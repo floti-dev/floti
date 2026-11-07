@@ -519,23 +519,29 @@ fn stream_call(
                 () = events.closed() => return,
             }
         };
-        let json = answered
+        let json = match answered
             .into_body()
             .collect()
             .await
             .map(|collected| collected.to_bytes())
             .ok()
             .filter(|bytes| serde_json::from_slice::<serde_json::Value>(bytes).is_ok())
-            .unwrap_or_else(|| {
-                Bytes::from(
-                    serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "id": id,
-                        "error": { "code": -32603, "message": "Floti could not answer that call." },
-                    })
-                    .to_string(),
-                )
-            });
+        {
+            Some(json) => json,
+            // The call's handler went without answering. A runtime shutting
+            // down drops its tasks one at a time while others still run, and
+            // a handler it dropped first looks like this: the host is going,
+            // and says nothing to the call, as a crashed one cannot.
+            None if runtime_is_going(&tokio::runtime::Handle::current()).await => return,
+            None => Bytes::from(
+                serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "error": { "code": -32603, "message": "Floti could not answer that call." },
+                })
+                .to_string(),
+            ),
+        };
         let last = event(&String::from_utf8_lossy(&json));
         let _ = events.send(Chunk::Last(last, delivery.take())).await;
     });
@@ -551,6 +557,12 @@ fn stream_call(
         .insert(CONTENT_TYPE, HeaderValue::from_static("text/event-stream"));
     no_store(answer.headers_mut());
     answer
+}
+
+/// Whether the runtime of `handle` is shutting down: it then cancels every
+/// task it is handed, which an empty one can be for no other reason.
+async fn runtime_is_going(handle: &tokio::runtime::Handle) -> bool {
+    handle.spawn(async {}).await.is_err()
 }
 
 /// What a body says about cancellation.
@@ -1128,5 +1140,23 @@ mod tests {
         ] {
             assert!(!is_loopback_origin(origin), "{origin}");
         }
+    }
+
+    /// A held call whose handler goes unanswered is told the call failed
+    /// only while the host's runtime runs; one that has shut down says it is
+    /// going, and the call is not answered.
+    #[test]
+    fn only_a_runtime_that_has_shut_down_is_going() {
+        let host = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .build()
+            .expect("a runtime");
+        let handle = host.handle().clone();
+        let asker = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("a runtime");
+        assert!(!asker.block_on(runtime_is_going(&handle)));
+        host.shutdown_timeout(Duration::from_secs(5));
+        assert!(asker.block_on(runtime_is_going(&handle)));
     }
 }

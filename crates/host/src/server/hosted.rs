@@ -62,6 +62,7 @@ use children::Children;
 pub(crate) use children::{
     ChildEntry, ChildRead, ChildStopped, ChildrenListed, ReadChild, RoleEntry, RolesListed,
     RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest, Waited, end_children_at_exit,
+    off_runtime,
 };
 #[cfg(test)]
 pub(crate) use children::{EventKind, Facts, News};

@@ -133,9 +133,7 @@ impl Hosted {
         let target = {
             let hosted = Arc::clone(self);
             let child = request.child.clone();
-            tokio::task::spawn_blocking(move || hosted.target_of(parent, &child))
-                .await
-                .unwrap_or_else(|_| Err("Floti could not finish that. Try again.".to_owned()))?
+            super::off_runtime(move || hosted.target_of(parent, &child)).await?
         };
         let turn = self.children.typing_lock(target.session.id());
         let _one_at_a_time = turn.lock().await;

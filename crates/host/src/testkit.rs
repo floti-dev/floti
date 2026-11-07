@@ -486,12 +486,14 @@ impl RunningHost {
 
 /// Drives `run` on `runtime` until it ends or `crashed` is sent.
 ///
-/// A crash is the process going: its runtime stops polling and nothing it ran
-/// answers or reacts to anything again, and what it held is let go only after
-/// that. So `run`, and the host's parts in it, are dropped once the runtime
-/// has been shut down and never before, when tasks still running on the
-/// runtime's workers could see a part go and answer a held call. One let go
-/// of without a send is no crash.
+/// A crash is the process going: nothing it ran answers or reacts to anything
+/// again, and what it held is let go only after that. So `run`, and the
+/// host's parts in it, are dropped once the runtime has been shut down and
+/// never before, when tasks still running on the runtime's workers could see
+/// a part go and answer a held call. The shutdown itself drops the tasks one
+/// at a time while other workers still poll the rest, so a task can see
+/// another go even so: the host answers nothing on a runtime that is shutting
+/// down, as a crashed one cannot. One let go of without a send is no crash.
 fn run_until_crash<F: std::future::Future>(
     runtime: tokio::runtime::Runtime,
     run: F,

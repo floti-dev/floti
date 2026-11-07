@@ -1430,10 +1430,73 @@ pub(crate) async fn end_children_at_exit(
     }
 }
 
+/// Runs `work`, which reads the store and may start processes, off the
+/// runtime's workers, for a call of the agents family. A panic in it is a
+/// refusal, never a hung call.
+///
+/// A runtime that is shutting down cancels the work instead of running it.
+/// The host is then going, and the call is never answered: a host that goes
+/// says nothing to a call it held, as a crashed one cannot, rather than
+/// telling its caller to try again. The call is dropped with the runtime.
+pub(crate) async fn off_runtime<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    match settled(tokio::task::spawn_blocking(work).await) {
+        Some(settled) => settled,
+        None => std::future::pending().await,
+    }
+}
+
+/// What work run off the runtime gives its call: its own result, a refusal
+/// for a panic, or `None` for work the runtime cancelled because it is
+/// shutting down. Nothing else cancels it: no one aborts that work.
+fn settled<T>(
+    joined: Result<Result<T, String>, tokio::task::JoinError>,
+) -> Option<Result<T, String>> {
+    match joined {
+        Ok(done) => Some(done),
+        Err(err) if err.is_cancelled() => None,
+        Err(_) => Some(Err("Floti could not finish that. Try again.".to_owned())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use PermissionMode::*;
+
+    #[tokio::test]
+    async fn work_a_runtime_cancels_is_no_answer_and_a_panic_is_a_refusal() {
+        let cancelled = tokio::spawn(std::future::pending::<Result<u8, String>>());
+        cancelled.abort();
+        assert_eq!(settled(cancelled.await), None);
+
+        let panicked = tokio::task::spawn_blocking(|| -> Result<u8, String> { panic!("in work") });
+        assert_eq!(
+            settled(panicked.await),
+            Some(Err("Floti could not finish that. Try again.".to_owned()))
+        );
+        let done = tokio::task::spawn_blocking(|| Ok::<u8, String>(7));
+        assert_eq!(settled(done.await), Some(Ok(7)));
+    }
+
+    /// A runtime that has shut down cancels work it is handed, which is how
+    /// [`off_runtime`] tells it is going.
+    #[test]
+    fn a_runtime_that_has_shut_down_cancels_the_work_it_is_handed() {
+        let going = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .build()
+            .expect("a runtime");
+        let handle = going.handle().clone();
+        going.shutdown_timeout(std::time::Duration::from_secs(5));
+        let handed = handle.spawn_blocking(|| Ok::<u8, String>(1));
+        let joined = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("a runtime")
+            .block_on(handed);
+        assert_eq!(settled(joined), None);
+    }
 
     #[test]
     fn a_child_never_runs_above_its_parents_mode() {

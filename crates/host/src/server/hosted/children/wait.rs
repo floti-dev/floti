@@ -39,7 +39,7 @@ use std::sync::Arc;
 use floti_protocol::channels::sessions::SessionActivity;
 
 use super::inbox::{self, News};
-use super::rows;
+use super::{off_runtime, rows};
 use crate::server::hosted::Hosted;
 use crate::session::SessionId;
 
@@ -314,15 +314,6 @@ fn records_backend(
     crate::server::records::read_record(store, id)
         .ok()
         .map(|record| record.backend)
-}
-
-/// Runs `work`, which reads the store, off the runtime's workers.
-async fn off_runtime<T: Send + 'static>(
-    work: impl FnOnce() -> Result<T, String> + Send + 'static,
-) -> Result<T, String> {
-    tokio::task::spawn_blocking(work)
-        .await
-        .unwrap_or_else(|_| Err("Floti could not finish that. Try again.".to_owned()))
 }
 
 #[cfg(test)]
