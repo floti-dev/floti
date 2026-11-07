@@ -45,6 +45,8 @@ use crate::Result;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessRow {
     pub pid: u32,
+    /// 0 when it has none to name. On Windows that includes a process whose
+    /// parent's id has been handed to a process started after it.
     pub parent_pid: u32,
     /// The image name, such as `node.exe`.
     pub name: String,

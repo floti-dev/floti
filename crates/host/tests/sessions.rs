@@ -1689,8 +1689,14 @@ async fn s10_a_client_that_falls_behind_skips_to_the_current_screen_while_the_se
     let mut watcher = TestClient::connect(&endpoint, TERMINAL).await;
     let mut slow = TestClient::connect(&endpoint, TERMINAL).await;
     slow.withhold_credit();
+    // Each is attached before anything is typed: its screen comes first, and
+    // a client attached after the echo would have it in that screen rather
+    // than in its output, and not the same bytes as the others.
     for client in [&mut typist, &mut watcher, &mut slow] {
         client.attach(SCREEN, session.id).await;
+        client
+            .read_stream_until(SCREEN, |bytes| bytes.starts_with(b"\x1bc"))
+            .await;
     }
     typist.type_into(SCREEN, b"before\r").await;
     for client in [&mut typist, &mut watcher, &mut slow] {

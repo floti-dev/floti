@@ -56,7 +56,7 @@ use serde_json::{Value, json};
 
 use super::hosted::{
     ChildEntry, ChildRead, ChildStopped, ChildrenListed, Hosted, ReadChild, RoleEntry, RolesListed,
-    RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest, Waited,
+    RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest, Waited, off_runtime,
 };
 use crate::agent_tools::{
     CallToolResult, Caller, ContentBlock, Delivery, GrantScope, JsonObject, Tool, ToolFamily,
@@ -377,7 +377,7 @@ async fn start(from: &Waiter<'_>, arguments: &JsonObject) -> CallToolResult {
     };
     let resumed = request.resume.is_some();
     let (hosted, me) = (Arc::clone(from.hosted), from.me);
-    let started = match blocking(move || hosted.start_child(me, request)).await {
+    let started = match off_runtime(move || hosted.start_child(me, request)).await {
         Ok(started) => started,
         Err(refusal) => return problem(&refusal),
     };
@@ -495,7 +495,7 @@ async fn read(hosted: Arc<Hosted>, me: SessionId, arguments: &JsonObject) -> Cal
         Ok(request) => request,
         Err(refusal) => return problem(&refusal),
     };
-    match blocking(move || hosted.read_child(me, &request)).await {
+    match off_runtime(move || hosted.read_child(me, &request)).await {
         Ok(read) => answer(read_text(&read), read_json(&read)),
         Err(refusal) => problem(&refusal),
     }
@@ -536,7 +536,7 @@ async fn run(from: &Waiter<'_>, arguments: &JsonObject) -> CallToolResult {
         Err(refusal) => return problem(&refusal),
     };
     let (hosted, me) = (Arc::clone(from.hosted), from.me);
-    let started = match blocking(move || hosted.run_command_child(me, request)).await {
+    let started = match off_runtime(move || hosted.run_command_child(me, request)).await {
         Ok(started) => started,
         Err(refusal) => return problem(&refusal),
     };
@@ -583,7 +583,7 @@ async fn report(hosted: Arc<Hosted>, me: SessionId, arguments: &JsonObject) -> C
         Err(refusal) => return problem(&refusal),
     };
     let reported = state.clone();
-    match blocking(move || hosted.child_reported(me, &state, &text)).await {
+    match off_runtime(move || hosted.child_reported(me, &state, &text)).await {
         Ok(()) => answer(
             format!("Reported {reported} to the agent that started you."),
             json!({ "reported": reported }),
@@ -594,7 +594,7 @@ async fn report(hosted: Arc<Hosted>, me: SessionId, arguments: &JsonObject) -> C
 
 /// `agents_list`: `me`'s running children and what is left of its limits.
 async fn list(hosted: Arc<Hosted>, me: SessionId) -> CallToolResult {
-    match blocking(move || hosted.list_children(me)).await {
+    match off_runtime(move || hosted.list_children(me)).await {
         Ok(listed) => {
             let text = listing_text(&listed);
             answer(text, listing_json(&listed))
@@ -605,7 +605,7 @@ async fn list(hosted: Arc<Hosted>, me: SessionId) -> CallToolResult {
 
 /// `agents_roles`: the roles there are now, and the files that are not roles.
 async fn roles(hosted: Arc<Hosted>, me: SessionId) -> CallToolResult {
-    match blocking(move || hosted.list_roles(me)).await {
+    match off_runtime(move || hosted.list_roles(me)).await {
         Ok(listed) => {
             let text = roles_text(&listed);
             answer(text, roles_json(&listed))
@@ -619,7 +619,7 @@ async fn stop(hosted: Arc<Hosted>, me: SessionId, arguments: &JsonObject) -> Cal
     let Some(child) = text_argument(arguments, "child") else {
         return problem("Name the agent to stop, as agents_start answered it: child.");
     };
-    match blocking(move || hosted.stop_child(me, &child)).await {
+    match off_runtime(move || hosted.stop_child(me, &child)).await {
         Ok(stopped) => stopped_answer(&stopped),
         Err(refusal) => problem(&refusal),
     }
@@ -637,16 +637,6 @@ fn stopped_answer(stopped: &ChildStopped) -> CallToolResult {
         text,
         json!({ "stopped": stopped.name, "also": stopped.also }),
     )
-}
-
-/// Runs `work`, which reads the store and starts processes, off the runtime's
-/// workers. A panic in it is a refusal, never a hung call.
-async fn blocking<T: Send + 'static>(
-    work: impl FnOnce() -> Result<T, String> + Send + 'static,
-) -> Result<T, String> {
-    tokio::task::spawn_blocking(work)
-        .await
-        .unwrap_or_else(|_| Err("Floti could not finish that. Try again.".to_owned()))
 }
 
 /// What `agents_start` was asked for. A text argument of the wrong kind is a
