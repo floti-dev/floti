@@ -4536,10 +4536,21 @@ async fn a_parent_reads_the_screen_and_up_to_200_lines_above_it_of_a_child_as_pl
         let (parent, child) = world.family(backend, "worker").await;
         // More than a screen (32 rows) and more than 200 lines of output.
         parent.send("worker", "/flood 400").await.done();
-        let full = eventually("the flood to reach the child's screen", async || {
-            let read = parent.read("worker", None).await;
-            (!read.failed && read.text().contains("flood done")).then_some(read)
-        })
+        // The answer and the prompt drawn after it are separate writes, so the
+        // screen is taken once the prompt is on it too: every read after that
+        // sees the same lines.
+        let full = eventually(
+            "the flood and the prompt after it to reach the child's screen",
+            async || {
+                let read = parent.read("worker", None).await;
+                let settled = !read.failed
+                    && read.text().contains("flood done")
+                    && read_lines(&read)
+                        .last()
+                        .is_some_and(|line| line.trim_end().ends_with('>'));
+                settled.then_some(read)
+            },
+        )
         .await;
         let typed_before = typed_into(&world.reread(&child));
 
