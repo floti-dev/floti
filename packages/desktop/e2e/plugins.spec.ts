@@ -576,7 +576,9 @@ test("a session calls the plugin's tools, its background module answers, and tur
   const tools = config.mcpServers['helm-plugin-sample']
   if (tools === undefined) throw new Error(`no plugin server among ${Object.keys(config.mcpServers).join(', ')}`)
   // The one tool the manifest marks read-only is allowed without asking; the other asks.
-  expect(run.allowedTools).toEqual(['mcp__helm-plugin-sample__list_items'])
+  expect(run.allowedTools.filter((tool) => tool.startsWith('mcp__helm-plugin-sample__'))).toEqual([
+    'mcp__helm-plugin-sample__list_items'
+  ])
   const token = bearerOf(tools)
   expect(await toolNames(tools.url, token)).toEqual(['list_items', 'create_item'])
   // Asked as `claude` asks, with a protocol version and who is asking.

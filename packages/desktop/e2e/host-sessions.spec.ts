@@ -394,13 +394,21 @@ withSample(
     const file = run.argv[run.argv.indexOf('--mcp-config') + 1] ?? ''
     expect(file.toLowerCase().startsWith(join(world.dataDir, 'host').toLowerCase())).toBe(true)
     const config = readMcpConfig(file)
-    expect(Object.keys(config.mcpServers).sort()).toEqual(['helm-browser', 'helm-plugin-sample', 'helm-sessions'])
+    // Sessions can start agents by default, so the host's own agents family is there too.
+    expect(Object.keys(config.mcpServers).sort()).toEqual([
+      'floti-agents',
+      'helm-browser',
+      'helm-plugin-sample',
+      'helm-sessions'
+    ])
     const plugin = config.mcpServers['helm-plugin-sample']
     const sessions = config.mcpServers['helm-sessions']
     if (plugin === undefined || sessions === undefined) throw new Error(`missing servers in ${JSON.stringify(config)}`)
     expect(new URL(plugin.url).pathname).toBe('/mcp/plugin/sample')
     // The one tool the manifest marks read-only is allowed without asking.
-    expect(run.allowedTools).toEqual(['mcp__helm-plugin-sample__list_items'])
+    expect(run.allowedTools.filter((tool) => tool.startsWith('mcp__helm-plugin-sample__'))).toEqual([
+      'mcp__helm-plugin-sample__list_items'
+    ])
 
     // Listed as Helm's listener lists it, and answered by the plugin's
     // background page through its own network and secret.

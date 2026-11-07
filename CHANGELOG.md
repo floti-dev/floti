@@ -14,6 +14,72 @@ A version with no section here does not release: the workflow fails rather than
 publishing an empty body, because the step a person can skip is the step that
 gets skipped.
 
+## 2.4.1-preview.9
+
+A preview, not a release: nothing offers it as an update.
+
+**Agents that start agents**
+
+- A session can now start child sessions of its own, hear back from them,
+  type into them, read their screens and stop them. Claude Code gets this as
+  the `floti-agents` tools, and any session's shell as `floti agent start`,
+  `send`, `read`, `wait`, `run` and `stop`. It works on every host, with no
+  Helm window open.
+- A session can only reach the children it started, and a child reaches its
+  parent only by reporting back. Nothing is ever typed into a parent, or into
+  a child waiting on a permission prompt.
+- A child runs in a folder Floti tracks, never in a permission mode above its
+  parent's, and can get a git worktree of its own on a new `agent/<name>`
+  branch. A project's page lists its agent worktrees, and Remove takes one
+  away unless a session works in it or it has uncommitted changes.
+- Start a child as a reviewer, a worker or a lead. Roles are files in
+  `~/.config/floti/roles`: edit the three shipped ones or add your own.
+- A parent can wait on its children and is told when one reports, needs you or
+  ends.
+- `floti agent run` runs a command you can watch as a child, and tells its
+  parent the exit code and the last 40 lines. A Windows crash code reads as
+  Windows gives it, such as -1073741819.
+- An ended child can be resumed under its name with a new task, in the folder
+  it had.
+- Settings > Agents turns this on or off (on by default) and sets the limits.
+  By default a parent runs at most four children and four commands at once
+  and starts sixteen in its life, a family is two levels deep, and a host
+  runs at most eight agent-started sessions and one heavy child at once.
+  Sessions you start count toward none of these. A profile can turn agents
+  off for its own sessions.
+
+**Seeing your agents**
+
+- The Sessions tree nests each child under the session that started it.
+- A child started while its parent's tab is open shows inside that tab as a
+  card, with its report under the card's header. Ended children shrink to a
+  header at the foot. Stop on a card asks first.
+- A child with no place on screen opens a read-only peek beside its row, or
+  under its chip in the parent's crumb.
+- A child that needs you lights its card and row and raises a toast with Peek
+  and Open as tab. What happened while you were away waits in one notice. A
+  parent that has used up its starts says so under its children, with a
+  button that allows it more.
+- Closing a parent's tab asks first, naming the children that end with it and
+  those started to outlive it.
+- A command child shows running or exited with its code, and Stopped when you
+  stopped it, in its row, card, header and tab.
+- Children inherit their parent's Remote Control setting. A profile has a
+  Remote Control switch of its own.
+
+**Fixes**
+
+- On Windows, a session's process list no longer takes in an unrelated
+  process that got its program's old parent id.
+- The ended bar of a failed session stays readable in Daylight.
+- A pane's corners no longer show the terminal's square background.
+
+**Updating**
+
+- This preview's host speaks protocol 2.1. After installing it, click Restart
+  host to update when Helm offers it. Your sessions keep running through the
+  restart.
+
 ## 2.4.1-preview.8
 
 A preview, not a release: nothing offers it as an update.
