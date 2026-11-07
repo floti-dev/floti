@@ -321,7 +321,7 @@ function personal(): Array<{ id: string; re: RegExp }> {
  */
 const IDENTITY_ALLOWED: Array<{ needle: string; why: string }> = [
   { needle: 'dev.coletaylor.helm', why: 'the Windows AppUserModelID / electron-builder appId' },
-  { needle: 'coledtaylor/helm', why: "the project's release address" },
+  { needle: 'floti-dev/floti', why: "the project's release address" },
   { needle: '"author": "Cole Taylor"', why: 'the authorship field in package.json' }
 ]
 

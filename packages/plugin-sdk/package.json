@@ -8,11 +8,11 @@
     "plugin",
     "sdk"
   ],
-  "homepage": "https://github.com/coledtaylor/helm/wiki/Plugins-Overview",
-  "bugs": "https://github.com/coledtaylor/helm/issues",
+  "homepage": "https://github.com/floti-dev/floti/wiki/Plugins-Overview",
+  "bugs": "https://github.com/floti-dev/floti/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/coledtaylor/helm.git",
+    "url": "git+https://github.com/floti-dev/floti.git",
     "directory": "packages/plugin-sdk"
   },
   "license": "MIT",

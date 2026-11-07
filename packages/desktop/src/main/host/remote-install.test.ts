@@ -56,7 +56,7 @@ function world(rules: [prefix: string, answer: Answer][], options: Partial<Remot
     ownBuild: async () => ({ path: '/opt/Helm/resources/floti', sha256: OWN_SHA }),
     sums: async () => new Map([['floti-2.6.0-linux-arm64', LINUX_SHA]]),
     script: async (os) => (os === 'windows' ? '# install.ps1\nInstall-Floti @args\n' : '# install.sh\nfloti_install "$@"\n'),
-    releaseBase: (version) => `https://github.com/coledtaylor/helm/releases/download/v${version}`,
+    releaseBase: (version) => `https://github.com/floti-dev/floti/releases/download/v${version}`,
     newId: () => 'offer-1',
     log: () => undefined,
     ...options
@@ -146,7 +146,7 @@ describe('installing floti on a host’s computer, from the desktop', () => {
     const put = w.runs[2]
     expect(put?.stdinFile).toBeNull()
     expect(put?.line).toContain(
-      `'2.6.0' 'floti-2.6.0-linux-arm64' '${LINUX_SHA}' 'https://github.com/coledtaylor/helm/releases/download/v2.6.0'`
+      `'2.6.0' 'floti-2.6.0-linux-arm64' '${LINUX_SHA}' 'https://github.com/floti-dev/floti/releases/download/v2.6.0'`
     )
     // Every program this PC started was the user's ssh.
     expect(w.runs.every((run) => run.argv.slice(0, 4).join(' ') === BATCH.join(' '))).toBe(true)
@@ -427,7 +427,7 @@ describe('installing floti in a WSL distro', () => {
       ownBuild: async () => null,
       sums: async () => new Map([['floti-2.6.0-linux-x64', LINUX_SHA]]),
       script: async () => '# install.sh\nfloti_install "$@"\n',
-      releaseBase: (version) => `https://github.com/coledtaylor/helm/releases/download/v${version}`,
+      releaseBase: (version) => `https://github.com/floti-dev/floti/releases/download/v${version}`,
       newId: () => 'offer-1',
       log: () => undefined
     })

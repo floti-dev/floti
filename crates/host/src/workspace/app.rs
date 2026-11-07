@@ -11,7 +11,7 @@ use crate::store::{MIGRATIONS, Store};
 /// Where a client sends the user for a newer host: the project's releases
 /// page, as today's app names it. Opened by the client, never fetched by the
 /// host.
-pub const RELEASES_URL: &str = "https://github.com/coledtaylor/helm/releases/latest";
+pub const RELEASES_URL: &str = "https://github.com/floti-dev/floti/releases/latest";
 
 /// The host's version, how it was started and whether a desktop started it,
 /// where its data, database and log are, the migrations its store has, and
