@@ -89,13 +89,22 @@ pub(crate) struct Waited {
 impl Waited {
     /// Marks this answer's news heard. Run when the answer has reached its
     /// caller, and not before.
+    ///
+    /// The marker is kept by the answer, which the listener's task table holds
+    /// until the answer is fetched, and the host owns that table: holding the
+    /// host strongly would make the host keep itself alive, and the session
+    /// keeper's connection with it. A host that has gone marks nothing, and
+    /// the news is heard by the next wait.
     pub fn confirm(&self, hosted: &Arc<Hosted>) -> Box<dyn FnOnce() + Send + Sync> {
-        let hosted = Arc::clone(hosted);
+        let hosted = Arc::downgrade(hosted);
         let ids: Vec<i64> = self.news.iter().map(|news| news.id).collect();
         Box::new(move || {
             if ids.is_empty() {
                 return;
             }
+            let Some(hosted) = hosted.upgrade() else {
+                return;
+            };
             if let Err(err) = inbox::mark_seen(&hosted.ledger.store(), &ids) {
                 log_line!("floti host: {err}");
             }
