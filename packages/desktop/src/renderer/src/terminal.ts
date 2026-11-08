@@ -234,6 +234,38 @@ function drawCursorWithoutFocus(term: Terminal): void {
   term.refresh(0, term.rows - 1)
 }
 
+/**
+ * Keeps xterm's scrollbar the size of what it scrolls.
+ *
+ * xterm's viewport reads the screen's height and the buffer's length into its
+ * scrollbar when the buffer resizes, scrolls or switches screens. A terminal
+ * fitted while xterm still counts it off screen - a tab opened behind another
+ * and fitted as it comes to the front, before xterm's visibility observer has
+ * said so - has its renderer's resize held until it is on screen, so the
+ * viewport reads the old screen height, and nothing it listens to comes after.
+ * That leaves a thumb drawn over a screen with nothing above it, which drags
+ * nowhere. Here every render that finds the screen a new height asks the
+ * viewport to read again. Both are xterm's own objects with no public handle;
+ * an xterm that keeps them elsewhere is left as it is.
+ */
+function keepScrollbarInStep(term: Terminal): { dispose: () => void } {
+  interface Internals {
+    _renderService?: { dimensions?: { css?: { canvas?: { height?: unknown } } } }
+    _viewport?: { queueSync?: unknown }
+  }
+  const core = (term as unknown as { _core?: Internals })._core
+  if (core === undefined) return { dispose: () => undefined }
+  let synced: unknown = undefined
+  return term.onRender(() => {
+    const height = core._renderService?.dimensions?.css?.canvas?.height
+    const viewport = core._viewport
+    if (typeof height !== 'number' || height === synced) return
+    if (viewport === undefined || typeof viewport.queueSync !== 'function') return
+    synced = height
+    ;(viewport.queueSync as () => void).call(viewport)
+  })
+}
+
 export function createTerminal(
   container: HTMLElement,
   opts: TermCreateOptions & {
@@ -292,6 +324,7 @@ export function createTerminal(
   }
 
   term.open(container)
+  const scrollbar = keepScrollbarInStep(term)
 
   // Held in an object rather than a bare `let` because the context-loss
   // handler fires long after `createTerminal` has returned: copying the
@@ -388,6 +421,7 @@ export function createTerminal(
       observer?.disconnect()
       observer = null
       links.dispose()
+      scrollbar.dispose()
       // Disposes the loaded addons with it, webgl's GL context included.
       term.dispose()
     }

@@ -359,6 +359,47 @@ describe('fitting a terminal to its pane', () => {
   })
 })
 
+describe('a terminal’s scrollbar', () => {
+  // A tab opened behind another: fitted from 30 rows of 17px to 63 as it comes
+  // to the front, while xterm still holds its renderer's resize because it has
+  // not seen the screen on show. xterm's viewport sized its bar for the old
+  // 510px screen, and a 1071px screen holding nothing above it showed a thumb
+  // that dragged nowhere.
+  it('is sized for the screen xterm draws, once a terminal held off screen comes on', () => {
+    const box = container()
+    layout.set(box, { width: 0, height: 0 })
+    createTerminal(box, { cols: 100, rows: 30, fit: true }, hooks())
+    const term = latest()
+    term.draw(510)
+    expect(term._core._viewport.scrollbarHeight).toBe(510)
+
+    layout.set(box, { width: 1000, height: 1071 })
+    FakeResizeObserver.notifyAll()
+    term.draw(1071)
+    expect(term._core._viewport.scrollbarHeight).toBe(1071)
+  })
+
+  it('asks xterm to size it again only when the screen drawn is a new height', () => {
+    createTerminal(container(), { cols: 80, rows: 24, fit: false }, hooks())
+    const term = latest()
+    term.draw(408)
+    term.draw(408)
+    term.draw(408)
+    expect(term._core._viewport.syncs).toBe(1)
+    term.draw(425)
+    expect(term._core._viewport.syncs).toBe(2)
+  })
+
+  it('stops following the screen once the terminal is disposed', () => {
+    const host = createTerminal(container(), { cols: 80, rows: 24, fit: false }, hooks())
+    const term = latest()
+    term.draw(408)
+    host.dispose()
+    term.draw(816)
+    expect(term._core._viewport.scrollbarHeight).toBe(408)
+  })
+})
+
 describe('applyPrefs', () => {
   const PREFS: TerminalPrefs = {
     fontFamily: BUILT_IN_STACK,

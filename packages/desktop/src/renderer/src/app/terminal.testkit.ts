@@ -228,7 +228,41 @@ export class Terminal {
    * Where xterm keeps whether the cursor is drawn at all: not until the
    * terminal has had the keyboard once, outline included.
    */
-  readonly _core = { coreService: { isCursorInitialized: false } }
+  readonly _core = {
+    coreService: { isCursorInitialized: false },
+    /** The renderer's measure of the screen, which the scrollbar is sized against. */
+    _renderService: { dimensions: { css: { canvas: { height: 0 } } } },
+    /**
+     * xterm's viewport: the screen height its scrollbar was last sized for, and
+     * how often it was asked to read again. The real one reads at its next
+     * frame; this one reads at once.
+     */
+    _viewport: {
+      scrollbarHeight: 0,
+      syncs: 0,
+      queueSync: (): void => {
+        this._core._viewport.syncs++
+        this._core._viewport.scrollbarHeight = this._core._renderService.dimensions.css.canvas.height
+      }
+    }
+  }
+  private readonly renderListeners = new Set<Listener<{ start: number; end: number }>>()
+
+  onRender(listener: Listener<{ start: number; end: number }>): { dispose: () => void } {
+    this.renderListeners.add(listener)
+    return { dispose: () => this.renderListeners.delete(listener) }
+  }
+
+  /**
+   * xterm drawing the screen at `height`, as it does when a terminal it held
+   * off screen comes on: the renderer takes the size it was held at and draws,
+   * and nothing tells the viewport.
+   */
+  draw(height: number): void {
+    this._core._renderService.dimensions.css.canvas.height = height
+    for (const listener of this.renderListeners) listener({ start: 0, end: this.rows - 1 })
+  }
+
   /** The row ranges the screen was asked to draw again. */
   readonly refreshed: [number, number][] = []
 

@@ -112,6 +112,12 @@ A preview, not a release: nothing offers it as an update.
 - Which children you closed is kept for this device with the rest of your
   panes, so a restart keeps them closed and other devices are not affected.
 
+**Fixes**
+
+- A terminal tab that was opened behind another, such as one Helm reopened
+  after a restart, no longer shows a scrollbar with nothing to scroll when you
+  bring it to the front.
+
 ## 2.4.1-preview.9
 
 A preview, not a release: nothing offers it as an update.
