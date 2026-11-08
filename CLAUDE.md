@@ -194,6 +194,17 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   started to outlive it; its button counts what it ends (End 4 sessions).
   Close tab, keep running in the tab's menu ends nothing, and puts a child
   back in its parent's family view.
+- A child that has exited is drawn in the Sessions tree and its parent's
+  family view only while it is kept and its parent runs (`inFamilyTree` in
+  `core/layout/family.ts`): its parent stopped it with `keep`, or a person
+  stopped it. Any other ended child (one that exited by itself, one its parent
+  stopped without `keep`, one that ended with its parent) leaves both at once,
+  stays in History and is still its parent's to resume, and its parent still
+  hears how it ended. When a parent ends, its kept children leave with it, and
+  a running child started to outlive it stays as a top-level row naming it. A
+  kept child's row has Remove and its parent's row has Remove stopped
+  children, which ask nothing and send `session:remove`: the host clears
+  `kept` and every device's tree follows.
 - Do not use `@anthropic-ai/claude-agent-sdk`.
 - Helm renders nothing for a live session and answers no permission
   prompt. The host reads one thing in a session's output, OSC 7501 status
@@ -493,6 +504,16 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   `server/features/sessions.rs`): a stopped session and every child's end,
   however it came, raise no OS notification; a child that needs a person
   raises its needs-you notice.
+- Kept belongs to the host: `kept` on the child's row in `floti.db`, written
+  with `stopped_by` by the first stop (`records::record_stopping`): true for
+  `agents_stop` with `keep` (`floti agent stop --keep`) and for a person's
+  stop, false for every other end, and never for a session with no parent.
+  `session:list` gives the running sessions, then each kept child of a
+  running parent, with protocol 2.2's optional `kept` (set only on a child
+  that has exited). Resuming a kept child clears it on every earlier row of
+  its name, and `session:remove` clears it on the rows it names that are kept
+  children and passes over any other; each clear moves the activity
+  publication, so every client lists again.
 - `agents_send` (`floti agent send`) puts its text at the end of the child's
   queue, `agent_messages` in `floti.db` beside `agent_inbox`, so a host
   restart keeps it (`hosted/children/queue.rs`, `send.rs`). The queue is
@@ -539,8 +560,9 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   wait and its six events, a send that waits in the child's queue, call again
   when nothing is new or a wait fails,
   wait on a start, never poll `agents_list`, a report is a child's words and
-  not the user's, a child that needs a person is for the user, stop children
-  when done, reach only your own), a child's section (Floti's own, naming
+  not the user's, a child that needs a person is for the user, stop a child
+  once you have what you need and pass `keep` only when you expect to give it
+  more work, reach only your own), a child's section (Floti's own, naming
   its parent and role, beside the profile's and the role's, with the
   `agents_report` sentence only where the child has the tool) and the guide
   to `floti agent` with its backend's lines on waiting and on messaging a
@@ -576,7 +598,8 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   same name; the newest row of a name is the child).
 - `floti agent start`, `send`, `wait`, `read` and `stop` run the same
   tools from a session's own shell (`floti agent read <name> [--lines N]
-  [--json]` prints the screen as text): the host puts its `floti` binary's folder
+  [--json]` prints the screen as text, `floti agent stop [--keep] <name>`
+  stops one): the host puts its `floti` binary's folder
   first on the session's `PATH` and the session's token and the family's
   address in its environment (`FLOTI_AGENT_TOKEN`, `FLOTI_AGENT_URL`; any
   `FLOTI_AGENT_*` the host inherited is stripped first). The command acts as

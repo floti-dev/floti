@@ -82,6 +82,23 @@ A preview, not a release: nothing offers it as an update.
   started whose program exits by itself while you cannot see it still does,
   and a child that needs you still raises its own notice.
 
+**Stopped children leave the tree unless they are kept**
+
+- A child that has ended leaves the Sessions tree and its parent's tab at
+  once: one that finished by itself, one its parent stopped, and one that
+  ended with its parent. It is still in History, its parent can still resume
+  it, and its parent still hears how it ended.
+- A parent that expects to give a child more work can stop it with keep
+  (`floti agent stop --keep`), and a child you stop yourself is kept too. A
+  kept child stays under its parent as a stopped row on every device until it
+  is resumed or removed, and a resumed child is one running row.
+- Right-click a kept child for Remove, or its parent for Remove stopped
+  children. Neither asks first, and the children stay in History.
+- When a parent ends, its kept children leave with it. A child started to
+  outlive its parent stays, on its own, naming the parent.
+- Sessions are told to stop a child once they have what they need, and to
+  keep it only when they expect to give it more work.
+
 ## 2.4.1-preview.9
 
 A preview, not a release: nothing offers it as an update.
