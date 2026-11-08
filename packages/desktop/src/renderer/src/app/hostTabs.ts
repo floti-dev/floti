@@ -3,6 +3,7 @@ import {
   LOCAL_HOST_KEY,
   childMark,
   closeTab,
+  reopenFamilyChild,
   hostOf,
   paneId,
   sessionLabel,
@@ -260,7 +261,8 @@ export interface KeepRunningDeps {
  *
  * A child that `returnsToFamily` is the exception: its parent's tab shows it
  * in its family view next, so its stream and its terminal stay, and only the
- * tab goes.
+ * tab goes. A child closed out of that family view earlier is back in it
+ * (`reopenFamilyChild`).
  */
 export function closeKeepingRunning(
   id: number,
@@ -272,5 +274,5 @@ export function closeKeepingRunning(
     deps.release(id, host)
     deps.disposeTerminal(id, host)
   }
-  deps.commit((layout) => closeTab(layout, paneId(sessionRef(id, host))))
+  deps.commit((layout) => reopenFamilyChild(closeTab(layout, paneId(sessionRef(id, host))), host, id))
 }

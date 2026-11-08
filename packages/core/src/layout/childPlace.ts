@@ -1,5 +1,5 @@
 import { commandState, isChild, isCommandChild, type FamilyMember, type UrgentState } from './family'
-import { familyChildren, familyEntries } from './familyState'
+import { crumbChildren, familyEntries } from './familyState'
 import { familyOf } from './familyView'
 import { familiesHere, paneId, sessionRef, sessionTabIds, type FamilyRoomOf, type PaneLayout } from './panes'
 
@@ -28,7 +28,8 @@ export interface ChildMember extends FamilyMember {
  * - `card`: a card in its parent's family view.
  * - `header`: a one-line header in its parent's family view.
  * - `chip`: a chip in the crumb of its parent's tab, which is here but has no
- *   room for the family view, or this device shows no family view.
+ *   room for the family view, or this device shows no family view, or the user
+ *   closed the running child out of the family view.
  * - `nowhere`: none of those, so only the Sessions tree lists it.
  */
 export type ChildPlace = 'tab' | 'card' | 'header' | 'chip' | 'nowhere'
@@ -54,10 +55,11 @@ function drawsFamily(scope: PlaceScope, tab: string): boolean {
  *
  * A child in a parent's tab whose pane draws the family view is a card or a
  * header as the arrangement and the pane's room make it (`familyEntries`; a pane
- * not measured yet holds every card that is wanted), and an ended child the
- * user closed is in neither. In a pane that draws no family view, every child
- * the family holds is a chip, an ended one with its ended dot; one the user
- * closed is on screen nowhere.
+ * not measured yet holds every card that is wanted). In a pane that draws no
+ * family view, every child the family holds is a chip, an ended one with its
+ * ended dot. A running child the user closed out of the family view is a chip
+ * either way, and an ended one the user closed is on screen nowhere
+ * (`crumbChildren`).
  */
 export function childPlaces<T extends ChildMember>(
   layout: PaneLayout,
@@ -70,12 +72,12 @@ export function childPlaces<T extends ChildMember>(
   for (const [parent, family] of familiesHere(layout, sessions, host)) {
     const tab = parentTab(layout, parent, host)
     if (tab === null) continue
-    if (!drawsFamily(scope, tab)) {
-      for (const child of familyChildren(family, familyOf(layout, tab))) places.set(child.id, 'chip')
-      continue
-    }
+    const state = familyOf(layout, tab)
+    const drawn = drawsFamily(scope, tab)
+    for (const child of crumbChildren(family, state, drawn)) places.set(child.id, 'chip')
+    if (!drawn) continue
     const capacity = scope.capacityOf(tab) ?? Number.POSITIVE_INFINITY
-    for (const entry of familyEntries(family, familyOf(layout, tab), capacity)) {
+    for (const entry of familyEntries(family, state, capacity)) {
       places.set(entry.child.id, entry.shape === 'card' || entry.shape === 'screen' ? 'card' : 'header')
     }
   }
@@ -153,8 +155,9 @@ export interface CrumbChip<T> {
 /**
  * The chips the crumb of parent `parent`'s tab holds: its children that are on
  * screen as chips (`childPlaces`), ended ones included, in the order the family
- * view runs them, each with its state's dot or, for a command, its glyph. None
- * while the pane draws the family view, or when the parent's tab is not here.
+ * view runs them, each with its state's dot or, for a command, its glyph. While
+ * the pane draws the family view, only the running children the user closed out
+ * of it. None when the parent's tab is not here.
  */
 export function crumbChips<T extends ChildMember>(
   layout: PaneLayout,
@@ -166,8 +169,11 @@ export function crumbChips<T extends ChildMember>(
 ): CrumbChip<T>[] {
   const tab = parentTab(layout, parent, host)
   const family = familiesHere(layout, sessions, host).get(parent)
-  if (tab === null || family === undefined || drawsFamily(scope, tab)) return []
-  return familyChildren(family, familyOf(layout, tab)).map((child) => ({ child, mark: childMark(child, stateOf(child)) }))
+  if (tab === null || family === undefined) return []
+  return crumbChildren(family, familyOf(layout, tab), drawsFamily(scope, tab)).map((child) => ({
+    child,
+    mark: childMark(child, stateOf(child))
+  }))
 }
 
 /**

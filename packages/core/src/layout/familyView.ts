@@ -4,6 +4,8 @@ import {
   PLAIN_FAMILY,
   closeChild,
   isPlainFamily,
+  isPutAway,
+  reopenChild,
   shrinkChild,
   showChild,
   type FamilyState
@@ -59,9 +61,62 @@ export function shrinkFamilyChild(layout: PaneLayout, tab: string, child: Family
   return arrangeFamily(layout, tab, (state) => shrinkChild(state, child))
 }
 
-/** Close pressed on an ended child: it leaves the family view, and its row in the Sessions tree stays. */
+/**
+ * Close pressed on a running child's card or on an ended child: it leaves the
+ * family view, and its row in the Sessions tree stays. A running one keeps
+ * running and is shown by its chip in the parent's crumb (`crumbChildren`).
+ */
 export function closeFamilyChild(layout: PaneLayout, tab: string, id: number): PaneLayout {
   return arrangeFamily(layout, tab, (state) => closeChild(state, id))
+}
+
+/**
+ * Show in tab on a running child closed out of parent tab `tab`'s family view:
+ * it is back in the view where it was (`reopenChild`), and the parent's tab
+ * comes to the front with it.
+ */
+export function showClosedFamilyChild(layout: PaneLayout, tab: string, id: number): PaneLayout {
+  if (findTab(layout, tab) === null) return layout
+  return activateTab(arrangeFamily(layout, tab, (state) => reopenChild(state, id)), tab)
+}
+
+/**
+ * The `paneId` of the parent tab whose family view running child `id` on
+ * `host` was closed out of, or null: it has no tab of its own here, and the
+ * tab that holds it (`tabHolder`) has it closed.
+ */
+export function closedChildTab<T extends FamilyMember>(
+  layout: PaneLayout,
+  sessions: readonly T[],
+  host: string,
+  id: number
+): string | null {
+  const tabbed = sessionTabIds(layout, host)
+  if (tabbed.has(id)) return null
+  const byId = new Map(sessions.map((session) => [session.id, session]))
+  const child = byId.get(id)
+  if (child === undefined) return null
+  const holder = tabHolder(byId, id, tabbed)
+  if (holder === null) return null
+  const tab = paneId(sessionRef(holder, host))
+  return isPutAway(child, familyOf(layout, tab)) ? tab : null
+}
+
+/**
+ * The layout with session `id` on `host` closed out of no family view here:
+ * Close tab, keep running on a child's own tab puts it back in its parent's
+ * family view, whether or not it had been closed out of it before.
+ */
+export function reopenFamilyChild(layout: PaneLayout, host: string, id: number): PaneLayout {
+  let next = layout
+  for (const [tab, state] of Object.entries(layout.families)) {
+    if (!state.closed.includes(id)) continue
+    const at = findTab(layout, tab)
+    const ref = at === null ? undefined : groupById(layout, at.group)?.tabs[at.index]
+    if (ref === undefined || !isSessionOn(ref, host)) continue
+    next = arrangeFamily(next, tab, (each) => reopenChild(each, id))
+  }
+  return next
 }
 
 /**
@@ -140,7 +195,9 @@ export interface FamilyPressScope {
  * A child of a running parent that is on screen nowhere here is `peek`, the
  * layout unchanged, whether it is running or ended: its parent's tab is not open
  * here, or that tab's pane has no room for the family view, or this device does
- * not show children in their parent's tab. Anything else is `open`, which is the one press that gives a session a tab, and the
+ * not show children in their parent's tab. So is a running child the user
+ * closed out of the family view: its peek's Show in tab puts it back
+ * (`showClosedFamilyChild`). Anything else is `open`, which is the one press that gives a session a tab, and the
  * caller opens it as any running session not open here is.
  */
 export function pressSessionRow<T extends FamilyMember>(
@@ -160,7 +217,12 @@ export function pressSessionRow<T extends FamilyMember>(
 
   const tab = paneId(sessionRef(holder, host))
   const press: FamilyPress = { to: 'parent-tab', id: holder }
-  if (!scope.enabled || !(scope.roomOf?.(tab) ?? true)) {
+  const child = byId.get(id)
+  if (
+    !scope.enabled ||
+    !(scope.roomOf?.(tab) ?? true) ||
+    (child !== undefined && isPutAway(child, familyOf(layout, tab)))
+  ) {
     return { layout, press: { to: 'peek', id } }
   }
   const family = familiesHere(layout, sessions, host).get(holder) ?? []

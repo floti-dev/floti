@@ -208,6 +208,23 @@ describe('the peek', () => {
     expect(props.onClose).not.toHaveBeenCalled()
   })
 
+  it('has Show in tab before Open for a child closed out of its parent’s family view, and it is the window’s to answer', async () => {
+    const onShowInTab = vi.fn()
+    const props = peek({ onShowInTab })
+    render(<ChildPeek {...props} />)
+    const show = screen.getByRole('button', { name: 'Show in tab' })
+    expect(show.nextElementSibling).toBe(screen.getByRole('button', { name: 'Open' }))
+    await userEvent.click(show)
+    expect(onShowInTab).toHaveBeenCalledTimes(1)
+    expect(props.onOpen).not.toHaveBeenCalled()
+    expect(props.onClose).not.toHaveBeenCalled()
+  })
+
+  it('has no Show in tab for any other child', () => {
+    render(<ChildPeek {...peek()} />)
+    expect(screen.queryByRole('button', { name: 'Show in tab' })).toBeNull()
+  })
+
   it('is placed at the point it is given, hidden until measured', () => {
     render(<ChildPeek {...peek({ at: { x: 320, y: 90 } })} />)
     const dialog = screen.getByRole('dialog')

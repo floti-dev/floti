@@ -937,9 +937,12 @@ overrides the gate; keep it.
   header is 26px on `surface` with a 1px `border` below it, in 11.5px: the
   state dot (6px, the session dot's colours), the name in weight 500, the role
   as a 10px tag in `accent-text` on `accent-soft`, the state and for how long
-  at the right in 10.5px `fg-muted` ("Working · 4m"), then **Open as tab** and
-  **Stop** as 10.5px buttons in `border-strong`, Stop in `danger` with a
-  `danger` edge at 45%. A command child (`floti agent run`) has `CommandChildIcon`, 12px, where the dot
+  at the right in 10.5px `fg-muted` ("Working · 4m"), then **Open as tab**,
+  **Stop** and **Close** as 10.5px buttons in `border-strong`, Stop in `danger`
+  with a `danger` edge at 45%. Close puts the child away and stops nothing:
+  it keeps running, leaves the family view, its card going to the next child
+  that wants one, and is shown by its chip in the crumb and its row in the
+  tree until its peek's **Show in tab** puts it back in its place. A command child (`floti agent run`) has `CommandChildIcon`, 12px, where the dot
   would be, in `success` while it runs, `fg-subtle` once it exited 0 and `danger`
   for any other code (the dot's tones, `commandTone`), on a card, a shrunk
   header and an ended header alike; its tag reads "command" in `fg-muted` on a
@@ -1020,7 +1023,8 @@ overrides the gate; keep it.
   **A parent shown alone has its children in its crumb.** A pane that fails
   the room rule, or a device with the setting off, draws the parent's terminal
   alone, and the crumb holds each child, running or ended, as a chip at the end of the
-  row, before the status: an 18px pill on `surface-raised`, `fg-muted` Inter
+  row, before the status; a running child closed out of the family view has
+  its chip there whether the view is drawn or not: an 18px pill on `surface-raised`, `fg-muted` Inter
   11px, with the child's 6px state dot or, for a command, its terminal glyph,
   and its name. Hover or an open peek takes `active` and `fg`; a child that
   needs a person has its name in `warn`. A chip opens that child's peek under
@@ -1047,7 +1051,7 @@ overrides the gate; keep it.
   with the 2px accent edge, under a "Last report · done" label in 10px small
   caps at weight 600 (the one text weight past 500, which the frame sets and no
   other text takes); and the foot: "Watching only. Open it to type." in
-  `fg-subtle`, Stop in `danger` (it closes the peek and asks, as stopping any session does) and Open in the accent outline. A
+  `fg-subtle`, Stop in `danger` (it closes the peek and asks, as stopping any session does), for a running child closed out of its parent's family view **Show in tab** in `border-strong` (it closes the peek and puts the child back in its card), and Open in the accent outline. A
   child that has ended gets a peek too: its chip says how it ended ("stopped", "ended", or "exited 0" for a command), its screen is
   the last one this window received, the foot reads "Ended. Open shows its last
   screen." ("Ended. This window saw none of its screen." when it ended before any reached this window) and there is no Stop. The Mode row says the mode in lower case ("manual").

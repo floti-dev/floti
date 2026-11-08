@@ -3,11 +3,15 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   DEFAULT_SETTINGS,
   EMPTY_LAYOUT,
+  closeFamilyChild,
+  familyOf,
   notOpenHere,
   openTab,
+  paneId,
   returnsToFamily,
   sessionRef,
   sessionTabIds,
+  showClosedFamilyChild,
   type PaneLayout,
   type SessionRecord
 } from '@helm/core/types'
@@ -360,6 +364,51 @@ describe('a child shown in its parent’s tab on build-box', () => {
     await settle()
     expect(w.shown.at(-1)).toEqual({ host: BUILD, ids: [7] })
     expect(first.streamsFor('session:data', 8)[0]?.closed).toBe(true)
+  })
+
+  it('is let go of when it is closed out of its parent’s family view, and carried again on Show in tab', async () => {
+    const { first, w, records, scope } = await connected()
+    const parent = paneId(sessionRef(7, BUILD))
+    const layout = openTab(EMPTY_LAYOUT, sessionRef(7, BUILD))
+    const family = scope(hasRoom)
+    const shown = renderHook(({ at }) => useShownSessionTabs(at, [BUILD], w.show, family), {
+      initialProps: { at: layout }
+    })
+    await settle()
+    expect(w.shown.at(-1)).toEqual({ host: BUILD, ids: [7, 8, 9] })
+
+    const closed = closeFamilyChild(layout, parent, 8)
+    shown.rerender({ at: closed })
+    await settle()
+    expect(w.shown.at(-1)).toEqual({ host: BUILD, ids: [7, 9] })
+    expect(first.streamsFor('session:data', 8)[0]?.closed).toBe(true)
+    // It runs on there, listed as not open here, and nothing was asked of the host.
+    expect(notOpenHere(closed, records, BUILD, family.roomOf).map((record) => record.id)).toEqual([8])
+    expect(first.payloads('session:close')).toEqual([])
+
+    shown.rerender({ at: showClosedFamilyChild(closed, parent, 8) })
+    await settle()
+    expect(w.shown.at(-1)).toEqual({ host: BUILD, ids: [7, 8, 9] })
+    expect(first.streamsFor('session:data', 8).at(-1)?.closed).toBe(false)
+  })
+
+  it('goes back to its parent’s family view on Close tab, keep running, though it had been closed out of it', () => {
+    const parent = paneId(sessionRef(7, BUILD))
+    let layout: PaneLayout = openTab(closeFamilyChild(openTab(EMPTY_LAYOUT, sessionRef(7, BUILD)), parent, 8), sessionRef(8, BUILD))
+    closeKeepingRunning(
+      8,
+      BUILD,
+      {
+        release: () => undefined,
+        disposeTerminal: () => undefined,
+        commit: (op) => {
+          layout = op(layout)
+        }
+      },
+      true
+    )
+    expect(sessionTabIds(layout, BUILD)).toEqual(new Set([7]))
+    expect(familyOf(layout, parent).closed).toEqual([])
   })
 
   it('goes back to its parent’s family view on Close tab, keep running, keeping its stream and its terminal', async () => {

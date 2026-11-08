@@ -99,6 +99,19 @@ A preview, not a release: nothing offers it as an update.
 - Sessions are told to stop a child once they have what they need, and to
   keep it only when they expect to give it more work.
 
+**Put a running child away without stopping it**
+
+- A running child's card in its parent's tab has Close, beside Open as tab
+  and Stop. The child keeps running and leaves the tab; the next child takes
+  its card.
+- It is then a chip in its parent's crumb and a row under its parent in the
+  Sessions tree. Either opens its peek, which has Show in tab: that puts the
+  child back in its card, where it was.
+- A closed child that needs you raises its notice as any child out of sight
+  does. One that ends stays closed.
+- Which children you closed is kept for this device with the rest of your
+  panes, so a restart keeps them closed and other devices are not affected.
+
 ## 2.4.1-preview.9
 
 A preview, not a release: nothing offers it as an update.

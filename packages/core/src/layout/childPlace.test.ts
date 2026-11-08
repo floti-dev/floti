@@ -11,7 +11,7 @@ import {
   type ChildMember,
   type PlaceScope
 } from './childPlace'
-import { shrinkFamilyChild } from './familyView'
+import { closeFamilyChild, shrinkFamilyChild } from './familyView'
 import {
   fromSaved,
   openTab,
@@ -251,5 +251,38 @@ describe('closing a parent', () => {
   it('does not loop on links that come back round', () => {
     const family = [session(1, 2), session(2, 1)]
     expect(names(closeParentPlan(family, 1, none).ends)).toEqual([2])
+  })
+})
+
+describe('a running child closed out of its parent’s family view', () => {
+  const closed = (): PaneLayout => closeFamilyChild(layout(), paneId(sessionRef(1)), 3)
+  const dots = (): UrgentState => 'idle'
+
+  it('is a chip while the pane draws the family view, and while it does not', () => {
+    expect(childPlace(closed(), FAMILY, LOCAL_HOST_KEY, 3, scope())).toBe('chip')
+    expect(childPlace(closed(), FAMILY, LOCAL_HOST_KEY, 3, scope({ roomOf: () => false }))).toBe('chip')
+    expect(childPlace(closed(), FAMILY, LOCAL_HOST_KEY, 3, scope({ enabled: false }))).toBe('chip')
+  })
+
+  it('gives its card place to the next child that wants one', () => {
+    const places = childPlaces(closed(), FAMILY, LOCAL_HOST_KEY, scope())
+    expect([2, 4, 5].map((id) => places.get(id))).toEqual(['card', 'card', 'header'])
+  })
+
+  it('is the one chip in the crumb while the family view is drawn, and among the others while it is not', () => {
+    const chips = (over: Partial<PlaceScope>): number[] =>
+      crumbChips(closed(), FAMILY, LOCAL_HOST_KEY, 1, scope(over), dots).map((chip) => chip.child.id)
+    expect(chips({})).toEqual([3])
+    expect(chips({ roomOf: () => false })).toEqual([2, 3, 4, 5])
+  })
+
+  it('raises its needs-you notice as a child with nowhere else on screen does: Peek', () => {
+    expect(needsYouToast(childPlace(closed(), FAMILY, LOCAL_HOST_KEY, 3, scope()))).toBe('peek')
+  })
+
+  it('is on screen nowhere once it has ended, and is no chip', () => {
+    const done = FAMILY.map((child) => (child.id === 3 ? { ...child, status: 'exited', kept: true } : child))
+    expect(childPlace(closed(), done, LOCAL_HOST_KEY, 3, scope())).toBe('nowhere')
+    expect(crumbChips(closed(), done, LOCAL_HOST_KEY, 1, scope(), dots)).toEqual([])
   })
 })

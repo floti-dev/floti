@@ -179,9 +179,13 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   is shown inside that tab while "Show children in their parent's tab" is on
   and the pane has room (`familyRoom`), and counts as open here, so the
   window's connection carries its terminal (`shownSessionIds`) along with
-  those of the sessions that have a tab. Which children are shown, shrunk or
-  opened as tabs is this device's `paneLayout` (`families`) and never reaches
-  the host. Every other running session is in the sessions pane
+  those of the sessions that have a tab. A running child's pane there can be
+  closed without ending it: it keeps running, is not open here (its terminal
+  is not carried), and is shown as a child with no room is, by its chip in the
+  parent's crumb and its row in the tree, whose peek has Show in tab to put it
+  back where it was. Which children are shown, shrunk, closed or opened as
+  tabs is this device's `paneLayout` (`families`) and never reaches the
+  host. Every other running session is in the sessions pane
   as not open here, with Open (a tab whose screen comes through the host's
   attach, never a second restore path) and End. A child with nowhere
   on screen here, running or ended, has a peek instead (from its row, or its

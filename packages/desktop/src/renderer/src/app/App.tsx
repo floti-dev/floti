@@ -17,6 +17,7 @@ import {
   childMark,
   childPlace,
   closeGroup,
+  closedChildTab,
   crumbChips,
   closeTab,
   cycleTab,
@@ -52,6 +53,7 @@ import {
   sendBeside,
   sessionLabel,
   sessionRef,
+  showClosedFamilyChild,
   sessionTabIds,
   splitWith,
   toSaved,
@@ -3909,9 +3911,10 @@ export function App(): JSX.Element {
   };
 
   /**
-   * The chips in the crumb of a session's tab: its running children, when its
-   * pane has no room for the family view or this device shows none. A chip
-   * opens the child's peek under itself.
+   * The chips in the crumb of a session's tab: its children, when its pane has
+   * no room for the family view or this device shows none, and the running
+   * children closed out of the family view in any case. A chip opens the
+   * child's peek under itself.
    */
   const chipsOf = (ref: { id: number; host?: string }): CrumbChip[] => {
     const host = ref.host ?? LOCAL_HOST_KEY;
@@ -4046,6 +4049,17 @@ export function App(): JSX.Element {
     peek.target === null
       ? null
       : sessionAt({ id: peek.target.id, host: peek.target.host });
+  // The parent tab a peeked running child was closed out of, whose family view
+  // its Show in tab puts it back in.
+  const peekedClosedIn =
+    peek.target === null
+      ? null
+      : closedChildTab(
+          open,
+          sessionsByHost.get(peek.target.host) ?? [],
+          peek.target.host,
+          peek.target.id,
+        );
   const childPeek =
     peek.target !== null &&
     peekAt !== null &&
@@ -4076,6 +4090,18 @@ export function App(): JSX.Element {
         onClose={peek.store.close}
         onStop={peek.store.stop}
         onOpen={peek.store.openAsTab}
+        onShowInTab={
+          peekedClosedIn === null
+            ? undefined
+            : () => {
+                const id = peek.target?.id;
+                if (id === undefined) return;
+                peek.store.close();
+                commit((current) =>
+                  showClosedFamilyChild(current, peekedClosedIn, id),
+                );
+              }
+        }
       />
     ) : null;
 

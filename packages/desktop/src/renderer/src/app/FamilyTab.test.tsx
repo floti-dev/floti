@@ -14,6 +14,7 @@ import {
   paneId,
   PARENT_GUTTER_PX,
   sessionRef,
+  showClosedFamilyChild,
   type PaneLayout,
   type SavedPane,
   type SessionRecord
@@ -157,6 +158,13 @@ function Harness({
       />
       <p data-tabs>{group.tabs.map(paneId).join(',')}</p>
       <p data-front>{paneId(activeRef(group)!)}</p>
+      <p data-closed>{familyOf(panes, TAB).closed.join(',')}</p>
+      {/* The window's Show in tab, from a closed child's peek. */}
+      {familyOf(panes, TAB).closed.map((id) => (
+        <button key={id} type="button" onClick={() => setPanes((at) => showClosedFamilyChild(at, TAB, id))}>
+          {`Show ${String(id)} in tab`}
+        </button>
+      ))}
     </>
   )
 }
@@ -324,6 +332,7 @@ describe('a parent’s tab with children', () => {
     expect(header.querySelector('[data-family-status]')!.textContent).toBe('Working · 4m')
     expect(within(header).getByRole('button', { name: 'Open reviewer as a tab' })).toBeTruthy()
     expect(within(header).getByRole('button', { name: 'Stop reviewer' })).toBeTruthy()
+    expect(within(header).getByRole('button', { name: 'Close reviewer' })).toBeTruthy()
     // The terminal is under the header, in the same card.
     expect(card(container, 'reviewer').contains(getTerminal(2)!.element)).toBe(true)
     expect(header.nextElementSibling!.contains(getTerminal(2)!.element)).toBe(true)
@@ -637,6 +646,59 @@ describe('a parent’s tab with children', () => {
     // Its row is the Sessions tree's: the host still lists it, and a new list changes nothing here.
     list(sessions)
     expect(headerNames(container)).toEqual([])
+  })
+
+  it('Close on a running card takes the child out of the family view without stopping it, and the next child takes its card', async () => {
+    const onStop = vi.fn()
+    const sessions = [LEAD, child(2, 'alpha'), child(3, 'beta'), child(4, 'gamma')]
+    const view = mount(SHORT, sessions, { onStop })
+    expect(cardNames(view.container)).toEqual(['alpha', 'beta'])
+    expect(headerNames(view.container)).toEqual(['gamma'])
+    const parentElement = getTerminal(1)!.element
+
+    await userEvent.click(within(card(view.container, 'alpha')).getByRole('button', { name: 'Close alpha' }))
+
+    expect(onStop).not.toHaveBeenCalled()
+    expect(cardNames(view.container)).toEqual(['beta', 'gamma'])
+    expect(headerNames(view.container)).toEqual([])
+    expect(view.container.querySelector('[data-closed]')!.textContent).toBe('2')
+    expect(view.container.querySelector('[data-tabs]')!.textContent).toBe('session:1')
+    // The parent's terminal is the same element, where it was.
+    expect(getTerminal(1)!.element).toBe(parentElement)
+    // The host still lists it running, and a new list keeps it out.
+    view.list(sessions, { onStop })
+    expect(cardNames(view.container)).toEqual(['beta', 'gamma'])
+  })
+
+  it('Show in tab puts a closed running child back in its card where it was, the last card falling to a header', async () => {
+    const sessions = [LEAD, child(2, 'alpha'), child(3, 'beta'), child(4, 'gamma')]
+    const { container } = mount(SHORT, sessions)
+    await userEvent.click(within(card(container, 'alpha')).getByRole('button', { name: 'Close alpha' }))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show 2 in tab' }))
+
+    expect(cardNames(container)).toEqual(['alpha', 'beta'])
+    expect(headerNames(container)).toEqual(['gamma'])
+    expect(container.querySelector('[data-closed]')!.textContent).toBe('')
+    expect(card(container, 'alpha').contains(getTerminal(2)!.element)).toBe(true)
+  })
+
+  it('keeps a closed child out of the family view when it ends', async () => {
+    const view = mount(WIDE, [LEAD, child(2, 'reviewer'), child(3, 'tester')])
+    await userEvent.click(within(card(view.container, 'reviewer')).getByRole('button', { name: 'Close reviewer' }))
+
+    view.list([LEAD, stopped(2, 'reviewer'), child(3, 'tester')])
+
+    expect(cardNames(view.container)).toEqual(['tester'])
+    expect(headerNames(view.container)).toEqual([])
+  })
+
+  it('shows the parent alone once every child is closed, with nothing of a family view around it', async () => {
+    const { container } = mount(WIDE, [LEAD, child(2, 'reviewer')])
+    await userEvent.click(within(card(container, 'reviewer')).getByRole('button', { name: 'Close reviewer' }))
+
+    expect(container.querySelector('[data-family-view]')).toBeNull()
+    expect(container.querySelector<HTMLElement>('[data-family-parent]')!.contains(getTerminal(1)!.element)).toBe(true)
   })
 
   it('S19: Open as tab gives the child a tab right after its parent’s, in front, and it leaves the family view', async () => {

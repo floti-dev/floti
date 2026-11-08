@@ -235,7 +235,7 @@ export interface ChildHeaderProps {
   onOpenAsTab?: (() => void) | undefined
   /** A running card's Stop, which the window asks about before it ends the child. */
   onStop?: (() => void) | undefined
-  /** An ended child's Close, which takes it out of the family view. */
+  /** Close, which takes the child out of the family view: a running card's child keeps running. */
   onClose?: (() => void) | undefined
 }
 
@@ -247,7 +247,7 @@ const SMALL_BUTTON =
  * A child's one-line header.
  *
  * On a card it carries the state dot, the name, the role as a tag, the state
- * and for how long, then Open as tab and Stop. A command child has the terminal
+ * and for how long, then Open as tab, Stop and Close. A command child has the terminal
  * glyph where the dot would be and "command" where the role would be. Shrunk it is the dot, the name
  * and the state; ended it says how and when with Close. Pressing the words
  * is the header's one action, and the buttons are beside it, never inside it.

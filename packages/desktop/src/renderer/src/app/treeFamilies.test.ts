@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   LOCAL_HOST_KEY,
   activeRef,
+  closeFamilyChild,
   familyEntries,
   familyOf,
   fromSaved,
@@ -415,6 +416,20 @@ describe('which rows say a press opens a peek', () => {
     // A child with a tab of its own brings that tab forward, even in the background.
     const own = openTab(layout(), { kind: 'session', id: 4 })
     expect(peeksOnPress(LOCAL_HOST_KEY, family, 4, deps({ enabled: false, layout: own }))).toBe(false)
+  })
+
+  it('is true for a running child the user closed out of its parent’s family view, and a press changes no pane', () => {
+    const closed = closeFamilyChild(layout(), paneId({ kind: 'session', id: 1 }), 3)
+    expect(peeksOnPress(LOCAL_HOST_KEY, family, 3, deps({ layout: closed }))).toBe(true)
+    let committed = 0
+    const press = pressTreeSession(LOCAL_HOST_KEY, family, 3, {
+      ...deps({ layout: closed }),
+      commit: () => {
+        committed += 1
+      }
+    })
+    expect(press).toEqual({ to: 'peek', id: 3 })
+    expect(committed).toBe(0)
   })
 
   it('is false for a session that is not a child, and for a child whose parent has ended', () => {

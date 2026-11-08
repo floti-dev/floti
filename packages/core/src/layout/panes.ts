@@ -1,7 +1,14 @@
 import { LOCAL_HOST_KEY } from '../hosts'
 import type { WorkspaceTab } from '../types'
 import { inFamilyTree, isChild, tabHolder, type FamilyMember } from './family'
-import { pruneFamilyState, readFamilyStates, type FamilyState, type FamilyStates } from './familyState'
+import {
+  PLAIN_FAMILY,
+  familyChildren,
+  pruneFamilyState,
+  readFamilyStates,
+  type FamilyState,
+  type FamilyStates
+} from './familyState'
 import { pluginPagesId, pluginTabId } from '../plugins/tabs'
 
 /**
@@ -1050,9 +1057,9 @@ export type FamilyRoomOf = (tab: string) => boolean
 /**
  * The running sessions on `host` (this PC's by default) that a family view
  * here shows, none of which has a tab: the running children of a tab here
- * whose pane has room for them. They are open here all the same - the
- * connection carries their terminals, and the sessions pane does not list them
- * as not open.
+ * whose pane has room for them, but those the user closed out of the view.
+ * They are open here all the same - the connection carries their terminals,
+ * and the sessions pane does not list them as not open.
  */
 export function familyViewIds(
   layout: PaneLayout,
@@ -1062,8 +1069,11 @@ export function familyViewIds(
 ): Set<number> {
   const ids = new Set<number>()
   for (const [holder, family] of familiesHere(layout, sessions, host)) {
-    if (!roomOf(paneId(sessionRef(holder, host)))) continue
-    for (const child of family) if (child.status === 'running') ids.add(child.id)
+    const tab = paneId(sessionRef(holder, host))
+    if (!roomOf(tab)) continue
+    for (const child of familyChildren(family, layout.families[tab] ?? PLAIN_FAMILY)) {
+      if (child.status === 'running') ids.add(child.id)
+    }
   }
   return ids
 }

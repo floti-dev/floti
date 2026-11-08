@@ -4,10 +4,13 @@ import { LOCAL_HOST_KEY } from '../hosts'
 import {
   arrangeFamily,
   closeFamilyChild,
+  closedChildTab,
   familyOf,
   openFamilyChildAsTab,
   pressSessionRow,
+  reopenFamilyChild,
   shrinkFamilyChild,
+  showClosedFamilyChild,
   showFamilyChild
 } from './familyView'
 import { familyEntries, PLAIN_FAMILY } from './familyState'
@@ -492,5 +495,80 @@ describe('Open as tab on a card', () => {
     const closed = closeTab(opened, paneId(session(3)))
     expect(familiesHere(closed, FAMILY).get(1)?.map((child) => child.id)).toEqual([2, 3, 4])
     expect(returnsToFamily(opened, FAMILY, 3, LOCAL_HOST_KEY, ROOM)).toBe(true)
+  })
+})
+
+describe('Close on a running child’s card', () => {
+  const parent = paneId(session(1))
+  const layout = layoutOf(row([g(session(1), HISTORY), g(SETTINGS)]), 1)
+  const closed = closeFamilyChild(layout, parent, 3)
+  const scope = { enabled: true, capacityOf: () => 2, roomOf: ROOM }
+  const drawn = (at: PaneLayout): string[] =>
+    familyEntries(familiesHere(at, FAMILY).get(1)!, familyOf(at, parent), 2).map((e) => `${e.shape}${e.child.id}`)
+
+  it('takes the child out of its parent’s family view and stops nothing: it is still listed, running', () => {
+    expect(drawn(layout)).toEqual(['card2', 'card3', 'header4'])
+    expect(drawn(closed)).toEqual(['card2', 'card4'])
+    expect(familiesHere(closed, FAMILY).get(1)?.map((child) => child.id)).toEqual([2, 3, 4])
+    expect(arrangement(closed)).toEqual(arrangement(layout))
+  })
+
+  it('has the window’s connection stop carrying its terminal, and lists it as not open here', () => {
+    expect(shownSessionIds(closed, FAMILY, LOCAL_HOST_KEY, ROOM)).toEqual([1, 2, 4])
+    expect(notOpenHere(closed, FAMILY, LOCAL_HOST_KEY, ROOM).map((s) => s.id)).toEqual([3])
+  })
+
+  it('makes a press on its row a peek, which changes nothing', () => {
+    expect(pressSessionRow(closed, FAMILY, 3, LOCAL_HOST_KEY, scope)).toEqual({
+      layout: closed,
+      press: { to: 'peek', id: 3 }
+    })
+  })
+
+  it('names the parent tab it was closed out of, for its peek’s Show in tab, and none for any other child', () => {
+    expect(closedChildTab(closed, FAMILY, LOCAL_HOST_KEY, 3)).toBe(parent)
+    expect(closedChildTab(closed, FAMILY, LOCAL_HOST_KEY, 2)).toBeNull()
+    expect(closedChildTab(layout, FAMILY, LOCAL_HOST_KEY, 3)).toBeNull()
+    expect(closedChildTab(openTab(closed, session(3)), FAMILY, LOCAL_HOST_KEY, 3)).toBeNull()
+    expect(closedChildTab(closed, FAMILY, 'build', 3)).toBeNull()
+  })
+
+  it('names none once the child has ended: it stays closed, and is out of the view', () => {
+    const done = [...FAMILY.slice(0, 2), ended(3, 1), FAMILY[3]!]
+    expect(closedChildTab(closed, done, LOCAL_HOST_KEY, 3)).toBeNull()
+    expect(familyOf(closed, parent).closed).toEqual([3])
+    expect(familyEntries(familiesHere(closed, done).get(1)!, familyOf(closed, parent), 3).map((e) => e.child.id)).toEqual([2, 4])
+  })
+
+  it('Show in tab puts it back where it was, carries its terminal again and brings the parent’s tab forward', () => {
+    const shown = showClosedFamilyChild(closed, parent, 3)
+    expect(drawn(shown)).toEqual(drawn(layout))
+    expect(familyOf(shown, parent)).toBe(PLAIN_FAMILY)
+    expect(shownSessionIds(shown, FAMILY, LOCAL_HOST_KEY, ROOM)).toEqual([1, 2, 3, 4])
+    expect(activeRef(shown.groups[0]!)).toEqual(session(1))
+    expect(shown.focused).toBe(shown.groups[0]!.id)
+    expect(showClosedFamilyChild(closed, 'session:77', 3)).toBe(closed)
+  })
+
+  it('comes back closed after a restart of the window, from what this device wrote down', () => {
+    const read = fromSaved(upgradeSavedLayout(JSON.parse(JSON.stringify(toSaved(closed))) as unknown, null))
+    expect(familyOf(read, parent).closed).toEqual([3])
+    expect(drawn(read)).toEqual(['card2', 'card4'])
+    expect(shownSessionIds(read, FAMILY, LOCAL_HOST_KEY, ROOM)).toEqual([1, 2, 4])
+  })
+
+  it('is this device’s alone: another device’s layout still shows the child', () => {
+    const there = layoutOf(row([g(session(1), HISTORY), g(SETTINGS)]), 1)
+    expect(drawn(there)).toEqual(['card2', 'card3', 'header4'])
+    expect(shownSessionIds(there, FAMILY, LOCAL_HOST_KEY, ROOM)).toEqual([1, 2, 3, 4])
+  })
+
+  it('is undone by Close tab, keep running on the child’s own tab, which puts it back in the family view', () => {
+    const tabbed = openTab(closed, session(3))
+    const back = reopenFamilyChild(closeTab(tabbed, paneId(session(3))), LOCAL_HOST_KEY, 3)
+    expect(familyOf(back, parent).closed).toEqual([])
+    expect(shownSessionIds(back, FAMILY, LOCAL_HOST_KEY, ROOM)).toEqual([1, 2, 3, 4])
+    expect(reopenFamilyChild(closed, 'build', 3)).toBe(closed)
+    expect(reopenFamilyChild(layout, LOCAL_HOST_KEY, 3)).toBe(layout)
   })
 })

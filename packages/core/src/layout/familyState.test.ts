@@ -3,6 +3,7 @@ import type { FamilyMember } from './family'
 import {
   PLAIN_FAMILY,
   closeChild,
+  crumbChildren,
   endedHeaderText,
   familyChildren,
   familyEntries,
@@ -10,6 +11,7 @@ import {
   pruneFamilyState,
   readFamilyState,
   readFamilyStates,
+  reopenChild,
   shrinkChild,
   showChild,
   type FamilyState
@@ -48,10 +50,16 @@ describe('familyEntries', () => {
     expect(drawn([running(2), ended(3), running(4)], state({ screens: [3] }), 2)).toBe('C2 S3 h4')
   })
 
-  it('leaves an ended child the user closed out, and a running one is never closed', () => {
+  it('leaves a child the user closed out, an ended one or a running one', () => {
     const family = [running(2), ended(3), running(4)]
     expect(drawn(family, state({ closed: [3] }), 3)).toBe('C2 C4')
-    expect(drawn(family, state({ closed: [2] }), 3)).toBe('C2 C4 e3')
+    expect(drawn(family, state({ closed: [2] }), 3)).toBe('C4 e3')
+  })
+
+  it('gives a closed running card’s place to the next child that wants one', () => {
+    const family = [running(2), running(3), running(4)]
+    expect(drawn(family, PLAIN_FAMILY, 2)).toBe('C2 C3 h4')
+    expect(drawn(family, state({ closed: [2] }), 2)).toBe('C3 C4')
   })
 
   it('puts the children the state orders first, then the rest as listed, so a child that starts is last', () => {
@@ -63,9 +71,13 @@ describe('familyEntries', () => {
     expect(drawn([running(2), running(3)], PLAIN_FAMILY, 0)).toBe('h2 h3')
   })
 
-  it('holds the children a view still has: all but the ended ones closed out', () => {
-    const family = [running(2), ended(3), ended(4)]
-    expect(familyChildren(family, state({ closed: [4] })).map((child) => child.id)).toEqual([2, 3])
+  it('holds the children a view still has: all but the ones closed out', () => {
+    const family = [running(2), ended(3), ended(4), running(5)]
+    expect(familyChildren(family, state({ closed: [4, 5] })).map((child) => child.id)).toEqual([2, 3])
+  })
+
+  it('keeps a closed child closed when it ends', () => {
+    expect(drawn([running(2), ended(3)], state({ closed: [3] }), 3)).toBe('C2')
   })
 })
 
@@ -161,6 +173,50 @@ describe('closeChild', () => {
     const closed = closeChild(state({ screens: [3] }), 3)
     expect(closed).toMatchObject({ closed: [3], screens: [] })
     expect(closeChild(closed, 3)).toBe(closed)
+  })
+
+  it('takes a running child’s card out of the family view and keeps its place in the order', () => {
+    const arranged = state({ order: [4, 2, 3] })
+    const closed = closeChild(arranged, 2)
+    expect(closed).toEqual({ ...arranged, closed: [2] })
+    expect(drawn([running(2), running(3), running(4)], closed, 3)).toBe('C4 C3')
+  })
+})
+
+describe('reopenChild', () => {
+  const family = [running(2), running(3), running(4)]
+
+  it('puts a closed running child back where it was, the last card falling to a header when the pane is full', () => {
+    const before = drawn(family, PLAIN_FAMILY, 2)
+    const closed = closeChild(PLAIN_FAMILY, 2)
+    expect(drawn(family, closed, 2)).toBe('C3 C4')
+    const back = reopenChild(closed, 2)
+    expect(drawn(family, back, 2)).toBe(before)
+    expect(back).toEqual(PLAIN_FAMILY)
+  })
+
+  it('puts it back in its place in an order the user arranged', () => {
+    const arranged = state({ order: [3, 2, 4] })
+    expect(drawn(family, reopenChild(closeChild(arranged, 2), 2), 3)).toBe('C3 C2 C4')
+  })
+
+  it('is the very same state for a child that is not closed', () => {
+    const arranged = state({ shrunk: [3] })
+    expect(reopenChild(arranged, 2)).toBe(arranged)
+  })
+})
+
+describe('crumbChildren', () => {
+  const family = [running(2), ended(3), running(4), ended(5)]
+  const ids = (children: readonly FamilyMember[]): number[] => children.map((child) => child.id)
+
+  it('holds only the running children closed out of a family view that is drawn', () => {
+    expect(ids(crumbChildren(family, state({ closed: [4, 5] }), true))).toEqual([4])
+    expect(ids(crumbChildren(family, PLAIN_FAMILY, true))).toEqual([])
+  })
+
+  it('holds every child but the ended ones closed when no family view is drawn, in the family’s order', () => {
+    expect(ids(crumbChildren(family, state({ closed: [4, 5], order: [4] }), false))).toEqual([4, 2, 3])
   })
 })
 
@@ -272,6 +328,13 @@ describe('endedHeaderText', () => {
   it('leaves the time off when it never saw one end rather than guessing', () => {
     expect(endedHeaderText({ status: 'exited', stopped: true, endedAt: null })).toBe('Stopped')
     expect(endedHeaderText({ status: 'exited', endedAt: 'not a time' })).toBe('Done')
+  })
+})
+
+describe('readFamilyState', () => {
+  it('reads back the running children closed out of the view as it wrote them', () => {
+    const closed = closeChild(state({ order: [3, 2] }), 2)
+    expect(readFamilyState(JSON.parse(JSON.stringify(closed)))).toEqual(closed)
   })
 })
 

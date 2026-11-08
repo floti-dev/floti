@@ -2,9 +2,9 @@ import type { EndedBy } from '../types'
 import { isCommandChild, stoppedText, type FamilyMember } from './family'
 
 /**
- * How one parent's tab arranges its children: which are shrunk, which ended
- * ones the user closed or opened to their last screen, and the order the cards
- * run in. Pure and browser-safe, so every rule about what a press on a card or
+ * How one parent's tab arranges its children: which are shrunk, which the
+ * user closed out of the view, which ended ones the user opened to their last
+ * screen, and the order the cards run in. Pure and browser-safe, so every rule about what a press on a card or
  * a header does is tested here and not found in a window.
  *
  * A child is named by its row id on its parent's host, the parent being the
@@ -27,7 +27,12 @@ export interface FamilyState {
   readonly order: readonly number[]
   /** Running children the user shrank to a header. */
   readonly shrunk: readonly number[]
-  /** Ended children the user closed out of the family view. */
+  /**
+   * Children the user closed out of the family view. A running one keeps
+   * running, and is shown as a child with no room is (its chip in the parent's
+   * crumb, its row in the tree, each with a peek) until Show in tab puts it back
+   * where it was. One that ends stays closed.
+   */
   readonly closed: readonly number[]
   /** Ended children the user opened to their last screen. */
   readonly screens: readonly number[]
@@ -84,9 +89,14 @@ function ordered<T extends FamilyMember>(children: readonly T[], state: FamilySt
   return [...first, ...children.filter((child) => !placed.has(child.id))]
 }
 
-/** Whether the family view still holds the child: an ended one the user closed is out of it. */
+/** Whether the family view still holds the child: one the user closed, running or ended, is out of it. */
 function inFamily(child: FamilyMember, state: FamilyState): boolean {
-  return !(hasEnded(child) && state.closed.includes(child.id))
+  return !state.closed.includes(child.id)
+}
+
+/** Whether a child is running but closed out of the family view: it is on screen only as a chip. */
+export function isPutAway(child: FamilyMember, state: FamilyState): boolean {
+  return !hasEnded(child) && state.closed.includes(child.id)
 }
 
 /**
@@ -101,6 +111,16 @@ export function wantsCard(child: FamilyMember, state: FamilyState): boolean {
 /** The children the family view holds, in the order it runs them in. */
 export function familyChildren<T extends FamilyMember>(children: readonly T[], state: FamilyState): T[] {
   return ordered(children, state).filter((child) => inFamily(child, state))
+}
+
+/**
+ * The children the parent's crumb holds as chips, in the family's order: while
+ * the family view is drawn (`drawn`), only the running children closed out of
+ * it; while it is not, every child it would hold as well. An ended child the
+ * user closed is no chip.
+ */
+export function crumbChildren<T extends FamilyMember>(children: readonly T[], state: FamilyState, drawn: boolean): T[] {
+  return ordered(children, state).filter((child) => (state.closed.includes(child.id) ? !hasEnded(child) : !drawn))
 }
 
 /**
@@ -165,11 +185,22 @@ export function shrinkChild(state: FamilyState, child: FamilyMember): FamilyStat
 }
 
 /**
- * A close pressed on an ended child's header or last screen: it leaves the
- * family view. Its row in the Sessions tree is not the family's to take away.
+ * A close pressed on a running child's card, or on an ended child's header or
+ * last screen: it leaves the family view, and a running one keeps running. Its
+ * row in the Sessions tree is not the family's to take away. Its place in the
+ * order is kept, so Show in tab (`reopenChild`) puts it back where it was.
  */
 export function closeChild(state: FamilyState, id: number): FamilyState {
   return changed(state, { closed: withId(state.closed, id), screens: withoutId(state.screens, id) })
+}
+
+/**
+ * Show in tab on a running child closed out of the family view: it is back in
+ * the view in its own place in the order, as a card if it was one and the pane
+ * has room, the last card that wants one falling to a header if not.
+ */
+export function reopenChild(state: FamilyState, id: number): FamilyState {
+  return changed(state, { closed: withoutId(state.closed, id) })
 }
 
 /**

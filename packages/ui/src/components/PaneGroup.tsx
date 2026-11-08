@@ -108,7 +108,8 @@ const CRUMB_TONE: Record<CrumbTone, string> = {
 /**
  * One child of the session in front, as a chip in its crumb: its dot or
  * glyph and its name. The chips stand in for the family view in a pane that
- * has no room for it, so the children are on screen with the sidebar closed.
+ * has no room for it, and for a running child closed out of the family view,
+ * so the children are on screen with the sidebar closed.
  */
 export interface CrumbChip {
   /** Names the chip to the window, which finds it to place the peek under it. */
@@ -143,7 +144,7 @@ export interface PaneCrumbProps {
   parent?: CrumbParent | undefined
   /** Where the session is: its project, as named in the tree. */
   place: string
-  /** The children of the session, as chips, when its pane has no room for the family view. */
+  /** The children of the session, as chips, when its pane has no room for the family view, and those closed out of it. */
   chips?: readonly CrumbChip[] | undefined
   /** The branch its folder was on when it started, when it is a repository. */
   branch?: string | null | undefined

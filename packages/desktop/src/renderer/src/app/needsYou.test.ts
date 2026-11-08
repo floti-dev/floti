@@ -1,5 +1,6 @@
 import {
   LOCAL_HOST_KEY,
+  closeFamilyChild,
   fromSaved,
   openTab,
   paneId,
@@ -107,6 +108,14 @@ describe('the toasts for children that need a person', () => {
       expect.objectContaining({ childId: 3, action: 'peek' })
     ])
     expect(needsYouToasts([hostOf([waiting(2)])], parentOnly(), scope({ enabled: false }), new Set())).toEqual([
+      expect.objectContaining({ childId: 2, action: 'peek' })
+    ])
+  })
+
+  it('offers Peek for a running child the user closed out of its parent’s family view, which would have been a card', () => {
+    const closed = closeFamilyChild(parentOnly(), paneId(sessionRef(1)), 2)
+    expect(needsYouToasts([hostOf([waiting(2)])], parentOnly(), scope(), new Set())).toEqual([])
+    expect(needsYouToasts([hostOf([waiting(2)])], closed, scope(), new Set())).toEqual([
       expect.objectContaining({ childId: 2, action: 'peek' })
     ])
   })

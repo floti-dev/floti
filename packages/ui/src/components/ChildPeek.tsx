@@ -52,6 +52,11 @@ export interface ChildPeekProps {
   /** Stop: the window closes the peek and asks before it ends the child. */
   onStop: () => Promise<void> | void
   onOpen: () => void
+  /**
+   * Show in tab, for a running child the user closed out of its parent's
+   * family view: the window puts it back there. Absent for any other child.
+   */
+  onShowInTab?: (() => void) | undefined
 }
 
 const BUTTON = 'rounded-well border px-[9px] py-[3px] text-[11.5px] font-medium whitespace-nowrap transition-colors'
@@ -60,8 +65,9 @@ const BUTTON = 'rounded-well border px-[9px] py-[3px] text-[11.5px] font-medium 
  * The peek: a popover beside the row, or under the crumb chip, it was opened
  * from, for a child that has nowhere on screen here. It shows the
  * child's screen live and read-only, who it is (its role, or its command), its
- * folder, branch and mode, what it last reported, and Stop and Open. A child
- * that has ended gets one too, which says so and has no Stop.
+ * folder, branch and mode, what it last reported, and Stop and Open, with Show
+ * in tab before Open for a running child closed out of its parent's family
+ * view. A child that has ended gets one too, which says so and has no Stop.
  *
  * It is an overlay (`usePopup`), so a browser tab's native view stands down for
  * it; Escape and its close button close it, and so does a press outside it. Stop
@@ -90,7 +96,8 @@ export function ChildPeek({
   anchorRef,
   onClose,
   onStop,
-  onOpen
+  onOpen,
+  onShowInTab
 }: ChildPeekProps): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -224,6 +231,16 @@ export function ChildPeek({
             className={cn(BUTTON, 'border-danger/45 text-danger hover:bg-danger/10')}
           >
             Stop
+          </button>
+        )}
+        {onShowInTab !== undefined && (
+          <button
+            type="button"
+            data-peek-show
+            onClick={onShowInTab}
+            className={cn(BUTTON, 'border-border-strong text-fg hover:bg-hover')}
+          >
+            Show in tab
           </button>
         )}
         <button
