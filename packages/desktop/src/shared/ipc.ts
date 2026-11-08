@@ -900,8 +900,6 @@ export interface IpcRequests {
    */
   'ownData:state': { request: void; response: OwnDataCopyState }
 
-  /** Helm's own question before a profile is deleted. */
-  'profileDialog:confirmDelete': { request: { name: string }; response: { confirmed: boolean } }
   /** Helm's save dialog, then the profile's YAML written where it says. */
   'profileDialog:export': { request: { fileName: string; yaml: string }; response: ExportProfileResult }
   /** Helm's open dialog, then the chosen file read. */
@@ -2335,7 +2333,6 @@ export const REQUEST_CHANNELS = Object.keys({
   'ownSettings:write': true,
   'ownApp:info': true,
   'ownData:state': true,
-  'profileDialog:confirmDelete': true,
   'profileDialog:export': true,
   'profileDialog:import': true,
   'windowSessions:lostLayout': true,

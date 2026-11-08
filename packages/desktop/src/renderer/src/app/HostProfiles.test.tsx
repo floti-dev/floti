@@ -88,4 +88,44 @@ describe('HostProfiles', () => {
     expect((screen.getByLabelText('Profile name') as HTMLInputElement).value).toBe('api')
     expect(bridge.invocations).toEqual([])
   })
+
+  it('asks in the window before deleting: Cancel and Escape delete nothing, and agreeing deletes and the list follows', async () => {
+    const box = remoteBridge('h1')
+    box.answer('profile:delete', () => {
+      queueMicrotask(() => box.emit('profiles:changed', []))
+      return { deleted: true }
+    })
+    render(
+      <HostProfiles
+        host="h1"
+        name="build-box"
+        connected
+        projects={[]}
+        harnesses={[]}
+        blank={(root, name) => ({ ...INFRA, root, name })}
+        onLaunched={vi.fn()}
+        paneSize={() => null}
+      />
+    )
+    const question = (): HTMLElement | null => screen.queryByRole('alertdialog', { name: 'Delete “infra”?' })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete infra' }))
+    expect(question()).not.toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(question()).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete infra' }))
+    await userEvent.keyboard('{Escape}')
+    expect(question()).toBeNull()
+    expect(box.invoked('profile:delete')).toEqual([])
+    expect(screen.getByTitle('infra — /home/you/work/infra')).toBeTruthy()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete infra' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Delete profile' }))
+    expect(question()).toBeNull()
+    expect(box.invoked('profile:delete')).toEqual([{ id: 5 }])
+    await waitFor(() => expect(screen.queryByTitle('infra — /home/you/work/infra')).toBeNull())
+    // Nothing of it went to main: no native box, no dialog channel.
+    expect(bridge.invocations).toEqual([])
+  })
 })

@@ -140,6 +140,7 @@ import {
   ConfigNothingSelected,
   ConfigRenameDialog,
   ConfirmSessionDialog,
+  DeleteProfileDialog,
   type ConsoleEntry,
   DocIcon,
   EffectiveViewPane,
@@ -2338,10 +2339,14 @@ export function App(): JSX.Element {
     [editing, profileState, launchProfile],
   );
 
-  // Main asks the user first, so this can be fired and forgotten.
-  const deleteProfile = useCallback(
-    (profile: Profile) => void profileState.remove(profile.id),
-    [profileState],
+  // Asks first, in the window's own dialog (`profileDialog` below).
+  const deleteProfile = profileState.askRemove;
+  const profileDialog = profileState.deleting !== null && (
+    <DeleteProfileDialog
+      name={profileState.deleting.name}
+      onConfirm={() => void profileState.confirmRemove()}
+      onCancel={profileState.cancelRemove}
+    />
   );
 
   // ---------------------------------------------------------------------------
@@ -6269,6 +6274,7 @@ export function App(): JSX.Element {
         {confirmDialog}
         {restartDialog}
         {configEntryDialog}
+        {profileDialog}
         {addingHost && (
           <AddHostDialog
             actions={addHostActions}
@@ -6511,8 +6517,8 @@ export function App(): JSX.Element {
             saving={saving}
             onSave={(draft) => void saveProfile(draft)}
             onCancel={() => setEditing(null)}
-            // Only for a profile that exists. The editor closes because the row
-            // it edits is gone.
+            // Only for a profile that exists. The editor closes and the
+            // question takes its place; Cancel there deletes nothing.
             {...("id" in editing
               ? {
                   onDelete: () => {

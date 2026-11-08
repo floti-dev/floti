@@ -15,10 +15,11 @@ import type { HostAdapter } from './router'
  * each list to the window, so whichever client wrote, every place that lists
  * profiles shows the change.
  *
- * The dialogs stay Helm's, on the user's own machine (`profileDialog:*`): it
- * asks before `profile:delete`, saves the document `profile:export` answers
- * where its save dialog says, and hands `profile:import` the file its open
- * dialog chose and read.
+ * The file dialogs stay Helm's, on the user's own machine (`profileDialog:*`):
+ * it saves the document `profile:export` answers where its save dialog says,
+ * and hands `profile:import` the file its open dialog chose and read. The
+ * question before `profile:delete` is the window's own (`DeleteProfileDialog`),
+ * asked before the request is made.
  *
  * A list asked for before the window reached the host waits for it, and with
  * no host it rejects with the sentence saying why, never an empty list
@@ -60,12 +61,11 @@ export function createProfilesAdapter({ link, own, log = () => undefined }: Prof
         return { profile: saved.profile === null ? null : profileFromHost(saved.profile), problems: saved.problems }
       },
 
+      // An id the host does not list is refused here, with nothing sent.
       'profile:delete': async ({ id }) => {
         const connection = await host()
-        const profile = (await connection.request('profile:list', null)).find((p) => p.id === id)
-        if (profile === undefined) return { deleted: false }
-        const { confirmed } = await own.invoke('profileDialog:confirmDelete', { name: profile.name })
-        if (!confirmed) return { deleted: false }
+        const known = (await connection.request('profile:list', null)).some((p) => p.id === id)
+        if (!known) return { deleted: false }
         return { deleted: (await connection.request('profile:delete', { id })).deleted }
       },
 

@@ -34,7 +34,14 @@ export interface ProfilesState {
     draft: ProfileDraft,
     id?: number | null
   ) => Promise<{ profile: Profile | null; problems: string[] }>
-  remove: (id: number) => Promise<boolean>
+  /** The profile whose delete is being asked about, or null when nothing is. */
+  deleting: Profile | null
+  /** Asks whether to delete `profile`; nothing is deleted until `confirmRemove`. */
+  askRemove: (profile: Profile) => void
+  /** The answer was no: nothing is deleted. */
+  cancelRemove: () => void
+  /** The answer was yes: the profile asked about is deleted, and a failure is the error. */
+  confirmRemove: () => Promise<void>
   togglePin: (profile: Profile) => Promise<void>
   reorder: (ids: number[]) => Promise<void>
   exportProfile: (id: number) => Promise<void>
@@ -49,6 +56,7 @@ export function useProfiles(host: string = LOCAL_HOST_KEY): ProfilesState {
   const [launching, setLaunching] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<Profile | null>(null)
 
   useEffect(() => {
     const off = helm.on('profiles:changed', setProfiles)
@@ -82,10 +90,22 @@ export function useProfiles(host: string = LOCAL_HOST_KEY): ProfilesState {
     }
   }, [helm])
 
-  const remove = useCallback(async (id: number) => {
-    const { deleted } = await helm.invoke('profile:delete', { id })
-    return deleted
-  }, [helm])
+  /**
+   * Deleting asks first, in the window's own dialog: `deleting` is the
+   * question while it is open. The list changes only when the host's
+   * `profiles:changed` says the profile is gone.
+   */
+  const confirmRemove = useCallback(async () => {
+    const profile = deleting
+    if (profile === null) return
+    setDeleting(null)
+    setError(null)
+    try {
+      await helm.invoke('profile:delete', { id: profile.id })
+    } catch (err: unknown) {
+      setError(readable(err))
+    }
+  }, [helm, deleting])
 
   const reorder = useCallback(async (ids: number[]) => {
     await helm.invoke('profile:pin', { ids })
@@ -186,7 +206,10 @@ export function useProfiles(host: string = LOCAL_HOST_KEY): ProfilesState {
     dismissError: useCallback(() => setError(null), []),
     dismissNotice: useCallback(() => setNotice(null), []),
     save,
-    remove,
+    deleting,
+    askRemove: useCallback((profile: Profile) => setDeleting(profile), []),
+    cancelRemove: useCallback(() => setDeleting(null), []),
+    confirmRemove,
     togglePin,
     reorder,
     exportProfile,

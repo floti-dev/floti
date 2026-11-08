@@ -120,6 +120,8 @@ A preview, not a release: nothing offers it as an update.
 - A browser page opened at an address Helm's browser may not reach, from a
   plugin's link, a session or a project's last address, now shows that address
   and is named after its site, and Open in your own browser opens it.
+- Deleting a profile asks in Helm's own dialog, in your theme, in place of the
+  system's message box. Cancel is still the default.
 
 ## 2.4.1-preview.9
 

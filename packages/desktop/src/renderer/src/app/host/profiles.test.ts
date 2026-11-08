@@ -34,7 +34,6 @@ const profile = (id: number, name: string, patch: Partial<P.Profile> = {}): P.Pr
 
 interface Options {
   hosted?: P.Profile[]
-  agree?: boolean
   /** Where Helm's save dialog says, or null when cancelled. */
   exportTo?: string | null
   chosen?: ProfileFileChosen
@@ -69,8 +68,6 @@ function world(options: Options = {}, connection: FakeConnection | null = new Fa
     invoke: (channel: string, payload?: unknown): Promise<unknown> => {
       asked.push({ channel, payload })
       switch (channel) {
-        case 'profileDialog:confirmDelete':
-          return Promise.resolve({ confirmed: options.agree ?? true })
         case 'profileDialog:export':
           return Promise.resolve({ file: options.exportTo === undefined ? '/out dir/x.yaml' : options.exportTo })
         case 'profileDialog:import':
@@ -138,16 +135,14 @@ describe('the window’s profiles over its own connection', () => {
     expect(listed.find((each) => each.name === 'review')).not.toHaveProperty('sessionAgents')
   })
 
-  it('deletes only after the user agrees in Helm’s dialog, and asks nothing about a profile that is gone', async () => {
-    const refused = world({ hosted: [profile(1, 'review')], agree: false })
-    await expect(ask(refused.adapter, 'profile:delete', { id: 1 })).resolves.toEqual({ deleted: false })
-    expect(refused.connection.payloads('profile:delete')).toEqual([])
-    expect(refused.asked).toEqual([{ channel: 'profileDialog:confirmDelete', payload: { name: 'review' } }])
-
-    const agreed = world({ hosted: [profile(1, 'review')] })
-    await expect(ask(agreed.adapter, 'profile:delete', { id: 1 })).resolves.toEqual({ deleted: true })
-    await expect(ask(agreed.adapter, 'profile:delete', { id: 1 })).resolves.toEqual({ deleted: false })
-    expect(agreed.asked).toHaveLength(1)
+  it('deletes a profile the host lists without a dialog of main’s, and refuses an unknown id with nothing sent', async () => {
+    const { adapter, connection, asked } = world({ hosted: [profile(1, 'review')] })
+    await expect(ask(adapter, 'profile:delete', { id: 9 })).resolves.toEqual({ deleted: false })
+    expect(connection.payloads('profile:delete')).toEqual([])
+    await expect(ask(adapter, 'profile:delete', { id: 1 })).resolves.toEqual({ deleted: true })
+    expect(connection.payloads('profile:delete')).toEqual([{ id: 1 }])
+    await expect(ask(adapter, 'profile:delete', { id: 1 })).resolves.toEqual({ deleted: false })
+    expect(asked).toEqual([])
   })
 
   it('exports the host’s document through Helm’s save dialog', async () => {

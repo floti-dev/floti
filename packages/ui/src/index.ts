@@ -98,6 +98,7 @@ export {
   type ConfirmChild,
   type ConfirmSessionDialogProps
 } from './components/ConfirmSessionDialog'
+export { DeleteProfileDialog, type DeleteProfileDialogProps } from './components/DeleteProfileDialog'
 export {
   SetupPane,
   type SetupClaudeStatus,

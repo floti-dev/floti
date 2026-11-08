@@ -30,7 +30,6 @@ interface Options {
   copied?: boolean
   /** The host's profiles to begin with. */
   hosted?: P.Profile[]
-  agree?: boolean
   exportTo?: string | null
   importFrom?: string | null
   files?: Record<string, string>
@@ -58,10 +57,6 @@ function world(options: Options = {}) {
   const profiles = createHostProfiles({
     link,
     dialogs: {
-      confirmDelete: (name) => {
-        asked.push(name)
-        return Promise.resolve(options.agree ?? true)
-      },
       chooseExportFile: (suggested) => {
         asked.push(suggested)
         return Promise.resolve(options.exportTo === undefined ? `/out/${suggested}` : options.exportTo)
@@ -120,7 +115,6 @@ describe('profiles in the local host', () => {
     const profiles = createHostProfiles({
       link: fakeLink(null, sentence),
       dialogs: {
-        confirmDelete: () => Promise.resolve(false),
         chooseExportFile: () => Promise.resolve(null),
         chooseImportFile: () => Promise.resolve(null)
       },
@@ -149,18 +143,14 @@ describe('profiles in the local host', () => {
     expect(refused).toEqual({ profile: null, problems: ['A profile needs a folder to run in.'] })
   })
 
-  it('deletes only after the user agrees in Helm’s dialog, and asks nothing about a profile that is gone', async () => {
-    const declined = world({ copied: true, hosted: [profile(1, 'api')], agree: false })
-    expect(await declined.profiles.remove(1)).toBe(false)
-    expect(declined.asked).toEqual(['api'])
-    expect(declined.connection.payloads('profile:delete')).toEqual([])
-
-    const agreed = world({ copied: true, hosted: [profile(1, 'api')] })
-    agreed.connection.answer('profile:delete', () => ({ deleted: true }))
-    expect(await agreed.profiles.remove(1)).toBe(true)
-    expect(await agreed.profiles.remove(9)).toBe(false)
-    expect(agreed.asked).toEqual(['api'])
-    expect(agreed.connection.payloads('profile:delete')).toEqual([{ id: 1 }])
+  it('deletes a profile the host lists, and refuses an unknown id with nothing sent', async () => {
+    const w = world({ copied: true, hosted: [profile(1, 'api')] })
+    w.connection.answer('profile:delete', () => ({ deleted: true }))
+    expect(await w.profiles.remove(9)).toBe(false)
+    expect(w.connection.payloads('profile:delete')).toEqual([])
+    expect(await w.profiles.remove(1)).toBe(true)
+    expect(w.connection.payloads('profile:delete')).toEqual([{ id: 1 }])
+    expect(w.asked).toEqual([])
   })
 
   it('pins through the host', async () => {

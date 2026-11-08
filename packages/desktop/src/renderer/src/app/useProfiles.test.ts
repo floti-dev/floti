@@ -162,4 +162,33 @@ describe('useProfiles', () => {
     // Nothing read, written or started on this PC.
     expect(bridge.invocations).toEqual([])
   })
+
+  it('deletes only the profile it asked about, once agreed, and nothing on no', async () => {
+    bridge.answer('profile:delete', () => ({ deleted: true }))
+    const { result } = renderHook(() => useProfiles())
+    await waitFor(() => expect(result.current.profiles).toEqual([OTHER]))
+
+    act(() => result.current.askRemove(OTHER))
+    expect(result.current.deleting).toEqual(OTHER)
+    act(() => result.current.cancelRemove())
+    expect(result.current.deleting).toBeNull()
+    await act(() => result.current.confirmRemove())
+    expect(bridge.invoked('profile:delete')).toEqual([])
+
+    act(() => result.current.askRemove(OTHER))
+    await act(() => result.current.confirmRemove())
+    expect(result.current.deleting).toBeNull()
+    expect(bridge.invoked('profile:delete')).toEqual([{ id: OTHER.id }])
+  })
+
+  it('says why a delete the host refused failed', async () => {
+    bridge.answer('profile:delete', () => {
+      throw new Error('The local host is not running.')
+    })
+    const { result } = renderHook(() => useProfiles())
+    await waitFor(() => expect(result.current.profiles).toEqual([OTHER]))
+    act(() => result.current.askRemove(OTHER))
+    await act(() => result.current.confirmRemove())
+    expect(result.current.error).toContain('The local host is not running.')
+  })
 })

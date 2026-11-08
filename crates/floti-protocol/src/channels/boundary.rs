@@ -111,7 +111,7 @@ pub const CLIENT_ONLY: &[Outside] = &[
     ),
     outside(
         "profileDialog:*",
-        "the client's own dialogs for deleting, exporting and importing a profile, and the file it writes or reads on its machine; the profile itself is the host's",
+        "the client's own dialogs for exporting and importing a profile, and the file it writes or reads on its machine; the profile itself is the host's",
     ),
     outside(
         "windowSessions:*",

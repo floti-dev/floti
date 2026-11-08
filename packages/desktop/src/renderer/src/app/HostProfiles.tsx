@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { useCallback, useState } from 'react'
 import type { Profile, ProfileDraft, Project, SessionRecord } from '@helm/core/types'
-import { ProfileEditor, ProfileList, type ProfilePrediction } from '@helm/ui'
+import { DeleteProfileDialog, ProfileEditor, ProfileList, type ProfilePrediction } from '@helm/ui'
 import { bridgeFor } from './bridge'
 import { useProfiles } from './useProfiles'
 
@@ -97,7 +97,7 @@ export function HostProfiles({
           setProblems([])
           setEditing(profile)
         }}
-        onDelete={(profile) => void state.remove(profile.id)}
+        onDelete={state.askRemove}
         onExport={(profile) => void state.exportProfile(profile.id)}
         onTogglePin={(profile) => void state.togglePin(profile)}
         onReorder={(ids) => void state.reorder(ids)}
@@ -124,11 +124,18 @@ export function HostProfiles({
           {...('id' in editing
             ? {
                 onDelete: () => {
-                  void state.remove(editing.id)
+                  state.askRemove(editing)
                   setEditing(null)
                 }
               }
             : {})}
+        />
+      )}
+      {state.deleting !== null && (
+        <DeleteProfileDialog
+          name={state.deleting.name}
+          onConfirm={() => void state.confirmRemove()}
+          onCancel={state.cancelRemove}
         />
       )}
     </>

@@ -110,9 +110,8 @@ export function createHostProfiles(deps: HostProfilesDeps): HostProfiles {
 
     async remove(id) {
       const connection = await host()
-      const profile = (await connection.request('profile:list', null)).find((p) => p.id === id)
-      if (profile === undefined) return false
-      if (!(await deps.dialogs.confirmDelete(profile.name))) return false
+      const known = (await connection.request('profile:list', null)).some((p) => p.id === id)
+      if (!known) return false
       return (await connection.request('profile:delete', { id })).deleted
     },
 

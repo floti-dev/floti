@@ -369,8 +369,6 @@ export function registerIpc(ctx: IpcContext): void {
       return next
     },
 
-    'profileDialog:confirmDelete': async ({ name }) => ({ confirmed: await profileDialogs.confirmDelete(name) }),
-
     'profileDialog:export': async ({ fileName, yaml }) => {
       const file = await profileDialogs.chooseExportFile(fileName)
       if (file === null) return { file: null }
