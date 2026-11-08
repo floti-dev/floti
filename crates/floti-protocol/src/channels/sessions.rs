@@ -72,6 +72,7 @@ pub fn declare(catalogue: &mut Catalogue) {
         .request::<SessionClose>()
         .request::<SessionList>()
         .request::<SessionRename>()
+        .request::<SessionRemove>()
         .request::<SessionResize>()
         .request::<SessionSize>()
         .request::<SessionFocus>()
@@ -129,13 +130,25 @@ request_channel! {
 }
 
 request_channel! {
-    /// The sessions the host is running now.
+    /// The sessions the host is running now, then each stopped child a
+    /// running parent kept (`kept`), which every client draws under its
+    /// parent.
     SessionList = "session:list", () => Vec<SessionRecord>
 }
 
 request_channel! {
     /// Renames a session's tab. Answers with the row as the host now holds it.
     SessionRename = "session:rename", RenameSessionRequest => SessionRecord
+}
+
+request_channel! {
+    /// A person's Remove on stopped children their parents kept: each named
+    /// session that is a kept child stops being kept, so it leaves every
+    /// client's Sessions tree and family view. It ends nothing and deletes
+    /// nothing: the child stays in History, and its parent can still resume
+    /// it. A session named that is not a kept child is left as it is.
+    /// Answers how many it took out. Added in 2.2.
+    SessionRemove = "session:remove", RemoveSessionsRequest => RemovedSessions
 }
 
 request_channel! {
@@ -434,6 +447,22 @@ pub struct RenameSessionRequest {
     #[ts(type = "number")]
     pub id: u64,
     pub label: Option<String>,
+}
+
+/// The stopped children a person removes, by row id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveSessionsRequest {
+    #[ts(type = "number[]")]
+    pub ids: Vec<u64>,
+}
+
+/// What `session:remove` took out of the tree.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct RemovedSessions {
+    /// How many of the sessions named were kept children, and are not now.
+    pub removed: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

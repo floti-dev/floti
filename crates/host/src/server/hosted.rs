@@ -124,6 +124,10 @@ pub(crate) struct Hosted {
     /// listed with its row, so a title moves the activity a client re-lists
     /// on, as a child's report does.
     title_revision: AtomicU64,
+    /// How many times a stopped child stopped being kept, by a resume or a
+    /// person's Remove, for the same reason: a client lists whether a child
+    /// is kept with its row.
+    kept_revision: AtomicU64,
 }
 
 /// How much is keeping the host busy: its running sessions and plain
@@ -231,6 +235,7 @@ impl Hosted {
             devices: Mutex::new(devices),
             held_distros: AtomicUsize::new(0),
             title_revision: AtomicU64::new(0),
+            kept_revision: AtomicU64::new(0),
             occupancy: watch::Sender::new(Occupancy::default()),
         })
     }
@@ -500,12 +505,22 @@ impl Hosted {
         Ok(record)
     }
 
-    /// The rows of the sessions running now, oldest first.
+    /// The rows of the sessions running now, oldest first, then the stopped
+    /// children their running parents kept, which every client draws under
+    /// them.
     pub fn list(&self) -> std::result::Result<Vec<SessionRecord>, String> {
-        self.sessions
+        let running: Vec<SessionId> = self
+            .sessions
             .list()
             .iter()
-            .map(|session| self.record(session.id()).map_err(|err| err.to_string()))
+            .map(|session| session.id())
+            .collect();
+        let kept = records::kept_children_of(&self.ledger.store(), &running)
+            .map_err(|err| err.to_string())?;
+        running
+            .iter()
+            .chain(&kept)
+            .map(|id| self.record(*id).map_err(|err| err.to_string()))
             .collect()
     }
 
@@ -1002,6 +1017,25 @@ impl Hosted {
     /// How many times an agent has titled its session since the host started.
     pub fn title_revision(&self) -> u64 {
         self.title_revision.load(Ordering::SeqCst)
+    }
+
+    /// How many times a stopped child stopped being kept since the host
+    /// started.
+    pub fn kept_revision(&self) -> u64 {
+        self.kept_revision.load(Ordering::SeqCst)
+    }
+
+    /// A stopped child stopped being kept.
+    fn kept_moved(&self) {
+        self.kept_revision.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// A person's Remove on stopped children their parents kept: each of
+    /// `ids` that is a kept child leaves every client's tree. It ends nothing
+    /// and deletes nothing. Answers how many were kept.
+    pub fn remove_kept(&self, ids: &[u64]) -> usize {
+        let ids: Vec<SessionId> = ids.iter().filter_map(|id| session_id(*id)).collect();
+        self.unkeep(&ids)
     }
 
     /// Session `id`, while it runs.

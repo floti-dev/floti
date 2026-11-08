@@ -7849,6 +7849,23 @@
       ],
       "type": "object"
     },
+    "RemoveSessionsRequest": {
+      "description": "The stopped children a person removes, by row id.",
+      "properties": {
+        "ids": {
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "ids"
+      ],
+      "type": "object"
+    },
     "RemoveWorktreeRequest": {
       "description": "One agent worktree to remove.",
       "properties": {
@@ -7863,6 +7880,21 @@
       "required": [
         "project",
         "folder"
+      ],
+      "type": "object"
+    },
+    "RemovedSessions": {
+      "description": "What `session:remove` took out of the tree.",
+      "properties": {
+        "removed": {
+          "description": "How many of the sessions named were kept children, and are not now.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "removed"
       ],
       "type": "object"
     },
@@ -9043,6 +9075,10 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "kept": {
+          "description": "Whether this child, stopped, stays under its parent in every client's\nSessions tree and family view: its parent stopped it with `keep`, or a\nperson stopped it. Any other ended child leaves them. Cleared when the\nchild is resumed and when a person removes it (`session:remove`). Set\nonly on a child that has exited; absent reads false, as it does from a\nhost before protocol 2.2.",
+          "type": "boolean"
         },
         "label": {
           "description": "What Floti calls it on screen, or null for \"use `name`\".",
@@ -12375,6 +12411,17 @@
       "kind": "event",
       "name": "session:notify",
       "snapshot": null
+    },
+    {
+      "capability": null,
+      "kind": "request",
+      "name": "session:remove",
+      "request": {
+        "$ref": "#/$defs/RemoveSessionsRequest"
+      },
+      "response": {
+        "$ref": "#/$defs/RemovedSessions"
+      }
     },
     {
       "capability": null,

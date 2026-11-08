@@ -91,7 +91,7 @@ fn child_section(child: &ChildInstructions) -> String {
 fn guide_section(waiting: &str, messaging: Option<&str>) -> String {
     let messaging = messaging.map(|line| format!(" {line}")).unwrap_or_default();
     format!(
-        "# Starting and waiting on agents from your shell\n\nYou can also use `floti agent` from your shell: start, send, wait, read and stop, as the floti-agents tools do. {waiting} Add --wait to `floti agent start` or `send` to get that child's next news from the same command. A text you send waits in the child's queue until the child can take it, and is typed in then.{messaging} For a long command the user should see, such as tests, a build or a dev server, use `floti agent run --name <name> -- <command>` rather than a background command of your own: it runs in your folder in a terminal the user watches, and `floti agent wait <name>` returns its exit code and last 40 lines when it exits. Floti cannot see your own background commands.\n"
+        "# Starting and waiting on agents from your shell\n\nYou can also use `floti agent` from your shell: start, send, wait, read and stop, as the floti-agents tools do. {waiting} Stop a child with `floti agent stop <name>` once you have what you need, and add --keep only when you expect to give it more work. Add --wait to `floti agent start` or `send` to get that child's next news from the same command. A text you send waits in the child's queue until the child can take it, and is typed in then.{messaging} For a long command the user should see, such as tests, a build or a dev server, use `floti agent run --name <name> -- <command>` rather than a background command of your own: it runs in your folder in a terminal the user watches, and `floti agent wait <name>` returns its exit code and last 40 lines when it exits. Floti cannot see your own background commands.\n"
     )
 }
 
@@ -165,6 +165,9 @@ mod tests {
         for word in ["start", "send", "wait", "read", "stop"] {
             assert!(text.contains(word), "{word}");
         }
+        assert!(text.contains(
+            "Stop a child with `floti agent stop <name>` once you have what you need, and add --keep only when you expect to give it more work."
+        ));
     }
 
     #[test]

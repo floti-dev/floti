@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `kept` integer DEFAULT false NOT NULL;

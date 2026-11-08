@@ -34,6 +34,7 @@ const DECLARED: &[(&str, ChannelKind, Option<Capability>)] = &[
     ("session:close", REQUEST, None),
     ("session:list", REQUEST, None),
     ("session:rename", REQUEST, None),
+    ("session:remove", REQUEST, None),
     ("session:resize", REQUEST, Some(Capability::Terminal)),
     ("session:size", REQUEST, None),
     ("session:focus", REQUEST, None),
@@ -218,6 +219,7 @@ fn record(id: u64) -> SessionRecord {
         command: None,
         stopped: false,
         ended_by: None,
+        kept: false,
         last_report: None,
         outlive: true,
         permission_mode: Some(PermissionMode::AcceptEdits),
@@ -522,6 +524,10 @@ fn session_requests_and_answers_round_trip_over_cbor() {
             label: None,
         },
         record(12),
+    );
+    exchange::<SessionRemove>(
+        RemoveSessionsRequest { ids: vec![12, 14] },
+        RemovedSessions { removed: 1 },
     );
     exchange::<SessionResize>(
         SessionResizeRequest {

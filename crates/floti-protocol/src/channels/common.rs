@@ -118,6 +118,15 @@ pub struct SessionRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub ended_by: Option<EndedBy>,
+    /// Whether this child, stopped, stays under its parent in every client's
+    /// Sessions tree and family view: its parent stopped it with `keep`, or a
+    /// person stopped it. Any other ended child leaves them. Cleared when the
+    /// child is resumed and when a person removes it (`session:remove`). Set
+    /// only on a child that has exited; absent reads false, as it does from a
+    /// host before protocol 2.2.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub kept: bool,
     /// What this child last told the session that started it with
     /// `agents_report`, until its next turn starts. Absent when it has told
     /// nothing since, for a session with no parent, and from a host before

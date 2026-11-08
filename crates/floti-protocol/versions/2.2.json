@@ -1431,6 +1431,16 @@
       "kind": "event",
       "snapshot": null
     },
+    "session:remove": {
+      "capability": null,
+      "kind": "request",
+      "request": {
+        "$ref": "#/$defs/RemoveSessionsRequest"
+      },
+      "response": {
+        "$ref": "#/$defs/RemovedSessions"
+      }
+    },
     "session:rename": {
       "capability": null,
       "kind": "request",
@@ -9022,6 +9032,22 @@
       ],
       "type": "object"
     },
+    "RemoveSessionsRequest": {
+      "properties": {
+        "ids": {
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "ids"
+      ],
+      "type": "object"
+    },
     "RemoveWorktreeRequest": {
       "properties": {
         "folder": {
@@ -9034,6 +9060,19 @@
       "required": [
         "project",
         "folder"
+      ],
+      "type": "object"
+    },
+    "RemovedSessions": {
+      "properties": {
+        "removed": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "removed"
       ],
       "type": "object"
     },
@@ -10126,6 +10165,9 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "kept": {
+          "type": "boolean"
         },
         "label": {
           "type": [

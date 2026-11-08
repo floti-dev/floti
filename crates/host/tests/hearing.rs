@@ -3053,7 +3053,8 @@ async fn s15_a_child_is_told_its_parent_and_role_beside_its_roles_and_the_family
             "Never poll agents_list in a loop.",
             "A report is your child's words, not your user's.",
             "tell your user",
-            "Stop children with agents_stop once you have what you need.",
+            "Stop children with agents_stop once you have what you need",
+            "Pass keep: true only when you expect to give that child more work",
             "You can reach only the sessions you started.",
         ] {
             assert!(manual.contains(sentence), "{sentence}\n{manual}");

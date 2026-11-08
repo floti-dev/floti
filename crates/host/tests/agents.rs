@@ -36,10 +36,10 @@ use floti_protocol::channels::host::{
     HostQuit, HostQuitRequest, HostStop, HostStopReason, HostStopRequest,
 };
 use floti_protocol::channels::sessions::{
-    CloseSessionRequest, HistoryRefresh, HistoryResume, RestoreSessionsRequest,
-    ResumeSessionRequest, SessionClose, SessionConfirmAnswer, SessionConfirmRequest,
-    SessionConfirmed, SessionExit, SessionList, SessionRestore, SessionStart, SessionToRestore,
-    StartSessionRequest,
+    CloseSessionRequest, HistoryRefresh, HistoryResume, RemoveSessionsRequest,
+    RestoreSessionsRequest, ResumeSessionRequest, SessionClose, SessionConfirmAnswer,
+    SessionConfirmRequest, SessionConfirmed, SessionExit, SessionList, SessionRemove,
+    SessionRestore, SessionStart, SessionToRestore, StartSessionRequest,
 };
 use floti_protocol::channels::workspace::{HostSettingsPatch, WriteSettings};
 use floti_protocol::{BackendId, Knowable};
@@ -1055,6 +1055,7 @@ fn cli_send(child: &str, text: &str, interrupt: bool) -> SendCommand {
 fn cli_stop(child: &str) -> StopCommand {
     StopCommand {
         child: child.to_owned(),
+        keep: false,
         json: false,
     }
 }
@@ -2042,6 +2043,188 @@ async fn a_quit_that_ends_a_clients_sessions_records_them_and_their_children_sto
         assert!(record.stopped, "{backend}: its child");
     }
     host.stop(HostStopReason::Stop).await;
+}
+
+// ---------------------------------------------------------------------------
+// Kept children
+// ---------------------------------------------------------------------------
+
+impl World {
+    /// The listing every client draws its tree from: each session's id and
+    /// whether it is a kept child.
+    async fn listed(&self) -> BTreeMap<u64, bool> {
+        self.sessions()
+            .await
+            .into_iter()
+            .map(|row| (row.id, row.kept))
+            .collect()
+    }
+
+    /// Whether `parent` has news of `child` ending, seen or not.
+    fn heard_end(&self, parent: &Agent, child: &Agent) -> bool {
+        self.db()
+            .query_row(
+                "SELECT count(*) FROM agent_inbox \
+                 WHERE parent_session_id = ?1 AND child_session_id = ?2 AND event = 'ended'",
+                rusqlite::params![
+                    i64::try_from(parent.id()).unwrap(),
+                    i64::try_from(child.id()).unwrap()
+                ],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("read the parent's news")
+            > 0
+    }
+
+    /// Removes `ids` from every client's tree, as a row's Remove does.
+    async fn remove(&self, ids: Vec<u64>) -> u32 {
+        let mut client = self.client().await;
+        client
+            .request::<SessionRemove>(&RemoveSessionsRequest { ids })
+            .await
+            .expect("the sessions are removed")
+            .removed
+    }
+}
+
+impl Agent {
+    async fn stop_keeping(&self, child: &str) -> Called {
+        self.call("agents_stop", json!({ "child": child, "keep": true }))
+            .await
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_child_stopped_with_keep_or_by_a_person_stays_listed_and_any_other_ended_child_leaves_while_its_parent_hears_of_each()
+ {
+    let world = World::new();
+    let host = world.host().await;
+    let parent = world
+        .session(CLAUDE, &world.project("kept"), "parent")
+        .await;
+    for name in ["kept", "dropped", "by-person", "finisher"] {
+        parent
+            .start(json!({ "task": "work", "name": name }))
+            .await
+            .done();
+    }
+    let kept = world.child_of(&parent, "kept").await;
+    let dropped = world.child_of(&parent, "dropped").await;
+    let by_person = world.child_of(&parent, "by-person").await;
+    let finisher = world.child_of(&parent, "finisher").await;
+
+    let called = parent.stop_keeping("kept").await;
+    assert_eq!(called.done()["kept"], true, "{called:?}");
+    assert!(called.text().contains("kept is kept"), "{called:?}");
+    let called = parent.stop("dropped").await;
+    assert_eq!(called.done()["kept"], false, "{called:?}");
+    assert!(
+        called.text().contains("left the user's window"),
+        "{called:?}"
+    );
+    world.close(&by_person).await;
+    world.type_line(&finisher, "/exit").await;
+    let ended = [kept.id(), dropped.id(), by_person.id(), finisher.id()];
+    world.ended("the four children to end", &ended).await;
+    parent
+        .start(json!({ "task": "work", "name": "staying", "outlive": true }))
+        .await
+        .done();
+    let staying = world.child_of(&parent, "staying").await;
+
+    let listed = world.listed().await;
+    assert_eq!(listed.get(&kept.id()), Some(&true), "{listed:?}");
+    assert_eq!(listed.get(&by_person.id()), Some(&true), "{listed:?}");
+    assert!(!listed.contains_key(&dropped.id()), "{listed:?}");
+    assert!(!listed.contains_key(&finisher.id()), "{listed:?}");
+    assert_eq!(listed.get(&staying.id()), Some(&false), "{listed:?}");
+    for child in [&kept, &dropped, &by_person, &finisher] {
+        assert!(
+            world.heard_end(&parent, child),
+            "the parent hears how {} ended",
+            child.name()
+        );
+    }
+
+    // The parent ends: its kept children leave with it, and the child started
+    // to outlive it stays, still naming it.
+    world.close(&parent).await;
+    world.ended("the parent to end", &[parent.id()]).await;
+    let listed = world.listed().await;
+    assert!(!listed.contains_key(&kept.id()), "{listed:?}");
+    assert!(!listed.contains_key(&by_person.id()), "{listed:?}");
+    assert!(!listed.contains_key(&parent.id()), "{listed:?}");
+    let outliving = world.record(staying.id()).await;
+    assert_eq!(outliving.parent_id, Some(parent.id()));
+    assert_eq!(outliving.parent_name.as_deref(), Some("parent"));
+    world.close(&staying).await;
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_kept_child_stays_listed_across_a_host_restart_until_it_is_resumed_or_removed_and_stays_resumable()
+ {
+    let world = World::new();
+    let first = world.host().await;
+    let parent = world
+        .session(CLAUDE, &world.project("kept restart"), "parent")
+        .await;
+    let mut children = Vec::new();
+    for name in ["again", "removed"] {
+        parent
+            .start(json!({ "task": "work", "name": name }))
+            .await
+            .done();
+        let child = world.child_of(&parent, name).await;
+        world.type_line(&child, "remember this").await;
+        parent.stop_keeping(name).await.done();
+        children.push(child);
+    }
+    let [again, removed] = <[Agent; 2]>::try_from(children).ok().unwrap();
+    world
+        .ended("the children to end", &[again.id(), removed.id()])
+        .await;
+    first.crash().await;
+
+    let second = world.host().await;
+    let listed = world.listed().await;
+    assert_eq!(listed.get(&again.id()), Some(&true), "{listed:?}");
+    assert_eq!(listed.get(&removed.id()), Some(&true), "{listed:?}");
+
+    // Remove takes only a kept child; the parent named with it is left be.
+    assert_eq!(world.remove(vec![removed.id(), parent.id()]).await, 1);
+    assert_eq!(world.remove(vec![removed.id()]).await, 0, "removed once");
+    let listed = world.listed().await;
+    assert!(!listed.contains_key(&removed.id()), "{listed:?}");
+    assert_eq!(listed.get(&parent.id()), Some(&false), "{listed:?}");
+    assert_eq!(world.status(removed.id()), "exited", "its row stays");
+
+    // Resuming a kept child makes it one running row.
+    parent
+        .start(json!({ "task": "more", "resume": "again" }))
+        .await
+        .done();
+    let resumed = world.resumed(&parent, "again", &again).await;
+    let listed = world.listed().await;
+    assert!(!listed.contains_key(&again.id()), "{listed:?}");
+    assert_eq!(listed.get(&resumed.id()), Some(&false), "{listed:?}");
+
+    // A removed child is still the parent's to resume.
+    parent
+        .start(json!({ "task": "more", "resume": "removed" }))
+        .await
+        .done();
+    let reopened = world.resumed(&parent, "removed", &removed).await;
+    assert_eq!(world.status(reopened.id()), "running");
+
+    world.close(&parent).await;
+    world
+        .ended(
+            "the resumed children to end with their parent",
+            &[resumed.id(), reopened.id()],
+        )
+        .await;
+    second.stop(HostStopReason::Stop).await;
 }
 
 // ---------------------------------------------------------------------------

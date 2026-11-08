@@ -36,7 +36,7 @@ const RECORD_COLUMNS: &str = "id, name, label, cwd, branch, project_path, profil
      parent_session_id, \
      (SELECT coalesce(nullif(parent.label, ''), parent.name) FROM sessions AS parent \
       WHERE parent.id = sessions.parent_session_id), \
-     role, stopped, command, outlive, permission_mode, title, stopped_by";
+     role, stopped, command, outlive, permission_mode, title, stopped_by, kept";
 
 /// The backend a row ran on, from its `backend` column.
 ///
@@ -404,20 +404,82 @@ pub(crate) fn stopped_by_of(word: Option<&str>) -> StoppedBy {
         .unwrap_or(StoppedBy::Person)
 }
 
-/// Records that `by` is about to end session `id`, while it still runs. The
-/// first to say wins: a person's Stop on a child its parent is already
-/// stopping is the parent's. A row that is no longer running is left as it
-/// is.
-pub(crate) fn record_stopping(store: &Store, id: SessionId, by: StoppedBy) -> Result<()> {
+/// Records that `by` is about to end session `id`, while it still runs, and,
+/// for a child, whether it is kept: whether it stays under its parent as a
+/// stopped row once it has ended. The first to say wins, for both: a person's
+/// Stop on a child its parent is already stopping is the parent's, and keeps
+/// it only if the parent did. A row that is no longer running is left as it
+/// is, and a session with no parent is never kept.
+pub(crate) fn record_stopping(
+    store: &Store,
+    id: SessionId,
+    by: StoppedBy,
+    keep: bool,
+) -> Result<()> {
     store
         .connection()
         .execute(
-            "UPDATE sessions SET stopped_by = ?2 \
+            "UPDATE sessions SET stopped_by = ?2, kept = (?3 AND parent_session_id IS NOT NULL) \
              WHERE id = ?1 AND status = 'running' AND stopped_by IS NULL",
-            params![id.0, by.word()],
+            params![id.0, by.word(), keep],
         )
         .map_err(sql("record who is stopping the session"))?;
     Ok(())
+}
+
+/// The stopped children their parents kept whose parent is one of `parents`,
+/// oldest first: the ended rows every client draws under a running parent.
+pub(crate) fn kept_children_of(store: &Store, parents: &[SessionId]) -> Result<Vec<SessionId>> {
+    if parents.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut select = store
+        .connection()
+        .prepare(
+            "SELECT id, parent_session_id FROM sessions \
+             WHERE kept = 1 AND status = 'exited' AND parent_session_id IS NOT NULL ORDER BY id",
+        )
+        .map_err(sql("read the kept children"))?;
+    let rows = select
+        .query_map([], |row| {
+            Ok((SessionId(row.get(0)?), SessionId(row.get(1)?)))
+        })
+        .and_then(Iterator::collect::<rusqlite::Result<Vec<_>>>)
+        .map_err(sql("read the kept children"))?;
+    Ok(rows
+        .into_iter()
+        .filter(|(_, parent)| parents.contains(parent))
+        .map(|(id, _)| id)
+        .collect())
+}
+
+/// Whether session `id`'s row says it is kept, whatever its state.
+pub(crate) fn is_kept(store: &Store, id: SessionId) -> Result<bool> {
+    store
+        .connection()
+        .query_row("SELECT kept FROM sessions WHERE id = ?1", [id.0], |row| {
+            row.get(0)
+        })
+        .optional()
+        .map(Option::unwrap_or_default)
+        .map_err(sql("read whether a child is kept"))
+}
+
+/// Stops keeping each of `ids` that is a kept child: it was resumed, or a
+/// person removed it. Answers how many were kept. Nothing else of a row
+/// changes, so History and a resume still find it.
+pub(crate) fn clear_kept(store: &Store, ids: &[SessionId]) -> Result<usize> {
+    let mut statement = store
+        .connection()
+        .prepare("UPDATE sessions SET kept = 0 WHERE id = ?1 AND kept = 1")
+        .map_err(sql("stop keeping a child"))?;
+    let mut cleared = 0;
+    for id in ids {
+        cleared += statement
+            .execute([id.0])
+            .map_err(sql("stop keeping a child"))?;
+    }
+    Ok(cleared)
 }
 
 /// Records `ids` as exited now, with no exit code, as a deliberate stop does
@@ -739,6 +801,9 @@ fn record_from(row: &Row<'_>) -> rusqlite::Result<SessionRecord> {
             row.get(18)?,
             row.get::<_, Option<String>>(23)?.as_deref(),
         ),
+        // Only a child that has exited is drawn as a stopped row; a running
+        // or a lost one is drawn as what it is.
+        kept: status == "exited" && row.get::<_, bool>(24)?,
         command: row
             .get::<_, Option<String>>(19)?
             .filter(|line| !line.trim().is_empty()),

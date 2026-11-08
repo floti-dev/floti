@@ -812,10 +812,11 @@ impl Hosted {
     }
 
     /// Session `id` is about to be ended by `by`: its row says so before it
-    /// is ended, for its record and, for a child, its parent's news. The
+    /// is ended, for its record and, for a child, its parent's news, and
+    /// whether a child stays under its parent as a stopped row (`keep`). The
     /// first to say wins.
-    pub(crate) fn note_stopped(&self, id: SessionId, by: StoppedBy) {
-        if let Err(err) = records::record_stopping(&self.ledger.store(), id, by) {
+    pub(crate) fn note_stopped(&self, id: SessionId, by: StoppedBy, keep: bool) {
+        if let Err(err) = records::record_stopping(&self.ledger.store(), id, by, keep) {
             log_line!("floti host: {err}");
         }
     }

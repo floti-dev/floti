@@ -2016,6 +2016,7 @@ async fn floti_agent_start_and_stop_take_a_role_and_agents_roles_is_called_from_
         let stopped = subcommand(
             Subcommand::Stop(StopCommand {
                 child: "by-cli".to_owned(),
+                keep: false,
                 json: false,
             }),
             url,

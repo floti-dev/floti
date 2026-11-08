@@ -2583,6 +2583,11 @@ client: ProtocolVersion, update: UpdateSide,
 message: string, };
 
 /**
+ * The stopped children a person removes, by row id.
+ */
+export type RemoveSessionsRequest = { ids: number[], };
+
+/**
  * One agent worktree to remove.
  */
 export type RemoveWorktreeRequest = { project: string, 
@@ -2590,6 +2595,15 @@ export type RemoveWorktreeRequest = { project: string,
  * The worktree's folder, as `worktrees:list` gave it.
  */
 folder: string, };
+
+/**
+ * What `session:remove` took out of the tree.
+ */
+export type RemovedSessions = { 
+/**
+ * How many of the sessions named were kept children, and are not now.
+ */
+removed: number, };
 
 export type RenameConfigRequest = { scopePath: string, 
 /**
@@ -3104,6 +3118,15 @@ stopped?: boolean,
  * known (`stopped` still says whether the host ended it).
  */
 endedBy?: EndedBy, 
+/**
+ * Whether this child, stopped, stays under its parent in every client's
+ * Sessions tree and family view: its parent stopped it with `keep`, or a
+ * person stopped it. Any other ended child leaves them. Cleared when the
+ * child is resumed and when a person removes it (`session:remove`). Set
+ * only on a child that has exited; absent reads false, as it does from a
+ * host before protocol 2.2.
+ */
+kept?: boolean, 
 /**
  * What this child last told the session that started it with
  * `agents_report`, until its next turn starts. Absent when it has told
@@ -3893,6 +3916,7 @@ export interface RequestChannels {
   "session:focus": { request: SessionFocusRequest; response: null; capability: null };
   "session:launch": { request: LaunchSessionRequest; response: LaunchedSession; capability: null };
   "session:list": { request: null; response: Array<SessionRecord>; capability: null };
+  "session:remove": { request: RemoveSessionsRequest; response: RemovedSessions; capability: null };
   "session:rename": { request: RenameSessionRequest; response: SessionRecord; capability: null };
   "session:resize": { request: SessionResizeRequest; response: null; capability: "terminal" };
   "session:restorable": { request: null; response: RestoreOffer | null; capability: null };
@@ -4092,6 +4116,7 @@ export const CHANNELS = [
   { name: "session:launch", kind: "request", capability: null },
   { name: "session:list", kind: "request", capability: null },
   { name: "session:notify", kind: "event", capability: null },
+  { name: "session:remove", kind: "request", capability: null },
   { name: "session:rename", kind: "request", capability: null },
   { name: "session:resize", kind: "request", capability: "terminal" },
   { name: "session:restorable", kind: "request", capability: null },

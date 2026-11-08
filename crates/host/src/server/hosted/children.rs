@@ -305,6 +305,9 @@ pub(crate) struct ChildStopped {
     pub name: String,
     /// The names of the agents below it that ended with it.
     pub also: Vec<String>,
+    /// Whether it stays under its parent as a stopped row until it is
+    /// resumed or a person removes it.
+    pub kept: bool,
 }
 
 impl Hosted {
@@ -594,7 +597,7 @@ impl Hosted {
             return Ok(());
         }
         if let Some(session) = super::session_id(child).and_then(|id| self.sessions.get(id)) {
-            self.note_stopped(session.id(), StoppedBy::Floti);
+            self.note_stopped(session.id(), StoppedBy::Floti, false);
             if let Err(err) = session.end_now() {
                 log_line!("floti host: {err}");
             }
@@ -817,6 +820,14 @@ impl Hosted {
         };
         self.end_with_gone_parent(parent, child.outlive, launched.session.id)?;
         self.child_launched(launched.session.id, keeps_records);
+        // Resumed, it is its running row: the stopped rows of its name are
+        // no longer kept.
+        let earlier: Vec<SessionId> = existing
+            .iter()
+            .filter(|row| row.name.eq_ignore_ascii_case(name))
+            .map(|row| row.id)
+            .collect();
+        self.unkeep(&earlier);
         Ok(ChildStarted {
             name: name.clone(),
             backend: backend_id_text(&backend_id),
@@ -932,13 +943,21 @@ impl Hosted {
     }
 
     /// Ends `parent`'s running child called `name` and every agent below it.
-    /// A name that is not one of `parent`'s running children is not found:
-    /// nothing else is looked at.
+    /// With `keep` the child stays under its parent as a stopped row, in every
+    /// client, until it is resumed or a person removes it; without, it leaves
+    /// them at once. The agents below it are never kept. A name that is not
+    /// one of `parent`'s running children is not found: nothing else is
+    /// looked at.
     ///
     /// # Errors
     ///
     /// A sentence when `name` is not one of `parent`'s running children.
-    pub(crate) fn stop_child(&self, parent: SessionId, name: &str) -> Result<ChildStopped, String> {
+    pub(crate) fn stop_child(
+        &self,
+        parent: SessionId,
+        name: &str,
+        keep: bool,
+    ) -> Result<ChildStopped, String> {
         let (target, below) = {
             let store = self.ledger.store();
             let facts = rows::parent_facts(&store, parent).map_err(|err| err.to_string())?;
@@ -972,12 +991,11 @@ impl Hosted {
         // The agent named is stopped by its parent; the ones it started end
         // because it did, which is Floti's doing.
         for session in &sessions {
-            let by = if session.id() == target {
-                StoppedBy::Parent
+            if session.id() == target {
+                self.note_stopped(session.id(), StoppedBy::Parent, keep);
             } else {
-                StoppedBy::Floti
-            };
-            self.note_stopped(session.id(), by);
+                self.note_stopped(session.id(), StoppedBy::Floti, false);
+            }
         }
         for session in &sessions {
             if let Err(err) = session.end_now() {
@@ -987,9 +1005,12 @@ impl Hosted {
         for session in &sessions {
             session.wait_exit(STOP_WAIT);
         }
+        // A person's stop that came first decides whether it is kept.
+        let kept = records::is_kept(&self.ledger.store(), target).unwrap_or(keep);
         Ok(ChildStopped {
             name: target_name,
             also,
+            kept,
         })
     }
 
@@ -1029,7 +1050,7 @@ impl Hosted {
             }
         };
         for session in children.iter().filter_map(|id| self.sessions.get(*id)) {
-            self.note_stopped(session.id(), StoppedBy::Floti);
+            self.note_stopped(session.id(), StoppedBy::Floti, false);
             if let Err(err) = session.end_now() {
                 log_line!("floti host: {err}");
             }
@@ -1058,7 +1079,7 @@ impl Hosted {
                 return;
             }
             for session in &sessions {
-                self.note_stopped(session.id(), StoppedBy::Floti);
+                self.note_stopped(session.id(), StoppedBy::Floti, false);
                 if let Err(err) = session.end_now() {
                     log_line!("floti host: {err}");
                 }
@@ -1069,10 +1090,28 @@ impl Hosted {
         }
     }
 
+    /// Stops keeping each of `ids` that is a kept child, and moves the
+    /// clients' listing so every device's tree loses it. Answers how many
+    /// were kept.
+    pub(crate) fn unkeep(&self, ids: &[SessionId]) -> usize {
+        match records::clear_kept(&self.ledger.store(), ids) {
+            Ok(0) => 0,
+            Ok(cleared) => {
+                self.kept_moved();
+                cleared
+            }
+            Err(err) => {
+                log_line!("floti host: {err}");
+                0
+            }
+        }
+    }
+
     /// A person is stopping session `id` from a client, on any device: its
-    /// record says so, and when it is an agent's child, its parent is told.
+    /// record says so, and when it is an agent's child, its parent is told
+    /// and it is kept, so the person sees it stopped under its parent.
     pub(super) fn note_person_stop(&self, id: SessionId) {
-        self.note_stopped(id, StoppedBy::Person);
+        self.note_stopped(id, StoppedBy::Person, true);
     }
 
     /// `session` is in `conversation_id`, which an earlier session was in when

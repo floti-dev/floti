@@ -1,8 +1,9 @@
 //! A client on 2.1 still reads what a host on 2.2 sends, and that host still
-//! reads what the client sends: protocol 2.2 only adds a session's title and
-//! how it ended, and a History session's agent title, all optional, so a 2.1
-//! frame is a 2.2 frame with them left out, and a 2.2 frame is a 2.1 frame
-//! with fields the older reader ignores.
+//! reads what the client sends: protocol 2.2 only adds a session's title, how
+//! it ended and whether its parent kept it, a History session's agent title,
+//! all optional, and `session:remove`, so a 2.1 frame is a 2.2 frame with them
+//! left out, and a 2.2 frame is a 2.1 frame with fields the older reader
+//! ignores.
 
 use std::collections::BTreeSet;
 
@@ -47,13 +48,17 @@ fn channels_of(record: &Value) -> BTreeSet<String> {
 }
 
 #[test]
-fn protocol_2_2_adds_only_the_optional_titles_and_how_a_session_ended_and_no_channel() {
+fn protocol_2_2_adds_only_optional_fields_and_the_remove_channel() {
     let v21 = record_of(V2_1);
     let v22 = record_of(V2_2);
     assert_eq!(v22["version"], "2.2");
-    assert_eq!(channels_of(&v22), channels_of(&v21));
+    let before = channels_of(&v21);
+    let after = channels_of(&v22);
+    assert!(before.is_subset(&after), "every 2.1 channel stays");
+    let gained: BTreeSet<String> = after.difference(&before).cloned().collect();
+    assert_eq!(gained, BTreeSet::from(["session:remove".to_owned()]));
     let added: [(&str, &[&str]); 2] = [
-        ("SessionRecord", &["title", "endedBy"]),
+        ("SessionRecord", &["title", "endedBy", "kept"]),
         ("HistorySession", &["agentTitle"]),
     ];
     for (name, fields) in added {
@@ -141,6 +146,24 @@ fn a_record_from_a_2_1_host_says_nothing_of_how_it_ended_and_a_2_2_record_names_
         let back: SessionRecord = from_payload(&to_payload(&said).unwrap()).unwrap();
         assert_eq!(back.ended_by, Some(by));
     }
+}
+
+#[test]
+fn a_record_from_a_2_1_host_reads_as_not_kept_and_only_a_kept_child_says_it() {
+    let mut ended = record_2_1();
+    ended["status"] = json!("exited");
+    ended["parentId"] = json!(4);
+    ended["stopped"] = json!(true);
+    let read: SessionRecord = from_payload(&to_payload(&ended).unwrap()).unwrap();
+    assert!(!read.kept);
+    let said = serde_json::to_value(&read).unwrap();
+    assert!(said.get("kept").is_none(), "{said}");
+
+    let kept = SessionRecord { kept: true, ..read };
+    let said = serde_json::to_value(&kept).unwrap();
+    assert_eq!(said["kept"], true);
+    let back: SessionRecord = from_payload(&to_payload(&said).unwrap()).unwrap();
+    assert!(back.kept);
 }
 
 #[test]

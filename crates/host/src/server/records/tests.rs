@@ -371,7 +371,7 @@ fn a_record_says_how_its_session_ended_and_who_stopped_it_once_it_has_exited() {
 
     let stop = |id: SessionId, by: Option<StoppedBy>| {
         if let Some(by) = by {
-            record_stopping(&world.store.lock().unwrap(), id, by).unwrap();
+            record_stopping(&world.store.lock().unwrap(), id, by, false).unwrap();
         }
         // Nothing is said of a session until it has ended.
         assert_eq!(world.record(id).ended_by, None);
@@ -411,17 +411,95 @@ fn the_first_to_say_who_is_stopping_a_session_is_who_stopped_it() {
     let quitting = world.start("quitting", None);
     let store = world.store.lock().unwrap();
     // The parent stops it, and a person's Stop arrives while it is ending.
-    record_stopping(&store, child, StoppedBy::Parent).unwrap();
-    record_stopping(&store, child, StoppedBy::Person).unwrap();
+    record_stopping(&store, child, StoppedBy::Parent, false).unwrap();
+    record_stopping(&store, child, StoppedBy::Person, true).unwrap();
     // A person was stopping it when the host was stopped.
-    record_stopping(&store, quitting, StoppedBy::Person).unwrap();
+    record_stopping(&store, quitting, StoppedBy::Person, true).unwrap();
     record_stopped(&store, &[child, quitting], StoppedBy::Floti).unwrap();
     // A session that has ended is not stopped by anyone after.
-    record_stopping(&store, child, StoppedBy::Floti).unwrap();
+    record_stopping(&store, child, StoppedBy::Floti, true).unwrap();
     drop(store);
 
     assert_eq!(world.record(child).ended_by, Some(EndedBy::Parent));
     assert_eq!(world.record(quitting).ended_by, Some(EndedBy::Person));
+    // The parent's stop came first, and did not keep it.
+    assert!(!world.record(child).kept);
+    // A session no session started is never kept.
+    assert!(!world.record(quitting).kept);
+}
+
+#[test]
+fn a_child_stopped_with_keep_or_by_a_person_is_kept_once_it_has_exited_and_any_other_end_is_not() {
+    let world = World::new();
+    let parent = world.start("lead", None);
+    let kept = world.start("lead-kept", Some(link(parent, "kept")));
+    let by_person = world.start("lead-watched", Some(link(parent, "watched")));
+    let let_go = world.start("lead-done", Some(link(parent, "done")));
+    let by_itself = world.start("lead-quitter", Some(link(parent, "quitter")));
+    let with_parent = world.start("lead-follower", Some(link(parent, "follower")));
+    let stop = |id: SessionId, by: StoppedBy, keep: bool| {
+        record_stopping(&world.store.lock().unwrap(), id, by, keep).unwrap();
+        // A child is drawn as a stopped row only once it has exited.
+        assert!(!world.record(id).kept);
+        world.store.ending(id);
+        world.store.finished(id, &exit(1)).unwrap();
+    };
+    stop(kept, StoppedBy::Parent, true);
+    stop(by_person, StoppedBy::Person, true);
+    stop(let_go, StoppedBy::Parent, false);
+    stop(with_parent, StoppedBy::Floti, false);
+    world.store.finished(by_itself, &exit(0)).unwrap();
+
+    assert!(world.record(kept).kept);
+    assert!(world.record(by_person).kept);
+    for id in [let_go, by_itself, with_parent] {
+        assert!(!world.record(id).kept, "{id}");
+    }
+    assert!(is_kept(&world.store.lock().unwrap(), kept).unwrap());
+    assert!(!is_kept(&world.store.lock().unwrap(), let_go).unwrap());
+}
+
+#[test]
+fn the_kept_children_listed_are_those_of_the_parents_named_and_clearing_takes_only_kept_ones() {
+    let world = World::new();
+    let running = world.start("lead", None);
+    let gone = world.start("old-lead", None);
+    let kept = world.start("lead-kept", Some(link(running, "kept")));
+    let orphan = world.start("old-lead-kept", Some(link(gone, "kept")));
+    let let_go = world.start("lead-done", Some(link(running, "done")));
+    let still_running = world.start("lead-busy", Some(link(running, "busy")));
+    for (id, keep) in [(kept, true), (orphan, true), (let_go, false)] {
+        record_stopping(&world.store.lock().unwrap(), id, StoppedBy::Parent, keep).unwrap();
+        world.store.ending(id);
+        world.store.finished(id, &exit(1)).unwrap();
+    }
+    // A running child that a stop is under way for is not listed yet.
+    record_stopping(
+        &world.store.lock().unwrap(),
+        still_running,
+        StoppedBy::Parent,
+        true,
+    )
+    .unwrap();
+
+    let store = world.store.lock().unwrap();
+    assert_eq!(kept_children_of(&store, &[running]).unwrap(), vec![kept]);
+    assert_eq!(
+        kept_children_of(&store, &[running, gone]).unwrap(),
+        vec![kept, orphan]
+    );
+    assert!(kept_children_of(&store, &[]).unwrap().is_empty());
+
+    // Only a kept row counts; a second clear finds nothing.
+    assert_eq!(clear_kept(&store, &[kept, let_go, running]).unwrap(), 1);
+    assert_eq!(clear_kept(&store, &[kept]).unwrap(), 0);
+    assert!(kept_children_of(&store, &[running]).unwrap().is_empty());
+    drop(store);
+    // Nothing else of the row changed: it is still the child that ended.
+    let record = world.record(kept);
+    assert!(!record.kept);
+    assert_eq!(record.ended_by, Some(EndedBy::Parent));
+    assert_eq!(record.parent_id, Some(u64::try_from(running.0).unwrap()));
 }
 
 #[test]

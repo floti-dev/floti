@@ -3,7 +3,8 @@
 //! `floti agent start --task <text>` starts an agent of the session's own and
 //! prints its name; `floti agent send <name> <text>` types a turn into it;
 //! `floti agent read <name>` prints its screen as plain text;
-//! `floti agent stop <name>` ends it; `floti agent wait` prints the news its
+//! `floti agent stop <name>` ends it, and `--keep` keeps it as a stopped
+//! child to resume later; `floti agent wait` prints the news its
 //! agents have for the session. Each is the `agents_start`, `agents_send`,
 //! `agents_read`, `agents_stop` or `agents_wait` tool called over the same
 //! endpoint a session's agent tools use, so the host answers one way whoever
@@ -63,7 +64,7 @@ pub const SESSIONS_URL_VAR: &str = "FLOTI_AGENT_SESSIONS_URL";
 pub const SESSION_USAGE: &str = "usage: floti session title <text>";
 
 /// What `floti agent` accepts.
-pub const USAGE: &str = "usage: floti agent start --task <text> [--role <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--worktree <name>] [--outlive] [--can-start] [--wait] [--json]\n       floti agent start --resume <name> --task <text> [--wait] [--json]\n       floti agent send [--interrupt] [--wait] [--json] <name> [--] <text>\n       floti agent read [--lines <n>] [--json] <name>\n       floti agent run [--name <name>] [--wait] [--json] -- <command...>\n       floti agent wait [--all] [--json] [<name>...]\n       floti agent stop <name> [--json]";
+pub const USAGE: &str = "usage: floti agent start --task <text> [--role <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--worktree <name>] [--outlive] [--can-start] [--wait] [--json]\n       floti agent start --resume <name> --task <text> [--wait] [--json]\n       floti agent send [--interrupt] [--wait] [--json] <name> [--] <text>\n       floti agent read [--lines <n>] [--json] <name>\n       floti agent run [--name <name>] [--wait] [--json] -- <command...>\n       floti agent wait [--all] [--json] [<name>...]\n       floti agent stop [--keep] [--json] <name>";
 
 /// How long a connection waits to be made.
 const CONNECT_WAIT: Duration = Duration::from_secs(10);
@@ -161,6 +162,8 @@ pub struct Wait {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Stop {
     pub child: String,
+    /// Keep it in the user's window as a stopped child, to resume it later.
+    pub keep: bool,
     pub json: bool,
 }
 
@@ -406,6 +409,7 @@ fn parse_stop(args: &[String]) -> Result<Stop, String> {
     for arg in args {
         match arg.as_str() {
             "--json" => stop.json = true,
+            "--keep" => stop.keep = true,
             flag if flag.starts_with("--") => {
                 return Err(format!("`{flag}` is not a floti agent stop option."));
             }
@@ -512,12 +516,20 @@ pub fn execute(command: &Command, url: &str, token: &str) -> Outcome {
         Command::Send(send) => ("agents_send", send_arguments(send), send.json),
         Command::Read(read) => ("agents_read", read_arguments(read), read.json),
         Command::Run(run) => ("agents_run", run_arguments(run), run.json),
-        Command::Stop(stop) => ("agents_stop", json!({ "child": stop.child }), stop.json),
+        Command::Stop(stop) => ("agents_stop", stop_arguments(stop), stop.json),
         Command::Wait(wait) => ("agents_wait", wait_arguments(wait), wait.json),
     };
     match call(AGENTS, url, token, tool, arguments) {
         Ok(answer) => present(command, &answer, json),
         Err(problem) => Outcome::refused(problem),
+    }
+}
+
+fn stop_arguments(stop: &Stop) -> Value {
+    if stop.keep {
+        json!({ "child": stop.child, "keep": true })
+    } else {
+        json!({ "child": stop.child })
     }
 }
 
@@ -1171,13 +1183,38 @@ mod tests {
     }
 
     #[test]
-    fn stop_takes_one_name_and_a_json_flag() {
+    fn stop_takes_one_name_a_keep_flag_and_a_json_flag() {
         assert_eq!(
             parse(&args(&["stop", "agent-2", "--json"])),
             Ok(Command::Stop(Stop {
                 child: "agent-2".to_owned(),
+                keep: false,
                 json: true
             }))
+        );
+        assert_eq!(
+            parse(&args(&["stop", "--keep", "agent-2"])),
+            Ok(Command::Stop(Stop {
+                child: "agent-2".to_owned(),
+                keep: true,
+                json: false
+            }))
+        );
+        assert_eq!(
+            stop_arguments(&Stop {
+                child: "agent-2".to_owned(),
+                keep: true,
+                json: false
+            }),
+            json!({ "child": "agent-2", "keep": true })
+        );
+        assert_eq!(
+            stop_arguments(&Stop {
+                child: "agent-2".to_owned(),
+                keep: false,
+                json: false
+            }),
+            json!({ "child": "agent-2" })
         );
         assert!(parse(&args(&["stop"])).is_err());
         assert!(parse(&args(&["stop", "a", "b"])).is_err());
@@ -1674,6 +1711,7 @@ mod tests {
         ]);
         let stop = Command::Stop(Stop {
             child: "agent".to_owned(),
+            keep: false,
             json: false,
         });
         assert_eq!(

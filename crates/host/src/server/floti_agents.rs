@@ -660,12 +660,17 @@ async fn roles(hosted: Arc<Hosted>, me: SessionId) -> CallToolResult {
     }
 }
 
-/// `agents_stop`: one of `me`'s children, and the agents it started.
+/// `agents_stop`: one of `me`'s children, and the agents it started; with
+/// `keep`, the child stays as a stopped row under `me`.
 async fn stop(hosted: Arc<Hosted>, me: SessionId, arguments: &JsonObject) -> CallToolResult {
     let Some(child) = text_argument(arguments, "child") else {
         return problem("Name the agent to stop, as agents_start answered it: child.");
     };
-    match off_runtime(move || hosted.stop_child(me, &child)).await {
+    let keep = match flag(arguments, "keep") {
+        Ok(keep) => keep.unwrap_or(false),
+        Err(refusal) => return problem(&refusal),
+    };
+    match off_runtime(move || hosted.stop_child(me, &child, keep)).await {
         Ok(stopped) => stopped_answer(&stopped),
         Err(refusal) => problem(&refusal),
     }
@@ -679,9 +684,17 @@ fn stopped_answer(stopped: &ChildStopped) -> CallToolResult {
             stopped.also.join(", ")
         ));
     }
+    if stopped.kept {
+        text.push_str(&format!(
+            " {} is kept: it stays under you as a stopped agent until you resume it or the user removes it.",
+            stopped.name
+        ));
+    } else {
+        text.push_str(" It has left the user's window. You can still resume it.");
+    }
     answer(
         text,
-        json!({ "stopped": stopped.name, "also": stopped.also }),
+        json!({ "stopped": stopped.name, "also": stopped.also, "kept": stopped.kept }),
     )
 }
 

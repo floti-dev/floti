@@ -308,6 +308,14 @@ export const sessions = sqliteTable(
      */
     stoppedBy: text('stopped_by', { enum: ['parent', 'person', 'floti'] }),
     /**
+     * Whether a stopped child stays under its parent as a stopped row: its
+     * parent stopped it with `keep`, or a person stopped it. Written with
+     * `stopped_by`, by the same first stop, and only on a child's row. Cleared
+     * when the child is resumed and when a person removes it; a child that
+     * ended any other way is never kept, and leaves the Sessions tree.
+     */
+    kept: integer('kept', { mode: 'boolean' }).notNull().default(false),
+    /**
      * The name this session runs with Remote Control under, or null when it
      * runs without. A child of a session with a name is launched with
      * "<that name> › <child name>".

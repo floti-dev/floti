@@ -48,10 +48,10 @@ use floti_protocol::channels::host::{HostDeviceSessions, HostQuit};
 use floti_protocol::channels::sessions::{
     CloseSessionRequest, CloseSessionResult, HistoryResume, ProfileLaunch, PtermCheckShell,
     PtermClose, PtermExit, PtermExited, PtermOpen, PtermResize, PtermShells, PtermStreamOpen,
-    PtermTerminal, SessionActivate, SessionActivityChanged, SessionActivityState, SessionClose,
-    SessionConfirm, SessionConfirmAnswer, SessionConfirmKind, SessionConfirmRequest,
+    PtermTerminal, RemovedSessions, SessionActivate, SessionActivityChanged, SessionActivityState,
+    SessionClose, SessionConfirm, SessionConfirmAnswer, SessionConfirmKind, SessionConfirmRequest,
     SessionConfirmed, SessionExit, SessionFocus, SessionLaunch, SessionList, SessionNotify,
-    SessionRename, SessionResize, SessionRestorable, SessionRestore, SessionSize,
+    SessionRemove, SessionRename, SessionResize, SessionRestorable, SessionRestore, SessionSize,
     SessionSizeResult, SessionStart, SessionStreamOpen, SessionTerminal, SessionsOverview,
     SessionsOverviewChanged,
 };
@@ -375,6 +375,13 @@ impl Feature for Sessions {
                 self.moved();
                 renamed
             })
+            .handle::<SessionRemove>(|request| {
+                let removed = hosted.remove_kept(&request.ids);
+                self.moved();
+                Ok(RemovedSessions {
+                    removed: u32::try_from(removed).unwrap_or(u32::MAX),
+                })
+            })
             .handle::<SessionClose>(|request| self.close(request))
             .handle::<SessionConfirmed>(|answer| self.confirmed(answer))
             .handle::<SessionResize>(move |request| hosted.resize(client, request))
@@ -439,6 +446,9 @@ struct Activity {
     /// How many times an agent has titled its session, for the same reason:
     /// a client lists a session's title with its row.
     titles: u64,
+    /// How many times a stopped child stopped being kept, for the same
+    /// reason: a client lists whether a child is kept with its row.
+    kept: u64,
 }
 
 impl Activity {
@@ -449,6 +459,7 @@ impl Activity {
             && self.overview.sessions == next.overview.sessions
             && self.reports == next.reports
             && self.titles == next.titles
+            && self.kept == next.kept
     }
 }
 
@@ -468,6 +479,7 @@ fn read_activity(hosted: &Hosted, tracker: &mut ActivityTracker) -> Activity {
         overview: pass.overview,
         reports: hosted.report_revision(),
         titles: hosted.title_revision(),
+        kept: hosted.kept_revision(),
     }
 }
 
@@ -541,7 +553,8 @@ impl ActivityState {
         }
         if (self.last.states != next.states
             || self.last.reports != next.reports
-            || self.last.titles != next.titles)
+            || self.last.titles != next.titles
+            || self.last.kept != next.kept)
             && let Err(err) = events.set_state::<SessionActivityChanged, _>(&next.states)
         {
             log_line!("floti host: {err}");
@@ -776,6 +789,7 @@ mod tests {
             command: None,
             stopped: ended_by.is_some_and(|by| by != EndedBy::Exited),
             ended_by,
+            kept: false,
             last_report: None,
             outlive: false,
             permission_mode: None,
@@ -806,8 +820,8 @@ mod tests {
     }
 
     #[test]
-    fn a_title_set_moves_the_activity_publication_as_a_report_does() {
-        let read = |reports, titles| Activity {
+    fn a_title_set_or_a_child_no_longer_kept_moves_the_activity_publication_as_a_report_does() {
+        let read = |reports, titles, kept| Activity {
             states: Vec::new(),
             overview: SessionsOverview {
                 sessions: Vec::new(),
@@ -815,10 +829,15 @@ mod tests {
             },
             reports,
             titles,
+            kept,
         };
-        assert!(read(0, 0).same_as(&read(0, 0)));
-        assert!(!read(0, 0).same_as(&read(0, 1)), "a title");
-        assert!(!read(0, 0).same_as(&read(1, 0)), "a report");
+        assert!(read(0, 0, 0).same_as(&read(0, 0, 0)));
+        assert!(!read(0, 0, 0).same_as(&read(0, 1, 0)), "a title");
+        assert!(!read(0, 0, 0).same_as(&read(1, 0, 0)), "a report");
+        assert!(
+            !read(0, 0, 0).same_as(&read(0, 0, 1)),
+            "a child no longer kept"
+        );
     }
 
     #[test]

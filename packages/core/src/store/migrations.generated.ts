@@ -213,5 +213,11 @@ export const MIGRATIONS: readonly EmbeddedMigration[] = [
     "statements": [
       "ALTER TABLE `sessions` ADD `stopped_by` text;"
     ]
+  },
+  {
+    "tag": "0027_nosy_rumiko_fujikawa",
+    "statements": [
+      "ALTER TABLE `sessions` ADD `kept` integer DEFAULT false NOT NULL;"
+    ]
   }
 ]
