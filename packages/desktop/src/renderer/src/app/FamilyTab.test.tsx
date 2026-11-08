@@ -84,10 +84,11 @@ function session(id: number, fields: Partial<SessionRecord> = {}): SessionRecord
 const LEAD = session(1, { name: 'lead' })
 const child = (id: number, name: string, fields: Partial<SessionRecord> = {}): SessionRecord =>
   session(id, { name, parentId: 1, parentName: 'lead', ...fields })
-/** A child the user stopped, at 14:52 where the test runs. */
+/** A child the user stopped, at 14:52 where the test runs, which stays under its parent kept. */
 const stopped = (id: number, name: string): SessionRecord =>
   child(id, name, {
     status: 'exited',
+    kept: true,
     exitCode: null,
     stopped: true,
     endedAt: new Date(2026, 9, 29, 14, 52).toISOString()
@@ -409,6 +410,7 @@ describe('a parent’s tab with children', () => {
       child(id, name, {
         command: 'pnpm test',
         status: 'exited',
+        kept: true,
         exitCode: code,
         endedAt: new Date(2026, 9, 29, 14, 52).toISOString()
       })
@@ -516,6 +518,7 @@ describe('a parent’s tab with children', () => {
         child(3, 'tests', {
           command: 'pnpm test',
           status: 'exited',
+          kept: true,
           exitCode: 2147483647,
           stopped: true,
           endedAt: new Date(2026, 9, 29, 14, 52).toISOString()
@@ -922,6 +925,7 @@ describe('a child’s report note', () => {
   it('has no note on a header or on an ended child’s last screen', async () => {
     const ended = child(3, 'tester', {
       status: 'exited',
+      kept: true,
       exitCode: null,
       stopped: true,
       endedAt: new Date(2026, 9, 29, 14, 52).toISOString(),

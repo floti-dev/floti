@@ -562,6 +562,44 @@ describe('sessions over the window’s own connection', () => {
     expect(await listed()).not.toHaveProperty('lastReport')
   })
 
+  it('keeps a stopped child kept while the host lists it so, and not once the host lists it no longer', async () => {
+    const connection = new FakeConnection()
+    const lead = row({ id: 7, name: 'app' })
+    const stopped = {
+      id: 12,
+      name: 'mapper',
+      parentId: 7,
+      parentName: 'app',
+      status: 'exited' as const,
+      endedAt: '2026-11-06T10:00:00.000Z',
+      exitCode: 0
+    }
+    const { adapters } = world({ connection, listed: [lead, row({ ...stopped, kept: true })] })
+    const listed = async () => (await ask(adapters, 'session:list')).find((each) => each.id === 12)
+    expect(await listed()).toMatchObject({ id: 12, status: 'exited', kept: true })
+
+    // Another device removed it: the host lists its parent alone.
+    connection.answer('session:list', () => [lead])
+    connection.push('session:activity', [])
+    await settle()
+    const removed = await listed()
+    expect(removed).toMatchObject({ id: 12, status: 'exited', name: 'mapper' })
+    expect(removed).not.toHaveProperty('kept')
+  })
+
+  it('asks the host to remove the children named and stops keeping them here at once', async () => {
+    const connection = new FakeConnection()
+    const stopped = { id: 12, name: 'mapper', parentId: 7, parentName: 'app', status: 'exited' as const, kept: true }
+    const { adapters } = world({ connection, listed: [row({ id: 7, name: 'app' }), row(stopped)] })
+    await ask(adapters, 'session:list')
+    connection.answer('session:remove', () => ({ removed: 1 }))
+
+    await expect(ask(adapters, 'session:remove', { ids: [12, 99] })).resolves.toEqual({ removed: 1 })
+
+    expect(connection.payloads('session:remove')).toEqual([{ ids: [12, 99] }])
+    expect((await ask(adapters, 'session:list')).find((each) => each.id === 12)).not.toHaveProperty('kept')
+  })
+
   it('opens a session it had no tab for on a new stream that starts with its screen, and lets it go again when its tab closes and it keeps running', async () => {
     const { adapters, connection } = world({ listed: [row(), row({ id: 9, name: 'api' })] })
     const data = hear(adapters, 'session:data')

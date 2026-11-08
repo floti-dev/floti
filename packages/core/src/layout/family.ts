@@ -23,6 +23,47 @@ export interface FamilyMember {
   command?: string | null
   /** The exit code of a session that ended, or absent / null where none was observed. */
   exitCode?: number | null
+  /** Whether this child, stopped, stays under its running parent: the host says so (`kept`). Absent reads false. */
+  kept?: boolean
+}
+
+/**
+ * Whether `session` is drawn in the Sessions tree and the family views, among
+ * the sessions `byId` holds. A child that has exited is drawn only while it is
+ * kept and its parent is listed and running: its parent stopped it with keep,
+ * or a person stopped it, and nobody has removed or resumed it since. Any other
+ * child that has exited (one that exited by itself, one its parent stopped
+ * without keep, one that ended with its parent) leaves both at once; it is
+ * still in History and its parent still hears how it ended. A running session,
+ * a lost one and every session a person started are drawn as before.
+ */
+export function inFamilyTree<T extends FamilyMember>(byId: ReadonlyMap<number, T>, session: T): boolean {
+  if (!isChild(session) || session.status !== 'exited') return true
+  if (session.kept !== true) return false
+  const parent = byId.get(session.parentId as number)
+  return parent !== undefined && parent.id !== session.id && parent.status === 'running'
+}
+
+/** `sessions` without the ended children that have left the tree (`inFamilyTree`), in the order given. */
+export function familyTreeMembers<T extends FamilyMember>(sessions: readonly T[]): T[] {
+  const byId = new Map(sessions.map((session) => [session.id, session]))
+  return sessions.filter((session) => inFamilyTree(byId, session))
+}
+
+/**
+ * The ids of the kept children nested anywhere under `row`, for a parent's
+ * Remove stopped children: the stopped rows its parents kept, at any depth.
+ */
+export function keptBelow<T extends FamilyMember>(row: FamilyRow<T>): number[] {
+  const ids: number[] = []
+  const collect = (rows: readonly FamilyRow<T>[]): void => {
+    for (const child of rows) {
+      if (child.session.status === 'exited' && child.session.kept === true) ids.push(child.session.id)
+      collect(child.children)
+    }
+  }
+  collect(row.children)
+  return ids
 }
 
 /** One row of the tree: a session, the children nested under it, and the mark a child shown on its own carries. */
@@ -108,8 +149,10 @@ export function stoppedText(session: {
  * child ends with its parent unless it was started to outlive it, and the
  * parent's row is no longer there to hold it. A parent link that loops back on
  * itself cannot be drawn as nesting, so each session on the loop is top level.
+ * A child that has left the tree (`inFamilyTree`) has no row at all.
  */
-export function sessionFamilies<T extends FamilyMember>(sessions: readonly T[]): FamilyRow<T>[] {
+export function sessionFamilies<T extends FamilyMember>(given: readonly T[]): FamilyRow<T>[] {
+  const sessions = familyTreeMembers(given)
   const byId = new Map<number, T>()
   for (const session of sessions) byId.set(session.id, session)
 

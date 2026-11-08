@@ -1,10 +1,12 @@
-import type { JSX } from 'react'
+import type { JSX, MouseEvent } from 'react'
+import { useState } from 'react'
 import type { Project } from '@helm/core'
 import { cn } from '../lib/cn'
 import { PROJECT_KIND_ICON } from '../lib/projectIcons'
 import { ROW_SELECTED, ROW_SELECTED_GROUP } from '../lib/rows'
 import { SESSION_STATE_DOT, SESSION_STATE_LABEL, commandTone, type SessionState } from '../lib/sessionstate'
 import { CaretIcon, CommandChildIcon, FolderIcon, PinIcon, TerminalIcon } from './icons'
+import { Menu, type MenuAnchor, type MenuEntry } from './Menu'
 
 /** The caret's column: 16px, so a row with nothing to expand keeps its icon in line. */
 const CARET_PX = 16
@@ -291,6 +293,12 @@ export interface SessionRowProps {
    * brings that forward when pressed.
    */
   peeks?: boolean | undefined
+  /**
+   * What the row's right-click menu offers, or absent / empty for a row with
+   * none. `onMenu` is told the id of the entry chosen.
+   */
+  menu?: readonly MenuEntry[] | undefined
+  onMenu?: ((entry: string) => void) | undefined
 }
 
 /**
@@ -369,9 +377,24 @@ export function SessionRow({
   command = false,
   needs = 0,
   peeking = false,
-  peeks = false
+  peeks = false,
+  menu: entries = [],
+  onMenu
 }: SessionRowProps): JSX.Element {
   const waiting = state === 'waiting'
+  const [menuAt, setMenuAt] = useState<MenuAnchor | null>(null)
+  const openMenu =
+    entries.length === 0 || onMenu === undefined
+      ? undefined
+      : (event: MouseEvent<HTMLButtonElement>): void => {
+          event.preventDefault()
+          // A keyboard's menu key reports no pointer: the menu opens under the row.
+          setMenuAt(
+            event.clientX === 0 && event.clientY === 0
+              ? { below: event.currentTarget.getBoundingClientRect() }
+              : { x: event.clientX, y: event.clientY }
+          )
+        }
   // Only a child with nowhere on screen here opens a peek when pressed.
   const peekable = peeks && shown === null && !outside
   const folds = expanded !== null && onToggle !== undefined
@@ -394,6 +417,7 @@ export function SessionRow({
         aria-expanded={peekable ? peeking : undefined}
         aria-label={`${label}, ${state === null ? 'state unknown' : command && note !== '' ? note : SESSION_STATE_LABEL[state]}${outside ? ', outside Helm' : ''}${parentName === undefined ? '' : `, started by ${parentName}`}${needs === 0 ? '' : `, ${String(needs)} of its sessions waiting for you`}`}
         onClick={() => onOpen(id)}
+        onContextMenu={openMenu}
         style={{ paddingLeft: indent }}
         className={cn(
           'group/row relative flex h-line w-full items-center gap-[7px] rounded-raised pr-2 text-left transition-colors',
@@ -545,6 +569,18 @@ export function SessionRow({
           {/* The design's glyphs: a triangle down while the children show, right while they are folded away. */}
           <span aria-hidden>{expanded ? '▾' : '▸'}</span>
         </button>
+      )}
+      {menuAt !== null && onMenu !== undefined && (
+        <Menu
+          label={label}
+          entries={entries}
+          at={menuAt}
+          onSelect={(entry) => {
+            setMenuAt(null)
+            onMenu(entry)
+          }}
+          onDismiss={() => setMenuAt(null)}
+        />
       )}
     </div>
   )

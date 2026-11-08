@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   commandState,
+  familyTreeMembers,
   foldedState,
+  inFamilyTree,
   isCommandChild,
+  keptBelow,
   mostPressingState,
   resolveFamilyPress,
   SESSION_URGENCY,
@@ -94,9 +97,81 @@ describe('sessionFamilies', () => {
     expect(drawn(rows)).toEqual(['1 (of itself)'])
   })
 
-  it('keeps an ended child under a parent that still runs', () => {
-    const rows = sessionFamilies([running(1, 'a'), child(2, 'a', 1, 'lead', { status: 'exited' })])
+  it('keeps a kept child under a parent that still runs, stopped', () => {
+    const rows = sessionFamilies([running(1, 'a'), child(2, 'a', 1, 'lead', { status: 'exited', kept: true })])
     expect(drawn(rows)).toEqual(['1', '  2'])
+  })
+
+  it('draws no row for a child that has exited and is not kept, whatever ended it', () => {
+    const rows = sessionFamilies([
+      running(1, 'a'),
+      child(2, 'a', 1, 'lead', { status: 'exited' }),
+      child(3, 'a', 1, 'lead', { status: 'exited', kept: false }),
+      child(4, 'a', 1, 'lead')
+    ])
+    expect(drawn(rows)).toEqual(['1', '  4'])
+  })
+
+  it('draws no row for a kept child once its parent has ended, and keeps the running child started to outlive it', () => {
+    const rows = sessionFamilies([
+      running(1, 'a', { status: 'exited' }),
+      child(2, 'a', 1, 'lead', { status: 'exited', kept: true }),
+      child(3, 'a', 1, 'lead')
+    ])
+    expect(drawn(rows)).toEqual(['1', '3 (of lead)'])
+  })
+})
+
+describe('inFamilyTree', () => {
+  const byId = (sessions: readonly Listed[]): Map<number, Listed> =>
+    new Map(sessions.map((session) => [session.id, session]))
+
+  it('keeps every session a person started and every running or lost child', () => {
+    const sessions = [
+      running(1, 'a', { status: 'exited' }),
+      running(2, 'a'),
+      child(3, 'a', 2, 'lead'),
+      child(4, 'a', 2, 'lead', { status: 'lost' })
+    ]
+    expect(sessions.map((session) => inFamilyTree(byId(sessions), session))).toEqual([true, true, true, true])
+  })
+
+  it('keeps an exited child only while it is kept and its parent is listed and running', () => {
+    const lead = running(1, 'a')
+    const kept = child(2, 'a', 1, 'lead', { status: 'exited', kept: true })
+    const dropped = child(3, 'a', 1, 'lead', { status: 'exited' })
+    const orphan = child(4, 'a', 9, 'gone', { status: 'exited', kept: true })
+    const looped = child(5, 'a', 5, 'itself', { status: 'exited', kept: true })
+    const all = byId([lead, kept, dropped, orphan, looped])
+    expect(inFamilyTree(all, kept)).toBe(true)
+    expect(inFamilyTree(all, dropped)).toBe(false)
+    expect(inFamilyTree(all, orphan)).toBe(false)
+    expect(inFamilyTree(all, looped)).toBe(false)
+    expect(inFamilyTree(byId([{ ...lead, status: 'exited' }, kept]), kept)).toBe(false)
+  })
+
+  it('leaves the order of the sessions that stay as it was given', () => {
+    const sessions = [
+      child(3, 'a', 1, 'lead', { status: 'exited' }),
+      running(1, 'a'),
+      child(2, 'a', 1, 'lead', { status: 'exited', kept: true })
+    ]
+    expect(familyTreeMembers(sessions).map((session) => session.id)).toEqual([1, 2])
+  })
+})
+
+describe('keptBelow', () => {
+  it('names the kept children under a row at any depth, and none of the running ones', () => {
+    const [lead] = sessionFamilies([
+      running(1, 'a'),
+      child(2, 'a', 1, 'lead', { status: 'exited', kept: true }),
+      child(3, 'a', 1, 'lead'),
+      child(4, 'a', 3, 'middle', { status: 'exited', kept: true }),
+      child(5, 'a', 3, 'middle')
+    ])
+    expect(keptBelow(lead!)).toEqual([2, 4])
+    expect(keptBelow(lead!.children[1]!)).toEqual([4])
+    expect(keptBelow(lead!.children[0]!)).toEqual([])
   })
 })
 

@@ -47,6 +47,12 @@ export interface TreeSession {
    * brings that place forward.
    */
   peeks?: boolean | undefined
+  /**
+   * A stopped child kept under its running parent: its parent stopped it with
+   * keep, or a person stopped it. Its right-click menu offers Remove, and its
+   * parent's offers Remove stopped children.
+   */
+  kept?: boolean | undefined
 }
 
 /**
@@ -89,6 +95,8 @@ export interface TreeHostActions {
   onRescan: (host: string) => void
   /** The Add a host line at the end of the list: Settings > Hosts. */
   onAddHost: () => void
+  /** Remove on a kept child's row, and Remove stopped children on its parent's, naming the rows. */
+  onRemoveSessions?: ((host: string, ids: readonly string[]) => void) | undefined
 }
 
 export interface SessionTreeProps {
@@ -141,6 +149,11 @@ export interface SessionTreeProps {
   noticeActions?: TreeNoticeActions | undefined
   /** The id of the row whose child's peek is open, which keeps its open fill. */
   peekingRow?: string | null | undefined
+  /**
+   * Remove on a kept child's row, and Remove stopped children on its parent's,
+   * on this PC, naming the rows. Absent, the rows have no such menu.
+   */
+  onRemoveSessions?: ((ids: readonly string[]) => void) | undefined
 }
 
 /**
@@ -256,6 +269,10 @@ function mostUrgent(sessions: readonly TreeSession[]): SessionState | null {
 }
 
 /** Every row in `sessions` and under them, each parent before the sessions it started. */
+/** A kept child's Remove, and its parent's Remove stopped children, as their menu entries are named. */
+const REMOVE = 'remove'
+const REMOVE_STOPPED = 'remove-stopped'
+
 function withNested(sessions: readonly TreeSession[]): TreeSession[] {
   const rows: TreeSession[] = []
   const walk = (level: readonly TreeSession[]): void => {
@@ -324,7 +341,8 @@ export function SessionTree({
   localKey = 'local',
   onAddHostMenu,
   noticeActions,
-  peekingRow = null
+  peekingRow = null,
+  onRemoveSessions
 }: SessionTreeProps): JSX.Element {
   const [query, setQuery] = useState('')
   const [listMenu, setListMenu] = useState<MenuAnchor | null>(null)
@@ -351,6 +369,7 @@ export function SessionTree({
       onLaunch={onLaunch}
       launchingPath={launchingPath}
       onOpenSession={onOpenSession}
+      onRemoveSessions={onRemoveSessions}
       peekingRow={peekingRow}
       query={query}
       reveal={reveal !== null && (reveal.kind === 'session' || (reveal.host ?? localKey) === localKey) ? reveal : null}
@@ -423,6 +442,11 @@ export function SessionTree({
                     onLaunch={(project) => hostActions.onLaunch(host.id, project)}
                     launchingPath={host.launchingPath}
                     onOpenSession={(id) => hostActions.onOpenSession(host.id, id)}
+                    onRemoveSessions={
+                      hostActions.onRemoveSessions === undefined
+                        ? undefined
+                        : (ids) => hostActions.onRemoveSessions?.(host.id, ids)
+                    }
                     peekingRow={peekingRow}
                     query={query}
                     reveal={
@@ -659,6 +683,7 @@ function HostTree({
   onLaunch,
   launchingPath,
   onOpenSession,
+  onRemoveSessions,
   peekingRow,
   query,
   reveal,
@@ -675,6 +700,7 @@ function HostTree({
   onLaunch: (project: Project) => void
   launchingPath: string | null
   onOpenSession: (id: string) => void
+  onRemoveSessions: ((ids: readonly string[]) => void) | undefined
   peekingRow: string | null
   query: string
   reveal: TreeReveal | null
@@ -794,6 +820,22 @@ function HostTree({
     // A limit notice stands under the last child, so that child's rule runs on
     // down to it instead of ending at its elbow.
     const noticeBelow = session.notice !== undefined && expanded !== false
+    const keptBelow = withNested(started)
+      .filter((row) => row.kept === true)
+      .map((row) => row.id)
+    const menu: MenuEntry[] =
+      onRemoveSessions === undefined
+        ? []
+        : [
+            ...(session.kept === true ? [{ kind: 'item' as const, id: REMOVE, label: 'Remove' }] : []),
+            ...(keptBelow.length > 0
+              ? [{ kind: 'item' as const, id: REMOVE_STOPPED, label: 'Remove stopped children' }]
+              : [])
+          ]
+    const chooseMenu = (entry: string): void => {
+      if (entry === REMOVE) onRemoveSessions?.([session.id])
+      else if (entry === REMOVE_STOPPED) onRemoveSessions?.(keptBelow)
+    }
     return (
       <Fragment key={session.id}>
         <SessionRow
@@ -815,6 +857,8 @@ function HostTree({
           peeks={session.peeks === true}
           peeking={session.id === peekingRow}
           needs={started.filter((child) => child.state === 'waiting').length}
+          menu={menu}
+          onMenu={chooseMenu}
         />
         {expanded === true &&
           started.map((child, at) =>

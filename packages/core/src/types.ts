@@ -404,6 +404,14 @@ export interface SessionRecord {
    */
   endedBy?: EndedBy
   /**
+   * Whether this child, stopped, stays under its parent in the Sessions tree
+   * and the family view: its parent stopped it with keep, or a person stopped
+   * it. Any other ended child leaves both (`inFamilyTree`). Cleared when it is
+   * resumed and when a person removes it (`session:remove`). Absent reads
+   * false, as it does from a host before protocol 2.2.
+   */
+  kept?: boolean
+  /**
    * What this child last told the session that started it with
    * `agents_report`, until its next turn starts. Absent for a session that has
    * told nothing since.

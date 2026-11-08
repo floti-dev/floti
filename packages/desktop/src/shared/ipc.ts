@@ -1242,6 +1242,14 @@ export interface IpcRequests {
    * validator normalised cannot drift from what was stored.
    */
   'session:rename': { request: RenameSessionRequest; response: SessionRecord }
+  /**
+   * Remove stopped children from the Sessions tree and the family view on
+   * every device: each of `ids` that is a kept child is no longer kept, and
+   * any other id is passed over. Asks nothing first; the children stay in
+   * History and their parents can still resume them. Answers how many were
+   * kept.
+   */
+  'session:remove': { request: { ids: number[] }; response: { removed: number } }
 
   /**
    * The project shell - a plain terminal under the project pane, opened in
@@ -2370,6 +2378,7 @@ export const REQUEST_CHANNELS = Object.keys({
   'sessions:overview': true,
   'sessions:resources': true,
   'session:rename': true,
+  'session:remove': true,
   'pterm:open': true,
   'pterm:close': true,
   'pterm:shells': true,

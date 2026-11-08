@@ -3,6 +3,7 @@ import {
   closeParentPlan,
   isCommandChild,
   sessionLabel,
+  unlistedOf,
   withListedOf,
   type SessionActivityState,
   type SessionRecord,
@@ -233,6 +234,11 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
         records.set(record.id, withListedOf(known, record))
       }
       carry(records.get(record.id)!)
+    }
+    // The host lists every stopped child it keeps under a running parent, so one held here
+    // as kept that it no longer lists was removed, resumed as a new row, or lost its parent.
+    for (const [id, record] of records) {
+      if (!listed.has(id)) records.set(id, unlistedOf(record))
     }
     if (!whole) return
     for (const record of [...records.values()]) {
@@ -548,6 +554,15 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
             (error: unknown) => log(`host: session:rename failed (${(error as Error).message})`)
           )
         return renamed
+      },
+      'session:remove': async (req) => {
+        const answer = await (await host()).request('session:remove', { ids: req.ids })
+        // Taken out here at once; the host's activity moves, and every other window relists.
+        for (const id of req.ids) {
+          const known = records.get(id)
+          if (known !== undefined) records.set(id, unlistedOf(known))
+        }
+        return answer
       }
     },
     sends: {

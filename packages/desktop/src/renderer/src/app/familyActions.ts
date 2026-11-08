@@ -18,3 +18,20 @@ export function stopChild(host: string, id: number): Promise<boolean> {
     .then((answer) => answer.closed)
     .catch(() => false)
 }
+
+/**
+ * Remove on a kept child's row, and Remove stopped children on its parent's:
+ * the host stops keeping each of `ids`, and they leave the Sessions tree and
+ * the family view on every device. It asks nothing first: the children stay in
+ * History and their parents can still resume them. A request that cannot reach
+ * the host leaves the rows where they are, to be removed again.
+ */
+export function removeKept(host: string, ids: readonly number[]): Promise<void> {
+  if (ids.length === 0) return Promise.resolve()
+  return bridgeFor(host)
+    .invoke('session:remove', { ids: [...ids] })
+    .then(
+      () => undefined,
+      () => undefined
+    )
+}

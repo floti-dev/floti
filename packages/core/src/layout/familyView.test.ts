@@ -58,11 +58,13 @@ const running = (id: number, parentId?: number): FamilyMember => ({
   status: 'running',
   ...(parentId === undefined ? {} : { parentId, parentName: 'lead' })
 })
+/** A stopped child its parent or a person kept, which stays under its running parent. */
 const ended = (id: number, parentId: number): FamilyMember => ({
   id,
   status: 'exited',
   parentId,
-  parentName: 'lead'
+  parentName: 'lead',
+  kept: true
 })
 
 /** A parent, 1, running three children, 2 to 4. */
@@ -115,6 +117,12 @@ describe('a child shown in its parent’s tab is open here', () => {
     const withTab = openTab(layout, session(3))
     const held = familiesHere(withTab, [...FAMILY, ended(6, 1)])
     expect(held.get(1)?.map((child) => child.id)).toEqual([2, 4, 6])
+  })
+
+  it('holds no ended child that is not kept: it left the family view when it ended', () => {
+    const { kept: _kept, ...unkept } = ended(7, 1)
+    const held = familiesHere(layout, [...FAMILY, { ...ended(6, 1), kept: false }, unkept])
+    expect(held.get(1)?.map((child) => child.id)).toEqual([2, 3, 4])
   })
 
   it('holds nothing of a child whose parent has no tab here, or that ended', () => {

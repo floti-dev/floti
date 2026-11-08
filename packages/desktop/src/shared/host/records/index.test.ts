@@ -119,6 +119,15 @@ describe('a host session, as the window reads it', () => {
     expect(sessionFromHost(hostSession({ status: 'exited', endedAt, stopped: true }))).not.toHaveProperty('endedBy')
   })
 
+  it('carries that a stopped child is kept under its parent, and nothing from a host that does not say', () => {
+    const endedAt = '2026-11-05T09:30:00.000Z'
+    const kept = hostSession({ parentId: 4, parentName: 'lead', status: 'exited', endedAt, kept: true })
+    expect(sessionFromHost(kept)).toMatchObject({ kept: true })
+    const left = hostSession({ parentId: 4, parentName: 'lead', status: 'exited', endedAt })
+    expect(sessionFromHost(left)).not.toHaveProperty('kept')
+    expect(sessionFromHost({ ...left, kept: false })).not.toHaveProperty('kept')
+  })
+
   it('carries a child’s last report while it has one, and nothing otherwise', () => {
     const lastReport = { state: 'done', text: 'Fixed both bugs.', at: '2026-11-06T10:00:00.000Z' }
     expect(sessionFromHost(hostSession({ parentId: 4, parentName: 'lead', lastReport }))).toMatchObject({

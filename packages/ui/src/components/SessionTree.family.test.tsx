@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { EMPTY_INVENTORY, commandState, type DiscoveryResult, type Project } from '@helm/core/types'
@@ -580,5 +580,60 @@ describe('SessionTree: a child whose peek is open', () => {
     // Row 2 is a child whose press brings a tab or its parent's family view forward, so it is not marked.
     expect(rowOf(2).getAttribute('aria-haspopup')).toBeNull()
     expect(rowOf(2).getAttribute('aria-expanded')).toBeNull()
+  })
+})
+
+describe('stopped children kept under their parent', () => {
+  const family = (): ReadonlyMap<string, readonly TreeSession[]> =>
+    new Map([
+      [
+        HELM.toLowerCase(),
+        [
+          row(1, 'lead', 'busy', {
+            nested: [
+              row(2, 'mapper', 'ended', { kept: true }),
+              row(3, 'tests', 'busy', { nested: [row(4, 'lint', 'ended', { kept: true })] })
+            ]
+          })
+        ]
+      ]
+    ])
+
+  it('offers Remove on a kept child’s row, which names that row alone and asks nothing first', async () => {
+    const onRemoveSessions = vi.fn()
+    renderTree(family(), { onRemoveSessions })
+
+    fireEvent.contextMenu(rowOf(2), { clientX: 20, clientY: 30 })
+    expect(screen.queryByRole('menuitem', { name: 'Remove stopped children' })).toBeNull()
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
+
+    expect(onRemoveSessions).toHaveBeenCalledExactlyOnceWith(['session:2'])
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('offers Remove stopped children on a parent, naming every kept child under it at any depth', async () => {
+    const onRemoveSessions = vi.fn()
+    renderTree(family(), { onRemoveSessions })
+
+    fireEvent.contextMenu(rowOf(1), { clientX: 20, clientY: 30 })
+    expect(screen.queryByRole('menuitem', { name: 'Remove' })).toBeNull()
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Remove stopped children' }))
+    expect(onRemoveSessions).toHaveBeenLastCalledWith(['session:2', 'session:4'])
+
+    fireEvent.contextMenu(rowOf(3), { clientX: 20, clientY: 30 })
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Remove stopped children' }))
+    expect(onRemoveSessions).toHaveBeenLastCalledWith(['session:4'])
+  })
+
+  it('opens no menu on a row with nothing to remove, or where the window offers no Remove', () => {
+    const plain = new Map([[HELM.toLowerCase(), [row(1, 'lead', 'busy', { nested: [row(5, 'worker', 'busy')] })]]])
+    const { rerender } = renderTree(plain, { onRemoveSessions: vi.fn() })
+    fireEvent.contextMenu(rowOf(5), { clientX: 20, clientY: 30 })
+    fireEvent.contextMenu(rowOf(1), { clientX: 20, clientY: 30 })
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    rerender({ sessionsByPath: family(), onRemoveSessions: undefined })
+    fireEvent.contextMenu(rowOf(2), { clientX: 20, clientY: 30 })
+    expect(screen.queryByRole('menu')).toBeNull()
   })
 })

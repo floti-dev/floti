@@ -81,8 +81,10 @@ describe('where a child is on screen here', () => {
   it('is nowhere for a child whose parent’s tab is not open here, and a chip for an ended child with no family view', () => {
     const away = windowOf({ kind: 'settings' })
     expect(childPlace(away, FAMILY, LOCAL_HOST_KEY, 3, scope())).toBe('nowhere')
-    const done = [session(1), { ...session(2, 1), status: 'exited' }]
+    const done = [session(1), { ...session(2, 1), status: 'exited', kept: true }]
     expect(childPlace(layout(), done, LOCAL_HOST_KEY, 2, scope({ roomOf: () => false }))).toBe('chip')
+    const left = [session(1), { ...session(2, 1), status: 'exited' }]
+    expect(childPlace(layout(), left, LOCAL_HOST_KEY, 2, scope({ roomOf: () => false }))).toBe('nowhere')
   })
 
   it('reads another host’s tabs only', () => {
@@ -139,7 +141,8 @@ describe('the chips a parent’s crumb holds', () => {
       session(1),
       session(2, 1, { command: 'npm test' }),
       session(3, 1),
-      { ...session(4, 1), status: 'exited' }
+      { ...session(4, 1), status: 'exited', kept: true },
+      { ...session(5, 1), status: 'exited' }
     ]
     const own = openTab(layout(), sessionRef(3))
     const chips = crumbChips(own, family, LOCAL_HOST_KEY, 1, scope({ roomOf: () => false }), () => 'running')
@@ -154,8 +157,8 @@ describe('the chips a parent’s crumb holds', () => {
       session(1),
       session(2, 1),
       session(3, 1, { command: 'pnpm dev' }),
-      session(4, 1, { command: 'pnpm lint', status: 'exited', exitCode: 0 }),
-      session(5, 1, { command: 'pnpm test', status: 'exited', exitCode: 1 })
+      session(4, 1, { command: 'pnpm lint', status: 'exited', exitCode: 0, kept: true }),
+      session(5, 1, { command: 'pnpm test', status: 'exited', exitCode: 1, kept: true })
     ]
     const chips = crumbChips(layout(), family, LOCAL_HOST_KEY, 1, scope({ roomOf: () => false }), () => 'busy')
     expect(chips.map((chip) => [chip.child.id, chip.mark])).toEqual([

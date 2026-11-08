@@ -331,7 +331,7 @@ import {
   type FamilyScope,
 } from "./hostTabs";
 import { familyCapacity, useFamilyRoomOf } from "./familyRooms";
-import { stopChild } from "./familyActions";
+import { removeKept, stopChild } from "./familyActions";
 import { FamilyTab, type FamilyKid } from "./FamilyTab";
 import { useUpdate } from "./useUpdate";
 import { useOwnDataCopy } from "./useOwnDataCopy";
@@ -3196,6 +3196,7 @@ export function App(): JSX.Element {
           id === frontId ? "focused" : visibleIds.has(id) ? "visible" : null,
         notice: limitNotices.get(LOCAL_HOST_KEY)?.get(session.id),
         peeks: peeksOnPress(LOCAL_HOST_KEY, sessions, session.id, peekScope),
+        ...(session.kept === true ? { kept: true } : {}),
         ...commandRow(session),
       };
     };
@@ -3251,9 +3252,10 @@ export function App(): JSX.Element {
     );
     const tabbed = sessionTabIds(open, host.id);
     // Listed: running, or ended with a tab here, or ended and a child of one
-    // that runs - it stays under its parent after its family view has closed
-    // it. A child whose parent is not among them stands on its own, naming the
-    // parent.
+    // that runs. Of the ended children, only a kept one is drawn
+    // (`inFamilyTree`), and it stays under its parent after its family view
+    // has closed it. A child whose parent is not among them stands on its own,
+    // naming the parent.
     const hosted = work?.sessions ?? [];
     const running = new Set(
       hosted
@@ -3281,6 +3283,7 @@ export function App(): JSX.Element {
           id === frontId ? "focused" : visibleIds.has(id) ? "visible" : null,
         notice: limitNotices.get(host.id)?.get(session.id),
         peeks: peeksOnPress(host.id, hosted, session.id, peekScope),
+        ...(session.kept === true ? { kept: true } : {}),
         ...commandRow(session),
       };
     };
@@ -3585,6 +3588,23 @@ export function App(): JSX.Element {
     [showChild, openSessions],
   );
 
+  /**
+   * Remove on a kept child's row, and Remove stopped children on its
+   * parent's, on `host`: the rows named, by their tree ids, as the host's
+   * sessions. The host stops keeping them, and every device's tree follows.
+   */
+  const removeTreeSessions = (host: string, rowIds: readonly string[]): void => {
+    const named = new Set(rowIds);
+    const there =
+      host === LOCAL_HOST_KEY
+        ? sessions
+        : (hostWork.byHost.get(host)?.sessions ?? []);
+    const ids = there
+      .filter((each) => named.has(paneId(sessionRef(each.id, host))))
+      .map((each) => each.id);
+    void removeKept(host, ids);
+  };
+
   /** What each host's group in the tree asks for, through that host. */
   const treeHostActions = {
     onSelect: (host: string, project: Project) =>
@@ -3614,6 +3634,7 @@ export function App(): JSX.Element {
     onNewHarness: (host: string) => setup.openDialog("new", host),
     onRescan: rescanOn,
     onAddHost: () => setAddingHost(true),
+    onRemoveSessions: removeTreeSessions,
   };
 
   /** Helm's live sessions by what they are doing, for the status bar. */
@@ -5806,6 +5827,7 @@ export function App(): JSX.Element {
             onLaunch={(project) => void launch(project)}
             launchingPath={launchingPath}
             onOpenSession={openTreeSession}
+            onRemoveSessions={(ids) => removeTreeSessions(LOCAL_HOST_KEY, ids)}
             onAddRoot={launcher.addRoot}
             reveal={treeReveal}
             hostActions={treeHostActions}

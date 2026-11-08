@@ -106,7 +106,7 @@ describe('commandRow', () => {
     const entries = treeEntries(
       [
         session(1, 'api-refactor', '/work/helm'),
-        record({ command: 'pnpm test', status: 'exited', exitCode: 1 })
+        record({ command: 'pnpm test', status: 'exited', exitCode: 1, kept: true })
       ],
       (listed) => ({ ...rowOf(listed), ...commandRow(listed) })
     )
@@ -114,6 +114,15 @@ describe('commandRow', () => {
     expect(nested).toHaveLength(1)
     expect(nested[0]).toMatchObject({ id: 'session:3', command: true, state: 'failed' })
     expect(entries[0]?.row.command).toBeUndefined()
+  })
+
+  it('draws no row for a command child that exited by itself: its parent was told the code', () => {
+    const entries = treeEntries(
+      [session(1, 'api-refactor', '/work/helm'), record({ command: 'pnpm test', status: 'exited', exitCode: 1 })],
+      (listed) => ({ ...rowOf(listed), ...commandRow(listed) })
+    )
+    expect(entries.map((entry) => entry.session.id)).toEqual([1])
+    expect(entries[0]?.row.nested).toBeUndefined()
   })
 })
 
