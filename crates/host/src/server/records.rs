@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use floti_protocol::BackendId;
-use floti_protocol::channels::common::{PermissionMode, SessionRecord, SessionStatus};
+use floti_protocol::channels::common::{EndedBy, PermissionMode, SessionRecord, SessionStatus};
 use floti_protocol::channels::sessions::{HistorySession, Profile};
 use rusqlite::{OptionalExtension, Row, params};
 use tokio::sync::broadcast;
@@ -36,7 +36,7 @@ const RECORD_COLUMNS: &str = "id, name, label, cwd, branch, project_path, profil
      parent_session_id, \
      (SELECT coalesce(nullif(parent.label, ''), parent.name) FROM sessions AS parent \
       WHERE parent.id = sessions.parent_session_id), \
-     role, stopped, command, outlive, permission_mode, title";
+     role, stopped, command, outlive, permission_mode, title, stopped_by";
 
 /// The backend a row ran on, from its `backend` column.
 ///
@@ -349,22 +349,94 @@ pub(crate) fn running_ids(store: &Store) -> Result<Vec<SessionId>> {
         .map_err(sql("read the running sessions"))
 }
 
+/// Who ended a session that did not exit on its own, as its row keeps it
+/// (`stopped_by`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StoppedBy {
+    /// The session that started it, with `agents_stop`.
+    Parent,
+    /// A person, from any device: End or Stop, or a quit that ends it.
+    Person,
+    /// Floti: its parent ended, or the host was stopped.
+    Floti,
+}
+
+impl StoppedBy {
+    /// The word stored.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Parent => "parent",
+            Self::Person => "person",
+            Self::Floti => "floti",
+        }
+    }
+
+    pub fn from_word(word: &str) -> Option<Self> {
+        [Self::Parent, Self::Person, Self::Floti]
+            .into_iter()
+            .find(|by| by.word() == word)
+    }
+
+    /// As a sentence says it.
+    pub fn said(self) -> &'static str {
+        match self {
+            Self::Parent => "its parent",
+            Self::Person => "a person",
+            Self::Floti => "Floti",
+        }
+    }
+
+    /// As a session's record says it.
+    fn ended_by(self) -> EndedBy {
+        match self {
+            Self::Parent => EndedBy::Parent,
+            Self::Person => EndedBy::Person,
+            Self::Floti => EndedBy::Floti,
+        }
+    }
+}
+
+/// Who ended a row `stopped` marks, from its `stopped_by`. A stop nobody
+/// named is a person's: every other route names itself before it ends the
+/// session.
+pub(crate) fn stopped_by_of(word: Option<&str>) -> StoppedBy {
+    word.and_then(StoppedBy::from_word)
+        .unwrap_or(StoppedBy::Person)
+}
+
+/// Records that `by` is about to end session `id`, while it still runs. The
+/// first to say wins: a person's Stop on a child its parent is already
+/// stopping is the parent's. A row that is no longer running is left as it
+/// is.
+pub(crate) fn record_stopping(store: &Store, id: SessionId, by: StoppedBy) -> Result<()> {
+    store
+        .connection()
+        .execute(
+            "UPDATE sessions SET stopped_by = ?2 \
+             WHERE id = ?1 AND status = 'running' AND stopped_by IS NULL",
+            params![id.0, by.word()],
+        )
+        .map_err(sql("record who is stopping the session"))?;
+    Ok(())
+}
+
 /// Records `ids` as exited now, with no exit code, as a deliberate stop does
 /// before it ends their processes, so none is offered for restore, and as
-/// stopped, because the host is ending them. A row that is no longer running
-/// is left as it is.
-pub(crate) fn record_stopped(store: &Store, ids: &[SessionId]) -> Result<()> {
+/// stopped by `by`, unless someone was already stopping one. A row that is no
+/// longer running is left as it is.
+pub(crate) fn record_stopped(store: &Store, ids: &[SessionId], by: StoppedBy) -> Result<()> {
     let mut statement = store
         .connection()
         .prepare(&format!(
-            "UPDATE sessions SET status = 'exited', stopped = 1, ended_at = {NOW}, \
+            "UPDATE sessions SET status = 'exited', stopped = 1, \
+             stopped_by = coalesce(stopped_by, ?2), ended_at = {NOW}, \
              duration_ms = CAST((julianday({NOW}) - julianday(started_at)) * 86400000 AS INTEGER) \
              WHERE id = ?1 AND status = 'running'"
         ))
         .map_err(sql("record the stopped sessions"))?;
     for id in ids {
         statement
-            .execute(params![id.0])
+            .execute(params![id.0, by.word()])
             .map_err(sql("record the stopped sessions"))?;
     }
     Ok(())
@@ -662,6 +734,11 @@ fn record_from(row: &Row<'_>) -> rusqlite::Result<SessionRecord> {
             (!role.is_empty()).then(|| role.to_owned())
         }),
         stopped: row.get(18)?,
+        ended_by: ended_by(
+            &status,
+            row.get(18)?,
+            row.get::<_, Option<String>>(23)?.as_deref(),
+        ),
         command: row
             .get::<_, Option<String>>(19)?
             .filter(|line| !line.trim().is_empty()),
@@ -671,6 +748,18 @@ fn record_from(row: &Row<'_>) -> rusqlite::Result<SessionRecord> {
             .get::<_, Option<String>>(21)?
             .as_deref()
             .and_then(permission_mode_from_name),
+    })
+}
+
+/// How a row ended: by itself, or stopped by whoever its row names. Only a
+/// row that has exited says; a running or a lost one does not.
+fn ended_by(status: &str, stopped: bool, by: Option<&str>) -> Option<EndedBy> {
+    (status == "exited").then(|| {
+        if stopped {
+            stopped_by_of(by).ended_by()
+        } else {
+            EndedBy::Exited
+        }
     })
 }
 

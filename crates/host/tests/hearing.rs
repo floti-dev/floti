@@ -35,12 +35,13 @@ use floti_host::testkit::{
     OtherAgent, OtherAgentBackend, OtherAgentRecord, PATIENCE, RunningHost, ShellRun, TestClient,
     TestDirs,
 };
-use floti_protocol::channel::from_payload;
-use floti_protocol::channels::common::SessionRecord;
+use floti_protocol::channel::{EventChannel, from_payload};
+use floti_protocol::channels::common::{EndedBy, SessionRecord};
 use floti_protocol::channels::host::HostStopReason;
 use floti_protocol::channels::sessions::{
     CloseSessionRequest, HistoryRefresh, HistoryResume, ResumeSessionRequest, SessionActivity,
-    SessionActivityState, SessionClose, SessionList, SessionStart, StartSessionRequest,
+    SessionActivityState, SessionClose, SessionExit, SessionList, SessionNotify, SessionStart,
+    StartSessionRequest,
 };
 use floti_protocol::{BackendId, Knowable, Message};
 use serde_json::{Value, json};
@@ -1946,6 +1947,109 @@ async fn s9_a_child_that_exits_or_is_stopped_is_ended_with_its_exit_code_or_who_
             .any(|row| row.starts_with("victim|ended|stopped|parent")),
         "{lines:?}"
     );
+    host.stop(HostStopReason::Stop).await;
+}
+
+/// Where a client hears of exits, and of the exits worth an OS notification.
+const EXITS: u64 = 40;
+const NOTIFY: u64 = 41;
+
+/// The finished rows `client` is sent on [`EXITS`] and the sessions it is
+/// sent on [`NOTIFY`], until every session in `ids` has been heard exiting. A
+/// notification goes out before its exit, so every one for those exits is in
+/// what this returns.
+async fn exits_of(
+    client: &mut TestClient,
+    ids: &[u64],
+) -> (BTreeMap<u64, SessionRecord>, Vec<u64>) {
+    let deadline = Instant::now() + PATIENCE;
+    let mut exited = BTreeMap::new();
+    let mut notified = Vec::new();
+    while !ids.iter().all(|id| exited.contains_key(id)) {
+        let left = deadline.saturating_duration_since(Instant::now());
+        let Some(message) = client.next(left).await else {
+            panic!("not every exit was heard: {exited:#?}");
+        };
+        let Message::Event(event) = message else {
+            continue;
+        };
+        if event.subscription != EXITS && event.subscription != NOTIFY {
+            continue;
+        }
+        let session: SessionRecord = from_payload(&event.payload).expect("a finished row");
+        if event.subscription == NOTIFY {
+            notified.push(session.id);
+        } else {
+            exited.insert(session.id, session);
+        }
+    }
+    (exited, notified)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_childs_record_says_who_ended_it_and_no_childs_end_raises_an_os_notification() {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("endings");
+    // A client that never says what it sees: every exit worth a notification
+    // is sent to it.
+    let mut watcher = world.client().await;
+    watcher.subscribe_quietly(EXITS, SessionExit::NAME).await;
+    watcher.subscribe_quietly(NOTIFY, SessionNotify::NAME).await;
+    let parent = world.session(CLAUDE, &folder, "parent").await;
+    let elder = world.session(CLAUDE, &folder, "elder").await;
+    for name in ["quitter", "crasher", "victim", "bystander"] {
+        parent
+            .start(json!({ "task": "work", "name": name, "backend": CLAUDE }))
+            .await
+            .done();
+    }
+    elder
+        .start(json!({ "task": "work", "name": "follower", "backend": CLAUDE }))
+        .await
+        .done();
+    let quitter = world.child_of(&parent, "quitter").await;
+    let crasher = world.child_of(&parent, "crasher").await;
+    let victim = world.child_of(&parent, "victim").await;
+    let bystander = world.child_of(&parent, "bystander").await;
+    let follower = world.child_of(&elder, "follower").await;
+    world
+        .calm(&parent, &["quitter", "crasher", "victim", "bystander"])
+        .await;
+    world.calm(&elder, &["follower"]).await;
+
+    world.type_line(&quitter, "/exit").await;
+    world.type_line(&crasher, "/crash").await;
+    parent.stop("victim").await.done();
+    // A person on another device than the one that started it.
+    world.close(&bystander).await;
+    // Its child ends with it, which is Floti's doing.
+    world.close(&elder).await;
+
+    let ids = [
+        quitter.id(),
+        crasher.id(),
+        victim.id(),
+        bystander.id(),
+        follower.id(),
+        elder.id(),
+    ];
+    let (exited, notified) = exits_of(&mut watcher, &ids).await;
+    let ended_by = |agent: &Agent| exited[&agent.id()].ended_by;
+    assert_eq!(ended_by(&quitter), Some(EndedBy::Exited));
+    assert_eq!(exited[&quitter.id()].exit_code, Some(0));
+    assert_eq!(ended_by(&crasher), Some(EndedBy::Exited));
+    assert_eq!(exited[&crasher.id()].exit_code, Some(3));
+    assert_eq!(ended_by(&victim), Some(EndedBy::Parent));
+    assert_eq!(ended_by(&bystander), Some(EndedBy::Person));
+    assert_eq!(ended_by(&follower), Some(EndedBy::Floti));
+    assert_eq!(ended_by(&elder), Some(EndedBy::Person));
+    for agent in [&victim, &bystander, &follower, &elder] {
+        assert!(exited[&agent.id()].stopped, "{}", agent.name());
+    }
+    // No child's end is worth a notification, however it came, and a session
+    // a person stopped was meant to end.
+    assert_eq!(notified, Vec::<u64>::new());
     host.stop(HostStopReason::Stop).await;
 }
 

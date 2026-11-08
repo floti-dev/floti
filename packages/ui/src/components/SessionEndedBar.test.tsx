@@ -61,6 +61,29 @@ describe('SessionEndedBar', () => {
     expect(bar.firstElementChild?.className).not.toContain('danger')
   })
 
+  it('says who stopped a session, in the muted ended tone, and never its exit code', () => {
+    for (const stoppedBy of ['Stopped by lead', 'Stopped', 'Stopped by Floti']) {
+      const { unmount } = render(
+        <SessionEndedBar exitCode={1} durationMs={4_000} onClose={vi.fn()} stoppedBy={stoppedBy} />
+      )
+      const bar = screen.getByRole('status')
+      expect(bar.textContent).toBe(`${stoppedBy}after 4sClose tab`)
+      expect(bar.textContent).not.toContain('code')
+      expect(bar.className).toContain('bg-surface-sunken')
+      expect(bar.className).toContain('text-fg-muted')
+      expect(bar.className).not.toContain('danger')
+      expect(bar.firstElementChild?.className).toContain('bg-fg-subtle')
+      unmount()
+    }
+  })
+
+  it('still names the code of a program that exited by itself with one other than 0', () => {
+    render(<SessionEndedBar exitCode={2} durationMs={null} onClose={vi.fn()} />)
+    const bar = screen.getByRole('status')
+    expect(bar.textContent).toBe('Session exited with code 2Close tab')
+    expect(bar.className).toContain('text-danger')
+  })
+
   it('says only that it ended when no exit code was observed', () => {
     render(<SessionEndedBar exitCode={null} durationMs={800} onClose={vi.fn()} />)
     expect(screen.getByRole('status').textContent).toBe('Session endedafter 800msClose tab')

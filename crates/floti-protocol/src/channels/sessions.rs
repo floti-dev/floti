@@ -189,10 +189,12 @@ event_channel! {
 }
 
 event_channel! {
-    /// A session ended where this client's user could not see it, judged
-    /// from what the client last said on `session:focus`: its finished row,
-    /// for the client to turn into its OS notification. Sent to one client
-    /// at a time, numbered for that client alone.
+    /// A session a person started, whose program exited by itself, ended
+    /// where this client's user could not see it, judged from what the
+    /// client last said on `session:focus`: its finished row, for the client
+    /// to turn into its OS notification. A stopped session and a child's end
+    /// are sent nobody. Sent to one client at a time, numbered for that
+    /// client alone.
     SessionNotify = "session:notify", event SessionRecord
 }
 

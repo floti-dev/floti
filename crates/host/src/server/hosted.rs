@@ -40,7 +40,7 @@ use tokio::sync::watch;
 use super::agent_tools::HostAgentTools;
 use super::features::ActivityHandle;
 use super::floti_agents::FAMILY;
-use super::records::{self, HostLedger, LostRow};
+use super::records::{self, HostLedger, LostRow, StoppedBy};
 use super::session_tools::SESSIONS_FAMILY;
 use crate::agent::claude_code::{parse_instant, sanitize_session_name, unique_session_name};
 use crate::agent::{
@@ -335,7 +335,8 @@ impl Hosted {
             .filter_map(|id| self.sessions.get(*id))
             .collect();
         let ids: Vec<SessionId> = running.iter().map(|session| session.id()).collect();
-        if let Err(err) = records::record_stopped(&self.ledger.store(), &ids) {
+        // The person quitting chose to end them.
+        if let Err(err) = records::record_stopped(&self.ledger.store(), &ids, StoppedBy::Person) {
             log_line!("floti host: {err}");
         }
         for session in &running {
@@ -1310,7 +1311,9 @@ impl Hosted {
             let running = self.sessions.list();
             if reason == HostStopReason::Stop {
                 let ids: Vec<SessionId> = running.iter().map(|session| session.id()).collect();
-                if let Err(err) = records::record_stopped(&self.ledger.store(), &ids) {
+                if let Err(err) =
+                    records::record_stopped(&self.ledger.store(), &ids, StoppedBy::Floti)
+                {
                     log_line!("floti host: {err}");
                 }
             }

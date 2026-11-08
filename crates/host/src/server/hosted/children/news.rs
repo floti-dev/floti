@@ -42,6 +42,7 @@ use super::inbox::{self, EventKind, Facts, Item, StoppedBy};
 use super::startup::{NOT_STARTED, NOT_STARTED_NOTICE, Startups};
 use super::{notices, rows};
 use crate::server::hosted::{Hosted, session_id};
+use crate::server::records;
 use crate::session::{HostedView, ReportState, ReportedStatus, SessionId};
 
 /// What a pass saw of one child.
@@ -234,8 +235,6 @@ struct Watched {
     activity: HashMap<SessionId, Option<SessionActivity>>,
     /// The children whose activity a pass has known since the host started.
     begun: HashSet<SessionId>,
-    /// Who ended a child that is ending, noted before it is ended.
-    stopped_by: HashMap<SessionId, StoppedBy>,
     last_report: HashMap<SessionId, LastReport>,
     /// Counts the changes to `last_report`, which the clients' listing shows
     /// and the activity reader publishes again when it moves.
@@ -355,17 +354,6 @@ impl Desk {
         self.watched().begun.contains(&id)
     }
 
-    /// Child `id` is about to be ended by `by`. The first to say wins: a
-    /// person's Stop on a child its parent is already stopping is the
-    /// parent's.
-    pub fn note_stopped(&self, id: SessionId, by: StoppedBy) {
-        self.watched().stopped_by.entry(id).or_insert(by);
-    }
-
-    fn take_stopped(&self, id: SessionId) -> Option<StoppedBy> {
-        self.watched().stopped_by.remove(&id)
-    }
-
     /// Child `id`'s last report, until its next turn starts.
     pub fn last_report(&self, id: SessionId) -> Option<LastReport> {
         self.watched().last_report.get(&id).cloned()
@@ -385,7 +373,6 @@ impl Desk {
         watched.begun.remove(&id);
         watched.plain.remove(&id);
         watched.adopted.remove(&id);
-        watched.stopped_by.remove(&id);
         watched.startups.forget(id);
         if watched.last_report.remove(&id).is_some() {
             watched.report_revision += 1;
@@ -707,13 +694,10 @@ impl Hosted {
         let last_lines = self.ledger.last_lines_of(child);
         match ended {
             Ok(Some(ended)) => {
-                let by = desk.take_stopped(child);
-                let facts = if ended.stopped {
+                let facts = if let Some(by) = ended.stopped_by {
                     Facts {
                         state: Some("stopped".to_owned()),
-                        // A stop nobody noted is a person's: every other
-                        // route notes itself first.
-                        detail: Some(by.unwrap_or(StoppedBy::Person).word().to_owned()),
+                        detail: Some(by.word().to_owned()),
                         exit_code: None,
                     }
                 } else {
@@ -726,7 +710,7 @@ impl Hosted {
                     }
                 };
                 self.write_news_to(&ended.link, Some(child), EventKind::Ended, &facts);
-                if !ended.stopped
+                if ended.stopped_by.is_none()
                     && let Some(code) = ended.exit_code.filter(|code| *code != 0)
                 {
                     self.error_noticed(
@@ -827,9 +811,13 @@ impl Hosted {
         }
     }
 
-    /// Child `child` is about to be ended by `by`.
-    pub(crate) fn note_stopped(&self, child: SessionId, by: StoppedBy) {
-        self.children.news.note_stopped(child, by);
+    /// Session `id` is about to be ended by `by`: its row says so before it
+    /// is ended, for its record and, for a child, its parent's news. The
+    /// first to say wins.
+    pub(crate) fn note_stopped(&self, id: SessionId, by: StoppedBy) {
+        if let Err(err) = records::record_stopping(&self.ledger.store(), id, by) {
+            log_line!("floti host: {err}");
+        }
     }
 
     /// Child `child`'s last report, until its next turn starts.

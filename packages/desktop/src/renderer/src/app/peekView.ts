@@ -3,6 +3,7 @@ import {
   commandState,
   isCommandChild,
   sessionLabel,
+  stoppedText,
   type ChildMark,
   type PermissionMode,
   type SessionRecord
@@ -19,12 +20,12 @@ import { commandWord } from './treeFamilies'
 
 /**
  * What a state chip says and how it is toned: the dot's own tones, in a word.
- * A child that has ended says how: 'stopped' when the host ended it, 'exited 0'
- * for a command's exit code, and 'ended' otherwise.
+ * A child that has ended says how: 'exited 0' for a command's exit code, and
+ * 'ended' otherwise. One that was stopped says who stopped it ({@link peekFacts}).
  */
 export function peekState(
   state: TabIndicator,
-  how: { stopped?: boolean | undefined; exitCode?: number | undefined } = {}
+  how: { exitCode?: number | undefined } = {}
 ): { label: string; tone: PeekTone } {
   switch (state) {
     case 'busy':
@@ -41,7 +42,7 @@ export function peekState(
       return { label: state === 'error' ? 'error' : 'failed', tone: 'danger' }
     case 'ended':
       return {
-        label: how.exitCode !== undefined ? `exited ${String(how.exitCode)}` : how.stopped === true ? 'stopped' : 'ended',
+        label: how.exitCode !== undefined ? `exited ${String(how.exitCode)}` : 'ended',
         tone: 'neutral'
       }
   }
@@ -92,7 +93,9 @@ export type PeekFacts = Pick<
  * The peek's facts for `child`: who it is (its role, or its command), where
  * it runs, the mode it was launched in and its last report. `command` is the
  * command line of a child that runs one and not an agent, which has no role,
- * mode or report; absent for an agent child.
+ * mode or report; absent for an agent child. A child that was stopped says who
+ * stopped it, as its ended header does, in the chip's lower case ('stopped by
+ * lead', 'stopped by Floti', 'stopped'), toned neutral whatever its exit code.
  */
 export function peekFacts(
   child: SessionRecord,
@@ -101,13 +104,16 @@ export function peekFacts(
   command?: { line: string; runsIn?: string; exitCode?: number }
 ): PeekFacts {
   const report = child.lastReport
+  const stopped = child.status === 'running' || child.status === 'lost' ? null : stoppedText(child)
   return {
     name: sessionLabel(child),
     mark,
     state:
-      command === undefined
-        ? peekState(indicator, { stopped: child.stopped })
-        : commandPeekState({
+      stopped !== null
+        ? { label: stopped.charAt(0).toLowerCase() + stopped.slice(1), tone: 'neutral' }
+        : command === undefined
+          ? peekState(indicator)
+          : commandPeekState({
             status: child.status,
             exitCode: command.exitCode ?? child.exitCode,
             ...(child.stopped === undefined ? {} : { stopped: child.stopped })

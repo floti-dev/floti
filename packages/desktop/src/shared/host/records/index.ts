@@ -79,6 +79,8 @@ export function sessionFromHost(record: P.SessionRecord): SessionRecord {
     ...(record.command == null ? {} : { command: record.command }),
     // Set only when the host ended it; a protocol before 2.1 never says.
     ...(record.stopped === true ? { stopped: true } : {}),
+    // Set once it has exited; a protocol before 2.2 never says how.
+    ...(record.endedBy == null ? {} : { endedBy: record.endedBy }),
     // Set only while the child has a report its next turn has not cleared.
     ...(record.lastReport == null ? {} : { lastReport: record.lastReport }),
     // Set only for a child started to keep running when its parent ends.

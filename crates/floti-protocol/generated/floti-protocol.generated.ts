@@ -1165,6 +1165,11 @@ cwd: string | null, overlays: Array<string>, };
  */
 export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
 
+/**
+ * How a session that has exited came to end.
+ */
+export type EndedBy = "exited" | "parent" | "person" | "floti";
+
 export type ErrorCode = "unknownChannel" | "notARequest" | "badPayload" | "unavailable" | "failed" | "missingCapability" | "notAnEvent" | "other";
 
 /**
@@ -3092,6 +3097,13 @@ command?: string | null,
  * does from a host before protocol 2.1.
  */
 stopped?: boolean, 
+/**
+ * How the session ended: its program exited by itself, or who stopped
+ * it. Set on every session that has exited; absent while it runs, for a
+ * lost session, and from a host before protocol 2.2, which reads as not
+ * known (`stopped` still says whether the host ended it).
+ */
+endedBy?: EndedBy, 
 /**
  * What this child last told the session that started it with
  * `agents_report`, until its next turn starts. Absent when it has told

@@ -300,6 +300,14 @@ export const sessions = sqliteTable(
      */
     stopped: integer('stopped', { mode: 'boolean' }).notNull().default(false),
     /**
+     * Who ended a session `stopped` marks: `parent` (the session that started
+     * it stopped it), `person` (a person, from any device) or `floti` (its
+     * parent ended, or the host was stopped). Written while the session still
+     * runs, before it is ended, and the first to say wins. Null for a session
+     * that exited by itself; a stopped row with none was a person's stop.
+     */
+    stoppedBy: text('stopped_by', { enum: ['parent', 'person', 'floti'] }),
+    /**
      * The name this session runs with Remote Control under, or null when it
      * runs without. A child of a session with a name is launched with
      * "<that name> › <child name>".

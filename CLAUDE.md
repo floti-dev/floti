@@ -480,6 +480,19 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   listing is answered as one the family does not have. A session's record
   carries its child's `last_report` (protocol 2.1, optional) from a report
   until the child's next turn starts.
+- Every session's record says how it ended once it has exited (`endedBy`,
+  protocol 2.2, optional): `exited` by itself, or stopped by its `parent`,
+  a `person` on any device or `floti` (its parent ended, or the host was
+  stopped). Whoever ends a session writes `stopped_by` on its row before it
+  ends it, and the first to say wins (`records::record_stopping`); a stop
+  nobody named is a person's. The ended bar, a child's ended header and its
+  peek say "Stopped by <parent>", "Stopped by Floti" or "Stopped"
+  (`stoppedText`) with no exit code, which shows only for a program that
+  exited by itself. `session:notify` is sent only for a session a person
+  started whose program exited by itself (`notifies` in
+  `server/features/sessions.rs`): a stopped session and every child's end,
+  however it came, raise no OS notification; a child that needs a person
+  raises its needs-you notice.
 - `agents_send` (`floti agent send`) puts its text at the end of the child's
   queue, `agent_messages` in `floti.db` beside `agent_inbox`, so a host
   restart keeps it (`hosted/children/queue.rs`, `send.rs`). The queue is

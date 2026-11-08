@@ -19,7 +19,7 @@ use floti_host::server::HostConfig;
 use floti_host::testkit::{FakeAgent, PATIENCE, RunningHost, TestClient, TestDirs};
 use floti_protocol::channel::EventChannel;
 use floti_protocol::channel::from_payload;
-use floti_protocol::channels::common::{PermissionMode, SessionRecord, SessionStatus};
+use floti_protocol::channels::common::{EndedBy, PermissionMode, SessionRecord, SessionStatus};
 use floti_protocol::channels::host::HostStopReason;
 use floti_protocol::channels::sessions::{
     CloseSessionRequest, EffortLevel, HistoryResume, LaunchProfileRequest, LaunchSessionRequest,
@@ -1089,6 +1089,7 @@ async fn an_exit_is_sent_for_a_notification_only_to_the_clients_whose_user_canno
         .unwrap();
     assert_eq!(notified.session.status, SessionStatus::Exited);
     assert_eq!(notified.session.exit_code, Some(3));
+    assert_eq!(notified.session.ended_by, Some(EndedBy::Exited));
     assert!(notified.session.ended_at.is_some(), "{notified:?}");
     for heard in [&watching_first, &elsewhere_first, &silent_first] {
         assert_eq!(sessions_on(heard, EXITS), [first.id]);
@@ -1123,6 +1124,13 @@ async fn an_exit_is_sent_for_a_notification_only_to_the_clients_whose_user_canno
     for heard in [&watching_third, &elsewhere_third, &silent_third] {
         assert_eq!(sessions_on(heard, NOTIFY), Vec::<u64>::new());
         assert_eq!(sessions_on(heard, EXITS), [third.id]);
+        // Its record says a person stopped it, whichever device did.
+        assert!(
+            heard
+                .iter()
+                .all(|heard| heard.session.ended_by == Some(EndedBy::Person)),
+            "{heard:?}"
+        );
     }
 
     // Each client's numbers run on without a gap: notifications are

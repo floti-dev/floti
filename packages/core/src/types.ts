@@ -397,6 +397,13 @@ export interface SessionRecord {
    */
   stopped?: boolean
   /**
+   * How it ended, once it has exited: its program exited by itself, or who
+   * stopped it (`stoppedText` words it). Absent while it runs, for a lost
+   * session, and from a host before protocol 2.2, where `stopped` alone says
+   * the host ended it.
+   */
+  endedBy?: EndedBy
+  /**
    * What this child last told the session that started it with
    * `agents_report`, until its next turn starts. Absent for a session that has
    * told nothing since.
@@ -407,6 +414,14 @@ export interface SessionRecord {
   /** The permission mode it was launched in. Absent for one launched with none. */
   permissionMode?: PermissionMode
 }
+
+/**
+ * How a session that has exited came to end: `exited` by itself, or stopped by
+ * the session that started it (`parent`), by a person on any device
+ * (`person`), or by Floti when its parent ended or the host was stopped
+ * (`floti`).
+ */
+export type EndedBy = 'exited' | 'parent' | 'person' | 'floti'
 
 /** A child's report to its parent: its state, its words and when it was made. */
 export interface ChildReport {

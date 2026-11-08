@@ -20,12 +20,15 @@
 //! Streams: each session's terminal (`session:data`) and each plain
 //! terminal's (`pterm:data`).
 //!
-//! Every client subscribed to `session:exit` gets every exit. An exit is
-//! also worth an OS notification for each client whose user could not see
-//! the session, judged as today's app judges it ([`Focus`]) from what the
-//! client last said on `session:focus`; each such client, and only it, gets
-//! the finished row on `session:notify` and shows the notification itself.
-//! A session a client closed is nobody's surprise and notifies no one.
+//! Every client subscribed to `session:exit` gets every exit. Only the exit
+//! of a session a person started whose program exited by itself is worth an
+//! OS notification ([`notifies`]): a stopped session was meant to end, and a
+//! child's end is its parent's news. Such an exit is worth one for each client
+//! whose user could not see the session, judged as today's app judges it
+//! ([`Focus`]) from what the client last said on `session:focus`; each such
+//! client, and only it, gets the finished row on `session:notify` and shows
+//! the notification itself. A session a client closed is nobody's surprise
+//! and notifies no one.
 //!
 //! A close without `force` of a session still running is not taken as meant:
 //! every client subscribed to `session:confirm` is asked, the answer to the
@@ -40,6 +43,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use floti_protocol::channel::Router;
+use floti_protocol::channels::common::{EndedBy, SessionRecord};
 use floti_protocol::channels::host::{HostDeviceSessions, HostQuit};
 use floti_protocol::channels::sessions::{
     CloseSessionRequest, CloseSessionResult, HistoryResume, ProfileLaunch, PtermCheckShell,
@@ -573,7 +577,12 @@ async fn publish_exits(
                 // notification for it too.
                 {
                     let mut focus = lock(&focus);
-                    for client in events.clients() {
+                    let clients = if notifies(&record) {
+                        events.clients()
+                    } else {
+                        Vec::new()
+                    };
+                    for client in clients {
                         if focus.worth_notifying(client, record.id)
                             && let Err(err) = events.emit_to::<SessionNotify>(client, &record)
                         {
@@ -592,6 +601,15 @@ async fn publish_exits(
             Err(RecvError::Closed) => return,
         }
     }
+}
+
+/// Whether a session's end is worth an OS notification to anybody: only when
+/// a person started it and its program exited by itself. A session stopped by
+/// anyone was meant to end, a lost one is offered back by the restore offer,
+/// and a child's end, however it came, is its parent's news (a child that
+/// needs a person raises its own needs-you notice).
+fn notifies(record: &SessionRecord) -> bool {
+    record.parent_id.is_none() && record.ended_by == Some(EndedBy::Exited)
 }
 
 /// Each plain terminal whose shell ended, on `pterm:exit`.
@@ -728,6 +746,63 @@ mod tests {
         focus.set(B, [4]);
         focus.leave(B);
         assert!(focus.worth_notifying(B, 4));
+    }
+
+    fn ended(
+        parent_id: Option<u64>,
+        ended_by: Option<EndedBy>,
+        exit_code: Option<i32>,
+    ) -> SessionRecord {
+        SessionRecord {
+            id: 7,
+            name: "helm-7".to_owned(),
+            label: None,
+            title: None,
+            cwd: "C:/work".to_owned(),
+            branch: None,
+            project_path: None,
+            profile_id: None,
+            argv: Vec::new(),
+            conversation_id: None,
+            backend: floti_protocol::BackendId::claude_code(),
+            status: floti_protocol::channels::common::SessionStatus::Exited,
+            started_at: "2026-11-07T10:00:00.000Z".to_owned(),
+            ended_at: Some("2026-11-07T10:05:00.000Z".to_owned()),
+            duration_ms: Some(300_000),
+            exit_code,
+            parent_id,
+            parent_name: parent_id.map(|_| "lead".to_owned()),
+            role: None,
+            command: None,
+            stopped: ended_by.is_some_and(|by| by != EndedBy::Exited),
+            ended_by,
+            last_report: None,
+            outlive: false,
+            permission_mode: None,
+        }
+    }
+
+    #[test]
+    fn only_a_session_a_person_started_whose_program_exited_by_itself_is_worth_a_notification() {
+        // A person's session that exited by itself, with any code.
+        assert!(notifies(&ended(None, Some(EndedBy::Exited), Some(2))));
+        assert!(notifies(&ended(None, Some(EndedBy::Exited), Some(0))));
+        // Stopped by anyone, it was meant to end.
+        for by in [EndedBy::Person, EndedBy::Floti, EndedBy::Parent] {
+            assert!(!notifies(&ended(None, Some(by), Some(1))), "{by:?}");
+        }
+        // A child's end is its parent's news, however it came.
+        for by in [
+            EndedBy::Exited,
+            EndedBy::Parent,
+            EndedBy::Person,
+            EndedBy::Floti,
+        ] {
+            assert!(!notifies(&ended(Some(3), Some(by), Some(1))), "{by:?}");
+        }
+        // A lost session says nothing of how it ended, and the restore offer
+        // is its way back.
+        assert!(!notifies(&ended(None, None, None)));
     }
 
     #[test]

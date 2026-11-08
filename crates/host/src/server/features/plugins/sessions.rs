@@ -261,6 +261,7 @@ mod tests {
             role: None,
             command: None,
             stopped: false,
+            ended_by: None,
             last_report: None,
             outlive: false,
             permission_mode: None,

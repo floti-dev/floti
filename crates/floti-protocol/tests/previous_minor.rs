@@ -377,6 +377,7 @@ fn a_2_0_client_reads_every_field_it_knows_of_a_stopped_childs_record() {
 fn a_childs_last_report_is_on_its_record_only_while_it_has_one() {
     let parent = session_v21();
     let reported = SessionRecord {
+        ended_by: None,
         last_report: Some(ChildReport {
             state: "done".into(),
             text: "Fixed both bugs in ledger.rs.".into(),

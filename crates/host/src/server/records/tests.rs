@@ -344,11 +344,84 @@ fn a_deliberate_stop_records_each_row_exited_and_stopped_and_leaves_an_ended_row
     let done = world.start("done", None);
     world.store.finished(done, &exit(0)).unwrap();
 
-    record_stopped(&world.store.lock().unwrap(), &[running, done]).unwrap();
+    record_stopped(
+        &world.store.lock().unwrap(),
+        &[running, done],
+        StoppedBy::Floti,
+    )
+    .unwrap();
     let record = world.record(running);
     assert_eq!(record.status, SessionStatus::Exited);
     assert!(record.stopped);
+    assert_eq!(record.ended_by, Some(EndedBy::Floti));
     assert!(!world.record(done).stopped);
+    assert_eq!(world.record(done).ended_by, Some(EndedBy::Exited));
+}
+
+#[test]
+fn a_record_says_how_its_session_ended_and_who_stopped_it_once_it_has_exited() {
+    let world = World::new();
+    let by_itself = world.start("by-itself", None);
+    let parent = world.start("lead", None);
+    let stopped_by_parent = world.start("lead-victim", Some(link(parent, "victim")));
+    let stopped_by_floti = world.start("lead-follower", Some(link(parent, "follower")));
+    let stopped_by_person = world.start("by-a-person", None);
+    let unnamed = world.start("unnamed", None);
+    let lost = world.start("lost", None);
+
+    let stop = |id: SessionId, by: Option<StoppedBy>| {
+        if let Some(by) = by {
+            record_stopping(&world.store.lock().unwrap(), id, by).unwrap();
+        }
+        // Nothing is said of a session until it has ended.
+        assert_eq!(world.record(id).ended_by, None);
+        world.store.ending(id);
+        world.store.finished(id, &exit(1)).unwrap();
+    };
+    world.store.finished(by_itself, &exit(2)).unwrap();
+    stop(stopped_by_parent, Some(StoppedBy::Parent));
+    stop(stopped_by_floti, Some(StoppedBy::Floti));
+    stop(stopped_by_person, Some(StoppedBy::Person));
+    // A stop nobody named is a person's.
+    stop(unnamed, None);
+    record_lost(&world.store.lock().unwrap(), lost).unwrap();
+
+    let by_itself = world.record(by_itself);
+    assert_eq!(by_itself.ended_by, Some(EndedBy::Exited));
+    assert_eq!(by_itself.exit_code, Some(2));
+    for (id, by) in [
+        (stopped_by_parent, EndedBy::Parent),
+        (stopped_by_floti, EndedBy::Floti),
+        (stopped_by_person, EndedBy::Person),
+        (unnamed, EndedBy::Person),
+    ] {
+        let record = world.record(id);
+        assert!(record.stopped, "{by:?}");
+        assert_eq!(record.ended_by, Some(by));
+    }
+    assert_eq!(world.record(lost).ended_by, None);
+    assert_eq!(world.record(parent).ended_by, None, "it runs");
+}
+
+#[test]
+fn the_first_to_say_who_is_stopping_a_session_is_who_stopped_it() {
+    let world = World::new();
+    let parent = world.start("lead", None);
+    let child = world.start("lead-victim", Some(link(parent, "victim")));
+    let quitting = world.start("quitting", None);
+    let store = world.store.lock().unwrap();
+    // The parent stops it, and a person's Stop arrives while it is ending.
+    record_stopping(&store, child, StoppedBy::Parent).unwrap();
+    record_stopping(&store, child, StoppedBy::Person).unwrap();
+    // A person was stopping it when the host was stopped.
+    record_stopping(&store, quitting, StoppedBy::Person).unwrap();
+    record_stopped(&store, &[child, quitting], StoppedBy::Floti).unwrap();
+    // A session that has ended is not stopped by anyone after.
+    record_stopping(&store, child, StoppedBy::Floti).unwrap();
+    drop(store);
+
+    assert_eq!(world.record(child).ended_by, Some(EndedBy::Parent));
+    assert_eq!(world.record(quitting).ended_by, Some(EndedBy::Person));
 }
 
 #[test]

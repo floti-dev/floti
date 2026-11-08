@@ -4760,6 +4760,26 @@
       ],
       "type": "string"
     },
+    "EndedBy": {
+      "oneOf": [
+        {
+          "const": "exited",
+          "type": "string"
+        },
+        {
+          "const": "parent",
+          "type": "string"
+        },
+        {
+          "const": "person",
+          "type": "string"
+        },
+        {
+          "const": "floti",
+          "type": "string"
+        }
+      ]
+    },
     "ErrorCode": {
       "oneOf": [
         {
@@ -10083,6 +10103,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "endedBy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EndedBy"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "exitCode": {

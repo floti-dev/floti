@@ -1,4 +1,4 @@
-import type { SessionActivity } from '../types'
+import type { EndedBy, SessionActivity } from '../types'
 
 /**
  * Sessions that started other sessions, as the Sessions tree and the tabs draw
@@ -67,6 +67,35 @@ export function commandState(session: {
   if (session.status === 'running') return 'running'
   if (session.stopped === true) return 'ended'
   return session.exitCode !== undefined && session.exitCode !== null && session.exitCode !== 0 ? 'failed' : 'ended'
+}
+
+/**
+ * What a session the host ended says of who ended it: "Stopped by <parent>"
+ * when the session that started it stopped it, "Stopped by Floti" when its
+ * parent ended or the host was stopped, and "Stopped" when a person stopped it
+ * from any device, or when a host before protocol 2.2 said only that it was
+ * stopped. Null for a session whose program exited by itself, and for one
+ * nothing says was stopped.
+ */
+export function stoppedText(session: {
+  stopped?: boolean | undefined
+  endedBy?: EndedBy | undefined
+  parentName?: string | null | undefined
+}): string | null {
+  switch (session.endedBy) {
+    case 'exited':
+      return null
+    case 'parent':
+      return typeof session.parentName === 'string' && session.parentName !== ''
+        ? `Stopped by ${session.parentName}`
+        : 'Stopped by its parent'
+    case 'floti':
+      return 'Stopped by Floti'
+    case 'person':
+      return 'Stopped'
+    case undefined:
+      return session.stopped === true ? 'Stopped' : null
+  }
 }
 
 /**

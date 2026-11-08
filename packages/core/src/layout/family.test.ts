@@ -7,6 +7,7 @@ import {
   resolveFamilyPress,
   SESSION_URGENCY,
   sessionFamilies,
+  stoppedText,
   type FamilyMember,
   type FamilyRow,
   type UrgentState
@@ -105,6 +106,22 @@ describe('isCommandChild', () => {
     expect(isCommandChild({ command: null })).toBe(false)
     expect(isCommandChild({ command: '' })).toBe(false)
     expect(isCommandChild({})).toBe(false)
+  })
+})
+
+describe('stoppedText', () => {
+  it('names the parent that stopped a session, Floti, or no one for a person, and nothing for an exit', () => {
+    expect(stoppedText({ endedBy: 'parent', parentName: 'lead', stopped: true })).toBe('Stopped by lead')
+    expect(stoppedText({ endedBy: 'parent', parentName: null, stopped: true })).toBe('Stopped by its parent')
+    expect(stoppedText({ endedBy: 'floti', stopped: true })).toBe('Stopped by Floti')
+    expect(stoppedText({ endedBy: 'person', stopped: true })).toBe('Stopped')
+    expect(stoppedText({ endedBy: 'exited' })).toBeNull()
+  })
+
+  it('says only Stopped for a host that named no one, and nothing for a session it did not stop', () => {
+    expect(stoppedText({ stopped: true })).toBe('Stopped')
+    expect(stoppedText({ stopped: false })).toBeNull()
+    expect(stoppedText({})).toBeNull()
   })
 })
 

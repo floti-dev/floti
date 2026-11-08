@@ -217,6 +217,7 @@ fn record(id: u64) -> SessionRecord {
         role: Some("reviewer".into()),
         command: None,
         stopped: false,
+        ended_by: None,
         last_report: None,
         outlive: true,
         permission_mode: Some(PermissionMode::AcceptEdits),

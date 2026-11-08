@@ -77,6 +77,23 @@ describe('how an ended child says it ended', () => {
     expect(ended({})).toEqual({ label: 'ended', tone: 'neutral' })
   })
 
+  it('says who stopped a child, neutral and with no exit code', () => {
+    const peeked = (endedBy: string, overrides: Record<string, unknown> = {}) => {
+      const record = child({ status: 'exited', stopped: true, endedBy, exitCode: 1, parentName: 'lead', ...overrides })
+      return peekFacts(record, 'ended', { glyph: 'dot', state: 'ended' }, commandFacts(record)).state
+    }
+    expect(peeked('parent')).toEqual({ label: 'stopped by lead', tone: 'neutral' })
+    expect(peeked('floti')).toEqual({ label: 'stopped by Floti', tone: 'neutral' })
+    expect(peeked('person')).toEqual({ label: 'stopped', tone: 'neutral' })
+    // A command child its parent stopped says so too, not its code.
+    expect(peeked('parent', { command: 'pnpm test', argv: [], role: undefined, permissionMode: undefined })).toEqual({
+      label: 'stopped by lead',
+      tone: 'neutral'
+    })
+    // One that exited by itself keeps its own words.
+    expect(peeked('exited', { stopped: false })).toEqual({ label: 'ended', tone: 'neutral' })
+  })
+
   it('S25: exited <code> for a command, stopped where the host ended it, ended where its code was never seen', () => {
     const ended = (overrides: Record<string, unknown>) => {
       const record = child({ command: 'pnpm test', argv: [], role: undefined, permissionMode: undefined, status: 'exited', ...overrides })

@@ -98,15 +98,43 @@ describe('TerminalPane', () => {
     expect(screen.getByRole('status').className).not.toContain('danger')
   })
 
-  it('S38: an agent child the host ended, and a session that is not a child, keep the bar as it is', () => {
-    const agent: SessionRecord = { ...SESSION, status: 'exited', parentId: 1, stopped: true, exitCode: 143 }
+  it('says who stopped an agent child or any session, muted and with no exit code', () => {
+    const agent: SessionRecord = {
+      ...SESSION,
+      status: 'exited',
+      parentId: 1,
+      parentName: 'lead',
+      stopped: true,
+      endedBy: 'parent',
+      exitCode: 1
+    }
     const { rerender } = render(<TerminalPane session={agent} active windowsBuild={null} onClose={vi.fn()} />)
-    expect(screen.getByRole('status').textContent).toContain('Session exited with code 143')
+    const bar = (): HTMLElement => screen.getByRole('status')
+    expect(bar().textContent).toContain('Stopped by lead')
+    expect(bar().textContent).not.toContain('code')
+    expect(bar().className).not.toContain('danger')
 
-    rerender(
-      <TerminalPane session={{ ...SESSION, status: 'exited', exitCode: 2 }} active windowsBuild={null} onClose={vi.fn()} />
+    rerender(<TerminalPane session={{ ...agent, endedBy: 'floti' }} active windowsBuild={null} onClose={vi.fn()} />)
+    expect(bar().textContent).toContain('Stopped by Floti')
+
+    // A person stopped it, from this device or another.
+    const stopped: SessionRecord = { ...SESSION, status: 'exited', stopped: true, endedBy: 'person', exitCode: 1 }
+    rerender(<TerminalPane session={stopped} active windowsBuild={null} onClose={vi.fn()} />)
+    expect(bar().textContent).toMatch(/^Stopped(after|Close)/)
+    expect(bar().className).not.toContain('danger')
+  })
+
+  it('names the code of a program that exited by itself with one other than 0', () => {
+    render(
+      <TerminalPane
+        session={{ ...SESSION, status: 'exited', endedBy: 'exited', exitCode: 2 }}
+        active
+        windowsBuild={null}
+        onClose={vi.fn()}
+      />
     )
     expect(screen.getByRole('status').textContent).toContain('Session exited with code 2')
+    expect(screen.getByRole('status').className).toContain('text-danger')
   })
 
   it('keeps a session lost with its host on its last screen, dimmed with input off, and offers Restore', async () => {

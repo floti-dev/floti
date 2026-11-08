@@ -473,8 +473,9 @@ pub(super) fn link_of(store: &Store, id: SessionId) -> Result<Option<Link>> {
 pub(super) struct Ended {
     pub link: Link,
     pub exit_code: Option<i32>,
-    /// The host ended it, rather than its program finishing on its own.
-    pub stopped: bool,
+    /// Who ended it, when the host did rather than its program finishing on
+    /// its own.
+    pub stopped_by: Option<records::StoppedBy>,
 }
 
 /// The link and ending of child `id`, when it is a child with a parent.
@@ -483,11 +484,13 @@ pub(super) fn ended_of(store: &Store, id: SessionId) -> Result<Option<Ended>> {
         .connection()
         .query_row(
             &format!(
-                "SELECT {LINK_COLUMNS}, exit_code, stopped FROM sessions WHERE id = ?1 \
+                "SELECT {LINK_COLUMNS}, exit_code, stopped, stopped_by FROM sessions WHERE id = ?1 \
                  AND child_name IS NOT NULL AND parent_session_id IS NOT NULL"
             ),
             [id.0],
             |row| {
+                let stopped: bool = row.get(4)?;
+                let stopped_by: Option<String> = row.get(5)?;
                 Ok(Ended {
                     link: link_row(row)?,
                     // The column holds the code as the OS gave it (a `u32`).
@@ -496,7 +499,7 @@ pub(super) fn ended_of(store: &Store, id: SessionId) -> Result<Option<Ended>> {
                     // PowerShell's `$LASTEXITCODE` says, so keep the low 32
                     // bits and never drop or clamp it.
                     exit_code: row.get::<_, Option<i64>>(3)?.map(|code| code as i32),
-                    stopped: row.get(4)?,
+                    stopped_by: stopped.then(|| records::stopped_by_of(stopped_by.as_deref())),
                 })
             },
         )
@@ -615,7 +618,7 @@ mod tests {
         let (_dirs, store, child) = ended_child(0xC000_0005);
         let ended = ended_of(&store.lock().unwrap(), child).unwrap().unwrap();
         assert_eq!(ended.exit_code, Some(-1_073_741_819));
-        assert!(!ended.stopped);
+        assert_eq!(ended.stopped_by, None);
     }
 
     #[test]

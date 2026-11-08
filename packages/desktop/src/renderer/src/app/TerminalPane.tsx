@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { useEffect, useRef } from 'react'
 import type { SessionRecord } from '@helm/core'
-import { isCommandChild, LOCAL_HOST_KEY } from '@helm/core/types'
+import { LOCAL_HOST_KEY, stoppedText } from '@helm/core/types'
 import { cn, HostLostBanner, SessionEndedBar, type SessionLost } from '@helm/ui'
 import { getTerminal, mountTerminal } from './terminals'
 import { terminalPrefs } from './termprefs'
@@ -79,6 +79,7 @@ export function TerminalPane({
   const away = !ended && hostLost !== undefined
   const waiting = !ended && (hostGone || away)
   const dimmed = waiting || (lost !== undefined && session.status === 'lost')
+  const stoppedBy = session.status === 'exited' ? stoppedText(session) : null
 
   // A running session whose host is gone, or whose host's link dropped, takes
   // no keys until a host carries it again: what is typed meanwhile reaches
@@ -141,9 +142,10 @@ export function TerminalPane({
           durationMs={session.durationMs}
           onClose={() => onClose(session.id)}
           {...(lost !== undefined && session.status === 'lost' ? { lost } : {})}
-          // A command the host ended says so, as its crumb and ended header do:
-          // the number the system gave a process it killed is not an exit code.
-          stopped={isCommandChild(session) && session.stopped === true}
+          // A session the host ended says who stopped it, as its ended header
+          // does: the number the system gave a process it killed is not an
+          // exit code.
+          {...(stoppedBy === null ? {} : { stoppedBy })}
         />
       )}
       {/* The gutter is a wrapper rather than padding on the terminal's own

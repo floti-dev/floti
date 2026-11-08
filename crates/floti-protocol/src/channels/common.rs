@@ -111,6 +111,13 @@ pub struct SessionRecord {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[ts(as = "Option<bool>", optional)]
     pub stopped: bool,
+    /// How the session ended: its program exited by itself, or who stopped
+    /// it. Set on every session that has exited; absent while it runs, for a
+    /// lost session, and from a host before protocol 2.2, which reads as not
+    /// known (`stopped` still says whether the host ended it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ended_by: Option<EndedBy>,
     /// What this child last told the session that started it with
     /// `agents_report`, until its next turn starts. Absent when it has told
     /// nothing since, for a session with no parent, and from a host before
@@ -129,6 +136,23 @@ pub struct SessionRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub permission_mode: Option<PermissionMode>,
+}
+
+/// How a session that has exited came to end.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum EndedBy {
+    /// Its program exited by itself; `exit_code` is its own.
+    Exited,
+    /// The session that started it stopped it (`agents_stop`,
+    /// `floti agent stop`).
+    Parent,
+    /// A person stopped it, from any device: a tab's End or Stop, or a quit
+    /// that ends what the device started.
+    Person,
+    /// Floti ended it: the session that started it ended, or the host was
+    /// stopped.
+    Floti,
 }
 
 /// A child's report to its parent: the words it was sent with, as its card

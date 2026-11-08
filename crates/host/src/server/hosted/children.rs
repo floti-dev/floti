@@ -1069,16 +1069,10 @@ impl Hosted {
         }
     }
 
-    /// A person is stopping session `id` from a client. When it is an agent's
-    /// child, its parent is told a person did it.
+    /// A person is stopping session `id` from a client, on any device: its
+    /// record says so, and when it is an agent's child, its parent is told.
     pub(super) fn note_person_stop(&self, id: SessionId) {
-        if rows::link_of(&self.ledger.store(), id)
-            .ok()
-            .flatten()
-            .is_some()
-        {
-            self.note_stopped(id, StoppedBy::Person);
-        }
+        self.note_stopped(id, StoppedBy::Person);
     }
 
     /// `session` is in `conversation_id`, which an earlier session was in when

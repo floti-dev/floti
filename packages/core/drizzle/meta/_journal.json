@@ -183,6 +183,13 @@
       "when": 1794115818045,
       "tag": "0025_complete_silhouette",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1794120638783,
+      "tag": "0026_mean_the_liberteens",
+      "breakpoints": true
     }
   ]
 }

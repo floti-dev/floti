@@ -3246,6 +3246,31 @@
       ],
       "type": "string"
     },
+    "EndedBy": {
+      "description": "How a session that has exited came to end.",
+      "oneOf": [
+        {
+          "const": "exited",
+          "description": "Its program exited by itself; `exit_code` is its own.",
+          "type": "string"
+        },
+        {
+          "const": "parent",
+          "description": "The session that started it stopped it (`agents_stop`,\n`floti agent stop`).",
+          "type": "string"
+        },
+        {
+          "const": "person",
+          "description": "A person stopped it, from any device: a tab's End or Stop, or a quit\nthat ends what the device started.",
+          "type": "string"
+        },
+        {
+          "const": "floti",
+          "description": "Floti ended it: the session that started it ended, or the host was\nstopped.",
+          "type": "string"
+        }
+      ]
+    },
     "ErrorCode": {
       "oneOf": [
         {
@@ -8994,6 +9019,17 @@
             "string",
             "null"
           ]
+        },
+        "endedBy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EndedBy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How the session ended: its program exited by itself, or who stopped\nit. Set on every session that has exited; absent while it runs, for a\nlost session, and from a host before protocol 2.2, which reads as not\nknown (`stopped` still says whether the host ended it)."
         },
         "exitCode": {
           "description": "Null while running, and for a session whose exit code was never\nobserved. The code as the OS reports it, wrapped to a signed 32-bit\nvalue: Windows' 0xC0000005 reads -1073741819, as PowerShell's\n`$LASTEXITCODE` says.",

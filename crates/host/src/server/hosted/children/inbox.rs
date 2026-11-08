@@ -72,42 +72,9 @@ impl EventKind {
     }
 }
 
-/// Who ended a child that did not exit on its own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum StoppedBy {
-    /// Its parent, with `agents_stop`.
-    Parent,
-    /// A person, with Stop in a client.
-    Person,
-    /// Floti: its parent ended, or the host did.
-    Floti,
-}
-
-impl StoppedBy {
-    /// The word stored.
-    pub fn word(self) -> &'static str {
-        match self {
-            Self::Parent => "parent",
-            Self::Person => "person",
-            Self::Floti => "floti",
-        }
-    }
-
-    fn from_word(word: &str) -> Option<Self> {
-        [Self::Parent, Self::Person, Self::Floti]
-            .into_iter()
-            .find(|by| by.word() == word)
-    }
-
-    /// As a sentence says it.
-    fn said(self) -> &'static str {
-        match self {
-            Self::Parent => "its parent",
-            Self::Person => "a person",
-            Self::Floti => "Floti",
-        }
-    }
-}
+/// Who ended a child that did not exit on its own: the word its row keeps is
+/// the word its news says.
+pub(crate) use crate::server::records::StoppedBy;
 
 /// What an event carries beyond its kind and its child.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

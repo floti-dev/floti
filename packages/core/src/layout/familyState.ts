@@ -1,4 +1,5 @@
-import { isCommandChild, type FamilyMember } from './family'
+import type { EndedBy } from '../types'
+import { isCommandChild, stoppedText, type FamilyMember } from './family'
 
 /**
  * How one parent's tab arranges its children: which are shrunk, which ended
@@ -247,33 +248,37 @@ export function pruneFamilyState(
 }
 
 /**
- * An ended child's header: how it ended and when, "Stopped · 14:52" when its
- * parent, the user or the host ended it and "Done · 14:52" when its agent
- * exited by itself, in the time of day where this window is. A command child
+ * An ended child's header: how it ended and when, in the time of day where
+ * this window is. One that was stopped says who stopped it, as `stoppedText`
+ * words it ("Stopped by lead · 14:52", "Stopped by Floti · 14:52", "Stopped ·
+ * 14:52"), and "Done · 14:52" when its agent exited by itself. A command child
  * that exited on its own says "exited 0 · 14:52", with the command's own exit
- * code; one that was stopped says "Stopped", because the number a system gives
- * a process it killed is not an exit code, and one whose code was never
- * observed is told as an agent would be. A child this
- * window's user stopped with Stop (`byYou`) says "Stopped by you". A session
- * whose host lost it says "Lost". With no time (it never saw one end) the time
- * is left off rather than guessed.
+ * code; one that was stopped says who stopped it, because the number a system
+ * gives a process it killed is not an exit code, and one whose code was never
+ * observed is told as an agent would be. A child a person stopped with this
+ * window's Stop (`byYou`) says "Stopped by you". A session whose host lost it
+ * says "Lost". With no time (it never saw one end) the time is left off rather
+ * than guessed.
  */
 export function endedHeaderText(
   child: {
     status: string
     stopped?: boolean
+    endedBy?: EndedBy
+    parentName?: string | null
     endedAt?: string | null
     command?: string | null
     exitCode?: number | null
   },
   byYou = false
 ): string {
-  const stopped = byYou && child.stopped === true ? 'Stopped by you' : 'Stopped'
+  const words = child.status === 'lost' ? null : stoppedText(child)
+  const stopped = byYou && words === 'Stopped' ? 'Stopped by you' : words
   const exited =
-    isCommandChild(child) && child.stopped !== true && child.exitCode !== undefined && child.exitCode !== null
+    isCommandChild(child) && stopped === null && child.exitCode !== undefined && child.exitCode !== null
       ? `exited ${String(child.exitCode)}`
       : null
-  const how = exited ?? (child.status === 'lost' ? 'Lost' : child.stopped === true ? stopped : 'Done')
+  const how = exited ?? (child.status === 'lost' ? 'Lost' : (stopped ?? 'Done'))
   if (child.endedAt === undefined || child.endedAt === null) return how
   const at = new Date(child.endedAt)
   if (Number.isNaN(at.getTime())) return how

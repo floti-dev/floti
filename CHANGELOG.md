@@ -67,6 +67,21 @@ A preview, not a release: nothing offers it as an update.
 - A Claude Code parent is told it can also reach a child with its own
   SendMessage, which reaches the child mid-turn but is not queued by Floti.
 
+**A stopped session says who stopped it**
+
+- A session that was stopped says so where it ended, in the muted ended
+  style and with no exit code: "Stopped by" and its parent's name when the
+  session that started it stopped it, "Stopped by Floti" when it ended with
+  its parent or the host was stopped, and "Stopped" when a person stopped
+  it, from this PC or another. It no longer reads "Session exited with code
+  1" in red. Its tab, its card in its parent's tab and its peek all say it.
+- An exit code shows only when the program exited by itself with a code
+  other than 0.
+- A child's end no longer raises an OS notification, however it ended: it
+  is its parent's news. A stopped session raises none either. A session you
+  started whose program exits by itself while you cannot see it still does,
+  and a child that needs you still raises its own notice.
+
 ## 2.4.1-preview.9
 
 A preview, not a release: nothing offers it as an update.

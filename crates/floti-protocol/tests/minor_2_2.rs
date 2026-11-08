@@ -1,13 +1,13 @@
 //! A client on 2.1 still reads what a host on 2.2 sends, and that host still
-//! reads what the client sends: protocol 2.2 only adds a session's title and a
-//! History session's agent title, both optional, so a 2.1 frame is a 2.2
-//! frame with them left out, and a 2.2 frame is a 2.1 frame with fields the
-//! older reader ignores.
+//! reads what the client sends: protocol 2.2 only adds a session's title and
+//! how it ended, and a History session's agent title, all optional, so a 2.1
+//! frame is a 2.2 frame with them left out, and a 2.2 frame is a 2.1 frame
+//! with fields the older reader ignores.
 
 use std::collections::BTreeSet;
 
 use floti_protocol::channel::{from_payload, to_payload};
-use floti_protocol::channels::common::SessionRecord;
+use floti_protocol::channels::common::{EndedBy, SessionRecord};
 use floti_protocol::channels::sessions::HistorySession;
 use floti_protocol::record::{records, records_dir};
 use floti_protocol::version::negotiate;
@@ -47,17 +47,21 @@ fn channels_of(record: &Value) -> BTreeSet<String> {
 }
 
 #[test]
-fn protocol_2_2_adds_only_the_two_optional_titles_and_no_channel() {
+fn protocol_2_2_adds_only_the_optional_titles_and_how_a_session_ended_and_no_channel() {
     let v21 = record_of(V2_1);
     let v22 = record_of(V2_2);
     assert_eq!(v22["version"], "2.2");
     assert_eq!(channels_of(&v22), channels_of(&v21));
-    let added = [("SessionRecord", "title"), ("HistorySession", "agentTitle")];
-    for (name, field) in added {
+    let added: [(&str, &[&str]); 2] = [
+        ("SessionRecord", &["title", "endedBy"]),
+        ("HistorySession", &["agentTitle"]),
+    ];
+    for (name, fields) in added {
         let before = keys_of(&v21, name, "properties");
         let after = keys_of(&v22, name, "properties");
         let gained: BTreeSet<String> = after.difference(&before).cloned().collect();
-        assert_eq!(gained, BTreeSet::from([field.to_owned()]), "{name} gained");
+        let expected: BTreeSet<String> = fields.iter().map(|field| (*field).to_owned()).collect();
+        assert_eq!(gained, expected, "{name} gained");
         assert!(before.is_subset(&after), "{name} lost a field");
         assert_eq!(
             keys_of(&v22, name, "required"),
@@ -108,6 +112,35 @@ fn a_record_from_a_2_1_host_reads_as_no_title_and_a_titled_record_says_it() {
     let again: SessionRecord = from_payload(&to_payload(&Value::Object(known)).unwrap()).unwrap();
     assert_eq!(again.name, "helm-3");
     assert_eq!(again.title, None);
+}
+
+#[test]
+fn a_record_from_a_2_1_host_says_nothing_of_how_it_ended_and_a_2_2_record_names_who_stopped_it() {
+    let mut ended = record_2_1();
+    ended["status"] = json!("exited");
+    ended["exitCode"] = json!(1);
+    ended["stopped"] = json!(true);
+    let read: SessionRecord = from_payload(&to_payload(&ended).unwrap()).unwrap();
+    assert_eq!(read.ended_by, None);
+    assert!(read.stopped);
+    let said = serde_json::to_value(&read).unwrap();
+    assert!(said.get("endedBy").is_none(), "{said}");
+
+    for (by, word) in [
+        (EndedBy::Exited, "exited"),
+        (EndedBy::Parent, "parent"),
+        (EndedBy::Person, "person"),
+        (EndedBy::Floti, "floti"),
+    ] {
+        let told = SessionRecord {
+            ended_by: Some(by),
+            ..read.clone()
+        };
+        let said = serde_json::to_value(&told).unwrap();
+        assert_eq!(said["endedBy"], word);
+        let back: SessionRecord = from_payload(&to_payload(&said).unwrap()).unwrap();
+        assert_eq!(back.ended_by, Some(by));
+    }
 }
 
 #[test]

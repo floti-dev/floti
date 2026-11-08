@@ -1972,7 +1972,8 @@ export interface IpcSends {
   }
 
   /**
-   * A session ended that the host judged nobody saw, from what the window told it was on screen. Main shows the OS
+   * A session a person started, whose program exited by itself, ended where the host judged nobody saw it, from what
+   * the window told it was on screen. The host sends none for a stopped session or a child's end. Main shows the OS
    * notification, which only main can.
    */
   'windowSessions:notify': SessionRecord

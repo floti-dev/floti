@@ -83,6 +83,7 @@ pub static MIGRATIONS: &[Migration] = drizzle_migrations![
     "0023_third_the_liberteens",
     "0024_ambiguous_marrow",
     "0025_complete_silhouette",
+    "0026_mean_the_liberteens",
 ];
 
 /// What opening a database applied.

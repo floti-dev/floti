@@ -26,6 +26,12 @@ export interface SessionEndedBarProps {
    * ended header do, and never in danger.
    */
   stopped?: boolean
+  /**
+   * Who stopped it, in the words the bar says ("Stopped by lead", "Stopped by
+   * Floti", "Stopped"): set when the host said who ended it. Like `stopped`,
+   * it is said in the ended tone with no exit code.
+   */
+  stoppedBy?: string
 }
 
 const barButton = cn(
@@ -50,9 +56,12 @@ export function SessionEndedBar({
   durationMs,
   onClose,
   lost,
-  stopped = false
+  stopped = false,
+  stoppedBy
 }: SessionEndedBarProps): JSX.Element {
-  const failed = lost === undefined && !stopped && exitCode !== null && exitCode !== 0
+  // Only a program that exited by itself has an exit code to show.
+  const stop = stoppedBy ?? (stopped ? 'Stopped' : undefined)
+  const failed = lost === undefined && stop === undefined && exitCode !== null && exitCode !== 0
 
   return (
     <div
@@ -80,8 +89,8 @@ export function SessionEndedBar({
       <span className="font-medium">
         {lost !== undefined
           ? `Session lost on ${lost.hostName}`
-          : stopped
-            ? 'Stopped'
+          : stop !== undefined
+            ? stop
             : exitCode === null
               ? 'Session ended'
               : failed

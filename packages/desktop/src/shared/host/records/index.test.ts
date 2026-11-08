@@ -111,6 +111,14 @@ describe('a host session, as the window reads it', () => {
     }
   })
 
+  it('carries how a session ended, and nothing from a host that does not say', () => {
+    const endedAt = '2026-11-05T09:30:00.000Z'
+    for (const endedBy of ['exited', 'parent', 'person', 'floti'] as const) {
+      expect(sessionFromHost(hostSession({ status: 'exited', endedAt, endedBy }))).toMatchObject({ endedBy })
+    }
+    expect(sessionFromHost(hostSession({ status: 'exited', endedAt, stopped: true }))).not.toHaveProperty('endedBy')
+  })
+
   it('carries a child’s last report while it has one, and nothing otherwise', () => {
     const lastReport = { state: 'done', text: 'Fixed both bugs.', at: '2026-11-06T10:00:00.000Z' }
     expect(sessionFromHost(hostSession({ parentId: 4, parentName: 'lead', lastReport }))).toMatchObject({

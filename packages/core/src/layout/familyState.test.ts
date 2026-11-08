@@ -191,6 +191,23 @@ describe('endedHeaderText', () => {
     expect(endedHeaderText({ status: 'exited', stopped: true, endedAt: at(14, 52) })).toBe('Stopped · 14:52')
   })
 
+  it('says who stopped a child: its parent by name, Floti, or a person on any device', () => {
+    const ended = { status: 'exited', stopped: true, parentName: 'lead', endedAt: at(14, 52) }
+    expect(endedHeaderText({ ...ended, endedBy: 'parent' })).toBe('Stopped by lead · 14:52')
+    expect(endedHeaderText({ ...ended, endedBy: 'floti' })).toBe('Stopped by Floti · 14:52')
+    expect(endedHeaderText({ ...ended, endedBy: 'person' })).toBe('Stopped · 14:52')
+    expect(endedHeaderText({ ...ended, endedBy: 'person' }, true)).toBe('Stopped by you · 14:52')
+    // Its parent stopped it, whatever this window's Stop said.
+    expect(endedHeaderText({ ...ended, endedBy: 'parent' }, true)).toBe('Stopped by lead · 14:52')
+    // A command child stopped by its parent shows no number either.
+    expect(endedHeaderText({ ...ended, endedBy: 'parent', command: 'pnpm test', exitCode: 1 })).toBe(
+      'Stopped by lead · 14:52'
+    )
+    expect(endedHeaderText({ status: 'exited', endedBy: 'exited', command: 'make', exitCode: 2, endedAt: null })).toBe(
+      'exited 2'
+    )
+  })
+
   it('says Stopped by you for a child the user stopped from this window, and only when the host stopped it', () => {
     expect(endedHeaderText({ status: 'exited', stopped: true, endedAt: at(14, 52) }, true)).toBe(
       'Stopped by you · 14:52'
