@@ -232,6 +232,8 @@ struct Watched {
     adopted: HashSet<SessionId>,
     /// What each child's activity was at the last pass.
     activity: HashMap<SessionId, Option<SessionActivity>>,
+    /// The children whose activity a pass has known since the host started.
+    begun: HashSet<SessionId>,
     /// Who ended a child that is ending, noted before it is ended.
     stopped_by: HashMap<SessionId, StoppedBy>,
     last_report: HashMap<SessionId, LastReport>,
@@ -347,6 +349,12 @@ impl Desk {
         self.watched().activity.get(&id).copied().flatten()
     }
 
+    /// Whether child `id`'s activity has been known at some pass since the
+    /// host started.
+    pub fn has_begun(&self, id: SessionId) -> bool {
+        self.watched().begun.contains(&id)
+    }
+
     /// Child `id` is about to be ended by `by`. The first to say wins: a
     /// person's Stop on a child its parent is already stopping is the
     /// parent's.
@@ -374,6 +382,7 @@ impl Desk {
         let mut watched = self.watched();
         watched.trackers.remove(&id);
         watched.activity.remove(&id);
+        watched.begun.remove(&id);
         watched.plain.remove(&id);
         watched.adopted.remove(&id);
         watched.stopped_by.remove(&id);
@@ -454,6 +463,9 @@ impl Hosted {
                     .unwrap_or_default();
                 if watched.activity.insert(id, state.activity) != Some(state.activity) {
                     moved = true;
+                }
+                if state.activity.is_some() {
+                    watched.begun.insert(id);
                 }
                 let listed = overview
                     .sessions

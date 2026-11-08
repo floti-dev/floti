@@ -4066,7 +4066,7 @@ async fn a_send_that_interrupts_presses_the_stop_key_first_and_the_child_takes_t
                     )
                     .await
                     .done();
-                assert_eq!(sent["interrupted"], true, "{backend}");
+                assert_eq!(sent["interrupted"], true, "{backend}: {sent}");
             }
             let run = eventually("the child to take the text after the stop", async || {
                 let run = world.reread(&child);

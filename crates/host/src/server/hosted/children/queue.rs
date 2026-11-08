@@ -135,6 +135,9 @@ pub(super) struct Moment {
     pub at_a_prompt: bool,
     /// Its activity at the last pass.
     pub activity: Option<SessionActivity>,
+    /// Its activity has been known at some pass since the host started: one
+    /// pass that could not tell it does not make it a child yet to begin.
+    pub begun: bool,
     /// Anything tells its turns: its backend keeps records of its sessions,
     /// or its program reports its status. With neither, there is no turn to
     /// wait for.
@@ -200,7 +203,7 @@ pub(super) fn hold(moment: &Moment, interrupt: bool) -> Option<Hold> {
     if !moment.signals {
         return None;
     }
-    if moment.activity.is_none() {
+    if moment.activity.is_none() && !moment.begun {
         return Some(Hold::NotStarted);
     }
     if interrupt {
@@ -290,6 +293,7 @@ mod tests {
             person_typed: false,
             at_a_prompt: false,
             activity: Some(SessionActivity::Idle),
+            begun: true,
             signals: true,
             given_a_turn: false,
         }
@@ -359,10 +363,19 @@ mod tests {
     fn a_child_that_has_not_begun_waits_and_one_nothing_tells_the_turns_of_takes_it_at_once() {
         let unstarted = Moment {
             activity: None,
+            begun: false,
             ..at_rest()
         };
         assert_eq!(hold(&unstarted, false), Some(Hold::NotStarted));
         assert_eq!(hold(&unstarted, true), Some(Hold::NotStarted));
+        // One whose activity a pass could not tell, after others could, has
+        // begun: a message waits for its turn, and an interrupt does not.
+        let untold = Moment {
+            activity: None,
+            ..at_rest()
+        };
+        assert_eq!(hold(&untold, false), Some(Hold::Working));
+        assert_eq!(hold(&untold, true), None);
         let silent = Moment {
             activity: None,
             signals: false,

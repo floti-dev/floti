@@ -383,6 +383,7 @@ impl Hosted {
                 Some(status) if status.report.state == ReportState::Blocked
             ),
             activity,
+            begun: activity.is_some() || self.children.news.has_begun(child),
             signals: recipient.signals || activity.is_some(),
             given_a_turn: session.given_a_turn(),
         };
