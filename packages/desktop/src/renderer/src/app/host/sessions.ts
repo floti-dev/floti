@@ -3,7 +3,7 @@ import {
   closeParentPlan,
   isCommandChild,
   sessionLabel,
-  withReportOf,
+  withListedOf,
   type SessionActivityState,
   type SessionRecord,
   type SessionsOverview,
@@ -227,9 +227,10 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
         // A rename answered here at once keeps its label until the host's row follows.
         records.set(record.id, record)
       } else {
-        // What a child last told its parent comes and goes with the child's turns, so it is
-        // taken from every listing; the rest of a known row stays as the window has it.
-        records.set(record.id, withReportOf(known, record))
+        // What a child last told its parent and what a session's agent says it is doing come
+        // and go with its turns, so they are taken from every listing; the rest of a known
+        // row stays as the window has it.
+        records.set(record.id, withListedOf(known, record))
       }
       carry(records.get(record.id)!)
     }

@@ -71,7 +71,8 @@ export interface SessionHistoryProps {
   refreshing: boolean
 
   /**
-   * Names a session by hand. Null restores the title derived from its prompts.
+   * Names a session by hand. Null restores the title its agent gave it, or
+   * the one derived from its prompts when it has none.
    *
    * A derived title cannot tell six check probes apart - their first
    * substantive prompt genuinely is the same sentence - and nothing Helm can
@@ -113,6 +114,15 @@ export interface SessionHistoryProps {
  * Helm ever saw it", and the pane has to be able to say which.
  */
 type Blocked = 'reaped' | 'archived' | 'evicted' | 'folder-gone' | null
+
+/**
+ * Whether what a session is called is Helm's own words for an empty record
+ * ("Image only"), drawn quieter than a sentence somebody wrote. Never when it
+ * was named by hand or titled by its agent: `historyTitle` draws those first.
+ */
+function isStandIn(session: HistorySession): boolean {
+  return session.label === null && session.agentTitle === undefined && session.titleFallback
+}
 
 function blockedBy(session: HistorySession): Blocked {
   if (!session.projectExists) return 'folder-gone'
@@ -577,9 +587,9 @@ function Row({
   const headline = session.match ?? title
   const isMatch = session.match !== undefined && session.match !== title
   // Helm's own words for a session that recorded nothing readable are not a
-  // sentence anybody wrote, and are not drawn as one. A name given by hand is
-  // never a stand-in, whatever the prompts said.
-  const standIn = session.label === null && session.titleFallback && session.match === undefined
+  // sentence anybody wrote, and are not drawn as one. A name given by hand, or
+  // a title its agent gave it, is never a stand-in, whatever the prompts said.
+  const standIn = isStandIn(session) && session.match === undefined
 
   return (
     <button
@@ -819,7 +829,7 @@ function Detail({
   const blocked = blockedBy(session)
   const [renaming, setRenaming] = useState(false)
   const title = historyTitle(session)
-  const standIn = session.label === null && session.titleFallback
+  const standIn = isStandIn(session)
 
   return (
     <div className="mx-auto max-w-3xl px-8 py-7">
@@ -837,9 +847,11 @@ function Detail({
             data-history-title
             onDoubleClick={() => setRenaming(true)}
             title={
-              session.label === null
-                ? 'Double-click to name this session'
-                : `Named by hand. Its prompts read “${session.title}”.`
+              session.label !== null
+                ? `Named by hand. Its prompts read “${session.title}”.`
+                : session.agentTitle !== undefined
+                  ? 'Titled by its agent. Double-click to name this session'
+                  : 'Double-click to name this session'
             }
             className={cn(
               'text-[17px] leading-snug font-medium tracking-tight',
@@ -884,10 +896,14 @@ function Detail({
               type="button"
               data-history-rename-clear
               onClick={() => onRename(session.sessionId, null)}
-              title={`Go back to the title read from the prompts: “${session.title}”`}
+              title={
+                session.agentTitle === undefined
+                  ? `Go back to the title read from the prompts: “${session.title}”`
+                  : `Go back to the title its agent gave it: “${session.agentTitle}”`
+              }
               className="text-fg-muted transition-colors hover:text-accent-text hover:underline"
             >
-              Use the derived title
+              {session.agentTitle === undefined ? 'Use the derived title' : "Use its agent's title"}
             </button>
           )}
         </div>

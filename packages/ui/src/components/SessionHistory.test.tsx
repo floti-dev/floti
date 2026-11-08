@@ -295,6 +295,34 @@ describe('SessionHistory', () => {
     expect(props.onRename).toHaveBeenLastCalledWith('a', null)
   })
 
+  it('calls a session by the title its agent gave it, a name given by hand over that, and its first prompt with neither', async () => {
+    const titled = session('a', { title: 'add geofencing to the map', agentTitle: 'Map: geofencing' })
+    const named = session('b', { title: 'fix the login', agentTitle: 'Login form', label: 'Auth work' })
+    const plain = session('c', { title: 'write the release notes' })
+    const { props, rerender } = renderHistory({}, [titled, named, plain])
+
+    expect(row('Map: geofencing')).toBeTruthy()
+    expect(row('Auth work')).toBeTruthy()
+    expect(within(list()).queryByRole('button', { name: /^Login form/ })).toBeNull()
+    expect(row('write the release notes')).toBeTruthy()
+
+    // Clearing a hand-given name goes back to the agent's title, and the detail says which it is.
+    rerender({ selected: named })
+    expect(screen.getByRole('heading', { name: 'Auth work' })).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: "Use its agent's title" }))
+    expect(props.onRename).toHaveBeenLastCalledWith('b', null)
+    rerender({ selected: { ...named, label: null } })
+    expect(screen.getByRole('heading', { name: 'Login form' })).toBeTruthy()
+  })
+
+  it('never draws an agent title as a stand-in, even for a session whose prompts left nothing to read', () => {
+    const empty = session('a', { title: 'Image only', titleFallback: true })
+    const titled = session('b', { title: 'Image only', titleFallback: true, agentTitle: 'Screenshot review' })
+    renderHistory({}, [empty, titled])
+    expect(row('Image only').querySelector('.italic')).not.toBeNull()
+    expect(row('Screenshot review').querySelector('.italic')).toBeNull()
+  })
+
   it('resumes a session and shows why a resume could not start', async () => {
     const s = session('a', { title: 'plan the release' })
     const { props, rerender } = renderHistory({ selected: s }, [s])

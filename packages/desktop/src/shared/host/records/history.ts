@@ -38,6 +38,8 @@ export function historySessionFromHost(session: P.HistorySession): HistorySessio
     title: session.title,
     titleFallback: session.titleFallback,
     label: session.label,
+    // Set only once its agent titled it; a protocol before 2.2 never says.
+    ...(session.agentTitle == null ? {} : { agentTitle: session.agentTitle }),
     transcriptFile: session.transcriptFile,
     transcriptBytes: session.transcriptBytes,
     projectExists: session.projectExists,

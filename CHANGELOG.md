@@ -14,6 +14,24 @@ A version with no section here does not release: the workflow fails rather than
 publishing an empty body, because the step a person can skip is the step that
 gets skipped.
 
+## 2.4.1-preview.10
+
+A preview, not a release: nothing offers it as an update.
+
+**Sessions say what they are doing**
+
+- A session's agent gives the session a title saying what it is working on,
+  such as "Agents page: edit and delete agents", and changes it when the work
+  changes. Claude Code is asked to once it knows what the session is for, and
+  any session's shell can set one with `floti session title "<text>"`. A
+  title is one line of at most 60 characters.
+- The sessions pane shows the title beside the session's name, and in its
+  detail.
+- History calls a conversation by its title. A name you give it in History
+  still wins, and a conversation with neither is called by its first prompt.
+- A session can title only itself. Turning off "Let Claude see the other
+  sessions" in Settings turns titles off with it.
+
 ## 2.4.1-preview.9
 
 A preview, not a release: nothing offers it as an update.

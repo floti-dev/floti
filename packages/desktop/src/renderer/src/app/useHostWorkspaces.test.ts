@@ -105,7 +105,25 @@ describe('useHostWorkspaces', () => {
     })
 
     await waitFor(() => expect(result.current.byHost.get(BOX)?.sessions).toEqual([deploy, child]))
-    expect(box.invoked('session:list')).toHaveLength(1)
+    // One listing for each push: the first for what its running session's agent
+    // calls it, the second for the session it names that the window has not got.
+    expect(box.invoked('session:list')).toHaveLength(2)
+  })
+
+  it('takes the title a session’s agent gave it from build-box’s listing when its activity moves', async () => {
+    const box = remoteBridge(BOX)
+    const other = { ...deploy, id: 4, name: 'notes' } as SessionRecord
+    box.answer('session:list', () => [deploy, other])
+    const { result } = renderHook(() => useHostWorkspaces([BOX], [BOX]))
+    await waitFor(() => expect(result.current.byHost.get(BOX)?.sessions).toEqual([deploy, other]))
+    const untitled = result.current.byHost.get(BOX)?.sessions[1]
+
+    box.answer('session:list', () => [{ ...deploy, title: 'Ship the release notes' }, other])
+    act(() => box.emit('session:activity', []))
+    await waitFor(() =>
+      expect(result.current.byHost.get(BOX)?.sessions[0]).toMatchObject({ id: deploy.id, title: 'Ship the release notes' })
+    )
+    expect(result.current.byHost.get(BOX)?.sessions[1]).toBe(untitled)
   })
 
   it('takes a child’s report from build-box’s listing when its activity moves, and drops it when the host clears it', async () => {

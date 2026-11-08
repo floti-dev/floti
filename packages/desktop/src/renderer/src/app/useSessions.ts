@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Project, SessionActivityState, SessionRecord } from '@helm/core'
-import { isChild, isCommandChild, withReports } from '@helm/core/types'
+import { isCommandChild, withListed } from '@helm/core/types'
 import { helm } from './bridge'
 import { disposeTerminal, estimateGrid } from './terminals'
 
@@ -85,25 +85,27 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
 
   // The ids this window holds, read when the host's activity names one, which
   // is not inside a state updater: an updater runs when React gets to it. Whether
-  // it holds a running child is kept too, whose report the host lists with its row.
+  // it holds a running session is kept too, whose report and title the host
+  // lists with its row.
   const heldRef = useRef(new Set<number>())
-  const childrenRef = useRef(false)
+  const runningRef = useRef(false)
   useEffect(() => {
     heldRef.current = new Set(sessions.map((session) => session.id))
-    childrenRef.current = sessions.some((session) => session.status === 'running' && isChild(session))
+    runningRef.current = sessions.some((session) => session.status === 'running')
   }, [sessions])
 
   useEffect(() => {
     // A session started elsewhere, such as a child a parent's agent tool
     // started, is added once the host lists it; the ones held are not touched,
-    // but for what a child last told its parent, which comes with its row.
+    // but for what a child last told its parent and what a session's agent says
+    // it is doing, which come with its row.
     const relist = (): void => {
       void helm.invoke('session:list').then(
         (rows) =>
           setSessions((current) => {
             const held = new Set(current.map((session) => session.id))
             const added = rows.filter((row) => !held.has(row.id))
-            const reported = withReports(current, rows) ?? current
+            const reported = withListed(current, rows) ?? current
             return added.length === 0 ? reported : [...reported, ...added]
           }),
         () => undefined
@@ -130,11 +132,12 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
       // stale dot until that session happens to move again.
       helm.on('session:activity', (states) => {
         setActivity(new Map(states.map((state) => [state.id, state])))
-        // A child's report, which its parent's tab shows in its card, changes with
-        // what the child does, so a window holding a running child lists again
-        // whenever the activity moves. The host moves it when a report is made or
-        // cleared, and a listing that says nothing new leaves the rows as they are.
-        if (listedRef.current && (childrenRef.current || states.some((state) => !heldRef.current.has(state.id)))) {
+        // A child's report, which its parent's tab shows in its card, and a
+        // session's title change with what its agent does, so a window holding a
+        // running session lists again whenever the activity moves. The host moves
+        // it when a report is made or cleared and when a title is set, and a
+        // listing that says nothing new leaves the rows as they are.
+        if (listedRef.current && (runningRef.current || states.some((state) => !heldRef.current.has(state.id)))) {
           relist()
         }
       })

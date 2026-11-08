@@ -58,6 +58,8 @@ export function sessionFromHost(record: P.SessionRecord): SessionRecord {
     id: record.id,
     name: record.name,
     label: record.label,
+    // Set only once its agent titled it; a protocol before 2.2 never says.
+    ...(record.title == null ? {} : { title: record.title }),
     cwd: record.cwd,
     branch: record.branch,
     projectPath: record.projectPath,

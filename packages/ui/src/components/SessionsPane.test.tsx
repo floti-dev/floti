@@ -328,6 +328,74 @@ describe("SessionsPane", () => {
   });
 });
 
+describe("SessionsPane: what a session's agent says it is doing", () => {
+  const TITLE = "Agents page: edit and delete agents";
+  const titled = (id: number, name: string, cwd: string): SessionRecord => ({
+    ...row(id, name, cwd),
+    title: TITLE,
+  });
+
+  it("draws the title its agent gave a session beside its name, and none for a session not titled", () => {
+    renderPane({
+      records: new Map([
+        [1, titled(1, "shop", "C:\\work\\shop")],
+        [2, row(2, "docs", "C:\\work\\docs")],
+        [3, row(3, "quiet", "C:\\work\\quiet")],
+      ]),
+    });
+    const inHelm = screen.getByRole("region", { name: "In Helm" });
+    const [shop, docs] = within(inHelm).getAllByRole("button");
+    expect(shop?.querySelector("[data-session-title]")?.textContent).toBe(
+      TITLE,
+    );
+    expect(shop?.textContent).toContain("shop");
+    expect(shop?.getAttribute("title")).toContain(`shop: ${TITLE}`);
+    expect(docs?.querySelector("[data-session-title]")).toBeNull();
+  });
+
+  it("shows the title in the selected session's detail", () => {
+    renderPane({
+      records: new Map([[1, titled(1, "shop", "C:\\work\\shop")]]),
+      selectedPid: SHOP.pid,
+    });
+    const detail = screen
+      .getByRole("heading", { name: "shop" })
+      .closest("div") as HTMLElement;
+    expect(within(detail).getByText("Title")).toBeTruthy();
+    expect(within(detail).getAllByText(TITLE).length).toBeGreaterThan(0);
+  });
+
+  it("draws the title on a session not open here and on a session of another computer", () => {
+    renderPane({
+      notOpenHere: [titled(2, "docs", "C:\\work\\docs")],
+      remoteHosts: [
+        {
+          id: "h-build",
+          name: "build-box",
+          connected: true,
+          sessions: [
+            {
+              key: "h-build:7",
+              name: "deploy",
+              title: "Ship the release notes",
+              cwd: "/srv/infra",
+              state: "busy",
+            },
+          ],
+        },
+      ],
+    });
+    const notHere = screen.getByRole("region", { name: "Not open here" });
+    expect(notHere.querySelector("[data-session-title]")?.textContent).toBe(
+      TITLE,
+    );
+    const build = screen.getByRole("region", { name: "build-box" });
+    expect(build.querySelector("[data-session-title]")?.textContent).toBe(
+      "Ship the release notes",
+    );
+  });
+});
+
 describe("SessionsPane sessions not open here", () => {
   it("lists a session running in the host with no tab on this device as not open here, once, with Open and End", async () => {
     const onEndSession = vi.fn();

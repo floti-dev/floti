@@ -163,6 +163,39 @@ describe("the window’s view of hosts on other computers", () => {
     expect(w.store.get()["h-build"]?.sessions).toEqual([]);
   });
 
+  it("carries the title a remote session's agent gave it, and the new one once the activity moves after it is set", async () => {
+    const rows = [
+      { ...record(4, "deploy", "/srv/app"), title: "Fix the login form" },
+      record(5, "notes", "/srv/app"),
+    ];
+    const build = hostListing(rows);
+    const w = world({ "h-build": build });
+    w.tell({ "h-build": { state: "connected" } });
+    await settle();
+    expect(w.store.get()["h-build"]?.sessions).toEqual([
+      {
+        key: "h-build:4",
+        name: "deploy",
+        title: "Fix the login form",
+        cwd: "/srv/app",
+        state: "running",
+      },
+      { key: "h-build:5", name: "notes", cwd: "/srv/app", state: "running" },
+    ]);
+
+    // The agent titles its session again: the host moves the activity, and the window lists again.
+    rows[0] = { ...rows[0]!, title: "Login form: tests" };
+    const quiet = { waitingFor: null, message: null, conversationId: null };
+    build.push("session:activity", [
+      { id: 4, activity: "busy", ...quiet },
+      { id: 5, activity: "idle", ...quiet },
+    ]);
+    await settle();
+    expect(
+      w.store.get()["h-build"]?.sessions.map((row) => row.title ?? null),
+    ).toEqual(["Login form: tests", null]);
+  });
+
   it("S9: a host that drops keeps its rows as not connected, and they come back live once it is reachable again", async () => {
     const first = hostListing([record(4, "deploy", "/srv/app")]);
     const w = world({ "h-build": first });

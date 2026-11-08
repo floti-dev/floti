@@ -380,8 +380,21 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
 - Listing is machine-wide; detail exists only for sessions the host spawned.
   A status it could not read is "unknown", never omitted. No tool takes a
   session id.
-- `helm-sessions` is awareness only: it sends a session nothing, waits on
-  none, hands none work, and returns no part of any session's conversation.
+- `helm-sessions` is awareness plus the caller's own title: it sends a
+  session nothing, waits on none, hands none work, and returns no part of any
+  session's conversation. Its one write is `session_title`, which titles the
+  caller's own row (resolved from its token, never from an argument) with one
+  line of at most 60 characters, and refuses anything else; from a session's
+  shell it is `floti session title <text>`, which reaches the family at
+  `FLOTI_AGENT_SESSIONS_URL` with the session's token. Both are allowed at
+  launch (`mcp__helm-sessions__session_title`, `Bash(floti session title:*)`),
+  and each backend's guidance asks the agent to set a title saying what is
+  being done, never the folder's name, and to change it when the work changes.
+  The title is kept on the row in `floti.db`, inherited by a new row of the
+  same conversation, carried to History by conversation (protocol 2.2's
+  optional `title` and `agentTitle`) and shown by the sessions pane beside
+  the name. History calls a conversation by its hand-given name, else its
+  agent's title, else its first prompt's title.
 - `floti-agents` acts on sessions, and only on the caller's own children:
   sessions started with `agents_start` by the session whose token made the
   call. A parent may start its children, type into them (`agents_send`), read

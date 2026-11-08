@@ -68,6 +68,7 @@ export * from './layout/family'
 export * from './layout/familyRoom'
 export * from './layout/familyState'
 export * from './layout/familyReport'
+export * from './layout/listed'
 export * from './layout/familyView'
 export * from './layout/childPlace'
 
@@ -322,6 +323,12 @@ export interface SessionRecord {
   name: string
   /** What Helm calls it on screen, or null for "use `name`". `sessionLabel`. */
   label: string | null
+  /**
+   * What the session is doing, in its agent's words (`session_title`): one
+   * line of at most 60 characters, drawn beside its name. Absent until the
+   * agent sets one, and from a host before protocol 2.2.
+   */
+  title?: string
   cwd: string
   /** The branch `cwd` was on when this was spawned. Null for a non-repo cwd, a
    * detached HEAD, or a read that failed. Captured, never followed. */
@@ -843,6 +850,12 @@ export interface HistorySession {
    * single field that had been overwritten could not.
    */
   label: string | null
+  /**
+   * The title the conversation's agent last gave its session
+   * (`session_title`), or absent when no agent titled it. A name given by
+   * hand wins over it, and it wins over `title`, which is only derived.
+   */
+  agentTitle?: string
   /** The transcript on disk, or null once it has been reaped. */
   transcriptFile: string | null
   transcriptBytes: number | null
@@ -882,17 +895,17 @@ export interface HistorySession {
 export const HISTORY_NAME_MAX = 120
 
 /**
- * What to call a history session on screen: the name it was given, or the one
- * derived from its prompts.
+ * What to call a history session on screen: the name it was given by hand,
+ * else the title its agent gave it, else the one derived from its prompts.
  *
  * `sessionLabel`'s twin, and it exists for the same reason - the list row, the
  * detail heading and the tab a resume opens all name the same session, and a
- * `label ?? title` written out three times is three places for them to
- * disagree. In `types.ts` because the renderer imports it (CLAUDE.md
+ * `label ?? agentTitle ?? title` written out three times is three places for
+ * them to disagree. In `types.ts` because the renderer imports it (CLAUDE.md
  * "Boundaries").
  */
-export function historyTitle(session: Pick<HistorySession, 'title' | 'label'>): string {
-  return session.label ?? session.title
+export function historyTitle(session: Pick<HistorySession, 'title' | 'label' | 'agentTitle'>): string {
+  return session.label ?? session.agentTitle ?? session.title
 }
 
 // ---------------------------------------------------------------------------

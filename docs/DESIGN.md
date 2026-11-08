@@ -602,6 +602,14 @@ overrides the gate; keep it.
   *called* is a name and is Inter, and the sentences about what Helm could and
   could not see are prose.
 
+  **What a session's agent says it is doing sits beside its name, muted.** A
+  title an agent gave its session (`session_title`) is Inter at 11.5px in
+  `fg-muted`, after the name on the same line, and it is the part that gives
+  way when the row is narrow: the name is what the user calls the session and
+  stays whole while it can. A session with no title draws nothing there. The
+  detail repeats it as its first fact, and History calls a conversation by it
+  when nobody named the conversation by hand.
+
   **A tree that could not be read says "Unknown", never nothing.** This is the
   usage figures' rule at a third surface - paint nothing rather than a wrong
   number - and here it has an edge the others do not: the wrong answer is not a

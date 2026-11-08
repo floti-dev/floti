@@ -82,10 +82,31 @@ describe('useSessions', () => {
     await waitFor(() => expect(result.current.sessions.map((s) => s.id)).toEqual([1, 2]))
     expect(bridge.invoked('session:list')).toHaveLength(1)
 
-    // Known sessions moving ask for nothing.
+    // Known sessions moving list again, for what their agents call them, and a
+    // listing that says nothing new leaves the very same rows.
+    const held = result.current.sessions
     bridge.clearRecords()
     act(() => bridge.emit('session:activity', [state(1), state(2)]))
-    expect(bridge.invoked('session:list')).toHaveLength(0)
+    await waitFor(() => expect(bridge.invoked('session:list')).toHaveLength(1))
+    expect(result.current.sessions).toBe(held)
+  })
+
+  it('takes the title a session’s agent gave it from the host’s listing when its activity moves, and the next one when it changes', async () => {
+    hosting = [record(1), record(2)]
+    const { result } = await mounted()
+    await waitFor(() => expect(result.current.sessions.map((s) => s.id)).toEqual([1, 2]))
+    const untitled = result.current.sessions[1]
+
+    const state = (id: number): SessionActivityState => ({ id, activity: 'busy', waitingFor: null, message: null, claudeSessionId: null })
+    hosting = [record(1, { title: 'Agents page: edit and delete agents' }), record(2)]
+    act(() => bridge.emit('session:activity', [state(1), state(2)]))
+    await waitFor(() => expect(result.current.sessions[0]).toMatchObject({ id: 1, title: 'Agents page: edit and delete agents' }))
+    // The session its agent did not title is the very same row.
+    expect(result.current.sessions[1]).toBe(untitled)
+
+    hosting = [record(1, { title: 'Agents page: tests' }), record(2)]
+    act(() => bridge.emit('session:activity', [state(1), state(2)]))
+    await waitFor(() => expect(result.current.sessions[0]).toMatchObject({ title: 'Agents page: tests' }))
   })
 
   it('takes the report a child holds from the host’s listing when its activity moves, and drops it when its next turn clears it', async () => {

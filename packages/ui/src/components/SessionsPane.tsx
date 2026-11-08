@@ -147,6 +147,8 @@ export interface SessionsPaneRemoteSession {
   /** Unique across every host, so it never meets this PC's session ids. */
   key: string;
   name: string;
+  /** What its agent says it is doing (`session_title`); absent until it says. */
+  title?: string | undefined;
   cwd: string;
   state: SessionState;
   /**
@@ -182,6 +184,46 @@ function stateOf(session: LiveSession): SessionState {
 
 function nameOf(session: LiveSession): string {
   return session.name ?? `pid ${String(session.pid)}`;
+}
+
+/** A row's tooltip first line: its name, and what its agent says it is doing when it has said. */
+function nameLine(name: string, title: string | undefined): string {
+  return title === undefined ? name : `${name}: ${title}`;
+}
+
+/**
+ * A row's name, and beside it, muted, what the session's agent says it is
+ * doing (`session_title`). The name is what the user calls it and stays
+ * whole while it can; the title gives way first, and is not drawn at all
+ * until the agent has set one.
+ */
+function SessionName({
+  name,
+  title,
+}: {
+  name: string;
+  title: string | undefined;
+}): JSX.Element {
+  return (
+    <span className="flex min-w-0 flex-1 items-baseline gap-2">
+      <span
+        className={cn(
+          "min-w-0 truncate text-[12.5px] text-fg",
+          title === undefined ? "flex-1" : "max-w-[60%] shrink-0",
+        )}
+      >
+        {name}
+      </span>
+      {title !== undefined && (
+        <span
+          data-session-title
+          className="min-w-0 flex-1 truncate text-[11.5px] text-fg-muted"
+        >
+          {title}
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function SessionsPane({
@@ -266,6 +308,11 @@ export function SessionsPane({
               <Row
                 key={session.pid}
                 session={session}
+                title={
+                  session.helmSessionId === null
+                    ? undefined
+                    : records.get(session.helmSessionId)?.title
+                }
                 selected={session.pid === selectedPid}
                 crowded={
                   session.cwd !== null && crowded.has(session.cwd.toLowerCase())
@@ -553,7 +600,7 @@ function RemoteRow({
       <div
         data-remote-session={session.key}
         data-not-open-here={notOpen ? session.key : undefined}
-        title={`${session.name} - ${SESSION_STATE_LABEL[session.state]}${notOpen ? ", not open here" : ""}\n${session.cwd}`}
+        title={`${nameLine(session.name, session.title)} - ${SESSION_STATE_LABEL[session.state]}${notOpen ? ", not open here" : ""}\n${session.cwd}`}
         className="flex min-w-0 items-center gap-2 rounded-raised px-2.5 py-row transition-colors hover:bg-hover"
       >
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -566,9 +613,7 @@ function RemoteRow({
                 SESSION_STATE_DOT[session.state],
               )}
             />
-            <span className="min-w-0 flex-1 truncate text-[12.5px] text-fg">
-              {session.name}
-            </span>
+            <SessionName name={session.name} title={session.title} />
             {notOpen && (
               <span className="shrink-0 text-[10.5px] text-fg-subtle">
                 not open here
@@ -702,12 +747,15 @@ function Section({
  */
 function Row({
   session,
+  title,
   selected,
   crowded,
   resources,
   onSelect,
 }: {
   session: LiveSession;
+  /** What its agent says it is doing, from the host's record; only a hosted session has one. */
+  title?: string | undefined;
   selected: boolean;
   crowded: boolean;
   resources?: SessionResources | undefined;
@@ -725,7 +773,7 @@ function Row({
       data-session-state={state}
       data-session-hosted={session.helmSessionId !== null}
       onClick={() => onSelect(session)}
-      title={`${name} - ${SESSION_STATE_LABEL[state]}\n${session.cwd ?? "working directory not recorded"}`}
+      title={`${nameLine(name, title)} - ${SESSION_STATE_LABEL[state]}\n${session.cwd ?? "working directory not recorded"}`}
       className={cn(
         "relative flex w-full flex-col gap-0.5 rounded-raised px-2.5 py-row text-left transition-colors",
         selected ? ROW_SELECTED : "hover:bg-hover",
@@ -740,9 +788,7 @@ function Row({
             SESSION_STATE_DOT[state],
           )}
         />
-        <span className="min-w-0 flex-1 truncate text-[12.5px] text-fg">
-          {name}
-        </span>
+        <SessionName name={name} title={title} />
         {session.waitingFor !== null && (
           // The CLI's own sentence, verbatim and never matched against - it
           // comes from whichever dialog is on top. It fits here where it does
@@ -839,7 +885,7 @@ function NotOpenRow({
   return (
     <div
       data-not-open-here={record.id}
-      title={`${name} - ${SESSION_STATE_LABEL[state]}, not open here\n${record.cwd}`}
+      title={`${nameLine(name, record.title)} - ${SESSION_STATE_LABEL[state]}, not open here\n${record.cwd}`}
       className="flex min-w-0 items-center gap-2 rounded-raised px-2.5 py-row transition-colors hover:bg-hover"
     >
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -852,9 +898,7 @@ function NotOpenRow({
               SESSION_STATE_DOT[state],
             )}
           />
-          <span className="min-w-0 flex-1 truncate text-[12.5px] text-fg">
-            {name}
-          </span>
+          <SessionName name={name} title={record.title} />
         </span>
         <span className="min-w-0 truncate pl-[14px] font-mono text-[10.5px] text-fg-subtle">
           {record.cwd}
@@ -967,6 +1011,14 @@ function Detail({
       </header>
 
       <Facts>
+        {record?.title !== undefined && (
+          // What its agent says it is doing, in its own words.
+          <Fact label="Title">
+            <span data-session-title className="text-[11.5px] text-fg-muted">
+              {record.title}
+            </span>
+          </Fact>
+        )}
         <Fact label="Working directory">
           {cwd === null ? (
             <Unknown>not recorded</Unknown>

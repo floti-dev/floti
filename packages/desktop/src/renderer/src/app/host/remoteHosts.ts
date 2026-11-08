@@ -38,6 +38,8 @@ export interface RemoteSessionRow {
   /** `<host id>:<session id>`: unique across every host, so it never meets this PC's ids. */
   key: string
   name: string
+  /** What its agent says it is doing (`session_title`); absent until it says. */
+  title?: string
   cwd: string
   state: P.SessionActivity | 'running'
 }
@@ -136,6 +138,7 @@ export function createRemoteHosts(deps: RemoteHostsDeps): RemoteHostsStore {
           .map((row) => ({
             key: `${id}:${String(row.id)}`,
             name: row.label ?? row.name,
+            ...(row.title == null ? {} : { title: row.title }),
             cwd: row.cwd,
             state: host?.activity.get(row.id) ?? 'running'
           })),
@@ -183,8 +186,11 @@ export function createRemoteHosts(deps: RemoteHostsDeps): RemoteHostsStore {
       const activity = (states: readonly P.SessionActivityState[]): void => {
         const known = new Set(host.rows.map((row) => row.id))
         host.activity = new Map(states.map((state) => [state.id, state.activity]))
-        // A session the list has not got yet is listed again; the rest only change state.
-        if (states.some((state) => !known.has(state.id))) void relist(id, host, connection)
+        // A session the list has not got yet is listed again, and so is the list while it
+        // holds a running session: the host moves the activity when an agent sets its
+        // session's title, which only the list carries.
+        const running = host.rows.some((row) => row.status === 'running')
+        if (running || states.some((state) => !known.has(state.id))) void relist(id, host, connection)
         else render()
       }
       host.subscriptions = [

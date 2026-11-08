@@ -1636,8 +1636,8 @@ function SessionsGroup({
         label="Let Claude see the other sessions"
         hint={
           mcp
-            ? 'Sessions Helm hosts can list every Claude Code session running here - its name, its directory, whether it is busy or waiting on you - and, for the ones Helm started, what they are holding: child processes and listening ports. Not their conversations, and not the arguments they were launched with.'
-            : 'Off. Helm serves the tools to nobody and sessions are started without them, exactly as they were before.'
+            ? 'Sessions Helm hosts can list every Claude Code session running here - its name, its directory, whether it is busy or waiting on you - and, for the ones Helm started, what they are holding: child processes and listening ports. Each can also give itself a title saying what it is doing, shown beside its name here and in History. Not their conversations, and not the arguments they were launched with.'
+            : 'Off. Helm serves the tools to nobody, sessions are started without them and give themselves no titles.'
         }
       >
         <span data-settings-session-mcp={String(mcp)}>

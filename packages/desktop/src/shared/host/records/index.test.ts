@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type * as P from '../protocol'
+import { historySessionFromHost } from './history'
 import { profileFromHost, sessionFromHost, splitSettingsPatch } from './index'
 
 const hostSession = (patch: Partial<P.SessionRecord> = {}): P.SessionRecord => ({
@@ -19,6 +20,41 @@ const hostSession = (patch: Partial<P.SessionRecord> = {}): P.SessionRecord => (
   durationMs: null,
   exitCode: null,
   ...patch
+})
+
+describe('what a session’s agent called it, as the window reads it', () => {
+  it('carries the title its agent gave a session, and none for one untitled or from a host before 2.2', () => {
+    expect(sessionFromHost(hostSession({ title: 'Fix the login form' }))).toMatchObject({ title: 'Fix the login form' })
+    expect(sessionFromHost(hostSession())).not.toHaveProperty('title')
+  })
+
+  it('carries the title a conversation’s agent gave it in History beside the derived one', () => {
+    const conversation = (patch: Partial<P.HistorySession> = {}): P.HistorySession => ({
+      sessionId: '3d1f0c2a-0000-4000-8000-000000000001',
+      backend: 'claude-code',
+      project: '/work/docs',
+      projectName: 'docs',
+      promptCount: 2,
+      firstAt: 1,
+      lastAt: 2,
+      firstPrompt: 'fix the login form',
+      title: 'fix the login form',
+      titleFallback: false,
+      label: null,
+      transcriptFile: null,
+      transcriptBytes: null,
+      projectExists: true,
+      archive: null,
+      archivedMessages: null,
+      match: null,
+      ...patch
+    })
+    expect(historySessionFromHost(conversation({ agentTitle: 'Login form' }))).toMatchObject({
+      title: 'fix the login form',
+      agentTitle: 'Login form'
+    })
+    expect(historySessionFromHost(conversation())).not.toHaveProperty('agentTitle')
+  })
 })
 
 describe('a host session, as the window reads it', () => {

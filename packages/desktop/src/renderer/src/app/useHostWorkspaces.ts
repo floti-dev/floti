@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DiscoveryResult, SessionActivityState, SessionRecord } from '@helm/core'
-import { isChild, isCommandChild, isProjectPinned, withProjectPinned, withReports } from '@helm/core/types'
+import { isCommandChild, isProjectPinned, withListed, withProjectPinned } from '@helm/core/types'
 import type { HelmBridge } from '../../../shared/ipc'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
@@ -90,17 +90,18 @@ export function useHostWorkspaces(
     [patch]
   )
 
-  // A running child's report is listed with its row and changes with what the
-  // child does, which the host's activity moves for. Only the reports are taken,
-  // so a session this window adopted before the host listed it stays.
-  const refreshReports = useCallback(
+  // A running child's report and a running session's title are listed with its
+  // row and change with what its agent does, which the host's activity moves
+  // for. Only those are taken, so a session this window adopted before the host
+  // listed it stays.
+  const refreshListed = useCallback(
     (host: string) => {
       void bridgesRef.current(host)
         .invoke('session:list')
         .then(
           (rows) =>
             patch(host, (current) => {
-              const reported = withReports(current.sessions, rows)
+              const reported = withListed(current.sessions, rows)
               return reported === null ? current : { ...current, sessions: reported }
             }),
           () => undefined
@@ -163,8 +164,8 @@ export function useHostWorkspaces(
           patch(host, (current) => ({ ...current, activity: new Map(states.map((state) => [state.id, state])) }))
           // A session started elsewhere, such as from another device: listed again.
           if (unknown) relist(host)
-          else if (heldRef.current.get(host)?.sessions.some((session) => session.status === 'running' && isChild(session))) {
-            refreshReports(host)
+          else if (heldRef.current.get(host)?.sessions.some((session) => session.status === 'running')) {
+            refreshListed(host)
           }
         })
       ]
@@ -172,7 +173,7 @@ export function useHostWorkspaces(
     return () => {
       for (const off of offs) off()
     }
-  }, [hostsKey, patch, relist, refreshReports])
+  }, [hostsKey, patch, relist, refreshListed])
 
   // Read afresh each time the window is connected to a host again.
   const connectedKey = connected.join('\n')
