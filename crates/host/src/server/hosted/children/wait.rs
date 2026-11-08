@@ -4,7 +4,10 @@
 //! **A wait answers from the inbox.** *Any* answers with the unseen news at
 //! once when there is some, else holds for the next event. *All* holds until
 //! none of the children it names (all of the caller's when it names none) is
-//! working, then answers with their unseen news. A name that is not one of the
+//! working, then answers with their unseen news; a child with a message
+//! waiting in its queue is still working. *After delivery*, which a send whose
+//! text was queued waits with, holds until news follows a delivered message
+//! (or the child ends), and answers with all of it. A name that is not one of the
 //! caller's children is not found, before anything waits.
 //!
 //! **A call that does not hold answers at once** with what is unseen and who
@@ -36,10 +39,8 @@
 
 use std::sync::Arc;
 
-use floti_protocol::channels::sessions::SessionActivity;
-
-use super::inbox::{self, News};
-use super::{off_runtime, rows};
+use super::inbox::{self, EventKind, News};
+use super::{off_runtime, queue, rows, send};
 use crate::server::hosted::Hosted;
 use crate::session::SessionId;
 
@@ -50,6 +51,10 @@ pub(crate) enum WaitFor {
     Any,
     /// Every child it names to stop working.
     All,
+    /// News from any child that follows a delivered message: what a child
+    /// did with a message that waited in its queue. A child that ended is
+    /// news too, since what waited for it was never delivered.
+    AfterDelivery,
 }
 
 /// What a wait was asked.
@@ -125,6 +130,18 @@ pub(super) fn ready(wait_for: WaitFor, snapshot: &Snapshot) -> bool {
     match wait_for {
         WaitFor::Any => !snapshot.news.is_empty(),
         WaitFor::All => snapshot.working.is_empty(),
+        WaitFor::AfterDelivery => {
+            let delivered = snapshot
+                .news
+                .iter()
+                .position(|news| news.event == EventKind::Delivered);
+            snapshot.news.iter().enumerate().any(|(at, news)| {
+                news.event == EventKind::Ended
+                    || delivered.is_some_and(|delivered| {
+                        at > delivered && news.event != EventKind::Delivered
+                    })
+            })
+        }
     }
 }
 
@@ -247,15 +264,16 @@ impl Hosted {
             .collect();
         let children =
             rows::children_of(&store, parent, conversation).map_err(|err| err.to_string())?;
+        let queued = queue::children_waiting(&store).map_err(|err| err.to_string())?;
         drop(store);
         let working = children
             .iter()
             .filter(|child| in_scope(&child.name))
             .filter(|child| child.running && self.sessions.get(child.id).is_some())
             .filter(|child| {
-                !matches!(
+                send::still_working(
                     self.children.news.activity_of(child.id),
-                    Some(SessionActivity::Idle | SessionActivity::Waiting | SessionActivity::Error)
+                    queued.contains(&child.id),
                 )
             })
             .map(|child| child.name.clone())
@@ -318,17 +336,43 @@ fn records_backend(
 
 #[cfg(test)]
 mod tests {
-    use super::super::inbox::{EventKind, Facts};
+    use super::super::inbox::Facts;
     use super::*;
 
     fn news(child: &str) -> News {
+        event(child, EventKind::TurnEnded)
+    }
+
+    fn event(child: &str, event: EventKind) -> News {
         News {
             id: 1,
             child: child.to_owned(),
-            event: EventKind::TurnEnded,
+            event,
             facts: Facts::default(),
             at: String::new(),
         }
+    }
+
+    #[test]
+    fn a_wait_after_delivery_is_ready_only_with_news_after_a_delivered_message_or_an_end() {
+        let mut snapshot = Snapshot {
+            caller_runs: true,
+            ..Snapshot::default()
+        };
+        // The turn before the message ended: that is not what it did with it.
+        snapshot.news.push(news("a"));
+        assert!(!ready(WaitFor::AfterDelivery, &snapshot));
+        snapshot.news.push(event("a", EventKind::Delivered));
+        assert!(!ready(WaitFor::AfterDelivery, &snapshot));
+        snapshot.news.push(event("a", EventKind::Report));
+        assert!(ready(WaitFor::AfterDelivery, &snapshot));
+        // A child that ends never takes it.
+        let ended = Snapshot {
+            news: vec![event("a", EventKind::Ended)],
+            caller_runs: true,
+            ..Snapshot::default()
+        };
+        assert!(ready(WaitFor::AfterDelivery, &ended));
     }
 
     #[test]

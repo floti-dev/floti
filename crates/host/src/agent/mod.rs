@@ -171,12 +171,23 @@ pub trait AgentBackend: Send + Sync {
         }
     }
 
+    /// The sentence of Floti's `floti agent` guide on a way of the agent's own
+    /// to message a child, beside Floti's queue, or `None` when it has none,
+    /// the default.
+    fn messaging_guidance(&self) -> Option<&'static str> {
+        None
+    }
+
     /// The instructions Floti adds on its own for `composition`: what a child
     /// is told about its parent and the `floti agent` guide, or `None` when
     /// it adds none. An adapter that takes instructions composes this beside
     /// the role's body.
     fn floti_instructions(&self, composition: &Composition) -> Option<String> {
-        guidance::floti_sections(composition, self.waiting_guidance())
+        guidance::floti_sections(
+            composition,
+            self.waiting_guidance(),
+            self.messaging_guidance(),
+        )
     }
 
     /// Whether the agent can enforce each of `rules`, and if it cannot, a

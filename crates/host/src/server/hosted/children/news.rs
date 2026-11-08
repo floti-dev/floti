@@ -1,5 +1,5 @@
 //! How a child's doings become news for its parent: the rules that turn what
-//! its agent's records and its program say into the five events, and the desk
+//! its agent's records and its program say into the events, and the desk
 //! that watches every child and writes them to the inbox.
 //!
 //! **Watched where activity is already read.** The activity reader
@@ -20,7 +20,9 @@
 //! - *turn ended*: working to idle with no report in that turn. A turn that
 //!   ends with a report is one event, the report;
 //! - *ended*: its session ended, with the exit code, or stopped and by whom;
-//! - *error*: its launch failed, or its program reports `error`.
+//! - *error*: its launch failed, or its program reports `error`;
+//! - *delivered*: a message the parent sent, which waited in the child's
+//!   queue, has been typed into it as its next turn (`send`).
 //!
 //! No event carries the conversation: a report's text and a program's message
 //! are all the words there are.
@@ -254,6 +256,10 @@ pub(in crate::server::hosted) struct Desk {
     /// When each child launched is due to have begun
     /// (`startup::after_each_launch`).
     launches: broadcast::Sender<Instant>,
+    /// Counts the moments a message queued for a child may have become
+    /// deliverable: a child's activity moved, or its turn ended
+    /// (`send::deliver_at_each_moment`).
+    queue_moments: watch::Sender<u64>,
 }
 
 impl Desk {
@@ -263,7 +269,18 @@ impl Desk {
             changes: watch::Sender::new(0),
             standing: watch::Sender::new(0),
             launches: broadcast::Sender::new(64),
+            queue_moments: watch::Sender::new(0),
         }
+    }
+
+    /// The moments a queued message may have become deliverable, from now on.
+    pub fn queue_moments(&self) -> watch::Receiver<u64> {
+        self.queue_moments.subscribe()
+    }
+
+    /// A queued message may have become deliverable.
+    pub(super) fn queue_moment(&self) {
+        self.queue_moments.send_modify(|moments| *moments += 1);
     }
 
     /// Child `id` has just been launched, and has a minute to begin.
@@ -494,17 +511,21 @@ impl Hosted {
             }
             watched.plain.retain(|id| live.contains(id));
         }
+        // A turn that ended, or an idle that spent what a person typed or the
+        // turn a message gave, is a moment a queued message may be taken.
+        let mut spent = false;
         for session in turns_ended
             .into_iter()
             .filter_map(|id| self.sessions.get(id))
         {
             session.turn_ended();
+            spent = true;
         }
         for (session, since) in idle_since
             .into_iter()
             .filter_map(|(id, since)| self.sessions.get(id).map(|session| (session, since)))
         {
-            session.idle_since(since);
+            spent |= session.idle_since(since);
         }
         for (child, kind, facts) in events {
             if kind == EventKind::Error {
@@ -517,6 +538,9 @@ impl Hosted {
         }
         if moved {
             desk.bump();
+        }
+        if moved || spent {
+            desk.queue_moment();
         }
     }
 
@@ -576,7 +600,7 @@ impl Hosted {
 
     /// Writes `facts` as an event of child `child` into its parent's inbox,
     /// and wakes the waits. A child with no parent has no inbox to write to.
-    fn write_news(&self, child: SessionId, kind: EventKind, facts: &Facts) {
+    pub(super) fn write_news(&self, child: SessionId, kind: EventKind, facts: &Facts) {
         let link = match rows::link_of(&self.ledger.store(), child) {
             Ok(Some(link)) => link,
             Ok(None) => return,
@@ -705,6 +729,10 @@ impl Hosted {
             }
             Ok(None) => {}
             Err(err) => log_line!("floti host: {err}"),
+        }
+        // What was queued for it is never delivered: no delivered news comes.
+        if let Err(err) = super::queue::drop_waiting(&self.ledger.store(), child) {
+            log_line!("floti host: {err}");
         }
         // What it was waiting on is no longer standing, and nothing stands
         // under a session that has ended.

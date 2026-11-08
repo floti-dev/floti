@@ -51,6 +51,22 @@ A preview, not a release: nothing offers it as an update.
   the wait early, so you can talk to a session whose children are running
   without it waking again and again.
 
+**Messages to a child wait their turn**
+
+- A message a session sends one of its children waits in the child's queue
+  until the child can take it, and is then typed in as its next turn: once
+  its turn in progress has ended, no permission prompt is open, and you have
+  not typed in its terminal since its last turn. What you type there always
+  comes first, even half a line you have not sent yet.
+- The send no longer fails while the child is busy, asking or being typed
+  in. It says the message is queued and why, and the parent hears when it
+  was delivered. Several messages arrive in the order they were sent, one
+  turn each, and the queue is kept when the host restarts.
+- A message sent to stop the child's turn first still waits for a
+  permission prompt and for what you are typing.
+- A Claude Code parent is told it can also reach a child with its own
+  SendMessage, which reaches the child mid-turn but is not queued by Floti.
+
 ## 2.4.1-preview.9
 
 A preview, not a release: nothing offers it as an update.

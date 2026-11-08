@@ -9,7 +9,8 @@
 //! **Nothing of the conversation.** An item is an event, the child's name as
 //! its parent knows it, and the words the event carries: a report's text, a
 //! program's own message (cut to 200 characters), an exit code, who stopped
-//! it. There is no column for anything an agent said or did otherwise. A
+//! it, and for a delivered message the parent's own text (cut to 200
+//! characters). There is no column for anything an agent said or did otherwise. A
 //! command child is no agent: when its command exits, its item also carries
 //! the last 40 lines the command printed, for its parent to read.
 //!
@@ -38,11 +39,14 @@ pub(crate) enum EventKind {
     Ended,
     /// Its launch failed, or its program reports an error.
     Error,
+    /// A message its parent sent, which waited in its queue, has been typed
+    /// into it as its next turn.
+    Delivered,
 }
 
 impl EventKind {
     /// The word stored and shown: `report`, `needs_you`, `turn_ended`,
-    /// `ended`, `error`.
+    /// `ended`, `error`, `delivered`.
     pub fn word(self) -> &'static str {
         match self {
             Self::Report => "report",
@@ -50,6 +54,7 @@ impl EventKind {
             Self::TurnEnded => "turn_ended",
             Self::Ended => "ended",
             Self::Error => "error",
+            Self::Delivered => "delivered",
         }
     }
 
@@ -60,6 +65,7 @@ impl EventKind {
             Self::TurnEnded,
             Self::Ended,
             Self::Error,
+            Self::Delivered,
         ]
         .into_iter()
         .find(|kind| kind.word() == word)
@@ -108,10 +114,12 @@ impl StoppedBy {
 pub(crate) struct Facts {
     /// A report's `done`, `stuck` or `note`; a needs-you's kind in words
     /// (`permission prompt`, `question`, `sign-in`); an error's `launch` or
-    /// `program`; an ended's `exited` or `stopped`.
+    /// `program`; an ended's `exited` or `stopped`; a delivered message's
+    /// `interrupted` when the child's turn was stopped for it.
     pub state: Option<String>,
     /// A report's text; a program's message; a needs-you's own sentence when
-    /// it has no kind; who stopped an ended child.
+    /// it has no kind; who stopped an ended child; the opening of a delivered
+    /// message, the parent's own words.
     pub detail: Option<String>,
     /// How an ended child's program exited.
     pub exit_code: Option<i32>,
@@ -180,6 +188,9 @@ fn cut(text: &str, event: EventKind, state: Option<&str>) -> String {
 
 /// The state of an ended child whose program exited on its own.
 pub(super) const EXITED: &str = "exited";
+
+/// The state of a delivered message for which the child's turn was stopped.
+pub(super) const INTERRUPTED: &str = "interrupted";
 
 /// What `parent` has not yet heard, oldest first: the items that name its row
 /// or, when it is known, its conversation.
@@ -281,6 +292,12 @@ impl News {
             EventKind::Error => match facts.state.as_deref() {
                 Some("launch") => format!("{child} could not be started: {detail}"),
                 _ => format!("{child} reports an error: {detail}"),
+            },
+            EventKind::Delivered => match facts.state.as_deref() {
+                Some(INTERRUPTED) => format!(
+                    "{child} was stopped and given your queued message as its next turn: {detail}"
+                ),
+                _ => format!("{child} was given your queued message as its next turn: {detail}"),
             },
         }
     }
@@ -502,5 +519,43 @@ last line"
                 .line()
                 .contains("could not be started: no folder")
         );
+        let delivered = news(EventKind::Delivered, None, Some("Now the docs."), None);
+        assert_eq!(
+            delivered.line(),
+            "reviewer was given your queued message as its next turn: Now the docs."
+        );
+        assert_eq!(delivered.json()["event"], "delivered");
+        assert_eq!(delivered.json()["text"], "Now the docs.");
+        let interrupted = news(
+            EventKind::Delivered,
+            Some("interrupted"),
+            Some("Stop that."),
+            None,
+        );
+        assert!(
+            interrupted
+                .line()
+                .starts_with("reviewer was stopped and given your queued message"),
+            "{}",
+            interrupted.line()
+        );
+        assert_eq!(interrupted.json()["state"], "interrupted");
+    }
+
+    #[test]
+    fn a_delivered_messages_words_are_cut_to_200_characters() {
+        let (_dirs, store) = store();
+        let facts = Facts {
+            detail: Some("y".repeat(500)),
+            ..Facts::default()
+        };
+        let delivered = Item {
+            event: EventKind::Delivered,
+            ..item(1, None, &facts)
+        };
+        record(&store, &delivered).unwrap();
+        let news = unseen(&store, SessionId(1), None).unwrap();
+        assert_eq!(news[0].event, EventKind::Delivered);
+        assert_eq!(news[0].facts.detail.as_deref().unwrap().len(), 200);
     }
 }

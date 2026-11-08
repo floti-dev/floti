@@ -355,7 +355,7 @@ export const agentInbox = sqliteTable(
     /** What the parent calls the child. */
     childName: text('child_name').notNull(),
     event: text('event', {
-      enum: ['report', 'needs_you', 'turn_ended', 'ended', 'error']
+      enum: ['report', 'needs_you', 'turn_ended', 'ended', 'error', 'delivered']
     }).notNull(),
     /**
      * A report's state (`done`, `stuck`, `note`), or for `ended` whether the
@@ -377,6 +377,37 @@ export const agentInbox = sqliteTable(
     index('agent_inbox_parent_idx').on(t.parentSessionId, t.seenAt),
     index('agent_inbox_conversation_idx').on(t.parentConversationId, t.seenAt)
   ]
+)
+
+/**
+ * What a parent has sent its child that the child has not been given yet:
+ * one row per message, delivered in the order they were sent (`id`) at the
+ * first moment the child can take one with nothing typed over a person. Only
+ * the Floti host writes it. It is keyed by the child's row, which a host
+ * restart keeps, so a message queued before a restart is delivered after it.
+ *
+ * The text is the parent's own words to its child. A message is done once it
+ * was typed (`delivered_at`) or its child ended before it could be
+ * (`dropped_at`). The rows are not foreign keys, as with the inbox.
+ */
+export const agentMessages = sqliteTable(
+  'agent_messages',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    /** The child's row: the session the message is for. */
+    childSessionId: integer('child_session_id').notNull(),
+    /** The parent's row when it sent the message. */
+    parentSessionId: integer('parent_session_id').notNull(),
+    text: text('text').notNull(),
+    /** Whether the child's turn in progress is stopped first. */
+    interrupt: integer('interrupt', { mode: 'boolean' }).notNull().default(false),
+    at: text('at').notNull().default(now),
+    /** When it was typed into the child, or null while it waits. */
+    deliveredAt: text('delivered_at'),
+    /** When its child ended before it could be delivered. */
+    droppedAt: text('dropped_at')
+  },
+  (t) => [index('agent_messages_child_idx').on(t.childSessionId, t.deliveredAt, t.droppedAt)]
 )
 
 /**

@@ -47,6 +47,7 @@ mod folders;
 mod inbox;
 mod news;
 mod notices;
+mod queue;
 mod read;
 mod rows;
 mod send;
@@ -58,7 +59,7 @@ use inbox::StoppedBy;
 #[cfg(test)]
 pub(crate) use inbox::{EventKind, Facts, News};
 pub(crate) use read::{ChildRead, ReadChild};
-pub(crate) use send::SendChild;
+pub(crate) use send::{ChildSent, SendChild, deliver_at_each_moment};
 pub(crate) use startup::after_each_launch;
 pub(crate) use wait::{WaitEnd, WaitFor, WaitRequest, Waited};
 

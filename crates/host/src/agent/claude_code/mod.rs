@@ -74,6 +74,9 @@ pub const INPUT_PAUSE: Duration = Duration::from_millis(250);
 /// The Claude Code version [`INPUT_PAUSE`] was recorded against.
 pub const INPUT_PAUSE_RECORDED_ON: &str = "2.1.319";
 
+/// What a Claude Code parent is told of its own way to message a child.
+const CLAUDE_CODE_MESSAGING: &str = "A child on this computer can also be reached with your own SendMessage, by the name ListAgents shows for it, and reads it between its tool calls even mid-turn; Floti does not see such a message, so it is not queued and no delivered news comes for it.";
+
 /// The settings every launch passes with `--settings`, so a harness and a
 /// repository written in different shapes both reach the session: Claude Code
 /// then loads `CLAUDE.md` and `AGENTS.md` together, each once.
@@ -468,6 +471,15 @@ impl AgentBackend for ClaudeCodeBackend {
                 .is_some_and(|version| version >= MCP_TASKS_FROM),
             mcp_tools: self.agent_tools().is_some(),
         }
+    }
+
+    /// Claude Code's own SendMessage reaches another session on the same
+    /// computer between its tool calls. Floti delivers nothing through it:
+    /// the socket it uses is documented for a session's own hooks and
+    /// commands, and a message there arrives as another session's, under
+    /// that session's own rules for messages, not as its user's next turn.
+    fn messaging_guidance(&self) -> Option<&'static str> {
+        Some(CLAUDE_CODE_MESSAGING)
     }
 
     /// A bracketed paste, submitted by Enter (CR) after [`INPUT_PAUSE`], and

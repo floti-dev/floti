@@ -55,8 +55,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::hosted::{
-    ChildEntry, ChildRead, ChildStopped, ChildrenListed, Hosted, ReadChild, RoleEntry, RolesListed,
-    RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest, Waited, off_runtime,
+    ChildEntry, ChildRead, ChildSent, ChildStopped, ChildrenListed, Hosted, ReadChild, RoleEntry,
+    RolesListed, RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest, Waited,
+    off_runtime,
 };
 use crate::agent_tools::{
     CallToolResult, Caller, ContentBlock, Delivery, GrantScope, JsonObject, Tool, ToolFamily,
@@ -444,8 +445,9 @@ async fn wait(from: &Waiter<'_>, arguments: &JsonObject) -> CallToolResult {
     }
 }
 
-/// `agents_send`: text typed into one of `me`'s children as its next turn;
-/// with `wait`, then that child's next news.
+/// `agents_send`: text queued for one of `me`'s children and typed into it
+/// as its next turn as soon as it can take it; with `wait`, then that child's
+/// next news (once the text has been delivered, when it waited).
 async fn send(from: &Waiter<'_>, arguments: &JsonObject) -> CallToolResult {
     let asked = send_request(arguments).and_then(|request| {
         let wait = flag(arguments, "wait")?.unwrap_or(false);
@@ -457,16 +459,16 @@ async fn send(from: &Waiter<'_>, arguments: &JsonObject) -> CallToolResult {
     };
     match from.hosted.send_to_child(from.me, request).await {
         Ok(sent) => {
-            let how = if sent.interrupted {
-                " after stopping its turn in progress"
-            } else {
-                ""
-            };
-            let mut text = format!("Sent to {}{how}.", sent.name);
-            let mut body = json!({ "sent": sent.name, "interrupted": sent.interrupted });
+            let (mut text, mut body) = sent_answer(&sent);
             if wait {
-                // Only that child's news: the rest stays in the inbox for a wait.
-                match from.wait(WaitFor::Any, vec![sent.name.clone()]).await {
+                // Only that child's news: the rest stays in the inbox for a
+                // wait. A queued text is news only once it has been given.
+                let wait_for = if sent.queued.is_some() {
+                    WaitFor::AfterDelivery
+                } else {
+                    WaitFor::Any
+                };
+                match from.wait(wait_for, vec![sent.name.clone()]).await {
                     Ok(waited) => {
                         text.push_str("\n\n");
                         text.push_str(&waited_text(&waited));
@@ -477,8 +479,13 @@ async fn send(from: &Waiter<'_>, arguments: &JsonObject) -> CallToolResult {
                         }
                     }
                     Err(refusal) => {
+                        let done = if sent.queued.is_some() {
+                            "queued"
+                        } else {
+                            "sent"
+                        };
                         text.push_str(&format!(
-                            "\n\nIt was sent, but waiting on it failed: {refusal}"
+                            "\n\nIt was {done}, but waiting on it failed: {refusal}"
                         ));
                     }
                 }
@@ -487,6 +494,45 @@ async fn send(from: &Waiter<'_>, arguments: &JsonObject) -> CallToolResult {
         }
         Err(refusal) => problem(&refusal),
     }
+}
+
+/// What a send answers before any wait: that the text was typed, or that it
+/// waits in the child's queue and why.
+fn sent_answer(sent: &ChildSent) -> (String, Value) {
+    let name = &sent.name;
+    let Some(queued) = sent.queued else {
+        let how = if sent.interrupted {
+            " after stopping its turn in progress"
+        } else {
+            ""
+        };
+        return (
+            format!("Sent to {name}{how}."),
+            json!({ "sent": name, "interrupted": sent.interrupted }),
+        );
+    };
+    let ahead = match queued.ahead {
+        0 => String::new(),
+        1 => " behind 1 earlier message".to_owned(),
+        n => format!(" behind {n} earlier messages"),
+    };
+    let how = if sent.interrupted {
+        "its turn is stopped and it is given this"
+    } else {
+        "this is typed in as its next turn"
+    };
+    (
+        format!(
+            "Queued for {name}{ahead}: {}. As soon as it can take it, {how}, and you hear delivered news then.",
+            queued.why.said(name)
+        ),
+        json!({
+            "queued": name,
+            "ahead": queued.ahead,
+            "why": queued.why.word(),
+            "interrupt": sent.interrupted,
+        }),
+    )
 }
 
 /// `agents_read`: the screen of one of `me`'s children, as plain text.

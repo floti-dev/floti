@@ -587,6 +587,8 @@ struct Run {
     received: Vec<String>,
     /// The text of each bracketed paste it took.
     pastes: Vec<String>,
+    /// Each line submitted while a turn of its own was running.
+    queued: Vec<String>,
     shell: Vec<ShellRun>,
 }
 
@@ -623,6 +625,7 @@ impl Run {
                         .collect()
                 })
                 .unwrap_or_default(),
+            queued: strings(&log["queued"]),
             shell: serde_json::from_value(log["shell"].clone()).unwrap_or_default(),
         }
     }
@@ -643,6 +646,7 @@ impl Run {
                 .iter()
                 .map(|paste| paste.text.clone())
                 .collect(),
+            queued: record.queued.clone(),
             shell: record.shell.clone(),
         }
     }
@@ -1778,7 +1782,7 @@ async fn s6_an_all_wait_returns_once_neither_child_is_working_and_an_unknown_nam
 }
 
 // ---------------------------------------------------------------------------
-// The five events
+// The events of a child's doings
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
@@ -2937,7 +2941,8 @@ async fn s15_a_child_is_told_its_parent_and_role_beside_its_roles_and_the_family
         // The manual the family gives on connecting.
         let manual = child.manual().await;
         for sentence in [
-            "agents_wait: it returns your children's news (a report, needs you, turn ended, ended, error)",
+            "agents_wait: it returns your children's news (a report, needs you, turn ended, ended, error, and delivered for a text that waited in a child's queue)",
+            "it is typed in as the child's next turn as soon as the child can take it, and waits in the child's queue until then",
             "If it answers that nothing is new yet, call it again after your next piece of work.",
             "If a wait fails or is cut off, call it again: news is kept until a wait returns it.",
             "pass wait: true to agents_start",
@@ -3319,7 +3324,7 @@ async fn s22_a_start_with_wait_returns_the_new_childs_name_and_its_next_news_and
 }
 
 // ---------------------------------------------------------------------------
-// A send that refuses, and a send that waits
+// A send that waits in the child's queue, and a send that waits for news
 // ---------------------------------------------------------------------------
 
 impl Agent {
@@ -3361,8 +3366,40 @@ impl World {
     }
 }
 
+impl World {
+    /// Hears `parent`'s news until `count` delivered messages have come, and
+    /// returns their texts in the order they came.
+    async fn delivered(&self, parent: &Agent, count: usize) -> Vec<String> {
+        let mut texts: Vec<String> = Vec::new();
+        eventually("the delivered news", async || {
+            let heard = parent.hear(json!({})).await;
+            texts.extend(
+                heard
+                    .of("delivered")
+                    .iter()
+                    .map(|news| news["text"].as_str().expect("a text").to_owned()),
+            );
+            (texts.len() >= count).then(|| texts.clone())
+        })
+        .await
+    }
+}
+
+/// The send's answer said the text is queued, `ahead` behind earlier ones,
+/// for `why`.
+fn assert_queued(called: Called, name: &str, ahead: u64, why: &str) {
+    assert!(
+        called.text().starts_with(&format!("Queued for {name}")),
+        "{name}: {called:?}"
+    );
+    let body = called.done();
+    assert_eq!(body["queued"], name, "{body}");
+    assert_eq!(body["ahead"], ahead, "{body}");
+    assert_eq!(body["why"], why, "{body}");
+}
+
 #[tokio::test(flavor = "multi_thread")]
-async fn s4_a_send_to_a_child_waiting_on_a_prompt_is_refused_typing_nothing_and_goes_through_once_it_is_answered()
+async fn s4_a_send_to_a_child_waiting_on_a_prompt_is_queued_typing_nothing_and_delivered_once_it_is_answered()
  {
     let world = World::new();
     let host = world.host().await;
@@ -3381,37 +3418,41 @@ async fn s4_a_send_to_a_child_waiting_on_a_prompt_is_refused_typing_nothing_and_
         let mut watch = Watch::open(&world).await;
         // The parent's own send brings the child to a permission prompt: no
         // person has typed there.
-        parent.send(name, "/wait").await.done();
+        let sent = parent.send(name, "/wait").await;
+        assert!(
+            sent.text().starts_with(&format!("Sent to {name}.")),
+            "{sent:?}"
+        );
         watch.until(&child, SessionActivity::Waiting).await;
 
-        let refused = parent.send(name, "ignored while asking").await;
+        let queued = parent.send(name, "kept while asking").await;
         assert!(
-            refused
-                .refused()
+            queued
+                .text()
                 .contains("waiting on a prompt a person must answer"),
-            "{name}: {refused:?}"
+            "{name}: {queued:?}"
         );
-        assert!(
-            refused.refused().contains("nothing was typed"),
-            "{name}: {refused:?}"
-        );
-        world.assert_untyped(&child, "ignored while asking");
+        assert_queued(queued, name, 0, "prompt");
+        world.assert_untyped(&child, "kept while asking");
 
-        // A person answers the prompt; the child is at rest and takes a send.
+        // A person answers the prompt; the child at rest takes the message
+        // as its next turn, and the parent hears it was delivered.
         let mut client = world.client().await;
         client.attach(1, child.id()).await;
         client.type_into(1, b"y").await;
-        watch.until(&child, SessionActivity::Idle).await;
-        parent.send(name, "after the prompt").await.done();
-        world.took(&child, "after the prompt").await;
+        world.took(&child, "kept while asking").await;
+        assert_eq!(
+            world.delivered(&parent, 1).await,
+            ["kept while asking"],
+            "{name}"
+        );
         drop(client);
     }
     host.stop(HostStopReason::Stop).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s5_a_send_after_a_person_typed_is_refused_typing_nothing_until_the_childs_next_turn_ends()
-{
+async fn s5_a_send_after_a_person_typed_is_queued_typing_nothing_until_the_childs_next_turn_ends() {
     let world = World::new();
     let host = world.host().await;
     let folder = world.project("send-person");
@@ -3426,29 +3467,133 @@ async fn s5_a_send_after_a_person_typed_is_refused_typing_nothing_until_the_chil
     for name in ["records", "reporter"] {
         let child = world.child_of(&parent, name).await;
         // A person starts a turn in the child's terminal.
-        let mut watch = world.hold_busy(&child).await;
-        let refused = parent.send(name, "ignored after a person").await;
+        let _watch = world.hold_busy(&child).await;
+        let queued = parent.send(name, "kept after a person").await;
         assert!(
-            refused.refused().contains("A person has typed in"),
-            "{name}: {refused:?}"
+            queued.text().contains("a person has typed in"),
+            "{name}: {queued:?}"
         );
-        assert!(
-            refused.refused().contains("nothing was typed"),
-            "{name}: {refused:?}"
-        );
-        world.assert_untyped(&child, "ignored after a person");
+        assert_queued(queued, name, 0, "person_typed");
+        world.assert_untyped(&child, "kept after a person");
 
-        // The turn ends: what the person typed is spent.
+        // The turn ends: what the person typed is spent, and the message is
+        // the child's next turn.
         world.release(&child).await;
-        watch.until(&child, SessionActivity::Idle).await;
-        parent.send(name, "after the turn").await.done();
-        world.took(&child, "after the turn").await;
+        world.took(&child, "kept after a person").await;
+        let run = world.reread(&child);
+        let at = |line: &str| run.received.iter().position(|got| got == line);
+        assert!(
+            at("/idle") < at("kept after a person"),
+            "{name}: {:?}",
+            run.received
+        );
+        assert_eq!(
+            world.delivered(&parent, 1).await,
+            ["kept after a person"],
+            "{name}"
+        );
     }
     host.stop(HostStopReason::Stop).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_send_right_after_a_prompt_appears_in_the_childs_records_is_refused_without_waiting_for_a_pass()
+async fn a_message_queued_while_a_person_types_half_a_line_comes_only_after_the_line_they_submit() {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("send-half-line");
+    let parent = world.session(CLAUDE, &folder, "parent").await;
+    parent
+        .start(json!({ "task": "work", "name": "records", "backend": CLAUDE }))
+        .await
+        .done();
+    world.calm(&parent, &["records"]).await;
+    let child = world.child_of(&parent, "records").await;
+
+    // A person has half a line in the child's prompt, not submitted.
+    let mut client = world.client().await;
+    client.attach(1, child.id()).await;
+    client.type_into(1, b"the person's own").await;
+    assert_queued(
+        parent.send("records", "the parent's text").await,
+        "records",
+        0,
+        "person_typed",
+    );
+    world.assert_untyped(&child, "the parent's text");
+
+    // They finish it: their line is theirs alone, and the message comes
+    // after it as a turn of its own.
+    client.type_into(1, b" words\r").await;
+    world.took(&child, "the parent's text").await;
+    let run = world.reread(&child);
+    let theirs = run
+        .received
+        .iter()
+        .position(|got| got == "the person's own words")
+        .unwrap_or_else(|| panic!("the person's line: {:?}", run.received));
+    let ours = run
+        .received
+        .iter()
+        .position(|got| got == "the parent's text")
+        .expect("the parent's line");
+    assert!(theirs < ours, "{:?}", run.received);
+    assert_eq!(world.delivered(&parent, 1).await, ["the parent's text"]);
+    drop(client);
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn messages_queued_behind_a_turn_are_delivered_in_order_each_as_its_own_turn_with_delivered_news()
+ {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("send-order");
+    let parent = world.session(CLAUDE, &folder, "parent").await;
+    parent
+        .start(json!({ "task": "work", "name": "records", "backend": CLAUDE }))
+        .await
+        .done();
+    world.calm(&parent, &["records"]).await;
+    let child = world.child_of(&parent, "records").await;
+
+    let _watch = world.hold_busy(&child).await;
+    let texts = ["first message", "second message", "third message"];
+    for (ahead, text) in texts.iter().enumerate() {
+        assert_queued(
+            parent.send("records", text).await,
+            "records",
+            ahead as u64,
+            "person_typed",
+        );
+    }
+    for text in texts {
+        world.assert_untyped(&child, text);
+    }
+
+    world.release(&child).await;
+    world.took(&child, "third message").await;
+    let run = world.reread(&child);
+    let taken: Vec<&str> = run
+        .received
+        .iter()
+        .map(String::as_str)
+        .filter(|got| texts.contains(got))
+        .collect();
+    assert_eq!(taken, texts, "{:?}", run.received);
+    // Each was its own prompt: none was queued behind another's turn.
+    assert!(
+        run.queued
+            .iter()
+            .all(|line| !texts.contains(&line.as_str())),
+        "{:?}",
+        run.queued
+    );
+    assert_eq!(world.delivered(&parent, 3).await, texts);
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_send_right_after_a_prompt_appears_in_the_childs_records_is_queued_without_waiting_for_a_pass()
  {
     let world = World::new();
     let host = world.host().await;
@@ -3465,12 +3610,11 @@ async fn a_send_right_after_a_prompt_appears_in_the_childs_records_is_refused_wi
     // the next send comes at once, not after a published pass.
     parent.send("records", "/wait").await.done();
     world.took(&child, "/wait").await;
-    let refused = parent.send("records", "typed into the prompt").await;
-    assert!(
-        refused
-            .refused()
-            .contains("waiting on a prompt a person must answer"),
-        "{refused:?}"
+    assert_queued(
+        parent.send("records", "typed into the prompt").await,
+        "records",
+        0,
+        "prompt",
     );
     world.assert_untyped(&child, "typed into the prompt");
     host.stop(HostStopReason::Stop).await;
@@ -3495,14 +3639,48 @@ async fn a_send_goes_through_after_a_person_typed_a_line_whose_turn_was_over_bef
         // A turn of a millisecond: busy and idle again within one read of its
         // records, and within one of its reports.
         world.type_line(&child, "/busy 1").await;
-        eventually(
-            "a send to go through once the person's turn is over",
-            async || (!parent.send(name, "after the quick turn").await.failed).then_some(()),
-        )
-        .await;
+        parent.send(name, "after the quick turn").await.done();
         world.took(&child, "after the quick turn").await;
     }
     host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_queued_before_a_host_restart_is_delivered_after_it() {
+    let world = World::new();
+    let first = world.host().await;
+    let folder = world.project("send-restart");
+    let parent = world.session(CLAUDE, &folder, "parent").await;
+    parent
+        .start(json!({ "task": "work", "name": "records", "backend": CLAUDE }))
+        .await
+        .done();
+    world.calm(&parent, &["records"]).await;
+    let child = world.child_of(&parent, "records").await;
+    let watch = world.hold_busy(&child).await;
+    assert_queued(
+        parent.send("records", "kept across the restart").await,
+        "records",
+        0,
+        "person_typed",
+    );
+    drop(watch);
+
+    first.crash().await;
+    assert!(alive(child.run.pid), "the sessions outlive the host");
+    let second = world.host().await;
+    // The new host keeps the message while the child's turn runs.
+    let mut watch = Watch::open(&world).await;
+    watch.until(&child, SessionActivity::Busy).await;
+    world.assert_untyped(&child, "kept across the restart");
+
+    world.release(&child).await;
+    world.took(&child, "kept across the restart").await;
+    assert_eq!(
+        world.delivered(&parent, 1).await,
+        ["kept across the restart"]
+    );
+    second.stop(HostStopReason::Stop).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

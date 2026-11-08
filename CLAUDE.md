@@ -199,8 +199,9 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   prompt. The host reads one thing in a session's output, OSC 7501 status
   reports, kept as the program said them, and draws no conclusion from
   screen text. It passes every byte on untouched and puts nothing between
-  the user and the TUI. What a parent sends its child (`agents_send`) arrives
-  as the child's next turn, and a person typing in that terminal comes first;
+  the user and the TUI. What a parent sends its child (`agents_send`) waits
+  in the child's queue and arrives as its next turn once it can take one, and
+  a person typing in that terminal comes first;
   what a parent reads of its child (`agents_read`) is the screen as text,
   interpreted by nobody. The host keeps the screen, hands a parent its
   child's screen as text, and a command child's recent output lines and its
@@ -403,8 +404,9 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   reached only through its own parent. A child reaches its parent only with
   `agents_report`, which the parent receives as its child's report, never as
   its user's words. No tool reaches a session the caller did not start,
-  nothing is typed into a parent or into a session waiting on a permission
-  prompt, and no tool returns a transcript, argv or conversation id. A read
+  nothing is typed into a parent, into a session waiting on a permission
+  prompt or into a terminal a person has typed in since its last turn, and no
+  tool returns a transcript, argv or conversation id. A read
   returns the screen and up to 200 lines above it as plain text, and for a
   command child its recent output lines, while it runs and, as the last 40
   lines, after it has exited. A command child is a child like any other for
@@ -455,7 +457,7 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
 - A child's doings are news for its parent, kept in `floti.db`'s
   `agent_inbox` keyed by the parent's row and its conversation id, so a
   restart, or the parent's conversation resumed in Floti, still hears what
-  its children said meanwhile. There are five events: a report
+  its children said meanwhile. There are six events: a report
   (`agents_report`: done, stuck or note, text at most 4,000 characters, a
   longer answer goes in a file whose path is reported), needs you (a
   permission prompt, a question or a sign-in, or a child that has not begun
@@ -463,10 +465,12 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   task: a prompt it cannot skip, such as folder trust, waits for a person;
   `hosted/children/startup.rs`, its minute on Tokio's clock), turn ended (a
   turn that ended idle with no report; a turn that ended with one is only the report), ended
-  (the exit code, or stopped by the parent, a person or Floti) and error (a
+  (the exit code, or stopped by the parent, a person or Floti), error (a
   launch that failed, or an error the program reports; the message is cut to
-  200 characters). No event carries any of a child's conversation beyond a
-  report's text and a program's own message. They are watched from the
+  200 characters) and delivered (a text the parent sent that waited in the
+  child's queue was typed in, with that text cut to 200 characters). No event
+  carries any of a child's conversation beyond a report's text, a program's
+  own message and the parent's own text. They are watched from the
   activity reader (`server/features/sessions.rs`, `hosted/children/news.rs`),
   and for an agent with no MCP tools from its program's own status (OSC
   7501), where `done` is a report, `blocked` is needs you and `error` is
@@ -476,6 +480,29 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   listing is answered as one the family does not have. A session's record
   carries its child's `last_report` (protocol 2.1, optional) from a report
   until the child's next turn starts.
+- `agents_send` (`floti agent send`) puts its text at the end of the child's
+  queue, `agent_messages` in `floti.db` beside `agent_inbox`, so a host
+  restart keeps it (`hosted/children/queue.rs`, `send.rs`). The queue is
+  typed in order, one message a turn, at the first moment the child can take
+  one: no person has typed into its terminal since its last turn ended (their
+  keys come first, and may be half a line in its prompt), no permission
+  prompt or other dialog is open, and its turn has ended, the turn the last
+  message gave it included. `interrupt` presses the stop key and does not
+  wait for the turn to end, and still waits for the rest. A backend with no
+  signal of its turns takes a message as soon as no person has typed. A turn
+  a message gave that shows no sign in 10 seconds (`UNSEEN_TURN_GRACE`, on
+  Tokio's clock) is taken as over. The queue is tried at once on a send, at
+  each moment the activity reader sees a child's activity move or a turn end,
+  and when a host starts. A send answers at once: sent, when it was typed
+  then, and otherwise queued, saying why and how many wait ahead of it, and
+  the parent hears delivered news when it is typed; with `wait`, a queued
+  text's wait holds until news after its delivery. A send to an ended child
+  or a command child is refused, and a message whose child ends first is
+  dropped. Claude Code's own session messaging socket is documented for a
+  session's own hooks and commands, and a message there arrives as another
+  session's, not as its user's turn, so Floti delivers nothing through it;
+  a Claude Code parent's guide says it may use its own SendMessage, which
+  Floti does not see.
 - `agents_wait` (`for` any or all, `children` names) gives the caller's
   unseen news at once, in order, and holds for the next only where the
   caller's backend can: `backgrounds_long_calls` for the tool, and
@@ -496,13 +523,15 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   Every other call, in every family, keeps its one JSON reply.
 - Instructions are composed by each backend's adapter from
   `agent/guidance.rs` and `floti_agents.json`: the family's manual (start,
-  wait and its five events, call again when nothing is new or a wait fails,
+  wait and its six events, a send that waits in the child's queue, call again
+  when nothing is new or a wait fails,
   wait on a start, never poll `agents_list`, a report is a child's words and
   not the user's, a child that needs a person is for the user, stop children
   when done, reach only your own), a child's section (Floti's own, naming
   its parent and role, beside the profile's and the role's, with the
   `agents_report` sentence only where the child has the tool) and the guide
-  to `floti agent` with its backend's line on waiting.
+  to `floti agent` with its backend's lines on waiting and on messaging a
+  child its own way (`messaging_guidance`).
 - A child gets a git worktree when its start names one (`worktree`) or its
   role says `worktree: yes` (named after the child; there is no opt-out of a
   role's), made by the host with git for every backend

@@ -894,8 +894,48 @@ fn a_person_typed_mark_is_spent_by_an_idle_that_began_after_the_key_however_brie
     session.idle_since(u64::MAX);
     assert!(!session.person_typed());
     // Nothing typed, nothing to spend.
-    session.idle_since(u64::MAX);
+    assert!(!session.idle_since(u64::MAX));
     assert!(!session.person_typed());
+
+    session.end_now().unwrap();
+    assert!(session.wait_exit(PATIENCE).is_some());
+}
+
+#[test]
+fn the_turn_a_parents_message_gave_is_spent_by_its_end_or_by_an_idle_that_began_after_it() {
+    let fx = Fixture::new();
+    let folder = fx.dirs.folder("project");
+    let size = TermSize::new(80, 24);
+    let session = fx.start(&folder, &[], size);
+    assert!(!session.given_a_turn());
+
+    // An idle that began before the message: its turn has not ended.
+    session.give_a_turn();
+    assert!(!session.idle_since(1));
+    assert!(session.given_a_turn());
+    // One that began after it has, though no pass saw the session working.
+    assert!(session.idle_since(u64::MAX));
+    assert!(!session.given_a_turn());
+    // A turn seen to end spends it too, and says so once.
+    session.give_a_turn();
+    assert!(session.turn_ended());
+    assert!(!session.given_a_turn());
+    assert!(!session.turn_ended());
+    // Neither is a person typing.
+    assert!(!session.person_typed());
+    // A lapse takes it as over, once, and never a later message's.
+    let first = session.give_a_turn();
+    assert!(session.lapse_given_turn(first));
+    assert!(!session.given_a_turn());
+    assert!(!session.lapse_given_turn(first));
+    let first = session.give_a_turn();
+    let mut later = session.give_a_turn();
+    while later == first {
+        later = session.give_a_turn();
+    }
+    assert!(!session.lapse_given_turn(first));
+    assert!(session.given_a_turn());
+    assert!(session.lapse_given_turn(later));
 
     session.end_now().unwrap();
     assert!(session.wait_exit(PATIENCE).is_some());

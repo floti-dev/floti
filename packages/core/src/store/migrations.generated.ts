@@ -200,5 +200,12 @@ export const MIGRATIONS: readonly EmbeddedMigration[] = [
     "statements": [
       "ALTER TABLE `sessions` ADD `title` text;"
     ]
+  },
+  {
+    "tag": "0025_complete_silhouette",
+    "statements": [
+      "CREATE TABLE `agent_messages` (\n\t`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,\n\t`child_session_id` integer NOT NULL,\n\t`parent_session_id` integer NOT NULL,\n\t`text` text NOT NULL,\n\t`interrupt` integer DEFAULT false NOT NULL,\n\t`at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')) NOT NULL,\n\t`delivered_at` text,\n\t`dropped_at` text\n);",
+      "CREATE INDEX `agent_messages_child_idx` ON `agent_messages` (`child_session_id`,`delivered_at`,`dropped_at`);"
+    ]
   }
 ]

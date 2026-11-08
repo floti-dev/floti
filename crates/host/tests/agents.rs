@@ -3982,8 +3982,8 @@ async fn s19_the_hosts_close_question_names_who_ends_and_who_outlives_and_agreei
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_text_sent_to_a_working_child_is_accepted_and_is_its_next_turn_once_the_current_one_ends()
-{
+async fn a_text_sent_to_a_working_child_is_queued_untyped_and_is_its_next_turn_once_the_current_one_ends()
+ {
     let world = World::new();
     let host = world.host().await;
     for backend in [CLAUDE, OTHER] {
@@ -3992,31 +3992,32 @@ async fn a_text_sent_to_a_working_child_is_accepted_and_is_its_next_turn_once_th
         world.give_a_held_turn(&parent, &child, &name).await;
 
         let sent = parent.send(&name, "next task\nin two lines").await.done();
-        assert_eq!(sent["sent"], name.as_str(), "{backend}");
-        let run = eventually("the child to queue the text", async || {
-            let run = world.reread(&child);
-            run.queued
-                .iter()
-                .any(|line| line == "next task\nin two lines")
-                .then_some(run)
-        })
-        .await;
+        assert_eq!(sent["queued"], name.as_str(), "{backend}: {sent}");
+        assert_eq!(sent["why"], "working", "{backend}: {sent}");
+        let run = world.reread(&child);
         assert!(
-            !run.prompts.iter().any(|line| line.starts_with("next task")),
-            "{backend} took it while its turn ran: {:?}",
-            run.prompts
+            !run.pastes
+                .iter()
+                .any(|(text, _)| text.starts_with("next task")),
+            "{backend} was typed into while its turn ran: {:?}",
+            run.pastes
         );
 
         world.type_line(&child, "/idle").await;
-        eventually("the queued text to be the next turn", async || {
-            world
-                .reread(&child)
-                .prompts
+        let run = eventually("the queued text to be the next turn", async || {
+            let run = world.reread(&child);
+            run.prompts
                 .last()
                 .is_some_and(|line| line == "next task\nin two lines")
-                .then_some(())
+                .then_some(run)
         })
         .await;
+        // Floti held it until the turn was over: the child never had to.
+        assert!(
+            !run.queued.iter().any(|line| line.starts_with("next task")),
+            "{backend}: {:?}",
+            run.queued
+        );
     }
     host.stop(HostStopReason::Stop).await;
 }

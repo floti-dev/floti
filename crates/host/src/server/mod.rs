@@ -712,6 +712,12 @@ fn start_agent_tools(hosted: &Arc<Hosted>, features: &Features) -> Result<Arc<Ho
             })
         },
     ));
+    // A message queued for a child is typed into it at the first moment it
+    // can take it, and what was queued before a restart after it.
+    tokio::spawn(hosted::deliver_at_each_moment(
+        hosted.queue_moments(),
+        Arc::downgrade(hosted),
+    ));
     hosted.use_agent_tools(Arc::clone(&tools));
     // Parents that ended while no host was running left children behind.
     let sweeping = Arc::clone(hosted);

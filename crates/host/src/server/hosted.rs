@@ -61,9 +61,9 @@ mod children;
 
 use children::Children;
 pub(crate) use children::{
-    ChildEntry, ChildRead, ChildStopped, ChildrenListed, Closing, ReadChild, RoleEntry,
+    ChildEntry, ChildRead, ChildSent, ChildStopped, ChildrenListed, Closing, ReadChild, RoleEntry,
     RolesListed, RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest, Waited,
-    after_each_launch, end_children_at_exit, off_runtime,
+    after_each_launch, deliver_at_each_moment, end_children_at_exit, off_runtime,
 };
 #[cfg(test)]
 pub(crate) use children::{EventKind, Facts, News};

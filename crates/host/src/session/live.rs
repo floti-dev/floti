@@ -288,6 +288,7 @@ impl SessionHost {
             ended: Condvar::new(),
             typed: watch::Sender::new(0),
             person_typed: AtomicU64::new(0),
+            given_turn: AtomicU64::new(0),
             pty: Mutex::new(Some(Pty::Kept {
                 link: Arc::clone(&link),
                 handle: held.handle,
@@ -382,6 +383,7 @@ impl SessionHost {
             ended: Condvar::new(),
             typed: watch::Sender::new(0),
             person_typed: AtomicU64::new(0),
+            given_turn: AtomicU64::new(0),
             pty: Mutex::new(Some(Pty::Here { master, writer })),
         });
         // Before the output thread starts: a client attached here misses
@@ -489,6 +491,7 @@ impl SessionHost {
             ended: Condvar::new(),
             typed: watch::Sender::new(0),
             person_typed: AtomicU64::new(0),
+            given_turn: AtomicU64::new(0),
             pty: Mutex::new(Some(Pty::Kept {
                 link: Arc::clone(&link),
                 handle,
@@ -589,6 +592,10 @@ pub struct Session {
     /// milliseconds since the epoch, or 0 when none has
     /// ([`Session::person_typed`]). Only [`Session::input`] sets it.
     person_typed: AtomicU64,
+    /// When the host began typing a parent's message into it, in milliseconds
+    /// since the epoch, until the turn that message gave it has ended; 0 when
+    /// none is in hand ([`Session::given_a_turn`]).
+    given_turn: AtomicU64,
     /// Taken when the session is closed or its program exits. Lock order:
     /// `state`, then `pty`.
     pty: Mutex<Option<Pty>>,
@@ -829,17 +836,44 @@ impl Session {
 
     /// Whether a client has typed into the session since its last turn ended
     /// ([`Session::turn_ended`]): what a client's terminal answers its program
-    /// with is not typing. A parent's send is refused while this holds,
-    /// because a person's keys come first and may be half a line in the
-    /// prompt. It is set here, for the bytes a client sent, and nowhere else.
+    /// with is not typing. A parent's message waits in its queue while this
+    /// holds, because a person's keys come first and may be half a line in
+    /// the prompt. It is set here, for the bytes a client sent, and nowhere else.
     pub fn person_typed(&self) -> bool {
         self.person_typed.load(Ordering::SeqCst) != 0
     }
 
+    /// A parent's message is about to be typed into the session: until the
+    /// turn it gives has ended, the next one waits ([`Session::given_a_turn`]).
+    /// The mark it set, for [`Session::lapse_given_turn`].
+    pub fn give_a_turn(&self) -> u64 {
+        let at = now_ms().max(1);
+        self.given_turn.store(at, Ordering::SeqCst);
+        at
+    }
+
+    /// The turn the message marked `at` gave is taken as over though nothing
+    /// saw it end, unless a later message has been given since or its end was
+    /// seen. Whether it was still in hand.
+    pub fn lapse_given_turn(&self, at: u64) -> bool {
+        self.given_turn
+            .compare_exchange(at, 0, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+    }
+
+    /// Whether a parent's message was typed into the session and the turn it
+    /// gave has not ended since.
+    pub fn given_a_turn(&self) -> bool {
+        self.given_turn.load(Ordering::SeqCst) != 0
+    }
+
     /// The session's turn has ended: what a person typed before it is spent,
-    /// so a parent's send goes through again.
-    pub fn turn_ended(&self) {
-        self.person_typed.store(0, Ordering::SeqCst);
+    /// and so is the turn a parent's message gave it. Whether either was in
+    /// hand.
+    pub fn turn_ended(&self) -> bool {
+        let typed = self.person_typed.swap(0, Ordering::SeqCst);
+        let given = self.given_turn.swap(0, Ordering::SeqCst);
+        typed != 0 || given != 0
     }
 
     /// The session has been idle since `idle_since_ms` (milliseconds since the
@@ -848,14 +882,22 @@ impl Session {
     /// never saw the session working still learns this from the time its
     /// status began. A key typed after `idle_since_ms` is not spent; one in
     /// the same millisecond is, since the program cannot have answered it
-    /// sooner than it began its idle.
-    pub fn idle_since(&self, idle_since_ms: u64) {
-        let typed = self.person_typed.load(Ordering::SeqCst);
-        if typed != 0 && idle_since_ms >= typed {
-            let _ =
-                self.person_typed
-                    .compare_exchange(typed, 0, Ordering::SeqCst, Ordering::SeqCst);
-        }
+    /// sooner than it began its idle. The turn a parent's message gave is
+    /// spent by an idle that began after the message was begun, and not by
+    /// one in the same millisecond, which the message cannot have started.
+    /// Whether either was spent.
+    pub fn idle_since(&self, idle_since_ms: u64) -> bool {
+        let spend = |mark: &AtomicU64, spent: fn(u64, u64) -> bool| {
+            let at = mark.load(Ordering::SeqCst);
+            at != 0
+                && spent(idle_since_ms, at)
+                && mark
+                    .compare_exchange(at, 0, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_ok()
+        };
+        let typed = spend(&self.person_typed, |idle, at| idle >= at);
+        let given = spend(&self.given_turn, |idle, at| idle > at);
+        typed || given
     }
 
     /// Changes each time a person types into the session through a client.
