@@ -13,6 +13,8 @@
 //   is the prompt. An unknown option is the CLI's own error.
 // - Every `--mcp-config` and `--settings` value names a file that exists, or
 //   is inline JSON, or the run fails at once with the real CLI's error.
+//   The working folder's `.mcp.json` servers load beside them, unless
+//   `--strict-mcp-config` is given.
 // - It loads settings (the user's, the project's and `--settings`) and
 //   instruction files as the CLI does: every CLAUDE.md from the working folder
 //   up, and an AGENTS.md only where no CLAUDE.md sits in its folder or above,
@@ -24,6 +26,9 @@
 //   (`<config>/sessions/<pid>.json`) with a `<pid>.<hash>.key` credential
 //   beside it as the real CLI keeps one, `history.jsonl`, and a transcript
 //   under `projects/`.
+// - A working folder holding a `fake-untrusted` file is one the CLI has not
+//   been told to trust: before it writes its record it draws the trust
+//   dialog and waits for Enter (Escape exits 1), as the real CLI does.
 // - `--resume <id>` succeeds only in the directory the conversation was
 //   recorded in, as the real CLI does. A prompt given with it is the next turn,
 //   and is logged as `openingPrompt` with `resumed` true.
@@ -482,7 +487,18 @@ function loadSettings() {
   }
 }
 
+/**
+ * The MCP servers a session loads: the working folder's `.mcp.json`, unless
+ * `--strict-mcp-config` says to load only what `--mcp-config` names, then each
+ * `--mcp-config` value. The real CLI asks a person to approve a project's
+ * servers once per folder before the first turn; the fake loads them as
+ * approved, and logs them in `mcpServers` with the rest.
+ */
 function loadMcpServers() {
+  if (opts.strictMcpConfig !== true) {
+    const project = readJsonFile(join(cwd, '.mcp.json'))?.mcpServers
+    if (project !== null && typeof project === 'object') Object.assign(log.mcpServers, project)
+  }
   for (const value of opts.mcpConfig ?? []) {
     const found = fileOrJson(value, 'MCP config file not found')
     if (found.error !== undefined) fail(`Error: Invalid MCP configuration:\r\n${found.error}`)
@@ -1258,6 +1274,33 @@ process.stdout.on('resize', () => {
   log.resized.push({ cols: process.stdout.columns, rows: process.stdout.rows })
   saveLog()
 })
+
+/**
+ * The real CLI's folder-trust dialog, which it shows before it writes its
+ * record or takes a turn: drawn when the working folder holds a
+ * `fake-untrusted` file, and answered with Enter (trust and go on) or Escape
+ * (exit 1). `trustDialog` in the run log is true while it is drawn.
+ */
+async function askTrust() {
+  log.trustDialog = true
+  saveLog()
+  out(`\x1b[2J\x1b[HDo you trust the files in this folder?\r\n\r\n  ${cwd}\r\n\r\n> 1. Yes, proceed\r\n  2. No, exit\r\n`)
+  if (process.stdin.isTTY) process.stdin.setRawMode(true)
+  process.stdin.setEncoding('utf8')
+  const trusted = await new Promise((resolve) => {
+    const onData = (chunk) => {
+      const answer = chunk.includes('\r') ? true : chunk.includes('\x1b') ? false : null
+      if (answer === null) return
+      process.stdin.off('data', onData)
+      resolve(answer)
+    }
+    process.stdin.on('data', onData)
+  })
+  if (!trusted) exit(1)
+  log.trustDialog = false
+}
+
+if (isFile(join(cwd, 'fake-untrusted'))) await askTrust()
 
 setStatus(undefined)
 writeKey()

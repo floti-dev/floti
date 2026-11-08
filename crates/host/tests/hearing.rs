@@ -30,7 +30,7 @@ use floti_host::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
 use floti_host::platform::process_tree::{Native as NativeTree, ProcessTree};
 use floti_host::platform::socket::Endpoint;
 use floti_host::roles::{FixedRoles, Role, RoleSource};
-use floti_host::server::HostConfig;
+use floti_host::server::{HostConfig, TEST_STARTUP_GRACE_MARKER};
 use floti_host::testkit::{
     OtherAgent, OtherAgentBackend, OtherAgentRecord, PATIENCE, RunningHost, ShellRun, TestClient,
     TestDirs,
@@ -1819,6 +1819,37 @@ async fn s7_a_child_waiting_on_a_prompt_a_question_or_a_sign_in_is_news_with_its
     let heard = parent.hear(json!({ "children": ["reader"] })).await;
     assert_eq!(heard.events(), ["reader:needs_you"], "{heard:?}");
     assert_eq!(heard.news()[0]["state"], "sign-in");
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_child_that_has_not_begun_its_first_turn_in_its_minute_is_needs_you_news_saying_so() {
+    let world = World::new();
+    // The minute a child has to begin is cut to nothing: this child cannot
+    // begin until its prompt is answered, so it is overdue at once. The minute
+    // itself is stepped in the host's own tests (`children::startup`).
+    std::fs::write(world.dirs.data.join(TEST_STARTUP_GRACE_MARKER), "0").unwrap();
+    let host = world.host().await;
+    let parent = world
+        .session(CLAUDE, &world.project("starts"), "parent")
+        .await;
+    // A folder the agent has not been told to trust: it asks before its
+    // first turn, and nobody is at its terminal to answer.
+    let untrusted = world.project("untrusted");
+    std::fs::write(untrusted.join("fake-untrusted"), "").unwrap();
+    parent
+        .start(json!({ "task": "work", "name": "stuck", "folder": text(&untrusted) }))
+        .await
+        .done();
+
+    let heard = parent.hear(json!({ "children": ["stuck"] })).await;
+    assert_eq!(heard.events(), ["stuck:needs_you"], "{heard:?}");
+    let news = &heard.news()[0];
+    assert_eq!(
+        news["text"],
+        "it has not started its task, and its terminal may be waiting on a prompt"
+    );
+    assert!(news.get("state").is_none(), "{news}");
     host.stop(HostStopReason::Stop).await;
 }
 

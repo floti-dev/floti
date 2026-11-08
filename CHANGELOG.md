@@ -32,6 +32,21 @@ A preview, not a release: nothing offers it as an update.
 - A session can title only itself. Turning off "Let Claude see the other
   sessions" in Settings turns titles off with it.
 
+**Children start on their own**
+
+- A child an agent starts begins its task with nothing for you to answer. A
+  project's `.mcp.json` no longer stops it at the approval dialog: it loads
+  only Floti's tools and its plugins' tools. Sessions you start still load
+  the project's servers.
+- A child runs in the permission mode its role names, and in auto when the
+  role names none. The shipped reviewer, worker and lead name auto. Only a
+  parent running in plan or don't-ask holds its children to that, and a
+  child runs with bypass permissions only when its parent does. Your deny
+  rules still apply.
+- A child that has not started its task a minute after it was launched, such
+  as one waiting to be told it may trust its folder, tells its parent it needs
+  you and raises a notice until it starts.
+
 ## 2.4.1-preview.9
 
 A preview, not a release: nothing offers it as an update.

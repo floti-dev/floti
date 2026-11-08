@@ -861,6 +861,8 @@ mod tests {
                 name.map_or(Vec::new(), |name| vec!["--mode".into(), name.into()]);
             assert_eq!(permissions.arguments(mode), expected, "{mode:?}");
         }
+        // With no auto mode, a child whose role names none keeps its default.
+        assert_eq!(world.backend.unattended_mode(), None);
     }
 
     #[test]

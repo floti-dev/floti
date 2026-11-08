@@ -1,7 +1,7 @@
 ---
 description: Does one piece of work in its own worktree and reports to its parent. Give it one item.
 backend: claude-code
-permission: accept-edits
+permission: auto
 class: light
 worktree: yes
 can_start: no

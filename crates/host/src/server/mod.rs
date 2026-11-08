@@ -149,14 +149,41 @@ fn hello_deadline(data: &Path) -> Duration {
 /// build; always `None` in a production build.
 fn test_deadline(data: &Path) -> Option<Duration> {
     #[cfg(any(test, feature = "testkit"))]
-    if let Some(ms) = std::fs::read_to_string(data.join(TEST_HANDSHAKE_DEADLINE_MARKER))
+    return test_millis(data, TEST_HANDSHAKE_DEADLINE_MARKER);
+    #[cfg(not(any(test, feature = "testkit")))]
+    {
+        let _ = data;
+        None
+    }
+}
+
+/// The file in a data folder that gives a test build's host, in
+/// milliseconds, how long a child an agent started has to begin its first
+/// turn, so a test of a child that never begins, against processes whose
+/// clock it cannot step, need not wait the minute out. A production build
+/// never reads it.
+#[cfg(any(test, feature = "testkit"))]
+pub const TEST_STARTUP_GRACE_MARKER: &str = "floti-test-startup-grace";
+
+/// The grace [`TEST_STARTUP_GRACE_MARKER`] in `data` gives a test build;
+/// always `None` in a production build.
+fn test_startup_grace(data: &Path) -> Option<Duration> {
+    #[cfg(any(test, feature = "testkit"))]
+    return test_millis(data, TEST_STARTUP_GRACE_MARKER);
+    #[cfg(not(any(test, feature = "testkit")))]
+    {
+        let _ = data;
+        None
+    }
+}
+
+/// The milliseconds the file `marker` in `data` says, when it says some.
+#[cfg(any(test, feature = "testkit"))]
+fn test_millis(data: &Path, marker: &str) -> Option<Duration> {
+    std::fs::read_to_string(data.join(marker))
         .ok()
         .and_then(|text| text.trim().parse().ok())
-    {
-        return Some(Duration::from_millis(ms));
-    }
-    let _ = data;
-    None
+        .map(Duration::from_millis)
 }
 
 /// The file in a data folder whose text, `<major>.<minor>`, is the protocol
@@ -456,6 +483,9 @@ impl Host {
             inherited_env,
             keeper,
         )?);
+        if let Some(grace) = test_startup_grace(&folders.data) {
+            hosted.use_startup_grace(grace);
+        }
         // What the keeper still runs keeps the host busy from its start.
         hosted.settle();
         if let Some(floti) = &run.keeper {
@@ -667,6 +697,20 @@ fn start_agent_tools(hosted: &Arc<Hosted>, features: &Features) -> Result<Arc<Ho
     tokio::spawn(hosted::end_children_at_exit(
         hosted.ledger().exits(),
         Arc::downgrade(hosted),
+    ));
+    // A child that has not begun its first turn a minute after its launch is
+    // news for its parent. The records are read afresh first, so a child that
+    // began since the last pass is seen to have.
+    let starting = Arc::downgrade(hosted);
+    tokio::spawn(hosted::after_each_launch(
+        hosted.child_launches(),
+        move || {
+            let hosted = starting.upgrade()?;
+            Some(async move {
+                hosted.read_activity_now().await;
+                let _ = tokio::task::spawn_blocking(move || hosted.startups_overdue()).await;
+            })
+        },
     ));
     hosted.use_agent_tools(Arc::clone(&tools));
     // Parents that ended while no host was running left children behind.

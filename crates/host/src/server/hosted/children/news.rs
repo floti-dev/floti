@@ -6,7 +6,8 @@
 //! (`features/sessions.rs`) takes one pass over every hosted session, every
 //! 750 ms and whenever a status moves; each pass is handed to
 //! [`Hosted::observe_activity`], which is the only place a child's activity
-//! becomes an event. There is no timer of its own and no client in it.
+//! becomes an event. Its one timer is the minute a child has to begin its
+//! first turn (`startup`), and there is no client in it.
 //!
 //! **The events** (kinds in [`EventKind`]):
 //!
@@ -14,7 +15,8 @@
 //!   tools, its program's OSC 7501 `done` with the program's message;
 //! - *needs you*: the child's activity becomes waiting, with its kind. The
 //!   backend's own records come first and OSC 7501 `blocked` after, as the
-//!   merged activity already has it;
+//!   merged activity already has it. A child that has not begun its first
+//!   turn a minute after its launch is needs you too (`startup`);
 //! - *turn ended*: working to idle with no report in that turn. A turn that
 //!   ends with a report is one event, the report;
 //! - *ended*: its session ended, with the exit code, or stopped and by whom;
@@ -25,14 +27,17 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 
 use floti_protocol::channels::common::ChildReport;
 use floti_protocol::channels::sessions::{
     SessionActivity, SessionActivityState, SessionsOverview, StandingNotice,
 };
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
+use tokio::time::Instant;
 
 use super::inbox::{self, EventKind, Facts, Item, StoppedBy};
+use super::startup::{NOT_STARTED, NOT_STARTED_NOTICE, Startups};
 use super::{notices, rows};
 use crate::server::hosted::{Hosted, session_id};
 use crate::session::{HostedView, ReportState, ReportedStatus, SessionId};
@@ -231,8 +236,11 @@ struct Watched {
     /// Counts the changes to `last_report`, which the clients' listing shows
     /// and the activity reader publishes again when it moves.
     report_revision: u64,
-    /// The needs-you notice of each child whose activity is waiting.
+    /// The needs-you notice of each child whose activity is waiting, or that
+    /// has not begun its first turn in time.
     needs_you: HashMap<SessionId, StandingNotice>,
+    /// The children launched that have not begun their first turn.
+    startups: Startups,
 }
 
 /// The children the host watches, and the signal waits sleep on.
@@ -243,6 +251,9 @@ pub(in crate::server::hosted) struct Desk {
     changes: watch::Sender<u64>,
     /// Counts the changes to the standing notices.
     standing: watch::Sender<u64>,
+    /// When each child launched is due to have begun
+    /// (`startup::after_each_launch`).
+    launches: broadcast::Sender<Instant>,
 }
 
 impl Desk {
@@ -251,7 +262,25 @@ impl Desk {
             watched: Mutex::new(Watched::default()),
             changes: watch::Sender::new(0),
             standing: watch::Sender::new(0),
+            launches: broadcast::Sender::new(64),
         }
+    }
+
+    /// Child `id` has just been launched, and has a minute to begin.
+    pub fn launched(&self, id: SessionId) {
+        let due = self.watched().startups.launched(id, Instant::now());
+        // No one listening is a host with no timer running, as in a test.
+        let _ = self.launches.send(due);
+    }
+
+    /// When each child launched from now on is due to have begun.
+    pub fn launches(&self) -> broadcast::Receiver<Instant> {
+        self.launches.subscribe()
+    }
+
+    /// A child launched from now on has `grace` to begin.
+    pub fn use_startup_grace(&self, grace: Duration) {
+        self.watched().startups.use_grace(grace);
     }
 
     /// The needs-you notices standing now, by child.
@@ -331,6 +360,7 @@ impl Desk {
         watched.plain.remove(&id);
         watched.adopted.remove(&id);
         watched.stopped_by.remove(&id);
+        watched.startups.forget(id);
         if watched.last_report.remove(&id).is_some() {
             watched.report_revision += 1;
         }
@@ -408,8 +438,26 @@ impl Hosted {
                 if watched.activity.insert(id, state.activity) != Some(state.activity) {
                     moved = true;
                 }
-                if state.activity == Some(SessionActivity::Waiting) {
-                    let text = waiting_text(state.waiting_for.as_deref());
+                let listed = overview
+                    .sessions
+                    .iter()
+                    .find(|listed| listed.host_session_id == Some(view.id));
+                // Its agent's record, its program's report or a known
+                // activity: the child has begun.
+                if listed.is_some_and(|listed| listed.registered)
+                    || view.report.is_some()
+                    || state.activity.is_some()
+                {
+                    watched.startups.begun(id);
+                }
+                let standing = if state.activity == Some(SessionActivity::Waiting) {
+                    Some(waiting_text(state.waiting_for.as_deref()))
+                } else if watched.startups.stalled(id) {
+                    Some(NOT_STARTED_NOTICE.to_owned())
+                } else {
+                    None
+                };
+                if let Some(text) = standing {
                     match watched.needs_you.get_mut(&id) {
                         Some(notice) if notice.text != text => {
                             notice.text = text;
@@ -417,11 +465,7 @@ impl Hosted {
                         }
                         Some(_) => {}
                         None => {
-                            let began = overview
-                                .sessions
-                                .iter()
-                                .find(|listed| listed.host_session_id == Some(view.id))
-                                .and_then(|listed| listed.status_since_ms);
+                            let began = listed.and_then(|listed| listed.status_since_ms);
                             if let Some(notice) = self.needs_you_notice(id, &text, began) {
                                 watched.needs_you.insert(id, notice);
                                 noticed = true;
@@ -434,11 +478,7 @@ impl Hosted {
                 if seen.turn_ended {
                     turns_ended.push(id);
                 } else if state.activity == Some(SessionActivity::Idle)
-                    && let Some(since) = overview
-                        .sessions
-                        .iter()
-                        .find(|listed| listed.host_session_id == Some(view.id))
-                        .and_then(|listed| listed.status_since_ms)
+                    && let Some(since) = listed.and_then(|listed| listed.status_since_ms)
                 {
                     idle_since.push((id, since));
                 }
@@ -693,6 +733,58 @@ impl Hosted {
                 exit_code: None,
             },
         );
+    }
+
+    /// Child `id` has just been launched on a backend that keeps records of
+    /// its sessions (`keeps_records`): it has a minute to begin its first
+    /// turn. One on a backend that keeps none cannot be told from one that
+    /// has begun, so it is not watched.
+    pub(super) fn child_launched(&self, id: u64, keeps_records: bool) {
+        if let Some(id) = session_id(id).filter(|_| keeps_records) {
+            self.children.news.launched(id);
+        }
+    }
+
+    /// When each child launched from now on is due to have begun.
+    pub(crate) fn child_launches(&self) -> broadcast::Receiver<Instant> {
+        self.children.news.launches()
+    }
+
+    /// A child launched from now on has `grace` to begin its first turn, in
+    /// place of a minute.
+    pub(crate) fn use_startup_grace(&self, grace: Duration) {
+        self.children.news.use_startup_grace(grace);
+    }
+
+    /// Every running child launched at least a minute ago that has not begun
+    /// its first turn: needs-you news for its parent, saying it has not
+    /// started its task, and a needs-you notice for the person, once each.
+    /// The notice stands until the child begins or ends.
+    pub(crate) fn startups_overdue(&self) {
+        let desk = &self.children.news;
+        let overdue = desk.watched().startups.overdue(Instant::now());
+        let mut noticed = false;
+        for child in overdue
+            .into_iter()
+            .filter(|id| self.sessions.get(*id).is_some())
+        {
+            self.write_news(
+                child,
+                EventKind::NeedsYou,
+                &Facts {
+                    state: None,
+                    detail: Some(NOT_STARTED.to_owned()),
+                    exit_code: None,
+                },
+            );
+            if let Some(notice) = self.needs_you_notice(child, NOT_STARTED_NOTICE, None) {
+                desk.watched().needs_you.entry(child).or_insert(notice);
+                noticed = true;
+            }
+        }
+        if noticed {
+            desk.notices_moved();
+        }
     }
 
     /// Child `child` is about to be ended by `by`.

@@ -200,6 +200,17 @@ pub trait AgentBackend: Send + Sync {
         Ok(())
     }
 
+    /// The mode an agent's child runs in when neither its role nor its
+    /// profile names one: auto, where the agent has a mode that judges each
+    /// action in place of a person, since a child has nobody to answer its
+    /// prompts; else `None`, the agent's own default.
+    fn unattended_mode(&self) -> Option<PermissionMode> {
+        let auto = ToolRule::PermissionMode(PermissionMode::Auto);
+        self.permissions()
+            .is_some_and(|permissions| permissions.can_enforce(&auto))
+            .then_some(PermissionMode::Auto)
+    }
+
     /// Whether the agent has an effort setting a launch can pass. A role
     /// that gives an effort for a backend without one is refused, naming the
     /// effort and the backend, rather than started with it dropped.
@@ -551,6 +562,12 @@ pub struct Composition {
     /// The name the session runs Remote Control under, for an agent that has
     /// it ([`AgentBackend::remote_control`]); an adapter without it drops it.
     pub remote_control: Option<String>,
+    /// Nobody is at the session's terminal: an agent started it. Its adapter
+    /// launches it with nothing a person has to answer before its first turn,
+    /// without writing the agent's own config (for Claude Code,
+    /// `--strict-mcp-config`, so the session loads only the servers its launch
+    /// gives it and no project server asks to be approved).
+    pub unattended: bool,
 }
 
 /// A role's body, and the name of the role it belongs to.

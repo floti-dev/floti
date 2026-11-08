@@ -1281,7 +1281,8 @@ async fn s5_a_folder_outside_everything_tracked_is_refused_by_name_by_dots_and_b
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s6_a_child_never_runs_with_more_permission_than_its_parent() {
+async fn s6_a_child_runs_in_auto_or_its_roles_mode_held_back_only_by_a_parent_in_plan_dont_ask_or_bypass()
+ {
     let world = World::new();
     let host = world.host().await;
     let bypassy = world.project("bypassy");
@@ -1353,6 +1354,26 @@ async fn s6_a_child_never_runs_with_more_permission_than_its_parent() {
         world.mode_of(equal.id()).as_deref(),
         Some("bypassPermissions")
     );
+
+    // A parent launched in no mode: a role that names none runs in auto, and
+    // one that asks for bypass gets auto too.
+    let unset = world.session(CLAUDE, &plain, "unset").await;
+    unset
+        .start(json!({ "task": "build", "name": "plain-kid" }))
+        .await
+        .done();
+    let plain_kid = world.child_of(&unset, "plain-kid").await;
+    assert_eq!(world.mode_of(plain_kid.id()).as_deref(), Some("auto"));
+    assert_eq!(
+        value_of(&plain_kid.run.argv, "--permission-mode"),
+        Some("auto")
+    );
+    unset
+        .start(json!({ "task": "build", "role": "builder", "name": "no-bypass" }))
+        .await
+        .done();
+    let no_bypass = world.child_of(&unset, "no-bypass").await;
+    assert_eq!(world.mode_of(no_bypass.id()).as_deref(), Some("auto"));
     host.stop(HostStopReason::Stop).await;
 }
 
@@ -2128,28 +2149,33 @@ async fn s24_a_rule_the_chosen_backend_cannot_enforce_refuses_the_start_naming_t
         "{sentence}"
     );
 
-    // The mode the role asks for, capped at the parent's, is the rule.
-    let refused = auto_parent
-        .start(json!({ "task": "decide", "role": "automatic" }))
-        .await;
-    let sentence = refused.refused();
-    assert!(sentence.contains(OTHER), "{sentence}");
-    assert!(sentence.contains("permission mode auto"), "{sentence}");
-    // Under a parent in manual the same role is capped to a mode it has.
-    parent
+    // The mode the role asks for, under a parent that holds it to nothing,
+    // is the rule: in auto or in no mode alike.
+    for asking in [&auto_parent, &parent] {
+        let refused = asking
+            .start(json!({ "task": "decide", "role": "automatic" }))
+            .await;
+        let sentence = refused.refused();
+        assert!(sentence.contains(OTHER), "{sentence}");
+        assert!(sentence.contains("permission mode auto"), "{sentence}");
+    }
+    assert_eq!(world.run_count(), runs, "no process started for a refusal");
+    // Under a parent in plan the same role is held to a mode it has.
+    let mut planning = request(&folder, "planning parent", CLAUDE);
+    planning.permission_mode = Some(PermissionMode::Plan);
+    let planner = world.session_as(planning).await;
+    let runs = world.run_count();
+    planner
         .start(json!({ "task": "decide", "role": "automatic", "name": "capped" }))
         .await
         .done();
     // Its run is logged once it has booted: the one process that started.
-    let capped = world.child_of(&parent, "capped").await;
+    let capped = world.child_of(&planner, "capped").await;
     assert_eq!(capped.record.backend, BackendId::new(OTHER));
+    assert_eq!(world.mode_of(capped.id()).as_deref(), Some("plan"));
 
     assert_eq!(world.children_made(), 1, "only the capped one started");
-    assert_eq!(
-        world.run_count(),
-        runs + 1,
-        "no process started for a refusal"
-    );
+    assert_eq!(world.run_count(), runs + 1, "the one child's process");
     host.stop(HostStopReason::Stop).await;
 }
 

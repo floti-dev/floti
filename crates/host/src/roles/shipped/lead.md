@@ -1,6 +1,7 @@
 ---
 description: Delegates work and keeps Trackr true. It does not edit files.
 backend: claude-code
+permission: auto
 class: light
 worktree: no
 can_start: yes

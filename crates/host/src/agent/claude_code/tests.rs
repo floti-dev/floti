@@ -1193,6 +1193,80 @@ fn agent_tools_are_one_file_per_launch_with_the_sessions_token_and_never_on_a_co
 }
 
 #[test]
+fn an_agents_child_loads_only_the_servers_its_launch_gives_it_and_a_persons_session_loads_the_projects_too()
+ {
+    let world = World::new();
+    let project = world.folder("work");
+    write(
+        &project.join(".mcp.json"),
+        r#"{"mcpServers":{"project-db":{"type":"stdio","command":"db-server"}}}"#,
+    );
+    let launch = |unattended: bool, agent_tools: Vec<AgentToolServer>| {
+        world.launch(&LaunchRequest {
+            folder: project.clone(),
+            name: "servers".into(),
+            composition: Composition {
+                agent_tools,
+                unattended,
+                ..Composition::default()
+            },
+            ..LaunchRequest::default()
+        })
+    };
+    let loaded = |log: &Value| -> Vec<String> {
+        let mut names: Vec<String> = log["mcpServers"]
+            .as_object()
+            .expect("servers")
+            .keys()
+            .cloned()
+            .collect();
+        names.sort();
+        names
+    };
+
+    // A child: strict, beside its own file, and the project's server never loads.
+    let (child, folder) = launch(true, vec![server("floti-agents", "t")]);
+    let args = world.args(&child);
+    let at = args
+        .iter()
+        .position(|arg| arg == "--strict-mcp-config")
+        .expect("--strict-mcp-config");
+    assert_eq!(args[at + 1], "--mcp-config", "{args:?}");
+    assert_eq!(args[at + 2], text(folder.path().join("mcp.json")));
+    let (output, log) = world.run(&child, "/exit\n");
+    succeeded(&output);
+    assert_eq!(loaded(&log), ["floti-agents"]);
+
+    // A child given no family loads no server at all.
+    let (bare, _folder) = launch(true, Vec::new());
+    let args = world.args(&bare);
+    assert!(args.contains(&"--strict-mcp-config".to_owned()), "{args:?}");
+    assert!(!args.contains(&"--mcp-config".to_owned()), "{args:?}");
+    let (output, log) = world.run(&bare, "/exit\n");
+    succeeded(&output);
+    assert!(loaded(&log).is_empty());
+
+    // A person's session loads the project's servers beside its own.
+    let (person, _folder) = launch(false, vec![server("floti-agents", "t")]);
+    assert!(
+        !world
+            .args(&person)
+            .contains(&"--strict-mcp-config".to_owned())
+    );
+    let (output, log) = world.run(&person, "/exit\n");
+    succeeded(&output);
+    assert_eq!(loaded(&log), ["floti-agents", "project-db"]);
+}
+
+#[test]
+fn a_child_whose_role_names_no_mode_runs_in_claude_codes_auto() {
+    assert_eq!(
+        World::new().backend.unattended_mode(),
+        Some(PermissionMode::Auto)
+    );
+}
+
+#[test]
 fn a_familys_read_only_tools_are_allowed_after_the_tool_file_and_before_the_next_flag() {
     let world = World::new();
     let mut notes = server("helm-plugin-notes", "t");

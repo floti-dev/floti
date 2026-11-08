@@ -23,7 +23,7 @@ use floti_host::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
 use floti_host::platform::process_tree::Native as NativeTree;
 use floti_host::platform::socket::Endpoint;
 use floti_host::roles::{FixedRoles, Role, RoleSource};
-use floti_host::server::HostConfig;
+use floti_host::server::{HostConfig, TEST_STARTUP_GRACE_MARKER};
 use floti_host::testkit::{
     OtherAgent, OtherAgentBackend, PATIENCE, RunningHost, TestClient, TestDirs,
 };
@@ -643,6 +643,51 @@ async fn a_child_waiting_on_a_person_stands_as_a_notice_until_it_stops_waiting_o
             notices.is_empty()
         })
         .await;
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_child_stopped_on_a_prompt_before_its_first_turn_stands_as_a_notice_until_it_begins() {
+    let world = World::new();
+    // The minute a child has to begin is cut to nothing: this child cannot
+    // begin until its prompt is answered, so it is overdue at once. The minute
+    // itself is stepped in the host's own tests (`children::startup`).
+    std::fs::write(world.dirs.data.join(TEST_STARTUP_GRACE_MARKER), "0").unwrap();
+    let host = world.host().await;
+    let parent = world.session(&world.project("starts"), "parent").await;
+    // A folder the agent has not been told to trust: it asks before its
+    // first turn, and nobody is at its terminal to answer.
+    let untrusted = world.project("untrusted");
+    std::fs::write(untrusted.join("fake-untrusted"), "").unwrap();
+    parent
+        .start(json!({ "task": "work", "name": "stuck", "folder": text(&untrusted) }))
+        .await
+        .done();
+    let stuck = world.child_of(&parent, "stuck").await;
+
+    let standing = world
+        .notices_where("a needs-you notice to stand", |notices| {
+            !of_kind(notices, NoticeKind::NeedsYou).is_empty()
+        })
+        .await;
+    assert_eq!(standing.len(), 1, "{standing:?}");
+    assert_eq!(standing[0].child_name.as_deref(), Some("stuck"));
+    assert_eq!(standing[0].parent_id, parent.id());
+    assert_eq!(
+        standing[0].text,
+        "has not started its task: its terminal may be waiting on a prompt"
+    );
+
+    // Answered, the child begins, and its notice goes.
+    let mut client = world.client().await;
+    client.attach(1, stuck.id()).await;
+    client.type_into(1, b"\r").await;
+    world
+        .notices_where("the begun child's notice to go", |notices| {
+            notices.is_empty()
+        })
+        .await;
+    drop(client);
     host.stop(HostStopReason::Stop).await;
 }
 

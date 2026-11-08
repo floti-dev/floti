@@ -3,7 +3,9 @@
 //! The order is not cosmetic. `--add-dir`, `--mcp-config` and `--allowedTools`
 //! are variadic:
 //! each takes values until the next argument that starts with a dash.
-//! `--plugin-dir` takes one path and is repeated for more. `-n`, or `--resume` for a conversation being reopened, always follows
+//! `--plugin-dir` takes one path and is repeated for more. `--strict-mcp-config`
+//! takes no value; it goes first among the tool arguments, after the one-value
+//! `--session-id`. `-n`, or `--resume` for a conversation being reopened, always follows
 //! `--add-dir` and always exists, which ends that list; the opening prompt
 //! goes last behind `--`, which ends every list, so it can never be taken for
 //! one more folder or config file.

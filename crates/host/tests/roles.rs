@@ -1196,11 +1196,12 @@ async fn s6_an_effort_for_a_backend_with_no_effort_setting_refuses_the_start_nam
 }
 
 // ---------------------------------------------------------------------------
-// S7: permission, capped at the parent's
+// S7: permission, held back only by a parent launched to be
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s7_a_roles_permission_replaces_the_profiles_and_is_capped_at_the_parents() {
+async fn s7_a_roles_permission_replaces_the_profiles_and_only_a_parent_in_plan_dont_ask_or_bypass_holds_it_back()
+ {
     let world = World::new();
     world.role(
         "ceiling",
@@ -1230,7 +1231,22 @@ async fn s7_a_roles_permission_replaces_the_profiles_and_is_capped_at_the_parent
         Some("plan")
     );
 
-    // A parent in manual caps it to manual.
+    // A parent in don't ask: the child gets no more, and a role that names
+    // nothing gets don't ask too.
+    let quiet = world
+        .session_in(CLAUDE, &plain, "quiet parent", PermissionMode::DontAsk)
+        .await;
+    quiet
+        .start(json!({ "task": "go", "role": "silent", "name": "quiet-kid" }))
+        .await
+        .done();
+    assert_eq!(
+        mode_of(&world.child_of(&quiet, "quiet-kid").await).as_deref(),
+        Some("dontAsk")
+    );
+
+    // A parent in manual does not hold its child to manual, and bypass is
+    // not its to give: the child runs in auto.
     let manual = world
         .session_in(CLAUDE, &plain, "manual parent", PermissionMode::Manual)
         .await;
@@ -1238,9 +1254,24 @@ async fn s7_a_roles_permission_replaces_the_profiles_and_is_capped_at_the_parent
         .start(json!({ "task": "go", "role": "ceiling", "name": "manual-kid" }))
         .await
         .done();
+    let manual_kid = world.child_of(&manual, "manual-kid").await;
+    assert_eq!(mode_of(&manual_kid).as_deref(), Some("auto"));
     assert_eq!(
-        mode_of(&world.child_of(&manual, "manual-kid").await).as_deref(),
-        Some("manual")
+        value_of(&manual_kid.run.argv, "--permission-mode"),
+        Some("auto")
+    );
+
+    // A parent launched in no mode: a role that names none runs in auto.
+    let unset = world.session(CLAUDE, &plain, "unset parent").await;
+    unset
+        .start(json!({ "task": "go", "role": "silent", "name": "unset-kid" }))
+        .await
+        .done();
+    let unset_kid = world.child_of(&unset, "unset-kid").await;
+    assert_eq!(mode_of(&unset_kid).as_deref(), Some("auto"));
+    assert_eq!(
+        value_of(&unset_kid.run.argv, "--permission-mode"),
+        Some("auto")
     );
 
     // A parent in bypass keeps what the role asks for: nothing is above it.
@@ -1635,8 +1666,8 @@ async fn s13_the_shipped_lead_starts_agents_cannot_edit_and_carries_its_voice_an
     assert!(world.column::<bool>(lead.id(), "can_start"));
     assert!(!world.column::<bool>(lead.id(), "child_worktree"));
     assert_eq!(lead.run.disallowed(), ["Edit", "Write", "NotebookEdit"]);
-    // No permission of its own: the agent's default.
-    assert_eq!(value_of(&lead.run.argv, "--permission-mode"), None);
+    // Auto: nobody is at its terminal to answer a prompt.
+    assert_eq!(value_of(&lead.run.argv, "--permission-mode"), Some("auto"));
     let instructions = lead
         .run
         .instructions
@@ -1663,7 +1694,7 @@ async fn s13_the_shipped_lead_starts_agents_cannot_edit_and_carries_its_voice_an
 async fn s14_the_shipped_worker_edits_in_a_worktree_cannot_start_agents_or_create_items() {
     let world = World::new();
     let host = world.host().await;
-    // Edits are accepted by the worker only where its parent accepts them too.
+    // A parent in accept edits holds its worker back to nothing.
     let parent = world
         .session_in(
             CLAUDE,
@@ -1690,7 +1721,7 @@ async fn s14_the_shipped_worker_edits_in_a_worktree_cannot_start_agents_or_creat
     assert!(!world.column::<bool>(worker.id(), "can_start"));
     assert_eq!(
         value_of(&worker.run.argv, "--permission-mode"),
-        Some("acceptEdits")
+        Some("auto")
     );
     assert_eq!(worker.run.disallowed(), ["mcp__helm-plugin-trackr__create"]);
     let instructions = worker

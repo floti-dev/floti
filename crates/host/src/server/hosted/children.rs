@@ -8,8 +8,10 @@
 //!
 //! **A start is judged before anything runs.** In this order: the role, the
 //! backend the role allows and the host has, the folder (tracked, on the
-//! path it leads to), the profile, the permission mode (never above the
-//! parent's), the backend's ability to enforce every rule, then the limits
+//! path it leads to), the profile, the permission mode (the role's, else
+//! auto, held to the parent's only where the parent was launched in plan or
+//! dont-ask, and bypass-permissions only under a parent launched in it), the
+//! backend's ability to enforce every rule, then the limits
 //! read afresh from the settings. Only a start that passes all of it spawns a
 //! process, and only then is a worktree made, so a refused start writes
 //! nothing. Starts are taken one at a time, so two calls cannot both pass a
@@ -48,6 +50,7 @@ mod notices;
 mod read;
 mod rows;
 mod send;
+mod startup;
 mod wait;
 
 pub(crate) use commands::RunCommand;
@@ -56,6 +59,7 @@ use inbox::StoppedBy;
 pub(crate) use inbox::{EventKind, Facts, News};
 pub(crate) use read::{ChildRead, ReadChild};
 pub(crate) use send::SendChild;
+pub(crate) use startup::after_each_launch;
 pub(crate) use wait::{WaitEnd, WaitFor, WaitRequest, Waited};
 
 use std::collections::HashMap;
@@ -380,7 +384,9 @@ impl Hosted {
         }
 
         let role = self.role_for(request.role.as_deref())?;
-        let role_mode = capped(role.permission, facts.permission_mode);
+        // A backend is chosen for the mode the role names. The auto a child
+        // gets when it names none is each backend's own, so it rules none out.
+        let role_mode = child_mode(role.permission, facts.permission_mode, None);
         let backend = self.backend_for(&role, request.backend.as_deref(), role_mode)?;
         let base = PathBuf::from(&facts.cwd);
         let folder = folders::child_folder(
@@ -419,14 +425,16 @@ impl Hosted {
             }
         };
 
-        let mode = capped(
+        let mode = child_mode(
             role.permission
                 .or_else(|| profile.as_ref().and_then(|profile| profile.permission_mode)),
             facts.permission_mode,
+            backend.unattended_mode(),
         );
         let mut composition =
             compose::role_composition(&role, backend.as_ref(), profile.as_ref(), mode)
                 .map_err(|reason| format!("{reason}, so no agent was started."))?;
+        composition.unattended = true;
         // What the child is told of the session that started it. An agent with
         // no MCP tools has no `agents_report` and is not told of it.
         composition.child = Some(ChildInstructions {
@@ -488,6 +496,7 @@ impl Hosted {
             .map_or_else(|| folder.clone(), |made| made.folder.clone());
         let outlive = request.outlive;
         let backend_id = backend.id().clone();
+        let keeps_records = backend.status().is_some();
         let remote_control = compose::inherited_remote_control(
             facts.remote_control_name.as_deref(),
             &name,
@@ -546,6 +555,7 @@ impl Hosted {
         };
 
         self.end_with_gone_parent(parent, outlive, launched.session.id)?;
+        self.child_launched(launched.session.id, keeps_records);
         Ok(ChildStarted {
             name,
             backend: backend_id_text(&backend_id),
@@ -707,7 +717,11 @@ impl Hosted {
                     .ok()
                     .flatten()
             });
-        let mode = capped(child.permission_mode, facts.permission_mode);
+        let mode = child_mode(
+            child.permission_mode,
+            facts.permission_mode,
+            backend.unattended_mode(),
+        );
         let mut composition = super::composition_of(profile.as_ref());
         composition.permission_mode = mode;
         if let Some(role) = child.role.as_deref() {
@@ -720,6 +734,7 @@ impl Hosted {
                 log_line!("floti host: {name}: {warning}");
             }
         }
+        composition.unattended = true;
         // A reopened child is told again of the session that started it.
         composition.child = Some(ChildInstructions {
             parent: rows::label_of(&self.ledger.store(), parent)
@@ -752,6 +767,7 @@ impl Hosted {
         let no_remote_control = remote_control
             .backend_has_none
             .then(|| backend.name().to_owned());
+        let keeps_records = backend.status().is_some();
         let launched = self.run(
             Plan {
                 backend,
@@ -799,6 +815,7 @@ impl Hosted {
             }
         };
         self.end_with_gone_parent(parent, child.outlive, launched.session.id)?;
+        self.child_launched(launched.session.id, keeps_records);
         Ok(ChildStarted {
             name: name.clone(),
             backend: backend_id_text(&backend_id),
@@ -1207,8 +1224,8 @@ impl Hosted {
     /// `agents_roles`. The default role comes first, from `agent.md` when
     /// that is a role. Each role lists the installed backends it can run on
     /// for a caller in `caller`'s mode: those whose adapter enforces its
-    /// permission and tool rules (the permission lowered to the caller's, as
-    /// a start lowers it), takes an effort where the role gives one and takes
+    /// permission and tool rules (the permission the role names, held back by
+    /// the caller's mode as a start holds it back), takes an effort where the role gives one and takes
     /// instructions where it has a body.
     ///
     /// # Errors
@@ -1254,7 +1271,8 @@ impl Hosted {
     }
 
     fn role_entry(&self, role: &Role, caller_mode: Option<PermissionMode>) -> RoleEntry {
-        let mode = capped(role.permission, caller_mode);
+        // As a start chooses its backend: for the mode the role names.
+        let mode = child_mode(role.permission, caller_mode, None);
         RoleEntry {
             name: role.name.clone(),
             description: role.description.clone(),
@@ -1349,21 +1367,35 @@ fn state_word(status: &crate::session::ReportedStatus) -> String {
     format!("{:?}", status.report.state).to_lowercase()
 }
 
-/// `requested`, lowered to what `parent` runs in where that is stricter. From
-/// the strictest: plan, don't ask, manual, accept edits, auto, bypass
-/// permissions. A session with no mode runs in manual; a child asking for no
-/// mode gets the agent's own default, which is manual, unless the parent is
-/// stricter than that.
-pub(super) fn capped(
+/// The mode a child runs in: `requested` (its role's, else its profile's),
+/// else `unattended` (the backend's [`AgentBackend::unattended_mode`]: auto
+/// where it has one), held back by what the host knows of the mode `parent`
+/// was launched in.
+///
+/// A child has nobody at its terminal, so a prompt it raises is never
+/// answered. Its parent's mode caps it only where the parent was launched to
+/// be held back: a parent launched in plan or don't ask gives its children no
+/// more than that (from the strictest: plan, don't ask, manual, accept edits,
+/// auto, bypass permissions), and bypass permissions reaches a child only
+/// when its parent was launched in it; a child asking for it under any other
+/// parent gets what a child asking for nothing gets. A parent launched in no
+/// mode or in manual does not hold its children to manual: a session started
+/// in a tab is launched with none whatever it runs in now, and the agent's
+/// records do not say. The user's own deny rules still win, in the agent.
+pub(super) fn child_mode(
     requested: Option<PermissionMode>,
     parent: Option<PermissionMode>,
+    unattended: Option<PermissionMode>,
 ) -> Option<PermissionMode> {
-    let ceiling = parent.unwrap_or(PermissionMode::Manual);
-    match requested {
-        Some(requested) if strictness(requested) <= strictness(ceiling) => Some(requested),
-        Some(_) => Some(ceiling),
-        None if strictness(ceiling) < strictness(PermissionMode::Manual) => Some(ceiling),
-        None => None,
+    let wanted = requested.or(unattended);
+    match parent {
+        Some(ceiling @ (PermissionMode::Plan | PermissionMode::DontAsk)) => match wanted {
+            Some(mode) if strictness(mode) <= strictness(ceiling) => Some(mode),
+            _ => Some(ceiling),
+        },
+        Some(PermissionMode::BypassPermissions) => wanted,
+        _ if wanted == Some(PermissionMode::BypassPermissions) => unattended,
+        _ => wanted,
     }
 }
 
@@ -1647,16 +1679,32 @@ mod tests {
         assert_eq!(settled(joined), None);
     }
 
+    /// Every mode, strictest first.
+    const MODES: [PermissionMode; 6] =
+        [Plan, DontAsk, Manual, AcceptEdits, Auto, BypassPermissions];
+
     #[test]
-    fn a_child_never_runs_above_its_parents_mode() {
-        // The order, strictest first.
-        let order = [Plan, DontAsk, Manual, AcceptEdits, Auto, BypassPermissions];
-        for (at, parent) in order.iter().enumerate() {
-            for (asked_at, asked) in order.iter().enumerate() {
-                let got = capped(Some(*asked), Some(*parent));
+    fn a_child_whose_role_names_no_mode_runs_in_auto_under_a_parent_launched_in_none_or_in_manual()
+    {
+        for parent in [None, Some(Manual), Some(AcceptEdits), Some(Auto)] {
+            assert_eq!(
+                child_mode(None, parent, Some(Auto)),
+                Some(Auto),
+                "{parent:?}"
+            );
+        }
+        // A backend with no auto mode keeps its own default.
+        assert_eq!(child_mode(None, None, None), None);
+        assert_eq!(child_mode(None, Some(Manual), None), None);
+    }
+
+    #[test]
+    fn a_child_runs_in_the_mode_its_role_names_under_a_parent_that_holds_it_to_nothing() {
+        for parent in [None, Some(Manual), Some(AcceptEdits), Some(Auto)] {
+            for asked in [Plan, DontAsk, Manual, AcceptEdits, Auto] {
                 assert_eq!(
-                    got,
-                    Some(order[at.min(asked_at)]),
+                    child_mode(Some(asked), parent, Some(Auto)),
+                    Some(asked),
                     "{asked:?} under {parent:?}"
                 );
             }
@@ -1664,15 +1712,48 @@ mod tests {
     }
 
     #[test]
-    fn no_mode_counts_as_manual_on_both_sides() {
-        assert_eq!(capped(Some(Auto), None), Some(Manual));
-        assert_eq!(capped(Some(Plan), None), Some(Plan));
-        // The agent's own default is manual, which only a stricter parent lowers.
-        assert_eq!(capped(None, None), None);
-        assert_eq!(capped(None, Some(Manual)), None);
-        assert_eq!(capped(None, Some(Auto)), None);
-        assert_eq!(capped(None, Some(Plan)), Some(Plan));
-        assert_eq!(capped(None, Some(DontAsk)), Some(DontAsk));
+    fn a_parent_launched_in_plan_or_dont_ask_gives_its_children_no_more() {
+        for ceiling in [Plan, DontAsk] {
+            for asked in MODES {
+                let expected = if asked == Plan { Plan } else { ceiling };
+                assert_eq!(
+                    child_mode(Some(asked), Some(ceiling), Some(Auto)),
+                    Some(expected),
+                    "{asked:?} under {ceiling:?}"
+                );
+            }
+            // The auto a role naming nothing would get is no more either.
+            assert_eq!(child_mode(None, Some(ceiling), Some(Auto)), Some(ceiling));
+            assert_eq!(child_mode(None, Some(ceiling), None), Some(ceiling));
+        }
+    }
+
+    #[test]
+    fn bypass_permissions_reaches_a_child_only_when_its_parent_was_launched_in_it() {
+        assert_eq!(
+            child_mode(Some(BypassPermissions), Some(BypassPermissions), Some(Auto)),
+            Some(BypassPermissions)
+        );
+        // Under any other parent it is what naming nothing gives.
+        for parent in [None, Some(Manual), Some(AcceptEdits), Some(Auto)] {
+            assert_eq!(
+                child_mode(Some(BypassPermissions), parent, Some(Auto)),
+                Some(Auto),
+                "{parent:?}"
+            );
+            assert_eq!(child_mode(Some(BypassPermissions), parent, None), None);
+        }
+        // A parent in bypass holds back nothing a child asks for.
+        for asked in MODES {
+            assert_eq!(
+                child_mode(Some(asked), Some(BypassPermissions), Some(Auto)),
+                Some(asked)
+            );
+        }
+        assert_eq!(
+            child_mode(None, Some(BypassPermissions), Some(Auto)),
+            Some(Auto)
+        );
     }
 
     #[test]

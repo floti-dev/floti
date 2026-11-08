@@ -88,8 +88,10 @@ pub struct Role {
     /// The effort each backend runs it with, keyed by backend id. Only a
     /// backend whose agent has an effort setting can be given one.
     pub efforts: BTreeMap<String, EffortLevel>,
-    /// The permission mode its children ask for, before the parent's mode caps
-    /// it.
+    /// The permission mode its children run in; auto where the backend has it
+    /// when none is named. A parent launched in plan or dont-ask holds its
+    /// children to that, and only one launched in bypass-permissions passes
+    /// that on.
     pub permission: Option<PermissionMode>,
     /// Tools its children use without asking.
     pub allowed_tools: Vec<String>,

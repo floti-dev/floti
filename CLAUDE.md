@@ -420,10 +420,21 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   anything else is not found. A start is judged before anything runs: the role
   and the backend it allows (`AgentBackend`, which refuses a rule it cannot
   enforce, naming the rule and the backend), a folder Floti tracks on the path
-  it leads to (a session's own folder does not make one tracked), a permission
-  mode never above the parent's, then the limits read afresh from the settings
-  and counted from the child rows, so they hold across a host restart. One
-  of them is the heavy limit (`agentHeavyPerHost`, 1 to 8, default 1): the
+  it leads to (a session's own folder does not make one tracked), the
+  permission mode, then the limits read afresh from the settings and counted
+  from the child rows, so they hold across a host restart. A child runs in its
+  role's mode, and in auto when the role names none (where its backend has
+  auto). A parent caps it only when the parent was launched in plan or
+  dont-ask, and bypass-permissions reaches a child only when its parent was
+  launched in it; a parent launched in no mode or in manual does not hold its
+  children to manual (`child_mode` in `hosted/children.rs`). The user's deny
+  rules still win. A child starts and works its task with nothing to answer:
+  nobody is at its terminal, so its adapter launches it with nothing a person
+  must answer before its first turn, without writing the agent's config (for
+  Claude Code `--strict-mcp-config` beside its own `--mcp-config`, so it loads
+  only the servers its launch gives it and no project `.mcp.json` asks to be
+  approved; a session a person starts still loads the project's). One
+  of the limits is the heavy limit (`agentHeavyPerHost`, 1 to 8, default 1): the
   running agent-started sessions whose row says `child_class` heavy are
   counted, and a start or a resume of a heavy-role child is refused when they
   reach it, naming the limit and each holder by its name and the session that
@@ -447,8 +458,11 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   its children said meanwhile. There are five events: a report
   (`agents_report`: done, stuck or note, text at most 4,000 characters, a
   longer answer goes in a file whose path is reported), needs you (a
-  permission prompt, a question or a sign-in), turn ended (a turn that ended
-  idle with no report; a turn that ended with one is only the report), ended
+  permission prompt, a question or a sign-in, or a child that has not begun
+  its first turn a minute after its launch, saying it has not started its
+  task: a prompt it cannot skip, such as folder trust, waits for a person;
+  `hosted/children/startup.rs`, its minute on Tokio's clock), turn ended (a
+  turn that ended idle with no report; a turn that ended with one is only the report), ended
   (the exit code, or stopped by the parent, a person or Floti) and error (a
   launch that failed, or an error the program reports; the message is cut to
   200 characters). No event carries any of a child's conversation beyond a
@@ -508,7 +522,7 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   resumed parent included; anything else is not found), in the folder or
   worktree its row recorded, through its backend's `Resumer` with the task as
   the conversation's next turn (`ResumeRequest.prompt`) and its role composed
-  again, its permission capped by the caller's. It keeps its name, parent
+  again, its permission mode decided as a start's is. It keeps its name, parent
   link, `outlive` and `can_start`, so a resume that also names a role,
   backend, folder, profile, worktree or name is refused. Also refused, with
   nothing started: a child still running, a folder or worktree gone or no

@@ -515,14 +515,21 @@ impl StatusSource for ClaudeCodeBackend {
 }
 
 impl ClaudeCodeBackend {
-    /// A launch's tool arguments: one `--mcp-config` file in the launch
-    /// folder naming each family with the session's bearer token; one
-    /// `--allowedTools` holding what each family allows up front (its
-    /// read-only tools and its named shell commands) and the role's allowed
-    /// tools; then `--disallowedTools` holding the role's disallowed tools.
-    /// Each flag is left out when it would hold nothing. All three are
-    /// variadic, so they come in that order before the next flag (see
-    /// `argv`), and no rule is passed for a server the file does not name.
+    /// A launch's tool arguments: `--strict-mcp-config` for an unattended
+    /// launch; one `--mcp-config` file in the launch folder naming each
+    /// family with the session's bearer token; one `--allowedTools` holding
+    /// what each family allows up front (its read-only tools and its named
+    /// shell commands) and the role's allowed tools; then `--disallowedTools`
+    /// holding the role's disallowed tools. Each flag is left out when it
+    /// would hold nothing. The last three are variadic, so they come in that
+    /// order before the next flag (see `argv`), and no rule is passed for a
+    /// server the file does not name.
+    ///
+    /// `--strict-mcp-config` makes the session load the servers its
+    /// `--mcp-config` names and no others: not the project's `.mcp.json`,
+    /// whose servers Claude Code asks a person to approve once per folder
+    /// before the first turn, and every agent worktree is a new folder. A
+    /// session a person starts keeps loading the project's servers.
     fn tool_arguments(
         &self,
         composition: &Composition,
@@ -530,6 +537,9 @@ impl ClaudeCodeBackend {
     ) -> Result<Registration> {
         let servers = &composition.agent_tools;
         let mut args: Vec<OsString> = Vec::new();
+        if composition.unattended {
+            args.push("--strict-mcp-config".into());
+        }
         if !servers.is_empty() {
             let mut document = serde_json::Map::new();
             for server in servers {

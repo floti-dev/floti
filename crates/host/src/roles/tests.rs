@@ -436,7 +436,7 @@ fn shipped(name: &str) -> Role {
 #[test]
 fn the_reviewer_reads_and_reports_without_editing() {
     let role = shipped("reviewer");
-    assert_eq!(role.permission, Some(PermissionMode::Plan));
+    assert_eq!(role.permission, Some(PermissionMode::Auto));
     assert!(!role.can_start && !role.worktree);
     assert_eq!(role.class, RoleClass::Light);
     assert_eq!(role.disallowed_tools, ["Edit", "Write", "NotebookEdit"]);
@@ -451,7 +451,7 @@ fn the_reviewer_reads_and_reports_without_editing() {
 #[test]
 fn the_worker_edits_in_a_worktree_of_its_own_and_cannot_start_agents_or_create_items() {
     let role = shipped("worker");
-    assert_eq!(role.permission, Some(PermissionMode::AcceptEdits));
+    assert_eq!(role.permission, Some(PermissionMode::Auto));
     assert!(role.worktree && !role.can_start);
     assert_eq!(role.class, RoleClass::Light);
     assert_eq!(role.disallowed_tools, ["mcp__helm-plugin-trackr__create"]);
@@ -470,7 +470,7 @@ fn the_lead_starts_agents_does_not_edit_and_keeps_trackr_in_a_voice() {
     let role = shipped("lead");
     assert!(role.can_start && !role.worktree);
     assert_eq!(role.class, RoleClass::Light);
-    assert_eq!(role.permission, None);
+    assert_eq!(role.permission, Some(PermissionMode::Auto));
     assert_eq!(role.disallowed_tools, ["Edit", "Write", "NotebookEdit"]);
     for section in ["## Keeping Trackr", "## Voice"] {
         assert!(role.instructions.contains(section), "{section}");

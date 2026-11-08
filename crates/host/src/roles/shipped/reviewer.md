@@ -5,7 +5,7 @@ model:
   claude-code: opus
 effort:
   claude-code: high
-permission: plan
+permission: auto
 class: light
 worktree: no
 can_start: no

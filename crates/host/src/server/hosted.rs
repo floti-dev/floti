@@ -63,7 +63,7 @@ use children::Children;
 pub(crate) use children::{
     ChildEntry, ChildRead, ChildStopped, ChildrenListed, Closing, ReadChild, RoleEntry,
     RolesListed, RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest, Waited,
-    end_children_at_exit, off_runtime,
+    after_each_launch, end_children_at_exit, off_runtime,
 };
 #[cfg(test)]
 pub(crate) use children::{EventKind, Facts, News};
@@ -1239,6 +1239,9 @@ impl Hosted {
             }
             role_warning = warning;
         }
+        // An agent's child is launched as one again: with only the servers
+        // its launch gives it.
+        composition.unattended = row.role.is_some();
         let mut launched = self.run(
             Plan {
                 backend,
@@ -1442,6 +1445,8 @@ fn composition_of(profile: Option<&Profile>) -> Composition {
         title_guide: false,
         // Named in `run`, where the session's name is made unique.
         remote_control: None,
+        // A session a person starts has a person at it.
+        unattended: false,
     }
 }
 
