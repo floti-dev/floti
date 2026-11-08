@@ -1617,21 +1617,13 @@ createServer((request, response) => response.end('ok'))
   .listen(Number(process.env.HELM_SERVICE_PORT), '127.0.0.1')
 ";
 
-/// The Node running these tests: the first `node` on `PATH`.
-fn node_on_path() -> PathBuf {
-    let path = std::env::var_os("PATH").expect("PATH is set");
-    std::env::split_paths(&path)
-        .flat_map(|dir| [dir.join("node.exe"), dir.join("node")])
-        .find(|candidate| candidate.is_file())
-        .expect("the tests run with Node on PATH")
-}
-
 /// A host that is killed takes a plugin's service with it, as a stop does:
 /// the service, run on the Node `FLOTI_NODE` names, and what it started.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_killed_floti_host_takes_a_plugins_service_run_on_the_node_floti_node_names_with_it() {
     let dirs = TestDirs::new();
-    let mut host = HostProcess::spawn(floti_host_command(&dirs).env(NODE_VAR, node_on_path()));
+    let mut host =
+        HostProcess::spawn(floti_host_command(&dirs).env(NODE_VAR, floti_host::testkit::node()));
     let mut client = TestClient::connect(&binary_endpoint(&dirs), &[]).await;
     let manifest = json!({
         "apiVersion": 2,
@@ -1983,7 +1975,7 @@ fn resolved(path: &Path) -> PathBuf {
 fn todays_backends(dirs: &TestDirs, endpoint: &Endpoint, claude_config: &Path) -> HostConfig {
     let claude = ClaudeCodeSettings {
         search_first: Vec::new(),
-        program: "node".into(),
+        program: floti_host::testkit::node().into(),
         leading_args: vec![fake_claude().into_os_string()],
         config_dir: claude_config.to_path_buf(),
         pass_config_dir: true,

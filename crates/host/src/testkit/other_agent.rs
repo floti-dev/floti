@@ -261,15 +261,12 @@ impl OtherAgentBackend {
     /// The program a launch runs and what comes before the agent's own
     /// arguments.
     fn command(&self) -> (OsString, Vec<OsString>) {
-        let program = if self.program_exists {
-            "node"
+        let program: OsString = if self.program_exists {
+            super::node().into()
         } else {
-            "floti-test-program-that-is-not-installed"
+            "floti-test-program-that-is-not-installed".into()
         };
-        (
-            program.into(),
-            vec![self.agent.script.clone().into_os_string()],
-        )
+        (program, vec![self.agent.script.clone().into_os_string()])
     }
 
     fn spec(
@@ -592,7 +589,7 @@ mod tests {
 
         /// The agent's own arguments in a launch, after the script.
         fn args(&self, launch: &Launch) -> Vec<String> {
-            assert_eq!(launch.spec.program, OsString::from("node"));
+            assert_eq!(launch.spec.program, OsString::from(crate::testkit::node()));
             launch.spec.args[1..]
                 .iter()
                 .map(|arg| arg.to_string_lossy().into_owned())
@@ -1113,7 +1110,7 @@ mod tests {
         // so a failure here leaves it nothing to wait for.
         let test_pid = std::process::id();
         let mut owner = Kill(
-            Command::new("node")
+            Command::new(crate::testkit::node())
                 .arg("-e")
                 .arg(format!(
                     "setInterval(() => {{ try {{ process.kill({test_pid}, 0) }} \

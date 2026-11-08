@@ -31,10 +31,19 @@ impl ProgramLauncher for Native {
     }
 
     #[cfg(any(test, feature = "testkit"))]
-    fn write_wrapper_script(&self, folder: &Path, name: &str, program: &Path) -> String {
-        let quoted = program.display().to_string().replace('\'', r"'\''");
+    fn write_wrapper_script(
+        &self,
+        folder: &Path,
+        name: &str,
+        program: &Path,
+        leading: &[&Path],
+    ) -> String {
+        let words: String = std::iter::once(program)
+            .chain(leading.iter().copied())
+            .map(|word| format!("'{}' ", word.display().to_string().replace('\'', r"'\''")))
+            .collect();
         let path = folder.join(name);
-        std::fs::write(&path, format!("#!/bin/sh\nexec '{quoted}' \"$@\"\n"))
+        std::fs::write(&path, format!("#!/bin/sh\nexec {words}\"$@\"\n"))
             .expect("write a shell script");
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
             .expect("make the script runnable");

@@ -140,7 +140,7 @@ impl World {
         let config = real(&dirs.folder("claude config"));
         let mut settings = ClaudeCodeSettings {
             search_first: Vec::new(),
-            program: "node".into(),
+            program: crate::testkit::node().into(),
             leading_args: vec![fake_claude().into_os_string()],
             config_dir: config.clone(),
             pass_config_dir: true,
@@ -1830,7 +1830,7 @@ fn a_resume_gets_the_settings_file_too() {
 // ---------------------------------------------------------------------------
 
 fn fake_version(world: &World, asked: &str) -> String {
-    let output = Command::new("node")
+    let output = Command::new(crate::testkit::node())
         .arg(fake_claude())
         .arg("--version")
         .env("FAKE_AGENT_VERSION", asked)
@@ -2772,7 +2772,7 @@ fn claude_code_takes_every_part_of_a_harness_and_its_launch_names_nothing_it_cou
 /// Runs the fake in `cwd` with `args` and nothing typed.
 fn run_fake(world: &World, cwd: &Path, args: &[&str]) -> (Output, Value) {
     let spec = LaunchSpec {
-        program: "node".into(),
+        program: crate::testkit::node().into(),
         args: std::iter::once(fake_claude().into_os_string())
             .chain(args.iter().map(OsString::from))
             .collect(),
@@ -2827,7 +2827,7 @@ fn the_fake_fails_as_the_cli_does_on_a_missing_file_and_reads_variadic_lists_as_
     assert_eq!(log["openingPrompt"], "hello");
 
     // An option the CLI does not know is the CLI's error, not a pass.
-    let output = Command::new("node")
+    let output = Command::new(crate::testkit::node())
         .arg(fake_claude())
         .arg("--no-such-option")
         .env("CLAUDE_CONFIG_DIR", &world.config)

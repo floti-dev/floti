@@ -378,7 +378,7 @@ async fn a_program_on_path_and_a_script_inside_the_plugin_folder_a_batch_file_on
  {
     let world = World::new();
     let scripts = world.dirs.folder("plugin wrapped");
-    let script = launcher::Native.write_wrapper_script(&scripts, "wrapped", &fake_program());
+    let script = launcher::Native.write_wrapper_script(&scripts, "wrapped", &fake_program(), &[]);
     world.plugin(
         "wrapped",
         &json!({
@@ -446,7 +446,7 @@ async fn an_undeclared_name_a_missing_program_a_path_leaving_the_folder_or_argum
     let world = World::new();
     let outside = world.dirs.folder("not the plugin");
     let outside_script =
-        launcher::Native.write_wrapper_script(&outside, "outside", &fake_program());
+        launcher::Native.write_wrapper_script(&outside, "outside", &fake_program(), &[]);
     let marker = world.dirs.root().join("started.json");
     let marker_text = text(&marker);
     world.plugin(

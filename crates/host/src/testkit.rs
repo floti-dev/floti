@@ -10,6 +10,8 @@
 //!   (`floti-fake-agent`, in `testkit/fake_agent.rs`), its records and a
 //!   backend that runs it. Integration tests get one with
 //!   [`fake_agent!`](crate::fake_agent).
+//! - [`node`]: the Node every fake agent and Node script a test starts runs
+//!   on, by absolute path, never a bare `node`.
 //! - [`OtherAgent`] and [`OtherAgentBackend`]: a second fake agent
 //!   (`test/fake-agents/other-agent.mjs`, under Node) shaped unlike Claude
 //!   Code, its run records and a backend (`other-agent`) that runs it, for a
@@ -35,12 +37,14 @@
 //! fake running.
 
 mod client;
+mod node;
 mod other_agent;
 #[path = "../testkit/owner.rs"]
 pub mod owner;
 mod process;
 
 pub use client::{PATIENCE, TestClient, names_unserved_channel};
+pub use node::node;
 pub use other_agent::{
     OTHER_AGENT_HOME_VAR, OtherAgent, OtherAgentBackend, OtherAgentRecord, OtherAgentServer,
     Pasted, ShellRun,

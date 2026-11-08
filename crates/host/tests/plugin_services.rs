@@ -77,15 +77,6 @@ if (process.env.SILENT === '1') {
 }
 ";
 
-/// The Node running these tests: the first `node` on `PATH`.
-fn node_on_path() -> PathBuf {
-    let path = std::env::var_os("PATH").expect("PATH is set");
-    std::env::split_paths(&path)
-        .flat_map(|dir| [dir.join("node.exe"), dir.join("node")])
-        .find(|candidate| candidate.is_file())
-        .expect("the tests run with Node on PATH")
-}
-
 struct World {
     registry: Registry,
     logs: Arc<Mutex<Vec<String>>>,
@@ -100,7 +91,7 @@ impl World {
         let store = Arc::new(Mutex::new(Store::open(&dirs.data).unwrap()));
         let logs = Arc::new(Mutex::new(Vec::new()));
         let services = Arc::new(ProcessServices::new(ServicesConfig {
-            node: Some(node_on_path()),
+            node: Some(floti_host::testkit::node().to_path_buf()),
             secrets: Arc::new(NoSecrets),
             launcher: Arc::new(ProcessLauncher),
             // The host's own variables, as a host started by the app has
@@ -434,7 +425,7 @@ async fn s6_the_token_is_in_no_log_line_and_not_in_the_plugin_list() {
 #[tokio::test(flavor = "multi_thread")]
 async fn s8_a_command_service_runs_its_program_under_the_same_port_token_and_stop_rules() {
     let world = World::new();
-    let node = text(&node_on_path());
+    let node = text(floti_host::testkit::node());
     let folder = world.plugin(
         "program",
         json!({ "command": node, "args": ["service.mjs"], "env": { "GREETING": "from a program" } }),

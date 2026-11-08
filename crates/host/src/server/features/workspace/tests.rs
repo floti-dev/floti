@@ -19,7 +19,6 @@ use tokio::sync::broadcast;
 use super::super::{Caller, Features};
 use crate::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
 use crate::agent::{AgentBackend, VersionCheck};
-use crate::platform::launcher::{self, ProgramLauncher};
 use crate::platform::process_tree;
 use crate::server::events::{Publication, Start};
 use crate::server::hosted::Hosted;
@@ -51,7 +50,7 @@ impl World {
         let dirs = TestDirs::new();
         let claude = Arc::new(ClaudeCodeBackend::new(
             ClaudeCodeSettings {
-                program: "node".into(),
+                program: crate::testkit::node().into(),
                 leading_args: vec![fake_claude().into_os_string()],
                 config_dir: dirs.home.join(".claude"),
                 pass_config_dir: true,
@@ -132,9 +131,7 @@ fn heard(listener: &mut broadcast::Receiver<Publication>) -> Vec<HostSettings> {
 }
 
 fn node() -> PathBuf {
-    launcher::Native
-        .find("node".as_ref())
-        .expect("node is on PATH, as the fake claude needs")
+    crate::testkit::node().to_path_buf()
 }
 
 #[tokio::test]

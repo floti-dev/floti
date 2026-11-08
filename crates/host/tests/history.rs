@@ -1348,7 +1348,7 @@ impl Claude {
         let backend = ClaudeCodeBackend::new(
             ClaudeCodeSettings {
                 search_first: Vec::new(),
-                program: "node".into(),
+                program: floti_host::testkit::node().into(),
                 leading_args: vec![script.into_os_string()],
                 config_dir: self.config.clone(),
                 pass_config_dir: true,

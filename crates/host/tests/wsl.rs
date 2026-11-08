@@ -41,15 +41,6 @@ fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
 }
 
-/// The Node running these tests: the first `node` on `PATH`.
-fn node_on_path() -> PathBuf {
-    let path = std::env::var_os("PATH").expect("PATH is set");
-    std::env::split_paths(&path)
-        .flat_map(|dir| [dir.join("node.exe"), dir.join("node")])
-        .find(|candidate| candidate.is_file())
-        .expect("the tests run with Node on PATH")
-}
-
 /// The JSON-lines file the fakes record each run in.
 fn transport_log(dirs: &TestDirs) -> PathBuf {
     dirs.root().join("transport runs.jsonl")
@@ -70,7 +61,7 @@ fn wsl_runs(dirs: &TestDirs) -> Vec<Value> {
 fn fake_wsl(windows: &TestDirs, distro: &TestDirs) -> WslProgram {
     let var = |name: &str, value: &Path| (OsString::from(name), value.as_os_str().to_owned());
     WslProgram {
-        program: node_on_path().into_os_string(),
+        program: floti_host::testkit::node().to_path_buf().into_os_string(),
         args: vec![
             repo_root()
                 .join("test")

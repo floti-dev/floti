@@ -13,10 +13,13 @@ use std::time::{Duration, Instant};
 use floti_host::agent::AgentBackend;
 use floti_host::agent::claude_code::ClaudeCodeSettings;
 use floti_host::fake_agent;
+use floti_host::platform::launcher::{self, ProgramLauncher};
 use floti_host::platform::process_tree::{Native as NativeTree, ProcessTree};
 use floti_host::platform::socket::Endpoint;
 use floti_host::server::HostConfig;
-use floti_host::testkit::{FakeAgent, PATIENCE, RunningHost, TestClient, TestDirs};
+use floti_host::testkit::{
+    FAKE_AGENT_LOG_VAR, FakeAgent, PATIENCE, RunningHost, TestClient, TestDirs,
+};
 use floti_protocol::channel::EventChannel;
 use floti_protocol::channel::from_payload;
 use floti_protocol::channels::common::{EndedBy, PermissionMode, SessionRecord, SessionStatus};
@@ -30,6 +33,7 @@ use floti_protocol::channels::sessions::{
     SessionFocus, SessionFocusRequest, SessionLaunch, SessionList, SessionNotify, SessionRename,
     SessionStart, SessionsOverview, StartSessionRequest,
 };
+use floti_protocol::channels::workspace::{HostSettingsPatch, ReadSetupStatus, WriteSettings};
 use floti_protocol::{BackendId, Knowable, Message};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -94,7 +98,7 @@ fn text(path: &Path) -> String {
 fn todays_backends(dirs: &TestDirs, endpoint: &Endpoint, claude_config: &Path) -> HostConfig {
     let claude = ClaudeCodeSettings {
         search_first: Vec::new(),
-        program: "node".into(),
+        program: floti_host::testkit::node().into(),
         leading_args: vec![fake_claude().into_os_string()],
         config_dir: claude_config.to_path_buf(),
         pass_config_dir: true,
@@ -706,6 +710,141 @@ async fn the_launchers_resume_runs_in_the_folder_history_recorded_not_the_one_pi
     assert_eq!(Path::new(&launched.session.cwd), project);
     let run = world.run(|argv| flag(argv, "--resume") == Some(CONVERSATION));
     assert_resumed(&run, &project);
+    host.stop(HostStopReason::Stop).await;
+}
+
+// ---------------------------------------------------------------------------
+// The program a backend runs
+// ---------------------------------------------------------------------------
+
+/// The name the decoys go by: one no machine has, so nothing but a decoy
+/// answers to it.
+const DECOY: &str = "floti-decoy-claude";
+
+/// A program named [`DECOY`] in `folder`: a copy of the fake agent, which
+/// records each run in the folder `FLOTI_FAKE_AGENT_LOG` names.
+fn write_decoy(folder: &Path) -> PathBuf {
+    let decoy = folder.join(format!("{DECOY}{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(env!("CARGO_BIN_EXE_floti-fake-agent"), &decoy).unwrap();
+    decoy
+}
+
+/// How many runs the decoys recorded in `marks`.
+fn decoy_runs(marks: &Path) -> usize {
+    std::fs::read_dir(marks).map_or(0, |entries| {
+        entries
+            .filter_map(Result::ok)
+            .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "json"))
+            .count()
+    })
+}
+
+/// A program chosen for a backend (`backendPaths`) is started as given. With
+/// decoys of the backend's program in the user's program folder, which
+/// discovery looks in first, and first on the sessions' `PATH`, where a
+/// launch by name finds one, a start and a resume from history run the
+/// chosen program, and no decoy runs. Claude Code is the backend whose
+/// program can be chosen.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chosen_program_is_started_as_given_never_one_in_the_users_program_folder_or_on_path() {
+    let world = ClaudeWorld::new();
+    let marks = world.folder("decoy runs");
+    let local_bin = world.dirs.home.join(".local").join("bin");
+    std::fs::create_dir_all(&local_bin).unwrap();
+    let in_local_bin = write_decoy(&local_bin);
+    let on_path = world.folder("first on path");
+    write_decoy(&on_path);
+    let chosen_folder = world.folder("the chosen claude");
+    let chosen = chosen_folder.join(launcher::Native.write_wrapper_script(
+        &chosen_folder,
+        "claude",
+        floti_host::testkit::node(),
+        &[&fake_claude()],
+    ));
+    let resumed_in = world.folder("the export");
+    world.history(CONVERSATION, &resumed_in);
+
+    let path = std::env::join_paths(
+        std::iter::once(on_path.clone()).chain(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )),
+    )
+    .unwrap();
+    let claude = ClaudeCodeSettings {
+        program: DECOY.into(),
+        leading_args: Vec::new(),
+        config_dir: world.config.clone(),
+        pass_config_dir: true,
+        api_key_set: false,
+        search_first: vec![local_bin.clone()],
+    };
+    let host = RunningHost::start(HostConfig {
+        run: Default::default(),
+        folders: world.dirs.folders(),
+        endpoint: world.endpoint.clone(),
+        backends: floti_host::server::backends(&world.dirs.user_env(), Some(claude)),
+        inherited_env: std::env::vars_os()
+            .filter(|(key, _)| !key.eq_ignore_ascii_case("PATH"))
+            .chain([
+                (OsString::from("PATH"), path),
+                (OsString::from(FAKE_AGENT_LOG_VAR), marks.clone().into()),
+            ])
+            .collect(),
+    });
+    let mut client = world.client().await;
+    world.indexed(CONVERSATION).await;
+
+    // Unchosen, discovery finds the decoy in the user's program folder, and a
+    // launch by name runs the one on the sessions' PATH.
+    let status = client.request::<ReadSetupStatus>(&()).await.unwrap();
+    assert_eq!(
+        status.backends[&BackendId::claude_code()].path.as_deref(),
+        Some(text(&in_local_bin).as_str())
+    );
+    client
+        .request::<SessionStart>(&StartSessionRequest {
+            backend: Some(BackendId::claude_code()),
+            ..start_request(&world.folder("unchosen"))
+        })
+        .await
+        .expect("a start by name");
+    let deadline = Instant::now() + PATIENCE;
+    while decoy_runs(&marks) == 0 {
+        if Instant::now() >= deadline {
+            let listed = client.request::<SessionList>(&()).await;
+            panic!("the decoy on PATH never ran: {listed:#?}");
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    client
+        .request::<WriteSettings>(&HostSettingsPatch {
+            backend_paths: Some([(BackendId::claude_code(), text(&chosen))].into()),
+            ..HostSettingsPatch::default()
+        })
+        .await
+        .expect("choose the program");
+    let started_in = world.folder("chosen");
+    client
+        .request::<SessionStart>(&StartSessionRequest {
+            backend: Some(BackendId::claude_code()),
+            ..start_request(&started_in)
+        })
+        .await
+        .expect("a start with the program chosen");
+    assert_eq!(world.run_in(&started_in)["exitCode"], Value::Null);
+    client
+        .request::<HistoryResume>(&ResumeSessionRequest {
+            session_id: CONVERSATION.into(),
+            cols: 80,
+            rows: 24,
+        })
+        .await
+        .expect("a resume with the program chosen");
+    let run = world.run(|argv| flag(argv, "--resume") == Some(CONVERSATION));
+    assert_resumed(&run, &resumed_in);
+
+    assert_eq!(decoy_runs(&marks), 1, "only the unchosen start ran a decoy");
     host.stop(HostStopReason::Stop).await;
 }
 

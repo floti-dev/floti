@@ -30,7 +30,13 @@ impl ProgramLauncher for Native {
     }
 
     #[cfg(any(test, feature = "testkit"))]
-    fn write_wrapper_script(&self, folder: &Path, name: &str, program: &Path) -> String {
-        unix::Native.write_wrapper_script(folder, name, program)
+    fn write_wrapper_script(
+        &self,
+        folder: &Path,
+        name: &str,
+        program: &Path,
+        leading: &[&Path],
+    ) -> String {
+        unix::Native.write_wrapper_script(folder, name, program, leading)
     }
 }

@@ -616,15 +616,6 @@ async fn an_edited_page_file_reads_the_folder_again_and_is_served_at_the_new_rev
 
 // Service output
 
-/// The Node running these tests: the first `node` on `PATH`.
-fn node_on_path() -> PathBuf {
-    let path = std::env::var_os("PATH").expect("PATH is set");
-    std::env::split_paths(&path)
-        .flat_map(|dir| [dir.join("node.exe"), dir.join("node")])
-        .find(|candidate| candidate.is_file())
-        .expect("the tests run with Node on PATH")
-}
-
 /// A service that says it started and what its token is, writes the token
 /// beside itself for the test to look for, and listens until the test
 /// process is gone.
@@ -644,7 +635,11 @@ createServer((request, response) => response.end('ok'))
 #[tokio::test(flavor = "multi_thread")]
 async fn what_a_service_run_on_the_node_it_was_handed_prints_reaches_its_plugins_log_without_its_token()
  {
-    let mut world = HostWorld::start_with(TestDirs::new(), Some(node_on_path())).await;
+    let mut world = HostWorld::start_with(
+        TestDirs::new(),
+        Some(floti_host::testkit::node().to_path_buf()),
+    )
+    .await;
     let folder = world.dirs.plugin_folder(
         "talking plugin",
         r#"{ "apiVersion": 1, "id": "talker", "name": "Talker",

@@ -63,7 +63,7 @@ impl World {
         let backend = Arc::new(ClaudeCodeBackend::new(
             ClaudeCodeSettings {
                 search_first: Vec::new(),
-                program: "node".into(),
+                program: floti_host::testkit::node().into(),
                 leading_args: vec![fake_claude().into_os_string()],
                 config_dir: claude.clone(),
                 pass_config_dir: true,
@@ -761,7 +761,7 @@ const CHANGES: u64 = 9;
 async fn host_over(dirs: &TestDirs, endpoint: &Endpoint, claude: &Path) -> RunningHost {
     let settings = ClaudeCodeSettings {
         search_first: Vec::new(),
-        program: "node".into(),
+        program: floti_host::testkit::node().into(),
         leading_args: vec![fake_claude().into_os_string()],
         config_dir: claude.to_path_buf(),
         pass_config_dir: true,
@@ -1323,7 +1323,7 @@ mod over_the_protocol {
                     &dirs.user_env(),
                     Some(ClaudeCodeSettings {
                         search_first: Vec::new(),
-                        program: "node".into(),
+                        program: floti_host::testkit::node().into(),
                         leading_args: vec![fake_claude().into_os_string()],
                         config_dir: claude.to_path_buf(),
                         pass_config_dir: true,

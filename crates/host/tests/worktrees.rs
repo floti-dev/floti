@@ -84,7 +84,7 @@ impl World {
     fn config(&self) -> HostConfig {
         let claude = ClaudeCodeSettings {
             search_first: Vec::new(),
-            program: "node".into(),
+            program: floti_host::testkit::node().into(),
             leading_args: vec![fake_claude().into_os_string()],
             config_dir: self.claude.clone(),
             pass_config_dir: true,

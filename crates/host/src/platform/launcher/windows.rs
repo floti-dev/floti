@@ -38,9 +38,19 @@ impl ProgramLauncher for Native {
     }
 
     #[cfg(any(test, feature = "testkit"))]
-    fn write_wrapper_script(&self, folder: &Path, name: &str, program: &Path) -> String {
+    fn write_wrapper_script(
+        &self,
+        folder: &Path,
+        name: &str,
+        program: &Path,
+        leading: &[&Path],
+    ) -> String {
         let file = format!("{name}.cmd");
-        let script = format!("@\"{}\" %*\r\n", program.display());
+        let words: String = std::iter::once(program)
+            .chain(leading.iter().copied())
+            .map(|word| format!("\"{}\" ", word.display()))
+            .collect();
+        let script = format!("@{words}%*\r\n");
         std::fs::write(folder.join(&file), script).expect("write a batch file");
         file
     }

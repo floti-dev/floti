@@ -1920,7 +1920,7 @@ fn fake_claude() -> PathBuf {
 fn wire_config(dirs: &TestDirs, endpoint: &Endpoint) -> HostConfig {
     let claude = ClaudeCodeSettings {
         search_first: Vec::new(),
-        program: "node".into(),
+        program: floti_host::testkit::node().into(),
         leading_args: vec![fake_claude().into_os_string()],
         config_dir: dirs.home.join(".claude"),
         pass_config_dir: true,

@@ -138,15 +138,6 @@ fn fake_transport(file: &str) -> PathBuf {
     repo_root().join("test").join("fake-ssh").join(file)
 }
 
-/// The Node running these tests: the first `node` on `PATH`.
-fn node_on_path() -> PathBuf {
-    let path = std::env::var_os("PATH").expect("PATH is set");
-    std::env::split_paths(&path)
-        .flat_map(|dir| [dir.join("node.exe"), dir.join("node")])
-        .find(|candidate| candidate.is_file())
-        .expect("the tests run with Node on PATH")
-}
-
 /// The JSON-lines file the fake transports record each run in.
 fn transport_log(dirs: &TestDirs) -> PathBuf {
     dirs.root().join("transport runs.jsonl")
@@ -195,7 +186,10 @@ fn floti_command(dirs: &TestDirs, runtime: &Path) -> Command {
 /// The transport ssh is: `node ssh.mjs -o BatchMode=yes <TARGET>`.
 fn ssh_transport() -> Vec<String> {
     vec![
-        node_on_path().to_string_lossy().into_owned(),
+        floti_host::testkit::node()
+            .to_path_buf()
+            .to_string_lossy()
+            .into_owned(),
         fake_transport("ssh.mjs").to_string_lossy().into_owned(),
         "-o".to_owned(),
         "BatchMode=yes".to_owned(),
@@ -207,7 +201,10 @@ fn ssh_transport() -> Vec<String> {
 /// space in it, which a shell would split.
 fn custom_transport() -> Vec<String> {
     vec![
-        node_on_path().to_string_lossy().into_owned(),
+        floti_host::testkit::node()
+            .to_path_buf()
+            .to_string_lossy()
+            .into_owned(),
         fake_transport("carry.mjs").to_string_lossy().into_owned(),
         "--via".to_owned(),
         "a pipe".to_owned(),
@@ -1907,7 +1904,10 @@ fn knowing(mut command: Command, distros: &str) -> Command {
 /// `node wsl.mjs -d <DISTRO> --`: this PC's wsl.exe.
 fn wsl_transport() -> Vec<String> {
     vec![
-        node_on_path().to_string_lossy().into_owned(),
+        floti_host::testkit::node()
+            .to_path_buf()
+            .to_string_lossy()
+            .into_owned(),
         fake_transport("wsl.mjs").to_string_lossy().into_owned(),
         "-d".to_owned(),
         DISTRO.to_owned(),

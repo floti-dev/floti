@@ -125,7 +125,7 @@ impl World {
     fn config_with(&self, extra: Vec<Arc<dyn AgentBackend>>) -> HostConfig {
         let claude = ClaudeCodeSettings {
             search_first: Vec::new(),
-            program: "node".into(),
+            program: floti_host::testkit::node().into(),
             leading_args: vec![fake_claude().into_os_string()],
             config_dir: self.claude.clone(),
             pass_config_dir: true,
@@ -4338,7 +4338,8 @@ fn record_file(world: &World, name: &str) -> PathBuf {
 /// the `--`, then the script with `options`.
 fn run_script(before: &str, script: &Path, options: &str) -> String {
     format!(
-        "floti agent run {before} -- node \"{}\" {options}",
+        "floti agent run {before} -- \"{}\" \"{}\" {options}",
+        text(floti_host::testkit::node()),
         text(script)
     )
 }
@@ -4588,7 +4589,7 @@ const CRASH_CODE: &str = "-1073741819";
 /// (3221225477), and macOS and Linux keep the low 8 bits (5). The unit tests
 /// prove the wrapping of a code above i32 on every OS.
 fn crash_codes() -> (String, i32) {
-    let status = std::process::Command::new("node")
+    let status = std::process::Command::new(floti_host::testkit::node())
         .args(["-e", &format!("process.exit({CRASH_CODE})")])
         .status()
         .expect("run node");
@@ -4771,7 +4772,7 @@ async fn run_wait_returns_the_name_exit_code_and_lines_and_exits_with_the_comman
         let outcome = subcommand(
             Subcommand::Run(RunCommand {
                 command: vec![
-                    "node".to_owned(),
+                    text(floti_host::testkit::node()),
                     text(&script),
                     "--code".to_owned(),
                     "4".to_owned(),

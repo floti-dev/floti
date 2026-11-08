@@ -61,7 +61,8 @@ fn a_batch_file_gets_each_argument_unchanged() {
     std::fs::write(
         &script,
         format!(
-            "@node -e \"require('fs').writeFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)))\" \"{}\" %*\r\n",
+            "@\"{}\" -e \"require('fs').writeFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)))\" \"{}\" %*\r\n",
+            crate::testkit::node().display(),
             out.display()
         ),
     )

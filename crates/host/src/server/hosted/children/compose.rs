@@ -106,7 +106,7 @@ mod tests {
     fn claude(dirs: &TestDirs) -> ClaudeCodeBackend {
         ClaudeCodeBackend::new(
             ClaudeCodeSettings {
-                program: "node".into(),
+                program: crate::testkit::node().into(),
                 leading_args: Vec::new(),
                 config_dir: dirs.home.join(".claude"),
                 pass_config_dir: true,

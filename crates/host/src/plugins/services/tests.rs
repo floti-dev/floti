@@ -574,7 +574,7 @@ async fn s6_the_token_is_in_no_log_line_status_error_or_debug_print() {
     said.push(format!("{:?}", service.ensure().await.unwrap_err()));
     let command = ServiceCommand {
         program: crate::platform::launcher::Program {
-            program: "node".into(),
+            program: crate::testkit::node().into(),
             args: Vec::new(),
             env: Vec::new(),
         },

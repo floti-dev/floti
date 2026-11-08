@@ -78,7 +78,7 @@ struct Run {
 impl Run {
     fn start(fake: &'static Fake, dirs: &TestDirs) -> Self {
         let home = dirs.folder(&format!("{} home", fake.name));
-        let mut child = Command::new("node")
+        let mut child = Command::new(floti_host::testkit::node())
             .arg(script(fake.script))
             .current_dir(dirs.folder("work"))
             .env_remove("FAKE_AGENT_VERSION")

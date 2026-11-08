@@ -148,7 +148,7 @@ impl World {
     fn config(&self) -> HostConfig {
         HostConfig {
             run: HostRun {
-                node: Some(node_on_path()),
+                node: Some(floti_host::testkit::node().to_path_buf()),
                 ..HostRun::default()
             },
             folders: self.dirs.folders(),
@@ -387,15 +387,6 @@ fn allowed_in(argv: &[String]) -> Vec<String> {
         .take_while(|arg| !arg.starts_with("--"))
         .cloned()
         .collect()
-}
-
-/// The Node running these tests: the first `node` on `PATH`.
-fn node_on_path() -> PathBuf {
-    let path = std::env::var_os("PATH").expect("PATH is set");
-    std::env::split_paths(&path)
-        .flat_map(|dir| [dir.join("node.exe"), dir.join("node")])
-        .find(|candidate| candidate.is_file())
-        .expect("the tests run with Node on PATH")
 }
 
 /// `path` with links resolved, in the form a process reports its own folder

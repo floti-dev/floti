@@ -10,7 +10,6 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use floti_host::agent::claude_code::ClaudeCodeSettings;
-use floti_host::platform::launcher::{self, ProgramLauncher};
 use floti_host::platform::socket::Endpoint;
 use floti_host::platform::startup;
 use floti_host::server::{HostConfig, HostRun, backends};
@@ -37,11 +36,9 @@ fn fake_claude() -> PathBuf {
         .join("claude-code.mjs")
 }
 
-/// Node, which the fake claude runs under, as this machine finds it.
+/// Node, which the fake claude runs under.
 fn node() -> PathBuf {
-    launcher::Native
-        .find("node".as_ref())
-        .expect("node is on PATH, as the fake claude needs")
+    floti_host::testkit::node().to_path_buf()
 }
 
 /// Claude Code's config folder, in the test's home.
@@ -54,7 +51,7 @@ fn claude_config_of(dirs: &TestDirs) -> PathBuf {
 /// `/bin/sh` rather than the user's shell.
 fn config(dirs: &TestDirs, endpoint: &Endpoint) -> HostConfig {
     let claude = ClaudeCodeSettings {
-        program: "node".into(),
+        program: floti_host::testkit::node().into(),
         leading_args: vec![fake_claude().into_os_string()],
         config_dir: claude_config_of(dirs),
         pass_config_dir: true,
