@@ -42,7 +42,7 @@ pub mod title;
 #[cfg(test)]
 pub(crate) mod tests;
 
-pub use activity::{ActivityPass, ActivityTracker, HostedView};
+pub use activity::{ActivityPass, ActivityTracker, HostedView, activity_of_report};
 pub use env::{STRIPPED_ENV, TERMINAL_ENV, session_env};
 pub use ledger::{
     NewSessionRow, ParentLink, SessionId, SessionLedger, SessionOrigin, allow_starts, extra_starts,

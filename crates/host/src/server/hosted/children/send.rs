@@ -59,7 +59,7 @@ use super::queue::{self, Hold, Moment, Queued};
 use super::{not_found, off_runtime, rows};
 use crate::agent::AgentInput;
 use crate::server::hosted::Hosted;
-use crate::session::{ReportState, Session, SessionId};
+use crate::session::{ReportState, Session, SessionId, activity_of_report};
 use floti_protocol::channels::sessions::SessionActivity;
 
 /// What `agents_send` was asked: the child, the text and whether to stop the
@@ -162,10 +162,12 @@ struct Target {
 }
 
 /// A running child whose queue is being delivered: its terminal, how it
-/// takes a turn, and whether anything tells its turns.
+/// takes a turn, whether its backend keeps records of its sessions, and
+/// whether anything tells its turns.
 struct Recipient {
     session: Arc<Session>,
     input: AgentInput,
+    records: bool,
     signals: bool,
 }
 
@@ -348,10 +350,12 @@ impl Hosted {
                 .ok()
                 .and_then(|record| self.find_backend(&record.backend).cloned())?;
             let input = backend.input()?;
-            let signals = backend.status().is_some() || session.reported_status().is_some();
+            let records = backend.status().is_some();
+            let signals = records || session.reported_status().is_some();
             Some(Recipient {
                 session,
                 input,
+                records,
                 signals,
             })
         });
@@ -363,11 +367,19 @@ impl Hosted {
         };
         drop(store);
         let session = &recipient.session;
-        let activity = self.children.news.activity_of(child);
+        let reported = session.reported_status();
+        // A backend's records are read by the pass, and win over a report, as
+        // the pass has them. A program's own report is the session's as it
+        // stands, newer than any pass, so it is read here.
+        let activity = match &reported {
+            Some(status) if !recipient.records => activity_of_report(status),
+            _ => None,
+        }
+        .or_else(|| self.children.news.activity_of(child));
         let moment = Moment {
             person_typed: session.person_typed(),
             at_a_prompt: matches!(
-                session.reported_status(),
+                &reported,
                 Some(status) if status.report.state == ReportState::Blocked
             ),
             activity,

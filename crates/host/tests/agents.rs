@@ -3990,6 +3990,19 @@ async fn a_text_sent_to_a_working_child_is_queued_untyped_and_is_its_next_turn_o
         let name = format!("busy-{backend}");
         let (parent, child) = world.family(backend, &name).await;
         world.give_a_held_turn(&parent, &child, &name).await;
+        if backend == OTHER {
+            // Only its own report tells this agent's turns: the host has
+            // heard the turn begin before the send comes.
+            eventually("the host to hear the child's turn begin", async || {
+                let listed = parent.list().await.done();
+                listed["children"]
+                    .as_array()?
+                    .iter()
+                    .any(|listed| listed["name"] == name.as_str() && listed["state"] == "working")
+                    .then_some(())
+            })
+            .await;
+        }
 
         let sent = parent.send(&name, "next task\nin two lines").await.done();
         assert_eq!(sent["queued"], name.as_str(), "{backend}: {sent}");

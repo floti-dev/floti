@@ -102,6 +102,12 @@ impl Status {
     }
 }
 
+/// What a program's own report (OSC 7501) says it is doing, as a pass reads
+/// it, or `None` for a clear.
+pub fn activity_of_report(status: &ReportedStatus) -> Option<SessionActivity> {
+    Status::of_report(status).activity
+}
+
 /// What one pass found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivityPass {
