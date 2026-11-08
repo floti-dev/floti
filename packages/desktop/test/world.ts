@@ -10,6 +10,7 @@ import {
   type Profile,
   type ProfileDraft
 } from '@helm/core'
+import { writeFakeAgent } from '../../../test/fake-agents/programs.mjs'
 
 /**
  * A machine of Helm's own for one test: a home directory with its own
@@ -119,7 +120,7 @@ export function createWorld(): World {
   // Signed in as far as Helm can tell: it reads only that onboarding finished.
   writeFileSync(join(home, '.claude.json'), JSON.stringify({ hasCompletedOnboarding: true, userID: 'helm-tests' }))
 
-  const claude = writeFakeClaude(bin)
+  const claude = writeFakeAgent(bin, 'claude-code')
 
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries(process.env)) {
@@ -141,33 +142,6 @@ export function createWorld(): World {
     claude,
     env
   }
-}
-
-/**
- * The fake `claude` in `bin`, in the form an install leaves on this OS: a
- * `claude.cmd` batch shim on Windows, the way npm installs one, and an
- * executable `claude` shell script on macOS and Linux. Either runs
- * `test/fake-agents/claude-code.mjs` with this Node and hands it every
- * argument unchanged.
- */
-export function writeFakeClaude(bin: string, platform: NodeJS.Platform = process.platform): string {
-  const node = process.execPath
-  const script = join(repoRoot(), 'test', 'fake-agents', 'claude-code.mjs')
-  if (platform === 'win32') {
-    const claude = join(bin, 'claude.cmd')
-    writeFileSync(claude, ['@echo off', `"${node}" "${script}" %*`, 'exit /b %ERRORLEVEL%', ''].join('\r\n'))
-    return claude
-  }
-  const claude = join(bin, 'claude')
-  writeFileSync(claude, ['#!/bin/sh', `exec ${shellQuote(node)} ${shellQuote(script)} "$@"`, ''].join('\n'), {
-    mode: 0o755
-  })
-  return claude
-}
-
-/** One word for `sh`, whatever it holds: single quotes, with any inside closed and reopened. */
-function shellQuote(text: string): string {
-  return `'${text.replace(/'/g, `'\\''`)}'`
 }
 
 function gitProject(dir: string, branch: string): string {

@@ -8,16 +8,22 @@ description: Running Helm in development, looking at a change, and the diagnosti
 ```bash
 pnpm dev            # its own data directory; the database is a copy of the real one
 pnpm dev --fresh    # no database: the first-run state
-pnpm dev --drive    # also opens a remote debugging port for drive-dev.mjs
+pnpm dev --drive    # a remote debugging port for drive-dev.mjs, and only the fake agents
 ```
 
 - The data directory is `%LOCALAPPDATA%\Helm\dev\helm-data`, seeded each launch
   from a `VACUUM INTO` copy of the real database. Anything changed in dev,
   settings included, is gone at the next launch. A second `pnpm dev` gets
   `dev-2`.
-- `~/.claude` and `claude` are the real ones, because `CLAUDE_CONFIG_DIR` moves
-  credentials and a dev app that cannot sign in cannot host a session. Dev
-  sessions land in the real `~/.claude/history.jsonl`.
+- With `--drive`, every agent is a fake from `test/fake-agents`: each launch
+  writes them under the dev folder's `fake-agents/` and chooses them in the
+  database, and Claude Code's config folder is `fake-agents/claude`. A new
+  session, a restore, a History resume and an agent-started child all run a
+  fake, and the console names each program. `--fresh` starts that folder over.
+- Without `--drive`, `~/.claude` and `claude` are the real ones, because
+  `CLAUDE_CONFIG_DIR` moves credentials and a dev app that cannot sign in
+  cannot host a session. Those dev sessions land in the real
+  `~/.claude/history.jsonl`.
 - Templates are copied once and then left alone; `--fresh` re-copies them.
 
 `pnpm dev:live` runs against the installed app's `%APPDATA%\Helm`. Do not use it

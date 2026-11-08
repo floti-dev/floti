@@ -23,18 +23,25 @@
 //
 //   pnpm dev            isolated, seeded from a copy of the real database
 //   pnpm dev --fresh    isolated, no database at all: the first-run state
+//   pnpm dev --drive    isolated, with a debugging port and only the fake agents
 //   pnpm dev:live       today's behaviour, against the installed app's directory
 //
 // The database and the **templates** directory are seeded on opposite rules,
 // and `seedTemplates` below says why: one is a mirror nobody authors into, and
 // since M14 the other is a place a person writes. `--fresh` resets both.
 //
-// What is deliberately **not** isolated is `~/.claude`. `CLAUDE_CONFIG_DIR`
-// moves credentials too, so a dev app pointed at a fixture home cannot sign in
-// and cannot host a real session - and a dev mode that cannot launch a session
-// is not one anybody would use to look at the app. The residue is real and
-// named: dev sessions land in the real `~/.claude/history.jsonl`, and the config
-// console still writes the real settings through its snapshot path.
+// What plain `pnpm dev` deliberately does **not** isolate is `~/.claude`.
+// `CLAUDE_CONFIG_DIR` moves credentials too, so a dev app pointed at a fixture
+// home cannot sign in and cannot host a real session - and a dev mode that
+// cannot launch a session is not one anybody would use to look at the app. The
+// residue is real and named: dev sessions land in the real
+// `~/.claude/history.jsonl`, and the config console still writes the real
+// settings through its snapshot path.
+//
+// `pnpm dev --drive` is the other way round: it starts only the fake agents
+// (`drive-agents.ts`), each chosen in the dev database on every launch, with
+// Claude Code's config folder beside them, so a window an agent drives never
+// runs a real agent or writes the real `~/.claude`.
 
 import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, lstatSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
@@ -51,17 +58,17 @@ const fresh = argv.includes('--fresh')
 const driveArg = argv.find((arg) => arg === '--drive' || arg.startsWith('--drive='))
 const passthrough = argv.filter((arg) => arg !== '--fresh' && arg !== driveArg)
 
-const { dataDir, env } = isolate('dev', { seed: !fresh, concurrent: true, group: null })
+const { root, dataDir, env } = isolate('dev', { seed: !fresh, concurrent: true, group: null })
 const templates = seedTemplates(dataDir, fresh)
 
 /**
  * Chromium's remote debugging port, for `scripts/drive-dev.mjs`.
  *
  * **Off unless asked for.** An open debugging port is a door into a process
- * that can reach the real `~/.claude` and spawn real sessions, and this
- * repository's habit with doors is not to build the ones nothing needs - the
- * artifact scheme is `corsEnabled: false` for the same reason. One flag is a
- * small price for the port not existing the rest of the time.
+ * that can start sessions, and this repository's habit with doors is not to
+ * build the ones nothing needs - the artifact scheme is `corsEnabled: false`
+ * for the same reason. One flag is a small price for the port not existing the
+ * rest of the time, and the window it opens runs only the fake agents.
  *
  * `electron-vite` reads it from the environment and passes
  * `--remote-debugging-port` to the app it starts, including across a `--watch`
@@ -70,12 +77,24 @@ const templates = seedTemplates(dataDir, fresh)
 const drivePort = driveArg === undefined ? null : (driveArg.split('=')[1] ?? '9333')
 if (drivePort !== null) env.REMOTE_DEBUGGING_PORT = drivePort
 
+/**
+ * A driven window's agents: the fakes, chosen in the dev database after its
+ * copy above and before the app opens it. `drive-agents.ts` is TypeScript
+ * that writes through `@helm/core`'s own store, so it is loaded through
+ * Vite's module runner, the way Vite loads a config file.
+ */
+const drive = drivePort === null ? null : await prepareDriveAgents()
+if (drive !== null) Object.assign(env, drive.env)
+
 console.log('')
 console.log(`Helm dev is isolated: ${dataDir}`)
 console.log(`  database   ${fresh ? 'none - this is the first-run state' : 'a copy of the real one, taken just now'}`)
 console.log(`  templates  ${templates}`)
-console.log(`  ~/.claude  the real one, so sessions are real sessions`)
-if (drivePort !== null) {
+if (drive === null) {
+  console.log(`  ~/.claude  the real one, so sessions are real sessions`)
+} else {
+  for (const agent of drive.agents) console.log(`  agents     ${agent.backend}: ${agent.program} (a fake; only fakes run)`)
+  console.log(`  ~/.claude  ${drive.claudeConfigDir} (the fake's own)`)
   console.log(`  drive      127.0.0.1:${drivePort} - node scripts/drive-dev.mjs text`)
 }
 console.log('')
@@ -114,6 +133,16 @@ const { status } = spawnSync(
 report(before, snapshot(realDataDir()))
 reportTemplates(templatesBefore, templatesSnapshot())
 process.exit(status ?? 1)
+
+async function prepareDriveAgents() {
+  const { runnerImport } = await import('vite')
+  const { module } = await runnerImport(join(import.meta.dirname, 'drive-agents.ts'), {
+    configFile: false,
+    root: desktopDir,
+    logLevel: 'error'
+  })
+  return module.prepareDriveAgents(root, dataDir, { fresh })
+}
 
 /**
  * The real templates directory, and where dev's copy of it goes.

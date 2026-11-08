@@ -99,8 +99,8 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   anything, no shadows outside modals, no text weight past 500, mono for
   machine data. Anything the tokens cannot express is a DESIGN.md amendment.
 - Look at a UI change before calling it done: `pnpm dev --drive`, then
-  `node packages/desktop/scripts/drive-dev.mjs shot <file>.png`. The `dev`
-  skill has the rest.
+  `node packages/desktop/scripts/drive-dev.mjs shot <file>.png`. A `--drive`
+  window starts only the fake agents. The `dev` skill has the rest.
 
 ## Boundaries
 
@@ -789,7 +789,11 @@ folder: run through npx, that folder is a cache.
 | templates | `~/.config/helm/templates`; `helm-data/templates` when portable | `~/.config/helm/templates` | `~/.config/helm/templates` |
 
 `pnpm dev` is seeded each launch from a copy of the installed app's database;
-`--fresh` gives the first-run state. The dev and check folders
+`--fresh` gives the first-run state. `pnpm dev --drive` starts only the fake
+agents in `test/fake-agents`: on every launch it writes them under its own
+folder, chooses them in its database (`scripts/drive-agents.ts`) and gives
+Claude Code a config folder beside them, so a driven window never runs a real
+agent or writes the real `~/.claude`. The dev and check folders
 (`isolatedBaseFor` in `scripts/isolate.mjs`) never sit inside the installed
 app's folder, on any OS.
 
