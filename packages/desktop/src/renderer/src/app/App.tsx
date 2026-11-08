@@ -4042,9 +4042,10 @@ export function App(): JSX.Element {
 
   /**
    * The peek of a child with nowhere on screen here: beside its row or
-   * under its chip, its screen through the host's watch-only attach. Open and
-   * Stop are the store's (a tab in the parent's pane strip or the focused
-   * pane; the question stopping any running session asks).
+   * under its chip, its screen through the host's watch-only attach. Open as
+   * tab and Stop are the store's (a tab in the parent's pane strip or the
+   * focused pane; the question stopping any running session asks). Open, for a
+   * running child closed out of its parent's family view, puts it back there.
    */
   const peekedChild =
     peek.target === null
@@ -4057,7 +4058,7 @@ export function App(): JSX.Element {
       ? null
       : sessionAt({ id: peek.target.id, host: peek.target.host });
   // The parent tab a peeked running child was closed out of, whose family view
-  // its Show in tab puts it back in.
+  // its Open puts it back in.
   const peekedClosedIn =
     peek.target === null
       ? null
@@ -4096,8 +4097,8 @@ export function App(): JSX.Element {
         anchorRef={peekAnchorRef}
         onClose={peek.store.close}
         onStop={peek.store.stop}
-        onOpen={peek.store.openAsTab}
-        onShowInTab={
+        onOpenAsTab={peek.store.openAsTab}
+        onOpen={
           peekedClosedIn === null
             ? undefined
             : () => {

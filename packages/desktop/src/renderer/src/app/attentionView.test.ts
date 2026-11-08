@@ -46,7 +46,7 @@ describe('what the notices say', () => {
     expect(awayDetail(notice())).toBe('The limit of 4 starts per parent holds.')
   })
 
-  it('S15: Peek and Open for a child that needs you, Dismiss for a refused start or an error', () => {
+  it('S15: Peek and Open as tab for a child that needs you, Dismiss for a refused start or an error', () => {
     const actions = { show: vi.fn(), open: vi.fn(), dismiss: vi.fn() }
     const rows = awayRows(
       [
@@ -57,7 +57,7 @@ describe('what the notices say', () => {
       actions
     )
     expect(rows.map((row) => row.actions.map((action) => action.label))).toEqual([
-      ['Peek', 'Open'],
+      ['Peek', 'Open as tab'],
       ['Dismiss'],
       ['Dismiss']
     ])

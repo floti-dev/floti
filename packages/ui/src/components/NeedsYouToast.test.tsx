@@ -73,7 +73,7 @@ const rowsOf = (actions: typeof NO_ACTIONS): AwayRowView[] => [
     detail: 'Waiting on a permission prompt since 03:12. Started by api-refactor, which was told.',
     actions: [
       { label: 'Peek', onPress: actions.peek },
-      { label: 'Open', onPress: actions.open }
+      { label: 'Open as tab', onPress: actions.open }
     ]
   },
   {
@@ -93,7 +93,7 @@ const rowsOf = (actions: typeof NO_ACTIONS): AwayRowView[] => [
 ]
 
 describe('While you were away', () => {
-  it('S15: lists each notice with what it is about, Peek and Open for a child that needs you and Dismiss for a refused start or an error', async () => {
+  it('S15: lists each notice with what it is about, Peek and Open as tab for a child that needs you and Dismiss for a refused start or an error', async () => {
     const actions = { peek: vi.fn(), open: vi.fn(), dismiss: vi.fn(), dismissError: vi.fn() }
     render(<AwayList host="home-server" rows={rowsOf(actions)} onClose={vi.fn()} />)
     const list = screen.getByRole('region', { name: 'While you were away' })
@@ -102,7 +102,7 @@ describe('While you were away', () => {
     expect(rows.map((each) => each.getAttribute('data-away-row'))).toEqual(['a', 'b', 'c'])
     expect(rows[0]!.textContent).toContain('worker-2 needs you')
     expect(rows[0]!.textContent).toContain('since 03:12')
-    expect([...rows[0]!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Peek', 'Open'])
+    expect([...rows[0]!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Peek', 'Open as tab'])
     expect([...rows[1]!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Dismiss'])
     expect([...rows[2]!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Dismiss'])
 

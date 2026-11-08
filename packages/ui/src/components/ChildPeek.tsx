@@ -51,12 +51,14 @@ export interface ChildPeekProps {
   onClose: () => void
   /** Stop: the window closes the peek and asks before it ends the child. */
   onStop: () => Promise<void> | void
-  onOpen: () => void
+  /** Open as tab: the window gives the child a tab of its own. */
+  onOpenAsTab: () => void
   /**
-   * Show in tab, for a running child the user closed out of its parent's
-   * family view: the window puts it back there. Absent for any other child.
+   * Open, for a running child the user closed out of its parent's family
+   * view: the window puts it back there. Absent for any other child, which
+   * has no place in a family view to go back to and only Open as tab.
    */
-  onShowInTab?: (() => void) | undefined
+  onOpen?: (() => void) | undefined
 }
 
 const BUTTON = 'rounded-well border px-[9px] py-[3px] text-[11.5px] font-medium whitespace-nowrap transition-colors'
@@ -65,9 +67,10 @@ const BUTTON = 'rounded-well border px-[9px] py-[3px] text-[11.5px] font-medium 
  * The peek: a popover beside the row, or under the crumb chip, it was opened
  * from, for a child that has nowhere on screen here. It shows the
  * child's screen live and read-only, who it is (its role, or its command), its
- * folder, branch and mode, what it last reported, and Stop and Open, with Show
- * in tab before Open for a running child closed out of its parent's family
- * view. A child that has ended gets one too, which says so and has no Stop.
+ * folder, branch and mode, what it last reported, and Stop and Open as tab,
+ * with Open after them for a running child closed out of its parent's family
+ * view. Open never makes a tab: it puts the child back in that view. A child
+ * that has ended gets a peek too, which says so and has no Stop.
  *
  * It is an overlay (`usePopup`), so a browser tab's native view stands down for
  * it; Escape and its close button close it, and so does a press outside it. Stop
@@ -96,8 +99,8 @@ export function ChildPeek({
   anchorRef,
   onClose,
   onStop,
-  onOpen,
-  onShowInTab
+  onOpenAsTab,
+  onOpen
 }: ChildPeekProps): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -219,9 +222,11 @@ export function ChildPeek({
         <span className="mr-auto text-[11px] text-fg-subtle">
           {ended
             ? screenSeen
-              ? 'Ended. Open shows its last screen.'
+              ? 'Ended. Open as tab shows its last screen.'
               : 'Ended. This window saw none of its screen.'
-            : 'Watching only. Open it to type.'}
+            : onOpen === undefined
+              ? 'Watching only. Open it as a tab to type.'
+              : 'Watching only. Open it to type.'}
         </span>
         {!ended && (
           <button
@@ -233,24 +238,30 @@ export function ChildPeek({
             Stop
           </button>
         )}
-        {onShowInTab !== undefined && (
-          <button
-            type="button"
-            data-peek-show
-            onClick={onShowInTab}
-            className={cn(BUTTON, 'border-border-strong text-fg hover:bg-hover')}
-          >
-            Show in tab
-          </button>
-        )}
+        {/* The accent outline marks the press the peek is for: Open where there is one, Open as tab where it is alone. */}
         <button
           type="button"
-          data-peek-open
-          onClick={onOpen}
-          className={cn(BUTTON, 'border-accent text-accent-text hover:bg-accent-soft')}
+          data-peek-open-tab
+          onClick={onOpenAsTab}
+          className={cn(
+            BUTTON,
+            onOpen === undefined
+              ? 'border-accent text-accent-text hover:bg-accent-soft'
+              : 'border-border-strong text-fg hover:bg-hover'
+          )}
         >
-          Open
+          Open as tab
         </button>
+        {onOpen !== undefined && (
+          <button
+            type="button"
+            data-peek-open
+            onClick={onOpen}
+            className={cn(BUTTON, 'border-accent text-accent-text hover:bg-accent-soft')}
+          >
+            Open
+          </button>
+        )}
       </div>
     </div>
   )

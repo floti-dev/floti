@@ -525,7 +525,7 @@ describe('Close on a running child’s card', () => {
     })
   })
 
-  it('names the parent tab it was closed out of, for its peek’s Show in tab, and none for any other child', () => {
+  it('names the parent tab it was closed out of, for its peek’s Open, and none for any other child', () => {
     expect(closedChildTab(closed, FAMILY, LOCAL_HOST_KEY, 3)).toBe(parent)
     expect(closedChildTab(closed, FAMILY, LOCAL_HOST_KEY, 2)).toBeNull()
     expect(closedChildTab(layout, FAMILY, LOCAL_HOST_KEY, 3)).toBeNull()
@@ -540,7 +540,7 @@ describe('Close on a running child’s card', () => {
     expect(familyEntries(familiesHere(closed, done).get(1)!, familyOf(closed, parent), 3).map((e) => e.child.id)).toEqual([2, 4])
   })
 
-  it('Show in tab puts it back where it was, carries its terminal again and brings the parent’s tab forward', () => {
+  it('the peek’s Open puts it back where it was, carries its terminal again and brings the parent’s tab forward', () => {
     const shown = showClosedFamilyChild(closed, parent, 3)
     expect(drawn(shown)).toEqual(drawn(layout))
     expect(familyOf(shown, parent)).toBe(PLAIN_FAMILY)

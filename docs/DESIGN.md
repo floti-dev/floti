@@ -942,7 +942,7 @@ overrides the gate; keep it.
   with a `danger` edge at 45%. Close puts the child away and stops nothing:
   it keeps running, leaves the family view, its card going to the next child
   that wants one, and is shown by its chip in the crumb and its row in the
-  tree until its peek's **Show in tab** puts it back in its place. A command child (`floti agent run`) has `CommandChildIcon`, 12px, where the dot
+  tree until its peek's **Open** puts it back in its place. A command child (`floti agent run`) has `CommandChildIcon`, 12px, where the dot
   would be, in `success` while it runs, `fg-subtle` once it exited 0 and `danger`
   for any other code (the dot's tones, `commandTone`), on a card, a shrunk
   header and an ended header alike; its tag reads "command" in `fg-muted` on a
@@ -1050,11 +1050,11 @@ overrides the gate; keep it.
   anything on it, with no cursor; its last report as the `accent-soft` note
   with the 2px accent edge, under a "Last report · done" label in 10px small
   caps at weight 600 (the one text weight past 500, which the frame sets and no
-  other text takes); and the foot: "Watching only. Open it to type." in
-  `fg-subtle`, Stop in `danger` (it closes the peek and asks, as stopping any session does), for a running child closed out of its parent's family view **Show in tab** in `border-strong` (it closes the peek and puts the child back in its card), and Open in the accent outline. A
+  other text takes); and the foot: "Watching only. Open it as a tab to type." in
+  `fg-subtle`, Stop in `danger` (it closes the peek and asks, as stopping any session does), and Open as tab in the accent outline. A running child closed out of its parent's family view also has **Open** after Open as tab, which takes the accent outline while Open as tab goes to `border-strong`: it closes the peek and puts the child back in its card, and the foot reads "Watching only. Open it to type." Open never gives a child a tab; only Open as tab does. A
   child that has ended gets a peek too: its chip says how it ended ("stopped", "ended", or "exited 0" for a command), its screen is
-  the last one this window received, the foot reads "Ended. Open shows its last
-  screen." ("Ended. This window saw none of its screen." when it ended before any reached this window) and there is no Stop. The Mode row says the mode in lower case ("manual").
+  the last one this window received, the foot reads "Ended. Open as tab shows its
+  last screen." ("Ended. This window saw none of its screen." when it ended before any reached this window) and there is no Stop. The Mode row says the mode in lower case ("manual").
 
   **A child that needs a person has a toast, and a window that connects to a
   host with notices standing has While you were away.** Both are cards on
@@ -1073,7 +1073,7 @@ overrides the gate; keep it.
   a card gets no toast: its warn edge says it. While you were away on the
   host's name has its close button in the header and a hairline-topped row for
   each notice: a `warn` dot (`danger` for an error), what it is about in 12.5px
-  `fg`, the sentence in 11.5px `fg-muted`, and Peek and Open for a child that
+  `fg`, the sentence in 11.5px `fg-muted`, and Peek and Open as tab for a child that
   needs you or Dismiss for a refused start or an error. Its close button closes
   it in this window only. The frames draw the stack at the right edge; here it is
   at the left so that it cannot sit under a browser view. Each away row reads

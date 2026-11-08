@@ -71,7 +71,7 @@ export function closeFamilyChild(layout: PaneLayout, tab: string, id: number): P
 }
 
 /**
- * Show in tab on a running child closed out of parent tab `tab`'s family view:
+ * The peek's Open on a running child closed out of parent tab `tab`'s family view:
  * it is back in the view where it was (`reopenChild`), and the parent's tab
  * comes to the front with it.
  */
@@ -196,7 +196,7 @@ export interface FamilyPressScope {
  * layout unchanged, whether it is running or ended: its parent's tab is not open
  * here, or that tab's pane has no room for the family view, or this device does
  * not show children in their parent's tab. So is a running child the user
- * closed out of the family view: its peek's Show in tab puts it back
+ * closed out of the family view: its peek's Open puts it back
  * (`showClosedFamilyChild`). Anything else is `open`, which is the one press that gives a session a tab, and the
  * caller opens it as any running session not open here is.
  */

@@ -95,7 +95,7 @@ export interface PeekStore {
   attach(sink: (text: string) => void): () => void
   /** Stop: closes the peek, asks the question stopping a running session asks, and ends the child when the user agrees. */
   stop(): Promise<void>
-  /** Open: gives the child a tab, and closes the peek. */
+  /** Open as tab: gives the child a tab, and closes the peek. */
   openAsTab(): void
   /** The window's deps as of its latest render, which the store's next press reads. */
   setDeps(next: PeekDeps): void

@@ -65,7 +65,7 @@ export function awayDetail(notice: StandingNotice): string {
 export interface AwayActions {
   /** Peek: the child where it is on screen here, or its peek. */
   show: (childId: number) => void
-  /** Open: the child as a tab. */
+  /** Open as tab: the child as a tab. */
   open: (childId: number) => void
   dismiss: (id: string) => void
 }
@@ -83,7 +83,7 @@ export function awayRows(away: readonly StandingNotice[], actions: AwayActions):
         notice.kind === 'needs-you' && childId !== null
           ? [
               { label: 'Peek', onPress: () => actions.show(childId) },
-              { label: 'Open', onPress: () => actions.open(childId) }
+              { label: 'Open as tab', onPress: () => actions.open(childId) }
             ]
           : [{ label: 'Dismiss', onPress: () => actions.dismiss(notice.id) }]
     }

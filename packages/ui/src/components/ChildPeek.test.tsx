@@ -19,14 +19,14 @@ function peek(overrides: Partial<ChildPeekProps> = {}): ChildPeekProps {
     at: { x: 300, y: 80 },
     onClose: vi.fn(),
     onStop: vi.fn(),
-    onOpen: vi.fn(),
+    onOpenAsTab: vi.fn(),
     ...overrides
   }
   return props
 }
 
 describe('the peek', () => {
-  it('S1: names the child with its state, role, folder, branch and mode, and shows its screen read-only with Stop and Open', () => {
+  it('S1: names the child with its state, role, folder, branch and mode, and shows its screen read-only with Stop and Open as tab', () => {
     render(<ChildPeek {...peek({ report: { state: 'done', text: 'Reviewed the diff; two nits.' } })} />)
     const dialog = screen.getByRole('dialog', { name: 'reviewer' })
     expect(within(dialog).getByText('working').getAttribute('data-peek-state')).toBe('working')
@@ -36,9 +36,9 @@ describe('the peek', () => {
     expect(within(dialog).getByTestId('screen')).toBeTruthy()
     const report = dialog.querySelector('[data-peek-report]')
     expect(report?.textContent).toBe('Last report · doneReviewed the diff; two nits.')
-    expect(within(dialog).getByText('Watching only. Open it to type.')).toBeTruthy()
+    expect(within(dialog).getByText('Watching only. Open it as a tab to type.')).toBeTruthy()
     expect(within(dialog).getByRole('button', { name: 'Stop' })).toBeTruthy()
-    expect(within(dialog).getByRole('button', { name: 'Open' })).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: 'Open as tab' })).toBeTruthy()
   })
 
   it('S1: says none for a child started with no role, and has no report block when it told nothing', () => {
@@ -69,7 +69,7 @@ describe('the peek', () => {
     expect(within(dialog).queryByText('Mode')).toBeNull()
   })
 
-  it('S24: a command child shows its command in fg, its facts in mono, no mode and no report, with Stop and Open', () => {
+  it('S24: a command child shows its command in fg, its facts in mono, no mode and no report, with Stop and Open as tab', () => {
     render(
       <ChildPeek
         {...peek({
@@ -89,7 +89,7 @@ describe('the peek', () => {
     expect(within(dialog).getByText('running').getAttribute('data-peek-state')).toBe('idle')
     expect(dialog.querySelector('[data-peek-report]')).toBeNull()
     expect(within(dialog).getByRole('button', { name: 'Stop' })).toBeTruthy()
-    expect(within(dialog).getByRole('button', { name: 'Open' })).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: 'Open as tab' })).toBeTruthy()
   })
 
   it('S24: a command whose shell the window cannot name has no Runs in row', () => {
@@ -97,7 +97,7 @@ describe('the peek', () => {
     expect(screen.queryByText('Runs in')).toBeNull()
   })
 
-  it('S25: an ended command says how it ended in its glyph tone and chip, keeps Open and has no Stop', () => {
+  it('S25: an ended command says how it ended in its glyph tone and chip, keeps Open as tab and has no Stop', () => {
     for (const [state, tone, label, text] of [
       ['ended', 'text-fg-subtle', 'exited 0', 'neutral'],
       ['failed', 'text-danger', 'exited 2', 'danger']
@@ -117,9 +117,9 @@ describe('the peek', () => {
       const dialog = screen.getByRole('dialog', { name: 'tests' })
       expect(dialog.querySelector(`[data-child-command="${state}"]`)?.className).toContain(tone)
       expect(within(dialog).getByText(label).getAttribute('data-peek-state')).toBe(text)
-      expect(within(dialog).getByText('Ended. Open shows its last screen.')).toBeTruthy()
+      expect(within(dialog).getByText('Ended. Open as tab shows its last screen.')).toBeTruthy()
       expect(within(dialog).queryByRole('button', { name: 'Stop' })).toBeNull()
-      expect(within(dialog).getByRole('button', { name: 'Open' })).toBeTruthy()
+      expect(within(dialog).getByRole('button', { name: 'Open as tab' })).toBeTruthy()
       unmount()
     }
   })
@@ -132,22 +132,22 @@ describe('the peek', () => {
     expect(dialog.querySelector('[data-peek-report] span')?.className).toContain('font-semibold')
   })
 
-  it('S1: an ended child says so, keeps Open and has no Stop', () => {
+  it('S1: an ended child says so, keeps Open as tab and has no Stop', () => {
     render(<ChildPeek {...peek({ ended: true, state: { label: 'ended', tone: 'neutral' } })} />)
     const dialog = screen.getByRole('dialog')
     const chip = within(dialog).getByText('ended')
     expect(chip.getAttribute('data-peek-state')).toBe('neutral')
     expect(chip.className).toContain('text-fg-subtle')
     expect(chip.className).not.toContain('text-fg-muted')
-    expect(within(dialog).getByText('Ended. Open shows its last screen.')).toBeTruthy()
+    expect(within(dialog).getByText('Ended. Open as tab shows its last screen.')).toBeTruthy()
     expect(within(dialog).queryByRole('button', { name: 'Stop' })).toBeNull()
-    expect(within(dialog).getByRole('button', { name: 'Open' })).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: 'Open as tab' })).toBeTruthy()
   })
 
   it('an ended child that sent no screen to this window says so', () => {
     render(<ChildPeek {...peek({ ended: true, screenSeen: false })} />)
     expect(screen.getByText('Ended. This window saw none of its screen.')).toBeTruthy()
-    expect(screen.queryByText('Ended. Open shows its last screen.')).toBeNull()
+    expect(screen.queryByText('Ended. Open as tab shows its last screen.')).toBeNull()
   })
 
   it('S2: is an overlay while it is mounted, so a browser view stands down for it', () => {
@@ -200,29 +200,34 @@ describe('the peek', () => {
     expect(props.onClose).not.toHaveBeenCalled()
   })
 
-  it('S6: Open is the window’s to answer', async () => {
+  it('S6: Open as tab is the window’s to answer', async () => {
     const props = peek()
     render(<ChildPeek {...props} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Open' }))
-    expect(props.onOpen).toHaveBeenCalledTimes(1)
+    await userEvent.click(screen.getByRole('button', { name: 'Open as tab' }))
+    expect(props.onOpenAsTab).toHaveBeenCalledTimes(1)
     expect(props.onClose).not.toHaveBeenCalled()
   })
 
-  it('has Show in tab before Open for a child closed out of its parent’s family view, and it is the window’s to answer', async () => {
-    const onShowInTab = vi.fn()
-    const props = peek({ onShowInTab })
+  it('has Open after Open as tab for a child closed out of its parent’s family view, in the accent outline, and it is the window’s to answer', async () => {
+    const onOpen = vi.fn()
+    const props = peek({ onOpen })
     render(<ChildPeek {...props} />)
-    const show = screen.getByRole('button', { name: 'Show in tab' })
-    expect(show.nextElementSibling).toBe(screen.getByRole('button', { name: 'Open' }))
-    await userEvent.click(show)
-    expect(onShowInTab).toHaveBeenCalledTimes(1)
-    expect(props.onOpen).not.toHaveBeenCalled()
+    const asTab = screen.getByRole('button', { name: 'Open as tab' })
+    const open = screen.getByRole('button', { name: 'Open' })
+    expect(asTab.nextElementSibling).toBe(open)
+    expect(open.className).toContain('border-accent')
+    expect(asTab.className).toContain('border-border-strong')
+    expect(screen.getByText('Watching only. Open it to type.')).toBeTruthy()
+    await userEvent.click(open)
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    expect(props.onOpenAsTab).not.toHaveBeenCalled()
     expect(props.onClose).not.toHaveBeenCalled()
   })
 
-  it('has no Show in tab for any other child', () => {
+  it('has no Open for any other child, whose Open as tab takes the accent outline', () => {
     render(<ChildPeek {...peek()} />)
-    expect(screen.queryByRole('button', { name: 'Show in tab' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Open' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Open as tab' }).className).toContain('border-accent')
   })
 
   it('is placed at the point it is given, hidden until measured', () => {

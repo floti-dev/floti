@@ -30,7 +30,7 @@ export interface FamilyState {
   /**
    * Children the user closed out of the family view. A running one keeps
    * running, and is shown as a child with no room is (its chip in the parent's
-   * crumb, its row in the tree, each with a peek) until Show in tab puts it back
+   * crumb, its row in the tree, each with a peek) until its peek's Open puts it back
    * where it was. One that ends stays closed.
    */
   readonly closed: readonly number[]
@@ -188,14 +188,14 @@ export function shrinkChild(state: FamilyState, child: FamilyMember): FamilyStat
  * A close pressed on a running child's card, or on an ended child's header or
  * last screen: it leaves the family view, and a running one keeps running. Its
  * row in the Sessions tree is not the family's to take away. Its place in the
- * order is kept, so Show in tab (`reopenChild`) puts it back where it was.
+ * order is kept, so the peek's Open (`reopenChild`) puts it back where it was.
  */
 export function closeChild(state: FamilyState, id: number): FamilyState {
   return changed(state, { closed: withId(state.closed, id), screens: withoutId(state.screens, id) })
 }
 
 /**
- * Show in tab on a running child closed out of the family view: it is back in
+ * The peek's Open on a running child closed out of the family view: it is back in
  * the view in its own place in the order, as a card if it was one and the pane
  * has room, the last card that wants one falling to a header if not.
  */

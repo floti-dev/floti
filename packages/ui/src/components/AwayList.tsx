@@ -14,8 +14,8 @@ export interface AwayRowView {
   title: string
   /** The sentence saying more. */
   detail: string
-  /** Peek and Open for a child that needs you; Dismiss for a refused start or an error. */
-  actions: ReadonlyArray<{ label: 'Peek' | 'Open' | 'Dismiss'; onPress: () => void }>
+  /** Peek and Open as tab for a child that needs you; Dismiss for a refused start or an error. */
+  actions: ReadonlyArray<{ label: 'Peek' | 'Open as tab' | 'Dismiss'; onPress: () => void }>
 }
 
 export interface AwayListProps {
@@ -68,7 +68,7 @@ export function AwayList({ host, rows, onClose }: AwayListProps): JSX.Element {
                   key={action.label}
                   type="button"
                   onClick={action.onPress}
-                  className={cn(NOTICE_BUTTON, action.label === 'Open' ? NOTICE_PRIMARY : NOTICE_PLAIN)}
+                  className={cn(NOTICE_BUTTON, action.label === 'Open as tab' ? NOTICE_PRIMARY : NOTICE_PLAIN)}
                 >
                   {action.label}
                 </button>

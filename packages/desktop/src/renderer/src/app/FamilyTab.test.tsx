@@ -159,7 +159,7 @@ function Harness({
       <p data-tabs>{group.tabs.map(paneId).join(',')}</p>
       <p data-front>{paneId(activeRef(group)!)}</p>
       <p data-closed>{familyOf(panes, TAB).closed.join(',')}</p>
-      {/* The window's Show in tab, from a closed child's peek. */}
+      {/* The window's Open, from a closed child's peek. */}
       {familyOf(panes, TAB).closed.map((id) => (
         <button key={id} type="button" onClick={() => setPanes((at) => showClosedFamilyChild(at, TAB, id))}>
           {`Show ${String(id)} in tab`}
@@ -670,7 +670,7 @@ describe('a parent’s tab with children', () => {
     expect(cardNames(view.container)).toEqual(['beta', 'gamma'])
   })
 
-  it('Show in tab puts a closed running child back in its card where it was, the last card falling to a header', async () => {
+  it('the peek’s Open puts a closed running child back in its card where it was, the last card falling to a header', async () => {
     const sessions = [LEAD, child(2, 'alpha'), child(3, 'beta'), child(4, 'gamma')]
     const { container } = mount(SHORT, sessions)
     await userEvent.click(within(card(container, 'alpha')).getByRole('button', { name: 'Close alpha' }))

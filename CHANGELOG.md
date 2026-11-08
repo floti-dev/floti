@@ -14,6 +14,14 @@ A version with no section here does not release: the workflow fails rather than
 publishing an empty body, because the step a person can skip is the step that
 gets skipped.
 
+## 2.4.1-preview.11
+
+A preview, not a release: nothing offers it as an update.
+
+- A child's peek says what each button does. For a child you closed out of
+  its parent's tab, Open puts it back there, and Open as tab gives it a tab of
+  its own. Every other peek, and While you were away, offers Open as tab.
+
 ## 2.4.1-preview.10
 
 A preview, not a release: nothing offers it as an update.

@@ -182,8 +182,8 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   those of the sessions that have a tab. A running child's pane there can be
   closed without ending it: it keeps running, is not open here (its terminal
   is not carried), and is shown as a child with no room is, by its chip in the
-  parent's crumb and its row in the tree, whose peek has Show in tab to put it
-  back where it was. Which children are shown, shrunk, closed or opened as
+  parent's crumb and its row in the tree, whose peek's Open puts it back
+  where it was (its Open as tab gives it a tab; Open never does). Which children are shown, shrunk, closed or opened as
   tabs is this device's `paneLayout` (`families`) and never reaches the
   host. Every other running session is in the sessions pane
   as not open here, with Open (a tab whose screen comes through the host's
@@ -192,7 +192,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   chip in the parent's crumb): its screen comes through the host's watch-only
   attach (`session:data` opened with `watch`), which takes no keys and no
   size, so a peek never types into the child or resizes it; it is drawn at the
-  grid the host reports (`session:size`); its Open is the attach above
+  grid the host reports (`session:size`); its Open as tab is the attach above
   and closes the peek. Closing a running session's tab asks first, naming its
   host, which the window names, and the children that end with it and any
   started to outlive it; its button counts what it ends (End 4 sessions).

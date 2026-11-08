@@ -366,7 +366,7 @@ describe('a child shown in its parent’s tab on build-box', () => {
     expect(first.streamsFor('session:data', 8)[0]?.closed).toBe(true)
   })
 
-  it('is let go of when it is closed out of its parent’s family view, and carried again on Show in tab', async () => {
+  it('is let go of when it is closed out of its parent’s family view, and carried again on its peek’s Open', async () => {
     const { first, w, records, scope } = await connected()
     const parent = paneId(sessionRef(7, BUILD))
     const layout = openTab(EMPTY_LAYOUT, sessionRef(7, BUILD))
