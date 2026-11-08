@@ -782,7 +782,8 @@ impl Session {
     /// Sends the keys `client` typed to the program, first giving the
     /// session that client's size.
     pub fn input(&self, client: ClientId, bytes: &[u8]) -> Result<()> {
-        if is_a_person_typing(bytes) {
+        let person = is_a_person_typing(bytes);
+        if person {
             self.person_typed.store(now_ms().max(1), Ordering::SeqCst);
         }
         {
@@ -806,7 +807,9 @@ impl Session {
         let pty = pty.as_mut().ok_or_else(|| self.has_ended())?;
         pty.write(bytes)
             .map_err(|err| Error::io(format!("type into session {}", self.id), err))?;
-        self.typed.send_modify(|typed| *typed += 1);
+        if person {
+            self.typed.send_modify(|typed| *typed += 1);
+        }
         Ok(())
     }
 
@@ -855,9 +858,13 @@ impl Session {
         }
     }
 
-    /// Changes each time a client types into the session. What the host
-    /// types itself (a prompt at launch) goes in another way and never moves
-    /// it.
+    /// Changes each time a person types into the session through a client.
+    /// What a client's terminal sends by itself (a focus change, a mouse
+    /// report, an answer to its program's query) is not typing and never
+    /// moves it: a terminal with focus reporting on sends one each time its
+    /// tab or pane gains or loses focus. Neither does what the host types
+    /// itself (a prompt at launch) or a parent's turn, which go in another
+    /// way.
     pub fn typing(&self) -> watch::Receiver<u64> {
         self.typed.subscribe()
     }

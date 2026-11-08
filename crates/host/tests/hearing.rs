@@ -2252,6 +2252,65 @@ async fn s14_typing_into_the_parent_ends_a_held_wait_at_once_and_loses_no_news()
     host.stop(HostStopReason::Stop).await;
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn s14_a_held_wait_outlasts_focus_changes_and_mouse_reports_from_the_parents_terminal() {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("focus");
+    let parent = world.session(CLAUDE, &folder, "parent").await;
+    parent
+        .start(json!({ "task": "work", "name": "worker", "backend": OTHER }))
+        .await
+        .done();
+    let worker = world.child_of(&parent, "worker").await;
+
+    // A terminal with focus reporting on sends focus in and out each time its
+    // pane gains or loses focus, and a mouse report for a click, on the same
+    // stream as a person's keys. Each round is followed by a request on the
+    // same connection, which the host answers only after it has taken the
+    // bytes sent before it, so every round reached the parent while the wait
+    // held. A wait listens for typing before it first looks for news, so a
+    // key in any round after the first would have ended it.
+    let mut held = parent.open("agents_wait", json!({})).await;
+    assert!(held.streamed);
+    let mut client = world.client().await;
+    client.attach(1, parent.id()).await;
+    for _ in 0..5 {
+        for reply in [
+            &b"\x1b[I"[..],
+            b"\x1b[<0;12;3M",
+            b"\x1b[<0;12;3m",
+            b"\x1b[O",
+        ] {
+            client.type_into(1, reply).await;
+        }
+        client
+            .request::<SessionList>(&())
+            .await
+            .expect("the sessions are listed");
+    }
+
+    // Still held: it ends with the child's news, not with typing.
+    worker.report("note", "after the clicks").await.done();
+    let heard = held.heard().await;
+    assert_eq!(heard.ended(), "news", "{heard:?}");
+    assert_eq!(heard.events(), ["worker:report"], "{heard:?}");
+
+    // A key from a person still ends the next one at once.
+    let mut held = parent.open("agents_wait", json!({})).await;
+    assert!(held.streamed);
+    let mut typed = 0;
+    let heard = loop {
+        tokio::select! {
+            heard = held.heard() => break heard,
+            () = async { world.type_line(&parent, &format!("hello {typed}")).await } => typed += 1,
+        }
+    };
+    assert_eq!(heard.ended(), "typed", "{heard:?}");
+    drop(client);
+    host.stop(HostStopReason::Stop).await;
+}
+
 // ---------------------------------------------------------------------------
 // A wait that is an MCP task
 // ---------------------------------------------------------------------------

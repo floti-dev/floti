@@ -484,8 +484,10 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   again after the next piece of work. News is marked seen only after the
   answer was handed to the caller in full (`Delivery`), so a wait that is
   cancelled, dropped or cut off by a host restart leaves it unseen for the
-  next. A held wait ends when someone types into the parent and when the
-  parent ends. `wait` on `agents_start` (`--wait` on the command) waits for
+  next. A held wait ends when a person types a key into the parent and when
+  the parent ends, and never on what a terminal sends by itself (focus in
+  and out, mouse reports, answers to its program's queries;
+  `session/person.rs`). `wait` on `agents_start` (`--wait` on the command) waits for
   that child's next news alone and leaves the others' unseen.
 - A call that holds is answered as a stream (`text/event-stream`): a
   progress notification each minute on the request's progress token, or a

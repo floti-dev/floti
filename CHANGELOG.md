@@ -46,6 +46,10 @@ A preview, not a release: nothing offers it as an update.
 - A child that has not started its task a minute after it was launched, such
   as one waiting to be told it may trust its folder, tells its parent it needs
   you and raises a notice until it starts.
+- A session waiting on its children keeps waiting when you click between
+  panes and tabs or use the mouse in its terminal. Only a key you type ends
+  the wait early, so you can talk to a session whose children are running
+  without it waking again and again.
 
 ## 2.4.1-preview.9
 

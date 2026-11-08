@@ -842,6 +842,42 @@ fn only_a_clients_keys_mark_a_person_typed_and_a_parents_text_and_a_terminals_re
 }
 
 #[test]
+fn the_typing_watch_moves_for_a_persons_keys_and_never_for_what_a_terminal_sends_by_itself() {
+    let fx = Fixture::new();
+    let folder = fx.dirs.folder("project");
+    let size = TermSize::new(80, 24);
+    let session = fx.start(&folder, &[], size);
+    let _a = Watcher::attach(&session, A, size);
+    let mut typing = session.typing();
+    typing.borrow_and_update();
+
+    for reply in [
+        &b"\x1b[I"[..],
+        b"\x1b[O",
+        b"\x1b[<0;12;3M",
+        b"\x1b[<0;12;3m",
+        b"\x1b[12;40R",
+        b"\x1b[?62;4c",
+        b"\x1b[0n",
+        b"\x1b]11;rgb:0000/0000/0000\x07",
+        b"\x1b]10;rgb:ffff/ffff/ffff\x1b\\",
+    ] {
+        session.input(A, reply).unwrap();
+        assert!(
+            !typing.has_changed().unwrap(),
+            "{:?} moved the typing watch",
+            String::from_utf8_lossy(reply)
+        );
+    }
+
+    session.input(A, b"x").unwrap();
+    assert!(typing.has_changed().unwrap(), "a key moves it");
+
+    session.end_now().unwrap();
+    assert!(session.wait_exit(PATIENCE).is_some());
+}
+
+#[test]
 fn a_person_typed_mark_is_spent_by_an_idle_that_began_after_the_key_however_brief_the_turn() {
     let fx = Fixture::new();
     let folder = fx.dirs.folder("project");
