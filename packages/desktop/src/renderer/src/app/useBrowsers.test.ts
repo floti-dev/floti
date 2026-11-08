@@ -13,6 +13,7 @@ const RECT = { x: 16, y: 120, width: 900, height: 600 }
 const view = (id: number): BrowserState => ({
   id,
   url: 'http://localhost:3000/',
+  refusedUrl: null,
   title: 'Dev server',
   host: 'localhost:3000',
   canGoBack: false,

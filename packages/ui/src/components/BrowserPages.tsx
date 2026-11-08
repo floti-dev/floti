@@ -7,6 +7,8 @@ export interface BrowserPage {
   id: number
   title: string
   url: string
+  /** The address it was asked for and refused, while it has loaded nothing. */
+  refusedUrl: string | null
   /** The session that opened it, or null when the user did. */
   openedBy: string | null
   /** The session the user shared it with, or null. */
@@ -59,8 +61,14 @@ export function BrowserPages({
   const tabs: Tab[] = pages.map((page) => {
     // The address, which tells three pages on one dev server apart, is in the
     // hint. An empty page is "New tab": a tab with no label is a tab you
-    // cannot aim at.
-    const where = page.url === '' ? 'A browser tab with no address yet' : page.url
+    // cannot aim at. One refused its first address names that address, and
+    // says nothing loaded there.
+    const where =
+      page.url !== ''
+        ? page.url
+        : page.refusedUrl !== null
+          ? `${page.refusedUrl}\nRefused, so nothing has loaded`
+          : 'A browser tab with no address yet'
     const badge = page.openedBy ?? (page.sharedWith === null ? undefined : 'shared')
     return {
       id: tabId(page.id),

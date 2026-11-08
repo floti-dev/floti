@@ -3847,7 +3847,9 @@ export function App(): JSX.Element {
           front === undefined
             ? ""
             : front.url === ""
-              ? "a new tab"
+              ? front.refusedUrl === null
+                ? "a new tab"
+                : `${front.refusedUrl}, refused`
               : front.title === ""
                 ? front.url
                 : front.title;

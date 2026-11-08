@@ -7,6 +7,7 @@ import { BrowserPane, type BrowserPaneProps, type BrowserPaneState } from './Bro
 const STATE: BrowserPaneState = {
   id: 7,
   url: 'http://localhost:3000/',
+  refusedUrl: null,
   title: 'Dev server',
   host: 'localhost:3000',
   canGoBack: true,
@@ -197,6 +198,32 @@ describe('BrowserPane - the address bar', () => {
     await user.type(address(), 'localhost:5173{Enter}')
     expect(props.onNavigate).toHaveBeenCalledWith('localhost:5173')
     expect(address().value).toBe('http://localhost:3000/')
+  })
+
+  it('shows the address a tab was refused before any page loaded, and opens it in your own browser', async () => {
+    const user = userEvent.setup()
+    const problem = 'example.com is off this machine, and the browser is set to This machine only.'
+    const props = renderPane({
+      state: {
+        ...STATE,
+        url: '',
+        refusedUrl: 'https://example.com/docs',
+        title: 'example.com',
+        host: 'example.com',
+        canGoBack: false,
+        problem
+      }
+    })
+    expect(address().value).toBe('https://example.com/docs')
+    expect(screen.getByRole('status').textContent).toBe(problem)
+    await user.click(screen.getByRole('button', { name: 'Open in your own browser' }))
+    expect(props.onOpenExternal).toHaveBeenCalledWith('https://example.com/docs')
+  })
+
+  it('has nothing to open in your own browser on an empty tab', () => {
+    renderPane({ state: { ...STATE, url: '', refusedUrl: null } })
+    expect(address().value).toBe('')
+    expect(screen.getByRole('button', { name: 'Open in your own browser' })).toHaveProperty('disabled', true)
   })
 
   it('paints what is wrong with the tab as a sentence', () => {

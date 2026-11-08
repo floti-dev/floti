@@ -12,6 +12,8 @@ import { Menu, type MenuEntry } from './Menu'
 export interface BrowserPaneState {
   id: number
   url: string
+  /** The address the tab was asked for and refused, while it has loaded nothing. */
+  refusedUrl: string | null
   title: string
   host: string
   canGoBack: boolean
@@ -180,7 +182,9 @@ export function BrowserPane({
    * that can disagree.
    */
   const [draft, setDraft] = useState<string | null>(null)
-  const typed = draft ?? state.url
+  /** What the address bar says when nobody is typing: the page's address, or the one refused before any loaded. */
+  const address = state.url !== '' ? state.url : (state.refusedUrl ?? '')
+  const typed = draft ?? address
   const [suggesting, setSuggesting] = useState(false)
   const [consoleOpen, setConsoleOpen] = useState(false)
   const [finding, setFinding] = useState(false)
@@ -574,8 +578,8 @@ export function BrowserPane({
           </BarButton>
           <BarButton
             label="Open in your own browser"
-            disabled={state.url === ''}
-            onClick={() => onOpenExternal(state.url)}
+            disabled={address === ''}
+            onClick={() => onOpenExternal(address)}
             data-browser="external"
           >
             <ExternalIcon width={14} height={14} />

@@ -2,7 +2,7 @@ import { agentReach, browserReachAllows, resolveBrowserAddress, type AppSettings
 import type { BrowserHost, BrowserOpener } from './browser'
 import type { ToolAnswer as PluginToolAnswer, ToolServer } from './plugins/tools'
 import { pairTools, type ToolSpec, type ToolTable } from './tool-table'
-import type { BrowserConsoleEntry } from '../shared/ipc'
+import type { BrowserConsoleEntry, BrowserState } from '../shared/ipc'
 import browserToolTable from '../../../../crates/host/src/server/browser_tools.json'
 
 /**
@@ -336,9 +336,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
               : shared.key === session.opener.key
                 ? 'opened by the user, shared with you: read and drive it, but it is theirs to close'
                 : `opened by the user, shared with the session "${shared.name}"`
-        return `#${String(state.id)}  ${state.url === '' ? '(blank)' : state.url}\n    title: ${
-          state.title === '' ? '(none)' : state.title
-        }\n    loading: ${String(state.loading)}   ${whose}${
+        return `#${String(state.id)}  ${addressOf(state)}\n    title: ${titleOf(state)}\n    loading: ${String(state.loading)}   ${whose}${
           state.problem === null ? '' : `\n    problem: ${state.problem}`
         }`
       })
@@ -672,11 +670,26 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
   const ok = (text: string): ToolResult => ({ content: [{ type: 'text', text }] })
   const fail = (text: string): ToolResult => ({ content: [{ type: 'text', text }], isError: true })
 
-  const describeTab = (state: { id: number; url: string; title: string; problem: string | null }): string =>
+  /**
+   * A tab's address as an agent is told it. A tab that was refused its first
+   * address has loaded nothing, and says so beside the address it was refused,
+   * so an agent never reads it as a page that is there.
+   */
+  const addressOf = (state: TabFacts): string =>
+    state.url !== ''
+      ? state.url
+      : state.refusedUrl !== null
+        ? `(blank: nothing has loaded; ${state.refusedUrl} was refused)`
+        : '(blank)'
+
+  /** A page's title, and none for a tab with no page, whatever the strip calls it. */
+  const titleOf = (state: TabFacts): string => (state.url === '' || state.title === '' ? '(none)' : state.title)
+
+  const describeTab = (state: TabFacts): string =>
     [
       `tab: ${String(state.id)}`,
-      `url: ${state.url === '' ? '(blank)' : state.url}`,
-      `title: ${state.title === '' ? '(none)' : state.title}`,
+      `url: ${addressOf(state)}`,
+      `title: ${titleOf(state)}`,
       ...(state.problem === null ? [] : [`problem: ${state.problem}`])
     ].join('\n')
 
@@ -691,7 +704,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
    */
   const settleTab = async (
     id: number
-  ): Promise<{ id: number; url: string; title: string; problem: string | null } | null> => {
+  ): Promise<TabFacts | null> => {
     const deadline = Date.now() + 15_000
     for (;;) {
       const state = browsers.states(id)[0]
@@ -714,7 +727,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
   const settleMove = async (
     id: number,
     from: string
-  ): Promise<{ id: number; url: string; title: string; problem: string | null } | null> => {
+  ): Promise<TabFacts | null> => {
     const deadline = Date.now() + 1500
     for (;;) {
       const state = browsers.states(id)[0]
@@ -817,6 +830,9 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
 // ---------------------------------------------------------------------------
 
 type Args = Record<string, unknown>
+
+/** What an agent is told about a tab. */
+type TabFacts = Pick<BrowserState, 'id' | 'url' | 'refusedUrl' | 'title' | 'problem'>
 
 const num = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null

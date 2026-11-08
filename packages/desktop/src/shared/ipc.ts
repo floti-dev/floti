@@ -570,6 +570,12 @@ export interface BrowserState {
   id: number
   /** Where it actually is, which is not always where it was asked to go. */
   url: string
+  /**
+   * The address this tab was asked for and refused, while it has loaded
+   * nothing (`url` is empty), or null. The address bar shows it and the tab
+   * is named after its host; `url` stays empty, because no page is there.
+   */
+  refusedUrl: string | null
   /** The page's own title, or the host until it has one. Names the tab. */
   title: string
   /** The tab's subtitle, and what an address that failed to load still says. */

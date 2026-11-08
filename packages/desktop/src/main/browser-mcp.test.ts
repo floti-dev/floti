@@ -97,6 +97,7 @@ function fakeBrowsers() {
     const state: BrowserState = {
       id,
       url,
+      refusedUrl: null,
       title: `Page at ${new URL(url).host}`,
       host: new URL(url).host,
       canGoBack: false,
@@ -347,6 +348,26 @@ describe('the browser tools', () => {
       expect(blockFor(listed, theirs)).toMatch(/opened by the session "beta"$/)
       expect(blockFor(listed, user)).toMatch(/opened by the user$/)
       expect(blockFor((await beta.call('browser_tabs')).text, theirs)).toMatch(/yours$/)
+    })
+
+    it('tells a session a tab refused its first address has loaded nothing, never that the page is there', async () => {
+      const user = browsers.add('http://127.0.0.1:5173/', null)
+      const tab = browsers.tabs.get(user)!
+      // What the host reports for a plugin's link out of reach: no page, the
+      // address it was refused, and the tab named after that address's host.
+      tab.state = {
+        ...tab.state,
+        url: '',
+        refusedUrl: 'https://example.com/docs',
+        title: 'example.com',
+        host: 'example.com',
+        problem: 'example.com is off this machine, and the browser is set to This machine only.'
+      }
+
+      const block = blockFor((await alpha.call('browser_tabs')).text, user)
+      expect(block).toContain(`#${String(user)}  (blank: nothing has loaded; https://example.com/docs was refused)`)
+      expect(block).toContain('title: (none)')
+      expect(block).toContain('problem: example.com is off this machine')
     })
 
     it('never reads or drives a tab the user opened', async () => {

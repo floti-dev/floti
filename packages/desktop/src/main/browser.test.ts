@@ -556,6 +556,84 @@ describe('browser host - security posture', () => {
     expect(browserWillNavigate(wc.id, 'file:///C:/Windows/win.ini')).toBe(false)
   })
 
+  describe('a tab refused its first address', () => {
+    it('opened at a link out of reach says that address and is named after its host, with no page claimed', () => {
+      const h = harness({ browserReach: 'local' })
+      // `browser:open` with an address: how a plugin's link and the user's own arrive.
+      const { state, problem } = h.host.open({ url: 'https://example.com/docs' })
+      const wc = FakeWebContentsView.created.at(-1)!.webContents!
+      expect(wc.loads).toEqual([])
+      expect(problem).toContain('This machine only')
+      expect(state).toMatchObject({
+        url: '',
+        refusedUrl: 'https://example.com/docs',
+        host: 'example.com',
+        title: 'example.com',
+        loading: false,
+        canGoBack: false
+      })
+      expect(state?.problem).toContain('example.com')
+    })
+
+    it("opened beside a project whose remembered address is out of reach says that address", () => {
+      const h = harness({
+        browserReach: 'local',
+        browserProjectUrls: { 'c:\\projects\\site': 'https://example.com/app' }
+      })
+      const { id, wc } = openTabFor(h, 'C:\\Projects\\Site')
+      expect(wc.loads).toEqual([])
+      expect(stateOf(h, id)).toMatchObject({
+        url: '',
+        refusedUrl: 'https://example.com/app',
+        host: 'example.com',
+        title: 'example.com'
+      })
+    })
+
+    it("opened for a session at an address out of reach says that address", async () => {
+      const h = harness({ browserReach: 'local' })
+      vi.useFakeTimers()
+      const pending = h.host.openFor(SESSIONS.get(7)!, 'https://example.com/')
+      const wc = FakeWebContentsView.created.at(-1)!.webContents!
+      await vi.advanceTimersByTimeAsync(1000)
+      const { state, problem } = await pending
+      expect(wc.loads).toEqual([])
+      expect(problem).toContain('example.com')
+      expect(state).toMatchObject({
+        url: '',
+        refusedUrl: 'https://example.com/',
+        host: 'example.com',
+        title: 'example.com',
+        openedBy: 'alpha'
+      })
+    })
+
+    it('names an address with no host by the address itself', () => {
+      const h = harness()
+      const { id } = openTab(h, 'file:///C:/Windows/win.ini')
+      expect(stateOf(h, id)).toMatchObject({
+        url: '',
+        refusedUrl: 'file:///C:/Windows/win.ini',
+        host: '',
+        title: 'file:///C:/Windows/win.ini'
+      })
+    })
+
+    it('says the page once one loads, and a later refusal leaves the page that is there', () => {
+      const h = harness({ browserReach: 'local' })
+      const { id, wc } = openTab(h, 'https://example.com/')
+      expect(stateOf(h, id).refusedUrl).toBe('https://example.com/')
+
+      h.host.navigate(id, 'localhost:3000')
+      expect(stateOf(h, id).refusedUrl).toBeNull()
+      wc.commit('http://localhost:3000/')
+
+      h.host.navigate(id, 'https://example.com/')
+      expect(stateOf(h, id)).toMatchObject({ url: 'http://localhost:3000/', refusedUrl: null, host: 'localhost:3000' })
+      expect(stateOf(h, id).problem).toContain('example.com')
+    })
+  })
+
   it('holds ten tabs at most, from the strip and from a page', () => {
     const h = harness()
     const tabs = Array.from({ length: 10 }, () => openTab(h, 'http://localhost:3000/'))

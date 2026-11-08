@@ -5,9 +5,16 @@ import { BROWSER_PAGE_MIME, BrowserPages, type BrowserPagesProps } from './Brows
 import { TAB_MIME } from './TabBar'
 
 const PAGES: BrowserPagesProps['pages'] = [
-  { id: 1, title: 'Dashboard', url: 'http://localhost:5173/', openedBy: null, sharedWith: null },
-  { id: 2, title: '', url: '', openedBy: null, sharedWith: null },
-  { id: 3, title: 'Settings', url: 'http://localhost:5173/settings', openedBy: 'browser overhaul', sharedWith: null }
+  { id: 1, title: 'Dashboard', url: 'http://localhost:5173/', refusedUrl: null, openedBy: null, sharedWith: null },
+  { id: 2, title: '', url: '', refusedUrl: null, openedBy: null, sharedWith: null },
+  {
+    id: 3,
+    title: 'Settings',
+    url: 'http://localhost:5173/settings',
+    refusedUrl: null,
+    openedBy: 'browser overhaul',
+    sharedWith: null
+  }
 ]
 
 function renderPages(overrides: Partial<BrowserPagesProps> = {}): BrowserPagesProps {
@@ -40,6 +47,16 @@ describe('BrowserPages', () => {
     expect(tabs[2]!.getAttribute('title')).toBe('http://localhost:5173/settings\nOpened by the session “browser overhaul”')
   })
 
+  it('names a page refused its first address after its host, and says on hover that nothing loaded', () => {
+    renderPages({
+      pages: [
+        { id: 5, title: 'example.com', url: '', refusedUrl: 'https://example.com/docs', openedBy: null, sharedWith: null }
+      ]
+    })
+    const tab = screen.getByRole('tab', { name: /^example\.com/ })
+    expect(tab.getAttribute('title')).toBe('https://example.com/docs\nRefused, so nothing has loaded')
+  })
+
   it('says "shared" on a page the user shared with a session, and names the session on hover', () => {
     renderPages({
       pages: [
@@ -47,6 +64,7 @@ describe('BrowserPages', () => {
           id: 4,
           title: 'Account',
           url: 'https://example.com/account',
+          refusedUrl: null,
           openedBy: null,
           sharedWith: { session: 9, name: 'browser overhaul' }
         }

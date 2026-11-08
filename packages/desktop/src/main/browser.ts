@@ -251,6 +251,13 @@ interface View {
   console: BrowserConsoleEntry[]
   /** What the pane should say is wrong, or null. */
   problem: string | null
+  /**
+   * The address this tab was last asked for and refused, or null. It is what
+   * the address bar shows and the tab is named after while the view has loaded
+   * nothing, so a tab opened at an address the reach rule turned away says
+   * which one; once a page has loaded, the page's own address is the truth.
+   */
+  refused: string | null
   /** The address a retry is trying to reach, and when it gives up. */
   retry: { url: string; until: number; step: number; timer: NodeJS.Timeout | null } | null
   find: { query: string; matches: number; active: number } | null
@@ -673,6 +680,12 @@ function viewPreferences(): WebPreferences {
  * A view can legitimately be at `about:blank` - that is what a new tab is - and
  * at a URL Chromium is still resolving, so this has to answer rather than throw.
  */
+/** What a refused input is remembered as: the address as typed, or nothing for an empty one. */
+function refusedAddress(input: string): string | null {
+  const typed = input.trim()
+  return typed === '' ? null : typed
+}
+
 function hostOf(url: string): string {
   if (url === '') return ''
   try {
@@ -780,14 +793,16 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     const wc = contentsOf(entry)
     const alive = wc !== null
     const url = alive ? wc.getURL() : ''
-    const host = hostOf(url)
+    const refusedUrl = url === '' ? entry.refused : null
+    const host = hostOf(url !== '' ? url : (refusedUrl ?? ''))
     const errors = entry.console.filter(
       (line) => line.level === 'error' || line.level === 'warning'
     ).length
     return {
       id: entry.id,
       url,
-      title: alive && wc.getTitle() !== '' ? wc.getTitle() : host,
+      refusedUrl,
+      title: alive && wc.getTitle() !== '' ? wc.getTitle() : host !== '' ? host : (refusedUrl ?? ''),
       host,
       canGoBack: alive && wc.navigationHistory.canGoBack(),
       canGoForward: alive && wc.navigationHistory.canGoForward(),
@@ -910,6 +925,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     if (!decision.allowed) {
       stopRetry(entry)
       entry.problem = decision.problem
+      entry.refused = url
       log(entry, { level: 'error', message: decision.problem ?? 'refused', source: url, line: 0 })
       return announce(entry)
     }
@@ -926,6 +942,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     }
     stopRetry(entry)
     entry.problem = null
+    entry.refused = null
     void wc.loadURL(url).catch(() => undefined)
     return announce(entry)
   }
@@ -1083,6 +1100,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       project,
       console: [],
       problem: null,
+      refused: null,
       retry: null,
       find: null,
       findRequest: null,
@@ -1151,6 +1169,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       }
       stopRetry(entry)
       entry.problem = null
+      entry.refused = null
       entry.find = null
       remember(entry, url)
       announce(entry)
@@ -1671,6 +1690,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       const resolved = resolveBrowserAddress(wanted)
       if (resolved.url === null) {
         entry.problem = resolved.problem
+        entry.refused = refusedAddress(wanted)
         return { state: announce(entry), problem: resolved.problem }
       }
       const next = load(entry, resolved.url)
@@ -1687,6 +1707,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       if (resolved.url === null) {
         stopRetry(entry)
         entry.problem = resolved.problem
+        entry.refused = refusedAddress(input)
         // Nothing was fetched: with searching off, a phrase produces a sentence
         // and no request at all.
         return announce(entry)

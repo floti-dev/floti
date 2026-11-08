@@ -117,6 +117,9 @@ A preview, not a release: nothing offers it as an update.
 - A terminal tab that was opened behind another, such as one Helm reopened
   after a restart, no longer shows a scrollbar with nothing to scroll when you
   bring it to the front.
+- A browser page opened at an address Helm's browser may not reach, from a
+  plugin's link, a session or a project's last address, now shows that address
+  and is named after its site, and Open in your own browser opens it.
 
 ## 2.4.1-preview.9
 
