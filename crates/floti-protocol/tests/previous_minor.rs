@@ -1,5 +1,5 @@
-//! A client one minor behind still reads what a host on this minor sends, and
-//! the host still reads what that client sends: protocol 2.1 only adds
+//! A client on 2.0 still reads what a host on 2.1 sends, and that host still
+//! reads what the client sends: protocol 2.1 only adds
 //! optional fields, so a 2.0 frame is a 2.1 frame with the new fields left
 //! out, and a 2.1 frame is a 2.0 frame with fields the older reader ignores.
 
@@ -16,13 +16,14 @@ use floti_protocol::channels::workspace::{
     DEFAULT_AGENT_HEAVY_PER_HOST, DEFAULT_AGENT_SESSIONS_PER_HOST, DEFAULT_AGENT_STARTS_PER_PARENT,
     DEFAULT_SESSION_AGENTS, HostSettings, HostSettingsPatch,
 };
-use floti_protocol::record::{self, records, records_dir};
+use floti_protocol::record::{records, records_dir};
 use floti_protocol::version::negotiate;
-use floti_protocol::{BackendId, Catalogue, PROTOCOL_VERSION, ProtocolVersion};
+use floti_protocol::{BackendId, ProtocolVersion};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 const V2_0: ProtocolVersion = ProtocolVersion::new(2, 0);
+const V2_1: ProtocolVersion = ProtocolVersion::new(2, 1);
 
 // ---------------------------------------------------------------------------
 // What a 2.0 client has: each type as 2.0 declared it, without the fields 2.1
@@ -524,8 +525,7 @@ fn a_profile_from_before_2_1_runs_without_remote_control_and_a_2_0_client_reads_
 #[test]
 fn the_standing_notice_channels_are_in_2_1_and_not_in_2_0_and_every_2_0_channel_stays() {
     let v20 = record_of(V2_0);
-    let v21: Value =
-        serde_json::from_str(&record::record(PROTOCOL_VERSION, &Catalogue::protocol())).unwrap();
+    let v21 = record_of(V2_1);
     let channels = |record: &Value| -> BTreeSet<String> {
         record["channels"]
             .as_object()
@@ -551,12 +551,8 @@ fn the_standing_notice_channels_are_in_2_1_and_not_in_2_0_and_every_2_0_channel_
 
 #[test]
 fn s31_a_2_1_host_negotiates_the_version_a_2_0_client_speaks() {
-    assert_eq!(PROTOCOL_VERSION, ProtocolVersion::new(2, 1));
-    assert_eq!(negotiate(PROTOCOL_VERSION, V2_0), Ok(V2_0));
-    assert_eq!(
-        negotiate(PROTOCOL_VERSION, PROTOCOL_VERSION),
-        Ok(PROTOCOL_VERSION)
-    );
+    assert_eq!(negotiate(V2_1, V2_0), Ok(V2_0));
+    assert_eq!(negotiate(V2_1, V2_1), Ok(V2_1));
 }
 
 // ---------------------------------------------------------------------------
@@ -722,8 +718,7 @@ fn the_2_0_clients_types_above_are_the_types_the_2_0_record_holds() {
 #[test]
 fn protocol_2_1_adds_only_optional_fields_and_these_are_all_of_them() {
     let v20 = record_of(V2_0);
-    let v21: Value =
-        serde_json::from_str(&record::record(PROTOCOL_VERSION, &Catalogue::protocol())).unwrap();
+    let v21 = record_of(V2_1);
     assert_eq!(v21["version"], "2.1");
     let added = [
         (

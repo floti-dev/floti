@@ -23,6 +23,8 @@
 //!   with no row, from the shells [`detect_shells`] finds.
 //! - [`describe`] says, in words, what one session may be told about the
 //!   others, and has no field for anything of a conversation.
+//! - [`title`] is what a session's agent may call it: one line, at most
+//!   [`TITLE_MAX`] characters.
 
 mod activity;
 pub mod describe;
@@ -35,6 +37,7 @@ mod report;
 mod screen;
 mod shells;
 mod terminals;
+pub mod title;
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -55,3 +58,4 @@ pub use report::{
 pub use screen::{SCROLLBACK_LINES, Screen, TermSize};
 pub use shells::{check_shell, detect_shells, find_shell, shell_args};
 pub use terminals::{TerminalExit, Terminals};
+pub use title::{TITLE_MAX, session_title};

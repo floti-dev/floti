@@ -41,6 +41,13 @@ pub struct SessionRecord {
     pub name: String,
     /// What Floti calls it on screen, or null for "use `name`".
     pub label: Option<String>,
+    /// What the session is doing, in its agent's words (`session_title`): one
+    /// line of at most 60 characters, shown beside its name. A name the user
+    /// gives wins over it. Absent until the agent sets one, and from a host
+    /// before protocol 2.2, which reads as none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub title: Option<String>,
     pub cwd: String,
     /// The branch `cwd` was on when this was spawned. Null for a folder that
     /// is not a repository, a detached HEAD, or a read that failed.

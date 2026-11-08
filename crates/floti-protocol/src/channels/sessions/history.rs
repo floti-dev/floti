@@ -138,6 +138,13 @@ pub struct HistorySession {
     pub title_fallback: bool,
     /// The name given by hand, or null.
     pub label: Option<String>,
+    /// The title the conversation's agent last gave its session
+    /// (`session_title`), kept on the session's row. What to call it is
+    /// `label`, then this, then `title`. Absent when no agent titled it, and
+    /// from a host before protocol 2.2, which reads as none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub agent_title: Option<String>,
     /// The transcript on disk, or null once it has been reaped.
     pub transcript_file: Option<String>,
     #[ts(type = "number | null")]

@@ -626,6 +626,87 @@ fn a_session_is_found_by_the_name_it_was_given() {
     assert_eq!(page.sessions[0].session_id, "a");
 }
 
+impl Indexed {
+    /// A row of the host's whose agent titled it, in `conversation`: its
+    /// launch's, or the one it moved to (`moved`).
+    fn titled_row(&self, conversation: &str, moved: bool, title: &str) {
+        let column = if moved {
+            "last_claude_session_id"
+        } else {
+            "claude_session_id"
+        };
+        self.store
+            .connection()
+            .execute(
+                &format!(
+                    "INSERT INTO sessions (name, cwd, argv, {column}, status, title) \
+                     VALUES ('agent', '/work', '[]', ?1, 'exited', ?2)"
+                ),
+                [conversation, title],
+            )
+            .unwrap();
+    }
+}
+
+#[test]
+fn a_conversation_its_agent_titled_carries_the_title_beside_its_derived_one() {
+    let world = renamable();
+    world.titled_row("A", false, "Agents page: edit and delete agents");
+    let a = world.session("a").unwrap();
+    assert_eq!(
+        a.agent_title.as_deref(),
+        Some("Agents page: edit and delete agents")
+    );
+    // The first prompt's line is still the derived title, for a list that
+    // has neither a name nor an agent's title.
+    assert_eq!(a.title, "add geofencing to the map");
+    assert_eq!(a.label, None);
+    let page = world.all();
+    let listed = |id: &str| {
+        page.sessions
+            .iter()
+            .find(|s| s.session_id == id)
+            .unwrap()
+            .agent_title
+            .clone()
+    };
+    assert_eq!(
+        listed("a").as_deref(),
+        Some("Agents page: edit and delete agents")
+    );
+    assert_eq!(listed("b"), None);
+}
+
+#[test]
+fn the_newest_title_of_a_conversation_is_its_title_wherever_its_rows_held_it() {
+    let world = renamable();
+    world.titled_row("a", false, "Old work");
+    world.titled_row("a", true, "New work");
+    assert_eq!(
+        world.session("a").unwrap().agent_title.as_deref(),
+        Some("New work")
+    );
+}
+
+#[test]
+fn a_name_given_by_hand_is_kept_beside_the_agents_title_and_both_are_searched() {
+    let world = renamable();
+    world.titled_row("a", false, "Agents page: edit and delete agents");
+    let named = world
+        .index()
+        .rename("a", Some("Geofencing"))
+        .unwrap()
+        .unwrap();
+    // The name is what the list shows; the title is kept for when it is cleared.
+    assert_eq!(named.label.as_deref(), Some("Geofencing"));
+    assert_eq!(
+        named.agent_title.as_deref(),
+        Some("Agents page: edit and delete agents")
+    );
+    let page = world.search("delete agents");
+    assert_eq!(ids(&page), ["a"]);
+}
+
 #[test]
 fn a_name_is_keyed_on_the_id_whatever_case_it_is_given_with() {
     let world = renamable();

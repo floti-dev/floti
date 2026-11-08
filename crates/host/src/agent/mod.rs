@@ -544,6 +544,10 @@ pub struct Composition {
     /// Whether the session is given Floti's agents family, and so the guide to
     /// `floti agent`, composed into its instructions the same way.
     pub agent_guide: bool,
+    /// Whether the session is given the helm-sessions family, and so is asked
+    /// to title itself (`session_title`, `floti session title`), composed
+    /// into its instructions the same way.
+    pub title_guide: bool,
     /// The name the session runs Remote Control under, for an agent that has
     /// it ([`AgentBackend::remote_control`]); an adapter without it drops it.
     pub remote_control: Option<String>,

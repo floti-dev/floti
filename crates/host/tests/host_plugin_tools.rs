@@ -371,6 +371,14 @@ fn mcp_config_of(argv: &[String]) -> PathBuf {
     PathBuf::from(&argv[at + 1])
 }
 
+/// The rules a launch is allowed without asking for its plugins' tools.
+fn plugin_rules(argv: &[String]) -> Vec<String> {
+    allowed_in(argv)
+        .into_iter()
+        .filter(|rule| rule.starts_with("mcp__helm-plugin-"))
+        .collect()
+}
+
 /// The tools a launch is allowed without asking.
 fn allowed_in(argv: &[String]) -> Vec<String> {
     argv.iter()
@@ -598,7 +606,7 @@ async fn s1_s2_s5_a_version_2_plugins_tools_are_given_to_a_launch_as_declared_an
     assert!(url.ends_with("/mcp/plugin/ledger"), "{url}");
     assert_eq!(token, alpha.server("helm-sessions").1);
     assert_eq!(
-        allowed_in(&alpha.argv),
+        plugin_rules(&alpha.argv),
         ["mcp__helm-plugin-ledger__whoami"],
         "{:?}",
         alpha.argv
@@ -841,7 +849,10 @@ async fn s6_a_client_offering_a_server_under_a_version_2_plugins_name_is_sent_no
         "the host's, not the window's"
     );
     assert_eq!(tools.len(), 2);
-    assert_eq!(allowed_in(&alpha.argv), ["mcp__helm-plugin-ledger__whoami"]);
+    assert_eq!(
+        plugin_rules(&alpha.argv),
+        ["mcp__helm-plugin-ledger__whoami"]
+    );
 
     let (failed, text) = alpha.call_ledger("whoami", json!({ "note": "hi" })).await;
     assert!(!failed, "{text}");

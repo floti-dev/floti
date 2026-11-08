@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Duration;
 
@@ -41,6 +41,7 @@ use super::agent_tools::HostAgentTools;
 use super::features::ActivityHandle;
 use super::floti_agents::FAMILY;
 use super::records::{self, HostLedger, LostRow};
+use super::session_tools::SESSIONS_FAMILY;
 use crate::agent::claude_code::{parse_instant, sanitize_session_name, unique_session_name};
 use crate::agent::{
     AgentBackend, Composition, Launch, LaunchFolder, LaunchRequest, LiveRecord, ResumeRequest,
@@ -119,6 +120,10 @@ pub(crate) struct Hosted {
     /// How many WSL distros the host holds awake now.
     held_distros: AtomicUsize,
     occupancy: watch::Sender<Occupancy>,
+    /// How many times an agent has titled its session. A record's title is
+    /// listed with its row, so a title moves the activity a client re-lists
+    /// on, as a child's report does.
+    title_revision: AtomicU64,
 }
 
 /// How much is keeping the host busy: its running sessions and plain
@@ -225,6 +230,7 @@ impl Hosted {
             children,
             devices: Mutex::new(devices),
             held_distros: AtomicUsize::new(0),
+            title_revision: AtomicU64::new(0),
             occupancy: watch::Sender::new(Occupancy::default()),
         })
     }
@@ -805,6 +811,11 @@ impl Hosted {
             .agent_tools
             .iter()
             .any(|server| server.name == FAMILY);
+        // A session given helm-sessions is asked to title itself.
+        composition.title_guide = composition
+            .agent_tools
+            .iter()
+            .any(|server| server.name == SESSIONS_FAMILY);
         let grant = grant.map(|(tools, grant)| (tools, grant.id));
         // What `floti agent` needs in the session's environment, added to the
         // launch the backend composed.
@@ -965,6 +976,31 @@ impl Hosted {
             return Err("That session is not in this database.".to_owned());
         }
         self.record(id).map_err(|err| err.to_string())
+    }
+
+    /// Gives session `id` the title its agent asked for, once it is one line
+    /// of at most [`crate::session::TITLE_MAX`] characters. The row is the
+    /// record, so a title is kept after the session ends. Answers the title
+    /// as kept.
+    ///
+    /// # Errors
+    ///
+    /// A sentence saying why the title was refused, or that the session is
+    /// not in the database. Nothing is written then.
+    pub fn set_title(&self, id: SessionId, title: &str) -> std::result::Result<String, String> {
+        let title = crate::session::session_title(title)?;
+        let titled =
+            records::set_title(&self.ledger.store(), id, &title).map_err(|err| err.to_string())?;
+        if !titled {
+            return Err("That session is not in this database.".to_owned());
+        }
+        self.title_revision.fetch_add(1, Ordering::SeqCst);
+        Ok(title)
+    }
+
+    /// How many times an agent has titled its session since the host started.
+    pub fn title_revision(&self) -> u64 {
+        self.title_revision.load(Ordering::SeqCst)
     }
 
     /// Session `id`, while it runs.
@@ -1403,6 +1439,7 @@ fn composition_of(profile: Option<&Profile>) -> Composition {
         // Set where the launch is made: they depend on who starts it.
         child: None,
         agent_guide: false,
+        title_guide: false,
         // Named in `run`, where the session's name is made unique.
         remote_control: None,
     }

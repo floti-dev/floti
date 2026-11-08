@@ -19,6 +19,7 @@ use tokio::sync::broadcast;
 
 use crate::agent::claude_code::session_title_from;
 use crate::agent_tools::KeptGrant;
+use crate::history::index::AGENT_TITLES;
 use crate::session::{NewSessionRow, SessionExit, SessionId, SessionLedger};
 use crate::store::Store;
 use crate::{Error, Result};
@@ -35,7 +36,7 @@ const RECORD_COLUMNS: &str = "id, name, label, cwd, branch, project_path, profil
      parent_session_id, \
      (SELECT coalesce(nullif(parent.label, ''), parent.name) FROM sessions AS parent \
       WHERE parent.id = sessions.parent_session_id), \
-     role, stopped, command, outlive, permission_mode";
+     role, stopped, command, outlive, permission_mode, title";
 
 /// The backend a row ran on, from its `backend` column.
 ///
@@ -461,12 +462,15 @@ pub(crate) fn read_history_session(
     store
         .connection()
         .query_row(
-            "SELECT h.session_id, h.project, h.prompt_count, h.first_at, h.last_at, \
-             h.first_prompt, h.title_prompt, h.transcript_file, h.transcript_bytes, \
-             h.project_exists, n.name \
-             FROM history_sessions h \
-             LEFT JOIN history_names n ON n.session_id = lower(h.session_id) \
-             WHERE lower(h.session_id) = lower(?1)",
+            &format!(
+                "SELECT h.session_id, h.project, h.prompt_count, h.first_at, h.last_at, \
+                 h.first_prompt, h.title_prompt, h.transcript_file, h.transcript_bytes, \
+                 h.project_exists, n.name, t.title \
+                 FROM history_sessions h \
+                 LEFT JOIN history_names n ON n.session_id = lower(h.session_id) \
+                 LEFT JOIN {AGENT_TITLES} t ON t.conversation = lower(h.session_id) \
+                 WHERE lower(h.session_id) = lower(?1)"
+            ),
             [conversation_id],
             |row| {
                 let project: String = row.get(1)?;
@@ -486,6 +490,7 @@ pub(crate) fn read_history_session(
                     title: title.text,
                     title_fallback: title.fallback,
                     label: non_empty(row.get(10)?),
+                    agent_title: non_empty(row.get(11)?),
                     transcript_file: row.get(7)?,
                     transcript_bytes: row.get::<_, Option<i64>>(8)?.map(unsigned),
                     project_exists: row.get::<_, Option<bool>>(9)?.unwrap_or(false),
@@ -519,6 +524,19 @@ pub(crate) fn set_label(store: &Store, id: SessionId, label: Option<&str>) -> Re
             params![id.0, label],
         )
         .map_err(sql("rename a session"))?;
+    Ok(changed > 0)
+}
+
+/// Sets session `id`'s title, the one its agent gave it. False when there is
+/// no such row.
+pub(crate) fn set_title(store: &Store, id: SessionId, title: &str) -> Result<bool> {
+    let changed = store
+        .connection()
+        .execute(
+            "UPDATE sessions SET title = ?2 WHERE id = ?1",
+            params![id.0, title],
+        )
+        .map_err(sql("title a session"))?;
     Ok(changed > 0)
 }
 
@@ -614,6 +632,7 @@ fn record_from(row: &Row<'_>) -> rusqlite::Result<SessionRecord> {
         id: unsigned(row.get::<_, i64>(0)?),
         name: row.get(1)?,
         label: row.get(2)?,
+        title: non_empty(row.get(22)?),
         cwd: row.get(3)?,
         branch: row.get(4)?,
         project_path: row.get(5)?,

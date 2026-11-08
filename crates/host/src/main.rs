@@ -50,7 +50,8 @@
 //! `floti agent stop <name>` are run from a session's own shell: they start
 //! and end an agent of that session's, through the address and token the host
 //! put in the session's environment, and print the agent's name or the
-//! host's refusal (to standard error, with a non-zero status).
+//! host's refusal (to standard error, with a non-zero status). `floti session
+//! title <text>` is run from a session's own shell too: it titles that session.
 
 mod end_old_host;
 mod update_stop;
@@ -68,7 +69,7 @@ use floti_host::keep_awake::run_keep_awake;
 use floti_host::version;
 use floti_host::{ALREADY_RUNNING_EXIT, DesktopCommand, Error, HostOptions, log_line};
 
-const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti agent start --task <text> [--role <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop <name> [--json]";
+const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti agent start --task <text> [--role <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop <name> [--json]\n       floti session title <text>";
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
@@ -121,6 +122,7 @@ fn main() -> ExitCode {
             None => usage(),
         },
         ["agent", ..] => agent(&args[1..]),
+        ["session", ..] => session(&args[1..]),
         ["version"] => {
             println!("{}", version::version_line());
             ExitCode::SUCCESS
@@ -152,6 +154,17 @@ fn agent(args: &[String]) -> ExitCode {
         Ok(command) => ExitCode::from(floti_host::agent_cli::run(&command)),
         Err(reason) => {
             eprintln!("{reason}\n{}", floti_host::agent_cli::USAGE);
+            ExitCode::from(BridgeExit::Usage.code())
+        }
+    }
+}
+
+/// `floti session title`, run from a session's own shell.
+fn session(args: &[String]) -> ExitCode {
+    match floti_host::agent_cli::parse_session(args) {
+        Ok(title) => ExitCode::from(floti_host::agent_cli::run_session(&title)),
+        Err(reason) => {
+            eprintln!("{reason}\n{}", floti_host::agent_cli::SESSION_USAGE);
             ExitCode::from(BridgeExit::Usage.code())
         }
     }

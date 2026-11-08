@@ -15,6 +15,7 @@ fn session(backend: BackendId) -> SessionRecord {
         id: 12,
         name: "helm-3".into(),
         label: None,
+        title: None,
         cwd: "C:\\work\\a repo".into(),
         branch: Some("main".into()),
         project_path: None,

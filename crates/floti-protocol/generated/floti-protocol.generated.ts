@@ -1,7 +1,7 @@
 // Generated from the floti-protocol crate by `cargo run -p floti-protocol --bin generate`. Do not edit.
 
 /** The protocol version these declarations describe. */
-export const PROTOCOL_VERSION = { major: 2, minor: 1 } as const;
+export const PROTOCOL_VERSION = { major: 2, minor: 2 } as const;
 
 /** The link version of the session keeper a host of this build takes back. */
 export const KEEPER_LINK_VERSION = 1;
@@ -1491,6 +1491,13 @@ titleFallback: boolean,
  * The name given by hand, or null.
  */
 label: string | null, 
+/**
+ * The title the conversation's agent last gave its session
+ * (`session_title`), kept on the session's row. What to call it is
+ * `label`, then this, then `title`. Absent when no agent titled it, and
+ * from a host before protocol 2.2, which reads as none.
+ */
+agentTitle?: string, 
 /**
  * The transcript on disk, or null once it has been reaped.
  */
@@ -3001,7 +3008,14 @@ name: string,
 /**
  * What Floti calls it on screen, or null for "use `name`".
  */
-label: string | null, cwd: string, 
+label: string | null, 
+/**
+ * What the session is doing, in its agent's words (`session_title`): one
+ * line of at most 60 characters, shown beside its name. A name the user
+ * gives wins over it. Absent until the agent sets one, and from a host
+ * before protocol 2.2, which reads as none.
+ */
+title?: string, cwd: string, 
 /**
  * The branch `cwd` was on when this was spawned. Null for a folder that
  * is not a repository, a detached HEAD, or a read that failed.

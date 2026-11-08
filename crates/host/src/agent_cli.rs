@@ -29,6 +29,11 @@
 //! again to get the news, which the host keeps until an answer has reached
 //! its caller.
 //!
+//! `floti session title <text>` titles the session it runs in, as its
+//! `session_title` tool does: the helm-sessions family at
+//! `FLOTI_AGENT_SESSIONS_URL`, with the same token. Several words are one
+//! title, so an unquoted title works as a quoted one does.
+//!
 //! The token goes only to a loopback address and is never printed or put in
 //! an error. A refusal is printed to standard error and the exit status is 1,
 //! so a script and a model both see it; with `--json` the answer is the
@@ -47,6 +52,15 @@ pub const URL_VAR: &str = "FLOTI_AGENT_URL";
 
 /// The variable that carries the session's token.
 pub const TOKEN_VAR: &str = "FLOTI_AGENT_TOKEN";
+
+/// The variable that carries the address of the session's helm-sessions
+/// family, which `floti session title` calls. Its name starts as the agents
+/// family's do, so what the host strips from an inherited environment strips
+/// it too.
+pub const SESSIONS_URL_VAR: &str = "FLOTI_AGENT_SESSIONS_URL";
+
+/// What `floti session` accepts.
+pub const SESSION_USAGE: &str = "usage: floti session title <text>";
 
 /// What `floti agent` accepts.
 pub const USAGE: &str = "usage: floti agent start --task <text> [--role <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--worktree <name>] [--outlive] [--can-start] [--wait] [--json]\n       floti agent start --resume <name> --task <text> [--wait] [--json]\n       floti agent send [--interrupt] [--wait] [--json] <name> [--] <text>\n       floti agent read [--lines <n>] [--json] <name>\n       floti agent run [--name <name>] [--wait] [--json] -- <command...>\n       floti agent wait [--all] [--json] [<name>...]\n       floti agent stop <name> [--json]";
@@ -149,6 +163,30 @@ pub struct Stop {
     pub child: String,
     pub json: bool,
 }
+
+/// `floti session title`: the title the session gives itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Title {
+    pub text: String,
+}
+
+/// Which family a command reaches: the variable that holds its address and
+/// what it means when the host has no route for it.
+#[derive(Debug, Clone, Copy)]
+struct Family {
+    url_var: &'static str,
+    off: &'static str,
+}
+
+const AGENTS: Family = Family {
+    url_var: URL_VAR,
+    off: "This session has no agents: they are off for it (Sessions can start agents, or its profile).",
+};
+
+const SESSIONS: Family = Family {
+    url_var: SESSIONS_URL_VAR,
+    off: "This session has no session tools: they are off for it (Let Claude see the other sessions, or its profile).",
+};
 
 /// What a command printed and how it ended.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -384,16 +422,79 @@ fn parse_stop(args: &[String]) -> Result<Stop, String> {
 /// Runs `command` against the family at `FLOTI_AGENT_URL` with the token in
 /// `FLOTI_AGENT_TOKEN`, printing its outcome. Returns the exit status.
 pub fn run(command: &Command) -> u8 {
-    let url = std::env::var(URL_VAR).ok();
-    let token = std::env::var(TOKEN_VAR).ok();
-    let outcome = match (url, token) {
-        (Some(url), Some(token)) if !url.is_empty() && !token.is_empty() => {
-            execute(command, &url, &token)
-        }
-        _ => Outcome::refused(
+    let outcome = match address_and_token(URL_VAR) {
+        Some((url, token)) => execute(command, &url, &token),
+        None => Outcome::refused(
             "floti agent runs inside a Floti session that was given agents: FLOTI_AGENT_URL and FLOTI_AGENT_TOKEN are not set here.",
         ),
     };
+    print_outcome(&outcome)
+}
+
+/// The title in `args` (what follows `floti session`), or why there is none.
+///
+/// # Errors
+///
+/// A sentence naming what is missing or not understood.
+pub fn parse_session(args: &[String]) -> Result<Title, String> {
+    let Some((subcommand, rest)) = args.split_first() else {
+        return Err("Say what to do: title.".to_owned());
+    };
+    if subcommand != "title" {
+        return Err(format!("`{subcommand}` is not a floti session command."));
+    }
+    // What follows `--` is the title even where it starts with a dash.
+    let words = match rest.split_first() {
+        Some((first, words)) if first == "--" => words,
+        _ => rest,
+    };
+    let text = words.join(" ");
+    if text.trim().is_empty() {
+        return Err("Give the title: what this session is doing.".to_owned());
+    }
+    Ok(Title { text })
+}
+
+/// Titles the session at `FLOTI_AGENT_SESSIONS_URL` with the token in
+/// `FLOTI_AGENT_TOKEN`, printing the outcome. Returns the exit status.
+pub fn run_session(title: &Title) -> u8 {
+    let outcome = match address_and_token(SESSIONS_URL_VAR) {
+        Some((url, token)) => execute_title(title, &url, &token),
+        None => Outcome::refused(
+            "floti session runs inside a Floti session that was given its session tools: FLOTI_AGENT_SESSIONS_URL and FLOTI_AGENT_TOKEN are not set here.",
+        ),
+    };
+    print_outcome(&outcome)
+}
+
+/// Calls `session_title` at `url`, as the session `token` names.
+pub fn execute_title(title: &Title, url: &str, token: &str) -> Outcome {
+    match call(
+        SESSIONS,
+        url,
+        token,
+        "session_title",
+        json!({ "title": title.text }),
+    ) {
+        Ok(answer) => match answer.blocks.first().cloned().unwrap_or_default() {
+            first if answer.failed => Outcome::refused(first),
+            first => Outcome::done(first),
+        },
+        Err(problem) => Outcome::refused(problem),
+    }
+}
+
+/// The address in `url_var` and the token, when both are set.
+fn address_and_token(url_var: &str) -> Option<(String, String)> {
+    let url = std::env::var(url_var).ok().filter(|url| !url.is_empty())?;
+    let token = std::env::var(TOKEN_VAR)
+        .ok()
+        .filter(|token| !token.is_empty())?;
+    Some((url, token))
+}
+
+/// Prints `outcome` and answers its exit status.
+fn print_outcome(outcome: &Outcome) -> u8 {
     if let Some(out) = &outcome.out {
         println!("{out}");
     }
@@ -414,7 +515,7 @@ pub fn execute(command: &Command, url: &str, token: &str) -> Outcome {
         Command::Stop(stop) => ("agents_stop", json!({ "child": stop.child }), stop.json),
         Command::Wait(wait) => ("agents_wait", wait_arguments(wait), wait.json),
     };
-    match call(url, token, tool, arguments) {
+    match call(AGENTS, url, token, tool, arguments) {
         Ok(answer) => present(command, &answer, json),
         Err(problem) => Outcome::refused(problem),
     }
@@ -588,21 +689,21 @@ struct Endpoint {
 
 /// `http://<loopback address>:<port><path>`. The token is sent only to a
 /// loopback address, so a URL anywhere else is refused before a byte is sent.
-fn endpoint_of(url: &str) -> Result<Endpoint, String> {
+fn endpoint_of(url_var: &str, url: &str) -> Result<Endpoint, String> {
     let rest = url
         .strip_prefix("http://")
-        .ok_or_else(|| format!("{URL_VAR} is not an http address."))?;
+        .ok_or_else(|| format!("{url_var} is not an http address."))?;
     let (authority, path) = match rest.find('/') {
         Some(at) => rest.split_at(at),
         None => (rest, "/"),
     };
     let address = authority
         .to_socket_addrs()
-        .map_err(|_| format!("{URL_VAR} does not name an address."))?
+        .map_err(|_| format!("{url_var} does not name an address."))?
         .find(|address| address.ip().is_loopback())
         .ok_or_else(|| {
             format!(
-                "{URL_VAR} is not a loopback address, so this session's token is not sent there."
+                "{url_var} is not a loopback address, so this session's token is not sent there."
             )
         })?;
     Ok(Endpoint {
@@ -613,9 +714,16 @@ fn endpoint_of(url: &str) -> Result<Endpoint, String> {
 
 /// Initialises a connection to the family, then calls `tool` with
 /// `arguments`.
-fn call(url: &str, token: &str, tool: &str, arguments: Value) -> Result<Answer, String> {
-    let endpoint = endpoint_of(url)?;
+fn call(
+    family: Family,
+    url: &str,
+    token: &str,
+    tool: &str,
+    arguments: Value,
+) -> Result<Answer, String> {
+    let endpoint = endpoint_of(family.url_var, url)?;
     rpc(
+        family,
         &endpoint,
         token,
         1,
@@ -627,6 +735,7 @@ fn call(url: &str, token: &str, tool: &str, arguments: Value) -> Result<Answer, 
         }),
     )?;
     let result = rpc(
+        family,
         &endpoint,
         token,
         2,
@@ -650,6 +759,7 @@ fn call(url: &str, token: &str, tool: &str, arguments: Value) -> Result<Answer, 
 
 /// One JSON-RPC request and the `result` of its answer.
 fn rpc(
+    family: Family,
     endpoint: &Endpoint,
     token: &str,
     id: u64,
@@ -667,12 +777,7 @@ fn rpc(
                     .to_owned(),
             );
         }
-        404 => {
-            return Err(
-                "This session has no agents: they are off for it (Sessions can start agents, or its profile)."
-                    .to_owned(),
-            );
-        }
+        404 => return Err(family.off.to_owned()),
         other => return Err(format!("The Floti host answered {other}.")),
     }
     let answer = json_of(&reply.body, id)?;
@@ -1081,17 +1186,17 @@ mod tests {
 
     #[test]
     fn the_token_goes_only_to_a_loopback_address() {
-        let ok = endpoint_of("http://127.0.0.1:4321/mcp/agents").expect("loopback");
+        let ok = endpoint_of(URL_VAR, "http://127.0.0.1:4321/mcp/agents").expect("loopback");
         assert_eq!(ok.address, "127.0.0.1:4321".parse().unwrap());
         assert_eq!(ok.path, "/mcp/agents");
-        assert!(endpoint_of("http://[::1]:4321/mcp/agents").is_ok());
+        assert!(endpoint_of(URL_VAR, "http://[::1]:4321/mcp/agents").is_ok());
         for refused in [
             "http://192.0.2.7:4321/mcp/agents",
             "https://127.0.0.1:4321/mcp/agents",
             "127.0.0.1:4321/mcp/agents",
             "http://127.0.0.1/mcp/agents",
         ] {
-            assert!(endpoint_of(refused).is_err(), "{refused}");
+            assert!(endpoint_of(URL_VAR, refused).is_err(), "{refused}");
         }
     }
 
@@ -1495,6 +1600,67 @@ mod tests {
             assert!(message.contains(wanted), "{message}");
             assert!(!message.contains("secret-token"), "{message}");
         }
+    }
+
+    #[test]
+    fn session_title_takes_its_words_as_one_title_and_refuses_none() {
+        assert_eq!(
+            parse_session(&args(&["title", "Agents page: edit and delete agents"])),
+            Ok(Title {
+                text: "Agents page: edit and delete agents".to_owned()
+            })
+        );
+        // Unquoted, the words are the same title.
+        assert_eq!(
+            parse_session(&args(&["title", "Fix", "the", "login"])),
+            Ok(Title {
+                text: "Fix the login".to_owned()
+            })
+        );
+        assert_eq!(
+            parse_session(&args(&["title", "--", "--dashes", "first"])),
+            Ok(Title {
+                text: "--dashes first".to_owned()
+            })
+        );
+        for refused in [&["title"][..], &["title", "  "], &["name", "x"], &[]] {
+            assert!(parse_session(&args(refused)).is_err(), "{refused:?}");
+        }
+    }
+
+    #[test]
+    fn session_title_calls_the_sessions_tool_and_prints_its_answer_or_refusal() {
+        let titled = host(vec![
+            rpc_result(json!({})),
+            tool_answer(false, &["Titled this session: Fix the login"]),
+        ]);
+        let title = Title {
+            text: "Fix the login".to_owned(),
+        };
+        assert_eq!(
+            execute_title(&title, &titled.url, "secret-token"),
+            Outcome::done("Titled this session: Fix the login".to_owned())
+        );
+        let seen = titled.seen.lock().unwrap().clone();
+        let call = seen.last().expect("the call");
+        assert!(call.contains(r#""name":"session_title""#), "{call}");
+        assert!(call.contains(r#""title":"Fix the login""#), "{call}");
+
+        let refused = host(vec![
+            rpc_result(json!({})),
+            tool_answer(true, &["A title is one line."]),
+        ]);
+        let outcome = execute_title(&title, &refused.url, "secret-token");
+        assert_eq!(outcome.code, 1);
+        assert_eq!(outcome.err.as_deref(), Some("A title is one line."));
+
+        // A launch without the session tools has no route for them.
+        let off = host(vec![(404, String::new())]);
+        let outcome = execute_title(&title, &off.url, "secret-token");
+        assert_eq!(outcome.code, 1);
+        let message = outcome.err.expect("a message");
+        assert!(message.contains("no session tools"), "{message}");
+        assert!(!message.contains("secret-token"), "{message}");
     }
 
     #[test]

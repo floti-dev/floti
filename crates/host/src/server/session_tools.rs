@@ -1,14 +1,16 @@
-//! helm-sessions: what the other sessions on this machine are doing, served
-//! to the host's sessions on the agent tools listener at `/mcp/sessions`,
-//! under today's name and with today's tools and instructions
-//! (`session_tools.json`).
+//! helm-sessions: what the other sessions on this machine are doing, and the
+//! caller's own title, served to the host's sessions on the agent tools
+//! listener at `/mcp/sessions`, under today's name and with today's tools and
+//! instructions (`session_tools.json`).
 //!
-//! **Read-only awareness, so a session can get out of another's way.** Two
-//! agents in one working tree is the failure this exists to prevent, and it is
-//! prevented by looking, not by talking. Nothing here sends a session anything,
-//! waits on one, hands one work, or lets one address another. That is
-//! coordination, which is out of scope, and Claude Code has its own channel
-//! for it.
+//! **Awareness plus the caller's own title.** Two agents in one working tree
+//! is the failure this exists to prevent, and it is prevented by looking, not
+//! by talking. Nothing here sends a session anything, waits on one, hands one
+//! work, or lets one address another. That is coordination, which is out of
+//! scope, and Claude Code has its own channel for it. The one thing a tool
+//! writes is the caller's own title (`session_title`, and
+//! `floti session title` from its shell), on its own row, resolved from its
+//! token: it takes no session id, so it reaches no other session.
 //!
 //! **No answer carries any part of another session's conversation.** The
 //! mechanism is [`crate::session::describe`]'s input types, which have no
@@ -82,6 +84,13 @@ static TABLE: LazyLock<Table> = LazyLock::new(|| {
 
 const SESSIONS_LIST: &str = "sessions_list";
 const SESSION_DETAIL: &str = "session_detail";
+const SESSION_TITLE: &str = "session_title";
+
+/// The family's name, as `session_tools.json` gives it.
+pub(crate) const SESSIONS_FAMILY: &str = "helm-sessions";
+
+/// The command that runs `session_title` from a session's shell.
+pub(crate) const TITLE_COMMAND: &str = "floti session title";
 
 /// The answer while the host is still assembling what the tools read. A
 /// sentence rather than a failure that sticks: the session's tools work once
@@ -109,6 +118,11 @@ pub(crate) trait SessionsWorld: Send + Sync + 'static {
 
     /// One processes-and-ports pass, taken for this call and no longer.
     fn measure(&self) -> PassFuture<'_>;
+
+    /// Sets the title of the host's session `host_session_id` and answers it
+    /// as kept, or a sentence saying why it was refused. Blocking: it writes
+    /// the store.
+    fn set_title(&self, host_session_id: u64, title: &str) -> Result<String, String>;
 }
 
 /// The family: its switch, the `sessionMcp` setting as last written, and
@@ -174,6 +188,18 @@ impl ToolFamily for SessionTools {
             .collect()
     }
 
+    /// `session_title` changes nothing but the caller's own row, so it is
+    /// allowed at launch beside the tools that only look.
+    fn allowed_tools(&self) -> Vec<String> {
+        let mut allowed = crate::agent_tools::read_only_tools(&self.tools());
+        allowed.push(SESSION_TITLE.to_owned());
+        allowed
+    }
+
+    fn allowed_commands(&self) -> Vec<String> {
+        vec![TITLE_COMMAND.to_owned()]
+    }
+
     fn call<'a>(&'a self, caller: Caller, name: &'a str, arguments: JsonObject) -> ToolFuture<'a> {
         Box::pin(async move {
             let Some(world) = self.world() else {
@@ -185,6 +211,7 @@ impl ToolFamily for SessionTools {
             match name {
                 SESSIONS_LIST => list(world, me).await,
                 SESSION_DETAIL => detail(world, me, &arguments).await,
+                SESSION_TITLE => title(world, me, &arguments).await,
                 other => problem(&format!("{} has no tool named {other}.", TABLE.name)),
             }
         })
@@ -284,6 +311,29 @@ async fn detail(
     }))
 }
 
+/// `session_title`: the caller's own session titled, which session that is
+/// coming from its token alone.
+async fn title(
+    world: Arc<dyn SessionsWorld>,
+    me: Option<u64>,
+    arguments: &JsonObject,
+) -> CallToolResult {
+    let Some(me) = me else {
+        return problem(NO_LIVE_SESSION);
+    };
+    let Some(Value::String(asked)) = arguments.get("title") else {
+        return problem(
+            "Give the title as text in title: what this session is doing, such as \"Agents page: edit and delete agents\".",
+        );
+    };
+    let asked = asked.clone();
+    match tokio::task::spawn_blocking(move || world.set_title(me, &asked)).await {
+        Ok(Ok(title)) => text(format!("Titled this session: {title}")),
+        Ok(Err(refused)) => problem(&refused),
+        Err(_) => problem(STILL_STARTING),
+    }
+}
+
 /// The listing, read now, off the runtime's workers.
 async fn overview(world: &Arc<dyn SessionsWorld>) -> Option<SessionsOverview> {
     let world = Arc::clone(world);
@@ -339,5 +389,19 @@ impl SessionsWorld for HostWorld {
 
     fn measure(&self) -> PassFuture<'_> {
         Box::pin(self.resources.one_pass())
+    }
+
+    fn set_title(&self, host_session_id: u64, title: &str) -> Result<String, String> {
+        let hosted = self
+            .hosted
+            .upgrade()
+            .ok_or_else(|| STILL_STARTING.to_owned())?;
+        let id = session_id(host_session_id).ok_or_else(|| NO_LIVE_SESSION.to_owned())?;
+        let title = hosted.set_title(id, title)?;
+        drop(hosted);
+        // Read the activity now, so the clients hear of the title at once
+        // rather than at the next pass.
+        let _ = self.activity.read_now();
+        Ok(title)
     }
 }

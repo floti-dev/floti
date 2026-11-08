@@ -138,15 +138,22 @@ impl SessionLedger for Mutex<Store> {
             .map_err(|err| Error::io("record the session's arguments", io::Error::other(err)))?;
         let store = self.lock().unwrap_or_else(PoisonError::into_inner);
         let parent = row.origin.parent.as_ref();
+        // A session that resumes a conversation starts with the title the
+        // newest row in that conversation had: it is the same work.
         let id = store
             .connection()
             .query_row(
                 "INSERT INTO sessions (name, cwd, argv, claude_session_id, backend, \
                  project_path, profile_id, permission_mode, branch, parent_session_id, \
                  parent_conversation_id, child_name, role, command, outlive, can_start, \
-                 child_class, child_worktree, remote_control_name, status) \
+                 child_class, child_worktree, remote_control_name, title, status) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, \
-                 ?16, ?17, ?18, ?19, 'running') RETURNING id",
+                 ?16, ?17, ?18, ?19, \
+                 (SELECT title FROM sessions AS earlier WHERE ?4 IS NOT NULL \
+                  AND earlier.title IS NOT NULL \
+                  AND (earlier.claude_session_id = ?4 OR earlier.last_claude_session_id = ?4) \
+                  ORDER BY earlier.id DESC LIMIT 1), \
+                 'running') RETURNING id",
                 params![
                     row.name,
                     row.cwd.to_string_lossy(),

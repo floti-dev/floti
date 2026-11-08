@@ -167,6 +167,7 @@ fn record() -> SessionRecord {
         id: 31,
         name: "factory: triage".into(),
         label: None,
+        title: None,
         cwd: "C:\\work\\a repo".into(),
         branch: Some("main".into()),
         project_path: Some("C:\\work\\a repo".into()),

@@ -11,9 +11,19 @@ use super::*;
 use crate::session::SessionId;
 
 /// A machine with one hosted session, 5150, whose listing is ready only once
-/// the test says so.
+/// the test says so, and the titles set on its rows, by row.
 struct World {
     ready: Mutex<bool>,
+    titles: Mutex<Vec<(u64, String)>>,
+}
+
+impl World {
+    fn new(ready: bool) -> Self {
+        Self {
+            ready: Mutex::new(ready),
+            titles: Mutex::new(Vec::new()),
+        }
+    }
 }
 
 impl World {
@@ -57,6 +67,12 @@ impl SessionsWorld for World {
 
     fn measure(&self) -> PassFuture<'_> {
         Box::pin(async { Vec::new() })
+    }
+
+    fn set_title(&self, host_session_id: u64, title: &str) -> Result<String, String> {
+        let title = crate::session::session_title(title)?;
+        lock(&self.titles).push((host_session_id, title.clone()));
+        Ok(title)
     }
 }
 
@@ -105,9 +121,7 @@ async fn s24_a_tool_called_before_the_listing_is_ready_says_to_try_again_and_wor
     }
 
     // Given a world whose listing cannot be read yet.
-    let world = Arc::new(World {
-        ready: Mutex::new(false),
-    });
+    let world = Arc::new(World::new(false));
     tools.answer_from(Arc::clone(&world) as Arc<dyn SessionsWorld>);
     for (tool, arguments) in [
         (SESSIONS_LIST, json!({})),
@@ -146,9 +160,7 @@ async fn s24_a_tool_called_before_the_listing_is_ready_says_to_try_again_and_wor
 async fn a_pid_that_is_not_a_whole_number_is_a_failed_call_and_one_that_is_no_number_is_the_callers()
  {
     let tools = SessionTools::new();
-    tools.answer_from(Arc::new(World {
-        ready: Mutex::new(true),
-    }));
+    tools.answer_from(Arc::new(World::new(true)));
     let (failed, text) = ask(&tools, Some(7), SESSION_DETAIL, json!({ "pid": 51.5 })).await;
     assert!(failed && text.contains("whole number"), "{text}");
     let (failed, text) = ask(&tools, Some(7), SESSION_DETAIL, json!({ "pid": -3 })).await;
@@ -163,9 +175,7 @@ async fn a_pid_that_is_not_a_whole_number_is_a_failed_call_and_one_that_is_no_nu
 #[tokio::test(flavor = "multi_thread")]
 async fn s20_a_token_whose_session_is_not_live_marks_no_session_and_has_no_own_detail() {
     let tools = SessionTools::new();
-    tools.answer_from(Arc::new(World {
-        ready: Mutex::new(true),
-    }));
+    tools.answer_from(Arc::new(World::new(true)));
     // A session the listing does not have, and a token not tied to one yet.
     for session in [Some(99), None] {
         let (failed, listing) = ask(&tools, session, SESSIONS_LIST, json!({})).await;
@@ -188,6 +198,7 @@ async fn s20_a_token_whose_session_is_not_live_marks_no_session_and_has_no_own_d
 fn the_family_is_todays_helm_sessions_at_its_route_from_the_shared_table_and_off_until_switched() {
     let tools = SessionTools::new();
     assert_eq!(tools.name(), "helm-sessions");
+    assert_eq!(tools.name(), SESSIONS_FAMILY);
     assert_eq!(tools.route(), "/mcp/sessions");
     let table: Value =
         serde_json::from_str(include_str!("../session_tools.json")).expect("the table is JSON");
@@ -195,14 +206,78 @@ fn the_family_is_todays_helm_sessions_at_its_route_from_the_shared_table_and_off
     assert!(!tools.is_on());
     tools.switch(true);
     assert!(tools.is_on());
-    // Listed exactly as the table says, as today's listener lists them: no
-    // annotation, so nothing is allowed without asking on their account.
+    // Listed exactly as the table says, with no annotation.
     let listed: Vec<Value> = tools
         .tools()
         .iter()
         .map(|tool| serde_json::to_value(tool).expect("a tool is JSON"))
         .collect();
     assert_eq!(Value::Array(listed), table["tools"]);
+    // Titling its own session is the one thing a launch does without asking,
+    // as the tool and as the command; looking asks as it always has.
+    assert_eq!(tools.allowed_tools(), vec![SESSION_TITLE.to_owned()]);
+    assert_eq!(
+        tools.allowed_commands(),
+        vec!["floti session title".to_owned()]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn session_title_titles_the_callers_own_row_and_reads_no_session_named_in_its_arguments() {
+    let tools = SessionTools::new();
+    let world = Arc::new(World::new(true));
+    tools.answer_from(Arc::clone(&world) as Arc<dyn SessionsWorld>);
+
+    let (failed, text) = ask(
+        &tools,
+        Some(7),
+        SESSION_TITLE,
+        // A session named in an argument the schema does not declare is not
+        // read: which session is titled comes from the token alone.
+        json!({ "title": "  Agents page: edit and delete agents ", "pid": 5150, "id": 8 }),
+    )
+    .await;
+    assert!(!failed, "{text}");
+    assert_eq!(
+        text,
+        "Titled this session: Agents page: edit and delete agents"
+    );
+    let (failed, text) = ask(
+        &tools,
+        Some(9),
+        SESSION_TITLE,
+        json!({ "title": "Other work" }),
+    )
+    .await;
+    assert!(!failed, "{text}");
+    assert_eq!(
+        *lock(&world.titles),
+        vec![
+            (7, "Agents page: edit and delete agents".to_owned()),
+            (9, "Other work".to_owned()),
+        ]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn session_title_refuses_a_title_it_cannot_keep_and_a_token_with_no_session() {
+    let tools = SessionTools::new();
+    let world = Arc::new(World::new(true));
+    tools.answer_from(Arc::clone(&world) as Arc<dyn SessionsWorld>);
+
+    for (arguments, says) in [
+        (json!({}), "Give the title as text"),
+        (json!({ "title": 5 }), "Give the title as text"),
+        (json!({ "title": "one\ntwo" }), "one line"),
+        (json!({ "title": "x".repeat(61) }), "at most 60"),
+    ] {
+        let (failed, text) = ask(&tools, Some(7), SESSION_TITLE, arguments).await;
+        assert!(failed && text.contains(says), "{text}");
+    }
+    let (failed, text) = ask(&tools, None, SESSION_TITLE, json!({ "title": "Mine" })).await;
+    assert!(failed, "{text}");
+    assert_eq!(text, NO_LIVE_SESSION);
+    assert!(lock(&world.titles).is_empty());
 }
 
 #[test]

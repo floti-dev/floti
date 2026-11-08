@@ -1,7 +1,7 @@
 {
   "name": "helm-sessions",
   "path": "/mcp/sessions",
-  "instructions": "These tools tell you what other Claude Code sessions are running on this machine, so you can stay out of their way - two agents in one working tree is the thing they exist to prevent. They are read-only and there is no way to send another session anything through them: nothing here starts, stops, waits on, or messages a session, and no tool will ever return any part of another session’s conversation. Check sessions_list before starting long work in a directory.",
+  "instructions": "These tools tell you what other Claude Code sessions are running on this machine, so you can stay out of their way - two agents in one working tree is the thing they exist to prevent - and let you title your own session. Looking is read-only and there is no way to send another session anything through them: nothing here starts, stops, waits on, or messages a session, and no tool will ever return any part of another session’s conversation. Check sessions_list before starting long work in a directory. Once you know what this session is for, give it a title with session_title, and give it a new one when the work changes.",
   "tools": [
     {
       "name": "sessions_list",
@@ -19,6 +19,21 @@
             "description": "The pid from sessions_list. Omit it for your own session - which one that is comes from the token this session was given, never from anything you pass."
           }
         },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session_title",
+      "description": "Titles your own session: the user sees the title beside its name in the sessions list and in History, so a list of sessions says what each was for. Say what is being done, such as \"Agents page: edit and delete agents\" - never the folder's name. One line, at most 60 characters. Set it once you know what the session is for, and again when the work changes. It titles only the session that calls it: which one that is comes from the token this session was given. A name the user gave the session in History is shown instead of the title.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "What this session is doing, in one line of at most 60 characters."
+          }
+        },
+        "required": ["title"],
         "additionalProperties": false
       }
     }

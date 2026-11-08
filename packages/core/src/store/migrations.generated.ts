@@ -194,5 +194,11 @@ export const MIGRATIONS: readonly EmbeddedMigration[] = [
       "ALTER TABLE `sessions` ADD `remote_control_name` text;",
       "ALTER TABLE `sessions` ADD `extra_starts` integer DEFAULT 0 NOT NULL;"
     ]
+  },
+  {
+    "tag": "0024_ambiguous_marrow",
+    "statements": [
+      "ALTER TABLE `sessions` ADD `title` text;"
+    ]
   }
 ]

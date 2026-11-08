@@ -185,8 +185,8 @@ impl<'a> HistoryIndex<'a> {
 
     /// Most recently active first; `total` is the match count before the
     /// limit. A `messages` search asks the archive which conversations said
-    /// it and lists those; a `prompts` search matches prompts, the project
-    /// and a name given by hand. The two are never mixed.
+    /// it and lists those; a `prompts` search matches prompts, the project,
+    /// a name given by hand and the title an agent gave it. The two are never mixed.
     pub fn sessions(&self, query: &HistoryQuery) -> Result<HistoryPage> {
         let started = Instant::now();
         let search = query.search.as_deref().map_or("", str::trim);
@@ -213,11 +213,13 @@ impl<'a> HistoryIndex<'a> {
                     clauses.push(
                         "(s.session_id IN (SELECT session_id FROM history_prompts WHERE text LIKE ? ESCAPE '\\')
                           OR s.project_key LIKE ? ESCAPE '\\'
-                          OR n.name LIKE ? ESCAPE '\\')"
+                          OR n.name LIKE ? ESCAPE '\\'
+                          OR t.title LIKE ? ESCAPE '\\')"
                             .to_owned(),
                     );
                     filter.push(SqlValue::Text(pattern.clone()));
                     filter.push(SqlValue::Text(like_pattern(&search.to_lowercase())));
+                    filter.push(SqlValue::Text(pattern.clone()));
                     filter.push(SqlValue::Text(pattern.clone()));
                     like = Some(pattern);
                 }
@@ -453,6 +455,9 @@ impl<'a> HistoryIndex<'a> {
             title: title.text,
             title_fallback: title.fallback,
             label: row.get("label")?,
+            agent_title: row
+                .get::<_, Option<String>>("agent_title")?
+                .filter(|title| !title.trim().is_empty()),
             transcript_file: row.get("transcript_file")?,
             transcript_bytes: row.get::<_, Option<i64>>("transcript_bytes")?.map(to_u64),
             project_exists: row.get::<_, i64>("project_exists")? == 1,
@@ -463,6 +468,27 @@ impl<'a> HistoryIndex<'a> {
     }
 }
 
+/// The table [`AGENT_TITLES`] is, as a literal for `concat!`.
+macro_rules! agent_titles {
+    () => {
+        "(SELECT conversation, title, MAX(id) AS newest FROM (
+           SELECT lower(claude_session_id) AS conversation, title, id FROM sessions
+            WHERE title IS NOT NULL AND claude_session_id IS NOT NULL
+           UNION ALL
+           SELECT lower(last_claude_session_id), title, id FROM sessions
+            WHERE title IS NOT NULL AND last_claude_session_id IS NOT NULL
+         ) GROUP BY conversation)"
+    };
+}
+
+/// Each conversation with the title its agent last gave a session in it:
+/// the newest session row that was in it, by the conversation it started in
+/// or the one a cleared conversation moved it to, and has a title. Columns
+/// `conversation` (lower-cased) and `title`. The title is kept on the
+/// session's row, so a conversation whose transcript was reaped and that only
+/// the archive still holds keeps it too.
+pub(crate) const AGENT_TITLES: &str = agent_titles!();
+
 /// The columns every session read takes, with what the archive holds for it
 /// and the name given by hand joined on: which of those a row has is a
 /// property of the row, read in the same query.
@@ -471,10 +497,15 @@ const SESSION_COLUMNS: &str =
         s.first_prompt, s.title_prompt, s.transcript_file, s.transcript_bytes, s.project_exists,
         a.state AS archive_state,
         CASE WHEN a.session_id IS NULL THEN NULL ELSE a.message_count END AS archived_messages,
-        n.name AS label";
+        n.name AS label, t.title AS agent_title";
 
-const JOINS: &str = "LEFT JOIN transcript_sessions a ON a.session_id = lower(s.session_id)
-     LEFT JOIN history_names n ON n.session_id = lower(s.session_id)";
+const JOINS: &str = concat!(
+    "LEFT JOIN transcript_sessions a ON a.session_id = lower(s.session_id)
+     LEFT JOIN history_names n ON n.session_id = lower(s.session_id)
+     LEFT JOIN ",
+    agent_titles!(),
+    " t ON t.conversation = lower(s.session_id)"
+);
 
 /// Ranks the prompts with no rank yet, and says how many there were.
 fn rank_unranked(tx: &Connection) -> rusqlite::Result<usize> {
@@ -626,7 +657,7 @@ fn like_pattern(search: &str) -> String {
 }
 
 /// A name as typed, made safe for the row it lands in.
-fn clean_name(name: &str) -> String {
+pub(crate) fn clean_name(name: &str) -> String {
     let spaced: String = name
         .chars()
         .map(|c| if is_other(c) { ' ' } else { c })

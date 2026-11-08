@@ -243,6 +243,7 @@ mod tests {
             id,
             name: name.to_owned(),
             label: None,
+            title: None,
             cwd: cwd.to_owned(),
             branch: None,
             project_path: None,

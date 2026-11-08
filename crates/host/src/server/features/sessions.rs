@@ -432,6 +432,9 @@ struct Activity {
     /// carry neither, but a client lists a child's report with its row when
     /// the states are published, so a report moves the publication.
     reports: u64,
+    /// How many times an agent has titled its session, for the same reason:
+    /// a client lists a session's title with its row.
+    titles: u64,
 }
 
 impl Activity {
@@ -441,6 +444,7 @@ impl Activity {
         self.states == next.states
             && self.overview.sessions == next.overview.sessions
             && self.reports == next.reports
+            && self.titles == next.titles
     }
 }
 
@@ -459,6 +463,7 @@ fn read_activity(hosted: &Hosted, tracker: &mut ActivityTracker) -> Activity {
         states: pass.states,
         overview: pass.overview,
         reports: hosted.report_revision(),
+        titles: hosted.title_revision(),
     }
 }
 
@@ -530,7 +535,9 @@ impl ActivityState {
         {
             log_line!("floti host: {err}");
         }
-        if (self.last.states != next.states || self.last.reports != next.reports)
+        if (self.last.states != next.states
+            || self.last.reports != next.reports
+            || self.last.titles != next.titles)
             && let Err(err) = events.set_state::<SessionActivityChanged, _>(&next.states)
         {
             log_line!("floti host: {err}");
@@ -721,6 +728,22 @@ mod tests {
         focus.set(B, [4]);
         focus.leave(B);
         assert!(focus.worth_notifying(B, 4));
+    }
+
+    #[test]
+    fn a_title_set_moves_the_activity_publication_as_a_report_does() {
+        let read = |reports, titles| Activity {
+            states: Vec::new(),
+            overview: SessionsOverview {
+                sessions: Vec::new(),
+                read_at_ms: 1,
+            },
+            reports,
+            titles,
+        };
+        assert!(read(0, 0).same_as(&read(0, 0)));
+        assert!(!read(0, 0).same_as(&read(0, 1)), "a title");
+        assert!(!read(0, 0).same_as(&read(1, 0)), "a report");
     }
 
     #[test]

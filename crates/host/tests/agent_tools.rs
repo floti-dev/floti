@@ -911,7 +911,7 @@ async fn s9_switching_helm_sessions_off_takes_its_route_away_at_once_and_on_give
         .iter()
         .map(|tool| tool["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["sessions_list", "session_detail"]);
+    assert_eq!(names, ["sessions_list", "session_detail", "session_title"]);
 
     close(&mut client, &alpha.record).await;
     close(&mut client, &beta).await;
@@ -1046,8 +1046,8 @@ async fn s13_s2_the_server_names_itself_helm_sessions_negotiates_and_lists_today
     assert!(notified.body.is_empty(), "{notified:?}");
 
     // Exactly today's tools and instructions, from the table the desktop's
-    // own listener reads: so `mcp__helm-sessions__*` rules apply unchanged,
-    // and none is allowed without asking on their account.
+    // own listener reads: so `mcp__helm-sessions__*` rules apply unchanged.
+    // Titling itself is the one thing a launch does without asking.
     let table = session_table();
     let initialized = rpc(
         &alpha.url,
@@ -1064,11 +1064,7 @@ async fn s13_s2_the_server_names_itself_helm_sessions_negotiates_and_lists_today
     assert_eq!(initialized["instructions"], table["instructions"]);
     let result = alpha.tools_list().await.result();
     assert_eq!(result["tools"], table["tools"]);
-    assert!(
-        !alpha.argv.iter().any(|arg| arg == "--allowedTools"),
-        "{:?}",
-        alpha.argv
-    );
+    assert_eq!(allowed_in(&alpha.argv), TITLE_RULES, "{:?}", alpha.argv);
 
     close(&mut client, &alpha.record).await;
     host.stop(HostStopReason::Stop).await;
@@ -1954,15 +1950,8 @@ async fn s3_s4_a_plugin_server_offered_by_helms_window_is_listed_as_offered_allo
     assert_eq!(token, alpha.token);
 
     // Its read-only tool is allowed at launch; the other asks.
-    let allowed: Vec<&String> = alpha
-        .argv
-        .iter()
-        .skip_while(|arg| *arg != "--allowedTools")
-        .skip(1)
-        .take_while(|arg| !arg.starts_with("--"))
-        .collect();
     assert_eq!(
-        allowed,
+        plugin_rules(&alpha.argv),
         ["mcp__helm-plugin-notes__find"],
         "{:?}",
         alpha.argv
@@ -2083,7 +2072,7 @@ async fn s5_a_plugin_server_left_out_of_the_next_offer_is_refused_to_running_ses
         .fake_session(&mut client, &world.folder("beta"), "beta")
         .await;
     assert_eq!(beta.servers(), ["helm-sessions"]);
-    assert!(!beta.argv.iter().any(|arg| arg == "--allowedTools"));
+    assert_eq!(allowed_in(&beta.argv), TITLE_RULES);
 
     // Switched on again, it is served again.
     offer_plugins(&mut desktop, vec![notes_server()]).await;
@@ -2198,6 +2187,21 @@ fn notes_server_none_read_only() -> AgentPluginServer {
     server
 }
 
+/// What helm-sessions lets a launch do without asking: title itself, by its
+/// tool and from its shell.
+const TITLE_RULES: [&str; 2] = [
+    "mcp__helm-sessions__session_title",
+    "Bash(floti session title:*)",
+];
+
+/// The rules a launch's argv allows without asking for its plugins' tools.
+fn plugin_rules(argv: &[String]) -> Vec<String> {
+    allowed_in(argv)
+        .into_iter()
+        .filter(|rule| rule.starts_with("mcp__helm-plugin-"))
+        .collect()
+}
+
 /// The tools a launch's argv allows without asking.
 fn allowed_in(argv: &[String]) -> Vec<String> {
     argv.iter()
@@ -2254,7 +2258,7 @@ async fn s2_the_tool_file_names_no_allowed_tool_and_a_plugin_with_none_marked_is
         .await;
 
     // The rule rides on the argv; the file holds servers, not permissions.
-    assert_eq!(allowed_in(&alpha.argv), ["mcp__helm-plugin-notes__find"]);
+    assert_eq!(plugin_rules(&alpha.argv), ["mcp__helm-plugin-notes__find"]);
     let file = std::fs::read_to_string(&alpha.config).expect("read the tool file");
     for allowed in ["allowedTools", "mcp__", "find"] {
         assert!(!file.contains(allowed), "{allowed} in {file}");
@@ -2266,11 +2270,7 @@ async fn s2_the_tool_file_names_no_allowed_tool_and_a_plugin_with_none_marked_is
         .fake_session(&mut client, &world.folder("beta"), "beta")
         .await;
     assert_eq!(beta.servers(), ["helm-plugin-notes", "helm-sessions"]);
-    assert!(
-        !beta.argv.iter().any(|arg| arg == "--allowedTools"),
-        "{:?}",
-        beta.argv
-    );
+    assert_eq!(allowed_in(&beta.argv), TITLE_RULES, "{:?}", beta.argv);
 
     close(&mut client, &alpha.record).await;
     close(&mut client, &beta.record).await;
@@ -2773,15 +2773,8 @@ async fn s21_a_plugin_only_another_host_has_is_offered_to_no_session_here_and_it
 
     // Given only the plugin this host has.
     assert_eq!(alpha.servers(), ["helm-plugin-notes", "helm-sessions"]);
-    let allowed: Vec<&String> = alpha
-        .argv
-        .iter()
-        .skip_while(|arg| *arg != "--allowedTools")
-        .skip(1)
-        .take_while(|arg| !arg.starts_with("--"))
-        .collect();
     assert_eq!(
-        allowed,
+        plugin_rules(&alpha.argv),
         ["mcp__helm-plugin-notes__find"],
         "{:?}",
         alpha.argv

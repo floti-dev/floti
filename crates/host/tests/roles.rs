@@ -1085,13 +1085,14 @@ async fn s4_a_roles_body_reaches_the_child_as_instructions_on_either_backend_and
         .await
         .done();
     let bare = world.child_of(&parent, "bare-kid").await;
-    // Only what Floti adds to every child: the two sections it composes.
+    // Only what Floti adds to every child: the sections it composes.
     let told = bare.run.instructions.as_deref().unwrap_or_default();
     let headings: Vec<&str> = told.lines().filter(|line| line.starts_with("# ")).collect();
     assert_eq!(
         headings,
         [
             "# Started by another session",
+            "# This session's title",
             "# Starting and waiting on agents from your shell"
         ],
         "{told}"
@@ -1460,9 +1461,9 @@ async fn s10_allowed_tools_become_each_backends_own_allow_form_beside_the_famili
             .iter()
             .filter(|arg| *arg == "--allow-shell")
             .count(),
-        // The role's `git status`, and floti agent start, send, wait, read
-        // and stop.
-        6
+        // The role's `git status`, floti agent start, send, wait, read and
+        // stop, and floti session title.
+        7
     );
     host.stop(HostStopReason::Stop).await;
 }

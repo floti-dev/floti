@@ -377,3 +377,50 @@ fn deleting_a_parents_row_leaves_its_child_with_no_parent_and_keeps_the_conversa
         .unwrap();
     assert_eq!(conversation.as_deref(), Some("conversation-of-lead"));
 }
+
+#[test]
+fn a_title_set_on_a_row_is_on_its_record_and_another_rows_is_untouched() {
+    let world = World::new();
+    let alpha = world.start("alpha", None);
+    let beta = world.start("beta", None);
+    assert_eq!(world.record(alpha).title, None);
+
+    let store = world.store.lock().unwrap();
+    assert!(set_title(&store, alpha, "Agents page: edit and delete agents").unwrap());
+    // A row that is not there is said, not made.
+    assert!(!set_title(&store, SessionId(9_999), "Nobody").unwrap());
+    drop(store);
+
+    assert_eq!(
+        world.record(alpha).title.as_deref(),
+        Some("Agents page: edit and delete agents")
+    );
+    assert_eq!(world.record(beta).title, None);
+}
+
+#[test]
+fn a_session_that_resumes_a_titled_conversation_starts_with_its_newest_title() {
+    let world = World::new();
+    let first = world.start("alpha", None);
+    {
+        let store = world.store.lock().unwrap();
+        set_title(&store, first, "Old work").unwrap();
+    }
+    let second = world.start("alpha", None);
+    assert_eq!(world.record(second).title.as_deref(), Some("Old work"));
+    {
+        let store = world.store.lock().unwrap();
+        set_title(&store, second, "New work").unwrap();
+    }
+    // The row that last held the conversation is the newest; a later row in
+    // it starts with that row's title.
+    world.execute(
+        "UPDATE sessions SET claude_session_id = 'moved-on', \
+         last_claude_session_id = 'conversation-of-alpha' WHERE id = ?1",
+        second,
+    );
+    let third = world.start("alpha", None);
+    assert_eq!(world.record(third).title.as_deref(), Some("New work"));
+    // Another conversation starts untitled.
+    assert_eq!(world.record(world.start("beta", None)).title, None);
+}

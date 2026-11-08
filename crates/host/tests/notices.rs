@@ -910,8 +910,8 @@ async fn allowing_a_parent_more_starts_adds_the_starts_setting_to_that_parent_al
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s23_a_2_1_client_follows_dismisses_allows_and_watches_while_a_2_0_client_works_as_before()
-{
+async fn s23_a_client_on_this_minor_follows_dismisses_allows_and_watches_while_one_a_minor_behind_works_as_before()
+ {
     let world = World::new();
     let host = world.host().await;
     world
@@ -933,12 +933,12 @@ async fn s23_a_2_1_client_follows_dismisses_allows_and_watches_while_a_2_0_clien
 
     let mut current = world.client().await;
     assert_eq!(current.welcome.protocol, PROTOCOL_VERSION);
-    assert_eq!(PROTOCOL_VERSION, ProtocolVersion::new(2, 1));
-    let mut old =
-        TestClient::connect_at(&world.endpoint, ProtocolVersion::new(2, 0), TERMINAL).await;
-    assert_eq!(old.welcome.protocol, ProtocolVersion::new(2, 0));
+    // The minor before this one, which the host still serves.
+    let previous = ProtocolVersion::new(PROTOCOL_VERSION.major, PROTOCOL_VERSION.minor - 1);
+    let mut old = TestClient::connect_at(&world.endpoint, previous, TERMINAL).await;
+    assert_eq!(old.welcome.protocol, previous);
 
-    // The 2.1 client follows the standing notices: the ones standing when it
+    // The current client follows the standing notices: the ones standing when it
     // connected, then each change.
     let standing: Vec<StandingNotice> = match current.subscribe_on(1, NOTICES).await {
         Message::Snapshot(snapshot) => from_payload(&snapshot.state).expect("the notices"),
@@ -991,30 +991,30 @@ async fn s23_a_2_1_client_follows_dismisses_allows_and_watches_while_a_2_0_clien
         })
         .await;
 
-    // A 2.0 client connects and works as it did: it lists the sessions,
+    // A client a minor behind connects and works as it did: it lists the sessions,
     // starts one, and types into it.
     let listed = old
         .request::<SessionList>(&())
         .await
-        .expect("a 2.0 client lists the sessions");
+        .expect("a client a minor behind lists the sessions");
     for parent in [&refused, &other] {
         assert!(listed.iter().any(|row| row.id == parent.id()), "{listed:?}");
     }
     let started = old
         .request::<SessionStart>(&StartSessionRequest {
-            cwd: text(&world.project("from-2-0")),
+            cwd: text(&world.project("from-previous")),
             cols: 80,
             rows: 24,
-            name: Some("from 2.0".to_owned()),
+            name: Some("from the previous minor".to_owned()),
             backend: Some(BackendId::new(CLAUDE)),
             ..StartSessionRequest::default()
         })
         .await
-        .expect("a 2.0 client starts a session");
+        .expect("a client a minor behind starts a session");
     old.attach(1, started.id).await;
-    old.type_into(1, b"hello from 2.0\r").await;
+    old.type_into(1, b"hello from the previous minor\r").await;
     old.read_stream_until(1, |screen| {
-        String::from_utf8_lossy(screen).contains("hello from 2.0")
+        String::from_utf8_lossy(screen).contains("hello from the previous minor")
     })
     .await;
     host.stop(HostStopReason::Stop).await;

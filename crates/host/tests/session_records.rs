@@ -22,10 +22,13 @@ use floti_protocol::channels::sessions::{
     SessionExit, SessionList, SessionStart, StartSessionRequest,
 };
 use floti_protocol::record::{records, records_dir};
-use floti_protocol::{EventChannel, Payload, ProtocolVersion, RequestChannel};
+use floti_protocol::{EventChannel, PROTOCOL_VERSION, Payload, ProtocolVersion, RequestChannel};
 use serde_json::Value;
 
 const TERMINAL: &[&str] = &["terminal"];
+
+/// The minor before this one, which the host still serves.
+const PREVIOUS: ProtocolVersion = ProtocolVersion::new(2, 1);
 
 fn start_request(folder: &Path) -> StartSessionRequest {
     StartSessionRequest {
@@ -75,22 +78,37 @@ fn make_command_child(data: &Path, child: u64, parent: u64, name: &str, command:
     assert_eq!(changed, 1, "the command child's row is there");
 }
 
-/// What the committed record of protocol 2.0 declares for `SessionRecord`.
-fn record_of_2_0() -> Value {
+/// Titles session `id`'s row as its agent's `session_title` does, from a
+/// connection of the test's own to the host's store.
+fn set_title(data: &Path, id: u64, title: &str) {
+    let store = rusqlite::Connection::open(data.join("floti.db")).expect("open floti.db");
+    store.busy_timeout(PATIENCE).expect("wait for the host");
+    let changed = store
+        .execute(
+            "UPDATE sessions SET title = ?2 WHERE id = ?1",
+            rusqlite::params![id as i64, title],
+        )
+        .expect("title the row");
+    assert_eq!(changed, 1, "the row is there");
+}
+
+/// What the committed record of the previous minor declares for
+/// `SessionRecord`.
+fn record_of_previous() -> Value {
     let text = records(&records_dir())
         .expect("read the records")
         .into_iter()
-        .find_map(|(version, text)| (version == ProtocolVersion::new(2, 0)).then_some(text))
-        .expect("there is a record of protocol 2.0");
+        .find_map(|(version, text)| (version == PREVIOUS).then_some(text))
+        .expect("there is a record of the previous minor");
     let record: Value = serde_json::from_str(&text).expect("the record is JSON");
     record["types"]["SessionRecord"].clone()
 }
 
 /// Whether `wire`, one session as a frame carries it, has every property
-/// protocol 2.0 declared for a session, with a type 2.0 allowed: what a
-/// client that knows only 2.0 needs to read it.
-fn problems_for_a_2_0_reader(wire: &Value) -> Vec<String> {
-    let declared = record_of_2_0();
+/// the previous minor declared for a session, with a type it allowed: what a
+/// client that knows only that minor needs to read it.
+fn problems_for_a_previous_reader(wire: &Value) -> Vec<String> {
+    let declared = record_of_previous();
     let mut problems = Vec::new();
     for (name, schema) in declared["properties"].as_object().unwrap() {
         let Some(found) = wire.get(name) else {
@@ -118,14 +136,14 @@ fn problems_for_a_2_0_reader(wire: &Value) -> Vec<String> {
             Value::Object(_) => "object",
         };
         if !allowed.contains(&kind) {
-            problems.push(format!("{name} is {kind}, 2.0 allows {allowed:?}"));
+            problems.push(format!("{name} is {kind}, {PREVIOUS} allows {allowed:?}"));
         }
     }
     problems
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s31_a_client_on_2_1_lists_a_child_with_its_parent_and_role_and_a_client_on_2_0_reads_the_same_list()
+async fn s31_a_client_on_this_minor_lists_a_child_with_its_parent_and_role_and_one_a_minor_behind_reads_the_same_list()
  {
     let dirs = TestDirs::new();
     let agent = fake_agent!(&dirs);
@@ -142,7 +160,7 @@ async fn s31_a_client_on_2_1_lists_a_child_with_its_parent_and_role_and_a_client
     });
 
     let mut client = TestClient::connect(&endpoint, TERMINAL).await;
-    assert_eq!(client.welcome.protocol.to_string(), "2.1");
+    assert_eq!(client.welcome.protocol, PROTOCOL_VERSION);
     let folder = dirs.folder("project");
     let lead = client
         .request::<SessionStart>(&start_request(&folder))
@@ -157,6 +175,7 @@ async fn s31_a_client_on_2_1_lists_a_child_with_its_parent_and_role_and_a_client
         .await
         .expect("start a session nobody's child");
     make_child(&dirs.data, reviewer.id, lead.id, "reviewer");
+    set_title(&dirs.data, alone.id, "Agents page: edit and delete agents");
 
     let listed = client.request::<SessionList>(&()).await.unwrap();
     let record = |id: u64| -> &SessionRecord {
@@ -177,23 +196,29 @@ async fn s31_a_client_on_2_1_lists_a_child_with_its_parent_and_role_and_a_client
             session.name
         );
     }
+    // A session its agent titled carries the title; the others carry none.
+    assert_eq!(
+        record(alone.id).title.as_deref(),
+        Some("Agents page: edit and delete agents")
+    );
+    assert_eq!(record(lead.id).title, None);
 
     // A client one minor behind connects, is told the version it speaks, and
     // reads every field it knows of every session in the same list.
-    let mut old = TestClient::connect_at(&endpoint, ProtocolVersion::new(2, 0), TERMINAL).await;
-    assert_eq!(old.welcome.protocol.to_string(), "2.0");
+    let mut old = TestClient::connect_at(&endpoint, PREVIOUS, TERMINAL).await;
+    assert_eq!(old.welcome.protocol, PREVIOUS);
     let payload: Payload = old
         .request_on(
             SessionList::NAME,
             to_payload(&()).expect("encode the request"),
         )
         .await
-        .expect("a 2.0 client lists sessions");
+        .expect("a client a minor behind lists sessions");
     let wire: Vec<Value> = from_payload(&payload).expect("the list is readable as plain values");
     assert_eq!(wire.len(), 3);
     for session in &wire {
         assert_eq!(
-            problems_for_a_2_0_reader(session),
+            problems_for_a_previous_reader(session),
             Vec::<String>::new(),
             "{session}"
         );
@@ -203,7 +228,7 @@ async fn s31_a_client_on_2_1_lists_a_child_with_its_parent_and_role_and_a_client
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_client_on_2_1_lists_a_command_child_with_its_command_and_once_it_exited_its_exit_code_and_a_client_on_2_0_reads_the_same_list()
+async fn a_client_on_this_minor_lists_a_command_child_with_its_command_and_once_it_exited_its_exit_code_and_one_a_minor_behind_reads_the_same_list()
  {
     const EXITS: u64 = 4;
     let dirs = TestDirs::new();
@@ -249,26 +274,27 @@ async fn a_client_on_2_1_lists_a_command_child_with_its_command_and_once_it_exit
 
     // A client one minor behind reads every field it knows of the same list,
     // the command child's record included.
-    let mut old = TestClient::connect_at(&endpoint, ProtocolVersion::new(2, 0), TERMINAL).await;
+    let mut old = TestClient::connect_at(&endpoint, PREVIOUS, TERMINAL).await;
     let payload: Payload = old
         .request_on(
             SessionList::NAME,
             to_payload(&()).expect("encode the request"),
         )
         .await
-        .expect("a 2.0 client lists sessions");
+        .expect("a client a minor behind lists sessions");
     let wire: Vec<Value> = from_payload(&payload).expect("the list is readable as plain values");
     assert_eq!(wire.len(), 3);
     for session in &wire {
         assert_eq!(
-            problems_for_a_2_0_reader(session),
+            problems_for_a_previous_reader(session),
             Vec::<String>::new(),
             "{session}"
         );
     }
 
     // Once the command exits, the record the host sends with the exit carries
-    // its exit code beside its command, and a 2.0 reader reads it as well.
+    // its exit code beside its command, and a reader a minor behind reads it
+    // as well.
     client.attach(1, tests).await;
     client.type_into(1, b"/exit 3\r").await;
     let exit: Value = client
@@ -276,7 +302,7 @@ async fn a_client_on_2_1_lists_a_command_child_with_its_command_and_once_it_exit
             ended["id"] == tests
         })
         .await;
-    assert_eq!(problems_for_a_2_0_reader(&exit), Vec::<String>::new());
+    assert_eq!(problems_for_a_previous_reader(&exit), Vec::<String>::new());
     let exited: SessionRecord = serde_json::from_value(exit).expect("the exit is a record");
     assert_eq!(exited.status, SessionStatus::Exited);
     assert_eq!(exited.exit_code, Some(3));

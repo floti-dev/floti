@@ -72,11 +72,13 @@ use tokio::sync::broadcast::{self, error::RecvError};
 use super::{Hosted, Plan, lock};
 use crate::agent::guidance::ChildInstructions;
 use crate::agent::{AgentBackend, AgentToolServer, Composition};
+use crate::agent_cli::{SESSIONS_URL_VAR, TOKEN_VAR, URL_VAR};
 use crate::roles::{
     BadRole, DEFAULT_ROLE, NoRoles, Role, RoleClass, RoleLookup, RoleSource, default_role,
 };
 use crate::server::floti_agents::FAMILY;
 use crate::server::records::{self, ExitNotice};
+use crate::server::session_tools::SESSIONS_FAMILY;
 use crate::session::{ParentLink, SessionId, SessionOrigin, TermSize};
 use crate::workspace::files::paths::resolves_inside;
 use crate::workspace::settings;
@@ -88,12 +90,6 @@ const STOP_WAIT: Duration = Duration::from_secs(5);
 /// The size a child's terminal starts at: no client is attached to it, and the
 /// first terminal to report a size resizes it (`Session::resize`).
 const CHILD_SIZE: (u16, u16) = (120, 32);
-
-/// The variable that carries a session's token for `floti agent`.
-const TOKEN_VAR: &str = "FLOTI_AGENT_TOKEN";
-
-/// The variable that carries the address of the agents family.
-const URL_VAR: &str = "FLOTI_AGENT_URL";
 
 /// What the host keeps to start children: where roles come from, where the
 /// `floti` executable is, and the one lock that takes starts one at a time.
@@ -328,16 +324,19 @@ impl Hosted {
         }
     }
 
-    /// Adds to a session's environment what a launch given the agents family
-    /// needs for `floti agent`: its token and the family's address, and the
-    /// PATH with the `floti` executable's folder first. Nothing for a launch
-    /// without the family.
+    /// Adds to a session's environment what its shell needs for `floti agent`
+    /// and `floti session title`: its token, the address of each of the two
+    /// families it was given, and the PATH with the `floti` executable's
+    /// folder first. Nothing for a launch given neither family.
     pub(super) fn give_agent_env(
         &self,
         env: &mut Vec<(OsString, OsString)>,
         servers: &[AgentToolServer],
     ) {
-        let Some(server) = servers.iter().find(|server| server.name == FAMILY) else {
+        let agents = servers.iter().find(|server| server.name == FAMILY);
+        let sessions = servers.iter().find(|server| server.name == SESSIONS_FAMILY);
+        // One token per launch, whichever family it is read from.
+        let Some(token) = agents.or(sessions).map(|server| &server.token) else {
             return;
         };
         let path = env
@@ -346,8 +345,13 @@ impl Hosted {
             .find(|(name, _)| name.eq_ignore_ascii_case("PATH"))
             .map(|(_, value)| value.clone())
             .or_else(|| self.children.inherited_path.clone());
-        set_env(env, TOKEN_VAR, OsString::from(&server.token));
-        set_env(env, URL_VAR, OsString::from(&server.url));
+        set_env(env, TOKEN_VAR, OsString::from(token));
+        if let Some(agents) = agents {
+            set_env(env, URL_VAR, OsString::from(&agents.url));
+        }
+        if let Some(sessions) = sessions {
+            set_env(env, SESSIONS_URL_VAR, OsString::from(&sessions.url));
+        }
         if let Some(path) = self.children.path_with_floti(path.as_ref()) {
             set_env(env, "PATH", path);
         }

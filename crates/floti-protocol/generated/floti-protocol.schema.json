@@ -4140,6 +4140,13 @@
     "HistorySession": {
       "description": "A conversation the history index knows about, and whether it can still be\nresumed.",
       "properties": {
+        "agentTitle": {
+          "description": "The title the conversation's agent last gave its session\n(`session_title`), kept on the session's row. What to call it is\n`label`, then this, then `title`. Absent when no agent titled it, and\nfrom a host before protocol 2.2, which reads as none.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "archive": {
           "anyOf": [
             {
@@ -9090,6 +9097,13 @@
         "stopped": {
           "description": "Whether the host ended the session itself - a client's Stop or End, an\nagent's stop, its parent ending, a quit that ends it - and not the\nprogram, which exited on its own. Marked before the process exits, so\na finished child reads \"Stopped\" or \"Done\". Absent reads false, as it\ndoes from a host before protocol 2.1.",
           "type": "boolean"
+        },
+        "title": {
+          "description": "What the session is doing, in its agent's words (`session_title`): one\nline of at most 60 characters, shown beside its name. A name the user\ngives wins over it. Absent until the agent sets one, and from a host\nbefore protocol 2.2, which reads as none.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -12700,5 +12714,5 @@
   ],
   "x-defaultInitialCredit": 262144,
   "x-maxFrameLen": 16777216,
-  "x-protocolVersion": "2.1"
+  "x-protocolVersion": "2.2"
 }

@@ -1132,7 +1132,7 @@ async fn s2_with_the_setting_off_or_the_profile_off_a_session_has_no_entry_no_to
                 .run
                 .allowed()
                 .iter()
-                .all(|rule| !rule.contains("floti")),
+                .all(|rule| !rule.contains("floti-agents") && !rule.contains("floti agent")),
             "{backend}: {:?}",
             agent.run.allowed()
         );
@@ -2209,7 +2209,7 @@ fn assert_family_allowed(who: &str, backend: &str, agent: &Agent) {
         .run
         .allowed()
         .into_iter()
-        .filter(|rule| rule.contains("floti"))
+        .filter(|rule| rule.contains("floti-agents") || rule.contains("floti agent"))
         .collect();
     about_the_family.sort();
     // No launch allows `run`, or a wildcard over the subcommands or the tools.
@@ -5523,5 +5523,102 @@ async fn agents_list_shows_a_command_child_with_its_command_and_how_many_command
         text.contains("3 of 4 command children running at once"),
         "{text}"
     );
+    host.stop(HostStopReason::Stop).await;
+}
+
+// ---------------------------------------------------------------------------
+// A session's own title
+// ---------------------------------------------------------------------------
+
+/// The family a session titles itself through.
+const SESSIONS: &str = "helm-sessions";
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_titles_itself_by_its_tool_and_from_its_shell_and_reaches_no_other_session() {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("titles");
+    for backend in [CLAUDE, OTHER] {
+        let alpha = world
+            .session(backend, &folder, &format!("alpha {backend}"))
+            .await;
+        let beta = world
+            .session(backend, &folder, &format!("beta {backend}"))
+            .await;
+
+        // Asked to keep a title, and allowed to set one without asking.
+        let instructions = alpha.run.instructions.clone().unwrap_or_default();
+        assert!(
+            instructions.contains("give it a title: call session_title"),
+            "{backend}: {instructions}"
+        );
+        let rules = if backend == CLAUDE {
+            [
+                "mcp__helm-sessions__session_title",
+                "Bash(floti session title:*)",
+            ]
+        } else {
+            ["helm-sessions.session_title", "floti session title"]
+        };
+        let allowed = alpha.run.allowed();
+        for rule in rules {
+            assert!(
+                allowed.iter().any(|got| got == rule),
+                "{backend}: {rule} in {allowed:?}"
+            );
+        }
+
+        // The tool, on alpha's own token. An id among the arguments is not
+        // read: which session is titled is the token's.
+        let (url, token) = alpha.run.servers[SESSIONS].clone();
+        let titled = called(
+            &url,
+            &token,
+            "session_title",
+            json!({ "title": "Agents page: edit and delete agents", "id": beta.id() }),
+        )
+        .await;
+        assert!(!titled.failed, "{titled:?}");
+        assert_eq!(
+            titled.blocks,
+            ["Titled this session: Agents page: edit and delete agents"]
+        );
+        assert_eq!(
+            world.record(alpha.id()).await.title.as_deref(),
+            Some("Agents page: edit and delete agents")
+        );
+        assert_eq!(world.record(beta.id()).await.title, None);
+
+        // From beta's own shell, beta, its words unquoted.
+        let ran = world
+            .shell(&beta, "floti session title Fix the login form")
+            .await;
+        assert_eq!(ran.code, Some(0), "{ran:?}");
+        assert!(
+            ran.stdout
+                .contains("Titled this session: Fix the login form"),
+            "{ran:?}"
+        );
+        assert_eq!(
+            world.record(beta.id()).await.title.as_deref(),
+            Some("Fix the login form")
+        );
+        assert_eq!(
+            world.record(alpha.id()).await.title.as_deref(),
+            Some("Agents page: edit and delete agents")
+        );
+
+        // A title it cannot keep is refused, said, and changes nothing.
+        let refused = world
+            .shell(&beta, &format!("floti session title {}", "x".repeat(61)))
+            .await;
+        assert_eq!(refused.code, Some(1), "{refused:?}");
+        assert!(refused.stderr.contains("at most 60"), "{refused:?}");
+        assert!(!refused.stderr.contains(&token), "{refused:?}");
+        assert_eq!(
+            world.record(beta.id()).await.title.as_deref(),
+            Some("Fix the login form")
+        );
+    }
     host.stop(HostStopReason::Stop).await;
 }

@@ -646,7 +646,7 @@ fn release(socket: &mut Option<Bound>) {
 
 /// The tools in `tools` listed with `readOnlyHint`, by name: the ones a launch
 /// is allowed to call without asking.
-fn read_only_tools(tools: &[Tool]) -> Vec<String> {
+pub(crate) fn read_only_tools(tools: &[Tool]) -> Vec<String> {
     tools
         .iter()
         .filter(|tool| {

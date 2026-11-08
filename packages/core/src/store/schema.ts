@@ -155,6 +155,14 @@ export const sessions = sqliteTable(
      * something into the tab.
      */
     label: text('label'),
+    /**
+     * What the session is doing, in its agent's own words: one line of at most
+     * 60 characters the agent set with the host's `session_title` tool (or
+     * `floti session title`), shown beside the name. Only the Floti host
+     * writes it. A label wins over it on screen, and a session that resumes a
+     * conversation starts with the title its last row had.
+     */
+    title: text('title'),
     cwd: text('cwd').notNull(),
     /**
      * The git branch `cwd` was on **when this session was spawned**, or null for

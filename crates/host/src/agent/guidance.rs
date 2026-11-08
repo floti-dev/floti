@@ -1,7 +1,7 @@
 //! The instructions Floti writes itself into the sessions it hosts, beside a
 //! profile's and a role's: what a child is told about the session that started
-//! it, and a short guide to `floti agent` for every session given the agents
-//! family.
+//! it, the ask to title itself for every session given helm-sessions, and a
+//! short guide to `floti agent` for every session given the agents family.
 //!
 //! The text is the host's, so every adapter composes the same words; the one
 //! thing that differs by agent is how a parent is woken when a wait ends, and
@@ -31,17 +31,24 @@ pub const WAKES_ON_BACKGROUND_COMMAND: &str = "To hear from your children while 
 /// never left holding a call.
 pub const ANSWERS_AT_ONCE: &str = "`floti agent wait` answers at once with your children's news, or says nothing is new yet; run it again after your next piece of work, and again whenever it fails.";
 
+/// What a session given helm-sessions is asked about its title.
+const TITLE_SECTION: &str = "# This session's title\n\nOnce you know what this session is for, give it a title: call session_title, or run `floti session title \"<title>\"` from your shell. Give it a new one whenever the work changes. The user sees it beside the session's name in the sessions list and in History, so say what is being done, such as \"Agents page: edit and delete agents\", and never the folder's name. One line, at most 60 characters.\n";
+
 /// The most characters of a parent's name put into a child's instructions.
 const NAME_CHARS: usize = 80;
 
 /// The sections Floti adds to the instructions `composition` is launched with,
-/// or `None` when it adds none: the child instructions for a child, then the
-/// guide for a session given the agents family. `waiting` is the adapter's
-/// sentence on waiting.
+/// or `None` when it adds none: the child instructions for a child, the ask
+/// to keep a title for a session given helm-sessions, then the guide for a
+/// session given the agents family. `waiting` is the adapter's sentence on
+/// waiting.
 pub fn floti_sections(composition: &Composition, waiting: &str) -> Option<String> {
     let mut sections = Vec::new();
     if let Some(child) = &composition.child {
         sections.push(child_section(child));
+    }
+    if composition.title_guide {
+        sections.push(TITLE_SECTION.to_owned());
     }
     if composition.agent_guide {
         sections.push(guide_section(waiting));
@@ -166,6 +173,37 @@ mod tests {
         assert!(text.contains("returns its exit code and last 40 lines when it exits"));
         assert!(text.contains("Floti cannot see your own background commands."));
         assert!(text.contains("Add --wait to `floti agent start` or `send`"));
+    }
+
+    #[test]
+    fn a_session_given_helm_sessions_is_asked_to_keep_a_descriptive_title() {
+        let composition = Composition {
+            title_guide: true,
+            ..Composition::default()
+        };
+        let text = floti_sections(&composition, "wait").expect("the ask");
+        assert!(
+            text.contains("give it a title: call session_title"),
+            "{text}"
+        );
+        assert!(text.contains("`floti session title"), "{text}");
+        assert!(
+            text.contains("a new one whenever the work changes"),
+            "{text}"
+        );
+        assert!(text.contains("never the folder's name"), "{text}");
+        assert!(text.contains("at most 60 characters"), "{text}");
+        assert!(!text.contains("floti agent"), "no guide without the family");
+
+        // Before the guide to `floti agent`, after a child's own section.
+        let mut both = child(true);
+        both.title_guide = true;
+        both.agent_guide = true;
+        let text = floti_sections(&both, "wait").expect("the sections");
+        let started = text.find("# Started by another session").unwrap();
+        let title = text.find("# This session's title").unwrap();
+        let guide = text.find("# Starting and waiting").unwrap();
+        assert!(started < title && title < guide, "{text}");
     }
 
     #[test]
