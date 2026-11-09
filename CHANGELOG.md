@@ -21,6 +21,10 @@ A preview, not a release: nothing offers it as an update.
 - A child's peek says what each button does. For a child you closed out of
   its parent's tab, Open puts it back there, and Open as tab gives it a tab of
   its own. Every other peek, and While you were away, offers Open as tab.
+- A child's peek shows its whole screen, scaled down to fit, so a Claude Code
+  child's latest output above its prompt is no longer cut off. The screen box
+  grows with what the child has drawn, up to 360px in a tall window, and its
+  text is drawn smaller rather than stretched, so it stays sharp.
 
 ## 2.4.1-preview.10
 
