@@ -425,6 +425,48 @@ export const agentMessages = sqliteTable(
 )
 
 /**
+ * The texts the Floti host kept of its agent files before changing them: one
+ * row per change a client made with `agents:write`, `agents:delete` or
+ * `agents:addShipped`, which `agents:restore` undoes newest first. Only the
+ * Floti host writes it, and it keeps the newest 20 rows per agent. The agent
+ * files are in the host's config folder; what they were is kept here, in its
+ * data folder, never beside them.
+ *
+ * A row undoes only while its files are as the change left them
+ * (`after_hash`, `renamed_hash`), so an undo never discards an edit made
+ * since.
+ */
+export const agentVersions = sqliteTable(
+  'agent_versions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    /** The agents folder the files are in. */
+    folder: text('folder').notNull(),
+    /** The agent the change was made to; for a rename, the one renamed. */
+    name: text('name').notNull(),
+    /** Its file, such as `reviewer.md`. */
+    file: text('file').notNull(),
+    /** The file's text before the change, or null when there was no file. */
+    text: text('text'),
+    /** The hash of what the change left in the file, or null when it left none. */
+    afterHash: text('after_hash'),
+    /** For a rename: the agent it became, its file and the hash of what was written there. */
+    renamedTo: text('renamed_to'),
+    renamedFile: text('renamed_file'),
+    renamedHash: text('renamed_hash'),
+    /** `create`, `replace`, `rename`, `delete` or `add-shipped`. */
+    reason: text('reason', {
+      enum: ['create', 'replace', 'rename', 'delete', 'add-shipped']
+    }).notNull(),
+    at: text('at').notNull().default(now)
+  },
+  (t) => [
+    index('agent_versions_name_idx').on(t.folder, t.name),
+    index('agent_versions_renamed_idx').on(t.folder, t.renamedTo)
+  ]
+)
+
+/**
  * What the host keeps standing for a person who is not looking: a start a
  * limit refused and a child that ended in error, until a client dismisses
  * them or the parent ends. Only the Floti host writes it. A child that needs

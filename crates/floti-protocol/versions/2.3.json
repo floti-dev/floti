@@ -54,6 +54,74 @@
         "type": "null"
       }
     },
+    "agents:addShipped": {
+      "capability": null,
+      "kind": "request",
+      "request": {
+        "$ref": "#/$defs/AgentName"
+      },
+      "response": {
+        "$ref": "#/$defs/AgentChange"
+      }
+    },
+    "agents:changed": {
+      "capability": null,
+      "event": {
+        "$ref": "#/$defs/AgentsChange"
+      },
+      "kind": "event",
+      "snapshot": null
+    },
+    "agents:delete": {
+      "capability": null,
+      "kind": "request",
+      "request": {
+        "$ref": "#/$defs/DeleteAgentRequest"
+      },
+      "response": {
+        "$ref": "#/$defs/AgentChange"
+      }
+    },
+    "agents:list": {
+      "capability": null,
+      "kind": "request",
+      "request": {
+        "type": "null"
+      },
+      "response": {
+        "$ref": "#/$defs/AgentsListing"
+      }
+    },
+    "agents:read": {
+      "capability": null,
+      "kind": "request",
+      "request": {
+        "$ref": "#/$defs/AgentName"
+      },
+      "response": {
+        "$ref": "#/$defs/AgentFile"
+      }
+    },
+    "agents:restore": {
+      "capability": null,
+      "kind": "request",
+      "request": {
+        "$ref": "#/$defs/AgentName"
+      },
+      "response": {
+        "$ref": "#/$defs/AgentChange"
+      }
+    },
+    "agents:write": {
+      "capability": null,
+      "kind": "request",
+      "request": {
+        "$ref": "#/$defs/WriteAgentRequest"
+      },
+      "response": {
+        "$ref": "#/$defs/AgentChange"
+      }
+    },
     "app:info": {
       "capability": null,
       "kind": "request",
@@ -1860,6 +1928,228 @@
       ],
       "type": "object"
     },
+    "AgentChange": {
+      "properties": {
+        "changed": {
+          "type": "boolean"
+        },
+        "conflict": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentConflict"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "file": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentFile"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/AgentProblem"
+          },
+          "type": "array"
+        },
+        "refusal": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "changed",
+        "problems"
+      ],
+      "type": "object"
+    },
+    "AgentConflict": {
+      "properties": {
+        "onDiskHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "onDiskText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "AgentFields": {
+      "properties": {
+        "allowedTools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "backends": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "canStart": {
+          "type": "boolean"
+        },
+        "command": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "disallowedTools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "efforts": {
+          "additionalProperties": {
+            "$ref": "#/$defs/EffortLevel"
+          },
+          "type": "object"
+        },
+        "models": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "permission": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PermissionMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stop": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "submit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "worktree": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "description",
+        "backends",
+        "models",
+        "efforts",
+        "worktree",
+        "canStart",
+        "allowedTools",
+        "disallowedTools"
+      ],
+      "type": "object"
+    },
+    "AgentFile": {
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "fields": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentFields"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "file": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "inFolder": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/AgentProblem"
+          },
+          "type": "array"
+        },
+        "text": {
+          "type": "string"
+        },
+        "unusedLines": {
+          "items": {
+            "$ref": "#/$defs/AgentUnusedLine"
+          },
+          "type": "array"
+        },
+        "values": {
+          "items": {
+            "$ref": "#/$defs/AgentWrittenValue"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "file",
+        "inFolder",
+        "text",
+        "hash",
+        "values",
+        "body",
+        "problems",
+        "unusedLines"
+      ],
+      "type": "object"
+    },
+    "AgentName": {
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "AgentPluginCallCancel": {
       "properties": {
         "callId": {
@@ -2043,6 +2333,97 @@
       ],
       "type": "object"
     },
+    "AgentProblem": {
+      "properties": {
+        "field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "type": "object"
+    },
+    "AgentSummary": {
+      "properties": {
+        "backends": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "canStart": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "file": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "unusedLines": {
+          "items": {
+            "$ref": "#/$defs/AgentUnusedLine"
+          },
+          "type": "array"
+        },
+        "worktree": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "backends",
+        "worktree",
+        "canStart",
+        "unusedLines"
+      ],
+      "type": "object"
+    },
+    "AgentUnusedLine": {
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "field",
+        "line"
+      ],
+      "type": "object"
+    },
     "AgentWorktree": {
       "properties": {
         "branch": {
@@ -2091,6 +2472,79 @@
       },
       "required": [
         "worktrees"
+      ],
+      "type": "object"
+    },
+    "AgentWrittenValue": {
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "line",
+        "value"
+      ],
+      "type": "object"
+    },
+    "AgentsChange": {
+      "properties": {
+        "names": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "names"
+      ],
+      "type": "object"
+    },
+    "AgentsListing": {
+      "properties": {
+        "agents": {
+          "items": {
+            "$ref": "#/$defs/AgentSummary"
+          },
+          "type": "array"
+        },
+        "bad": {
+          "items": {
+            "$ref": "#/$defs/BadAgentFile"
+          },
+          "type": "array"
+        },
+        "folder": {
+          "type": "string"
+        },
+        "readOnly": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "shipped": {
+          "items": {
+            "$ref": "#/$defs/ShippedAgent"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "folder",
+        "agents",
+        "bad",
+        "shipped"
       ],
       "type": "object"
     },
@@ -2622,6 +3076,34 @@
         "configDirExists",
         "signedIn",
         "signInSignal"
+      ],
+      "type": "object"
+    },
+    "BadAgentFile": {
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/AgentProblem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "file",
+        "problems"
       ],
       "type": "object"
     },
@@ -4150,6 +4632,24 @@
           ]
         },
         "label": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "DeleteAgentRequest": {
+      "properties": {
+        "expectedHash": {
           "default": null,
           "type": [
             "string",
@@ -10558,6 +11058,21 @@
       ],
       "type": "object"
     },
+    "ShippedAgent": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "type": "object"
+    },
     "Snapshot": {
       "properties": {
         "seq": {
@@ -11671,6 +12186,35 @@
       },
       "required": [
         "project"
+      ],
+      "type": "object"
+    },
+    "WriteAgentRequest": {
+      "properties": {
+        "expectedHash": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "renameFrom": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "text"
       ],
       "type": "object"
     },

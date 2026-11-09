@@ -232,5 +232,13 @@ export const MIGRATIONS: readonly EmbeddedMigration[] = [
     "statements": [
       "-- Roles are called agents: a session's `role` is its `agent`, and every row keeps its value.\nALTER TABLE `sessions` RENAME COLUMN `role` TO `agent`;"
     ]
+  },
+  {
+    "tag": "0030_agent_versions",
+    "statements": [
+      "CREATE TABLE `agent_versions` (\n\t`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,\n\t`folder` text NOT NULL,\n\t`name` text NOT NULL,\n\t`file` text NOT NULL,\n\t`text` text,\n\t`after_hash` text,\n\t`renamed_to` text,\n\t`renamed_file` text,\n\t`renamed_hash` text,\n\t`reason` text NOT NULL,\n\t`at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')) NOT NULL\n);",
+      "CREATE INDEX `agent_versions_name_idx` ON `agent_versions` (`folder`,`name`);",
+      "CREATE INDEX `agent_versions_renamed_idx` ON `agent_versions` (`folder`,`renamed_to`);"
+    ]
   }
 ]

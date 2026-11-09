@@ -838,6 +838,20 @@ folder: run through npx, that folder is a cache.
   `agents_available` names it as no longer used. An agent's body is composed
   into the child's instructions by its adapter, as its own section after the
   project's, and is never typed to the session.
+- A client lists, reads and edits the agents of the host it asks over
+  `agents:*` (`server/features/agents.rs`, `agent_definitions/editing.rs`).
+  A write is parsed by the parser a start uses first and refused with every
+  problem, each naming its field and line; a write whose hash is not the
+  file's is a conflict, as `content:write`'s is; a replace, rename or delete
+  keeps the old text in `floti.db`'s `agent_versions`, never in the config
+  folder (the newest 20 per agent), and `agents:restore` undoes the newest
+  change only while its files are as that change left them.
+  `agents:addShipped` writes a shipped agent only where its file is absent.
+  A host started with `FLOTI_CONFIG_READ_ONLY` refuses every change with a
+  sentence and still lists, reads and watches. The folder is watched only
+  while a client listens on `agents:changed`, which tells every listener the
+  names whose files came, went or changed, the host's own writes and an
+  outside editor's alike (`agent_definitions/watch.rs`).
 - Claude Code's own agents (its `agents/` files, chosen with `--agent`) are
   its subagents, and Floti calls them Subagents wherever it shows them (the
   profile editor, the config console, the effective view), so the two never

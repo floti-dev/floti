@@ -1555,10 +1555,12 @@ mod tests {
                     unused_lines: vec!["class".into()],
                 },
             ],
-            bad: vec![BadDefinition {
-                file: "typo.md".into(),
-                problem: "the key disalowed_tools is not an agent field".into(),
-            }],
+            bad: vec![BadDefinition::new(
+                "typo.md",
+                vec![crate::agent_definitions::DefinitionProblem::whole(
+                    "the key disalowed_tools is not an agent field",
+                )],
+            )],
         }
     }
 

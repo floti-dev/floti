@@ -34,11 +34,19 @@
 //! its problem in every listing, and a start naming it is refused naming the
 //! file and the problem, because a typo must never drop a rule.
 //!
+//! Clients list, read and edit the folder over `agents:*` through
+//! [`editing`], which parses a text as a start would before it writes it and
+//! keeps what it replaces in floti.db ([`versions`]), and the folder is
+//! watched while one listens for its changes ([`watch`]).
+//!
 //! [`ToolRules`]: crate::agent::ToolRules
 
+pub mod editing;
 pub mod folder;
 pub mod parse;
 pub mod seed;
+pub mod versions;
+pub mod watch;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -50,6 +58,7 @@ use floti_protocol::channels::sessions::EffortLevel;
 use crate::agent::{AgentBackend, ToolRules};
 
 pub use folder::{FolderDefinitions, agents_folder};
+pub use parse::DefinitionProblem;
 
 /// The name of the agent a start without one gets.
 pub const DEFAULT_AGENT_NAME: &str = "default";
@@ -225,11 +234,22 @@ fn keyed<'a, V>(map: &'a BTreeMap<String, V>, backend: &BackendId) -> Option<&'a
 pub struct BadDefinition {
     /// The file's name, such as `reviewer.md`.
     pub file: String,
-    /// What is wrong with it, as a sentence fragment.
+    /// What is wrong with it, as a sentence fragment: every problem, joined.
     pub problem: String,
+    /// Every problem, each with the field and line it concerns.
+    pub problems: Vec<DefinitionProblem>,
 }
 
 impl BadDefinition {
+    /// The file `file` with `problems`.
+    pub fn new(file: impl Into<String>, problems: Vec<DefinitionProblem>) -> Self {
+        Self {
+            file: file.into(),
+            problem: parse::joined(&problems),
+            problems,
+        }
+    }
+
     /// The sentence a refused start gives.
     pub fn refusal(&self) -> String {
         format!(
@@ -290,6 +310,12 @@ pub trait DefinitionSource: Send + Sync {
             .into_iter()
             .find(|bad| bad.file.eq_ignore_ascii_case(&format!("{name}.md")))
             .map_or(DefinitionLookup::Missing, DefinitionLookup::Bad)
+    }
+
+    /// The folder the agents are read from, when they are read from one: what
+    /// a client lists, reads and edits.
+    fn folder(&self) -> Option<&FolderDefinitions> {
+        None
     }
 }
 

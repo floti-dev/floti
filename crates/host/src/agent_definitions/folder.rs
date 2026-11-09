@@ -21,7 +21,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::parse::parse_definition;
+use super::parse::{DefinitionProblem, parse_agent};
 use super::seed::SHIPPED_AGENTS;
 use super::{
     AgentDefinition, BadDefinition, DEFAULT_AGENT_NAME, DefinitionListing, DefinitionLookup,
@@ -224,15 +224,60 @@ impl FolderDefinitions {
             Err(err) => return DefinitionLookup::Bad(unreadable(file, &err)),
         };
         let Ok(source) = String::from_utf8(bytes) else {
-            return DefinitionLookup::Bad(BadDefinition {
+            return DefinitionLookup::Bad(BadDefinition::new(
                 file,
-                problem: "it is not UTF-8 text".to_owned(),
-            });
+                vec![DefinitionProblem::whole(NOT_TEXT)],
+            ));
         };
-        match parse_definition(name, &source) {
+        match parse_agent(name, &source) {
             Ok(agent) => DefinitionLookup::Found(Box::new(agent)),
-            Err(problem) => DefinitionLookup::Bad(BadDefinition { file, problem }),
+            Err(problems) => DefinitionLookup::Bad(BadDefinition::new(file, problems)),
         }
+    }
+
+    /// The file the agent `name` is read from and written to, such as
+    /// `reviewer.md`, or `None` for a name that is no agent's. Either of the
+    /// default's names is the default's file: `default.md`, else an
+    /// `agent.md` from before agents were called agents, else `default.md`.
+    pub fn file_of(&self, name: &str) -> Option<String> {
+        if is_default_name(name) {
+            let retired = format!("{RETIRED_DEFAULT_NAME}.md");
+            let default = format!("{DEFAULT_AGENT_NAME}.md");
+            return Some(
+                if !self.dir.join(&default).is_file() && self.dir.join(&retired).is_file() {
+                    retired
+                } else {
+                    default
+                },
+            );
+        }
+        is_agent_name(name).then(|| format!("{name}.md"))
+    }
+
+    /// The names of the agent files in the folder, sorted: each `<name>.md`
+    /// file whose name is an agent name. Empty when there is no folder.
+    ///
+    /// # Errors
+    ///
+    /// The folder could not be read.
+    pub fn file_names(&self) -> io::Result<Vec<String>> {
+        let entries = match std::fs::read_dir(&self.dir) {
+            Ok(entries) => entries,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(err) => return Err(err),
+        };
+        let mut names: Vec<String> = entries
+            .filter_map(|entry| {
+                let path = entry.ok()?.path();
+                if path.extension()? != "md" {
+                    return None;
+                }
+                let stem = path.file_stem()?.to_str()?;
+                (is_agent_name(stem) && path.is_file()).then(|| stem.to_owned())
+            })
+            .collect();
+        names.sort();
+        Ok(names)
     }
 
     /// The default agent's file: `default.md`, else an `agent.md` from
@@ -278,7 +323,7 @@ impl FolderDefinitions {
     }
 
     /// Whether the folder is absent and the shipped agents stand in for it.
-    fn serves_shipped(&self) -> bool {
+    pub fn serves_shipped(&self) -> bool {
         self.shipped && !exists(&self.dir)
     }
 }
@@ -288,23 +333,25 @@ pub fn shipped_listing() -> DefinitionListing {
     let mut listing = DefinitionListing::default();
     for (file, source) in SHIPPED_AGENTS {
         let name = file.strip_suffix(".md").unwrap_or(file);
-        match parse_definition(name, source) {
+        match parse_agent(name, source) {
             Ok(agent) => listing.agents.push(agent),
-            Err(problem) => listing.bad.push(BadDefinition {
-                file: (*file).to_owned(),
-                problem,
-            }),
+            Err(problems) => listing.bad.push(BadDefinition::new(*file, problems)),
         }
     }
     listing.agents.sort_by(|a, b| a.name.cmp(&b.name));
     listing
 }
 
+/// What a file that is not UTF-8 text is.
+pub(crate) const NOT_TEXT: &str = "it is not UTF-8 text";
+
 fn unreadable(file: String, err: &io::Error) -> BadDefinition {
-    BadDefinition {
+    BadDefinition::new(
         file,
-        problem: format!("it could not be read: {err}"),
-    }
+        vec![DefinitionProblem::whole(format!(
+            "it could not be read: {err}"
+        ))],
+    )
 }
 
 impl DefinitionSource for FolderDefinitions {
@@ -312,29 +359,15 @@ impl DefinitionSource for FolderDefinitions {
         if self.serves_shipped() {
             return shipped_listing();
         }
-        let mut names: Vec<String> = match std::fs::read_dir(&self.dir) {
-            Ok(entries) => entries
-                .filter_map(|entry| {
-                    let path = entry.ok()?.path();
-                    if path.extension()? != "md" {
-                        return None;
-                    }
-                    let stem = path.file_stem()?.to_str()?;
-                    (is_agent_name(stem) && path.is_file()).then(|| stem.to_owned())
-                })
-                .collect(),
-            // No folder is no agents; one that cannot be read is said in the
-            // host's log and is no agents either.
-            Err(err) if err.kind() == io::ErrorKind::NotFound => Vec::new(),
-            Err(err) => {
-                log_line!(
-                    "floti host: the agents folder {} could not be read: {err}",
-                    self.dir.display()
-                );
-                Vec::new()
-            }
-        };
-        names.sort();
+        // No folder is no agents; one that cannot be read is said in the
+        // host's log and is no agents either.
+        let mut names = self.file_names().unwrap_or_else(|err| {
+            log_line!(
+                "floti host: the agents folder {} could not be read: {err}",
+                self.dir.display()
+            );
+            Vec::new()
+        });
         let mut listing = DefinitionListing::default();
         let has_default = names.iter().any(|name| is_default_name(name));
         names.retain(|name| !is_default_name(name));
@@ -359,6 +392,10 @@ impl DefinitionSource for FolderDefinitions {
         } else {
             DefinitionLookup::Missing
         }
+    }
+
+    fn folder(&self) -> Option<&FolderDefinitions> {
+        Some(self)
     }
 }
 

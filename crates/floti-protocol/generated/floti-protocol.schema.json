@@ -87,6 +87,252 @@
       ],
       "type": "object"
     },
+    "AgentChange": {
+      "description": "What a write, a delete, a restore or an add came to.",
+      "properties": {
+        "changed": {
+          "description": "Whether the folder changed. False with no refusal when it already\nheld what was asked.",
+          "type": "boolean"
+        },
+        "conflict": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentConflict"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set when the file is not what the client's change was based on."
+        },
+        "file": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentFile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The agent's file as it is now: after the change, or as it stands when\nthe change was refused; null when there is none."
+        },
+        "problems": {
+          "description": "The parser's problems with the text, when they are why it was\nrefused.",
+          "items": {
+            "$ref": "#/$defs/AgentProblem"
+          },
+          "type": "array"
+        },
+        "refusal": {
+          "description": "Why nothing changed, as a sentence; null when the change was made or\nnothing needed to.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "changed",
+        "problems"
+      ],
+      "type": "object"
+    },
+    "AgentConflict": {
+      "description": "The file on disk, which is not what the client's change was based on.",
+      "properties": {
+        "onDiskHash": {
+          "description": "The file's hash now; null when there is no file.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "onDiskText": {
+          "description": "The file's text now; null when there is no file.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "AgentFields": {
+      "description": "An agent's fields, as a start reads them.",
+      "properties": {
+        "allowedTools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "backends": {
+          "description": "The backends that may run its children, in order; empty for every\ninstalled agent backend.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "canStart": {
+          "type": "boolean"
+        },
+        "command": {
+          "description": "For a plain command line: the command, and the keys that submit a\ntask and stop it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "disallowedTools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "efforts": {
+          "additionalProperties": {
+            "$ref": "#/$defs/EffortLevel"
+          },
+          "description": "The effort each backend runs it with, by backend id.",
+          "type": "object"
+        },
+        "models": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The model each backend runs it with, by backend id.",
+          "type": "object"
+        },
+        "permission": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PermissionMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stop": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "submit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "worktree": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "description",
+        "backends",
+        "models",
+        "efforts",
+        "worktree",
+        "canStart",
+        "allowedTools",
+        "disallowedTools"
+      ],
+      "type": "object"
+    },
+    "AgentFile": {
+      "description": "One agent's file.",
+      "properties": {
+        "body": {
+          "description": "The text after the front matter: the agent's instructions.",
+          "type": "string"
+        },
+        "fields": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentFields"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The fields as a start reads them; null when the file is not an agent."
+        },
+        "file": {
+          "description": "The file, such as `reviewer.md`.",
+          "type": "string"
+        },
+        "hash": {
+          "description": "The SHA-256 of the file's bytes, as lowercase hex: what a write or a\ndelete names as the text it was based on.",
+          "type": "string"
+        },
+        "inFolder": {
+          "description": "Whether the text is the folder's file; false for a shipped agent a\nhost serves while it has no agents folder.",
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "problems": {
+          "description": "Every problem with it; empty when it is an agent.",
+          "items": {
+            "$ref": "#/$defs/AgentProblem"
+          },
+          "type": "array"
+        },
+        "text": {
+          "description": "The whole text.",
+          "type": "string"
+        },
+        "unusedLines": {
+          "items": {
+            "$ref": "#/$defs/AgentUnusedLine"
+          },
+          "type": "array"
+        },
+        "values": {
+          "description": "Each value of the front matter as written, in the file's order, with\nthe line its field is on, whether or not the file is an agent.",
+          "items": {
+            "$ref": "#/$defs/AgentWrittenValue"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "file",
+        "inFolder",
+        "text",
+        "hash",
+        "values",
+        "body",
+        "problems",
+        "unusedLines"
+      ],
+      "type": "object"
+    },
+    "AgentName": {
+      "description": "An agent, by name.",
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "AgentPluginCallCancel": {
       "description": "A call nobody waits on any more.",
       "properties": {
@@ -298,6 +544,108 @@
       ],
       "type": "object"
     },
+    "AgentProblem": {
+      "description": "One problem with an agent file.",
+      "properties": {
+        "field": {
+          "description": "The field it concerns, as the file spells it; null for a problem with\nthe whole file, such as front matter that does not parse.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "line": {
+          "description": "The file's line it concerns, from 1; null when it concerns no one\nline, such as a file that could not be read.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "message": {
+          "description": "What is wrong, as a sentence fragment.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "type": "object"
+    },
+    "AgentSummary": {
+      "description": "One agent, as a listing shows it.",
+      "properties": {
+        "backends": {
+          "description": "The installed backends it can run on, in the agent's order.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "canStart": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "file": {
+          "description": "The file it is read from, such as `reviewer.md`; null for the default\nthe host makes from its backends, and for a shipped agent a host\nserves while it has no agents folder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hash": {
+          "description": "The file's hash, as `agents:read` gives it; null where there is no\nfile.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "unusedLines": {
+          "description": "The lines its file has that Floti no longer reads, in the file's\norder.",
+          "items": {
+            "$ref": "#/$defs/AgentUnusedLine"
+          },
+          "type": "array"
+        },
+        "worktree": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "backends",
+        "worktree",
+        "canStart",
+        "unusedLines"
+      ],
+      "type": "object"
+    },
+    "AgentUnusedLine": {
+      "description": "A line an agent file has that Floti no longer reads: accepted and\nignored.",
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "line": {
+          "description": "The file's line, from 1.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "field",
+        "line"
+      ],
+      "type": "object"
+    },
     "AgentWorktree": {
       "description": "One checkout under `.floti/worktrees`.",
       "properties": {
@@ -353,6 +701,91 @@
       },
       "required": [
         "worktrees"
+      ],
+      "type": "object"
+    },
+    "AgentWrittenValue": {
+      "description": "One field's value as the file writes it.",
+      "properties": {
+        "field": {
+          "description": "The field, as the file spells it.",
+          "type": "string"
+        },
+        "line": {
+          "description": "The line it is on, from 1.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "What follows the field's colon, and the indented lines under it with\ntheir common indent taken off, trimmed.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "line",
+        "value"
+      ],
+      "type": "object"
+    },
+    "AgentsChange": {
+      "description": "What changed in the agents folder.",
+      "properties": {
+        "names": {
+          "description": "The agents whose files came, went or have other text, by the files'\nnames without `.md`, sorted.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "names"
+      ],
+      "type": "object"
+    },
+    "AgentsListing": {
+      "description": "Every agent a host has at one moment.",
+      "properties": {
+        "agents": {
+          "description": "The agents, the default first, then by name.",
+          "items": {
+            "$ref": "#/$defs/AgentSummary"
+          },
+          "type": "array"
+        },
+        "bad": {
+          "description": "The files in the folder that are not agents, by name.",
+          "items": {
+            "$ref": "#/$defs/BadAgentFile"
+          },
+          "type": "array"
+        },
+        "folder": {
+          "description": "The agents folder, as the host spells it.",
+          "type": "string"
+        },
+        "readOnly": {
+          "description": "Why this host changes nothing in its agents folder, as a sentence;\nnull when it may.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "shipped": {
+          "description": "The shipped agents whose file the folder does not have, by name.",
+          "items": {
+            "$ref": "#/$defs/ShippedAgent"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "folder",
+        "agents",
+        "bad",
+        "shipped"
       ],
       "type": "object"
     },
@@ -949,6 +1382,39 @@
         "configDirExists",
         "signedIn",
         "signInSignal"
+      ],
+      "type": "object"
+    },
+    "BadAgentFile": {
+      "description": "A file in the agents folder that is not an agent.",
+      "properties": {
+        "file": {
+          "description": "The file, such as `reviewer.md`.",
+          "type": "string"
+        },
+        "hash": {
+          "description": "The file's hash; null when it could not be read.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "The agent it would be, by its file's name.",
+          "type": "string"
+        },
+        "problems": {
+          "description": "Every problem with it.",
+          "items": {
+            "$ref": "#/$defs/AgentProblem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "file",
+        "problems"
       ],
       "type": "object"
     },
@@ -2585,6 +3051,26 @@
         },
         "label": {
           "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "DeleteAgentRequest": {
+      "description": "An agent's file to remove.",
+      "properties": {
+        "expectedHash": {
+          "default": null,
+          "description": "The hash the client last read, or null to remove whatever is there.",
           "type": [
             "string",
             "null"
@@ -9503,6 +9989,22 @@
       ],
       "type": "object"
     },
+    "ShippedAgent": {
+      "description": "A shipped agent, as the host would write it.",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "type": "object"
+    },
     "Snapshot": {
       "description": "The whole current state of a channel that carries state, sent first on\nevery subscription.",
       "properties": {
@@ -10734,6 +11236,38 @@
       ],
       "type": "object"
     },
+    "WriteAgentRequest": {
+      "description": "A whole text to write under an agent's name.",
+      "properties": {
+        "expectedHash": {
+          "default": null,
+          "description": "The hash `agents:read` gave the text was based on, or null for an\nagent the client believes has no file: a file there now is a\nconflict. For a rename, the hash of the file it renames.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "renameFrom": {
+          "default": null,
+          "description": "The agent this one is renamed from: its file goes once `name`'s is\nwritten, and its text is kept first. A file already called `name` is\nnever written over by a rename.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "text"
+      ],
+      "type": "object"
+    },
     "WriteConfigRequest": {
       "properties": {
         "content": {
@@ -10918,6 +11452,81 @@
       },
       "response": {
         "type": "null"
+      }
+    },
+    {
+      "capability": null,
+      "kind": "request",
+      "name": "agents:addShipped",
+      "request": {
+        "$ref": "#/$defs/AgentName"
+      },
+      "response": {
+        "$ref": "#/$defs/AgentChange"
+      }
+    },
+    {
+      "capability": null,
+      "event": {
+        "$ref": "#/$defs/AgentsChange"
+      },
+      "kind": "event",
+      "name": "agents:changed",
+      "snapshot": null
+    },
+    {
+      "capability": null,
+      "kind": "request",
+      "name": "agents:delete",
+      "request": {
+        "$ref": "#/$defs/DeleteAgentRequest"
+      },
+      "response": {
+        "$ref": "#/$defs/AgentChange"
+      }
+    },
+    {
+      "capability": null,
+      "kind": "request",
+      "name": "agents:list",
+      "request": {
+        "type": "null"
+      },
+      "response": {
+        "$ref": "#/$defs/AgentsListing"
+      }
+    },
+    {
+      "capability": null,
+      "kind": "request",
+      "name": "agents:read",
+      "request": {
+        "$ref": "#/$defs/AgentName"
+      },
+      "response": {
+        "$ref": "#/$defs/AgentFile"
+      }
+    },
+    {
+      "capability": null,
+      "kind": "request",
+      "name": "agents:restore",
+      "request": {
+        "$ref": "#/$defs/AgentName"
+      },
+      "response": {
+        "$ref": "#/$defs/AgentChange"
+      }
+    },
+    {
+      "capability": null,
+      "kind": "request",
+      "name": "agents:write",
+      "request": {
+        "$ref": "#/$defs/WriteAgentRequest"
+      },
+      "response": {
+        "$ref": "#/$defs/AgentChange"
       }
     },
     {

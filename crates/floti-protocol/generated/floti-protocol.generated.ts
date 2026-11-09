@@ -48,6 +48,116 @@ tool: string,
 arguments: unknown, };
 
 /**
+ * What a write, a delete, a restore or an add came to.
+ */
+export type AgentChange = { 
+/**
+ * Whether the folder changed. False with no refusal when it already
+ * held what was asked.
+ */
+changed: boolean, 
+/**
+ * The agent's file as it is now: after the change, or as it stands when
+ * the change was refused; null when there is none.
+ */
+file: AgentFile | null, 
+/**
+ * Why nothing changed, as a sentence; null when the change was made or
+ * nothing needed to.
+ */
+refusal: string | null, 
+/**
+ * The parser's problems with the text, when they are why it was
+ * refused.
+ */
+problems: Array<AgentProblem>, 
+/**
+ * Set when the file is not what the client's change was based on.
+ */
+conflict: AgentConflict | null, };
+
+/**
+ * The file on disk, which is not what the client's change was based on.
+ */
+export type AgentConflict = { 
+/**
+ * The file's hash now; null when there is no file.
+ */
+onDiskHash: string | null, 
+/**
+ * The file's text now; null when there is no file.
+ */
+onDiskText: string | null, };
+
+/**
+ * An agent's fields, as a start reads them.
+ */
+export type AgentFields = { description: string, profile: string | null, 
+/**
+ * The backends that may run its children, in order; empty for every
+ * installed agent backend.
+ */
+backends: Array<string>, 
+/**
+ * The model each backend runs it with, by backend id.
+ */
+models: { [key in string]?: string }, 
+/**
+ * The effort each backend runs it with, by backend id.
+ */
+efforts: { [key in string]?: EffortLevel }, permission: PermissionMode | null, worktree: boolean, canStart: boolean, allowedTools: Array<string>, disallowedTools: Array<string>, 
+/**
+ * For a plain command line: the command, and the keys that submit a
+ * task and stop it.
+ */
+command: string | null, submit: string | null, stop: string | null, };
+
+/**
+ * One agent's file.
+ */
+export type AgentFile = { name: string, 
+/**
+ * The file, such as `reviewer.md`.
+ */
+file: string, 
+/**
+ * Whether the text is the folder's file; false for a shipped agent a
+ * host serves while it has no agents folder.
+ */
+inFolder: boolean, 
+/**
+ * The whole text.
+ */
+text: string, 
+/**
+ * The SHA-256 of the file's bytes, as lowercase hex: what a write or a
+ * delete names as the text it was based on.
+ */
+hash: string, 
+/**
+ * Each value of the front matter as written, in the file's order, with
+ * the line its field is on, whether or not the file is an agent.
+ */
+values: Array<AgentWrittenValue>, 
+/**
+ * The fields as a start reads them; null when the file is not an agent.
+ */
+fields: AgentFields | null, 
+/**
+ * The text after the front matter: the agent's instructions.
+ */
+body: string, 
+/**
+ * Every problem with it; empty when it is an agent.
+ */
+problems: Array<AgentProblem>, unusedLines: Array<AgentUnusedLine>, };
+
+/**
+ * An agent, by name.
+ */
+export type AgentName = { name: string, };
+
+/**
  * A call nobody waits on any more.
  */
 export type AgentPluginCallCancel = { 
@@ -158,6 +268,60 @@ tool: string,
 arguments: unknown, };
 
 /**
+ * One problem with an agent file.
+ */
+export type AgentProblem = { 
+/**
+ * The field it concerns, as the file spells it; null for a problem with
+ * the whole file, such as front matter that does not parse.
+ */
+field: string | null, 
+/**
+ * The file's line it concerns, from 1; null when it concerns no one
+ * line, such as a file that could not be read.
+ */
+line: number | null, 
+/**
+ * What is wrong, as a sentence fragment.
+ */
+message: string, };
+
+/**
+ * One agent, as a listing shows it.
+ */
+export type AgentSummary = { name: string, description: string, 
+/**
+ * The file it is read from, such as `reviewer.md`; null for the default
+ * the host makes from its backends, and for a shipped agent a host
+ * serves while it has no agents folder.
+ */
+file: string | null, 
+/**
+ * The file's hash, as `agents:read` gives it; null where there is no
+ * file.
+ */
+hash: string | null, 
+/**
+ * The installed backends it can run on, in the agent's order.
+ */
+backends: Array<string>, worktree: boolean, canStart: boolean, 
+/**
+ * The lines its file has that Floti no longer reads, in the file's
+ * order.
+ */
+unusedLines: Array<AgentUnusedLine>, };
+
+/**
+ * A line an agent file has that Floti no longer reads: accepted and
+ * ignored.
+ */
+export type AgentUnusedLine = { field: string, 
+/**
+ * The file's line, from 1.
+ */
+line: number, };
+
+/**
  * One checkout under `.floti/worktrees`.
  */
 export type AgentWorktree = { 
@@ -188,6 +352,60 @@ uncommitted: boolean | null, };
  * A project's agent worktrees, by name.
  */
 export type AgentWorktrees = { worktrees: Array<AgentWorktree>, };
+
+/**
+ * One field's value as the file writes it.
+ */
+export type AgentWrittenValue = { 
+/**
+ * The field, as the file spells it.
+ */
+field: string, 
+/**
+ * The line it is on, from 1.
+ */
+line: number, 
+/**
+ * What follows the field's colon, and the indented lines under it with
+ * their common indent taken off, trimmed.
+ */
+value: string, };
+
+/**
+ * What changed in the agents folder.
+ */
+export type AgentsChange = { 
+/**
+ * The agents whose files came, went or have other text, by the files'
+ * names without `.md`, sorted.
+ */
+names: Array<string>, };
+
+/**
+ * Every agent a host has at one moment.
+ */
+export type AgentsListing = { 
+/**
+ * The agents folder, as the host spells it.
+ */
+folder: string, 
+/**
+ * Why this host changes nothing in its agents folder, as a sentence;
+ * null when it may.
+ */
+readOnly: string | null, 
+/**
+ * The agents, the default first, then by name.
+ */
+agents: Array<AgentSummary>, 
+/**
+ * The files in the folder that are not agents, by name.
+ */
+bad: Array<BadAgentFile>, 
+/**
+ * The shipped agents whose file the folder does not have, by name.
+ */
+shipped: Array<ShippedAgent>, };
 
 export type AllowMoreStartsRequest = { 
 /**
@@ -465,6 +683,27 @@ signInSignal: string,
  * What went wrong locating or running the executable, if anything.
  */
 error: string | null, };
+
+/**
+ * A file in the agents folder that is not an agent.
+ */
+export type BadAgentFile = { 
+/**
+ * The agent it would be, by its file's name.
+ */
+name: string, 
+/**
+ * The file, such as `reviewer.md`.
+ */
+file: string, 
+/**
+ * The file's hash; null when it could not be read.
+ */
+hash: string | null, 
+/**
+ * Every problem with it.
+ */
+problems: Array<AgentProblem>, };
 
 /**
  * A project as the last scan left it.
@@ -965,6 +1204,15 @@ export type CreateHarnessRequest = { mode: HarnessMode, dir: string, name: strin
 template: string | null, };
 
 export type CreateTemplateRequest = { name: string, label: string | null, description: string | null, };
+
+/**
+ * An agent's file to remove.
+ */
+export type DeleteAgentRequest = { name: string, 
+/**
+ * The hash the client last read, or null to remove whatever is there.
+ */
+expectedHash: string | null, };
 
 export type DeleteConfigRequest = { scopePath: string, path: string, };
 
@@ -3267,6 +3515,11 @@ export type SetupStatus = { backends: { [key in BackendId]?: BackendStatus }, };
 export type SharedName = { name: string, invocations: Array<string>, };
 
 /**
+ * A shipped agent, as the host would write it.
+ */
+export type ShippedAgent = { name: string, description: string, };
+
+/**
  * The whole current state of a channel that carries state, sent first on
  * every subscription.
  */
@@ -3775,6 +4028,23 @@ export type WorktreesProject = {
  */
 project: string, };
 
+/**
+ * A whole text to write under an agent's name.
+ */
+export type WriteAgentRequest = { name: string, text: string, 
+/**
+ * The hash `agents:read` gave the text was based on, or null for an
+ * agent the client believes has no file: a file there now is a
+ * conflict. For a rename, the hash of the file it renames.
+ */
+expectedHash: string | null, 
+/**
+ * The agent this one is renamed from: its file goes once `name`'s is
+ * written, and its text is kept first. A file already called `name` is
+ * never written over by a rename.
+ */
+renameFrom: string | null, };
+
 export type WriteConfigRequest = { 
 /**
  * The scope's base folder, recorded on the snapshot.
@@ -3829,6 +4099,12 @@ export interface RequestChannels {
   "agentBrowser:answer": { request: AgentBrowserToolAnswer; response: null; capability: "browser" };
   "agentPlugin:answer": { request: AgentPluginToolAnswer; response: null; capability: null };
   "agentPlugin:offer": { request: AgentPluginServers; response: null; capability: null };
+  "agents:addShipped": { request: AgentName; response: AgentChange; capability: null };
+  "agents:delete": { request: DeleteAgentRequest; response: AgentChange; capability: null };
+  "agents:list": { request: null; response: AgentsListing; capability: null };
+  "agents:read": { request: AgentName; response: AgentFile; capability: null };
+  "agents:restore": { request: AgentName; response: AgentChange; capability: null };
+  "agents:write": { request: WriteAgentRequest; response: AgentChange; capability: null };
   "app:info": { request: null; response: AppInfo; capability: null };
   "archive:conversation": { request: HistorySessionRef; response: ArchivedConversation | null; capability: null };
   "archive:stats": { request: null; response: ArchiveStats; capability: null };
@@ -3966,6 +4242,7 @@ export interface EventChannels {
   "agentBrowser:call": { event: AgentBrowserToolCall; snapshot: null; capability: "browser" };
   "agentPlugin:call": { event: AgentPluginToolCall; snapshot: null; capability: null };
   "agentPlugin:cancel": { event: AgentPluginCallCancel; snapshot: null; capability: null };
+  "agents:changed": { event: AgentsChange; snapshot: null; capability: null };
   "archive:changed": { event: ArchiveStats; snapshot: ArchiveStats; capability: null };
   "config:externalChange": { event: ConfigExternalChange; snapshot: null; capability: null };
   "devices:attached": { event: AttachedDevices; snapshot: AttachedDevices; capability: null };
@@ -4007,6 +4284,13 @@ export const CHANNELS = [
   { name: "agentPlugin:call", kind: "event", capability: null },
   { name: "agentPlugin:cancel", kind: "event", capability: null },
   { name: "agentPlugin:offer", kind: "request", capability: null },
+  { name: "agents:addShipped", kind: "request", capability: null },
+  { name: "agents:changed", kind: "event", capability: null },
+  { name: "agents:delete", kind: "request", capability: null },
+  { name: "agents:list", kind: "request", capability: null },
+  { name: "agents:read", kind: "request", capability: null },
+  { name: "agents:restore", kind: "request", capability: null },
+  { name: "agents:write", kind: "request", capability: null },
   { name: "app:info", kind: "request", capability: null },
   { name: "archive:changed", kind: "event", capability: null },
   { name: "archive:conversation", kind: "request", capability: null },

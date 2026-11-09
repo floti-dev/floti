@@ -307,6 +307,23 @@ pub(crate) struct ChildStopped {
 }
 
 impl Hosted {
+    /// Where agents come from now.
+    pub(crate) fn agent_source(&self) -> Arc<dyn DefinitionSource> {
+        self.children.agents()
+    }
+
+    /// The installed backends `agent` can run on for a start no parent's
+    /// mode holds back, in the agent's order: what a client lists.
+    pub(crate) fn agent_runs_on(&self, agent: &AgentDefinition) -> Vec<String> {
+        self.agent_entry(agent, None).backends
+    }
+
+    /// The default agent the host makes from its backends, which a start
+    /// with no agent gets while there is no file for it.
+    pub(crate) fn built_in_default_agent(&self) -> AgentDefinition {
+        default_definition(&self.backends)
+    }
+
     /// Reads agents from `agents` from now on.
     pub(crate) fn use_agents(&self, agents: Arc<dyn DefinitionSource>) {
         *self

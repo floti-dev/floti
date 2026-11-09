@@ -226,6 +226,149 @@ fn a_file_that_is_not_exactly_an_agent_is_bad_and_says_what_is_wrong() {
     );
 }
 
+/// Each problem with `source`, as `(field, line)`.
+fn placed(source: &str) -> Vec<(Option<String>, Option<u32>)> {
+    super::parse::parse_agent("a", source)
+        .expect_err("the file is bad")
+        .into_iter()
+        .map(|problem| (problem.field, problem.line))
+        .collect()
+}
+
+#[test]
+fn each_problem_names_the_field_and_the_line_of_the_file_it_concerns() {
+    let field = |name: &str, line: u32| (Some(name.to_owned()), Some(line));
+    assert_eq!(
+        placed(
+            "---
+description: x
+worktree: maybe
+
+permission: always
+---
+"
+        ),
+        [field("worktree", 3), field("permission", 5)]
+    );
+    // A map's line is the line of its field, whichever entry is wrong.
+    assert_eq!(
+        placed(
+            "---
+effort:
+  claude-code: high
+  other-agent: loud
+---
+"
+        ),
+        [field("effort", 2)]
+    );
+    // A key that is not text is placed by how the file writes it.
+    assert_eq!(
+        placed(
+            "---
+1: one
+---
+"
+        ),
+        [field("1", 2)]
+    );
+    // A quoted key is the field it names.
+    assert_eq!(
+        placed(
+            "---
+\"worktree\": maybe
+---
+"
+        ),
+        [field("worktree", 2)]
+    );
+    // A problem with the whole front matter names its line and no field.
+    assert_eq!(
+        placed(
+            "Just some text.
+"
+        ),
+        [(None, Some(1))]
+    );
+    assert_eq!(
+        placed(
+            "
+
+---
+description: x
+"
+        ),
+        [(None, Some(3))]
+    );
+    let unparsed = placed(
+        "---
+description: ok
+model: [unclosed
+---
+",
+    );
+    let [(None, Some(line))] = unparsed.as_slice() else {
+        panic!("one problem with the front matter: {unparsed:?}");
+    };
+    assert!((2..=4).contains(line), "inside the front matter: {line}");
+}
+
+#[test]
+fn each_value_is_read_as_the_file_writes_it_whether_or_not_it_parses() {
+    let reading = super::parse::read_agent_file(
+        "a",
+        "---
+description:   Reads a change  
+model:
+  claude-code: opus
+
+  other-agent: big
+\"permission\": plan
+---
+body
+",
+    );
+    let values: Vec<(&str, u32, &str)> = reading
+        .values
+        .iter()
+        .map(|value| (value.field.as_str(), value.line, value.value.as_str()))
+        .collect();
+    assert_eq!(
+        values,
+        [
+            ("description", 2, "Reads a change"),
+            (
+                "model",
+                3,
+                "claude-code: opus
+
+other-agent: big"
+            ),
+            ("permission", 7, "plan"),
+        ]
+    );
+    assert!(reading.agent.is_ok(), "{:?}", reading.agent);
+
+    let broken = super::parse::read_agent_file(
+        "a",
+        "---
+worktree: [maybe
+model: x
+---
+",
+    );
+    assert!(broken.agent.is_err());
+    assert_eq!(
+        broken
+            .values
+            .iter()
+            .map(|value| value.field.as_str())
+            .collect::<Vec<_>>(),
+        ["worktree", "model"],
+        "a front matter that does not parse is still read as written"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // The folder, read afresh
 // ---------------------------------------------------------------------------

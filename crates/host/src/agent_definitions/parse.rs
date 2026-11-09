@@ -11,6 +11,11 @@
 //! once read and no longer does. The shipped agents wrote such lines into
 //! folders that are never rewritten, so a retired line is accepted with any
 //! value, ignored, and kept on the agent for the listing to name.
+//!
+//! Every problem names the field and the line of the file it concerns
+//! ([`DefinitionProblem`]), and every value is also read as the file writes
+//! it ([`WrittenValue`]), whether or not the file parses, so a client can
+//! show each problem and each value on its field.
 
 use std::collections::BTreeMap;
 
@@ -49,6 +54,87 @@ const EFFORTS: &str = "low, medium, high, xhigh or max";
 /// The permission modes an agent may ask for.
 const PERMISSIONS: &str = "plan, dont-ask, manual, accept-edits, auto or bypass-permissions";
 
+/// One problem with an agent file: what is wrong, and the field and the line
+/// of the file it concerns.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefinitionProblem {
+    /// The field, as the file spells it; `None` for a problem with the whole
+    /// file.
+    pub field: Option<String>,
+    /// The file's line, from 1; `None` when the problem is with no one line.
+    pub line: Option<u32>,
+    /// What is wrong, as a sentence fragment.
+    pub message: String,
+}
+
+impl DefinitionProblem {
+    /// A problem with the whole file and no one line of it, such as a file
+    /// that could not be read.
+    pub fn whole(message: impl Into<String>) -> Self {
+        Self {
+            field: None,
+            line: None,
+            message: message.into(),
+        }
+    }
+
+    fn at(line: u32, message: impl Into<String>) -> Self {
+        Self {
+            field: None,
+            line: Some(line),
+            message: message.into(),
+        }
+    }
+}
+
+/// `problems` as one sentence fragment, in order.
+pub fn joined(problems: &[DefinitionProblem]) -> String {
+    problems
+        .iter()
+        .map(|problem| problem.message.as_str())
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// One field's value as the file writes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WrittenValue {
+    /// The field, as the file spells it.
+    pub field: String,
+    /// The line it is on, from 1.
+    pub line: u32,
+    /// What follows its colon, and the indented lines under it with their
+    /// common indent taken off, trimmed.
+    pub value: String,
+}
+
+/// An agent file read whole: the agent it is or every problem with it, each
+/// value as written, and the body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentFileReading {
+    pub agent: Result<AgentDefinition, Vec<DefinitionProblem>>,
+    /// Each top-level field of the front matter as written, in the file's
+    /// order; empty when there is no front matter.
+    pub values: Vec<WrittenValue>,
+    /// The text after the front matter, as written; the whole text when
+    /// there is no front matter.
+    pub body: String,
+}
+
+impl AgentFileReading {
+    /// The line the field `field` is on, when the file writes it.
+    pub fn line_of(&self, field: &str) -> Option<u32> {
+        line_of(&self.values, field)
+    }
+}
+
+fn line_of(values: &[WrittenValue], field: &str) -> Option<u32> {
+    values
+        .iter()
+        .find(|value| value.field == field)
+        .map(|value| value.line)
+}
+
 /// The agent `name` that `source` (the text of `<name>.md`) describes, or every
 /// problem with it, joined, as a sentence fragment.
 ///
@@ -56,39 +142,182 @@ const PERMISSIONS: &str = "plan, dont-ask, manual, accept-edits, auto or bypass-
 ///
 /// What is wrong with the file, when anything is.
 pub fn parse_definition(name: &str, source: &str) -> Result<AgentDefinition, String> {
+    parse_agent(name, source).map_err(|problems| joined(&problems))
+}
+
+/// The agent `name` that `source` describes, or every problem with it, each
+/// naming its field and line.
+///
+/// # Errors
+///
+/// Every problem with the file, when there is one.
+pub fn parse_agent(name: &str, source: &str) -> Result<AgentDefinition, Vec<DefinitionProblem>> {
+    read_agent_file(name, source).agent
+}
+
+/// `source`, the text of `<name>.md`, read whole.
+pub fn read_agent_file(name: &str, source: &str) -> AgentFileReading {
     let front = parse_note_frontmatter(source);
     if !front.present {
         let text = source.strip_prefix('\u{feff}').unwrap_or(source);
-        return Err(if text.trim_start().starts_with("---") {
-            "its front matter must start on the file's first line with --- and end with a --- line"
-                .to_owned()
+        let problem = if text.trim_start().starts_with("---") {
+            let fence = text
+                .split('\n')
+                .position(|line| line.trim().starts_with("---"))
+                .unwrap_or(0);
+            DefinitionProblem::at(
+                line_number(fence),
+                "its front matter must start on the file's first line with --- and end with a --- line",
+            )
         } else {
-            "it has no front matter: an agent file starts with --- lines around its fields"
-                .to_owned()
-        });
+            DefinitionProblem::at(
+                1,
+                "it has no front matter: an agent file starts with --- lines around its fields",
+            )
+        };
+        return AgentFileReading {
+            agent: Err(vec![problem]),
+            values: Vec::new(),
+            body: front.body,
+        };
     }
+    // The front matter's first line is the file's second, after the fence.
+    let values = written_values(&front.raw, 2);
+    let body = front.body.clone();
     if let Some(error) = front.error {
-        return Err(format!("its front matter does not parse: {error}"));
+        // The parser counts lines from the front matter's first, which is
+        // the file's second.
+        let line = serde_yaml_ng::from_str::<Value>(&front.raw)
+            .err()
+            .and_then(|err| err.location())
+            .map_or(2, |at| line_number(at.line()));
+        return AgentFileReading {
+            agent: Err(vec![DefinitionProblem::at(
+                line,
+                format!("its front matter does not parse: {error}"),
+            )]),
+            values,
+            body,
+        };
     }
     let fields = front.data.unwrap_or_default();
 
     let mut agent = AgentDefinition::new(name, []);
     agent.instructions = front.body.trim().to_owned();
-    let mut problems: Vec<String> = Vec::new();
+    let mut problems: Vec<DefinitionProblem> = Vec::new();
     for (key, value) in &fields {
         let Some(key) = key.as_str() else {
-            problems.push("a key that is not text".to_owned());
+            let spelled = serde_yaml_ng::to_string(key)
+                .map(|text| text.trim().to_owned())
+                .unwrap_or_default();
+            problems.push(DefinitionProblem {
+                line: line_of(&values, &spelled),
+                field: Some(spelled).filter(|spelled| !spelled.is_empty()),
+                message: "a key that is not text".to_owned(),
+            });
             continue;
         };
-        if let Err(problem) = apply(&mut agent, key, value) {
-            problems.push(problem);
+        if let Err(message) = apply(&mut agent, key, value) {
+            problems.push(DefinitionProblem {
+                field: Some(key.to_owned()),
+                line: line_of(&values, key),
+                message,
+            });
         }
     }
-    if problems.is_empty() {
-        Ok(agent)
-    } else {
-        Err(problems.join("; "))
+    AgentFileReading {
+        agent: if problems.is_empty() {
+            Ok(agent)
+        } else {
+            Err(problems)
+        },
+        values,
+        body,
     }
+}
+
+/// The 1-based line of a 0-based line index.
+fn line_number(at: usize) -> u32 {
+    u32::try_from(at.saturating_add(1)).unwrap_or(u32::MAX)
+}
+
+/// Each top-level field in `raw`, the front matter whose first line is the
+/// file's line `first`, as written. A field is a line that starts in the
+/// first column with a key and a colon; the lines under it that are
+/// indented, blank or a `-` item are its value, up to the next field. A
+/// comment in the first column belongs to no field.
+fn written_values(raw: &str, first: u32) -> Vec<WrittenValue> {
+    let mut values: Vec<(WrittenValue, Vec<&str>)> = Vec::new();
+    for (at, line) in raw.split('\n').enumerate() {
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        let number = first.saturating_add(u32::try_from(at).unwrap_or(u32::MAX));
+        if let Some((field, rest)) = field_line(line) {
+            values.push((
+                WrittenValue {
+                    field,
+                    line: number,
+                    value: rest.trim().to_owned(),
+                },
+                Vec::new(),
+            ));
+        } else if !line.starts_with('#')
+            && let Some((_, under)) = values.last_mut()
+        {
+            under.push(line);
+        }
+    }
+    values
+        .into_iter()
+        .map(|(mut value, under)| {
+            let under = dedented(&under);
+            if !under.is_empty() {
+                value.value = if value.value.is_empty() {
+                    under
+                } else {
+                    format!("{}\n{under}", value.value)
+                };
+            }
+            value
+        })
+        .collect()
+}
+
+/// The key and what follows its colon, when `line` starts a top-level field.
+fn field_line(line: &str) -> Option<(String, &str)> {
+    let first = line.chars().next()?;
+    if first.is_whitespace() || matches!(first, '#' | '-' | '[' | '{' | '?') {
+        return None;
+    }
+    let (key, rest) = if matches!(first, '"' | '\'') {
+        let close = line[1..].find(first)? + 1;
+        let rest = line[close + 1..].trim_start().strip_prefix(':')?;
+        (line[1..close].to_owned(), rest)
+    } else {
+        let colon = line.find(':')?;
+        (line[..colon].trim_end().to_owned(), &line[colon + 1..])
+    };
+    (!key.is_empty()).then_some((key, rest))
+}
+
+/// `lines` with their common indent taken off, without the blank lines at
+/// either end.
+fn dedented(lines: &[&str]) -> String {
+    let start = lines.iter().position(|line| !line.trim().is_empty());
+    let end = lines.iter().rposition(|line| !line.trim().is_empty());
+    let (Some(start), Some(end)) = (start, end) else {
+        return String::new();
+    };
+    let kept = &lines[start..=end];
+    let indent = kept
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.len() - line.trim_start().len())
+        .min()
+        .unwrap_or(0);
+    kept.iter()
+        .map(|line| line.get(indent..).unwrap_or("").trim_end())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Sets the field `key` of `agent` from `value`.

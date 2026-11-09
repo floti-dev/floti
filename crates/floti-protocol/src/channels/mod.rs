@@ -79,6 +79,7 @@ macro_rules! stream_channel {
 
 pub mod agent_browser;
 pub mod agent_plugin;
+pub mod agents;
 pub mod boundary;
 pub mod carry;
 pub mod common;
@@ -101,6 +102,7 @@ pub fn declare(catalogue: &mut Catalogue) {
     plugins::declare(catalogue);
     agent_browser::declare(catalogue);
     agent_plugin::declare(catalogue);
+    agents::declare(catalogue);
     carry::declare(catalogue);
     wsl::declare(catalogue);
 }

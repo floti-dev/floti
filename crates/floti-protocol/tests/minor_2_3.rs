@@ -1,9 +1,12 @@
 //! A client on 2.2 still reads what a host on 2.3 sends, and that host still
-//! reads what the client sends: protocol 2.3 only adds a session record's
-//! `agent`, beside the `role` it retires, so a 2.2 frame is a 2.3 frame with
-//! `agent` left out and a 2.3 frame is a 2.2 frame with a field the older
-//! reader ignores. `role` keeps its shape and is written with `agent`'s value,
-//! and a record that names only `role` is read with that as its agent.
+//! reads what the client sends: protocol 2.3 adds a session record's
+//! `agent`, beside the `role` it retires, and the `agents:*` channels, and
+//! changes nothing else. A 2.2 frame is a 2.3 frame with `agent` left out
+//! and a 2.3 frame is a 2.2 frame with a field the older reader ignores.
+//! `role` keeps its shape and is written with `agent`'s value, and a record
+//! that names only `role` is read with that as its agent.
+
+use std::collections::BTreeSet;
 
 use floti_protocol::channel::{from_payload, to_payload};
 use floti_protocol::channels::common::SessionRecord;
@@ -28,18 +31,84 @@ fn record_of(version: ProtocolVersion) -> Value {
     serde_json::from_str(&record_text(version)).unwrap()
 }
 
+/// The types `schema` names, by `$ref`, anywhere in it.
+fn refs(schema: &Value) -> Vec<String> {
+    match schema {
+        Value::Object(map) => map
+            .iter()
+            .flat_map(|(key, value)| match (key.as_str(), value) {
+                ("$ref", Value::String(target)) => target
+                    .strip_prefix("#/$defs/")
+                    .map(str::to_owned)
+                    .into_iter()
+                    .collect(),
+                _ => refs(value),
+            })
+            .collect(),
+        Value::Array(items) => items.iter().flat_map(refs).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The channels 2.3 adds, for a host's agents.
+const AGENTS_CHANNELS: &[&str] = &[
+    "agents:addShipped",
+    "agents:changed",
+    "agents:delete",
+    "agents:list",
+    "agents:read",
+    "agents:restore",
+    "agents:write",
+];
+
 #[test]
-fn protocol_2_3_changes_only_the_session_record_and_adds_only_agent_to_it() {
+fn protocol_2_3_changes_only_the_session_record_and_adds_the_agents_channels() {
     assert_eq!(record_of(V2_3)["version"], "2.3");
+    let found = differences(&record_text(V2_2), &record_text(V2_3)).unwrap();
+    let changed: Vec<&Difference> = found
+        .iter()
+        .filter(|difference| difference.change != Change::Added)
+        .collect();
     assert_eq!(
-        differences(&record_text(V2_2), &record_text(V2_3)).unwrap(),
-        [Difference {
+        changed,
+        [&Difference {
             part: Part::Type,
             name: "SessionRecord".to_owned(),
             change: Change::Changed,
         }],
-        "no channel and no other type differs"
+        "nothing but the session record changes, and nothing is removed"
     );
+    let added_channels: Vec<&str> = found
+        .iter()
+        .filter(|difference| difference.part == Part::Channel)
+        .map(|difference| difference.name.as_str())
+        .collect();
+    assert_eq!(added_channels, AGENTS_CHANNELS);
+    // Every type added is one the agents channels carry, directly or inside
+    // another.
+    let record = record_of(V2_3);
+    let mut carried: BTreeSet<String> = BTreeSet::new();
+    let mut reading: Vec<Value> = AGENTS_CHANNELS
+        .iter()
+        .map(|name| record["channels"][name].clone())
+        .collect();
+    while let Some(schema) = reading.pop() {
+        for name in refs(&schema) {
+            if carried.insert(name.clone()) {
+                reading.push(record["types"][&name].clone());
+            }
+        }
+    }
+    for added in found
+        .iter()
+        .filter(|difference| difference.part == Part::Type && difference.change == Change::Added)
+    {
+        assert!(
+            carried.contains(&added.name),
+            "2.3 adds the type {}, which no agents channel carries",
+            added.name
+        );
+    }
     let (before, after) = (record_of(V2_2), record_of(V2_3));
     let record = |of: &Value| of["types"]["SessionRecord"].clone();
     let (before, mut after) = (record(&before), record(&after));

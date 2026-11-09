@@ -7,8 +7,9 @@
 //!
 //! No client is attached while a session works: a client starts the session
 //! and goes, and comes back only to restore sessions after the host restarts.
-//! The agents folder is under the test's own run root, so no test reads or
-//! writes a real one.
+//! A client lists, reads, edits and watches the agents over the protocol
+//! (S19). The agents folder is under the test's own run root, so no test
+//! reads or writes a real one.
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -29,6 +30,11 @@ use floti_host::testkit::{
     GitRepo, OtherAgent, OtherAgentRecord, PATIENCE, RunningHost, TestClient, TestDirs,
 };
 use floti_protocol::BackendId;
+use floti_protocol::channels::agents::{
+    AddShippedAgent, AgentName, AgentProblem, AgentUnusedLine, AgentsChange, AgentsListing,
+    DeleteAgent, DeleteAgentRequest, ListAgents, ReadAgent, RestoreAgent, WriteAgent,
+    WriteAgentRequest,
+};
 use floti_protocol::channels::common::{PermissionMode, SessionRecord};
 use floti_protocol::channels::host::{HostStop, HostStopReason, HostStopRequest};
 use floti_protocol::channels::sessions::{
@@ -2731,4 +2737,300 @@ async fn a_read_only_host_with_neither_folder_serves_the_shipped_agents_and_writ
     assert_eq!(world.config_files(), before, "nothing was written");
     assert!(!world.agents_dir().exists());
     assert!(!world.dirs.config.join("roles").exists());
+}
+
+// ---------------------------------------------------------------------------
+// S19: a client lists, reads, edits and watches the host's agents
+// ---------------------------------------------------------------------------
+
+/// What a client is answered on `agents:list`.
+async fn listed(client: &mut TestClient) -> AgentsListing {
+    client
+        .request::<ListAgents>(&())
+        .await
+        .expect("the agents are listed")
+}
+
+fn listed_names(listing: &AgentsListing) -> Vec<&str> {
+    listing
+        .agents
+        .iter()
+        .map(|agent| agent.name.as_str())
+        .collect()
+}
+
+/// Subscribes `client` to `agents:changed`, and answers once the host has
+/// taken the subscription: a request after it is answered after it.
+async fn listen_for_changes(client: &mut TestClient) {
+    client.subscribe_quietly(1, "agents:changed").await;
+    listed(client).await;
+}
+
+async fn told_of(client: &mut TestClient, name: &str) -> AgentsChange {
+    client
+        .event_on::<AgentsChange>(1, &format!("agents:changed naming {name}"), |change| {
+            change.names.iter().any(|changed| changed == name)
+        })
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn s19_a_client_lists_the_hosts_agents_its_bad_files_retired_lines_and_missing_shipped_ones_and_each_host_answers_its_own()
+ {
+    let world = World::new();
+    world.agent(
+        "reviewer",
+        "---\ndescription: Reads a change.\nclass: light\n---\nRead it.\n",
+    );
+    world.agent("typo", "---\ndescription: Typo.\nworktree: maybe\n---\n");
+    let other = World::new();
+    other.agent("scout", "---\ndescription: Looks around.\n---\n");
+    let host = world.host().await;
+    let other_host = other.host().await;
+
+    let mut client = world.client().await;
+    let listing = listed(&mut client).await;
+    assert_eq!(listing.folder, text(&world.agents_dir()));
+    assert_eq!(listing.read_only, None);
+    assert_eq!(listed_names(&listing), ["default", "reviewer"]);
+    let (default, reviewer) = (&listing.agents[0], &listing.agents[1]);
+    assert_eq!(
+        (default.file.as_deref(), default.hash.as_deref()),
+        (None, None)
+    );
+    assert!(
+        default.backends.iter().any(|backend| backend == CLAUDE),
+        "{default:?}"
+    );
+    assert_eq!(reviewer.description, "Reads a change.");
+    assert_eq!(reviewer.file.as_deref(), Some("reviewer.md"));
+    assert_eq!(
+        reviewer.unused_lines,
+        [AgentUnusedLine {
+            field: "class".into(),
+            line: 3,
+        }]
+    );
+    let read = client
+        .request::<ReadAgent>(&AgentName {
+            name: "reviewer".into(),
+        })
+        .await
+        .expect("the reviewer is read");
+    assert_eq!(reviewer.hash.as_deref(), Some(read.hash.as_str()));
+    assert_eq!(read.body, "Read it.\n");
+
+    let [typo] = listing.bad.as_slice() else {
+        panic!("one bad file: {listing:?}");
+    };
+    assert_eq!(
+        (typo.name.as_str(), typo.file.as_str()),
+        ("typo", "typo.md")
+    );
+    assert_eq!(
+        typo.problems,
+        [AgentProblem {
+            field: Some("worktree".into()),
+            line: Some(3),
+            message: "worktree must be yes, no, true or false, not maybe".into(),
+        }]
+    );
+    let shipped: Vec<&str> = listing
+        .shipped
+        .iter()
+        .map(|agent| agent.name.as_str())
+        .collect();
+    assert_eq!(shipped, ["lead", "worker"], "the reviewer's file is there");
+
+    // The other host answers with its own folder.
+    let mut elsewhere = TestClient::connect(&other.endpoint, TERMINAL).await;
+    let theirs = listed(&mut elsewhere).await;
+    assert_eq!(theirs.folder, text(&other.agents_dir()));
+    assert_eq!(listed_names(&theirs), ["default", "scout"]);
+    assert!(theirs.bad.is_empty());
+    assert_eq!(theirs.shipped.len(), 3);
+
+    drop((client, elsewhere));
+    other_host.stop(HostStopReason::Stop).await;
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn s19_an_agent_a_client_writes_is_what_the_next_agents_start_runs_with_no_restart() {
+    let world = World::new();
+    world.agent("existing", "---\n---\n");
+    let host = world.host().await;
+    let parent = world
+        .session(CLAUDE, &world.project("written"), "parent")
+        .await;
+    let mut client = world.client().await;
+
+    let created = client
+        .request::<WriteAgent>(&WriteAgentRequest {
+            name: "scout".into(),
+            text: "---\ndescription: Scouts.\n---\nLook around first.\n".into(),
+            expected_hash: None,
+            rename_from: None,
+        })
+        .await
+        .expect("the write is answered");
+    assert!(created.changed, "{created:?}");
+    parent
+        .start(json!({ "task": "go", "agent": "scout", "name": "first" }))
+        .await
+        .done();
+    let first = world.child_of(&parent, "first").await;
+    assert!(
+        first
+            .run
+            .instructions
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Look around first.")
+    );
+
+    let replaced = client
+        .request::<WriteAgent>(&WriteAgentRequest {
+            name: "scout".into(),
+            text: "---\ndescription: Scouts.\n---\nLook around twice.\n".into(),
+            expected_hash: created.file.map(|file| file.hash),
+            rename_from: None,
+        })
+        .await
+        .expect("the write is answered");
+    assert!(replaced.changed, "{replaced:?}");
+    parent
+        .start(json!({ "task": "go", "agent": "scout", "name": "second" }))
+        .await
+        .done();
+    let second = world.child_of(&parent, "second").await;
+    let composed = second.run.instructions.as_deref().unwrap_or_default();
+    assert!(
+        composed.contains("Look around twice.") && !composed.contains("Look around first."),
+        "{composed}"
+    );
+
+    // A text the parser refuses changes nothing a start reads.
+    let refused = client
+        .request::<WriteAgent>(&WriteAgentRequest {
+            name: "scout".into(),
+            text: "---\nworktree: maybe\n---\n".into(),
+            expected_hash: replaced.file.map(|file| file.hash),
+            rename_from: None,
+        })
+        .await
+        .expect("the write is answered");
+    assert!(
+        !refused.changed && !refused.problems.is_empty(),
+        "{refused:?}"
+    );
+    assert!(
+        std::fs::read_to_string(world.agents_dir().join("scout.md"))
+            .unwrap()
+            .contains("Look around twice.")
+    );
+    drop(client);
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn s19_an_edit_outside_floti_and_the_hosts_own_reach_every_listening_client_as_agents_changed()
+ {
+    let world = World::new();
+    world.agent("reviewer", "---\ndescription: Reads.\n---\n");
+    let host = world.host().await;
+    let mut first = world.client().await;
+    let mut second = world.client().await;
+    listen_for_changes(&mut first).await;
+    listen_for_changes(&mut second).await;
+
+    // An editor writes a new agent file.
+    world.agent("scout", "---\ndescription: Looks around.\n---\n");
+    assert_eq!(told_of(&mut first, "scout").await.names, ["scout"]);
+    assert_eq!(told_of(&mut second, "scout").await.names, ["scout"]);
+
+    // The host's own delete, made for one client, is told to both.
+    let deleted = first
+        .request::<DeleteAgent>(&DeleteAgentRequest {
+            name: "reviewer".into(),
+            expected_hash: None,
+        })
+        .await
+        .expect("the delete is answered");
+    assert!(deleted.changed, "{deleted:?}");
+    told_of(&mut first, "reviewer").await;
+    told_of(&mut second, "reviewer").await;
+
+    drop((first, second));
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn s19_a_host_that_writes_no_config_lists_reads_and_watches_its_agents_and_refuses_every_change()
+ {
+    let world = World::new();
+    let reviewer = "---\ndescription: Reads.\n---\n";
+    world.agent("reviewer", reviewer);
+    let host = world.host_read_only().await;
+    let mut client = world.client().await;
+    listen_for_changes(&mut client).await;
+
+    let listing = listed(&mut client).await;
+    let sentence = listing
+        .read_only
+        .clone()
+        .expect("the host says it is read-only");
+    assert!(
+        sentence.contains("does not change its config folder"),
+        "{sentence}"
+    );
+    assert_eq!(listed_names(&listing), ["default", "reviewer"]);
+    let read = client
+        .request::<ReadAgent>(&AgentName {
+            name: "reviewer".into(),
+        })
+        .await
+        .expect("the reviewer is read");
+
+    let name = || AgentName {
+        name: "reviewer".into(),
+    };
+    let changes = [
+        client
+            .request::<WriteAgent>(&WriteAgentRequest {
+                name: "reviewer".into(),
+                text: "---\ndescription: Mine.\n---\n".into(),
+                expected_hash: Some(read.hash.clone()),
+                rename_from: None,
+            })
+            .await,
+        client
+            .request::<DeleteAgent>(&DeleteAgentRequest {
+                name: "reviewer".into(),
+                expected_hash: None,
+            })
+            .await,
+        client.request::<RestoreAgent>(&name()).await,
+        client
+            .request::<AddShippedAgent>(&AgentName {
+                name: "worker".into(),
+            })
+            .await,
+    ];
+    for change in changes {
+        let change = change.expect("the change is answered");
+        assert!(!change.changed, "{change:?}");
+        assert_eq!(change.refusal.as_deref(), Some(sentence.as_str()));
+    }
+    assert_eq!(
+        std::fs::read_to_string(world.agents_dir().join("reviewer.md")).unwrap(),
+        reviewer
+    );
+    assert!(!world.agents_dir().join("worker.md").exists());
+
+    // It still watches: an outside edit is told.
+    world.agent("reviewer", "---\ndescription: Edited by hand.\n---\n");
+    told_of(&mut client, "reviewer").await;
+    drop(client);
+    host.stop(HostStopReason::Stop).await;
 }
