@@ -225,7 +225,7 @@ async fn s31_a_client_on_this_minor_lists_a_child_with_its_parent_and_agent_and_
             "{session}"
         );
     }
-    // It reads the child's agent where it always did, as its role.
+    // It reads the child's agent from the field it always read it from.
     let said = |id: u64| {
         wire.iter()
             .find(|session| session["id"] == id)

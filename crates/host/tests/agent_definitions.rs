@@ -2342,3 +2342,393 @@ async fn s2_a_lost_child_is_reopened_in_its_agent_as_the_file_reads_when_it_come
     assert!(!told.contains("Will be deleted."), "{told}");
     host.stop(HostStopReason::Stop).await;
 }
+
+// ---------------------------------------------------------------------------
+// Sessions and rows from before agents were called agents
+// ---------------------------------------------------------------------------
+
+/// The newest row `parent` has under `name`: a resume adds one.
+fn newest_child_id(world: &World, parent: u64, name: &str) -> Option<u64> {
+    world
+        .db()
+        .query_row(
+            "SELECT id FROM sessions WHERE parent_session_id = ?1 AND child_name = ?2 \
+             ORDER BY id DESC LIMIT 1",
+            rusqlite::params![i64::try_from(parent).unwrap(), name],
+            |row| row.get::<_, i64>(0),
+        )
+        .ok()
+        .and_then(|id| u64::try_from(id).ok())
+}
+
+/// Writes `agent` into child `id`'s row, as an earlier host wrote it.
+fn set_row_agent(world: &World, id: u64, agent: &str) {
+    let changed = world
+        .db()
+        .execute(
+            "UPDATE sessions SET agent = ?2 WHERE id = ?1",
+            rusqlite::params![i64::try_from(id).unwrap(), agent],
+        )
+        .expect("write the row's agent");
+    assert_eq!(changed, 1);
+}
+
+/// Stops `parent`'s child `name` and waits for its row to say it ended.
+async fn stop_and_wait(world: &World, parent: &Agent, name: &str, id: u64) {
+    parent
+        .call("agents_stop", json!({ "child": name }))
+        .await
+        .done();
+    eventually("the child to end", async || {
+        (world.column::<String>(id, "status") != "running").then_some(())
+    })
+    .await;
+}
+
+const CAREFUL: &str =
+    "---\ndescription: Careful.\nbackend: claude-code\npermission: plan\n---\nCareful words.\n";
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_launched_before_the_rename_starts_by_role_calls_agents_roles_and_runs_floti_agent_start_role()
+ {
+    let world = World::new();
+    world.agent("careful", CAREFUL);
+    let host = world.host().await;
+    let parent = world
+        .session(CLAUDE, &world.project("old names"), "parent")
+        .await;
+
+    // role is read as agent: the child runs as that agent, its rules and
+    // body included, never as the default.
+    parent
+        .start(json!({ "task": "go", "role": "careful", "name": "by-role" }))
+        .await
+        .done();
+    let by_role = world.child_of(&parent, "by-role").await;
+    assert_eq!(world.column::<String>(by_role.id(), "agent"), "careful");
+    assert_eq!(
+        value_of(&by_role.run.argv, "--permission-mode"),
+        Some("plan"),
+        "{:?}",
+        by_role.run.argv
+    );
+    let told = by_role.run.instructions.as_deref().unwrap_or_default();
+    assert!(told.contains("Careful words."), "{told}");
+
+    // The same agent under both names is one agent; two are refused naming
+    // both, and nothing starts.
+    parent
+        .start(json!({ "task": "go", "agent": "careful", "role": "careful", "name": "both" }))
+        .await
+        .done();
+    let made = world.children_made();
+    let refused = parent
+        .start(json!({ "task": "go", "agent": "careful", "role": "default" }))
+        .await;
+    let sentence = refused.refused();
+    assert!(
+        sentence.contains("agent names careful") && sentence.contains("role names default"),
+        "{sentence}"
+    );
+    assert_eq!(world.children_made(), made, "nothing was started");
+
+    // A resume refuses role as it refuses agent.
+    world.type_line(&by_role, "remember this").await;
+    stop_and_wait(&world, &parent, "by-role", by_role.id()).await;
+    let refused = parent
+        .start(json!({ "task": "again", "resume": "by-role", "role": "careful" }))
+        .await;
+    assert!(
+        refused.refused().contains("you also gave role"),
+        "{refused:?}"
+    );
+
+    // agents_roles answers as agents_available, and no listing shows it.
+    let (url, token) = parent.route();
+    let old = parent.call("agents_roles", json!({})).await;
+    assert_eq!(old.done(), parent.agents().await.done());
+    let tools = rpc(&url, Some(&token), "tools/list", json!({}))
+        .await
+        .result();
+    let names: Vec<&str> = tools["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tool| tool["name"].as_str().unwrap())
+        .collect();
+    assert!(names.contains(&"agents_available"), "{names:?}");
+    assert!(!names.contains(&"agents_roles"), "{names:?}");
+    for tool in tools["tools"].as_array().unwrap() {
+        assert!(
+            !tool.to_string().contains("role"),
+            "no tool says role: {tool}"
+        );
+    }
+
+    // floti agent start --role reads as --agent.
+    let command = agent_cli::parse(&[
+        "start".to_owned(),
+        "--task".to_owned(),
+        "go".to_owned(),
+        "--role".to_owned(),
+        "careful".to_owned(),
+        "--name".to_owned(),
+        "by-flag".to_owned(),
+    ])
+    .expect("--role parses");
+    let outcome = subcommand(command, url, token).await;
+    assert_eq!(outcome.code, 0, "{outcome:?}");
+    let by_flag = world.child_of(&parent, "by-flag").await;
+    assert_eq!(world.column::<String>(by_flag.id(), "agent"), "careful");
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_lost_child_whose_row_says_agent_comes_back_as_the_default_with_no_warning() {
+    let world = World::new();
+    world.agent("existing", "---\n---\n");
+    let host = world.host().await;
+    let parent = world
+        .session(CLAUDE, &world.project("old default"), "parent")
+        .await;
+    parent
+        .start(json!({ "task": "work", "name": "kid" }))
+        .await
+        .done();
+    let kid = world.child_of(&parent, "kid").await;
+    assert_eq!(world.column::<String>(kid.id(), "agent"), "default");
+    // A child started as the default is told nothing about an agent.
+    let told = kid.run.instructions.as_deref().unwrap_or_default();
+    assert!(
+        told.contains("You were started by another session, parent. Your first message"),
+        "{told}"
+    );
+    world.type_line(&kid, "carry on").await;
+
+    let mut client = world.client().await;
+    client
+        .request::<HostStop>(&HostStopRequest {
+            reason: HostStopReason::Update,
+        })
+        .await
+        .expect("the stop is taken");
+    drop(client);
+    assert_eq!(host.stopped().await, HostStopReason::Update);
+    // What an earlier host wrote for a child started with no role.
+    set_row_agent(&world, kid.id(), "agent");
+
+    let host = world.host().await;
+    let mut client = world.client().await;
+    let result = client
+        .request::<SessionRestore>(&RestoreSessionsRequest {
+            sessions: vec![SessionToRestore {
+                id: kid.id(),
+                cols: 80,
+                rows: 24,
+            }],
+        })
+        .await
+        .expect("the restore is taken");
+    drop(client);
+    assert_eq!(result.restored.len(), 1, "{result:?}");
+    assert!(
+        result.restored[0].launched.warnings.is_empty(),
+        "{:?}",
+        result.restored[0].launched.warnings
+    );
+    let again = world
+        .agent_of(result.restored[0].launched.session.clone(), &[kid.run.pid])
+        .await;
+    let told = again.run.instructions.as_deref().unwrap_or_default();
+    assert!(!told.contains("no longer exists"), "{told}");
+    assert!(!told.contains("session, parent, as"), "{told}");
+    assert!(
+        again.run.argv.iter().any(|arg| arg == "--resume"),
+        "{:?}",
+        again.run.argv
+    );
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agent_md_with_no_default_md_is_the_default_for_a_new_start_and_a_resumed_child() {
+    let world = World::new();
+    // What a roles folder moved to agents may hold: the old default's file.
+    world.agent(
+        "agent",
+        "---\ndescription: My old default.\nbackend: claude-code\n---\nOld default words.\n",
+    );
+    let host = world.host().await;
+    let parent = world
+        .session(CLAUDE, &world.project("agent md"), "parent")
+        .await;
+
+    // Listed as the default, under the default's name, and not twice.
+    assert_eq!(parent.agent_names().await, ["default"]);
+    let entries = parent.agent_entries().await;
+    assert_eq!(entries["default"]["description"], "My old default.");
+    assert_eq!(backends_of(&entries["default"]), [CLAUDE]);
+
+    // A start that names no agent gets it.
+    parent
+        .start(json!({ "task": "work", "name": "kid" }))
+        .await
+        .done();
+    let kid = world.child_of(&parent, "kid").await;
+    let told = kid.run.instructions.as_deref().unwrap_or_default();
+    assert!(told.contains("Old default words."), "{told}");
+    assert!(!told.contains("session, parent, as"), "{told}");
+
+    // A child whose row still says agent resumes as it too, saying nothing
+    // of an agent that no longer exists.
+    world.type_line(&kid, "remember this").await;
+    stop_and_wait(&world, &parent, "kid", kid.id()).await;
+    set_row_agent(&world, kid.id(), "agent");
+    let resumed = parent
+        .start(json!({ "task": "again", "resume": "kid" }))
+        .await;
+    assert!(!resumed.text().contains("no longer exists"), "{resumed:?}");
+    resumed.done();
+    let id = newest_child_id(&world, parent.id(), "kid").expect("the resumed row");
+    assert_ne!(id, kid.id());
+    let record = world.record(id).await;
+    let again = world.agent_of(record, &[kid.run.pid]).await;
+    let told = again.run.instructions.as_deref().unwrap_or_default();
+    assert!(told.contains("Old default words."), "{told}");
+    assert_eq!(world.column::<String>(id, "agent"), "default");
+
+    // A default.md beside it wins, and agent.md is not listed.
+    world.agent("default", "---\ndescription: The new one.\n---\n");
+    assert_eq!(parent.agent_names().await, ["default"]);
+    assert_eq!(
+        parent.agent_entries().await["default"]["description"],
+        "The new one."
+    );
+    host.stop(HostStopReason::Stop).await;
+}
+
+// ---------------------------------------------------------------------------
+// A host whose config folder is another host's to write
+// ---------------------------------------------------------------------------
+
+impl World {
+    /// A host told its config folder is not its to write, as Helm starts
+    /// one in every run but the installed app's.
+    async fn host_read_only(&self) -> RunningHost {
+        let mut config = self.config();
+        config.run.config_read_only = true;
+        let host = RunningHost::start(config);
+        drop(self.client().await);
+        let known: i64 = self
+            .db()
+            .query_row(
+                "SELECT count(*) FROM profiles WHERE name = 'workspace'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count the profiles");
+        if known == 0 {
+            self.profile("workspace", &self.work, None, None, None);
+        }
+        host
+    }
+
+    /// Every entry under the config folder, by its path from it, with a
+    /// file's bytes.
+    fn config_files(&self) -> Vec<(String, Option<Vec<u8>>)> {
+        let mut found = Vec::new();
+        let mut stack = vec![self.dirs.config.clone()];
+        while let Some(at) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&at) else {
+                continue;
+            };
+            for entry in entries {
+                let path = entry.expect("an entry").path();
+                let name = path
+                    .strip_prefix(&self.dirs.config)
+                    .expect("under the config folder")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                if path.is_dir() {
+                    found.push((name, None));
+                    stack.push(path);
+                } else {
+                    found.push((name, Some(std::fs::read(&path).expect("read a file"))));
+                }
+            }
+        }
+        found.sort();
+        found
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_read_only_host_reads_a_roles_folder_where_it_is_and_moves_and_writes_nothing() {
+    let world = World::new();
+    let roles = world.dirs.config.join("roles");
+    std::fs::create_dir_all(&roles).unwrap();
+    std::fs::write(roles.join("careful.md"), CAREFUL).unwrap();
+    std::fs::write(
+        roles.join("lead.md"),
+        "---\ndescription: My lead.\n---\nMine.\n",
+    )
+    .unwrap();
+    let before = world.config_files();
+
+    let host = world.host_read_only().await;
+    let parent = world
+        .session(CLAUDE, &world.project("shared config"), "parent")
+        .await;
+    assert_eq!(parent.agent_names().await, ["default", "careful", "lead"]);
+    parent
+        .start(json!({ "task": "go", "agent": "careful", "name": "kid" }))
+        .await
+        .done();
+    let kid = world.child_of(&parent, "kid").await;
+    assert!(
+        kid.run
+            .instructions
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Careful words.")
+    );
+    host.stop(HostStopReason::Stop).await;
+    assert_eq!(
+        world.config_files(),
+        before,
+        "the config folder is as it was"
+    );
+    assert!(!world.agents_dir().exists());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_read_only_host_with_neither_folder_serves_the_shipped_agents_and_writes_none() {
+    let world = World::new();
+    let before = world.config_files();
+    let host = world.host_read_only().await;
+    let parent = world
+        .session(CLAUDE, &world.project("no folder"), "parent")
+        .await;
+    assert_eq!(
+        parent.agent_names().await,
+        ["default", "lead", "reviewer", "worker"]
+    );
+    parent
+        .start(json!({ "task": "look", "agent": "reviewer", "name": "kid" }))
+        .await
+        .done();
+    let kid = world.child_of(&parent, "kid").await;
+    assert!(
+        kid.run
+            .instructions
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Read the code before you give findings."),
+        "{:?}",
+        kid.run.instructions
+    );
+    host.stop(HostStopReason::Stop).await;
+    assert_eq!(world.config_files(), before, "nothing was written");
+    assert!(!world.agents_dir().exists());
+    assert!(!world.dirs.config.join("roles").exists());
+}

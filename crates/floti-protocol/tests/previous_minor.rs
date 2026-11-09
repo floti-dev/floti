@@ -252,7 +252,7 @@ fn s31_a_2_0_record_read_by_a_2_1_client_has_no_parent_and_no_role() {
     assert_eq!(read.profile_id, Some(4));
 }
 
-/// A command child that has exited: it names its command, not a role, and its
+/// A command child that has exited: it names its command, not an agent, and its
 /// exit code is the record's.
 fn command_child(parent: &SessionRecord, code: i32) -> SessionRecord {
     SessionRecord {

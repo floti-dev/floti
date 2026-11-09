@@ -16,8 +16,9 @@ use super::Composition;
 pub struct ChildInstructions {
     /// What the child's parent is called in Floti.
     pub parent: String,
-    /// The agent the child was started as.
-    pub agent: String,
+    /// The agent the child was started as, or `None` for the default, which
+    /// it is told nothing about.
+    pub agent: Option<String>,
     /// Whether the child has `agents_report`. An agent with no MCP tools
     /// reports through its program's own status instead, and is told nothing
     /// about the tool.
@@ -88,9 +89,13 @@ pub fn append(base: Option<String>, sections: Option<String>) -> Option<String> 
 
 fn child_section(child: &ChildInstructions) -> String {
     let parent = one_line(&child.parent);
-    let agent = one_line(&child.agent);
+    let started_as = child
+        .agent
+        .as_deref()
+        .map(|agent| format!(", as {}", one_line(agent)))
+        .unwrap_or_default();
     let mut text = format!(
-        "# Started by another session\n\nYou were started by another session, {parent}, as {agent}. Your first message is your task. Nobody may be watching this terminal, so a question asked here can go unanswered."
+        "# Started by another session\n\nYou were started by another session, {parent}{started_as}. Your first message is your task. Nobody may be watching this terminal, so a question asked here can go unanswered."
     );
     if child.reports {
         text.push_str(" When you are done or stuck, call agents_report once: done with what you did and where, or stuck with one question, its options and your recommendation.");
@@ -134,7 +139,7 @@ mod tests {
         Composition {
             child: Some(ChildInstructions {
                 parent: "api-refactor".into(),
-                agent: "reviewer".into(),
+                agent: Some("reviewer".into()),
                 reports,
             }),
             ..Composition::default()
@@ -153,6 +158,20 @@ mod tests {
         assert!(text.contains("call agents_report once"));
         assert!(text.contains("may come from api-refactor"));
         assert!(!text.contains("floti agent"), "no guide without the family");
+    }
+
+    #[test]
+    fn a_child_started_as_the_default_is_told_its_parent_and_nothing_of_an_agent() {
+        let mut composition = child(true);
+        if let Some(child) = composition.child.as_mut() {
+            child.agent = None;
+        }
+        let text = floti_sections(&composition, "wait", None).expect("a section");
+        assert!(
+            text.contains("You were started by another session, api-refactor. Your first message"),
+            "{text}"
+        );
+        assert!(!text.contains(", as "), "{text}");
     }
 
     #[test]
@@ -292,7 +311,7 @@ mod tests {
         let composition = Composition {
             child: Some(ChildInstructions {
                 parent: format!("a\nb\t{}", "x".repeat(300)),
-                agent: "r".into(),
+                agent: Some("r".into()),
                 reports: false,
             }),
             ..Composition::default()

@@ -220,6 +220,9 @@ export function clientFolder(places: HostPlaces, platform: NodeJS.Platform): str
   return pathsFor(platform).join(places.dataDir, 'host-client')
 }
 
+/** What tells a host its config folder is another host's to write (`CONFIG_READ_ONLY_VAR` in the host). */
+const CONFIG_READ_ONLY = 'FLOTI_CONFIG_READ_ONLY'
+
 /**
  * The environment both programs run with. The installed app uses the host's
  * own folders, so it passes its environment as it is; every other run moves
@@ -227,6 +230,15 @@ export function clientFolder(places: HostPlaces, platform: NodeJS.Platform): str
  * meets the user's real host. The config folder is the one exception, in every
  * run: it is the folder holding Helm's templates folder, which is all the
  * host keeps there.
+ *
+ * A development run (`pnpm dev`, `dev:live`, every check) sets
+ * `FLOTI_CONFIG_READ_ONLY`, because its config folder can be the installed
+ * host's own (`dev:live` shares `~/.config/helm`), and a host built from a
+ * checkout must never move, seed or write what the installed one reads: it
+ * reads `agents`, else `roles` where it is, else the shipped agents from
+ * memory, and seeds no templates. The installed and the portable app write
+ * their own config folders, which nothing else uses, and are never handed
+ * it, whatever this process inherited.
  *
  * A build that is not packaged carries no Node beside `floti`, so it hands the
  * host the `node` on PATH (`FLOTI_NODE`, an absolute path) for plugin
@@ -241,7 +253,8 @@ export function hostEnvironment(
   const paths = pathsFor(deps.platform)
   const config = paths.dirname(places.templatesDir)
   const node = places.packaged || deps.env['FLOTI_NODE'] !== undefined ? null : nodeOnPath(deps)
-  const env = node === null ? deps.env : { ...deps.env, FLOTI_NODE: node }
+  const { [CONFIG_READ_ONLY]: _inherited, ...env } =
+    node === null ? deps.env : { ...deps.env, FLOTI_NODE: node }
   if (places.appMode === 'installed') return { ...env, FLOTI_CONFIG_DIR: config }
   const root = paths.join(places.dataDir, 'host')
   return {
@@ -249,6 +262,7 @@ export function hostEnvironment(
     FLOTI_DATA_DIR: paths.join(root, 'data'),
     FLOTI_LOG_DIR: paths.join(root, 'logs'),
     FLOTI_CONFIG_DIR: config,
+    ...(places.appMode === 'portable' ? {} : { [CONFIG_READ_ONLY]: '1' }),
     FLOTI_RUNTIME_DIR: runtimeFolder(places.dataDir, deps)
   }
 }

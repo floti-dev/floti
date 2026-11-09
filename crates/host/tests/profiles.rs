@@ -728,6 +728,7 @@ impl HostWorld {
                 desktop: false,
                 keeper: None,
                 wsl: None,
+                config_read_only: false,
             },
         });
         let client = TestClient::connect(&endpoint, &[]).await;

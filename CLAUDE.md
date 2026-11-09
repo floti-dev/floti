@@ -810,17 +810,27 @@ folder: run through npx, that folder is a cache.
   in-app template editor.
 - Agents (a lead, a worker, a reviewer: the named definitions a session
   starts its children as) live in `agents` in the host's config folder
-  (`~/.config/floti`), one `<name>.md` each (front matter, then the body),
-  parsed as an `AgentDefinition` (`agent_definitions/`). The one a start
-  naming none gets is `default`. The host reads the folder afresh on every
-  `agents_start`, `agents_available` and reopen of a child, never from a
-  cache. At start, a host that finds `roles` there and no `agents` renames the
-  folder to `agents`, whole, rewriting no file in it; with both it reads
+  (`~/.config/floti`; `~/.config/helm` for the host Helm starts), one
+  `<name>.md` each (front matter, then the body), parsed as an
+  `AgentDefinition` (`agent_definitions/`). The one a start naming none gets
+  is `default`; it was called `agent` before, so a child's row naming `agent`
+  is the default's, and an `agent.md` is the default where there is no
+  `default.md` (the log says so once). The host reads the folder afresh on
+  every `agents_start`, `agents_available` and reopen of a child, never from
+  a cache. At start, a host that finds `roles` there and no `agents` renames
+  the folder to `agents`, whole, rewriting no file in it; with both it reads
   `agents`, leaves `roles` alone and says so in its log
   (`prepare_agents_folder` in `agent_definitions/folder.rs`). It seeds the
   shipped `reviewer.md`, `worker.md` and `lead.md` only when neither folder
   exists: nothing there is ever rewritten, an edit or a deletion stays, and an
-  empty folder stays empty. A file that is not an agent (front matter that
+  empty folder stays empty. A host started with `FLOTI_CONFIG_READ_ONLY`
+  (Helm sets it for `pnpm dev`, `dev:live` and every check, whose config
+  folder can be the installed host's) moves, seeds and writes nothing in its
+  config folder, templates included: it reads `agents`, else `roles` where it
+  is, else serves the shipped agents from memory (`read_agents_folder`). A
+  session launched before the rename may still call `agents_roles`, pass
+  `role` to `agents_start` and run `floti agent start --role`; each is
+  answered as its new name and none is listed, allowed or written anywhere. A file that is not an agent (front matter that
   does not parse, an unknown key, a value outside its choices) is named with
   its problem by `agents_available`, and a start naming it is refused naming
   the file; nothing guesses at it. A retired line (`RETIRED_FIELDS` in

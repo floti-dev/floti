@@ -177,9 +177,32 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
           FLOTI_DATA_DIR: `${WIN_PLACES.dataDir}\\host\\data`,
           FLOTI_LOG_DIR: `${WIN_PLACES.dataDir}\\host\\logs`,
           FLOTI_CONFIG_DIR: WIN_PLACES.dataDir,
+          ...(appMode === 'portable' ? {} : { FLOTI_CONFIG_READ_ONLY: '1' }),
           FLOTI_RUNTIME_DIR: `${WIN_PLACES.dataDir}\\host\\run`
         })
       }
+    })
+
+    it('tells a development run’s host that its config folder is not its to write, and no other', () => {
+      // dev:live's config folder is the installed host's own ~/.config/helm.
+      const shared = { ...WIN_PLACES, templatesDir: 'C:\\Users\\me\\.config\\helm\\templates' }
+      for (const appMode of ['dev', 'dev-live'] as const) {
+        const env = hostEnvironment({ ...shared, appMode }, { platform: 'win32', env: {}, tmpdir: () => 'C:\\Temp' })
+        expect(env['FLOTI_CONFIG_READ_ONLY'], appMode).toBe('1')
+      }
+      // The installed and the portable app's hosts write their own config
+      // folders, even when this process was started with the variable set.
+      const inherited = { PATH: 'x', FLOTI_CONFIG_READ_ONLY: '1' }
+      const installed = hostEnvironment(
+        { ...shared, appMode: 'installed' },
+        { platform: 'win32', env: inherited, tmpdir: () => 'C:\\Temp' }
+      )
+      expect(installed).toEqual({ PATH: 'x', FLOTI_CONFIG_DIR: 'C:\\Users\\me\\.config\\helm' })
+      const portable = hostEnvironment(
+        { ...WIN_PLACES, appMode: 'portable' },
+        { platform: 'win32', env: inherited, tmpdir: () => 'C:\\Temp' }
+      )
+      expect(portable).not.toHaveProperty('FLOTI_CONFIG_READ_ONLY')
     })
 
     it('leaves the installed app on the host’s own folders but the config folder, which holds Helm’s templates', () => {

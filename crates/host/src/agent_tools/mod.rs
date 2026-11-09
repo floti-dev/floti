@@ -166,6 +166,14 @@ pub trait ToolFamily: Send + Sync + 'static {
         Vec::new()
     }
 
+    /// Names its tools had before they were renamed, each with the tool it
+    /// became. A session launched before a rename learnt the old name, so a
+    /// call by it is answered as the tool it became; no `tools/list` shows
+    /// it, and nothing is allowed at launch by it.
+    fn retired_names(&self) -> &'static [(&'static str, &'static str)] {
+        &[]
+    }
+
     /// The tools of [`Self::tools`] a launch calls without asking, by name.
     /// The default is the ones marked `readOnlyHint`; a family whose every
     /// tool is its caller's own to use says them all.

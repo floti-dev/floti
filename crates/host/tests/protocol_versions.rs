@@ -70,6 +70,7 @@ fn start_host_naming(on: ProtocolVersion, version: Option<&str>) -> Host {
             desktop: false,
             keeper: None,
             wsl: None,
+            config_read_only: false,
         },
     });
     Host {

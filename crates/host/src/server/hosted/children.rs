@@ -81,7 +81,7 @@ use crate::agent::{AgentBackend, AgentToolServer, Composition};
 use crate::agent_cli::{SESSIONS_URL_VAR, TOKEN_VAR, URL_VAR};
 use crate::agent_definitions::{
     AgentDefinition, BadDefinition, DEFAULT_AGENT_NAME, DefinitionLookup, DefinitionSource,
-    NoDefinitions, default_definition,
+    NoDefinitions, default_definition, is_default_name,
 };
 use crate::server::floti_agents::FAMILY;
 use crate::server::records::{self, ExitNotice};
@@ -183,6 +183,10 @@ impl Children {
 pub(crate) struct StartChild {
     pub task: String,
     pub agent: Option<String>,
+    /// What `agent` was called before agents were called agents, which a
+    /// session launched before the rename may still send. It is read as
+    /// `agent`; the two naming different agents is refused.
+    pub role: Option<String>,
     pub backend: Option<String>,
     pub folder: Option<String>,
     pub profile: Option<String>,
@@ -379,7 +383,7 @@ impl Hosted {
             return self.resume_child(parent, &facts, request);
         }
 
-        let agent = self.definition_for(request.agent.as_deref())?;
+        let agent = self.definition_for(asked_agent(&request)?)?;
         // A backend is chosen for the mode the agent names. The auto a child
         // gets when it names none is each backend's own, so it rules none out.
         let agent_mode = child_mode(agent.permission, facts.permission_mode, None);
@@ -439,7 +443,7 @@ impl Hosted {
                 .ok()
                 .flatten()
                 .unwrap_or_default(),
-            agent: agent.name.clone(),
+            agent: named_agent(&agent.name),
             reports: backend.tool_support().mcp_tools,
         });
 
@@ -611,6 +615,7 @@ impl Hosted {
         let wanted = request.resume.as_deref().unwrap_or_default().trim();
         let also: Vec<&str> = [
             ("agent", &request.agent),
+            ("role", &request.role),
             ("backend", &request.backend),
             ("folder", &request.folder),
             ("profile", &request.profile),
@@ -729,10 +734,7 @@ impl Hosted {
                 .ok()
                 .flatten()
                 .unwrap_or_default(),
-            agent: child
-                .agent
-                .clone()
-                .unwrap_or_else(|| DEFAULT_AGENT_NAME.to_owned()),
+            agent: child.agent.as_deref().and_then(named_agent),
             reports: backend.tool_support().mcp_tools,
         });
         judge(&settings, facts, &running, agents.len(), &agents, &on_host)
@@ -766,7 +768,15 @@ impl Hosted {
                         session: parent,
                         conversation_id: facts.conversation_id.clone(),
                         name: name.clone(),
-                        agent: child.agent.clone(),
+                        // The default keeps its own name, whatever an
+                        // earlier host called it.
+                        agent: child.agent.as_deref().map(|agent| {
+                            if is_default_name(agent) {
+                                DEFAULT_AGENT_NAME.to_owned()
+                            } else {
+                                agent.to_owned()
+                            }
+                        }),
                         command: None,
                         outlive: child.outlive,
                         can_start: child.can_start,
@@ -1161,7 +1171,7 @@ impl Hosted {
         match agents.lookup(name) {
             DefinitionLookup::Found(agent) => Ok(*agent),
             DefinitionLookup::Bad(bad) => Err(bad.refusal()),
-            DefinitionLookup::Missing if name.eq_ignore_ascii_case(DEFAULT_AGENT_NAME) => {
+            DefinitionLookup::Missing if is_default_name(name) => {
                 Ok(default_definition(&self.backends))
             }
             DefinitionLookup::Missing => {
@@ -1172,7 +1182,7 @@ impl Hosted {
                         .agents
                         .into_iter()
                         .map(|agent| agent.name)
-                        .filter(|known| !known.eq_ignore_ascii_case(DEFAULT_AGENT_NAME)),
+                        .filter(|known| !is_default_name(known)),
                 );
                 Err(format!(
                     "There is no agent named {name}. The agents are: {}.",
@@ -1201,7 +1211,9 @@ impl Hosted {
         let agent = match self.children.agents().lookup(agent_name) {
             DefinitionLookup::Found(agent) => *agent,
             DefinitionLookup::Bad(bad) => return Err(bad.reopen_refusal()),
-            DefinitionLookup::Missing if agent_name.eq_ignore_ascii_case(DEFAULT_AGENT_NAME) => {
+            // A child started as the default, under either of its names,
+            // comes back as the default there is now.
+            DefinitionLookup::Missing if is_default_name(agent_name) => {
                 default_definition(&self.backends)
             }
             DefinitionLookup::Missing => {
@@ -1239,10 +1251,10 @@ impl Hosted {
             .position(|agent| agent.name.eq_ignore_ascii_case(DEFAULT_AGENT_NAME))
         {
             Some(at) => agents.remove(at),
-            None if found.bad.iter().any(|bad| {
-                bad.file
-                    .eq_ignore_ascii_case(&format!("{DEFAULT_AGENT_NAME}.md"))
-            }) =>
+            None if found
+                .bad
+                .iter()
+                .any(|bad| bad.file.strip_suffix(".md").is_some_and(is_default_name)) =>
             {
                 // A broken `default.md` leaves no default agent to list, and a
                 // start without an agent is refused naming it.
@@ -1367,6 +1379,30 @@ fn or_none(list: &[String]) -> String {
 /// The word for what a program last reported about itself.
 fn state_word(status: &crate::session::ReportedStatus) -> String {
     format!("{:?}", status.report.state).to_lowercase()
+}
+
+/// The agent `request` names, from `agent` or, from a session launched
+/// before agents were called agents, `role`.
+///
+/// # Errors
+///
+/// A sentence naming both when they name different agents.
+fn asked_agent(request: &StartChild) -> Result<Option<&str>, String> {
+    match (request.agent.as_deref(), request.role.as_deref()) {
+        (Some(agent), Some(role)) if !agent.trim().eq_ignore_ascii_case(role.trim()) => {
+            Err(format!(
+                "agent names {agent} and role names {role}: give only agent. No agent was started."
+            ))
+        }
+        (Some(agent), _) => Ok(Some(agent)),
+        (None, role) => Ok(role),
+    }
+}
+
+/// What a child is told it was started as: the agent's name, or nothing for
+/// the default, which is no agent anybody chose.
+fn named_agent(name: &str) -> Option<String> {
+    (!is_default_name(name)).then(|| name.to_owned())
 }
 
 /// The mode a child runs in: `requested` (its agent's, else its profile's),

@@ -172,19 +172,23 @@ impl ServerHandler for FamilyServer {
         let delivery = parts
             .and_then(|parts| parts.extensions.get::<Delivery>().cloned())
             .unwrap_or_default();
+        // A tool's earlier name is answered as the tool it became, for a
+        // session that learnt the name before it changed.
+        let name: &str = self
+            .family
+            .retired_names()
+            .iter()
+            .find(|(old, _)| *old == request.name)
+            .map_or(&request.name, |(_, now)| now);
         // The tools this caller is listed, and those only its shell may call:
         // one it is not given is one the family does not have.
         let listed = self
             .family
             .tools_for(caller)
             .iter()
-            .any(|tool| tool.name == request.name);
-        let from_shell = caller.shell
-            && self
-                .family
-                .shell_tools()
-                .iter()
-                .any(|name| *name == request.name);
+            .any(|tool| tool.name == name);
+        let from_shell =
+            caller.shell && self.family.shell_tools().iter().any(|shell| shell == name);
         if !listed && !from_shell {
             return Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "{} has no tool named {}.",
@@ -200,17 +204,10 @@ impl ServerHandler for FamilyServer {
             .filter(|parts| parts.extensions.get::<AsTask>().is_some())
             .and_then(|parts| parts.extensions.get::<Arc<Tasks>>())
         {
-            let seed = tasks.start(
-                caller,
-                Arc::clone(&self.family),
-                request.name.to_string(),
-                arguments,
-            );
+            let seed = tasks.start(caller, Arc::clone(&self.family), name.to_owned(), arguments);
             return Ok(CreateTaskResult::new(seed).into());
         }
-        let call = self
-            .family
-            .call_with(caller, &request.name, arguments, delivery);
+        let call = self.family.call_with(caller, name, arguments, delivery);
         // Dropping the family's future is how a call learns nobody waits on
         // it: its connection closed (rmcp cancels the request), the session
         // cancelled it, or its token was revoked.

@@ -46,6 +46,15 @@ impl World {
 
     /// A host started once `prepare` has had the folders.
     fn after(prepare: impl FnOnce(&TestDirs)) -> Self {
+        Self::made(prepare, false)
+    }
+
+    /// A host told its config folder is another host's to write.
+    fn read_only() -> Self {
+        Self::made(|_| {}, true)
+    }
+
+    fn made(prepare: impl FnOnce(&TestDirs), config_read_only: bool) -> Self {
         let dirs = TestDirs::new();
         prepare(&dirs);
         let claude = Arc::new(ClaudeCodeBackend::new(
@@ -76,6 +85,7 @@ impl World {
                 desktop: false,
                 keeper: None,
                 wsl: None,
+                config_read_only,
             },
         )
         .unwrap();
@@ -178,6 +188,20 @@ async fn a_host_seeds_the_shipped_readme_and_example_into_a_templates_folder_tha
     assert_eq!(ids, ["minimal", "example"]);
     assert_eq!(listing.dir, text(&dir));
     assert!(listing.problems.is_empty(), "{:?}", listing.problems);
+}
+
+#[tokio::test]
+async fn a_host_whose_config_folder_is_another_hosts_seeds_no_templates_and_still_lists_the_scaffold()
+ {
+    let world = World::read_only();
+    assert!(!world.templates().exists(), "nothing was written");
+    let listing: TemplateListing = world.ask::<ListTemplates>(&()).unwrap();
+    let ids: Vec<&str> = listing
+        .templates
+        .iter()
+        .map(|choice| choice.id.as_str())
+        .collect();
+    assert_eq!(ids, ["minimal"]);
 }
 
 #[tokio::test]

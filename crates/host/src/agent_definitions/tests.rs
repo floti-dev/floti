@@ -10,6 +10,7 @@ use floti_protocol::channels::sessions::EffortLevel;
 
 use super::folder::{
     FolderDefinitions, agents_folder, prepare_agents_folder, prepare_agents_folder_with,
+    read_agents_folder,
 };
 use super::parse::parse_definition;
 use super::seed::{SHIPPED_AGENTS, seed_agents};
@@ -648,4 +649,145 @@ fn the_shipped_agents_name_no_product_no_path_no_handle_and_only_made_up_item_id
             );
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// The default under its earlier name
+// ---------------------------------------------------------------------------
+
+#[test]
+fn either_of_the_defaults_names_is_the_default() {
+    for name in ["default", "Default", "agent", " AGENT "] {
+        assert!(is_default_name(name), "{name}");
+    }
+    for name in ["agents", "reviewer", ""] {
+        assert!(!is_default_name(name), "{name}");
+    }
+}
+
+#[test]
+fn an_agent_md_with_no_default_md_is_the_default_under_its_name_and_listed_once() {
+    let dirs = TestDirs::new();
+    let dir = dirs.config.join("agents");
+    write(
+        &dir,
+        "agent.md",
+        "---\ndescription: Old.\npermission: plan\n---\nOld words.\n",
+    );
+    write(&dir, "reviewer.md", "---\n---\nReview.\n");
+    let agents = FolderDefinitions::new(&dir);
+
+    let listing = agents.listing();
+    let names: Vec<&str> = listing
+        .agents
+        .iter()
+        .map(|agent| agent.name.as_str())
+        .collect();
+    assert_eq!(names, ["default", "reviewer"]);
+    for asked in ["default", "agent"] {
+        let DefinitionLookup::Found(found) = agents.lookup(asked) else {
+            panic!("{asked} finds agent.md");
+        };
+        assert_eq!(found.name, "default", "{asked}");
+        assert_eq!(found.instructions, "Old words.", "{asked}");
+        assert_eq!(found.permission, Some(PermissionMode::Plan), "{asked}");
+    }
+    // The trait's own lookup, over a fixed list, finds the default by
+    // either name too.
+    let fixed = FixedDefinitions(vec![AgentDefinition::new("default", [])]);
+    assert!(matches!(fixed.lookup("agent"), DefinitionLookup::Found(_)));
+}
+
+#[test]
+fn beside_a_default_md_an_agent_md_is_not_read() {
+    let dirs = TestDirs::new();
+    let dir = dirs.config.join("agents");
+    write(&dir, "agent.md", "---\n---\nOld words.\n");
+    write(&dir, "default.md", "---\n---\nNew words.\n");
+    let agents = FolderDefinitions::new(&dir);
+    let listing = agents.listing();
+    let names: Vec<&str> = listing
+        .agents
+        .iter()
+        .map(|agent| agent.name.as_str())
+        .collect();
+    assert_eq!(names, ["default"]);
+    assert_eq!(listing.agents[0].instructions, "New words.");
+    let DefinitionLookup::Found(found) = agents.lookup("agent") else {
+        panic!("agent finds the default");
+    };
+    assert_eq!(found.instructions, "New words.");
+}
+
+#[test]
+fn a_broken_agent_md_with_no_default_md_is_the_broken_default_naming_its_file() {
+    let dirs = TestDirs::new();
+    let dir = dirs.config.join("agents");
+    write(&dir, "agent.md", "---\nworktree: maybe\n---\n");
+    let agents = FolderDefinitions::new(&dir);
+    let DefinitionLookup::Bad(bad) = agents.lookup("default") else {
+        panic!("a bad default");
+    };
+    assert_eq!(bad.file, "agent.md");
+    assert_eq!(agents.listing().bad, [bad]);
+}
+
+// ---------------------------------------------------------------------------
+// A host that may not write its config folder
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_read_only_host_reads_agents_else_roles_where_it_is_and_never_seeds() {
+    let dirs = TestDirs::new();
+    let roles = dirs.config.join("roles");
+    write(&roles, "reviewer.md", "---\n---\nmine\n");
+    let before = files_in(&roles);
+
+    let prepared = read_agents_folder(&dirs.config);
+    assert_eq!(prepared.dir, roles);
+    assert!(!prepared.seed && !prepared.shipped);
+    assert_eq!(files_in(&roles), before, "nothing moved or written");
+    assert!(!dirs.config.join("agents").exists());
+
+    let agents = dirs.config.join("agents");
+    write(&agents, "lead.md", "---\n---\nlead\n");
+    let prepared = read_agents_folder(&dirs.config);
+    assert_eq!(prepared.dir, agents);
+    assert!(!prepared.seed && !prepared.shipped);
+    assert_eq!(files_in(&roles), before);
+}
+
+#[test]
+fn a_read_only_host_with_neither_folder_serves_the_shipped_agents_and_writes_none() {
+    let dirs = TestDirs::new();
+    let prepared = read_agents_folder(&dirs.config);
+    assert!(!prepared.seed && prepared.shipped);
+    let agents = FolderDefinitions::prepared(prepared);
+    let listing = agents.listing();
+    let names: Vec<&str> = listing
+        .agents
+        .iter()
+        .map(|agent| agent.name.as_str())
+        .collect();
+    assert_eq!(names, ["lead", "reviewer", "worker"]);
+    assert!(listing.bad.is_empty());
+    let DefinitionLookup::Found(reviewer) = agents.lookup("Reviewer") else {
+        panic!("the shipped reviewer");
+    };
+    assert_eq!(*reviewer, shipped("reviewer"));
+    assert_eq!(agents.lookup("default"), DefinitionLookup::Missing);
+    assert!(
+        std::fs::read_dir(&dirs.config).map_or(true, |mut entries| entries.next().is_none()),
+        "nothing written in the config folder"
+    );
+
+    // A folder made while it runs is read from then on.
+    write(&dirs.config.join("agents"), "mine.md", "---\n---\nmine\n");
+    let names: Vec<String> = agents
+        .listing()
+        .agents
+        .into_iter()
+        .map(|agent| agent.name)
+        .collect();
+    assert_eq!(names, ["mine"]);
 }

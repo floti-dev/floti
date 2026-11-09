@@ -49,8 +49,11 @@ impl Templates {
         let dir = templates_folder(&context.workspace.folders);
         // A folder that could not be seeded is not a host that cannot start:
         // the picker still has the built-in scaffold, and the listing names
-        // the folder it could not read.
-        if let Some(problem) = seed_templates(&dir).problem {
+        // the folder it could not read. A host whose config folder is another
+        // host's to write seeds nothing there.
+        if !context.workspace.run.config_read_only
+            && let Some(problem) = seed_templates(&dir).problem
+        {
             log_line!("floti host: {problem}");
         }
         Ok(Self {

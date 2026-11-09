@@ -320,6 +320,7 @@ fn start_host(dirs: &TestDirs, endpoint: &Endpoint) -> RunningHost {
             desktop: false,
             keeper: None,
             wsl: None,
+            config_read_only: false,
         },
     })
 }

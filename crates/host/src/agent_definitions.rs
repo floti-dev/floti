@@ -25,7 +25,10 @@
 //! `lead` are written there at host start only when neither folder exists
 //! ([`seed`]). The agent every start without one falls back to
 //! ([`default_definition`]) is made from the backends the host has, unless a
-//! file named `default.md` replaces it.
+//! file named `default.md` replaces it, or, where there is none, an
+//! `agent.md` from before agents were called agents, when the default was
+//! called `agent` ([`RETIRED_DEFAULT_NAME`]). A child's row from then naming
+//! `agent` is the default's.
 //!
 //! A file that cannot be an agent is never skipped quietly: it is named with
 //! its problem in every listing, and a start naming it is refused naming the
@@ -50,6 +53,18 @@ pub use folder::{FolderDefinitions, agents_folder};
 
 /// The name of the agent a start without one gets.
 pub const DEFAULT_AGENT_NAME: &str = "default";
+
+/// What the default agent was called before agents were called agents. A
+/// child's row written then may still carry it, and an `agent.md` written
+/// then is the default where there is no `default.md`.
+pub const RETIRED_DEFAULT_NAME: &str = "agent";
+
+/// Whether `name` is the default agent's, by its name or by the one it had
+/// before ([`RETIRED_DEFAULT_NAME`]), whatever the case.
+pub fn is_default_name(name: &str) -> bool {
+    let name = name.trim();
+    name.eq_ignore_ascii_case(DEFAULT_AGENT_NAME) || name.eq_ignore_ascii_case(RETIRED_DEFAULT_NAME)
+}
 
 /// One agent, as its file defines it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -254,8 +269,14 @@ pub trait DefinitionSource: Send + Sync {
     /// Every agent and every unusable file, as they are now.
     fn listing(&self) -> DefinitionListing;
 
-    /// The agent called `name`, whatever the case, as it is now.
+    /// The agent called `name`, whatever the case, as it is now. Either of
+    /// the default's names finds the default.
     fn lookup(&self, name: &str) -> DefinitionLookup {
+        let name = if is_default_name(name) {
+            DEFAULT_AGENT_NAME
+        } else {
+            name
+        };
         let listing = self.listing();
         if let Some(agent) = listing
             .agents

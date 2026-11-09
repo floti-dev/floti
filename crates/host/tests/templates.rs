@@ -1941,6 +1941,7 @@ fn wire_config(dirs: &TestDirs, endpoint: &Endpoint) -> HostConfig {
             desktop: false,
             keeper: None,
             wsl: None,
+            config_read_only: false,
         },
     }
 }

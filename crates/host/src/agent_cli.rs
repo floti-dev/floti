@@ -266,7 +266,9 @@ fn parse_start(args: &[String]) -> Result<Start, String> {
         };
         match flag {
             "--task" => task = Some(value(flag)?),
-            "--agent" => start.agent = Some(value(flag)?),
+            // `--role` is what `--agent` was called before agents were
+            // called agents, and a session launched before may still use it.
+            "--agent" | "--role" => start.agent = Some(value(flag)?),
             "--backend" => start.backend = Some(value(flag)?),
             "--folder" => start.folder = Some(value(flag)?),
             "--profile" => start.profile = Some(value(flag)?),
@@ -961,6 +963,21 @@ mod tests {
                 json: true,
             })
         );
+    }
+
+    #[test]
+    fn start_reads_role_as_agent_and_its_usage_names_only_agent() {
+        // What a session launched before agents were called agents runs.
+        for flag in [&["--role", "reviewer"][..], &["--role=reviewer"][..]] {
+            let mut words = vec!["start", "--task", "x"];
+            words.extend_from_slice(flag);
+            let Ok(Command::Start(start)) = parse(&args(&words)) else {
+                panic!("a start: {flag:?}");
+            };
+            assert_eq!(start.agent.as_deref(), Some("reviewer"), "{flag:?}");
+        }
+        assert!(USAGE.contains("--agent <name>"));
+        assert!(!USAGE.contains("role"), "{USAGE}");
     }
 
     #[test]

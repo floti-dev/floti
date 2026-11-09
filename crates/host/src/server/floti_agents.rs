@@ -103,6 +103,10 @@ const AGENTS_READ: &str = "agents_read";
 const AGENTS_LIST: &str = "agents_list";
 const AGENTS_STOP: &str = "agents_stop";
 const AGENTS_AVAILABLE: &str = "agents_available";
+
+/// What `agents_available` was called before agents were called agents. A
+/// session launched before the rename may still call it by this name.
+const RETIRED_NAMES: &[(&str, &str)] = &[("agents_roles", AGENTS_AVAILABLE)];
 const AGENTS_WAIT: &str = "agents_wait";
 const AGENTS_REPORT: &str = "agents_report";
 
@@ -255,6 +259,10 @@ impl ToolFamily for FlotiAgents {
 
     fn shell_tools(&self) -> Vec<String> {
         SHELL_TOOLS.iter().map(|name| (*name).to_owned()).collect()
+    }
+
+    fn retired_names(&self) -> &'static [(&'static str, &'static str)] {
+        RETIRED_NAMES
     }
 
     /// A wait, or a start that waits, from the agent's own tool call is a task
@@ -731,7 +739,7 @@ fn start_request(arguments: &JsonObject) -> Result<StartChild, String> {
     let task = text_argument(arguments, "task")
         .ok_or_else(|| "Give the agent its task: task is what it is to do.".to_owned())?;
     for key in [
-        "agent", "backend", "folder", "profile", "name", "worktree", "resume",
+        "agent", "role", "backend", "folder", "profile", "name", "worktree", "resume",
     ] {
         if !matches!(
             arguments.get(key),
@@ -743,6 +751,9 @@ fn start_request(arguments: &JsonObject) -> Result<StartChild, String> {
     Ok(StartChild {
         task,
         agent: text_argument(arguments, "agent"),
+        // What `agent` was called before agents were called agents; the
+        // schema no longer says it, and a session launched before still may.
+        role: text_argument(arguments, "role"),
         backend: text_argument(arguments, "backend"),
         folder: text_argument(arguments, "folder"),
         profile: text_argument(arguments, "profile"),

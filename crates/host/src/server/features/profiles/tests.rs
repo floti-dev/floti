@@ -50,6 +50,7 @@ impl World {
                 desktop: false,
                 keeper: None,
                 wsl: None,
+                config_read_only: false,
             },
         )
         .unwrap();

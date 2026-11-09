@@ -138,7 +138,7 @@ export interface CrumbParent {
 }
 
 export interface PaneCrumbProps {
-  /** A child's tag: `command`, or the role it was started in. Absent for a child with no role. */
+  /** A child's tag: `command`, or the agent it was started as. Absent for a child started as no agent. */
   tag?: CrumbTag | undefined
   /** The session that started it, for a child. */
   parent?: CrumbParent | undefined

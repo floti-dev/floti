@@ -80,7 +80,9 @@ use tokio::task::JoinHandle;
 use crate::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
 use crate::agent::{AgentBackend, PlainCommandBackend, sweep_launch_folders};
 use crate::agent_definitions::DefinitionSource;
-use crate::agent_definitions::folder::{FolderDefinitions, prepare_agents_folder};
+use crate::agent_definitions::folder::{
+    FolderDefinitions, prepare_agents_folder, read_agents_folder,
+};
 use crate::agent_definitions::seed::seed_agents;
 use crate::keeper::Keeper;
 use crate::keys::{load_or_create_key_pair, read_key_pair};
@@ -333,6 +335,10 @@ pub struct HostRun {
     /// The `wsl.exe` it keeps distros awake with (`wsl:keepAwake`), or
     /// `None` where there is no WSL ([`WslSide::program`]).
     pub wsl: Option<WslProgram>,
+    /// Whether its config folder is another host's to write
+    /// ([`folders::CONFIG_READ_ONLY_VAR`]): the host moves, seeds and writes
+    /// no agents there, and serves the shipped ones while there are none.
+    pub config_read_only: bool,
 }
 
 impl HostRun {
@@ -354,6 +360,7 @@ impl HostRun {
             desktop: false,
             keeper: exe,
             wsl: wsl::Native.program(env),
+            config_read_only: env.var(folders::CONFIG_READ_ONLY_VAR).is_some(),
         }
     }
 }
@@ -369,6 +376,7 @@ impl Default for HostRun {
             desktop: false,
             keeper: None,
             wsl: None,
+            config_read_only: false,
         }
     }
 }
@@ -496,8 +504,14 @@ impl Host {
         // is moved to `agents` first, and only a host with neither seeds. A
         // folder that could not be moved or seeded is not a host that cannot
         // start: the default agent still works, and the problem is in the
-        // log.
-        let agents = prepare_agents_folder(&folders.config);
+        // log. A host whose config folder is another host's to write moves
+        // and seeds nothing there, and serves the shipped agents while there
+        // are none.
+        let agents = if run.config_read_only {
+            read_agents_folder(&folders.config)
+        } else {
+            prepare_agents_folder(&folders.config)
+        };
         if let Some(said) = &agents.log {
             log_line!("{said}");
         }
@@ -506,7 +520,7 @@ impl Host {
         {
             log_line!("floti host: {problem}");
         }
-        hosted.use_agents(Arc::new(FolderDefinitions::new(agents.dir)));
+        hosted.use_agents(Arc::new(FolderDefinitions::prepared(agents)));
         let features = Arc::new(Features::new(Arc::clone(&hosted), folders, run)?);
         let agent_tools = start_agent_tools(&hosted, &features)?;
 
