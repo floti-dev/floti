@@ -25,6 +25,12 @@ A preview, not a release: nothing offers it as an update.
   child's latest output above its prompt is no longer cut off. The screen box
   grows with what the child has drawn, up to 360px in a tall window, and its
   text is drawn smaller rather than stretched, so it stays sharp.
+- Agent classes and the heavy limit are removed. Settings › Agents no longer
+  has a Heavy agents on this host row, and children are held only by the
+  limits on children per parent, agent sessions per host, starts, depth and
+  command children. How many children work at once is up to the agent that
+  started them. A role file's `class` line still loads, is ignored, and the
+  roles listing says it is no longer used.
 
 ## 2.4.1-preview.10
 

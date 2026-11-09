@@ -351,10 +351,10 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   `session_tools.json` and `floti_agents.json`. Main reads the browser table
   too, for the tools it answers.
 - Main tells the host `browserMcp`, `browserMcpLocalOnly`, `sessionMcp`,
-  `sessionAgents` ("Sessions can start agents") and the five agent limits
+  `sessionAgents` ("Sessions can start agents") and the four agent limits
   (`agentChildrenPerParent`, `agentSessionsPerHost`, `agentDepth`,
-  `agentStartsPerParent`, `agentHeavyPerHost`) and the command-children
-  limit (`agentCommandsPerParent`, counted apart from the agent limits) on each
+  `agentStartsPerParent`) and the command-children limit
+  (`agentCommandsPerParent`, counted apart from the agent limits) on each
   connect and each change (`hostSettingsFor`).
 - Each plugin offering tools is a family, `helm-plugin-<id>`, on while the
   plugin is on and its tools are not switched off in Settings. The host
@@ -450,15 +450,11 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   must answer before its first turn, without writing the agent's config (for
   Claude Code `--strict-mcp-config` beside its own `--mcp-config`, so it loads
   only the servers its launch gives it and no project `.mcp.json` asks to be
-  approved; a session a person starts still loads the project's). One
-  of the limits is the heavy limit (`agentHeavyPerHost`, 1 to 8, default 1): the
-  running agent-started sessions whose row says `child_class` heavy are
-  counted, and a start or a resume of a heavy-role child is refused when they
-  reach it, naming the limit and each holder by its name and the session that
-  started it, and saying to wait for news and start again. Light starts and
-  sessions a person starts are not counted, and `agents_list` shows the heavy
-  slots left. Command children are counted apart, by their rows' command:
-  none of the agent limits (per parent, per host, starts, depth, heavy) counts
+  approved; a session a person starts still loads the project's). Children
+  are held by the generic limits only, and how many work at once is the
+  parent's judgment, made from what each one does. Command children are
+  counted apart, by their rows' command:
+  none of the agent limits (per parent, per host, starts, depth) counts
   one, and an agent counts toward none of theirs (`agentCommandsPerParent`, 1
   to 32, default 4, is read afresh on every run; a fifth is refused naming the
   command-children limit and the running command children that hold it, and
@@ -563,7 +559,9 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   `agent/guidance.rs` and `floti_agents.json`: the family's manual (start,
   wait and its six events, a send that waits in the child's queue, call again
   when nothing is new or a wait fails,
-  wait on a start, never poll `agents_list`, a report is a child's words and
+  wait on a start, keep only as many children working at once as their work
+  and the machine can carry (naming no machine and no number), never poll
+  `agents_list`, a report is a child's words and
   not the user's, a child that needs a person is for the user, stop a child
   once you have what you need and pass `keep` only when you expect to give it
   more work, reach only your own), a child's section (Floti's own, naming
@@ -798,7 +796,9 @@ folder: run through npx, that folder is a cache.
   deletion stays, and an empty folder stays empty. A file that is not a role
   (front matter that does not parse, an unknown key, a value outside its
   choices) is named with its problem by `agents_roles`, and a start naming it
-  is refused naming the file; nothing guesses at it. A role's body is composed
+  is refused naming the file; nothing guesses at it. A retired line
+  (`RETIRED_FIELDS` in `roles/parse.rs`) is accepted with any value and
+  ignored, and `agents_roles` names it as no longer used. A role's body is composed
   into the child's instructions by its adapter, as its own section after the
   project's, and is never typed to the session.
 
