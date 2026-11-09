@@ -2881,7 +2881,9 @@ async fn a_person_typing_into_the_parent_ends_none_of_its_waits_in_the_backgroun
 
     // A wait in the background for each kind there is, each on a child of
     // its own: agents_wait, a start and a send that wait, each as an MCP
-    // task, and `floti agent wait --background` from the parent's shell.
+    // task, and `floti agent wait --background` from the parent's shell. The
+    // send gives its child a turn that lasts until the test is done with it,
+    // so the first news that child has is its report.
     let waiting = parent
         .start_task("agents_wait", json!({ "children": ["worker"] }))
         .await;
@@ -2895,10 +2897,10 @@ async fn a_person_typing_into_the_parent_ends_none_of_its_waits_in_the_backgroun
     let sending = parent
         .start_task(
             "agents_send",
-            json!({ "child": "target", "text": "do the thing", "wait": true }),
+            json!({ "child": "target", "text": "/busy hold", "wait": true }),
         )
         .await;
-    world.took(&target, "do the thing").await;
+    world.took(&target, "/busy hold").await;
     let mut shell = parent
         .open_from_shell(
             "agents_wait",
@@ -3204,6 +3206,9 @@ async fn s15_a_child_is_told_its_parent_and_role_beside_its_roles_and_the_family
             "agents_wait: it returns your children's news (a report, needs you, turn ended, ended, error, and delivered for a text that waited in a child's queue)",
             "it is typed in as the child's next turn as soon as the child can take it, and waits in the child's queue until then",
             "If it answers that nothing is new yet, call it again after your next piece of work.",
+            "Wait in the background wherever you can, so a person can talk to you while you wait",
+            "run floti agent wait --background from your shell",
+            "A person typing to you does not end a wait in the background",
             "If a wait fails or is cut off, call it again: news is kept until a wait returns it.",
             "pass wait: true to agents_start",
             "Never poll agents_list in a loop.",
