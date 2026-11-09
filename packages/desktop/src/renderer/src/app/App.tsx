@@ -4068,6 +4068,7 @@ export function App(): JSX.Element {
           peek.target.host,
           peek.target.id,
         );
+  const peekGrid = peek.target?.grid ?? null;
   const childPeek =
     peek.target !== null &&
     peekAt !== null &&
@@ -4084,14 +4085,17 @@ export function App(): JSX.Element {
         ended={peekedChild.status !== "running"}
         screenSeen={peek.target.screenSeen}
         screen={
-          peek.target.grid === null ? null : (
-            <PeekTerminal
-              key={`${String(peek.target.grid.cols)}x${String(peek.target.grid.rows)}`}
-              attach={peek.store.attach}
-              grid={peek.target.grid}
-              windowsBuild={info?.windowsBuild ?? null}
-            />
-          )
+          peekGrid === null
+            ? null
+            : (room) => (
+                <PeekTerminal
+                  key={`${String(peekGrid.cols)}x${String(peekGrid.rows)}`}
+                  attach={peek.store.attach}
+                  grid={peekGrid}
+                  room={room}
+                  windowsBuild={info?.windowsBuild ?? null}
+                />
+              )
         }
         at={peekAt.at}
         anchorRef={peekAnchorRef}

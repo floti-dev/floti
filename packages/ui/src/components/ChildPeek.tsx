@@ -1,7 +1,7 @@
 import type { JSX, ReactNode, RefObject } from 'react'
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { cn } from '../lib/cn'
-import { usePopup, type PopupAnchor } from '../lib/popup'
+import { POPUP_MARGIN, usePopup, type PopupAnchor } from '../lib/popup'
 import { ChildMarkIcon, type ChildMarkView } from './ChildMark'
 import { CloseIcon } from './icons'
 
@@ -16,6 +16,33 @@ const TONE: Record<PeekTone, string> = {
   // An ended child: DESIGN.md's state table gives `ended` fg-subtle.
   neutral: 'border-border-strong text-fg-subtle'
 }
+
+/** The room the peek's screen has inside its box, in CSS px. */
+export interface PeekScreenRoom {
+  /** The box's inner width: the whole width the screen is drawn across. */
+  width: number
+  /** The most the screen may be high: the box's cap less its border and padding. */
+  maxHeight: number
+}
+
+/** The screen box is never capped lower than this, in px, however short the window. */
+export const PEEK_SCREEN_MIN = 150
+/** Nor higher than this, however tall the window. */
+export const PEEK_SCREEN_MAX = 360
+
+/**
+ * The most the screen box may be high, border and padding included: the
+ * larger of {@link PEEK_SCREEN_MIN} and what fits in the window under the
+ * peek's other parts (`others`, their height together), at most
+ * {@link PEEK_SCREEN_MAX}. The popover stays inside the window by
+ * `POPUP_MARGIN` at its top and its bottom.
+ */
+export function peekScreenCap(windowHeight: number, others: number): number {
+  return Math.min(PEEK_SCREEN_MAX, Math.max(PEEK_SCREEN_MIN, windowHeight - 2 * POPUP_MARGIN - others))
+}
+
+/** A length in px from a computed style, 0 where it has none. */
+const px = (value: string): number => Number.parseFloat(value) || 0
 
 export interface ChildPeekProps {
   /** The child, as every surface names it. */
@@ -42,8 +69,13 @@ export interface ChildPeekProps {
   ended?: boolean | undefined
   /** Whether any of its screen reached the window. An ended child that sent none has nothing for Open to show but its tab. */
   screenSeen?: boolean | undefined
-  /** The child's screen, live and read-only. */
-  screen: ReactNode
+  /**
+   * The child's screen, live and read-only, drawn in the room its box has:
+   * across the box's width, and as high as it needs up to the box's cap, which
+   * the box's height then follows. Null while there is no screen to draw yet,
+   * when the box keeps the cap's floor.
+   */
+  screen: ((room: PeekScreenRoom) => ReactNode) | null
   /** Where the popover goes: beside a row (a point), or under a chip. */
   at: PopupAnchor
   /** The row or chip it opened from, whose press is not outside the peek. */
@@ -71,6 +103,10 @@ const BUTTON = 'rounded-well border px-[9px] py-[3px] text-[11.5px] font-medium 
  * with Open after them for a running child closed out of its parent's family
  * view. Open never makes a tab: it puts the child back in that view. A child
  * that has ended gets a peek too, which says so and has no Stop.
+ *
+ * The screen box spans the peek's width, and its height follows the screen
+ * drawn in it up to its cap ({@link peekScreenCap}), which it measures from the
+ * window and the peek's other parts and hands the screen as its room.
  *
  * It is an overlay (`usePopup`), so a browser tab's native view stands down for
  * it; Escape and its close button close it, and so does a press outside it. Stop
@@ -103,9 +139,34 @@ export function ChildPeek({
   onOpen
 }: ChildPeekProps): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
   const place = usePopup({ ref, at, anchorRef, onDismiss: onClose })
+  const [room, setRoom] = useState<PeekScreenRoom | null>(null)
+
+  // The screen's room: the box's inner width, and its cap less its edges. Read
+  // again whenever the peek or the box changes size, as when a report arrives;
+  // the parts other than the box do not change with it, so the cap holds still.
+  useLayoutEffect(() => {
+    const peek = ref.current
+    const box = boxRef.current
+    if (peek === null || box === null) return
+    const measure = (): void => {
+      const style = getComputedStyle(box)
+      const width = Math.max(0, box.clientWidth - px(style.paddingLeft) - px(style.paddingRight))
+      const edges = box.offsetHeight - box.clientHeight + px(style.paddingTop) + px(style.paddingBottom)
+      const cap = peekScreenCap(window.innerHeight, peek.offsetHeight - box.offsetHeight)
+      const maxHeight = Math.max(0, cap - edges)
+      setRoom((last) => (last?.width === width && last.maxHeight === maxHeight ? last : { width, maxHeight }))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(peek)
+    observer.observe(box)
+    return () => observer.disconnect()
+  }, [])
 
   // Focus: the close button while it is open, and back where it came from.
   useEffect(() => {
@@ -200,10 +261,14 @@ export function ChildPeek({
       </dl>
 
       <div
+        ref={boxRef}
         data-peek-screen
-        className="relative mx-3 h-[150px] overflow-hidden rounded-raised border border-border bg-terminal"
+        className={cn(
+          'relative mx-3 overflow-hidden rounded-raised border border-border bg-terminal px-2.5 py-[9px]',
+          screen === null && 'h-[150px]'
+        )}
       >
-        {screen}
+        {screen !== null && room !== null && screen(room)}
       </div>
 
       {report !== null && command === undefined && (

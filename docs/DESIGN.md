@@ -1043,11 +1043,16 @@ overrides the gate; keep it.
   command's Command in `fg`, Folder, Branch and Runs in, "your shell, pwsh",
   with no Mode and no report; its glyph and chip tone success while it runs,
   `fg-subtle` and neutral once it exited 0, `danger` for any other code); its screen, live and
-  read-only through the host's watch-only attach, 150px high on the terminal's
-  ground, set in 11px mono at a line height of 1.5 and drawn at the child's own
-  grid (the host says it with `session:size`; 120 by 32 when it cannot), cut at
-  the right and the top rather than scaled and held to the last row that has
-  anything on it, with no cursor; its last report as the `accent-soft` note
+  read-only through the host's watch-only attach, on the terminal's ground in a
+  box that spans the peek's width: the child's whole grid at its own cols and
+  rows (the host says them with `session:size`; 120 by 32 when it cannot), in
+  mono at the terminal's own line height and at the largest size up to 11px at
+  which every column fits the box's width and every row down to the last with
+  anything on it fits the box's cap, so nothing is cut off, drawn smaller and
+  never stretched so the text stays sharp, in a box as high as those rows up to
+  its cap (the larger of 150px and what fits in the window under the peek's
+  other parts, at most 360px; 150px while there is no screen yet), with no
+  cursor; its last report as the `accent-soft` note
   with the 2px accent edge, under a "Last report · done" label in 10px small
   caps at weight 600 (the one text weight past 500, which the frame sets and no
   other text takes); and the foot: "Watching only. Open it as a tab to type." in

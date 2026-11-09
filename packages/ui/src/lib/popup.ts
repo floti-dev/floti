@@ -6,7 +6,7 @@ import { overlayMounted } from './overlay'
 export type PopupAnchor = { x: number; y: number } | { below: DOMRect }
 
 /** Kept clear of the window's edge, so the border is never the edge. */
-const MARGIN = 8
+export const POPUP_MARGIN = 8
 /** The gap between a control and what drops from it. */
 const DROP = 4
 
@@ -22,7 +22,8 @@ const DROP = 4
  *
  * **Placed, then shown.** Flipped above a control with no room under it, and
  * pulled back inside the window wherever it would cross the edge. Null until
- * then, so the caller can draw it hidden for the frame it is measured in.
+ * then, so the caller can draw it hidden for the frame it is measured in. A
+ * popup whose size changes once it is up is placed again.
  *
  * **A press anywhere else closes it**, as does the window losing focus or
  * changing size - a popup left floating over a layout that moved is pointing at
@@ -52,20 +53,33 @@ export function usePopup({
   useLayoutEffect(() => {
     const popup = ref.current
     if (popup === null) return
-    const { width, height } = popup.getBoundingClientRect()
-    const maxLeft = window.innerWidth - width - MARGIN
-    const maxTop = window.innerHeight - height - MARGIN
-    let left: number
-    let top: number
-    if ('below' in at) {
-      left = at.below.left
-      top = at.below.bottom + DROP
-      if (top > maxTop && at.below.top - height - DROP >= MARGIN) top = at.below.top - height - DROP
-    } else {
-      left = at.x
-      top = at.y
+    const placeNow = (): void => {
+      const { width, height } = popup.getBoundingClientRect()
+      const maxLeft = window.innerWidth - width - POPUP_MARGIN
+      const maxTop = window.innerHeight - height - POPUP_MARGIN
+      let left: number
+      let top: number
+      if ('below' in at) {
+        left = at.below.left
+        top = at.below.bottom + DROP
+        if (top > maxTop && at.below.top - height - DROP >= POPUP_MARGIN) top = at.below.top - height - DROP
+      } else {
+        left = at.x
+        top = at.y
+      }
+      const next = {
+        left: Math.max(POPUP_MARGIN, Math.min(left, maxLeft)),
+        top: Math.max(POPUP_MARGIN, Math.min(top, maxTop))
+      }
+      setPlace((last) => (last !== null && last.left === next.left && last.top === next.top ? last : next))
     }
-    setPlace({ left: Math.max(MARGIN, Math.min(left, maxLeft)), top: Math.max(MARGIN, Math.min(top, maxTop)) })
+    placeNow()
+    // A popup that grows or shrinks once placed, as the peek does when its
+    // child's screen arrives, is placed again, so it stays inside the window.
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(placeNow)
+    observer.observe(popup)
+    return () => observer.disconnect()
   }, [ref, at])
 
   useEffect(() => {

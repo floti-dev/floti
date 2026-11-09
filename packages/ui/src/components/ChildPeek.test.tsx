@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { overlayOpen } from '../lib/overlay'
-import { ChildPeek, type ChildPeekProps } from './ChildPeek'
+import { ChildPeek, peekScreenCap, type ChildPeekProps, type PeekScreenRoom } from './ChildPeek'
 
 function peek(overrides: Partial<ChildPeekProps> = {}): ChildPeekProps {
   const props: ChildPeekProps = {
@@ -15,7 +15,7 @@ function peek(overrides: Partial<ChildPeekProps> = {}): ChildPeekProps {
     branch: 'main',
     mode: 'plan',
     report: null,
-    screen: <div data-testid="screen">the child’s screen</div>,
+    screen: () => <div data-testid="screen">the child’s screen</div>,
     at: { x: 300, y: 80 },
     onClose: vi.fn(),
     onStop: vi.fn(),
@@ -124,12 +124,68 @@ describe('the peek', () => {
     }
   })
 
-  it('S1: is 470px wide with a 150px screen, and its last report label is semibold', () => {
+  it('S1: is 470px wide, its screen box spans it with no height of its own, and its last report label is semibold', () => {
     render(<ChildPeek {...peek({ report: { state: 'done', text: 'Reviewed.' } })} />)
     const dialog = screen.getByRole('dialog')
     expect(dialog.className).toContain('w-[470px]')
-    expect(dialog.querySelector('[data-peek-screen]')?.className).toContain('h-[150px]')
+    const box = dialog.querySelector<HTMLElement>('[data-peek-screen]')
+    // Its height is the screen's: no fixed height and no fixed width.
+    const classes = box?.className.split(' ') ?? []
+    expect(classes.filter((name) => name.startsWith('h-') || name.startsWith('w-'))).toEqual([])
+    expect(classes).toContain('mx-3')
     expect(dialog.querySelector('[data-peek-report] span')?.className).toContain('font-semibold')
+  })
+
+  it('keeps the screen box 150px high while there is no screen to draw yet', () => {
+    render(<ChildPeek {...peek({ screen: null })} />)
+    expect(screen.getByRole('dialog').querySelector('[data-peek-screen]')?.className).toContain('h-[150px]')
+  })
+
+  describe('the room it gives its screen', () => {
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    /** Lays the peek out as 400px high with a 150px screen box whose border is 1px and whose inner width is 444px. */
+    function layOut(): void {
+      const box = (element: HTMLElement): boolean => element.hasAttribute('data-peek-screen')
+      vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
+        return box(this) ? 444 : 0
+      })
+      vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) {
+        return box(this) ? 148 : 0
+      })
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+        return box(this) ? 150 : this.getAttribute('role') === 'dialog' ? 400 : 0
+      })
+    }
+
+    it('is the box’s inner width, and the cap less its edges, the cap being what fits under the peek’s other parts', () => {
+      layOut()
+      vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(520)
+      const rooms: PeekScreenRoom[] = []
+      render(
+        <ChildPeek
+          {...peek({
+            screen: (room) => {
+              rooms.push(room)
+              return <div data-testid="screen" />
+            }
+          })}
+        />
+      )
+      // 520 less 8px above and below and the 250px the other parts take, less the 2px border.
+      expect(rooms.at(-1)).toEqual({ width: 444, maxHeight: 520 - 16 - 250 - 2 })
+      expect(screen.getByTestId('screen')).toBeTruthy()
+    })
+
+    it('is capped at 360px in a tall window', () => {
+      layOut()
+      vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(1200)
+      const rooms: PeekScreenRoom[] = []
+      render(<ChildPeek {...peek({ screen: (room) => (rooms.push(room), null) })} />)
+      expect(rooms.at(-1)?.maxHeight).toBe(360 - 2)
+    })
   })
 
   it('S1: an ended child says so, keeps Open as tab and has no Stop', () => {
@@ -236,5 +292,19 @@ describe('the peek', () => {
     expect(dialog.style.position).toBe('fixed')
     expect(dialog.style.left).toBe('320px')
     expect(dialog.style.top).toBe('90px')
+  })
+})
+
+describe('the cap on the peek’s screen box', () => {
+  it('is what fits in the window under the peek’s other parts, inside its margins', () => {
+    expect(peekScreenCap(600, 250)).toBe(600 - 16 - 250)
+  })
+
+  it('is never less than 150px, however short the window', () => {
+    expect(peekScreenCap(380, 250)).toBe(150)
+  })
+
+  it('is never more than 360px, however tall the window', () => {
+    expect(peekScreenCap(1400, 250)).toBe(360)
   })
 })

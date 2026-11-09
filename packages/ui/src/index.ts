@@ -173,7 +173,7 @@ export { ChildMarkIcon, type ChildMarkView } from './components/ChildMark'
 export { AwayList, type AwayListProps, type AwayRowView, type AwayTone } from './components/AwayList'
 export { LimitNotice, type LimitNoticeProps } from './components/LimitNotice'
 export { NeedsYouToast, type NeedsYouToastProps } from './components/NeedsYouToast'
-export { ChildPeek, type ChildPeekProps, type PeekTone } from './components/ChildPeek'
+export { ChildPeek, type ChildPeekProps, type PeekScreenRoom, type PeekTone } from './components/ChildPeek'
 export {
   ChildHeader,
   FAMILY_HEADER_PX,
