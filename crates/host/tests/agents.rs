@@ -24,7 +24,7 @@ use floti_host::agent_cli::{
 use floti_host::platform::links::{FolderLinks, Native as NativeLinks};
 use floti_host::platform::process_tree::{Native as NativeTree, ProcessTree};
 use floti_host::platform::socket::Endpoint;
-use floti_host::roles::{FixedRoles, Role, RoleClass, RoleSource};
+use floti_host::roles::{FixedRoles, Role, RoleSource};
 use floti_host::server::HostConfig;
 use floti_host::testkit::{
     GitRepo, OtherAgent, OtherAgentRecord, PATIENCE, RunningHost, ShellRun, TestClient, TestDirs,
@@ -81,13 +81,8 @@ fn roles() -> Vec<Role> {
     // A body its backends are given as instructions on every launch.
     let mut briefed = Role::new("briefed", [BackendId::new(CLAUDE), BackendId::new(OTHER)]);
     briefed.instructions = "Answer in one line.".to_owned();
-    // Roles for work that holds the host's heavy slot.
-    let mut emulator = Role::new("emulator", [BackendId::new(CLAUDE)]);
-    emulator.class = RoleClass::Heavy;
-    let mut suite = Role::new("suite", [BackendId::new(CLAUDE), BackendId::new(OTHER)]);
-    suite.class = RoleClass::Heavy;
     vec![
-        builder, reviewer, locked, automatic, reader, careful, briefed, emulator, suite,
+        builder, reviewer, locked, automatic, reader, careful, briefed,
     ]
 }
 
@@ -1555,6 +1550,74 @@ async fn s9_after_a_host_restart_that_takes_its_sessions_back_the_children_are_s
     let second = world.host().await;
     // The parent's token is answered by the next host, which knows its
     // children for its own.
+    assert_eq!(chain.parent.children().await, ["middle"]);
+    assert_eq!(chain.child.children().await, ["leaf"]);
+    world.close(&chain.parent).await;
+    chain.below_end(&world).await;
+    second.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_floti_db_whose_children_rows_have_a_class_upgrades_in_place_and_the_next_host_takes_them_back()
+ {
+    let world = World::new();
+    let first = world.host().await;
+    let chain = chain(&world, &world.project("upgrade")).await;
+    first.crash().await;
+    assert!(alive(chain.parent.run.pid), "the sessions outlive the host");
+
+    // What an earlier release left: each child's row with its class, a
+    // refusal by its heavy limit standing, and the migration that drops the
+    // column not yet applied.
+    let dropping = floti_host::store::MIGRATIONS
+        .iter()
+        .find(|migration| migration.sql.contains("DROP COLUMN `child_class`"))
+        .expect("a migration drops child_class");
+    {
+        let db = world.db();
+        db.execute_batch("ALTER TABLE sessions ADD child_class text")
+            .unwrap();
+        let classed = db
+            .execute(
+                "UPDATE sessions SET child_class = 'heavy' WHERE child_name IS NOT NULL",
+                [],
+            )
+            .unwrap();
+        assert_eq!(classed, 2, "the child and the grandchild");
+        db.execute(
+            "INSERT INTO notices (kind, parent_session_id, parent_name, text, limit_kind) \
+             VALUES ('limit', ?1, 'parent', 'The heavy limit of 1 holds.', 'heavy')",
+            [i64::try_from(chain.parent.id()).unwrap()],
+        )
+        .unwrap();
+        db.execute(
+            "DELETE FROM __helm_migrations WHERE tag = ?1",
+            [dropping.tag],
+        )
+        .unwrap();
+    }
+
+    let second = world.host().await;
+    {
+        let db = world.db();
+        let columns: Vec<String> = db
+            .prepare("SELECT name FROM pragma_table_info('sessions')")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert!(!columns.iter().any(|column| column == "child_class"));
+        let heavy: i64 = db
+            .query_row(
+                "SELECT count(*) FROM notices WHERE limit_kind = 'heavy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(heavy, 0, "the heavy limit's notice went with it");
+    }
+    // The children are still the parents' and run on, as before.
     assert_eq!(chain.parent.children().await, ["middle"]);
     assert_eq!(chain.child.children().await, ["leaf"]);
     world.close(&chain.parent).await;
@@ -3459,240 +3522,6 @@ async fn floti_agent_start_resume_reopens_an_ended_child_from_the_parents_shell(
         assert!(renamed.stderr.contains("keeps its own"), "{renamed:?}");
         parent.stop(&name).await.done();
     }
-    host.stop(HostStopReason::Stop).await;
-}
-
-// ---------------------------------------------------------------------------
-// The heavy slot
-// ---------------------------------------------------------------------------
-
-#[tokio::test(flavor = "multi_thread")]
-async fn a_heavy_start_is_refused_while_a_heavy_child_runs_naming_the_limit_the_holder_and_who_started_it()
- {
-    let world = World::new();
-    let host = world.host().await;
-    let parent = world
-        .session(CLAUDE, &world.project("heavy"), "parent")
-        .await;
-    let neighbour = world
-        .session(OTHER, &world.project("heavy neighbour"), "neighbour")
-        .await;
-    parent
-        .start(json!({ "task": "boot the emulator", "name": "emu", "role": "emulator" }))
-        .await
-        .done();
-    // Its run is logged before the runs are counted.
-    world.child_of(&parent, "emu").await;
-
-    // Any session is refused, the holder's own parent included.
-    for (who, asker) in [("neighbour", &neighbour), ("parent", &parent)] {
-        let rows = world.children_made();
-        let runs = world.run_count();
-        let refused = asker
-            .start(json!({ "task": "run the suite", "role": "suite" }))
-            .await;
-        let sentence = refused.refused();
-        assert!(sentence.contains("heavy limit of 1"), "{who}: {sentence}");
-        assert!(
-            sentence.contains("emu (started by parent)"),
-            "{who}: {sentence}"
-        );
-        assert!(
-            sentence.contains("Wait for news and start again"),
-            "{who}: {sentence}"
-        );
-        assert_eq!(world.children_made(), rows, "{who}: nothing started");
-        assert_eq!(world.run_count(), runs, "{who}: nothing ran");
-    }
-    host.stop(HostStopReason::Stop).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn light_starts_are_not_held_by_a_heavy_child_and_the_next_heavy_start_goes_ahead_once_it_ends()
- {
-    let world = World::new();
-    let host = world.host().await;
-    let parent = world
-        .session(CLAUDE, &world.project("light beside heavy"), "parent")
-        .await;
-    // A session a person started runs beside it and holds no heavy slot.
-    let person = world
-        .session(OTHER, &world.project("a person"), "a person")
-        .await;
-    parent
-        .start(json!({ "task": "boot the emulator", "name": "emu", "role": "emulator" }))
-        .await
-        .done();
-
-    parent
-        .start(json!({ "task": "read a file", "name": "easy" }))
-        .await
-        .done();
-    person
-        .start(json!({ "task": "read another", "name": "other-easy" }))
-        .await
-        .done();
-    let refused = person
-        .start(json!({ "task": "run the suite", "role": "suite" }))
-        .await;
-    let sentence = refused.refused();
-    // Only the one agent holds the slot: not the session a person started,
-    // and not the light children.
-    assert!(sentence.contains("1 heavy agent is running"), "{sentence}");
-    assert!(!sentence.contains("easy"), "{sentence}");
-    assert!(!sentence.contains("a person"), "{sentence}");
-
-    // It ends, and the next heavy start goes ahead.
-    let emu = world.newest_child_id(parent.id(), "emu").unwrap();
-    parent.stop("emu").await.done();
-    world.ended("the heavy child to stop", &[emu]).await;
-    person
-        .start(json!({ "task": "run the suite", "name": "suite", "role": "suite" }))
-        .await
-        .done();
-    host.stop(HostStopReason::Stop).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn a_resume_of_a_heavy_child_is_refused_naming_the_holder_as_a_start_is() {
-    let world = World::new();
-    let host = world.host().await;
-    let parent = world
-        .session(CLAUDE, &world.project("heavy resume"), "parent")
-        .await;
-    let neighbour = world
-        .session(OTHER, &world.project("heavy resume neighbour"), "neighbour")
-        .await;
-    world
-        .ended_child(
-            &parent,
-            json!({ "task": "first", "name": "ended-heavy", "role": "suite" }),
-        )
-        .await;
-    neighbour
-        .start(json!({ "task": "boot the emulator", "name": "emu", "role": "emulator" }))
-        .await
-        .done();
-    // Its run is logged before the runs are counted.
-    world.child_of(&neighbour, "emu").await;
-
-    let rows = world.children_made();
-    let runs = world.run_count();
-    let refused = parent
-        .start(json!({ "task": "again", "resume": "ended-heavy" }))
-        .await;
-    let sentence = refused.refused();
-    assert!(sentence.contains("heavy limit of 1"), "{sentence}");
-    assert!(
-        sentence.contains("emu (started by neighbour)"),
-        "{sentence}"
-    );
-    assert!(
-        sentence.contains("Wait for news and start again"),
-        "{sentence}"
-    );
-    assert_eq!(world.children_made(), rows, "nothing started");
-    assert_eq!(world.run_count(), runs, "nothing ran");
-
-    // The holder ends and the resume goes ahead, and now holds the slot.
-    let emu = world.newest_child_id(neighbour.id(), "emu").unwrap();
-    neighbour.stop("emu").await.done();
-    world.ended("the heavy child to stop", &[emu]).await;
-    parent
-        .start(json!({ "task": "again", "resume": "ended-heavy" }))
-        .await
-        .done();
-    let refused = neighbour
-        .start(json!({ "task": "boot the emulator again", "role": "emulator" }))
-        .await;
-    assert!(
-        refused
-            .refused()
-            .contains("ended-heavy (started by parent)"),
-        "{}",
-        refused.refused()
-    );
-    host.stop(HostStopReason::Stop).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn the_host_runs_one_heavy_child_until_a_heavy_limit_is_told_to_it_and_agents_list_shows_the_slots_left()
- {
-    let world = World::new();
-    let host = world.host().await;
-    let parent = world
-        .session(CLAUDE, &world.project("heavy limit"), "parent")
-        .await;
-
-    // Told nothing: one runs.
-    let listed = parent.list().await;
-    assert!(
-        listed.text().contains("1 of 1 heavy on this host"),
-        "{}",
-        listed.text()
-    );
-    let limits = listed.done()["limits"].clone();
-    assert_eq!(
-        (&limits["heavyPerHost"], &limits["heavyLeft"]),
-        (&json!(1), &json!(1))
-    );
-    parent
-        .start(json!({ "task": "one", "name": "h1", "role": "emulator" }))
-        .await
-        .done();
-    let listed = parent.list().await;
-    assert!(
-        listed.text().contains("0 of 1 heavy on this host"),
-        "{}",
-        listed.text()
-    );
-    let refused = parent
-        .start(json!({ "task": "two", "name": "h2", "role": "emulator" }))
-        .await;
-    assert!(
-        refused.refused().contains("heavy limit of 1"),
-        "{}",
-        refused.refused()
-    );
-
-    // Told 2: the second runs and the third is refused naming both holders.
-    world
-        .settings(HostSettingsPatch {
-            agent_heavy_per_host: Some(2),
-            ..HostSettingsPatch::default()
-        })
-        .await;
-    let limits = parent.list().await.done()["limits"].clone();
-    assert_eq!(
-        (&limits["heavyPerHost"], &limits["heavyLeft"]),
-        (&json!(2), &json!(1))
-    );
-    parent
-        .start(json!({ "task": "two", "name": "h2", "role": "suite" }))
-        .await
-        .done();
-    let limits = parent.list().await.done()["limits"].clone();
-    assert_eq!(limits["heavyLeft"], 0, "{limits}");
-    let rows = world.children_made();
-    let refused = parent
-        .start(json!({ "task": "three", "name": "h3", "role": "emulator" }))
-        .await;
-    let sentence = refused.refused();
-    assert!(sentence.contains("heavy limit of 2"), "{sentence}");
-    assert!(sentence.contains("h1 (started by parent)"), "{sentence}");
-    assert!(sentence.contains("h2 (started by parent)"), "{sentence}");
-    assert_eq!(world.children_made(), rows, "nothing started");
-
-    // Lowered under what runs: nothing ends, and the next heavy start waits.
-    world
-        .settings(HostSettingsPatch {
-            agent_heavy_per_host: Some(1),
-            ..HostSettingsPatch::default()
-        })
-        .await;
-    assert_eq!(parent.children().await, ["h1", "h2"]);
-    let limits = parent.list().await.done()["limits"].clone();
-    assert_eq!(limits["heavyLeft"], 0, "{limits}");
     host.stop(HostStopReason::Stop).await;
 }
 
@@ -5726,7 +5555,7 @@ async fn agents_list_shows_a_command_child_with_its_command_and_how_many_command
     assert_eq!(agent["command"], Value::Null, "{agent}");
     assert!(agent["role"].is_string(), "{agent}");
     assert_eq!(command["role"], Value::Null, "{command}");
-    assert_eq!(command["class"], Value::Null, "{command}");
+    assert!(command.get("class").is_none(), "{command}");
     assert_eq!(command["backend"], "shell", "{command}");
     let line = command["command"].as_str().expect("a command");
     assert!(line.contains("emit lines.mjs") && line.contains("--hold"));

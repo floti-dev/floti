@@ -6,7 +6,6 @@ model:
 effort:
   claude-code: high
 permission: auto
-class: light
 worktree: no
 can_start: no
 disallowed_tools: Edit, Write, NotebookEdit

@@ -6,6 +6,11 @@
 //! has and a value outside its field's choices each make the whole file bad,
 //! with every problem named, because a typo such as `disalowed_tools` must
 //! never quietly drop a rule.
+//!
+//! The one exception is a retired field ([`RETIRED_FIELDS`]): a line Floti
+//! once read and no longer does. The shipped roles wrote such lines into
+//! folders that are never rewritten, so a retired line is accepted with any
+//! value, ignored, and kept on the role for the listing to name.
 
 use std::collections::BTreeMap;
 
@@ -14,7 +19,7 @@ use floti_protocol::channels::common::PermissionMode;
 use floti_protocol::channels::sessions::EffortLevel;
 use serde_yaml_ng::{Mapping, Value};
 
-use super::{Role, RoleClass};
+use super::Role;
 use crate::agent::input::key_bytes;
 use crate::workspace::render::frontmatter::parse_note_frontmatter;
 
@@ -26,7 +31,6 @@ pub const FIELDS: &[&str] = &[
     "model",
     "effort",
     "permission",
-    "class",
     "worktree",
     "can_start",
     "allowed_tools",
@@ -35,6 +39,9 @@ pub const FIELDS: &[&str] = &[
     "submit",
     "stop",
 ];
+
+/// The fields a role file may still have that Floti no longer reads.
+pub const RETIRED_FIELDS: &[&str] = &["class"];
 
 /// The efforts a role may give.
 const EFFORTS: &str = "low, medium, high, xhigh or max";
@@ -92,7 +99,6 @@ fn apply(role: &mut Role, key: &str, value: &Value) -> Result<(), String> {
         "model" => role.models = keyed_text(key, value)?,
         "effort" => role.efforts = efforts(value)?,
         "permission" => role.permission = permission(value)?,
-        "class" => role.class = class(value)?,
         "worktree" => role.worktree = flag(key, value)?,
         "can_start" => role.can_start = flag(key, value)?,
         "allowed_tools" => role.allowed_tools = list(key, value)?,
@@ -100,6 +106,9 @@ fn apply(role: &mut Role, key: &str, value: &Value) -> Result<(), String> {
         "command" => role.command = text(key, value)?,
         "submit" => role.submit = key_word(key, value)?,
         "stop" => role.stop = key_word(key, value)?,
+        retired if RETIRED_FIELDS.contains(&retired) => {
+            role.unused_lines.push(retired.to_owned());
+        }
         other => {
             return Err(format!(
                 "{other} is not a field a role has (the fields are {})",
@@ -283,18 +292,5 @@ fn permission(value: &Value) -> Result<Option<PermissionMode>, String> {
         "auto" => Ok(Some(PermissionMode::Auto)),
         "bypasspermissions" => Ok(Some(PermissionMode::BypassPermissions)),
         _ => Err(format!("permission must be {PERMISSIONS}, not {word}")),
-    }
-}
-
-/// `light` or `heavy`.
-fn class(value: &Value) -> Result<RoleClass, String> {
-    match value {
-        Value::Null => Ok(RoleClass::Light),
-        Value::String(word) => match word.trim().to_ascii_lowercase().as_str() {
-            "light" => Ok(RoleClass::Light),
-            "heavy" => Ok(RoleClass::Heavy),
-            _ => Err(format!("class must be light or heavy, not {word}")),
-        },
-        _ => Err("class must be light or heavy".to_owned()),
     }
 }

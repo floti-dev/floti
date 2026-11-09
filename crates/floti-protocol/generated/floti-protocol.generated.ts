@@ -1637,8 +1637,9 @@ agentStartsPerParent: number,
  */
 agentCommandsPerParent: number, 
 /**
- * How many heavy children (those started in a role whose class is heavy)
- * may run on the host at once.
+ * Retired: Floti has no agent classes and holds children by the limits
+ * above only. A host sends the field's default and never reads it; it
+ * stays, unread, until the protocol's next major removes it.
  */
 agentHeavyPerHost: number, };
 
@@ -1650,7 +1651,12 @@ export type HostSettingsPatch = { scanRoots?: Array<string>, pinnedProjects?: Ar
 /**
  * Replaces the whole map.
  */
-backendPaths?: { [key in BackendId]?: string }, terminalShell?: string | null, transcriptArchiveMaxBytes?: number, browserMcp?: boolean, browserMcpLocalOnly?: boolean, sessionMcp?: boolean, restoreWithoutAsking?: boolean, sessionAgents?: boolean, agentChildrenPerParent?: number, agentSessionsPerHost?: number, agentDepth?: number, agentStartsPerParent?: number, agentCommandsPerParent?: number, agentHeavyPerHost?: number, };
+backendPaths?: { [key in BackendId]?: string }, terminalShell?: string | null, transcriptArchiveMaxBytes?: number, browserMcp?: boolean, browserMcpLocalOnly?: boolean, sessionMcp?: boolean, restoreWithoutAsking?: boolean, sessionAgents?: boolean, agentChildrenPerParent?: number, agentSessionsPerHost?: number, agentDepth?: number, agentStartsPerParent?: number, agentCommandsPerParent?: number, 
+/**
+ * Retired, as in [`HostSettings`]: a host ignores it, and applies the
+ * rest of a patch that carries it.
+ */
+agentHeavyPerHost?: number, };
 
 /**
  * Why the host is being stopped, which decides what its sessions become.

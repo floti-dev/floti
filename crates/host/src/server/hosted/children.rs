@@ -58,6 +58,7 @@ pub(crate) use commands::RunCommand;
 use inbox::StoppedBy;
 #[cfg(test)]
 pub(crate) use inbox::{EventKind, Facts, News};
+use notices::StartLimit;
 pub(crate) use read::{ChildRead, ReadChild};
 pub(crate) use send::{ChildSent, SendChild, deliver_at_each_moment};
 pub(crate) use startup::after_each_launch;
@@ -71,16 +72,14 @@ use std::time::Duration;
 
 use floti_protocol::BackendId;
 use floti_protocol::channels::common::PermissionMode;
-use floti_protocol::channels::sessions::{NoticeLimit, Profile};
+use floti_protocol::channels::sessions::Profile;
 use tokio::sync::broadcast::{self, error::RecvError};
 
 use super::{Hosted, Plan, lock};
 use crate::agent::guidance::ChildInstructions;
 use crate::agent::{AgentBackend, AgentToolServer, Composition};
 use crate::agent_cli::{SESSIONS_URL_VAR, TOKEN_VAR, URL_VAR};
-use crate::roles::{
-    BadRole, DEFAULT_ROLE, NoRoles, Role, RoleClass, RoleLookup, RoleSource, default_role,
-};
+use crate::roles::{BadRole, DEFAULT_ROLE, NoRoles, Role, RoleLookup, RoleSource, default_role};
 use crate::server::floti_agents::FAMILY;
 use crate::server::records::{self, ExitNotice};
 use crate::server::session_tools::SESSIONS_FAMILY;
@@ -237,8 +236,6 @@ pub(crate) struct ChildEntry {
     pub branch: Option<String>,
     pub outlive: bool,
     pub can_start: bool,
-    /// The resource class of the role it was started in.
-    pub class: RoleClass,
     /// Whether it works in a worktree Floti made for it.
     pub worktree: bool,
 }
@@ -248,11 +245,12 @@ pub(crate) struct ChildEntry {
 pub(crate) struct RoleEntry {
     pub name: String,
     pub description: String,
-    pub class: RoleClass,
     pub worktree: bool,
     pub can_start: bool,
     /// The installed backends it can run on, in the role's order.
     pub backends: Vec<String>,
+    /// The lines its file has that Floti no longer uses.
+    pub unused_lines: Vec<String>,
 }
 
 /// What `agents_roles` answers: the roles there are now, then the files that
@@ -272,9 +270,6 @@ pub(crate) struct LimitsLeft {
     pub starts_left: u32,
     pub sessions_per_host: u32,
     pub host_left: u32,
-    pub heavy_per_host: u32,
-    /// How many more heavy agents the host takes.
-    pub heavy_left: u32,
     /// The most command children a parent runs at once, counted apart from
     /// every agent limit.
     pub commands_per_parent: u32,
@@ -283,13 +278,6 @@ pub(crate) struct LimitsLeft {
     pub depth: u32,
     /// Why the session cannot start children at all, when it cannot.
     pub cannot_start: Option<String>,
-}
-
-/// What runs on the host now that the limits count: every agent-started
-/// session, and the heavy ones among them.
-struct HostLoad {
-    running: Vec<SessionId>,
-    heavy: Vec<rows::HeavyHolder>,
 }
 
 /// What `agents_list` answers.
@@ -456,7 +444,7 @@ impl Hosted {
             let settings = settings::read(store.connection()).map_err(|err| err.to_string())?;
             let existing = rows::children_of(&store, parent, facts.conversation_id.as_deref())
                 .map_err(|err| err.to_string())?;
-            let load = self.host_load(&store)?;
+            let on_host = self.agents_on_host(&store)?;
             // Command children are no agents: they fill no agent limit.
             let agents: Vec<&rows::ChildRow> = existing
                 .iter()
@@ -467,16 +455,8 @@ impl Hosted {
                 .copied()
                 .filter(|child| child.running && self.sessions.get(child.id).is_some())
                 .collect();
-            let limits_error = judge(
-                &settings,
-                &facts,
-                &running,
-                agents.len(),
-                &agents,
-                &load,
-                role.class == RoleClass::Heavy,
-            )
-            .err();
+            let limits_error =
+                judge(&settings, &facts, &running, agents.len(), &agents, &on_host).err();
             let wanted = request.name.as_deref().unwrap_or(&role.name);
             (
                 unique_child_name(wanted, existing.iter().map(|child| child.name.as_str())),
@@ -531,7 +511,6 @@ impl Hosted {
                         command: None,
                         outlive,
                         can_start,
-                        heavy: role.class == RoleClass::Heavy,
                         worktree: made.is_some(),
                     }),
                 },
@@ -643,13 +622,13 @@ impl Hosted {
             ));
         }
 
-        let (settings, existing, load) = {
+        let (settings, existing, on_host) = {
             let store = self.ledger.store();
             (
                 settings::read(store.connection()).map_err(|err| err.to_string())?,
                 rows::children_of(&store, parent, facts.conversation_id.as_deref())
                     .map_err(|err| err.to_string())?,
-                self.host_load(&store)?,
+                self.agents_on_host(&store)?,
             )
         };
         let agents: Vec<&rows::ChildRow> = existing
@@ -751,16 +730,8 @@ impl Hosted {
                 .unwrap_or_else(|| DEFAULT_ROLE.to_owned()),
             reports: backend.tool_support().mcp_tools,
         });
-        judge(
-            &settings,
-            facts,
-            &running,
-            agents.len(),
-            &agents,
-            &load,
-            child.class == RoleClass::Heavy,
-        )
-        .map_err(|refusal| self.refused(parent, refusal))?;
+        judge(&settings, facts, &running, agents.len(), &agents, &on_host)
+            .map_err(|refusal| self.refused(parent, refusal))?;
 
         // Everything is judged: only now does anything run.
         let remote_control = compose::inherited_remote_control(
@@ -794,7 +765,6 @@ impl Hosted {
                         command: None,
                         outlive: child.outlive,
                         can_start: child.can_start,
-                        heavy: child.class == RoleClass::Heavy,
                         worktree: child.worktree,
                     }),
                 },
@@ -881,7 +851,7 @@ impl Hosted {
         let settings = settings::read(store.connection()).map_err(|err| err.to_string())?;
         let existing = rows::children_of(&store, parent, facts.conversation_id.as_deref())
             .map_err(|err| err.to_string())?;
-        let load = self.host_load(&store)?;
+        let on_host = self.agents_on_host(&store)?;
         // Command children are listed with their command, but they are no
         // agents and fill no agent limit.
         let agents: Vec<&rows::ChildRow> = existing
@@ -907,7 +877,6 @@ impl Hosted {
                 branch: child.branch.clone(),
                 outlive: child.outlive,
                 can_start: child.can_start,
-                class: child.class,
                 worktree: child.worktree,
             });
         }
@@ -918,8 +887,7 @@ impl Hosted {
         let running = u32::try_from(children.len() - commands).unwrap_or(u32::MAX);
         let commands = u32::try_from(commands).unwrap_or(u32::MAX);
         let made = u32::try_from(agents.len()).unwrap_or(u32::MAX);
-        let on_host = u32::try_from(load.running.len()).unwrap_or(u32::MAX);
-        let heavy_on_host = u32::try_from(load.heavy.len()).unwrap_or(u32::MAX);
+        let on_host = u32::try_from(on_host.len()).unwrap_or(u32::MAX);
         let starts_allowed = settings
             .agent_starts_per_parent
             .saturating_add(facts.extra_starts);
@@ -932,8 +900,6 @@ impl Hosted {
                 starts_left: starts_allowed.saturating_sub(made),
                 sessions_per_host: settings.agent_sessions_per_host,
                 host_left: settings.agent_sessions_per_host.saturating_sub(on_host),
-                heavy_per_host: settings.agent_heavy_per_host,
-                heavy_left: settings.agent_heavy_per_host.saturating_sub(heavy_on_host),
                 commands_per_parent: settings.agent_commands_per_parent,
                 commands_left: settings.agent_commands_per_parent.saturating_sub(commands),
                 depth: settings.agent_depth,
@@ -1173,20 +1139,13 @@ impl Hosted {
             .ok()
     }
 
-    /// The agent-started sessions running on this host now, and the heavy
-    /// ones among them.
-    fn host_load(&self, store: &crate::store::Store) -> Result<HostLoad, String> {
-        let running = rows::agent_sessions_running(store)
+    /// The agent-started sessions running on this host now.
+    fn agents_on_host(&self, store: &crate::store::Store) -> Result<Vec<SessionId>, String> {
+        Ok(rows::agent_sessions_running(store)
             .map_err(|err| err.to_string())?
             .into_iter()
             .filter(|id| self.sessions.get(*id).is_some())
-            .collect();
-        let heavy = rows::heavy_running(store)
-            .map_err(|err| err.to_string())?
-            .into_iter()
-            .filter(|holder| self.sessions.get(holder.id).is_some())
-            .collect();
-        Ok(HostLoad { running, heavy })
+            .collect())
     }
 
     /// The role a start asks for, read now: the default role when it names
@@ -1310,7 +1269,6 @@ impl Hosted {
         RoleEntry {
             name: role.name.clone(),
             description: role.description.clone(),
-            class: role.class,
             worktree: role.worktree,
             can_start: role.can_start,
             backends: role
@@ -1319,6 +1277,7 @@ impl Hosted {
                 .filter(|backend| role.refusal_on(backend.as_ref(), mode).is_none())
                 .map(|backend| backend_id_text(backend.id()))
                 .collect(),
+            unused_lines: role.unused_lines.clone(),
         }
     }
 
@@ -1510,14 +1469,14 @@ fn depth_refusal(
 /// A start a limit refused: which limit, and the sentence that names it and
 /// what holds it.
 struct Refusal {
-    limit: NoticeLimit,
+    limit: StartLimit,
     text: String,
     /// For the starts limit, how many starts allowing more adds.
     allow_more: Option<u32>,
 }
 
 impl Refusal {
-    fn new(limit: NoticeLimit, text: String) -> Self {
+    fn new(limit: StartLimit, text: String) -> Self {
         Self {
             limit,
             text,
@@ -1540,18 +1499,16 @@ fn judge(
     running: &[&rows::ChildRow],
     starts_made: usize,
     made: &[&rows::ChildRow],
-    load: &HostLoad,
-    heavy: bool,
+    host_running: &[SessionId],
 ) -> Result<(), Refusal> {
-    let host_running = &load.running;
     if let Some(refusal) = depth_refusal(settings, facts) {
-        return Err(Refusal::new(NoticeLimit::Depth, refusal));
+        return Err(Refusal::new(StartLimit::Depth, refusal));
     }
     let per_parent = settings.agent_children_per_parent as usize;
     if running.len() >= per_parent {
         let names: Vec<&str> = running.iter().map(|child| child.name.as_str()).collect();
         return Err(Refusal::new(
-            NoticeLimit::Children,
+            StartLimit::Children,
             format!(
                 "The limit of {per_parent} running agents per parent holds: you have {} running ({}). Wait for news from them and start again.",
                 running.len(),
@@ -1568,31 +1525,10 @@ fn judge(
             format!("{} of them yours ({})", mine.len(), mine.join(", "))
         };
         return Err(Refusal::new(
-            NoticeLimit::Sessions,
+            StartLimit::Sessions,
             format!(
                 "The limit of {per_host} agent sessions running on this host holds: {} are running, {yours}. Wait for news and start again.",
                 host_running.len()
-            ),
-        ));
-    }
-    let heavy_limit = settings.agent_heavy_per_host as usize;
-    if heavy && load.heavy.len() >= heavy_limit {
-        let holders: Vec<String> = load
-            .heavy
-            .iter()
-            .map(|holder| format!("{} (started by {})", holder.name, holder.started_by))
-            .collect();
-        return Err(Refusal::new(
-            NoticeLimit::Heavy,
-            format!(
-                "The heavy limit of {heavy_limit} holds: {} heavy agent{} running on this host, {}. Wait for news and start again.",
-                load.heavy.len(),
-                if load.heavy.len() == 1 {
-                    " is"
-                } else {
-                    "s are"
-                },
-                holders.join(", ")
             ),
         ));
     }
@@ -1604,7 +1540,7 @@ fn judge(
         return Err(Refusal {
             allow_more: Some(settings.agent_starts_per_parent),
             ..Refusal::new(
-                NoticeLimit::Starts,
+                StartLimit::Starts,
                 format!(
                     "The limit of {per_life} starts per parent holds: you have made {starts_made} starts ({}). Wait for news and start again.",
                     names.join(", ")

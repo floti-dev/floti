@@ -2,7 +2,6 @@
 description: Delegates work and keeps Trackr true. It does not edit files.
 backend: claude-code
 permission: auto
-class: light
 worktree: no
 can_start: yes
 disallowed_tools: Edit, Write, NotebookEdit
@@ -19,10 +18,10 @@ child.
 - Start a child for work that needs editing: a worker, in its own worktree, for
   each piece of work, and a reviewer for a check that reads and does not change.
   The task you give is all a child gets, so write it as a complete brief.
-- Respect the limits on children. A host runs one heavy child at a time unless
-  its heavy limit was raised, so anything else heavy waits behind it; the
-  listing of your agents shows the heavy slots left. When a limit holds, wait
-  for news from your children before you start another.
+- Keep only as many children working at once as their work and the machine
+  can carry. When the machine is short of memory, run work that builds or
+  tests one at a time. When a limit holds, wait for news from your children
+  before you start another.
 - When a child stops, check where its item really is before you tell the user
   anything about it.
 
@@ -77,7 +76,7 @@ The example, robotic and then right:
 Needs you (2)
   ABC-12  merge to v1.35? checks green, 4/4 criteria
   ABC-14  A or B. Recommends B.
-Running (1)  ABC-13 2/4 criteria, heavy
+Running (1)  ABC-13 2/4 criteria, emulator
 Done (1)  ABC-9
 ```
 
@@ -90,4 +89,5 @@ Done (1)  ABC-9
 >    touch resume.
 >
 > ABC-13 is still going. It's about halfway, and it's holding the emulator, so
-> anything else heavy waits behind it. ABC-9 finished cleanly.
+> I'm starting nothing else that needs one until it's done. ABC-9 finished
+> cleanly.

@@ -3,9 +3,9 @@
 //! A role says which backends may run the child (in order of preference), the
 //! model and effort for each, the permission mode, the tools it may use without
 //! asking and the ones it may never use, whether it may start children of its
-//! own, its resource class, whether it works in a worktree of its own, and the
-//! profile it runs under. Its body is instructions, composed into the child's
-//! own and never typed. Rules are written once, in the spelling
+//! own, whether it works in a worktree of its own, and the profile it runs
+//! under. Its body is instructions, composed into the child's own and never
+//! typed. Rules are written once, in the spelling
 //! [`ToolRules`] documents, and each backend's adapter translates them or
 //! refuses.
 //!
@@ -42,36 +42,6 @@ pub use folder::{FolderRoles, roles_folder};
 /// The name of the role a start without one gets.
 pub const DEFAULT_ROLE: &str = "agent";
 
-/// How much of a host a role's children use, for the limit on heavy work.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum RoleClass {
-    /// Ordinary work: any number run at once, within the other limits.
-    #[default]
-    Light,
-    /// An Android emulator, an end-to-end stack, a dev build of an app,
-    /// packaging or a full test suite: one runs on a host at a time.
-    Heavy,
-}
-
-impl RoleClass {
-    /// The word a role file and the tools use.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Light => "light",
-            Self::Heavy => "heavy",
-        }
-    }
-
-    /// The class a row records, or light for anything else.
-    pub fn from_word(word: &str) -> Self {
-        if word.eq_ignore_ascii_case("heavy") {
-            Self::Heavy
-        } else {
-            Self::Light
-        }
-    }
-}
-
 /// One role.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Role {
@@ -101,8 +71,6 @@ pub struct Role {
     pub can_start: bool,
     /// The name of the profile its children run under, when it names one.
     pub profile: Option<String>,
-    /// How much of the host it uses.
-    pub class: RoleClass,
     /// Whether its children work in a worktree of their own.
     pub worktree: bool,
     /// For a plain command line: the command to run.
@@ -113,6 +81,10 @@ pub struct Role {
     pub stop: Option<String>,
     /// Instructions composed into its children's own, never typed.
     pub instructions: String,
+    /// The lines its file has that Floti no longer uses
+    /// ([`parse::RETIRED_FIELDS`]), in the file's order: accepted and
+    /// ignored, and named by the listing so the user can delete them.
+    pub unused_lines: Vec<String>,
 }
 
 impl Role {
@@ -130,12 +102,12 @@ impl Role {
             disallowed_tools: Vec::new(),
             can_start: false,
             profile: None,
-            class: RoleClass::Light,
             worktree: false,
             command: None,
             submit: None,
             stop: None,
             instructions: String::new(),
+            unused_lines: Vec::new(),
         }
     }
 

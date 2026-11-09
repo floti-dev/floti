@@ -86,8 +86,6 @@ pub struct ParentLink {
     pub outlive: bool,
     /// Whether it may start children of its own.
     pub can_start: bool,
-    /// Whether its role is heavy, which a host runs one of at a time.
-    pub heavy: bool,
     /// Whether it works in a worktree Floti made for it.
     pub worktree: bool,
 }
@@ -146,9 +144,9 @@ impl SessionLedger for Mutex<Store> {
                 "INSERT INTO sessions (name, cwd, argv, claude_session_id, backend, \
                  project_path, profile_id, permission_mode, branch, parent_session_id, \
                  parent_conversation_id, child_name, role, command, outlive, can_start, \
-                 child_class, child_worktree, remote_control_name, title, status) \
+                 child_worktree, remote_control_name, title, status) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, \
-                 ?16, ?17, ?18, ?19, \
+                 ?16, ?17, ?18, \
                  (SELECT title FROM sessions AS earlier WHERE ?4 IS NOT NULL \
                   AND earlier.title IS NOT NULL \
                   AND (earlier.claude_session_id = ?4 OR earlier.last_claude_session_id = ?4) \
@@ -171,7 +169,6 @@ impl SessionLedger for Mutex<Store> {
                     parent.and_then(|link| link.command.as_deref()),
                     parent.is_some_and(|link| link.outlive),
                     parent.is_some_and(|link| link.can_start),
-                    parent.map(|link| if link.heavy { "heavy" } else { "light" }),
                     parent.is_some_and(|link| link.worktree),
                     row.origin.remote_control_name,
                 ],

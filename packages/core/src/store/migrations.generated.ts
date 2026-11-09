@@ -219,5 +219,12 @@ export const MIGRATIONS: readonly EmbeddedMigration[] = [
     "statements": [
       "ALTER TABLE `sessions` ADD `kept` integer DEFAULT false NOT NULL;"
     ]
+  },
+  {
+    "tag": "0028_faithful_maggott",
+    "statements": [
+      "ALTER TABLE `sessions` DROP COLUMN `child_class`;",
+      "-- A limit notice the heavy limit left refers to a limit there no longer is.\nDELETE FROM `notices` WHERE `limit_kind` = 'heavy';"
+    ]
   }
 ]

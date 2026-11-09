@@ -47,7 +47,6 @@ fn a_file_with_every_field_reads_as_that_role_and_its_body_is_the_instructions()
          model:\n  claude-code: opus\n  other-agent: small\n\
          effort:\n  claude-code: high\n\
          permission: plan\n\
-         class: heavy\n\
          worktree: yes\n\
          can_start: true\n\
          allowed_tools: Read, Bash(git log --format=a,b:*)\n\
@@ -75,7 +74,6 @@ fn a_file_with_every_field_reads_as_that_role_and_its_body_is_the_instructions()
     );
     assert_eq!(role.effort_for(&BackendId::new("other-agent")), None);
     assert_eq!(role.permission, Some(PermissionMode::Plan));
-    assert_eq!(role.class, RoleClass::Heavy);
     assert!(role.worktree && role.can_start);
     // A comma inside parentheses belongs to the rule.
     assert_eq!(role.allowed_tools, ["Read", "Bash(git log --format=a,b:*)"]);
@@ -88,11 +86,39 @@ fn a_file_with_every_field_reads_as_that_role_and_its_body_is_the_instructions()
 }
 
 #[test]
+fn a_class_line_is_accepted_with_any_value_ignored_and_kept_as_a_line_no_longer_used() {
+    for value in ["light", "heavy", "medium", "", "[1, 2]"] {
+        let role = good(
+            "builder",
+            &format!("---\nbackend: claude-code\nclass: {value}\nworktree: yes\n---\nBuild.\n"),
+        );
+        assert_eq!(role.unused_lines, ["class"], "class: {value}");
+        // Everything else in the file still reads.
+        assert_eq!(ids(&role), ["claude-code"], "class: {value}");
+        assert!(role.worktree, "class: {value}");
+        assert_eq!(role.instructions, "Build.", "class: {value}");
+    }
+    // A role with a class line is the role without it, but for that line.
+    let with = good("a", "---\nclass: heavy\npermission: plan\n---\nGo.\n");
+    let without = good("a", "---\npermission: plan\n---\nGo.\n");
+    assert_eq!(
+        Role {
+            unused_lines: Vec::new(),
+            ..with
+        },
+        without
+    );
+    // It is not offered as one of the fields a role has.
+    let typo = bad("a", "---\nclas: heavy\n---\n");
+    assert!(!typo.contains("class"), "{typo}");
+}
+
+#[test]
 fn a_file_with_no_fields_is_a_role_with_the_defaults() {
     let role = good("plain", "---\n---\nJust do it.\n");
     assert!(role.backends.is_empty(), "every installed agent backend");
-    assert_eq!(role.class, RoleClass::Light);
     assert!(!role.worktree && !role.can_start);
+    assert!(role.unused_lines.is_empty());
     assert_eq!(role.permission, None);
     assert_eq!(role.instructions, "Just do it.");
 
@@ -178,7 +204,6 @@ fn a_file_that_is_not_exactly_a_role_is_bad_and_says_what_is_wrong() {
     assert!(effort.contains("effort for claude-code"), "{effort}");
     let permission = bad("a", "---\npermission: always\n---\n");
     assert!(permission.contains("permission must be"), "{permission}");
-    assert!(bad("a", "---\nclass: medium\n---\n").contains("class must be light or heavy"));
     assert!(bad("a", "---\nworktree: maybe\n---\n").contains("worktree must be"));
     assert!(bad("a", "---\nmodel: opus\n---\n").contains("model is a map"));
     assert!(bad("a", "---\nbackend: \"\"\n---\n").contains("backend"));
@@ -188,8 +213,11 @@ fn a_file_that_is_not_exactly_a_role_is_bad_and_says_what_is_wrong() {
     let stop = bad("a", "---\nstop: ctrl-9\n---\n");
     assert!(stop.contains("stop: ctrl-9 is not a key"), "{stop}");
     // Every problem is named, not only the first.
-    let two = bad("a", "---\nclass: x\npermission: y\n---\n");
-    assert!(two.contains("class") && two.contains("permission"), "{two}");
+    let two = bad("a", "---\nworktree: x\npermission: y\n---\n");
+    assert!(
+        two.contains("worktree") && two.contains("permission"),
+        "{two}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -270,12 +298,12 @@ fn every_call_reads_the_folder_afresh_so_an_edit_an_add_and_a_delete_show_at_onc
     assert!(second.worktree);
 
     // Broken: the lookup says why, naming the file.
-    write(&dir, "scout.md", "---\nclass: medium\n---\n");
+    write(&dir, "scout.md", "---\nworktree: maybe\n---\n");
     let RoleLookup::Bad(broken) = roles.lookup("scout") else {
         panic!("scout is bad now");
     };
     assert_eq!(broken.file, "scout.md");
-    assert!(broken.problem.contains("class must be light or heavy"));
+    assert!(broken.problem.contains("worktree must be"));
     assert!(roles.listing().roles.is_empty());
 
     // Added and deleted.
@@ -438,7 +466,6 @@ fn the_reviewer_reads_and_reports_without_editing() {
     let role = shipped("reviewer");
     assert_eq!(role.permission, Some(PermissionMode::Auto));
     assert!(!role.can_start && !role.worktree);
-    assert_eq!(role.class, RoleClass::Light);
     assert_eq!(role.disallowed_tools, ["Edit", "Write", "NotebookEdit"]);
     assert_eq!(role.model_for(&BackendId::claude_code()), Some("opus"));
     assert_eq!(
@@ -453,7 +480,6 @@ fn the_worker_edits_in_a_worktree_of_its_own_and_cannot_start_agents_or_create_i
     let role = shipped("worker");
     assert_eq!(role.permission, Some(PermissionMode::Auto));
     assert!(role.worktree && !role.can_start);
-    assert_eq!(role.class, RoleClass::Light);
     assert_eq!(role.disallowed_tools, ["mcp__helm-plugin-trackr__create"]);
     for rule in [
         "Touch only your own item",
@@ -469,7 +495,6 @@ fn the_worker_edits_in_a_worktree_of_its_own_and_cannot_start_agents_or_create_i
 fn the_lead_starts_agents_does_not_edit_and_keeps_trackr_in_a_voice() {
     let role = shipped("lead");
     assert!(role.can_start && !role.worktree);
-    assert_eq!(role.class, RoleClass::Light);
     assert_eq!(role.permission, Some(PermissionMode::Auto));
     assert_eq!(role.disallowed_tools, ["Edit", "Write", "NotebookEdit"]);
     for section in ["## Keeping Trackr", "## Voice"] {

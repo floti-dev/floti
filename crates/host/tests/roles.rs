@@ -784,7 +784,7 @@ async fn s1_agents_roles_lists_each_role_with_what_it_is_and_the_backends_it_can
     let world = World::new();
     world.role(
         "scout",
-        "---\ndescription: Looks around.\nbackend: claude-code\nclass: heavy\nworktree: yes\ncan_start: yes\n---\nLook.\n",
+        "---\ndescription: Looks around.\nbackend: claude-code\nworktree: yes\ncan_start: yes\n---\nLook.\n",
     );
     world.role("plain-reader", "---\ndescription: Reads.\n---\n");
     world.role("codex-only", "---\nbackend: codex\n---\n");
@@ -810,14 +810,14 @@ async fn s1_agents_roles_lists_each_role_with_what_it_is_and_the_backends_it_can
         let roles = parent.role_entries().await;
         let scout = &roles["scout"];
         assert_eq!(scout["description"], "Looks around.");
-        assert_eq!(scout["class"], "heavy");
         assert_eq!(scout["worktree"], true);
         assert_eq!(scout["canStart"], true);
         assert_eq!(backends_of(scout), [CLAUDE]);
+        assert!(scout.get("class").is_none(), "{scout}");
+        assert_eq!(scout["unusedLines"], json!([]));
 
         // No backend named: every installed agent backend, in the host's order.
         let reader = &roles["plain-reader"];
-        assert_eq!(reader["class"], "light");
         assert_eq!(reader["worktree"], false);
         assert_eq!(reader["canStart"], false);
         assert_eq!(backends_of(reader), [CLAUDE, OTHER]);
@@ -831,12 +831,13 @@ async fn s1_agents_roles_lists_each_role_with_what_it_is_and_the_backends_it_can
         for word in [
             "scout",
             "Looks around.",
-            "class heavy",
+            "worktree yes",
             "plain-reader",
             "codex-only",
         ] {
             assert!(text.contains(word), "{word} in {text}");
         }
+        assert!(!text.contains("class"), "{text}");
     }
     host.stop(HostStopReason::Stop).await;
 }
@@ -934,7 +935,7 @@ async fn s3_a_bad_role_file_is_skipped_and_named_and_a_start_naming_it_is_refuse
     world.role("broken", "---\ndescription: [unclosed\n---\n");
     world.role(
         "odd",
-        "---\nclass: medium\neffort:\n  claude-code: loud\n---\n",
+        "---\nworktree: maybe\neffort:\n  claude-code: loud\n---\n",
     );
     world.role("naked", "no front matter at all\n");
     let host = world.host().await;
@@ -962,7 +963,7 @@ async fn s3_a_bad_role_file_is_skipped_and_named_and_a_start_naming_it_is_refuse
     assert!(bad["broken.md"].contains("does not parse"), "{bad:?}");
     assert!(bad["naked.md"].contains("no front matter"), "{bad:?}");
     assert!(
-        bad["odd.md"].contains("class must be light or heavy")
+        bad["odd.md"].contains("worktree must be")
             && bad["odd.md"].contains("effort for claude-code"),
         "every problem is named: {bad:?}"
     );
@@ -1006,7 +1007,7 @@ async fn s3_a_bad_role_file_is_skipped_and_named_and_a_start_naming_it_is_refuse
 #[tokio::test(flavor = "multi_thread")]
 async fn s3_a_bad_agent_md_refuses_a_start_with_no_role_and_does_not_fall_back_to_the_built_in() {
     let world = World::new();
-    world.role("agent", "---\nclass: medium\n---\n");
+    world.role("agent", "---\nworktree: maybe\n---\n");
     let host = world.host().await;
     let parent = world
         .session(CLAUDE, &world.project("bad default"), "parent")
@@ -1386,21 +1387,40 @@ async fn s8_can_start_comes_from_the_role_unless_the_start_says_otherwise_and_de
 }
 
 // ---------------------------------------------------------------------------
-// S9: class and worktree
+// S9: a class line, no longer used, and worktree
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s9_class_and_worktree_are_kept_on_the_childs_row_and_shown_by_agents_list() {
+async fn s9_a_role_file_with_a_class_line_runs_like_any_and_the_listing_names_the_line_as_no_longer_used()
+ {
     let world = World::new();
-    world.role(
-        "bulk",
-        "---\nbackend: claude-code\nclass: heavy\nworktree: yes\n---\n",
-    );
-    world.role("nimble", "---\nbackend: claude-code\n---\n");
+    let bulk_file = "---\nbackend: claude-code\nclass: heavy\nworktree: yes\n---\n";
+    let nimble_file = "---\nbackend: claude-code\nclass: light\n---\n";
+    world.role("bulk", bulk_file);
+    world.role("nimble", nimble_file);
     let host = world.host().await;
     let parent = world
-        .session(CLAUDE, &world.repository("classes"), "parent")
+        .session(CLAUDE, &world.repository("retired lines"), "parent")
         .await;
+
+    // Listed as roles, each naming its class line as one no longer used.
+    let asked = parent.roles().await;
+    let roles = parent.role_entries().await;
+    for name in ["bulk", "nimble"] {
+        let role = &roles[name];
+        assert!(role.get("class").is_none(), "{role}");
+        assert_eq!(role["unusedLines"][0]["line"], "class", "{role}");
+        let sentence = format!("The class line in {name}.md is no longer used");
+        assert!(
+            role["unusedLines"][0]["text"]
+                .as_str()
+                .unwrap()
+                .starts_with(&sentence),
+            "{role}"
+        );
+        assert!(asked.text().contains(&sentence), "{}", asked.text());
+    }
+    assert!(asked.done()["bad"].as_array().unwrap().is_empty());
 
     parent
         .start(json!({ "task": "build", "role": "bulk", "name": "bulk-kid" }))
@@ -1413,30 +1433,89 @@ async fn s9_class_and_worktree_are_kept_on_the_childs_row_and_shown_by_agents_li
     let bulk = world.child_of(&parent, "bulk-kid").await;
     let nimble = world.child_of(&parent, "nimble-kid").await;
 
-    // Kept on the row beside the role.
-    assert_eq!(world.column::<String>(bulk.id(), "child_class"), "heavy");
+    // Kept on the row beside the role, as any child's is.
     assert!(world.column::<bool>(bulk.id(), "child_worktree"));
     assert_eq!(world.column::<String>(bulk.id(), "role"), "bulk");
-    assert_eq!(world.column::<String>(nimble.id(), "child_class"), "light");
     assert!(!world.column::<bool>(nimble.id(), "child_worktree"));
 
-    // Shown by agents_list, in the text and the JSON.
+    // Shown by agents_list with its role and worktree, and no class.
     let listed = parent.list().await;
     let json = listed.done();
     let children = json["children"].as_array().unwrap();
     let find = |name: &str| children.iter().find(|child| child["name"] == name).unwrap();
-    assert_eq!(find("bulk-kid")["class"], "heavy");
+    assert_eq!(find("bulk-kid")["role"], "bulk");
     assert_eq!(find("bulk-kid")["worktree"], true);
-    assert_eq!(find("nimble-kid")["class"], "light");
     assert_eq!(find("nimble-kid")["worktree"], false);
-    assert!(listed.text().contains("class heavy"), "{}", listed.text());
-    assert!(listed.text().contains("class light"), "{}", listed.text());
-    // The role's worktree is named after the child; a light role without one
-    // runs in the folder it was given.
+    for child in children {
+        assert!(child.get("class").is_none(), "{child}");
+    }
+    assert!(!listed.text().contains("class"), "{}", listed.text());
+    assert!(!listed.text().contains("heavy"), "{}", listed.text());
+    // The role's worktree is named after the child; a role without one runs
+    // in the folder it was given.
     let expected = Path::new(&parent.record.cwd).join(".floti/worktrees/bulk-kid");
     assert_eq!(Path::new(&bulk.record.cwd), expected.as_path());
     assert_eq!(bulk.record.branch.as_deref(), Some("agent/bulk-kid"));
     assert_eq!(nimble.record.cwd, parent.record.cwd);
+
+    // Nothing in the folder was rewritten.
+    for (file, written) in [("bulk.md", bulk_file), ("nimble.md", nimble_file)] {
+        let now = std::fs::read_to_string(world.roles_dir().join(file)).unwrap();
+        assert_eq!(now, written, "{file}");
+    }
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn s9_two_children_whose_role_file_says_class_heavy_run_side_by_side_held_only_by_the_generic_limits()
+ {
+    let world = World::new();
+    world.role("suite", "---\nbackend: claude-code\nclass: heavy\n---\n");
+    let host = world.host().await;
+    let parent = world
+        .session(CLAUDE, &world.project("side by side"), "parent")
+        .await;
+    // Two running children per parent: the generic limit this test reaches.
+    world
+        .db()
+        .execute(
+            "INSERT INTO app_settings (key, value) VALUES ('agentChildrenPerParent', '2') \
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [],
+        )
+        .unwrap();
+
+    for name in ["first", "second"] {
+        parent
+            .start(json!({ "task": "run the suite", "role": "suite", "name": name }))
+            .await
+            .done();
+    }
+    world.child_of(&parent, "first").await;
+    world.child_of(&parent, "second").await;
+    let listed = parent.list().await.done();
+    let running: Vec<&str> = listed["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|child| child["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(running, ["first", "second"], "{listed}");
+
+    // A third is held by the limit on children per parent, and by nothing
+    // that has to do with its role.
+    let refused = parent
+        .start(json!({ "task": "run the suite", "role": "suite", "name": "third" }))
+        .await;
+    let sentence = refused.refused();
+    assert!(
+        sentence.contains("The limit of 2 running agents per parent holds"),
+        "{sentence}"
+    );
+    assert!(
+        sentence.contains("first") && sentence.contains("second"),
+        "{sentence}"
+    );
     host.stop(HostStopReason::Stop).await;
 }
 
@@ -1717,7 +1796,6 @@ async fn s14_the_shipped_worker_edits_in_a_worktree_cannot_start_agents_or_creat
             .as_path()
     );
     assert_eq!(worker.record.branch.as_deref(), Some("agent/worker"));
-    assert_eq!(world.column::<String>(worker.id(), "child_class"), "light");
     assert!(!world.column::<bool>(worker.id(), "can_start"));
     assert_eq!(
         value_of(&worker.run.argv, "--permission-mode"),
@@ -2085,7 +2163,7 @@ async fn s2_a_lost_child_is_reopened_in_its_role_as_the_file_reads_when_it_comes
         "edited",
         "---\nbackend: claude-code\n---\nSecond version.\n",
     );
-    world.role("broken", "---\nclass: medium\n---\nStill here.\n");
+    world.role("broken", "---\nworktree: maybe\n---\nStill here.\n");
     world.remove_role("gone");
 
     let host = world.host().await;
@@ -2136,11 +2214,7 @@ async fn s2_a_lost_child_is_reopened_in_its_role_as_the_file_reads_when_it_comes
         "{:?}",
         result.failed[0]
     );
-    assert!(
-        result.failed[0]
-            .reason
-            .contains("class must be light or heavy")
-    );
+    assert!(result.failed[0].reason.contains("worktree must be"));
 
     // A role that is gone reopens without it, and says so.
     let gone = result

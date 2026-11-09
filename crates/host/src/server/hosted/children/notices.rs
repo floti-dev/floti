@@ -72,31 +72,55 @@ pub(super) fn needs_you(
 
 /// What a refused start leaves.
 pub(super) struct Limit<'a> {
-    pub limit: NoticeLimit,
+    pub limit: StartLimit,
     pub text: &'a str,
     /// For the starts limit, how many starts Allow adds.
     pub allow_more: Option<u32>,
 }
 
-fn limit_word(limit: NoticeLimit) -> &'static str {
-    match limit {
-        NoticeLimit::Children => "children",
-        NoticeLimit::Sessions => "sessions",
-        NoticeLimit::Depth => "depth",
-        NoticeLimit::Starts => "starts",
-        NoticeLimit::Heavy => "heavy",
+/// A limit a start can be refused by: every one there is. The protocol's
+/// [`NoticeLimit`] has one more, which it keeps until its next major and no
+/// host refuses with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum StartLimit {
+    Children,
+    Sessions,
+    Depth,
+    Starts,
+}
+
+impl StartLimit {
+    /// The word a notice's row keeps in `limit_kind`.
+    fn word(self) -> &'static str {
+        match self {
+            Self::Children => "children",
+            Self::Sessions => "sessions",
+            Self::Depth => "depth",
+            Self::Starts => "starts",
+        }
+    }
+
+    /// The limit a row's word names, or none for a word it is not.
+    fn of(word: &str) -> Option<Self> {
+        Some(match word {
+            "children" => Self::Children,
+            "sessions" => Self::Sessions,
+            "depth" => Self::Depth,
+            "starts" => Self::Starts,
+            _ => return None,
+        })
     }
 }
 
-fn limit_of(word: &str) -> Option<NoticeLimit> {
-    Some(match word {
-        "children" => NoticeLimit::Children,
-        "sessions" => NoticeLimit::Sessions,
-        "depth" => NoticeLimit::Depth,
-        "starts" => NoticeLimit::Starts,
-        "heavy" => NoticeLimit::Heavy,
-        _ => return None,
-    })
+impl From<StartLimit> for NoticeLimit {
+    fn from(limit: StartLimit) -> Self {
+        match limit {
+            StartLimit::Children => Self::Children,
+            StartLimit::Sessions => Self::Sessions,
+            StartLimit::Depth => Self::Depth,
+            StartLimit::Starts => Self::Starts,
+        }
+    }
 }
 
 /// Records that `parent`'s start was refused by `refusal`, in place of the
@@ -107,7 +131,7 @@ pub(super) fn record_limit(
     parent_name: &str,
     refusal: &Limit<'_>,
 ) -> Result<()> {
-    let word = limit_word(refusal.limit);
+    let word = refusal.limit.word();
     store
         .connection()
         .execute(
@@ -191,7 +215,10 @@ pub(super) fn stored(store: &Store) -> Result<Vec<StandingNotice>> {
                 child_name: row.get(5)?,
                 text: row.get(6)?,
                 since: row.get(9)?,
-                limit: limit.as_deref().and_then(limit_of),
+                limit: limit
+                    .as_deref()
+                    .and_then(StartLimit::of)
+                    .map(NoticeLimit::from),
                 allow_more: row
                     .get::<_, Option<i64>>(8)?
                     .and_then(|more| u32::try_from(more).ok()),

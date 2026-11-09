@@ -130,7 +130,6 @@ impl Hosted {
                         command: Some(line.clone()),
                         outlive: false,
                         can_start: false,
-                        heavy: false,
                         worktree: false,
                     }),
                 },

@@ -10,7 +10,6 @@ use floti_protocol::channels::common::PermissionMode;
 use floti_protocol::channels::sessions::Profile;
 use rusqlite::{OptionalExtension, Row, params};
 
-use crate::roles::RoleClass;
 use crate::server::records::{self, PROFILE_COLUMNS, profile_row};
 use crate::session::SessionId;
 use crate::store::Store;
@@ -146,8 +145,6 @@ pub(super) struct ChildRow {
     pub can_start: bool,
     /// Whether the row says it is running.
     pub running: bool,
-    /// The resource class of the role it was started in.
-    pub class: RoleClass,
     /// Whether it works in a worktree Floti made for it.
     pub worktree: bool,
     /// The conversation it is in now, when its row knows: what a resume
@@ -170,7 +167,7 @@ impl ChildRow {
 }
 
 const CHILD_COLUMNS: &str = "id, child_name, role, backend, cwd, branch, started_at, outlive, \
-     can_start, status, child_class, child_worktree, \
+     can_start, status, child_worktree, \
      coalesce(last_claude_session_id, claude_session_id), permission_mode, profile_id, command";
 
 fn child_row(row: &Row<'_>) -> rusqlite::Result<ChildRow> {
@@ -189,19 +186,16 @@ fn child_row(row: &Row<'_>) -> rusqlite::Result<ChildRow> {
         outlive: row.get(7)?,
         can_start: row.get(8)?,
         running: status == "running",
-        class: row
-            .get::<_, Option<String>>(10)?
-            .map_or(RoleClass::Light, |class| RoleClass::from_word(&class)),
-        worktree: row.get(11)?,
+        worktree: row.get(10)?,
         conversation_id: row
-            .get::<_, Option<String>>(12)?
+            .get::<_, Option<String>>(11)?
             .filter(|id| !id.trim().is_empty()),
         permission_mode: row
-            .get::<_, Option<String>>(13)?
+            .get::<_, Option<String>>(12)?
             .as_deref()
             .and_then(records::permission_mode_from_name),
-        profile_id: row.get(14)?,
-        command: row.get(15)?,
+        profile_id: row.get(13)?,
+        command: row.get(14)?,
     })
 }
 
@@ -242,39 +236,6 @@ pub(super) fn agent_sessions_running(store: &Store) -> Result<Vec<SessionId>> {
         .query_map([], |row| row.get(0).map(SessionId))
         .and_then(Iterator::collect::<rusqlite::Result<Vec<_>>>)
         .map_err(sql("read the agent sessions running"))
-}
-
-/// A running agent-started session whose role is heavy, and who started it.
-pub(super) struct HeavyHolder {
-    pub id: SessionId,
-    pub name: String,
-    /// The session that started it, by its agent name when it is one, else
-    /// its session name.
-    pub started_by: String,
-}
-
-/// Every agent-started session the rows say is running whose role is heavy,
-/// oldest first. Sessions a person starts have no class, so hold no slot.
-pub(super) fn heavy_running(store: &Store) -> Result<Vec<HeavyHolder>> {
-    let mut select = store
-        .connection()
-        .prepare(
-            "SELECT s.id, s.child_name, COALESCE(p.child_name, p.name, 'a session') \
-             FROM sessions s LEFT JOIN sessions p ON p.id = s.parent_session_id \
-             WHERE s.child_name IS NOT NULL AND s.child_class = 'heavy' \
-             AND s.status = 'running' ORDER BY s.id",
-        )
-        .map_err(sql("read the heavy agents running"))?;
-    select
-        .query_map([], |row| {
-            Ok(HeavyHolder {
-                id: SessionId(row.get(0)?),
-                name: row.get(1)?,
-                started_by: row.get(2)?,
-            })
-        })
-        .and_then(Iterator::collect::<rusqlite::Result<Vec<_>>>)
-        .map_err(sql("read the heavy agents running"))
 }
 
 /// A session the rows say is running, and where.
@@ -601,7 +562,6 @@ mod tests {
             command: Some("pnpm test".to_owned()),
             outlive: false,
             can_start: false,
-            heavy: false,
             worktree: false,
         };
         let child = store.started(&row("lead-tests", Some(link))).unwrap();

@@ -32,6 +32,11 @@ pub const WAKES_ON_BACKGROUND_COMMAND: &str = "To hear from your children while 
 /// never left holding a call.
 pub const ANSWERS_AT_ONCE: &str = "`floti agent wait` answers at once with your children's news, or says nothing is new yet; run it again after your next piece of work, and again whenever it fails.";
 
+/// How many children a parent keeps working at once: its own judgment, from
+/// what each one does. The family's instructions (`floti_agents.json`) carry
+/// the same sentence.
+pub const PACING: &str = "Keep only as many children working at once as their work and the machine can carry, and when the machine is short of memory, run work that builds or tests one at a time.";
+
 /// What a session given helm-sessions is asked about its title.
 const TITLE_SECTION: &str = "# This session's title\n\nOnce you know what this session is for, give it a title: call session_title, or run `floti session title \"<title>\"` from your shell. Give it a new one whenever the work changes. The user sees it beside the session's name in the sessions list and in History, so say what is being done, such as \"Agents page: edit and delete agents\", and never the folder's name. One line, at most 60 characters.\n";
 
@@ -91,7 +96,7 @@ fn child_section(child: &ChildInstructions) -> String {
 fn guide_section(waiting: &str, messaging: Option<&str>) -> String {
     let messaging = messaging.map(|line| format!(" {line}")).unwrap_or_default();
     format!(
-        "# Starting and waiting on agents from your shell\n\nYou can also use `floti agent` from your shell: start, send, wait, read and stop, as the floti-agents tools do. {waiting} Stop a child with `floti agent stop <name>` once you have what you need, and add --keep only when you expect to give it more work. Add --wait to `floti agent start` or `send` to get that child's next news from the same command. A text you send waits in the child's queue until the child can take it, and is typed in then.{messaging} For a long command the user should see, such as tests, a build or a dev server, use `floti agent run --name <name> -- <command>` rather than a background command of your own: it runs in your folder in a terminal the user watches, and `floti agent wait <name>` returns its exit code and last 40 lines when it exits. Floti cannot see your own background commands.\n"
+        "# Starting and waiting on agents from your shell\n\nYou can also use `floti agent` from your shell: start, send, wait, read and stop, as the floti-agents tools do. {waiting} {PACING} Stop a child with `floti agent stop <name>` once you have what you need, and add --keep only when you expect to give it more work. Add --wait to `floti agent start` or `send` to get that child's next news from the same command. A text you send waits in the child's queue until the child can take it, and is typed in then.{messaging} For a long command the user should see, such as tests, a build or a dev server, use `floti agent run --name <name> -- <command>` rather than a background command of your own: it runs in your folder in a terminal the user watches, and `floti agent wait <name>` returns its exit code and last 40 lines when it exits. Floti cannot see your own background commands.\n"
     )
 }
 
@@ -168,6 +173,27 @@ mod tests {
         assert!(text.contains(
             "Stop a child with `floti agent stop <name>` once you have what you need, and add --keep only when you expect to give it more work."
         ));
+    }
+
+    #[test]
+    fn the_manual_and_the_guide_leave_how_many_children_work_at_once_to_the_parent() {
+        let composition = Composition {
+            agent_guide: true,
+            ..Composition::default()
+        };
+        let guide = floti_sections(&composition, "wait", None).expect("the guide");
+        assert!(guide.contains(PACING), "{guide}");
+        let family: serde_json::Value =
+            serde_json::from_str(include_str!("../server/floti_agents.json")).unwrap();
+        let manual = family["instructions"].as_str().unwrap();
+        assert!(manual.contains(PACING), "{manual}");
+        // It names no machine and no number: the parent judges.
+        assert!(!PACING.chars().any(|c| c.is_ascii_digit()), "{PACING}");
+        for text in [guide.as_str(), manual] {
+            for word in ["heavy", "light", "class", "slot"] {
+                assert!(!text.to_lowercase().contains(word), "{word} in {text}");
+            }
+        }
     }
 
     #[test]

@@ -61,7 +61,6 @@ fn link(parent: SessionId, name: &str) -> ParentLink {
         command: None,
         outlive: false,
         can_start: false,
-        heavy: false,
         worktree: false,
     }
 }

@@ -868,15 +868,13 @@ fn listing_text(listed: &ChildrenListed) -> String {
     }
     let limits = &listed.limits;
     out.push_str(&format!(
-        "Limits left: {} of {} agents running at once, {} of {} starts, {} of {} on this host, {} of {} heavy on this host, {} of {} command children running at once.",
+        "Limits left: {} of {} agents running at once, {} of {} starts, {} of {} on this host, {} of {} command children running at once.",
         limits.children_left,
         limits.children_per_parent,
         limits.starts_left,
         limits.starts_per_parent,
         limits.host_left,
         limits.sessions_per_host,
-        limits.heavy_left,
-        limits.heavy_per_host,
         limits.commands_left,
         limits.commands_per_parent,
     ));
@@ -891,11 +889,7 @@ fn child_text(child: &ChildEntry) -> String {
     // A command child shows its command where an agent shows its role.
     let kind = match &child.command {
         Some(command) => format!("command {command}"),
-        None => format!(
-            "role {}  class {}",
-            child.role.as_deref().unwrap_or("none"),
-            child.class.as_str()
-        ),
+        None => format!("role {}", child.role.as_deref().unwrap_or("none")),
     };
     let mut line = format!(
         "{name}  {kind}  {backend}  {state} since {since}  {folder}  branch {branch}",
@@ -924,7 +918,6 @@ fn listing_json(listed: &ChildrenListed) -> Value {
             "name": child.name,
             "role": child.role,
             "command": child.command,
-            "class": child.command.is_none().then(|| child.class.as_str()),
             "worktree": child.worktree,
             "backend": child.backend,
             "state": child.state,
@@ -941,8 +934,6 @@ fn listing_json(listed: &ChildrenListed) -> Value {
             "startsLeft": limits.starts_left,
             "sessionsPerHost": limits.sessions_per_host,
             "hostLeft": limits.host_left,
-            "heavyPerHost": limits.heavy_per_host,
-            "heavyLeft": limits.heavy_left,
             "commandsPerParent": limits.commands_per_parent,
             "commandsLeft": limits.commands_left,
             "depth": limits.depth,
@@ -974,16 +965,23 @@ fn role_text(role: &RoleEntry) -> String {
         role.backends.join(", ")
     };
     let mut text = format!(
-        "{name}  class {class}  worktree {worktree}  may start agents {can_start}  runs on {backends}",
+        "{name}  worktree {worktree}  may start agents {can_start}  runs on {backends}",
         name = role.name,
-        class = role.class.as_str(),
         worktree = yes_no(role.worktree),
         can_start = yes_no(role.can_start),
     );
     if !role.description.is_empty() {
         text.push_str(&format!("\n  {}", role.description));
     }
+    for line in &role.unused_lines {
+        text.push_str(&format!("\n  {}", unused_line_text(&role.name, line)));
+    }
     text
+}
+
+/// The sentence naming a line of a role's file that Floti no longer uses.
+fn unused_line_text(role: &str, line: &str) -> String {
+    format!("The {line} line in {role}.md is no longer used and is ignored; it can be deleted.")
 }
 
 fn roles_json(listed: &RolesListed) -> Value {
@@ -991,10 +989,13 @@ fn roles_json(listed: &RolesListed) -> Value {
         "roles": listed.roles.iter().map(|role| json!({
             "name": role.name,
             "description": role.description,
-            "class": role.class.as_str(),
             "worktree": role.worktree,
             "canStart": role.can_start,
             "backends": role.backends,
+            "unusedLines": role.unused_lines.iter().map(|line| json!({
+                "line": line,
+                "text": unused_line_text(&role.name, line),
+            })).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
         "bad": listed.bad.iter().map(|bad| json!({
             "file": bad.file,
@@ -1165,7 +1166,7 @@ pub(crate) mod allowances {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::roles::{BadRole, RoleClass};
+    use crate::roles::BadRole;
     use crate::server::hosted::{EventKind, Facts, News};
 
     fn arguments(value: Value) -> JsonObject {
@@ -1501,18 +1502,18 @@ mod tests {
                 RoleEntry {
                     name: "agent".into(),
                     description: String::new(),
-                    class: RoleClass::Light,
                     worktree: false,
                     can_start: false,
                     backends: vec!["claude-code".into(), "other-agent".into()],
+                    unused_lines: vec![],
                 },
                 RoleEntry {
                     name: "scout".into(),
                     description: "Looks around.".into(),
-                    class: RoleClass::Heavy,
                     worktree: true,
                     can_start: true,
                     backends: vec![],
+                    unused_lines: vec!["class".into()],
                 },
             ],
             bad: vec![BadRole {
@@ -1527,8 +1528,9 @@ mod tests {
         let text = roles_text(&listed_roles());
         assert_eq!(
             text,
-            "agent  class light  worktree no  may start agents no  runs on claude-code, other-agent\n\
-             scout  class heavy  worktree yes  may start agents yes  runs on none installed here can run it\n  Looks around.\n\
+            "agent  worktree no  may start agents no  runs on claude-code, other-agent\n\
+             scout  worktree yes  may start agents yes  runs on none installed here can run it\n  Looks around.\n  \
+             The class line in scout.md is no longer used and is ignored; it can be deleted.\n\
              Role files that cannot be used:\n\
              typo.md: the key disalowed_tools is not a role field"
         );
@@ -1539,18 +1541,21 @@ mod tests {
                     {
                         "name": "agent",
                         "description": "",
-                        "class": "light",
                         "worktree": false,
                         "canStart": false,
                         "backends": ["claude-code", "other-agent"],
+                        "unusedLines": [],
                     },
                     {
                         "name": "scout",
                         "description": "Looks around.",
-                        "class": "heavy",
                         "worktree": true,
                         "canStart": true,
                         "backends": [],
+                        "unusedLines": [{
+                            "line": "class",
+                            "text": "The class line in scout.md is no longer used and is ignored; it can be deleted.",
+                        }],
                     },
                 ],
                 "bad": [

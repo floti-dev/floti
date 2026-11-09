@@ -127,8 +127,9 @@ pub struct HostSettings {
     /// counted apart from every agent limit above.
     #[serde(default = "default_agent_commands_per_parent")]
     pub agent_commands_per_parent: u32,
-    /// How many heavy children (those started in a role whose class is heavy)
-    /// may run on the host at once.
+    /// Retired: Floti has no agent classes and holds children by the limits
+    /// above only. A host sends the field's default and never reads it; it
+    /// stays, unread, until the protocol's next major removes it.
     #[serde(default = "default_agent_heavy_per_host")]
     pub agent_heavy_per_host: u32,
 }
@@ -141,6 +142,7 @@ pub const DEFAULT_AGENT_SESSIONS_PER_HOST: u32 = 8;
 pub const DEFAULT_AGENT_DEPTH: u32 = 2;
 pub const DEFAULT_AGENT_STARTS_PER_PARENT: u32 = 16;
 pub const DEFAULT_AGENT_COMMANDS_PER_PARENT: u32 = 4;
+/// What the retired `agentHeavyPerHost` always reads as.
 pub const DEFAULT_AGENT_HEAVY_PER_HOST: u32 = 1;
 
 fn default_agent_heavy_per_host() -> u32 {
@@ -235,6 +237,8 @@ pub struct HostSettingsPatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub agent_commands_per_parent: Option<u32>,
+    /// Retired, as in [`HostSettings`]: a host ignores it, and applies the
+    /// rest of a patch that carries it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub agent_heavy_per_host: Option<u32>,

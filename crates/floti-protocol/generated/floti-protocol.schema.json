@@ -4396,7 +4396,7 @@
         },
         "agentHeavyPerHost": {
           "default": 1,
-          "description": "How many heavy children (those started in a role whose class is heavy)\nmay run on the host at once.",
+          "description": "Retired: Floti has no agent classes and holds children by the limits\nabove only. A host sends the field's default and never reads it; it\nstays, unread, until the protocol's next major removes it.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -4518,6 +4518,7 @@
           ]
         },
         "agentHeavyPerHost": {
+          "description": "Retired, as in [`HostSettings`]: a host ignores it, and applies the\nrest of a patch that carries it.",
           "format": "uint32",
           "minimum": 0,
           "type": [
@@ -5599,7 +5600,7 @@
         },
         {
           "const": "heavy",
-          "description": "Heavy children running at once on the host.",
+          "description": "Retired: no host refuses a start with it. A host on an earlier\nrelease may still send it; it stays until the protocol's next major\nremoves it.",
           "type": "string"
         }
       ]

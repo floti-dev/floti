@@ -283,12 +283,6 @@ export const sessions = sqliteTable(
     outlive: integer('outlive', { mode: 'boolean' }).notNull().default(false),
     /** Whether it may start children of its own (the second generation). */
     canStart: integer('can_start', { mode: 'boolean' }).notNull().default(false),
-    /**
-     * The resource class of the role it was started in, `light` or `heavy`,
-     * kept so the one heavy child a host runs at a time is counted from rows.
-     * Null for a session with no parent.
-     */
-    childClass: text('child_class', { enum: ['light', 'heavy'] }),
     /** Whether the role it was started in asks for a worktree of its own. */
     childWorktree: integer('child_worktree', { mode: 'boolean' }).notNull().default(false),
     /**
@@ -452,8 +446,8 @@ export const notices = sqliteTable(
     childName: text('child_name'),
     /** The sentence the notice says. */
     text: text('text').notNull(),
-    /** For a limit, which one refused: children, sessions, depth, starts or heavy. */
-    limitKind: text('limit_kind', { enum: ['children', 'sessions', 'depth', 'starts', 'heavy'] }),
+    /** For a limit, which one refused: children, sessions, depth or starts. */
+    limitKind: text('limit_kind', { enum: ['children', 'sessions', 'depth', 'starts'] }),
     /** For the starts limit, how many more starts Allow adds. */
     allowMore: integer('allow_more'),
     since: text('since').notNull().default(now)
