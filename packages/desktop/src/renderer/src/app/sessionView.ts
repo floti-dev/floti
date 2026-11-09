@@ -246,19 +246,19 @@ export function useSecondsClock(now: number, active: boolean): number {
 
 /**
  * What the crumb of a child's own tab begins with: its tag (`command` for a
- * command child, the role an agent child was started in, none for a child
- * with no role) and the session that started it. `openParent` is given only
+ * command child, the agent an agent child was started as, none for a child
+ * with no agent) and the session that started it. `openParent` is given only
  * where the window lists that session, so the link is plain text otherwise.
  */
 export function childCrumb(
-  session: Pick<SessionRecord, 'command' | 'role' | 'parentId' | 'parentName'>,
+  session: Pick<SessionRecord, 'command' | 'agent' | 'parentId' | 'parentName'>,
   openParent: (parentId: number) => void,
   listsParent: (parentId: number) => boolean
 ): { tag: CrumbTag | undefined; parent: CrumbParent | undefined } {
   const tag: CrumbTag | undefined = isCommandChild(session)
     ? { kind: 'command', text: 'command' }
-    : typeof session.role === 'string' && session.role !== ''
-      ? { kind: 'role', text: session.role }
+    : typeof session.agent === 'string' && session.agent !== ''
+      ? { kind: 'agent', text: session.agent }
       : undefined
   const { parentId, parentName } = session
   const parent: CrumbParent | undefined =

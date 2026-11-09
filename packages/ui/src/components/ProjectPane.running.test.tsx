@@ -52,7 +52,7 @@ describe('ProjectPane, with sessions already running in the folder', () => {
     expect(screen.getByRole('note').textContent).toBe(
       '2 sessions are already running in this folder: shop, terminal session. ' +
         'One of them was not started by Helm, so it has no tab here. ' +
-        'Starting another one here means two agents in one working tree.'
+        'Starting another one here means two sessions in one working tree.'
     )
     expect(onLaunch).not.toHaveBeenCalled()
   })
@@ -62,7 +62,7 @@ describe('ProjectPane, with sessions already running in the folder', () => {
     expect(screen.getByRole('note').textContent).toBe(
       'A session is already running in this folder: terminal session. ' +
         'It was not started by Helm, so it has no tab here. ' +
-        'Starting another one here means two agents in one working tree.'
+        'Starting another one here means two sessions in one working tree.'
     )
   })
 

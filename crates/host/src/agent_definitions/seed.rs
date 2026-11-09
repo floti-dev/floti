@@ -1,21 +1,23 @@
-//! What a first start writes into the roles folder: the shipped `lead`,
+//! What a first start writes into the agents folder: the shipped `lead`,
 //! `reviewer` and `worker`.
 //!
 //! The trigger is the folder being absent, as for the templates folder, and for
 //! the same reason: the host keeps no record of what it wrote there, so it
 //! cannot tell an edited file from an untouched one, and an improved shipped
-//! role overwriting somebody's edited copy is the one failure this must not
-//! have. So a better shipped role never reaches an existing folder, a file the
+//! agent overwriting somebody's edited copy is the one failure this must not
+//! have. So a better shipped agent never reaches an existing folder, a file the
 //! user deleted stays deleted, an empty folder stays empty, and deleting the
-//! folder brings the originals back at the next start.
+//! folder brings the originals back at the next start. A host that still finds
+//! the folder under its old name, `roles`, moves it and seeds nothing
+//! ([`super::folder::prepare_agents_folder`]).
 
 use std::io;
 use std::path::Path;
 
 use crate::workspace::templates::seed::write_new;
 
-/// The shipped roles, by file name.
-pub const SHIPPED_ROLES: &[(&str, &str)] = &[
+/// The shipped agents, by file name.
+pub const SHIPPED_AGENTS: &[(&str, &str)] = &[
     ("lead.md", include_str!("shipped/lead.md")),
     ("reviewer.md", include_str!("shipped/reviewer.md")),
     ("worker.md", include_str!("shipped/worker.md")),
@@ -32,11 +34,11 @@ pub struct Seeded {
     pub problem: Option<String>,
 }
 
-/// Writes the shipped roles into `dir`, only when `dir` is absent. The folder
+/// Writes the shipped agents into `dir`, only when `dir` is absent. The folder
 /// itself is made by a call that fails when it exists, and every file is
 /// written create-new, so of two hosts starting at once only one seeds, and
 /// nothing already there is ever written over.
-pub fn seed_roles(dir: &Path) -> Seeded {
+pub fn seed_agents(dir: &Path) -> Seeded {
     if std::fs::symlink_metadata(dir).is_ok() {
         return Seeded::default();
     }
@@ -51,7 +53,7 @@ pub fn seed_roles(dir: &Path) -> Seeded {
         Err(err) => return failed(Vec::new(), &err),
     }
     let mut created = Vec::new();
-    for (file, content) in SHIPPED_ROLES {
+    for (file, content) in SHIPPED_AGENTS {
         if let Err(err) = write_new(&dir.join(file), content) {
             return failed(created, &err);
         }
@@ -68,6 +70,6 @@ fn failed(created: Vec<String>, err: &io::Error) -> Seeded {
     Seeded {
         seeded: !created.is_empty(),
         created,
-        problem: Some(format!("the roles folder could not be seeded: {err}")),
+        problem: Some(format!("the agents folder could not be seeded: {err}")),
     }
 }

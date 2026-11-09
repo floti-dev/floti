@@ -1,6 +1,6 @@
-//! Role files read, listed and seeded: what a file may say, what makes it
-//! bad, that every call reads the folder afresh, and what the first start
-//! writes.
+//! Agent files read, listed and seeded: what a file may say, what makes it
+//! bad, that every call reads the folder afresh, what the first start writes,
+//! and how a folder still called `roles` becomes `agents`.
 
 use std::path::Path;
 
@@ -8,19 +8,21 @@ use floti_protocol::BackendId;
 use floti_protocol::channels::common::PermissionMode;
 use floti_protocol::channels::sessions::EffortLevel;
 
-use super::folder::{FolderRoles, roles_folder};
-use super::parse::parse_role;
-use super::seed::{SHIPPED_ROLES, seed_roles};
+use super::folder::{
+    FolderDefinitions, agents_folder, prepare_agents_folder, prepare_agents_folder_with,
+};
+use super::parse::parse_definition;
+use super::seed::{SHIPPED_AGENTS, seed_agents};
 use super::*;
 use crate::agent::PlainCommandBackend;
 use crate::testkit::TestDirs;
 
-fn good(name: &str, source: &str) -> Role {
-    parse_role(name, source).unwrap_or_else(|problem| panic!("{name} is bad: {problem}"))
+fn good(name: &str, source: &str) -> AgentDefinition {
+    parse_definition(name, source).unwrap_or_else(|problem| panic!("{name} is bad: {problem}"))
 }
 
 fn bad(name: &str, source: &str) -> String {
-    parse_role(name, source).expect_err("the file is bad")
+    parse_definition(name, source).expect_err("the file is bad")
 }
 
 fn write(dir: &Path, file: &str, content: &str) {
@@ -28,8 +30,8 @@ fn write(dir: &Path, file: &str, content: &str) {
     std::fs::write(dir.join(file), content).unwrap();
 }
 
-fn ids(role: &Role) -> Vec<&str> {
-    role.backends.iter().map(BackendId::as_str).collect()
+fn ids(agent: &AgentDefinition) -> Vec<&str> {
+    agent.backends.iter().map(BackendId::as_str).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -37,8 +39,8 @@ fn ids(role: &Role) -> Vec<&str> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn a_file_with_every_field_reads_as_that_role_and_its_body_is_the_instructions() {
-    let role = good(
+fn a_file_with_every_field_reads_as_that_agent_and_its_body_is_the_instructions() {
+    let agent = good(
         "reviewer",
         "---\n\
          description: Read-only review.\n\
@@ -59,68 +61,71 @@ fn a_file_with_every_field_reads_as_that_role_and_its_body_is_the_instructions()
          Read the code first.\n\n\
          Then report.\n",
     );
-    assert_eq!(role.name, "reviewer");
-    assert_eq!(role.description, "Read-only review.");
-    assert_eq!(role.profile.as_deref(), Some("Acme"));
-    assert_eq!(ids(&role), ["claude-code", "other-agent"]);
-    assert_eq!(role.model_for(&BackendId::claude_code()), Some("opus"));
+    assert_eq!(agent.name, "reviewer");
+    assert_eq!(agent.description, "Read-only review.");
+    assert_eq!(agent.profile.as_deref(), Some("Acme"));
+    assert_eq!(ids(&agent), ["claude-code", "other-agent"]);
+    assert_eq!(agent.model_for(&BackendId::claude_code()), Some("opus"));
     assert_eq!(
-        role.model_for(&BackendId::new("other-agent")),
+        agent.model_for(&BackendId::new("other-agent")),
         Some("small")
     );
     assert_eq!(
-        role.effort_for(&BackendId::claude_code()),
+        agent.effort_for(&BackendId::claude_code()),
         Some(EffortLevel::High)
     );
-    assert_eq!(role.effort_for(&BackendId::new("other-agent")), None);
-    assert_eq!(role.permission, Some(PermissionMode::Plan));
-    assert!(role.worktree && role.can_start);
+    assert_eq!(agent.effort_for(&BackendId::new("other-agent")), None);
+    assert_eq!(agent.permission, Some(PermissionMode::Plan));
+    assert!(agent.worktree && agent.can_start);
     // A comma inside parentheses belongs to the rule.
-    assert_eq!(role.allowed_tools, ["Read", "Bash(git log --format=a,b:*)"]);
-    assert_eq!(role.disallowed_tools, ["Edit", "Write"]);
+    assert_eq!(
+        agent.allowed_tools,
+        ["Read", "Bash(git log --format=a,b:*)"]
+    );
+    assert_eq!(agent.disallowed_tools, ["Edit", "Write"]);
     // Kept for a plain command line: its submit and stop words are keys.
-    assert_eq!(role.command.as_deref(), Some("acme"));
-    assert_eq!(role.submit.as_deref(), Some("enter"));
-    assert_eq!(role.stop.as_deref(), Some("ctrl-c"));
-    assert_eq!(role.instructions, "Read the code first.\n\nThen report.");
+    assert_eq!(agent.command.as_deref(), Some("acme"));
+    assert_eq!(agent.submit.as_deref(), Some("enter"));
+    assert_eq!(agent.stop.as_deref(), Some("ctrl-c"));
+    assert_eq!(agent.instructions, "Read the code first.\n\nThen report.");
 }
 
 #[test]
 fn a_class_line_is_accepted_with_any_value_ignored_and_kept_as_a_line_no_longer_used() {
     for value in ["light", "heavy", "medium", "", "[1, 2]"] {
-        let role = good(
+        let agent = good(
             "builder",
             &format!("---\nbackend: claude-code\nclass: {value}\nworktree: yes\n---\nBuild.\n"),
         );
-        assert_eq!(role.unused_lines, ["class"], "class: {value}");
+        assert_eq!(agent.unused_lines, ["class"], "class: {value}");
         // Everything else in the file still reads.
-        assert_eq!(ids(&role), ["claude-code"], "class: {value}");
-        assert!(role.worktree, "class: {value}");
-        assert_eq!(role.instructions, "Build.", "class: {value}");
+        assert_eq!(ids(&agent), ["claude-code"], "class: {value}");
+        assert!(agent.worktree, "class: {value}");
+        assert_eq!(agent.instructions, "Build.", "class: {value}");
     }
-    // A role with a class line is the role without it, but for that line.
+    // An agent with a class line is the agent without it, but for that line.
     let with = good("a", "---\nclass: heavy\npermission: plan\n---\nGo.\n");
     let without = good("a", "---\npermission: plan\n---\nGo.\n");
     assert_eq!(
-        Role {
+        AgentDefinition {
             unused_lines: Vec::new(),
             ..with
         },
         without
     );
-    // It is not offered as one of the fields a role has.
+    // It is not offered as one of the fields an agent has.
     let typo = bad("a", "---\nclas: heavy\n---\n");
     assert!(!typo.contains("class"), "{typo}");
 }
 
 #[test]
-fn a_file_with_no_fields_is_a_role_with_the_defaults() {
-    let role = good("plain", "---\n---\nJust do it.\n");
-    assert!(role.backends.is_empty(), "every installed agent backend");
-    assert!(!role.worktree && !role.can_start);
-    assert!(role.unused_lines.is_empty());
-    assert_eq!(role.permission, None);
-    assert_eq!(role.instructions, "Just do it.");
+fn a_file_with_no_fields_is_an_agent_with_the_defaults() {
+    let agent = good("plain", "---\n---\nJust do it.\n");
+    assert!(agent.backends.is_empty(), "every installed agent backend");
+    assert!(!agent.worktree && !agent.can_start);
+    assert!(agent.unused_lines.is_empty());
+    assert_eq!(agent.permission, None);
+    assert_eq!(agent.instructions, "Just do it.");
 
     let empty = good("empty", "---\ndescription: Nothing else.\n---\n");
     assert_eq!(empty.instructions, "");
@@ -159,8 +164,8 @@ fn permission_is_written_with_hyphens_spaces_or_camel_case() {
         ("bypass-permissions", PermissionMode::BypassPermissions),
         ("bypassPermissions", PermissionMode::BypassPermissions),
     ] {
-        let role = good("p", &format!("---\npermission: {written}\n---\n"));
-        assert_eq!(role.permission, Some(mode), "{written}");
+        let agent = good("p", &format!("---\npermission: {written}\n---\n"));
+        assert_eq!(agent.permission, Some(mode), "{written}");
     }
 }
 
@@ -172,12 +177,12 @@ fn flags_are_yes_no_true_or_false() {
         ("true", true),
         ("false", false),
     ] {
-        let role = good(
+        let agent = good(
             "f",
             &format!("---\nworktree: {written}\ncan_start: {written}\n---\n"),
         );
         assert_eq!(
-            (role.worktree, role.can_start),
+            (agent.worktree, agent.can_start),
             (expected, expected),
             "{written}"
         );
@@ -185,14 +190,14 @@ fn flags_are_yes_no_true_or_false() {
 }
 
 #[test]
-fn a_file_that_is_not_exactly_a_role_is_bad_and_says_what_is_wrong() {
+fn a_file_that_is_not_exactly_an_agent_is_bad_and_says_what_is_wrong() {
     // No front matter at all.
     assert!(bad("a", "Just some text.\n").contains("no front matter"));
     // A front matter that never ends.
     assert!(bad("a", "---\ndescription: x\n").contains("front matter"));
     // A front matter that does not parse.
     assert!(bad("a", "---\ndescription: [unclosed\n---\n").contains("does not parse"));
-    // A key no role has: a typo must never quietly drop a rule.
+    // A key no agent has: a typo must never quietly drop a rule.
     let typo = bad("a", "---\ndisalowed_tools: Edit\n---\n");
     assert!(typo.contains("disalowed_tools"), "{typo}");
     assert!(
@@ -225,15 +230,15 @@ fn a_file_that_is_not_exactly_a_role_is_bad_and_says_what_is_wrong() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_roles_folder_is_roles_in_the_config_folder() {
+fn the_agents_folder_is_agents_in_the_config_folder() {
     let dirs = TestDirs::new();
-    assert_eq!(roles_folder(&dirs.folders()), dirs.config.join("roles"));
+    assert_eq!(agents_folder(&dirs.folders()), dirs.config.join("agents"));
 }
 
 #[test]
-fn a_listing_has_the_good_roles_by_name_then_each_bad_file_with_its_problem() {
+fn a_listing_has_the_good_agents_by_name_then_each_bad_file_with_its_problem() {
     let dirs = TestDirs::new();
-    let dir = dirs.config.join("roles");
+    let dir = dirs.config.join("agents");
     write(&dir, "zeta.md", "---\ndescription: Last.\n---\nz\n");
     write(&dir, "alpha.md", "---\ndescription: First.\n---\na\n");
     write(
@@ -242,17 +247,17 @@ fn a_listing_has_the_good_roles_by_name_then_each_bad_file_with_its_problem() {
         "---\neffort:\n  claude-code: loud\n---\n",
     );
     write(&dir, "no-front.md", "nothing\n");
-    // Not role files: other extensions, other names and folders.
+    // Not agent files: other extensions, other names and folders.
     write(&dir, "notes.txt", "---\n---\n");
     write(&dir, "Upper Case.md", "---\n---\n");
     write(&dir, "Shouting.md", "---\n---\n");
     std::fs::create_dir_all(dir.join("folder.md")).unwrap();
 
-    let listing = FolderRoles::new(&dir).listing();
+    let listing = FolderDefinitions::new(&dir).listing();
     let names: Vec<&str> = listing
-        .roles
+        .agents
         .iter()
-        .map(|role| role.name.as_str())
+        .map(|agent| agent.name.as_str())
         .collect();
     assert_eq!(names, ["alpha", "zeta"]);
     let files: Vec<&str> = listing.bad.iter().map(|bad| bad.file.as_str()).collect();
@@ -262,22 +267,22 @@ fn a_listing_has_the_good_roles_by_name_then_each_bad_file_with_its_problem() {
 }
 
 #[test]
-fn no_folder_is_no_roles() {
+fn no_folder_is_no_agents() {
     let dirs = TestDirs::new();
-    let roles = FolderRoles::new(dirs.config.join("roles"));
-    assert_eq!(roles.listing(), RoleListing::default());
-    assert_eq!(roles.lookup("reviewer"), RoleLookup::Missing);
+    let agents = FolderDefinitions::new(dirs.config.join("agents"));
+    assert_eq!(agents.listing(), DefinitionListing::default());
+    assert_eq!(agents.lookup("reviewer"), DefinitionLookup::Missing);
 }
 
 #[test]
 fn every_call_reads_the_folder_afresh_so_an_edit_an_add_and_a_delete_show_at_once() {
     let dirs = TestDirs::new();
-    let dir = dirs.config.join("roles");
-    let roles = FolderRoles::new(&dir);
+    let dir = dirs.config.join("agents");
+    let agents = FolderDefinitions::new(&dir);
 
     write(&dir, "scout.md", "---\ndescription: One.\n---\nfirst\n");
-    let RoleLookup::Found(first) = roles.lookup("scout") else {
-        panic!("scout is a role");
+    let DefinitionLookup::Found(first) = agents.lookup("scout") else {
+        panic!("scout is an agent");
     };
     assert_eq!(
         (first.description.as_str(), first.instructions.as_str()),
@@ -290,8 +295,8 @@ fn every_call_reads_the_folder_afresh_so_an_edit_an_add_and_a_delete_show_at_onc
         "scout.md",
         "---\ndescription: Two.\nworktree: yes\n---\nsecond\n",
     );
-    let RoleLookup::Found(second) = roles.lookup("scout") else {
-        panic!("scout is still a role");
+    let DefinitionLookup::Found(second) = agents.lookup("scout") else {
+        panic!("scout is still an agent");
     };
     assert_eq!(second.description, "Two.");
     assert_eq!(second.instructions, "second");
@@ -299,52 +304,57 @@ fn every_call_reads_the_folder_afresh_so_an_edit_an_add_and_a_delete_show_at_onc
 
     // Broken: the lookup says why, naming the file.
     write(&dir, "scout.md", "---\nworktree: maybe\n---\n");
-    let RoleLookup::Bad(broken) = roles.lookup("scout") else {
+    let DefinitionLookup::Bad(broken) = agents.lookup("scout") else {
         panic!("scout is bad now");
     };
     assert_eq!(broken.file, "scout.md");
     assert!(broken.problem.contains("worktree must be"));
-    assert!(roles.listing().roles.is_empty());
+    assert!(agents.listing().agents.is_empty());
 
     // Added and deleted.
     write(&dir, "new-one.md", "---\n---\nbody\n");
-    assert_eq!(roles.listing().roles.len(), 1);
+    assert_eq!(agents.listing().agents.len(), 1);
     std::fs::remove_file(dir.join("scout.md")).unwrap();
     std::fs::remove_file(dir.join("new-one.md")).unwrap();
-    assert_eq!(roles.lookup("scout"), RoleLookup::Missing);
-    assert_eq!(roles.listing(), RoleListing::default());
+    assert_eq!(agents.lookup("scout"), DefinitionLookup::Missing);
+    assert_eq!(agents.listing(), DefinitionListing::default());
 }
 
 #[test]
-fn a_lookup_ignores_the_case_of_the_name_and_a_name_that_cannot_be_a_role_is_missing() {
+fn a_lookup_ignores_the_case_of_the_name_and_a_name_that_cannot_be_an_agent_is_missing() {
     let dirs = TestDirs::new();
-    let dir = dirs.config.join("roles");
+    let dir = dirs.config.join("agents");
     write(&dir, "reviewer.md", "---\n---\nx\n");
-    let roles = FolderRoles::new(&dir);
-    assert!(matches!(roles.lookup("Reviewer"), RoleLookup::Found(_)));
-    assert_eq!(roles.lookup("../reviewer"), RoleLookup::Missing);
-    assert_eq!(roles.lookup("re viewer"), RoleLookup::Missing);
-    assert_eq!(roles.lookup(""), RoleLookup::Missing);
+    let agents = FolderDefinitions::new(&dir);
+    assert!(matches!(
+        agents.lookup("Reviewer"),
+        DefinitionLookup::Found(_)
+    ));
+    assert_eq!(agents.lookup("../reviewer"), DefinitionLookup::Missing);
+    assert_eq!(agents.lookup("re viewer"), DefinitionLookup::Missing);
+    assert_eq!(agents.lookup(""), DefinitionLookup::Missing);
 }
 
 #[test]
-fn an_agent_md_is_the_default_role() {
+fn a_default_md_is_the_default_agent() {
     let dirs = TestDirs::new();
-    let dir = dirs.config.join("roles");
+    let dir = dirs.config.join("agents");
     write(
         &dir,
-        "agent.md",
+        "default.md",
         "---\npermission: plan\n---\nBe careful.\n",
     );
-    let RoleLookup::Found(role) = FolderRoles::new(&dir).lookup(DEFAULT_ROLE) else {
-        panic!("agent.md is a role");
+    let DefinitionLookup::Found(agent) = FolderDefinitions::new(&dir).lookup(DEFAULT_AGENT_NAME)
+    else {
+        panic!("default.md is an agent");
     };
-    assert_eq!(role.name, "agent");
-    assert_eq!(role.permission, Some(PermissionMode::Plan));
+    assert_eq!(DEFAULT_AGENT_NAME, "default");
+    assert_eq!(agent.name, "default");
+    assert_eq!(agent.permission, Some(PermissionMode::Plan));
 }
 
 // ---------------------------------------------------------------------------
-// What a role asks of the host
+// What an agent asks of the host
 // ---------------------------------------------------------------------------
 
 fn plain_command() -> std::sync::Arc<dyn AgentBackend> {
@@ -357,12 +367,16 @@ fn plain_command() -> std::sync::Arc<dyn AgentBackend> {
 }
 
 #[test]
-fn a_plain_command_line_runs_no_role_and_a_role_that_lists_no_backend_never_picks_one() {
+fn a_plain_command_line_runs_no_agent_and_an_agent_that_lists_no_backend_never_picks_one() {
     let host = vec![plain_command()];
-    assert!(Role::new("any", []).backends_on(&host).is_empty());
-    assert!(default_role(&host).backends.is_empty());
+    assert!(
+        AgentDefinition::new("any", [])
+            .backends_on(&host)
+            .is_empty()
+    );
+    assert!(default_definition(&host).backends.is_empty());
     // Even when it is named, a plain command line takes no task.
-    let named = Role::new("named", [BackendId::new("my-cli")]);
+    let named = AgentDefinition::new("named", [BackendId::new("my-cli")]);
     assert_eq!(named.backends_on(&host).len(), 1);
     let refusal = named.refusal_on(host[0].as_ref(), None).expect("a refusal");
     assert!(
@@ -372,10 +386,116 @@ fn a_plain_command_line_runs_no_role_and_a_role_that_lists_no_backend_never_pick
 }
 
 #[test]
-fn a_role_that_names_a_backend_the_host_does_not_have_runs_on_none() {
+fn an_agent_that_names_a_backend_the_host_does_not_have_runs_on_none() {
     let host = vec![plain_command()];
-    let codex = Role::new("codex-only", [BackendId::new("codex")]);
+    let codex = AgentDefinition::new("codex-only", [BackendId::new("codex")]);
     assert!(codex.backends_on(&host).is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// A folder still called roles
+// ---------------------------------------------------------------------------
+
+/// Every file under `dir`, by its path from `dir`, with its bytes.
+fn files_in(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    let mut found = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(at) = stack.pop() {
+        for entry in std::fs::read_dir(&at).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                let name = path
+                    .strip_prefix(dir)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                found.push((name, std::fs::read(&path).unwrap()));
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+#[test]
+fn a_roles_folder_with_no_agents_folder_is_moved_whole_to_agents_and_not_seeded() {
+    let dirs = TestDirs::new();
+    let roles = dirs.config.join("roles");
+    write(
+        &roles,
+        "reviewer.md",
+        "---\ndescription: Mine.\n---\nMy words.\r\n",
+    );
+    write(&roles, "notes.txt", "not an agent");
+    write(&roles.join("drafts"), "idea.md", "---\n---\n");
+    let before = files_in(&roles);
+
+    let prepared = prepare_agents_folder(&dirs.config);
+    let agents = dirs.config.join("agents");
+    assert_eq!(prepared.dir, agents);
+    assert!(!prepared.seed);
+    assert!(!roles.exists(), "the roles folder is gone");
+    assert_eq!(files_in(&agents), before, "every file as it was");
+    let said = prepared.log.expect("the move is logged");
+    assert!(said.contains("moved") && said.contains("roles"), "{said}");
+
+    // The next start finds only agents and says nothing.
+    let again = prepare_agents_folder(&dirs.config);
+    assert_eq!((again.dir, again.seed, again.log), (agents, false, None));
+}
+
+#[test]
+fn an_agents_folder_beside_a_roles_folder_is_read_and_the_roles_folder_left_alone() {
+    let dirs = TestDirs::new();
+    let roles = dirs.config.join("roles");
+    let agents = dirs.config.join("agents");
+    write(&roles, "old.md", "---\n---\nold\n");
+    write(&agents, "new.md", "---\n---\nnew\n");
+    let roles_before = files_in(&roles);
+    let agents_before = files_in(&agents);
+
+    let prepared = prepare_agents_folder(&dirs.config);
+    assert_eq!(prepared.dir, agents);
+    assert!(!prepared.seed);
+    assert_eq!(files_in(&roles), roles_before);
+    assert_eq!(files_in(&agents), agents_before);
+    let said = prepared.log.expect("both folders are named once");
+    assert!(
+        said.contains(&roles.display().to_string()) && said.contains("left as it is"),
+        "{said}"
+    );
+}
+
+#[test]
+fn with_neither_folder_the_agents_folder_is_to_be_seeded() {
+    let dirs = TestDirs::new();
+    let prepared = prepare_agents_folder(&dirs.config);
+    assert_eq!(prepared.dir, dirs.config.join("agents"));
+    assert!(prepared.seed);
+    assert_eq!(prepared.log, None);
+}
+
+#[test]
+fn a_roles_folder_that_cannot_be_moved_is_read_where_it_is_and_never_seeded_over() {
+    let dirs = TestDirs::new();
+    let roles = dirs.config.join("roles");
+    write(&roles, "reviewer.md", "---\n---\nmine\n");
+    let before = files_in(&roles);
+
+    let prepared = prepare_agents_folder_with(&dirs.config, |_, _| {
+        Err(std::io::Error::other("the folder is in use"))
+    });
+    assert_eq!(prepared.dir, roles);
+    assert!(
+        !prepared.seed,
+        "a folder that is there is never seeded over"
+    );
+    assert_eq!(files_in(&roles), before);
+    assert!(!dirs.config.join("agents").exists());
+    let said = prepared.log.expect("the failure is logged");
+    assert!(said.contains("the folder is in use"), "{said}");
 }
 
 // ---------------------------------------------------------------------------
@@ -383,19 +503,19 @@ fn a_role_that_names_a_backend_the_host_does_not_have_runs_on_none() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn an_absent_folder_gets_the_three_shipped_roles_and_each_reads_as_a_good_role() {
+fn an_absent_folder_gets_the_three_shipped_agents_and_each_reads_as_a_good_agent() {
     let dirs = TestDirs::new();
-    let dir = dirs.config.join("roles");
-    let seeded = seed_roles(&dir);
+    let dir = dirs.config.join("agents");
+    let seeded = seed_agents(&dir);
     assert!(seeded.seeded && seeded.problem.is_none(), "{seeded:?}");
     assert_eq!(seeded.created, ["lead.md", "reviewer.md", "worker.md"]);
 
-    let listing = FolderRoles::new(&dir).listing();
+    let listing = FolderDefinitions::new(&dir).listing();
     assert!(listing.bad.is_empty(), "{:?}", listing.bad);
     let names: Vec<&str> = listing
-        .roles
+        .agents
         .iter()
-        .map(|role| role.name.as_str())
+        .map(|agent| agent.name.as_str())
         .collect();
     assert_eq!(names, ["lead", "reviewer", "worker"]);
 }
@@ -405,19 +525,19 @@ fn a_folder_that_is_there_is_never_written_to_whatever_it_holds() {
     let dirs = TestDirs::new();
 
     // Empty stays empty.
-    let empty = dirs.config.join("empty roles");
+    let empty = dirs.config.join("empty agents");
     std::fs::create_dir_all(&empty).unwrap();
-    let seeded = seed_roles(&empty);
+    let seeded = seed_agents(&empty);
     assert!(!seeded.seeded && seeded.created.is_empty());
     assert_eq!(std::fs::read_dir(&empty).unwrap().count(), 0);
 
     // An edited file is not rewritten, and one the user deleted stays deleted.
-    let dir = dirs.config.join("roles");
-    seed_roles(&dir);
+    let dir = dirs.config.join("agents");
+    seed_agents(&dir);
     let edited = "---\ndescription: Mine.\n---\nMy own words.\n";
     std::fs::write(dir.join("worker.md"), edited).unwrap();
     std::fs::remove_file(dir.join("lead.md")).unwrap();
-    let again = seed_roles(&dir);
+    let again = seed_agents(&dir);
     assert!(!again.seeded && again.created.is_empty());
     assert_eq!(
         std::fs::read_to_string(dir.join("worker.md")).unwrap(),
@@ -428,7 +548,7 @@ fn a_folder_that_is_there_is_never_written_to_whatever_it_holds() {
 
     // Deleting the folder brings the originals back at the next start.
     std::fs::remove_dir_all(&dir).unwrap();
-    assert!(seed_roles(&dir).seeded);
+    assert!(seed_agents(&dir).seeded);
     assert!(dir.join("lead.md").exists());
 }
 
@@ -438,74 +558,74 @@ fn a_folder_that_cannot_be_made_is_a_problem_to_log_and_not_a_panic() {
     // A file where the config folder's parent should be.
     let blocker = dirs.config.join("blocker");
     std::fs::write(&blocker, "a file").unwrap();
-    let seeded = seed_roles(&blocker.join("roles"));
+    let seeded = seed_agents(&blocker.join("agents"));
     assert!(!seeded.seeded);
     assert!(
         seeded
             .problem
             .as_deref()
-            .is_some_and(|problem| problem.contains("roles folder")),
+            .is_some_and(|problem| problem.contains("agents folder")),
         "{seeded:?}"
     );
 }
 
 // ---------------------------------------------------------------------------
-// What the shipped roles are
+// What the shipped agents are
 // ---------------------------------------------------------------------------
 
-fn shipped(name: &str) -> Role {
-    let (_, source) = SHIPPED_ROLES
+fn shipped(name: &str) -> AgentDefinition {
+    let (_, source) = SHIPPED_AGENTS
         .iter()
         .find(|(file, _)| *file == format!("{name}.md"))
-        .expect("a shipped role");
+        .expect("a shipped agent");
     good(name, source)
 }
 
 #[test]
 fn the_reviewer_reads_and_reports_without_editing() {
-    let role = shipped("reviewer");
-    assert_eq!(role.permission, Some(PermissionMode::Auto));
-    assert!(!role.can_start && !role.worktree);
-    assert_eq!(role.disallowed_tools, ["Edit", "Write", "NotebookEdit"]);
-    assert_eq!(role.model_for(&BackendId::claude_code()), Some("opus"));
+    let agent = shipped("reviewer");
+    assert_eq!(agent.permission, Some(PermissionMode::Auto));
+    assert!(!agent.can_start && !agent.worktree);
+    assert_eq!(agent.disallowed_tools, ["Edit", "Write", "NotebookEdit"]);
+    assert_eq!(agent.model_for(&BackendId::claude_code()), Some("opus"));
     assert_eq!(
-        role.effort_for(&BackendId::claude_code()),
+        agent.effort_for(&BackendId::claude_code()),
         Some(EffortLevel::High)
     );
-    assert!(!role.instructions.is_empty());
+    assert!(!agent.instructions.is_empty());
 }
 
 #[test]
 fn the_worker_edits_in_a_worktree_of_its_own_and_cannot_start_agents_or_create_items() {
-    let role = shipped("worker");
-    assert_eq!(role.permission, Some(PermissionMode::Auto));
-    assert!(role.worktree && !role.can_start);
-    assert_eq!(role.disallowed_tools, ["mcp__helm-plugin-trackr__create"]);
+    let agent = shipped("worker");
+    assert_eq!(agent.permission, Some(PermissionMode::Auto));
+    assert!(agent.worktree && !agent.can_start);
+    assert_eq!(agent.disallowed_tools, ["mcp__helm-plugin-trackr__create"]);
     for rule in [
         "Touch only your own item",
         "Also fixed:",
         "Found:",
         "Blocked",
     ] {
-        assert!(role.instructions.contains(rule), "{rule}");
+        assert!(agent.instructions.contains(rule), "{rule}");
     }
 }
 
 #[test]
 fn the_lead_starts_agents_does_not_edit_and_keeps_trackr_in_a_voice() {
-    let role = shipped("lead");
-    assert!(role.can_start && !role.worktree);
-    assert_eq!(role.permission, Some(PermissionMode::Auto));
-    assert_eq!(role.disallowed_tools, ["Edit", "Write", "NotebookEdit"]);
+    let agent = shipped("lead");
+    assert!(agent.can_start && !agent.worktree);
+    assert_eq!(agent.permission, Some(PermissionMode::Auto));
+    assert_eq!(agent.disallowed_tools, ["Edit", "Write", "NotebookEdit"]);
     for section in ["## Keeping Trackr", "## Voice"] {
-        assert!(role.instructions.contains(section), "{section}");
+        assert!(agent.instructions.contains(section), "{section}");
     }
-    assert!(role.instructions.contains("robotic and then right"));
+    assert!(agent.instructions.contains("robotic and then right"));
 }
 
 #[test]
-fn the_shipped_roles_name_no_product_no_path_no_handle_and_only_made_up_item_ids() {
-    for (file, source) in SHIPPED_ROLES {
+fn the_shipped_agents_name_no_product_no_path_no_handle_and_only_made_up_item_ids() {
+    for (file, source) in SHIPPED_AGENTS {
         // Nothing that ties them to one machine, person or product: no
         // product of this repository, no agent but the one they run on, no
         // path, address or handle.

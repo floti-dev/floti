@@ -9,7 +9,7 @@ function peek(overrides: Partial<ChildPeekProps> = {}): ChildPeekProps {
     name: 'reviewer',
     mark: { glyph: 'dot', state: 'busy' },
     state: { label: 'working', tone: 'working' },
-    role: 'reviewer',
+    agent: 'reviewer',
     folder: 'helm',
     folderPath: 'C:\\work\\helm',
     branch: 'main',
@@ -26,12 +26,12 @@ function peek(overrides: Partial<ChildPeekProps> = {}): ChildPeekProps {
 }
 
 describe('the peek', () => {
-  it('S1: names the child with its state, role, folder, branch and mode, and shows its screen read-only with Stop and Open as tab', () => {
+  it('S1: names the child with its state, agent, folder, branch and mode, and shows its screen read-only with Stop and Open as tab', () => {
     render(<ChildPeek {...peek({ report: { state: 'done', text: 'Reviewed the diff; two nits.' } })} />)
     const dialog = screen.getByRole('dialog', { name: 'reviewer' })
     expect(within(dialog).getByText('working').getAttribute('data-peek-state')).toBe('working')
     const facts = dialog.querySelector('dl')
-    expect(facts?.textContent).toBe('RolereviewerFolderhelmBranchmainModeplan')
+    expect(facts?.textContent).toBe('AgentreviewerFolderhelmBranchmainModeplan')
     expect(within(dialog).getByText('helm').getAttribute('title')).toBe('C:\\work\\helm')
     expect(within(dialog).getByTestId('screen')).toBeTruthy()
     const report = dialog.querySelector('[data-peek-report]')
@@ -41,14 +41,14 @@ describe('the peek', () => {
     expect(within(dialog).getByRole('button', { name: 'Open as tab' })).toBeTruthy()
   })
 
-  it('S1: says none for a child started with no role, and has no report block when it told nothing', () => {
-    render(<ChildPeek {...peek({ role: null, branch: null, mode: null })} />)
+  it('S1: says none for a child started with no agent, and has no report block when it told nothing', () => {
+    render(<ChildPeek {...peek({ agent: null, branch: null, mode: null })} />)
     const dialog = screen.getByRole('dialog')
-    expect(dialog.querySelector('dl')?.textContent).toBe('RolenoneFolderhelmBranchnoneModedefault')
+    expect(dialog.querySelector('dl')?.textContent).toBe('AgentnoneFolderhelmBranchnoneModedefault')
     expect(dialog.querySelector('[data-peek-report]')).toBeNull()
   })
 
-  it('S1: a command child shows its command, folder and branch, and no role or mode', () => {
+  it('S1: a command child shows its command, folder and branch, and no agent or mode', () => {
     render(
       <ChildPeek
         {...peek({
@@ -65,7 +65,7 @@ describe('the peek', () => {
     )
     expect(dialog.querySelector('[data-child-command="running"]')).not.toBeNull()
     expect(dialog.querySelector('[data-child-dot]')).toBeNull()
-    expect(within(dialog).queryByText('Role')).toBeNull()
+    expect(within(dialog).queryByText('Agent')).toBeNull()
     expect(within(dialog).queryByText('Mode')).toBeNull()
   })
 

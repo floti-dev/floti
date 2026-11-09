@@ -1,5 +1,5 @@
 //! A child's record on the wire: a client on this protocol minor lists the
-//! sessions of a real host and finds a child naming its parent and its role,
+//! sessions of a real host and finds a child naming its parent and its agent,
 //! a session with neither carrying none, and a client one minor behind
 //! connects to the same host and reads every field its own version declared.
 //!
@@ -28,7 +28,7 @@ use serde_json::Value;
 const TERMINAL: &[&str] = &["terminal"];
 
 /// The minor before this one, which the host still serves.
-const PREVIOUS: ProtocolVersion = ProtocolVersion::new(2, 1);
+const PREVIOUS: ProtocolVersion = ProtocolVersion::new(2, 2);
 
 fn start_request(folder: &Path) -> StartSessionRequest {
     StartSessionRequest {
@@ -52,13 +52,13 @@ async fn start_in(client: &mut TestClient, folder: &Path) -> u64 {
 
 /// Makes `child`'s row a child of `parent`'s, as a start by an agent tool
 /// will write it, from a connection of the test's own to the host's store.
-fn make_child(data: &Path, child: u64, parent: u64, role: &str) {
+fn make_child(data: &Path, child: u64, parent: u64, agent: &str) {
     let store = rusqlite::Connection::open(data.join("floti.db")).expect("open floti.db");
     store.busy_timeout(PATIENCE).expect("wait for the host");
     let changed = store
         .execute(
-            "UPDATE sessions SET parent_session_id = ?2, child_name = ?3, role = ?3 WHERE id = ?1",
-            rusqlite::params![child as i64, parent as i64, role],
+            "UPDATE sessions SET parent_session_id = ?2, child_name = ?3, agent = ?3 WHERE id = ?1",
+            rusqlite::params![child as i64, parent as i64, agent],
         )
         .expect("link the child's row");
     assert_eq!(changed, 1, "the child's row is there");
@@ -143,7 +143,7 @@ fn problems_for_a_previous_reader(wire: &Value) -> Vec<String> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s31_a_client_on_this_minor_lists_a_child_with_its_parent_and_role_and_one_a_minor_behind_reads_the_same_list()
+async fn s31_a_client_on_this_minor_lists_a_child_with_its_parent_and_agent_and_one_a_minor_behind_reads_the_same_list()
  {
     let dirs = TestDirs::new();
     let agent = fake_agent!(&dirs);
@@ -187,12 +187,14 @@ async fn s31_a_client_on_this_minor_lists_a_child_with_its_parent_and_role_and_o
     let child = record(reviewer.id);
     assert_eq!(child.parent_id, Some(lead.id));
     assert_eq!(child.parent_name.as_deref(), Some(lead.name.as_str()));
+    assert_eq!(child.agent.as_deref(), Some("reviewer"));
+    // The retired role says the same, for a client before protocol 2.3.
     assert_eq!(child.role.as_deref(), Some("reviewer"));
     for session in [record(lead.id), record(alone.id)] {
         assert_eq!(
-            (&session.parent_id, &session.parent_name, &session.role),
+            (&session.parent_id, &session.parent_name, &session.agent),
             (&None, &None, &None),
-            "{} has no parent and no role",
+            "{} has no parent and no agent",
             session.name
         );
     }
@@ -223,6 +225,21 @@ async fn s31_a_client_on_this_minor_lists_a_child_with_its_parent_and_role_and_o
             "{session}"
         );
     }
+    // It reads the child's agent where it always did, as its role.
+    let said = |id: u64| {
+        wire.iter()
+            .find(|session| session["id"] == id)
+            .unwrap_or_else(|| panic!("session {id} is on the wire"))
+    };
+    assert_eq!(said(reviewer.id)["role"], "reviewer");
+    assert_eq!(said(lead.id)["role"], Value::Null);
+    // And a reader of this minor that takes only that role from it still
+    // has the child's agent.
+    let mut known = said(reviewer.id).clone();
+    known.as_object_mut().unwrap().remove("agent");
+    let read: SessionRecord =
+        from_payload(&to_payload(&known).expect("encode the record")).expect("read it");
+    assert_eq!(read.agent.as_deref(), Some("reviewer"));
 
     host.stop(HostStopReason::Stop).await;
 }
@@ -267,7 +284,7 @@ async fn a_client_on_this_minor_lists_a_command_child_with_its_command_and_once_
     assert_eq!(running.command.as_deref(), Some("pnpm test --filter core"));
     assert_eq!(running.exit_code, None);
     assert_eq!(running.parent_id, Some(lead));
-    assert_eq!(running.role, None);
+    assert_eq!(running.agent, None);
     for session in [record(reviewer), record(lead)] {
         assert_eq!(session.command, None, "{} runs no command", session.name);
     }

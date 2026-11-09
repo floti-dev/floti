@@ -39,7 +39,7 @@ export function LaunchSentence({ parts }: { parts: readonly SentencePart[] }): J
 
 /**
  * The sessions already in the folder about to get another one, by name. Said
- * before the start rather than after, because two agents in one working tree is
+ * before the start rather than after, because two sessions in one working tree is
  * the collision a launcher is in the best place to prevent.
  */
 export function RunningHere({ sessions }: { sessions: readonly LiveSession[] }): JSX.Element | null {
@@ -52,7 +52,7 @@ export function RunningHere({ sessions }: { sessions: readonly LiveSession[] }):
         <span className="text-fg">
           {sessions.map((session) => session.name ?? `pid ${String(session.pid)}`).join(', ')}
         </span>
-        . <span className="text-fg-muted">Another one means two agents in one working tree.</span>
+        . <span className="text-fg-muted">Another one means two sessions in one working tree.</span>
       </span>
     </p>
   )

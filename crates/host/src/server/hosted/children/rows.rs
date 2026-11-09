@@ -136,7 +136,7 @@ fn is_child(store: &Store, id: SessionId) -> Result<bool> {
 pub(super) struct ChildRow {
     pub id: SessionId,
     pub name: String,
-    pub role: Option<String>,
+    pub agent: Option<String>,
     pub backend: String,
     pub cwd: String,
     pub branch: Option<String>,
@@ -166,7 +166,7 @@ impl ChildRow {
     }
 }
 
-const CHILD_COLUMNS: &str = "id, child_name, role, backend, cwd, branch, started_at, outlive, \
+const CHILD_COLUMNS: &str = "id, child_name, agent, backend, cwd, branch, started_at, outlive, \
      can_start, status, child_worktree, \
      coalesce(last_claude_session_id, claude_session_id), permission_mode, profile_id, command";
 
@@ -175,7 +175,7 @@ fn child_row(row: &Row<'_>) -> rusqlite::Result<ChildRow> {
     Ok(ChildRow {
         id: SessionId(row.get(0)?),
         name: row.get(1)?,
-        role: row.get(2)?,
+        agent: row.get(2)?,
         backend: row
             .get::<_, Option<String>>(3)?
             .filter(|backend| !backend.trim().is_empty())
@@ -558,7 +558,7 @@ mod tests {
             session: parent,
             conversation_id: None,
             name: "tests".to_owned(),
-            role: None,
+            agent: None,
             command: Some("pnpm test".to_owned()),
             outlive: false,
             can_start: false,

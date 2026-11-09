@@ -82,7 +82,7 @@ describe('childTab', () => {
   })
 
   it('keeps an agent child’s own dot and gives it the parent’s name as its badge', () => {
-    expect(childTab(session({ role: 'reviewer', parentName: 'api-refactor' }), 'busy')).toEqual({
+    expect(childTab(session({ agent: 'reviewer', parentName: 'api-refactor' }), 'busy')).toEqual({
       indicator: 'busy',
       badge: 'api-refactor',
       startedBy: 'api-refactor'
@@ -335,13 +335,13 @@ describe('childCrumb', () => {
     expect(parent?.name).toBe('api-refactor')
   })
 
-  it('S32: an agent child is tagged with its role, and one with no role has no tag', () => {
-    expect(childCrumb(session({ ...parentOf, role: 'reviewer' }), open, lists).tag).toEqual({
-      kind: 'role',
+  it('S32: an agent child is tagged with its agent, and one with no agent has no tag', () => {
+    expect(childCrumb(session({ ...parentOf, agent: 'reviewer' }), open, lists).tag).toEqual({
+      kind: 'agent',
       text: 'reviewer'
     })
-    expect(childCrumb(session({ ...parentOf, role: null }), open, lists).tag).toBeUndefined()
-    expect(childCrumb(session({ ...parentOf, role: '' }), open, lists).tag).toBeUndefined()
+    expect(childCrumb(session({ ...parentOf, agent: null }), open, lists).tag).toBeUndefined()
+    expect(childCrumb(session({ ...parentOf, agent: '' }), open, lists).tag).toBeUndefined()
   })
 
   it('S32: the link opens the parent by its id where the window lists it, and is plain text where not', () => {

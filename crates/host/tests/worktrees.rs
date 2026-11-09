@@ -1,4 +1,4 @@
-//! Worktrees: a child started with a worktree, or in a role whose file says
+//! Worktrees: a child started with a worktree, or in an agent whose file says
 //! worktree: yes, runs in `<repo>/.floti/worktrees/<name>` on `agent/<name>`,
 //! which the host makes with git. Real git repositories under the run's root,
 //! with spaces in their names, and a host whose sessions run the fake `claude`
@@ -8,7 +8,7 @@
 //! was given, and `floti agent` runs its own code against the same route.
 //!
 //! No client is attached while a session works: a client starts the session
-//! and goes. The roles folder is under the test's own run root, so no test
+//! and goes. The agents folder is under the test's own run root, so no test
 //! reads or writes a real one.
 
 use std::collections::BTreeMap;
@@ -54,7 +54,7 @@ const FAMILY: &str = "floti-agents";
 const WORKTREES: &str = ".floti/worktrees";
 
 // ---------------------------------------------------------------------------
-// A host with two backends and a roles folder of its own
+// A host with two backends and an agents folder of its own
 // ---------------------------------------------------------------------------
 
 struct World {
@@ -118,12 +118,12 @@ impl World {
         }
     }
 
-    /// Writes the role file `<name>.md`. Making the folder is what keeps the
+    /// Writes the agent file `<name>.md`. Making the folder is what keeps the
     /// host from seeding it.
-    fn role(&self, name: &str, content: &str) {
-        let folder = self.dirs.config.join("roles");
-        std::fs::create_dir_all(&folder).expect("make the roles folder");
-        std::fs::write(folder.join(format!("{name}.md")), content).expect("write a role file");
+    fn agent(&self, name: &str, content: &str) {
+        let folder = self.dirs.config.join("agents");
+        std::fs::create_dir_all(&folder).expect("make the agents folder");
+        std::fs::write(folder.join(format!("{name}.md")), content).expect("write an agent file");
     }
 
     /// A host that serves once this returns, with the workspace tracked.
@@ -812,26 +812,26 @@ async fn s1_floti_agent_start_worktree_makes_one_for_a_child_on_the_other_backen
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s1_a_role_that_says_worktree_yes_gives_every_child_one_named_after_it_unless_one_is_named()
-{
+async fn s1_an_agent_that_says_worktree_yes_gives_every_child_one_named_after_it_unless_one_is_named()
+ {
     let world = World::new();
-    world.role("tree", "---\nworktree: yes\n---\nWork in your tree.\n");
+    world.agent("tree", "---\nworktree: yes\n---\nWork in your tree.\n");
     let host = world.host().await;
-    let repo = world.repository("role repo");
+    let repo = world.repository("agent repo");
     let parent = world.session(CLAUDE, &repo.root, "parent").await;
 
     // On each backend, named after the child; a second of the same name gets
     // a number, as its child name does.
     let first = parent
-        .start(json!({ "task": "a", "role": "tree", "name": "kid" }))
+        .start(json!({ "task": "a", "agent": "tree", "name": "kid" }))
         .await
         .done();
     let second = parent
-        .start(json!({ "task": "b", "role": "tree", "name": "kid", "backend": OTHER }))
+        .start(json!({ "task": "b", "agent": "tree", "name": "kid", "backend": OTHER }))
         .await
         .done();
     let named = parent
-        .start(json!({ "task": "c", "role": "tree", "name": "third", "worktree": "chosen" }))
+        .start(json!({ "task": "c", "agent": "tree", "name": "third", "worktree": "chosen" }))
         .await
         .done();
 
@@ -1052,7 +1052,7 @@ async fn s4_a_worktree_nobody_works_in_any_more_may_be_started_in() {
 #[tokio::test(flavor = "multi_thread")]
 async fn s5_a_folder_outside_a_repository_refuses_a_worktree_and_writes_nothing() {
     let world = World::new();
-    world.role("tree", "---\nworktree: yes\n---\n");
+    world.agent("tree", "---\nworktree: yes\n---\n");
     let host = world.host().await;
     let folder = world.project("plain folder");
     let parent = world.session(CLAUDE, &folder, "parent").await;
@@ -1061,7 +1061,7 @@ async fn s5_a_folder_outside_a_repository_refuses_a_worktree_and_writes_nothing(
 
     for arguments in [
         json!({ "task": "a", "worktree": "ledger-store" }),
-        json!({ "task": "b", "role": "tree" }),
+        json!({ "task": "b", "agent": "tree" }),
     ] {
         let refused = parent.start(arguments).await;
         let sentence = refused.refused();
@@ -1088,7 +1088,7 @@ async fn s5_the_shipped_worker_is_refused_outside_a_repository_and_starts_inside
     let runs = world.run_count();
 
     let refused = parent
-        .start(json!({ "task": "do it", "role": "worker" }))
+        .start(json!({ "task": "do it", "agent": "worker" }))
         .await;
 
     assert!(
@@ -1101,7 +1101,7 @@ async fn s5_the_shipped_worker_is_refused_outside_a_repository_and_starts_inside
     let repo = world.repository("worker repo");
     let inside = world.session(CLAUDE, &repo.root, "inside").await;
     let started = inside
-        .start(json!({ "task": "do it", "role": "worker", "name": "worker" }))
+        .start(json!({ "task": "do it", "agent": "worker", "name": "worker" }))
         .await
         .done();
     assert_eq!(started["worktree"], "worker");

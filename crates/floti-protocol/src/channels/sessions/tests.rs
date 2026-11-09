@@ -215,6 +215,7 @@ fn record(id: u64) -> SessionRecord {
         exit_code: Some(-1),
         parent_id: Some(2),
         parent_name: Some("lead".into()),
+        agent: Some("reviewer".into()),
         role: Some("reviewer".into()),
         command: None,
         stopped: false,
@@ -226,12 +227,13 @@ fn record(id: u64) -> SessionRecord {
     }
 }
 
-/// A command child that has exited: it names its command and no role, and its
+/// A command child that has exited: it names its command and no agent, and its
 /// exit code is the record's.
 fn command_child(id: u64) -> SessionRecord {
     SessionRecord {
         id,
         name: "tests".into(),
+        agent: None,
         role: None,
         command: Some("pnpm test --filter @helm/core".into()),
         exit_code: Some(1),

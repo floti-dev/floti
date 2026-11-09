@@ -1,16 +1,16 @@
-//! A role file read: YAML front matter between `---` lines, then the body.
+//! An agent file read: YAML front matter between `---` lines, then the body.
 //!
 //! The front matter is split as a note's is (`workspace::render::frontmatter`)
-//! and parsed with `serde_yaml_ng`. **A file that is not exactly a role is
-//! bad, never half a role**: a front matter that does not parse, a key no role
-//! has and a value outside its field's choices each make the whole file bad,
+//! and parsed with `serde_yaml_ng`. **A file that is not exactly an agent is
+//! bad, never half an agent**: a front matter that does not parse, a key no
+//! agent file has and a value outside its field's choices each make the whole file bad,
 //! with every problem named, because a typo such as `disalowed_tools` must
 //! never quietly drop a rule.
 //!
 //! The one exception is a retired field ([`RETIRED_FIELDS`]): a line Floti
-//! once read and no longer does. The shipped roles wrote such lines into
+//! once read and no longer does. The shipped agents wrote such lines into
 //! folders that are never rewritten, so a retired line is accepted with any
-//! value, ignored, and kept on the role for the listing to name.
+//! value, ignored, and kept on the agent for the listing to name.
 
 use std::collections::BTreeMap;
 
@@ -19,11 +19,11 @@ use floti_protocol::channels::common::PermissionMode;
 use floti_protocol::channels::sessions::EffortLevel;
 use serde_yaml_ng::{Mapping, Value};
 
-use super::Role;
+use super::AgentDefinition;
 use crate::agent::input::key_bytes;
 use crate::workspace::render::frontmatter::parse_note_frontmatter;
 
-/// The fields a role file has.
+/// The fields an agent file has.
 pub const FIELDS: &[&str] = &[
     "description",
     "profile",
@@ -40,22 +40,22 @@ pub const FIELDS: &[&str] = &[
     "stop",
 ];
 
-/// The fields a role file may still have that Floti no longer reads.
+/// The fields an agent file may still have that Floti no longer reads.
 pub const RETIRED_FIELDS: &[&str] = &["class"];
 
-/// The efforts a role may give.
+/// The efforts an agent may give.
 const EFFORTS: &str = "low, medium, high, xhigh or max";
 
-/// The permission modes a role may ask for.
+/// The permission modes an agent may ask for.
 const PERMISSIONS: &str = "plan, dont-ask, manual, accept-edits, auto or bypass-permissions";
 
-/// The role `name` that `source` (the text of `<name>.md`) describes, or every
+/// The agent `name` that `source` (the text of `<name>.md`) describes, or every
 /// problem with it, joined, as a sentence fragment.
 ///
 /// # Errors
 ///
 /// What is wrong with the file, when anything is.
-pub fn parse_role(name: &str, source: &str) -> Result<Role, String> {
+pub fn parse_definition(name: &str, source: &str) -> Result<AgentDefinition, String> {
     let front = parse_note_frontmatter(source);
     if !front.present {
         let text = source.strip_prefix('\u{feff}').unwrap_or(source);
@@ -63,7 +63,8 @@ pub fn parse_role(name: &str, source: &str) -> Result<Role, String> {
             "its front matter must start on the file's first line with --- and end with a --- line"
                 .to_owned()
         } else {
-            "it has no front matter: a role file starts with --- lines around its fields".to_owned()
+            "it has no front matter: an agent file starts with --- lines around its fields"
+                .to_owned()
         });
     }
     if let Some(error) = front.error {
@@ -71,47 +72,47 @@ pub fn parse_role(name: &str, source: &str) -> Result<Role, String> {
     }
     let fields = front.data.unwrap_or_default();
 
-    let mut role = Role::new(name, []);
-    role.instructions = front.body.trim().to_owned();
+    let mut agent = AgentDefinition::new(name, []);
+    agent.instructions = front.body.trim().to_owned();
     let mut problems: Vec<String> = Vec::new();
     for (key, value) in &fields {
         let Some(key) = key.as_str() else {
             problems.push("a key that is not text".to_owned());
             continue;
         };
-        if let Err(problem) = apply(&mut role, key, value) {
+        if let Err(problem) = apply(&mut agent, key, value) {
             problems.push(problem);
         }
     }
     if problems.is_empty() {
-        Ok(role)
+        Ok(agent)
     } else {
         Err(problems.join("; "))
     }
 }
 
-/// Sets the field `key` of `role` from `value`.
-fn apply(role: &mut Role, key: &str, value: &Value) -> Result<(), String> {
+/// Sets the field `key` of `agent` from `value`.
+fn apply(agent: &mut AgentDefinition, key: &str, value: &Value) -> Result<(), String> {
     match key {
-        "description" => role.description = text(key, value)?.unwrap_or_default(),
-        "profile" => role.profile = text(key, value)?,
-        "backend" => role.backends = backends(value)?,
-        "model" => role.models = keyed_text(key, value)?,
-        "effort" => role.efforts = efforts(value)?,
-        "permission" => role.permission = permission(value)?,
-        "worktree" => role.worktree = flag(key, value)?,
-        "can_start" => role.can_start = flag(key, value)?,
-        "allowed_tools" => role.allowed_tools = list(key, value)?,
-        "disallowed_tools" => role.disallowed_tools = list(key, value)?,
-        "command" => role.command = text(key, value)?,
-        "submit" => role.submit = key_word(key, value)?,
-        "stop" => role.stop = key_word(key, value)?,
+        "description" => agent.description = text(key, value)?.unwrap_or_default(),
+        "profile" => agent.profile = text(key, value)?,
+        "backend" => agent.backends = backends(value)?,
+        "model" => agent.models = keyed_text(key, value)?,
+        "effort" => agent.efforts = efforts(value)?,
+        "permission" => agent.permission = permission(value)?,
+        "worktree" => agent.worktree = flag(key, value)?,
+        "can_start" => agent.can_start = flag(key, value)?,
+        "allowed_tools" => agent.allowed_tools = list(key, value)?,
+        "disallowed_tools" => agent.disallowed_tools = list(key, value)?,
+        "command" => agent.command = text(key, value)?,
+        "submit" => agent.submit = key_word(key, value)?,
+        "stop" => agent.stop = key_word(key, value)?,
         retired if RETIRED_FIELDS.contains(&retired) => {
-            role.unused_lines.push(retired.to_owned());
+            agent.unused_lines.push(retired.to_owned());
         }
         other => {
             return Err(format!(
-                "{other} is not a field a role has (the fields are {})",
+                "{other} is not a field an agent file has (the fields are {})",
                 FIELDS.join(", ")
             ));
         }

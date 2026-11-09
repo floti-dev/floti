@@ -9002,6 +9002,14 @@
     "SessionRecord": {
       "description": "One hosted agent process, from spawn to exit.",
       "properties": {
+        "agent": {
+          "default": null,
+          "description": "The agent the session was started as (a lead, a worker, a reviewer),\nor null for a session started as none: one a person started, and a\ncommand child. Absent from a host before protocol 2.3, which says it\nas `role`; a record read from one has it here all the same.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "argv": {
           "description": "Arguments after the executable, as spawned. A command child's holds the\nshell program it ran through first, then its arguments.",
           "items": {
@@ -9154,7 +9162,7 @@
         },
         "role": {
           "default": null,
-          "description": "The role the session was started in, or null for a session started\nwith none.",
+          "description": "Retired: the same as `agent`, under the name it had before protocol\n2.3. Still written with `agent`'s value so that a client before 2.3\nreads what it did, and read in place of `agent` from one that sends\nonly this. It leaves the protocol at the next major version.",
           "type": [
             "string",
             "null"
@@ -12798,5 +12806,5 @@
   ],
   "x-defaultInitialCredit": 262144,
   "x-maxFrameLen": 16777216,
-  "x-protocolVersion": "2.2"
+  "x-protocolVersion": "2.3"
 }

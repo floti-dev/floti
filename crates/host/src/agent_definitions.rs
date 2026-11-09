@@ -1,26 +1,35 @@
-//! Roles: what a session that starts a child of its own may ask for by name.
+//! Agents: the named definitions a session that starts a child of its own
+//! may start it as, such as a lead, a worker or a reviewer.
 //!
-//! A role says which backends may run the child (in order of preference), the
-//! model and effort for each, the permission mode, the tools it may use without
-//! asking and the ones it may never use, whether it may start children of its
-//! own, whether it works in a worktree of its own, and the profile it runs
-//! under. Its body is instructions, composed into the child's own and never
-//! typed. Rules are written once, in the spelling
+//! An agent says which backends may run the child (in order of preference),
+//! the model and effort for each, the permission mode, the tools it may use
+//! without asking and the ones it may never use, whether it may start
+//! children of its own, whether it works in a worktree of its own, and the
+//! profile it runs under. Its body is instructions, composed into the child's
+//! own and never typed. Rules are written once, in the spelling
 //! [`ToolRules`] documents, and each backend's adapter translates them or
 //! refuses.
 //!
-//! Roles come from a [`RoleSource`] that is read on every start and every
-//! listing, so a change to a role reaches the next child and no running one.
-//! The host's source is [`FolderRoles`]: one `<name>.md` file per role in the
-//! roles folder of its config folder ([`folder::roles_folder`]), which is the
-//! user's to edit. The shipped `reviewer`, `worker` and `lead` are written
-//! there at host start only when the folder is absent ([`seed`]). The default
-//! role every start without one falls back to ([`default_role`]) is made from
-//! the backends the host has, unless a file named `agent.md` replaces it.
+//! The parsed file is an [`AgentDefinition`], so that it never reads as one
+//! more `agent` beside the backends' `agent` module. A running one is a
+//! session of that agent, and a session another session started is its
+//! child.
 //!
-//! A file that cannot be a role is never skipped quietly: it is named with its
-//! problem in every listing, and a start naming it is refused naming the file
-//! and the problem, because a typo must never drop a rule.
+//! Agents come from a [`DefinitionSource`] that is read on every start and
+//! every listing, so a change to an agent reaches the next child and no
+//! running one. The host's source is [`FolderDefinitions`]: one `<name>.md`
+//! file per agent in the agents folder of its config folder
+//! ([`folder::agents_folder`]), which is the user's to edit. A host that finds
+//! the folder still called `roles` moves it to `agents` at start
+//! ([`folder::prepare_agents_folder`]). The shipped `reviewer`, `worker` and
+//! `lead` are written there at host start only when neither folder exists
+//! ([`seed`]). The agent every start without one falls back to
+//! ([`default_definition`]) is made from the backends the host has, unless a
+//! file named `default.md` replaces it.
+//!
+//! A file that cannot be an agent is never skipped quietly: it is named with
+//! its problem in every listing, and a start naming it is refused naming the
+//! file and the problem, because a typo must never drop a rule.
 //!
 //! [`ToolRules`]: crate::agent::ToolRules
 
@@ -37,14 +46,14 @@ use floti_protocol::channels::sessions::EffortLevel;
 
 use crate::agent::{AgentBackend, ToolRules};
 
-pub use folder::{FolderRoles, roles_folder};
+pub use folder::{FolderDefinitions, agents_folder};
 
-/// The name of the role a start without one gets.
-pub const DEFAULT_ROLE: &str = "agent";
+/// The name of the agent a start without one gets.
+pub const DEFAULT_AGENT_NAME: &str = "default";
 
-/// One role.
+/// One agent, as its file defines it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Role {
+pub struct AgentDefinition {
     /// What it is called, and what its children are named by default.
     pub name: String,
     /// What it is for, in a sentence.
@@ -87,8 +96,8 @@ pub struct Role {
     pub unused_lines: Vec<String>,
 }
 
-impl Role {
-    /// A role `name` that lets `backends` run its children and asks for
+impl AgentDefinition {
+    /// An agent `name` that lets `backends` run its children and asks for
     /// nothing else.
     pub fn new(name: impl Into<String>, backends: impl IntoIterator<Item = BackendId>) -> Self {
         Self {
@@ -111,17 +120,17 @@ impl Role {
         }
     }
 
-    /// The model the role gives for `backend`.
+    /// The model the agent gives for `backend`.
     pub fn model_for(&self, backend: &BackendId) -> Option<&str> {
         keyed(&self.models, backend).map(String::as_str)
     }
 
-    /// The effort the role gives for `backend`.
+    /// The effort the agent gives for `backend`.
     pub fn effort_for(&self, backend: &BackendId) -> Option<EffortLevel> {
         keyed(&self.efforts, backend).copied()
     }
 
-    /// The role's rules for a launch in `mode`, written once.
+    /// The agent's rules for a launch in `mode`, written once.
     pub fn rules(&self, mode: Option<PermissionMode>) -> ToolRules {
         ToolRules {
             permission_mode: mode,
@@ -130,9 +139,9 @@ impl Role {
         }
     }
 
-    /// The backends of `host` that may run this role's children, in the order
-    /// the role prefers them: the ones it lists that the host has, or every
-    /// agent backend but a plain command line when it lists none.
+    /// The backends of `host` that may run this agent's children, in the
+    /// order the agent prefers them: the ones it lists that the host has, or
+    /// every agent backend but a plain command line when it lists none.
     pub fn backends_on<'a>(
         &self,
         host: &'a [Arc<dyn AgentBackend>],
@@ -152,11 +161,11 @@ impl Role {
             .collect()
     }
 
-    /// Why `backend` cannot run this role's children in `mode`, as a
+    /// Why `backend` cannot run this agent's children in `mode`, as a
     /// fragment of a sentence, or `None` when it can: its adapter enforces
-    /// the role's permission and tool rules, it has an effort setting where
-    /// the role gives it an effort, and it takes instructions where the role
-    /// has a body. A plain command line takes no task, so none can.
+    /// the agent's permission and tool rules, it has an effort setting where
+    /// the agent gives it an effort, and it takes instructions where the
+    /// agent has a body. A plain command line takes no task, so none can.
     pub fn refusal_on(
         &self,
         backend: &dyn AgentBackend,
@@ -173,14 +182,14 @@ impl Role {
         }
         if self.effort_for(backend.id()).is_some() && !backend.takes_effort() {
             return Some(format!(
-                "The role {} gives an effort for {}, which has no effort setting",
+                "The agent {} gives an effort for {}, which has no effort setting",
                 self.name,
                 backend.id()
             ));
         }
         if !self.instructions.is_empty() && !backend.takes_instructions() {
             return Some(format!(
-                "The role {} has instructions, which {} cannot take",
+                "The agent {} has instructions, which {} cannot take",
                 self.name,
                 backend.id()
             ));
@@ -196,20 +205,20 @@ fn keyed<'a, V>(map: &'a BTreeMap<String, V>, backend: &BackendId) -> Option<&'a
         .map(|(_, value)| value)
 }
 
-/// A role file that cannot be used, and what is wrong with it.
+/// An agent file that cannot be used, and what is wrong with it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BadRole {
+pub struct BadDefinition {
     /// The file's name, such as `reviewer.md`.
     pub file: String,
     /// What is wrong with it, as a sentence fragment.
     pub problem: String,
 }
 
-impl BadRole {
+impl BadDefinition {
     /// The sentence a refused start gives.
     pub fn refusal(&self) -> String {
         format!(
-            "The role file {} cannot be used: {}. Fix it and start again; no agent was started.",
+            "The agent file {} cannot be used: {}. Fix it and start again; no agent was started.",
             self.file, self.problem
         )
     }
@@ -217,89 +226,90 @@ impl BadRole {
     /// The sentence a refused reopen gives.
     pub fn reopen_refusal(&self) -> String {
         format!(
-            "The role file {} cannot be used: {}. Fix it and reopen the session again; it was not reopened.",
+            "The agent file {} cannot be used: {}. Fix it and reopen the session again; it was not reopened.",
             self.file, self.problem
         )
     }
 }
 
-/// Every role there is at one moment: the good ones in name order, then the
-/// files that are not roles.
+/// Every agent there is at one moment: the good ones in name order, then the
+/// files that are not agents.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RoleListing {
-    pub roles: Vec<Role>,
-    pub bad: Vec<BadRole>,
+pub struct DefinitionListing {
+    pub agents: Vec<AgentDefinition>,
+    pub bad: Vec<BadDefinition>,
 }
 
-/// What looking a role up by name found.
+/// What looking an agent up by name found.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RoleLookup {
-    Found(Box<Role>),
-    /// The role's file exists and cannot be used.
-    Bad(BadRole),
+pub enum DefinitionLookup {
+    Found(Box<AgentDefinition>),
+    /// The agent's file exists and cannot be used.
+    Bad(BadDefinition),
     Missing,
 }
 
-/// Where roles come from. Read on every start and every listing.
-pub trait RoleSource: Send + Sync {
-    /// Every role and every unusable file, as they are now.
-    fn listing(&self) -> RoleListing;
+/// Where agents come from. Read on every start and every listing.
+pub trait DefinitionSource: Send + Sync {
+    /// Every agent and every unusable file, as they are now.
+    fn listing(&self) -> DefinitionListing;
 
-    /// The role called `name`, whatever the case, as it is now.
-    fn lookup(&self, name: &str) -> RoleLookup {
+    /// The agent called `name`, whatever the case, as it is now.
+    fn lookup(&self, name: &str) -> DefinitionLookup {
         let listing = self.listing();
-        if let Some(role) = listing
-            .roles
+        if let Some(agent) = listing
+            .agents
             .into_iter()
-            .find(|role| role.name.eq_ignore_ascii_case(name))
+            .find(|agent| agent.name.eq_ignore_ascii_case(name))
         {
-            return RoleLookup::Found(Box::new(role));
+            return DefinitionLookup::Found(Box::new(agent));
         }
         listing
             .bad
             .into_iter()
             .find(|bad| bad.file.eq_ignore_ascii_case(&format!("{name}.md")))
-            .map_or(RoleLookup::Missing, RoleLookup::Bad)
+            .map_or(DefinitionLookup::Missing, DefinitionLookup::Bad)
     }
 }
 
-/// A source that names no role.
+/// A source that names no agent.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct NoRoles;
+pub struct NoDefinitions;
 
-impl RoleSource for NoRoles {
-    fn listing(&self) -> RoleListing {
-        RoleListing::default()
+impl DefinitionSource for NoDefinitions {
+    fn listing(&self) -> DefinitionListing {
+        DefinitionListing::default()
     }
 }
 
-/// A fixed list of roles.
+/// A fixed list of agents.
 #[derive(Debug, Clone, Default)]
-pub struct FixedRoles(pub Vec<Role>);
+pub struct FixedDefinitions(pub Vec<AgentDefinition>);
 
-impl RoleSource for FixedRoles {
-    fn listing(&self) -> RoleListing {
-        RoleListing {
-            roles: self.0.clone(),
+impl DefinitionSource for FixedDefinitions {
+    fn listing(&self) -> DefinitionListing {
+        DefinitionListing {
+            agents: self.0.clone(),
             bad: Vec::new(),
         }
     }
 }
 
-/// The role a start without one gets: every agent backend the host has except
-/// a plain command, in the host's order, with no rules of its own, that may
-/// not start children.
-pub fn default_role(backends: &[Arc<dyn AgentBackend>]) -> Role {
-    let mut role = Role::new(
-        DEFAULT_ROLE,
+/// The agent a start without one gets, `default`: every agent backend the
+/// host has except a plain command, in the host's order, with no rules of its
+/// own, that may not start children.
+pub fn default_definition(backends: &[Arc<dyn AgentBackend>]) -> AgentDefinition {
+    let mut agent = AgentDefinition::new(
+        DEFAULT_AGENT_NAME,
         backends
             .iter()
             .filter(|backend| !is_plain_command(backend.as_ref()))
             .map(|backend| backend.id().clone()),
     );
-    role.description =
-        "What a start without a role gets: any installed agent, no rules of its own.".to_owned();
-    role
+    agent.description =
+        "What a start without an agent gets: any installed backend, no rules of its own."
+            .to_owned();
+    agent
 }
 
 /// Whether `backend` is a plain command line, which declares nothing beyond
@@ -313,9 +323,9 @@ pub fn is_plain_command(backend: &dyn AgentBackend) -> bool {
         && backend.history().is_none()
 }
 
-/// Whether `name` can be a role's name: lowercase letters, digits and
+/// Whether `name` can be an agent's name: lowercase letters, digits and
 /// hyphens.
-pub fn is_role_name(name: &str) -> bool {
+pub fn is_agent_name(name: &str) -> bool {
     !name.is_empty()
         && name
             .chars()

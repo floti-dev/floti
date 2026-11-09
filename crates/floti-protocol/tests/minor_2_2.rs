@@ -7,12 +7,12 @@
 
 use std::collections::BTreeSet;
 
+use floti_protocol::ProtocolVersion;
 use floti_protocol::channel::{from_payload, to_payload};
 use floti_protocol::channels::common::{EndedBy, SessionRecord};
 use floti_protocol::channels::sessions::HistorySession;
 use floti_protocol::record::{records, records_dir};
 use floti_protocol::version::negotiate;
-use floti_protocol::{PROTOCOL_VERSION, ProtocolVersion};
 use serde_json::{Value, json};
 
 const V2_1: ProtocolVersion = ProtocolVersion::new(2, 1);
@@ -196,7 +196,6 @@ fn a_history_session_from_a_2_1_host_reads_as_no_agent_title() {
 
 #[test]
 fn a_2_2_host_negotiates_the_version_a_2_1_client_speaks() {
-    assert_eq!(PROTOCOL_VERSION, V2_2);
     assert_eq!(negotiate(V2_2, V2_1), Ok(V2_1));
     assert_eq!(negotiate(V2_2, V2_2), Ok(V2_2));
 }

@@ -10,7 +10,7 @@ export interface ConfirmChild {
   name: string
   /** Its dot, or a terminal glyph for a command. */
   mark: ChildMarkView
-  /** At the right, in mono: its role and branch, or `command · ` and its command line for a command. */
+  /** At the right, in mono: its agent and branch, or `command · ` and its command line for a command. */
   meta: string
 }
 

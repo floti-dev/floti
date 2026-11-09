@@ -3,7 +3,7 @@
 //! listener at `/mcp/sessions`, under today's name and with today's tools and
 //! instructions (`session_tools.json`).
 //!
-//! **Awareness plus the caller's own title.** Two agents in one working tree
+//! **Awareness plus the caller's own title.** Two sessions in one working tree
 //! is the failure this exists to prevent, and it is prevented by looking, not
 //! by talking. Nothing here sends a session anything, waits on one, hands one
 //! work, or lets one address another. That is coordination, which is out of

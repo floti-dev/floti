@@ -226,5 +226,11 @@ export const MIGRATIONS: readonly EmbeddedMigration[] = [
       "ALTER TABLE `sessions` DROP COLUMN `child_class`;",
       "-- A limit notice the heavy limit left refers to a limit there no longer is.\nDELETE FROM `notices` WHERE `limit_kind` = 'heavy';"
     ]
+  },
+  {
+    "tag": "0029_agents_were_roles",
+    "statements": [
+      "-- Roles are called agents: a session's `role` is its `agent`, and every row keeps its value.\nALTER TABLE `sessions` RENAME COLUMN `role` TO `agent`;"
+    ]
   }
 ]

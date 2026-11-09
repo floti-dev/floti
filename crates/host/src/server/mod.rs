@@ -79,6 +79,9 @@ use tokio::task::JoinHandle;
 
 use crate::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
 use crate::agent::{AgentBackend, PlainCommandBackend, sweep_launch_folders};
+use crate::agent_definitions::DefinitionSource;
+use crate::agent_definitions::folder::{FolderDefinitions, prepare_agents_folder};
+use crate::agent_definitions::seed::seed_agents;
 use crate::keeper::Keeper;
 use crate::keys::{load_or_create_key_pair, read_key_pair};
 use crate::platform::folders::{self, Folders, UserEnv};
@@ -87,9 +90,6 @@ use crate::platform::private_files::sweep_stale_temps;
 use crate::platform::process_tree::{self, ProcessTree};
 use crate::platform::socket::{self, Endpoint, LocalListener, LocalSocket};
 use crate::platform::wsl::{self, WslProgram, WslSide};
-use crate::roles::RoleSource;
-use crate::roles::folder::{FolderRoles, roles_folder};
-use crate::roles::seed::seed_roles;
 use crate::session::ClientId;
 use crate::store::Store;
 use crate::{Error, Result};
@@ -491,15 +491,22 @@ impl Host {
         if let Some(floti) = &run.keeper {
             hosted.use_floti(floti);
         }
-        // The roles an agent starts children in are files in the config
-        // folder, read afresh at every start. A folder that could not be
-        // seeded is not a host that cannot start: the default role still
-        // works, and the problem is in the log.
-        let roles_dir = roles_folder(&folders);
-        if let Some(problem) = seed_roles(&roles_dir).problem {
+        // The agents a session starts children as are files in the config
+        // folder, read afresh at every start. A folder still called `roles`
+        // is moved to `agents` first, and only a host with neither seeds. A
+        // folder that could not be moved or seeded is not a host that cannot
+        // start: the default agent still works, and the problem is in the
+        // log.
+        let agents = prepare_agents_folder(&folders.config);
+        if let Some(said) = &agents.log {
+            log_line!("{said}");
+        }
+        if agents.seed
+            && let Some(problem) = seed_agents(&agents.dir).problem
+        {
             log_line!("floti host: {problem}");
         }
-        hosted.use_roles(Arc::new(FolderRoles::new(roles_dir)));
+        hosted.use_agents(Arc::new(FolderDefinitions::new(agents.dir)));
         let features = Arc::new(Features::new(Arc::clone(&hosted), folders, run)?);
         let agent_tools = start_agent_tools(&hosted, &features)?;
 
@@ -545,10 +552,10 @@ impl Host {
         })
     }
 
-    /// Reads the roles a session may start children in from `roles` from now
-    /// on. The host starts with none named.
-    pub fn use_roles(&self, roles: Arc<dyn RoleSource>) {
-        self.hosted.use_roles(roles);
+    /// Reads the agents a session may start children as from `agents` from
+    /// now on. The host starts with none named.
+    pub fn use_agents(&self, agents: Arc<dyn DefinitionSource>) {
+        self.hosted.use_agents(agents);
     }
 
     /// Every protocol channel this host serves, of every kind.

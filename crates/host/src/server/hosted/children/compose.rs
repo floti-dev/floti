@@ -1,49 +1,49 @@
-//! What a role adds to a child's launch: its model and effort for the backend
+//! What an agent adds to a child's launch: its model and effort for the backend
 //! the child runs on, its permission, its tool rules and its body.
 //!
-//! The role's profile has already been chosen (or the folder's); what the
-//! profile gives is the base, and the role's own choices replace it.
+//! The agent's profile has already been chosen (or the folder's); what the
+//! profile gives is the base, and the agent's own choices replace it.
 
 use floti_protocol::channels::common::PermissionMode;
 use floti_protocol::channels::sessions::Profile;
 
-use crate::agent::{AgentBackend, Composition, RoleInstructions};
-use crate::roles::Role;
+use crate::agent::{AgentBackend, AgentInstructions, Composition};
+use crate::agent_definitions::AgentDefinition;
 
-/// The composition of a child of `role` on `backend`, in `mode` (the role's
+/// The composition of a child of `agent` on `backend`, in `mode` (the agent's
 /// permission or the profile's, already lowered to the parent's), or the
 /// reason the backend cannot run it, as a fragment of a sentence.
 ///
 /// # Errors
 ///
-/// Why `backend` cannot run the role: its adapter cannot enforce a rule,
+/// Why `backend` cannot run the agent: its adapter cannot enforce a rule,
 /// there is an effort and no effort setting, or there is a body and no way to
 /// take it.
-pub(super) fn role_composition(
-    role: &Role,
+pub(super) fn agent_composition(
+    agent: &AgentDefinition,
     backend: &dyn AgentBackend,
     profile: Option<&Profile>,
     mode: Option<PermissionMode>,
 ) -> Result<Composition, String> {
-    if let Some(reason) = role.refusal_on(backend, mode) {
+    if let Some(reason) = agent.refusal_on(backend, mode) {
         return Err(reason);
     }
     let mut composition = super::super::composition_of(profile);
     composition.permission_mode = mode;
-    if let Some(model) = role.model_for(backend.id()) {
+    if let Some(model) = agent.model_for(backend.id()) {
         composition.model = Some(model.to_owned());
     }
-    if let Some(effort) = role.effort_for(backend.id()) {
+    if let Some(effort) = agent.effort_for(backend.id()) {
         composition.effort = Some(effort);
     }
-    composition.allowed_tools.clone_from(&role.allowed_tools);
+    composition.allowed_tools.clone_from(&agent.allowed_tools);
     composition
         .disallowed_tools
-        .clone_from(&role.disallowed_tools);
-    let body = role.instructions.trim();
+        .clone_from(&agent.disallowed_tools);
+    let body = agent.instructions.trim();
     if !body.is_empty() {
-        composition.instructions = Some(RoleInstructions {
-            role: role.name.clone(),
+        composition.instructions = Some(AgentInstructions {
+            agent: agent.name.clone(),
             body: body.to_owned(),
         });
     }
@@ -99,8 +99,8 @@ mod tests {
     use super::*;
     use crate::agent::PlainCommandBackend;
     use crate::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
+    use crate::agent_definitions::parse::parse_definition;
     use crate::platform::process_tree;
-    use crate::roles::parse::parse_role;
     use crate::testkit::{OtherAgent, TestDirs};
 
     fn claude(dirs: &TestDirs) -> ClaudeCodeBackend {
@@ -117,8 +117,8 @@ mod tests {
         )
     }
 
-    fn role(source: &str) -> Role {
-        parse_role("tuned", source).expect("a good role")
+    fn agent(source: &str) -> AgentDefinition {
+        parse_definition("tuned", source).expect("a good agent")
     }
 
     fn profile(model: &str, effort: EffortLevel, mode: PermissionMode) -> Profile {
@@ -151,15 +151,15 @@ mod tests {
         Work carefully.\n";
 
     #[test]
-    fn the_roles_choices_for_the_backend_replace_the_profiles_and_the_rest_of_the_profile_stays() {
+    fn the_agents_choices_for_the_backend_replace_the_profiles_and_the_rest_of_the_profile_stays() {
         let dirs = TestDirs::new();
         let profile = profile(
             "profile-model",
             EffortLevel::Low,
             PermissionMode::AcceptEdits,
         );
-        let composition = role_composition(
-            &role(TUNED),
+        let composition = agent_composition(
+            &agent(TUNED),
             &claude(&dirs),
             Some(&profile),
             Some(PermissionMode::Plan),
@@ -172,10 +172,10 @@ mod tests {
         assert_eq!(composition.disallowed_tools, ["Edit"]);
         let body = composition.instructions.expect("the body");
         assert_eq!(
-            (body.role.as_str(), body.body.as_str()),
+            (body.agent.as_str(), body.body.as_str()),
             ("tuned", "Work carefully.")
         );
-        // What the profile gave and the role did not stays.
+        // What the profile gave and the agent did not stays.
         assert_eq!(
             composition.overlays,
             [std::path::PathBuf::from("C:/work/harness")]
@@ -187,15 +187,15 @@ mod tests {
     }
 
     #[test]
-    fn a_role_that_gives_nothing_leaves_the_profile_as_it_is_and_the_mode_is_the_one_passed() {
+    fn an_agent_that_gives_nothing_leaves_the_profile_as_it_is_and_the_mode_is_the_one_passed() {
         let dirs = TestDirs::new();
         let profile = profile(
             "profile-model",
             EffortLevel::Low,
             PermissionMode::AcceptEdits,
         );
-        let composition = role_composition(
-            &role("---\n---\n"),
+        let composition = agent_composition(
+            &agent("---\n---\n"),
             &claude(&dirs),
             Some(&profile),
             Some(PermissionMode::AcceptEdits),
@@ -208,10 +208,10 @@ mod tests {
             Some(PermissionMode::AcceptEdits)
         );
         assert!(composition.allowed_tools.is_empty() && composition.disallowed_tools.is_empty());
-        // No body: no instructions of the role's.
+        // No body: no instructions of the agent's.
         assert_eq!(composition.instructions, None);
 
-        let none = role_composition(&role("---\n---\n"), &claude(&dirs), None, None).unwrap();
+        let none = agent_composition(&agent("---\n---\n"), &claude(&dirs), None, None).unwrap();
         assert_eq!(none.model, None);
         assert_eq!(none.permission_mode, None);
     }
@@ -220,7 +220,7 @@ mod tests {
     fn a_body_of_only_whitespace_adds_no_instructions() {
         let dirs = TestDirs::new();
         let composition =
-            role_composition(&role("---\n---\n  \n\n"), &claude(&dirs), None, None).unwrap();
+            agent_composition(&agent("---\n---\n  \n\n"), &claude(&dirs), None, None).unwrap();
         assert_eq!(composition.instructions, None);
     }
 
@@ -229,17 +229,17 @@ mod tests {
         let dirs = TestDirs::new();
         let other = OtherAgent::new(&dirs).backend();
         assert_eq!(other.id(), &BackendId::new("other-agent"));
-        let small = role("---\nmodel:\n  other-agent: small\n---\nBody.\n");
-        let composition = role_composition(&small, &other, None, None).unwrap();
+        let small = agent("---\nmodel:\n  other-agent: small\n---\nBody.\n");
+        let composition = agent_composition(&small, &other, None, None).unwrap();
         assert_eq!(composition.model.as_deref(), Some("small"));
         assert!(composition.instructions.is_some());
 
         let refused =
-            role_composition(&role(TUNED), &other, None, None).expect_err("it cannot run it");
+            agent_composition(&agent(TUNED), &other, None, None).expect_err("it cannot run it");
         assert!(refused.contains("disallowed_tools rule Edit"), "{refused}");
         assert!(refused.contains("other-agent"), "{refused}");
-        let efforty = role("---\neffort:\n  other-agent: high\n---\n");
-        let refused = role_composition(&efforty, &other, None, None).expect_err("no effort");
+        let efforty = agent("---\neffort:\n  other-agent: high\n---\n");
+        let refused = agent_composition(&efforty, &other, None, None).expect_err("no effort");
         assert!(
             refused.contains("effort") && refused.contains("other-agent"),
             "{refused}"
@@ -284,14 +284,14 @@ mod tests {
     }
 
     #[test]
-    fn a_plain_command_line_cannot_run_a_role_at_all() {
+    fn a_plain_command_line_cannot_run_an_agent_at_all() {
         let plain = PlainCommandBackend::new(
             BackendId::new("my-cli"),
             "My CLI",
             "my-cli",
             Vec::<String>::new(),
         );
-        let refused = role_composition(&role("---\n---\n"), &plain, None, None)
+        let refused = agent_composition(&agent("---\n---\n"), &plain, None, None)
             .expect_err("a plain command takes no task");
         assert!(refused.contains("my-cli"), "{refused}");
     }

@@ -24,7 +24,7 @@ use serde_json::{Value, json};
 
 use super::*;
 use crate::agent::{
-    BackendAnswers, Composition, RoleInstructions, ToolRules, ToolSupport, sweep_launch_folders,
+    AgentInstructions, BackendAnswers, Composition, ToolRules, ToolSupport, sweep_launch_folders,
 };
 use crate::platform::links::is_link;
 use crate::platform::process_tree::{self, Ending, ProcessTree};
@@ -589,7 +589,7 @@ fn a_permission_choice_is_passed_exactly_and_no_choice_passes_no_flag() {
 }
 
 // ---------------------------------------------------------------------------
-// Declarations and a role's tool rules
+// Declarations and an agent's tool rules
 // ---------------------------------------------------------------------------
 
 /// A world whose `claude --version` answers `version` and nothing else.
@@ -638,7 +638,7 @@ fn it_moves_long_calls_to_the_background_has_mcp_tools_and_supports_mcp_tasks_fr
 }
 
 #[test]
-fn a_roles_tool_rules_reach_its_flags_in_one_allow_list_and_one_deny_list() {
+fn an_agents_tool_rules_reach_its_flags_in_one_allow_list_and_one_deny_list() {
     let world = World::new();
     let mut agents = server("floti-agents", "t");
     agents.allowed_tools = vec!["agents_start".into(), "agents_stop".into()];
@@ -747,7 +747,7 @@ fn shell_commands_and_tools_are_named_the_way_claude_code_names_them() {
 #[test]
 fn a_tool_rule_the_command_line_cannot_carry_is_refused_naming_the_rule_and_claude_code() {
     let world = World::new();
-    // Everything a role can mean passes, every mode included.
+    // Everything an agent can mean passes, every mode included.
     for mode in [
         PermissionMode::Plan,
         PermissionMode::DontAsk,
@@ -1264,7 +1264,7 @@ fn an_agents_child_loads_only_the_servers_its_launch_gives_it_and_a_persons_sess
 }
 
 #[test]
-fn a_child_whose_role_names_no_mode_runs_in_claude_codes_auto() {
+fn a_child_whose_agent_names_no_mode_runs_in_claude_codes_auto() {
     assert_eq!(
         World::new().backend.unattended_mode(),
         Some(PermissionMode::Auto)
@@ -1606,21 +1606,21 @@ fn an_overlaid_projects_agents_md_is_composed_like_its_claude_md() {
     assert!(composed.contains("(AGENTS.md)") && composed.contains("# agents rules"));
 }
 
-fn role_body(role: &str, body: &str) -> Option<RoleInstructions> {
-    Some(RoleInstructions {
-        role: role.to_owned(),
+fn agent_body(agent: &str, body: &str) -> Option<AgentInstructions> {
+    Some(AgentInstructions {
+        agent: agent.to_owned(),
         body: body.to_owned(),
     })
 }
 
 #[test]
-fn a_roles_body_is_composed_into_the_instructions_with_no_overlays_and_never_typed() {
+fn an_agents_body_is_composed_into_the_instructions_with_no_overlays_and_never_typed() {
     let world = World::new();
     let (launch, _folder) = world.launch(&LaunchRequest {
         folder: world.folder("work"),
         name: "reviewer".into(),
         composition: Composition {
-            instructions: role_body("reviewer", "Read the code before you give findings.\n"),
+            instructions: agent_body("reviewer", "Read the code before you give findings.\n"),
             ..Composition::default()
         },
         prompt: Some("review the change".into()),
@@ -1631,7 +1631,7 @@ fn a_roles_body_is_composed_into_the_instructions_with_no_overlays_and_never_typ
     succeeded(&output);
     let composed = log["composedInstructions"].as_str().unwrap();
     assert!(
-        composed.contains("# Role: reviewer")
+        composed.contains("# Agent: reviewer")
             && composed.contains("Read the code before you give findings."),
         "{composed}"
     );
@@ -1641,7 +1641,7 @@ fn a_roles_body_is_composed_into_the_instructions_with_no_overlays_and_never_typ
 }
 
 #[test]
-fn a_roles_section_follows_the_project_instructions() {
+fn an_agents_section_follows_the_project_instructions() {
     let world = World::new();
     let other = world.folder("project with rules");
     write(&other.join("CLAUDE.md"), "# project rules\n");
@@ -1650,7 +1650,7 @@ fn a_roles_section_follows_the_project_instructions() {
         name: "worker".into(),
         composition: Composition {
             overlays: vec![other],
-            instructions: role_body("worker", "Do one item."),
+            instructions: agent_body("worker", "Do one item."),
             ..Composition::default()
         },
         ..LaunchRequest::default()
@@ -1659,19 +1659,19 @@ fn a_roles_section_follows_the_project_instructions() {
     succeeded(&output);
     let composed = log["composedInstructions"].as_str().unwrap();
     let project = composed.find("# project rules").expect("project rules");
-    let role = composed.find("# Role: worker").expect("role section");
-    assert!(project < role, "{composed}");
+    let agent = composed.find("# Agent: worker").expect("agent section");
+    assert!(project < agent, "{composed}");
     assert!(composed.ends_with("Do one item.\n"), "{composed:?}");
 }
 
 #[test]
-fn a_role_without_a_body_adds_no_instructions() {
+fn an_agent_without_a_body_adds_no_instructions() {
     let world = World::new();
     let (launch, _folder) = world.launch(&LaunchRequest {
         folder: world.folder("work"),
         name: "bare".into(),
         composition: Composition {
-            instructions: role_body("bare", "  \n"),
+            instructions: agent_body("bare", "  \n"),
             ..Composition::default()
         },
         ..LaunchRequest::default()

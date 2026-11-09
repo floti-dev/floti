@@ -9,7 +9,7 @@
 //! on that key, so the host waits [`AgentInput::pause`] between them.
 //!
 //! A plain command line has no turns, so it declares none of this unless its
-//! role names a submit word and a stop word ([`AgentInput::from_words`]).
+//! agent names a submit word and a stop word ([`AgentInput::from_words`]).
 //!
 //! [`AgentBackend::input`]: super::AgentBackend::input
 
@@ -50,9 +50,9 @@ impl AgentInput {
         }
     }
 
-    /// A plain command line's input from the words its role gives for submit
-    /// and stop, or `None` when the role gives no submit word: a command line
-    /// without one takes no turns. A role with a submit word and no stop word
+    /// A plain command line's input from the words its agent gives for submit
+    /// and stop, or `None` when the agent gives no submit word: a command line
+    /// without one takes no turns. An agent with a submit word and no stop word
     /// has no stop key.
     ///
     /// # Errors
@@ -106,7 +106,7 @@ impl AgentInput {
 }
 
 /// The pause a plain command line waits between a paste and its submit key:
-/// a chosen default, as a role has no word for it.
+/// a chosen default, as an agent has no word for it.
 pub const PLAIN_PAUSE: Duration = Duration::from_millis(100);
 
 /// The bytes a key word names, in the one place words become bytes.
@@ -204,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn a_role_with_a_submit_word_and_a_stop_word_declares_input() {
+    fn an_agent_with_a_submit_word_and_a_stop_word_declares_input() {
         let input = AgentInput::from_words(Some("enter"), Some("ctrl-c"))
             .unwrap()
             .expect("it takes turns");
@@ -216,7 +216,7 @@ mod tests {
     }
 
     #[test]
-    fn a_role_without_a_submit_word_declares_no_input_and_one_without_a_stop_word_no_stop_key() {
+    fn an_agent_without_a_submit_word_declares_no_input_and_one_without_a_stop_word_no_stop_key() {
         for (submit, stop) in [(None, None), (None, Some("ctrl-c")), (Some("  "), None)] {
             assert_eq!(AgentInput::from_words(submit, stop), Ok(None), "{submit:?}");
         }
@@ -227,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn a_role_word_that_is_not_a_key_is_refused_naming_its_field() {
+    fn an_agent_word_that_is_not_a_key_is_refused_naming_its_field() {
         assert!(
             AgentInput::from_words(Some("hit it"), None)
                 .unwrap_err()

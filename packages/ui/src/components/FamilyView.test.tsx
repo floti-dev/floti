@@ -23,7 +23,7 @@ function header(props: Partial<ChildHeaderProps> = {}): ChildHeaderProps {
     shape: 'card',
     name: 'reviewer',
     state: 'busy',
-    role: 'reviewer',
+    agent: 'reviewer',
     status: 'Working · 4m',
     onPress: vi.fn(),
     onOpenAsTab: vi.fn(),
@@ -277,7 +277,7 @@ describe('FamilyCard with a report note', () => {
 })
 
 describe('ChildHeader on a card', () => {
-  it('shows the state dot, the name, the role as a tag, the state and for how long, Open as tab and Stop', async () => {
+  it('shows the state dot, the name, the agent as a tag, the state and for how long, Open as tab and Stop', async () => {
     const props = header()
     const { container } = render(<ChildHeader {...props} />)
     const row = container.querySelector<HTMLElement>('[data-family-header="card"]')!
@@ -286,7 +286,7 @@ describe('ChildHeader on a card', () => {
     const press = within(row).getByRole('button', { name: 'Shrink reviewer, Working · 4m' })
     expect(press.getAttribute('aria-expanded')).toBe('true')
     expect(press.textContent).toBe('reviewerreviewerWorking · 4m')
-    expect(container.querySelector('[data-family-role]')?.textContent).toBe('reviewer')
+    expect(container.querySelector('[data-family-agent]')?.textContent).toBe('reviewer')
     expect(container.querySelector('[data-family-status]')?.textContent).toBe('Working · 4m')
 
     // The small buttons take the font's own line height, so they stand about 17px tall in the 26px header.
@@ -316,9 +316,9 @@ describe('ChildHeader on a card', () => {
     expect(press.className).toContain('text-[11.5px]')
     expect(press.className).toContain('pl-[7px]')
     expect(press.className).toContain('gap-1')
-    const name = [...press.querySelectorAll('span')].find((span) => span.textContent === 'reviewer' && !span.hasAttribute('data-family-role'))
+    const name = [...press.querySelectorAll('span')].find((span) => span.textContent === 'reviewer' && !span.hasAttribute('data-family-agent'))
     expect(name?.className).toContain('font-medium')
-    const tag = container.querySelector('[data-family-role]')
+    const tag = container.querySelector('[data-family-agent]')
     expect(tag?.className).toContain('bg-accent-soft')
     expect(tag?.className).toContain('text-accent-text')
     expect(tag?.className).toContain('text-[10px]')
@@ -341,9 +341,9 @@ describe('ChildHeader on a card', () => {
     expect(stop.className).not.toContain('border-border-strong')
   })
 
-  it('draws no tag for a child started with no role', () => {
-    const { container } = render(<ChildHeader {...header({ role: null })} />)
-    expect(container.querySelector('[data-family-role]')).toBeNull()
+  it('draws no tag for a child started with no agent', () => {
+    const { container } = render(<ChildHeader {...header({ agent: null })} />)
+    expect(container.querySelector('[data-family-agent]')).toBeNull()
   })
 
   it('keeps every weight at medium or lighter and the buttons to the header’s own size', () => {
@@ -362,7 +362,7 @@ describe('ChildHeader shrunk', () => {
     const press = within(row as HTMLElement).getByRole('button', { name: 'Show reviewer, Working · 4m' })
     expect(press.getAttribute('aria-expanded')).toBe('false')
     // A shrunk header has no tag and no buttons of its own.
-    expect(container.querySelector('[data-family-role]')).toBeNull()
+    expect(container.querySelector('[data-family-agent]')).toBeNull()
     expect(within(row as HTMLElement).getAllByRole('button')).toHaveLength(1)
     expect(row.className).toContain('border-t')
     await userEvent.click(press)
@@ -414,7 +414,7 @@ describe('ChildHeader ended', () => {
     const row = container.querySelector<HTMLElement>('[data-family-header="ended"]')!
     expect(container.querySelector('[data-family-status]')?.textContent).toBe('Stopped by you · 14:53')
     expect(container.querySelector('[data-family-status]')?.className).toContain('text-fg-muted')
-    expect(container.querySelector('[data-family-role]')).toBeNull()
+    expect(container.querySelector('[data-family-agent]')).toBeNull()
     expect(row.className).toContain('border-t')
     const close = within(row).getByRole('button', { name: 'Close reviewer' })
     for (const token of ['border-border-strong', 'text-fg', 'text-[10.5px]', 'px-[5px]', 'leading-[normal]', 'hover:bg-hover']) {
@@ -466,7 +466,7 @@ describe('a child that needs you', () => {
 
 describe('ChildHeader of a command child', () => {
   const command = (props: Partial<ChildHeaderProps> = {}): ChildHeaderProps =>
-    header({ name: 'tests', command: true, role: null, state: 'running', status: 'Running · 1s', onOpenAsTab: undefined, ...props })
+    header({ name: 'tests', command: true, agent: null, state: 'running', status: 'Running · 1s', onOpenAsTab: undefined, ...props })
 
   it('S25: shows the terminal glyph where an agent child shows its state dot, in success while it runs, on a card and shrunk', () => {
     for (const shape of ['card', 'header'] as const) {
@@ -504,9 +504,9 @@ describe('ChildHeader of a command child', () => {
     expect(titleOf({ shape: 'ended', state: 'failed', word: 'exited 1', onStop: undefined })).toBe('exited 1')
   })
 
-  it('S26: reads command in the tag on a card where an agent child names its role, in the muted ring and not the accent fill', () => {
-    const { container } = render(<ChildHeader {...command({ role: 'worker' })} />)
-    const tag = container.querySelector('[data-family-role]')!
+  it('S26: reads command in the tag on a card where an agent child names its agent, in the muted ring and not the accent fill', () => {
+    const { container } = render(<ChildHeader {...command({ agent: 'worker' })} />)
+    const tag = container.querySelector('[data-family-agent]')!
     expect(tag.textContent).toBe('command')
     expect(tag.className).toContain('text-fg-muted')
     expect(tag.className).toContain('border-border-strong')
@@ -515,10 +515,10 @@ describe('ChildHeader of a command child', () => {
 
   it('S26: draws no tag on a shrunk or ended header', () => {
     const shrunk = render(<ChildHeader {...command({ shape: 'header', onStop: undefined })} />)
-    expect(shrunk.container.querySelector('[data-family-role]')).toBeNull()
+    expect(shrunk.container.querySelector('[data-family-agent]')).toBeNull()
     shrunk.unmount()
     const ended = render(<ChildHeader {...command({ shape: 'ended', state: 'ended', status: 'exited 0 · 14:52', onStop: undefined, onClose: vi.fn() })} />)
-    expect(ended.container.querySelector('[data-family-role]')).toBeNull()
+    expect(ended.container.querySelector('[data-family-agent]')).toBeNull()
   })
 
   it('S27: reads exited <code> · <time> with Close on an ended header, and pressing the words opens its last screen', async () => {

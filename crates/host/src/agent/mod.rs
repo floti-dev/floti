@@ -21,7 +21,7 @@
 //! What the agents feature needs from an agent is asked here too, and the
 //! agents feature names no agent: [`AgentBackend::tool_support`] says whether
 //! the agent moves a long tool call to the background, supports MCP tasks and
-//! has MCP tools at all; a role's [`ToolRules`] are written once and each
+//! has MCP tools at all; an agent's [`ToolRules`] are written once and each
 //! adapter translates them or refuses the first it cannot enforce
 //! ([`AgentBackend::check_rules`]); and the shell commands a launch allows up
 //! front are rendered by the adapter beside the allowed tools
@@ -187,7 +187,7 @@ pub trait AgentBackend: Send + Sync {
     /// The instructions Floti adds on its own for `composition`: what a child
     /// is told about its parent and the `floti agent` guide, or `None` when
     /// it adds none. An adapter that takes instructions composes this beside
-    /// the role's body.
+    /// the agent's body.
     fn floti_instructions(&self, composition: &Composition) -> Option<String> {
         guidance::floti_sections(
             composition,
@@ -217,7 +217,7 @@ pub trait AgentBackend: Send + Sync {
         Ok(())
     }
 
-    /// The mode an agent's child runs in when neither its role nor its
+    /// The mode an agent's child runs in when neither its agent nor its
     /// profile names one: auto, where the agent has a mode that judges each
     /// action in place of a person, since a child has nobody to answer its
     /// prompts; else `None`, the agent's own default.
@@ -228,7 +228,7 @@ pub trait AgentBackend: Send + Sync {
             .then_some(PermissionMode::Auto)
     }
 
-    /// Whether the agent has an effort setting a launch can pass. A role
+    /// Whether the agent has an effort setting a launch can pass. An agent
     /// that gives an effort for a backend without one is refused, naming the
     /// effort and the backend, rather than started with it dropped.
     fn takes_effort(&self) -> bool {
@@ -236,7 +236,7 @@ pub trait AgentBackend: Send + Sync {
     }
 
     /// Whether the adapter composes [`Composition::instructions`] into the
-    /// session's own instructions. A role with a body is refused on a backend
+    /// session's own instructions. An agent with a body is refused on a backend
     /// that does not, naming it, rather than started without the body.
     fn takes_instructions(&self) -> bool {
         false
@@ -313,11 +313,11 @@ pub trait Permissions: Send + Sync {
     /// must not start without it.
     fn arguments(&self, mode: PermissionMode) -> Vec<OsString>;
 
-    /// Whether this agent can enforce `rule` as the role wrote it.
+    /// Whether this agent can enforce `rule` as an agent file wrote it.
     fn can_enforce(&self, rule: &ToolRule) -> bool;
 }
 
-/// A role's rules about what its agent may do, written once. Tool names are
+/// An agent's rules about what its children may do, written once. Tool names are
 /// spelled as Claude Code spells them (`Read`, `Bash(git status:*)`,
 /// `mcp__<server>__<tool>`); each backend's adapter translates them to its
 /// agent's nearest equivalent, or refuses the first it cannot enforce, so no
@@ -353,7 +353,7 @@ impl ToolRules {
     }
 }
 
-/// One of a role's rules.
+/// One of an agent's rules.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolRule {
     PermissionMode(PermissionMode),
@@ -554,19 +554,19 @@ pub struct Composition {
     pub agent: Option<String>,
     /// Floti's agent tool families switched on, for this session alone.
     pub agent_tools: Vec<AgentToolServer>,
-    /// A role's allowed tools, as [`ToolRules`] spells them. A backend whose
+    /// An agent's allowed tools, as [`ToolRules`] spells them. A backend whose
     /// agent cannot enforce one fails the launch rather than dropping it.
     pub allowed_tools: Vec<String>,
-    /// A role's disallowed tools, as [`ToolRules`] spells them, refused the
+    /// An agent's disallowed tools, as [`ToolRules`] spells them, refused the
     /// same way.
     pub disallowed_tools: Vec<String>,
-    /// A role's body, composed into the session's own instructions by an
+    /// An agent's body, composed into the session's own instructions by an
     /// adapter that takes instructions, and never typed or sent to the
     /// session. An adapter that takes none fails the launch rather than
     /// dropping it.
-    pub instructions: Option<RoleInstructions>,
+    pub instructions: Option<AgentInstructions>,
     /// What a child is told about the session that started it, composed into
-    /// the session's instructions beside the role's body. Floti's own words,
+    /// the session's instructions beside the agent's body. Floti's own words,
     /// so an adapter that takes none drops it and the launch still runs.
     pub child: Option<guidance::ChildInstructions>,
     /// Whether the session is given Floti's agents family, and so the guide to
@@ -587,11 +587,11 @@ pub struct Composition {
     pub unattended: bool,
 }
 
-/// A role's body, and the name of the role it belongs to.
+/// An agent's body, and the name of the agent it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RoleInstructions {
-    /// The role's name, which heads its section.
-    pub role: String,
+pub struct AgentInstructions {
+    /// The agent's name, which heads its section.
+    pub agent: String,
     /// The body.
     pub body: String,
 }

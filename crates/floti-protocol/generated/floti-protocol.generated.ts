@@ -1,7 +1,7 @@
 // Generated from the floti-protocol crate by `cargo run -p floti-protocol --bin generate`. Do not edit.
 
 /** The protocol version these declarations describe. */
-export const PROTOCOL_VERSION = { major: 2, minor: 2 } as const;
+export const PROTOCOL_VERSION = { major: 2, minor: 3 } as const;
 
 /** The link version of the session keeper a host of this build takes back. */
 export const KEEPER_LINK_VERSION = 1;
@@ -3098,8 +3098,17 @@ parentId?: number | null,
  */
 parentName?: string | null, 
 /**
- * The role the session was started in, or null for a session started
- * with none.
+ * The agent the session was started as (a lead, a worker, a reviewer),
+ * or null for a session started as none: one a person started, and a
+ * command child. Absent from a host before protocol 2.3, which says it
+ * as `role`; a record read from one has it here all the same.
+ */
+agent?: string | null, 
+/**
+ * Retired: the same as `agent`, under the name it had before protocol
+ * 2.3. Still written with `agent`'s value so that a client before 2.3
+ * reads what it did, and read in place of `agent` from one that sends
+ * only this. It leaves the protocol at the next major version.
  */
 role?: string | null, 
 /**

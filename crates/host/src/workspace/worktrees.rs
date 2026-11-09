@@ -1,6 +1,6 @@
 //! The git worktrees Floti makes for agents.
 //!
-//! A child that asks for one (or whose role does) works in
+//! A child that asks for one (or whose agent does) works in
 //! `<repo>/.floti/worktrees/<name>` on a new branch `agent/<name>`, cut from
 //! the commit its parent's folder has checked out. The repository is the main
 //! working tree, found through git itself, so a parent that is already in an

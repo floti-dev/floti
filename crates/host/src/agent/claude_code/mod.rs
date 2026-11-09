@@ -254,11 +254,11 @@ impl ClaudeCodeBackend {
         });
         let built = overlay::build_overlays(&overlays, folder, &mut warnings)?;
 
-        // The project's instructions, then the role's own section after them
+        // The project's instructions, then the agent's own section after them
         // and Floti's own (a child's, the `floti agent` guide) after that:
         // written even with no overlays, and never typed to the session.
         let instructions = super::guidance::append(
-            overlay::with_role_section(
+            overlay::with_agent_section(
                 overlay::compose_instructions(&built, cwd),
                 composition.instructions.as_ref(),
             ),
@@ -451,7 +451,7 @@ impl AgentBackend for ClaudeCodeBackend {
         true
     }
 
-    /// A role's body is a headed section of the launch's instructions file,
+    /// An agent's body is a headed section of the launch's instructions file,
     /// which `--append-system-prompt-file` passes.
     fn takes_instructions(&self) -> bool {
         true
@@ -531,8 +531,8 @@ impl ClaudeCodeBackend {
     /// launch; one `--mcp-config` file in the launch folder naming each
     /// family with the session's bearer token; one `--allowedTools` holding
     /// what each family allows up front (its read-only tools and its named
-    /// shell commands) and the role's allowed tools; then `--disallowedTools`
-    /// holding the role's disallowed tools. Each flag is left out when it
+    /// shell commands) and the agent's allowed tools; then `--disallowedTools`
+    /// holding the agent's disallowed tools. Each flag is left out when it
     /// would hold nothing. The last three are variadic, so they come in that
     /// order before the next flag (see `argv`), and no rule is passed for a
     /// server the file does not name.

@@ -86,6 +86,7 @@ pub static MIGRATIONS: &[Migration] = drizzle_migrations![
     "0026_mean_the_liberteens",
     "0027_nosy_rumiko_fujikawa",
     "0028_faithful_maggott",
+    "0029_agents_were_roles",
 ];
 
 /// What opening a database applied.

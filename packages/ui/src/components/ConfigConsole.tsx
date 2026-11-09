@@ -94,7 +94,9 @@ const KIND_LABEL: Record<ConfigFileKind, string> = {
   mcp: 'MCP',
   skill: 'Skills',
   command: 'Commands',
-  agent: 'Agents',
+  // Claude Code's own agents (its `agents/` files) are its subagents, so they
+  // never share a name with the agents a session starts children as.
+  agent: 'Subagents',
   workflow: 'Workflows',
   hook: 'Hooks',
   rule: 'Rules',

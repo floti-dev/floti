@@ -139,7 +139,7 @@ describe('PaneCrumb chips', () => {
 describe('PaneCrumb child tag and parent link', () => {
   it('spaces the row 8px apart, with the for <parent> link 3px nearer its tag', () => {
     const { container } = render(
-      <PaneCrumb tag={{ kind: 'role', text: 'reviewer' }} parent={{ name: 'api-refactor', onOpen: () => {} }} place='helm' />
+      <PaneCrumb tag={{ kind: 'agent', text: 'reviewer' }} parent={{ name: 'api-refactor', onOpen: () => {} }} place='helm' />
     )
     expect(container.querySelector('[data-pane-crumb]')?.className).toContain(' gap-2 ')
     expect(container.querySelector('[data-crumb="parent"]')?.className).toContain('-ml-[3px]')
@@ -166,15 +166,15 @@ describe('PaneCrumb child tag and parent link', () => {
     expect(order).toEqual(['tag', 'parent', 'place'])
   })
 
-  it('S32: an agent child begins with its role in accent-text on accent-soft', () => {
-    const { container } = render(<PaneCrumb tag={{ kind: 'role', text: 'reviewer' }} place="helm" />)
+  it('S32: an agent child begins with its agent in accent-text on accent-soft', () => {
+    const { container } = render(<PaneCrumb tag={{ kind: 'agent', text: 'reviewer' }} place="helm" />)
     const tag = tagOf(container)
     expect(tag?.textContent).toBe('reviewer')
     expect(tag?.className).toContain('text-accent-text')
     expect(tag?.className).toContain('bg-accent-soft')
   })
 
-  it('has no tag for a child with no role, and none for a session that is no child', () => {
+  it('has no tag for a child with no agent, and none for a session that is no child', () => {
     const { container } = render(<PaneCrumb parent={{ name: 'api-refactor', onOpen: () => {} }} place="helm" />)
     expect(tagOf(container)).toBeNull()
     expect(parentOf(container)?.textContent).toBe('for api-refactor')

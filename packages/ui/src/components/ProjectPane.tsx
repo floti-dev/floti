@@ -532,7 +532,7 @@ function AlreadyRunning({ sessions }: { sessions: readonly LiveSession[] }): JSX
           </>
         )}{' '}
         <span className="text-fg-muted">
-          Starting another one here means two agents in one working tree.
+          Starting another one here means two sessions in one working tree.
         </span>
       </span>
     </p>

@@ -1,5 +1,5 @@
 //! The instructions Floti writes itself into the sessions it hosts, beside a
-//! profile's and a role's: what a child is told about the session that started
+//! profile's and an agent's: what a child is told about the session that started
 //! it, the ask to title itself for every session given helm-sessions, and a
 //! short guide to `floti agent` for every session given the agents family.
 //!
@@ -16,8 +16,8 @@ use super::Composition;
 pub struct ChildInstructions {
     /// What the child's parent is called in Floti.
     pub parent: String,
-    /// The role the child was started in.
-    pub role: String,
+    /// The agent the child was started as.
+    pub agent: String,
     /// Whether the child has `agents_report`. An agent with no MCP tools
     /// reports through its program's own status instead, and is told nothing
     /// about the tool.
@@ -88,9 +88,9 @@ pub fn append(base: Option<String>, sections: Option<String>) -> Option<String> 
 
 fn child_section(child: &ChildInstructions) -> String {
     let parent = one_line(&child.parent);
-    let role = one_line(&child.role);
+    let agent = one_line(&child.agent);
     let mut text = format!(
-        "# Started by another session\n\nYou were started by another session, {parent}, as {role}. Your first message is your task. Nobody may be watching this terminal, so a question asked here can go unanswered."
+        "# Started by another session\n\nYou were started by another session, {parent}, as {agent}. Your first message is your task. Nobody may be watching this terminal, so a question asked here can go unanswered."
     );
     if child.reports {
         text.push_str(" When you are done or stuck, call agents_report once: done with what you did and where, or stuck with one question, its options and your recommendation.");
@@ -134,7 +134,7 @@ mod tests {
         Composition {
             child: Some(ChildInstructions {
                 parent: "api-refactor".into(),
-                role: "reviewer".into(),
+                agent: "reviewer".into(),
                 reports,
             }),
             ..Composition::default()
@@ -147,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    fn a_child_is_told_its_parent_its_role_and_how_to_report() {
+    fn a_child_is_told_its_parent_its_agent_and_how_to_report() {
         let text = floti_sections(&child(true), "wait", None).expect("a section");
         assert!(text.contains("started by another session, api-refactor, as reviewer"));
         assert!(text.contains("call agents_report once"));
@@ -292,7 +292,7 @@ mod tests {
         let composition = Composition {
             child: Some(ChildInstructions {
                 parent: format!("a\nb\t{}", "x".repeat(300)),
-                role: "r".into(),
+                agent: "r".into(),
                 reports: false,
             }),
             ..Composition::default()

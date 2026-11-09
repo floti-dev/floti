@@ -9,7 +9,7 @@
 //! works.
 //!
 //! **A child like any other, and no agent.** Its row has the parent's links
-//! and the command line, and no role. It gets no agent token and no tools,
+//! and the command line, and no agent. It gets no agent token and no tools,
 //! opens no tab, and counts toward none of the agent limits
 //! (`rows::ChildRow::is_command`). It is named as an agent child is, `--name`
 //! or its program's file name, made unique among all the caller's children.
@@ -126,7 +126,7 @@ impl Hosted {
                         session: parent,
                         conversation_id: facts.conversation_id.clone(),
                         name: name.clone(),
-                        role: None,
+                        agent: None,
                         command: Some(line.clone()),
                         outlive: false,
                         can_start: false,

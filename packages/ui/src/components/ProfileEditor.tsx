@@ -24,12 +24,12 @@ import { Overlay } from './Overlay'
  * The half of the effective view the two name pickers need.
  *
  * Both fields used to be free text, and both questions a person asked of them -
- * "is this agent going to resolve", "will this server be available" - already
+ * "is this subagent going to resolve", "will this server be available" - already
  * had an answer Helm computes and was not showing. This is that answer, narrowed
  * to the two lists.
  */
 export interface ProfilePrediction {
-  /** Agents a session at this root, with these overlays, would resolve. */
+  /** Subagents (Claude Code's own agents) a session at this root, with these overlays, would resolve. */
   agents: EffectiveEntry[]
   /** MCP servers configured for this root, however they got there. */
   mcpServers: EffectiveMcpServer[]
@@ -92,8 +92,8 @@ const MODELS = ['opus', 'sonnet', 'haiku', 'fable'] as const
  * cannot do anything. Unticking access afterwards is allowed; it is just not
  * the default anyone wants.
  *
- * **Agent and MCP are pickers over the effective view**, and they were both
- * text boxes. The questions a person asked of those boxes - is this agent going
+ * **Subagent and MCP are pickers over the effective view**, and they were both
+ * text boxes. The questions a person asked of those boxes - is this subagent going
  * to resolve, will this server be available - are exactly what
  * `EffectiveView.agents` and `EffectiveView.mcpServers` answer, and the form was
  * the one place holding that answer back. An overlay's agent settles it: it
@@ -211,7 +211,7 @@ export function ProfileEditor({
   // Only once an answer is in is "not in the list" the same thing as "does not
   // resolve" - before that it is just a list nobody has filled in yet.
   const settled = prediction.state === 'ready'
-  const agentNote = predictionNote(prediction, 'agents')
+  const agentNote = predictionNote(prediction, 'subagents')
   const serverNote = predictionNote(prediction, 'servers')
 
   const has = (list: string[], path: string): boolean =>
@@ -356,7 +356,7 @@ export function ProfileEditor({
           <legend className={labelClass}>Composition</legend>
           <p className="mt-1.5 mb-2 text-[11px] leading-[1.55] text-fg-muted">
             <strong className="font-medium text-fg">Compose</strong> loads a project&rsquo;s
-            skills, agents and commands under its own namespace.{' '}
+            skills, subagents and commands under its own namespace.{' '}
             <strong className="font-medium text-fg">Access</strong> lets the session read and
             write its files.
           </p>
@@ -455,7 +455,7 @@ export function ProfileEditor({
             </Select>
           </Field>
           <Field
-            label="Agent"
+            label="Subagent"
             hint={
               <>
                 Placed on the session&rsquo;s argv as <code className={codeClass}>--agent</code>,
@@ -473,14 +473,14 @@ export function ProfileEditor({
                     list has nothing for this name in it. */}
                 {settled && !agentUnlisted && predictedAgents.length === 0 && (
                   <span className="mt-[3px] block">
-                    No agents resolve here - neither this root nor the composed projects define
-                    one.
+                    No subagents resolve here - neither this root nor the composed projects
+                    define one.
                   </span>
                 )}
               </>
             }
           >
-            <Select value={agent} onChange={setAgent} label="Agent">
+            <Select value={agent} onChange={setAgent} label="Subagent">
               <option value="">Default</option>
               {/* A saved name the prediction does not carry still has to be
                   the select's value, or the control would silently move the

@@ -35,6 +35,18 @@ const KINDS = ['skills', 'commands', 'agents', 'workflows'] as const
 type Kind = (typeof KINDS)[number]
 
 /**
+ * What each kind is called on screen. Claude Code's own agents are its
+ * subagents, so they never share a name with the agents a session starts
+ * children as.
+ */
+const KIND_NAME: Record<Kind, string> = {
+  skills: 'skills',
+  commands: 'commands',
+  agents: 'subagents',
+  workflows: 'workflows'
+}
+
+/**
  * What a session would actually see.
  *
  * This is the payoff of the composition model and the thing no file explorer
@@ -299,7 +311,7 @@ export function EffectiveViewPane({
                             : 'text-fg-muted hover:text-fg'
                         )}
                       >
-                        {option}
+                        {KIND_NAME[option]}
                       </button>
                     ))}
                   </div>
@@ -323,7 +335,7 @@ export function EffectiveViewPane({
             >
               {entries.length === 0 ? (
                 <p className="rounded-raised border border-border bg-surface-raised px-3 py-6 text-center text-[12px] text-fg-subtle">
-                  {filter === '' ? `No ${kind} would resolve here.` : 'Nothing matches that.'}
+                  {filter === '' ? `No ${KIND_NAME[kind]} would resolve here.` : 'Nothing matches that.'}
                 </p>
               ) : (
                 <ul className="overflow-hidden rounded-raised border border-border bg-surface-raised">

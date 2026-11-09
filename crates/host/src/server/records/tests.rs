@@ -1,5 +1,5 @@
 //! A session's row read back as the protocol's record: a child names its
-//! parent and its role, a session with neither says none.
+//! parent and its agent, a session with neither says none.
 
 use std::sync::Mutex;
 
@@ -57,7 +57,7 @@ fn link(parent: SessionId, name: &str) -> ParentLink {
         session: parent,
         conversation_id: Some("conversation-of-lead".to_owned()),
         name: name.to_owned(),
-        role: Some("reviewer".to_owned()),
+        agent: Some("reviewer".to_owned()),
         command: None,
         outlive: false,
         can_start: false,
@@ -125,7 +125,7 @@ fn a_profile_row_keeps_remote_control_only_when_it_is_on() {
 }
 
 #[test]
-fn a_childs_record_names_its_parent_by_row_and_name_and_carries_its_role() {
+fn a_childs_record_names_its_parent_by_row_and_name_and_carries_its_agent() {
     let world = World::new();
     let parent = world.start("lead", None);
     let child = world.start("lead-reviewer", Some(link(parent, "reviewer")));
@@ -133,6 +133,8 @@ fn a_childs_record_names_its_parent_by_row_and_name_and_carries_its_role() {
     let child = world.record(child);
     assert_eq!(child.parent_id, Some(parent.0 as u64));
     assert_eq!(child.parent_name.as_deref(), Some("lead"));
+    assert_eq!(child.agent.as_deref(), Some("reviewer"));
+    // The retired role says the same, for a client before protocol 2.3.
     assert_eq!(child.role.as_deref(), Some("reviewer"));
 }
 
@@ -141,13 +143,13 @@ fn a_command_childs_record_carries_its_command_and_once_it_exited_its_exit_code(
     let world = World::new();
     let parent = world.start("lead", None);
     let mut running = link(parent, "tests");
-    running.role = None;
+    running.agent = None;
     running.command = Some("pnpm test --filter core".to_owned());
     let child = world.start("lead-tests", Some(running));
 
     let record = world.record(child);
     assert_eq!(record.command.as_deref(), Some("pnpm test --filter core"));
-    assert_eq!(record.role, None);
+    assert_eq!(record.agent, None);
     assert_eq!(record.exit_code, None, "still running: no code yet");
 
     world
@@ -173,7 +175,7 @@ fn a_command_that_exited_above_i32_is_listed_and_told_as_the_signed_code_powersh
     let world = World::new();
     let parent = world.start("lead", None);
     let mut running = link(parent, "tests");
-    running.role = None;
+    running.agent = None;
     running.command = Some("pnpm test".to_owned());
     let child = world.start("lead-tests", Some(running));
     world.store.finished(child, &exit(0xC000_0005)).unwrap();
@@ -212,18 +214,18 @@ fn an_agent_childs_record_and_a_session_started_by_a_person_carry_no_command() {
     assert_eq!(world.record(child).command, None);
     assert_eq!(world.record(parent).command, None);
 
-    // A blank column reads as none, as a blank role does.
+    // A blank column reads as none, as a blank agent does.
     world.execute("UPDATE sessions SET command = '  ' WHERE id = ?1", child);
     assert_eq!(world.record(child).command, None);
 }
 
 #[test]
-fn a_session_started_by_a_person_carries_no_parent_and_no_role() {
+fn a_session_started_by_a_person_carries_no_parent_and_no_agent() {
     let world = World::new();
     let alone = world.record(world.start("alone", None));
     assert_eq!(alone.parent_id, None);
     assert_eq!(alone.parent_name, None);
-    assert_eq!(alone.role, None);
+    assert_eq!(alone.agent, None);
 }
 
 #[test]
@@ -513,7 +515,7 @@ fn deleting_a_parents_row_leaves_its_child_with_no_parent_and_keeps_the_conversa
     let record = world.record(child);
     assert_eq!(record.parent_id, None);
     assert_eq!(record.parent_name, None);
-    assert_eq!(record.role.as_deref(), Some("reviewer"));
+    assert_eq!(record.agent.as_deref(), Some("reviewer"));
     let conversation: Option<String> = world
         .store
         .lock()

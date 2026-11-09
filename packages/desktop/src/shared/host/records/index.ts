@@ -71,10 +71,11 @@ export function sessionFromHost(record: P.SessionRecord): SessionRecord {
     endedAt: record.endedAt,
     durationMs: record.durationMs,
     exitCode: record.exitCode,
-    // A session a person started names no parent and no role, and the window's
-    // record then has neither: a protocol before 2.1 says nothing of them.
+    // A session a person started names no parent and no agent, and the
+    // window's record then has neither: a protocol before 2.1 says nothing of
+    // them. A host before 2.3 names the agent `role`.
     ...(record.parentId == null ? {} : { parentId: record.parentId, parentName: record.parentName ?? null }),
-    ...(record.role == null ? {} : { role: record.role }),
+    ...((record.agent ?? record.role) == null ? {} : { agent: record.agent ?? record.role }),
     // Set only for a command child; a protocol before 2.1 never says.
     ...(record.command == null ? {} : { command: record.command }),
     // Set only when the host ended it; a protocol before 2.1 never says.

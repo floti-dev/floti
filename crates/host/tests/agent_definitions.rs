@@ -1,4 +1,4 @@
-//! Roles: the files an agent starts its children in, read from the host's
+//! Agents: the files an agent starts its children in, read from the host's
 //! config folder. A host whose sessions run the fake `claude`
 //! (`test/fake-agents/claude-code.mjs`) and the other fake agent
 //! (`test/fake-agents/other-agent.mjs`), never a real agent. A session's agent
@@ -7,7 +7,7 @@
 //!
 //! No client is attached while a session works: a client starts the session
 //! and goes, and comes back only to restore sessions after the host restarts.
-//! The roles folder is under the test's own run root, so no test reads or
+//! The agents folder is under the test's own run root, so no test reads or
 //! writes a real one.
 
 use std::collections::BTreeMap;
@@ -49,7 +49,7 @@ const OTHER: &str = "other-agent";
 const FAMILY: &str = "floti-agents";
 
 // ---------------------------------------------------------------------------
-// A host with two backends and a roles folder of its own
+// A host with two backends and an agents folder of its own
 // ---------------------------------------------------------------------------
 
 struct World {
@@ -113,24 +113,25 @@ impl World {
         }
     }
 
-    /// The roles folder the host reads: `roles` in its config folder.
-    fn roles_dir(&self) -> PathBuf {
-        self.dirs.config.join("roles")
+    /// The agents folder the host reads: `agents` in its config folder.
+    fn agents_dir(&self) -> PathBuf {
+        self.dirs.config.join("agents")
     }
 
-    /// Writes the role file `<name>.md`. Making the folder is what keeps the
+    /// Writes the agent file `<name>.md`. Making the folder is what keeps the
     /// host from seeding it.
-    fn role(&self, name: &str, content: &str) {
-        std::fs::create_dir_all(self.roles_dir()).expect("make the roles folder");
-        std::fs::write(self.roles_dir().join(format!("{name}.md")), content)
-            .expect("write a role file");
+    fn agent(&self, name: &str, content: &str) {
+        std::fs::create_dir_all(self.agents_dir()).expect("make the agents folder");
+        std::fs::write(self.agents_dir().join(format!("{name}.md")), content)
+            .expect("write an agent file");
     }
 
-    fn remove_role(&self, name: &str) {
-        std::fs::remove_file(self.roles_dir().join(format!("{name}.md"))).expect("delete a role");
+    fn remove_agent(&self, name: &str) {
+        std::fs::remove_file(self.agents_dir().join(format!("{name}.md")))
+            .expect("delete an agent");
     }
 
-    /// A host that serves once this returns, reading the roles folder as the
+    /// A host that serves once this returns, reading the agents folder as the
     /// installed host does, with the workspace tracked.
     async fn host(&self) -> RunningHost {
         let host = RunningHost::start(self.config());
@@ -159,7 +160,7 @@ impl World {
         resolved(&self.dirs.folder(&format!("workspace/{name}")))
     }
 
-    /// A git repository in the workspace with one commit, for the roles that
+    /// A git repository in the workspace with one commit, for the agents that
     /// work in a worktree.
     fn repository(&self, name: &str) -> PathBuf {
         let repo = GitRepo::init(self.project(name));
@@ -523,39 +524,39 @@ impl Agent {
         self.call("agents_list", json!({})).await
     }
 
-    async fn roles(&self) -> Called {
-        self.call("agents_roles", json!({})).await
+    async fn agents(&self) -> Called {
+        self.call("agents_available", json!({})).await
     }
 
-    /// Each role `agents_roles` lists, by name: its JSON entry.
-    async fn role_entries(&self) -> BTreeMap<String, Value> {
-        self.roles().await.done()["roles"]
+    /// Each agent `agents_available` lists, by name: its JSON entry.
+    async fn agent_entries(&self) -> BTreeMap<String, Value> {
+        self.agents().await.done()["agents"]
             .as_array()
-            .expect("a list of roles")
+            .expect("a list of agents")
             .iter()
-            .map(|role| {
+            .map(|agent| {
                 (
-                    role["name"].as_str().expect("a name").to_owned(),
-                    role.clone(),
+                    agent["name"].as_str().expect("a name").to_owned(),
+                    agent.clone(),
                 )
             })
             .collect()
     }
 
-    /// The names `agents_roles` lists, in the order it lists them.
-    async fn role_names(&self) -> Vec<String> {
-        self.roles().await.done()["roles"]
+    /// The names `agents_available` lists, in the order it lists them.
+    async fn agent_names(&self) -> Vec<String> {
+        self.agents().await.done()["agents"]
             .as_array()
-            .expect("a list of roles")
+            .expect("a list of agents")
             .iter()
-            .map(|role| role["name"].as_str().expect("a name").to_owned())
+            .map(|agent| agent["name"].as_str().expect("a name").to_owned())
             .collect()
     }
 }
 
-/// The backends of one `agents_roles` entry.
-fn backends_of(role: &Value) -> Vec<String> {
-    strings(&role["backends"])
+/// The backends of one `agents_available` entry.
+fn backends_of(agent: &Value) -> Vec<String> {
+    strings(&agent["backends"])
 }
 
 // ---------------------------------------------------------------------------
@@ -762,10 +763,10 @@ async fn subcommand(command: Subcommand, url: String, token: String) -> agent_cl
 }
 
 // ---------------------------------------------------------------------------
-// The role files these tests write
+// The agent files these tests write
 // ---------------------------------------------------------------------------
 
-/// A role on both fakes with a body, a model for each and an effort for the
+/// An agent on both fakes with a body, a model for each and an effort for the
 /// first.
 const TUNED: &str = "---\n\
 description: Tuned for each backend.\n\
@@ -776,18 +777,18 @@ effort:\n  claude-code: high\n\
 Work carefully.\n";
 
 // ---------------------------------------------------------------------------
-// S1: agents_roles lists what there is
+// S1: agents_available lists what there is
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s1_agents_roles_lists_each_role_with_what_it_is_and_the_backends_it_can_run_on() {
+async fn s1_agents_available_lists_each_agent_with_what_it_is_and_the_backends_it_can_run_on() {
     let world = World::new();
-    world.role(
+    world.agent(
         "scout",
         "---\ndescription: Looks around.\nbackend: claude-code\nworktree: yes\ncan_start: yes\n---\nLook.\n",
     );
-    world.role("plain-reader", "---\ndescription: Reads.\n---\n");
-    world.role("codex-only", "---\nbackend: codex\n---\n");
+    world.agent("plain-reader", "---\ndescription: Reads.\n---\n");
+    world.agent("codex-only", "---\nbackend: codex\n---\n");
     let host = world.host().await;
     let folder = world.project("listing");
 
@@ -795,20 +796,20 @@ async fn s1_agents_roles_lists_each_role_with_what_it_is_and_the_backends_it_can
         let parent = world
             .session(backend, &folder, &format!("parent {backend}"))
             .await;
-        let asked = parent.roles().await;
+        let asked = parent.agents().await;
         let listed = asked.done();
 
-        // The default role comes first, then the roles by name.
-        let names = parent.role_names().await;
+        // The default agent comes first, then the agents by name.
+        let names = parent.agent_names().await;
         assert_eq!(
             names,
-            ["agent", "codex-only", "plain-reader", "scout"],
+            ["default", "codex-only", "plain-reader", "scout"],
             "{backend}"
         );
         assert!(listed["bad"].as_array().unwrap().is_empty(), "{listed}");
 
-        let roles = parent.role_entries().await;
-        let scout = &roles["scout"];
+        let agents = parent.agent_entries().await;
+        let scout = &agents["scout"];
         assert_eq!(scout["description"], "Looks around.");
         assert_eq!(scout["worktree"], true);
         assert_eq!(scout["canStart"], true);
@@ -817,16 +818,16 @@ async fn s1_agents_roles_lists_each_role_with_what_it_is_and_the_backends_it_can
         assert_eq!(scout["unusedLines"], json!([]));
 
         // No backend named: every installed agent backend, in the host's order.
-        let reader = &roles["plain-reader"];
+        let reader = &agents["plain-reader"];
         assert_eq!(reader["worktree"], false);
         assert_eq!(reader["canStart"], false);
         assert_eq!(backends_of(reader), [CLAUDE, OTHER]);
-        assert_eq!(backends_of(&roles["agent"]), [CLAUDE, OTHER]);
+        assert_eq!(backends_of(&agents["default"]), [CLAUDE, OTHER]);
 
         // A backend that is not installed here runs nothing.
-        assert!(backends_of(&roles["codex-only"]).is_empty());
+        assert!(backends_of(&agents["codex-only"]).is_empty());
 
-        // The text a model reads names each role and what it is.
+        // The text a model reads names each agent and what it is.
         let text = asked.text();
         for word in [
             "scout",
@@ -847,20 +848,20 @@ async fn s1_agents_roles_lists_each_role_with_what_it_is_and_the_backends_it_can
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s2_a_role_file_added_edited_or_deleted_is_seen_by_the_next_listing_and_start() {
+async fn s2_an_agent_file_added_edited_or_deleted_is_seen_by_the_next_listing_and_start() {
     let world = World::new();
-    world.role("existing", "---\n---\n");
+    world.agent("existing", "---\n---\n");
     let host = world.host().await;
     let parent = world
         .session(CLAUDE, &world.project("fresh"), "parent")
         .await;
-    assert_eq!(parent.role_names().await, ["agent", "existing"]);
+    assert_eq!(parent.agent_names().await, ["default", "existing"]);
 
-    // Added: listed and started in at once, with no restart.
-    world.role("added", "---\ndescription: One.\n---\nFirst words.\n");
-    assert_eq!(parent.role_names().await, ["agent", "added", "existing"]);
+    // Added: listed and started at once, with no restart.
+    world.agent("added", "---\ndescription: One.\n---\nFirst words.\n");
+    assert_eq!(parent.agent_names().await, ["default", "added", "existing"]);
     parent
-        .start(json!({ "task": "go", "role": "added", "name": "first" }))
+        .start(json!({ "task": "go", "agent": "added", "name": "first" }))
         .await
         .done();
     let first = world.child_of(&parent, "first").await;
@@ -874,10 +875,10 @@ async fn s2_a_role_file_added_edited_or_deleted_is_seen_by_the_next_listing_and_
     );
 
     // Edited: the listing and the next start have the new text.
-    world.role("added", "---\ndescription: Two.\n---\nSecond words.\n");
-    assert_eq!(parent.role_entries().await["added"]["description"], "Two.");
+    world.agent("added", "---\ndescription: Two.\n---\nSecond words.\n");
+    assert_eq!(parent.agent_entries().await["added"]["description"], "Two.");
     parent
-        .start(json!({ "task": "go", "role": "added", "name": "second" }))
+        .start(json!({ "task": "go", "agent": "added", "name": "second" }))
         .await
         .done();
     let second = world.child_of(&parent, "second").await;
@@ -888,24 +889,29 @@ async fn s2_a_role_file_added_edited_or_deleted_is_seen_by_the_next_listing_and_
     );
 
     // Deleted: gone from the listing, and a start naming it is refused.
-    world.remove_role("added");
-    assert_eq!(parent.role_names().await, ["agent", "existing"]);
-    let refused = parent.start(json!({ "task": "go", "role": "added" })).await;
+    world.remove_agent("added");
+    assert_eq!(parent.agent_names().await, ["default", "existing"]);
+    let refused = parent
+        .start(json!({ "task": "go", "agent": "added" }))
+        .await;
     assert!(
-        refused.refused().contains("no role named added"),
+        refused.refused().contains("no agent named added"),
         "{refused:?}"
     );
     assert!(
         refused.refused().contains("existing"),
-        "the roles are listed: {refused:?}"
+        "the agents are listed: {refused:?}"
     );
 
-    // agent.md replaces the built-in default role.
-    world.role(
-        "agent",
+    // default.md replaces the built-in default agent.
+    world.agent(
+        "default",
         "---\ndescription: Mine.\ncan_start: yes\n---\nBe brief.\n",
     );
-    assert_eq!(parent.role_entries().await["agent"]["description"], "Mine.");
+    assert_eq!(
+        parent.agent_entries().await["default"]["description"],
+        "Mine."
+    );
     parent
         .start(json!({ "task": "go", "name": "default" }))
         .await
@@ -924,26 +930,26 @@ async fn s2_a_role_file_added_edited_or_deleted_is_seen_by_the_next_listing_and_
 }
 
 // ---------------------------------------------------------------------------
-// S3: a file that is not a role
+// S3: a file that is not an agent
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s3_a_bad_role_file_is_skipped_and_named_and_a_start_naming_it_is_refused() {
+async fn s3_a_bad_agent_file_is_skipped_and_named_and_a_start_naming_it_is_refused() {
     let world = World::new();
-    world.role("fine", "---\ndescription: Fine.\n---\n");
-    world.role("typo", "---\ndisalowed_tools: Edit\n---\nbody\n");
-    world.role("broken", "---\ndescription: [unclosed\n---\n");
-    world.role(
+    world.agent("fine", "---\ndescription: Fine.\n---\n");
+    world.agent("typo", "---\ndisalowed_tools: Edit\n---\nbody\n");
+    world.agent("broken", "---\ndescription: [unclosed\n---\n");
+    world.agent(
         "odd",
         "---\nworktree: maybe\neffort:\n  claude-code: loud\n---\n",
     );
-    world.role("naked", "no front matter at all\n");
+    world.agent("naked", "no front matter at all\n");
     let host = world.host().await;
     let parent = world.session(CLAUDE, &world.project("bad"), "parent").await;
 
-    let asked = parent.roles().await;
+    let asked = parent.agents().await;
     let listed = asked.done();
-    assert_eq!(parent.role_names().await, ["agent", "fine"]);
+    assert_eq!(parent.agent_names().await, ["default", "fine"]);
     let bad: BTreeMap<String, String> = listed["bad"]
         .as_array()
         .unwrap()
@@ -975,7 +981,7 @@ async fn s3_a_bad_role_file_is_skipped_and_named_and_a_start_naming_it_is_refuse
 
     // A start naming one is refused, naming the file and the problem.
     let runs = world.run_count();
-    let refused = parent.start(json!({ "task": "go", "role": "typo" })).await;
+    let refused = parent.start(json!({ "task": "go", "agent": "typo" })).await;
     let sentence = refused.refused();
     assert!(
         sentence.contains("typo.md") && sentence.contains("disalowed_tools"),
@@ -984,7 +990,7 @@ async fn s3_a_bad_role_file_is_skipped_and_named_and_a_start_naming_it_is_refuse
     assert!(sentence.contains("no agent was started"), "{sentence}");
     assert!(
         parent
-            .start(json!({ "task": "go", "role": "Naked" }))
+            .start(json!({ "task": "go", "agent": "Naked" }))
             .await
             .refused()
             .contains("naked.md")
@@ -992,9 +998,9 @@ async fn s3_a_bad_role_file_is_skipped_and_named_and_a_start_naming_it_is_refuse
     assert_eq!(world.children_made(), 0);
     assert_eq!(world.run_count(), runs, "no process started for a refusal");
 
-    // A file that is fine still starts, and so does the default role.
+    // A file that is fine still starts, and so does the default agent.
     parent
-        .start(json!({ "task": "go", "role": "fine", "name": "ok" }))
+        .start(json!({ "task": "go", "agent": "fine", "name": "ok" }))
         .await
         .done();
     parent
@@ -1005,22 +1011,23 @@ async fn s3_a_bad_role_file_is_skipped_and_named_and_a_start_naming_it_is_refuse
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s3_a_bad_agent_md_refuses_a_start_with_no_role_and_does_not_fall_back_to_the_built_in() {
+async fn s3_a_bad_default_md_refuses_a_start_with_no_agent_and_does_not_fall_back_to_the_built_in()
+{
     let world = World::new();
-    world.role("agent", "---\nworktree: maybe\n---\n");
+    world.agent("default", "---\nworktree: maybe\n---\n");
     let host = world.host().await;
     let parent = world
         .session(CLAUDE, &world.project("bad default"), "parent")
         .await;
 
     let refused = parent.start(json!({ "task": "go" })).await;
-    assert!(refused.refused().contains("agent.md"), "{refused:?}");
+    assert!(refused.refused().contains("default.md"), "{refused:?}");
     assert!(
-        parent.role_names().await.is_empty(),
-        "no role to list but the bad file"
+        parent.agent_names().await.is_empty(),
+        "no agent to list but the bad file"
     );
     assert!(
-        parent.roles().await.done()["bad"][0]["file"] == "agent.md",
+        parent.agents().await.done()["bad"][0]["file"] == "default.md",
         "the bad file is named"
     );
     assert_eq!(world.children_made(), 0);
@@ -1032,9 +1039,10 @@ async fn s3_a_bad_agent_md_refuses_a_start_with_no_role_and_does_not_fall_back_t
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s4_a_roles_body_reaches_the_child_as_instructions_on_either_backend_and_is_never_typed() {
+async fn s4_an_agents_body_reaches_the_child_as_instructions_on_either_backend_and_is_never_typed()
+{
     let world = World::new();
-    world.role(
+    world.agent(
         "briefed",
         "---\ndescription: Has a brief.\n---\nCheck the notes before you answer.\n",
     );
@@ -1046,17 +1054,17 @@ async fn s4_a_roles_body_reaches_the_child_as_instructions_on_either_backend_and
     for backend in [CLAUDE, OTHER] {
         let name = format!("kid-{backend}");
         parent
-            .start(json!({ "task": "do the thing", "role": "briefed", "backend": backend, "name": name }))
+            .start(json!({ "task": "do the thing", "agent": "briefed", "backend": backend, "name": name }))
             .await
             .done();
         let child = world.child_of(&parent, &name).await;
-        // The project has no overlays: the instructions are the role's alone.
+        // The project has no overlays: the instructions are the agent's alone.
         let loaded = child
             .run
             .instructions
             .as_deref()
             .expect("instructions loaded");
-        assert!(loaded.contains("# Role: briefed"), "{backend}: {loaded}");
+        assert!(loaded.contains("# Agent: briefed"), "{backend}: {loaded}");
         assert!(
             loaded.contains("Check the notes before you answer."),
             "{backend}: {loaded}"
@@ -1079,10 +1087,10 @@ async fn s4_a_roles_body_reaches_the_child_as_instructions_on_either_backend_and
         );
     }
 
-    // A role with no body adds no instructions.
-    world.role("bare", "---\ndescription: No brief.\n---\n");
+    // An agent with no body adds no instructions.
+    world.agent("bare", "---\ndescription: No brief.\n---\n");
     parent
-        .start(json!({ "task": "x", "role": "bare", "name": "bare-kid" }))
+        .start(json!({ "task": "x", "agent": "bare", "name": "bare-kid" }))
         .await
         .done();
     let bare = world.child_of(&parent, "bare-kid").await;
@@ -1106,16 +1114,16 @@ async fn s4_a_roles_body_reaches_the_child_as_instructions_on_either_backend_and
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s5_a_roles_model_and_effort_for_the_chosen_backend_replace_the_profiles() {
+async fn s5_an_agents_model_and_effort_for_the_chosen_backend_replace_the_profiles() {
     let world = World::new();
-    world.role("tuned", TUNED);
+    world.agent("tuned", TUNED);
     let host = world.host().await;
     let folder = world.project("tuned");
     world.profile("tuned", &folder, Some("profile-model"), Some("low"), None);
     let parent = world
         .session(CLAUDE, &world.project("elsewhere"), "parent")
         .await;
-    let request = |backend: &str, name: &str| json!({ "task": "go", "role": "tuned", "backend": backend, "name": name, "folder": text(&folder) });
+    let request = |backend: &str, name: &str| json!({ "task": "go", "agent": "tuned", "backend": backend, "name": name, "folder": text(&folder) });
 
     parent.start(request(CLAUDE, "on-claude")).await.done();
     let on_claude = world.child_of(&parent, "on-claude").await;
@@ -1128,11 +1136,11 @@ async fn s5_a_roles_model_and_effort_for_the_chosen_backend_replace_the_profiles
     assert_eq!(on_other.run.model(), Some("small"));
     assert_eq!(on_other.run.effort(), None);
 
-    // A role that gives neither leaves the profile's choices as they are.
-    world.role("quiet", "---\nbackend: claude-code\n---\n");
+    // An agent that gives neither leaves the profile's choices as they are.
+    world.agent("quiet", "---\nbackend: claude-code\n---\n");
     parent
         .start(
-            json!({ "task": "go", "role": "quiet", "name": "quiet-kid", "folder": text(&folder) }),
+            json!({ "task": "go", "agent": "quiet", "name": "quiet-kid", "folder": text(&folder) }),
         )
         .await
         .done();
@@ -1145,11 +1153,11 @@ async fn s5_a_roles_model_and_effort_for_the_chosen_backend_replace_the_profiles
 #[tokio::test(flavor = "multi_thread")]
 async fn s6_an_effort_for_a_backend_with_no_effort_setting_refuses_the_start_naming_both() {
     let world = World::new();
-    world.role(
+    world.agent(
         "efforty",
         "---\nbackend: other-agent\neffort:\n  other-agent: high\n---\n",
     );
-    world.role(
+    world.agent(
         "either",
         "---\nbackend: other-agent, claude-code\neffort:\n  other-agent: high\n---\n",
     );
@@ -1160,7 +1168,7 @@ async fn s6_an_effort_for_a_backend_with_no_effort_setting_refuses_the_start_nam
     let runs = world.run_count();
 
     let refused = parent
-        .start(json!({ "task": "go", "role": "efforty" }))
+        .start(json!({ "task": "go", "agent": "efforty" }))
         .await;
     let sentence = refused.refused();
     assert!(
@@ -1170,7 +1178,7 @@ async fn s6_an_effort_for_a_backend_with_no_effort_setting_refuses_the_start_nam
     assert!(sentence.contains("no agent was started"), "{sentence}");
     // The same when the backend is asked for by name.
     let refused = parent
-        .start(json!({ "task": "go", "role": "either", "backend": OTHER }))
+        .start(json!({ "task": "go", "agent": "either", "backend": OTHER }))
         .await;
     let sentence = refused.refused();
     assert!(
@@ -1180,15 +1188,15 @@ async fn s6_an_effort_for_a_backend_with_no_effort_setting_refuses_the_start_nam
     assert_eq!(world.children_made(), 0);
     assert_eq!(world.run_count(), runs, "no process started for a refusal");
 
-    // With no backend asked for, the first one that can run the role is used,
+    // With no backend asked for, the first one that can run the agent is used,
     // and the listing shows the same.
-    assert!(backends_of(&parent.role_entries().await["efforty"]).is_empty());
+    assert!(backends_of(&parent.agent_entries().await["efforty"]).is_empty());
     assert_eq!(
-        backends_of(&parent.role_entries().await["either"]),
+        backends_of(&parent.agent_entries().await["either"]),
         [CLAUDE]
     );
     parent
-        .start(json!({ "task": "go", "role": "either", "name": "picked" }))
+        .start(json!({ "task": "go", "agent": "either", "name": "picked" }))
         .await
         .done();
     let picked = world.child_of(&parent, "picked").await;
@@ -1201,15 +1209,15 @@ async fn s6_an_effort_for_a_backend_with_no_effort_setting_refuses_the_start_nam
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s7_a_roles_permission_replaces_the_profiles_and_only_a_parent_in_plan_dont_ask_or_bypass_holds_it_back()
+async fn s7_an_agents_permission_replaces_the_profiles_and_only_a_parent_in_plan_dont_ask_or_bypass_holds_it_back()
  {
     let world = World::new();
-    world.role(
+    world.agent(
         "ceiling",
         "---\nbackend: claude-code\npermission: bypass-permissions\n---\n",
     );
-    world.role("calm", "---\nbackend: claude-code\npermission: plan\n---\n");
-    world.role("silent", "---\nbackend: claude-code\n---\n");
+    world.agent("calm", "---\nbackend: claude-code\npermission: plan\n---\n");
+    world.agent("silent", "---\nbackend: claude-code\n---\n");
     let host = world.host().await;
     let plain = world.project("plain");
     let profiled = world.project("profiled");
@@ -1217,12 +1225,12 @@ async fn s7_a_roles_permission_replaces_the_profiles_and_only_a_parent_in_plan_d
 
     let mode_of = |child: &Agent| world.column::<Option<String>>(child.id(), "permission_mode");
 
-    // A parent in plan: the role asks for bypass, and the child plans.
+    // A parent in plan: the agent asks for bypass, and the child plans.
     let planner = world
         .session_in(CLAUDE, &plain, "planner", PermissionMode::Plan)
         .await;
     planner
-        .start(json!({ "task": "go", "role": "ceiling", "name": "capped" }))
+        .start(json!({ "task": "go", "agent": "ceiling", "name": "capped" }))
         .await
         .done();
     let capped = world.child_of(&planner, "capped").await;
@@ -1232,13 +1240,13 @@ async fn s7_a_roles_permission_replaces_the_profiles_and_only_a_parent_in_plan_d
         Some("plan")
     );
 
-    // A parent in don't ask: the child gets no more, and a role that names
+    // A parent in don't ask: the child gets no more, and an agent that names
     // nothing gets don't ask too.
     let quiet = world
         .session_in(CLAUDE, &plain, "quiet parent", PermissionMode::DontAsk)
         .await;
     quiet
-        .start(json!({ "task": "go", "role": "silent", "name": "quiet-kid" }))
+        .start(json!({ "task": "go", "agent": "silent", "name": "quiet-kid" }))
         .await
         .done();
     assert_eq!(
@@ -1252,7 +1260,7 @@ async fn s7_a_roles_permission_replaces_the_profiles_and_only_a_parent_in_plan_d
         .session_in(CLAUDE, &plain, "manual parent", PermissionMode::Manual)
         .await;
     manual
-        .start(json!({ "task": "go", "role": "ceiling", "name": "manual-kid" }))
+        .start(json!({ "task": "go", "agent": "ceiling", "name": "manual-kid" }))
         .await
         .done();
     let manual_kid = world.child_of(&manual, "manual-kid").await;
@@ -1262,10 +1270,10 @@ async fn s7_a_roles_permission_replaces_the_profiles_and_only_a_parent_in_plan_d
         Some("auto")
     );
 
-    // A parent launched in no mode: a role that names none runs in auto.
+    // A parent launched in no mode: an agent that names none runs in auto.
     let unset = world.session(CLAUDE, &plain, "unset parent").await;
     unset
-        .start(json!({ "task": "go", "role": "silent", "name": "unset-kid" }))
+        .start(json!({ "task": "go", "agent": "silent", "name": "unset-kid" }))
         .await
         .done();
     let unset_kid = world.child_of(&unset, "unset-kid").await;
@@ -1275,7 +1283,7 @@ async fn s7_a_roles_permission_replaces_the_profiles_and_only_a_parent_in_plan_d
         Some("auto")
     );
 
-    // A parent in bypass keeps what the role asks for: nothing is above it.
+    // A parent in bypass keeps what the agent asks for: nothing is above it.
     let bypasser = world
         .session_in(
             CLAUDE,
@@ -1285,7 +1293,7 @@ async fn s7_a_roles_permission_replaces_the_profiles_and_only_a_parent_in_plan_d
         )
         .await;
     bypasser
-        .start(json!({ "task": "go", "role": "ceiling", "name": "free" }))
+        .start(json!({ "task": "go", "agent": "ceiling", "name": "free" }))
         .await
         .done();
     assert_eq!(
@@ -1293,10 +1301,10 @@ async fn s7_a_roles_permission_replaces_the_profiles_and_only_a_parent_in_plan_d
         Some("bypassPermissions")
     );
 
-    // The role's permission replaces the profile's, then the cap applies.
+    // The agent's permission replaces the profile's, then the cap applies.
     bypasser
         .start(
-            json!({ "task": "go", "role": "calm", "name": "replaced", "folder": text(&profiled) }),
+            json!({ "task": "go", "agent": "calm", "name": "replaced", "folder": text(&profiled) }),
         )
         .await
         .done();
@@ -1304,9 +1312,11 @@ async fn s7_a_roles_permission_replaces_the_profiles_and_only_a_parent_in_plan_d
         mode_of(&world.child_of(&bypasser, "replaced").await).as_deref(),
         Some("plan")
     );
-    // A role that says nothing leaves the profile's permission.
+    // An agent that says nothing leaves the profile's permission.
     bypasser
-        .start(json!({ "task": "go", "role": "silent", "name": "kept", "folder": text(&profiled) }))
+        .start(
+            json!({ "task": "go", "agent": "silent", "name": "kept", "folder": text(&profiled) }),
+        )
         .await
         .done();
     assert_eq!(
@@ -1321,29 +1331,29 @@ async fn s7_a_roles_permission_replaces_the_profiles_and_only_a_parent_in_plan_d
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s8_can_start_comes_from_the_role_unless_the_start_says_otherwise_and_depth_still_holds() {
+async fn s8_can_start_comes_from_the_agent_unless_the_start_says_otherwise_and_depth_still_holds() {
     let world = World::new();
-    world.role("boss", "---\nbackend: claude-code\ncan_start: yes\n---\n");
-    world.role("pawn", "---\nbackend: claude-code\n---\n");
+    world.agent("boss", "---\nbackend: claude-code\ncan_start: yes\n---\n");
+    world.agent("pawn", "---\nbackend: claude-code\n---\n");
     let host = world.host().await;
     let parent = world
         .session(CLAUDE, &world.project("depth"), "parent")
         .await;
 
     parent
-        .start(json!({ "task": "lead", "role": "boss", "name": "boss" }))
+        .start(json!({ "task": "lead", "agent": "boss", "name": "boss" }))
         .await
         .done();
     parent
-        .start(json!({ "task": "work", "role": "pawn", "name": "pawn" }))
+        .start(json!({ "task": "work", "agent": "pawn", "name": "pawn" }))
         .await
         .done();
     parent
-        .start(json!({ "task": "lead", "role": "boss", "name": "muzzled", "can_start": false }))
+        .start(json!({ "task": "lead", "agent": "boss", "name": "muzzled", "can_start": false }))
         .await
         .done();
     parent
-        .start(json!({ "task": "work", "role": "pawn", "name": "promoted", "can_start": true }))
+        .start(json!({ "task": "work", "agent": "pawn", "name": "promoted", "can_start": true }))
         .await
         .done();
     let boss = world.child_of(&parent, "boss").await;
@@ -1367,11 +1377,11 @@ async fn s8_can_start_comes_from_the_role_unless_the_start_says_otherwise_and_de
         "{refused:?}"
     );
     // One that may, starts its own.
-    boss.start(json!({ "task": "help", "role": "pawn", "name": "grandchild" }))
+    boss.start(json!({ "task": "help", "agent": "pawn", "name": "grandchild" }))
         .await
         .done();
     promoted
-        .start(json!({ "task": "help", "role": "pawn", "name": "grandchild" }))
+        .start(json!({ "task": "help", "agent": "pawn", "name": "grandchild" }))
         .await
         .done();
     assert_eq!(
@@ -1379,7 +1389,7 @@ async fn s8_can_start_comes_from_the_role_unless_the_start_says_otherwise_and_de
         Some(boss.id())
     );
 
-    // The depth limit holds for a role that says it may start agents.
+    // The depth limit holds for an agent that says it may start agents.
     let grandchild = world.child_of(&boss, "grandchild").await;
     let refused = grandchild.start(json!({ "task": "deeper" })).await;
     assert!(refused.refused().contains("depth limit"), "{refused:?}");
@@ -1391,59 +1401,59 @@ async fn s8_can_start_comes_from_the_role_unless_the_start_says_otherwise_and_de
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s9_a_role_file_with_a_class_line_runs_like_any_and_the_listing_names_the_line_as_no_longer_used()
+async fn s9_an_agent_file_with_a_class_line_runs_like_any_and_the_listing_names_the_line_as_no_longer_used()
  {
     let world = World::new();
     let bulk_file = "---\nbackend: claude-code\nclass: heavy\nworktree: yes\n---\n";
     let nimble_file = "---\nbackend: claude-code\nclass: light\n---\n";
-    world.role("bulk", bulk_file);
-    world.role("nimble", nimble_file);
+    world.agent("bulk", bulk_file);
+    world.agent("nimble", nimble_file);
     let host = world.host().await;
     let parent = world
         .session(CLAUDE, &world.repository("retired lines"), "parent")
         .await;
 
-    // Listed as roles, each naming its class line as one no longer used.
-    let asked = parent.roles().await;
-    let roles = parent.role_entries().await;
+    // Listed as agents, each naming its class line as one no longer used.
+    let asked = parent.agents().await;
+    let agents = parent.agent_entries().await;
     for name in ["bulk", "nimble"] {
-        let role = &roles[name];
-        assert!(role.get("class").is_none(), "{role}");
-        assert_eq!(role["unusedLines"][0]["line"], "class", "{role}");
+        let agent = &agents[name];
+        assert!(agent.get("class").is_none(), "{agent}");
+        assert_eq!(agent["unusedLines"][0]["line"], "class", "{agent}");
         let sentence = format!("The class line in {name}.md is no longer used");
         assert!(
-            role["unusedLines"][0]["text"]
+            agent["unusedLines"][0]["text"]
                 .as_str()
                 .unwrap()
                 .starts_with(&sentence),
-            "{role}"
+            "{agent}"
         );
         assert!(asked.text().contains(&sentence), "{}", asked.text());
     }
     assert!(asked.done()["bad"].as_array().unwrap().is_empty());
 
     parent
-        .start(json!({ "task": "build", "role": "bulk", "name": "bulk-kid" }))
+        .start(json!({ "task": "build", "agent": "bulk", "name": "bulk-kid" }))
         .await
         .done();
     parent
-        .start(json!({ "task": "look", "role": "nimble", "name": "nimble-kid" }))
+        .start(json!({ "task": "look", "agent": "nimble", "name": "nimble-kid" }))
         .await
         .done();
     let bulk = world.child_of(&parent, "bulk-kid").await;
     let nimble = world.child_of(&parent, "nimble-kid").await;
 
-    // Kept on the row beside the role, as any child's is.
+    // Kept on the row beside the agent, as any child's is.
     assert!(world.column::<bool>(bulk.id(), "child_worktree"));
-    assert_eq!(world.column::<String>(bulk.id(), "role"), "bulk");
+    assert_eq!(world.column::<String>(bulk.id(), "agent"), "bulk");
     assert!(!world.column::<bool>(nimble.id(), "child_worktree"));
 
-    // Shown by agents_list with its role and worktree, and no class.
+    // Shown by agents_list with its agent and worktree, and no class.
     let listed = parent.list().await;
     let json = listed.done();
     let children = json["children"].as_array().unwrap();
     let find = |name: &str| children.iter().find(|child| child["name"] == name).unwrap();
-    assert_eq!(find("bulk-kid")["role"], "bulk");
+    assert_eq!(find("bulk-kid")["agent"], "bulk");
     assert_eq!(find("bulk-kid")["worktree"], true);
     assert_eq!(find("nimble-kid")["worktree"], false);
     for child in children {
@@ -1451,7 +1461,7 @@ async fn s9_a_role_file_with_a_class_line_runs_like_any_and_the_listing_names_th
     }
     assert!(!listed.text().contains("class"), "{}", listed.text());
     assert!(!listed.text().contains("heavy"), "{}", listed.text());
-    // The role's worktree is named after the child; a role without one runs
+    // The agent's worktree is named after the child; an agent without one runs
     // in the folder it was given.
     let expected = Path::new(&parent.record.cwd).join(".floti/worktrees/bulk-kid");
     assert_eq!(Path::new(&bulk.record.cwd), expected.as_path());
@@ -1460,17 +1470,17 @@ async fn s9_a_role_file_with_a_class_line_runs_like_any_and_the_listing_names_th
 
     // Nothing in the folder was rewritten.
     for (file, written) in [("bulk.md", bulk_file), ("nimble.md", nimble_file)] {
-        let now = std::fs::read_to_string(world.roles_dir().join(file)).unwrap();
+        let now = std::fs::read_to_string(world.agents_dir().join(file)).unwrap();
         assert_eq!(now, written, "{file}");
     }
     host.stop(HostStopReason::Stop).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s9_two_children_whose_role_file_says_class_heavy_run_side_by_side_held_only_by_the_generic_limits()
+async fn s9_two_children_whose_agent_file_says_class_heavy_run_side_by_side_held_only_by_the_generic_limits()
  {
     let world = World::new();
-    world.role("suite", "---\nbackend: claude-code\nclass: heavy\n---\n");
+    world.agent("suite", "---\nbackend: claude-code\nclass: heavy\n---\n");
     let host = world.host().await;
     let parent = world
         .session(CLAUDE, &world.project("side by side"), "parent")
@@ -1487,7 +1497,7 @@ async fn s9_two_children_whose_role_file_says_class_heavy_run_side_by_side_held_
 
     for name in ["first", "second"] {
         parent
-            .start(json!({ "task": "run the suite", "role": "suite", "name": name }))
+            .start(json!({ "task": "run the suite", "agent": "suite", "name": name }))
             .await
             .done();
     }
@@ -1503,9 +1513,9 @@ async fn s9_two_children_whose_role_file_says_class_heavy_run_side_by_side_held_
     assert_eq!(running, ["first", "second"], "{listed}");
 
     // A third is held by the limit on children per parent, and by nothing
-    // that has to do with its role.
+    // that has to do with its agent.
     let refused = parent
-        .start(json!({ "task": "run the suite", "role": "suite", "name": "third" }))
+        .start(json!({ "task": "run the suite", "agent": "suite", "name": "third" }))
         .await;
     let sentence = refused.refused();
     assert!(
@@ -1526,7 +1536,7 @@ async fn s9_two_children_whose_role_file_says_class_heavy_run_side_by_side_held_
 #[tokio::test(flavor = "multi_thread")]
 async fn s10_allowed_tools_become_each_backends_own_allow_form_beside_the_families() {
     let world = World::new();
-    world.role(
+    world.agent(
         "gated",
         "---\nbackend: claude-code, other-agent\nallowed_tools: Read, Bash(git status:*)\n---\n",
     );
@@ -1536,7 +1546,7 @@ async fn s10_allowed_tools_become_each_backends_own_allow_form_beside_the_famili
         .await;
 
     parent
-        .start(json!({ "task": "go", "role": "gated", "backend": CLAUDE, "name": "on-claude" }))
+        .start(json!({ "task": "go", "agent": "gated", "backend": CLAUDE, "name": "on-claude" }))
         .await
         .done();
     let on_claude = world.child_of(&parent, "on-claude").await;
@@ -1553,7 +1563,7 @@ async fn s10_allowed_tools_become_each_backends_own_allow_form_beside_the_famili
     }
 
     parent
-        .start(json!({ "task": "go", "role": "gated", "backend": OTHER, "name": "on-other" }))
+        .start(json!({ "task": "go", "agent": "gated", "backend": OTHER, "name": "on-other" }))
         .await
         .done();
     let on_other = world.child_of(&parent, "on-other").await;
@@ -1571,7 +1581,7 @@ async fn s10_allowed_tools_become_each_backends_own_allow_form_beside_the_famili
             .iter()
             .filter(|arg| *arg == "--allow-shell")
             .count(),
-        // The role's `git status`, floti agent start, send, wait, read and
+        // The agent's `git status`, floti agent start, send, wait, read and
         // stop, and floti session title.
         7
     );
@@ -1581,15 +1591,15 @@ async fn s10_allowed_tools_become_each_backends_own_allow_form_beside_the_famili
 #[tokio::test(flavor = "multi_thread")]
 async fn s10_disallowed_tools_are_passed_to_claude_and_refuse_a_backend_that_cannot_enforce_them() {
     let world = World::new();
-    world.role(
+    world.agent(
         "locked-down",
         "---\nbackend: claude-code\ndisallowed_tools: Edit, Write\n---\n",
     );
-    world.role(
+    world.agent(
         "either-way",
         "---\nbackend: other-agent, claude-code\ndisallowed_tools: Bash(rm:*)\n---\n",
     );
-    world.role(
+    world.agent(
         "other-only",
         "---\nbackend: other-agent\ndisallowed_tools: Edit\n---\n",
     );
@@ -1600,7 +1610,7 @@ async fn s10_disallowed_tools_are_passed_to_claude_and_refuse_a_backend_that_can
     let runs = world.run_count();
 
     parent
-        .start(json!({ "task": "go", "role": "locked-down", "name": "denied" }))
+        .start(json!({ "task": "go", "agent": "locked-down", "name": "denied" }))
         .await
         .done();
     let denied = world.child_of(&parent, "denied").await;
@@ -1609,7 +1619,7 @@ async fn s10_disallowed_tools_are_passed_to_claude_and_refuse_a_backend_that_can
     // The other backend has no flag that disallows a tool: refused, naming it
     // and the rule, with nothing started.
     let refused = parent
-        .start(json!({ "task": "go", "role": "other-only" }))
+        .start(json!({ "task": "go", "agent": "other-only" }))
         .await;
     let sentence = refused.refused();
     assert!(
@@ -1617,7 +1627,7 @@ async fn s10_disallowed_tools_are_passed_to_claude_and_refuse_a_backend_that_can
         "{sentence}"
     );
     let refused = parent
-        .start(json!({ "task": "go", "role": "either-way", "backend": OTHER }))
+        .start(json!({ "task": "go", "agent": "either-way", "backend": OTHER }))
         .await;
     assert!(
         refused
@@ -1629,11 +1639,11 @@ async fn s10_disallowed_tools_are_passed_to_claude_and_refuse_a_backend_that_can
 
     // With no backend asked for, the first that can enforce it runs it, and
     // the listing shows only that one.
-    let roles = parent.role_entries().await;
-    assert_eq!(backends_of(&roles["either-way"]), [CLAUDE]);
-    assert!(backends_of(&roles["other-only"]).is_empty());
+    let agents = parent.agent_entries().await;
+    assert_eq!(backends_of(&agents["either-way"]), [CLAUDE]);
+    assert!(backends_of(&agents["other-only"]).is_empty());
     parent
-        .start(json!({ "task": "go", "role": "either-way", "name": "picked" }))
+        .start(json!({ "task": "go", "agent": "either-way", "name": "picked" }))
         .await
         .done();
     let picked = world.child_of(&parent, "picked").await;
@@ -1647,13 +1657,13 @@ async fn s10_disallowed_tools_are_passed_to_claude_and_refuse_a_backend_that_can
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s11_a_host_started_with_no_roles_folder_writes_the_shipped_roles_and_lists_them() {
+async fn s11_a_host_started_with_no_agents_folder_writes_the_shipped_agents_and_lists_them() {
     let world = World::new();
-    assert!(!world.roles_dir().exists());
+    assert!(!world.agents_dir().exists());
     let host = world.host().await;
 
-    let mut files: Vec<String> = std::fs::read_dir(world.roles_dir())
-        .expect("the roles folder was made")
+    let mut files: Vec<String> = std::fs::read_dir(world.agents_dir())
+        .expect("the agents folder was made")
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     files.sort();
@@ -1663,18 +1673,18 @@ async fn s11_a_host_started_with_no_roles_folder_writes_the_shipped_roles_and_li
         .session(CLAUDE, &world.project("seeded"), "parent")
         .await;
     assert_eq!(
-        parent.role_names().await,
-        ["agent", "lead", "reviewer", "worker"]
+        parent.agent_names().await,
+        ["default", "lead", "reviewer", "worker"]
     );
-    let roles = parent.role_entries().await;
-    assert_eq!(roles["lead"]["canStart"], true);
-    assert_eq!(roles["worker"]["worktree"], true);
-    assert_eq!(roles["reviewer"]["canStart"], false);
+    let agents = parent.agent_entries().await;
+    assert_eq!(agents["lead"]["canStart"], true);
+    assert_eq!(agents["worker"]["worktree"], true);
+    assert_eq!(agents["reviewer"]["canStart"], false);
     for name in ["lead", "reviewer", "worker"] {
-        assert_eq!(backends_of(&roles[name]), [CLAUDE], "{name}");
+        assert_eq!(backends_of(&agents[name]), [CLAUDE], "{name}");
     }
     assert!(
-        parent.roles().await.done()["bad"]
+        parent.agents().await.done()["bad"]
             .as_array()
             .unwrap()
             .is_empty()
@@ -1690,38 +1700,123 @@ async fn s12_a_later_start_never_rewrites_the_folder_an_edit_a_delete_and_an_emp
 
     // Edited stays edited, deleted stays deleted, and nothing new appears.
     let edited = "---\ndescription: Mine.\n---\nMy own words.\n";
-    std::fs::write(world.roles_dir().join("worker.md"), edited).unwrap();
-    world.remove_role("lead");
+    std::fs::write(world.agents_dir().join("worker.md"), edited).unwrap();
+    world.remove_agent("lead");
     let host = world.host().await;
     assert_eq!(
-        std::fs::read_to_string(world.roles_dir().join("worker.md")).unwrap(),
+        std::fs::read_to_string(world.agents_dir().join("worker.md")).unwrap(),
         edited
     );
-    assert!(!world.roles_dir().join("lead.md").exists());
-    assert!(world.roles_dir().join("reviewer.md").exists());
+    assert!(!world.agents_dir().join("lead.md").exists());
+    assert!(world.agents_dir().join("reviewer.md").exists());
     host.stop(HostStopReason::Stop).await;
 
     // An emptied folder stays empty.
     for name in ["worker", "reviewer"] {
-        world.remove_role(name);
+        world.remove_agent(name);
     }
     let host = world.host().await;
-    assert_eq!(std::fs::read_dir(world.roles_dir()).unwrap().count(), 0);
+    assert_eq!(std::fs::read_dir(world.agents_dir()).unwrap().count(), 0);
     let parent = world
         .session(CLAUDE, &world.project("emptied"), "parent")
         .await;
-    assert_eq!(parent.role_names().await, ["agent"]);
+    assert_eq!(parent.agent_names().await, ["default"]);
     host.stop(HostStopReason::Stop).await;
 
     // Deleting the folder brings the originals back at the next start.
-    std::fs::remove_dir_all(world.roles_dir()).unwrap();
+    std::fs::remove_dir_all(world.agents_dir()).unwrap();
     let host = world.host().await;
-    assert!(world.roles_dir().join("lead.md").exists());
+    assert!(world.agents_dir().join("lead.md").exists());
     assert_eq!(
-        std::fs::read_dir(world.roles_dir()).unwrap().count(),
+        std::fs::read_dir(world.agents_dir()).unwrap().count(),
         3,
-        "the three shipped roles"
+        "the three shipped agents"
     );
+    host.stop(HostStopReason::Stop).await;
+}
+
+/// Every file under `dir`, by its path from `dir`, with its bytes.
+fn files_in(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    let mut found = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(at) = stack.pop() {
+        for entry in std::fs::read_dir(&at).expect("read a folder") {
+            let path = entry.expect("an entry").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                let name = path
+                    .strip_prefix(dir)
+                    .expect("under the folder")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                found.push((name, std::fs::read(&path).expect("read a file")));
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn s12_a_roles_folder_with_no_agents_folder_is_moved_at_start_and_lists_the_same_agents() {
+    let world = World::new();
+    let roles = world.dirs.config.join("roles");
+    let edited = "---\ndescription: My lead.\ncan_start: yes\n---\nMy own words.\r\n";
+    for (file, content) in [
+        ("lead.md", edited),
+        ("scout.md", "---\ndescription: Looks around.\n---\nLook.\n"),
+        ("typo.md", "---\ndisalowed_tools: Edit\n---\n"),
+        ("notes.txt", "not an agent"),
+    ] {
+        std::fs::create_dir_all(&roles).unwrap();
+        std::fs::write(roles.join(file), content).unwrap();
+    }
+    let before = files_in(&roles);
+    assert!(!world.agents_dir().exists());
+
+    let host = world.host().await;
+    assert!(!roles.exists(), "the roles folder was moved");
+    assert_eq!(
+        files_in(&world.agents_dir()),
+        before,
+        "every file as it was, and nothing seeded beside them"
+    );
+    let parent = world
+        .session(CLAUDE, &world.project("moved"), "parent")
+        .await;
+    assert_eq!(parent.agent_names().await, ["default", "lead", "scout"]);
+    let listed = parent.agents().await.done();
+    assert_eq!(listed["bad"][0]["file"], "typo.md", "{listed}");
+    assert_eq!(
+        parent.agent_entries().await["lead"]["description"],
+        "My lead."
+    );
+    host.stop(HostStopReason::Stop).await;
+
+    // The next start finds the agents folder and moves nothing.
+    let host = world.host().await;
+    assert!(!roles.exists());
+    assert_eq!(files_in(&world.agents_dir()), before);
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn s12_beside_an_agents_folder_a_roles_folder_is_left_alone_and_not_read() {
+    let world = World::new();
+    let roles = world.dirs.config.join("roles");
+    std::fs::create_dir_all(&roles).unwrap();
+    std::fs::write(roles.join("old.md"), "---\n---\nOld.\n").unwrap();
+    world.agent("new", "---\n---\nNew.\n");
+    let (roles_before, agents_before) = (files_in(&roles), files_in(&world.agents_dir()));
+
+    let host = world.host().await;
+    let parent = world
+        .session(CLAUDE, &world.project("both"), "parent")
+        .await;
+    assert_eq!(parent.agent_names().await, ["default", "new"]);
+    assert_eq!(files_in(&roles), roles_before);
+    assert_eq!(files_in(&world.agents_dir()), agents_before);
     host.stop(HostStopReason::Stop).await;
 }
 
@@ -1738,7 +1833,7 @@ async fn s13_the_shipped_lead_starts_agents_cannot_edit_and_carries_its_voice_an
         .await;
 
     parent
-        .start(json!({ "task": "run the board", "role": "lead", "name": "lead" }))
+        .start(json!({ "task": "run the board", "agent": "lead", "name": "lead" }))
         .await
         .done();
     let lead = world.child_of(&parent, "lead").await;
@@ -1752,14 +1847,14 @@ async fn s13_the_shipped_lead_starts_agents_cannot_edit_and_carries_its_voice_an
         .instructions
         .as_deref()
         .expect("the lead's instructions");
-    for part in ["# Role: lead", "## Keeping Trackr", "## Voice", "ABC-12"] {
+    for part in ["# Agent: lead", "## Keeping Trackr", "## Voice", "ABC-12"] {
         assert!(instructions.contains(part), "{part} in {instructions}");
     }
     assert_eq!(lead.run.opening_prompt.as_deref(), Some("run the board"));
     assert!(lead.run.received.is_empty());
 
     // It starts a worker of its own, which is what it is for.
-    lead.start(json!({ "task": "do ABC-12", "role": "worker", "name": "helper" }))
+    lead.start(json!({ "task": "do ABC-12", "agent": "worker", "name": "helper" }))
         .await
         .done();
     assert_eq!(
@@ -1784,7 +1879,7 @@ async fn s14_the_shipped_worker_edits_in_a_worktree_cannot_start_agents_or_creat
         .await;
 
     parent
-        .start(json!({ "task": "do ABC-12", "role": "worker", "name": "worker" }))
+        .start(json!({ "task": "do ABC-12", "agent": "worker", "name": "worker" }))
         .await
         .done();
     let worker = world.child_of(&parent, "worker").await;
@@ -1808,7 +1903,7 @@ async fn s14_the_shipped_worker_edits_in_a_worktree_cannot_start_agents_or_creat
         .as_deref()
         .expect("the worker's instructions");
     for part in [
-        "# Role: worker",
+        "# Agent: worker",
         "Touch only your own item",
         "Also fixed:",
         "Found:",
@@ -1835,18 +1930,19 @@ async fn s14_the_shipped_worker_edits_in_a_worktree_cannot_start_agents_or_creat
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s16_agents_roles_is_allowed_up_front_with_the_other_tools_and_a_deny_rule_still_wins() {
+async fn s16_agents_available_is_allowed_up_front_with_the_other_tools_and_a_deny_rule_still_wins()
+{
     let world = World::new();
-    world.role(
-        "no-roles",
-        "---\nbackend: claude-code\ndisallowed_tools: mcp__floti-agents__agents_roles\n---\n",
+    world.agent(
+        "no-agents",
+        "---\nbackend: claude-code\ndisallowed_tools: mcp__floti-agents__agents_available\n---\n",
     );
     let host = world.host().await;
     let folder = world.project("up front");
 
     for (backend, rule) in [
-        (CLAUDE, "mcp__floti-agents__agents_roles"),
-        (OTHER, "floti-agents.agents_roles"),
+        (CLAUDE, "mcp__floti-agents__agents_available"),
+        (OTHER, "floti-agents.agents_available"),
     ] {
         let parent = world
             .session(backend, &folder, &format!("parent {backend}"))
@@ -1856,9 +1952,9 @@ async fn s16_agents_roles_is_allowed_up_front_with_the_other_tools_and_a_deny_ru
             allowed.iter().any(|got| got == rule),
             "{backend}: {rule} in {allowed:?}"
         );
-        // It is a tool and not a command: no `floti agent roles`.
+        // It is a tool and not a command: no `floti agent available`.
         assert!(
-            !allowed.iter().any(|got| got.contains("agent roles")),
+            !allowed.iter().any(|got| got.contains("agent available")),
             "{backend}: {allowed:?}"
         );
         // Nothing is allowed by a wildcard over the family.
@@ -1877,27 +1973,32 @@ async fn s16_agents_roles_is_allowed_up_front_with_the_other_tools_and_a_deny_ru
             .iter()
             .map(|tool| tool["name"].as_str().unwrap())
             .collect();
-        assert!(names.contains(&"agents_roles"), "{names:?}");
+        assert!(names.contains(&"agents_available"), "{names:?}");
     }
 
-    // A deny rule of a role stays beside the allow rule.
+    // A deny rule of an agent stays beside the allow rule.
     let parent = world.session(CLAUDE, &folder, "parent").await;
     parent
-        .start(json!({ "task": "go", "role": "no-roles", "name": "denied" }))
+        .start(json!({ "task": "go", "agent": "no-agents", "name": "denied" }))
         .await
         .done();
     let denied = world.child_of(&parent, "denied").await;
-    assert_eq!(denied.run.disallowed(), ["mcp__floti-agents__agents_roles"]);
+    assert_eq!(
+        denied.run.disallowed(),
+        ["mcp__floti-agents__agents_available"]
+    );
     assert!(
         denied
             .run
             .allowed()
             .iter()
-            .any(|got| got == "mcp__floti-agents__agents_roles")
+            .any(|got| got == "mcp__floti-agents__agents_available")
     );
 
-    // The subcommand set has no roles command.
-    assert!(agent_cli::parse(&["roles".to_owned()]).is_err());
+    // The subcommand set has no command for the listing.
+    for word in ["available", "agents", "roles"] {
+        assert!(agent_cli::parse(&[word.to_owned()]).is_err(), "{word}");
+    }
     host.stop(HostStopReason::Stop).await;
 }
 
@@ -1906,22 +2007,23 @@ async fn s16_agents_roles_is_allowed_up_front_with_the_other_tools_and_a_deny_ru
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s17_a_role_runs_on_the_installed_backends_it_lists_and_a_start_says_when_there_are_none() {
+async fn s17_an_agent_runs_on_the_installed_backends_it_lists_and_a_start_says_when_there_are_none()
+{
     let world = World::new();
-    world.role("codex-first", "---\nbackend: codex, claude-code\n---\n");
-    world.role("gone", "---\nbackend: codex\n---\n");
+    world.agent("codex-first", "---\nbackend: codex, claude-code\n---\n");
+    world.agent("gone", "---\nbackend: codex\n---\n");
     let host = world.host().await;
     let parent = world
         .session(OTHER, &world.project("installed"), "parent")
         .await;
 
-    let roles = parent.role_entries().await;
-    assert_eq!(backends_of(&roles["codex-first"]), [CLAUDE]);
-    assert!(backends_of(&roles["gone"]).is_empty());
+    let agents = parent.agent_entries().await;
+    assert_eq!(backends_of(&agents["codex-first"]), [CLAUDE]);
+    assert!(backends_of(&agents["gone"]).is_empty());
 
-    // The first one the role lists that is installed.
+    // The first one the agent lists that is installed.
     parent
-        .start(json!({ "task": "go", "role": "codex-first", "name": "first" }))
+        .start(json!({ "task": "go", "agent": "codex-first", "name": "first" }))
         .await
         .done();
     assert_eq!(
@@ -1931,7 +2033,7 @@ async fn s17_a_role_runs_on_the_installed_backends_it_lists_and_a_start_says_whe
 
     // One that is listed and not installed.
     let refused = parent
-        .start(json!({ "task": "go", "role": "codex-first", "backend": "codex" }))
+        .start(json!({ "task": "go", "agent": "codex-first", "backend": "codex" }))
         .await;
     assert!(
         refused.refused().contains("codex") && refused.refused().contains("allows: claude-code."),
@@ -1939,40 +2041,41 @@ async fn s17_a_role_runs_on_the_installed_backends_it_lists_and_a_start_says_whe
     );
     // One that is installed and not listed.
     let refused = parent
-        .start(json!({ "task": "go", "role": "codex-first", "backend": OTHER }))
+        .start(json!({ "task": "go", "agent": "codex-first", "backend": OTHER }))
         .await;
     assert!(refused.refused().contains(OTHER), "{refused:?}");
-    // A role none of whose backends is here.
-    let refused = parent.start(json!({ "task": "go", "role": "gone" })).await;
+    // An agent none of whose backends is here.
+    let refused = parent.start(json!({ "task": "go", "agent": "gone" })).await;
     assert!(
         refused
             .refused()
-            .contains("None of the backends the role gone lists"),
+            .contains("None of the backends the agent gone lists"),
         "{refused:?}"
     );
     assert_eq!(world.children_made(), 1);
 
-    // A role that lists no backend is for every installed agent backend.
-    world.role("anywhere", "---\n---\n");
+    // An agent that lists no backend is for every installed agent backend.
+    world.agent("anywhere", "---\n---\n");
     assert_eq!(
-        backends_of(&parent.role_entries().await["anywhere"]),
+        backends_of(&parent.agent_entries().await["anywhere"]),
         [CLAUDE, OTHER]
     );
     host.stop(HostStopReason::Stop).await;
 }
 
 // ---------------------------------------------------------------------------
-// S18: the role's profile
+// S18: the agent's profile
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s18_a_role_names_the_profile_its_children_run_under_and_a_missing_one_refuses_the_start() {
+async fn s18_an_agent_names_the_profile_its_children_run_under_and_a_missing_one_refuses_the_start()
+{
     let world = World::new();
-    world.role(
+    world.agent(
         "profiled",
         "---\nbackend: claude-code\nprofile: Roleprof\n---\n",
     );
-    world.role(
+    world.agent(
         "lost",
         "---\nbackend: claude-code\nprofile: Nonesuch\n---\n",
     );
@@ -1996,22 +2099,22 @@ async fn s18_a_role_names_the_profile_its_children_run_under_and_a_missing_one_r
         None,
     );
 
-    // The role's profile, even though the folder is another profile's.
+    // The agent's profile, even though the folder is another profile's.
     parent
-        .start(json!({ "task": "go", "role": "profiled", "name": "by-role" }))
+        .start(json!({ "task": "go", "agent": "profiled", "name": "by-agent" }))
         .await
         .done();
-    let by_role = world.child_of(&parent, "by-role").await;
-    assert_eq!(world.column::<i64>(by_role.id(), "profile_id"), profile);
-    assert_eq!(by_role.run.model(), Some("profile-model"));
+    let by_agent = world.child_of(&parent, "by-agent").await;
+    assert_eq!(world.column::<i64>(by_agent.id(), "profile_id"), profile);
+    assert_eq!(by_agent.run.model(), Some("profile-model"));
     assert_eq!(
-        value_of(&by_role.run.argv, "--permission-mode"),
+        value_of(&by_agent.run.argv, "--permission-mode"),
         Some("plan")
     );
 
-    // A profile named in the start wins over the role's.
+    // A profile named in the start wins over the agent's.
     parent
-        .start(json!({ "task": "go", "role": "profiled", "name": "by-ask", "profile": "Asked" }))
+        .start(json!({ "task": "go", "agent": "profiled", "name": "by-ask", "profile": "Asked" }))
         .await
         .done();
     let by_ask = world.child_of(&parent, "by-ask").await;
@@ -2019,7 +2122,7 @@ async fn s18_a_role_names_the_profile_its_children_run_under_and_a_missing_one_r
 
     // A profile that is not there refuses the start, naming file and profile.
     let runs = world.run_count();
-    let refused = parent.start(json!({ "task": "go", "role": "lost" })).await;
+    let refused = parent.start(json!({ "task": "go", "agent": "lost" })).await;
     let sentence = refused.refused();
     assert!(
         sentence.contains("lost.md") && sentence.contains("Nonesuch"),
@@ -2035,9 +2138,10 @@ async fn s18_a_role_names_the_profile_its_children_run_under_and_a_missing_one_r
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn floti_agent_start_and_stop_take_a_role_and_agents_roles_is_called_from_either_backend() {
+async fn floti_agent_start_and_stop_take_an_agent_and_agents_available_is_called_from_either_backend()
+ {
     let world = World::new();
-    world.role(
+    world.agent(
         "briefed",
         "---\ndescription: Has a brief.\nbackend: claude-code, other-agent\n---\nBe thorough.\n",
     );
@@ -2052,7 +2156,7 @@ async fn floti_agent_start_and_stop_take_a_role_and_agents_roles_is_called_from_
         let started = subcommand(
             Subcommand::Start(StartCommand {
                 task: "by the command".to_owned(),
-                role: Some("briefed".to_owned()),
+                agent: Some("briefed".to_owned()),
                 backend: Some(other.to_owned()),
                 name: Some("by-cli".to_owned()),
                 ..StartCommand::default()
@@ -2074,11 +2178,11 @@ async fn floti_agent_start_and_stop_take_a_role_and_agents_roles_is_called_from_
         );
         assert_eq!(child.run.opening_prompt.as_deref(), Some("by the command"));
 
-        // A role that does not exist is a refusal the command prints.
+        // An agent that does not exist is a refusal the command prints.
         let refused = subcommand(
             Subcommand::Start(StartCommand {
                 task: "x".to_owned(),
-                role: Some("wizard".to_owned()),
+                agent: Some("wizard".to_owned()),
                 ..StartCommand::default()
             }),
             url.clone(),
@@ -2086,10 +2190,10 @@ async fn floti_agent_start_and_stop_take_a_role_and_agents_roles_is_called_from_
         )
         .await;
         assert_eq!(refused.code, 1, "{refused:?}");
-        assert!(refused.err.unwrap().contains("no role named wizard"));
+        assert!(refused.err.unwrap().contains("no agent named wizard"));
 
-        // The roles, over the same route.
-        assert!(parent.role_names().await.contains(&"briefed".to_owned()));
+        // The agents, over the same route.
+        assert!(parent.agent_names().await.contains(&"briefed".to_owned()));
 
         let stopped = subcommand(
             Subcommand::Stop(StopCommand {
@@ -2112,27 +2216,27 @@ async fn floti_agent_start_and_stop_take_a_role_and_agents_roles_is_called_from_
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s2_a_lost_child_is_reopened_in_its_role_as_the_file_reads_when_it_comes_back() {
+async fn s2_a_lost_child_is_reopened_in_its_agent_as_the_file_reads_when_it_comes_back() {
     let world = World::new();
-    world.role("edited", "---\nbackend: claude-code\n---\nFirst version.\n");
-    world.role(
+    world.agent("edited", "---\nbackend: claude-code\n---\nFirst version.\n");
+    world.agent(
         "broken",
         "---\nbackend: claude-code\n---\nWill be broken.\n",
     );
-    world.role("gone", "---\nbackend: claude-code\n---\nWill be deleted.\n");
+    world.agent("gone", "---\nbackend: claude-code\n---\nWill be deleted.\n");
     let host = world.host().await;
     let parent = world
         .session(CLAUDE, &world.project("reopen"), "parent")
         .await;
-    for role in ["edited", "broken", "gone"] {
+    for agent in ["edited", "broken", "gone"] {
         parent
-            .start(json!({ "task": "work", "role": role, "name": role }))
+            .start(json!({ "task": "work", "agent": agent, "name": agent }))
             .await
             .done();
     }
     let mut kids = BTreeMap::new();
-    for role in ["edited", "broken", "gone"] {
-        kids.insert(role, world.child_of(&parent, role).await);
+    for agent in ["edited", "broken", "gone"] {
+        kids.insert(agent, world.child_of(&parent, agent).await);
     }
     assert!(
         kids["edited"]
@@ -2159,12 +2263,12 @@ async fn s2_a_lost_child_is_reopened_in_its_role_as_the_file_reads_when_it_comes
     assert_eq!(host.stopped().await, HostStopReason::Update);
 
     // The files change while it is down.
-    world.role(
+    world.agent(
         "edited",
         "---\nbackend: claude-code\n---\nSecond version.\n",
     );
-    world.role("broken", "---\nworktree: maybe\n---\nStill here.\n");
-    world.remove_role("gone");
+    world.agent("broken", "---\nworktree: maybe\n---\nStill here.\n");
+    world.remove_agent("gone");
 
     let host = world.host().await;
     let mut client = world.client().await;
@@ -2172,8 +2276,8 @@ async fn s2_a_lost_child_is_reopened_in_its_role_as_the_file_reads_when_it_comes
         .request::<SessionRestore>(&RestoreSessionsRequest {
             sessions: ["edited", "broken", "gone"]
                 .iter()
-                .map(|role| SessionToRestore {
-                    id: kids[role].id(),
+                .map(|agent| SessionToRestore {
+                    id: kids[agent].id(),
                     cols: 80,
                     rows: 24,
                 })
@@ -2183,7 +2287,7 @@ async fn s2_a_lost_child_is_reopened_in_its_role_as_the_file_reads_when_it_comes
         .expect("the restore is taken");
     drop(client);
 
-    // The edited role composes the reopened child again, as it reads now.
+    // The edited agent composes the reopened child again, as it reads now.
     assert_eq!(result.restored.len(), 2, "{result:?}");
     let edited = result
         .restored
@@ -2197,7 +2301,7 @@ async fn s2_a_lost_child_is_reopened_in_its_role_as_the_file_reads_when_it_comes
         .run
         .instructions
         .as_deref()
-        .expect("the role's instructions");
+        .expect("the agent's instructions");
     assert!(composed.contains("Second version."), "{composed}");
     assert!(!composed.contains("First version."), "{composed}");
     assert!(
@@ -2206,7 +2310,7 @@ async fn s2_a_lost_child_is_reopened_in_its_role_as_the_file_reads_when_it_comes
         again.run.argv
     );
 
-    // A role whose file cannot be used refuses the reopen, naming the file.
+    // An agent whose file cannot be used refuses the reopen, naming the file.
     assert_eq!(result.failed.len(), 1, "{result:?}");
     assert_eq!(result.failed[0].id, kids["broken"].id());
     assert!(
@@ -2216,12 +2320,12 @@ async fn s2_a_lost_child_is_reopened_in_its_role_as_the_file_reads_when_it_comes
     );
     assert!(result.failed[0].reason.contains("worktree must be"));
 
-    // A role that is gone reopens without it, and says so.
+    // An agent that is gone reopens without it, and says so.
     let gone = result
         .restored
         .iter()
         .find(|restored| restored.from == kids["gone"].id())
-        .expect("the child of the deleted role came back");
+        .expect("the child of the deleted agent came back");
     assert!(
         gone.launched
             .warnings
@@ -2233,7 +2337,7 @@ async fn s2_a_lost_child_is_reopened_in_its_role_as_the_file_reads_when_it_comes
     let reopened = world
         .agent_of(gone.launched.session.clone(), &[kids["gone"].run.pid])
         .await;
-    // Floti's own guide is all it is given: nothing of the deleted role's body.
+    // Floti's own guide is all it is given: nothing of the deleted agent's body.
     let told = reopened.run.instructions.as_deref().unwrap_or_default();
     assert!(!told.contains("Will be deleted."), "{told}");
     host.stop(HostStopReason::Stop).await;

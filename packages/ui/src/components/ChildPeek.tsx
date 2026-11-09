@@ -50,9 +50,9 @@ export interface ChildPeekProps {
   mark: ChildMarkView
   /** What it is doing, in a word or two ("working", "needs you"). */
   state: { label: string; tone: PeekTone }
-  /** An agent child's role, or null for one started with none. Ignored for a command. */
-  role: string | null
-  /** A command child's command line; undefined for an agent child, which has a role and a mode. */
+  /** The agent an agent child was started as, or null for one started as none. Ignored for a command. */
+  agent: string | null
+  /** A command child's command line; undefined for an agent child, which has an agent and a mode. */
   command?: string | undefined
   /** The folder it runs in, as named on screen, and the whole path for its hover text. */
   folder: string
@@ -98,7 +98,7 @@ const BUTTON = 'rounded-well border px-[9px] py-[3px] text-[11.5px] font-medium 
 /**
  * The peek: a popover beside the row, or under the crumb chip, it was opened
  * from, for a child that has nowhere on screen here. It shows the
- * child's screen live and read-only, who it is (its role, or its command), its
+ * child's screen live and read-only, who it is (its agent, or its command), its
  * folder, branch and mode, what it last reported, and Stop and Open as tab,
  * with Open after them for a running child closed out of its parent's family
  * view. Open never makes a tab: it puts the child back in that view. A child
@@ -120,7 +120,7 @@ export function ChildPeek({
   name,
   mark,
   state,
-  role,
+  agent,
   command,
   folder,
   folderPath,
@@ -194,7 +194,7 @@ export function ChildPeek({
   const rows: Array<{ label: string; value: string; title?: string | undefined; strong?: boolean }> =
     command === undefined
       ? [
-          { label: 'Role', value: role ?? 'none' },
+          { label: 'Agent', value: agent ?? 'none' },
           { label: 'Folder', value: folder, title: folderPath },
           { label: 'Branch', value: branch ?? 'none' },
           { label: 'Mode', value: mode ?? 'default' }

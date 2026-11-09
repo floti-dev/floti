@@ -30,6 +30,7 @@ fn session(backend: BackendId) -> SessionRecord {
         exit_code: None,
         parent_id: None,
         parent_name: None,
+        agent: None,
         role: None,
         command: None,
         stopped: false,

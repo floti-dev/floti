@@ -68,7 +68,7 @@ pub const SESSIONS_URL_VAR: &str = "FLOTI_AGENT_SESSIONS_URL";
 pub const SESSION_USAGE: &str = "usage: floti session title <text>";
 
 /// What `floti agent` accepts.
-pub const USAGE: &str = "usage: floti agent start --task <text> [--role <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--worktree <name>] [--outlive] [--can-start] [--wait] [--json]\n       floti agent start --resume <name> --task <text> [--wait] [--json]\n       floti agent send [--interrupt] [--wait] [--json] <name> [--] <text>\n       floti agent read [--lines <n>] [--json] <name>\n       floti agent run [--name <name>] [--wait] [--json] -- <command...>\n       floti agent wait [--all] [--background] [--json] [<name>...]\n       floti agent stop [--keep] [--json] <name>";
+pub const USAGE: &str = "usage: floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--worktree <name>] [--outlive] [--can-start] [--wait] [--json]\n       floti agent start --resume <name> --task <text> [--wait] [--json]\n       floti agent send [--interrupt] [--wait] [--json] <name> [--] <text>\n       floti agent read [--lines <n>] [--json] <name>\n       floti agent run [--name <name>] [--wait] [--json] -- <command...>\n       floti agent wait [--all] [--background] [--json] [<name>...]\n       floti agent stop [--keep] [--json] <name>";
 
 /// How long a connection waits to be made.
 const CONNECT_WAIT: Duration = Duration::from_secs(10);
@@ -132,7 +132,7 @@ pub struct SendText {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Start {
     pub task: String,
-    pub role: Option<String>,
+    pub agent: Option<String>,
     pub backend: Option<String>,
     pub folder: Option<String>,
     pub profile: Option<String>,
@@ -143,7 +143,7 @@ pub struct Start {
     /// its next turn.
     pub resume: Option<String>,
     pub outlive: bool,
-    /// Whether `--can-start` was given; without it the role chooses.
+    /// Whether `--can-start` was given; without it the agent chooses.
     pub can_start: bool,
     /// Whether `--wait` was given: the command then also prints the child's
     /// next news.
@@ -266,7 +266,7 @@ fn parse_start(args: &[String]) -> Result<Start, String> {
         };
         match flag {
             "--task" => task = Some(value(flag)?),
-            "--role" => start.role = Some(value(flag)?),
+            "--agent" => start.agent = Some(value(flag)?),
             "--backend" => start.backend = Some(value(flag)?),
             "--folder" => start.folder = Some(value(flag)?),
             "--profile" => start.profile = Some(value(flag)?),
@@ -546,7 +546,7 @@ fn start_arguments(start: &Start) -> Value {
     let mut arguments = json!({ "task": start.task });
     let map = arguments.as_object_mut().expect("an object");
     for (key, value) in [
-        ("role", &start.role),
+        ("agent", &start.agent),
         ("backend", &start.backend),
         ("folder", &start.folder),
         ("profile", &start.profile),
@@ -927,7 +927,7 @@ mod tests {
             "start",
             "--task",
             "review the diff",
-            "--role=reviewer",
+            "--agent=reviewer",
             "--backend",
             "other-agent",
             "--folder",
@@ -948,7 +948,7 @@ mod tests {
             parsed,
             Command::Start(Start {
                 task: "review the diff".to_owned(),
-                role: Some("reviewer".to_owned()),
+                agent: Some("reviewer".to_owned()),
                 backend: Some("other-agent".to_owned()),
                 folder: Some("src".to_owned()),
                 profile: Some("Acme".to_owned()),

@@ -27,9 +27,9 @@ use std::time::{Duration, Instant};
 
 use floti_host::agent::AgentBackend;
 use floti_host::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
+use floti_host::agent_definitions::{AgentDefinition, DefinitionSource, FixedDefinitions};
 use floti_host::platform::process_tree::{Native as NativeTree, ProcessTree};
 use floti_host::platform::socket::Endpoint;
-use floti_host::roles::{FixedRoles, Role, RoleSource};
 use floti_host::server::{HostConfig, TEST_STARTUP_GRACE_MARKER};
 use floti_host::testkit::{
     OtherAgent, OtherAgentBackend, OtherAgentRecord, PATIENCE, RunningHost, ShellRun, TestClient,
@@ -65,10 +65,10 @@ const FAMILY: &str = "floti-agents";
 // A host with several backends
 // ---------------------------------------------------------------------------
 
-/// The one role the host is given beside the default: it has a body of its
+/// The one agent the host is given beside the default: it has a body of its
 /// own, to be composed beside what Floti adds.
-fn roles() -> Vec<Role> {
-    let mut reviewer = Role::new(
+fn agents() -> Vec<AgentDefinition> {
+    let mut reviewer = AgentDefinition::new(
         "reviewer",
         [
             BackendId::new(CLAUDE),
@@ -165,11 +165,12 @@ impl World {
         }
     }
 
-    /// A host that serves once this returns, with the roles above, and the
+    /// A host that serves once this returns, with the agents above, and the
     /// workspace tracked.
     async fn host(&self) -> RunningHost {
-        let source: Arc<dyn RoleSource> = Arc::new(FixedRoles(roles()));
-        let (host, ()) = RunningHost::start_with(self.config(), move |host| host.use_roles(source));
+        let source: Arc<dyn DefinitionSource> = Arc::new(FixedDefinitions(agents()));
+        let (host, ()) =
+            RunningHost::start_with(self.config(), move |host| host.use_agents(source));
         // A client is welcomed once the host serves.
         drop(self.client().await);
         let known: i64 = self
@@ -2063,7 +2064,7 @@ async fn s10_a_launch_that_fails_or_a_program_that_reports_an_error_is_news_with
 
     // A child whose launch fails: its program is not there.
     let refused = parent
-        .start(json!({ "task": "TOPSECRET-TASK", "name": "ghost", "role": "reviewer", "backend": MISSING }))
+        .start(json!({ "task": "TOPSECRET-TASK", "name": "ghost", "agent": "reviewer", "backend": MISSING }))
         .await;
     let reason = refused.refused().to_owned();
     let heard = parent.hear(json!({})).await;
@@ -3167,7 +3168,7 @@ async fn the_agents_family_is_discovered_at_2026_07_28_with_the_tasks_extension_
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s15_a_child_is_told_its_parent_and_role_beside_its_roles_and_the_family_has_a_manual() {
+async fn s15_a_child_is_told_its_parent_and_agent_beside_its_agents_and_the_family_has_a_manual() {
     let world = World::new();
     let host = world.host().await;
     let folder = world.project("told");
@@ -3176,7 +3177,7 @@ async fn s15_a_child_is_told_its_parent_and_role_beside_its_roles_and_the_family
             .session(backend, &folder, &format!("parent {backend}"))
             .await;
         parent
-            .start(json!({ "task": "review", "name": "checker", "role": "reviewer", "backend": backend }))
+            .start(json!({ "task": "review", "name": "checker", "agent": "reviewer", "backend": backend }))
             .await
             .done();
         let child = world.child_of(&parent, "checker").await;
@@ -3193,7 +3194,7 @@ async fn s15_a_child_is_told_its_parent_and_role_beside_its_roles_and_the_family
             told.contains("Review the change and touch nothing."),
             "{told}"
         );
-        // The role's own text comes before what Floti adds.
+        // The agent's own text comes before what Floti adds.
         assert!(
             told.find("Review the change").unwrap()
                 < told.find("Started by another session").unwrap(),

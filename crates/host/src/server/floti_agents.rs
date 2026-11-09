@@ -1,5 +1,5 @@
 //! floti-agents: start, send to, read, list, wait on and stop an agent's own
-//! children, list the roles they can be started in, and (for a child) report
+//! children, list the agents they can be started as, and (for a child) report
 //! to its parent,
 //! served to the host's sessions on the agent tools listener at `/mcp/agents`
 //! (`floti_agents.json`).
@@ -61,8 +61,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::hosted::{
-    ChildEntry, ChildRead, ChildSent, ChildStopped, ChildrenListed, Holding, Hosted, ReadChild,
-    RoleEntry, RolesListed, RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest,
+    AgentEntry, AgentsAvailable, ChildEntry, ChildRead, ChildSent, ChildStopped, ChildrenListed,
+    Holding, Hosted, ReadChild, RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest,
     Waited, off_runtime,
 };
 use crate::agent_tools::{
@@ -102,7 +102,7 @@ const AGENTS_SEND: &str = "agents_send";
 const AGENTS_READ: &str = "agents_read";
 const AGENTS_LIST: &str = "agents_list";
 const AGENTS_STOP: &str = "agents_stop";
-const AGENTS_ROLES: &str = "agents_roles";
+const AGENTS_AVAILABLE: &str = "agents_available";
 const AGENTS_WAIT: &str = "agents_wait";
 const AGENTS_REPORT: &str = "agents_report";
 
@@ -313,7 +313,7 @@ impl ToolFamily for FlotiAgents {
                 AGENTS_REPORT => report(Arc::clone(&hosted), me, &arguments).await,
                 AGENTS_LIST => list(hosted, me).await,
                 AGENTS_STOP => stop(hosted, me, &arguments).await,
-                AGENTS_ROLES => roles(hosted, me).await,
+                AGENTS_AVAILABLE => agents(hosted, me).await,
                 other => problem(&format!("{} has no tool named {other}.", TABLE.name)),
             }
         })
@@ -675,12 +675,13 @@ async fn list(hosted: Arc<Hosted>, me: SessionId) -> CallToolResult {
     }
 }
 
-/// `agents_roles`: the roles there are now, and the files that are not roles.
-async fn roles(hosted: Arc<Hosted>, me: SessionId) -> CallToolResult {
-    match off_runtime(move || hosted.list_roles(me)).await {
+/// `agents_available`: the agents there are now, and the files that are not
+/// agents.
+async fn agents(hosted: Arc<Hosted>, me: SessionId) -> CallToolResult {
+    match off_runtime(move || hosted.available_agents(me)).await {
         Ok(listed) => {
-            let text = roles_text(&listed);
-            answer(text, roles_json(&listed))
+            let text = available_text(&listed);
+            answer(text, available_json(&listed))
         }
         Err(refusal) => problem(&refusal),
     }
@@ -730,7 +731,7 @@ fn start_request(arguments: &JsonObject) -> Result<StartChild, String> {
     let task = text_argument(arguments, "task")
         .ok_or_else(|| "Give the agent its task: task is what it is to do.".to_owned())?;
     for key in [
-        "role", "backend", "folder", "profile", "name", "worktree", "resume",
+        "agent", "backend", "folder", "profile", "name", "worktree", "resume",
     ] {
         if !matches!(
             arguments.get(key),
@@ -741,7 +742,7 @@ fn start_request(arguments: &JsonObject) -> Result<StartChild, String> {
     }
     Ok(StartChild {
         task,
-        role: text_argument(arguments, "role"),
+        agent: text_argument(arguments, "agent"),
         backend: text_argument(arguments, "backend"),
         folder: text_argument(arguments, "folder"),
         profile: text_argument(arguments, "profile"),
@@ -912,10 +913,11 @@ fn listing_text(listed: &ChildrenListed) -> String {
 
 fn child_text(child: &ChildEntry) -> String {
     let branch = child.branch.as_deref().unwrap_or("none");
-    // A command child shows its command where an agent shows its role.
+    // A command child shows its command where any other child shows its
+    // agent.
     let kind = match &child.command {
         Some(command) => format!("command {command}"),
-        None => format!("role {}", child.role.as_deref().unwrap_or("none")),
+        None => format!("agent {}", child.agent.as_deref().unwrap_or("none")),
     };
     let mut line = format!(
         "{name}  {kind}  {backend}  {state} since {since}  {folder}  branch {branch}",
@@ -942,7 +944,7 @@ fn listing_json(listed: &ChildrenListed) -> Value {
     json!({
         "children": listed.children.iter().map(|child| json!({
             "name": child.name,
-            "role": child.role,
+            "agent": child.agent,
             "command": child.command,
             "worktree": child.worktree,
             "backend": child.backend,
@@ -968,14 +970,14 @@ fn listing_json(listed: &ChildrenListed) -> Value {
     })
 }
 
-fn roles_text(listed: &RolesListed) -> String {
+fn available_text(listed: &AgentsAvailable) -> String {
     let mut out = String::new();
-    for role in &listed.roles {
-        out.push_str(&role_text(role));
+    for agent in &listed.agents {
+        out.push_str(&agent_text(agent));
         out.push('\n');
     }
     if !listed.bad.is_empty() {
-        out.push_str("Role files that cannot be used:\n");
+        out.push_str("Agent files that cannot be used:\n");
         for bad in &listed.bad {
             out.push_str(&format!("{}: {}\n", bad.file, bad.problem));
         }
@@ -983,44 +985,44 @@ fn roles_text(listed: &RolesListed) -> String {
     out.trim_end().to_owned()
 }
 
-fn role_text(role: &RoleEntry) -> String {
+fn agent_text(agent: &AgentEntry) -> String {
     let yes_no = |flag: bool| if flag { "yes" } else { "no" };
-    let backends = if role.backends.is_empty() {
+    let backends = if agent.backends.is_empty() {
         "none installed here can run it".to_owned()
     } else {
-        role.backends.join(", ")
+        agent.backends.join(", ")
     };
     let mut text = format!(
         "{name}  worktree {worktree}  may start agents {can_start}  runs on {backends}",
-        name = role.name,
-        worktree = yes_no(role.worktree),
-        can_start = yes_no(role.can_start),
+        name = agent.name,
+        worktree = yes_no(agent.worktree),
+        can_start = yes_no(agent.can_start),
     );
-    if !role.description.is_empty() {
-        text.push_str(&format!("\n  {}", role.description));
+    if !agent.description.is_empty() {
+        text.push_str(&format!("\n  {}", agent.description));
     }
-    for line in &role.unused_lines {
-        text.push_str(&format!("\n  {}", unused_line_text(&role.name, line)));
+    for line in &agent.unused_lines {
+        text.push_str(&format!("\n  {}", unused_line_text(&agent.name, line)));
     }
     text
 }
 
-/// The sentence naming a line of a role's file that Floti no longer uses.
-fn unused_line_text(role: &str, line: &str) -> String {
-    format!("The {line} line in {role}.md is no longer used and is ignored; it can be deleted.")
+/// The sentence naming a line of an agent's file that Floti no longer uses.
+fn unused_line_text(agent: &str, line: &str) -> String {
+    format!("The {line} line in {agent}.md is no longer used and is ignored; it can be deleted.")
 }
 
-fn roles_json(listed: &RolesListed) -> Value {
+fn available_json(listed: &AgentsAvailable) -> Value {
     json!({
-        "roles": listed.roles.iter().map(|role| json!({
-            "name": role.name,
-            "description": role.description,
-            "worktree": role.worktree,
-            "canStart": role.can_start,
-            "backends": role.backends,
-            "unusedLines": role.unused_lines.iter().map(|line| json!({
+        "agents": listed.agents.iter().map(|agent| json!({
+            "name": agent.name,
+            "description": agent.description,
+            "worktree": agent.worktree,
+            "canStart": agent.can_start,
+            "backends": agent.backends,
+            "unusedLines": agent.unused_lines.iter().map(|line| json!({
                 "line": line,
-                "text": unused_line_text(&role.name, line),
+                "text": unused_line_text(&agent.name, line),
             })).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
         "bad": listed.bad.iter().map(|bad| json!({
@@ -1192,7 +1194,7 @@ pub(crate) mod allowances {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::roles::BadRole;
+    use crate::agent_definitions::BadDefinition;
     use crate::server::hosted::{EventKind, Facts, News};
 
     fn arguments(value: Value) -> JsonObject {
@@ -1217,7 +1219,7 @@ mod tests {
                 "agents_read",
                 "agents_list",
                 "agents_stop",
-                "agents_roles",
+                "agents_available",
                 "agents_wait",
                 "agents_report"
             ]
@@ -1249,7 +1251,7 @@ mod tests {
             "agents_read",
             "agents_list",
             "agents_stop",
-            "agents_roles",
+            "agents_available",
             "agents_wait",
             "floti agent run --name <name> -- <command>",
             "call it again",
@@ -1492,7 +1494,7 @@ mod tests {
         assert!(start_request(&arguments(json!({ "task": "  " }))).is_err());
         let request = start_request(&arguments(json!({
             "task": " review it ",
-            "role": "reviewer",
+            "agent": "reviewer",
             "backend": "other-agent",
             "folder": "src",
             "profile": "Acme",
@@ -1503,7 +1505,7 @@ mod tests {
         })))
         .expect("a request");
         assert_eq!(request.task, "review it");
-        assert_eq!(request.role.as_deref(), Some("reviewer"));
+        assert_eq!(request.agent.as_deref(), Some("reviewer"));
         assert_eq!(request.backend.as_deref(), Some("other-agent"));
         assert_eq!(request.folder.as_deref(), Some("src"));
         assert_eq!(request.profile.as_deref(), Some("Acme"));
@@ -1522,10 +1524,10 @@ mod tests {
         assert!(flag(&arguments(json!({ "wait": "yes" })), "wait").is_err());
     }
 
-    fn listed_roles() -> RolesListed {
-        RolesListed {
-            roles: vec![
-                RoleEntry {
+    fn listed_agents() -> AgentsAvailable {
+        AgentsAvailable {
+            agents: vec![
+                AgentEntry {
                     name: "agent".into(),
                     description: String::new(),
                     worktree: false,
@@ -1533,7 +1535,7 @@ mod tests {
                     backends: vec!["claude-code".into(), "other-agent".into()],
                     unused_lines: vec![],
                 },
-                RoleEntry {
+                AgentEntry {
                     name: "scout".into(),
                     description: "Looks around.".into(),
                     worktree: true,
@@ -1542,28 +1544,28 @@ mod tests {
                     unused_lines: vec!["class".into()],
                 },
             ],
-            bad: vec![BadRole {
+            bad: vec![BadDefinition {
                 file: "typo.md".into(),
-                problem: "the key disalowed_tools is not a role field".into(),
+                problem: "the key disalowed_tools is not an agent field".into(),
             }],
         }
     }
 
     #[test]
-    fn the_roles_answer_names_each_role_what_it_is_and_the_backends_that_can_run_it() {
-        let text = roles_text(&listed_roles());
+    fn the_agents_answer_names_each_agent_what_it_is_and_the_backends_that_can_run_it() {
+        let text = available_text(&listed_agents());
         assert_eq!(
             text,
             "agent  worktree no  may start agents no  runs on claude-code, other-agent\n\
              scout  worktree yes  may start agents yes  runs on none installed here can run it\n  Looks around.\n  \
              The class line in scout.md is no longer used and is ignored; it can be deleted.\n\
-             Role files that cannot be used:\n\
-             typo.md: the key disalowed_tools is not a role field"
+             Agent files that cannot be used:\n\
+             typo.md: the key disalowed_tools is not an agent field"
         );
         assert_eq!(
-            roles_json(&listed_roles()),
+            available_json(&listed_agents()),
             json!({
-                "roles": [
+                "agents": [
                     {
                         "name": "agent",
                         "description": "",
@@ -1585,7 +1587,7 @@ mod tests {
                     },
                 ],
                 "bad": [
-                    { "file": "typo.md", "problem": "the key disalowed_tools is not a role field" },
+                    { "file": "typo.md", "problem": "the key disalowed_tools is not an agent field" },
                 ],
             })
         );
@@ -1593,10 +1595,10 @@ mod tests {
 
     #[test]
     fn a_listing_with_no_bad_file_says_nothing_of_them() {
-        let mut listed = listed_roles();
+        let mut listed = listed_agents();
         listed.bad.clear();
-        assert!(!roles_text(&listed).contains("cannot be used"));
-        assert_eq!(roles_json(&listed)["bad"], json!([]));
+        assert!(!available_text(&listed).contains("cannot be used"));
+        assert_eq!(available_json(&listed)["bad"], json!([]));
     }
 
     #[test]

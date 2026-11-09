@@ -939,7 +939,7 @@ async fn s11_a_stop_from_a_client_ends_every_tree_records_rows_exited_and_offers
             .unwrap();
         pids.extend(tree_of(&agent, run_of(&agent, folder)[0]));
     }
-    assert_eq!(pids.len(), 4, "two agents, each with a child");
+    assert_eq!(pids.len(), 4, "two sessions, each with a child");
 
     client
         .request::<HostStop>(&HostStopRequest {

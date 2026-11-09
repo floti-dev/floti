@@ -5,7 +5,7 @@
 //! about.
 
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use ts_rs::TS;
 
 use crate::backend::BackendId;
@@ -31,8 +31,14 @@ pub enum SessionStatus {
 }
 
 /// One hosted agent process, from spawn to exit.
+// Its serde derives are `remote = "Self"`, which makes them this type's own
+// functions, and the `Serialize` and `Deserialize` impls below wrap them: a
+// record is written and read with `agent` and the retired `role` holding one
+// value, whichever of the two the other side sent. `schemars(rename)` keeps
+// the schema's name, which `remote` would otherwise take.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", remote = "Self")]
+#[schemars(rename = "SessionRecord")]
 pub struct SessionRecord {
     #[ts(type = "number")]
     pub id: u64,
@@ -91,8 +97,17 @@ pub struct SessionRecord {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub parent_name: Option<String>,
-    /// The role the session was started in, or null for a session started
-    /// with none.
+    /// The agent the session was started as (a lead, a worker, a reviewer),
+    /// or null for a session started as none: one a person started, and a
+    /// command child. Absent from a host before protocol 2.3, which says it
+    /// as `role`; a record read from one has it here all the same.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub agent: Option<String>,
+    /// Retired: the same as `agent`, under the name it had before protocol
+    /// 2.3. Still written with `agent`'s value so that a client before 2.3
+    /// reads what it did, and read in place of `agent` from one that sends
+    /// only this. It leaves the protocol at the next major version.
     #[serde(default)]
     #[ts(optional = nullable)]
     pub role: Option<String>,
@@ -145,6 +160,35 @@ pub struct SessionRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub permission_mode: Option<PermissionMode>,
+}
+
+impl SessionRecord {
+    /// This record with `agent` and the retired `role` holding the same
+    /// value: `agent`'s, else `role`'s from a side before protocol 2.3.
+    fn with_one_agent(mut self) -> Self {
+        if self.agent.is_none() {
+            self.agent.clone_from(&self.role);
+        } else if self.role != self.agent {
+            self.role.clone_from(&self.agent);
+        }
+        self
+    }
+}
+
+impl Serialize for SessionRecord {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if self.role == self.agent {
+            SessionRecord::serialize(self, serializer)
+        } else {
+            SessionRecord::serialize(&self.clone().with_one_agent(), serializer)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for SessionRecord {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        SessionRecord::deserialize(deserializer).map(SessionRecord::with_one_agent)
+    }
 }
 
 /// How a session that has exited came to end.

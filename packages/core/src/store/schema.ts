@@ -267,12 +267,16 @@ export const sessions = sqliteTable(
     parentConversationId: text('parent_conversation_id'),
     /**
      * What the parent calls this child: unique among the parent's children,
-     * taken from the role by default (`reviewer`, `reviewer-2`). Null for a
+     * taken from the agent by default (`reviewer`, `reviewer-2`). Null for a
      * session with no parent.
      */
     childName: text('child_name'),
-    /** The role it was started in, or null for none. */
-    role: text('role'),
+    /**
+     * The agent it was started as (`reviewer`, `worker`, `lead`), or null for
+     * none. The column was `role` before agents were called agents; the
+     * migration that renamed it kept every row's value.
+     */
+    agent: text('agent'),
     /**
      * The command line a command child runs, as its parent gave it after `--`,
      * or null for every other session. The child's exit code is the row's
@@ -283,7 +287,7 @@ export const sessions = sqliteTable(
     outlive: integer('outlive', { mode: 'boolean' }).notNull().default(false),
     /** Whether it may start children of its own (the second generation). */
     canStart: integer('can_start', { mode: 'boolean' }).notNull().default(false),
-    /** Whether the role it was started in asks for a worktree of its own. */
+    /** Whether the agent it was started as asks for a worktree of its own. */
     childWorktree: integer('child_worktree', { mode: 'boolean' }).notNull().default(false),
     /**
      * Whether the host ended the session itself - Stop or End, an agent's stop,

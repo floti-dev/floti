@@ -6,7 +6,7 @@
 //! config flag, it reopens a conversation with `--continue`, and it has no flag
 //! that disallows a tool. Its backend, `other-agent`, has MCP tools, moves no
 //! long call to the background and supports no MCP tasks, and it enforces what
-//! its flags can: a role's allowed tools and the permission modes it has a
+//! its flags can: an agent's allowed tools and the permission modes it has a
 //! name for. A rule it cannot enforce, such as a disallowed tool, is refused.
 
 use std::collections::BTreeMap;
@@ -278,7 +278,7 @@ impl OtherAgentBackend {
         prompt: Option<&str>,
         folder: &LaunchFolder,
     ) -> Result<Launch> {
-        // The one thing it can never do is start with a role's rule dropped.
+        // The one thing it can never do is start with an agent's rule dropped.
         self.check_rules(&composition.tool_lists())?;
         let (program, mut args) = self.command();
         args.extend(conversation_args);
@@ -289,17 +289,17 @@ impl OtherAgentBackend {
         {
             args.extend(["--model".into(), model.into()]);
         }
-        // A role's body goes in a file of the launch's own, passed with the
+        // An agent's body goes in a file of the launch's own, passed with the
         // flag it has for that; it is never typed to the session. It has no
         // effort setting, so a composition's effort is not passed.
         // Floti's own sections (a child's, the `floti agent` guide) follow it
         // in the same file.
-        let role_section = composition
+        let agent_section = composition
             .instructions
             .as_ref()
-            .map(|role| format!("# Role: {}\n\n{}\n", role.role, role.body.trim()));
+            .map(|agent| format!("# Agent: {}\n\n{}\n", agent.agent, agent.body.trim()));
         if let Some(text) =
-            crate::agent::guidance::append(role_section, self.floti_instructions(composition))
+            crate::agent::guidance::append(agent_section, self.floti_instructions(composition))
         {
             let file = folder.write("instructions.md", text)?;
             args.extend(["--instructions-file".into(), file.into_os_string()]);
@@ -337,7 +337,7 @@ impl OtherAgentBackend {
     }
 
     /// The flags that let one tool or command run without asking, for the
-    /// role's `rule` as Claude Code spells it.
+    /// agent's `rule` as Claude Code spells it.
     fn allow_arguments(&self, rule: &str) -> Result<Vec<OsString>> {
         match allow_of(rule) {
             Some(Allow::Tool(tool)) => Ok(vec!["--allow-tool".into(), tool.into()]),
@@ -546,7 +546,7 @@ mod tests {
     use floti_protocol::BackendFeature;
 
     use super::*;
-    use crate::agent::{RoleInstructions, ToolSupport};
+    use crate::agent::{AgentInstructions, ToolSupport};
     use crate::testkit::PATIENCE;
 
     struct World {
@@ -816,7 +816,7 @@ mod tests {
     }
 
     #[test]
-    fn a_roles_rules_become_its_own_flags() {
+    fn an_agents_rules_become_its_own_flags() {
         let world = World::new();
         let (launch, _folder) = world.launch(&LaunchRequest {
             composition: Composition {
@@ -858,7 +858,7 @@ mod tests {
                 name.map_or(Vec::new(), |name| vec!["--mode".into(), name.into()]);
             assert_eq!(permissions.arguments(mode), expected, "{mode:?}");
         }
-        // With no auto mode, a child whose role names none keeps its default.
+        // With no auto mode, a child whose agent names none keeps its default.
         assert_eq!(world.backend.unattended_mode(), None);
     }
 
@@ -994,13 +994,13 @@ mod tests {
     }
 
     #[test]
-    fn a_roles_body_goes_in_an_instructions_file_it_loads_and_is_never_typed() {
+    fn an_agents_body_goes_in_an_instructions_file_it_loads_and_is_never_typed() {
         let world = World::new();
         let (launch, folder) = world.launch(&LaunchRequest {
             composition: Composition {
                 model: Some("small".into()),
-                instructions: Some(RoleInstructions {
-                    role: "reviewer".into(),
+                instructions: Some(AgentInstructions {
+                    agent: "reviewer".into(),
                     body: "Read the code before you give findings.\n".into(),
                 }),
                 ..Composition::default()
@@ -1017,7 +1017,7 @@ mod tests {
         assert_eq!(args[at + 1], file.display().to_string());
         assert_eq!(
             std::fs::read_to_string(&file).unwrap(),
-            "# Role: reviewer\n\nRead the code before you give findings.\n"
+            "# Agent: reviewer\n\nRead the code before you give findings.\n"
         );
         // The prompt stays the last argument, and is only the task.
         assert_eq!(args.last().unwrap(), "review the change");
@@ -1027,13 +1027,13 @@ mod tests {
         let record = world.agent.record(pid).expect("the run is recorded");
         assert_eq!(
             record.instructions.as_deref(),
-            Some("# Role: reviewer\n\nRead the code before you give findings.\n")
+            Some("# Agent: reviewer\n\nRead the code before you give findings.\n")
         );
         assert_eq!(record.model.as_deref(), Some("small"));
         assert_eq!(record.received, ["/exit"]);
         assert_eq!(record.opening_prompt.as_deref(), Some("review the change"));
 
-        // No role, no file and no flag.
+        // No agent, no file and no flag.
         let (bare, folder) = world.launch(&request(world.dirs.folder("work")));
         assert!(
             !world

@@ -24,7 +24,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::agent::harness::{HarnessProject, Skills, is_same_or_ancestor};
-use crate::agent::{LaunchFolder, RoleInstructions};
+use crate::agent::{AgentInstructions, LaunchFolder};
 use crate::platform::links::{FolderLinks, Native as Links};
 use crate::{Error, Result};
 
@@ -183,16 +183,16 @@ fn copy_folder(from: &Path, to: &Path) -> Result<()> {
 }
 
 /// `project` (the composed project instructions, when there are any) with a
-/// headed section for a role's body after them. A role with no body adds
-/// nothing, and a role with a body makes instructions where there were none.
-pub(super) fn with_role_section(
+/// headed section for an agent's body after them. An agent with no body adds
+/// nothing, and an agent with a body makes instructions where there were none.
+pub(super) fn with_agent_section(
     project: Option<String>,
-    role: Option<&RoleInstructions>,
+    agent: Option<&AgentInstructions>,
 ) -> Option<String> {
-    let Some(role) = role.filter(|role| !role.body.trim().is_empty()) else {
+    let Some(agent) = agent.filter(|agent| !agent.body.trim().is_empty()) else {
         return project;
     };
-    let section = format!("# Role: {}\n\n{}\n", role.role, role.body.trim());
+    let section = format!("# Agent: {}\n\n{}\n", agent.agent, agent.body.trim());
     Some(match project {
         Some(project) => format!("{}\n\n{section}", project.trim_end()),
         None => section,

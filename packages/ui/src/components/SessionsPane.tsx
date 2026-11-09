@@ -258,7 +258,7 @@ export function SessionsPane({
    *
    * The same collision the launch warning is about, seen from the list rather
    * than from the launch button. Counted over every session whoever started it,
-   * because two agents in one working tree is the same problem whether or not
+   * because two sessions in one working tree is the same problem whether or not
    * Helm started both.
    */
   const crowded = new Set<string>();

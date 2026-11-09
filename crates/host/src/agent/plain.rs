@@ -7,7 +7,7 @@
 //! only. It moves no tool call to the background, supports no MCP tasks and
 //! has no MCP tools, and it enforces no tool rule: asked to, it refuses
 //! ([`AgentBackend::check_rules`]). It takes no turns, so it declares no input
-//! ([`AgentBackend::input`]), unless it is built from a role that names a
+//! ([`AgentBackend::input`]), unless it is built from an agent that names a
 //! submit word and a stop word ([`PlainCommandBackend::with_input_words`]).
 
 use std::ffi::OsString;
@@ -44,8 +44,8 @@ impl PlainCommandBackend {
         }
     }
 
-    /// The same command line taking turns with the keys a role names: its
-    /// `submit` and `stop` words (`enter`, `ctrl-c` and the like). A role
+    /// The same command line taking turns with the keys an agent names: its
+    /// `submit` and `stop` words (`enter`, `ctrl-c` and the like). An agent
     /// without a submit word leaves it taking none.
     ///
     /// # Errors
@@ -78,7 +78,7 @@ impl AgentBackend for PlainCommandBackend {
         if request.prompt.is_some() {
             return Err(Error::backend(&self.id, "take an opening prompt"));
         }
-        // Nor can it be given a role's body, which it would run without.
+        // Nor can it be given an agent's body, which it would run without.
         if request.composition.instructions.is_some() {
             return Err(Error::backend(&self.id, "take instructions"));
         }
@@ -191,13 +191,13 @@ mod tests {
     }
 
     #[test]
-    fn it_takes_no_turns_until_its_role_names_the_keys() {
+    fn it_takes_no_turns_until_its_agent_names_the_keys() {
         assert_eq!(backend().input(), None);
 
         let taking = backend()
             .with_input_words(Some("enter"), Some("ctrl-c"))
             .unwrap();
-        let input = taking.input().expect("its role names the keys");
+        let input = taking.input().expect("its agent names the keys");
         assert_eq!(input.submit, b"\r");
         assert_eq!(input.stop.as_deref(), Some(&b"\x03"[..]));
 
@@ -307,15 +307,15 @@ mod tests {
     }
 
     #[test]
-    fn refuses_a_roles_body_naming_the_backend_and_takes_neither_instructions_nor_an_effort() {
+    fn refuses_an_agents_body_naming_the_backend_and_takes_neither_instructions_nor_an_effort() {
         let dirs = TestDirs::new();
         let err = backend()
             .launch(
                 &LaunchRequest {
                     folder: "C:/work".into(),
                     composition: Composition {
-                        instructions: Some(crate::agent::RoleInstructions {
-                            role: "reviewer".into(),
+                        instructions: Some(crate::agent::AgentInstructions {
+                            agent: "reviewer".into(),
                             body: "Read first.".into(),
                         }),
                         ..Composition::default()

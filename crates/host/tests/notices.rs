@@ -20,9 +20,9 @@ use std::time::{Duration, Instant};
 
 use floti_host::agent::AgentBackend;
 use floti_host::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
+use floti_host::agent_definitions::{AgentDefinition, DefinitionSource, FixedDefinitions};
 use floti_host::platform::process_tree::Native as NativeTree;
 use floti_host::platform::socket::Endpoint;
-use floti_host::roles::{FixedRoles, Role, RoleSource};
 use floti_host::server::{HostConfig, TEST_STARTUP_GRACE_MARKER};
 use floti_host::testkit::{
     OtherAgent, OtherAgentBackend, PATIENCE, RunningHost, TestClient, TestDirs,
@@ -119,13 +119,14 @@ impl World {
         }
     }
 
-    /// A host that serves once this returns, with a role that can run on the
+    /// A host that serves once this returns, with an agent that can run on the
     /// backend that cannot start, and the workspace tracked.
     async fn host(&self) -> RunningHost {
-        let mut ghostly = Role::new("ghostly", [BackendId::new(MISSING)]);
+        let mut ghostly = AgentDefinition::new("ghostly", [BackendId::new(MISSING)]);
         ghostly.instructions = "Never runs.".to_owned();
-        let source: Arc<dyn RoleSource> = Arc::new(FixedRoles(vec![ghostly]));
-        let (host, ()) = RunningHost::start_with(self.config(), move |host| host.use_roles(source));
+        let source: Arc<dyn DefinitionSource> = Arc::new(FixedDefinitions(vec![ghostly]));
+        let (host, ()) =
+            RunningHost::start_with(self.config(), move |host| host.use_agents(source));
         // A client is welcomed once the host serves.
         drop(self.client().await);
         let known: i64 = self
@@ -331,7 +332,7 @@ impl World {
             self.db()
                 .execute(
                     "INSERT INTO sessions (name, cwd, argv, claude_session_id, backend, \
-                     parent_session_id, child_name, role, status) \
+                     parent_session_id, child_name, agent, status) \
                      VALUES (?1, ?2, '[]', ?3, 'claude-code', ?4, ?1, 'agent', 'exited')",
                     rusqlite::params![
                         format!("old{number}"),
@@ -767,7 +768,7 @@ async fn a_refused_start_and_a_child_that_ended_in_error_stand_across_a_restart_
 
     // A launch that fails leaves one, naming the child that never ran.
     let failed = parent
-        .start(json!({ "task": "work", "name": "ghost", "role": "ghostly", "backend": MISSING }))
+        .start(json!({ "task": "work", "name": "ghost", "agent": "ghostly", "backend": MISSING }))
         .await;
     failed.refused();
     let standing = world

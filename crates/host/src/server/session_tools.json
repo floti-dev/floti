@@ -1,7 +1,7 @@
 {
   "name": "helm-sessions",
   "path": "/mcp/sessions",
-  "instructions": "These tools tell you what other Claude Code sessions are running on this machine, so you can stay out of their way - two agents in one working tree is the thing they exist to prevent - and let you title your own session. Looking is read-only and there is no way to send another session anything through them: nothing here starts, stops, waits on, or messages a session, and no tool will ever return any part of another session’s conversation. Check sessions_list before starting long work in a directory. Once you know what this session is for, give it a title with session_title, and give it a new one when the work changes.",
+  "instructions": "These tools tell you what other Claude Code sessions are running on this machine, so you can stay out of their way - two sessions in one working tree is the thing they exist to prevent - and let you title your own session. Looking is read-only and there is no way to send another session anything through them: nothing here starts, stops, waits on, or messages a session, and no tool will ever return any part of another session’s conversation. Check sessions_list before starting long work in a directory. Once you know what this session is for, give it a title with session_title, and give it a new one when the work changes.",
   "tools": [
     {
       "name": "sessions_list",

@@ -36,7 +36,7 @@ const RECORD_COLUMNS: &str = "id, name, label, cwd, branch, project_path, profil
      parent_session_id, \
      (SELECT coalesce(nullif(parent.label, ''), parent.name) FROM sessions AS parent \
       WHERE parent.id = sessions.parent_session_id), \
-     role, stopped, command, outlive, permission_mode, title, stopped_by, kept";
+     agent, stopped, command, outlive, permission_mode, title, stopped_by, kept";
 
 /// The backend a row ran on, from its `backend` column.
 ///
@@ -262,9 +262,10 @@ pub(crate) struct LostRow {
     pub permission_mode: Option<PermissionMode>,
     /// The backend it ran on, which reopens it ([`recorded_backend`]).
     pub backend: BackendId,
-    /// The role an agent started it in, when one did: the role file as it is
-    /// when the session reopens is what composes it again.
-    pub role: Option<String>,
+    /// The agent it was started as, when another session started it: the
+    /// agent's file as it is when the session reopens is what composes it
+    /// again.
+    pub agent: Option<String>,
     /// The name it ran Remote Control under, when it did: the line a child
     /// inherited from its parent, which it runs under again.
     pub remote_control_name: Option<String>,
@@ -273,7 +274,7 @@ pub(crate) struct LostRow {
 /// What an update to `lost` returns, in [`lost_row`]'s order.
 const LOST_COLUMNS: &str = "id, name, label, cwd, branch, profile_id, \
      coalesce(last_claude_session_id, claude_session_id), backend, project_path, permission_mode, \
-     role, remote_control_name";
+     agent, remote_control_name";
 
 fn lost_row(row: &Row<'_>) -> rusqlite::Result<LostRow> {
     let name: String = row.get(1)?;
@@ -290,9 +291,9 @@ fn lost_row(row: &Row<'_>) -> rusqlite::Result<LostRow> {
         backend: recorded_backend(row.get(7)?),
         project_path: row.get(8)?,
         permission_mode: named(row.get(9)?),
-        role: row
+        agent: row
             .get::<_, Option<String>>(10)?
-            .filter(|role| !role.trim().is_empty()),
+            .filter(|agent| !agent.trim().is_empty()),
         remote_control_name: row
             .get::<_, Option<String>>(11)?
             .filter(|name| !name.trim().is_empty()),
@@ -762,6 +763,10 @@ pub(crate) fn read_record(store: &Store, id: SessionId) -> Result<SessionRecord>
 fn record_from(row: &Row<'_>) -> rusqlite::Result<SessionRecord> {
     let argv: String = row.get(7)?;
     let status: String = row.get(9)?;
+    let agent = row.get::<_, Option<String>>(17)?.and_then(|agent| {
+        let agent = agent.trim();
+        (!agent.is_empty()).then(|| agent.to_owned())
+    });
     Ok(SessionRecord {
         id: unsigned(row.get::<_, i64>(0)?),
         name: row.get(1)?,
@@ -791,10 +796,9 @@ fn record_from(row: &Row<'_>) -> rusqlite::Result<SessionRecord> {
         exit_code: row.get::<_, Option<i64>>(13)?.map(|code| code as i32),
         parent_id: row.get::<_, Option<i64>>(15)?.map(unsigned),
         parent_name: row.get(16)?,
-        role: row.get::<_, Option<String>>(17)?.and_then(|role| {
-            let role = role.trim();
-            (!role.is_empty()).then(|| role.to_owned())
-        }),
+        // The retired role says the same, for a client before protocol 2.3.
+        role: agent.clone(),
+        agent,
         stopped: row.get(18)?,
         ended_by: ended_by(
             &status,

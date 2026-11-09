@@ -6,9 +6,9 @@
 //! it, it opens no tab, and a client quitting reaches it only through its
 //! parent.
 //!
-//! **A start is judged before anything runs.** In this order: the role, the
-//! backend the role allows and the host has, the folder (tracked, on the
-//! path it leads to), the profile, the permission mode (the role's, else
+//! **A start is judged before anything runs.** In this order: the agent, the
+//! backend the agent allows and the host has, the folder (tracked, on the
+//! path it leads to), the profile, the permission mode (the agent's, else
 //! auto, held to the parent's only where the parent was launched in plan or
 //! dont-ask, and bypass-permissions only under a parent launched in it), the
 //! backend's ability to enforce every rule, then the limits
@@ -31,7 +31,7 @@
 //! one more start and one more running child.
 //!
 //! **A child's row carries its links** (parent row, parent conversation,
-//! name, role, outlive, can_start), written when the session is. Counts and
+//! name, agent, outlive, can_start), written when the session is. Counts and
 //! names come from those rows, so they hold across a host restart, and a
 //! parent that is resumed in its conversation finds its outliving children
 //! again.
@@ -79,7 +79,10 @@ use super::{Hosted, Plan, lock};
 use crate::agent::guidance::ChildInstructions;
 use crate::agent::{AgentBackend, AgentToolServer, Composition};
 use crate::agent_cli::{SESSIONS_URL_VAR, TOKEN_VAR, URL_VAR};
-use crate::roles::{BadRole, DEFAULT_ROLE, NoRoles, Role, RoleLookup, RoleSource, default_role};
+use crate::agent_definitions::{
+    AgentDefinition, BadDefinition, DEFAULT_AGENT_NAME, DefinitionLookup, DefinitionSource,
+    NoDefinitions, default_definition,
+};
 use crate::server::floti_agents::FAMILY;
 use crate::server::records::{self, ExitNotice};
 use crate::server::session_tools::SESSIONS_FAMILY;
@@ -95,10 +98,10 @@ const STOP_WAIT: Duration = Duration::from_secs(5);
 /// first terminal to report a size resizes it (`Session::resize`).
 const CHILD_SIZE: (u16, u16) = (120, 32);
 
-/// What the host keeps to start children: where roles come from, where the
+/// What the host keeps to start children: where agents come from, where the
 /// `floti` executable is, and the one lock that takes starts one at a time.
 pub(super) struct Children {
-    roles: RwLock<Arc<dyn RoleSource>>,
+    agents: RwLock<Arc<dyn DefinitionSource>>,
     /// The folder holding the `floti` executable, put first on a session's
     /// PATH so that `floti agent` is found there.
     floti_dir: RwLock<Option<PathBuf>>,
@@ -130,7 +133,7 @@ impl Children {
     pub(super) fn new(inherited_env: &[(OsString, OsString)]) -> Self {
         Self {
             news: news::Desk::new(),
-            roles: RwLock::new(Arc::new(NoRoles)),
+            agents: RwLock::new(Arc::new(NoDefinitions)),
             floti_dir: RwLock::new(
                 std::env::current_exe()
                     .ok()
@@ -165,10 +168,10 @@ impl Children {
         std::env::join_paths(std::iter::once(dir).chain(rest)).ok()
     }
 
-    fn roles(&self) -> Arc<dyn RoleSource> {
+    fn agents(&self) -> Arc<dyn DefinitionSource> {
         Arc::clone(
             &self
-                .roles
+                .agents
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         )
@@ -179,12 +182,12 @@ impl Children {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct StartChild {
     pub task: String,
-    pub role: Option<String>,
+    pub agent: Option<String>,
     pub backend: Option<String>,
     pub folder: Option<String>,
     pub profile: Option<String>,
     pub name: Option<String>,
-    /// The one-word name of the worktree to make for it. A role that asks for
+    /// The one-word name of the worktree to make for it. An agent that asks for
     /// a worktree makes one named after the child when this is `None`.
     pub worktree: Option<String>,
     pub outlive: bool,
@@ -225,9 +228,10 @@ pub(crate) struct Closing {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ChildEntry {
     pub name: String,
-    /// The role an agent runs in; none for a command child.
-    pub role: Option<String>,
-    /// The command line a command child runs, where an agent has its role.
+    /// The agent it was started as; none for a command child.
+    pub agent: Option<String>,
+    /// The command line a command child runs, where any other child names
+    /// its agent.
     pub command: Option<String>,
     pub backend: String,
     pub state: String,
@@ -240,25 +244,25 @@ pub(crate) struct ChildEntry {
     pub worktree: bool,
 }
 
-/// One role, as `agents_roles` shows it.
+/// One agent, as `agents_available` shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RoleEntry {
+pub(crate) struct AgentEntry {
     pub name: String,
     pub description: String,
     pub worktree: bool,
     pub can_start: bool,
-    /// The installed backends it can run on, in the role's order.
+    /// The installed backends it can run on, in the agent's order.
     pub backends: Vec<String>,
     /// The lines its file has that Floti no longer uses.
     pub unused_lines: Vec<String>,
 }
 
-/// What `agents_roles` answers: the roles there are now, then the files that
-/// are not roles.
+/// What `agents_available` answers: the agents there are now, then the files that
+/// are not agents.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RolesListed {
-    pub roles: Vec<RoleEntry>,
-    pub bad: Vec<BadRole>,
+pub(crate) struct AgentsAvailable {
+    pub agents: Vec<AgentEntry>,
+    pub bad: Vec<BadDefinition>,
 }
 
 /// What is left of the limits a session starts children under.
@@ -299,13 +303,13 @@ pub(crate) struct ChildStopped {
 }
 
 impl Hosted {
-    /// Reads roles from `roles` from now on.
-    pub(crate) fn use_roles(&self, roles: Arc<dyn RoleSource>) {
+    /// Reads agents from `agents` from now on.
+    pub(crate) fn use_agents(&self, agents: Arc<dyn DefinitionSource>) {
         *self
             .children
-            .roles
+            .agents
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = roles;
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = agents;
     }
 
     /// Puts `exe`'s folder on the PATH of the sessions that start from now
@@ -375,21 +379,21 @@ impl Hosted {
             return self.resume_child(parent, &facts, request);
         }
 
-        let role = self.role_for(request.role.as_deref())?;
-        // A backend is chosen for the mode the role names. The auto a child
+        let agent = self.definition_for(request.agent.as_deref())?;
+        // A backend is chosen for the mode the agent names. The auto a child
         // gets when it names none is each backend's own, so it rules none out.
-        let role_mode = child_mode(role.permission, facts.permission_mode, None);
-        let backend = self.backend_for(&role, request.backend.as_deref(), role_mode)?;
+        let agent_mode = child_mode(agent.permission, facts.permission_mode, None);
+        let backend = self.backend_for(&agent, request.backend.as_deref(), agent_mode)?;
         let base = PathBuf::from(&facts.cwd);
         let folder = folders::child_folder(
             &self.ledger.shared_store(),
             &base,
             request.folder.as_deref(),
         )?;
-        // A worktree is asked for by name or by the role. Anywhere in a
+        // A worktree is asked for by name or by the agent. Anywhere in a
         // repository a start must also leave alone a worktree another session
         // works in.
-        let wants_worktree = request.worktree.is_some() || role.worktree;
+        let wants_worktree = request.worktree.is_some() || agent.worktree;
         let repository = if wants_worktree {
             Some(Repository::of(&folder)?)
         } else {
@@ -401,13 +405,13 @@ impl Hosted {
         let profile = {
             let store = self.ledger.store();
             let profiles = rows::profiles(&store).map_err(|err| err.to_string())?;
-            match (request.profile.as_deref(), role.profile.as_deref()) {
+            match (request.profile.as_deref(), agent.profile.as_deref()) {
                 (Some(named), _) => Some(folders::profile_named(&profiles, named)?),
                 (None, Some(named)) => Some(
                     folders::profile_named(&profiles, named).map_err(|problem| {
                         format!(
-                            "The role file {}.md names a profile that cannot be used: {problem} No agent was started.",
-                            role.name
+                            "The agent file {}.md names a profile that cannot be used: {problem} No agent was started.",
+                            agent.name
                         )
                     })?,
                 ),
@@ -418,13 +422,14 @@ impl Hosted {
         };
 
         let mode = child_mode(
-            role.permission
+            agent
+                .permission
                 .or_else(|| profile.as_ref().and_then(|profile| profile.permission_mode)),
             facts.permission_mode,
             backend.unattended_mode(),
         );
         let mut composition =
-            compose::role_composition(&role, backend.as_ref(), profile.as_ref(), mode)
+            compose::agent_composition(&agent, backend.as_ref(), profile.as_ref(), mode)
                 .map_err(|reason| format!("{reason}, so no agent was started."))?;
         composition.unattended = true;
         // What the child is told of the session that started it. An agent with
@@ -434,11 +439,11 @@ impl Hosted {
                 .ok()
                 .flatten()
                 .unwrap_or_default(),
-            role: role.name.clone(),
+            agent: agent.name.clone(),
             reports: backend.tool_support().mcp_tools,
         });
 
-        let can_start = request.can_start.unwrap_or(role.can_start);
+        let can_start = request.can_start.unwrap_or(agent.can_start);
         let (name, limits_error) = {
             let store = self.ledger.store();
             let settings = settings::read(store.connection()).map_err(|err| err.to_string())?;
@@ -457,7 +462,7 @@ impl Hosted {
                 .collect();
             let limits_error =
                 judge(&settings, &facts, &running, agents.len(), &agents, &on_host).err();
-            let wanted = request.name.as_deref().unwrap_or(&role.name);
+            let wanted = request.name.as_deref().unwrap_or(&agent.name);
             (
                 unique_child_name(wanted, existing.iter().map(|child| child.name.as_str())),
                 limits_error,
@@ -507,7 +512,7 @@ impl Hosted {
                         session: parent,
                         conversation_id: facts.conversation_id.clone(),
                         name: name.clone(),
-                        role: Some(role.name.clone()),
+                        agent: Some(agent.name.clone()),
                         command: None,
                         outlive,
                         can_start,
@@ -589,7 +594,7 @@ impl Hosted {
 
     /// Reopens `parent`'s ended child named by `request.resume` in the folder
     /// it worked in, through its backend's own resume of its conversation,
-    /// with the task as its next turn and its role's instructions composed
+    /// with the task as its next turn and its agent's instructions composed
     /// again. It is judged as a start is, against the same limits, and is one
     /// more start and one more running child. It keeps its name, parent link,
     /// outlive and can_start; nothing else about it can be asked for.
@@ -605,7 +610,7 @@ impl Hosted {
     ) -> Result<ChildStarted, String> {
         let wanted = request.resume.as_deref().unwrap_or_default().trim();
         let also: Vec<&str> = [
-            ("role", &request.role),
+            ("agent", &request.agent),
             ("backend", &request.backend),
             ("folder", &request.folder),
             ("profile", &request.profile),
@@ -617,7 +622,7 @@ impl Hosted {
         .collect();
         if !also.is_empty() {
             return Err(format!(
-                "A resumed agent keeps its own role, backend, folder, profile, worktree and name, so resume takes only the task, and you also gave {}. No agent was started.",
+                "A resumed child keeps its own agent, backend, folder, profile, worktree and name, so resume takes only the task, and you also gave {}. No agent was started.",
                 also.join(", ")
             ));
         }
@@ -707,9 +712,9 @@ impl Hosted {
         );
         let mut composition = super::composition_of(profile.as_ref());
         composition.permission_mode = mode;
-        if let Some(role) = child.role.as_deref() {
+        if let Some(agent) = child.agent.as_deref() {
             let (reopened, warning) =
-                self.reopen_in_role(role, backend.as_ref(), profile.as_ref(), mode)?;
+                self.reopen_as_agent(agent, backend.as_ref(), profile.as_ref(), mode)?;
             if let Some(reopened) = reopened {
                 composition = reopened;
             }
@@ -724,10 +729,10 @@ impl Hosted {
                 .ok()
                 .flatten()
                 .unwrap_or_default(),
-            role: child
-                .role
+            agent: child
+                .agent
                 .clone()
-                .unwrap_or_else(|| DEFAULT_ROLE.to_owned()),
+                .unwrap_or_else(|| DEFAULT_AGENT_NAME.to_owned()),
             reports: backend.tool_support().mcp_tools,
         });
         judge(&settings, facts, &running, agents.len(), &agents, &on_host)
@@ -761,7 +766,7 @@ impl Hosted {
                         session: parent,
                         conversation_id: facts.conversation_id.clone(),
                         name: name.clone(),
-                        role: child.role.clone(),
+                        agent: child.agent.clone(),
                         command: None,
                         outlive: child.outlive,
                         can_start: child.can_start,
@@ -868,7 +873,7 @@ impl Hosted {
                 .map_or_else(|| "running".to_owned(), |status| state_word(&status));
             children.push(ChildEntry {
                 name: child.name.clone(),
-                role: child.role.clone(),
+                agent: child.agent.clone(),
                 command: child.command.clone(),
                 backend: child.backend.clone(),
                 state,
@@ -1148,150 +1153,154 @@ impl Hosted {
             .collect())
     }
 
-    /// The role a start asks for, read now: the default role when it names
+    /// The agent a start asks for, read now: the default agent when it names
     /// none.
-    fn role_for(&self, asked: Option<&str>) -> Result<Role, String> {
-        let roles = self.children.roles();
-        let name = asked.unwrap_or(DEFAULT_ROLE);
-        match roles.lookup(name) {
-            RoleLookup::Found(role) => Ok(*role),
-            RoleLookup::Bad(bad) => Err(bad.refusal()),
-            RoleLookup::Missing if name.eq_ignore_ascii_case(DEFAULT_ROLE) => {
-                Ok(default_role(&self.backends))
+    fn definition_for(&self, asked: Option<&str>) -> Result<AgentDefinition, String> {
+        let agents = self.children.agents();
+        let name = asked.unwrap_or(DEFAULT_AGENT_NAME);
+        match agents.lookup(name) {
+            DefinitionLookup::Found(agent) => Ok(*agent),
+            DefinitionLookup::Bad(bad) => Err(bad.refusal()),
+            DefinitionLookup::Missing if name.eq_ignore_ascii_case(DEFAULT_AGENT_NAME) => {
+                Ok(default_definition(&self.backends))
             }
-            RoleLookup::Missing => {
-                let mut names = vec![DEFAULT_ROLE.to_owned()];
+            DefinitionLookup::Missing => {
+                let mut names = vec![DEFAULT_AGENT_NAME.to_owned()];
                 names.extend(
-                    roles
+                    agents
                         .listing()
-                        .roles
+                        .agents
                         .into_iter()
-                        .map(|role| role.name)
-                        .filter(|known| !known.eq_ignore_ascii_case(DEFAULT_ROLE)),
+                        .map(|agent| agent.name)
+                        .filter(|known| !known.eq_ignore_ascii_case(DEFAULT_AGENT_NAME)),
                 );
                 Err(format!(
-                    "There is no role named {name}. The roles are: {}.",
+                    "There is no agent named {name}. The agents are: {}.",
                     names.join(", ")
                 ))
             }
         }
     }
 
-    /// What a lost child is reopened with: its role as the role's file reads
-    /// now. A role whose file cannot be used refuses the reopen, naming the
-    /// file; a role that is gone reopens the child without it and says so
+    /// What a lost child is reopened with: its agent as the agent's file reads
+    /// now. An agent whose file cannot be used refuses the reopen, naming the
+    /// file; an agent that is gone reopens the child without it and says so
     /// (`None` for the composition).
     ///
     /// # Errors
     ///
-    /// A sentence naming the role file, or the rule the backend now cannot
+    /// A sentence naming the agent file, or the rule the backend now cannot
     /// enforce for it. Nothing has started then.
-    pub(super) fn reopen_in_role(
+    pub(super) fn reopen_as_agent(
         &self,
-        role_name: &str,
+        agent_name: &str,
         backend: &dyn AgentBackend,
         profile: Option<&Profile>,
         mode: Option<PermissionMode>,
     ) -> Result<(Option<Composition>, Option<String>), String> {
-        let role = match self.children.roles().lookup(role_name) {
-            RoleLookup::Found(role) => *role,
-            RoleLookup::Bad(bad) => return Err(bad.reopen_refusal()),
-            RoleLookup::Missing if role_name.eq_ignore_ascii_case(DEFAULT_ROLE) => {
-                default_role(&self.backends)
+        let agent = match self.children.agents().lookup(agent_name) {
+            DefinitionLookup::Found(agent) => *agent,
+            DefinitionLookup::Bad(bad) => return Err(bad.reopen_refusal()),
+            DefinitionLookup::Missing if agent_name.eq_ignore_ascii_case(DEFAULT_AGENT_NAME) => {
+                default_definition(&self.backends)
             }
-            RoleLookup::Missing => {
+            DefinitionLookup::Missing => {
                 return Ok((
                     None,
                     Some(format!(
-                        "The role {role_name} no longer exists, so the session reopened without its instructions and rules."
+                        "The agent {agent_name} no longer exists, so the session reopened without its instructions and rules."
                     )),
                 ));
             }
         };
-        let composition = compose::role_composition(&role, backend, profile, mode)
+        let composition = compose::agent_composition(&agent, backend, profile, mode)
             .map_err(|reason| format!("{reason}, so the session was not reopened."))?;
         Ok((Some(composition), None))
     }
 
-    /// Every role there is now and every file that is not one, for
-    /// `agents_roles`. The default role comes first, from `agent.md` when
-    /// that is a role. Each role lists the installed backends it can run on
+    /// Every agent there is now and every file that is not one, for
+    /// `agents_available`. The default agent comes first, from `default.md` when
+    /// that is an agent. Each agent lists the installed backends it can run on
     /// for a caller in `caller`'s mode: those whose adapter enforces its
-    /// permission and tool rules (the permission the role names, held back by
-    /// the caller's mode as a start holds it back), takes an effort where the role gives one and takes
+    /// permission and tool rules (the permission the agent names, held back by
+    /// the caller's mode as a start holds it back), takes an effort where the agent gives one and takes
     /// instructions where it has a body.
     ///
     /// # Errors
     ///
     /// A sentence when the caller's record cannot be read.
-    pub(crate) fn list_roles(&self, caller: SessionId) -> Result<RolesListed, String> {
+    pub(crate) fn available_agents(&self, caller: SessionId) -> Result<AgentsAvailable, String> {
         let facts =
             rows::parent_facts(&self.ledger.store(), caller).map_err(|err| err.to_string())?;
-        let found = self.children.roles().listing();
-        let mut roles = found.roles;
-        let default = match roles
+        let found = self.children.agents().listing();
+        let mut agents = found.agents;
+        let default = match agents
             .iter()
-            .position(|role| role.name.eq_ignore_ascii_case(DEFAULT_ROLE))
+            .position(|agent| agent.name.eq_ignore_ascii_case(DEFAULT_AGENT_NAME))
         {
-            Some(at) => roles.remove(at),
-            None if found
-                .bad
-                .iter()
-                .any(|bad| bad.file.eq_ignore_ascii_case(&format!("{DEFAULT_ROLE}.md"))) =>
+            Some(at) => agents.remove(at),
+            None if found.bad.iter().any(|bad| {
+                bad.file
+                    .eq_ignore_ascii_case(&format!("{DEFAULT_AGENT_NAME}.md"))
+            }) =>
             {
-                // A broken `agent.md` leaves no default role to list, and a
-                // start without a role is refused naming it.
-                return Ok(RolesListed {
-                    roles: roles
+                // A broken `default.md` leaves no default agent to list, and a
+                // start without an agent is refused naming it.
+                return Ok(AgentsAvailable {
+                    agents: agents
                         .iter()
-                        .map(|role| self.role_entry(role, facts.permission_mode))
+                        .map(|agent| self.agent_entry(agent, facts.permission_mode))
                         .collect(),
                     bad: found.bad,
                 });
             }
-            None => default_role(&self.backends),
+            None => default_definition(&self.backends),
         };
-        let mut entries = vec![self.role_entry(&default, facts.permission_mode)];
+        let mut entries = vec![self.agent_entry(&default, facts.permission_mode)];
         entries.extend(
-            roles
+            agents
                 .iter()
-                .map(|role| self.role_entry(role, facts.permission_mode)),
+                .map(|agent| self.agent_entry(agent, facts.permission_mode)),
         );
-        Ok(RolesListed {
-            roles: entries,
+        Ok(AgentsAvailable {
+            agents: entries,
             bad: found.bad,
         })
     }
 
-    fn role_entry(&self, role: &Role, caller_mode: Option<PermissionMode>) -> RoleEntry {
-        // As a start chooses its backend: for the mode the role names.
-        let mode = child_mode(role.permission, caller_mode, None);
-        RoleEntry {
-            name: role.name.clone(),
-            description: role.description.clone(),
-            worktree: role.worktree,
-            can_start: role.can_start,
-            backends: role
+    fn agent_entry(
+        &self,
+        agent: &AgentDefinition,
+        caller_mode: Option<PermissionMode>,
+    ) -> AgentEntry {
+        // As a start chooses its backend: for the mode the agent names.
+        let mode = child_mode(agent.permission, caller_mode, None);
+        AgentEntry {
+            name: agent.name.clone(),
+            description: agent.description.clone(),
+            worktree: agent.worktree,
+            can_start: agent.can_start,
+            backends: agent
                 .backends_on(&self.backends)
                 .into_iter()
-                .filter(|backend| role.refusal_on(backend.as_ref(), mode).is_none())
+                .filter(|backend| agent.refusal_on(backend.as_ref(), mode).is_none())
                 .map(|backend| backend_id_text(backend.id()))
                 .collect(),
-            unused_lines: role.unused_lines.clone(),
+            unused_lines: agent.unused_lines.clone(),
         }
     }
 
-    /// The backend a child runs on: the one asked for when the role lists it
-    /// and the host has it, else the first the role lists that the host has
-    /// and can run it, which is the first `agents_roles` lists. When none of
+    /// The backend a child runs on: the one asked for when the agent lists it
+    /// and the host has it, else the first the agent lists that the host has
+    /// and can run it, which is the first `agents_available` lists. When none of
     /// those can run it, the first one's reason is the refusal.
     fn backend_for(
         &self,
-        role: &Role,
+        agent: &AgentDefinition,
         asked: Option<&str>,
         mode: Option<PermissionMode>,
     ) -> Result<Arc<dyn AgentBackend>, String> {
-        let allowed = role.backends_on(&self.backends);
+        let allowed = agent.backends_on(&self.backends);
         let installed: Vec<String> = allowed
             .iter()
             .map(|backend| backend_id_text(backend.id()))
@@ -1303,30 +1312,30 @@ impl Hosted {
                 .map(|backend| Arc::clone(backend))
                 .ok_or_else(|| {
                     format!(
-                        "The role {} does not allow the backend {asked} on this host. The installed backends it allows: {}.",
-                        role.name,
+                        "The agent {} does not allow the backend {asked} on this host. The installed backends it allows: {}.",
+                        agent.name,
                         or_none(&installed)
                     )
                 }),
             None => {
                 if let Some(runs) = allowed
                     .iter()
-                    .find(|backend| role.refusal_on(backend.as_ref(), mode).is_none())
+                    .find(|backend| agent.refusal_on(backend.as_ref(), mode).is_none())
                 {
                     return Ok(Arc::clone(runs));
                 }
                 match allowed.first() {
                     Some(first) => Err(format!(
                         "{}, so no agent was started.",
-                        role.refusal_on(first.as_ref(), mode)
-                            .unwrap_or_else(|| "The role cannot run".to_owned())
+                        agent.refusal_on(first.as_ref(), mode)
+                            .unwrap_or_else(|| "The agent cannot run".to_owned())
                     )),
                     None => {
                         let listed: Vec<String> =
-                            role.backends.iter().map(backend_id_text).collect();
+                            agent.backends.iter().map(backend_id_text).collect();
                         Err(format!(
-                            "None of the backends the role {} lists is installed on this host (it lists: {}).",
-                            role.name,
+                            "None of the backends the agent {} lists is installed on this host (it lists: {}).",
+                            agent.name,
                             or_none(&listed)
                         ))
                     }
@@ -1360,7 +1369,7 @@ fn state_word(status: &crate::session::ReportedStatus) -> String {
     format!("{:?}", status.report.state).to_lowercase()
 }
 
-/// The mode a child runs in: `requested` (its role's, else its profile's),
+/// The mode a child runs in: `requested` (its agent's, else its profile's),
 /// else `unattended` (the backend's [`AgentBackend::unattended_mode`]: auto
 /// where it has one), held back by what the host knows of the mode `parent`
 /// was launched in.
@@ -1416,7 +1425,7 @@ fn unique_child_name<'a>(wanted: &str, taken: impl IntoIterator<Item = &'a str>)
         .take(40)
         .collect();
     let base = if word.is_empty() {
-        DEFAULT_ROLE.to_owned()
+        DEFAULT_AGENT_NAME.to_owned()
     } else {
         word
     };
@@ -1654,7 +1663,7 @@ mod tests {
         [Plan, DontAsk, Manual, AcceptEdits, Auto, BypassPermissions];
 
     #[test]
-    fn a_child_whose_role_names_no_mode_runs_in_auto_under_a_parent_launched_in_none_or_in_manual()
+    fn a_child_whose_agent_names_no_mode_runs_in_auto_under_a_parent_launched_in_none_or_in_manual()
     {
         for parent in [None, Some(Manual), Some(AcceptEdits), Some(Auto)] {
             assert_eq!(
@@ -1669,7 +1678,7 @@ mod tests {
     }
 
     #[test]
-    fn a_child_runs_in_the_mode_its_role_names_under_a_parent_that_holds_it_to_nothing() {
+    fn a_child_runs_in_the_mode_its_agent_names_under_a_parent_that_holds_it_to_nothing() {
         for parent in [None, Some(Manual), Some(AcceptEdits), Some(Auto)] {
             for asked in [Plan, DontAsk, Manual, AcceptEdits, Auto] {
                 assert_eq!(
@@ -1692,7 +1701,7 @@ mod tests {
                     "{asked:?} under {ceiling:?}"
                 );
             }
-            // The auto a role naming nothing would get is no more either.
+            // The auto an agent naming nothing would get is no more either.
             assert_eq!(child_mode(None, Some(ceiling), Some(Auto)), Some(ceiling));
             assert_eq!(child_mode(None, Some(ceiling), None), Some(ceiling));
         }
@@ -1732,6 +1741,6 @@ mod tests {
         assert_eq!(unique_child_name("agent", ["agent"]), "agent-2");
         assert_eq!(unique_child_name("agent", ["Agent", "agent-2"]), "agent-3");
         assert_eq!(unique_child_name("code reviewer", []), "code-reviewer");
-        assert_eq!(unique_child_name("   ", []), "agent");
+        assert_eq!(unique_child_name("   ", []), "default");
     }
 }

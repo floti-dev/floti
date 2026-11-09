@@ -300,8 +300,8 @@ describe('a build-box session’s tab', () => {
 
 describe('a child shown in its parent’s tab on build-box', () => {
   const lead = row({ id: 7, name: 'lead' })
-  const reviewer = row({ id: 8, name: 'reviewer', parentId: 7, parentName: 'lead', role: 'reviewer' })
-  const worker = row({ id: 9, name: 'worker', parentId: 7, parentName: 'lead', role: 'worker' })
+  const reviewer = row({ id: 8, name: 'reviewer', parentId: 7, parentName: 'lead', agent: 'reviewer' })
+  const worker = row({ id: 9, name: 'worker', parentId: 7, parentName: 'lead', agent: 'worker' })
   const hasRoom = (): boolean => true
   const noRoom = (): boolean => false
 

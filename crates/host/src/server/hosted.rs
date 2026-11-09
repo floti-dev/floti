@@ -61,8 +61,8 @@ mod children;
 
 use children::Children;
 pub(crate) use children::{
-    ChildEntry, ChildRead, ChildSent, ChildStopped, ChildrenListed, Closing, Holding, ReadChild,
-    RoleEntry, RolesListed, RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest,
+    AgentEntry, AgentsAvailable, ChildEntry, ChildRead, ChildSent, ChildStopped, ChildrenListed,
+    Closing, Holding, ReadChild, RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest,
     Waited, after_each_launch, deliver_at_each_moment, end_children_at_exit, off_runtime,
 };
 #[cfg(test)]
@@ -111,7 +111,7 @@ pub(crate) struct Hosted {
     /// built it: what a send reads afresh, so it never types into a prompt
     /// the last pass had not yet seen.
     activity: OnceLock<ActivityHandle>,
-    /// What starting children for the sessions that ask needs: roles, where
+    /// What starting children for the sessions that ask needs: agents, where
     /// the `floti` executable is, and the one lock that takes starts in turn.
     children: Children,
     /// Who is here: each attached client's device, and the device that
@@ -1260,11 +1260,11 @@ impl Hosted {
             });
         let mut composition = composition_of(profile.as_ref());
         composition.permission_mode = row.permission_mode;
-        // An agent's child comes back in its role as the role file reads now.
-        let mut role_warning = None;
-        if let Some(role) = row.role.as_deref() {
-            let (reopened, warning) = self.reopen_in_role(
-                role,
+        // A child comes back as its agent, as the agent's file reads now.
+        let mut agent_warning = None;
+        if let Some(agent) = row.agent.as_deref() {
+            let (reopened, warning) = self.reopen_as_agent(
+                agent,
                 backend.as_ref(),
                 profile.as_ref(),
                 row.permission_mode,
@@ -1272,11 +1272,11 @@ impl Hosted {
             if let Some(reopened) = reopened {
                 composition = reopened;
             }
-            role_warning = warning;
+            agent_warning = warning;
         }
         // An agent's child is launched as one again: with only the servers
         // its launch gives it.
-        composition.unattended = row.role.is_some();
+        composition.unattended = row.agent.is_some();
         let mut launched = self.run(
             Plan {
                 backend,
@@ -1307,7 +1307,7 @@ impl Hosted {
                 ),
             );
         }
-        if let Some(warning) = role_warning {
+        if let Some(warning) = agent_warning {
             launched.warnings.insert(0, warning);
         }
         Ok(launched)
@@ -1472,7 +1472,7 @@ fn composition_of(profile: Option<&Profile>) -> Composition {
         agent: profile.agent.clone(),
         // Granted per launch, in `run`: a profile names no token.
         agent_tools: Vec::new(),
-        // Only a role names these.
+        // Only an agent names these.
         allowed_tools: Vec::new(),
         disallowed_tools: Vec::new(),
         instructions: None,

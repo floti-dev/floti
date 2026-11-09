@@ -125,9 +125,9 @@ export interface CrumbChip {
   onPress: () => void
 }
 
-/** What a child session is: a command child, or an agent started in a role. */
+/** What a child session is: a command child, or the agent it was started as. */
 export interface CrumbTag {
-  kind: 'command' | 'role'
+  kind: 'command' | 'agent'
   text: string
 }
 

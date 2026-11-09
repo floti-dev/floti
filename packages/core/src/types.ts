@@ -380,8 +380,8 @@ export interface SessionRecord {
   parentId?: number | null
   /** What the parent is called on screen, or null. */
   parentName?: string | null
-  /** The role the session was started in, or null for one started with none. */
-  role?: string | null
+  /** The agent the session was started as (`reviewer`, `worker`), or null for one started as none. */
+  agent?: string | null
   /**
    * The command line a command child runs, as its parent gave it after `--`.
    * Absent for every other session. Its exit code is `exitCode`, once it has
@@ -1914,7 +1914,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   restoreWithoutAsking: false,
   browserRecentUrls: [],
   browserProjectUrls: {},
-  // On, because the collision this exists to prevent - two agents in one
+  // On, because the collision this exists to prevent - two sessions in one
   // working tree - happens to somebody who never went looking for a setting,
   // and because what it serves is a strictly smaller grant than the tick above
   // it. See the field for what is not in it, which is what makes that true.

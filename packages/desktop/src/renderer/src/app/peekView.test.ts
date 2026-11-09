@@ -11,13 +11,13 @@ const child = (overrides: Record<string, unknown> = {}): SessionRecord =>
     cwd: 'C:\\work\\helm',
     branch: 'main',
     status: 'running',
-    role: 'reviewer',
+    agent: 'reviewer',
     permissionMode: 'plan',
     ...overrides
   }) as SessionRecord
 
 describe('what the peek says of a child', () => {
-  it('S1: names its role, folder, branch and mode, and carries its last report', () => {
+  it('S1: names its agent, folder, branch and mode, and carries its last report', () => {
     const facts = peekFacts(
       child({ lastReport: { state: 'done', text: 'Reviewed it.', at: '2026-11-07T10:00:00Z' } }),
       'busy',
@@ -25,7 +25,7 @@ describe('what the peek says of a child', () => {
     )
     expect(facts).toMatchObject({
       name: 'reviewer',
-      role: 'reviewer',
+      agent: 'reviewer',
       folder: 'helm',
       folderPath: 'C:\\work\\helm',
       branch: 'main',
@@ -36,13 +36,13 @@ describe('what the peek says of a child', () => {
     expect(facts.command).toBeUndefined()
   })
 
-  it('S1: a child with no role, mode or report says none of them, and a blank report is none', () => {
+  it('S1: a child with no agent, mode or report says none of them, and a blank report is none', () => {
     const facts = peekFacts(
-      child({ role: undefined, permissionMode: undefined, branch: null, lastReport: { state: 'note', text: '  ', at: 'x' } }),
+      child({ agent: undefined, permissionMode: undefined, branch: null, lastReport: { state: 'note', text: '  ', at: 'x' } }),
       'idle',
       { glyph: 'dot', state: 'idle' }
     )
-    expect(facts).toMatchObject({ role: null, mode: null, branch: null, report: null })
+    expect(facts).toMatchObject({ agent: null, mode: null, branch: null, report: null })
   })
 
   it('S1: a command child carries its command and runs-in, and never a report', () => {
@@ -86,7 +86,7 @@ describe('how an ended child says it ended', () => {
     expect(peeked('floti')).toEqual({ label: 'stopped by Floti', tone: 'neutral' })
     expect(peeked('person')).toEqual({ label: 'stopped', tone: 'neutral' })
     // A command child its parent stopped says so too, not its code.
-    expect(peeked('parent', { command: 'pnpm test', argv: [], role: undefined, permissionMode: undefined })).toEqual({
+    expect(peeked('parent', { command: 'pnpm test', argv: [], agent: undefined, permissionMode: undefined })).toEqual({
       label: 'stopped by lead',
       tone: 'neutral'
     })
@@ -96,7 +96,7 @@ describe('how an ended child says it ended', () => {
 
   it('S25: exited <code> for a command, stopped where the host ended it, ended where its code was never seen', () => {
     const ended = (overrides: Record<string, unknown>) => {
-      const record = child({ command: 'pnpm test', argv: [], role: undefined, permissionMode: undefined, status: 'exited', ...overrides })
+      const record = child({ command: 'pnpm test', argv: [], agent: undefined, permissionMode: undefined, status: 'exited', ...overrides })
       return peekFacts(record, 'ended', childMark(record, null), commandFacts(record)).state
     }
     expect(ended({ exitCode: 0 })).toEqual({ label: 'exited 0', tone: 'neutral' })
@@ -113,13 +113,13 @@ describe('what the peek says of a command child', () => {
     child({
       command: 'pnpm test',
       argv: ['C:\\Program Files\\PowerShell\\7\\pwsh.exe', '-NoLogo', '-Command', 'pnpm test'],
-      role: undefined,
+      agent: undefined,
       permissionMode: undefined,
       lastReport: { state: 'done', text: 'should not show', at: 'y' },
       ...overrides
     })
 
-  it('S24: names its command, folder, branch and the user’s shell, with no role, mode or report', () => {
+  it('S24: names its command, folder, branch and the user’s shell, with no agent, mode or report', () => {
     const record = command()
     const facts = peekFacts(record, 'running', childMark(record, 'busy'), commandFacts(record))
     expect(facts).toMatchObject({
@@ -128,7 +128,7 @@ describe('what the peek says of a command child', () => {
       runsIn: 'your shell, pwsh',
       folder: 'helm',
       branch: 'main',
-      role: null,
+      agent: null,
       mode: null,
       report: null,
       state: { label: 'running', tone: 'idle' }

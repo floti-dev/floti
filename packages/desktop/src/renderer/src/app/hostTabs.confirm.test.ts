@@ -44,8 +44,8 @@ describe('the close question as the window draws it', () => {
 
   it('S18: rows each child with its mark, name and what it is, a command as command · its command line', () => {
     const records = [
-      { ...child(8), role: 'reviewer', branch: 'main', cwd: '/r', name: 'rev', label: null },
-      { ...child(10, { command: 'npm test' }), role: null, branch: 'main', cwd: '/r', name: 'tests', label: null }
+      { ...child(8), agent: 'reviewer', branch: 'main', cwd: '/r', name: 'rev', label: null },
+      { ...child(10, { command: 'npm test' }), agent: null, branch: 'main', cwd: '/r', name: 'tests', label: null }
     ] as unknown as Array<SessionRecord & ChildMember>
     const plan = confirmChildren({ endingIds: [8, 10] }, records, () => 'busy')
     const rows = confirmRows(plan)
@@ -58,7 +58,7 @@ describe('the close question as the window draws it', () => {
 
   it('S27: a command that exited with a wrapped code (0xC0000005) keeps its failed glyph and its command line, nothing clamps it', () => {
     const records = [
-      { ...child(10, { command: 'npm test', exitCode: -1073741819, status: 'exited' }), role: null, branch: 'main', cwd: '/r', name: 'tests', label: null }
+      { ...child(10, { command: 'npm test', exitCode: -1073741819, status: 'exited' }), agent: null, branch: 'main', cwd: '/r', name: 'tests', label: null }
     ] as unknown as Array<SessionRecord & ChildMember>
     const rows = confirmRows(confirmChildren({ endingIds: [10] }, records, () => 'ended'))
     expect(rows.ends.map(({ mark, meta }) => [mark, meta])).toEqual([[{ glyph: 'command', state: 'failed' }, 'command · npm test']])

@@ -86,13 +86,13 @@ function folderOf(path: string): string {
 /** What a child of the peek's facts are, everything the popover shows but its screen and its buttons. */
 export type PeekFacts = Pick<
   ChildPeekProps,
-  'name' | 'mark' | 'state' | 'role' | 'command' | 'folder' | 'folderPath' | 'branch' | 'mode' | 'runsIn' | 'report'
+  'name' | 'mark' | 'state' | 'agent' | 'command' | 'folder' | 'folderPath' | 'branch' | 'mode' | 'runsIn' | 'report'
 >
 
 /**
- * The peek's facts for `child`: who it is (its role, or its command), where
+ * The peek's facts for `child`: who it is (its agent, or its command), where
  * it runs, the mode it was launched in and its last report. `command` is the
- * command line of a child that runs one and not an agent, which has no role,
+ * command line of a child that runs one and not an agent, which has no agent,
  * mode or report; absent for an agent child. A child that was stopped says who
  * stopped it, as its ended header does, in the chip's lower case ('stopped by
  * lead', 'stopped by Floti', 'stopped'), toned neutral whatever its exit code.
@@ -118,7 +118,7 @@ export function peekFacts(
             exitCode: command.exitCode ?? child.exitCode,
             ...(child.stopped === undefined ? {} : { stopped: child.stopped })
           }),
-    role: command === undefined ? (child.role ?? null) : null,
+    agent: command === undefined ? (child.agent ?? null) : null,
     command: command?.line,
     folder: folderOf(child.cwd),
     folderPath: child.cwd,

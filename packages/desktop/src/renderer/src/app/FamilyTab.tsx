@@ -191,7 +191,7 @@ export function FamilyTab({
         shape={shape}
         name={name}
         state={state}
-        role={child.role}
+        agent={child.agent}
         command={command}
         word={command ? commandWord(child) : undefined}
         status={

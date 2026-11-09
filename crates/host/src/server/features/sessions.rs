@@ -785,6 +785,7 @@ mod tests {
             exit_code,
             parent_id,
             parent_name: parent_id.map(|_| "lead".to_owned()),
+            agent: None,
             role: None,
             command: None,
             stopped: ended_by.is_some_and(|by| by != EndedBy::Exited),

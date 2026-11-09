@@ -264,7 +264,7 @@ describe('NewSessionDialog', () => {
 
     expect(within(list()).getByRole('option', { name: 'timeclick' }).textContent).toContain('2 running')
     expect(within(dialog()).getByRole('note').textContent).toBe(
-      'Already running here: accruals report, pid 42. Another one means two agents in one working tree.'
+      'Already running here: accruals report, pid 42. Another one means two sessions in one working tree.'
     )
     expect(within(dialog()).getByRole('alert').textContent).toBe('Claude Code CLI not found.')
   })

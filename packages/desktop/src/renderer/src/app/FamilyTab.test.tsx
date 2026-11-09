@@ -319,8 +319,8 @@ describe('a parent’s tab with children', () => {
     expect(Terminal.instances).toHaveLength(made)
   })
 
-  it('S6: puts a running card’s terminal under a one-line header with its state dot, name, role, state and for how long, Open as tab and Stop', () => {
-    const { container } = mount(WIDE, [LEAD, child(2, 'reviewer', { role: 'reviewer' })], {
+  it('S6: puts a running card’s terminal under a one-line header with its state dot, name, agent, state and for how long, Open as tab and Stop', () => {
+    const { container } = mount(WIDE, [LEAD, child(2, 'reviewer', { agent: 'reviewer' })], {
       doing: { 2: { state: 'busy', since: NOW - 4 * MINUTE } }
     })
 
@@ -328,7 +328,7 @@ describe('a parent’s tab with children', () => {
       .parentElement!
     expect(header.getAttribute('data-family-header')).toBe('card')
     expect(header.querySelector('[data-family-dot]')!.getAttribute('data-family-dot')).toBe('busy')
-    expect(header.querySelector('[data-family-role]')!.textContent).toBe('reviewer')
+    expect(header.querySelector('[data-family-agent]')!.textContent).toBe('reviewer')
     expect(header.querySelector('[data-family-status]')!.textContent).toBe('Working · 4m')
     expect(within(header).getByRole('button', { name: 'Open reviewer as a tab' })).toBeTruthy()
     expect(within(header).getByRole('button', { name: 'Stop reviewer' })).toBeTruthy()
@@ -425,15 +425,15 @@ describe('a parent’s tab with children', () => {
       })
 
     it('S25 S26: has the terminal glyph in success where an agent has its dot and the command tag on its card while it runs', () => {
-      const view = mount(WIDE, [LEAD, child(2, 'reviewer', { role: 'reviewer' }), child(3, 'tests', { command: 'pnpm test', role: null })])
+      const view = mount(WIDE, [LEAD, child(2, 'reviewer', { agent: 'reviewer' }), child(3, 'tests', { command: 'pnpm test', agent: null })])
 
       const tests = card(view.container, 'tests')
       expect(tests.querySelector('[data-family-command="running"]')!.className).toContain('text-success')
       expect(tests.querySelector('[data-family-dot]')).toBeNull()
-      expect(tests.querySelector('[data-family-role]')!.textContent).toBe('command')
+      expect(tests.querySelector('[data-family-agent]')!.textContent).toBe('command')
       const reviewer = card(view.container, 'reviewer')
       expect(reviewer.querySelector('[data-family-command]')).toBeNull()
-      expect(reviewer.querySelector('[data-family-role]')!.textContent).toBe('reviewer')
+      expect(reviewer.querySelector('[data-family-agent]')!.textContent).toBe('reviewer')
     })
 
     it('S25: says how long a command has run on its card, from when it started', () => {
@@ -562,7 +562,7 @@ describe('a parent’s tab with children', () => {
       const headers = container.querySelector<HTMLElement>('[data-family-headers]')!
       expect(headers.querySelectorAll('[data-family-dot]')).toHaveLength(1)
       expect(headers.querySelectorAll('[data-family-command="running"]')).toHaveLength(1)
-      expect(headers.querySelector('[data-family-role]')).toBeNull()
+      expect(headers.querySelector('[data-family-agent]')).toBeNull()
     })
   })
 
@@ -590,7 +590,7 @@ describe('a parent’s tab with children', () => {
     const headers = container.querySelector('[data-family-headers]')!
     expect(headers.querySelectorAll('[data-family-header="header"]')).toHaveLength(2)
     // A header is its dot, name and state only: no tag, no buttons beside it.
-    expect(headers.querySelector('[data-family-role]')).toBeNull()
+    expect(headers.querySelector('[data-family-agent]')).toBeNull()
     expect(within(headers as HTMLElement).getAllByRole('button')).toHaveLength(2)
     // The headers come after the cards in the column.
     const kids = container.querySelector('[data-family-kids]')!

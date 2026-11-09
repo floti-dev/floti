@@ -58,23 +58,35 @@ describe('what a session’s agent called it, as the window reads it', () => {
 })
 
 describe('a host session, as the window reads it', () => {
-  it('carries a child’s parent, the parent’s name and its role', () => {
-    const record = sessionFromHost(hostSession({ parentId: 4, parentName: 'lead', role: 'reviewer' }))
-    expect(record).toMatchObject({ id: 9, parentId: 4, parentName: 'lead', role: 'reviewer' })
+  it('carries a child’s parent, the parent’s name and its agent', () => {
+    const record = sessionFromHost(
+      hostSession({ parentId: 4, parentName: 'lead', agent: 'reviewer', role: 'reviewer' })
+    )
+    expect(record).toMatchObject({ id: 9, parentId: 4, parentName: 'lead', agent: 'reviewer' })
+    expect(record).not.toHaveProperty('role')
   })
 
-  it('carries a session nobody started with neither a parent nor a role', () => {
-    for (const bare of [hostSession(), hostSession({ parentId: null, parentName: null, role: null })]) {
+  it('reads the agent from role when a host says only that', () => {
+    const record = sessionFromHost(hostSession({ parentId: 4, parentName: 'lead', role: 'reviewer' }))
+    expect(record).toMatchObject({ agent: 'reviewer' })
+    expect(record).not.toHaveProperty('role')
+  })
+
+  it('carries a session nobody started with neither a parent nor an agent', () => {
+    for (const bare of [
+      hostSession(),
+      hostSession({ parentId: null, parentName: null, agent: null, role: null })
+    ]) {
       const record = sessionFromHost(bare)
       expect(record).not.toHaveProperty('parentId')
       expect(record).not.toHaveProperty('parentName')
-      expect(record).not.toHaveProperty('role')
+      expect(record).not.toHaveProperty('agent')
     }
   })
 
-  it('keeps a role the parent’s row outlived, with no parent', () => {
-    const record = sessionFromHost(hostSession({ parentId: null, parentName: null, role: 'reviewer' }))
-    expect(record).toMatchObject({ role: 'reviewer' })
+  it('keeps an agent the parent’s row outlived, with no parent', () => {
+    const record = sessionFromHost(hostSession({ parentId: null, parentName: null, agent: 'reviewer' }))
+    expect(record).toMatchObject({ agent: 'reviewer' })
     expect(record).not.toHaveProperty('parentId')
   })
 
@@ -82,7 +94,7 @@ describe('a host session, as the window reads it', () => {
     const command = 'pnpm test --filter core'
     const running = sessionFromHost(hostSession({ parentId: 4, parentName: 'lead', command }))
     expect(running).toMatchObject({ command, exitCode: null })
-    expect(running).not.toHaveProperty('role')
+    expect(running).not.toHaveProperty('agent')
 
     const endedAt = '2026-11-05T09:30:00.000Z'
     expect(
@@ -92,8 +104,8 @@ describe('a host session, as the window reads it', () => {
 
   it('carries no command for an agent child, a session nobody started, or a host before it', () => {
     for (const bare of [
-      hostSession({ parentId: 4, parentName: 'lead', role: 'reviewer', command: null }),
-      hostSession({ parentId: 4, parentName: 'lead', role: 'reviewer' }),
+      hostSession({ parentId: 4, parentName: 'lead', agent: 'reviewer', command: null }),
+      hostSession({ parentId: 4, parentName: 'lead', agent: 'reviewer' }),
       hostSession()
     ]) {
       expect(sessionFromHost(bare)).not.toHaveProperty('command')

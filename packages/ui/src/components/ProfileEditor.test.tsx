@@ -241,20 +241,20 @@ describe('ProfileEditor', () => {
     await settle()
 
     expect(screen.getByText('Set a root to see which servers resolve here.')).toBeTruthy()
-    expect(screen.getByText('Set a root to see which agents resolve here.')).toBeTruthy()
+    expect(screen.getByText('Set a root to see which subagents resolve here.')).toBeTruthy()
     expect(screen.queryAllByRole('checkbox', { name: /^MCP server/ })).toEqual([])
-    expect(optionsOf('Agent')).toEqual(['Default'])
+    expect(optionsOf('Subagent')).toEqual(['Default'])
     expect(props.predict).not.toHaveBeenCalled()
   })
 
   it('offers the root’s agents, and a composed overlay’s under its namespace', async () => {
     const props = renderEditor({ initial: { ...BLANK, root: HUB } })
     await settle()
-    expect(optionsOf('Agent')).toEqual(['Default', 'planner'])
+    expect(optionsOf('Subagent')).toEqual(['Default', 'planner'])
 
     tick('Compose tools')
     await settle()
-    expect(optionsOf('Agent')).toEqual(['Default', 'planner', 'tools:reviewer'])
+    expect(optionsOf('Subagent')).toEqual(['Default', 'planner', 'tools:reviewer'])
     expect(props.predict).toHaveBeenLastCalledWith(HUB, [TOOLS])
   })
 
@@ -279,7 +279,7 @@ describe('ProfileEditor', () => {
     tick('Compose tools')
     await settle()
 
-    choose('Agent', 'tools:reviewer')
+    choose('Subagent', 'tools:reviewer')
     tick('MCP server tracker')
     fireEvent.click(screen.getByRole('button', { name: 'Save and start' }))
 
@@ -302,8 +302,8 @@ describe('ProfileEditor', () => {
     const props = renderEditor({ initial: saved, onDelete: vi.fn() })
     await settle()
 
-    expect((screen.getByRole('combobox', { name: 'Agent' }) as HTMLSelectElement).value).toBe('ghost:helper')
-    expect(optionsOf('Agent')).toContain('ghost:helper - unresolved')
+    expect((screen.getByRole('combobox', { name: 'Subagent' }) as HTMLSelectElement).value).toBe('ghost:helper')
+    expect(optionsOf('Subagent')).toContain('ghost:helper - unresolved')
     expect(screen.getByText(/Nothing at this root resolves/).textContent).toBe(
       'Nothing at this root resolves ghost:helper. It is still saved.'
     )

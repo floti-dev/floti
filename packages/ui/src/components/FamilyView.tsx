@@ -218,8 +218,8 @@ export interface ChildHeaderProps {
   name: string
   /** What its dot says. */
   state: SessionState
-  /** Its role, drawn as a tag on a card; null for a child started with none. */
-  role?: string | null | undefined
+  /** Its agent, drawn as a tag on a card; null for a child started with none. */
+  agent?: string | null | undefined
   /**
    * It is a command and not an agent: the terminal glyph takes the dot's place,
    * in the tone `state` gives it, and the card's tag reads "command".
@@ -246,9 +246,9 @@ const SMALL_BUTTON =
 /**
  * A child's one-line header.
  *
- * On a card it carries the state dot, the name, the role as a tag, the state
+ * On a card it carries the state dot, the name, the agent as a tag, the state
  * and for how long, then Open as tab, Stop and Close. A command child has the terminal
- * glyph where the dot would be and "command" where the role would be. Shrunk it is the dot, the name
+ * glyph where the dot would be and "command" where the agent would be. Shrunk it is the dot, the name
  * and the state; ended it says how and when with Close. Pressing the words
  * is the header's one action, and the buttons are beside it, never inside it.
  */
@@ -256,7 +256,7 @@ export function ChildHeader({
   shape,
   name,
   state,
-  role,
+  agent,
   command = false,
   word,
   status,
@@ -302,21 +302,21 @@ export function ChildHeader({
         <span className="shrink-0 font-medium">{name}</span>
         {open && command ? (
           <span
-            data-family-role
+            data-family-agent
             className="shrink-0 rounded-full border border-border-strong px-1 text-[10px] leading-[14px] font-medium text-fg-muted"
           >
             command
           </span>
         ) : (
           open &&
-          role !== undefined &&
-          role !== null &&
-          role !== '' && (
+          agent !== undefined &&
+          agent !== null &&
+          agent !== '' && (
             <span
-              data-family-role
+              data-family-agent
               className="shrink-0 rounded-full bg-accent-soft px-[5px] text-[10px] leading-4 font-medium text-accent-text"
             >
-              {role}
+              {agent}
             </span>
           )
         )}
