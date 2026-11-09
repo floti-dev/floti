@@ -229,7 +229,6 @@ describe('settings', () => {
       agentDepth: 3,
       agentStartsPerParent: 20,
       agentCommandsPerParent: 3,
-      agentHeavyPerHost: 2,
       showChildrenInParentTab: false,
       quitSessions: { local: 'keep' },
       hosts: [{ id: 'h1', name: 'build-box', transport: { kind: 'ssh', target: 'you@build-box' } }],
@@ -276,6 +275,31 @@ describe('settings', () => {
     }
     expect(() => writeSettings(store, { theme: 'dark' })).not.toThrow()
     expect(readSettings(store).theme).toBe('dark')
+  })
+
+  it('ignores a stored heavy-agents limit an earlier version wrote, and takes the next write', () => {
+    // An earlier version kept a limit on heavy agents; Floti has none, and
+    // helm.db keeps the row, whatever it holds.
+    for (const value of ['3', '0', '{oops']) {
+      store.raw
+        .prepare(
+          'INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ' +
+            'ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+        )
+        .run('agentHeavyPerHost', value, '')
+
+      const settings = readSettings(store)
+      expect(settings).not.toHaveProperty('agentHeavyPerHost')
+      const fresh = openStore({ file: ':memory:' })
+      try {
+        expect(settings).toEqual(readSettings(fresh))
+      } finally {
+        fresh.close()
+      }
+    }
+    expect(() => writeSettings(store, readSettings(store))).not.toThrow()
+    expect(() => writeSettings(store, { agentChildrenPerParent: 6 })).not.toThrow()
+    expect(readSettings(store).agentChildrenPerParent).toBe(6)
   })
 
   it('has quitting end the sessions on this PC’s host until Settings keeps them, and keeps that choice across a restart', async () => {
@@ -945,11 +969,6 @@ describe('settings validation', () => {
       bad: [0, -1, 33, 4.5, '4', null, NaN, Infinity, true, {}]
     },
     {
-      key: 'agentHeavyPerHost',
-      good: [1, 2, 8],
-      bad: [0, -1, 9, 1.5, '1', null, NaN, Infinity, true, {}]
-    },
-    {
       // `'false'` would show the children while the pane read it as off.
       key: 'showChildrenInParentTab',
       good: [true, false],
@@ -1188,7 +1207,6 @@ describe('settings validation', () => {
       agentDepth: 3,
       agentStartsPerParent: 20,
       agentCommandsPerParent: 3,
-      agentHeavyPerHost: 2,
       showChildrenInParentTab: false,
       quitSessions: { local: 'keep' },
       hosts: [{ id: 'h1', name: 'build-box', transport: { kind: 'ssh', target: 'you@build-box' } }],
@@ -1246,7 +1264,6 @@ const DEFAULT_SETTINGS_SHAPE = (dir: string): typeof DEFAULT_SETTINGS => ({
   agentDepth: 3,
   agentStartsPerParent: 20,
   agentCommandsPerParent: 3,
-  agentHeavyPerHost: 2,
   showChildrenInParentTab: false,
   quitSessions: { local: 'keep' },
   hosts: [{ id: 'h1', name: 'build-box', transport: { kind: 'ssh', target: 'you@build-box' } }],

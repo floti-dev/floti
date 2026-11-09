@@ -95,8 +95,7 @@ export function hostSettingsFor(settings: AppSettings, discovered: string | null
     agentSessionsPerHost: settings.agentSessionsPerHost,
     agentDepth: settings.agentDepth,
     agentStartsPerParent: settings.agentStartsPerParent,
-    agentCommandsPerParent: settings.agentCommandsPerParent,
-    agentHeavyPerHost: settings.agentHeavyPerHost
+    agentCommandsPerParent: settings.agentCommandsPerParent
   }
 }
 

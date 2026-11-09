@@ -12,7 +12,6 @@ import {
   AGENT_CHILDREN_PER_PARENT,
   AGENT_COMMANDS_PER_PARENT,
   AGENT_DEPTH,
-  AGENT_HEAVY_PER_HOST,
   AGENT_SESSIONS_PER_HOST,
   AGENT_STARTS_PER_PARENT,
   BROWSER_PROJECT_URLS_MAX,
@@ -629,7 +628,6 @@ export const SETTING_VALIDATORS: SettingValidators = {
   agentDepth: boundedInteger(AGENT_DEPTH),
   agentStartsPerParent: boundedInteger(AGENT_STARTS_PER_PARENT),
   agentCommandsPerParent: boundedInteger(AGENT_COMMANDS_PER_PARENT),
-  agentHeavyPerHost: boundedInteger(AGENT_HEAVY_PER_HOST),
   showChildrenInParentTab: (value) => (typeof value === 'boolean' ? null : 'must be a boolean'),
 
   /**

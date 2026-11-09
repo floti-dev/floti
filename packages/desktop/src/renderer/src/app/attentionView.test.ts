@@ -75,7 +75,7 @@ describe('what the notices say', () => {
       [
         notice({ id: 'old', since: '2026-11-07T10:00:00.000Z', limit: 'children', allowMore: null, text: 'children' }),
         notice({ id: 'new', since: '2026-11-07T11:00:00.000Z' }),
-        notice({ id: 'other', parentId: 2, limit: 'heavy', allowMore: null, text: 'heavy' }),
+        notice({ id: 'other', parentId: 2, limit: 'sessions', allowMore: null, text: 'sessions' }),
         notice({ id: 'err', parentId: 3, kind: 'error', limit: null }),
         notice({ id: 'wait', parentId: 4, kind: 'needs-you', limit: null })
       ],
@@ -101,9 +101,6 @@ describe('what the notices say', () => {
     )
     expect(said({ limit: 'sessions', text: 'The limit of 8 agent sessions running on this host holds.' })).toMatch(
       new RegExp(`^api-refactor asked for another agent at ${at}; this host may run 8 agent sessions at once\\.$`)
-    )
-    expect(said({ limit: 'heavy', text: 'The heavy limit of 1 holds.' })).toMatch(
-      new RegExp(`^api-refactor asked for another heavy agent at ${at}; 1 heavy agent may run at once\\.$`)
     )
     expect(said({ limit: 'depth', text: 'The depth limit of 2 holds.' })).toMatch(
       new RegExp(`^api-refactor asked for an agent at ${at}; agents nest 2 deep at most\\.$`)

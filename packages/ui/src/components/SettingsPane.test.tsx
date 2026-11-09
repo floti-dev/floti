@@ -132,7 +132,6 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
       agentChildrenPerParent: 4,
       agentCommandsPerParent: 4,
       agentSessionsPerHost: 8,
-      agentHeavyPerHost: 1,
       agentDepth: 2,
       agentStartsPerParent: 16
     },

@@ -4722,8 +4722,6 @@ export function App(): JSX.Element {
         agentSessionsPerHost:
           settings?.agentSessionsPerHost ??
           DEFAULT_SETTINGS.agentSessionsPerHost,
-        agentHeavyPerHost:
-          settings?.agentHeavyPerHost ?? DEFAULT_SETTINGS.agentHeavyPerHost,
         agentDepth: settings?.agentDepth ?? DEFAULT_SETTINGS.agentDepth,
         agentStartsPerParent:
           settings?.agentStartsPerParent ??

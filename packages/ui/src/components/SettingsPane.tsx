@@ -4,7 +4,6 @@ import {
   AGENT_CHILDREN_PER_PARENT,
   AGENT_COMMANDS_PER_PARENT,
   AGENT_DEPTH,
-  AGENT_HEAVY_PER_HOST,
   AGENT_SESSIONS_PER_HOST,
   AGENT_STARTS_PER_PARENT,
   offerableUsageModes,
@@ -335,7 +334,6 @@ export type AgentLimitSettings = Pick<
   | 'agentChildrenPerParent'
   | 'agentCommandsPerParent'
   | 'agentSessionsPerHost'
-  | 'agentHeavyPerHost'
   | 'agentDepth'
   | 'agentStartsPerParent'
 >
@@ -1828,22 +1826,6 @@ function AgentLimitsGroup({
           label="Agent sessions per host"
           data-settings-agent-sessions-per-host={String(limits.agentSessionsPerHost)}
           onCommit={(agentSessionsPerHost) => onLimitsChange({ agentSessionsPerHost })}
-        />
-      </Row>
-
-      <Divider />
-
-      <Row
-        label="Heavy agents on this host"
-        hint="Agents started in a heavy role (an emulator, an end-to-end stack, a full build or suite) that may run on one host at once. A heavy start past it is refused, naming the one that holds the slot."
-      >
-        <NumberField
-          value={limits.agentHeavyPerHost}
-          min={AGENT_HEAVY_PER_HOST.min}
-          max={AGENT_HEAVY_PER_HOST.max}
-          label="Heavy agents on this host"
-          data-settings-agent-heavy-per-host={String(limits.agentHeavyPerHost)}
-          onCommit={(agentHeavyPerHost) => onLimitsChange({ agentHeavyPerHost })}
         />
       </Row>
 

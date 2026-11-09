@@ -799,8 +799,7 @@ describe('sessions through the local host', () => {
             agentSessionsPerHost: 12,
             agentDepth: 3,
             agentStartsPerParent: 20,
-            agentCommandsPerParent: 2,
-            agentHeavyPerHost: 2
+            agentCommandsPerParent: 2
           },
           '/bin/claude'
         )
@@ -816,24 +815,28 @@ describe('sessions through the local host', () => {
         agentSessionsPerHost: 12,
         agentDepth: 3,
         agentStartsPerParent: 20,
-        agentCommandsPerParent: 2,
-        agentHeavyPerHost: 2
+        agentCommandsPerParent: 2
       })
       expect(
         hostSettingsFor({ ...DEFAULT_SETTINGS, browserMcp: true, browserMcpLocalOnly: false, sessionMcp: true }, null)
       ).toMatchObject({ browserMcp: true, browserMcpLocalOnly: false, sessionMcp: true })
     })
 
-    it('tells the host the defaults - agents on, 4 children, 8 on the host, 2 deep, 16 starts, 1 heavy, 4 command children - when the user has changed none', () => {
+    it('tells the host the defaults - agents on, 4 children, 8 on the host, 2 deep, 16 starts, 4 command children - when the user has changed none', () => {
       expect(hostSettingsFor(DEFAULT_SETTINGS, null)).toMatchObject({
         sessionAgents: true,
         agentChildrenPerParent: 4,
         agentSessionsPerHost: 8,
         agentDepth: 2,
         agentStartsPerParent: 16,
-        agentCommandsPerParent: 4,
-        agentHeavyPerHost: 1
+        agentCommandsPerParent: 4
       })
+    })
+
+    it('tells the host no limit on heavy agents, whatever an earlier version kept', () => {
+      const kept = { ...DEFAULT_SETTINGS, agentHeavyPerHost: 3 } as typeof DEFAULT_SETTINGS
+      expect(hostSettingsFor(DEFAULT_SETTINGS, null)).not.toHaveProperty('agentHeavyPerHost')
+      expect(hostSettingsFor(kept, null)).not.toHaveProperty('agentHeavyPerHost')
     })
   })
 })

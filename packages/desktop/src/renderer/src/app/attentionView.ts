@@ -110,8 +110,6 @@ export function limitSentence(notice: StandingNotice): string {
     }
     case 'sessions':
       return `${asked} another agent at ${at}; this host may run ${limit} agent sessions at once.`
-    case 'heavy':
-      return `${asked} another heavy agent at ${at}; ${limit} heavy ${n === 1 ? 'agent' : 'agents'} may run at once.`
     case 'starts':
       return `${asked} another agent at ${at}; a session may start ${limit} in all.`
     case 'depth':

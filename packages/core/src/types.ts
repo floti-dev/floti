@@ -1219,8 +1219,8 @@ export const PROJECT_SHELL_HEIGHT_PCT = { min: 10, max: 50, default: 30 } as con
  * host accepts: the host refuses a limit outside it, and a write it refused
  * would drop every other setting sent with it, so Helm keeps to the same range.
  * The defaults are the design's: four children running at once per parent,
- * eight agent-started sessions per host, two levels deep, sixteen starts in a
- * parent's life, and one heavy child at a time on a host.
+ * eight agent-started sessions per host, two levels deep and sixteen starts in
+ * a parent's life.
  */
 export const AGENT_CHILDREN_PER_PARENT = { min: 1, max: 32, default: 4 } as const
 export const AGENT_SESSIONS_PER_HOST = { min: 1, max: 128, default: 8 } as const
@@ -1231,7 +1231,6 @@ export const AGENT_STARTS_PER_PARENT = { min: 1, max: 1000, default: 16 } as con
  * every agent limit above: a test run never takes a reviewer's slot.
  */
 export const AGENT_COMMANDS_PER_PARENT = { min: 1, max: 32, default: 4 } as const
-export const AGENT_HEAVY_PER_HOST = { min: 1, max: 8, default: 1 } as const
 
 /**
  * The rail's destinations that can be hidden, in the order the rail draws them.
@@ -1770,8 +1769,6 @@ export interface AppSettings {
   agentDepth: number
   /** Children one session may start in its life, running or not. */
   agentStartsPerParent: number
-  /** Agents in a heavy role (an emulator, a dev build, a full suite) that may run on one host at once. */
-  agentHeavyPerHost: number
   /**
    * Command children (`floti agent run`) one session may have running at once.
    * Counted apart from the agent limits: a command child takes none of their
@@ -1932,7 +1929,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   agentDepth: AGENT_DEPTH.default,
   agentStartsPerParent: AGENT_STARTS_PER_PARENT.default,
   agentCommandsPerParent: AGENT_COMMANDS_PER_PARENT.default,
-  agentHeavyPerHost: AGENT_HEAVY_PER_HOST.default,
   showChildrenInParentTab: true,
   // Empty: this PC's host then ends the sessions Helm started when it quits,
   // which is what a session on your own computer usually wants, and a host on
@@ -2708,7 +2704,7 @@ export interface AgentWorktreeRemoval {
 export type NoticeKind = 'needs-you' | 'limit' | 'error'
 
 /** The limit that refused a parent's start. */
-export type NoticeLimit = 'children' | 'sessions' | 'depth' | 'starts' | 'heavy'
+export type NoticeLimit = 'children' | 'sessions' | 'depth' | 'starts'
 
 /**
  * Something the host keeps for a person who is not looking: a child waiting on
