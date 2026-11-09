@@ -5,7 +5,8 @@
 //! `floti agent read <name>` prints its screen as plain text;
 //! `floti agent stop <name>` ends it, and `--keep` keeps it as a stopped
 //! child to resume later; `floti agent wait` prints the news its
-//! agents have for the session. Each is the `agents_start`, `agents_send`,
+//! agents have for the session, and `--background` says it runs as a
+//! background command. Each is the `agents_start`, `agents_send`,
 //! `agents_read`, `agents_stop` or `agents_wait` tool called over the same
 //! endpoint a session's agent tools use, so the host answers one way whoever
 //! asks and the same limits, folder rule and own-children rule apply. The session is
@@ -28,7 +29,10 @@
 //! The command prints what the tool returned and exits; one that is cut off
 //! (the host restarted, the connection went) says so and exits 1, and runs
 //! again to get the news, which the host keeps until an answer has reached
-//! its caller.
+//! its caller. A wait in the foreground holds up the agent's turn, so a person
+//! typing into the session ends it at once; `floti agent wait --background`,
+//! run as a background command, holds up nothing, and a person typing does
+//! not end it.
 //!
 //! `floti session title <text>` titles the session it runs in, as its
 //! `session_title` tool does: the helm-sessions family at
@@ -64,7 +68,7 @@ pub const SESSIONS_URL_VAR: &str = "FLOTI_AGENT_SESSIONS_URL";
 pub const SESSION_USAGE: &str = "usage: floti session title <text>";
 
 /// What `floti agent` accepts.
-pub const USAGE: &str = "usage: floti agent start --task <text> [--role <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--worktree <name>] [--outlive] [--can-start] [--wait] [--json]\n       floti agent start --resume <name> --task <text> [--wait] [--json]\n       floti agent send [--interrupt] [--wait] [--json] <name> [--] <text>\n       floti agent read [--lines <n>] [--json] <name>\n       floti agent run [--name <name>] [--wait] [--json] -- <command...>\n       floti agent wait [--all] [--json] [<name>...]\n       floti agent stop [--keep] [--json] <name>";
+pub const USAGE: &str = "usage: floti agent start --task <text> [--role <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--worktree <name>] [--outlive] [--can-start] [--wait] [--json]\n       floti agent start --resume <name> --task <text> [--wait] [--json]\n       floti agent send [--interrupt] [--wait] [--json] <name> [--] <text>\n       floti agent read [--lines <n>] [--json] <name>\n       floti agent run [--name <name>] [--wait] [--json] -- <command...>\n       floti agent wait [--all] [--background] [--json] [<name>...]\n       floti agent stop [--keep] [--json] <name>";
 
 /// How long a connection waits to be made.
 const CONNECT_WAIT: Duration = Duration::from_secs(10);
@@ -155,6 +159,10 @@ pub struct Wait {
     pub all: bool,
     /// The agents to wait on; none for all of the session's.
     pub children: Vec<String>,
+    /// Whether `--background` was given: the command runs as a background
+    /// command the agent is woken by, so a person typing into the session
+    /// does not end it.
+    pub background: bool,
     pub json: bool,
 }
 
@@ -392,6 +400,7 @@ fn parse_wait(args: &[String]) -> Result<Wait, String> {
     for arg in args {
         match arg.as_str() {
             "--all" => wait.all = true,
+            "--background" => wait.background = true,
             "--json" => wait.json = true,
             flag if flag.starts_with("--") => {
                 return Err(format!("`{flag}` is not a floti agent wait option."));
@@ -617,6 +626,9 @@ fn wait_arguments(wait: &Wait) -> Value {
     let mut arguments = json!({ "for": if wait.all { "all" } else { "any" } });
     if !wait.children.is_empty() {
         arguments["children"] = json!(wait.children);
+    }
+    if wait.background {
+        arguments["background"] = json!(true);
     }
     arguments
 }
@@ -971,9 +983,19 @@ mod tests {
             Ok(Command::Wait(Wait {
                 all: true,
                 children: vec!["reviewer".to_owned(), "reviewer-2".to_owned()],
+                background: false,
                 json: true,
             }))
         );
+        assert_eq!(
+            parse(&args(&["wait", "--background", "reviewer"])),
+            Ok(Command::Wait(Wait {
+                children: vec!["reviewer".to_owned()],
+                background: true,
+                ..Wait::default()
+            }))
+        );
+        assert!(parse(&args(&["wait", "--background=yes"])).is_err());
         assert!(parse(&args(&["wait", "--any"])).is_err());
         assert!(parse(&args(&["wait", " "])).is_err());
     }
@@ -985,9 +1007,19 @@ mod tests {
             wait_arguments(&Wait {
                 all: true,
                 children: vec!["a".to_owned(), "b".to_owned()],
+                background: false,
                 json: false,
             }),
             json!({ "for": "all", "children": ["a", "b"] })
+        );
+        // A wait run as a background command says so, so that a person
+        // typing into the session does not end it.
+        assert_eq!(
+            wait_arguments(&Wait {
+                background: true,
+                ..Wait::default()
+            }),
+            json!({ "for": "any", "background": true })
         );
         let start = Start {
             task: "t".to_owned(),
@@ -1373,6 +1405,7 @@ mod tests {
         Command::Wait(Wait {
             all,
             children: vec!["reviewer".to_owned()],
+            background: false,
             json,
         })
     }

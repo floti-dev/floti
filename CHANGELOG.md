@@ -31,6 +31,13 @@ A preview, not a release: nothing offers it as an update.
   command children. How many children work at once is up to the agent that
   started them. A role file's `class` line still loads, is ignored, and the
   roles listing says it is no longer used.
+- Typing to an agent whose children are working no longer cuts its wait on
+  them short. A wait that runs in the background (a Claude Code agent's
+  agents_wait from 2.1.304, or `floti agent wait --background` run as a
+  background command) goes on while you talk to it, and it hears its
+  children's news when that comes, instead of being woken by your typing and
+  waiting again. Its children, and the messages it sent them, carry on as
+  before. Agents are told to wait that way wherever they can.
 
 ## 2.4.1-preview.10
 

@@ -618,11 +618,16 @@ fn it_moves_long_calls_to_the_background_has_mcp_tools_and_supports_mcp_tasks_fr
         ("2.1.305", true),
         ("2.2.0", true),
     ] {
-        assert_eq!(
-            world_reporting(version).backend.tool_support(),
-            declared(tasks),
-            "{version}"
-        );
+        let backend = world_reporting(version).backend;
+        assert_eq!(backend.tool_support(), declared(tasks), "{version}");
+        // Its guide asks it to wait in the background: in a task where it
+        // has them, else in a background command, never in a held call.
+        let waiting = if tasks {
+            crate::agent::guidance::WAITS_IN_A_TASK
+        } else {
+            crate::agent::guidance::WAKES_ON_BACKGROUND_COMMAND
+        };
+        assert_eq!(backend.waiting_guidance(), waiting, "{version}");
     }
     // A version that cannot be read is not taken to support them.
     let unknown = World::with(|settings| {

@@ -62,7 +62,7 @@ use notices::StartLimit;
 pub(crate) use read::{ChildRead, ReadChild};
 pub(crate) use send::{ChildSent, SendChild, deliver_at_each_moment};
 pub(crate) use startup::after_each_launch;
-pub(crate) use wait::{WaitEnd, WaitFor, WaitRequest, Waited};
+pub(crate) use wait::{Holding, WaitEnd, WaitFor, WaitRequest, Waited};
 
 use std::collections::HashMap;
 use std::ffi::OsString;

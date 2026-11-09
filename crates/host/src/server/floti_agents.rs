@@ -28,6 +28,12 @@
 //! What a wait returns is marked heard only once the answer has reached its
 //! caller ([`Delivery`]), so a dropped wait loses nothing.
 //!
+//! **A wait in the background is not ended by a person.** A held wait inside
+//! an MCP task, or from the shell with `background` (which only
+//! `floti agent wait --background` sends), runs in the background, and a
+//! person typing into the caller does not end it; any other held wait holds
+//! up the caller's turn and ends at a person's key (`children/wait.rs`).
+//!
 //! **A wait is a task where the agent offers them.** An agent whose backend
 //! declares MCP tasks (`Hosted::waits_as_task`; Claude Code from 2.1.304) and
 //! asks for them on its own tool call (the tasks extension at 2026-07-28) has
@@ -55,9 +61,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::hosted::{
-    ChildEntry, ChildRead, ChildSent, ChildStopped, ChildrenListed, Hosted, ReadChild, RoleEntry,
-    RolesListed, RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest, Waited,
-    off_runtime,
+    ChildEntry, ChildRead, ChildSent, ChildStopped, ChildrenListed, Holding, Hosted, ReadChild,
+    RoleEntry, RolesListed, RunCommand, SendChild, StartChild, WaitEnd, WaitFor, WaitRequest,
+    Waited, off_runtime,
 };
 use crate::agent_tools::{
     CallToolResult, Caller, ContentBlock, Delivery, GrantScope, JsonObject, Tool, ToolFamily,
@@ -294,6 +300,8 @@ impl ToolFamily for FlotiAgents {
                 hosted: &hosted,
                 me,
                 shell: caller.shell,
+                background: caller.shell
+                    && matches!(arguments.get("background"), Some(Value::Bool(true))),
                 delivery: &delivery,
             };
             match name {
@@ -329,6 +337,9 @@ struct Waiter<'a> {
     me: SessionId,
     /// The call came from `floti agent` in the caller's shell.
     shell: bool,
+    /// The call came from the caller's shell saying it runs there as a
+    /// background command (`floti agent wait --background`).
+    background: bool,
     delivery: &'a Delivery,
 }
 
@@ -338,14 +349,29 @@ impl Waiter<'_> {
     /// the news returned is heard once the answer has been delivered: for a
     /// task, once `tasks/get` has handed over its completed result.
     async fn wait(&self, wait_for: WaitFor, children: Vec<String>) -> Result<Waited, String> {
-        let hold = self.delivery.is_task() || self.hosted.waits_hold(self.me, self.shell);
-        self.wait_holding(hold, wait_for, children).await
+        let holding = if self.delivery.is_task() || self.hosted.waits_hold(self.me, self.shell) {
+            self.held()
+        } else {
+            Holding::No
+        };
+        self.wait_as(holding, wait_for, children).await
     }
 
-    /// [`Self::wait`], holding or not as `hold` says.
-    async fn wait_holding(
+    /// How this call holds when it does: in the background inside an MCP task
+    /// or as a background command, and otherwise holding up the caller's
+    /// turn, which a person's key then ends.
+    fn held(&self) -> Holding {
+        if self.delivery.is_task() || self.background {
+            Holding::InBackground
+        } else {
+            Holding::BlockingTurn
+        }
+    }
+
+    /// [`Self::wait`], holding as `holding` says.
+    async fn wait_as(
         &self,
-        hold: bool,
+        holding: Holding,
         wait_for: WaitFor,
         children: Vec<String>,
     ) -> Result<Waited, String> {
@@ -356,7 +382,7 @@ impl Waiter<'_> {
                 WaitRequest {
                     wait_for,
                     children,
-                    hold,
+                    holding,
                 },
             )
             .await?;
@@ -600,7 +626,7 @@ async fn run(from: &Waiter<'_>, arguments: &JsonObject) -> CallToolResult {
     if wait {
         // Only that command's news: the rest stays in the inbox for a wait.
         match from
-            .wait_holding(true, WaitFor::Any, vec![started.name.clone()])
+            .wait_as(from.held(), WaitFor::Any, vec![started.name.clone()])
             .await
         {
             Ok(waited) => {

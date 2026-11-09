@@ -160,14 +160,20 @@ pub trait AgentBackend: Send + Sync {
     }
 
     /// The sentence of Floti's `floti agent` guide on waiting, which is the
-    /// one thing about waiting that differs by agent: an agent woken by a
-    /// finished background command is told to wait in one, and any other is
-    /// told the wait answers at once and to call it again.
+    /// one thing about waiting that differs by agent. Every agent that can is
+    /// told to wait in the background, which a person talking to it does not
+    /// end: one woken by a finished background command that also answers its
+    /// tool calls as tasks is told to wait either way, one with no tasks to
+    /// wait in a background command, and any other is told the wait answers
+    /// at once and to call it again.
     fn waiting_guidance(&self) -> &'static str {
-        if self.tool_support().background_command_wakes {
-            guidance::WAKES_ON_BACKGROUND_COMMAND
-        } else {
+        let support = self.tool_support();
+        if !support.background_command_wakes {
             guidance::ANSWERS_AT_ONCE
+        } else if support.mcp_tasks {
+            guidance::WAITS_IN_A_TASK
+        } else {
+            guidance::WAKES_ON_BACKGROUND_COMMAND
         }
     }
 

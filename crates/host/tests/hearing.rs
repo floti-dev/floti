@@ -2454,7 +2454,7 @@ impl World {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s3_a_wait_carrying_the_tasks_extension_is_a_working_task_that_completes_on_news_or_typing_and_is_heard_once_fetched()
+async fn s3_a_wait_carrying_the_tasks_extension_is_a_working_task_that_completes_on_news_and_is_heard_once_fetched()
  {
     let world = World::new();
     let host = world.host().await;
@@ -2491,32 +2491,6 @@ async fn s3_a_wait_carrying_the_tasks_extension_is_a_working_task_that_completes
     .await;
     // The result was taken once: the task is gone.
     assert_eq!(parent.task(&id).await["error"]["code"], -32602);
-
-    // Someone typing into the parent first completes it with what is unseen.
-    let id = parent
-        .start_task("agents_wait", json!({ "for": "all" }))
-        .await;
-    worker.report("note", "kept").await.done();
-    assert_eq!(world.unseen_report("kept"), 1, "{}", world.inbox_text());
-    let mut typed = 0;
-    // One poll for the whole loop: a poll dropped after the host handed over
-    // its result would leave the next one with no task to find.
-    let completed = parent.completed_task(&id);
-    tokio::pin!(completed);
-    let done = loop {
-        tokio::select! {
-            done = &mut completed => break done,
-            () = async { world.type_line(&parent, &format!("hello {typed}")).await } => typed += 1,
-        }
-    };
-    let heard = Heard(tasks_answer(&done));
-    assert_eq!(heard.ended(), "typed", "{heard:?}");
-    assert_eq!(heard.events(), ["worker:report"], "{heard:?}");
-    eventually(
-        "the news to be heard once the result was fetched",
-        async || (world.unseen_report("kept") == 0).then_some(()),
-    )
-    .await;
     host.stop(HostStopReason::Stop).await;
 }
 
@@ -2859,6 +2833,188 @@ async fn s12_a_send_with_wait_carrying_the_tasks_extension_is_a_task_with_that_c
     assert!(message["result"].get("taskId").is_none(), "{message}");
     let heard = Heard(Called::of(&message).done());
     assert_eq!(heard.events(), ["target:report"], "{heard:?}");
+    host.stop(HostStopReason::Stop).await;
+}
+
+// ---------------------------------------------------------------------------
+// A person talks to a parent whose waits run in the background
+// ---------------------------------------------------------------------------
+
+impl World {
+    /// A person talks to `parent` until a wait that holds up its turn, opened
+    /// now, has ended on their keys. Every wait opened before it was waiting
+    /// on the parent's keys before those that ended it reached the host:
+    /// each began listening before this one was asked for. A key sent before
+    /// a wait listens does not end it, so the person keeps talking until one
+    /// does.
+    async fn talk_to(&self, parent: &Agent, talked: &mut usize) {
+        let mut blocking = parent.open("agents_wait", json!({})).await;
+        assert!(blocking.streamed, "a wait that holds up the turn is held");
+        let heard = loop {
+            tokio::select! {
+                heard = blocking.heard() => break heard,
+                () = async { self.type_line(parent, &format!("hello {talked}")).await } => *talked += 1,
+            }
+        };
+        assert_eq!(heard.ended(), "typed", "{heard:?}");
+        assert!(heard.news().is_empty(), "{heard:?}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_person_typing_into_the_parent_ends_none_of_its_waits_in_the_background_and_each_ends_on_its_childs_news()
+ {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("talk-to-parent");
+    let parent = world.session(CLAUDE, &folder, "parent").await;
+    for (name, backend) in [("worker", OTHER), ("shellkid", OTHER), ("target", CLAUDE)] {
+        parent
+            .start(json!({ "task": "work", "name": name, "backend": backend }))
+            .await
+            .done();
+    }
+    let worker = world.child_of(&parent, "worker").await;
+    let shellkid = world.child_of(&parent, "shellkid").await;
+    let target = world.child_of(&parent, "target").await;
+    world.calm(&parent, &["target"]).await;
+
+    // A wait in the background for each kind there is, each on a child of
+    // its own: agents_wait, a start and a send that wait, each as an MCP
+    // task, and `floti agent wait --background` from the parent's shell.
+    let waiting = parent
+        .start_task("agents_wait", json!({ "children": ["worker"] }))
+        .await;
+    let starting = parent
+        .start_task(
+            "agents_start",
+            json!({ "task": "go", "name": "fresh", "backend": OTHER, "wait": true }),
+        )
+        .await;
+    let fresh = world.child_when_started(&parent, "fresh").await;
+    let sending = parent
+        .start_task(
+            "agents_send",
+            json!({ "child": "target", "text": "do the thing", "wait": true }),
+        )
+        .await;
+    world.took(&target, "do the thing").await;
+    let mut shell = parent
+        .open_from_shell(
+            "agents_wait",
+            json!({ "children": ["shellkid"], "background": true }),
+        )
+        .await;
+    assert!(shell.streamed, "held from the shell");
+
+    // A person talks to the parent: a wait that holds up its turn ends at
+    // once, twice over, and every wait in the background is still working.
+    let mut talked = 0;
+    world.talk_to(&parent, &mut talked).await;
+    world.talk_to(&parent, &mut talked).await;
+    for id in [&waiting, &starting, &sending] {
+        let task = parent.task(id).await;
+        assert_eq!(task["result"]["status"], "working", "{task}");
+    }
+
+    // Each ends on its own child's news, which the person's talk left
+    // unheard until a wait handed it over.
+    shellkid.report("note", "from the shell").await.done();
+    let heard = shell.heard().await;
+    assert_eq!(heard.ended(), "news", "{heard:?}");
+    assert_eq!(heard.events(), ["shellkid:report"], "{heard:?}");
+
+    worker.report("done", "worker words").await.done();
+    assert_eq!(
+        world.unseen_report("worker words"),
+        1,
+        "{}",
+        world.inbox_text()
+    );
+    let done = parent.completed_task(&waiting).await;
+    assert!(!tasks_text(&done).contains("typed"), "{done}");
+    let heard = Heard(tasks_answer(&done));
+    assert_eq!(heard.ended(), "news", "{heard:?}");
+    assert_eq!(heard.events(), ["worker:report"], "{heard:?}");
+    eventually(
+        "the news to be heard once the result was fetched",
+        async || (world.unseen_report("worker words") == 0).then_some(()),
+    )
+    .await;
+
+    fresh.report("done", "fresh words").await.done();
+    let done = parent.completed_task(&starting).await;
+    assert!(tasks_text(&done).starts_with("Started fresh."), "{done}");
+    let heard = Heard(tasks_answer(&done));
+    assert_eq!(heard.ended(), "news", "{heard:?}");
+    assert_eq!(heard.events(), ["fresh:report"], "{heard:?}");
+
+    target.report("done", "the thing is done").await.done();
+    let done = parent.completed_task(&sending).await;
+    assert!(tasks_text(&done).starts_with("Sent to target."), "{done}");
+    let heard = Heard(tasks_answer(&done));
+    assert_eq!(heard.ended(), "news", "{heard:?}");
+    assert_eq!(heard.events(), ["target:report"], "{heard:?}");
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_claude_code_parent_talked_to_while_its_agents_wait_task_runs_takes_its_childs_news_as_its_next_turn()
+ {
+    let world = World::reporting("2.1.304");
+    let host = world.host().await;
+    let folder = world.project("talk-task");
+    let parent = world.session(CLAUDE, &folder, "parent").await;
+    parent
+        .start(json!({ "task": "work", "name": "worker", "backend": OTHER }))
+        .await
+        .done();
+    let worker = world.child_of(&parent, "worker").await;
+
+    // The parent's agent waits with its own tool call and is answered with a
+    // task, which it runs in the background.
+    world
+        .type_line(&parent, "/mcp floti-agents agents_wait {}")
+        .await;
+    let call = eventually("the call to be answered with a task", async || {
+        let call = world.claude_log(&parent)["mcpCalls"][0].clone();
+        call["taskId"].is_string().then_some(call)
+    })
+    .await;
+    let id = call["taskId"].as_str().expect("a task id").to_owned();
+
+    // A person talks to the parent meanwhile: the task goes on working, and
+    // the parent is given nothing as a turn.
+    let mut talked = 0;
+    world.talk_to(&parent, &mut talked).await;
+    let task = parent.task(&id).await;
+    assert_eq!(task["result"]["status"], "working", "{task}");
+    assert!(
+        world.claude_log(&parent)["turns"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+
+    // The child's report completes it, and the parent takes the news as its
+    // next turn, as if nobody had typed.
+    worker.report("done", "All shipped.").await.done();
+    let turn = eventually("the parent to take the result as a turn", async || {
+        world.claude_log(&parent)["turns"][0]["text"]
+            .as_str()
+            .map(str::to_owned)
+    })
+    .await;
+    assert!(turn.starts_with("agents_wait finished:"), "{turn}");
+    assert!(
+        turn.contains("worker reported done: All shipped."),
+        "{turn}"
+    );
+    assert!(!turn.contains("typed"), "{turn}");
+    assert_eq!(
+        world.claude_log(&parent)["turns"].as_array().unwrap().len(),
+        1
+    );
     host.stop(HostStopReason::Stop).await;
 }
 
@@ -3305,7 +3461,7 @@ async fn s21_each_session_with_the_family_is_given_the_guide_with_its_backends_l
     for (backend, line) in [
         (
             CLAUDE,
-            "run `floti agent wait` as a background command; you are woken with their news when it finishes",
+            "agents_wait runs as a task, so call it and keep working, and from your shell run `floti agent wait --background` as a background command",
         ),
         (
             OTHER,
@@ -3694,6 +3850,47 @@ async fn messages_queued_behind_a_turn_are_delivered_in_order_each_as_its_own_tu
         run.queued
     );
     assert_eq!(world.delivered(&parent, 3).await, texts);
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_queued_for_a_child_is_delivered_on_the_childs_own_turn_while_a_person_types_into_the_parent()
+ {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("send-talk");
+    let parent = world.session(CLAUDE, &folder, "parent").await;
+    parent
+        .start(json!({ "task": "work", "name": "records", "backend": CLAUDE }))
+        .await
+        .done();
+    world.calm(&parent, &["records"]).await;
+    let child = world.child_of(&parent, "records").await;
+
+    // The child is in a turn its parent gave it, so the next text waits in
+    // its queue.
+    let mut watch = Watch::open(&world).await;
+    let sent = parent.send("records", "/busy hold").await;
+    assert_eq!(sent.text(), "Sent to records.", "{sent:?}");
+    watch.until(&child, SessionActivity::Busy).await;
+    assert_queued(
+        parent.send("records", "after the talk").await,
+        "records",
+        0,
+        "working",
+    );
+
+    // A person talks to the parent meanwhile: what reaches the child is
+    // still only what its own turn allows.
+    for line in ["hello", "how is it going"] {
+        world.type_line(&parent, line).await;
+    }
+    world.assert_untyped(&child, "after the talk");
+
+    // The child's turn ends, and the text is its next turn.
+    world.release(&child).await;
+    world.took(&child, "after the talk").await;
+    assert_eq!(world.delivered(&parent, 1).await, ["after the talk"]);
     host.stop(HostStopReason::Stop).await;
 }
 

@@ -24,9 +24,17 @@ pub struct ChildInstructions {
     pub reports: bool,
 }
 
+/// The waiting sentence for an agent that answers its tool calls as tasks
+/// and is woken when a background command it started finishes: it can wait
+/// in the background either way, and a person talking to it meanwhile ends
+/// neither.
+pub const WAITS_IN_A_TASK: &str = "Wait in the background, so a person can talk to you while you wait: agents_wait runs as a task, so call it and keep working, and from your shell run `floti agent wait --background` as a background command. Either wakes you with your children's news when it ends, and a person talking to you meanwhile does not end it. If a wait ends with nothing new, or fails or is cut off, wait again.";
+
 /// The waiting sentence for an agent that is woken when a background command
-/// it started finishes.
-pub const WAKES_ON_BACKGROUND_COMMAND: &str = "To hear from your children while you keep working, run `floti agent wait` as a background command; you are woken with their news when it finishes. If it ends with nothing new, or fails or is cut off, run it again.";
+/// it started finishes and has no tasks: its own held tool call would hold up
+/// its turn, so it waits from its shell. `--background` is what tells the
+/// host the command holds up nothing.
+pub const WAKES_ON_BACKGROUND_COMMAND: &str = "To hear from your children while you keep working, run `floti agent wait --background` as a background command rather than calling agents_wait, which holds up your turn and ends as soon as a person types to you; you are woken with their news when it finishes, and a person talking to you meanwhile does not end it. If it ends with nothing new, or fails or is cut off, run it again.";
 
 /// The waiting sentence for an agent that is not woken by anything, and so is
 /// never left holding a call.
@@ -162,8 +170,14 @@ mod tests {
         };
         let text =
             floti_sections(&composition, WAKES_ON_BACKGROUND_COMMAND, None).expect("the guide");
-        assert!(text.contains("run `floti agent wait` as a background command"));
+        assert!(text.contains("run `floti agent wait --background` as a background command"));
+        assert!(text.contains("a person talking to you meanwhile does not end it"));
         assert!(text.contains("fails or is cut off, run it again"));
+        let text = floti_sections(&composition, WAITS_IN_A_TASK, None).expect("the guide");
+        assert!(text.contains("Wait in the background"));
+        assert!(text.contains("agents_wait runs as a task"));
+        assert!(text.contains("run `floti agent wait --background` as a background command"));
+        assert!(text.contains("fails or is cut off, wait again"));
         let text = floti_sections(&composition, ANSWERS_AT_ONCE, None).expect("the guide");
         assert!(text.contains("answers at once"));
         assert!(text.contains("after your next piece of work"));
@@ -173,6 +187,19 @@ mod tests {
         assert!(text.contains(
             "Stop a child with `floti agent stop <name>` once you have what you need, and add --keep only when you expect to give it more work."
         ));
+    }
+
+    #[test]
+    fn every_line_that_waits_in_a_background_command_says_so_with_background() {
+        // Without the flag the host cannot tell a background command from a
+        // wait that holds up the turn, and a person's key would end it.
+        for line in [WAITS_IN_A_TASK, WAKES_ON_BACKGROUND_COMMAND] {
+            assert!(
+                line.contains("`floti agent wait --background` as a background command"),
+                "{line}"
+            );
+            assert!(!line.contains("`floti agent wait` as"), "{line}");
+        }
     }
 
     #[test]

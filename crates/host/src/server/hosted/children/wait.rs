@@ -14,10 +14,17 @@
 //! is still working, and says nothing is new when nothing is. Which calls hold
 //! is the caller's backend's (`Hosted::waits_hold`), not this module's.
 //!
-//! **A held wait ends early, with what is unseen,** when a person types into
-//! the caller's terminal (so a person is never queued behind a wait) and when
-//! the caller ends. It never ends on a timer: the stream the listener answers
-//! it with says it is still there.
+//! **A held wait either holds up the caller's turn or runs in the background**
+//! ([`Holding`]). One that holds up the turn (a held tool call that is not a
+//! task, `floti agent wait` without `--background`) ends early, with what is
+//! unseen, when a person types into the caller's terminal, so a person is
+//! never queued behind it. One in the background (an MCP task,
+//! `floti agent wait --background`) blocks nothing, since the agent takes a
+//! person's message as a turn of its own meanwhile, so the caller's terminal
+//! does not end it: a person can talk to the caller while it waits on its
+//! children as if they had not typed. Either ends when the caller ends. None
+//! ends on a timer: the stream the listener answers a held call with says it
+//! is still there.
 //!
 //! **Nothing is lost.** News is read, not taken: the answer carries the ids of
 //! what it holds, and [`Waited::confirm`] marks them heard once the answer has
@@ -29,15 +36,17 @@
 //! listener answers it at once with a working task and runs the wait inside
 //! it. Inside a task the wait always holds, whatever the backend says about
 //! moving long calls to the background, since the task is the background and
-//! nothing keeps a connection open for it. It ends as a held wait ends: the
-//! child's next news, every child it is about idle, a person typing into the
-//! caller, or the caller ending. The task
-//! then completes with the same answer a held wait gives, and the news counts
+//! nothing keeps a connection open for it. It ends as a wait in the
+//! background ends: the child's next news, every child it is about idle, or
+//! the caller ending, and never because a person typed into the caller. The
+//! task then completes with the same answer a held wait gives, and the news counts
 //! as heard (`Waited::confirm`, through the call's delivery) once that result
 //! has been fetched in full. A task cancelled, dropped with its session or
 //! cut off by a host restart leaves the news unseen.
 
 use std::sync::Arc;
+
+use tokio::sync::watch;
 
 use super::inbox::{self, EventKind, News};
 use super::{off_runtime, queue, rows, send};
@@ -64,8 +73,24 @@ pub(crate) struct WaitRequest {
     /// The children it is about, as the caller names them; none for all of
     /// the caller's.
     pub children: Vec<String>,
-    /// Whether it may stay unanswered until something happens.
-    pub hold: bool,
+    /// Whether it may stay unanswered until something happens, and what it
+    /// holds up while it does.
+    pub holding: Holding,
+}
+
+/// Whether a wait holds, and what waits on it while it does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Holding {
+    /// It answers at once.
+    No,
+    /// It holds, and the caller's turn waits on it: a person's key in the
+    /// caller's terminal ends it at once, so they are never queued behind it.
+    BlockingTurn,
+    /// It holds in the background (an MCP task, or a background command the
+    /// caller is woken by when it finishes), and the caller takes a person's
+    /// message as a turn of its own meanwhile: the caller's terminal does not
+    /// end it.
+    InBackground,
 }
 
 /// Why a wait answered.
@@ -77,7 +102,8 @@ pub(crate) enum WaitEnd {
     Idle,
     /// There was nothing new and the call does not hold.
     NothingNew,
-    /// A person typed into the caller's terminal.
+    /// A person typed into the caller's terminal while the wait held up its
+    /// turn.
     Typed,
     /// The caller ended.
     CallerEnded,
@@ -157,12 +183,13 @@ impl Hosted {
         parent: SessionId,
         request: WaitRequest,
     ) -> Result<Waited, String> {
-        let session = self
+        // Typing that already happened does not end this wait. The session is
+        // not kept: its keys' watch closing is the caller ending.
+        let mut typed = self
             .sessions
             .get(parent)
-            .ok_or_else(|| "Your session has ended, so there is nothing to wait for.".to_owned())?;
-        // Typing that already happened does not end this wait.
-        let mut typed = session.typing();
+            .ok_or_else(|| "Your session has ended, so there is nothing to wait for.".to_owned())?
+            .typing();
         typed.borrow_and_update();
         let mut changes = self.children.news.changes();
         let names = {
@@ -185,7 +212,7 @@ impl Hosted {
                 } else {
                     WaitEnd::News
                 })
-            } else if !request.hold {
+            } else if request.holding == Holding::No {
                 Some(WaitEnd::NothingNew)
             } else {
                 None
@@ -203,8 +230,7 @@ impl Hosted {
                         return Err("The host is stopping.".to_owned());
                     }
                 }
-                typing = typed.changed() => {
-                    let end = if typing.is_ok() { WaitEnd::Typed } else { WaitEnd::CallerEnded };
+                end = from_the_callers_terminal(&mut typed, request.holding) => {
                     let hosted = Arc::clone(self);
                     let names = names.clone();
                     let latest = off_runtime(move || hosted.snapshot(parent, &names)).await?;
@@ -324,6 +350,21 @@ impl Hosted {
     }
 }
 
+/// What ends a held wait from the caller's terminal, once it does: a
+/// person's key, for a wait that holds up the caller's turn, and the terminal
+/// going with its session, for any wait. A key does not end a wait in the
+/// background, which goes on watching for the terminal to go. A key it ended
+/// on has been seen, so the next look waits for a later one.
+async fn from_the_callers_terminal(typed: &mut watch::Receiver<u64>, holding: Holding) -> WaitEnd {
+    loop {
+        match typed.changed().await {
+            Ok(()) if holding == Holding::InBackground => {}
+            Ok(()) => return WaitEnd::Typed,
+            Err(_) => return WaitEnd::CallerEnded,
+        }
+    }
+}
+
 /// The backend session `id`'s row says it runs.
 fn records_backend(
     store: &crate::store::Store,
@@ -336,8 +377,47 @@ fn records_backend(
 
 #[cfg(test)]
 mod tests {
+    use std::pin::{Pin, pin};
+    use std::task::{Context, Poll, Waker};
+
     use super::super::inbox::Facts;
     use super::*;
+
+    /// What `ends` has come to at one look, with nothing run in between: a
+    /// key sent on the watch before the look is there to be seen.
+    fn look(ends: Pin<&mut impl Future<Output = WaitEnd>>) -> Poll<WaitEnd> {
+        ends.poll(&mut Context::from_waker(Waker::noop()))
+    }
+
+    #[test]
+    fn a_wait_in_the_background_goes_on_through_a_persons_keys_and_ends_when_the_callers_terminal_goes()
+     {
+        let (keys, mut typed) = watch::channel(0_u64);
+        let mut ends = pin!(from_the_callers_terminal(&mut typed, Holding::InBackground));
+        assert_eq!(look(ends.as_mut()), Poll::Pending);
+        for _ in 0..3 {
+            keys.send_modify(|typed| *typed += 1);
+            assert_eq!(look(ends.as_mut()), Poll::Pending, "a key ended it");
+        }
+        drop(keys);
+        assert_eq!(look(ends.as_mut()), Poll::Ready(WaitEnd::CallerEnded));
+    }
+
+    #[test]
+    fn a_wait_that_holds_up_the_callers_turn_ends_at_its_first_key_and_when_the_terminal_goes() {
+        let (keys, mut typed) = watch::channel(0_u64);
+        {
+            let mut ends = pin!(from_the_callers_terminal(&mut typed, Holding::BlockingTurn));
+            assert_eq!(look(ends.as_mut()), Poll::Pending);
+            keys.send_modify(|typed| *typed += 1);
+            assert_eq!(look(ends.as_mut()), Poll::Ready(WaitEnd::Typed));
+        }
+        // The key it ended on was seen: the next look waits for another.
+        let mut ends = pin!(from_the_callers_terminal(&mut typed, Holding::BlockingTurn));
+        assert_eq!(look(ends.as_mut()), Poll::Pending);
+        drop(keys);
+        assert_eq!(look(ends.as_mut()), Poll::Ready(WaitEnd::CallerEnded));
+    }
 
     fn news(child: &str) -> News {
         event(child, EventKind::TurnEnded)

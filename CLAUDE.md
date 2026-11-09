@@ -545,11 +545,22 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   again after the next piece of work. News is marked seen only after the
   answer was handed to the caller in full (`Delivery`), so a wait that is
   cancelled, dropped or cut off by a host restart leaves it unseen for the
-  next. A held wait ends when a person types a key into the parent and when
-  the parent ends, and never on what a terminal sends by itself (focus in
-  and out, mouse reports, answers to its program's queries;
-  `session/person.rs`). `wait` on `agents_start` (`--wait` on the command) waits for
-  that child's next news alone and leaves the others' unseen.
+  next. A wait running in the background (an MCP task, `agents_start` or
+  `agents_send` with `wait` as one, and `floti agent wait --background`)
+  does not end when a person types into the parent: the person talks to the
+  parent while its waits, its children's news, the messages it queued and
+  its children carry on, and the wait ends on its children's news, every
+  child it is about idle, or the parent ending. A held wait that holds up
+  the parent's turn (a held call that is not a task, `floti agent wait`
+  without `--background`) ends when a person types a key into the parent
+  and when the parent ends. No wait ends on what a terminal sends by itself
+  (focus in and out, mouse reports, answers to its program's queries;
+  `session/person.rs`). Each backend's guide asks the parent to wait in the
+  background where it can: an MCP task where it has them, else
+  `floti agent wait --background` as a background command, so a wait that
+  holds up the turn is the exception. `wait` on `agents_start` (`--wait` on
+  the command) waits for that child's next news alone and leaves the others'
+  unseen.
 - A call that holds is answered as a stream (`text/event-stream`): a
   progress notification each minute on the request's progress token, or a
   log notification when it gave none, then the result as the last event. The
@@ -567,8 +578,11 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   more work, reach only your own), a child's section (Floti's own, naming
   its parent and role, beside the profile's and the role's, with the
   `agents_report` sentence only where the child has the tool) and the guide
-  to `floti agent` with its backend's lines on waiting and on messaging a
-  child its own way (`messaging_guidance`).
+  to `floti agent` with its backend's lines on waiting (`waiting_guidance`:
+  wait in a task or a background command where the backend can, and every
+  line that runs `floti agent wait` as a background command passes
+  `--background`) and on messaging a child its own way
+  (`messaging_guidance`).
 - A child gets a git worktree when its start names one (`worktree`) or its
   role says `worktree: yes` (named after the child; there is no opt-out of a
   role's), made by the host with git for every backend
@@ -601,7 +615,8 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
 - `floti agent start`, `send`, `wait`, `read` and `stop` run the same
   tools from a session's own shell (`floti agent read <name> [--lines N]
   [--json]` prints the screen as text, `floti agent stop [--keep] <name>`
-  stops one): the host puts its `floti` binary's folder
+  stops one, `floti agent wait --background` says it runs as a background
+  command): the host puts its `floti` binary's folder
   first on the session's `PATH` and the session's token and the family's
   address in its environment (`FLOTI_AGENT_TOKEN`, `FLOTI_AGENT_URL`; any
   `FLOTI_AGENT_*` the host inherited is stripped first). The command acts as
