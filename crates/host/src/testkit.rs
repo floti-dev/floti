@@ -689,6 +689,15 @@ pub fn link_folder(target: &Path, link: &Path) {
         .expect("link a folder");
 }
 
+/// Makes `link` a symlink to the file `target`, as a dotfiles manager does.
+/// On Windows that needs developer mode or elevation, which CI's runners and
+/// a development machine have.
+pub fn link_file(target: &Path, link: &Path) {
+    crate::platform::links::Native
+        .link_file(target, link)
+        .expect("link a file");
+}
+
 /// A short name for a pipe or socket that no other test, in this process or
 /// another, is using: the pid, a counter, and the clock against a reused pid.
 pub fn unique_name() -> String {

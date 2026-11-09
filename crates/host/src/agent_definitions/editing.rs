@@ -7,22 +7,26 @@
 //!    there ([`READ_ONLY`]).
 //! 2. A text is parsed by the parser a start uses before anything is
 //!    written, and one it refuses is refused with its problems.
-//! 3. Nothing is written when the file is not what the client read: the
-//!    hash it names is the file's now, or it named none and there is no
-//!    file. That is an outside edit, answered as a conflict rather than
-//!    written over, as `content:write` answers one.
+//! 3. Nothing is written or removed when the file is not what the client
+//!    read: the hash it names is the file's now, or it named none and there
+//!    is no file. That is an outside edit, answered as a conflict rather
+//!    than written over or deleted, as `content:write` answers one.
 //! 4. Nothing is replaced, renamed or removed until what it was is kept in
 //!    floti.db ([`versions`]), and a change whose row cannot go in does not
 //!    happen. A restore undoes the newest change kept, only while its files
 //!    are as that change left them, so it never discards an edit made since.
 //!
-//! A file is replaced through a file beside it renamed over it, so a start
-//! reading the folder meanwhile reads the old text or the new, never half of
-//! one. A new file is written only where there is none, so nothing a client
-//! did not read is ever written over.
+//! Every text is written whole into a file beside its place first and put in
+//! place in one step, so a start reading the folder meanwhile reads the old
+//! text or the new, never half of one, and a write that fails leaves nothing
+//! behind. A new file is put in place only where there is none, so nothing a
+//! client did not read is ever written over. A file that is a link is
+//! written through, as the config console writes one: the file it leads to
+//! gets the text and the link stays.
 
 use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use floti_protocol::channels::agents::{
     AgentChange, AgentConflict, AgentFields, AgentFile, AgentProblem, AgentUnusedLine,
@@ -36,6 +40,7 @@ use super::seed::SHIPPED_AGENTS;
 use super::versions::{self, Reason, Renamed, Version};
 use super::{AgentDefinition, DEFAULT_AGENT_NAME, FolderDefinitions, is_default_name};
 use crate::config_console::sha256_hex;
+use crate::platform::links::is_link;
 
 /// Why a host whose config folder is another host's to write refuses every
 /// change to its agents.
@@ -537,11 +542,10 @@ impl<'a> AgentEditor<'a> {
                     ),
                 });
             }
+            // A delete names the file it read, so nothing a client did not
+            // see is deleted.
             FileState::Present { hash, .. }
-                if request
-                    .expected_hash
-                    .as_ref()
-                    .is_some_and(|expected| expected != hash) =>
+                if request.expected_hash.as_deref() != Some(hash.as_str()) =>
             {
                 return Ok(conflicted(&name, &file, &current));
             }
@@ -777,26 +781,66 @@ fn not_text(file: &str) -> String {
 }
 
 /// Writes `text` at `path`, which must not exist, making its folder when it
-/// has none.
+/// has none: written whole beside it, then put in place by a link that fails
+/// when a file is there, which every OS makes in one step.
 fn create_file(path: &Path, text: &str) -> io::Result<()> {
-    crate::workspace::templates::seed::write_new(path, text)
+    create_with(path, |beside| write_whole(beside, text))
 }
 
-/// Writes `text` over the file at `path`, through a file beside it renamed
-/// over it, so the file is never half written.
+/// [`create_file`], with the text written beside the file by `write`.
+fn create_with(path: &Path, write: impl FnOnce(&Path) -> io::Result<()>) -> io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let beside = beside(path);
+    let placed = write(&beside).and_then(|()| std::fs::hard_link(&beside, path));
+    // The file is in place under its own name, or nothing is: the one
+    // beside it goes either way.
+    let _ = std::fs::remove_file(&beside);
+    placed
+}
+
+/// Writes `text` over the file at `path`, written whole beside it and renamed
+/// over it. A link is written through: the file it leads to is replaced, with
+/// the new text beside that file, and the link stays.
 fn replace_file(path: &Path, text: &str) -> io::Result<()> {
+    replace_with(path, |beside| write_whole(beside, text))
+}
+
+/// [`replace_file`], with the text written beside the file by `write`.
+fn replace_with(path: &Path, write: impl FnOnce(&Path) -> io::Result<()>) -> io::Result<()> {
+    let target = if is_link(path) {
+        std::fs::canonicalize(path)?
+    } else {
+        path.to_path_buf()
+    };
+    let beside = beside(&target);
+    let placed = write(&beside).and_then(|()| std::fs::rename(&beside, &target));
+    if placed.is_err() {
+        let _ = std::fs::remove_file(&beside);
+    }
+    placed
+}
+
+/// A file beside `path` for its next text, which no other write in this
+/// host or another is using, and which is no agent file: its name starts
+/// with a dot and does not end in `.md`.
+fn beside(path: &Path) -> PathBuf {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
     let name = path
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let beside = path.with_file_name(format!(".{name}.floti-write"));
-    let written = std::fs::File::create(&beside)
-        .and_then(|mut out| out.write_all(text.as_bytes()).and_then(|()| out.sync_all()))
-        .and_then(|()| std::fs::rename(&beside, path));
-    if written.is_err() {
-        let _ = std::fs::remove_file(&beside);
-    }
-    written
+    let n = NEXT.fetch_add(1, Ordering::Relaxed);
+    path.with_file_name(format!(".{name}.{}-{n}.floti-write", std::process::id()))
+}
+
+/// Writes `text` as the whole of a new file at `path`, on disk before it
+/// answers.
+fn write_whole(path: &Path, text: &str) -> io::Result<()> {
+    let mut out = std::fs::File::create(path)?;
+    out.write_all(text.as_bytes())?;
+    out.sync_all()
 }
 
 #[cfg(test)]

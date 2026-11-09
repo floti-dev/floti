@@ -9,8 +9,9 @@
 //! - A write is parsed by the parser a start uses before anything is
 //!   written: text the parser refuses is refused with its problems, each
 //!   naming the field and line it concerns, and the file is left as it was.
-//!   A write whose `expectedHash` is not the file's hash now is refused as a
-//!   conflict, as `content:write` is.
+//!   A write or a delete whose `expectedHash` is not the file's hash now is
+//!   refused as a conflict, as `content:write` is, so nothing a client did
+//!   not read is written over or deleted.
 //! - Replacing, renaming or deleting a file first keeps its old text in the
 //!   host's data folder, never in its config folder, and `agents:restore`
 //!   puts back the newest, which is a client's Undo.
@@ -60,7 +61,8 @@ request_channel!(
     WriteAgent = "agents:write", WriteAgentRequest => AgentChange
 );
 request_channel!(
-    /// Removes an agent's file, keeping its text first.
+    /// Removes an agent's file, keeping its text first, once the file is
+    /// what the client read.
     DeleteAgent = "agents:delete", DeleteAgentRequest => AgentChange
 );
 request_channel!(
@@ -92,7 +94,8 @@ pub struct AgentsListing {
     pub agents: Vec<AgentSummary>,
     /// The files in the folder that are not agents, by name.
     pub bad: Vec<BadAgentFile>,
-    /// The shipped agents whose file the folder does not have, by name.
+    /// The shipped agents the host would add, by name: those whose file the
+    /// folder does not have and that `agents` does not list already.
     pub shipped: Vec<ShippedAgent>,
 }
 
@@ -259,7 +262,9 @@ pub struct WriteAgentRequest {
 #[serde(rename_all = "camelCase")]
 pub struct DeleteAgentRequest {
     pub name: String,
-    /// The hash the client last read, or null to remove whatever is there.
+    /// The hash `agents:read` or `agents:list` gave the file the client
+    /// means to delete. A missing or stale one is a conflict and deletes
+    /// nothing.
     #[serde(default)]
     pub expected_hash: Option<String>,
 }

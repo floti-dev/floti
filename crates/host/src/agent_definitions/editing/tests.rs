@@ -14,7 +14,7 @@ use super::*;
 use crate::agent_definitions::versions::{self, KEPT_PER_AGENT};
 use crate::agent_definitions::{DefinitionLookup, DefinitionSource};
 use crate::store::Store;
-use crate::testkit::TestDirs;
+use crate::testkit::{TestDirs, link_file};
 
 const REVIEWER: &str = "---\ndescription: Reads a change\npermission: plan\n---\nRead the diff.\n";
 const REVIEWER_EDITED: &str =
@@ -23,7 +23,7 @@ const REVIEWER_EDITED: &str =
 struct World {
     folder: FolderDefinitions,
     store: Store,
-    _dirs: TestDirs,
+    dirs: TestDirs,
 }
 
 impl World {
@@ -32,7 +32,7 @@ impl World {
         Self {
             folder: FolderDefinitions::new(dirs.config.join("agents")),
             store: Store::open(&dirs.data).unwrap(),
-            _dirs: dirs,
+            dirs,
         }
     }
 
@@ -314,6 +314,82 @@ fn the_default_read_from_an_agent_md_from_before_is_written_there() {
     assert!(world.text("default.md").is_none());
 }
 
+/// The names in `dir`, sorted.
+fn entries(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn a_text_is_put_in_place_whole_and_nothing_is_left_beside_it() {
+    let world = World::new();
+    let path = world.path("scout.md");
+    create_file(&path, REVIEWER).unwrap();
+    assert_eq!(world.text("scout.md").as_deref(), Some(REVIEWER));
+    replace_file(&path, REVIEWER_EDITED).unwrap();
+    assert_eq!(world.text("scout.md").as_deref(), Some(REVIEWER_EDITED));
+
+    // A new file is never put over one that is there, and the text written
+    // for it does not stay behind.
+    let over = create_file(
+        &path, "---
+---
+",
+    )
+    .unwrap_err();
+    assert_eq!(over.kind(), io::ErrorKind::AlreadyExists);
+    assert_eq!(world.text("scout.md").as_deref(), Some(REVIEWER_EDITED));
+    // A write that fails part way leaves the file as it was, and nothing
+    // beside it: what a start reads is the old text or the new, whole.
+    let half_then_full = |beside: &Path| {
+        std::fs::write(
+            beside,
+            "---
+description: half",
+        )?;
+        Err(io::Error::other("the disk is full"))
+    };
+    assert!(replace_with(&path, half_then_full).is_err());
+    assert_eq!(world.text("scout.md").as_deref(), Some(REVIEWER_EDITED));
+    let new = world.path("worker.md");
+    assert!(create_with(&new, half_then_full).is_err());
+    assert!(!new.exists(), "no half-written file is put in place");
+    // A place that cannot take the file leaves nothing either.
+    std::fs::create_dir(world.path("folder.md")).unwrap();
+    assert!(replace_file(&world.path("folder.md"), REVIEWER).is_err());
+    assert_eq!(entries(world.dir()), ["folder.md", "scout.md"]);
+}
+
+#[test]
+fn a_linked_agent_file_is_written_through_its_link_and_stays_a_link() {
+    let world = World::new();
+    let dotfiles = world.dirs.folder("dot files");
+    let target = dotfiles.join("reviewer.md");
+    std::fs::write(&target, REVIEWER).unwrap();
+    std::fs::create_dir_all(world.dir()).unwrap();
+    link_file(&target, &world.path("reviewer.md"));
+
+    let saved = world.write("reviewer", REVIEWER_EDITED, Some(&hash(REVIEWER)));
+    assert!(saved.changed, "{saved:?}");
+    assert!(is_link(&world.path("reviewer.md")), "the link stays");
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), REVIEWER_EDITED);
+
+    let undone = world.restore("reviewer");
+    assert!(undone.changed, "{undone:?}");
+    assert!(is_link(&world.path("reviewer.md")), "the link stays");
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), REVIEWER);
+    assert_eq!(
+        entries(&dotfiles),
+        ["reviewer.md"],
+        "nothing left beside it"
+    );
+    assert_eq!(entries(world.dir()), ["reviewer.md"]);
+}
+
 // ---------------------------------------------------------------------------
 // Keeping and restoring
 // ---------------------------------------------------------------------------
@@ -351,7 +427,19 @@ fn a_delete_keeps_the_text_and_a_restore_puts_the_file_back() {
 
     let stale = world.delete("reviewer", Some(&hash(REVIEWER_EDITED)));
     assert!(!stale.changed && stale.conflict.is_some(), "{stale:?}");
+    // A delete that names no hash names no file it read: an outside edit it
+    // never saw is not deleted.
+    let unseen = world.delete("reviewer", None);
+    assert!(!unseen.changed, "{unseen:?}");
+    assert_eq!(
+        unseen.conflict.and_then(|conflict| conflict.on_disk_hash),
+        Some(hash(REVIEWER))
+    );
     assert_eq!(world.text("reviewer.md").as_deref(), Some(REVIEWER));
+    assert!(
+        world.kept("reviewer").is_empty(),
+        "no refused delete keeps anything"
+    );
 
     let deleted = world.delete("reviewer", Some(&hash(REVIEWER)));
     assert!(deleted.changed && deleted.file.is_none(), "{deleted:?}");

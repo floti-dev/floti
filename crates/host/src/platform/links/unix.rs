@@ -21,3 +21,13 @@ impl FolderLinks for Native {
         std::fs::remove_file(link)
     }
 }
+
+impl Native {
+    /// Makes `link`, which must not exist, a symlink to the file `target`.
+    /// Floti makes no file links of its own; this is the link a user's own
+    /// tools make, such as a dotfiles manager's, for what reads and writes
+    /// through one.
+    pub fn link_file(&self, target: &Path, link: &Path) -> io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+}

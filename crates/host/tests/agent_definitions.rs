@@ -2766,12 +2766,24 @@ async fn listen_for_changes(client: &mut TestClient) {
     listed(client).await;
 }
 
-async fn told_of(client: &mut TestClient, name: &str) -> AgentsChange {
+/// The names the next `agents:changed` event `client` is sent tells,
+/// whatever they are: a test that writes again and expects the next event to
+/// name only that write knows the one before was told once.
+async fn next_change(client: &mut TestClient) -> Vec<String> {
     client
-        .event_on::<AgentsChange>(1, &format!("agents:changed naming {name}"), |change| {
-            change.names.iter().any(|changed| changed == name)
-        })
+        .event_on::<AgentsChange>(1, "the next agents:changed", |_| true)
         .await
+        .names
+}
+
+/// The hash the host lists for the agent file `name`.
+async fn listed_hash(client: &mut TestClient, name: &str) -> Option<String> {
+    listed(client)
+        .await
+        .agents
+        .into_iter()
+        .find(|agent| agent.name == name)
+        .and_then(|agent| agent.hash)
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -2944,22 +2956,29 @@ async fn s19_an_edit_outside_floti_and_the_hosts_own_reach_every_listening_clien
     listen_for_changes(&mut first).await;
     listen_for_changes(&mut second).await;
 
-    // An editor writes a new agent file.
+    // An editor writes a new agent file: each listener is told once.
     world.agent("scout", "---\ndescription: Looks around.\n---\n");
-    assert_eq!(told_of(&mut first, "scout").await.names, ["scout"]);
-    assert_eq!(told_of(&mut second, "scout").await.names, ["scout"]);
+    assert_eq!(next_change(&mut first).await, ["scout"]);
+    assert_eq!(next_change(&mut second).await, ["scout"]);
 
-    // The host's own delete, made for one client, is told to both.
+    // The host's own delete, made for one client, is told to both, once,
+    // though both the host and the OS say it happened.
+    let hash = listed_hash(&mut first, "reviewer").await;
     let deleted = first
         .request::<DeleteAgent>(&DeleteAgentRequest {
             name: "reviewer".into(),
-            expected_hash: None,
+            expected_hash: hash,
         })
         .await
         .expect("the delete is answered");
     assert!(deleted.changed, "{deleted:?}");
-    told_of(&mut first, "reviewer").await;
-    told_of(&mut second, "reviewer").await;
+    assert_eq!(next_change(&mut first).await, ["reviewer"]);
+    assert_eq!(next_change(&mut second).await, ["reviewer"]);
+
+    // The next event is the next change, so nothing was told twice.
+    world.agent("marker", "---\n---\n");
+    assert_eq!(next_change(&mut first).await, ["marker"]);
+    assert_eq!(next_change(&mut second).await, ["marker"]);
 
     drop((first, second));
     host.stop(HostStopReason::Stop).await;
@@ -3028,9 +3047,63 @@ async fn s19_a_host_that_writes_no_config_lists_reads_and_watches_its_agents_and
     );
     assert!(!world.agents_dir().join("worker.md").exists());
 
-    // It still watches: an outside edit is told.
+    // It still watches: an outside edit is told, once.
     world.agent("reviewer", "---\ndescription: Edited by hand.\n---\n");
-    told_of(&mut client, "reviewer").await;
+    assert_eq!(next_change(&mut client).await, ["reviewer"]);
+    world.agent("marker", "---\n---\n");
+    assert_eq!(next_change(&mut client).await, ["marker"]);
+    drop(client);
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn s19_a_host_that_writes_no_config_and_has_no_agents_folder_lists_each_shipped_agent_once() {
+    let world = World::new();
+    let host = world.host_read_only().await;
+    let mut client = world.client().await;
+
+    let listing = listed(&mut client).await;
+    assert_eq!(
+        listed_names(&listing),
+        ["default", "lead", "reviewer", "worker"]
+    );
+    assert!(
+        listing.agents.iter().all(|agent| agent.file.is_none()),
+        "no agent is read from a file: {listing:?}"
+    );
+    assert!(
+        listing.shipped.is_empty(),
+        "an agent it lists is not offered to add: {listing:?}"
+    );
+    let lead = client
+        .request::<ReadAgent>(&AgentName {
+            name: "lead".into(),
+        })
+        .await
+        .expect("the shipped lead is read");
+    assert!(!lead.in_folder);
+    assert!(!world.agents_dir().exists(), "nothing was written");
+    drop(client);
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn s19_an_agents_folder_deleted_and_made_again_while_a_client_listens_is_watched_anew() {
+    let world = World::new();
+    world.agent("reviewer", "---\ndescription: Reads.\n---\n");
+    let host = world.host().await;
+    let mut client = world.client().await;
+    listen_for_changes(&mut client).await;
+
+    std::fs::remove_dir_all(world.agents_dir()).expect("delete the agents folder");
+    assert_eq!(next_change(&mut client).await, ["reviewer"]);
+
+    // Made again, with a file in it.
+    world.agent("scout", "---\ndescription: Looks around.\n---\n");
+    assert_eq!(next_change(&mut client).await, ["scout"]);
+    // A file written in the folder made again is told: it is watched anew.
+    world.agent("worker", "---\ndescription: Builds.\n---\n");
+    assert_eq!(next_change(&mut client).await, ["worker"]);
     drop(client);
     host.stop(HostStopReason::Stop).await;
 }

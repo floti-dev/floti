@@ -403,7 +403,8 @@ agents: Array<AgentSummary>,
  */
 bad: Array<BadAgentFile>, 
 /**
- * The shipped agents whose file the folder does not have, by name.
+ * The shipped agents the host would add, by name: those whose file the
+ * folder does not have and that `agents` does not list already.
  */
 shipped: Array<ShippedAgent>, };
 
@@ -1210,7 +1211,9 @@ export type CreateTemplateRequest = { name: string, label: string | null, descri
  */
 export type DeleteAgentRequest = { name: string, 
 /**
- * The hash the client last read, or null to remove whatever is there.
+ * The hash `agents:read` or `agents:list` gave the file the client
+ * means to delete. A missing or stale one is a conflict and deletes
+ * nothing.
  */
 expectedHash: string | null, };
 

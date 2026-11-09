@@ -14,10 +14,13 @@
 //! the folder anew. A burst is measured [`SETTLE`] after its first event, so
 //! a stream of writes is told while it goes on.
 //!
+//! The folder is watched only while a client listens ([`Listening`]): the
+//! first listener starts the watch and the last one to leave stops it.
+//!
 //! The OS's watch is `notify`'s, which is the one interface over each OS's
 //! own; nothing here differs by OS.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -28,7 +31,7 @@ use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use super::is_agent_name;
+use super::{DEFAULT_AGENT_NAME, is_agent_name, is_default_name};
 use crate::config_console::sha256_hex;
 
 /// How long after a burst's first event the folder is measured.
@@ -65,22 +68,69 @@ pub fn fingerprint(dir: &Path) -> Fingerprint {
         .collect()
 }
 
-/// The names whose file came, went or has other bytes from `before` to
-/// `after`, sorted.
+/// The agents whose file came, went or has other bytes from `before` to
+/// `after`, sorted, each once and named as `agents:list` names it: an
+/// `agent.md` from before agents were called agents is the default's.
 pub fn changed(before: &Fingerprint, after: &Fingerprint) -> Vec<String> {
-    let mut names: Vec<String> = before
+    let names: BTreeSet<&str> = before
         .iter()
         .filter(|(name, hash)| after.get(*name) != Some(*hash))
-        .map(|(name, _)| name.clone())
+        .map(|(name, _)| name.as_str())
         .chain(
             after
                 .keys()
                 .filter(|name| !before.contains_key(*name))
-                .cloned(),
+                .map(String::as_str),
         )
+        .map(|name| {
+            if is_default_name(name) {
+                DEFAULT_AGENT_NAME
+            } else {
+                name
+            }
+        })
         .collect();
-    names.sort();
-    names
+    names.into_iter().map(str::to_owned).collect()
+}
+
+/// Who listens for changes, by key, and the watch kept while anyone does.
+#[derive(Debug)]
+pub struct Listening<K, W> {
+    listeners: BTreeSet<K>,
+    watch: Option<W>,
+}
+
+impl<K: Ord, W> Default for Listening<K, W> {
+    fn default() -> Self {
+        Self {
+            listeners: BTreeSet::new(),
+            watch: None,
+        }
+    }
+}
+
+impl<K: Ord, W> Listening<K, W> {
+    /// `listener` listens now, or no longer. The first to listen starts the
+    /// watch with `start`, which may find nothing to watch and is asked
+    /// again by the next; the last to leave drops it. `start` is never
+    /// called while nobody listens.
+    pub fn set(&mut self, listener: K, listens: bool, start: impl FnOnce() -> Option<W>) {
+        if listens {
+            self.listeners.insert(listener);
+        } else {
+            self.listeners.remove(&listener);
+        }
+        if self.listeners.is_empty() {
+            self.watch = None;
+        } else if self.watch.is_none() {
+            self.watch = start();
+        }
+    }
+
+    /// The watch, while anyone listens and it could be started.
+    pub fn watch(&self) -> Option<&W> {
+        self.watch.as_ref()
+    }
 }
 
 /// Told the names of the agents whose files changed.
@@ -259,6 +309,71 @@ mod tests {
         let after = print(&[("lead", "a"), ("reviewer", "B"), ("scout", "d")]);
         assert_eq!(changed(&before, &after), ["reviewer", "scout", "worker"]);
         assert!(changed(&before, &before).is_empty());
+    }
+
+    #[test]
+    fn an_agent_md_from_before_is_told_as_the_default_and_the_default_once() {
+        let none = print(&[]);
+        assert_eq!(changed(&none, &print(&[("agent", "a")])), ["default"]);
+        assert_eq!(
+            changed(&none, &print(&[("agent", "a"), ("default", "d")])),
+            ["default"]
+        );
+    }
+
+    /// A watch that counts its drops.
+    struct Counted(Arc<std::sync::atomic::AtomicUsize>);
+
+    impl Drop for Counted {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    #[test]
+    fn the_watch_starts_with_the_first_listener_and_stops_when_the_last_leaves() {
+        use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+        let dropped = Arc::new(AtomicUsize::new(0));
+        let started = AtomicUsize::new(0);
+        let start = || {
+            started.fetch_add(1, Relaxed);
+            Some(Counted(Arc::clone(&dropped)))
+        };
+        let mut listening: Listening<u32, Counted> = Listening::default();
+
+        listening.set(1, false, start);
+        assert_eq!(
+            started.load(Relaxed),
+            0,
+            "nobody listens, so nothing starts"
+        );
+        assert!(listening.watch().is_none());
+
+        listening.set(1, true, start);
+        listening.set(2, true, start);
+        listening.set(1, true, start);
+        assert_eq!(started.load(Relaxed), 1, "one watch for every listener");
+        listening.set(1, false, start);
+        assert!(listening.watch().is_some(), "one listener is left");
+        assert_eq!(dropped.load(Relaxed), 0);
+
+        listening.set(2, false, start);
+        assert!(listening.watch().is_none());
+        assert_eq!(dropped.load(Relaxed), 1, "the last to leave stops it");
+        listening.set(2, false, start);
+        assert_eq!(started.load(Relaxed), 1, "leaving again starts nothing");
+
+        listening.set(3, true, start);
+        assert_eq!(started.load(Relaxed), 2, "a new listener starts it again");
+    }
+
+    #[test]
+    fn a_folder_that_cannot_be_watched_is_asked_again_by_the_next_listener() {
+        let mut listening: Listening<u32, ()> = Listening::default();
+        listening.set(1, true, || None);
+        assert!(listening.watch().is_none());
+        listening.set(2, true, || Some(()));
+        assert!(listening.watch().is_some());
     }
 
     #[test]

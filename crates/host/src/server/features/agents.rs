@@ -13,7 +13,6 @@
 //! and every listening client is told each change, the host's own and an
 //! outside editor's alike ([`AgentsWatch`]).
 
-use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use floti_protocol::channel::Router;
@@ -32,7 +31,7 @@ use crate::agent_definitions::editing::{
 use crate::agent_definitions::folder::NOT_TEXT;
 use crate::agent_definitions::parse::{DefinitionProblem, parse_agent, read_agent_file};
 use crate::agent_definitions::seed::SHIPPED_AGENTS;
-use crate::agent_definitions::watch::AgentsWatch;
+use crate::agent_definitions::watch::{AgentsWatch, Listening};
 use crate::agent_definitions::{
     AgentDefinition, DEFAULT_AGENT_NAME, FolderDefinitions, is_default_name,
 };
@@ -47,11 +46,7 @@ const NO_FOLDER: &str =
     "This host reads its agents from no folder, so it has none to list or change.";
 
 /// Who listens on `agents:changed`, and the watch kept while anyone does.
-#[derive(Default)]
-struct Watching {
-    listeners: BTreeSet<ClientId>,
-    watch: Option<AgentsWatch>,
-}
+type Watching = Listening<ClientId, AgentsWatch>;
 
 pub(crate) struct Agents {
     hosted: Arc<Hosted>,
@@ -110,7 +105,7 @@ impl Agents {
     ) -> Result<AgentChange, String> {
         let change = self.edit(work)?;
         if change.changed
-            && let Some(watch) = &self.watching().watch
+            && let Some(watch) = self.watching().watch()
         {
             watch.poke();
         }
@@ -137,10 +132,10 @@ impl Agents {
                     None,
                     Vec::new(),
                 ));
+                // They are its agents, so none is offered to add.
                 for agent in shipped_agents() {
                     listing.agents.push(self.summary(&agent, None, Vec::new()));
                 }
-                listing.shipped = shipped_agents().iter().map(shipped_entry).collect();
                 return Ok(listing);
             }
             let names = folder.file_names().map_err(|err| {
@@ -246,36 +241,21 @@ impl Agents {
     /// `client` listens on `agents:changed` now, or no longer: the folder is
     /// watched while anyone does.
     fn listening(&self, client: ClientId, listens: bool) {
-        let mut watching = self.watching();
-        if listens {
-            watching.listeners.insert(client);
-        } else {
-            watching.listeners.remove(&client);
-        }
-        if watching.listeners.is_empty() {
-            watching.watch = None;
-            return;
-        }
-        if watching.watch.is_some() {
-            return;
-        }
-        let Some(runtime) = &self.runtime else {
-            return;
-        };
-        let source = self.hosted.agent_source();
-        let Some(folder) = source.folder() else {
-            return;
-        };
-        let events = Arc::clone(&self.events);
-        watching.watch = Some(AgentsWatch::start(
-            folder.dir(),
-            runtime,
-            Arc::new(move |names| {
-                if let Err(err) = events.emit::<AgentsChanged>(&AgentsChange { names }) {
-                    log_line!("floti host: {err}");
-                }
-            }),
-        ));
+        self.watching().set(client, listens, || {
+            let runtime = self.runtime.as_ref()?;
+            let source = self.hosted.agent_source();
+            let folder = source.folder()?;
+            let events = Arc::clone(&self.events);
+            Some(AgentsWatch::start(
+                folder.dir(),
+                runtime,
+                Arc::new(move |names| {
+                    if let Err(err) = events.emit::<AgentsChanged>(&AgentsChange { names }) {
+                        log_line!("floti host: {err}");
+                    }
+                }),
+            ))
+        });
     }
 }
 

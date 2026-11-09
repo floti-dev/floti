@@ -841,11 +841,14 @@ folder: run through npx, that folder is a cache.
 - A client lists, reads and edits the agents of the host it asks over
   `agents:*` (`server/features/agents.rs`, `agent_definitions/editing.rs`).
   A write is parsed by the parser a start uses first and refused with every
-  problem, each naming its field and line; a write whose hash is not the
-  file's is a conflict, as `content:write`'s is; a replace, rename or delete
-  keeps the old text in `floti.db`'s `agent_versions`, never in the config
-  folder (the newest 20 per agent), and `agents:restore` undoes the newest
-  change only while its files are as that change left them.
+  problem, each naming its field and line; a write or a delete whose hash is
+  not the file's, or that names none where there is a file, is a conflict,
+  as `content:write`'s is; a replace, rename or delete keeps the old text in `floti.db`'s
+  `agent_versions`, never in the config folder (the newest 20 per agent), and
+  `agents:restore` undoes the newest change only while its files are as that
+  change left them. Every text is written whole beside its file and put in
+  place in one step (a new one only where no file is), and a file that is a
+  link is written through, keeping the link.
   `agents:addShipped` writes a shipped agent only where its file is absent.
   A host started with `FLOTI_CONFIG_READ_ONLY` refuses every change with a
   sentence and still lists, reads and watches. The folder is watched only
