@@ -434,13 +434,14 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   while `sessionAgents` is on and the launch's profile does not turn it off;
   off, or an excluded profile, is no route (404), no entry and no tool. Every
   name a tool is given is resolved among the caller's own children only, and
-  anything else is not found. A start is judged before anything runs: the role
-  and the backend it allows (`AgentBackend`, which refuses a rule it cannot
-  enforce, naming the rule and the backend), a folder Floti tracks on the path
+  anything else is not found. A start is judged before anything runs: the
+  agent it starts and the backend that agent allows (`AgentBackend`, which
+  refuses a rule it cannot enforce, naming the rule and the backend), a
+  folder Floti tracks on the path
   it leads to (a session's own folder does not make one tracked), the
   permission mode, then the limits read afresh from the settings and counted
   from the child rows, so they hold across a host restart. A child runs in its
-  role's mode, and in auto when the role names none (where its backend has
+  agent's mode, and in auto when its agent names none (where its backend has
   auto). A parent caps it only when the parent was launched in plan or
   dont-ask, and bypass-permissions reaches a child only when its parent was
   launched in it; a parent launched in no mode or in manual does not hold its
@@ -459,12 +460,16 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   to 32, default 4, is read afresh on every run; a fifth is refused naming the
   command-children limit and the running command children that hold it, and
   saying to wait for news and run again). `agents_list` shows a command child
-  with its command where an agent shows its role, and how many command
+  with its command where any other child shows its agent, and how many command
   children the parent has left. A
   child ends when its parent ends, however it ends, and its own children with
   it, unless it was started to `outlive`; its row keeps the parent's row and
   conversation, so a restart restores the links and resuming the parent's
-  conversation gives its outliving children back.
+  conversation gives its outliving children back. A session's record names
+  the agent it was started as (`agent`, protocol 2.3); the retired `role`
+  beside it carries the same value for a client before 2.3, and a record
+  that names only `role` is read with it as its agent. `role` leaves the
+  protocol at its next major version.
 - A child's doings are news for its parent, kept in `floti.db`'s
   `agent_inbox` keyed by the parent's row and its conversation id, so a
   restart, or the parent's conversation resumed in Floti, still hears what
@@ -576,16 +581,16 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   not the user's, a child that needs a person is for the user, stop a child
   once you have what you need and pass `keep` only when you expect to give it
   more work, reach only your own), a child's section (Floti's own, naming
-  its parent and role, beside the profile's and the role's, with the
-  `agents_report` sentence only where the child has the tool) and the guide
+  its parent and the agent it was started as, beside the profile's and the
+  agent's, with the `agents_report` sentence only where the child has the tool) and the guide
   to `floti agent` with its backend's lines on waiting (`waiting_guidance`:
   wait in a task or a background command where the backend can, and every
   line that runs `floti agent wait` as a background command passes
   `--background`) and on messaging a child its own way
   (`messaging_guidance`).
 - A child gets a git worktree when its start names one (`worktree`) or its
-  role says `worktree: yes` (named after the child; there is no opt-out of a
-  role's), made by the host with git for every backend
+  agent says `worktree: yes` (named after the child; there is no opt-out of an
+  agent's), made by the host with git for every backend
   (`workspace/worktrees.rs`) after the whole start has been judged, so a
   refused start writes nothing. It is `<repo>/.floti/worktrees/<name>` on a
   new branch `agent/<name>` cut from the commit the parent's folder has
@@ -603,9 +608,9 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   children like every other name (ended rows and those given back by a
   resumed parent included; anything else is not found), in the folder or
   worktree its row recorded, through its backend's `Resumer` with the task as
-  the conversation's next turn (`ResumeRequest.prompt`) and its role composed
+  the conversation's next turn (`ResumeRequest.prompt`) and its agent composed
   again, its permission mode decided as a start's is. It keeps its name, parent
-  link, `outlive` and `can_start`, so a resume that also names a role,
+  link, `outlive` and `can_start`, so a resume that also names an agent,
   backend, folder, profile, worktree or name is refused. Also refused, with
   nothing started: a child still running, a folder or worktree gone or no
   longer tracked, a backend whose adapter has no `Resumer`, and a child with
@@ -634,7 +639,7 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   one program and its arguments, quoted for that shell; one word is the whole
   command line. The child is named `--name`, else its program's file name made
   unique among the caller's children. Its row has the parent's links and the
-  command and no role; it has no agent token, no family entry and no tab, and
+  command and no agent; it has no agent token, no family entry and no tab, and
   counts toward no agent limit. It ends when its command exits, or with its
   parent, or at `floti agent stop`. Its parent is told the exit code and the
   last 40 lines of its screen with the exit (`Screen::last_lines`, kept before
@@ -803,19 +808,30 @@ folder: run through npx, that folder is a cache.
   `paths.ts`). The shipped README and example are written only when the
   directory is absent, and nothing there is ever overwritten. There is no
   in-app template editor.
-- Roles live in `roles` in the host's config folder (`~/.config/floti`), one
-  `<name>.md` each (front matter, then the body). The host reads the folder
-  afresh on every `agents_start`, `agents_roles` and reopen of a child, never
-  from a cache, and seeds the shipped `reviewer.md`, `worker.md` and `lead.md`
-  only when the folder is absent: nothing there is ever rewritten, an edit or a
-  deletion stays, and an empty folder stays empty. A file that is not a role
-  (front matter that does not parse, an unknown key, a value outside its
-  choices) is named with its problem by `agents_roles`, and a start naming it
-  is refused naming the file; nothing guesses at it. A retired line
-  (`RETIRED_FIELDS` in `roles/parse.rs`) is accepted with any value and
-  ignored, and `agents_roles` names it as no longer used. A role's body is composed
+- Agents (a lead, a worker, a reviewer: the named definitions a session
+  starts its children as) live in `agents` in the host's config folder
+  (`~/.config/floti`), one `<name>.md` each (front matter, then the body),
+  parsed as an `AgentDefinition` (`agent_definitions/`). The one a start
+  naming none gets is `default`. The host reads the folder afresh on every
+  `agents_start`, `agents_available` and reopen of a child, never from a
+  cache. At start, a host that finds `roles` there and no `agents` renames the
+  folder to `agents`, whole, rewriting no file in it; with both it reads
+  `agents`, leaves `roles` alone and says so in its log
+  (`prepare_agents_folder` in `agent_definitions/folder.rs`). It seeds the
+  shipped `reviewer.md`, `worker.md` and `lead.md` only when neither folder
+  exists: nothing there is ever rewritten, an edit or a deletion stays, and an
+  empty folder stays empty. A file that is not an agent (front matter that
+  does not parse, an unknown key, a value outside its choices) is named with
+  its problem by `agents_available`, and a start naming it is refused naming
+  the file; nothing guesses at it. A retired line (`RETIRED_FIELDS` in
+  `agent_definitions/parse.rs`) is accepted with any value and ignored, and
+  `agents_available` names it as no longer used. An agent's body is composed
   into the child's instructions by its adapter, as its own section after the
   project's, and is never typed to the session.
+- Claude Code's own agents (its `agents/` files, chosen with `--agent`) are
+  its subagents, and Floti calls them Subagents wherever it shows them (the
+  profile editor, the config console, the effective view), so the two never
+  share a name.
 
 ## Where the data lives
 

@@ -29,8 +29,18 @@ A preview, not a release: nothing offers it as an update.
   has a Heavy agents on this host row, and children are held only by the
   limits on children per parent, agent sessions per host, starts, depth and
   command children. How many children work at once is up to the agent that
-  started them. A role file's `class` line still loads, is ignored, and the
-  roles listing says it is no longer used.
+  started them. An agent file's `class` line still loads, is ignored, and
+  agents_available says it is no longer used.
+- Roles are called agents. A lead, a worker or a reviewer is an agent, and
+  its file is in `~/.config/floti/agents`: a `roles` folder there is moved to
+  `agents` the first time the host starts, with every file as it was. An
+  agent starts one with agents_start's `agent` (`floti agent start --agent`)
+  and lists them with agents_available, and agents_list names each child's
+  agent. A start that names none gets the agent called `default`, so such a
+  child is named `default`; a `default.md` file replaces it. Children started
+  before keep their agent and resume as it. Claude Code's own agents are
+  called Subagents in the profile editor, the config console and the
+  effective view.
 - Typing to an agent whose children are working no longer cuts its wait on
   them short. A wait that runs in the background (a Claude Code agent's
   agents_wait from 2.1.304, or `floti agent wait --background` run as a

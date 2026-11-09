@@ -499,8 +499,8 @@ overrides the gate; keep it.
   its tag and a `for <parent>` link: the tag of a command child reads
   "command" in `fg-muted` on a 1px `border-strong` ring with no fill (as the
   family header's; the ring is an inset shadow, so the pill is 16px tall with
-  7px of padding), an agent child's names its role in `accent-text` on
-  `accent-soft`, and a child with no role has no tag. The link is Inter 11px
+  7px of padding), an agent child's names its agent in `accent-text` on
+  `accent-soft`, and a child started as no agent has no tag. The link is Inter 11px
   `fg-muted`, `fg` and underlined on hover, with the page's focus ring;
   pressing it brings the parent's tab forward or opens one. The row's gap is
   8px and the link sits 3px nearer the tag. Where the window
@@ -935,7 +935,7 @@ overrides the gate; keep it.
   without the keyboard: the parent keeps the caret, and the card's cursor is
   the outline of a terminal without it until its terminal is pressed. The
   header is 26px on `surface` with a 1px `border` below it, in 11.5px: the
-  state dot (6px, the session dot's colours), the name in weight 500, the role
+  state dot (6px, the session dot's colours), the name in weight 500, its agent
   as a 10px tag in `accent-text` on `accent-soft`, the state and for how long
   at the right in 10.5px `fg-muted` ("Working · 4m"), then **Open as tab**,
   **Stop** and **Close** as 10.5px buttons in `border-strong`, Stop in `danger`
@@ -946,7 +946,7 @@ overrides the gate; keep it.
   would be, in `success` while it runs, `fg-subtle` once it exited 0 and `danger`
   for any other code (the dot's tones, `commandTone`), on a card, a shrunk
   header and an ended header alike; its tag reads "command" in `fg-muted` on a
-  1px `border-strong` ring with no fill, where an agent's names its role, its
+  1px `border-strong` ring with no fill, where an agent's names its agent, its
   running header counts its seconds ("Running · 5s", then "Running · 1m" from
   a minute on), and its ended header reads "exited 0 · 14:52" ("exited <code> · <time>") with
   **Close**; a command the host ended (Stop, its parent, the host) reads
@@ -1006,7 +1006,7 @@ overrides the gate; keep it.
   **Closing a parent's tab asks in the window's one question for ending a
   session**, and lists the children that end with it: a 26px row each on
   `surface-raised`, `rounded-raised`, 12.5px `fg`, with the child's dot or
-  terminal glyph, its name, and at the end in 11px mono `fg-subtle` its role
+  terminal glyph, its name, and at the end in 11px mono `fg-subtle` its agent
   and branch ("reviewer · main"; "command · pnpm test" for a command, with the
   command line cut by an ellipsis where it is longer than the room and the
   whole line in the row's title). The sentence above the list reads
@@ -1039,7 +1039,7 @@ overrides the gate; keep it.
   down for it; Escape, the close button and a press outside close it, and
   focus goes back to the row or chip. Top to bottom: the child's mark, name and
   a state chip in the dot's tone, with the close button at the end; the facts as
-  mono `fg-muted` 11px rows (an agent's Role, Folder, Branch and Mode; a
+  mono `fg-muted` 11px rows (an agent's Agent, Folder, Branch and Mode; a
   command's Command in `fg`, Folder, Branch and Runs in, "your shell, pwsh",
   with no Mode and no report; its glyph and chip tone success while it runs,
   `fg-subtle` and neutral once it exited 0, `danger` for any other code); its screen, live and
