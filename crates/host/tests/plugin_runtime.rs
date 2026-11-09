@@ -851,11 +851,14 @@ async fn switching_off_reloading_or_stopping_ends_every_timer() {
         .iter()
         .position(|line| line == "tick 1")
         .unwrap();
+    // Only the ticks are one count: the new isolate's own "late" may land
+    // between two of them on a slow machine.
+    let ticks: Vec<u32> = after_reload[first..]
+        .iter()
+        .filter_map(|line| line.strip_prefix("tick ")?.parse().ok())
+        .collect();
     assert!(
-        after_reload[first..].windows(2).all(|pair| {
-            let number = |line: &str| line.trim_start_matches("tick ").parse::<u32>().unwrap_or(0);
-            number(&pair[1]) == number(&pair[0]) + 1 || !pair[1].starts_with("tick ")
-        }),
+        ticks.windows(2).all(|pair| pair[1] == pair[0] + 1),
         "one count after a reload: {after_reload:#?}"
     );
 
