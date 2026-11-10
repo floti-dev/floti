@@ -73,9 +73,14 @@ A preview, not a release: nothing offers it as an update.
   than one agent backend is installed.
 - The session's agent is shown as a tag on its tab, its row in the sessions
   tree, its crumb, the sessions pane and History. Resuming it from History or
-  the restore offer composes the agent again from its file as it is then; an
-  agent that has been deleted or cannot be loaded is named, with Resume
-  without the agent.
+  the restore offer composes the agent again from its file as it is then,
+  and keeps the permission mode the session last ran with, which History
+  names beside Resume. An agent that has been deleted, cannot be loaded or
+  names a profile this PC no longer has is named, with Resume without the
+  agent.
+- The sessions pane's Launched as lists what a session was started with: its
+  agent and the file it came from, profile, model and effort, permissions,
+  tool families and rules, and worktree.
 
 ## 2.4.1-preview.10
 
