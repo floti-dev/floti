@@ -109,6 +109,18 @@ describe('createTerminal preferences', () => {
     expect(latest().options).toMatchObject({ macOptionClickForcesSelection: true })
   })
 
+  it('on macOS keeps Option+click from moving the cursor, which would type arrow keys into the program', () => {
+    runningOn('MacIntel')
+    createTerminal(container(), { cols: 80, rows: 24, fit: false }, hooks())
+    expect(latest().options).toMatchObject({ macOptionClickForcesSelection: true, altClickMovesCursor: false })
+  })
+
+  it('off macOS leaves Alt+click moving the cursor, as xterm does by default', () => {
+    runningOn('Win32')
+    createTerminal(container(), { cols: 80, rows: 24, fit: false }, hooks())
+    expect(latest().options).toMatchObject({ altClickMovesCursor: true })
+  })
+
   it('takes the keyboard as it is made, unless it is a card beside a parent that keeps it', () => {
     const focus = vi.spyOn(Terminal.prototype, 'focus')
     createTerminal(container(), { cols: 80, rows: 24, fit: false }, hooks())
@@ -319,9 +331,13 @@ describe('a program’s own copy, OSC 52', () => {
   const OSC_CLIPBOARD = 52
   const base64 = (text: string): string => btoa(String.fromCharCode(...new TextEncoder().encode(text)))
 
-  /** A terminal on this window, focused or not, and what reached its clipboard. */
+  /**
+   * A terminal in this window, and what reached its clipboard. It holds the
+   * keyboard unless `keyboard` is false, and the window has focus unless
+   * `focused` is false.
+   */
   function terminal(
-    opts: { programClipboard?: boolean; focused?: boolean; write?: ClipboardWriteOutcome } = {}
+    opts: { programClipboard?: boolean; focused?: boolean; keyboard?: boolean; write?: ClipboardWriteOutcome } = {}
   ): {
     term: Terminal
     box: HTMLDivElement
@@ -337,7 +353,7 @@ describe('a program’s own copy, OSC 52', () => {
     const sent = vi.fn<(data: string) => void>()
     const host = createTerminal(
       box,
-      { cols: 80, rows: 24, fit: false, programClipboard: opts.programClipboard ?? true },
+      { cols: 80, rows: 24, fit: false, focus: opts.keyboard ?? true, programClipboard: opts.programClipboard ?? true },
       { ...hooks(), onInput: sent, writeClipboard: writes }
     )
     return { term: latest(), box, writes, sent, host }
@@ -367,6 +383,18 @@ describe('a program’s own copy, OSC 52', () => {
     const { term, writes } = terminal({ focused: false })
     expect(term.osc(OSC_CLIPBOARD, `c;${base64('from another device')}`)).toBe(true)
     expect(writes).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing from a terminal without the keyboard in a focused window, such as a tab behind or a child’s card', () => {
+    const { term, writes } = terminal({ keyboard: false })
+    expect(term.osc(OSC_CLIPBOARD, `c;${base64('from the card')}`)).toBe(true)
+    expect(writes).not.toHaveBeenCalled()
+
+    // Another terminal has taken the keyboard from one that had it.
+    const front = terminal()
+    terminal()
+    expect(front.term.osc(OSC_CLIPBOARD, `c;${base64('from the tab behind')}`)).toBe(true)
+    expect(front.writes).not.toHaveBeenCalled()
   })
 
   it('says in the pane that a refused write was refused, as a copy does', async () => {

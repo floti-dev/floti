@@ -17,9 +17,12 @@ import { copyToClipboard } from './clipboardNotice'
  * more than `PROGRAM_CLIPBOARD_MAX_BYTES` - writes nothing. Every OSC 52 is
  * consumed either way, so xterm draws none of it.
  *
- * A write lands only while this window has focus. Every client attached to a
- * session sees the same bytes, and a window nobody is using must not have its
- * clipboard replaced by a copy made at another.
+ * A write lands only while this terminal holds the keyboard in a focused
+ * window: its own helper textarea, where xterm takes keys, is the document's
+ * active element. Every client attached to a session sees the same bytes, and
+ * a window nobody is using must not have its clipboard replaced by a copy made
+ * at another; within the window, neither may a tab behind the one in front or
+ * a child's card beside the parent that has the keyboard.
  *
  * The host's redraw for a tab that attaches is written out from its parsed
  * screen (`crates/host/src/session/redraw.rs`), which keeps cells and modes
@@ -90,7 +93,13 @@ export function attachProgramClipboard(
 ): { dispose: () => void } {
   return term.parser.registerOscHandler(OSC_CLIPBOARD, (body) => {
     const text = clipboardWriteOf(body)
-    if (text !== null && document.hasFocus()) void copyToClipboard(container, text, write)
+    if (text !== null && holdsKeyboard(term)) void copyToClipboard(container, text, write)
     return true
   })
+}
+
+/** Whether `term` has the keyboard in a window that has focus. */
+function holdsKeyboard(term: Terminal): boolean {
+  const keys = term.textarea
+  return keys !== undefined && document.hasFocus() && document.activeElement === keys
 }

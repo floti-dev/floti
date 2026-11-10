@@ -147,6 +147,8 @@ export class Terminal {
   parent: HTMLElement | null = null
   /** xterm's own root, which holds the screen; here the container itself. */
   element: HTMLElement | undefined
+  /** xterm's helper textarea, where it takes keys: the document's active element while it has the keyboard. */
+  textarea: HTMLTextAreaElement | undefined
   disposed = false
   readonly written: string[] = []
   readonly unicode = { activeVersion: '6' }
@@ -172,6 +174,9 @@ export class Terminal {
     const screen = document.createElement('div')
     screen.className = 'xterm-screen'
     container.appendChild(screen)
+    this.textarea = document.createElement('textarea')
+    this.textarea.className = 'xterm-helper-textarea'
+    container.appendChild(this.textarea)
   }
 
   resize(cols: number, rows: number): void {
@@ -298,10 +303,12 @@ export class Terminal {
   focus(): void {
     Terminal.focused = this
     this._core.coreService.isCursorInitialized = true
+    this.textarea?.focus()
   }
 
   blur(): void {
     if (Terminal.focused === this) Terminal.focused = null
+    this.textarea?.blur()
   }
   hasSelection(): boolean {
     return this.selection !== ''

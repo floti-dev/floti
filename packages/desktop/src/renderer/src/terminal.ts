@@ -309,9 +309,15 @@ export function createTerminal(
     // A program that captures the mouse gets every drag as mouse reports, so
     // xterm makes no selection and Cmd+C has nothing to copy. Shift forces a
     // native selection on Windows and Linux; on a Mac xterm forces one only
-    // with Option and this option, as Terminal.app and iTerm2 do. It also turns
-    // off Option+click moving the cursor. No effect off a Mac.
+    // with Option and this option, as Terminal.app and iTerm2 do. With it on,
+    // xterm makes no block selection on a Mac (`shouldColumnSelect`), so
+    // Option+drag there is a plain selection. No effect off a Mac.
     macOptionClickForcesSelection: true,
+    // xterm 6.0.0 does not turn Option+click moving the cursor off with the
+    // option above: its mouse-up checks only this one. Left on, an Option+click
+    // made to start a selection over a mouse-tracking program would type arrow
+    // keys into it. Windows and Linux keep xterm's default.
+    altClickMovesCursor: !isMac(),
     theme: THEME,
     // Spread rather than `windowsPty: cond ? {...} : undefined`. Same value
     // reaches xterm either way - it tests the property for truthiness - but
