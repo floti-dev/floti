@@ -21,9 +21,9 @@
 //! file per agent in the agents folder of its config folder
 //! ([`folder::agents_folder`]), which is the user's to edit. A host that finds
 //! the folder still called `roles` moves it to `agents` at start
-//! ([`folder::prepare_agents_folder`]). The shipped `reviewer`, `worker` and
-//! `lead` are written there at host start only when neither folder exists
-//! ([`seed`]). The agent every start without one falls back to
+//! ([`folder::prepare_agents_folder`]). The shipped `lead`, `researcher`,
+//! `reviewer` and `worker` are written there at host start only when neither
+//! folder exists ([`seed`]). The agent every start without one falls back to
 //! ([`default_definition`]) is made from the backends the host has, unless a
 //! file named `default.md` replaces it, or, where there is none, an
 //! `agent.md` from before agents were called agents, when the default was

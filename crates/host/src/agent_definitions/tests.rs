@@ -647,12 +647,15 @@ fn a_roles_folder_that_cannot_be_moved_is_read_where_it_is_and_never_seeded_over
 // ---------------------------------------------------------------------------
 
 #[test]
-fn an_absent_folder_gets_the_three_shipped_agents_and_each_reads_as_a_good_agent() {
+fn an_absent_folder_gets_the_four_shipped_agents_and_each_reads_as_a_good_agent() {
     let dirs = TestDirs::new();
     let dir = dirs.config.join("agents");
     let seeded = seed_agents(&dir);
     assert!(seeded.seeded && seeded.problem.is_none(), "{seeded:?}");
-    assert_eq!(seeded.created, ["lead.md", "reviewer.md", "worker.md"]);
+    assert_eq!(
+        seeded.created,
+        ["lead.md", "researcher.md", "reviewer.md", "worker.md"]
+    );
 
     let listing = FolderDefinitions::new(&dir).listing();
     assert!(listing.bad.is_empty(), "{:?}", listing.bad);
@@ -661,7 +664,7 @@ fn an_absent_folder_gets_the_three_shipped_agents_and_each_reads_as_a_good_agent
         .iter()
         .map(|agent| agent.name.as_str())
         .collect();
-    assert_eq!(names, ["lead", "reviewer", "worker"]);
+    assert_eq!(names, ["lead", "researcher", "reviewer", "worker"]);
 }
 
 #[test]
@@ -728,7 +731,6 @@ fn shipped(name: &str) -> AgentDefinition {
 #[test]
 fn the_reviewer_reads_and_reports_without_editing() {
     let agent = shipped("reviewer");
-    assert_eq!(agent.permission, Some(PermissionMode::Auto));
     assert!(!agent.can_start && !agent.worktree);
     assert_eq!(agent.disallowed_tools, ["Edit", "Write", "NotebookEdit"]);
     assert_eq!(agent.model_for(&BackendId::claude_code()), Some("opus"));
@@ -736,35 +738,106 @@ fn the_reviewer_reads_and_reports_without_editing() {
         agent.effort_for(&BackendId::claude_code()),
         Some(EffortLevel::High)
     );
-    assert!(!agent.instructions.is_empty());
+    for rule in ["change nothing", "acceptance criteria", "file, line"] {
+        assert!(agent.instructions.contains(rule), "{rule}");
+    }
 }
 
 #[test]
-fn the_worker_edits_in_a_worktree_of_its_own_and_cannot_start_agents_or_create_items() {
-    let agent = shipped("worker");
-    assert_eq!(agent.permission, Some(PermissionMode::Auto));
-    assert!(agent.worktree && !agent.can_start);
-    assert_eq!(agent.disallowed_tools, ["mcp__helm-plugin-trackr__create"]);
+fn the_researcher_finds_out_with_sources_and_changes_no_project_file() {
+    let agent = shipped("researcher");
+    assert!(!agent.can_start && !agent.worktree);
+    // Write stays: a long answer goes in a file outside the project.
+    assert_eq!(agent.disallowed_tools, ["Edit", "NotebookEdit"]);
     for rule in [
-        "Touch only your own item",
-        "Also fixed:",
-        "Found:",
-        "Blocked",
+        "Answer the question your task asks from the code",
+        "change no file of the project",
+        "by file and line",
+        "a new file outside the project",
+        "Report its path",
     ] {
         assert!(agent.instructions.contains(rule), "{rule}");
     }
 }
 
 #[test]
-fn the_lead_starts_agents_does_not_edit_and_keeps_trackr_in_a_voice() {
+fn the_worker_edits_in_a_worktree_of_its_own_and_touches_only_the_item_its_task_names() {
+    let agent = shipped("worker");
+    assert!(agent.worktree && !agent.can_start);
+    assert!(
+        agent.disallowed_tools.is_empty(),
+        "{:?}",
+        agent.disallowed_tools
+    );
+    for rule in [
+        "The item your task names",
+        "Touch only that item",
+        "create none",
+        "Blocked",
+        "Also fixed:",
+        "Found:",
+        "commit it on your branch",
+    ] {
+        assert!(agent.instructions.contains(rule), "{rule}");
+    }
+}
+
+#[test]
+fn the_lead_plans_with_its_user_starts_each_agent_does_not_edit_and_keeps_a_tracker_it_has() {
     let agent = shipped("lead");
     assert!(agent.can_start && !agent.worktree);
-    assert_eq!(agent.permission, Some(PermissionMode::Auto));
     assert_eq!(agent.disallowed_tools, ["Edit", "Write", "NotebookEdit"]);
-    for section in ["## Keeping Trackr", "## Voice"] {
-        assert!(agent.instructions.contains(section), "{section}");
+    for part in [
+        "Otherwise your user is the person",
+        "Plan with your user",
+        "Start a worker",
+        "a reviewer",
+        "a researcher",
+        "Whatever your user types is new direction",
+        "Given a body of work",
+        "## Keeping the tracker",
+        "This applies only when you have a tracker's tools.",
+        "## Voice",
+        "Not this:",
+    ] {
+        assert!(agent.instructions.contains(part), "{part}");
     }
-    assert!(agent.instructions.contains("robotic and then right"));
+}
+
+#[test]
+fn no_shipped_agent_asks_before_a_tool_call_names_a_plugin_or_heavy_work() {
+    for (file, source) in SHIPPED_AGENTS {
+        let name = file.strip_suffix(".md").expect("a markdown file");
+        let agent = shipped(name);
+        // Nobody is at a child's terminal: each runs in a child's own mode,
+        // which asks nothing before an ordinary tool call.
+        assert_eq!(agent.permission, None, "{file}");
+        assert!(!source.contains("permission:"), "{file}");
+        let lower = source.to_lowercase();
+        for word in [
+            "plugin",
+            "mcp__",
+            "trackr",
+            "heavy",
+            "slot",
+            "emulator",
+            "plan mode",
+            "accept-edits",
+            "acceptedits",
+            "manual",
+        ] {
+            assert!(!lower.contains(word), "{file} names {word}");
+        }
+    }
+    for name in ["reviewer", "researcher"] {
+        let agent = shipped(name);
+        for tool in ["Edit", "NotebookEdit"] {
+            assert!(
+                agent.disallowed_tools.iter().any(|t| t == tool),
+                "{name} disallows {tool}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -912,7 +985,7 @@ fn a_read_only_host_with_neither_folder_serves_the_shipped_agents_and_writes_non
         .iter()
         .map(|agent| agent.name.as_str())
         .collect();
-    assert_eq!(names, ["lead", "reviewer", "worker"]);
+    assert_eq!(names, ["lead", "researcher", "reviewer", "worker"]);
     assert!(listing.bad.is_empty());
     let DefinitionLookup::Found(reviewer) = agents.lookup("Reviewer") else {
         panic!("the shipped reviewer");

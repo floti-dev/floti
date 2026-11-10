@@ -51,6 +51,15 @@ A preview, not a release: nothing offers it as an update.
   children's news when that comes, instead of being woken by your typing and
   waiting again. Its children, and the messages it sent them, carry on as
   before. Agents are told to wait that way wherever they can.
+- The shipped agents are written for anyone. The lead plans the work with
+  you, starts a worker for each piece that edits files and a reviewer or a
+  researcher for each question, checks what comes back and tells you, and
+  keeps your tracker only when it has a tracker's tools. The worker and the
+  reviewer name no plugin. The new researcher finds things out in the code,
+  the docs and the web, changes no file of the project and reports its
+  sources. None names a permission mode, so each runs in auto as a child. A
+  host with no agents folder yet writes all four; a folder you already have
+  is left as it is.
 
 ## 2.4.1-preview.10
 

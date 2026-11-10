@@ -563,7 +563,7 @@ fn a_missing_shipped_agent_is_added_and_one_whose_file_is_there_is_never_written
     let unknown = world.editor().add_shipped("scout").unwrap();
     assert!(!unknown.changed);
     assert!(
-        refusal(&unknown).contains("lead, reviewer and worker"),
+        refusal(&unknown).contains("lead, researcher, reviewer and worker"),
         "{unknown:?}"
     );
 

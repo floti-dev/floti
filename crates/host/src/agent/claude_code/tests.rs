@@ -1665,6 +1665,55 @@ fn an_agents_section_follows_the_project_instructions() {
 }
 
 #[test]
+fn the_shipped_lead_with_no_parent_is_composed_with_its_body_and_talks_to_its_user() {
+    let (_, source) = crate::agent_definitions::seed::SHIPPED_AGENTS
+        .iter()
+        .find(|(file, _)| *file == "lead.md")
+        .expect("the lead is shipped");
+    let lead = crate::agent_definitions::parse::parse_definition("lead", source)
+        .expect("the shipped lead is a good agent");
+    let world = World::new();
+    // A session a person starts as the lead: the lead's composition and
+    // Floti's guides, and no parent to be told about.
+    let (launch, _folder) = world.launch(&LaunchRequest {
+        folder: world.folder("work"),
+        name: "lead".into(),
+        composition: Composition {
+            disallowed_tools: lead.disallowed_tools.clone(),
+            instructions: agent_body("lead", lead.instructions.trim()),
+            agent_guide: true,
+            title_guide: true,
+            ..Composition::default()
+        },
+        ..LaunchRequest::default()
+    });
+    let (output, log) = world.run(&launch, "/exit\n");
+    succeeded(&output);
+    let composed = log["composedInstructions"].as_str().unwrap();
+    for part in [
+        "# Agent: lead",
+        "Otherwise your user is the person",
+        "Plan with your user",
+        "Start a worker",
+        "a reviewer",
+        "a researcher",
+        "Whatever your user types is new direction",
+        "This applies only when you have a tracker's tools.",
+        "# Starting and waiting on agents from your shell",
+    ] {
+        assert!(composed.contains(part), "{part} in {composed}");
+    }
+    assert!(
+        !composed.contains("# Started by another session"),
+        "{composed}"
+    );
+    assert_eq!(
+        strings(&log, "disallowedTools"),
+        ["Edit", "Write", "NotebookEdit"]
+    );
+}
+
+#[test]
 fn an_agent_without_a_body_adds_no_instructions() {
     let world = World::new();
     let (launch, _folder) = world.launch(&LaunchRequest {

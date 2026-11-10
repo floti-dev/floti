@@ -821,9 +821,9 @@ folder: run through npx, that folder is a cache.
   the folder to `agents`, whole, rewriting no file in it; with both it reads
   `agents`, leaves `roles` alone and says so in its log
   (`prepare_agents_folder` in `agent_definitions/folder.rs`). It seeds the
-  shipped `reviewer.md`, `worker.md` and `lead.md` only when neither folder
-  exists: nothing there is ever rewritten, an edit or a deletion stays, and an
-  empty folder stays empty. A host started with `FLOTI_CONFIG_READ_ONLY`
+  shipped `lead.md`, `researcher.md`, `reviewer.md` and `worker.md` only
+  when neither folder exists: nothing there is ever rewritten, an edit or a
+  deletion stays, and an empty folder stays empty. A host started with `FLOTI_CONFIG_READ_ONLY`
   (Helm sets it for `pnpm dev`, `dev:live` and every check, whose config
   folder can be the installed host's) moves, seeds and writes nothing in its
   config folder, templates included: it reads `agents`, else `roles` where it

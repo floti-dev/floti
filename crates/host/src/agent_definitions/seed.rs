@@ -1,5 +1,5 @@
 //! What a first start writes into the agents folder: the shipped `lead`,
-//! `reviewer` and `worker`.
+//! `researcher`, `reviewer` and `worker`.
 //!
 //! The trigger is the folder being absent, as for the templates folder, and for
 //! the same reason: the host keeps no record of what it wrote there, so it
@@ -19,6 +19,7 @@ use crate::workspace::templates::seed::write_new;
 /// The shipped agents, by file name.
 pub const SHIPPED_AGENTS: &[(&str, &str)] = &[
     ("lead.md", include_str!("shipped/lead.md")),
+    ("researcher.md", include_str!("shipped/researcher.md")),
     ("reviewer.md", include_str!("shipped/reviewer.md")),
     ("worker.md", include_str!("shipped/worker.md")),
 ];

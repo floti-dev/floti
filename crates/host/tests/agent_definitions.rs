@@ -1673,20 +1673,24 @@ async fn s11_a_host_started_with_no_agents_folder_writes_the_shipped_agents_and_
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     files.sort();
-    assert_eq!(files, ["lead.md", "reviewer.md", "worker.md"]);
+    assert_eq!(
+        files,
+        ["lead.md", "researcher.md", "reviewer.md", "worker.md"]
+    );
 
     let parent = world
         .session(CLAUDE, &world.project("seeded"), "parent")
         .await;
     assert_eq!(
         parent.agent_names().await,
-        ["default", "lead", "reviewer", "worker"]
+        ["default", "lead", "researcher", "reviewer", "worker"]
     );
     let agents = parent.agent_entries().await;
     assert_eq!(agents["lead"]["canStart"], true);
     assert_eq!(agents["worker"]["worktree"], true);
     assert_eq!(agents["reviewer"]["canStart"], false);
-    for name in ["lead", "reviewer", "worker"] {
+    assert_eq!(agents["researcher"]["canStart"], false);
+    for name in ["lead", "researcher", "reviewer", "worker"] {
         assert_eq!(backends_of(&agents[name]), [CLAUDE], "{name}");
     }
     assert!(
@@ -1718,7 +1722,7 @@ async fn s12_a_later_start_never_rewrites_the_folder_an_edit_a_delete_and_an_emp
     host.stop(HostStopReason::Stop).await;
 
     // An emptied folder stays empty.
-    for name in ["worker", "reviewer"] {
+    for name in ["worker", "reviewer", "researcher"] {
         world.remove_agent(name);
     }
     let host = world.host().await;
@@ -1735,8 +1739,8 @@ async fn s12_a_later_start_never_rewrites_the_folder_an_edit_a_delete_and_an_emp
     assert!(world.agents_dir().join("lead.md").exists());
     assert_eq!(
         std::fs::read_dir(world.agents_dir()).unwrap().count(),
-        3,
-        "the three shipped agents"
+        4,
+        "the four shipped agents"
     );
     host.stop(HostStopReason::Stop).await;
 }
@@ -1827,11 +1831,11 @@ async fn s12_beside_an_agents_folder_a_roles_folder_is_left_alone_and_not_read()
 }
 
 // ---------------------------------------------------------------------------
-// S13, S14: the shipped lead and worker
+// S13, S14: the shipped lead, worker, reviewer and researcher
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s13_the_shipped_lead_starts_agents_cannot_edit_and_carries_its_voice_and_trackr_rules() {
+async fn s13_the_shipped_lead_starts_agents_cannot_edit_and_carries_its_voice_and_tracker_rules() {
     let world = World::new();
     let host = world.host().await;
     let parent = world
@@ -1846,14 +1850,21 @@ async fn s13_the_shipped_lead_starts_agents_cannot_edit_and_carries_its_voice_an
     assert!(world.column::<bool>(lead.id(), "can_start"));
     assert!(!world.column::<bool>(lead.id(), "child_worktree"));
     assert_eq!(lead.run.disallowed(), ["Edit", "Write", "NotebookEdit"]);
-    // Auto: nobody is at its terminal to answer a prompt.
+    // It names no mode, so it runs in a child's own, auto: nobody is at its
+    // terminal to answer a prompt.
     assert_eq!(value_of(&lead.run.argv, "--permission-mode"), Some("auto"));
     let instructions = lead
         .run
         .instructions
         .as_deref()
         .expect("the lead's instructions");
-    for part in ["# Agent: lead", "## Keeping Trackr", "## Voice", "ABC-12"] {
+    for part in [
+        "# Agent: lead",
+        "Start a worker",
+        "## Keeping the tracker",
+        "## Voice",
+        "ABC-12",
+    ] {
         assert!(instructions.contains(part), "{part} in {instructions}");
     }
     assert_eq!(lead.run.opening_prompt.as_deref(), Some("run the board"));
@@ -1871,7 +1882,7 @@ async fn s13_the_shipped_lead_starts_agents_cannot_edit_and_carries_its_voice_an
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s14_the_shipped_worker_edits_in_a_worktree_cannot_start_agents_or_create_items() {
+async fn s14_the_shipped_worker_edits_in_a_worktree_and_cannot_start_agents() {
     let world = World::new();
     let host = world.host().await;
     // A parent in accept edits holds its worker back to nothing.
@@ -1902,7 +1913,7 @@ async fn s14_the_shipped_worker_edits_in_a_worktree_cannot_start_agents_or_creat
         value_of(&worker.run.argv, "--permission-mode"),
         Some("auto")
     );
-    assert_eq!(worker.run.disallowed(), ["mcp__helm-plugin-trackr__create"]);
+    assert!(worker.run.disallowed().is_empty(), "{:?}", worker.run.argv);
     let instructions = worker
         .run
         .instructions
@@ -1910,7 +1921,7 @@ async fn s14_the_shipped_worker_edits_in_a_worktree_cannot_start_agents_or_creat
         .expect("the worker's instructions");
     for part in [
         "# Agent: worker",
-        "Touch only your own item",
+        "Touch only that item",
         "Also fixed:",
         "Found:",
     ] {
@@ -1928,6 +1939,51 @@ async fn s14_the_shipped_worker_edits_in_a_worktree_cannot_start_agents_or_creat
     // The parent's view of it.
     let listed = parent.list().await.done();
     assert_eq!(listed["children"][0]["worktree"], true);
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn s14_the_shipped_reviewer_and_researcher_launch_unable_to_edit_in_a_childs_own_mode() {
+    let world = World::new();
+    let host = world.host().await;
+    let parent = world
+        .session(CLAUDE, &world.repository("look"), "parent")
+        .await;
+
+    for (agent, disallowed, words) in [
+        (
+            "researcher",
+            &["Edit", "NotebookEdit"][..],
+            "change no file of the project",
+        ),
+        (
+            "reviewer",
+            &["Edit", "Write", "NotebookEdit"][..],
+            "change nothing",
+        ),
+    ] {
+        parent
+            .start(json!({ "task": "find out about ABC-12", "agent": agent, "name": agent }))
+            .await
+            .done();
+        let child = world.child_of(&parent, agent).await;
+        assert_eq!(child.run.disallowed(), disallowed, "{agent}");
+        // It names no mode, so it runs in a child's own, which asks nothing.
+        assert_eq!(
+            value_of(&child.run.argv, "--permission-mode"),
+            Some("auto"),
+            "{agent}"
+        );
+        assert!(!world.column::<bool>(child.id(), "can_start"), "{agent}");
+        assert!(
+            !world.column::<bool>(child.id(), "child_worktree"),
+            "{agent}"
+        );
+        let instructions = child.run.instructions.as_deref().unwrap_or_default();
+        for part in [format!("# Agent: {agent}"), words.to_owned()] {
+            assert!(instructions.contains(&part), "{part} in {instructions}");
+        }
+    }
     host.stop(HostStopReason::Stop).await;
 }
 
@@ -2717,7 +2773,7 @@ async fn a_read_only_host_with_neither_folder_serves_the_shipped_agents_and_writ
         .await;
     assert_eq!(
         parent.agent_names().await,
-        ["default", "lead", "reviewer", "worker"]
+        ["default", "lead", "researcher", "reviewer", "worker"]
     );
     parent
         .start(json!({ "task": "look", "agent": "reviewer", "name": "kid" }))
@@ -2729,7 +2785,7 @@ async fn a_read_only_host_with_neither_folder_serves_the_shipped_agents_and_writ
             .instructions
             .as_deref()
             .unwrap_or_default()
-            .contains("Read the code before you give findings."),
+            .contains("Read the code before you give a finding"),
         "{:?}",
         kid.run.instructions
     );
@@ -2852,7 +2908,11 @@ async fn s19_a_client_lists_the_hosts_agents_its_bad_files_retired_lines_and_mis
         .iter()
         .map(|agent| agent.name.as_str())
         .collect();
-    assert_eq!(shipped, ["lead", "worker"], "the reviewer's file is there");
+    assert_eq!(
+        shipped,
+        ["lead", "researcher", "worker"],
+        "the reviewer's file is there"
+    );
 
     // The other host answers with its own folder.
     let mut elsewhere = TestClient::connect(&other.endpoint, TERMINAL).await;
@@ -2860,7 +2920,7 @@ async fn s19_a_client_lists_the_hosts_agents_its_bad_files_retired_lines_and_mis
     assert_eq!(theirs.folder, text(&other.agents_dir()));
     assert_eq!(listed_names(&theirs), ["default", "scout"]);
     assert!(theirs.bad.is_empty());
-    assert_eq!(theirs.shipped.len(), 3);
+    assert_eq!(theirs.shipped.len(), 4);
 
     drop((client, elsewhere));
     other_host.stop(HostStopReason::Stop).await;
@@ -3065,7 +3125,7 @@ async fn s19_a_host_that_writes_no_config_and_has_no_agents_folder_lists_each_sh
     let listing = listed(&mut client).await;
     assert_eq!(
         listed_names(&listing),
-        ["default", "lead", "reviewer", "worker"]
+        ["default", "lead", "researcher", "reviewer", "worker"]
     );
     assert!(
         listing.agents.iter().all(|agent| agent.file.is_none()),
