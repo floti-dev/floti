@@ -3,6 +3,7 @@ import type { RestorableSession, RestoreOffer } from '@helm/core/types'
 import { cn } from '../lib/cn'
 import { folderName } from '../lib/launcher'
 import { formatMoment } from '../lib/time'
+import { AgentTag } from './AgentTag'
 import { Checkbox } from './Checkbox'
 import { HistoryIcon } from './icons'
 
@@ -13,8 +14,8 @@ export interface RestorePaneProps {
   onWithoutAskingChange: (next: boolean) => void
   /** True while the reopening is under way. */
   busy: boolean
-  /** The ticked sessions' row ids, in the order they are listed. */
-  onResume: (ids: number[]) => void
+  /** The ticked sessions, in the order they are listed. */
+  onResume: (picks: RestorePick[]) => void
   onNotNow: () => void
   /** The clock, for the time column. */
   now: number
@@ -28,6 +29,16 @@ export interface RestorePaneProps {
    * host"), when they ran in one; absent when they went with Helm.
    */
   lostWith?: string
+}
+
+/** One session to reopen: its row id, and whether it comes back without the agent it was started as. */
+export interface RestorePick {
+  id: number
+  /**
+   * Its agent cannot be composed again (`agentProblem`) and the person ticked
+   * it anyway: it comes back without its agent.
+   */
+  withoutAgent?: true
 }
 
 const plural = (count: number, one: string, many: string): string =>
@@ -70,17 +81,26 @@ export function RestorePane({
   lostWith
 }: RestorePaneProps): JSX.Element {
   const headingId = useId()
+  // One whose agent cannot be composed again starts unticked: it would come
+  // back without the agent it was started as, which is the person's to choose.
   const [ticked, setTicked] = useState<ReadonlySet<number>>(
     () =>
       new Set(
         offer.sessions
           .filter(
-            (session) => session.blocked === null && (preselected === undefined || preselected.includes(session.id))
+            (session) =>
+              session.blocked === null &&
+              session.agentProblem === undefined &&
+              (preselected === undefined || preselected.includes(session.id))
           )
           .map((session) => session.id)
       )
   )
-  const chosen = offer.sessions.filter((session) => ticked.has(session.id)).map((session) => session.id)
+  const chosen: RestorePick[] = offer.sessions
+    .filter((session) => ticked.has(session.id))
+    .map((session) =>
+      session.agentProblem === undefined ? { id: session.id } : { id: session.id, withoutAgent: true }
+    )
 
   const toggle = (id: number): void =>
     setTicked((current) => {
@@ -191,10 +211,12 @@ function Row({
 }): JSX.Element {
   const blocked = session.blocked !== null
   const where = [folderName(session.cwd), session.branch].filter((part) => part !== null).join(' · ')
+  const agent = session.agent === undefined || session.agent === '' ? undefined : session.agent
   return (
     <li
       data-restore-row={session.id}
       {...(blocked ? { 'data-restore-blocked': '' } : {})}
+      {...(session.agentProblem === undefined ? {} : { 'data-restore-agent-problem': '' })}
       className="border-b border-border last:border-b-0"
     >
       <label
@@ -206,9 +228,18 @@ function Row({
       >
         <Checkbox checked={on} onChange={onToggle} label={session.name} disabled={blocked} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className={cn('truncate', on ? 'text-fg' : 'text-fg-muted')}>{session.name}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className={cn('min-w-0 truncate', on ? 'text-fg' : 'text-fg-muted')}>{session.name}</span>
+            {agent !== undefined && <AgentTag name={agent} gone={session.agentProblem !== undefined} />}
+          </span>
           {blocked ? (
             <span className="truncate text-[11px] text-fg-subtle">{session.blocked}</span>
+          ) : session.agentProblem !== undefined ? (
+            // The host's sentence naming what is wrong with its agent, and what
+            // ticking it does about that.
+            <span title={session.agentProblem} className="truncate text-[11px] text-warn">
+              {session.agentProblem} Restored, it comes back without its agent.
+            </span>
           ) : (
             <span className="truncate font-mono text-[11px] text-fg-subtle">{where}</span>
           )}

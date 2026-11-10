@@ -1,9 +1,12 @@
 import type { JSX, KeyboardEvent, ReactNode } from 'react'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
+  EFFORT_LEVELS,
   historyTitle,
   liveSessionsIn,
+  type EffortLevel,
   type HistorySession,
+  type LaunchAgents,
   type LiveSession,
   type PermissionMode,
   type Profile,
@@ -20,10 +23,20 @@ import {
   rankProjects,
   type ProjectMatch
 } from '../lib/launcher'
+import {
+  agentOptions,
+  agentValuesNote,
+  MODEL_CHOICES,
+  resolveLaunch,
+  runnableAgent,
+  worktreePlan,
+  type Touched
+} from '../lib/launchAgent'
 import { PROJECT_KIND_ICON } from '../lib/projectIcons'
 import { ROW_SELECTED } from '../lib/rows'
 import { SEGMENT_ON } from '../lib/segmented'
 import { formatAge, formatMoment } from '../lib/time'
+import { AgentPicker } from './AgentPicker'
 import { HistoryIcon, LayersIcon, TerminalIcon } from './icons'
 import { LaunchSentence, RunningHere } from './LaunchNotes'
 import { Overlay } from './Overlay'
@@ -38,6 +51,12 @@ export interface LaunchChoice {
   resume: HistorySession | null
   /** In the pane beside the focused one. */
   beside: boolean
+  /** The agent to start it as, or null for none. */
+  agent?: string | null
+  /** The agent backend to run, or null for the host's choice. */
+  backend?: string | null
+  /** The model and effort shown, each null for Default: what is sent is what was shown. */
+  chosen?: { model: string | null; effort: EffortLevel | null }
 }
 
 export interface NewSessionDialogProps {
@@ -78,6 +97,12 @@ export interface NewSessionDialogProps {
   host?: string | undefined
   /** Another host was chosen: the caller lists that host's folders and profiles instead. */
   onHostChange?: ((host: string) => void) | undefined
+  /**
+   * The agents of the host it starts on and its installed agent backends, for
+   * the Agent and Backend pickers; null while they are being read, or when
+   * they could not be, which offers No agent alone.
+   */
+  agents?: LaunchAgents | null | undefined
 }
 
 /** A host the launcher can start a session on. */
@@ -111,12 +136,12 @@ interface Cursor {
 }
 
 /**
- * Ctrl+N: a folder, a profile and a permission mode, or a conversation to
- * reopen there - and Enter.
+ * Ctrl+N: a folder, an agent, a profile, a model, an effort and a permission
+ * mode, or a conversation to reopen there - and Enter.
  *
  * Starting sessions is most of what Helm is used for, so this is built for the
- * keyboard: type to narrow the folders, the arrows to move, Tab to the profile
- * and the mode, Enter to start and Ctrl+Enter to start beside. Nothing here
+ * keyboard: type to narrow the folders, the arrows to move, Tab to the agent,
+ * then the profile and the rest, Enter to start and Ctrl+Enter to start beside. Nothing here
  * launches on a click; a click highlights, which is what puts the launch
  * sentence for that row on screen *before* anything runs (DESIGN.md's launch
  * disclosure). A double click, or the Start button, then starts it.
@@ -129,9 +154,16 @@ interface Cursor {
  *
  * **The profile follows the folder until it is chosen.** Each folder starts
  * with the profile most about it (`profileFor`); once somebody picks one, that
- * is the choice for whatever they move to next. The permission mode works the
- * same way against the profile, so the mode shown is the profile's until it is
- * changed - and what is shown is exactly what is sent.
+ * is the choice for whatever they move to next. The model, effort and
+ * permission mode work the same way against the profile, so each shows the
+ * profile's until it is changed - and what is shown is exactly what is sent.
+ *
+ * **An agent fills the pickers nobody touched** (`resolveLaunch`): its model
+ * and effort for the backend, its permission and its profile, each still the
+ * person's to change, with a line saying whose they are. The Backend picker is
+ * drawn only while the host has more than one agent backend, narrowed to the
+ * agent's. An agent that works in a worktree names it in the sentence, and
+ * outside a git repository the sentence is the refusal and Start is off.
  */
 export function NewSessionDialog({
   projects,
@@ -150,7 +182,8 @@ export function NewSessionDialog({
   onDismiss,
   hosts,
   host,
-  onHostChange
+  onHostChange,
+  agents = null
 }: NewSessionDialogProps): JSX.Element {
   const ids = useId()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -164,8 +197,11 @@ export function NewSessionDialog({
   const [cursor, setCursor] = useState<Cursor | null>(
     initialPath === null ? null : { path: initialPath, resume: null }
   )
-  const [chosenProfile, setChosenProfile] = useState<{ id: number | null } | null>(null)
-  const [chosenMode, setChosenMode] = useState<{ mode: PermissionMode | null } | null>(null)
+  /** The agent picked. Not remembered: every opening starts at No agent (A17). */
+  const [chosenAgent, setChosenAgent] = useState<string | null>(null)
+  /** The pickers the person changed: the rest follow the folder and the agent. */
+  const [touched, setTouched] = useState<Touched>({})
+  const hostName = hosts?.find((each) => each.id === host)?.name ?? 'This PC'
 
   const dismiss = (): void => {
     if (returnTo instanceof HTMLElement && returnTo.isConnected) returnTo.focus()
@@ -225,25 +261,46 @@ export function NewSessionDialog({
     document.getElementById(highlightedId)?.scrollIntoView?.({ block: 'nearest' })
   }, [highlightedId])
 
+  // Another host's agents (A25): the agent picked stays only where that
+  // host has one by its name, and the line under the pickers says when it
+  // does not.
+  const dropped =
+    chosenAgent !== null && agents !== null && !agents.agents.some((each) => each.name === chosenAgent)
+      ? chosenAgent
+      : null
+
   const sortedProfiles = useMemo(() => profilesInOrder(profiles), [profiles])
-  const profile =
-    chosenProfile === null
-      ? selected === null
-        ? null
-        : profileFor(selected.path, profiles)
-      : (profiles.find((candidate) => candidate.id === chosenProfile.id) ?? null)
-  const mode = chosenMode === null ? (profile?.permissionMode ?? null) : chosenMode.mode
+  const agent = runnableAgent(agents, chosenAgent)
+  const launch = resolveLaunch({
+    agent,
+    installed: agents?.backends ?? [],
+    profiles,
+    folderProfile: selected === null ? null : profileFor(selected.path, profiles),
+    touched
+  })
+  const { profile, mode, model, effort } = launch
   const resume = highlighted?.kind === 'resume' ? highlighted.session : null
   const here = selected === null ? [] : liveSessionsIn(live, selected.path)
+  const plan =
+    selected === null || resume !== null
+      ? null
+      : worktreePlan(agent, selected, selected.name, homePath(selected.path, home))
+  const refused = plan?.kind === 'refused' ? plan.reason : null
+  const note = agent === null ? null : agentValuesNote(agent.name, launch.fromAgent)
+  const options = agentOptions(agents, hostName)
+  const modelChoices = model !== null && !MODEL_CHOICES.some((each) => each === model) ? [...MODEL_CHOICES, model] : MODEL_CHOICES
 
   const start = (beside: boolean): void => {
-    if (busy || selected === null) return
+    if (busy || selected === null || refused !== null) return
     onStart({
       project: selected,
       profileId: profile?.id ?? null,
       permissionMode: mode,
       resume,
-      beside
+      beside,
+      agent: agent?.name ?? null,
+      backend: launch.backend,
+      chosen: { model, effort }
     })
   }
 
@@ -285,14 +342,19 @@ export function NewSessionDialog({
   }
 
   const sentence =
-    selected === null
+    selected === null || refused !== null
       ? null
       : launchSentence({
           cwd: selected.path,
           home,
           profile,
           permissionMode: mode,
-          resume: resume === null ? null : historyTitle(resume)
+          resume: resume === null ? null : historyTitle(resume),
+          model,
+          effort,
+          agent,
+          rules: 'flags',
+          worktree: plan?.kind === 'made' ? plan : null
         })
 
   return (
@@ -410,20 +472,90 @@ export function NewSessionDialog({
 
       <div className="flex shrink-0 flex-col gap-2.5 border-t border-border bg-surface px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor={`${ids}-profile`} className="w-[52px] text-[12px] text-fg-subtle">
+          <label htmlFor={`${ids}-agent`} className="w-[52px] text-[12px] text-fg-subtle">
+            Agent
+          </label>
+          <AgentPicker
+            id={`${ids}-agent`}
+            value={agent?.name ?? null}
+            options={options}
+            onChange={setChosenAgent}
+            className="w-[190px]"
+          />
+          <label htmlFor={`${ids}-profile`} className="ml-2.5 text-[12px] text-fg-subtle">
             Profile
           </label>
           <Picker
             id={`${ids}-profile`}
             icon={<LayersIcon width={13} height={13} className="text-fg-muted" />}
             value={profile === null ? '' : String(profile.id)}
-            onChange={(value) => setChosenProfile({ id: value === '' ? null : Number(value) })}
-            className="min-w-[170px]"
+            onChange={(value) => setTouched((was) => ({ ...was, profile: { id: value === '' ? null : Number(value) } }))}
+            className="w-[170px]"
           >
             <option value="">No profile</option>
             {sortedProfiles.map((candidate) => (
               <option key={candidate.id} value={String(candidate.id)}>
                 {candidate.name}
+              </option>
+            ))}
+          </Picker>
+          {launch.backends.length > 1 && (
+            <>
+              <label htmlFor={`${ids}-backend`} className="ml-2.5 text-[12px] text-fg-subtle">
+                Backend
+              </label>
+              <Picker
+                id={`${ids}-backend`}
+                value={launch.backend ?? ''}
+                onChange={(value) => setTouched((was) => ({ ...was, backend: { id: value } }))}
+                className="w-[130px]"
+              >
+                {launch.backends.map((backend) => (
+                  <option key={backend.id} value={backend.id}>
+                    {backend.name}
+                  </option>
+                ))}
+              </Picker>
+            </>
+          )}
+        </div>
+        {dropped !== null && (
+          <p data-agent-dropped className="-mt-1 pl-[60px] text-[10.5px] leading-[1.5] text-fg-muted">
+            {hostName} has no agent called {dropped}, so Agent is back to No agent.
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor={`${ids}-model`} className="w-[52px] text-[12px] text-fg-subtle">
+            Model
+          </label>
+          <Picker
+            id={`${ids}-model`}
+            value={model ?? ''}
+            onChange={(value) => setTouched((was) => ({ ...was, model: { model: value === '' ? null : value } }))}
+            className="w-[118px]"
+          >
+            <option value="">Default</option>
+            {modelChoices.map((choice) => (
+              <option key={choice} value={choice}>
+                {choice}
+              </option>
+            ))}
+          </Picker>
+          <label htmlFor={`${ids}-effort`} className="ml-2.5 text-[12px] text-fg-subtle">
+            Effort
+          </label>
+          <Picker
+            id={`${ids}-effort`}
+            value={effort ?? ''}
+            onChange={(value) =>
+              setTouched((was) => ({ ...was, effort: { effort: value === '' ? null : (value as EffortLevel) } }))
+            }
+            className="w-[110px]"
+          >
+            <option value="">Default</option>
+            {EFFORT_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {level}
               </option>
             ))}
           </Picker>
@@ -433,8 +565,10 @@ export function NewSessionDialog({
           <Picker
             id={`${ids}-mode`}
             value={mode ?? ''}
-            onChange={(value) => setChosenMode({ mode: value === '' ? null : (value as PermissionMode) })}
-            className="min-w-[130px]"
+            onChange={(value) =>
+              setTouched((was) => ({ ...was, mode: { mode: value === '' ? null : (value as PermissionMode) } }))
+            }
+            className="w-[128px]"
           >
             <option value="">Default</option>
             {PERMISSION_CHOICES.map((choice) => (
@@ -444,8 +578,18 @@ export function NewSessionDialog({
             ))}
           </Picker>
         </div>
+        {note !== null && (
+          <p data-agent-note className="-mt-1 pl-[60px] text-[10.5px] leading-[1.5] text-fg-subtle">
+            {note}
+          </p>
+        )}
 
         {sentence !== null && <LaunchSentence parts={sentence} />}
+        {refused !== null && (
+          <p data-launch-refused role="alert" className="text-[11.5px] leading-[1.55] text-danger">
+            {refused}
+          </p>
+        )}
 
         <RunningHere sessions={here} />
 
@@ -457,10 +601,14 @@ export function NewSessionDialog({
       </div>
 
       <footer className="flex h-[34px] shrink-0 items-center gap-1 border-t border-border bg-surface px-2.5 text-[11px] text-fg-subtle">
-        <KeyButton keys="↵" onClick={() => start(false)} disabled={busy || selected === null}>
+        <KeyButton keys="↵" onClick={() => start(false)} disabled={busy || selected === null || refused !== null}>
           {busy ? 'Starting…' : 'Start'}
         </KeyButton>
-        <KeyButton keys={shortcutLabel('↵', { separator: ' ' })} onClick={() => start(true)} disabled={busy || selected === null}>
+        <KeyButton
+          keys={shortcutLabel('↵', { separator: ' ' })}
+          onClick={() => start(true)}
+          disabled={busy || selected === null || refused !== null}
+        >
           Start beside
         </KeyButton>
         {onTerminal !== undefined && (
@@ -469,7 +617,7 @@ export function NewSessionDialog({
           </KeyButton>
         )}
         <span className="px-1.5">
-          <span className="font-mono text-fg-muted">Tab</span> Profile
+          <span className="font-mono text-fg-muted">Tab</span> Agent
         </span>
         <span className="flex-1" />
         <KeyButton keys="Esc" onClick={dismiss}>

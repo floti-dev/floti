@@ -63,6 +63,24 @@ describe('TabBar session tabs', () => {
     expect(screen.getByRole('tab', { name: 'api-refactor, ready' })).toBeTruthy()
   })
 
+  it('A23: a session a person started as an agent carries its agent tag after the title, and says so in its accessible name', () => {
+    renderBar([
+      { id: 'session:1', title: 'orbit-api', indicator: 'busy', agent: 'lead' },
+      { id: 'session:2', title: 'reviewer', indicator: 'busy', badge: 'orbit-api', startedBy: 'orbit-api' }
+    ])
+    const tab = screen.getByRole('tab', { name: 'orbit-api, working, started as the lead agent' })
+    const tag = tab.querySelector<HTMLElement>('[data-agent-tag]')
+    expect(tag?.textContent).toBe('lead')
+    expect(tag?.className).toContain('bg-accent-soft')
+    expect(tag?.className).toContain('text-accent-text')
+    expect(tag?.className).toContain('text-[10px]')
+    // It follows the title.
+    expect(tab.querySelector('[data-tab-title]')?.nextElementSibling).toBe(tag)
+    // A child keeps its parent badge and no tag.
+    const child = screen.getByRole('tab', { name: 'reviewer, working, started by orbit-api' })
+    expect(child.querySelector('[data-agent-tag]')).toBeNull()
+  })
+
   it('draws the warning ring, not the glyph, while a command child’s host is away', () => {
     renderBar([{ id: 'session:1', title: 'tests', indicator: 'running', command: true, away: true }])
     const tab = screen.getByRole('tab', { name: 'tests, connection lost' })

@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   EMPTY_INVENTORY,
   type HistorySession,
+  type LaunchAgent,
+  type LaunchAgents,
   type LiveSession,
   type Profile,
   type Project
@@ -102,9 +104,12 @@ function renderDialog(overrides: Partial<NewSessionDialogProps> = {}): NewSessio
     onDismiss: vi.fn(),
     ...overrides
   }
-  render(<NewSessionDialog {...props} />)
+  lastView = render(<NewSessionDialog {...props} />)
   return props
 }
+
+/** The last dialog rendered, for a test that hands it new props. */
+let lastView: ReturnType<typeof render> | null = null
 
 const dialog = (): HTMLElement => screen.getByRole('dialog', { name: 'New session' })
 /** The folder list - the pickers' own options are options too. */
@@ -155,7 +160,11 @@ describe('NewSessionDialog', () => {
       profileId: timeclickProfile.id,
       permissionMode: 'bypassPermissions',
       resume: null,
-      beside: false
+      beside: false,
+      agent: null,
+      backend: null,
+      // What the Model and Effort pickers show is what is sent: the profile's.
+      chosen: { model: 'opus', effort: null }
     })
   })
 
@@ -321,5 +330,198 @@ describe('NewSessionDialog with more than one host connected', () => {
     renderDialog({ hosts: [HOSTS[0]!], host: 'local' })
     expect(within(dialog()).queryByRole('radiogroup', { name: 'Host' })).toBeNull()
     expect(within(dialog()).getByText('Start a session in…')).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The Agent picker (A17-A20, A25)
+// ---------------------------------------------------------------------------
+
+function launchAgent(name: string, patch: Partial<LaunchAgent> = {}): LaunchAgent {
+  return {
+    name,
+    description: `${name} does its work.`,
+    file: `${name}.md`,
+    backends: ['claude-code'],
+    listedBackends: ['claude-code'],
+    models: {},
+    efforts: {},
+    permission: null,
+    profile: null,
+    allowedTools: [],
+    disallowedTools: [],
+    worktree: false,
+    canStart: false,
+    cannotRun: null,
+    ...patch
+  }
+}
+
+const researchLead = launchAgent('research-lead', {
+  description: 'Researches a new project with you and writes the plan.',
+  models: { 'claude-code': 'opus' },
+  efforts: { 'claude-code': 'xhigh' },
+  permission: 'plan',
+  profile: 'dev',
+  allowedTools: ['Read', 'Grep'],
+  disallowedTools: ['Edit', 'Write'],
+  canStart: true
+})
+const workerAgent = launchAgent('worker', {
+  description: 'Does one piece of work in its own worktree.',
+  permission: 'acceptEdits',
+  worktree: true,
+  disallowedTools: ['mcp__helm-plugin-trackr__create']
+})
+const docsWriter = launchAgent('docs-writer', { backends: [], listedBackends: ['codex'] })
+const CLAUDE_BACKEND = { id: 'claude-code', name: 'Claude Code' }
+const AGENTS: LaunchAgents = {
+  agents: [docsWriter, researchLead, workerAgent],
+  bad: [{ name: 'deploy-check', file: 'deploy-check.md', problem: 'permission must be plan or auto' }],
+  backends: [CLAUDE_BACKEND]
+}
+const inGit = (of: Project): Project => ({
+  ...of,
+  git: { branch: 'main', detached: false, dirty: 0, ahead: 0, behind: 0 }
+})
+
+/** The Agent picker's rows: name, second line, and whether it is disabled. */
+const agentRows = (): { name: string; detail: string; disabled: boolean }[] =>
+  Array.from(picker('Agent').options).map((option) => ({
+    name: option.label,
+    detail: option.querySelectorAll('span')[1]?.textContent ?? '',
+    disabled: option.disabled
+  }))
+
+describe('NewSessionDialog: the Agent picker', () => {
+  it('comes first at No agent, lists each agent with its description, one that cannot run here and a bad file disabled with why', () => {
+    renderDialog({ agents: AGENTS })
+    const footer = picker('Agent').closest('div')!
+    expect(within(footer).getAllByRole('combobox')[0]).toBe(picker('Agent'))
+    expect(picker('Agent').value).toBe('')
+    expect(agentRows()).toEqual([
+      { name: 'No agent', detail: 'A plain session, as now.', disabled: false },
+      { name: 'docs-writer', detail: 'Runs only on codex, which This PC does not have.', disabled: true },
+      { name: 'research-lead', detail: 'Researches a new project with you and writes the plan.', disabled: false },
+      { name: 'worker', detail: 'Does one piece of work in its own worktree.', disabled: false },
+      { name: 'deploy-check', detail: 'Cannot be loaded: permission must be plan or auto', disabled: true }
+    ])
+    // The bad file is set apart under a rule.
+    expect(picker('Agent').querySelector('hr')?.nextElementSibling?.getAttribute('data-agent-option')).toBe(
+      'deploy-check'
+    )
+    expect(dialog().querySelector('footer')?.textContent).toContain('Tab Agent')
+    expect(dialog().querySelector('[data-agent-note]')).toBeNull()
+  })
+
+  it('fills the pickers with the agent’s values, says whose they are, and starts with them and the agent', async () => {
+    const props = renderDialog({ agents: AGENTS, initialPath: timeclick.path })
+    await userEvent.selectOptions(picker('Agent'), 'research-lead')
+    expect(picker('Profile').selectedOptions[0]?.textContent).toBe('dev')
+    expect(picker('Model').value).toBe('opus')
+    expect(picker('Effort').value).toBe('xhigh')
+    expect(picker('Permissions').value).toBe('plan')
+    expect(dialog().querySelector('[data-agent-note]')?.textContent).toBe(
+      "Model, effort, permissions and profile are research-lead's. Change any of them before starting."
+    )
+    expect(sentence()).toBe(
+      "Runs claude in ~\\.harness\\dev\\repos\\timeclick as the research-lead agent with the dev profile, composing dev, and --model opus --effort xhigh --permission-mode plan --allowedTools Read,Grep --disallowedTools Edit,Write. Its instructions go in after the project's; nothing is typed into the terminal. It can start agents of its own."
+    )
+    await userEvent.keyboard('{Enter}')
+    expect(props.onStart).toHaveBeenCalledWith({
+      project: timeclick,
+      profileId: devProfile.id,
+      permissionMode: 'plan',
+      resume: null,
+      beside: false,
+      agent: 'research-lead',
+      backend: 'claude-code',
+      chosen: { model: 'opus', effort: 'xhigh' }
+    })
+  })
+
+  it('keeps a picker the person changed, and another agent changes only the untouched ones', async () => {
+    const props = renderDialog({ agents: AGENTS, initialPath: timeclick.path })
+    await userEvent.selectOptions(picker('Effort'), 'low')
+    await userEvent.selectOptions(picker('Agent'), 'research-lead')
+    expect(picker('Effort').value).toBe('low')
+    expect(picker('Permissions').value).toBe('plan')
+    expect(dialog().querySelector('[data-agent-note]')?.textContent).toBe(
+      "Model, permissions and profile are research-lead's. Change any of them before starting."
+    )
+    await userEvent.selectOptions(picker('Permissions'), 'Default')
+    await userEvent.selectOptions(picker('Agent'), '')
+    // Back to the folder's profile and its values, but for what was changed.
+    expect(picker('Profile').selectedOptions[0]?.textContent).toBe('Timeclick')
+    expect(picker('Model').value).toBe('opus')
+    expect(picker('Effort').value).toBe('low')
+    expect(picker('Permissions').value).toBe('')
+    await userEvent.click(within(dialog()).getByRole('button', { name: /Start$/ }))
+    expect(props.onStart).toHaveBeenLastCalledWith(
+      expect.objectContaining({ agent: null, permissionMode: null, chosen: { model: 'opus', effort: 'low' } })
+    )
+  })
+
+  it('offers Model and Effort for every start, and Backend only while two or more backends are installed, narrowed to the agent’s', async () => {
+    renderDialog({ agents: { ...AGENTS, backends: [CLAUDE_BACKEND] }, initialPath: timeclick.path })
+    expect(picker('Model').value).toBe('opus')
+    expect(picker('Effort').value).toBe('')
+    expect(within(dialog()).queryByRole('combobox', { name: 'Backend' })).toBeNull()
+  })
+
+  it('draws the Backend picker with two backends installed, and an agent narrows it to its own', async () => {
+    const OTHER = { id: 'other-agent', name: 'Other Agent' }
+    renderDialog({ agents: { ...AGENTS, backends: [CLAUDE_BACKEND, OTHER] } })
+    expect(Array.from(picker('Backend').options).map((option) => option.textContent)).toEqual([
+      'Claude Code',
+      'Other Agent'
+    ])
+    expect(picker('Backend').value).toBe('claude-code')
+    await userEvent.selectOptions(picker('Agent'), 'research-lead')
+    // One backend left: there is nothing to choose, so no picker.
+    expect(within(dialog()).queryByRole('combobox', { name: 'Backend' })).toBeNull()
+  })
+
+  it('names the new worktree of an agent that works in one, and outside git refuses with Start off', async () => {
+    const repoFolder = inGit(timeclick)
+    const props = renderDialog({ agents: AGENTS, projects: [repoFolder, helm], initialPath: repoFolder.path })
+    await userEvent.selectOptions(picker('Agent'), 'worker')
+    expect(sentence()).toBe(
+      "Runs claude in a new worktree, ~\\.harness\\dev\\repos\\timeclick\\.floti\\worktrees\\timeclick on branch agent/timeclick cut from main, as the worker agent with the Timeclick profile, composing dev and timeclick, and --model opus --permission-mode acceptEdits --disallowedTools mcp__helm-plugin-trackr__create. Its instructions go in after the project's; nothing is typed into the terminal. It gets no floti-agents tools."
+    )
+
+    await userEvent.click(within(list()).getByRole('option', { name: 'helm' }))
+    expect(dialog().querySelector('[data-launch-sentence]')).toBeNull()
+    expect(dialog().querySelector('[data-launch-refused]')?.textContent).toBe(
+      'worker works in a worktree of its own, and ~\\.harness\\dev\\repos\\helm is not in a git repository. Pick a folder in one, or No agent.'
+    )
+    expect(within(dialog()).getByRole('button', { name: /Start$/ })).toHaveProperty('disabled', true)
+    expect(within(dialog()).getByRole('button', { name: /Start beside/ })).toHaveProperty('disabled', true)
+    await userEvent.keyboard('{Enter}')
+    expect(props.onStart).not.toHaveBeenCalled()
+  })
+
+  it('switched to a host without the agent goes back to No agent and says so', async () => {
+    const hosts = [
+      { id: 'local', name: 'This PC', remote: false },
+      { id: 'buildbox', name: 'buildbox', remote: true }
+    ]
+    const props = renderDialog({ agents: AGENTS, hosts, host: 'local' })
+    await userEvent.selectOptions(picker('Agent'), 'research-lead')
+    expect(picker('Model').value).toBe('opus')
+    // buildbox's agents arrive once it is switched to.
+    lastView!.rerender(
+      <NewSessionDialog {...props} host="buildbox" agents={{ ...AGENTS, agents: [workerAgent] }} />
+    )
+    expect(picker('Agent').value).toBe('')
+    expect(dialog().querySelector('[data-agent-dropped]')?.textContent).toBe(
+      'buildbox has no agent called research-lead, so Agent is back to No agent.'
+    )
+    // What the agent had set goes back to what it was before it.
+    expect(picker('Effort').value).toBe('')
+    // A host that has it keeps it.
+    await userEvent.selectOptions(picker('Agent'), 'worker')
+    lastView!.rerender(<NewSessionDialog {...props} host="local" agents={AGENTS} />)
+    expect(picker('Agent').value).toBe('worker')
   })
 })

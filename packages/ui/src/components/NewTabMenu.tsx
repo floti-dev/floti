@@ -2,10 +2,11 @@ import type { JSX } from 'react'
 import { useMemo, useRef, useState } from 'react'
 import type { Profile, Project } from '@helm/core/types'
 import { folderName, homePath, profilesInOrder, rankProjects } from '../lib/launcher'
+import { agentOptions } from '../lib/launchAgent'
 import { shortcutLabel } from '../lib/platform'
 import type { PopupAnchor } from '../lib/popup'
 import { PROJECT_KIND_ICON } from '../lib/projectIcons'
-import { ConsoleIcon, GlobeIcon, LayersIcon, TerminalIcon } from './icons'
+import { AgentCardIcon, ConsoleIcon, GlobeIcon, LayersIcon, TerminalIcon } from './icons'
 import { Menu, type MenuEntry } from './Menu'
 import type { LauncherHost } from './NewSessionDialog'
 import { NewSessionPopover, type NewSessionPopoverProps } from './NewSessionPopover'
@@ -35,7 +36,7 @@ export interface NewTabMenuProps extends Omit<NewSessionPopoverProps, 'at' | 'an
 /** A host entry's id in the first step's list; no kind's id starts so. */
 const HOST_ENTRY = 'host:'
 
-type Stage = 'kind' | 'session' | 'profile' | 'terminal'
+type Stage = 'kind' | 'session' | 'profile' | 'agent' | 'terminal'
 
 /**
  * What a pane's `+` opens: first what kind of tab, then whatever that kind
@@ -45,6 +46,10 @@ type Stage = 'kind' | 'session' | 'profile' | 'terminal'
  * - **Session** becomes the new-session popover (`NewSessionPopover`).
  * - **Profile session** becomes the list of profiles; one click starts one in
  *   its own folder, which is the launch the Profiles view's rows make.
+ * - **Agent session** becomes the host's agents, each with its description,
+ *   one no backend here can run disabled with the reason; picking one becomes
+ *   the session popover with that agent picked, in the pane's folder (A22). A
+ *   file that cannot be loaded is left out here: the dialog lists it.
  * - **Browser tab** opens straight away: an empty page, its address bar taking
  *   the caret.
  * - **Terminal** becomes the list of folders, the pane's own first and then the
@@ -66,6 +71,8 @@ export function NewTabMenu({
   ...session
 }: NewTabMenuProps): JSX.Element {
   const [stage, setStage] = useState<Stage>('kind')
+  /** The agent Agent session's list picked, which the popover opens with. */
+  const [pickedAgent, setPickedAgent] = useState<string | null>(null)
   // Measured once, when it opens. A strip that moves under it closes it anyway:
   // a resize is a dismissal.
   const [at] = useState<PopupAnchor>(() => ({ below: anchor.getBoundingClientRect() }))
@@ -91,6 +98,43 @@ export function NewTabMenu({
         anchorRef={anchorRef}
         onDismiss={onDismiss}
         hostName={on?.remote === true ? on.name : undefined}
+        initialAgent={pickedAgent}
+      />
+    )
+  }
+
+  const hostName = on?.remote === true ? on.name : 'This PC'
+  const agentRows = agentOptions(session.agents ?? null, hostName).filter((option) => !option.bad)
+  if (stage === 'agent') {
+    const runnable = agentRows.filter((option) => !option.disabled)
+    const cannot = agentRows.filter((option) => option.disabled)
+    const toEntry = (option: (typeof agentRows)[number]): MenuEntry => ({
+      kind: 'item',
+      id: option.name,
+      label: option.name,
+      detail: option.detail,
+      disabled: option.disabled,
+      title: option.disabled ? option.detail : undefined
+    })
+    const place = folders[0]?.name
+    return (
+      <Menu
+        label="Start an agent session"
+        at={at}
+        anchorRef={anchorRef}
+        entries={[
+          { kind: 'heading', id: 'agents', label: place === undefined ? 'Agent session' : `Agent session in ${place}` },
+          ...runnable.map(toEntry),
+          ...(cannot.length > 0 && runnable.length > 0 ? [{ kind: 'separator' as const, id: 'cannot' }] : []),
+          ...cannot.map(toEntry)
+        ]}
+        stayOpen
+        onSelect={(name) => {
+          if (!runnable.some((option) => option.name === name)) return
+          setPickedAgent(name)
+          setStage('session')
+        }}
+        onDismiss={onDismiss}
       />
     )
   }
@@ -162,6 +206,14 @@ export function NewTabMenu({
     },
     {
       kind: 'item',
+      id: 'agent',
+      label: 'Agent session',
+      icon: <AgentCardIcon width={13} height={13} />,
+      disabled: agentRows.length === 0,
+      title: agentRows.length === 0 ? `${hostName} has no agents yet.` : undefined
+    },
+    {
+      kind: 'item',
       id: 'terminal',
       label: 'Terminal',
       icon: <ConsoleIcon width={13} height={13} />,
@@ -200,7 +252,7 @@ export function NewTabMenu({
           onBrowser()
           onDismiss()
         } else {
-          setStage(id === 'session' ? 'session' : id === 'terminal' ? 'terminal' : 'profile')
+          setStage(id === 'session' || id === 'terminal' || id === 'agent' ? id : 'profile')
         }
       }}
       onDismiss={onDismiss}

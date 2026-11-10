@@ -97,6 +97,22 @@ export function AgentIcon(props: IconProps): JSX.Element {
   )
 }
 
+/**
+ * One of Floti's agents, the named definitions a session is started as: a
+ * card with a figure on it. Claude Code's own agents are Subagents, drawn
+ * with `AgentIcon`.
+ */
+export function AgentCardIcon(props: IconProps): JSX.Element {
+  return (
+    <Icon {...props}>
+      <rect x="2.25" y="3.25" width="11.5" height="9.5" rx="1.5" />
+      <circle cx="6.1" cy="6.9" r="1.35" />
+      <path d="M4 10.7c.4-1 1.2-1.6 2.1-1.6s1.7.6 2.1 1.6" />
+      <path d="M9.75 6.6h2.2M9.75 9.1h2.2" />
+    </Icon>
+  )
+}
+
 /** A workflow: one script fanning work out to several agents. */
 export function WorkflowIcon(props: IconProps): JSX.Element {
   return (

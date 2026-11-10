@@ -212,6 +212,8 @@ import {
   type QuickOpenMode,
   type CrumbChip,
   type RailItem,
+  type RestorePick,
+  type ResumeOptions,
   type SettingsSectionId,
   type Tab,
   type TabIndicator,
@@ -289,6 +291,7 @@ import { TerminalTabPane } from "./TerminalTabPane";
 import { terminalFontStack } from "../terminal";
 import { SessionCrumb } from "./SessionCrumb";
 import {
+  agentRow,
   childCrumb,
   childTab,
   indicatorOf,
@@ -2075,12 +2078,13 @@ export function App(): JSX.Element {
    * decided upstream whether it could be reopened and built `--resume` argv.
    */
   const resumeSession = useCallback(
-    async (session: HistorySession) => {
+    async (session: HistorySession, options?: ResumeOptions) => {
       // On the host whose history it is, in a tab naming that host.
       const on = historyHost;
       const record = await historyState.resume(
         session,
         bodyRefs.current.get(open.focused) ?? null,
+        options,
       );
       if (!record) return;
       if (on === LOCAL_HOST_KEY) sessionState.adopt(record);
@@ -2120,6 +2124,9 @@ export function App(): JSX.Element {
           profileId: choice.profileId,
           permissionMode: choice.permissionMode,
           resume: choice.resume?.sessionId ?? null,
+          ...(choice.agent == null ? {} : { agent: choice.agent }),
+          ...(choice.backend == null ? {} : { backend: choice.backend }),
+          ...(choice.chosen === undefined ? {} : { chosen: choice.chosen }),
         },
         bodyRefs.current.get(target) ?? null,
       );
@@ -2178,10 +2185,12 @@ export function App(): JSX.Element {
   /**
    * Reopens sessions a crash took and puts each back in the pane and place it
    * had, sized for that pane. Unasked is the `restoreWithoutAsking` path, which
-   * also says afterwards that it happened.
+   * also says afterwards that it happened. Only a pick from the offer comes
+   * back without its agent (`withoutAgent`): nobody chose that for one restored
+   * unasked, so the host refuses it, naming its agent's problem.
    */
   const resumeLost = useCallback(
-    async (ids: readonly number[], unasked = false) => {
+    async (chosen: readonly RestorePick[], unasked = false) => {
       if (restoreOffer === null) return;
       const { layout } = restoreOffer;
       // Sized for the pane at the saved one's place in reading order, when
@@ -2190,12 +2199,16 @@ export function App(): JSX.Element {
         savedGroups(layout).findIndex((group) =>
           group.panes.some((pane) => pane.kind === "session" && pane.id === id),
         );
-      const picks = ids.map((id) => {
+      const picks = chosen.map(({ id, withoutAgent }) => {
         const there = open.groups[paneOf(id)];
         const body =
           (there === undefined ? undefined : bodyRefs.current.get(there.id)) ??
           bodyRefs.current.get(open.focused);
-        return { id, ...estimateGrid(body ?? null) };
+        return {
+          id,
+          ...estimateGrid(body ?? null),
+          ...(withoutAgent === true ? { withoutAgent } : {}),
+        };
       });
       const result = await restoreLost(picks, {
         unasked,
@@ -2263,7 +2276,7 @@ export function App(): JSX.Element {
     actedOn.current = restoreOffer;
     if (restoreUnasked)
       void resumeLost(
-        restoreOffer.sessions.map((session) => session.id),
+        restoreOffer.sessions.map((session) => ({ id: session.id })),
         true,
       );
     else commit((current) => openTab(current, { kind: "restore" }));
@@ -3204,6 +3217,7 @@ export function App(): JSX.Element {
         notice: limitNotices.get(LOCAL_HOST_KEY)?.get(session.id),
         peeks: peeksOnPress(LOCAL_HOST_KEY, sessions, session.id, peekScope),
         ...(session.kept === true ? { kept: true } : {}),
+        ...agentRow(session),
         ...commandRow(session),
       };
     };
@@ -3291,6 +3305,7 @@ export function App(): JSX.Element {
         notice: limitNotices.get(host.id)?.get(session.id),
         peeks: peeksOnPress(host.id, hosted, session.id, peekScope),
         ...(session.kept === true ? { kept: true } : {}),
+        ...agentRow(session),
         ...commandRow(session),
       };
     };
@@ -4925,7 +4940,10 @@ export function App(): JSX.Element {
           <SessionHistory
             {...sessionHistoryProps(historyState)}
             hostChoice={hostChoiceFor("history")}
-            onResume={(session) => void resumeSession(session)}
+            onResume={(session, options) =>
+              void resumeSession(session, options)
+            }
+            hostName={hostName(historyHost)}
             onReveal={revealOn(historyHost)}
             compact={compact}
           />
@@ -5185,7 +5203,7 @@ export function App(): JSX.Element {
               writeSettings({ restoreWithoutAsking })
             }
             busy={restoreState.busy}
-            onResume={(ids) => void resumeLost(ids)}
+            onResume={(picks) => void resumeLost(picks)}
             onNotNow={dismissRestore}
             now={now}
           />
@@ -6399,6 +6417,7 @@ export function App(): JSX.Element {
             home={info?.home ?? null}
             initialPath={newSession.initialPath}
             resumable={newSession.resumable}
+            agents={newSession.agents}
             onShowing={newSession.loadResumable}
             busy={newSession.busy}
             error={newSession.error}
@@ -6450,6 +6469,7 @@ export function App(): JSX.Element {
             home={info?.home ?? null}
             initialPath={newTab.folder}
             resumable={newSession.resumable}
+            agents={newSession.agents}
             onShowing={newSession.loadResumable}
             busy={newSession.busy}
             error={newSession.error}

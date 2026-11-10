@@ -165,3 +165,96 @@ describe('launchSentence', () => {
     ).toBe('Reopens “payroll export fix” with `claude --resume` in `~\\.harness\\dev\\repos\\timeclick` with the dev profile, composing `dev`.')
   })
 })
+
+describe('launchSentence for a session started as an agent', () => {
+  const home = 'C:\\Users\\someone'
+  const lead = {
+    name: 'research-lead',
+    allowedTools: ['Read', 'Grep', 'Bash(git log:*)'],
+    disallowedTools: ['Edit', 'Write'],
+    canStart: true
+  }
+
+  it('says what the agent adds: every flag, where its instructions go, and that it can start agents', () => {
+    const p = profile({ name: 'studio-docs', overlays: [repo('lumen-web')], access: [repo('lumen-web')], model: 'haiku' })
+    expect(
+      read(
+        launchSentence({
+          cwd: repo('orbit-api'),
+          home,
+          profile: p,
+          permissionMode: 'plan',
+          resume: null,
+          model: 'opus',
+          effort: 'xhigh',
+          agent: lead
+        })
+      )
+    ).toBe(
+      "Runs `claude` in `~\\.harness\\dev\\repos\\orbit-api` as the research-lead agent with the studio-docs profile, composing `lumen-web`, and `--model opus --effort xhigh --permission-mode plan --allowedTools Read,Grep,Bash(git log:*) --disallowedTools Edit,Write`. Its instructions go in after the project's; nothing is typed into the terminal. It can start agents of its own."
+    )
+  })
+
+  it('names a new worktree with its branch, and an agent that cannot start agents gets none', () => {
+    expect(
+      read(
+        launchSentence({
+          cwd: repo('orbit-api'),
+          home,
+          profile: null,
+          permissionMode: 'acceptEdits',
+          resume: null,
+          model: null,
+          effort: null,
+          agent: { name: 'worker', allowedTools: [], disallowedTools: ['mcp__helm-plugin-trackr__create'], canStart: false },
+          worktree: {
+            folder: `${repo('orbit-api')}\\.floti\\worktrees\\orbit-api`,
+            branch: 'agent/orbit-api',
+            from: 'main'
+          }
+        })
+      )
+    ).toBe(
+      "Runs `claude` in a new worktree, `~\\.harness\\dev\\repos\\orbit-api\\.floti\\worktrees\\orbit-api` on branch `agent/orbit-api` cut from `main`, as the worker agent, and `--permission-mode acceptEdits --disallowedTools mcp__helm-plugin-trackr__create`. Its instructions go in after the project's; nothing is typed into the terminal. It gets no floti-agents tools."
+    )
+  })
+
+  it('in the popover names the agent’s tool rules without spelling them, and a model chosen replaces the profile’s', () => {
+    const p = profile({ name: 'studio-docs', model: 'haiku' })
+    expect(
+      read(
+        launchSentence({
+          cwd: repo('orbit-api'),
+          home,
+          profile: p,
+          permissionMode: 'plan',
+          resume: null,
+          model: 'opus',
+          effort: 'xhigh',
+          agent: lead,
+          rules: 'named'
+        })
+      )
+    ).toBe(
+      'Runs `claude` in `~\\.harness\\dev\\repos\\orbit-api` as the research-lead agent with the studio-docs profile, and `--model opus --effort xhigh --permission-mode plan` and its tool rules. It can start agents of its own.'
+    )
+  })
+
+  it('reopens a conversation as its agent in its own folder, with no worktree', () => {
+    expect(
+      read(
+        launchSentence({
+          cwd: repo('orbit-api'),
+          home,
+          profile: null,
+          permissionMode: null,
+          resume: 'plan the export',
+          agent: { ...lead, allowedTools: [], disallowedTools: [] },
+          worktree: { folder: 'x', branch: 'agent/x', from: 'main' }
+        })
+      )
+    ).toBe(
+      "Reopens “plan the export” with `claude --resume` in `~\\.harness\\dev\\repos\\orbit-api` as the research-lead agent. Its instructions go in after the project's; nothing is typed into the terminal. It can start agents of its own."
+    )
+  })
+})

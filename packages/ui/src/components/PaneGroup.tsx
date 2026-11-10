@@ -1,6 +1,7 @@
 import type { JSX, ReactNode, Ref } from 'react'
 import { cn } from '../lib/cn'
 import { shortcutLabel } from '../lib/platform'
+import { AgentTag, TAG_PILL, TAG_RING } from './AgentTag'
 import { ChildMarkIcon, type ChildMarkView } from './ChildMark'
 import { CloseIcon, MaximizeIcon, SplitIcon, UnmaximizeIcon } from './icons'
 
@@ -138,7 +139,11 @@ export interface CrumbParent {
 }
 
 export interface PaneCrumbProps {
-  /** A child's tag: `command`, or the agent it was started as. Absent for a child started as no agent. */
+  /**
+   * A child's tag: `command`, or the agent it was started as; for a session a
+   * person started as an agent, that agent, leading a crumb with no parent.
+   * Absent for a session started as no agent.
+   */
   tag?: CrumbTag | undefined
   /** The session that started it, for a child. */
   parent?: CrumbParent | undefined
@@ -159,7 +164,8 @@ export interface PaneCrumbProps {
 /**
  * The row under a session's tab: project › branch · profile, and on the right
  * what the session is doing and for how long. A child's row begins with its
- * tag and a link to the session that started it.
+ * tag and a link to the session that started it; a session a person started as
+ * an agent begins with its agent tag alone, since it has no parent.
  *
  * The tab above is one line, so what told two sessions on one project apart -
  * the branch - lives here, in mono, where it has the whole width of the pane to
@@ -181,22 +187,16 @@ export function PaneCrumb({
       data-pane-crumb
       className="flex h-[26px] shrink-0 items-center gap-2 border-b border-border px-3 font-mono text-[11px] text-fg-subtle"
     >
-      {tag !== undefined && (
-        <span
-          data-crumb="tag"
-          data-crumb-tag={tag.kind}
-          className={cn(
-            'shrink-0 rounded-full px-[7px] font-sans text-[10px] leading-4 font-medium',
-            // The command tag's ring is drawn inside the 16px pill and takes no
-            // room, as the frame's inset shadow does.
-            tag.kind === 'command'
-              ? 'text-fg-muted ring-1 ring-border-strong ring-inset'
-              : 'bg-accent-soft text-accent-text'
-          )}
-        >
-          {tag.text}
-        </span>
-      )}
+      {tag !== undefined &&
+        (tag.kind === 'agent' ? (
+          <AgentTag name={tag.text} data-crumb="tag" data-crumb-tag="agent" />
+        ) : (
+          // The command tag's ring is drawn inside the 16px pill and takes no
+          // room, as the frame's inset shadow does.
+          <span data-crumb="tag" data-crumb-tag={tag.kind} className={cn(TAG_PILL, TAG_RING)}>
+            {tag.text}
+          </span>
+        ))}
       {parent !== undefined &&
         (parent.onOpen !== undefined ? (
           <button

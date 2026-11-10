@@ -39,6 +39,8 @@ export type MenuEntry =
       disabled?: boolean | undefined
       /** Said on hover - why a disabled row is disabled. */
       title?: string | undefined
+      /** A second, quieter line under the label: what it is, or why it is disabled. */
+      detail?: string | undefined
     }
   | { kind: 'separator'; id: string }
   | { kind: 'heading'; id: string; label: string }
@@ -240,7 +242,8 @@ export function Menu({
             onMouseMove={entry.disabled === true || on ? undefined : () => setActive(at)}
             onClick={() => choose(entry)}
             className={cn(
-              'flex h-7 cursor-default items-center gap-2 rounded-raised px-2 text-[12px] whitespace-nowrap',
+              'flex cursor-default items-center gap-2 rounded-raised px-2 text-[12px] whitespace-nowrap',
+              entry.detail === undefined ? 'h-7' : 'py-[5px]',
               entry.disabled === true ? 'text-fg-subtle' : on ? 'bg-hover text-fg' : 'text-fg'
             )}
           >
@@ -254,7 +257,16 @@ export function Menu({
                 {entry.icon}
               </span>
             )}
-            <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+            {entry.detail === undefined ? (
+              <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+            ) : (
+              <span className="flex min-w-0 flex-1 flex-col gap-px">
+                <span className="truncate">{entry.label}</span>
+                <span data-menu-detail className="truncate text-[10.5px] leading-[1.35] text-fg-subtle">
+                  {entry.detail}
+                </span>
+              </span>
+            )}
             {entry.hint !== undefined && (
               <span className="ml-3 shrink-0 font-mono text-[11px] text-fg-subtle">{entry.hint}</span>
             )}

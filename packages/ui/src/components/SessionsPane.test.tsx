@@ -396,6 +396,90 @@ describe("SessionsPane: what a session's agent says it is doing", () => {
   });
 });
 
+describe("SessionsPane: the agent tag (A23, M15)", () => {
+  const asLead = (id: number, name: string, cwd: string): SessionRecord => ({
+    ...row(id, name, cwd),
+    agent: "lead",
+  });
+  const records = new Map([
+    [1, asLead(1, "shop", "C:\\work\\shop")],
+    [2, row(2, "docs", "C:\\work\\docs")],
+    [3, row(3, "quiet", "C:\\work\\quiet")],
+  ]);
+
+  it("draws the agent tag after the name on its row, and none for a session started as no agent", () => {
+    renderPane({ records });
+    const inHelm = screen.getByRole("region", { name: "In Helm" });
+    const [shop, docs] = within(inHelm).getAllByRole("button");
+    const tag = shop?.querySelector<HTMLElement>("[data-agent-tag]");
+    expect(tag?.textContent).toBe("lead");
+    expect(tag?.className).toContain("bg-accent-soft");
+    expect(tag?.className).toContain("text-accent-text");
+    expect(tag?.previousElementSibling?.textContent).toBe("shop");
+    expect(docs?.querySelector("[data-agent-tag]")).toBeNull();
+  });
+
+  it("puts the tag after the name in the detail's header, before the state chip, and an Agent fact naming its file", () => {
+    renderPane({ records, selectedPid: SHOP.pid });
+    const heading = screen.getByRole("heading", { name: "shop" });
+    const header = heading.closest("header") as HTMLElement;
+    const tag = heading.nextElementSibling as HTMLElement;
+    expect(tag.getAttribute("data-agent-tag")).toBe("lead");
+    expect(tag.nextElementSibling?.hasAttribute("data-session-state-chip")).toBe(
+      true,
+    );
+    expect(header.contains(tag)).toBe(true);
+
+    const fact = screen.getByText("Agent").closest("div") as HTMLElement;
+    const agent = fact.querySelector<HTMLElement>("[data-session-agent]");
+    expect(agent?.querySelector("[data-agent-tag]")?.textContent).toBe("lead");
+    const file = within(agent as HTMLElement).getByText("lead.md");
+    expect(file.className).toContain("font-mono");
+    expect(file.className).toContain("text-fg-subtle");
+    // The argv it was launched with is still its own group.
+    expect(screen.getByRole("region", { name: "Launched as" })).toBeTruthy();
+  });
+
+  it("has no Agent fact for a session started as no agent", () => {
+    renderPane({ records, selectedPid: DOCS.pid });
+    expect(screen.queryByText("Agent")).toBeNull();
+    expect(
+      screen
+        .getByRole("heading", { name: "docs" })
+        .closest("header")
+        ?.querySelector("[data-agent-tag]"),
+    ).toBeNull();
+  });
+
+  it("draws the tag on a session not open here and on a session of another computer", () => {
+    renderPane({
+      notOpenHere: [asLead(2, "docs", "C:\\work\\docs")],
+      remoteHosts: [
+        {
+          id: "h-build",
+          name: "build-box",
+          connected: true,
+          sessions: [
+            {
+              key: "h-build:7",
+              name: "deploy",
+              agent: "research-lead",
+              cwd: "/srv/infra",
+              state: "busy",
+            },
+          ],
+        },
+      ],
+    });
+    const notHere = screen.getByRole("region", { name: "Not open here" });
+    expect(notHere.querySelector("[data-agent-tag]")?.textContent).toBe("lead");
+    const build = screen.getByRole("region", { name: "build-box" });
+    expect(build.querySelector("[data-agent-tag]")?.textContent).toBe(
+      "research-lead",
+    );
+  });
+});
+
 describe("SessionsPane sessions not open here", () => {
   it("lists a session running in the host with no tab on this device as not open here, once, with Open and End", async () => {
     const onEndSession = vi.fn();

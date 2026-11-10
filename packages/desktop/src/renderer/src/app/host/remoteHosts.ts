@@ -40,6 +40,8 @@ export interface RemoteSessionRow {
   name: string
   /** What its agent says it is doing (`session_title`); absent until it says. */
   title?: string
+  /** The agent it was started as; absent for none. */
+  agent?: string
   cwd: string
   state: P.SessionActivity | 'running'
 }
@@ -95,6 +97,12 @@ export interface RemoteHostsDeps {
 
 type RemoteLink = Pick<PageLink, 'connection' | 'onConnected' | 'onEnded'> & Partial<Pick<PageLink, 'reconnectNow'>>
 
+/** The agent a host's row says its session was started as, for its agent tag: `role` from a host before protocol 2.3. */
+function agentOfRow(row: Pick<P.SessionRecord, 'agent' | 'role'>): { agent: string } | null {
+  const agent = row.agent ?? row.role
+  return agent === null || agent === undefined || agent === '' ? null : { agent }
+}
+
 interface Host {
   link: RemoteLink
   /** Whether the window's connection is up or on its way. */
@@ -139,6 +147,7 @@ export function createRemoteHosts(deps: RemoteHostsDeps): RemoteHostsStore {
             key: `${id}:${String(row.id)}`,
             name: row.label ?? row.name,
             ...(row.title == null ? {} : { title: row.title }),
+            ...agentOfRow(row),
             cwd: row.cwd,
             state: host?.activity.get(row.id) ?? 'running'
           })),

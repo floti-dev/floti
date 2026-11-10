@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { LOCAL_HOST_KEY, type HistorySession } from '@helm/core/types'
+import { LOCAL_HOST_KEY, type HistorySession, type LaunchAgents } from '@helm/core/types'
 import type { LaunchedSession, LaunchSessionRequest } from '../../../shared/ipc'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
@@ -41,6 +41,11 @@ export interface NewSessionState {
   recency: ReadonlyMap<string, number>
   /** Conversations that can be reopened, by lower-cased folder path, for those read so far. */
   resumable: ReadonlyMap<string, readonly HistorySession[]>
+  /**
+   * The host's agents and installed agent backends, read when it opens: null
+   * until they are, and when they could not be, which offers No agent alone.
+   */
+  agents: LaunchAgents | null
   /** Reads the conversations of any of these folders not read since it opened. */
   loadResumable: (paths: readonly string[]) => void
   busy: boolean
@@ -71,6 +76,7 @@ export function useNewSession(): NewSessionState {
   const [resumable, setResumable] = useState<ReadonlyMap<string, readonly HistorySession[]>>(
     new Map()
   )
+  const [agents, setAgents] = useState<LaunchAgents | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
@@ -93,7 +99,16 @@ export function useNewSession(): NewSessionState {
     asked.current = new Set()
     setResumable(new Map())
     setRecency(new Map())
+    setAgents(null)
     setError(null)
+    void bridgeFor(hostRef.current)
+      .invoke('agents:list')
+      .then((listing) => {
+        if (current === opening.current) setAgents(listing)
+      })
+      // A host whose agents cannot be read starts plain sessions as before;
+      // the Agent picker offers No agent alone.
+      .catch(() => undefined)
     void bridgeFor(hostRef.current)
       .invoke('history:projects')
       .then((projects) => {
@@ -187,6 +202,7 @@ export function useNewSession(): NewSessionState {
     hide,
     recency,
     resumable,
+    agents,
     loadResumable,
     busy,
     error,

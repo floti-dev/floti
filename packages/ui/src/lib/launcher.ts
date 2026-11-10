@@ -1,4 +1,4 @@
-import type { PermissionMode, Profile, Project } from '@helm/core/types'
+import type { EffortLevel, PermissionMode, Profile, Project } from '@helm/core/types'
 
 /**
  * What the new-session launcher decides before anything is drawn: which
@@ -163,6 +163,22 @@ function listOf(names: readonly string[]): SentencePart[] {
   })
 }
 
+/** What the launch sentence says of the agent a session starts as. */
+export interface SentenceAgent {
+  name: string
+  allowedTools: readonly string[]
+  disallowedTools: readonly string[]
+  canStart: boolean
+}
+
+/** The new worktree a session starts in, when its agent works in one. */
+export interface SentenceWorktree {
+  folder: string
+  branch: string
+  /** The branch it is cut from. */
+  from: string
+}
+
 /**
  * The launch disclosure (DESIGN.md 5): what Enter will run, in words, with the
  * program, the folder and every flag Helm supplies in mono.
@@ -172,6 +188,14 @@ function listOf(names: readonly string[]): SentencePart[] {
  * at a `/` prompt, and flags exactly as the CLI takes them. A reopened
  * conversation says so first, and never mentions an opening prompt - a resume
  * drops it.
+ *
+ * A session started as an agent says so ("as the research-lead agent"), with
+ * the agent's tool rules among the flags (`rules: 'flags'`, the dialog) or
+ * named in words (`rules: 'named'`, the popover, which leaves them to Ctrl+N),
+ * that its instructions go in after the project's with nothing typed, and
+ * whether it can start agents of its own. A new worktree it starts in is named
+ * with its branch and the branch it is cut from. `model` and `effort` are the
+ * pickers' when given, and the profile's when left out.
  */
 export function launchSentence(options: {
   cwd: string
@@ -180,13 +204,34 @@ export function launchSentence(options: {
   permissionMode: PermissionMode | null
   /** The conversation being reopened, by the name its row shows. */
   resume: string | null
+  model?: string | null
+  effort?: EffortLevel | null
+  agent?: SentenceAgent | null
+  rules?: 'flags' | 'named'
+  worktree?: SentenceWorktree | null
 }): SentencePart[] {
   const { cwd, home, profile, permissionMode, resume } = options
+  const agent = options.agent ?? null
+  const rules = options.rules ?? 'flags'
+  const worktree = resume === null ? (options.worktree ?? null) : null
   const parts: SentencePart[] =
     resume === null
       ? [{ text: 'Runs ' }, { text: 'claude', mono: true }]
       : [{ text: `Reopens “${resume}” with ` }, { text: 'claude --resume', mono: true }]
-  parts.push({ text: ' in ' }, { text: homePath(cwd, home), mono: true })
+  if (worktree === null) {
+    parts.push({ text: ' in ' }, { text: homePath(cwd, home), mono: true })
+  } else {
+    parts.push(
+      { text: ' in a new worktree, ' },
+      { text: homePath(worktree.folder, home), mono: true },
+      { text: ' on branch ' },
+      { text: worktree.branch, mono: true },
+      { text: ' cut from ' },
+      { text: worktree.from, mono: true },
+      { text: ',' }
+    )
+  }
+  if (agent !== null) parts.push({ text: ` as the ${agent.name} agent` })
 
   if (profile !== null) {
     parts.push({ text: ` with the ${profile.name} profile` })
@@ -197,18 +242,39 @@ export function launchSentence(options: {
     if (extra.length > 0) parts.push({ text: ', with access to ' }, ...listOf(extra))
   }
 
+  const model = options.model === undefined ? (profile?.model ?? null) : options.model
+  const effort = options.effort === undefined ? (profile?.effort ?? null) : options.effort
+  const spelled = agent !== null && rules === 'flags'
   const flags = [
-    ...(profile?.model ? ['--model', profile.model] : []),
-    ...(profile?.effort ? ['--effort', profile.effort] : []),
+    ...(model ? ['--model', model] : []),
+    ...(effort ? ['--effort', effort] : []),
     ...(permissionMode !== null ? ['--permission-mode', permissionMode] : []),
+    ...(spelled && agent.allowedTools.length > 0 ? ['--allowedTools', agent.allowedTools.join(',')] : []),
+    ...(spelled && agent.disallowedTools.length > 0
+      ? ['--disallowedTools', agent.disallowedTools.join(',')]
+      : []),
     ...(profile?.agent ? ['--agent', profile.agent] : [])
   ]
+  const named =
+    agent !== null && rules === 'named' && (agent.allowedTools.length > 0 || agent.disallowedTools.length > 0)
   if (flags.length > 0) {
-    parts.push({ text: profile === null ? ' with ' : ', and ' }, { text: flags.join(' '), mono: true })
+    parts.push(
+      { text: profile === null && agent === null ? ' with ' : ', and ' },
+      { text: flags.join(' '), mono: true }
+    )
+    if (named) parts.push({ text: ' and its tool rules' })
+  } else if (named) {
+    parts.push({ text: ', and its tool rules' })
   }
   parts.push({ text: '.' })
 
   const prompt = resume === null ? profile?.openingPrompt?.trim() : undefined
   if (prompt) parts.push({ text: ' It opens by saying ' }, { text: prompt, mono: true }, { text: '.' })
+  if (agent !== null) {
+    if (rules === 'flags') {
+      parts.push({ text: " Its instructions go in after the project's; nothing is typed into the terminal." })
+    }
+    parts.push({ text: agent.canStart ? ' It can start agents of its own.' : ' It gets no floti-agents tools.' })
+  }
   return parts
 }

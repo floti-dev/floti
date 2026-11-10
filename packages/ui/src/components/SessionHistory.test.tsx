@@ -403,3 +403,67 @@ describe('SessionHistory on more than one host', () => {
     expect(empty.textContent).toContain('A Claude Code session started anywhere on this machine is listed here.')
   })
 })
+
+describe('SessionHistory: a session started as an agent (A23, M16)', () => {
+  const lead = session('s-lead', { title: 'plan the orbit api', projectName: 'orbit-api', agent: 'research-lead' })
+  const agentsWith = (names: string[], bad: { name: string; file: string; problem: string }[] = []) => ({
+    agents: names.map((name) => ({ name, file: `${name}.md` })),
+    bad
+  })
+  const show = (overrides: Partial<SessionHistoryProps> = {}) =>
+    renderHistory({ selected: lead, ...(overrides as object) } as Partial<SessionHistoryProps>, [lead])
+
+  it('ends the row meta line with the agent tag, and puts an Agent item in the detail', () => {
+    show({ agents: agentsWith(['research-lead']) as SessionHistoryProps['agents'] })
+    const tag = row('plan the orbit api').querySelector<HTMLElement>('[data-agent-tag]')
+    expect(tag?.textContent).toBe('research-lead')
+    expect(tag?.parentElement?.lastElementChild).toBe(tag)
+    const item = document.querySelector<HTMLElement>('[data-history-agent]')
+    expect(item?.querySelector('[data-agent-tag]')?.className).toContain('bg-accent-soft')
+    expect(item?.textContent).toBe('research-lead')
+  })
+
+  it('says the resume composes the agent as it is now, and resumes with it', async () => {
+    const { props } = show({ agents: agentsWith(['research-lead']) as SessionHistoryProps['agents'] })
+    expect(document.querySelector('[data-resume-sentence]')?.textContent).toBe(
+      'Runs claude --resume in orbit-api as the research-lead agent, composing research-lead.md as it is now.'
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Resume in a tab' }))
+    expect(props.onResume).toHaveBeenCalledWith(lead)
+  })
+
+  it('offers the resume as usual while the host’s agents are not known', () => {
+    show({ agents: null })
+    expect(document.querySelector('[data-agent-unavailable]')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Resume in a tab' })).toBeTruthy()
+  })
+
+  it('says a gone agent is no longer among the host’s agents, and resumes without it only when asked', async () => {
+    const { props } = show({ agents: agentsWith(['worker']) as SessionHistoryProps['agents'], hostName: 'build-box' })
+    const box = document.querySelector<HTMLElement>('[data-agent-unavailable="gone"]')
+    expect(box?.className).toContain('border-warn/40')
+    expect(box?.textContent).toContain('research-lead is no longer among build-box’s agents')
+    expect(box?.textContent).toContain('It was renamed or deleted after this session.')
+    expect(screen.queryByRole('button', { name: 'Resume in a tab' })).toBeNull()
+    // No Agents view to open: no button for it.
+    expect(screen.queryByRole('button', { name: 'Open Agents' })).toBeNull()
+    expect(document.querySelector('[data-history-agent] [data-agent-tag]')?.getAttribute('data-agent-gone')).toBe('true')
+    expect(document.querySelector('[data-history-agent]')?.textContent).toBe('research-leadgone')
+    expect(props.onResume).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Resume without the agent' }))
+    expect(props.onResume).toHaveBeenCalledWith(lead, { withoutAgent: true })
+  })
+
+  it('names a file that cannot be loaded with its problem, and opens it where the window can', async () => {
+    const onOpenAgents = vi.fn()
+    show({
+      agents: agentsWith([], [{ name: 'research-lead', file: 'research-lead.md', problem: 'unknown key "colour" on line 3' }]) as SessionHistoryProps['agents'],
+      onOpenAgents
+    })
+    const box = document.querySelector<HTMLElement>('[data-agent-unavailable="bad"]')
+    expect(box?.textContent).toContain('research-lead.md cannot be loaded: unknown key "colour" on line 3')
+    expect(box?.textContent).toContain('Resume it without the agent, or fix the file')
+    await userEvent.click(screen.getByRole('button', { name: 'Open research-lead.md' }))
+    expect(onOpenAgents).toHaveBeenCalledWith('research-lead')
+  })
+})

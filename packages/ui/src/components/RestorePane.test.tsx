@@ -85,12 +85,12 @@ describe('RestorePane', () => {
     const props = renderPane()
     await userEvent.click(screen.getByRole('checkbox', { name: 'tab baseline' }))
     await userEvent.click(button('Resume 1 session'))
-    expect(props.onResume).toHaveBeenCalledWith([7])
+    expect(props.onResume).toHaveBeenCalledWith([{ id: 7 }])
 
     // The row is a label, so a click on its name ticks it back.
     await userEvent.click(within(row(4)).getByText('tab baseline'))
     await userEvent.click(button('Resume 2 sessions'))
-    expect(props.onResume).toHaveBeenLastCalledWith([4, 7])
+    expect(props.onResume).toHaveBeenLastCalledWith([{ id: 4 }, { id: 7 }])
   })
 
   it('cannot resume nothing', async () => {
@@ -125,5 +125,30 @@ describe('RestorePane', () => {
     screen.getByRole('region', { name: '1 session was running when this PC’s host stopped' })
     expect(document.body.textContent).toContain('This PC’s host didn’t shut down cleanly. Pick up where they left off.')
     expect(document.body.textContent).not.toContain('Helm')
+  })
+  it('offers a session whose agent cannot be composed again unticked but tickable, saying why, and restores it without its agent', async () => {
+    const problem = 'research-lead is no longer among this PC’s agents.'
+    const props = renderPane({
+      offer: {
+        ...OFFER,
+        sessions: [
+          session(4, 'orbit-api', { agent: 'lead' }),
+          session(5, 'research', { agent: 'research-lead', agentProblem: problem })
+        ]
+      }
+    })
+    expect(row(4).querySelector('[data-agent-tag]')?.textContent).toBe('lead')
+    expect(row(5).querySelector('[data-agent-tag]')?.getAttribute('data-agent-gone')).toBe('true')
+    const box = within(row(5)).getByRole('checkbox', { name: 'research' })
+    expect(box).toHaveProperty('checked', false)
+    expect(box).toHaveProperty('disabled', false)
+    expect(text(5)).toContain(`${problem} Restored, it comes back without its agent.`)
+    expect(text(5)).not.toContain('research · main')
+
+    await userEvent.click(button('Resume 1 session'))
+    expect(props.onResume).toHaveBeenLastCalledWith([{ id: 4 }])
+    await userEvent.click(box)
+    await userEvent.click(button('Resume 2 sessions'))
+    expect(props.onResume).toHaveBeenLastCalledWith([{ id: 4 }, { id: 5, withoutAgent: true }])
   })
 })

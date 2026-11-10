@@ -37,6 +37,11 @@ export interface TreeSession {
    * folder's own list because that session has ended and no longer holds it.
    */
   parentName?: string | undefined
+  /**
+   * The agent a person started this session as, drawn as its agent tag after
+   * the name. Absent for a child: its guide is its only mark here.
+   */
+  agent?: string | undefined
   /** A command the session that started it ran as a child, drawn with a terminal glyph in place of a dot. */
   command?: boolean | undefined
   /** A refused start of this session, drawn as one line under its children. */
@@ -847,6 +852,7 @@ function HostTree({
           outside={session.outside}
           shown={session.shown}
           parentName={session.parentName}
+          agent={session.agent}
           indent={indent}
           onOpen={onOpenSession}
           guide={guide}

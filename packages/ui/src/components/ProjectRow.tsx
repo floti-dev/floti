@@ -5,6 +5,7 @@ import { cn } from '../lib/cn'
 import { PROJECT_KIND_ICON } from '../lib/projectIcons'
 import { ROW_SELECTED, ROW_SELECTED_GROUP } from '../lib/rows'
 import { SESSION_STATE_DOT, SESSION_STATE_LABEL, commandTone, type SessionState } from '../lib/sessionstate'
+import { AgentTag } from './AgentTag'
 import { CaretIcon, CommandChildIcon, FolderIcon, PinIcon, TerminalIcon } from './icons'
 import { Menu, type MenuAnchor, type MenuEntry } from './Menu'
 
@@ -260,6 +261,11 @@ export interface SessionRowProps {
    */
   parentName?: string | undefined
   /**
+   * The agent a person started this session as: its agent tag follows the
+   * name, and the row's accessible name says "started as the <agent> agent".
+   */
+  agent?: string | undefined
+  /**
    * Whether the sessions this one started are showing. Null for a session that
    * started none, which then has no caret.
    */
@@ -371,6 +377,7 @@ export function SessionRow({
   onOpen,
   guide,
   parentName,
+  agent,
   expanded = null,
   onToggle,
   summary,
@@ -415,7 +422,7 @@ export function SessionRow({
         aria-current={shown === 'focused' ? 'true' : undefined}
         aria-haspopup={peekable ? 'dialog' : undefined}
         aria-expanded={peekable ? peeking : undefined}
-        aria-label={`${label}, ${state === null ? 'state unknown' : command && note !== '' ? note : SESSION_STATE_LABEL[state]}${outside ? ', outside Helm' : ''}${parentName === undefined ? '' : `, started by ${parentName}`}${needs === 0 ? '' : `, ${String(needs)} of its sessions waiting for you`}`}
+        aria-label={`${label}, ${state === null ? 'state unknown' : command && note !== '' ? note : SESSION_STATE_LABEL[state]}${agent === undefined ? '' : `, started as the ${agent} agent`}${outside ? ', outside Helm' : ''}${parentName === undefined ? '' : `, started by ${parentName}`}${needs === 0 ? '' : `, ${String(needs)} of its sessions waiting for you`}`}
         onClick={() => onOpen(id)}
         onContextMenu={openMenu}
         style={{ paddingLeft: indent }}
@@ -522,6 +529,7 @@ export function SessionRow({
             </span>
           )}
         </span>
+        {agent !== undefined && <AgentTag name={agent} className="max-w-[96px]" />}
         {expanded === false && summary !== null && summary !== undefined && (
           <span
             aria-hidden

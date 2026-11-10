@@ -60,6 +60,22 @@ A preview, not a release: nothing offers it as an update.
   sources. None names a permission mode, so each runs in auto as a child. A
   host with no agents folder yet writes all four; a folder you already have
   is left as it is.
+- You can start a session as an agent: a lead to work through an epic with,
+  or a research lead to plan a project with. Ctrl+N, the launcher popover and
+  a pane's + (Agent session) have an Agent picker, at No agent each time.
+  Picking one fills Model, Effort, Permissions and Profile with the agent's,
+  and you can change any of them before starting; the sentence says what the
+  agent adds. Its instructions go in after the project's and nothing is typed
+  into the terminal. An agent that may start agents gets the tools to, one
+  whose worktree is yes starts in a new worktree named after the session, and
+  outside a git repository that start is refused before anything runs. Ctrl+N
+  now has Model and Effort for every start, and a Backend picker when more
+  than one agent backend is installed.
+- The session's agent is shown as a tag on its tab, its row in the sessions
+  tree, its crumb, the sessions pane and History. Resuming it from History or
+  the restore offer composes the agent again from its file as it is then; an
+  agent that has been deleted or cannot be loaded is named, with Resume
+  without the agent.
 
 ## 2.4.1-preview.10
 

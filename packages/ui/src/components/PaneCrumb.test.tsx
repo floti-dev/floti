@@ -174,6 +174,21 @@ describe('PaneCrumb child tag and parent link', () => {
     expect(tag?.className).toContain('bg-accent-soft')
   })
 
+  it('A23: a session a person started as an agent leads with its agent tag, then the place, with no for link', () => {
+    const { container } = render(
+      <PaneCrumb tag={{ kind: 'agent', text: 'lead' }} place="orbit-api" branch="main" />
+    )
+    const tag = tagOf(container)
+    expect(tag?.textContent).toBe('lead')
+    expect(tag?.getAttribute('data-agent-tag')).toBe('lead')
+    expect(tag?.className).toContain('bg-accent-soft')
+    expect(tag?.className).toContain('leading-4')
+    expect(parentOf(container)).toBeNull()
+    const order = [...container.querySelectorAll('[data-crumb]')].map((el) => el.getAttribute('data-crumb'))
+    expect(order).toEqual(['tag', 'place', 'branch'])
+    expect(container.querySelector('[data-pane-crumb]')?.textContent).toBe('leadorbit-api›main')
+  })
+
   it('has no tag for a child with no agent, and none for a session that is no child', () => {
     const { container } = render(<PaneCrumb parent={{ name: 'api-refactor', onOpen: () => {} }} place="helm" />)
     expect(tagOf(container)).toBeNull()

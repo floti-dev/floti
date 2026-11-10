@@ -1,6 +1,8 @@
 import type {
   AgentWorktree,
   AgentWorktreeRemoval,
+  EffortLevel,
+  LaunchAgents,
   StandingNotice,
   AppSettings,
   LocalHostRestartOffer,
@@ -339,6 +341,11 @@ export interface ExportProfileResult {
  */
 export interface ResumeSessionRequest {
   sessionId: string
+  /**
+   * The agent to compose it as again, from its file as it is now: the one
+   * the conversation was started as, or absent to resume it without.
+   */
+  agent?: string | null
   cols: number
   rows: number
 }
@@ -372,6 +379,16 @@ export interface LaunchSessionRequest {
   permissionMode: PermissionMode | null
   /** A conversation in the history index to reopen, or null to start a new one. */
   resume: string | null
+  /** The agent backend to run; absent for Claude Code, or for the agent's own first one. */
+  backend?: string | null
+  /** The agent to start it as, by name, or absent for none. */
+  agent?: string | null
+  /**
+   * The model and effort the launcher chose, each null for none. Present, the
+   * profile, permission mode, model and effort are all the request's own;
+   * absent, the agent's fill what the request leaves out.
+   */
+  chosen?: { model: string | null; effort: EffortLevel | null }
   cols: number
   rows: number
 }
@@ -392,7 +409,8 @@ export interface LaunchedSession {
  * it is going back to. None at all is "not now".
  */
 export interface RestoreSessionsRequest {
-  sessions: { id: number; cols: number; rows: number }[]
+  /** `withoutAgent` reopens one without the agent it was started as: the person's choice for one whose agent the offer named a problem with. */
+  sessions: { id: number; cols: number; rows: number; withoutAgent?: boolean }[]
 }
 
 /** What came back, and what could not, each with the sentence why. */
@@ -1561,6 +1579,12 @@ export interface IpcRequests {
    */
   'worktrees:list': { request: { project: string }; response: AgentWorktree[] }
   /**
+   * The host's agents as a launcher offers them, the files it could not load,
+   * and its installed agent backends: what the Agent and Backend pickers list.
+   * The host answers from its agents folder as it reads now.
+   */
+  'agents:list': { request: void; response: LaunchAgents }
+  /**
    * Removes one agent worktree with git, keeping its `agent/<name>` branch and
    * the work on it. One a running session works in, one with uncommitted
    * changes and a folder that is none of the project's agent worktrees are
@@ -2440,6 +2464,7 @@ export const REQUEST_CHANNELS = Object.keys({
   'files:watch': true,
   'worktrees:list': true,
   'worktrees:remove': true,
+  'agents:list': true,
   'notices:dismiss': true,
   'notices:allowMore': true,
   'files:editor': true,

@@ -5,6 +5,7 @@ import {
   historyTitle,
   liveSessionsIn,
   type HistorySession,
+  type LaunchAgents,
   type LiveSession,
   type Profile,
   type Project
@@ -12,9 +13,11 @@ import {
 import { cn } from '../lib/cn'
 import { shortcutLabel } from '../lib/platform'
 import { homePath, launchSentence, profileFor, profilesInOrder, rankProjects } from '../lib/launcher'
+import { agentOptions, resolveLaunch, runnableAgent, worktreePlan, type AgentField } from '../lib/launchAgent'
 import { usePopup, type PopupAnchor } from '../lib/popup'
 import { PROJECT_KIND_ICON } from '../lib/projectIcons'
 import { formatAge } from '../lib/time'
+import { AgentPicker } from './AgentPicker'
 import { HistoryIcon, LayersIcon } from './icons'
 import { LaunchSentence, RunningHere } from './LaunchNotes'
 import { Menu } from './Menu'
@@ -52,6 +55,23 @@ export interface NewSessionPopoverProps {
    * profiles are the ones listed. Absent for this PC, which it does not name.
    */
   hostName?: string | undefined
+  /** The agents of the host it starts on, for the Agent picker; null while they are read. */
+  agents?: LaunchAgents | null | undefined
+  /** The agent it opens with picked: a pane's + menu's Agent session. */
+  initialAgent?: string | null | undefined
+}
+
+/**
+ * The line that says the agent's values are left to Ctrl+N: "Its model,
+ * effort and permissions are research-lead's; Ctrl+N changes them." The
+ * profile is the popover's own to pick, so it is not named.
+ */
+function ctrlNNote(agent: string, fields: readonly AgentField[]): string | null {
+  const named = fields.filter((field) => field !== 'profile')
+  if (named.length === 0) return null
+  const words = named.length === 1 ? named[0]! : `${named.slice(0, -1).join(', ')} and ${named.at(-1)!}`
+  const plural = named.length > 1 || named[0] === 'permissions'
+  return `Its ${words} ${plural ? 'are' : 'is'} ${agent}'s; Ctrl+N changes ${plural ? 'them' : 'it'}.`
 }
 
 /** Recent folders offered at the foot. */
@@ -87,6 +107,11 @@ function isOpen(select: HTMLSelectElement): boolean {
  *
  * **The profile follows the folder until it is chosen**, as in the palette, and
  * the permission mode is the profile's. Choosing one is what Ctrl+N is for.
+ *
+ * **Agent sits between Folder and Profile** (A21). A picked agent gives the
+ * session its model, effort and permissions, which a line says Ctrl+N
+ * changes, and its tool rules, which the sentence names without spelling.
+ * The Recent rows start with No agent.
  */
 export function NewSessionPopover({
   at,
@@ -104,13 +129,17 @@ export function NewSessionPopover({
   now,
   onStart,
   onDismiss,
-  hostName
+  hostName,
+  agents = null,
+  initialAgent = null
 }: NewSessionPopoverProps): JSX.Element {
   const ids = useId()
   const popupRef = useRef<HTMLDivElement>(null)
   const resumeRef = useRef<HTMLButtonElement>(null)
   const [chosenPath, setChosenPath] = useState<string | null>(null)
   const [chosenProfile, setChosenProfile] = useState<{ id: number | null } | null>(null)
+  /** The agent picked; not remembered, so it opens at No agent unless the + menu chose one. */
+  const [chosenAgent, setChosenAgent] = useState<string | null>(initialAgent)
   const [resumeAt, setResumeAt] = useState<PopupAnchor | null>(null)
 
   /** Focus goes back to the `+` when this closes without starting anything. */
@@ -137,13 +166,21 @@ export function NewSessionPopover({
   const find = (path: string | null): Project | undefined =>
     path === null ? undefined : folders.find((project) => key(project.path) === key(path))
   const selected = find(chosenPath) ?? find(initialPath) ?? folders[0] ?? null
-  const profile =
-    chosenProfile === null
-      ? selected === null
-        ? null
-        : profileFor(selected.path, profiles)
-      : (profiles.find((candidate) => candidate.id === chosenProfile.id) ?? null)
-  const mode = profile?.permissionMode ?? null
+  // The agent's model, effort and permissions are its own here: Ctrl+N is
+  // where they are changed (A21). Only the profile is the person's to pick.
+  const agent = runnableAgent(agents, chosenAgent)
+  const launch = resolveLaunch({
+    agent,
+    installed: agents?.backends ?? [],
+    profiles,
+    folderProfile: selected === null ? null : profileFor(selected.path, profiles),
+    touched: chosenProfile === null ? {} : { profile: chosenProfile }
+  })
+  const { profile, mode, model, effort } = launch
+  const place_ = hostName ?? 'This PC'
+  const plan = selected === null ? null : worktreePlan(agent, selected, selected.name, homePath(selected.path, home))
+  const refused = plan?.kind === 'refused' ? plan.reason : null
+  const note = agent === null ? null : ctrlNNote(agent.name, launch.fromAgent)
   const resumes = selected === null ? undefined : resumable.get(key(selected.path))
   const recent = folders.filter((project) => recency.has(key(project.path))).slice(0, RECENT)
 
@@ -160,8 +197,17 @@ export function NewSessionPopover({
   }, [placed, ids])
 
   const start = (resume: HistorySession | null): void => {
-    if (busy || selected === null) return
-    onStart({ project: selected, profileId: profile?.id ?? null, permissionMode: mode, resume, beside: false })
+    if (busy || selected === null || (refused !== null && resume === null)) return
+    onStart({
+      project: selected,
+      profileId: profile?.id ?? null,
+      permissionMode: mode,
+      resume,
+      beside: false,
+      agent: agent?.name ?? null,
+      backend: launch.backend,
+      chosen: { model, effort }
+    })
   }
 
   const startRecent = (project: Project): void => {
@@ -213,9 +259,20 @@ export function NewSessionPopover({
   }
 
   const sentence =
-    selected === null
+    selected === null || refused !== null
       ? null
-      : launchSentence({ cwd: selected.path, home, profile, permissionMode: mode, resume: null })
+      : launchSentence({
+          cwd: selected.path,
+          home,
+          profile,
+          permissionMode: mode,
+          resume: null,
+          model,
+          effort,
+          agent,
+          rules: 'named',
+          worktree: plan?.kind === 'made' ? plan : null
+        })
   const KindIcon = selected === null ? null : PROJECT_KIND_ICON[selected.kind]
 
   return createPortal(
@@ -274,6 +331,17 @@ export function NewSessionPopover({
             ))}
           </Picker>
 
+          <label htmlFor={`${ids}-agent`} className={cn(CAPS, 'mb-[5px] block')}>
+            Agent
+          </label>
+          <AgentPicker
+            id={`${ids}-agent`}
+            value={agent?.name ?? null}
+            options={agentOptions(agents, place_)}
+            onChange={setChosenAgent}
+            className="mb-2.5"
+          />
+
           <label htmlFor={`${ids}-profile`} className={cn(CAPS, 'mb-[5px] block')}>
             Profile
           </label>
@@ -294,6 +362,16 @@ export function NewSessionPopover({
 
           <div className="mb-3 flex flex-col gap-2">
             {sentence !== null && <LaunchSentence parts={sentence} />}
+            {refused !== null && (
+              <p data-launch-refused role="alert" className="text-[11.5px] leading-[1.55] text-danger">
+                {refused}
+              </p>
+            )}
+            {note !== null && refused === null && (
+              <p data-agent-note className="-mt-1 text-[10.5px] leading-[1.5] text-fg-subtle">
+                {note}
+              </p>
+            )}
             <RunningHere sessions={liveSessionsIn(live, selected.path)} />
             {error !== null && (
               <p role="alert" className="text-[11.5px] leading-[1.55] text-danger">
@@ -334,7 +412,7 @@ export function NewSessionPopover({
         <span className="flex-1" />
         <button
           type="button"
-          disabled={busy || selected === null}
+          disabled={busy || selected === null || refused !== null}
           onClick={() => start(null)}
           className={cn(
             BUTTON,

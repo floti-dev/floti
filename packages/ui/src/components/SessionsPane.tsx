@@ -15,6 +15,7 @@ import {
   type SessionState,
 } from "../lib/sessionstate";
 import { formatAge, formatMoment } from "../lib/time";
+import { AgentTag } from "./AgentTag";
 import { Chip } from "./Chip";
 import { EmptyState } from "./EmptyState";
 import { PaneBack } from "./PaneBack";
@@ -149,6 +150,8 @@ export interface SessionsPaneRemoteSession {
   name: string;
   /** What its agent says it is doing (`session_title`); absent until it says. */
   title?: string | undefined;
+  /** The agent it was started as, drawn as its agent tag after the name; absent for none. */
+  agent?: string | undefined;
   cwd: string;
   state: SessionState;
   /**
@@ -191,6 +194,14 @@ function nameLine(name: string, title: string | undefined): string {
   return title === undefined ? name : `${name}: ${title}`;
 }
 
+/** The agent a session's record says it was started as, or undefined for none. */
+function agentOf(
+  record: Pick<SessionRecord, "agent"> | null | undefined,
+): string | undefined {
+  const agent = record?.agent;
+  return typeof agent === "string" && agent !== "" ? agent : undefined;
+}
+
 /**
  * A row's name, and beside it, muted, what the session's agent says it is
  * doing (`session_title`). The name is what the user calls it and stays
@@ -200,20 +211,28 @@ function nameLine(name: string, title: string | undefined): string {
 function SessionName({
   name,
   title,
+  agent,
 }: {
   name: string;
   title: string | undefined;
+  /** The agent it was started as: its agent tag follows the name. */
+  agent?: string | undefined;
 }): JSX.Element {
   return (
     <span className="flex min-w-0 flex-1 items-baseline gap-2">
       <span
         className={cn(
           "min-w-0 truncate text-[12.5px] text-fg",
-          title === undefined ? "flex-1" : "max-w-[60%] shrink-0",
+          title === undefined && agent === undefined
+            ? "flex-1"
+            : "max-w-[60%] shrink-0",
         )}
       >
         {name}
       </span>
+      {agent !== undefined && (
+        <AgentTag name={agent} className="max-w-[96px] self-center" />
+      )}
       {title !== undefined && (
         <span
           data-session-title
@@ -312,6 +331,11 @@ export function SessionsPane({
                   session.helmSessionId === null
                     ? undefined
                     : records.get(session.helmSessionId)?.title
+                }
+                agent={
+                  session.helmSessionId === null
+                    ? undefined
+                    : agentOf(records.get(session.helmSessionId))
                 }
                 selected={session.pid === selectedPid}
                 crowded={
@@ -613,7 +637,11 @@ function RemoteRow({
                 SESSION_STATE_DOT[session.state],
               )}
             />
-            <SessionName name={session.name} title={session.title} />
+            <SessionName
+              name={session.name}
+              title={session.title}
+              agent={session.agent}
+            />
             {notOpen && (
               <span className="shrink-0 text-[10.5px] text-fg-subtle">
                 not open here
@@ -748,6 +776,7 @@ function Section({
 function Row({
   session,
   title,
+  agent,
   selected,
   crowded,
   resources,
@@ -756,6 +785,8 @@ function Row({
   session: LiveSession;
   /** What its agent says it is doing, from the host's record; only a hosted session has one. */
   title?: string | undefined;
+  /** The agent it was started as, from the host's record. */
+  agent?: string | undefined;
   selected: boolean;
   crowded: boolean;
   resources?: SessionResources | undefined;
@@ -788,7 +819,7 @@ function Row({
             SESSION_STATE_DOT[state],
           )}
         />
-        <SessionName name={name} title={title} />
+        <SessionName name={name} title={title} agent={agent} />
         {session.waitingFor !== null && (
           // The CLI's own sentence, verbatim and never matched against - it
           // comes from whichever dialog is on top. It fits here where it does
@@ -898,7 +929,11 @@ function NotOpenRow({
               SESSION_STATE_DOT[state],
             )}
           />
-          <SessionName name={name} title={record.title} />
+          <SessionName
+            name={name}
+            title={record.title}
+            agent={agentOf(record)}
+          />
         </span>
         <span className="min-w-0 truncate pl-[14px] font-mono text-[10.5px] text-fg-subtle">
           {record.cwd}
@@ -964,6 +999,7 @@ function Detail({
 }): JSX.Element {
   const state = stateOf(session);
   const name = record === null ? nameOf(session) : sessionLabel(record);
+  const agent = agentOf(record);
   const helmSessionId = session.helmSessionId;
   const cwd = session.cwd;
 
@@ -980,6 +1016,7 @@ function Detail({
         <h2 className="min-w-0 truncate text-[15px] font-medium tracking-tight text-fg">
           {name}
         </h2>
+        {agent !== undefined && <AgentTag name={agent} />}
         {/* A hairline outline in a semantic tone, never a fill - DESIGN.md 4's
             state chip. One word carrying the whole status of the thing on screen is exactly
             what that pill is for. */}
@@ -1016,6 +1053,19 @@ function Detail({
           <Fact label="Title">
             <span data-session-title className="text-[11.5px] text-fg-muted">
               {record.title}
+            </span>
+          </Fact>
+        )}
+        {agent !== undefined && (
+          // What it was started as, and the file its instructions came from.
+          // The record names only the agent; its file is `<name>.md` in the
+          // host's agents folder.
+          <Fact label="Agent">
+            <span data-session-agent className="flex min-w-0 items-center gap-2">
+              <AgentTag name={agent} />
+              <span className="min-w-0 truncate font-mono text-[11px] text-fg-subtle">
+                {`${agent}.md`}
+              </span>
             </span>
           </Fact>
         )}

@@ -8,6 +8,7 @@ import {
   commandTone,
   type SessionState
 } from '../lib/sessionstate'
+import { AgentTag } from './AgentTag'
 import { CloseIcon, CommandChildIcon, PlusIcon } from './icons'
 import { Menu, type MenuAnchor, type MenuEntry } from './Menu'
 
@@ -39,6 +40,12 @@ export interface Tab {
    * badge is drawn and a screen reader would otherwise not hear it.
    */
   startedBy?: string | undefined
+  /**
+   * The agent a person started the tab's session as: its agent tag follows the
+   * title, and the tab's accessible name ends "started as the <agent> agent".
+   * A child's tab names its parent in `badge` instead.
+   */
+  agent?: string | undefined
   /**
    * The host the tab's session or page is on, named after the title in mono
    * when it is not this PC. A tab of this PC's names no host.
@@ -481,6 +488,7 @@ export function TabBar({
                     >
                       {tab.title}
                     </span>
+                    {tab.agent !== undefined && <AgentTag name={tab.agent} className="max-w-[96px]" />}
                     {tab.host !== undefined && (
                       <span
                         data-tab-host={tab.host}
@@ -564,8 +572,10 @@ export function TabBar({
 }
 
 /** The dot, or the kind icon where there is no dot. */
+/** Who or what the tab's session was started by, ending its accessible name. */
 function startedBySuffix(tab: Tab): string {
-  return tab.startedBy === undefined ? '' : `, started by ${tab.startedBy}`
+  if (tab.startedBy !== undefined) return `, started by ${tab.startedBy}`
+  return tab.agent === undefined ? '' : `, started as the ${tab.agent} agent`
 }
 
 function Mark({ tab, active }: { tab: Tab; active: boolean }): JSX.Element | null {

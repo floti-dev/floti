@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionActivity, SessionActivityState, SessionRecord } from '@helm/core/types'
-import { childCrumb, childStatus, childTab, crumbStatus, indicatorOf, sessionNote, statusCounts, statusHint } from './sessionView'
+import {
+  agentRow,
+  childCrumb,
+  childStatus,
+  childTab,
+  crumbStatus,
+  indicatorOf,
+  sessionNote,
+  startedAsAgent,
+  statusCounts,
+  statusHint
+} from './sessionView'
 
 function session(over: Partial<SessionRecord> = {}): SessionRecord {
   return {
@@ -92,6 +103,15 @@ describe('childTab', () => {
   it('gives a session nobody started no badge', () => {
     expect(childTab(session(), 'idle')).toEqual({ indicator: 'idle' })
     expect(childTab(session({ parentName: '' }), 'idle')).toEqual({ indicator: 'idle' })
+  })
+
+  it('A23: gives a session a person started as an agent its agent tag, and a child its badge alone', () => {
+    expect(childTab(session({ agent: 'lead' }), 'busy')).toEqual({ indicator: 'busy', agent: 'lead' })
+    expect(childTab(session({ agent: 'reviewer', parentId: 7, parentName: 'api-refactor' }), 'busy')).toEqual({
+      indicator: 'busy',
+      badge: 'api-refactor',
+      startedBy: 'api-refactor'
+    })
   })
 })
 
@@ -359,5 +379,31 @@ describe('childCrumb', () => {
 
   it('a session nobody started has neither tag nor link', () => {
     expect(childCrumb(session(), open, lists)).toEqual({ tag: undefined, parent: undefined })
+  })
+
+  it('A23: a session a person started as an agent leads with its agent tag and has no for link', () => {
+    expect(childCrumb(session({ agent: 'lead' }), open, lists)).toEqual({
+      tag: { kind: 'agent', text: 'lead' },
+      parent: undefined
+    })
+  })
+})
+
+describe('the agent tag of a session a person started as an agent', () => {
+  it('A23: is set for a session with an agent and no parent', () => {
+    expect(startedAsAgent(session({ agent: 'lead' }))).toBe('lead')
+    expect(startedAsAgent(session({ agent: 'lead', parentId: null }))).toBe('lead')
+    expect(agentRow(session({ agent: 'lead' }))).toEqual({ agent: 'lead' })
+  })
+
+  it('A23: is not set for a child, a command child or a session started as no agent', () => {
+    expect(startedAsAgent(session({ agent: 'reviewer', parentId: 7, parentName: 'api-refactor' }))).toBeUndefined()
+    // A child whose parent's name is not known is still a child.
+    expect(startedAsAgent(session({ agent: 'reviewer', parentId: 7 }))).toBeUndefined()
+    expect(startedAsAgent(session({ command: 'pnpm test' }))).toBeUndefined()
+    expect(startedAsAgent(session({ agent: null }))).toBeUndefined()
+    expect(startedAsAgent(session({ agent: '' }))).toBeUndefined()
+    expect(startedAsAgent(session())).toBeUndefined()
+    expect(agentRow(session({ agent: 'reviewer', parentId: 7 }))).toBeNull()
   })
 })

@@ -241,7 +241,10 @@ export function offerFromHost(offer: P.RestoreOffer, layout: SavedPaneLayout | n
     profile: session.profile,
     profileGone: session.profileGone,
     lastAt: session.lastAt,
-    blocked: session.blocked
+    blocked: session.blocked,
+    // A host before protocol 2.3 names neither.
+    ...(session.agent == null ? {} : { agent: session.agent }),
+    ...(session.agentProblem == null ? {} : { agentProblem: session.agentProblem })
   }))
   return { sessions, elsewhere: offer.elsewhere, layout }
 }

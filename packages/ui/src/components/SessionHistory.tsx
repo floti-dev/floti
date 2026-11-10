@@ -8,7 +8,8 @@ import type {
   HistoryPrompt,
   HistorySearchScope,
   HistorySession,
-  HistorySummary
+  HistorySummary,
+  LaunchAgents
 } from '@helm/core'
 // A value, so it comes from `@helm/core/types` - the entry point with no
 // filesystem behind it (CLAUDE.md "Boundaries").
@@ -17,14 +18,54 @@ import { cn } from '../lib/cn'
 import { ROW_SELECTED } from '../lib/rows'
 import { SEGMENT_ON } from '../lib/segmented'
 import { formatAge, formatBytes, formatMoment } from '../lib/time'
+import { AgentTag } from './AgentTag'
 import { Checkbox } from './Checkbox'
 import { EmptyState } from './EmptyState'
 import { HostSwitch, type HostChoice } from './HostSwitch'
 import { PaneBack } from './PaneBack'
-import { CloseIcon, HistoryIcon, RefreshIcon, ResumeIcon, SearchIcon } from './icons'
+import { CloseIcon, HistoryIcon, RefreshIcon, ResumeIcon, SearchIcon, WarnIcon } from './icons'
 import { ICON_BUTTON, PAGE_BAR, PAGE_LIST_BESIDE } from '../lib/page'
 
 export type HistoryGrouping = 'recent' | 'project'
+
+/** How a resume from History is asked for. */
+export interface ResumeOptions {
+  /** Resume it without the agent it was started as: its instructions and rules are left out. */
+  withoutAgent?: boolean | undefined
+}
+
+/**
+ * Whether a session's agent can be composed again on its host: there, with
+ * the file it is read from; gone (renamed or deleted since); a file that
+ * cannot be loaded, with the host's problem; or not known, when the host's
+ * agents could not be read.
+ */
+type AgentStanding =
+  | { kind: 'there'; file: string }
+  | { kind: 'gone' }
+  | { kind: 'bad'; file: string; problem: string }
+  | { kind: 'unknown'; file: string }
+
+/** The host's default agent is always there: the host makes one when it has no file. */
+const DEFAULT_AGENT = 'default'
+
+function agentStanding(
+  agent: string,
+  agents: Pick<LaunchAgents, 'agents' | 'bad'> | null | undefined
+): AgentStanding {
+  const guessed = `${agent}.md`
+  if (agents === null || agents === undefined) return { kind: 'unknown', file: guessed }
+  const found = agents.agents.find((each) => each.name === agent)
+  if (found !== undefined) return { kind: 'there', file: found.file ?? guessed }
+  const bad = agents.bad.find((each) => each.name === agent)
+  if (bad !== undefined) return { kind: 'bad', file: bad.file, problem: bad.problem }
+  return agent === DEFAULT_AGENT ? { kind: 'there', file: guessed } : { kind: 'gone' }
+}
+
+/** The agent a session was started as, or undefined for none. */
+function agentOf(session: HistorySession): string | undefined {
+  return session.agent === undefined || session.agent === '' ? undefined : session.agent
+}
 
 export interface SessionHistoryProps {
   /**
@@ -80,7 +121,26 @@ export interface SessionHistoryProps {
    */
   onRename: (sessionId: string, name: string | null) => void
 
-  onResume: (session: HistorySession) => void
+  /**
+   * Reopens a session in a tab: one started as an agent composes that agent
+   * again, from its file as it is now, unless `withoutAgent` (the person's
+   * choice when the agent is gone or its file cannot be loaded).
+   */
+  onResume: (session: HistorySession, options?: ResumeOptions) => void
+  /**
+   * The host's agents, read when a session started as an agent is selected,
+   * to tell whether its agent is still there. Null or absent while that is not
+   * known (not read yet, or the read failed): the resume is offered as usual,
+   * and the host's refusal names an agent that is gone.
+   */
+  agents?: Pick<LaunchAgents, 'agents' | 'bad'> | null | undefined
+  /** What the window calls the host these sessions are on, as a sentence names it. "This PC" when absent. */
+  hostName?: string | undefined
+  /**
+   * Opens the host's agents (gone) or the agent's file (bad), beside the
+   * resume without it. Absent while the window has no place to open them.
+   */
+  onOpenAgents?: ((agent: string) => void) | undefined
   /** Session id whose resume is in flight. */
   resuming: string | null
   resumeError?: string | null | undefined
@@ -215,6 +275,9 @@ export function SessionHistory({
   onRefresh,
   refreshing,
   onResume,
+  agents,
+  hostName = 'This PC',
+  onOpenAgents,
   resuming,
   resumeError = null,
   onDismissResumeError,
@@ -545,6 +608,9 @@ export function SessionHistory({
               conversation={conversation}
               conversationLoading={conversationLoading}
               onResume={onResume}
+              agents={agents}
+              hostName={hostName}
+              onOpenAgents={onOpenAgents}
               resuming={resuming === selected.sessionId}
               resumeError={resumeError}
               onDismissResumeError={onDismissResumeError}
@@ -590,6 +656,7 @@ function Row({
   // sentence anybody wrote, and are not drawn as one. A name given by hand, or
   // a title its agent gave it, is never a stand-in, whatever the prompts said.
   const standIn = isStandIn(session) && session.match === undefined
+  const agent = agentOf(session)
 
   return (
     <button
@@ -650,6 +717,7 @@ function Row({
             {BADGE[blocked]}
           </span>
         )}
+        {agent !== undefined && <AgentTag name={agent} className="max-w-[120px] self-center" />}
       </span>
     </button>
   )
@@ -803,6 +871,9 @@ function Detail({
   conversation,
   conversationLoading,
   onResume,
+  agents,
+  hostName,
+  onOpenAgents,
   resuming,
   resumeError,
   onDismissResumeError,
@@ -817,7 +888,10 @@ function Detail({
   promptsLoading: boolean
   conversation: ArchivedConversation | null
   conversationLoading: boolean
-  onResume: (session: HistorySession) => void
+  onResume: (session: HistorySession, options?: ResumeOptions) => void
+  agents: Pick<LaunchAgents, 'agents' | 'bad'> | null | undefined
+  hostName: string
+  onOpenAgents: ((agent: string) => void) | undefined
   resuming: boolean
   resumeError: string | null | undefined
   onDismissResumeError: () => void
@@ -830,6 +904,12 @@ function Detail({
   const [renaming, setRenaming] = useState(false)
   const title = historyTitle(session)
   const standIn = isStandIn(session)
+  const agent = agentOf(session)
+  const standing = agent === undefined ? null : agentStanding(agent, agents)
+  // The file a resume composes, or the reason it cannot. Not known yet is
+  // offered as usual: the host refuses a gone agent, naming it.
+  const composing = standing?.kind === 'there' || standing?.kind === 'unknown' ? standing.file : null
+  const unavailable = standing?.kind === 'gone' || standing?.kind === 'bad' ? standing : null
 
   return (
     <div className="mx-auto max-w-3xl px-8 py-7">
@@ -945,30 +1025,65 @@ function Detail({
             muted={session.archive !== 'archived'}
           />
         )}
+        {agent !== undefined && (
+          // What it was started as. An agent that is gone keeps its name, on
+          // a ring with no tint, and says so.
+          <Meta
+            label="Agent"
+            value={
+              <span data-history-agent className="flex items-center gap-1.5">
+                <AgentTag name={agent} gone={standing?.kind === 'gone'} />
+                {standing?.kind === 'gone' && <span className="text-[11px] text-warn">gone</span>}
+              </span>
+            }
+          />
+        )}
       </dl>
 
       <div className="mt-5">
         {blocked === null ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              data-resume={session.sessionId}
-              onClick={() => onResume(session)}
-              disabled={resuming}
-              className={cn(
-                'flex items-center gap-2 rounded-well border border-accent px-3.5 py-1.5',
-                'text-[12px] font-medium text-accent-text transition-colors',
-                resuming ? 'cursor-default opacity-60' : 'hover:bg-accent-soft active:bg-active'
-              )}
-            >
-              <ResumeIcon width={14} height={14} />
-              {resuming ? 'Reopening…' : 'Resume in a tab'}
-            </button>
-            <span className="text-[11px] text-fg-subtle">
-              Runs <code className="font-mono">claude --resume</code> in{' '}
-              <span className="font-mono">{session.projectName}</span>.
-            </span>
-          </div>
+          agent !== undefined && unavailable !== null ? (
+            // Nothing starts until a button is pressed: resuming without the
+            // agent leaves out what the person started it with, so it is theirs
+            // to choose.
+            <AgentUnavailable
+              agent={agent}
+              standing={unavailable}
+              hostName={hostName}
+              resuming={resuming}
+              onResumeWithout={() => onResume(session, { withoutAgent: true })}
+              onOpenAgents={onOpenAgents}
+            />
+          ) : (
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                data-resume={session.sessionId}
+                onClick={() => onResume(session)}
+                disabled={resuming}
+                className={cn(
+                  'flex items-center gap-2 rounded-well border border-accent px-3.5 py-1.5',
+                  'text-[12px] font-medium text-accent-text transition-colors',
+                  resuming ? 'cursor-default opacity-60' : 'hover:bg-accent-soft active:bg-active'
+                )}
+              >
+                <ResumeIcon width={14} height={14} />
+                {resuming ? 'Reopening…' : 'Resume in a tab'}
+              </button>
+              <span data-resume-sentence className="text-[11px] text-fg-subtle">
+                Runs <code className="font-mono">claude --resume</code> in{' '}
+                <span className="font-mono">{session.projectName}</span>
+                {agent !== undefined && composing !== null && (
+                  <>
+                    {' '}
+                    as the {agent} agent, composing <span className="font-mono">{composing}</span> as it is
+                    now
+                  </>
+                )}
+                .
+              </span>
+            </div>
+          )
         ) : (
           <Unavailable
             reason={blocked}
@@ -1108,6 +1223,81 @@ const UNAVAILABLE_TITLE: Record<Exclude<Blocked, null>, string> = {
  * Helm ever looked. Collapsing any two of those into "not available" would be
  * telling the user a number instead of a fact.
  */
+/**
+ * In place of the resume sentence, for a session whose agent cannot be
+ * composed again: it was renamed or deleted (gone), or its file does not load
+ * (bad). The conversation is still there, so the one thing offered is to
+ * resume it without the agent, and, where the window has somewhere to show
+ * them, the host's agents or the file.
+ */
+function AgentUnavailable({
+  agent,
+  standing,
+  hostName,
+  resuming,
+  onResumeWithout,
+  onOpenAgents
+}: {
+  agent: string
+  standing: Extract<AgentStanding, { kind: 'gone' | 'bad' }>
+  hostName: string
+  resuming: boolean
+  onResumeWithout: () => void
+  onOpenAgents: ((agent: string) => void) | undefined
+}): JSX.Element {
+  const gone = standing.kind === 'gone'
+  return (
+    <div
+      data-agent-unavailable={standing.kind}
+      className="rounded-well border border-warn/40 bg-warn/10 px-3.5 py-3"
+    >
+      <p className="flex items-start gap-2 text-[12px] font-medium text-fg">
+        <WarnIcon width={13} height={13} className="mt-px shrink-0 text-warn" />
+        <span className="min-w-0 break-words">
+          {standing.kind === 'gone' ? (
+            `${agent} is no longer among ${hostName}’s agents`
+          ) : (
+            <>
+              <span className="font-mono">{standing.file}</span> cannot be loaded: {standing.problem}
+            </>
+          )}
+        </span>
+      </p>
+      <p className="mt-1.5 pl-[21px] text-[12px] leading-relaxed text-fg-muted">
+        {gone
+          ? 'It was renamed or deleted after this session. Resume it without the agent: its instructions and rules are left out, and the conversation is as it was.'
+          : 'Resume it without the agent, or fix the file and resume it as the agent. Without it, its instructions and rules are left out, and the conversation is as it was.'}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2 pl-[21px]">
+        <button
+          type="button"
+          data-resume-without-agent
+          onClick={onResumeWithout}
+          disabled={resuming}
+          className={cn(
+            'flex items-center gap-1.5 rounded-well border border-accent px-2.5 py-1',
+            'text-[11.5px] font-medium text-accent-text transition-colors',
+            resuming ? 'cursor-default opacity-60' : 'hover:bg-accent-soft active:bg-active'
+          )}
+        >
+          <ResumeIcon width={12} height={12} />
+          {resuming ? 'Reopening…' : 'Resume without the agent'}
+        </button>
+        {onOpenAgents !== undefined && (
+          <button
+            type="button"
+            data-open-agents
+            onClick={() => onOpenAgents(agent)}
+            className="rounded-well border border-border-strong px-2.5 py-1 text-[11.5px] text-fg transition-colors hover:bg-hover"
+          >
+            {standing.kind === 'gone' ? 'Open Agents' : `Open ${standing.file}`}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Unavailable({
   reason,
   session,
@@ -1367,7 +1557,7 @@ function Meta({
   muted = false
 }: {
   label: string
-  value: string
+  value: ReactNode
   hint?: string | undefined
   muted?: boolean | undefined
 }): JSX.Element {

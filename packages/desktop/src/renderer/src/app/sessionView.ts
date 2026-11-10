@@ -6,7 +6,7 @@ import {
   type SessionActivityState,
   type SessionRecord
 } from '@helm/core/types'
-import type { CrumbParent, CrumbTag, CrumbTone, Tab, TabIndicator } from '@helm/ui'
+import type { CrumbParent, CrumbTag, CrumbTone, Tab, TabIndicator, TreeSession } from '@helm/ui'
 import { commandWord } from './treeFamilies'
 
 /**
@@ -269,21 +269,46 @@ export function childCrumb(
 }
 
 /**
+ * The agent a person started this session as, for its agent tag: set only for
+ * a session with no parent. A child is named after its agent already, and is
+ * marked by its family (the tree's guide, its tab's parent badge), so it has
+ * no tag of its own there.
+ */
+export function startedAsAgent(
+  session: Pick<SessionRecord, 'agent' | 'parentId' | 'command'>
+): string | undefined {
+  if (session.parentId !== null && session.parentId !== undefined) return undefined
+  if (isCommandChild(session)) return undefined
+  return typeof session.agent === 'string' && session.agent !== '' ? session.agent : undefined
+}
+
+/** What a session's row in the Sessions tree adds for its agent tag: nothing for a child or a session started as no agent. */
+export function agentRow(
+  session: Pick<SessionRecord, 'agent' | 'parentId' | 'command'>
+): Pick<TreeSession, 'agent'> | null {
+  const agent = startedAsAgent(session)
+  return agent === undefined ? null : { agent }
+}
+
+/**
  * What a child's own tab adds to a session tab. A command child's indicator is
  * the terminal glyph in the glyph's tones (success while it runs, fg-subtle
  * after exit 0, danger otherwise), read from its command and never from the
  * registry, and its accessible name says `running` or `exited <code>`. Any
  * child, command or agent, carries the name of the session that started it as
  * the muted badge after its title, and the tab's accessible name ends with
- * `started by <parent>`.
+ * `started by <parent>`. A session a person started as an agent, which has no
+ * parent, carries its agent tag after its title instead (`startedAsAgent`).
  */
 export function childTab(
-  session: Pick<SessionRecord, 'status' | 'exitCode' | 'command' | 'parentName'>,
+  session: Pick<SessionRecord, 'status' | 'exitCode' | 'command' | 'parentName' | 'parentId' | 'agent'>,
   indicator: TabIndicator
-): Pick<Tab, 'indicator' | 'command' | 'stateWord' | 'badge' | 'startedBy'> {
+): Pick<Tab, 'indicator' | 'command' | 'stateWord' | 'badge' | 'startedBy' | 'agent'> {
   const parent = typeof session.parentName === 'string' && session.parentName !== '' ? session.parentName : undefined
   const marks = isCommandChild(session)
     ? { indicator: commandState(session), command: true, stateWord: commandWord(session) }
     : { indicator }
-  return parent === undefined ? marks : { ...marks, badge: parent, startedBy: parent }
+  if (parent !== undefined) return { ...marks, badge: parent, startedBy: parent }
+  const agent = startedAsAgent(session)
+  return agent === undefined ? marks : { ...marks, agent }
 }

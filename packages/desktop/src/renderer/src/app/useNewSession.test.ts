@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HistoryPage, HistoryProject, HistorySession, SessionRecord } from '@helm/core'
+import type { HistoryPage, HistoryProject, HistorySession, LaunchAgents, SessionRecord } from '@helm/core'
 import type { LaunchedSession } from '../../../shared/ipc'
 import { bridge, remoteBridge } from './bridge.testkit'
 import { useNewSession } from './useNewSession'
@@ -53,6 +53,26 @@ describe('useNewSession', () => {
     expect(result.current.resumable.size).toBe(0)
     act(() => result.current.loadResumable([ALPHA]))
     await waitFor(() => expect(bridge.invoked('history:sessions')).toHaveLength(2))
+  })
+
+  it('reads the host’s agents when it opens, afresh each time, and offers none when they cannot be read', async () => {
+    const agents: LaunchAgents = { agents: [], bad: [], backends: [{ id: 'claude-code', name: 'Claude Code' }] }
+    bridge.answer('agents:list', () => agents)
+    const { result } = renderHook(() => useNewSession())
+    expect(result.current.agents).toBeNull()
+    act(() => result.current.show(null))
+    await waitFor(() => expect(result.current.agents).toEqual(agents))
+    expect(bridge.invoked('agents:list')).toHaveLength(1)
+
+    bridge.answer('agents:list', () => {
+      throw new Error('The host cannot read its agents.')
+    })
+    act(() => result.current.hide())
+    act(() => result.current.show(null))
+    expect(result.current.agents).toBeNull()
+    await waitFor(() => expect(bridge.invoked('agents:list')).toHaveLength(2))
+    expect(result.current.agents).toBeNull()
+    expect(result.current.error).toBeNull()
   })
 
   it('launches at the pane’s grid, and says what could not be composed', async () => {

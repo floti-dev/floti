@@ -40,6 +40,8 @@ export function historySessionFromHost(session: P.HistorySession): HistorySessio
     label: session.label,
     // Set only once its agent titled it; a protocol before 2.2 never says.
     ...(session.agentTitle == null ? {} : { agentTitle: session.agentTitle }),
+    // The agent its newest session was started as; a protocol before 2.3 never says.
+    ...(session.agent == null ? {} : { agent: session.agent }),
     transcriptFile: session.transcriptFile,
     transcriptBytes: session.transcriptBytes,
     projectExists: session.projectExists,

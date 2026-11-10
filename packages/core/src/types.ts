@@ -583,6 +583,15 @@ export interface RestorableSession {
   lastAt: number | null
   /** Why it cannot be reopened, as a sentence, or null when it can. */
   blocked: string | null
+  /** The agent it was started as, or absent for none. */
+  agent?: string
+  /**
+   * Why its agent cannot be composed again (it is gone, or its file cannot be
+   * loaded), as the host's sentence naming it; absent when it can. Such a
+   * session is offered unticked, and restoring it restores it without its
+   * agent.
+   */
+  agentProblem?: string
 }
 
 /** What a crash took, offered back once at the next start. */
@@ -879,6 +888,11 @@ export interface HistorySession {
    * hand wins over it, and it wins over `title`, which is only derived.
    */
   agentTitle?: string
+  /**
+   * The agent its newest session in Floti was started as, which Resume
+   * composes again from its file as it is then; absent for none.
+   */
+  agent?: string
   /** The transcript on disk, or null once it has been reaped. */
   transcriptFile: string | null
   transcriptBytes: number | null
@@ -1092,6 +1106,56 @@ export const PERMISSION_MODES = [
   'plan'
 ] as const
 export type PermissionMode = (typeof PERMISSION_MODES)[number]
+
+/**
+ * One of a host's agents, as a launcher offers it: a person picks it to start
+ * a session as that agent. Its fields are what fill the launcher's pickers.
+ */
+export interface LaunchAgent {
+  name: string
+  description: string
+  /** Its file, such as `lead.md`; null for the default the host makes. */
+  file: string | null
+  /** The installed backends that can run it, in its order. Empty: it cannot run here. */
+  backends: string[]
+  /** The backends its file lists, in order; empty for any installed one. */
+  listedBackends: string[]
+  /** The model each backend runs it with, by backend id. */
+  models: Record<string, string>
+  /** The effort each backend runs it with, by backend id. */
+  efforts: Record<string, EffortLevel>
+  permission: PermissionMode | null
+  /** The profile it names, by name. */
+  profile: string | null
+  allowedTools: string[]
+  disallowedTools: string[]
+  worktree: boolean
+  canStart: boolean
+  /** Why none of the host's backends can run it, as the host's sentence; null when one can. */
+  cannotRun: string | null
+}
+
+/** An agent file a host could not load, with every problem joined. */
+export interface BadAgent {
+  name: string
+  file: string
+  problem: string
+}
+
+/** One agent backend a host has installed: an id to send and a name to show. */
+export interface InstalledBackend {
+  id: string
+  name: string
+}
+
+/** What a launcher reads of a host's agents when it opens. */
+export interface LaunchAgents {
+  /** The agents a person may start a session as: the host's default is not one. */
+  agents: LaunchAgent[]
+  bad: BadAgent[]
+  /** The host's agent backends, in its order: a plain command line is not one. */
+  backends: InstalledBackend[]
+}
 
 /**
  * A saved launch composition - the core object everything in Helm is organised

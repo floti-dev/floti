@@ -113,6 +113,23 @@ const family = (): ReadonlyMap<string, readonly TreeSession[]> =>
   ])
 
 describe('SessionTree: sessions that started sessions', () => {
+  it('A23: a session a person started as an agent has its agent tag after its name, and its children only their guide', () => {
+    const tree = family()
+    const [parent, docs] = tree.get(HELM.toLowerCase()) ?? []
+    renderTree(new Map([[HELM.toLowerCase(), [{ ...parent!, label: 'orbit-api', agent: 'lead', note: '4m' }, docs!]]]))
+
+    const lead = screen.getByRole('button', { name: /^orbit-api, ready, started as the lead agent, / })
+    const tag = lead.querySelector<HTMLElement>('[data-agent-tag]')
+    expect(tag?.textContent).toBe('lead')
+    expect(tag?.className).toContain('bg-accent-soft')
+    expect(tag?.className).toContain('text-accent-text')
+    // Right after the name.
+    expect(tag?.previousElementSibling?.textContent).toBe('orbit-api')
+    // Its children and a session started as no agent carry no tag.
+    for (const id of [2, 3, 4, 5]) expect(rowOf(id).querySelector('[data-agent-tag]')).toBeNull()
+    expect(rowOf(2).getAttribute('aria-label')).not.toContain('started as')
+  })
+
   it('S18: draws each child under its parent, one step in with a hairline guide, whatever folder it runs in', () => {
     renderTree(family())
 

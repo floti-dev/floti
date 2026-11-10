@@ -16,6 +16,7 @@ import type {
   SessionHost
 } from './session-host'
 import { CLAUDE_CODE_BACKEND } from '../../shared/host/backend'
+import { launchRequestToHost } from '../../shared/host/launch'
 import type { EventChannel, EventPayload, QuitAnswer } from '../../shared/ipc'
 import type { HostConnection, HostSubscription } from './client'
 import type { HostLink } from './link'
@@ -463,17 +464,7 @@ export function createHostSessions(deps: HostSessionsDeps): HostSessions {
     async launch(req) {
       const connection = await host()
       const launched = launchedFromHost(
-        await connection.request('session:launch', {
-          cwd: req.cwd,
-          projectPath: req.projectPath ?? null,
-          name: req.name ?? null,
-          profileId: req.profileId,
-          permissionMode: req.permissionMode,
-          resume: req.resume,
-          backend: CLAUDE_CODE_BACKEND,
-          cols: req.cols,
-          rows: req.rows
-        })
+        await connection.request('session:launch', launchRequestToHost(req))
       )
       adopt(launched.session)
       announce()
@@ -494,6 +485,7 @@ export function createHostSessions(deps: HostSessionsDeps): HostSessions {
       const connection = await host()
       const resumed = await connection.request('history:resume', {
         sessionId: req.sessionId,
+        ...(req.agent == null ? {} : { agent: req.agent }),
         cols: req.cols,
         rows: req.rows
       })

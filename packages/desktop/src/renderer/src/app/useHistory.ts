@@ -7,10 +7,11 @@ import type {
   HistorySearchScope,
   HistorySession,
   HistorySummary,
+  LaunchAgents,
   SessionRecord
 } from '@helm/core'
 import { LOCAL_HOST_KEY } from '@helm/core/types'
-import type { SessionHistoryProps } from '@helm/ui'
+import type { ResumeOptions, SessionHistoryProps } from '@helm/ui'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
 import { estimateGrid } from './terminals'
@@ -62,8 +63,22 @@ export interface HistoryState {
   refresh: () => void
   refreshing: boolean
 
-  /** Reopens the conversation in a tab. Null when it could not be started. */
-  resume: (session: HistorySession, paneSize: HTMLElement | null) => Promise<SessionRecord | null>
+  /**
+   * Reopens the conversation in a tab, composing the agent it was started as
+   * again unless `withoutAgent`. Null when it could not be started.
+   */
+  resume: (
+    session: HistorySession,
+    paneSize: HTMLElement | null,
+    options?: ResumeOptions
+  ) => Promise<SessionRecord | null>
+  /**
+   * The host's agents, read each time a session started as an agent is
+   * selected, so its detail can say whether that agent is still there. Null
+   * while not read, or when the read failed: then nothing is said, and the
+   * host's refusal of a resume names a gone agent.
+   */
+  agents: LaunchAgents | null
   resuming: string | null
   resumeError: string | null
   dismissResumeError: () => void
@@ -114,6 +129,7 @@ export function useHistory(host: string = LOCAL_HOST_KEY): HistoryState {
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [promptAnswer, setPromptAnswer] = useState<Answered<HistoryPrompt[]> | null>(null)
+  const [agentsAnswer, setAgentsAnswer] = useState<Answered<LaunchAgents | null> | null>(null)
 
   /** Bumped by a rename, so the listing is asked for again. See `rename`. */
   const [nameVersion, setNameVersion] = useState(0)
@@ -135,6 +151,7 @@ export function useHistory(host: string = LOCAL_HOST_KEY): HistoryState {
     setProject(null)
     setSelectedId(null)
     setPromptAnswer(null)
+    setAgentsAnswer(null)
     setResumeError(null)
   }
 
@@ -333,13 +350,17 @@ export function useHistory(host: string = LOCAL_HOST_KEY): HistoryState {
   }, [helm, host])
 
   const resume = useCallback(
-    async (session: HistorySession, paneSize: HTMLElement | null) => {
+    async (session: HistorySession, paneSize: HTMLElement | null, options: ResumeOptions = {}) => {
       setResumeError(null)
       setResuming(session.sessionId)
       try {
         const { cols, rows } = estimateGrid(paneSize)
+        // The agent it was started as is composed again from its file as it
+        // is now; without it, the request names none.
+        const agent = options.withoutAgent === true ? undefined : session.agent
         const result = await helm.invoke('history:resume', {
           sessionId: session.sessionId,
+          ...(agent === undefined || agent === '' ? {} : { agent }),
           cols,
           rows
         })
@@ -369,6 +390,31 @@ export function useHistory(host: string = LOCAL_HOST_KEY): HistoryState {
   // resumability changed under it shows the new answer instead of the one it
   // was selected with.
   const selected = page?.sessions.find((s) => s.sessionId === selectedId) ?? null
+
+  // The host's agents, read afresh each time a session started as an agent is
+  // selected: its file can be renamed, deleted or broken between two looks. A
+  // read that fails is "not known", never "gone".
+  const selectedAgent = selected?.agent
+  const agentsKey =
+    selectedId === null || selectedAgent === undefined || selectedAgent === ''
+      ? null
+      : `${host}:${selectedId}:${selectedAgent}`
+  useEffect(() => {
+    if (agentsKey === null) return
+    let live = true
+    void helm.invoke('agents:list').then(
+      (value) => {
+        if (live) setAgentsAnswer({ key: agentsKey, value })
+      },
+      () => {
+        if (live) setAgentsAnswer({ key: agentsKey, value: null })
+      }
+    )
+    return () => {
+      live = false
+    }
+  }, [helm, agentsKey])
+  const agents = agentsAnswer?.key === agentsKey ? agentsAnswer.value : null
 
   const select = useCallback((session: HistorySession | null) => {
     setSelectedId(session?.sessionId ?? null)
@@ -401,6 +447,7 @@ export function useHistory(host: string = LOCAL_HOST_KEY): HistoryState {
     refresh,
     refreshing,
     resume,
+    agents,
     resuming,
     resumeError,
     dismissResumeError: useCallback(() => setResumeError(null), [])
@@ -443,6 +490,7 @@ export function sessionHistoryProps(
     onRename: (sessionId, name) => void state.rename(sessionId, name),
     onRefresh: state.refresh,
     refreshing: state.refreshing,
+    agents: state.agents,
     resuming: state.resuming,
     resumeError: state.resumeError,
     onDismissResumeError: state.dismissResumeError

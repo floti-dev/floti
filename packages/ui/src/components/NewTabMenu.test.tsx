@@ -1,7 +1,14 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { EMPTY_INVENTORY, type HistorySession, type Profile, type Project } from '@helm/core/types'
+import {
+  EMPTY_INVENTORY,
+  type HistorySession,
+  type LaunchAgent,
+  type LaunchAgents,
+  type Profile,
+  type Project
+} from '@helm/core/types'
 import { NewTabMenu, type NewTabMenuProps } from './NewTabMenu'
 
 const HOME = 'C:\\Users\\someone'
@@ -121,6 +128,7 @@ describe('NewTabMenu: the kinds', () => {
     expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'SessionCtrl N',
       'Profile session',
+      'Agent session',
       'Terminal',
       'Browser tab'
     ])
@@ -218,7 +226,10 @@ describe('NewTabMenu: session', () => {
       profileId: null,
       permissionMode: null,
       resume: null,
-      beside: false
+      beside: false,
+      agent: null,
+      backend: null,
+      chosen: { model: null, effort: null }
     })
   })
 
@@ -232,7 +243,10 @@ describe('NewTabMenu: session', () => {
       profileId: 1,
       permissionMode: 'auto',
       resume: null,
-      beside: false
+      beside: false,
+      agent: null,
+      backend: null,
+      chosen: { model: null, effort: null }
     })
   })
 
@@ -265,7 +279,10 @@ describe('NewTabMenu: session', () => {
       profileId: null,
       permissionMode: null,
       resume: payroll,
-      beside: false
+      beside: false,
+      agent: null,
+      backend: null,
+      chosen: { model: null, effort: null }
     })
   })
 
@@ -321,5 +338,114 @@ describe('NewTabMenu: more than one host', () => {
   it('names no host with only this PC', () => {
     renderMenu({ hosts: [HOSTS[0]!], host: 'local' })
     expect(screen.queryByRole('menuitemcheckbox')).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Agent session, and the popover's Agent picker (A21, A22)
+// ---------------------------------------------------------------------------
+
+function launchAgent(name: string, patch: Partial<LaunchAgent> = {}): LaunchAgent {
+  return {
+    name,
+    description: `${name} does its work.`,
+    file: `${name}.md`,
+    backends: ['claude-code'],
+    listedBackends: ['claude-code'],
+    models: {},
+    efforts: {},
+    permission: null,
+    profile: null,
+    allowedTools: [],
+    disallowedTools: [],
+    worktree: false,
+    canStart: false,
+    cannotRun: null,
+    ...patch
+  }
+}
+
+const researchLead = launchAgent('research-lead', {
+  description: 'Researches a new project with you.',
+  models: { 'claude-code': 'opus' },
+  efforts: { 'claude-code': 'xhigh' },
+  permission: 'plan',
+  allowedTools: ['Read'],
+  canStart: true
+})
+const AGENTS: LaunchAgents = {
+  agents: [
+    launchAgent('docs-writer', { backends: [], listedBackends: ['codex'] }),
+    launchAgent('lead', { description: 'Delegates work and keeps Trackr true.' }),
+    researchLead
+  ],
+  bad: [{ name: 'deploy-check', file: 'deploy-check.md', problem: 'permission must be plan' }],
+  backends: [{ id: 'claude-code', name: 'Claude Code' }]
+}
+
+describe('NewTabMenu: agent session', () => {
+  it('lists the host’s agents with what each is, one that cannot run here disabled with why, and leaves a bad file out', async () => {
+    renderMenu({ agents: AGENTS })
+    await userEvent.click(screen.getByText('Agent session'))
+    const menu = screen.getByRole('menu', { name: 'Start an agent session' })
+    expect(menu.textContent).toContain('Agent session in helm')
+    const items = within(menu).getAllByRole('menuitem')
+    expect(items.map((item) => item.textContent)).toEqual([
+      'leadDelegates work and keeps Trackr true.',
+      'research-leadResearches a new project with you.',
+      'docs-writerRuns only on codex, which This PC does not have.'
+    ])
+    expect(items[2]!.getAttribute('aria-disabled')).toBe('true')
+    expect(menu.textContent).not.toContain('deploy-check')
+  })
+
+  it('turns into the session popover with the agent picked, in the pane’s folder, and starts as the agent', async () => {
+    const { props } = renderMenu({ agents: AGENTS })
+    await userEvent.click(screen.getByText('Agent session'))
+    await userEvent.click(screen.getByText('research-lead'))
+    const popover = screen.getByRole('dialog', { name: 'New session' })
+    const pickers = within(popover).getAllByRole('combobox')
+    // Agent sits between Folder and Profile.
+    expect(pickers.map((picker) => picker.id.split('-').at(-1))).toEqual(['folder', 'agent', 'profile'])
+    expect(within(popover).getByRole('combobox', { name: 'Folder' })).toHaveProperty('value', helm.path)
+    expect(within(popover).getByRole('combobox', { name: 'Agent' })).toHaveProperty('value', 'research-lead')
+    expect(popover.querySelector('[data-launch-sentence]')?.textContent).toBe(
+      'Runs claude in ~\\.harness\\dev\\repos\\helm as the research-lead agent, and --model opus --effort xhigh --permission-mode plan and its tool rules. It can start agents of its own.'
+    )
+    expect(popover.querySelector('[data-agent-note]')?.textContent).toBe(
+      "Its model, effort and permissions are research-lead's; Ctrl+N changes them."
+    )
+    await userEvent.click(within(popover).getByRole('button', { name: 'Start session' }))
+    expect(props.onStart).toHaveBeenCalledWith({
+      project: helm,
+      profileId: null,
+      permissionMode: 'plan',
+      resume: null,
+      beside: false,
+      agent: 'research-lead',
+      backend: 'claude-code',
+      chosen: { model: 'opus', effort: 'xhigh' }
+    })
+  })
+
+  it('is disabled, saying why, when the host has no agents', async () => {
+    renderMenu({ agents: { agents: [], bad: [], backends: [] } })
+    const item = screen.getByText('Agent session').closest('[role="menuitem"]')!
+    expect(item.getAttribute('aria-disabled')).toBe('true')
+    expect(item.getAttribute('title')).toBe('This PC has no agents yet.')
+    await userEvent.click(item)
+    expect(screen.queryByRole('menu', { name: 'Start an agent session' })).toBeNull()
+  })
+
+  it('opens the session popover at No agent, and a Recent row starts with No agent', async () => {
+    const { props } = renderMenu({ agents: AGENTS })
+    const popover = await chooseSession()
+    expect(within(popover).getByRole('combobox', { name: 'Agent' })).toHaveProperty('value', '')
+    await userEvent.selectOptions(within(popover).getByRole('combobox', { name: 'Agent' }), 'research-lead')
+    const recent = within(popover).getByRole('list', { name: 'Recent' })
+    await userEvent.click(within(recent).getAllByRole('button')[1]!)
+    const started = vi.mocked(props.onStart).mock.calls.at(-1)?.[0]
+    expect(started?.project).toBe(helm)
+    expect(started?.agent ?? null).toBeNull()
   })
 })

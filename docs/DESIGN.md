@@ -337,7 +337,11 @@ overrides the gate; keep it.
   painted it white with the page's light text on the rows, and the highlighted
   row in the Windows selection colour. Now it is `surface-raised` behind a
   `border-strong` edge, rows `hover` under the pointer and `accent-soft` for the
-  chosen one, no tick. The list is DOM in the top layer, so it no longer paints
+  chosen one, no tick. An option may be two lines, its name over a 10.5px
+  `fg-subtle` line saying what it is (the Agent picker's agents): the closed
+  control shows the name alone, from the option's `label`. A disabled option
+  says why on that second line, and an `<hr>` sets apart a group, such as the
+  agent files that cannot be loaded, whose second line is `danger`. The list is DOM in the top layer, so it no longer paints
   over a browser tab's native view - which is fine for a select inside a pane,
   whose list opens in that pane, and is why the Files view's project picker,
   whose list crosses the sidebar's edge, is a `Menu` instead (below).
@@ -714,17 +718,30 @@ overrides the gate; keep it.
   - **A click highlights; it never starts.** Enter, a double click, or the key
     strip's Start does. That is the launch-disclosure rule: the sentence for
     the row has to be on screen before the session runs.
-  - **The profile follows the folder until it is chosen**, and the permission
-    mode follows the profile until it is. A folder starts with the profile most
-    about it: among those naming it as their root or an overlay, the one
-    composing the fewest folders.
+  - **The profile follows the folder until it is chosen**, and the model,
+    effort and permission mode follow the profile until each is. A folder
+    starts with the profile most about it: among those naming it as their root
+    or an overlay, the one composing the fewest folders.
+  - **The footer's first picker is Agent**, at No agent every time it opens.
+    Picking one fills the pickers nobody touched with the agent's model and
+    effort for the backend, its permission and its profile, and a 10.5px line
+    under them says whose they are; each stays the person's to change, and
+    picking another agent changes only the untouched ones. Model and Effort sit
+    beside Permissions for every start. A Backend picker is drawn only while
+    the host has two or more agent backends, narrowed to the agent's. The
+    sentence says "as the research-lead agent", every flag the agent adds,
+    that its instructions go in after the project's with nothing typed, and
+    whether it can start agents; an agent that works in a worktree names the
+    new worktree, its branch and what it is cut from, and outside a git
+    repository the refusal replaces the sentence, in `danger`, and Start is
+    off. The key strip's Tab says Agent.
 
   Its key strip is buttons that look like hints - the key in mono, the word
   beside it - because the strip is the only place a pointer could start a
   session from.
 - **A pane's `+`** (after the last tab of every strip): a new tab in that pane,
   the way a browser's new-tab button works. It is a `Menu` first - Session,
-  Profile session, Browser tab - and each choice replaces it in the same place
+  Profile session, Agent session, Terminal, Browser tab - and each choice replaces it in the same place
   under the `+` rather than opening beside it, so there is one popup at a time
   and Escape always means "none of this". Whatever it opens lands in the pane
   whose `+` was pressed, focused or not (`placeIn`), and takes its front.
@@ -738,7 +755,10 @@ overrides the gate; keep it.
     folder's conversations, as a menu) and **Start session**. After a faded
     rule comes **Recent**: the three folders worked in last, each with the
     profile it would start with. The permission mode is the profile's;
-    choosing one is what Ctrl+N is for.
+    choosing one is what Ctrl+N is for. **Agent** sits between Folder and
+    Profile: a picked agent's model, effort and permissions are its own here,
+    with a line saying Ctrl+N changes them, and the sentence names its tool
+    rules without spelling them. Recent's rows start with No agent.
 
     Recent's rows and Resume's are the exception to "a click never starts", and
     they earn it by saying what they run before they run it. A Recent row names
@@ -747,6 +767,11 @@ overrides the gate; keep it.
     the sentence above it already describes.
   - **Profile session** is the profiles as a menu, pinned first, each with the
     folder it runs in. One click starts it there.
+  - **Agent session** is the host's agents as a menu headed "Agent session in
+    <folder>", each with its description on a second line; one no backend here
+    can run is under a separator, disabled, saying why. Picking one turns it
+    into the Session popover with that agent picked, in the pane's folder. It
+    is disabled, saying why, while the host has no agents.
   - **Browser tab** opens an empty page with the caret in its address bar.
 - **The restore offer** (after Helm stops without shutting down): a page in a
   tab, not a dialog, opened in front of the focused pane. It is the first thing

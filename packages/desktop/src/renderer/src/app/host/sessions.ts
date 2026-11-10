@@ -11,6 +11,7 @@ import {
   type UrgentState
 } from '@helm/core/types'
 import { CLAUDE_CODE_BACKEND } from '../../../../shared/host/backend'
+import { launchRequestToHost } from '../../../../shared/host/launch'
 import type { HostConnection, HostSubscription } from '../../../../shared/host/client'
 import type * as P from '../../../../shared/host/protocol'
 import {
@@ -427,17 +428,7 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
         const launched = launchedFromHost(
           await (
             await host()
-          ).request('session:launch', {
-            cwd: req.cwd,
-            projectPath: req.projectPath ?? null,
-            name: req.name ?? null,
-            profileId: req.profileId,
-            permissionMode: req.permissionMode,
-            resume: req.resume,
-            backend: CLAUDE_CODE_BACKEND,
-            cols: req.cols,
-            rows: req.rows
-          })
+          ).request('session:launch', launchRequestToHost(req))
         )
         adopt(launched.session)
         return launched
@@ -452,7 +443,12 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
       'history:resume': async (req) => {
         const resumed = await (
           await host()
-        ).request('history:resume', { sessionId: req.sessionId, cols: req.cols, rows: req.rows })
+        ).request('history:resume', {
+          sessionId: req.sessionId,
+          ...(req.agent == null ? {} : { agent: req.agent }),
+          cols: req.cols,
+          rows: req.rows
+        })
         const session = adopt(sessionFromHost(resumed.session))
         return { session, history: historySessionFromHost(resumed.history) }
       },
