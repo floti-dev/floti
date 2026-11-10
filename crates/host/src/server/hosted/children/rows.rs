@@ -558,7 +558,6 @@ mod tests {
             session: parent,
             conversation_id: None,
             name: "tests".to_owned(),
-            agent: None,
             command: Some("pnpm test".to_owned()),
             outlive: false,
             can_start: false,

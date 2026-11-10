@@ -19,7 +19,7 @@ use tokio::sync::broadcast;
 
 use crate::agent::claude_code::session_title_from;
 use crate::agent_tools::KeptGrant;
-use crate::history::index::AGENT_TITLES;
+use crate::history::index::{AGENT_TITLES, CONVERSATION_AGENTS};
 use crate::session::{NewSessionRow, SessionExit, SessionId, SessionLedger};
 use crate::store::Store;
 use crate::{Error, Result};
@@ -262,10 +262,12 @@ pub(crate) struct LostRow {
     pub permission_mode: Option<PermissionMode>,
     /// The backend it ran on, which reopens it ([`recorded_backend`]).
     pub backend: BackendId,
-    /// The agent it was started as, when another session started it: the
+    /// The agent it was started as, by another session or by a person: the
     /// agent's file as it is when the session reopens is what composes it
     /// again.
     pub agent: Option<String>,
+    /// Whether another session started it, as its child.
+    pub child: bool,
     /// The name it ran Remote Control under, when it did: the line a child
     /// inherited from its parent, which it runs under again.
     pub remote_control_name: Option<String>,
@@ -274,7 +276,7 @@ pub(crate) struct LostRow {
 /// What an update to `lost` returns, in [`lost_row`]'s order.
 const LOST_COLUMNS: &str = "id, name, label, cwd, branch, profile_id, \
      coalesce(last_claude_session_id, claude_session_id), backend, project_path, permission_mode, \
-     agent, remote_control_name";
+     agent, remote_control_name, child_name IS NOT NULL";
 
 fn lost_row(row: &Row<'_>) -> rusqlite::Result<LostRow> {
     let name: String = row.get(1)?;
@@ -297,6 +299,7 @@ fn lost_row(row: &Row<'_>) -> rusqlite::Result<LostRow> {
         remote_control_name: row
             .get::<_, Option<String>>(11)?
             .filter(|name| !name.trim().is_empty()),
+        child: row.get(12)?,
     })
 }
 
@@ -600,10 +603,11 @@ pub(crate) fn read_history_session(
             &format!(
                 "SELECT h.session_id, h.project, h.prompt_count, h.first_at, h.last_at, \
                  h.first_prompt, h.title_prompt, h.transcript_file, h.transcript_bytes, \
-                 h.project_exists, n.name, t.title \
+                 h.project_exists, n.name, t.title, g.agent \
                  FROM history_sessions h \
                  LEFT JOIN history_names n ON n.session_id = lower(h.session_id) \
                  LEFT JOIN {AGENT_TITLES} t ON t.conversation = lower(h.session_id) \
+                 LEFT JOIN {CONVERSATION_AGENTS} g ON g.conversation = lower(h.session_id) \
                  WHERE lower(h.session_id) = lower(?1)"
             ),
             [conversation_id],
@@ -626,6 +630,7 @@ pub(crate) fn read_history_session(
                     title_fallback: title.fallback,
                     label: non_empty(row.get(10)?),
                     agent_title: non_empty(row.get(11)?),
+                    agent: non_empty(row.get(12)?).map(|agent| agent.trim().to_owned()),
                     transcript_file: row.get(7)?,
                     transcript_bytes: row.get::<_, Option<i64>>(8)?.map(unsigned),
                     project_exists: row.get::<_, Option<bool>>(9)?.unwrap_or(false),

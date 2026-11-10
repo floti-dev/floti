@@ -586,8 +586,19 @@
         "canStart": {
           "type": "boolean"
         },
+        "cannotRun": {
+          "description": "Why none of the host's backends can run it, as a sentence, when\n`backends` is empty: none it lists is installed, or none that is can\nenforce its rules. Null when one can.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": "string"
+        },
+        "fields": {
+          "$ref": "#/$defs/AgentFields",
+          "description": "Its fields, as a start reads them: what a launcher fills its pickers\nwith when a person starts a session as it."
         },
         "file": {
           "description": "The file it is read from, such as `reviewer.md`; null for the default\nthe host makes from its backends, and for a shipped agent a host\nserves while it has no agents folder.",
@@ -623,7 +634,8 @@
         "backends",
         "worktree",
         "canStart",
-        "unusedLines"
+        "unusedLines",
+        "fields"
       ],
       "type": "object"
     },
@@ -4651,6 +4663,13 @@
     "HistorySession": {
       "description": "A conversation the history index knows about, and whether it can still be\nresumed.",
       "properties": {
+        "agent": {
+          "description": "The agent its newest session in Floti was started as (protocol 2.3),\nwhich a resume composes again. Absent for none, and from a host before\n2.3.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "agentTitle": {
           "description": "The title the conversation's agent last gave its session\n(`session_title`), kept on the session's row. What to call it is\n`label`, then this, then `title`. Absent when no agent titled it, and\nfrom a host before protocol 2.2, which reads as none.",
           "type": [
@@ -5229,6 +5248,28 @@
         }
       ]
     },
+    "LaunchChoices": {
+      "description": "The model and effort a launcher chose for a session, each null for the\nbackend's own default.",
+      "properties": {
+        "effort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EffortLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "LaunchProfileRequest": {
       "description": "Launching a profile: the profile supplies the folder, the overlays and\nevery flag, so the client sends an id and a grid and nothing else.",
       "properties": {
@@ -5260,6 +5301,13 @@
     "LaunchSessionRequest": {
       "description": "A session from the new-session launcher. The profile goes as an id and a\nconversation to reopen as its id; the host reads both back.",
       "properties": {
+        "agent": {
+          "description": "The agent to start it as (protocol 2.3), by name, or null for none.\nThe host composes it as it composes a child's: its body after the\nproject's instructions, its tool rules, its worktree and whether it\nmay start agents; nothing of it is typed. A resume composes it again\nfrom its file as it is then. An agent that is gone or cannot be loaded\nis refused, naming it, and nothing starts.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "backend": {
           "anyOf": [
             {
@@ -5271,6 +5319,17 @@
           ],
           "default": null,
           "description": "The agent backend to run, or null for the host's default. A resumed\nconversation runs on the backend that recorded it."
+        },
+        "chosen": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LaunchChoices"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The model and effort the launcher chose (protocol 2.3). Present, they\nreplace what the profile and the agent give, each null passing no\nflag, as `permissionMode` does. Absent, the profile's and the agent's\napply, as they did for a client before 2.3."
         },
         "cols": {
           "format": "uint16",
@@ -8725,6 +8784,20 @@
     "RestorableSession": {
       "description": "A session the host's last run was hosting when it stopped without shutting\ndown.",
       "properties": {
+        "agent": {
+          "description": "The agent it was started as (protocol 2.3), or absent for none.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "agentProblem": {
+          "description": "Why its agent cannot be composed again (protocol 2.3): it is gone, or\nits file cannot be loaded, as a sentence naming it. Absent when it can,\nor when it was started as none. Such a session is offered unticked,\nand restoring it is restoring it without its agent\n(`SessionToRestore.withoutAgent`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "blocked": {
           "description": "Why it cannot be reopened, as a sentence, or null when it can.",
           "type": [
@@ -8878,6 +8951,13 @@
     "ResumeSessionRequest": {
       "description": "Reopening a conversation: an id and a grid. The folder and the command are\ndecided by the host from its own index.",
       "properties": {
+        "agent": {
+          "description": "The agent to compose it as again (protocol 2.3), from its file as it\nis now, or absent for none: History passes the agent the conversation\nwas started as, and leaves it out for Resume without the agent. An\nagent that is gone or cannot be loaded is refused, naming it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "cols": {
           "format": "uint16",
           "maximum": 65535,
@@ -9850,6 +9930,10 @@
           "maximum": 65535,
           "minimum": 0,
           "type": "integer"
+        },
+        "withoutAgent": {
+          "description": "Reopen it without the agent it was started as (protocol 2.3): what a\nperson chose for a session whose agent the offer named a problem with.\nAbsent, its agent is composed again, and a file that cannot be loaded\nrefuses it.",
+          "type": "boolean"
         }
       },
       "required": [

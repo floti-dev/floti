@@ -115,6 +115,7 @@ impl Hosted {
                 prompt: None,
                 composition: Composition::default(),
                 resume: None,
+                families_off: Vec::new(),
                 origin: SessionOrigin {
                     project_path: self.known_project(&folder.display().to_string()),
                     profile_id: None,
@@ -122,11 +123,12 @@ impl Hosted {
                     branch: None,
                     // A shell has no Remote Control to name.
                     remote_control_name: None,
+                    // A command is no agent.
+                    agent: None,
                     parent: Some(ParentLink {
                         session: parent,
                         conversation_id: facts.conversation_id.clone(),
                         name: name.clone(),
-                        agent: None,
                         command: Some(line.clone()),
                         outlive: false,
                         can_start: false,

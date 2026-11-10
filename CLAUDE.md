@@ -855,6 +855,25 @@ folder: run through npx, that folder is a cache.
   while a client listens on `agents:changed`, which tells every listener the
   names whose files came, went or changed, the host's own writes and an
   outside editor's alike (`agent_definitions/watch.rs`).
+- A person starts a session as an agent from a launcher (`session:launch`'s
+  `agent`, protocol 2.3). The host composes it as it composes a child's
+  (`server/hosted/as_agent.rs`): its body after the project's instructions,
+  its model, effort, permission, tool rules and profile, with no child's
+  section and nothing typed. A person is at it, so it is not launched
+  unattended, and it counts toward no agent limit (its row has no
+  `child_name`). `can_start: no` gives it no floti-agents; `worktree: yes`
+  starts a new one in a new agent worktree named after the session, and
+  outside a git repository refuses it with nothing started. When the launcher
+  says what it chose (`chosen`), the profile, permission, model and effort are
+  the request's own, each null for none; when it does not, the agent's fill
+  what the request leaves out. The agent is on the session's row, and History
+  gives a conversation the agent of its newest row. A resume from History
+  (`history:resume`'s `agent`) and a restore compose it again from its file as
+  it reads now; one that is gone or cannot be loaded is refused naming it, and
+  the restore offer names the problem (`agentProblem`), leaves the row
+  unticked, and restores it without the agent only when asked
+  (`withoutAgent`). A session taken back from the keeper is composed by
+  nothing: it never stopped.
 - Claude Code's own agents (its `agents/` files, chosen with `--agent`) are
   its subagents, and Floti calls them Subagents wherever it shows them (the
   profile editor, the config console, the effective view), so the two never

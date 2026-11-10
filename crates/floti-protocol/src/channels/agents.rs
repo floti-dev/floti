@@ -119,6 +119,13 @@ pub struct AgentSummary {
     /// The lines its file has that Floti no longer reads, in the file's
     /// order.
     pub unused_lines: Vec<AgentUnusedLine>,
+    /// Its fields, as a start reads them: what a launcher fills its pickers
+    /// with when a person starts a session as it.
+    pub fields: AgentFields,
+    /// Why none of the host's backends can run it, as a sentence, when
+    /// `backends` is empty: none it lists is installed, or none that is can
+    /// enforce its rules. Null when one can.
+    pub cannot_run: Option<String>,
 }
 
 /// A line an agent file has that Floti no longer reads: accepted and

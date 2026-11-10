@@ -309,7 +309,18 @@ backends: Array<string>, worktree: boolean, canStart: boolean,
  * The lines its file has that Floti no longer reads, in the file's
  * order.
  */
-unusedLines: Array<AgentUnusedLine>, };
+unusedLines: Array<AgentUnusedLine>, 
+/**
+ * Its fields, as a start reads them: what a launcher fills its pickers
+ * with when a person starts a session as it.
+ */
+fields: AgentFields, 
+/**
+ * Why none of the host's backends can run it, as a sentence, when
+ * `backends` is empty: none it lists is installed, or none that is can
+ * enforce its rules. Null when one can.
+ */
+cannotRun: string | null, };
 
 /**
  * A line an agent file has that Floti no longer reads: accepted and
@@ -1755,6 +1766,12 @@ label: string | null,
  */
 agentTitle?: string, 
 /**
+ * The agent its newest session in Floti was started as (protocol 2.3),
+ * which a resume composes again. Absent for none, and from a host before
+ * 2.3.
+ */
+agent?: string, 
+/**
  * The transcript on disk, or null once it has been reaped.
  */
 transcriptFile: string | null, transcriptBytes: number | null, 
@@ -1949,6 +1966,12 @@ renamedTo: string | null, };
 export type Knowable<T> = { "state": "known", "value": T } | { "state": "unknown" };
 
 /**
+ * The model and effort a launcher chose for a session, each null for the
+ * backend's own default.
+ */
+export type LaunchChoices = { model: string | null, effort: EffortLevel | null, };
+
+/**
  * Launching a profile: the profile supplies the folder, the overlays and
  * every flag, so the client sends an id and a grid and nothing else.
  */
@@ -1983,7 +2006,23 @@ resume: string | null,
  * The agent backend to run, or null for the host's default. A resumed
  * conversation runs on the backend that recorded it.
  */
-backend: BackendId | null, cols: number, rows: number, };
+backend: BackendId | null, 
+/**
+ * The agent to start it as (protocol 2.3), by name, or null for none.
+ * The host composes it as it composes a child's: its body after the
+ * project's instructions, its tool rules, its worktree and whether it
+ * may start agents; nothing of it is typed. A resume composes it again
+ * from its file as it is then. An agent that is gone or cannot be loaded
+ * is refused, naming it, and nothing starts.
+ */
+agent?: string, 
+/**
+ * The model and effort the launcher chose (protocol 2.3). Present, they
+ * replace what the profile and the agent give, each null passing no
+ * flag, as `permissionMode` does. Absent, the profile's and the agent's
+ * apply, as they did for a client before 2.3.
+ */
+chosen?: LaunchChoices, cols: number, rows: number, };
 
 /**
  * What a profile launch composed, for the pane to report before the terminal
@@ -3013,7 +3052,19 @@ lastAt: number | null,
 /**
  * Why it cannot be reopened, as a sentence, or null when it can.
  */
-blocked: string | null, };
+blocked: string | null, 
+/**
+ * The agent it was started as (protocol 2.3), or absent for none.
+ */
+agent?: string, 
+/**
+ * Why its agent cannot be composed again (protocol 2.3): it is gone, or
+ * its file cannot be loaded, as a sentence naming it. Absent when it can,
+ * or when it was started as none. Such a session is offered unticked,
+ * and restoring it is restoring it without its agent
+ * (`SessionToRestore.withoutAgent`).
+ */
+agentProblem?: string, };
 
 /**
  * What a crash took, offered back once. Where each session goes on screen is
@@ -3054,7 +3105,14 @@ from: number, launched: LaunchedSession, };
  * Reopening a conversation: an id and a grid. The folder and the command are
  * decided by the host from its own index.
  */
-export type ResumeSessionRequest = { sessionId: string, cols: number, rows: number, };
+export type ResumeSessionRequest = { sessionId: string, 
+/**
+ * The agent to compose it as again (protocol 2.3), from its file as it
+ * is now, or absent for none: History passes the agent the conversation
+ * was started as, and leaves it out for Resume without the agent. An
+ * agent that is gone or cannot be loaded is refused, naming it.
+ */
+agent?: string, cols: number, rows: number, };
 
 export type ResumedSession = { session: SessionRecord, 
 /**
@@ -3468,7 +3526,14 @@ watch?: boolean, };
 /**
  * One lost session to reopen, at the grid of the pane it goes back to.
  */
-export type SessionToRestore = { id: number, cols: number, rows: number, };
+export type SessionToRestore = { id: number, cols: number, rows: number, 
+/**
+ * Reopen it without the agent it was started as (protocol 2.3): what a
+ * person chose for a session whose agent the offer named a problem with.
+ * Absent, its agent is composed again, and a file that cannot be loaded
+ * refuses it.
+ */
+withoutAgent?: boolean, };
 
 export type SessionsOverview = { 
 /**

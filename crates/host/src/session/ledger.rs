@@ -59,6 +59,9 @@ pub struct SessionOrigin {
     pub branch: Option<String>,
     /// The session that started it with an agent tool, when one did.
     pub parent: Option<ParentLink>,
+    /// The agent it was started as: the one its parent started it as, or the
+    /// one a person picked when starting it. `None` for no agent.
+    pub agent: Option<String>,
     /// The name it runs with Remote Control under, when it runs with it. Its
     /// children are launched with Remote Control under "<this name> ›
     /// <their name>".
@@ -77,8 +80,6 @@ pub struct ParentLink {
     pub conversation_id: Option<String>,
     /// What the parent calls this child, unique among its children.
     pub name: String,
-    /// The agent it was started as.
-    pub agent: Option<String>,
     /// The command line it runs, for a command child; null for every other
     /// session.
     pub command: Option<String>,
@@ -165,7 +166,7 @@ impl SessionLedger for Mutex<Store> {
                     parent.map(|link| link.session.0),
                     parent.and_then(|link| link.conversation_id.as_deref()),
                     parent.map(|link| link.name.as_str()),
-                    parent.and_then(|link| link.agent.as_deref()),
+                    row.origin.agent.as_deref(),
                     parent.and_then(|link| link.command.as_deref()),
                     parent.is_some_and(|link| link.outlive),
                     parent.is_some_and(|link| link.can_start),

@@ -55,6 +55,7 @@ mod startup;
 mod wait;
 
 pub(crate) use commands::RunCommand;
+pub(super) use compose::agent_composition;
 use inbox::StoppedBy;
 #[cfg(test)]
 pub(crate) use inbox::{EventKind, Facts, News};
@@ -77,7 +78,7 @@ use tokio::sync::broadcast::{self, error::RecvError};
 
 use super::{Hosted, Plan, lock};
 use crate::agent::guidance::ChildInstructions;
-use crate::agent::{AgentBackend, AgentToolServer, Composition};
+use crate::agent::{AgentBackend, AgentToolServer};
 use crate::agent_cli::{SESSIONS_URL_VAR, TOKEN_VAR, URL_VAR};
 use crate::agent_definitions::{
     AgentDefinition, BadDefinition, DEFAULT_AGENT_NAME, DefinitionLookup, DefinitionSource,
@@ -318,6 +319,31 @@ impl Hosted {
         self.agent_entry(agent, None).backends
     }
 
+    /// Why none of the host's backends can run `agent` for a start no
+    /// parent's mode holds back, as a sentence a client shows beside it, or
+    /// `None` when one can: none it lists is installed, or none that is can
+    /// enforce its rules.
+    pub(crate) fn agent_cannot_run(&self, agent: &AgentDefinition) -> Option<String> {
+        if !self.agent_runs_on(agent).is_empty() {
+            return None;
+        }
+        let mode = child_mode(agent.permission, None, None);
+        if let Some(first) = agent.backends_on(&self.backends).first() {
+            return agent
+                .refusal_on(first.as_ref(), mode)
+                .map(|reason| format!("{reason}."));
+        }
+        let listed: Vec<String> = agent.backends.iter().map(backend_id_text).collect();
+        Some(if listed.is_empty() {
+            "This host has no agent backend that can run it.".to_owned()
+        } else {
+            format!(
+                "Runs only on {}, which this host does not have.",
+                listed.join(" or ")
+            )
+        })
+    }
+
     /// The default agent the host makes from its backends, which a start
     /// with no agent gets while there is no file for it.
     pub(crate) fn built_in_default_agent(&self) -> AgentDefinition {
@@ -423,23 +449,17 @@ impl Hosted {
         if let Some(repository) = &repository {
             self.refuse_shared_worktree(repository, &folder, parent)?;
         }
-        let profile = {
-            let store = self.ledger.store();
-            let profiles = rows::profiles(&store).map_err(|err| err.to_string())?;
-            match (request.profile.as_deref(), agent.profile.as_deref()) {
-                (Some(named), _) => Some(folders::profile_named(&profiles, named)?),
-                (None, Some(named)) => Some(
-                    folders::profile_named(&profiles, named).map_err(|problem| {
-                        format!(
-                            "The agent file {}.md names a profile that cannot be used: {problem} No agent was started.",
-                            agent.name
-                        )
-                    })?,
-                ),
-                (None, None) => {
-                    folders::profile_holding(&store, &folder).map_err(|err| err.to_string())?
-                }
+        let profile = match (request.profile.as_deref(), agent.profile.is_some()) {
+            (Some(named), _) => {
+                let profiles =
+                    rows::profiles(&self.ledger.store()).map_err(|err| err.to_string())?;
+                Some(folders::profile_named(&profiles, named)?)
             }
+            (None, true) => self
+                .agents_profile(&agent)
+                .map_err(|problem| format!("{problem} No agent was started."))?,
+            (None, false) => folders::profile_holding(&self.ledger.store(), &folder)
+                .map_err(|err| err.to_string())?,
         };
 
         let mode = child_mode(
@@ -523,17 +543,18 @@ impl Hosted {
                 prompt: Some(request.task),
                 composition,
                 resume: None,
+                families_off: Vec::new(),
                 origin: SessionOrigin {
                     project_path,
                     profile_id: profile.as_ref().and_then(|p| i64::try_from(p.id).ok()),
                     permission_mode: mode.map(records::permission_mode_name),
                     branch: None,
                     remote_control_name: remote_control.name.clone(),
+                    agent: Some(agent.name.clone()),
                     parent: Some(ParentLink {
                         session: parent,
                         conversation_id: facts.conversation_id.clone(),
                         name: name.clone(),
-                        agent: Some(agent.name.clone()),
                         command: None,
                         outlive,
                         can_start,
@@ -738,7 +759,7 @@ impl Hosted {
             let (reopened, warning) =
                 self.reopen_as_agent(agent, backend.as_ref(), profile.as_ref(), mode)?;
             if let Some(reopened) = reopened {
-                composition = reopened;
+                composition = reopened.composition;
             }
             if let Some(warning) = warning {
                 log_line!("floti host: {name}: {warning}");
@@ -775,25 +796,26 @@ impl Hosted {
                 prompt: Some(request.task),
                 composition,
                 resume: Some(conversation_id),
+                families_off: Vec::new(),
                 origin: SessionOrigin {
                     project_path: self.known_project(&folder.display().to_string()),
                     profile_id: profile.as_ref().and_then(|p| i64::try_from(p.id).ok()),
                     permission_mode: mode.map(records::permission_mode_name),
                     branch: None,
                     remote_control_name: remote_control.name.clone(),
+                    // The default keeps its own name, whatever an earlier
+                    // host called it.
+                    agent: child.agent.as_deref().map(|agent| {
+                        if is_default_name(agent) {
+                            DEFAULT_AGENT_NAME.to_owned()
+                        } else {
+                            agent.to_owned()
+                        }
+                    }),
                     parent: Some(ParentLink {
                         session: parent,
                         conversation_id: facts.conversation_id.clone(),
                         name: name.clone(),
-                        // The default keeps its own name, whatever an
-                        // earlier host called it.
-                        agent: child.agent.as_deref().map(|agent| {
-                            if is_default_name(agent) {
-                                DEFAULT_AGENT_NAME.to_owned()
-                            } else {
-                                agent.to_owned()
-                            }
-                        }),
                         command: None,
                         outlive: child.outlive,
                         can_start: child.can_start,
@@ -1180,6 +1202,30 @@ impl Hosted {
             .collect())
     }
 
+    /// The profile `agent` names, as the host has it now; `None` when it
+    /// names none.
+    ///
+    /// # Errors
+    ///
+    /// A sentence naming the agent's file when no profile has that name.
+    pub(super) fn agents_profile(
+        &self,
+        agent: &AgentDefinition,
+    ) -> Result<Option<Profile>, String> {
+        let Some(named) = agent.profile.as_deref() else {
+            return Ok(None);
+        };
+        let profiles = rows::profiles(&self.ledger.store()).map_err(|err| err.to_string())?;
+        folders::profile_named(&profiles, named)
+            .map(Some)
+            .map_err(|problem| {
+                format!(
+                    "The agent file {}.md names a profile that cannot be used: {problem}",
+                    agent.name
+                )
+            })
+    }
+
     /// The agent a start asks for, read now: the default agent when it names
     /// none.
     fn definition_for(&self, asked: Option<&str>) -> Result<AgentDefinition, String> {
@@ -1209,10 +1255,11 @@ impl Hosted {
         }
     }
 
-    /// What a lost child is reopened with: its agent as the agent's file reads
-    /// now. An agent whose file cannot be used refuses the reopen, naming the
-    /// file; an agent that is gone reopens the child without it and says so
-    /// (`None` for the composition).
+    /// What a session started as an agent is reopened with: its agent as the
+    /// agent's file reads now, and the name it is composed as. An agent whose
+    /// file cannot be used refuses the reopen, naming the file, because a
+    /// typo must never drop a rule; an agent that is gone reopens the session
+    /// without it and says so (`None` for what it adds).
     ///
     /// # Errors
     ///
@@ -1224,7 +1271,7 @@ impl Hosted {
         backend: &dyn AgentBackend,
         profile: Option<&Profile>,
         mode: Option<PermissionMode>,
-    ) -> Result<(Option<Composition>, Option<String>), String> {
+    ) -> Result<(Option<super::as_agent::AsAgent>, Option<String>), String> {
         let agent = match self.children.agents().lookup(agent_name) {
             DefinitionLookup::Found(agent) => *agent,
             DefinitionLookup::Bad(bad) => return Err(bad.reopen_refusal()),
@@ -1242,9 +1289,10 @@ impl Hosted {
                 ));
             }
         };
-        let composition = compose::agent_composition(&agent, backend, profile, mode)
+        let as_agent = self
+            .as_agent(&agent, backend, profile, mode)
             .map_err(|reason| format!("{reason}, so the session was not reopened."))?;
-        Ok((Some(composition), None))
+        Ok((Some(as_agent), None))
     }
 
     /// Every agent there is now and every file that is not one, for
@@ -1323,7 +1371,7 @@ impl Hosted {
     /// and the host has it, else the first the agent lists that the host has
     /// and can run it, which is the first `agents_available` lists. When none of
     /// those can run it, the first one's reason is the refusal.
-    fn backend_for(
+    pub(super) fn backend_for(
         &self,
         agent: &AgentDefinition,
         asked: Option<&str>,

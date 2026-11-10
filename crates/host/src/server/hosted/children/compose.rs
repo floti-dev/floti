@@ -19,7 +19,7 @@ use crate::agent_definitions::AgentDefinition;
 /// Why `backend` cannot run the agent: its adapter cannot enforce a rule,
 /// there is an effort and no effort setting, or there is a body and no way to
 /// take it.
-pub(super) fn agent_composition(
+pub(in crate::server::hosted) fn agent_composition(
     agent: &AgentDefinition,
     backend: &dyn AgentBackend,
     profile: Option<&Profile>,

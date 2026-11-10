@@ -1522,6 +1522,7 @@ async fn s8_an_outliving_child_runs_on_names_its_parent_and_is_the_resumed_paren
     let resumed = client
         .request::<HistoryResume>(&ResumeSessionRequest {
             session_id: conversation.clone(),
+            agent: None,
             cols: 80,
             rows: 24,
         })
@@ -3840,6 +3841,7 @@ async fn s21_a_child_and_its_parent_reopened_through_the_restore_offer_run_remot
                     id,
                     cols: 80,
                     rows: 24,
+                    without_agent: false,
                 })
                 .collect(),
         })

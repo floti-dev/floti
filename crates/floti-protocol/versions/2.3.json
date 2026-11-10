@@ -2369,8 +2369,17 @@
         "canStart": {
           "type": "boolean"
         },
+        "cannotRun": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": "string"
+        },
+        "fields": {
+          "$ref": "#/$defs/AgentFields"
         },
         "file": {
           "type": [
@@ -2403,7 +2412,8 @@
         "backends",
         "worktree",
         "canStart",
-        "unusedLines"
+        "unusedLines",
+        "fields"
       ],
       "type": "object"
     },
@@ -6102,6 +6112,12 @@
     },
     "HistorySession": {
       "properties": {
+        "agent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "agentTitle": {
           "type": [
             "string",
@@ -6628,6 +6644,27 @@
         }
       ]
     },
+    "LaunchChoices": {
+      "properties": {
+        "effort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EffortLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "LaunchProfileRequest": {
       "properties": {
         "cols": {
@@ -6657,6 +6694,12 @@
     },
     "LaunchSessionRequest": {
       "properties": {
+        "agent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "backend": {
           "anyOf": [
             {
@@ -6667,6 +6710,16 @@
             }
           ],
           "default": null
+        },
+        "chosen": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LaunchChoices"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "cols": {
           "format": "uint16",
@@ -9892,6 +9945,18 @@
     },
     "RestorableSession": {
       "properties": {
+        "agent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "agentProblem": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "blocked": {
           "type": [
             "string",
@@ -10032,6 +10097,12 @@
     },
     "ResumeSessionRequest": {
       "properties": {
+        "agent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "cols": {
           "format": "uint16",
           "maximum": 65535,
@@ -10928,6 +10999,9 @@
           "maximum": 65535,
           "minimum": 0,
           "type": "integer"
+        },
+        "withoutAgent": {
+          "type": "boolean"
         }
       },
       "required": [

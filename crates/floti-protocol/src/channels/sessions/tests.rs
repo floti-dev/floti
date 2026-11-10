@@ -286,6 +286,7 @@ fn history_session() -> HistorySession {
         title_fallback: false,
         label: None,
         agent_title: None,
+        agent: Some("research-lead".into()),
         transcript_file: Some("C:\\Users\\me\\.claude\\projects\\api\\0b9c.jsonl".into()),
         transcript_bytes: Some(5_000_000_000),
         project_exists: true,
@@ -470,6 +471,11 @@ fn session_requests_and_answers_round_trip_over_cbor() {
             permission_mode: Some(PermissionMode::Plan),
             resume: Some("0b9c".into()),
             backend: None,
+            agent: Some("research-lead".into()),
+            chosen: Some(LaunchChoices {
+                model: Some("opus".into()),
+                effort: None,
+            }),
             cols: 80,
             rows: 24,
         },
@@ -487,6 +493,8 @@ fn session_requests_and_answers_round_trip_over_cbor() {
                 profile_gone: false,
                 last_at: Some(1_761_560_000_000),
                 blocked: Some("Its folder is gone.".into()),
+                agent: Some("research-lead".into()),
+                agent_problem: Some("research-lead is no longer among this host's agents.".into()),
             }],
             elsewhere: 1,
         }),
@@ -498,6 +506,7 @@ fn session_requests_and_answers_round_trip_over_cbor() {
                 id: 9,
                 cols: 100,
                 rows: 30,
+                without_agent: false,
             }],
         },
         RestoreSessionsResult {
@@ -900,6 +909,7 @@ fn history_and_archive_channels_round_trip_over_cbor() {
     exchange::<HistoryResume>(
         ResumeSessionRequest {
             session_id: "0b9c".into(),
+            agent: None,
             cols: 80,
             rows: 24,
         },

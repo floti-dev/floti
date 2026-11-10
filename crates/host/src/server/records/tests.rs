@@ -24,6 +24,11 @@ impl World {
     }
 
     fn start(&self, name: &str, parent: Option<ParentLink>) -> SessionId {
+        self.start_as(name, parent, None)
+    }
+
+    /// A session started as `agent`, by its parent or by a person.
+    fn start_as(&self, name: &str, parent: Option<ParentLink>, agent: Option<&str>) -> SessionId {
         let row = NewSessionRow {
             name: name.to_owned(),
             cwd: self.dirs.folder("work"),
@@ -32,6 +37,7 @@ impl World {
             backend: BackendId::claude_code(),
             origin: SessionOrigin {
                 parent,
+                agent: agent.map(str::to_owned),
                 ..SessionOrigin::default()
             },
         };
@@ -57,7 +63,6 @@ fn link(parent: SessionId, name: &str) -> ParentLink {
         session: parent,
         conversation_id: Some("conversation-of-lead".to_owned()),
         name: name.to_owned(),
-        agent: Some("reviewer".to_owned()),
         command: None,
         outlive: false,
         can_start: false,
@@ -128,7 +133,11 @@ fn a_profile_row_keeps_remote_control_only_when_it_is_on() {
 fn a_childs_record_names_its_parent_by_row_and_name_and_carries_its_agent() {
     let world = World::new();
     let parent = world.start("lead", None);
-    let child = world.start("lead-reviewer", Some(link(parent, "reviewer")));
+    let child = world.start_as(
+        "lead-reviewer",
+        Some(link(parent, "reviewer")),
+        Some("reviewer"),
+    );
 
     let child = world.record(child);
     assert_eq!(child.parent_id, Some(parent.0 as u64));
@@ -143,7 +152,6 @@ fn a_command_childs_record_carries_its_command_and_once_it_exited_its_exit_code(
     let world = World::new();
     let parent = world.start("lead", None);
     let mut running = link(parent, "tests");
-    running.agent = None;
     running.command = Some("pnpm test --filter core".to_owned());
     let child = world.start("lead-tests", Some(running));
 
@@ -175,7 +183,6 @@ fn a_command_that_exited_above_i32_is_listed_and_told_as_the_signed_code_powersh
     let world = World::new();
     let parent = world.start("lead", None);
     let mut running = link(parent, "tests");
-    running.agent = None;
     running.command = Some("pnpm test".to_owned());
     let child = world.start("lead-tests", Some(running));
     world.store.finished(child, &exit(0xC000_0005)).unwrap();
@@ -508,7 +515,11 @@ fn deleting_a_parents_row_leaves_its_child_with_no_parent_and_keeps_the_conversa
 {
     let world = World::new();
     let parent = world.start("lead", None);
-    let child = world.start("lead-reviewer", Some(link(parent, "reviewer")));
+    let child = world.start_as(
+        "lead-reviewer",
+        Some(link(parent, "reviewer")),
+        Some("reviewer"),
+    );
 
     world.execute("DELETE FROM sessions WHERE id = ?1", parent);
 

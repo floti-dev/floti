@@ -2275,6 +2275,7 @@ async fn s13_a_parent_that_exits_and_is_resumed_in_floti_hears_what_its_children
     let resumed = client
         .request::<HistoryResume>(&ResumeSessionRequest {
             session_id: conversation,
+            agent: None,
             cols: 80,
             rows: 24,
         })

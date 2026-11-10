@@ -235,6 +235,8 @@ impl Agents {
             worktree: agent.worktree,
             can_start: agent.can_start,
             unused_lines,
+            fields: editing::fields(agent),
+            cannot_run: self.hosted.agent_cannot_run(agent),
         }
     }
 

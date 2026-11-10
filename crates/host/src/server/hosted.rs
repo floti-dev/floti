@@ -55,8 +55,10 @@ use crate::session::{
 };
 use crate::store::Store;
 use crate::workspace::discovery::git::read_git_branch;
+use crate::workspace::worktrees::Made;
 use crate::{Error, Result};
 
+mod as_agent;
 mod children;
 
 use children::Children;
@@ -85,6 +87,10 @@ struct Plan {
     composition: Composition,
     /// The conversation to reopen, or `None` for a new one.
     resume: Option<String>,
+    /// The agent tool families the launch is given none of, beyond those its
+    /// profile turns off: floti-agents for a session a person starts as an
+    /// agent that may not start agents.
+    families_off: Vec<&'static str>,
     origin: SessionOrigin,
 }
 
@@ -605,6 +611,7 @@ impl Hosted {
                 prompt,
                 composition,
                 resume: None,
+                families_off: Vec::new(),
             },
             TermSize::new(request.cols, request.rows),
             Some(client),
@@ -613,26 +620,64 @@ impl Hosted {
 
     /// The launcher's launch: a folder, a saved profile's composition or
     /// none, the launcher's own permission mode (none passes no flag,
-    /// whatever the profile says), and optionally a conversation from
+    /// whatever the profile says), and optionally the agent to start it as,
+    /// what the launcher chose of model and effort, and a conversation from
     /// history to reopen, which runs in the folder history recorded and on
     /// the backend that recorded it.
+    ///
+    /// An agent is composed as a child's is ([`as_agent`]), from its file as
+    /// it reads now, and a new session of an agent that works in a worktree
+    /// starts in one of its own. When the launcher says what it chose
+    /// (`chosen`), the profile, the permission mode, the model and the effort
+    /// are all the request's own; when it does not, the agent's profile and
+    /// permission fill those the request leaves out, as they do for a child.
     pub fn launch(
         &self,
         client: ClientId,
         request: LaunchSessionRequest,
     ) -> std::result::Result<LaunchedSession, String> {
-        let profile = request.profile_id.map(|id| self.profile(id)).transpose()?;
         let history = request
             .resume
             .as_deref()
             .map(|id| self.resumable(id))
             .transpose()?;
-        let backend = match &history {
-            Some(history) => self.named_backend(&history.backend)?,
-            None => self.backend(request.backend.as_ref())?,
+        let agent = non_empty(request.agent.clone())
+            .map(|name| self.person_agent(&name))
+            .transpose()?;
+        let chose = request.chosen.is_some();
+        let profile = match (request.profile_id, &agent) {
+            (Some(id), _) => Some(self.profile(id)?),
+            (None, Some(agent)) if !chose => self.agents_profile(agent)?,
+            (None, _) => None,
         };
-        let mut composition = composition_of(profile.as_ref());
-        composition.permission_mode = request.permission_mode;
+        let mode = match &agent {
+            Some(agent) if !chose => request.permission_mode.or(agent.permission),
+            _ => request.permission_mode,
+        };
+        let backend = match (&history, &agent) {
+            (Some(history), _) => self.named_backend(&history.backend)?,
+            (None, Some(agent)) => {
+                self.backend_for(agent, request.backend.as_ref().map(BackendId::as_str), mode)?
+            }
+            (None, None) => self.backend(request.backend.as_ref())?,
+        };
+        let (mut composition, families_off) = match &agent {
+            Some(agent) => {
+                let as_agent = self
+                    .as_agent(agent, backend.as_ref(), profile.as_ref(), mode)
+                    .map_err(|reason| format!("{reason}, so nothing was started."))?;
+                (as_agent.composition, as_agent.families_off)
+            }
+            None => {
+                let mut composition = composition_of(profile.as_ref());
+                composition.permission_mode = mode;
+                (composition, Vec::new())
+            }
+        };
+        if let Some(chosen) = request.chosen {
+            composition.model = non_empty(chosen.model);
+            composition.effort = chosen.effort;
+        }
         let (folder, name, prompt) = match &history {
             Some(history) => (PathBuf::from(&history.project), history_name(history), None),
             None => {
@@ -642,27 +687,46 @@ impl Hosted {
                 (folder, name, prompt)
             }
         };
-        self.run(
+        // A new session of an agent that works in a worktree gets one named
+        // after it; a resumed one is in the folder its conversation ran in.
+        let made = match &agent {
+            Some(agent) if agent.worktree && history.is_none() => {
+                Some(self.person_worktree(agent, &folder, &name)?)
+            }
+            _ => None,
+        };
+        let launched = self.run(
             Plan {
                 origin: SessionOrigin {
                     project_path: history
                         .as_ref()
                         .map(|history| history.project.clone())
                         .or(request.project_path),
-                    profile_id: request.profile_id.and_then(|id| i64::try_from(id).ok()),
-                    permission_mode: request.permission_mode.map(records::permission_mode_name),
+                    profile_id: profile
+                        .as_ref()
+                        .and_then(|profile| i64::try_from(profile.id).ok()),
+                    permission_mode: mode.map(records::permission_mode_name),
+                    agent: agent.as_ref().map(|agent| agent.name.clone()),
                     ..SessionOrigin::default()
                 },
                 resume: history.map(|history| history.session_id),
                 backend,
-                folder,
+                folder: made.as_ref().map_or(folder, |made| made.folder.clone()),
                 name,
                 prompt,
                 composition,
+                families_off,
             },
             TermSize::new(request.cols, request.rows),
             Some(client),
-        )
+        );
+        // A worktree made for a session that never started holds no work.
+        if launched.is_err()
+            && let Some(Err(err)) = made.as_ref().map(Made::discard)
+        {
+            log_line!("floti host: {err}");
+        }
+        launched
     }
 
     /// A profile's own launch: at its root, named after it, in its own
@@ -692,6 +756,7 @@ impl Hosted {
                 },
                 composition,
                 resume: None,
+                families_off: Vec::new(),
             },
             TermSize::new(request.cols, request.rows),
             Some(client),
@@ -708,7 +773,9 @@ impl Hosted {
     /// Reopens a conversation from history as it was had: in the folder
     /// history recorded, on the backend that recorded it, with no profile
     /// and no permission mode. The launcher is where one is reopened with a
-    /// composition.
+    /// composition. A conversation reopened as the agent it was started as
+    /// is composed as that agent again, from its file as it reads now, with
+    /// the profile and permission the agent names.
     pub fn resume(
         &self,
         client: ClientId,
@@ -716,16 +783,40 @@ impl Hosted {
     ) -> std::result::Result<ResumedSession, String> {
         let history = self.resumable(&request.session_id)?;
         let backend = self.named_backend(&history.backend)?;
+        let agent = non_empty(request.agent)
+            .map(|name| self.person_agent(&name))
+            .transpose()?;
+        let (composition, families_off, profile, mode) = match &agent {
+            Some(agent) => {
+                let profile = self.agents_profile(agent)?;
+                let as_agent = self
+                    .as_agent(agent, backend.as_ref(), profile.as_ref(), agent.permission)
+                    .map_err(|reason| format!("{reason}, so nothing was started."))?;
+                (
+                    as_agent.composition,
+                    as_agent.families_off,
+                    profile,
+                    agent.permission,
+                )
+            }
+            None => (Composition::default(), Vec::new(), None, None),
+        };
         let launched = self.run(
             Plan {
                 backend,
                 folder: PathBuf::from(&history.project),
                 name: history_name(&history),
                 prompt: None,
-                composition: Composition::default(),
+                composition,
                 resume: Some(history.session_id.clone()),
+                families_off,
                 origin: SessionOrigin {
                     project_path: Some(history.project.clone()),
+                    profile_id: profile
+                        .as_ref()
+                        .and_then(|profile| i64::try_from(profile.id).ok()),
+                    permission_mode: mode.map(records::permission_mode_name),
+                    agent: agent.map(|agent| agent.name),
                     ..SessionOrigin::default()
                 },
             },
@@ -783,6 +874,7 @@ impl Hosted {
             prompt,
             mut composition,
             resume,
+            families_off,
             mut origin,
         } = plan;
         if !folder.is_dir() {
@@ -812,7 +904,8 @@ impl Hosted {
             .clone_from(&origin.remote_control_name);
         // Granted before the backend composes the launch, which writes the
         // token into the launch's own folder.
-        let excluded = self.families_off_for(origin.profile_id);
+        let mut excluded = self.families_off_for(origin.profile_id);
+        excluded.extend(families_off);
         let scope = GrantScope {
             reports_to_parent: origin.parent.is_some(),
         };
@@ -1152,6 +1245,11 @@ impl Hosted {
                     profile,
                     last_at: None,
                     blocked: self.blocked(row),
+                    agent: row.agent.clone(),
+                    agent_problem: row
+                        .agent
+                        .as_deref()
+                        .and_then(|agent| self.agent_problem(agent)),
                 }
             })
             .collect();
@@ -1225,7 +1323,7 @@ impl Hosted {
                 continue;
             };
             let size = TermSize::new(wanted.cols, wanted.rows);
-            match self.reopen(row, size, client) {
+            match self.reopen(row, size, client, wanted.without_agent) {
                 Ok(launched) => result.restored.push(RestoredSession {
                     from: wanted.id,
                     launched,
@@ -1241,13 +1339,18 @@ impl Hosted {
     }
 
     /// A lost session reopened as it was launched: its row's folder, name,
-    /// profile and permission mode. A profile deleted since is said rather
-    /// than refused; the conversation is still worth having back.
+    /// profile, permission mode and agent, the agent composed from its file
+    /// as it reads now ([`Hosted::reopen_as_agent`]), or left out when the
+    /// person chose to restore it without (`without_agent`), which the offer
+    /// leaves to them when it names the agent's problem. A profile deleted
+    /// since is said rather than refused; the conversation is still worth
+    /// having back.
     fn reopen(
         &self,
         row: &LostRow,
         size: TermSize,
         client: ClientId,
+        without_agent: bool,
     ) -> std::result::Result<LaunchedSession, String> {
         let backend = self.reopener(row)?;
         let profile = row
@@ -1260,23 +1363,31 @@ impl Hosted {
             });
         let mut composition = composition_of(profile.as_ref());
         composition.permission_mode = row.permission_mode;
-        // A child comes back as its agent, as the agent's file reads now.
+        let mut families_off = Vec::new();
+        let mut agent = None;
         let mut agent_warning = None;
-        if let Some(agent) = row.agent.as_deref() {
+        // It comes back as its agent, as the agent's file reads now, unless
+        // the person chose to restore it without.
+        if let Some(name) = row.agent.as_deref().filter(|_| !without_agent) {
             let (reopened, warning) = self.reopen_as_agent(
-                agent,
+                name,
                 backend.as_ref(),
                 profile.as_ref(),
                 row.permission_mode,
             )?;
             if let Some(reopened) = reopened {
-                composition = reopened;
+                composition = reopened.composition;
+                // A child had the agents family as a child, and keeps it.
+                if !row.child {
+                    families_off = reopened.families_off;
+                }
+                agent = Some(reopened.agent);
             }
             agent_warning = warning;
         }
         // An agent's child is launched as one again: with only the servers
         // its launch gives it.
-        composition.unattended = row.agent.is_some();
+        composition.unattended = row.child && row.agent.is_some();
         let mut launched = self.run(
             Plan {
                 backend,
@@ -1285,10 +1396,12 @@ impl Hosted {
                 prompt: None,
                 composition,
                 resume: row.conversation_id.clone(),
+                families_off,
                 origin: SessionOrigin {
                     project_path: row.project_path.clone(),
                     profile_id: row.profile_id,
                     permission_mode: row.permission_mode.map(records::permission_mode_name),
+                    agent,
                     // The line it ran Remote Control under, so a child of a
                     // Remote Control parent comes back on it as well.
                     remote_control_name: row.remote_control_name.clone(),

@@ -318,8 +318,33 @@ pub struct LaunchSessionRequest {
     /// conversation runs on the backend that recorded it.
     #[serde(default)]
     pub backend: Option<BackendId>,
+    /// The agent to start it as (protocol 2.3), by name, or null for none.
+    /// The host composes it as it composes a child's: its body after the
+    /// project's instructions, its tool rules, its worktree and whether it
+    /// may start agents; nothing of it is typed. A resume composes it again
+    /// from its file as it is then. An agent that is gone or cannot be loaded
+    /// is refused, naming it, and nothing starts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub agent: Option<String>,
+    /// The model and effort the launcher chose (protocol 2.3). Present, they
+    /// replace what the profile and the agent give, each null passing no
+    /// flag, as `permissionMode` does. Absent, the profile's and the agent's
+    /// apply, as they did for a client before 2.3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub chosen: Option<LaunchChoices>,
     pub cols: u16,
     pub rows: u16,
+}
+
+/// The model and effort a launcher chose for a session, each null for the
+/// backend's own default.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchChoices {
+    pub model: Option<String>,
+    pub effort: Option<EffortLevel>,
 }
 
 /// What a launch composed, for anything worth saying before the terminal
@@ -361,6 +386,18 @@ pub struct RestorableSession {
     pub last_at: Option<u64>,
     /// Why it cannot be reopened, as a sentence, or null when it can.
     pub blocked: Option<String>,
+    /// The agent it was started as (protocol 2.3), or absent for none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub agent: Option<String>,
+    /// Why its agent cannot be composed again (protocol 2.3): it is gone, or
+    /// its file cannot be loaded, as a sentence naming it. Absent when it can,
+    /// or when it was started as none. Such a session is offered unticked,
+    /// and restoring it is restoring it without its agent
+    /// (`SessionToRestore.withoutAgent`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub agent_problem: Option<String>,
 }
 
 /// What a crash took, offered back once. Where each session goes on screen is
@@ -384,6 +421,13 @@ pub struct SessionToRestore {
     pub id: u64,
     pub cols: u16,
     pub rows: u16,
+    /// Reopen it without the agent it was started as (protocol 2.3): what a
+    /// person chose for a session whose agent the offer named a problem with.
+    /// Absent, its agent is composed again, and a file that cannot be loaded
+    /// refuses it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub without_agent: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

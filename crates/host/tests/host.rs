@@ -461,6 +461,8 @@ async fn s1_floti_host_is_one_executable_that_starts_and_serves_clients() {
             permission_mode: None,
             resume: None,
             backend: Some(BackendId::new("shell")),
+            agent: None,
+            chosen: None,
             cols: 80,
             rows: 24,
         })
@@ -1848,6 +1850,7 @@ async fn s13_restoring_some_sessions_resumes_each_in_its_recorded_folder_and_ans
                     id: record.id,
                     cols: 100,
                     rows: 30,
+                    without_agent: false,
                 })
                 .collect(),
         })
@@ -1901,6 +1904,7 @@ async fn s13_restoring_some_sessions_resumes_each_in_its_recorded_folder_and_ans
                 id: started[1].id,
                 cols: 80,
                 rows: 24,
+                without_agent: false,
             }],
         })
         .await
@@ -2120,6 +2124,7 @@ async fn s3_restoring_a_claude_code_conversation_on_todays_backends_resumes_it_i
                 id: started.id,
                 cols: 100,
                 rows: 30,
+                without_agent: false,
             }],
         })
         .await
@@ -2210,6 +2215,7 @@ async fn s3_a_row_with_no_backend_recorded_reopens_through_claude_code_and_a_mis
                     id,
                     cols: 80,
                     rows: 24,
+                    without_agent: false,
                 })
                 .to_vec(),
         })

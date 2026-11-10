@@ -38,8 +38,9 @@ use floti_protocol::channels::agents::{
 use floti_protocol::channels::common::{PermissionMode, SessionRecord};
 use floti_protocol::channels::host::{HostStop, HostStopReason, HostStopRequest};
 use floti_protocol::channels::sessions::{
-    RestoreSessionsRequest, SessionList, SessionRestore, SessionStart, SessionToRestore,
-    StartSessionRequest,
+    HistoryQuery, HistoryRefresh, HistoryResume, HistorySession, HistorySessions, LaunchChoices,
+    LaunchSessionRequest, RestoreSessionsRequest, ResumeSessionRequest, SessionLaunch, SessionList,
+    SessionRestorable, SessionRestore, SessionStart, SessionToRestore, StartSessionRequest,
 };
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -2342,6 +2343,7 @@ async fn s2_a_lost_child_is_reopened_in_its_agent_as_the_file_reads_when_it_come
                     id: kids[agent].id(),
                     cols: 80,
                     rows: 24,
+                    without_agent: false,
                 })
                 .collect(),
         })
@@ -2587,6 +2589,7 @@ async fn a_lost_child_whose_row_says_agent_comes_back_as_the_default_with_no_war
                 id: kid.id(),
                 cols: 80,
                 rows: 24,
+                without_agent: false,
             }],
         })
         .await
@@ -3165,5 +3168,500 @@ async fn s19_an_agents_folder_deleted_and_made_again_while_a_client_listens_is_w
     world.agent("worker", "---\ndescription: Builds.\n---\n");
     assert_eq!(next_change(&mut client).await, ["worker"]);
     drop(client);
+    host.stop(HostStopReason::Stop).await;
+}
+
+// ---------------------------------------------------------------------------
+// A session a person starts as an agent
+// ---------------------------------------------------------------------------
+
+/// An agent a person plans a project with: its own model, effort, permission
+/// and rules, and children of its own.
+const RESEARCH_LEAD: &str = "---\n\
+    description: Researches a new project with you and writes the plan.\n\
+    backend: claude-code\n\
+    model:\n  claude-code: opus\n\
+    effort:\n  claude-code: high\n\
+    permission: plan\n\
+    can_start: yes\n\
+    allowed_tools: Read, Grep\n\
+    disallowed_tools: Edit, Write\n\
+    ---\n\
+    Research the project with the user and write the plan.\n";
+
+/// What a launcher sends to start a session in `folder` as `agent`.
+fn launch_request(folder: &Path, agent: Option<&str>) -> LaunchSessionRequest {
+    LaunchSessionRequest {
+        cwd: text(folder),
+        project_path: Some(text(folder)),
+        name: None,
+        profile_id: None,
+        permission_mode: None,
+        resume: None,
+        backend: None,
+        agent: agent.map(str::to_owned),
+        chosen: None,
+        cols: 80,
+        rows: 24,
+    }
+}
+
+impl World {
+    /// A session a person starts from a launcher, the client gone once it
+    /// started; the host's sentence when it refuses.
+    async fn launch(&self, request: LaunchSessionRequest) -> Result<Agent, String> {
+        let mut client = self.client().await;
+        let launched = client.request::<SessionLaunch>(&request).await;
+        drop(client);
+        match launched {
+            Ok(launched) => Ok(self.agent_of(launched.session, &[]).await),
+            Err(err) => Err(err.message),
+        }
+    }
+
+    /// The conversation `agent` is in, once a line was typed into it so that
+    /// history can reopen it, and its session has ended.
+    async fn worked_and_ended(&self, agent: &Agent) -> String {
+        self.type_line(agent, "remember this conversation").await;
+        self.end_from_its_terminal(agent).await;
+        agent
+            .record
+            .conversation_id
+            .clone()
+            .expect("the session has a conversation")
+    }
+
+    /// Ends `agent` from its own terminal and waits for its row to say so.
+    async fn end_from_its_terminal(&self, agent: &Agent) {
+        self.type_line(agent, "/exit").await;
+        eventually("the session to end", async || {
+            (self.column::<String>(agent.id(), "status") != "running").then_some(())
+        })
+        .await;
+    }
+
+    /// The history index's entry for `conversation`, read afresh.
+    async fn history_entry(&self, conversation: &str) -> HistorySession {
+        let mut client = self.client().await;
+        client
+            .request::<HistoryRefresh>(&())
+            .await
+            .expect("the history is read");
+        let page = client
+            .request::<HistorySessions>(&HistoryQuery::default())
+            .await
+            .expect("the history is listed");
+        page.sessions
+            .into_iter()
+            .find(|session| session.session_id.eq_ignore_ascii_case(conversation))
+            .unwrap_or_else(|| panic!("{conversation} is not in the history"))
+    }
+
+    /// Reopens `conversation` from History, as `agent` or as none: the run
+    /// that is none of the earlier runs `seen`.
+    async fn resume_from_history(
+        &self,
+        conversation: &str,
+        agent: Option<&str>,
+        seen: &[u32],
+    ) -> Result<Agent, String> {
+        let mut client = self.client().await;
+        client
+            .request::<HistoryRefresh>(&())
+            .await
+            .expect("the history is read");
+        let resumed = client
+            .request::<HistoryResume>(&ResumeSessionRequest {
+                session_id: conversation.to_owned(),
+                agent: agent.map(str::to_owned),
+                cols: 80,
+                rows: 24,
+            })
+            .await;
+        drop(client);
+        match resumed {
+            Ok(resumed) => Ok(self.agent_of(resumed.session, seen).await),
+            Err(err) => Err(err.message),
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_person_starts_a_session_as_an_agent_composed_as_a_childs_with_no_parent_and_nothing_typed()
+ {
+    let world = World::new();
+    world.agent("research-lead", RESEARCH_LEAD);
+    let host = world.host().await;
+    let folder = world.project("orbit-api");
+
+    let lead = world
+        .launch(launch_request(&folder, Some("research-lead")))
+        .await
+        .expect("the session starts as the agent");
+    assert_eq!(lead.record.agent.as_deref(), Some("research-lead"));
+    assert_eq!(lead.record.parent_id, None);
+    assert_eq!(lead.record.name, "orbit-api", "named after its folder");
+    // Its model, effort, permission and rules, as a child of it would have.
+    assert_eq!(lead.run.model(), Some("opus"));
+    assert_eq!(lead.run.effort(), Some("high"));
+    assert_eq!(value_of(&lead.run.argv, "--permission-mode"), Some("plan"));
+    for tool in ["Read", "Grep"] {
+        assert!(
+            lead.run.allowed().iter().any(|allowed| allowed == tool),
+            "{:?}",
+            lead.run.allowed()
+        );
+    }
+    assert_eq!(lead.run.disallowed(), ["Edit", "Write"]);
+    // Its body is composed in; it is told of no parent; nothing is typed.
+    let instructions = lead.run.instructions.as_deref().expect("instructions");
+    assert!(
+        instructions.contains("# Agent: research-lead"),
+        "{instructions}"
+    );
+    assert!(instructions.contains("Research the project with the user"));
+    assert!(
+        !instructions.contains("# Started by another session"),
+        "{instructions}"
+    );
+    assert_eq!(lead.run.opening_prompt, None);
+    assert!(lead.run.received.is_empty(), "{:?}", lead.run.received);
+    // A person is at it: it is not launched as an unattended child is.
+    assert!(!lead.run.argv.iter().any(|arg| arg == "--strict-mcp-config"));
+    // It counts toward no agent limit: it is no child.
+    assert_eq!(world.children_made(), 0);
+
+    // What the launcher chose replaces the agent's, and none passes no flag.
+    let chosen = world
+        .launch(LaunchSessionRequest {
+            name: Some("tuned".into()),
+            permission_mode: Some(PermissionMode::AcceptEdits),
+            chosen: Some(LaunchChoices {
+                model: Some("sonnet".into()),
+                effort: None,
+            }),
+            ..launch_request(&folder, Some("research-lead"))
+        })
+        .await
+        .expect("the session starts as the agent with the launcher's choices");
+    assert_eq!(chosen.run.model(), Some("sonnet"));
+    assert_eq!(chosen.run.effort(), None);
+    assert_eq!(
+        value_of(&chosen.run.argv, "--permission-mode"),
+        Some("acceptEdits")
+    );
+    assert_eq!(chosen.run.disallowed(), ["Edit", "Write"], "its rules stay");
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agent_that_can_start_agents_gets_floti_agents_and_starts_its_own_and_one_that_cannot_has_none()
+ {
+    let world = World::new();
+    world.agent("research-lead", RESEARCH_LEAD);
+    world.agent(
+        "planner",
+        "---\nbackend: claude-code\ncan_start: no\n---\nPlan it.\n",
+    );
+    let host = world.host().await;
+    let folder = world.project("plans");
+
+    let lead = world
+        .launch(launch_request(&folder, Some("research-lead")))
+        .await
+        .expect("the lead starts");
+    assert!(
+        lead.run.servers.contains_key(FAMILY),
+        "{:?}",
+        lead.run.servers
+    );
+    lead.start(json!({ "task": "read the code", "name": "scout" }))
+        .await
+        .done();
+    assert_eq!(
+        world.child_of(&lead, "scout").await.record.parent_id,
+        Some(lead.id())
+    );
+
+    let planner = world
+        .launch(launch_request(&folder, Some("planner")))
+        .await
+        .expect("the planner starts");
+    assert!(
+        !planner.run.servers.contains_key(FAMILY),
+        "{:?}",
+        planner.run.servers
+    );
+    assert!(
+        !planner
+            .run
+            .allowed()
+            .iter()
+            .any(|allowed| allowed.contains("floti-agents") || allowed.contains("floti agent")),
+        "{:?}",
+        planner.run.allowed()
+    );
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agent_that_works_in_a_worktree_starts_in_a_new_one_named_after_the_session_and_outside_git_nothing_starts()
+ {
+    let world = World::new();
+    world.agent(
+        "builder",
+        "---\nbackend: claude-code\nworktree: yes\n---\nBuild it.\n",
+    );
+    let host = world.host().await;
+    let repo = world.repository("orbit-api");
+
+    let builder = world
+        .launch(launch_request(&repo, Some("builder")))
+        .await
+        .expect("the builder starts");
+    assert_eq!(
+        Path::new(&builder.record.cwd),
+        repo.join(".floti/worktrees/orbit-api").as_path()
+    );
+    assert_eq!(builder.record.branch.as_deref(), Some("agent/orbit-api"));
+    assert_eq!(
+        builder.record.project_path.as_deref(),
+        Some(text(&repo).as_str()),
+        "it stays under its project"
+    );
+    // A second one is made unique, as a child's is.
+    let again = world
+        .launch(launch_request(&repo, Some("builder")))
+        .await
+        .expect("a second builder starts");
+    assert_eq!(again.record.branch.as_deref(), Some("agent/orbit-api-2"));
+
+    // Outside a git repository the start is refused and nothing runs.
+    let runs = world.run_count();
+    let notes = world.project("notes");
+    let refused = world
+        .launch(launch_request(&notes, Some("builder")))
+        .await
+        .expect_err("not in a git repository");
+    assert!(
+        refused.contains("builder works in a worktree of its own")
+            && refused.contains("is not in a git repository"),
+        "{refused}"
+    );
+    assert_eq!(world.run_count(), runs);
+    assert_eq!(world.sessions().await.len(), 2);
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agent_that_is_gone_or_cannot_be_loaded_is_named_and_nothing_starts() {
+    let world = World::new();
+    world.agent("typo", "---\nworktree: maybe\n---\n");
+    let host = world.host().await;
+    let folder = world.project("anywhere");
+
+    let gone = world
+        .launch(launch_request(&folder, Some("research-lead")))
+        .await
+        .expect_err("there is no such agent");
+    assert!(
+        gone.contains("research-lead is no longer among this host's agents"),
+        "{gone}"
+    );
+    let bad = world
+        .launch(launch_request(&folder, Some("typo")))
+        .await
+        .expect_err("its file cannot be loaded");
+    assert!(
+        bad.contains("typo.md cannot be loaded") && bad.contains("worktree must be"),
+        "{bad}"
+    );
+    assert_eq!(world.run_count(), 0, "nothing ran");
+    assert!(world.sessions().await.is_empty());
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn history_names_a_conversations_agent_and_resuming_composes_it_from_its_file_as_it_is_now() {
+    let world = World::new();
+    world.agent(
+        "research-lead",
+        "---\nbackend: claude-code\n---\nFirst version.\n",
+    );
+    let host = world.host().await;
+    let folder = world.project("ledger");
+    let lead = world
+        .launch(launch_request(&folder, Some("research-lead")))
+        .await
+        .expect("the lead starts");
+    let conversation = world.worked_and_ended(&lead).await;
+    assert_eq!(
+        world.history_entry(&conversation).await.agent.as_deref(),
+        Some("research-lead")
+    );
+
+    // The file changed since: the resume is composed as it reads now.
+    world.agent(
+        "research-lead",
+        "---\nbackend: claude-code\n---\nSecond version.\n",
+    );
+    let resumed = world
+        .resume_from_history(&conversation, Some("research-lead"), &[lead.run.pid])
+        .await
+        .expect("it resumes as its agent");
+    let composed = resumed.run.instructions.as_deref().expect("instructions");
+    assert!(composed.contains("Second version."), "{composed}");
+    assert!(!composed.contains("First version."), "{composed}");
+    assert_eq!(resumed.record.agent.as_deref(), Some("research-lead"));
+    assert!(resumed.run.argv.iter().any(|arg| arg == "--resume"));
+    world.end_from_its_terminal(&resumed).await;
+
+    // Gone: named, and nothing starts until it is resumed without it.
+    world.remove_agent("research-lead");
+    let runs = world.run_count();
+    let refused = world
+        .resume_from_history(&conversation, Some("research-lead"), &[])
+        .await
+        .expect_err("the agent is gone");
+    assert!(
+        refused.contains("research-lead is no longer among this host's agents"),
+        "{refused}"
+    );
+    assert_eq!(world.run_count(), runs);
+    let without = world
+        .resume_from_history(&conversation, None, &[lead.run.pid, resumed.run.pid])
+        .await
+        .expect("it resumes without the agent");
+    assert_eq!(without.record.agent, None);
+    let told = without.run.instructions.as_deref().unwrap_or_default();
+    assert!(!told.contains("# Agent:"), "{told}");
+    // Its newest session is no agent's now, and History says so.
+    world.end_from_its_terminal(&without).await;
+    assert_eq!(world.history_entry(&conversation).await.agent, None);
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_restore_offer_names_an_agents_problem_and_restores_it_without_the_agent_when_asked() {
+    let world = World::new();
+    world.agent(
+        "planner",
+        "---\nbackend: claude-code\ncan_start: no\n---\nFirst plan.\n",
+    );
+    world.agent(
+        "scribe",
+        "---\nbackend: claude-code\n---\nWill be deleted.\n",
+    );
+    let host = world.host().await;
+    let planner = world
+        .launch(launch_request(&world.project("plans"), Some("planner")))
+        .await
+        .expect("the planner starts");
+    let scribe = world
+        .launch(launch_request(&world.project("notes"), Some("scribe")))
+        .await
+        .expect("the scribe starts");
+    for agent in [&planner, &scribe] {
+        world.type_line(agent, "carry on").await;
+    }
+
+    let mut client = world.client().await;
+    client
+        .request::<HostStop>(&HostStopRequest {
+            reason: HostStopReason::Update,
+        })
+        .await
+        .expect("the stop is taken");
+    drop(client);
+    assert_eq!(host.stopped().await, HostStopReason::Update);
+    world.agent(
+        "planner",
+        "---\nbackend: claude-code\ncan_start: no\n---\nSecond plan.\n",
+    );
+    world.remove_agent("scribe");
+
+    let host = world.host().await;
+    let mut client = world.client().await;
+    let offer = client
+        .request::<SessionRestorable>(&())
+        .await
+        .expect("the offer is read")
+        .expect("there is an offer");
+    let offered = |id: u64| {
+        offer
+            .sessions
+            .iter()
+            .find(|session| session.id == id)
+            .expect("offered")
+            .clone()
+    };
+    assert_eq!(offered(planner.id()).agent.as_deref(), Some("planner"));
+    assert_eq!(offered(planner.id()).agent_problem, None);
+    let gone = offered(scribe.id());
+    assert_eq!(gone.agent.as_deref(), Some("scribe"));
+    assert!(
+        gone.agent_problem
+            .as_deref()
+            .is_some_and(|problem| problem.contains("scribe is no longer among")),
+        "{gone:?}"
+    );
+
+    let result = client
+        .request::<SessionRestore>(&RestoreSessionsRequest {
+            sessions: vec![
+                SessionToRestore {
+                    id: planner.id(),
+                    cols: 80,
+                    rows: 24,
+                    without_agent: false,
+                },
+                SessionToRestore {
+                    id: scribe.id(),
+                    cols: 80,
+                    rows: 24,
+                    without_agent: true,
+                },
+            ],
+        })
+        .await
+        .expect("the restore is taken");
+    drop(client);
+    assert_eq!(result.restored.len(), 2, "{result:?}");
+    let restored = |from: u64| {
+        result
+            .restored
+            .iter()
+            .find(|restored| restored.from == from)
+            .expect("restored")
+            .launched
+            .clone()
+    };
+    // The planner comes back as its file reads now, still without the
+    // agents family it may not have.
+    let planner_again = world
+        .agent_of(restored(planner.id()).session, &[planner.run.pid])
+        .await;
+    let composed = planner_again
+        .run
+        .instructions
+        .as_deref()
+        .expect("instructions");
+    assert!(composed.contains("Second plan."), "{composed}");
+    assert_eq!(planner_again.record.agent.as_deref(), Some("planner"));
+    assert!(!planner_again.run.servers.contains_key(FAMILY));
+    assert!(
+        !planner_again
+            .run
+            .argv
+            .iter()
+            .any(|arg| arg == "--strict-mcp-config")
+    );
+    // The scribe comes back without its agent, as the person chose.
+    let scribe_again = world
+        .agent_of(restored(scribe.id()).session, &[scribe.run.pid])
+        .await;
+    assert_eq!(scribe_again.record.agent, None);
+    let told = scribe_again.run.instructions.as_deref().unwrap_or_default();
+    assert!(!told.contains("Will be deleted."), "{told}");
     host.stop(HostStopReason::Stop).await;
 }

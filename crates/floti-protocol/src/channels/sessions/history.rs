@@ -145,6 +145,12 @@ pub struct HistorySession {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub agent_title: Option<String>,
+    /// The agent its newest session in Floti was started as (protocol 2.3),
+    /// which a resume composes again. Absent for none, and from a host before
+    /// 2.3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub agent: Option<String>,
     /// The transcript on disk, or null once it has been reaped.
     pub transcript_file: Option<String>,
     #[ts(type = "number | null")]
@@ -251,6 +257,13 @@ pub struct RenameHistorySessionRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ResumeSessionRequest {
     pub session_id: String,
+    /// The agent to compose it as again (protocol 2.3), from its file as it
+    /// is now, or absent for none: History passes the agent the conversation
+    /// was started as, and leaves it out for Resume without the agent. An
+    /// agent that is gone or cannot be loaded is refused, naming it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub agent: Option<String>,
     pub cols: u16,
     pub rows: u16,
 }

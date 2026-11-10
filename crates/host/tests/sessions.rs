@@ -358,6 +358,8 @@ fn launch_request(folder: &Path) -> LaunchSessionRequest {
         permission_mode: None,
         resume: None,
         backend: Some(BackendId::claude_code()),
+        agent: None,
+        chosen: None,
         cols: 80,
         rows: 24,
     }
@@ -671,6 +673,7 @@ async fn a_conversation_from_history_resumes_in_its_recorded_folder_on_its_backe
     let resumed = client
         .request::<HistoryResume>(&ResumeSessionRequest {
             session_id: CONVERSATION.into(),
+            agent: None,
             cols: 80,
             rows: 24,
         })
@@ -836,6 +839,7 @@ async fn a_chosen_program_is_started_as_given_never_one_in_the_users_program_fol
     client
         .request::<HistoryResume>(&ResumeSessionRequest {
             session_id: CONVERSATION.into(),
+            agent: None,
             cols: 80,
             rows: 24,
         })
@@ -865,6 +869,7 @@ async fn a_conversation_whose_folder_or_transcript_is_gone_is_refused_in_a_sente
 
     let resume = |id: &str| ResumeSessionRequest {
         session_id: id.into(),
+        agent: None,
         cols: 80,
         rows: 24,
     };
