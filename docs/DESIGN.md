@@ -175,7 +175,7 @@ reading width, and make the header read as a summary card sitting above some
 other pane's contents.
 
 **A page draws no island at all.** The pane it sits in is already one - its
-hairline, its surface, its tab strip - so every page (history, config, content,
+hairline, its surface, its tab strip - so every page (history, content,
 settings, a project, the browser) is drawn on the pane's own surface, edge to
 edge. Its bar is a row under the tab strip with a hairline below it; a list
 beside its detail is split by a hairline on the list's right edge; a long page
@@ -380,18 +380,6 @@ overrides the gate; keep it.
   the loudest object on the pane and a state is not the loudest fact about the
   thing it describes.
 
-  **The user is the config console's live state** (`ConfigLive`): whether a
-  file in a `.claude` tree reaches a session. Live is `success`, outranked or
-  partly outranked is `warn`, and read-but-empty or not-in-this-resolution take
-  no tone at all - neither is a problem, so neither gets a colour.
-
-  It also has **a state that paints nothing**. Helm has no claim to make about
-  most of what sits in a `.claude` directory - a `rules/` file is a convention
-  some instruction file may reference, and nothing in the resolution can see
-  that reference - so those get no chip and no dot rather than a confident grey
-  "not loaded". Same rule as the usage figures: paint nothing rather than a
-  wrong number.
-
 ## 5. Patterns
 
 - **List rows**: two lines - name above, machine data below, counts pinned
@@ -399,19 +387,8 @@ overrides the gate; keep it.
   edge (absolutely positioned, `rounded-full`), never a solid fill. Hover is
   `bg-hover`. Row radius is `rounded-well`.
 
-  **A state dot may take the head of the row, in place of a kind icon.** The
-  config console's rows carry a 6px dot where every other list carries an icon,
-  because the group heading two rows up already says `Skills` - the icon was the
-  one fact on the row written twice, and whether the thing is reaching a session
-  was written nowhere. The dot's slot is held open even when there is nothing to
-  say, so the names stay in one column. Where a row's name is something typed at
-  a prompt (`spec:plan`, `settings.local.json`) that name is **mono**, by §2's
-  rule: it is machine data, not a title.
-
-  **A third line is allowed only for what the row contains**, and there is one:
-  a skill's bundled resources, listed under it as `└ prompts.md · score.py`.
-  Everything else that wanted a third line has been a fact *about* the row,
-  which belongs on the pane it opens.
+  **A row has no third line.** Everything that wanted one has been a fact
+  *about* the row, which belongs on the pane it opens.
 
   **A row carries no buttons: the row itself is the action.** Everything else
   about the thing on it is inside it, one click away, on a pane with room to say
@@ -567,8 +544,8 @@ overrides the gate; keep it.
   read. All three are "Helm has nothing to add", and the honest paint for that
   is what the tab painted before any of this existed. A renamed status in a
   future CLI therefore degrades to the old behaviour rather than to a guess -
-  the same rule as the usage figures and the config console's live state: paint
-  nothing rather than a wrong answer.
+  the same rule as the usage figures: paint nothing rather than a wrong
+  answer.
 
   The session's own sentence for *why* it is waiting goes in the tab's hover
   hint and never on the tab. It is the CLI's string, carried verbatim, and a
@@ -645,13 +622,13 @@ overrides the gate; keep it.
   this is the attention tone doing what it does on the `waiting` dot.
 - **Page bars**: a page's own controls sit in one row directly under the tab
   strip, as tall as the strip, with a hairline below - scope switcher, what is
-  being looked at, counts, the page's controls and a refresh (`PaneHeader` for
-  the config console, `PAGE_BAR` for history and the
+  being looked at, counts, the page's controls and a refresh (`PaneHeader`,
+  and `PAGE_BAR` for history and the
   sessions pane). **No mark and no title**: the tab directly
-  above already says "Config", and a second one a row down is what made the
+  above already names the page, and a second name a row down is what made the
   header read as a card on top of somebody else's pane. It **measures itself,
   not the window**: any of these may be one of two panes, so a `lg:` media
-  query is a question about the wrong box, and asking it is how the config
+  query is a question about the wrong box, and asking it is how a page's
   header came to paint its view switcher 100px past its right edge on a 1280px
   screen. Every threshold is a container query on the bar's own content box.
 
@@ -853,8 +830,8 @@ overrides the gate; keep it.
   a 20px glyph (`RAIL_ICON`) drawn with a stroke thinned to keep the 1.6px line
   of the rest of the chrome - bigger, not bolder. Ordered by how often each is
   reached for rather than by feature - Sessions,
-  Profiles and session history, a hairline, then Files, the browser and
-  Config, and Settings pinned to the foot. The order is a fact
+  Profiles and session history, a hairline, then Files and the browser, and
+  Settings pinned to the foot. The order is a fact
   about how Helm is used, so it is fixed rather than learned: a rail that
   reordered itself would move under muscle memory.
 
@@ -877,7 +854,7 @@ overrides the gate; keep it.
   pointed at the tab's own row: a session's or a project page's tab brings
   Sessions with its row unfolded and scrolled to, a file's tab brings Files on
   its project with every folder down to it open, and Settings' tab brings its
-  sections. A tab with its list inside it - History, Config -
+  sections. A tab with its list inside it - History -
   or none at all (Browser) leaves the sidebar alone. Only a click on a tab does
   this: focus moving between two panes does not, or a session beside a file
   would flip the sidebar on every click across. A maximized pane keeps the
@@ -1187,8 +1164,8 @@ overrides the gate; keep it.
   button, and counts what was delivered with `tracePointer` - so "the app
   ignored it" and "it never arrived" stop being the same red line. `SESS-15`
   and `S-21` both assert `buttons: 1` for exactly that reason.
-- **Narrow panes**: the config console and the session
-  history are both a bounded list beside a detail, and that needs roughly 700px
+- **Narrow panes**: session history is a bounded list beside a detail, and
+  that needs roughly 700px
   before both are readable. In one of two panes none of them get it, so each
   collapses to **one at a time**: the list until something is
   picked, then the detail alone with a `‹ Back` row above it (`PaneBack`).
@@ -1251,14 +1228,14 @@ overrides the gate; keep it.
   **Elsewhere** holds Helm's sessions whose folder is no project the scan
   found, so every session Helm hosts has a row somewhere.
 
-  **Config, Content and the rest are destinations on the rail, not rows here.**
-  Each of those panes owns a scope switcher, so its way in carries none. They
-  were per-harness links once, which made a pane reachable only through a
-  harness that happened to be expanded; a destination a collapsed group can
-  hide is a destination that can be lost. A **project page may still link to
-  both, scoped to itself**: what a link from a project adds is the scope, and it
-  is a **secondary button** at the far end of the page's action row carrying
-  the rail's icon for its destination, so the two read as one object.
+  **Files and the rest are destinations on the rail, not rows here.** Each
+  of those views owns its own picker, so its way in carries none. They were
+  per-harness links once, which made a pane reachable only through a harness
+  that happened to be expanded; a destination a collapsed group can hide is a
+  destination that can be lost. A **project page may still link to Files,
+  scoped to itself**: what a link from a project adds is the scope, and it is
+  a **secondary button** at the far end of the page's action row carrying the
+  rail's icon for its destination, so the two read as one object.
 - **Project rows in the tree**: one line - caret (only where there are sessions
   to show), kind icon, name, and the branch in mono `fg-subtle` at the right,
   where it gives way first. Under the pointer the branch's slot shows a terminal button

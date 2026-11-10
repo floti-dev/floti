@@ -466,7 +466,6 @@ over the window, or Electron's own guards on a page.
 | `history` | an ended session is in history and resumes where it ran |
 | `profiles` | a profile made in the form starts with its overlay when saved |
 | `launcher` | Ctrl+N, a folder typed, a profile and mode picked there; a conversation reopened in the pane beside; a new harness and a new profile each end in a session |
-| `config` | an edit saved to disk and undone byte for byte |
 | `content` | a wikilink followed; an HTML artifact framed with no reach |
 | `files` | a file opened from the tree beside its session, its changed lines counted, its line numbers to the bottom, and the view following the session's next edit; Ctrl+P, and the hand-offs to VS Code, Explorer and the clipboard |
 | `browser` | browsing; the security posture; the refusals; a cookie surviving a restart |
@@ -791,12 +790,12 @@ a slower one, so no test has one.
   `vi.runAllTimersAsync`), as `browser.test.ts` does for a page's retries. In
   Rust it runs on tokio's paused clock (`#[tokio::test(start_paused = true)]`,
   then `tokio::time::advance`), as the resources pass tests do, or calls the
-  step itself, as the config watch's `look` test does. Integration tests check
+  step itself. Integration tests check
   only the wiring: that the timer is set and reaches what it calls.
 - **A module ported from TypeScript lists what Node or Electron did for it
   implicitly, and tests each.** Node's http server discards a request body
-  nobody read; the config watch debounced an editor's write, truncate and
-  write again. A port that does not do the same loses it without a sound, and
+  nobody read; a file watch debounced an editor's write, truncate and write
+  again. A port that does not do the same loses it without a sound, and
   only a test that names it notices.
 - A sleep inside a fake that plays a slow program is fine, as long as no
   assertion depends on its length.

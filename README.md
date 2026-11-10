@@ -61,7 +61,8 @@ whole install travels on a stick and removing it is deleting two things.
 **Installed** - download `Helm-<version>-setup.exe` and run it. It installs for
 your user only, into `%LOCALAPPDATA%\Programs\Helm`, and keeps its data in
 `%APPDATA%\Helm`. Uninstalling removes the program and **keeps** your data - the
-database holds your profiles, session index and config snapshots.
+database holds your profiles, session index and the versions of the notes you
+saved.
 
 Harness templates are the one thing outside that: they live in
 `~/.config/helm/templates`, because they are folders you write and edit by hand.
@@ -145,9 +146,6 @@ in a harness is yours to decide.
   Claude Code keeps prompts indefinitely and reaps the transcripts behind them,
   so most of that list is a record rather than a door. Helm marks which is which
   instead of offering a resume that fails.
-- **A config console** over every `.claude` tree in reach: browse, edit, and an
-  *effective view* that answers "what would a session launched here actually
-  see". Every write is snapshotted first, so every edit has an undo.
 - **Files**: a project's tree with git status, Ctrl+P for a file by name and
   Ctrl+Shift+F by what it says, and the markdown and HTML artifacts Claude
   writes opened rendered - with wikilinks, an editor beside a live preview for

@@ -176,8 +176,8 @@ Profiles live in SQLite, exportable to YAML so they travel with a harness.
 
 ## 4. The Surfaces
 
-Three of them are the product - the launcher, the config console and the content
-viewer - and the terminal is what they all point at. Settings (4.5) is the app's
+The launcher and the content viewer were the product, beside a config console
+that has since been removed (4.2), and the terminal is what they all point at. Settings (4.5) is the app's
 own, added late because every surface above it had a setting with nowhere to
 live. Pull requests (4.6) was the first surface added after v1, and the first
 that showed something that is not on this machine; it has since been removed in
@@ -299,8 +299,8 @@ favour of a plugin.
 > own editor takes it from there. A tree view and an editor pane was the
 > largest piece of the original design and the piece most redundant with a
 > folder somebody already owns. If in-app editing ever comes back it comes back
-> as "the config console accepts a template directory as a scope", not as a
-> second editor.
+> as one editor that accepts a template directory as a scope, not as a second
+> editor.
 >
 > What is built is what a file manager cannot do.
 >
@@ -322,13 +322,13 @@ favour of a plugin.
 > PNG substitutable is arranging for it to be corrupted at creation time.
 >
 > **Skill import.** `ClaudeInventory` cannot feed this - it is counts and
-> carries no names - so the seam is the config console: `config:scopes` lists
-> every `.claude` tree Helm can see, `config:tree` names what is in one, and
+> carries no names - so the seam is the host's config scopes: `config:scopes`
+> lists every `.claude` tree Helm can see, `config:tree` names what is in one, and
 > the picker is that tree with checkboxes. Every scope is a source, `~/.claude`
 > included, and that is a **read**; the writes land inside the templates
 > directory and nowhere else (`assertTemplateWritable`). A skill copies as its
-> whole directory - the console's own `configUnit`, so "copy this skill" means
-> there what it means in the console - as **plain files with no link back**,
+> whole directory - the tree's own `config_unit`, so "copy this skill" means
+> one thing everywhere - as **plain files with no link back**,
 > because a template travels and a reference to `~/.claude/skills/think`
 > produces a different harness on a different machine and none at all on
 > somebody else's.
@@ -392,6 +392,15 @@ favour of a plugin.
 > install keeps its own copy, by the seeding rule above.
 
 ### 4.2 Config Console
+
+> **Removed (2026-11-10): Config's page, its rail entry and its tab went.**
+> Claude Code edits its own config (`/config`, `/mcp`, `/hooks`, `/agents`, or
+> by asking the session), and the page served one agent only. Every agent's
+> config directory is read-only to Floti. Composition stays: profiles,
+> overlays, templates and each launch's composed instructions, tools and
+> settings, and the host still answers `config:scopes`, `config:tree` (a
+> template's import) and `config:effective` (the profile editor). What follows
+> is the record of what was built and why.
 
 The `.claude/` directory of whatever scope you point at, as a real interface.
 
@@ -524,8 +533,8 @@ Read what Claude writes without a detour through Explorer and a text editor.
 #### The editors: a textarea with an overlay, not a code editor
 
 > [!note] Decided 2026-08-16
-> Helm edits files in two places - the config console and the content viewer -
-> and both are **one component**: a `<textarea>` with an `aria-hidden`
+> Helm edited files in two places - the config console and the content viewer -
+> and both were **one component**: a `<textarea>` with an `aria-hidden`
 > highlighted `<pre>` under it, the textarea's own text transparent and its
 > caret painted. Not CodeMirror, not Monaco. This is written down here because
 > the argument had already evaporated once: it lived in a comment in
@@ -646,10 +655,10 @@ amendment rather than a row (DESIGN.md par. 6).
 
 ### 4.5 Settings
 
-Helm's own configuration, and the permanent home for all of it. Distinct from
-the config console by ownership: 4.2 edits the `.claude` trees that belong to
-Claude Code and are shared with every other client on the machine, this edits
-the app.
+Helm's own configuration, and the permanent home for all of it. Distinct by
+ownership from the `.claude` trees that belong to Claude Code and are shared
+with every other client on the machine, which Claude Code's own commands edit:
+this edits the app.
 
 A `{kind:'settings'}` workspace pane, opened by the gear in the title bar beside
 the theme toggle, laid out as one scrolling page of titled groups:

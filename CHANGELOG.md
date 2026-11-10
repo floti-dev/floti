@@ -14,6 +14,22 @@ A version with no section here does not release: the workflow fails rather than
 publishing an empty body, because the step a person can skip is the step that
 gets skipped.
 
+## 3.0.0
+
+- Config is removed: its page, its rail entry and its tab. Claude Code edits
+  its own config - `/config`, `/mcp`, `/hooks` and `/agents`, or ask the
+  session - and Floti now writes nothing into an agent's config folder. A
+  saved layout that had a Config tab opens without it, and a rail that hid
+  Config forgets it. The project page links to Files only.
+- Profiles, overlays and templates compose sessions as before. The profile
+  editor still shows the subagents and MCP servers a profile's folders give a
+  session, and a template still copies skills, commands, agents and settings
+  in from any `.claude` folder.
+- The versions of config files an earlier Helm kept are no longer copied into
+  the host. Those it already copied stay in its data folder.
+- Helm and its host speak Floti protocol 3.0. A desktop or host on an earlier
+  release is refused at connect with a sentence saying which side to update.
+
 ## 2.4.1-preview.11
 
 A preview, not a release: nothing offers it as an update.

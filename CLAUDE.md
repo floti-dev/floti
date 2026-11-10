@@ -2,8 +2,8 @@
 
 Helm is a Windows desktop shell for the Claude Code CLI. It hosts `claude` in
 terminal tabs and adds what the CLI does not have around it: project discovery,
-profiles, session history, a config console, a Files view that renders notes
-and artifacts, and a browser pane. Electron and React. It shells out to the
+profiles, session history, a Files view that renders notes and artifacts, and
+a browser pane. Electron and React. It shells out to the
 `claude` CLI and never reimplements it.
 
 - [docs/DESIGN.md](docs/DESIGN.md) - the design system. All UI work follows it.
@@ -122,15 +122,17 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   host-internal channels from the hidden plugin window: `registerIpc`
   registers nothing else, and a page's router (`app/host/router.ts`) refuses
   any other channel at once. `e2e/boundary.spec.ts` fails naming any channel
-  that crossed. Main runs no session, terminal, config console, content,
+  that crossed. Main runs no session, terminal, config reader, content,
   template or scan service of its own; those are the host's.
 - The host never opens `helm.db` or learns Helm's data folder. What only
   `helm.db` holds (archived conversations whose transcript is gone, their
-  usage, History's names, config versions) main reads through core's
+  usage, History's names) main reads through core's
   read-only pages (`store/copy.ts`) and sends on `carry:*`, in batches, until
   the host records in `floti.db` that the copy finished
   (`main/host/own-data.ts`). The host's merge keeps what it already holds,
-  and a copy that stops part way is sent again at the next connect.
+  and a copy that stops part way is sent again at the next connect. The
+  config file versions an earlier Helm kept in `helm.db` are not copied;
+  those already in `floti.db` stay there.
 - A host channel added to `shared/ipc.ts` is also declared in
   `crates/floti-protocol`, or listed there as client-only or host-internal
   with a reason (`channels/boundary.rs`), and the generated files are
@@ -468,10 +470,7 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   it, unless it was started to `outlive`; its row keeps the parent's row and
   conversation, so a restart restores the links and resuming the parent's
   conversation gives its outliving children back. A session's record names
-  the agent it was started as (`agent`, protocol 2.3); the retired `role`
-  beside it carries the same value for a client before 2.3, and a record
-  that names only `role` is read with it as its agent. `role` leaves the
-  protocol at its next major version.
+  the agent it was started as (`agent`).
 - A child's doings are news for its parent, kept in `floti.db`'s
   `agent_inbox` keyed by the parent's row and its conversation id, so a
   restart, or the parent's conversation resumed in Floti, still hears what
@@ -881,7 +880,7 @@ folder: run through npx, that folder is a cache.
   nothing: it never stopped.
 - Claude Code's own agents (its `agents/` files, chosen with `--agent`) are
   its subagents, and Floti calls them Subagents wherever it shows them (the
-  profile editor, the config console, the effective view), so the two never
+  profile editor and its view of what a profile composes), so the two never
   share a name.
 
 ## Where the data lives
@@ -917,11 +916,12 @@ app's folder, on any OS.
   window that is still running paints lower bounds. Roll-over is judged before
   age. Dollar figures are estimates and say so.
 - Every agent's config directory (`~/.claude` for Claude Code) is read-only to
-  Helm and Floti, except config console writes and hooks the user installs
-  from it, each through the host's one config writer
-  (`config_console/writer.rs`), which snapshots the file first and aborts if
-  it cannot. The transcript archive copies into the host's `floti.db`, and
-  never writes there. Copying `helm.db`'s archive into
+  Floti; the agent's own commands (`/config`, `/mcp`, `/hooks`, `/agents` for
+  Claude Code) edit it. What composition reads of it - the scopes and trees a
+  template imports from, and the view of what a profile composes - is
+  `config:scopes`, `config:tree` and `config:effective`
+  (`crates/host/src/agent_config`), and nothing there writes. The transcript
+  archive copies into the host's `floti.db`, and never writes there. Copying `helm.db`'s archive into
   `floti.db` writes neither the agent's config nor `helm.db`, and logs
   counts, never a message. What a launch needs (agent
   tools, settings, composed instructions, overlays) is a per-launch file under
