@@ -27,6 +27,7 @@ use floti_protocol::channels::workspace::{
 use super::config::off_the_workers;
 use super::{Caller, Feature, FeatureContext};
 use crate::agent::AgentBackend;
+use crate::agent_config::AgentConfigFolders;
 use crate::agent_config::time::now_iso;
 use crate::platform::folders::Folders;
 use crate::server::HostRun;
@@ -39,6 +40,8 @@ use crate::workspace::{app, setup};
 pub(crate) struct WorkspaceContext {
     pub settings: Arc<SettingsService>,
     pub roots: Arc<KnownRoots>,
+    /// Every agent's config on the host, which nothing writes.
+    pub agent_config: Arc<AgentConfigFolders>,
     pub folders: Folders,
     pub run: HostRun,
 }
@@ -63,6 +66,7 @@ impl WorkspaceContext {
         Ok(Self {
             settings,
             roots,
+            agent_config: Arc::new(AgentConfigFolders::of(hosted.backends())),
             folders,
             run,
         })

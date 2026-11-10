@@ -48,6 +48,7 @@ pub fn read_file_view(root: &Path, path: &Path) -> FileView {
             reason: "not read".to_owned(),
         },
         error: None,
+        read_only: None,
     };
 
     if !is_inside_root(&base, &absolute) {

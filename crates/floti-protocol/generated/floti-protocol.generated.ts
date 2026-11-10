@@ -1409,7 +1409,13 @@ content: string, eol: LineEnding | null, changes: FileChangeState,
 /**
  * Set when the file could not be shown at all.
  */
-error: string | null, };
+error: string | null, 
+/**
+ * Set, saying why, when the file is not Floti's to write: it is in an
+ * agent's own config, which the agent's own commands edit. Absent for
+ * every other file.
+ */
+readOnly?: string, };
 
 /**
  * What changed under a root.

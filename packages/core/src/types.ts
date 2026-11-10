@@ -2619,6 +2619,11 @@ export interface FileView {
   changes: FileChangeState
   /** Set when the file could not be shown at all - outside the project, a folder. */
   error: string | null
+  /**
+   * Set, saying why, when the host will not save it: it is in an agent's own
+   * config, which the agent's own commands edit. Absent for every other file.
+   */
+  readOnly?: string
 }
 
 /** Every file in a project, for Ctrl+P. */

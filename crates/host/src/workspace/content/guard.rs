@@ -4,16 +4,19 @@
 //! beside it: the snapshot before the bytes are touched, the abort when it
 //! cannot be taken, the conflict when the file on disk is not the one the
 //! editor opened, and the refusal to rewrite what is not text are the
-//! guarantees a note wants too. The only thing of its own is this guard.
+//! guarantees a note wants too. The only thing of its own is this guard,
+//! which also keeps every agent's config folder out of reach: it is the
+//! agent's own, and the agent's own commands edit it.
 //!
 //! [`SnapshotWriter`]: crate::agent_config::SnapshotWriter
 
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
 use floti_protocol::channels::workspace::ContentFileKind;
 
 use super::kinds::content_file_kind;
-use crate::agent_config::{PathGuard, normalize};
+use crate::agent_config::{AgentConfigFolders, PathGuard, normalize};
 
 /// Folders that are never content, whatever they hold. `repos` matters most:
 /// each repository under a harness is a scope of its own, and a save that
@@ -83,12 +86,20 @@ pub fn rebuilt_below(base: &Path, path: &Path) -> Option<PathBuf> {
 }
 
 /// The content write guard: inside the scope, under no folder that is not
-/// content, and not a binary file.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ContentGuard;
+/// content, in no agent's config, and not a binary file.
+#[derive(Debug, Clone, Default)]
+pub struct ContentGuard {
+    agent_config: Arc<AgentConfigFolders>,
+}
 
 impl ContentGuard {
-    pub fn check(scope: &Path, path: &Path) -> Result<(), String> {
+    /// The guard that refuses, besides what is not content, every path at or
+    /// under `agent_config`.
+    pub fn new(agent_config: Arc<AgentConfigFolders>) -> Self {
+        Self { agent_config }
+    }
+
+    pub fn check(&self, scope: &Path, path: &Path) -> Result<(), String> {
         if !path.is_absolute() {
             return Err(format!(
                 "Refusing to write a relative path: {}",
@@ -107,6 +118,12 @@ impl ContentGuard {
                 ));
             }
         };
+        if let Some(why) = self.agent_config.holding(&absolute) {
+            return Err(format!(
+                "Floti does not write {}. {why}",
+                absolute.display()
+            ));
+        }
         let (name, folders) = segments.split_last().expect("not empty");
         if let Some(segment) = folders
             .iter()
@@ -131,6 +148,6 @@ impl ContentGuard {
 
 impl PathGuard for ContentGuard {
     fn check(&self, scope: &Path, path: &Path) -> Result<(), String> {
-        Self::check(scope, path)
+        ContentGuard::check(self, scope, path)
     }
 }

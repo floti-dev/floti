@@ -145,4 +145,20 @@ describe('DocumentModeSwitch', () => {
     expect(radios()).toEqual(['Preview', 'Source'])
     expect(screen.getByRole('radio', { name: 'Source' }).getAttribute('aria-checked')).toBe('true')
   })
+
+  it('offers no Edit for a note the host says is read-only, says why, and shows Preview for Edit', () => {
+    const why = "It is Claude Code's own config, which Claude Code edits itself."
+    render(<DocumentModeSwitch kind="markdown" mode="edit" readOnly={why} onChange={vi.fn()} />)
+    expect(screen.getAllByRole('radio').map((radio) => radio.textContent)).toEqual(['Preview', 'Source'])
+    expect(screen.getByRole('radio', { name: 'Preview' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('radiogroup', { name: 'Show as' }).getAttribute('title')).toBe(why)
+  })
+})
+
+describe('a read-only note', () => {
+  it('opens in no editor when asked for Edit, and is shown as its preview', async () => {
+    render(<DocumentTab {...tab('edit', { readOnly: "It is Claude Code's own config." })} />)
+    expect(await screen.findByRole('heading', { level: 1, name: 'A' })).toBeTruthy()
+    expect(screen.queryByRole('textbox', { name: 'Edit notes/a.md' })).toBeNull()
+  })
 })

@@ -34,6 +34,7 @@ impl Files {
         let events = Arc::clone(&context.events);
         let service = FilesService::new(
             Arc::clone(&context.workspace.roots),
+            Arc::clone(&context.workspace.agent_config),
             move |client, change| {
                 if let Err(err) = events.emit_to::<FilesChanged>(client, change) {
                     log_line!("floti host: {err}");

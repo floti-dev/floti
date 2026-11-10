@@ -12,7 +12,8 @@ import { useDocument } from './useDocument'
  * frame. Source is the plain file view every other file gets, with the lines
  * that changed since the last commit marked. Edit, for a note only, is the
  * editor beside a live preview, and the one place in the Files view anything
- * is written.
+ * is written. A file the host says is read-only - one in an agent's own
+ * config, which the agent's own commands edit - has no Edit.
  */
 export type DocumentMode = 'preview' | 'source' | 'edit'
 
@@ -38,6 +39,8 @@ export interface DocumentTabProps {
   highlight: string | null
   /** Where its unsaved draft is kept between showings (`drafts`). */
   draftKey: string
+  /** Why the host will not save this file, when it will not: it then opens in no editor. */
+  readOnly?: string | undefined
   onDirtyChange: (dirty: boolean) => void
   onHighlight: (path: string, source: string) => Promise<EditorHighlight>
   onOpenPath: (path: string) => void
@@ -53,12 +56,13 @@ export function DocumentTab({
   source,
   highlight,
   draftKey,
+  readOnly,
   onDirtyChange,
   onHighlight,
   onOpenPath,
   onOpenExternal
 }: DocumentTabProps): JSX.Element {
-  const editing = mode === 'edit' && kind === 'markdown'
+  const editing = mode === 'edit' && kind === 'markdown' && readOnly === undefined
   // The draft as it stands, for whichever editor mounts next: the tab's own
   // edits are the truth from the moment it opens, and Source unmounts the
   // editor while the tab stays.
@@ -142,26 +146,34 @@ const noop = (): void => undefined
 
 /**
  * The crumb's switch between the three. HTML has no Edit: an artifact is
- * generated, and the editor that fits it is the one that generated it.
+ * generated, and the editor that fits it is the one that generated it. A
+ * read-only note has none either, and the switch's hint says why; asked to
+ * show one in Edit, it shows Preview.
  */
 export function DocumentModeSwitch({
   kind,
-  mode,
+  mode: asked,
+  readOnly,
   onChange
 }: {
   kind: 'markdown' | 'html'
   mode: DocumentMode
+  /** Why the host will not save this file, when it will not. */
+  readOnly?: string | undefined
   onChange: (mode: DocumentMode) => void
 }): JSX.Element {
+  const editable = kind === 'markdown' && readOnly === undefined
+  const mode: DocumentMode = asked === 'edit' && !editable ? 'preview' : asked
   const options: Array<{ id: DocumentMode; label: string; Icon: typeof EyeIcon }> = [
     { id: 'preview', label: 'Preview', Icon: EyeIcon },
     { id: 'source', label: 'Source', Icon: CodeIcon },
-    ...(kind === 'markdown' ? [{ id: 'edit' as const, label: 'Edit', Icon: PencilIcon }] : [])
+    ...(editable ? [{ id: 'edit' as const, label: 'Edit', Icon: PencilIcon }] : [])
   ]
   return (
     <div
       role="radiogroup"
       aria-label="Show as"
+      {...(readOnly === undefined ? {} : { title: readOnly, 'data-document-read-only': true })}
       data-document-mode={mode}
       className="ml-3 flex items-center gap-px rounded-well border border-border bg-surface-sunken p-px"
     >

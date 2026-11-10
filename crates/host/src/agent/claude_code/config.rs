@@ -20,7 +20,7 @@ use crate::{Error, Result};
 
 impl ClaudeCodeBackend {
     /// Where Claude Code keeps its config: its config folder and its global
-    /// config.
+    /// config, which its own `/config`, `/mcp`, `/hooks` and `/agents` edit.
     ///
     /// The global config is where the CLI keeps it: `.claude.json` in
     /// `CLAUDE_CONFIG_DIR` when that is set, and in the home folder beside
@@ -38,6 +38,9 @@ impl ClaudeCodeBackend {
         AgentConfig {
             config_dir: settings.config_dir.clone(),
             global_config: global_dir.join(".claude.json"),
+            own_commands: ["/config", "/mcp", "/hooks", "/agents"]
+                .map(str::to_owned)
+                .to_vec(),
         }
     }
 }

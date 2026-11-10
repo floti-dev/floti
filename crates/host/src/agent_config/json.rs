@@ -29,15 +29,6 @@ impl Json {
         serde_json::from_str(text).map_err(|err| err.to_string())
     }
 
-    /// `text` as an object: an empty file is an empty object, anything else
-    /// that is not an object is `None`.
-    pub fn parse_object(text: &str) -> Option<Self> {
-        if text.trim().is_empty() {
-            return Some(Self::Object(Vec::new()));
-        }
-        Self::parse(text).ok().filter(Self::is_object)
-    }
-
     pub fn is_object(&self) -> bool {
         matches!(self, Self::Object(_))
     }
@@ -80,36 +71,6 @@ impl Json {
                 None => entries.push((key.to_owned(), value)),
             }
         }
-    }
-
-    /// Removes `key` from an object.
-    pub fn remove(&mut self, key: &str) {
-        if let Self::Object(entries) = self {
-            entries.retain(|(name, _)| name != key);
-        }
-    }
-
-    /// The object under `key`, made an empty one first when the key is
-    /// missing or null (`obj[key] ??= {}`). `None` when this is not an
-    /// object, or the key holds something else.
-    pub fn object_at(&mut self, key: &str) -> Option<&mut Json> {
-        let Self::Object(entries) = self else {
-            return None;
-        };
-        let at = match entries.iter().position(|(name, _)| name == key) {
-            Some(at) => {
-                if entries[at].1 == Self::Null {
-                    entries[at].1 = Self::Object(Vec::new());
-                }
-                at
-            }
-            None => {
-                entries.push((key.to_owned(), Self::Object(Vec::new())));
-                entries.len() - 1
-            }
-        };
-        let value = &mut entries[at].1;
-        value.is_object().then_some(value)
     }
 
     /// The strings in an array, skipping anything else; nothing for a value
@@ -252,11 +213,5 @@ mod tests {
         doc.set("b", Json::Bool(true));
         doc.set("c", Json::Null);
         assert_eq!(doc.compact(), r#"{"b":true,"a":2,"c":null}"#);
-        doc.object_at("d").unwrap().set("x", Json::Bool(false));
-        assert_eq!(
-            doc.compact(),
-            r#"{"b":true,"a":2,"c":null,"d":{"x":false}}"#
-        );
-        assert!(doc.object_at("a").is_none());
     }
 }

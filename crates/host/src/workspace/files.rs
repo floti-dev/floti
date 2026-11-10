@@ -29,6 +29,7 @@ use floti_protocol::channels::workspace::{
 };
 
 use self::watch::{FileWatches, WatchedRoot};
+use crate::agent_config::AgentConfigFolders;
 use crate::session::ClientId;
 use crate::workspace::roots::{KnownRoot, KnownRoots, key};
 
@@ -40,15 +41,17 @@ type Lists = Mutex<HashMap<String, (FileListing, Instant)>>;
 /// The Files view's requests, over the folders the host knows.
 pub struct FilesService {
     roots: Arc<KnownRoots>,
+    agent_config: Arc<AgentConfigFolders>,
     lists: Arc<Lists>,
     watches: FileWatches,
 }
 
 impl FilesService {
     /// `tell` delivers a change under a watched root to the one client
-    /// watching it.
+    /// watching it. A file at or under `agent_config` is read as read-only.
     pub fn new(
         roots: Arc<KnownRoots>,
+        agent_config: Arc<AgentConfigFolders>,
         tell: impl Fn(ClientId, &FilesChange) + Send + Sync + 'static,
     ) -> Self {
         let lists: Arc<Lists> = Arc::default();
@@ -61,6 +64,7 @@ impl FilesService {
         }));
         Self {
             roots,
+            agent_config,
             lists,
             watches,
         }
@@ -82,10 +86,15 @@ impl FilesService {
         Ok(status::read_files_status(&root.path))
     }
 
-    /// `path`, which must be inside `root`, read for the view.
+    /// `path`, which must be inside `root`, read for the view: read-only,
+    /// saying why, when it is in an agent's config.
     pub fn read(&self, root: &str, path: &str) -> Result<FileView, String> {
         let root = self.known(root)?;
-        Ok(view::read_file_view(&root.path, Path::new(path)))
+        let view = view::read_file_view(&root.path, Path::new(path));
+        Ok(FileView {
+            read_only: self.agent_config.holding(Path::new(&view.path)),
+            ..view
+        })
     }
 
     /// Every file in `root`, reused for [`LIST_TTL`] unless a watch says it

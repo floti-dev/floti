@@ -5071,6 +5071,12 @@
         "path": {
           "type": "string"
         },
+        "readOnly": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "relPath": {
           "type": "string"
         },

@@ -3739,6 +3739,13 @@
         "path": {
           "type": "string"
         },
+        "readOnly": {
+          "description": "Set, saying why, when the file is not Floti's to write: it is in an\nagent's own config, which the agent's own commands edit. Absent for\nevery other file.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "relPath": {
           "description": "Relative to `root`, forward-slashed.",
           "type": "string"

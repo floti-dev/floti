@@ -1,8 +1,8 @@
 //! Protocol 3.0 is a major: it removes the channels only Config's page used
 //! (and the copy of its file versions), the types only they carried, and the
-//! three fields 2.x retired, and changes nothing else. What composition reads
-//! of an agent's config stays: `config:scopes`, `config:tree` and
-//! `config:effective`.
+//! three fields 2.x retired, adds only a file view's optional `readOnly`, and
+//! changes nothing else. What composition reads of an agent's config stays:
+//! `config:scopes`, `config:tree` and `config:effective`.
 
 use std::collections::BTreeSet;
 
@@ -117,6 +117,7 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
     assert_eq!(
         names(&found, Part::Type, Change::Changed),
         [
+            "FileView",
             "HostSettings",
             "HostSettingsPatch",
             "NoticeLimit",
@@ -124,8 +125,21 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
         ]
     );
 
-    // Each type that changes only loses its retired field.
+    // A file view only gains an optional `readOnly`, so a view without it
+    // reads as before.
     let (before, after) = (record_of(V2_3), record_of(V3_0));
+    let mut view = after["types"]["FileView"].clone();
+    view["properties"]
+        .as_object_mut()
+        .unwrap()
+        .remove("readOnly")
+        .expect("3.0's FileView has readOnly");
+    assert_eq!(
+        view, before["types"]["FileView"],
+        "FileView gains only readOnly"
+    );
+
+    // Each type that changes only loses its retired field.
     for (name, field) in RETIRED_FIELDS {
         let mut was = before["types"][*name].clone();
         was["properties"]

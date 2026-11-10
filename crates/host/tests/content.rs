@@ -6,16 +6,21 @@
 //! Every test makes its own folders and its own store, with a space in every
 //! path. The last section drives every content channel through a client
 //! connection to a running host: a note read and rendered, a draft rendered,
-//! a scope searched, a wikilink resolved, a config file rendered, an editor's
-//! source highlighted, and artifacts opened, refusals and a file larger than
-//! one answer included.
+//! a scope searched, a wikilink resolved, an editor's source highlighted, and
+//! artifacts opened, refusals and a file larger than one answer included.
+//!
+//! The agent's config folder is the test's own fake home's (or the folder
+//! `CLAUDE_CONFIG_DIR` names inside it), never the machine's.
 
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 
-use floti_host::agent_config::{hash_content, normalize, snapshots};
+use floti_host::agent::claude_code::ClaudeCodeSettings;
+use floti_host::agent_config::{AgentConfigFolders, hash_content, normalize, snapshots};
+use floti_host::platform::folders::UserEnv;
 use floti_host::server::{HostConfig, HostRun, backends};
 use floti_host::store::Store;
 use floti_host::store::projects::{EMPTY_INVENTORY, cache_projects};
@@ -26,6 +31,7 @@ use floti_host::workspace::content::search::{MAX_HITS, build_corpus, search_corp
 use floti_host::workspace::content::tree::{
     ContentTree, RootOffer, content_scope, read_content_tree,
 };
+use floti_host::workspace::files::FilesService;
 use floti_host::workspace::render::frontmatter::parse_note_frontmatter;
 use floti_host::workspace::render::wikilinks::{
     IndexedFile, WikiIndex, heading_slug, parse_wikilink,
@@ -52,26 +58,75 @@ struct World {
     store: Arc<Mutex<Store>>,
     sessions: Arc<RwLock<Vec<String>>>,
     content: ContentService,
+    files: FilesService,
     /// Last: fields drop in order, and the folder goes only once nothing in it is open.
     dirs: TestDirs,
 }
 
 impl World {
+    /// The service over the test's folders, with Claude Code's config where
+    /// the test's fake home puts it: `.claude` and `.claude.json` in it.
     fn new() -> Self {
+        Self::with_config_dir(|_| None)
+    }
+
+    /// The same, with `CLAUDE_CONFIG_DIR` set to the folder `config_dir`
+    /// names in the test's folders, or unset for `None`: resolved as the
+    /// host resolves it for a launch.
+    fn with_config_dir(config_dir: impl FnOnce(&TestDirs) -> Option<PathBuf>) -> Self {
         let dirs = TestDirs::new();
+        let mut env = UserEnv {
+            home: Some(dirs.home.clone()),
+            vars: BTreeMap::new(),
+        };
+        if let Some(dir) = config_dir(&dirs) {
+            env.vars
+                .insert("CLAUDE_CONFIG_DIR".into(), dir.into_os_string());
+        }
+        let agent_config = Arc::new(AgentConfigFolders::of(&backends(
+            &env,
+            ClaudeCodeSettings::from_env(&env),
+        )));
         let store = Arc::new(Mutex::new(Store::open(&dirs.data).unwrap()));
         let sessions = Arc::new(RwLock::new(Vec::new()));
         let seen = Arc::clone(&sessions);
         let roots = Arc::new(KnownRoots::new(Arc::clone(&store), move || {
             seen.read().unwrap().clone()
         }));
-        let content = ContentService::new(Arc::clone(&store), roots);
+        let content = ContentService::new(
+            Arc::clone(&store),
+            Arc::clone(&roots),
+            Arc::clone(&agent_config),
+        );
+        let files = FilesService::new(roots, agent_config, |_, _| {});
         Self {
             store,
             sessions,
             content,
+            files,
             dirs,
         }
+    }
+
+    /// A session is running in `folder`, which makes it a known root.
+    fn session_in(&self, folder: &Path) {
+        self.sessions.write().unwrap().push(shown(folder));
+    }
+
+    /// A version of `path` in `scope`'s history, as an earlier save left it.
+    fn version_of(&self, scope: &Path, path: &Path, content: &str) -> u64 {
+        let store = self.store.lock().unwrap();
+        snapshots::insert(
+            store.connection(),
+            &snapshots::NewSnapshot {
+                scope_path: &shown(&normalize(scope)),
+                file_path: &floti_host::agent_config::snapshot_key(scope, path),
+                content,
+                content_hash: &hash_content(content),
+                reason: ConfigWriteReason::Edit,
+            },
+        )
+        .unwrap()
     }
 
     /// `name` as a folder discovery found, `kind` of it.
@@ -803,7 +858,7 @@ fn the_guard_allows_a_script_an_extensionless_file_a_note_and_a_skill() {
         ".claude/skills/x/SKILL.md",
     ] {
         let path = rel.split('/').fold(v.clone(), |path, part| path.join(part));
-        assert_eq!(ContentGuard::check(&v, &path), Ok(()), "{rel}");
+        assert_eq!(ContentGuard::default().check(&v, &path), Ok(()), "{rel}");
     }
 }
 
@@ -813,19 +868,22 @@ fn the_guard_refuses_outside_the_scope_a_nested_repository_and_a_binary() {
     let v = dirs.folder("v");
     let outside = v.join("..").join("other").join("notes").join("a.md");
     assert!(
-        ContentGuard::check(&v, &outside)
+        ContentGuard::default()
+            .check(&v, &outside)
             .unwrap_err()
             .contains("not inside")
     );
     let nested = v.join("repos").join("x").join("notes").join("a.md");
     assert!(
-        ContentGuard::check(&v, &nested)
+        ContentGuard::default()
+            .check(&v, &nested)
             .unwrap_err()
             .contains("not content")
     );
     let binary = v.join("notes").join("a.exe");
     assert!(
-        ContentGuard::check(&v, &binary)
+        ContentGuard::default()
+            .check(&v, &binary)
             .unwrap_err()
             .contains("binary")
     );
@@ -1300,6 +1358,94 @@ fn a_restore_whose_scope_is_no_longer_known_is_refused() {
 
 // ---------------------------------------------------------------------------
 // Refusals: what a save may never touch.
+
+/// Claude Code's config in `config_dir`: a skill and an instructions file.
+fn agent_config_in(config_dir: &Path) -> [(PathBuf, &'static str); 2] {
+    let files = [
+        (
+            config_dir.join("skills").join("x").join("SKILL.md"),
+            "---\nname: x\n---\n# The skill\n",
+        ),
+        (config_dir.join("CLAUDE.md"), "# Mine\n"),
+    ];
+    for (path, content) in &files {
+        put(path, content);
+    }
+    files
+}
+
+/// Every write and restore of `files` in `scope` is refused, saying Claude
+/// Code edits its own config with its own commands, and each file is as it
+/// was, with no version taken of it.
+fn refused_and_unchanged(world: &World, scope: &Path, files: &[(PathBuf, &str)]) {
+    for (path, content) in files {
+        let version = world.version_of(scope, path, "# An older text\n");
+        let before = world.snapshot_count();
+        let refused = world
+            .write(scope, path, "# Rewritten\n", Some(hash_content(content)))
+            .unwrap_err();
+        assert!(
+            refused.contains("Claude Code's own config, which Claude Code edits itself")
+                && refused.contains("/config, /mcp, /hooks and /agents"),
+            "{refused}"
+        );
+        let refused = world.content.restore(version, &shown(path)).unwrap_err();
+        assert!(refused.contains("Claude Code edits itself"), "{refused}");
+        assert_eq!(text(path), *content, "{} is unchanged", path.display());
+        assert_eq!(world.snapshot_count(), before, "no version was taken");
+
+        // The Files view shows it read-only, saying why.
+        let view = world.files.read(&shown(scope), &shown(path)).unwrap();
+        assert_eq!(view.content, *content);
+        let why = view.read_only.expect("an agent's config is read-only");
+        assert!(why.contains("Claude Code edits itself"), "{why}");
+    }
+}
+
+#[test]
+fn a_save_or_restore_into_the_agents_config_folder_under_a_sessions_folder_is_refused() {
+    let world = World::new();
+    // A session in the fake home makes the home a known root, `.claude` in it.
+    let home = normalize(&world.dirs.home);
+    world.session_in(&home);
+    let files = agent_config_in(&home.join(".claude"));
+    refused_and_unchanged(&world, &home, &files);
+
+    // Its global config file too, and a session started inside `.claude`.
+    let global = home.join(".claude.json");
+    put(&global, "{}\n");
+    refused_and_unchanged(&world, &home, &[(global, "{}\n")]);
+    let inside = home.join(".claude");
+    world.session_in(&inside);
+    refused_and_unchanged(&world, &inside, &files);
+
+    // A note beside them is the Files view's to save, and not read-only.
+    let note = home.join("notes").join("today.md");
+    put(&note, "# Today\n");
+    let saved = world
+        .write(
+            &home,
+            &note,
+            "# Today, again\n",
+            Some(hash_content("# Today\n")),
+        )
+        .unwrap();
+    assert!(saved.ok);
+    let view = world.files.read(&shown(&home), &shown(&note)).unwrap();
+    assert_eq!(view.read_only, None);
+}
+
+#[test]
+fn a_save_or_restore_into_a_claude_config_dir_inside_a_known_root_is_refused() {
+    let world = World::with_config_dir(|dirs| Some(dirs.folder("work").join("claude config")));
+    let work = world.scanned("work", ProjectKind::Folder);
+    let files = agent_config_in(&work.join("claude config"));
+    refused_and_unchanged(&world, &work, &files);
+    // With `CLAUDE_CONFIG_DIR` set, the global config is in that folder.
+    let global = work.join("claude config").join(".claude.json");
+    put(&global, "{}\n");
+    refused_and_unchanged(&world, &work, &[(global, "{}\n")]);
+}
 
 #[test]
 fn a_save_is_refused_for_a_relative_path() {

@@ -3911,6 +3911,7 @@ export function App(): JSX.Element {
               <DocumentModeSwitch
                 kind={kind}
                 mode={docModes.get(fileKey(ref.path, hostOf(ref))) ?? "preview"}
+                readOnly={view?.readOnly}
                 onChange={(mode) => setDocMode(ref, mode)}
               />
             )
@@ -5039,6 +5040,7 @@ export function App(): JSX.Element {
         source={code}
         highlight={reveal?.term ?? null}
         draftKey={key}
+        readOnly={state?.view?.readOnly}
         onDirtyChange={(dirty) => markDocDirty(key, dirty)}
         onHighlight={helmHighlight}
         // A wikilink opens beside it as a kept tab, in the same project.

@@ -166,6 +166,12 @@ pub struct FileView {
     pub changes: FileChangeState,
     /// Set when the file could not be shown at all.
     pub error: Option<String>,
+    /// Set, saying why, when the file is not Floti's to write: it is in an
+    /// agent's own config, which the agent's own commands edit. Absent for
+    /// every other file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub read_only: Option<String>,
 }
 
 /// Where a file list came from.

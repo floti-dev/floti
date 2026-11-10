@@ -1259,6 +1259,7 @@ fn files_view_payloads_survive_the_wire() {
         eol: Some(LineEnding::Crlf),
         changes,
         error: None,
+        read_only: None,
     };
     for changes in [
         FileChangeState::Tracked {
@@ -1284,6 +1285,19 @@ fn files_view_payloads_survive_the_wire() {
             view(changes),
         );
     }
+    // A file in an agent's config says why it is read-only; any other says
+    // nothing of it.
+    exchange::<ReadFile>(
+        FilesPathRequest {
+            root: root.clone(),
+            path: "src/a.rs".into(),
+        },
+        FileView {
+            read_only: Some("It is Claude Code's own config.".into()),
+            ..view(FileChangeState::New)
+        },
+    );
+    assert!(field(&encoded(&view(FileChangeState::New)), "readOnly").is_none());
     assert_eq!(encoded(&LineEnding::Crlf), Value::Text("CRLF".into()));
     exchange::<ListFiles>(
         FilesRoot { root: root.clone() },

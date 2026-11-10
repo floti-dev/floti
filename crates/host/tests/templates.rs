@@ -1133,9 +1133,15 @@ fn refuses_to_create_a_template_whose_name_is_a_path_and_writes_nothing() {
 }
 
 #[test]
-fn records_the_manifest_in_the_snapshot_table_because_it_goes_through_the_consoles_write() {
+fn records_the_manifest_in_the_snapshot_table_because_it_goes_through_the_snapshot_first_writer() {
     let world = World::new();
-    assert_eq!(snapshots::count(world.conn()).unwrap(), 0);
+    let rows: i64 = world
+        .conn()
+        .query_row("SELECT count(*) FROM config_snapshots", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(rows, 0);
 
     world.create("recorded", Some("Recorded"));
     let dir = world.templates.join("recorded").display().to_string();

@@ -37,6 +37,7 @@ impl Content {
             service: Arc::new(ContentService::new(
                 context.hosted.ledger().shared_store(),
                 Arc::clone(&context.workspace.roots),
+                Arc::clone(&context.workspace.agent_config),
             )),
         })
     }

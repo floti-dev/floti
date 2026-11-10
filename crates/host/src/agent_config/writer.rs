@@ -33,17 +33,9 @@ impl<'a> SnapshotWriter<'a> {
         Self { conn, guard }
     }
 
-    pub fn guard(&self) -> &dyn PathGuard {
-        self.guard
-    }
-
-    pub fn connection(&self) -> &Connection {
-        self.conn
-    }
-
     /// Takes a snapshot of `content`, the bytes `path` holds now, under
     /// `scope`. The id, or the sentence a change aborts with.
-    pub fn snapshot(
+    fn snapshot(
         &self,
         scope: &Path,
         path: &Path,
@@ -148,8 +140,8 @@ impl<'a> SnapshotWriter<'a> {
 
     /// Puts a snapshot's bytes back at `path`, after a snapshot of what is
     /// there. A version that records a file that did not exist removes the
-    /// file rather than leaving an empty one: an empty `settings.json` is a
-    /// parse error, an absent one a layer the agent skips.
+    /// file rather than leaving an empty one: restoring a note to before it
+    /// was first saved takes the note away, not its text.
     pub fn restore(&self, id: u64, path: &Path) -> Result<WriteConfigResult, String> {
         let Some(snapshot) = snapshots::read(self.conn, id)? else {
             return Ok(WriteConfigResult {

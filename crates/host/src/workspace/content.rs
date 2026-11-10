@@ -37,7 +37,9 @@ use self::artifact::{ArtifactPiece, ArtifactResponse, Artifacts, artifact_wikili
 use self::guard::{ContentGuard, rebuilt_below};
 use self::search::{ContentCorpus, MAX_HITS, build_corpus, corpus_is_current, search_corpus};
 use self::tree::{ContentTree, content_scope, describe_unlisted, read_content_tree};
-use crate::agent_config::{SnapshotWriter, normalize, read_file, snapshot_key, snapshots};
+use crate::agent_config::{
+    AgentConfigFolders, SnapshotWriter, normalize, read_file, snapshot_key, snapshots,
+};
 use crate::store::Store;
 use crate::workspace::render::render_markdown;
 use crate::workspace::render::wikilinks::{IndexedFile, WikiIndex, parse_wikilink};
@@ -59,6 +61,7 @@ struct ScopeCache {
 pub struct ContentService {
     store: Arc<Mutex<Store>>,
     roots: Arc<KnownRoots>,
+    guard: ContentGuard,
     cache: Mutex<HashMap<String, Arc<ScopeCache>>>,
     artifacts: Artifacts,
 }
@@ -90,10 +93,17 @@ fn inside(scope: &ContentScope, path: &str) -> Result<PathBuf, String> {
 }
 
 impl ContentService {
-    pub fn new(store: Arc<Mutex<Store>>, roots: Arc<KnownRoots>) -> Self {
+    /// The content of `roots`, its versions in `store`. Nothing at or under
+    /// `agent_config` is written.
+    pub fn new(
+        store: Arc<Mutex<Store>>,
+        roots: Arc<KnownRoots>,
+        agent_config: Arc<AgentConfigFolders>,
+    ) -> Self {
         Self {
             store,
             roots,
+            guard: ContentGuard::new(agent_config),
             cache: Mutex::new(HashMap::new()),
             artifacts: Artifacts::default(),
         }
@@ -243,7 +253,7 @@ impl ContentService {
     pub fn write(&self, request: &WriteConfigRequest) -> Result<WriteConfigResult, String> {
         let scope = self.scope(&request.scope_path)?;
         let base = Path::new(&scope.path);
-        ContentGuard::check(base, Path::new(&request.path))?;
+        self.guard.check(base, Path::new(&request.path))?;
         let absolute = rebuilt_below(base, Path::new(&request.path))
             .ok_or_else(|| format!("{} is not inside {}.", request.path, scope.path))?;
         let request = WriteConfigRequest {
@@ -253,7 +263,7 @@ impl ContentService {
         };
         let result = {
             let store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
-            SnapshotWriter::new(store.connection(), &ContentGuard).write(&request)?
+            SnapshotWriter::new(store.connection(), &self.guard).write(&request)?
         };
         if result.ok && !result.unchanged {
             self.invalidate(&absolute);
@@ -291,7 +301,7 @@ impl ContentService {
             Some(snapshot) => {
                 let scope = self.scope(&snapshot.meta.scope_path)?;
                 let base = Path::new(&scope.path);
-                ContentGuard::check(base, Path::new(path))?;
+                self.guard.check(base, Path::new(path))?;
                 rebuilt_below(base, Path::new(path))
                     .ok_or_else(|| format!("{path} is not inside {}.", scope.path))?
             }
@@ -300,7 +310,7 @@ impl ContentService {
         };
         let result = {
             let store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
-            SnapshotWriter::new(store.connection(), &ContentGuard).restore(id, &target)?
+            SnapshotWriter::new(store.connection(), &self.guard).restore(id, &target)?
         };
         if result.ok && !result.unchanged {
             self.invalidate(&target);

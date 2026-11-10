@@ -136,12 +136,3 @@ pub fn read(conn: &Connection, id: u64) -> Result<Option<Snapshot>, String> {
     .optional()
     .map_err(|err| format!("Floti could not read the snapshot history: {err}"))
 }
-
-/// How many rows the history holds.
-pub fn count(conn: &Connection) -> Result<u64, String> {
-    conn.query_row("SELECT COUNT(*) FROM config_snapshots", [], |row| {
-        row.get::<_, i64>(0)
-    })
-    .map(|n| n.max(0) as u64)
-    .map_err(|err| format!("Floti could not count the snapshot history: {err}"))
-}

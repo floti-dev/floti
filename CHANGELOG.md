@@ -18,9 +18,11 @@ gets skipped.
 
 - Config is removed: its page, its rail entry and its tab. Claude Code edits
   its own config - `/config`, `/mcp`, `/hooks` and `/agents`, or ask the
-  session - and Floti now writes nothing into an agent's config folder. A
-  saved layout that had a Config tab opens without it, and a rail that hid
-  Config forgets it. The project page links to Files only.
+  session - and Floti now writes nothing into an agent's config folder: Files
+  shows a file in `~/.claude` (or `CLAUDE_CONFIG_DIR`) read-only, with no
+  Edit, and says who edits it. A saved layout that had a Config tab opens
+  without it, and a rail that hid Config forgets it. The project page links
+  to Files only.
 - Profiles, overlays and templates compose sessions as before. The profile
   editor still shows the subagents and MCP servers a profile's folders give a
   session, and a template still copies skills, commands, agents and settings

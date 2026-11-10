@@ -11,6 +11,7 @@
 
 mod effective;
 mod files;
+mod folders;
 mod json;
 mod sha256;
 pub mod snapshots;
@@ -32,7 +33,9 @@ use crate::store::Store;
 
 pub use effective::{EffectiveInput, effective_view};
 pub use files::{PathGuard, hash_content, mtime_ms, normalize, read_file, snapshot_key};
-pub use json::Json;
+pub use folders::AgentConfigFolders;
+
+use json::Json;
 pub use sha256::hex_digest as sha256_hex;
 pub use tree::{config_unit, project_scope, read_tree, user_scope};
 pub use writer::SnapshotWriter;
@@ -42,11 +45,14 @@ pub use writer::SnapshotWriter;
 pub const NO_AGENT_CONFIG: &str = "No agent on this host has config files Floti can read.";
 
 /// Where an agent keeps its config: its config folder (the user scope) and
-/// its global config file (where its `local` and `user` MCP servers live).
+/// its global config file (where its `local` and `user` MCP servers live),
+/// and the agent's own commands that edit them, which Floti names when it
+/// refuses to write there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentConfig {
     pub config_dir: PathBuf,
     pub global_config: PathBuf,
+    pub own_commands: Vec<String>,
 }
 
 /// Names ordered as a person reads them: case folded first, then exact.
@@ -99,10 +105,6 @@ impl ConfigReader {
             agent,
             store,
         }
-    }
-
-    pub fn agent(&self) -> &AgentConfig {
-        &self.agent
     }
 
     fn store(&self) -> MutexGuard<'_, Store> {
