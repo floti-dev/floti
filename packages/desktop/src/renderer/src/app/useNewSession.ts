@@ -106,9 +106,12 @@ export function useNewSession(): NewSessionState {
       .then((listing) => {
         if (current === opening.current) setAgents(listing)
       })
-      // A host whose agents cannot be read starts plain sessions as before;
-      // the Agent picker offers No agent alone.
-      .catch(() => undefined)
+      // A host whose agents cannot be read starts plain sessions as before:
+      // it is answered as having none, so the Agent picker offers No agent
+      // alone and nothing says the agents are still being read.
+      .catch(() => {
+        if (current === opening.current) setAgents({ agents: [], bad: [], backends: [] })
+      })
     void bridgeFor(hostRef.current)
       .invoke('history:projects')
       .then((projects) => {

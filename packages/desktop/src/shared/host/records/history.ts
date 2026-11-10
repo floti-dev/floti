@@ -42,6 +42,7 @@ export function historySessionFromHost(session: P.HistorySession): HistorySessio
     ...(session.agentTitle == null ? {} : { agentTitle: session.agentTitle }),
     // The agent its newest session was started as; a protocol before 2.3 never says.
     ...(session.agent == null ? {} : { agent: session.agent }),
+    ...(session.permissionMode == null ? {} : { permissionMode: session.permissionMode }),
     transcriptFile: session.transcriptFile,
     transcriptBytes: session.transcriptBytes,
     projectExists: session.projectExists,

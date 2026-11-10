@@ -89,7 +89,9 @@ export function sessionFromHost(record: P.SessionRecord): SessionRecord {
     // Set only for a child started to keep running when its parent ends.
     ...(record.outlive === true ? { outlive: true } : {}),
     // Absent for a session launched with no mode.
-    ...(record.permissionMode == null ? {} : { permissionMode: record.permissionMode })
+    ...(record.permissionMode == null ? {} : { permissionMode: record.permissionMode }),
+    // A host before protocol 2.3 never says.
+    ...(record.launchedAs == null ? {} : { launchedAs: { ...record.launchedAs } })
   }
 }
 

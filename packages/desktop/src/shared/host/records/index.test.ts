@@ -152,6 +152,17 @@ describe('a host session, as the window reads it', () => {
     expect(
       sessionFromHost(hostSession({ parentId: 4, parentName: 'lead', outlive: true, permissionMode: 'plan' }))
     ).toMatchObject({ outlive: true, permissionMode: 'plan' })
+    const launchedAs = {
+      agentFile: 'C:\\Users\\someone\\.config\\floti\\agents\\lead.md',
+      model: 'opus',
+      effort: 'high' as const,
+      allowedTools: ['Read'],
+      disallowedTools: ['Edit'],
+      tools: ['floti-agents'],
+      worktree: true
+    }
+    expect(sessionFromHost(hostSession({ launchedAs })).launchedAs).toEqual(launchedAs)
+    expect(sessionFromHost(hostSession({}))).not.toHaveProperty('launchedAs')
     for (const plain of [hostSession(), hostSession({ outlive: false })]) {
       expect(sessionFromHost(plain)).not.toHaveProperty('outlive')
       expect(sessionFromHost(plain)).not.toHaveProperty('permissionMode')

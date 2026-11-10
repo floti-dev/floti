@@ -4944,6 +4944,12 @@ export function App(): JSX.Element {
               void resumeSession(session, options)
             }
             hostName={hostName(historyHost)}
+            // This PC's profiles; another host's are not known here.
+            profiles={
+              historyHost === LOCAL_HOST_KEY
+                ? profileState.profiles.map((profile) => profile.name)
+                : null
+            }
             onReveal={revealOn(historyHost)}
             compact={compact}
           />
@@ -4954,6 +4960,7 @@ export function App(): JSX.Element {
             sessions={machineSessions.sessions}
             readAtMs={machineSessions.readAtMs}
             records={sessionsById}
+            profileNames={profileNames}
             resources={machineSessions.resources}
             selectedPid={selectedLivePid}
             onSelect={(session) => setSelectedLivePid(session?.pid ?? null)}

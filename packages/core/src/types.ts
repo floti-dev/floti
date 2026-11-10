@@ -421,6 +421,28 @@ export interface SessionRecord {
   outlive?: boolean
   /** The permission mode it was launched in. Absent for one launched with none. */
   permissionMode?: PermissionMode
+  /**
+   * What it was launched with beyond its agent, profile and permission mode:
+   * the sessions pane's Launched as. Absent for a plain command line, a row
+   * from before it, and from a host before protocol 2.3.
+   */
+  launchedAs?: LaunchedAs
+}
+
+/** What a session was launched with, as its launch composed it. */
+export interface LaunchedAs {
+  /** The agent file it was composed from, as the host spells its path; null for none and the host's built-in default. */
+  agentFile: string | null
+  /** Null for the backend's own. */
+  model: string | null
+  /** Null for the backend's own. */
+  effort: EffortLevel | null
+  allowedTools: string[]
+  disallowedTools: string[]
+  /** The agent tool families its launch was given, such as `floti-agents`. */
+  tools: string[]
+  /** Whether it works in an agent worktree Floti made for it. */
+  worktree: boolean
 }
 
 /**
@@ -893,6 +915,11 @@ export interface HistorySession {
    * composes again from its file as it is then; absent for none.
    */
   agent?: string
+  /**
+   * The permission mode its newest session ran with, which a resume as its
+   * agent keeps; absent for none.
+   */
+  permissionMode?: PermissionMode
   /** The transcript on disk, or null once it has been reaped. */
   transcriptFile: string | null
   transcriptBytes: number | null

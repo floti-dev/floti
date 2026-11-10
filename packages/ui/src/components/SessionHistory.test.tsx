@@ -432,6 +432,32 @@ describe('SessionHistory: a session started as an agent (A23, M16)', () => {
     expect(props.onResume).toHaveBeenCalledWith(lead)
   })
 
+  it('names the mode a resume as the agent keeps, the one the session ran with', () => {
+    renderHistory(
+      {
+        selected: { ...lead, permissionMode: 'acceptEdits' },
+        agents: agentsWith(['research-lead']) as SessionHistoryProps['agents']
+      } as Partial<SessionHistoryProps>,
+      [{ ...lead, permissionMode: 'acceptEdits' }]
+    )
+    expect(document.querySelector('[data-resume-sentence]')?.textContent).toBe(
+      'Runs claude --resume --permission-mode acceptEdits in orbit-api as the research-lead agent, composing research-lead.md as it is now.'
+    )
+  })
+
+  it('names an agent whose profile is gone, with Resume without the agent, and judges nothing when profiles are not known', async () => {
+    const withProfile = {
+      agents: [{ name: 'research-lead', file: 'research-lead.md', profile: 'studio-docs' }],
+      bad: []
+    } as unknown as SessionHistoryProps['agents']
+    const { props } = show({ agents: withProfile, profiles: ['Helm'] })
+    const box = document.querySelector<HTMLElement>('[data-agent-unavailable="profile"]')
+    expect(box?.textContent).toContain('research-lead.md names the profile studio-docs, which This PC no longer has')
+    expect(document.querySelector('[data-resume-sentence]')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Resume without the agent' }))
+    expect(props.onResume).toHaveBeenCalledWith(lead, { withoutAgent: true })
+  })
+
   it('offers the resume as usual while the host’s agents are not known', () => {
     show({ agents: null })
     expect(document.querySelector('[data-agent-unavailable]')).toBeNull()

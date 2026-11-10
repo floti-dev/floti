@@ -55,7 +55,7 @@ describe('useNewSession', () => {
     await waitFor(() => expect(bridge.invoked('history:sessions')).toHaveLength(2))
   })
 
-  it('reads the host’s agents when it opens, afresh each time, and offers none when they cannot be read', async () => {
+  it('reads the host’s agents when it opens, afresh each time, and has none when they cannot be read', async () => {
     const agents: LaunchAgents = { agents: [], bad: [], backends: [{ id: 'claude-code', name: 'Claude Code' }] }
     bridge.answer('agents:list', () => agents)
     const { result } = renderHook(() => useNewSession())
@@ -70,8 +70,8 @@ describe('useNewSession', () => {
     act(() => result.current.hide())
     act(() => result.current.show(null))
     expect(result.current.agents).toBeNull()
-    await waitFor(() => expect(bridge.invoked('agents:list')).toHaveLength(2))
-    expect(result.current.agents).toBeNull()
+    await waitFor(() => expect(result.current.agents).toEqual({ agents: [], bad: [], backends: [] }))
+    expect(bridge.invoked('agents:list')).toHaveLength(2)
     expect(result.current.error).toBeNull()
   })
 

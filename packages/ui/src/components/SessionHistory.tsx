@@ -37,13 +37,14 @@ export interface ResumeOptions {
 /**
  * Whether a session's agent can be composed again on its host: there, with
  * the file it is read from; gone (renamed or deleted since); a file that
- * cannot be loaded, with the host's problem; or not known, when the host's
- * agents could not be read.
+ * cannot be loaded, with the host's problem; a file naming a profile the host
+ * no longer has; or not known, when the host's agents could not be read.
  */
 type AgentStanding =
   | { kind: 'there'; file: string }
   | { kind: 'gone' }
   | { kind: 'bad'; file: string; problem: string }
+  | { kind: 'profile'; file: string; profile: string }
   | { kind: 'unknown'; file: string }
 
 /** The host's default agent is always there: the host makes one when it has no file. */
@@ -51,12 +52,27 @@ const DEFAULT_AGENT = 'default'
 
 function agentStanding(
   agent: string,
-  agents: Pick<LaunchAgents, 'agents' | 'bad'> | null | undefined
+  agents: Pick<LaunchAgents, 'agents' | 'bad'> | null | undefined,
+  profiles: readonly string[] | null | undefined
 ): AgentStanding {
   const guessed = `${agent}.md`
   if (agents === null || agents === undefined) return { kind: 'unknown', file: guessed }
   const found = agents.agents.find((each) => each.name === agent)
-  if (found !== undefined) return { kind: 'there', file: found.file ?? guessed }
+  if (found !== undefined) {
+    const file = found.file ?? guessed
+    // A profile it names that the host no longer has refuses the resume, as
+    // a file that cannot be loaded does. Profiles not known judge nothing.
+    const named = found.profile
+    if (
+      named !== null &&
+      profiles !== null &&
+      profiles !== undefined &&
+      !profiles.some((each) => each.trim().toLowerCase() === named.trim().toLowerCase())
+    ) {
+      return { kind: 'profile', file, profile: named }
+    }
+    return { kind: 'there', file }
+  }
   const bad = agents.bad.find((each) => each.name === agent)
   if (bad !== undefined) return { kind: 'bad', file: bad.file, problem: bad.problem }
   return agent === DEFAULT_AGENT ? { kind: 'there', file: guessed } : { kind: 'gone' }
@@ -136,6 +152,11 @@ export interface SessionHistoryProps {
   agents?: Pick<LaunchAgents, 'agents' | 'bad'> | null | undefined
   /** What the window calls the host these sessions are on, as a sentence names it. "This PC" when absent. */
   hostName?: string | undefined
+  /**
+   * The names of that host's profiles, to tell an agent naming one that is
+   * gone. Null or absent when not known, which judges nothing.
+   */
+  profiles?: readonly string[] | null | undefined
   /**
    * Opens the host's agents (gone) or the agent's file (bad), beside the
    * resume without it. Absent while the window has no place to open them.
@@ -277,6 +298,7 @@ export function SessionHistory({
   onResume,
   agents,
   hostName = 'This PC',
+  profiles,
   onOpenAgents,
   resuming,
   resumeError = null,
@@ -610,6 +632,7 @@ export function SessionHistory({
               onResume={onResume}
               agents={agents}
               hostName={hostName}
+              profiles={profiles}
               onOpenAgents={onOpenAgents}
               resuming={resuming === selected.sessionId}
               resumeError={resumeError}
@@ -873,6 +896,7 @@ function Detail({
   onResume,
   agents,
   hostName,
+  profiles,
   onOpenAgents,
   resuming,
   resumeError,
@@ -891,6 +915,7 @@ function Detail({
   onResume: (session: HistorySession, options?: ResumeOptions) => void
   agents: Pick<LaunchAgents, 'agents' | 'bad'> | null | undefined
   hostName: string
+  profiles: readonly string[] | null | undefined
   onOpenAgents: ((agent: string) => void) | undefined
   resuming: boolean
   resumeError: string | null | undefined
@@ -905,11 +930,15 @@ function Detail({
   const title = historyTitle(session)
   const standIn = isStandIn(session)
   const agent = agentOf(session)
-  const standing = agent === undefined ? null : agentStanding(agent, agents)
+  const standing = agent === undefined ? null : agentStanding(agent, agents, profiles)
   // The file a resume composes, or the reason it cannot. Not known yet is
   // offered as usual: the host refuses a gone agent, naming it.
   const composing = standing?.kind === 'there' || standing?.kind === 'unknown' ? standing.file : null
-  const unavailable = standing?.kind === 'gone' || standing?.kind === 'bad' ? standing : null
+  const unavailable =
+    standing?.kind === 'gone' || standing?.kind === 'bad' || standing?.kind === 'profile' ? standing : null
+  // A resume as the agent keeps the mode the session ran with, so the
+  // sentence names it.
+  const keptMode = agent !== undefined ? session.permissionMode : undefined
 
   return (
     <div className="mx-auto max-w-3xl px-8 py-7">
@@ -1071,7 +1100,11 @@ function Detail({
                 {resuming ? 'Reopening…' : 'Resume in a tab'}
               </button>
               <span data-resume-sentence className="text-[11px] text-fg-subtle">
-                Runs <code className="font-mono">claude --resume</code> in{' '}
+                Runs{' '}
+                <code className="font-mono">
+                  claude --resume{keptMode === undefined ? '' : ` --permission-mode ${keptMode}`}
+                </code>{' '}
+                in{' '}
                 <span className="font-mono">{session.projectName}</span>
                 {agent !== undefined && composing !== null && (
                   <>
@@ -1239,7 +1272,7 @@ function AgentUnavailable({
   onOpenAgents
 }: {
   agent: string
-  standing: Extract<AgentStanding, { kind: 'gone' | 'bad' }>
+  standing: Extract<AgentStanding, { kind: 'gone' | 'bad' | 'profile' }>
   hostName: string
   resuming: boolean
   onResumeWithout: () => void
@@ -1256,6 +1289,11 @@ function AgentUnavailable({
         <span className="min-w-0 break-words">
           {standing.kind === 'gone' ? (
             `${agent} is no longer among ${hostName}’s agents`
+          ) : standing.kind === 'profile' ? (
+            <>
+              <span className="font-mono">{standing.file}</span> names the profile {standing.profile}, which{' '}
+              {hostName} no longer has
+            </>
           ) : (
             <>
               <span className="font-mono">{standing.file}</span> cannot be loaded: {standing.problem}

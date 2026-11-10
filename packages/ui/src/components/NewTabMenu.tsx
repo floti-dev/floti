@@ -210,7 +210,13 @@ export function NewTabMenu({
       label: 'Agent session',
       icon: <AgentCardIcon width={13} height={13} />,
       disabled: agentRows.length === 0,
-      title: agentRows.length === 0 ? `${hostName} has no agents yet.` : undefined
+      // Not read yet is not the same as having none.
+      title:
+        session.agents == null
+          ? `Reading ${hostName}'s agents…`
+          : agentRows.length === 0
+            ? `${hostName} has no agents yet.`
+            : undefined
     },
     {
       kind: 'item',

@@ -34,8 +34,10 @@ tests run after the build: `cargo nextest run -p floti-host <filter>` compiles
 and links every one of them first, which costs minutes and several gigabytes
 of memory. `cargo check -p <crate>` finds compile errors without linking
 anything. A test that passed is run again only once the code it covers has
-changed. A full suite is a regression check, and CI is where it runs, on every
-push and on all three OSes, rather than locally; nobody waits on it to merge.
+changed. A full suite, every test of every crate and package, is a regression
+check that runs on CI, on every push and on all three OSes, and nobody runs
+one locally. A review still runs the suite for what changed, locally. Nobody
+waits on CI to merge.
 
 **Unit and integration tests validate the work; end-to-end tests run only
 before a release is cut.** An end-to-end run builds the app and drives it,

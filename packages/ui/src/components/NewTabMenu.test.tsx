@@ -428,6 +428,13 @@ describe('NewTabMenu: agent session', () => {
     })
   })
 
+  it('is disabled while the host’s agents are being read, saying so, which is not having none', () => {
+    renderMenu({ agents: null })
+    const item = screen.getByText('Agent session').closest('[role="menuitem"]')!
+    expect(item.getAttribute('aria-disabled')).toBe('true')
+    expect(item.getAttribute('title')).toBe("Reading This PC's agents…")
+  })
+
   it('is disabled, saying why, when the host has no agents', async () => {
     renderMenu({ agents: { agents: [], bad: [], backends: [] } })
     const item = screen.getByText('Agent session').closest('[role="menuitem"]')!

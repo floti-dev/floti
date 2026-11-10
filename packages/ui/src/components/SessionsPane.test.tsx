@@ -400,6 +400,15 @@ describe("SessionsPane: the agent tag (A23, M15)", () => {
   const asLead = (id: number, name: string, cwd: string): SessionRecord => ({
     ...row(id, name, cwd),
     agent: "lead",
+    launchedAs: {
+      agentFile: "C:\\Users\\someone\\.config\\floti\\agents\\lead.md",
+      model: "opus",
+      effort: "high",
+      allowedTools: [],
+      disallowedTools: ["Edit", "Write", "NotebookEdit"],
+      tools: ["floti-agents"],
+      worktree: false,
+    },
   });
   const records = new Map([
     [1, asLead(1, "shop", "C:\\work\\shop")],
@@ -430,14 +439,46 @@ describe("SessionsPane: the agent tag (A23, M15)", () => {
     );
     expect(header.contains(tag)).toBe(true);
 
-    const fact = screen.getByText("Agent").closest("div") as HTMLElement;
+    const fact = document
+      .querySelector("[data-session-agent]")
+      ?.closest("div") as HTMLElement;
     const agent = fact.querySelector<HTMLElement>("[data-session-agent]");
     expect(agent?.querySelector("[data-agent-tag]")?.textContent).toBe("lead");
     const file = within(agent as HTMLElement).getByText("lead.md");
     expect(file.className).toContain("font-mono");
     expect(file.className).toContain("text-fg-subtle");
     // The argv it was launched with is still its own group.
-    expect(screen.getByRole("region", { name: "Launched as" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Command line" })).toBeTruthy();
+  });
+
+  it("lists what it was launched with, as M15 does: agent and file, profile, model and effort, permissions, tools and worktree", () => {
+    renderPane({ records, selectedPid: SHOP.pid });
+    const launched = screen.getByRole("region", { name: "Launched as" });
+    const value = (label: string): string =>
+      launched.querySelector(`[data-launched="${label}"]`)?.textContent ?? "";
+    expect(value("Agent")).toMatch(
+      /^lead, composed from C:\\Users\\someone\\\.config\\floti\\agents\\lead\.md as it was at /,
+    );
+    expect(value("Profile")).toBe("none");
+    expect(value("Model · effort")).toBe("opus · high");
+    expect(value("Permissions")).toBe("Default");
+    expect(value("Tools")).toBe("floti-agents · disallowed Edit, Write, NotebookEdit");
+    expect(value("Worktree")).toBe("none, the folder itself");
+  });
+
+  it("names no file for the host's built-in default, which has none", () => {
+    const builtIn: SessionRecord = {
+      ...asLead(1, "shop", "C:\\work\\shop"),
+      agent: "default",
+      launchedAs: { ...asLead(1, "shop", "C:\\work\\shop").launchedAs!, agentFile: null },
+    };
+    renderPane({ records: new Map([[1, builtIn]]), selectedPid: SHOP.pid });
+    const agent = document.querySelector<HTMLElement>("[data-session-agent]");
+    expect(agent?.textContent).toBe("default");
+    expect(
+      screen.getByRole("region", { name: "Launched as" }).querySelector('[data-launched="Agent"]')
+        ?.textContent,
+    ).toBe("default");
   });
 
   it("has no Agent fact for a session started as no agent", () => {

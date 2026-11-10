@@ -1,6 +1,8 @@
 import type { JSX, ReactNode } from "react";
 import type {
+  LaunchedAs,
   LiveSession,
+  PermissionMode,
   SessionPort,
   SessionProcess,
   SessionRecord,
@@ -84,6 +86,11 @@ export interface SessionsPaneProps {
    * a second thing to keep true.
    */
   records: ReadonlyMap<number, SessionRecord>;
+  /**
+   * This PC's profiles' names by id, for what a session was launched with.
+   * Absent, a profile is named by nothing but whether there was one.
+   */
+  profileNames?: ReadonlyMap<number, string> | undefined;
   /** What each hosted session is holding, by session id. */
   resources: ReadonlyMap<number, SessionResources>;
   /** The row on screen, by pid. Null for none. */
@@ -249,6 +256,7 @@ export function SessionsPane({
   sessions,
   readAtMs,
   records,
+  profileNames,
   resources,
   selectedPid,
   onSelect,
@@ -495,6 +503,7 @@ export function SessionsPane({
                   // still on screen under the next one's heading.
                   key={selected.pid}
                   session={selected}
+                  profileNames={profileNames}
                   record={
                     selected.helmSessionId === null
                       ? null
@@ -987,12 +996,14 @@ function NothingSelected({ count }: { count: number }): JSX.Element {
 function Detail({
   session,
   record,
+  profileNames,
   resources,
   onOpenSession,
   onReveal,
 }: {
   session: LiveSession;
   record: SessionRecord | null;
+  profileNames: ReadonlyMap<number, string> | undefined;
   resources: SessionResources | null;
   onOpenSession?: ((id: number) => void) | undefined;
   onReveal: (path: string) => void;
@@ -1057,15 +1068,17 @@ function Detail({
           </Fact>
         )}
         {agent !== undefined && (
-          // What it was started as, and the file its instructions came from.
-          // The record names only the agent; its file is `<name>.md` in the
-          // host's agents folder.
+          // What it was started as, and the file its instructions came from,
+          // as the record names it: none for the host's built-in default and
+          // for a row that does not say.
           <Fact label="Agent">
             <span data-session-agent className="flex min-w-0 items-center gap-2">
               <AgentTag name={agent} />
-              <span className="min-w-0 truncate font-mono text-[11px] text-fg-subtle">
-                {`${agent}.md`}
-              </span>
+              {agentFileName(record) !== null && (
+                <span className="min-w-0 truncate font-mono text-[11px] text-fg-subtle">
+                  {agentFileName(record)}
+                </span>
+              )}
             </span>
           </Fact>
         )}
@@ -1125,8 +1138,18 @@ function Detail({
         )}
       </Facts>
 
-      {record !== null && record.argv.length > 0 && (
+      {record?.launchedAs !== undefined && (
         <Group label="Launched as">
+          <LaunchedAsList
+            record={record}
+            launched={record.launchedAs}
+            profileNames={profileNames}
+          />
+        </Group>
+      )}
+
+      {record !== null && record.argv.length > 0 && (
+        <Group label={record.launchedAs === undefined ? "Launched as" : "Command line"}>
           {/* Wrapped rather than scrolled, and `wrap-anywhere` because an argv
               is mostly one unbreakable Windows path: with `overflow-x-auto`
               alone a 171px pane got a tall wrapped block *and* a horizontal
@@ -1207,6 +1230,95 @@ function StateChip({
  * rendered as `C:\Users…`. 420px is where two columns of a path and a branch
  * stop being two truncations.
  */
+/** The file name of the agent file a session was composed from, or null for none. */
+function agentFileName(record: SessionRecord | null): string | null {
+  const file = record?.launchedAs?.agentFile ?? null;
+  if (file === null) return null;
+  return file.split(/[\\/]/).filter((part) => part !== "").at(-1) ?? file;
+}
+
+/** What each permission mode is called, as the launchers' pickers call it. */
+const PERMISSION_WORDS: Record<PermissionMode, string> = {
+  manual: "Ask first",
+  plan: "Plan",
+  acceptEdits: "Accept edits",
+  auto: "Auto",
+  dontAsk: "Don’t ask",
+  bypassPermissions: "Bypass permissions",
+};
+
+/**
+ * What a session was launched with (M15): its agent and the file it was
+ * composed from as it was then, its profile, model and effort, permissions,
+ * tool families and rules, and the worktree it works in.
+ */
+function LaunchedAsList({
+  record,
+  launched,
+  profileNames,
+}: {
+  record: SessionRecord;
+  launched: LaunchedAs;
+  profileNames: ReadonlyMap<number, string> | undefined;
+}): JSX.Element {
+  const agent = agentOf(record);
+  const startedAt = Date.parse(record.startedAt);
+  const at = Number.isNaN(startedAt)
+    ? null
+    : new Date(startedAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const profileId = record.profileId ?? null;
+  const profile =
+    profileId === null ? "none" : (profileNames?.get(profileId) ?? "a profile that is gone");
+  const rules = [
+    launched.tools.join(", "),
+    launched.allowedTools.length > 0 ? `allowed ${launched.allowedTools.join(", ")}` : "",
+    launched.disallowedTools.length > 0 ? `disallowed ${launched.disallowedTools.join(", ")}` : "",
+  ].filter((part) => part !== "");
+  const rows: [string, ReactNode, boolean][] = [
+    [
+      "Agent",
+      agent === undefined ? (
+        "none"
+      ) : (
+        <>
+          {agent}
+          {launched.agentFile !== null && (
+            <>
+              , composed from <span className="font-mono">{launched.agentFile}</span>
+              {at !== null && ` as it was at ${at}`}
+            </>
+          )}
+        </>
+      ),
+      false,
+    ],
+    ["Profile", profile, false],
+    ["Model · effort", `${launched.model ?? "default"} · ${launched.effort ?? "default"}`, true],
+    [
+      "Permissions",
+      record.permissionMode === undefined ? "Default" : PERMISSION_WORDS[record.permissionMode],
+      false,
+    ],
+    ["Tools", rules.length === 0 ? "none" : rules.join(" · "), true],
+    ["Worktree", launched.worktree ? "an agent worktree Floti made for it" : "none, the folder itself", false],
+  ];
+  return (
+    <dl data-launched-as className="grid grid-cols-[130px_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12px]">
+      {rows.map(([label, value, mono]) => (
+        <div key={label} className="contents">
+          <dt className="text-fg-subtle">{label}</dt>
+          <dd
+            data-launched={label}
+            className={cn("min-w-0 wrap-anywhere text-fg", mono && "font-mono text-[11.5px]")}
+          >
+            {value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function Facts({ children }: { children: ReactNode }): JSX.Element {
   return (
     // The container is the wrapper and the query is on the grid inside it: an
