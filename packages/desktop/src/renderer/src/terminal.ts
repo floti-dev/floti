@@ -8,6 +8,7 @@ import { isMac } from '@helm/ui'
 import type { ClipboardRead, ClipboardWriteOutcome } from '../../shared/ipc'
 import type { TermCreateOptions } from '../../shared/protocol'
 import { copyToClipboard, readForPaste } from './clipboardNotice'
+import { attachProgramClipboard } from './programClipboard'
 import { attachLinks } from './terminalLinks'
 
 /**
@@ -271,6 +272,12 @@ export function createTerminal(
   opts: TermCreateOptions & {
     /** Whether the terminal takes the keyboard as it is made. True unless it says false. */
     focus?: boolean
+    /**
+     * Whether a program's OSC 52 copy reaches the clipboard (`programClipboard.ts`).
+     * Only a terminal that takes input here says true: a session tab or a plain
+     * terminal, never a watch-only peek, which must not change this client.
+     */
+    programClipboard?: boolean
   },
   hooks: TerminalHooks,
   prefs: TerminalPrefs = TERMINAL_DEFAULTS
@@ -299,6 +306,12 @@ export function createTerminal(
     // here so the family view's cards, which start without focus beside a parent
     // that keeps it, are known to show a hollow cursor rather than assumed to.
     cursorInactiveStyle: 'outline',
+    // A program that captures the mouse gets every drag as mouse reports, so
+    // xterm makes no selection and Cmd+C has nothing to copy. Shift forces a
+    // native selection on Windows and Linux; on a Mac xterm forces one only
+    // with Option and this option, as Terminal.app and iTerm2 do. It also turns
+    // off Option+click moving the cursor. No effect off a Mac.
+    macOptionClickForcesSelection: true,
     theme: THEME,
     // Spread rather than `windowsPty: cond ? {...} : undefined`. Same value
     // reaches xterm either way - it tests the property for truthiness - but
@@ -383,6 +396,8 @@ export function createTerminal(
 
   attachKeyBindings(term, container, hooks)
   const links = attachLinks(term, container, hooks.openLink)
+  const programCopies =
+    opts.programClipboard === true ? attachProgramClipboard(term, container, hooks.writeClipboard) : null
 
   // Diagnostic only: records what a wheel event actually looked like by the
   // time it reached the pane, so a "scrolling does not work" result can name
@@ -421,6 +436,7 @@ export function createTerminal(
       observer?.disconnect()
       observer = null
       links.dispose()
+      programCopies?.dispose()
       scrollbar.dispose()
       // Disposes the loaded addons with it, webgl's GL context included.
       term.dispose()

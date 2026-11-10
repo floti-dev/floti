@@ -123,6 +123,11 @@ describe('the peek terminal', () => {
     expect(hooks.onResize?.(10 as never, 5 as never)).toBeUndefined()
   })
 
+  it('takes no clipboard write from the program it shows: a peek leaves this client as it is', () => {
+    render(<PeekTerminal attach={() => () => undefined} grid={GRID} room={ROOM} windowsBuild={null} />)
+    expect(made.options[0]).not.toHaveProperty('programClipboard')
+  })
+
   it('S1: draws what the peek kept and then each chunk as it arrives, and stops with the view', () => {
     let sink: (text: string) => void = () => undefined
     const detach = vi.fn()

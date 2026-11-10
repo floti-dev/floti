@@ -76,6 +76,14 @@ describe('project shells', () => {
     expect(bridge.invoked('pterm:open').map((request) => request.path)).toEqual([ALPHA, BETA])
   })
 
+  it('put their program’s own copy (OSC 52) on this PC’s clipboard', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+    bridge.answer('clipboard:write', () => ({ outcome: 'copied' }))
+    await mountShell(ALPHA, box(), OPTS)
+    expect(termOf(ALPHA).osc(52, `c;${btoa('git log output')}`)).toBe(true)
+    expect(bridge.invoked('clipboard:write')).toEqual(['git log output'])
+  })
+
   it('end only when their project closes, and then for good', async () => {
     await mountShell(ALPHA, box(), OPTS)
     const term = termOf(ALPHA)

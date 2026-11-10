@@ -104,6 +104,11 @@ describe('createTerminal preferences', () => {
     }
   })
 
+  it('lets Option+drag make a selection over a program that captures the mouse, as a Mac terminal does', () => {
+    createTerminal(container(), { cols: 80, rows: 24, fit: false }, hooks())
+    expect(latest().options).toMatchObject({ macOptionClickForcesSelection: true })
+  })
+
   it('takes the keyboard as it is made, unless it is a card beside a parent that keeps it', () => {
     const focus = vi.spyOn(Terminal.prototype, 'focus')
     createTerminal(container(), { cols: 80, rows: 24, fit: false }, hooks())
@@ -307,6 +312,80 @@ describe('a clipboard that refuses', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(term.pasted).toEqual(['pasted', 'pasted'])
     expect(notice()).toBeNull()
+  })
+})
+
+describe('a program’s own copy, OSC 52', () => {
+  const OSC_CLIPBOARD = 52
+  const base64 = (text: string): string => btoa(String.fromCharCode(...new TextEncoder().encode(text)))
+
+  /** A terminal on this window, focused or not, and what reached its clipboard. */
+  function terminal(
+    opts: { programClipboard?: boolean; focused?: boolean; write?: ClipboardWriteOutcome } = {}
+  ): {
+    term: Terminal
+    box: HTMLDivElement
+    writes: Mock<(text: string) => Promise<ClipboardWriteOutcome>>
+    sent: Mock<(data: string) => void>
+    host: ReturnType<typeof createTerminal>
+  } {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(opts.focused ?? true)
+    const box = container()
+    const writes = vi.fn<(text: string) => Promise<ClipboardWriteOutcome>>(() =>
+      Promise.resolve(opts.write ?? 'copied')
+    )
+    const sent = vi.fn<(data: string) => void>()
+    const host = createTerminal(
+      box,
+      { cols: 80, rows: 24, fit: false, programClipboard: opts.programClipboard ?? true },
+      { ...hooks(), onInput: sent, writeClipboard: writes }
+    )
+    return { term: latest(), box, writes, sent, host }
+  }
+
+  it('puts a write’s decoded text on this client’s clipboard, through the hook a copy uses', () => {
+    const { term, writes } = terminal()
+    expect(term.osc(OSC_CLIPBOARD, `c;${base64('copied in the TUI ✓')}`)).toBe(true)
+    expect(writes.mock.calls).toEqual([['copied in the TUI ✓']])
+  })
+
+  it('answers a read request with nothing, and writes nothing for one', () => {
+    const { term, writes, sent } = terminal()
+    expect(term.osc(OSC_CLIPBOARD, 'c;?')).toBe(true)
+    expect(writes).not.toHaveBeenCalled()
+    expect(sent).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing for malformed base64, and still keeps it off the screen', () => {
+    const { term, writes } = terminal()
+    expect(term.osc(OSC_CLIPBOARD, 'c;not base64!')).toBe(true)
+    expect(term.osc(OSC_CLIPBOARD, 'c;YWJjZ')).toBe(true)
+    expect(writes).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing while this window does not have focus, so a client nobody is using keeps its clipboard', () => {
+    const { term, writes } = terminal({ focused: false })
+    expect(term.osc(OSC_CLIPBOARD, `c;${base64('from another device')}`)).toBe(true)
+    expect(writes).not.toHaveBeenCalled()
+  })
+
+  it('says in the pane that a refused write was refused, as a copy does', async () => {
+    const { term, box } = terminal({ write: 'refused' })
+    term.osc(OSC_CLIPBOARD, `c;${base64('text')}`)
+    await vi.waitFor(() => expect(box.querySelector('[role="status"]')?.textContent).toBe(COPY_REFUSED))
+  })
+
+  it('is not answered by a terminal that does not take input here, such as a peek', () => {
+    const { term, writes } = terminal({ programClipboard: false })
+    expect(term.osc(OSC_CLIPBOARD, `c;${base64('text')}`)).toBe(false)
+    expect(writes).not.toHaveBeenCalled()
+  })
+
+  it('stops answering once the terminal is disposed', () => {
+    const { term, writes, host } = terminal()
+    host.dispose()
+    expect(term.osc(OSC_CLIPBOARD, `c;${base64('text')}`)).toBe(false)
+    expect(writes).not.toHaveBeenCalled()
   })
 })
 

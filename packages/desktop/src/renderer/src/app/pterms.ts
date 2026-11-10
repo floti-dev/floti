@@ -215,6 +215,7 @@ export async function mountShell(
       cols: opts.cols,
       rows: opts.rows,
       fit: true,
+      programClipboard: true,
       ...(opts.windowsBuild !== null ? { windowsBuild: opts.windowsBuild } : {})
     },
     {

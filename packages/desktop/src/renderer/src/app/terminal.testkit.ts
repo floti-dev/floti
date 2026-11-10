@@ -216,6 +216,31 @@ export class Terminal {
     this.written.push(data)
   }
 
+  private readonly oscHandlers = new Map<number, Set<(body: string) => boolean | Promise<boolean>>>()
+
+  /** xterm's parser, as far as an OSC handler goes. */
+  readonly parser = {
+    registerOscHandler: (
+      ident: number,
+      handler: (body: string) => boolean | Promise<boolean>
+    ): { dispose: () => void } => {
+      const set = this.oscHandlers.get(ident) ?? new Set()
+      set.add(handler)
+      this.oscHandlers.set(ident, set)
+      return { dispose: () => set.delete(handler) }
+    }
+  }
+
+  /**
+   * The program writing `ESC ] <ident> ; <body> BEL`, as xterm's parser hands
+   * it on: to the handlers registered for `ident`, newest first, until one
+   * says it handled it. False when none did, and xterm would ignore it.
+   */
+  osc(ident: number, body: string): boolean {
+    const handlers = [...(this.oscHandlers.get(ident) ?? [])].reverse()
+    return handlers.some((handler) => handler(body) === true)
+  }
+
   /** The one terminal holding the keyboard, as a page has one focused element. */
   static focused: Terminal | null = null
 

@@ -220,6 +220,15 @@ describe('a session terminal', () => {
     expect(host?.element.isConnected).toBe(false)
   })
 
+  it('puts its program’s own copy (OSC 52) on this PC’s clipboard, whichever host the session runs on', () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+    bridge.answer('clipboard:write', () => ({ outcome: 'copied' }))
+    mountTerminal(1, pane(700, 350), { windowsBuild: null }, 'build-box')
+    expect(Terminal.instances.at(-1)?.osc(52, `c;${btoa('from the TUI')}`)).toBe(true)
+    expect(bridge.invoked('clipboard:write')).toEqual(['from the TUI'])
+    disposeTerminal(1, 'build-box')
+  })
+
   it('takes the keyboard when its tab opens, and a card made beside a parent leaves it with the parent', () => {
     const focus = vi.spyOn(Terminal.prototype, 'focus')
     render(<TerminalPane session={session(1)} active windowsBuild={null} onClose={vi.fn()} />)

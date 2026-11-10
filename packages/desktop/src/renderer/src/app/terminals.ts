@@ -102,6 +102,7 @@ export function mountTerminal(
       cols: 100,
       rows: 30,
       fit: true,
+      programClipboard: true,
       ...(opts.windowsBuild !== null ? { windowsBuild: opts.windowsBuild } : {}),
       ...(opts.focus === false ? { focus: false } : {})
     },
