@@ -14,7 +14,7 @@ use crate::capability::Capability;
 use crate::channel::{
     Catalogue, ChannelKind, EventChannel, RequestChannel, StreamChannel, from_payload, to_payload,
 };
-use crate::channels::common::SessionStatus;
+use crate::channels::common::{LaunchedAs, SessionStatus};
 use crate::frame::{FrameDecoder, encode_frame};
 use crate::message::{Event, Message, Request, Response, Snapshot, StreamData, StreamOpen};
 
@@ -224,6 +224,15 @@ fn record(id: u64) -> SessionRecord {
         last_report: None,
         outlive: true,
         permission_mode: Some(PermissionMode::AcceptEdits),
+        launched_as: Some(LaunchedAs {
+            agent_file: Some("C:\\Users\\me\\.config\\floti\\agents\\reviewer.md".into()),
+            model: Some("opus".into()),
+            effort: Some(EffortLevel::High),
+            allowed_tools: vec!["Read".into()],
+            disallowed_tools: vec!["Edit".into()],
+            tools: vec!["floti-agents".into()],
+            worktree: true,
+        }),
     }
 }
 
@@ -287,6 +296,7 @@ fn history_session() -> HistorySession {
         label: None,
         agent_title: None,
         agent: Some("research-lead".into()),
+        permission_mode: Some(PermissionMode::Plan),
         transcript_file: Some("C:\\Users\\me\\.claude\\projects\\api\\0b9c.jsonl".into()),
         transcript_bytes: Some(5_000_000_000),
         project_exists: true,

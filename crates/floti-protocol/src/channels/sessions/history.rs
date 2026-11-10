@@ -8,7 +8,7 @@ use ts_rs::TS;
 
 use crate::backend::BackendId;
 use crate::channel::Catalogue;
-use crate::channels::common::SessionRecord;
+use crate::channels::common::{PermissionMode, SessionRecord};
 
 pub(super) fn declare(catalogue: &mut Catalogue) {
     catalogue
@@ -151,6 +151,12 @@ pub struct HistorySession {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub agent: Option<String>,
+    /// The permission mode its newest session in Floti ran with (protocol
+    /// 2.3), which a resume as its agent keeps. Absent for one launched with
+    /// none, and from a host before 2.3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub permission_mode: Option<PermissionMode>,
     /// The transcript on disk, or null once it has been reaped.
     pub transcript_file: Option<String>,
     #[ts(type = "number | null")]

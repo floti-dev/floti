@@ -125,6 +125,8 @@ impl Hosted {
                     remote_control_name: None,
                     // A command is no agent.
                     agent: None,
+                    // A plain command line: nothing to say it was launched with.
+                    launched: None,
                     parent: Some(ParentLink {
                         session: parent,
                         conversation_id: facts.conversation_id.clone(),

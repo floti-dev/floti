@@ -24,7 +24,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Duration;
 
-use floti_protocol::channels::common::{ChildReport, SessionRecord};
+use floti_protocol::channels::common::{ChildReport, LaunchedAs, SessionRecord};
 use floti_protocol::channels::host::{DeviceSession, HostStopReason};
 use floti_protocol::channels::sessions::{
     CloseSessionRequest, HistorySession, LaunchProfileRequest, LaunchSessionRequest,
@@ -46,6 +46,7 @@ use crate::agent::claude_code::{parse_instant, sanitize_session_name, unique_ses
 use crate::agent::{
     AgentBackend, Composition, Launch, LaunchFolder, LaunchRequest, LiveRecord, ResumeRequest,
 };
+use crate::agent_definitions::is_plain_command;
 use crate::agent_tools::{Grant, GrantScope, KeptGrant};
 use crate::keeper::{HeldKind, Keeper};
 use crate::platform::process_tree;
@@ -60,6 +61,8 @@ use crate::{Error, Result};
 
 mod as_agent;
 mod children;
+
+use as_agent::Starting;
 
 use children::Children;
 pub(crate) use children::{
@@ -641,13 +644,20 @@ impl Hosted {
             .as_deref()
             .map(|id| self.resumable(id))
             .transpose()?;
+        let starting = if history.is_some() {
+            Starting::Resume
+        } else {
+            Starting::Launch
+        };
         let agent = non_empty(request.agent.clone())
-            .map(|name| self.person_agent(&name))
+            .map(|name| self.person_agent(&name, starting))
             .transpose()?;
         let chose = request.chosen.is_some();
         let profile = match (request.profile_id, &agent) {
             (Some(id), _) => Some(self.profile(id)?),
-            (None, Some(agent)) if !chose => self.agents_profile(agent)?,
+            (None, Some(agent)) if !chose => self
+                .agents_profile(agent)
+                .map_err(|problem| format!("{problem} {}", starting.instead()))?,
             (None, _) => None,
         };
         let mode = match &agent {
@@ -655,23 +665,29 @@ impl Hosted {
             _ => request.permission_mode,
         };
         let backend = match (&history, &agent) {
-            (Some(history), _) => self.named_backend(&history.backend)?,
+            (Some(history), Some(agent)) => {
+                // A conversation reopens on the backend that recorded it,
+                // which the agent has to allow, as a start's choice is held.
+                self.agent_allows(agent, &history.backend, mode, starting)?;
+                self.named_backend(&history.backend)?
+            }
+            (Some(history), None) => self.named_backend(&history.backend)?,
             (None, Some(agent)) => {
                 self.backend_for(agent, request.backend.as_ref().map(BackendId::as_str), mode)?
             }
             (None, None) => self.backend(request.backend.as_ref())?,
         };
-        let (mut composition, families_off) = match &agent {
+        let (mut composition, families_off, agent_file) = match &agent {
             Some(agent) => {
                 let as_agent = self
                     .as_agent(agent, backend.as_ref(), profile.as_ref(), mode)
-                    .map_err(|reason| format!("{reason}, so nothing was started."))?;
-                (as_agent.composition, as_agent.families_off)
+                    .map_err(|reason| format!("{reason}. {}", starting.instead()))?;
+                (as_agent.composition, as_agent.families_off, as_agent.file)
             }
             None => {
                 let mut composition = composition_of(profile.as_ref());
                 composition.permission_mode = mode;
-                (composition, Vec::new())
+                (composition, Vec::new(), None)
             }
         };
         if let Some(chosen) = request.chosen {
@@ -707,6 +723,11 @@ impl Hosted {
                         .and_then(|profile| i64::try_from(profile.id).ok()),
                     permission_mode: mode.map(records::permission_mode_name),
                     agent: agent.as_ref().map(|agent| agent.name.clone()),
+                    launched: Some(LaunchedAs {
+                        agent_file,
+                        worktree: made.is_some(),
+                        ..LaunchedAs::default()
+                    }),
                     ..SessionOrigin::default()
                 },
                 resume: history.map(|history| history.session_id),
@@ -774,8 +795,11 @@ impl Hosted {
     /// history recorded, on the backend that recorded it, with no profile
     /// and no permission mode. The launcher is where one is reopened with a
     /// composition. A conversation reopened as the agent it was started as
-    /// is composed as that agent again, from its file as it reads now, with
-    /// the profile and permission the agent names.
+    /// is composed as that agent again, from its file as it reads now (its
+    /// body, model, effort, tool rules and profile), and keeps the permission
+    /// mode its newest session ran with, so a resume never runs in a mode
+    /// nobody chose for it: a child's conversation keeps the mode its parent
+    /// held it to. The agent has to allow the conversation's backend.
     pub fn resume(
         &self,
         client: ClientId,
@@ -784,22 +808,27 @@ impl Hosted {
         let history = self.resumable(&request.session_id)?;
         let backend = self.named_backend(&history.backend)?;
         let agent = non_empty(request.agent)
-            .map(|name| self.person_agent(&name))
+            .map(|name| self.person_agent(&name, Starting::Resume))
             .transpose()?;
-        let (composition, families_off, profile, mode) = match &agent {
+        let (composition, families_off, profile, mode, agent_file) = match &agent {
             Some(agent) => {
-                let profile = self.agents_profile(agent)?;
+                let mode = history.permission_mode;
+                self.agent_allows(agent, &history.backend, mode, Starting::Resume)?;
+                let profile = self
+                    .agents_profile(agent)
+                    .map_err(|problem| format!("{problem} {}", Starting::Resume.instead()))?;
                 let as_agent = self
-                    .as_agent(agent, backend.as_ref(), profile.as_ref(), agent.permission)
-                    .map_err(|reason| format!("{reason}, so nothing was started."))?;
+                    .as_agent(agent, backend.as_ref(), profile.as_ref(), mode)
+                    .map_err(|reason| format!("{reason}. {}", Starting::Resume.instead()))?;
                 (
                     as_agent.composition,
                     as_agent.families_off,
                     profile,
-                    agent.permission,
+                    mode,
+                    as_agent.file,
                 )
             }
-            None => (Composition::default(), Vec::new(), None, None),
+            None => (Composition::default(), Vec::new(), None, None, None),
         };
         let launched = self.run(
             Plan {
@@ -817,6 +846,10 @@ impl Hosted {
                         .and_then(|profile| i64::try_from(profile.id).ok()),
                     permission_mode: mode.map(records::permission_mode_name),
                     agent: agent.map(|agent| agent.name),
+                    launched: Some(LaunchedAs {
+                        agent_file,
+                        ..LaunchedAs::default()
+                    }),
                     ..SessionOrigin::default()
                 },
             },
@@ -925,6 +958,25 @@ impl Hosted {
             .agent_tools
             .iter()
             .any(|server| server.name == SESSIONS_FAMILY);
+        // What it was launched with, for the sessions pane's Launched as: every
+        // launch but a plain command line's, which runs no agent.
+        origin.launched = (!is_plain_command(backend.as_ref())).then(|| {
+            let preset = origin.launched.take().unwrap_or_default();
+            LaunchedAs {
+                agent_file: preset.agent_file,
+                model: composition.model.clone(),
+                effort: composition.effort,
+                allowed_tools: composition.allowed_tools.clone(),
+                disallowed_tools: composition.disallowed_tools.clone(),
+                tools: composition
+                    .agent_tools
+                    .iter()
+                    .map(|server| server.name.clone())
+                    .collect(),
+                worktree: preset.worktree
+                    || origin.parent.as_ref().is_some_and(|link| link.worktree),
+            }
+        });
         let grant = grant.map(|(tools, grant)| (tools, grant.id));
         // What `floti agent` needs in the session's environment, added to the
         // launch the backend composed.
@@ -1365,6 +1417,7 @@ impl Hosted {
         composition.permission_mode = row.permission_mode;
         let mut families_off = Vec::new();
         let mut agent = None;
+        let mut agent_file = None;
         let mut agent_warning = None;
         // It comes back as its agent, as the agent's file reads now, unless
         // the person chose to restore it without.
@@ -1382,6 +1435,7 @@ impl Hosted {
                     families_off = reopened.families_off;
                 }
                 agent = Some(reopened.agent);
+                agent_file = reopened.file;
             }
             agent_warning = warning;
         }
@@ -1402,6 +1456,10 @@ impl Hosted {
                     profile_id: row.profile_id,
                     permission_mode: row.permission_mode.map(records::permission_mode_name),
                     agent,
+                    launched: Some(LaunchedAs {
+                        agent_file,
+                        ..LaunchedAs::default()
+                    }),
                     // The line it ran Remote Control under, so a child of a
                     // Remote Control parent comes back on it as well.
                     remote_control_name: row.remote_control_name.clone(),

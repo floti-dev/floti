@@ -462,6 +462,10 @@ impl<'a> HistoryIndex<'a> {
                 .get::<_, Option<String>>("agent")?
                 .map(|agent| agent.trim().to_owned())
                 .filter(|agent| !agent.is_empty()),
+            permission_mode: row
+                .get::<_, Option<String>>("permission_mode")?
+                .as_deref()
+                .and_then(crate::server::records::permission_mode_from_name),
             transcript_file: row.get("transcript_file")?,
             transcript_bytes: row.get::<_, Option<i64>>("transcript_bytes")?.map(to_u64),
             project_exists: row.get::<_, i64>("project_exists")? == 1,
@@ -496,20 +500,22 @@ pub(crate) const AGENT_TITLES: &str = agent_titles!();
 /// The table [`CONVERSATION_AGENTS`] is, as a literal for `concat!`.
 macro_rules! conversation_agents {
     () => {
-        "(SELECT conversation, agent, MAX(id) AS newest FROM (
-           SELECT lower(claude_session_id) AS conversation, agent, id FROM sessions
-            WHERE claude_session_id IS NOT NULL
+        "(SELECT conversation, agent, permission_mode, MAX(id) AS newest FROM (
+           SELECT lower(claude_session_id) AS conversation, agent, permission_mode, id
+            FROM sessions WHERE claude_session_id IS NOT NULL
            UNION ALL
-           SELECT lower(last_claude_session_id), agent, id FROM sessions
-            WHERE last_claude_session_id IS NOT NULL
+           SELECT lower(last_claude_session_id), agent, permission_mode, id
+            FROM sessions WHERE last_claude_session_id IS NOT NULL
          ) GROUP BY conversation)"
     };
 }
 
 /// Each conversation with the agent its newest session row in Floti was
-/// started as: what a resume from History composes again. Columns
-/// `conversation` (lower-cased) and `agent`, null for a session started as
-/// none, so a conversation last resumed without its agent has none.
+/// started as, and the permission mode that row ran with: what a resume from
+/// History composes again, and the mode it keeps. Columns `conversation`
+/// (lower-cased), `agent`, null for a session started as none, so a
+/// conversation last resumed without its agent has none, and
+/// `permission_mode`.
 pub(crate) const CONVERSATION_AGENTS: &str = conversation_agents!();
 
 /// The columns every session read takes, with what the archive holds for it
@@ -520,7 +526,8 @@ const SESSION_COLUMNS: &str =
         s.first_prompt, s.title_prompt, s.transcript_file, s.transcript_bytes, s.project_exists,
         a.state AS archive_state,
         CASE WHEN a.session_id IS NULL THEN NULL ELSE a.message_count END AS archived_messages,
-        n.name AS label, t.title AS agent_title, g.agent AS agent";
+        n.name AS label, t.title AS agent_title, g.agent AS agent,
+        g.permission_mode AS permission_mode";
 
 const JOINS: &str = concat!(
     "LEFT JOIN transcript_sessions a ON a.session_id = lower(s.session_id)

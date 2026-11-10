@@ -6171,6 +6171,16 @@
             "null"
           ]
         },
+        "permissionMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PermissionMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "project": {
           "type": "string"
         },
@@ -6779,6 +6789,60 @@
         "cwd",
         "cols",
         "rows"
+      ],
+      "type": "object"
+    },
+    "LaunchedAs": {
+      "properties": {
+        "agentFile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "allowedTools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "disallowedTools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "effort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EffortLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "worktree": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "allowedTools",
+        "disallowedTools",
+        "tools",
+        "worktree"
       ],
       "type": "object"
     },
@@ -10757,6 +10821,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/ChildReport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "launchedAs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LaunchedAs"
             },
             {
               "type": "null"

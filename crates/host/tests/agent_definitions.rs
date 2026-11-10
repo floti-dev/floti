@@ -27,7 +27,8 @@ use floti_host::platform::process_tree::Native as NativeTree;
 use floti_host::platform::socket::Endpoint;
 use floti_host::server::HostConfig;
 use floti_host::testkit::{
-    GitRepo, OtherAgent, OtherAgentRecord, PATIENCE, RunningHost, TestClient, TestDirs,
+    GitRepo, OtherAgent, OtherAgentBackend, OtherAgentRecord, PATIENCE, RunningHost, TestClient,
+    TestDirs,
 };
 use floti_protocol::BackendId;
 use floti_protocol::channels::agents::{
@@ -38,9 +39,10 @@ use floti_protocol::channels::agents::{
 use floti_protocol::channels::common::{PermissionMode, SessionRecord};
 use floti_protocol::channels::host::{HostStop, HostStopReason, HostStopRequest};
 use floti_protocol::channels::sessions::{
-    HistoryQuery, HistoryRefresh, HistoryResume, HistorySession, HistorySessions, LaunchChoices,
-    LaunchSessionRequest, RestoreSessionsRequest, ResumeSessionRequest, SessionLaunch, SessionList,
-    SessionRestorable, SessionRestore, SessionStart, SessionToRestore, StartSessionRequest,
+    EffortLevel, HistoryQuery, HistoryRefresh, HistoryResume, HistorySession, HistorySessions,
+    LaunchChoices, LaunchSessionRequest, RestoreSessionsRequest, ResumeSessionRequest,
+    SessionLaunch, SessionList, SessionRestorable, SessionRestore, SessionStart, SessionToRestore,
+    StartSessionRequest,
 };
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -141,7 +143,12 @@ impl World {
     /// A host that serves once this returns, reading the agents folder as the
     /// installed host does, with the workspace tracked.
     async fn host(&self) -> RunningHost {
-        let host = RunningHost::start(self.config());
+        self.host_on(self.config()).await
+    }
+
+    /// As [`Self::host`], with `config` in place of the World's own.
+    async fn host_on(&self, config: HostConfig) -> RunningHost {
+        let host = RunningHost::start(config);
         // A client is welcomed once the host serves.
         drop(self.client().await);
         let known: i64 = self
@@ -3330,6 +3337,30 @@ async fn a_person_starts_a_session_as_an_agent_composed_as_a_childs_with_no_pare
     assert!(!lead.run.argv.iter().any(|arg| arg == "--strict-mcp-config"));
     // It counts toward no agent limit: it is no child.
     assert_eq!(world.children_made(), 0);
+    // What it was launched with is on its record, for the sessions pane.
+    let launched = lead
+        .record
+        .launched_as
+        .clone()
+        .expect("what it was launched with");
+    assert!(
+        launched
+            .agent_file
+            .as_deref()
+            .is_some_and(|file| file.ends_with("research-lead.md")),
+        "{launched:?}"
+    );
+    assert_eq!(
+        (launched.model.as_deref(), launched.effort),
+        (Some("opus"), Some(EffortLevel::High))
+    );
+    assert_eq!(launched.allowed_tools, ["Read", "Grep"]);
+    assert_eq!(launched.disallowed_tools, ["Edit", "Write"]);
+    assert!(
+        launched.tools.iter().any(|family| family == FAMILY),
+        "{launched:?}"
+    );
+    assert!(!launched.worktree);
 
     // What the launcher chose replaces the agent's, and none passes no flag.
     let chosen = world
@@ -3424,6 +3455,14 @@ async fn an_agent_that_works_in_a_worktree_starts_in_a_new_one_named_after_the_s
         repo.join(".floti/worktrees/orbit-api").as_path()
     );
     assert_eq!(builder.record.branch.as_deref(), Some("agent/orbit-api"));
+    assert!(
+        builder
+            .record
+            .launched_as
+            .as_ref()
+            .is_some_and(|launched| launched.worktree),
+        "its record says it works in a worktree"
+    );
     assert_eq!(
         builder.record.project_path.as_deref(),
         Some(text(&repo).as_str()),
@@ -3524,7 +3563,8 @@ async fn history_names_a_conversations_agent_and_resuming_composes_it_from_its_f
         .await
         .expect_err("the agent is gone");
     assert!(
-        refused.contains("research-lead is no longer among this host's agents"),
+        refused.contains("research-lead is no longer among this host's agents")
+            && refused.ends_with("Resume without the agent; nothing was started."),
         "{refused}"
     );
     assert_eq!(world.run_count(), runs);
@@ -3663,5 +3703,218 @@ async fn the_restore_offer_names_an_agents_problem_and_restores_it_without_the_a
     assert_eq!(scribe_again.record.agent, None);
     let told = scribe_again.run.instructions.as_deref().unwrap_or_default();
     assert!(!told.contains("Will be deleted."), "{told}");
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_resume_from_history_keeps_the_mode_the_session_ran_with_and_not_the_agent_files() {
+    let world = World::new();
+    world.agent(
+        "planner",
+        "---\nbackend: claude-code\npermission: plan\n---\nPlan it.\n",
+    );
+    let host = world.host().await;
+    let folder = world.project("orbit");
+    // The person turned Permissions to Accept edits in Ctrl+N.
+    let planner = world
+        .launch(LaunchSessionRequest {
+            permission_mode: Some(PermissionMode::AcceptEdits),
+            chosen: Some(LaunchChoices {
+                model: None,
+                effort: None,
+            }),
+            ..launch_request(&folder, Some("planner"))
+        })
+        .await
+        .expect("the planner starts");
+    assert_eq!(
+        value_of(&planner.run.argv, "--permission-mode"),
+        Some("acceptEdits")
+    );
+    let conversation = world.worked_and_ended(&planner).await;
+    // History names the mode a resume keeps.
+    assert_eq!(
+        world.history_entry(&conversation).await.permission_mode,
+        Some(PermissionMode::AcceptEdits)
+    );
+
+    let resumed = world
+        .resume_from_history(&conversation, Some("planner"), &[planner.run.pid])
+        .await
+        .expect("it resumes as its agent");
+    assert_eq!(
+        value_of(&resumed.run.argv, "--permission-mode"),
+        Some("acceptEdits"),
+        "the mode it ran with, not the file's plan: {:?}",
+        resumed.run.argv
+    );
+    assert_eq!(
+        resumed.record.permission_mode,
+        Some(PermissionMode::AcceptEdits)
+    );
+    assert!(
+        resumed
+            .run
+            .instructions
+            .as_deref()
+            .is_some_and(|told| told.contains("Plan it.")),
+        "its body is still the file's"
+    );
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_resume_as_an_agent_that_does_not_allow_the_backend_or_whose_profile_is_gone_is_refused_saying_resume_without_it()
+ {
+    let world = World::new();
+    world.agent("elsewhere", "---\nbackend: other-agent\n---\nWork.\n");
+    world.agent(
+        "profiled",
+        "---\nbackend: claude-code\nprofile: gone-profile\n---\nWork.\n",
+    );
+    let host = world.host().await;
+    let folder = world.project("plain");
+    // A conversation on Claude Code, started as no agent.
+    let plain = world
+        .launch(launch_request(&folder, None))
+        .await
+        .expect("the session starts");
+    let conversation = world.worked_and_ended(&plain).await;
+    let runs = world.run_count();
+
+    let refused = world
+        .resume_from_history(&conversation, Some("elsewhere"), &[])
+        .await
+        .expect_err("the agent does not allow Claude Code");
+    assert!(
+        refused.contains("elsewhere")
+            && refused.contains("claude-code")
+            && refused.ends_with("Resume without the agent; nothing was started."),
+        "{refused}"
+    );
+    let refused = world
+        .resume_from_history(&conversation, Some("profiled"), &[])
+        .await
+        .expect_err("its profile is gone");
+    assert!(
+        refused.contains("profiled.md names a profile that cannot be used")
+            && refused.ends_with("Resume without the agent; nothing was started."),
+        "{refused}"
+    );
+    let refused = world
+        .resume_from_history(&conversation, Some("nobody"), &[])
+        .await
+        .expect_err("there is no such agent");
+    assert!(
+        refused.ends_with("Resume without the agent; nothing was started."),
+        "{refused}"
+    );
+    assert_eq!(world.run_count(), runs, "nothing ran");
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_launch_that_fails_after_its_worktree_was_made_removes_the_worktree_and_its_branch() {
+    let world = World::new();
+    world.agent(
+        "doomed",
+        &format!(
+            "---\nbackend: {}\nworktree: yes\n---\nNever runs.\n",
+            OtherAgentBackend::MISSING_ID
+        ),
+    );
+    let mut config = world.config();
+    config
+        .backends
+        .push(Arc::new(world.other.backend_that_cannot_start()));
+    let host = world.host_on(config).await;
+    let repo = world.repository("ledger");
+
+    let refused = world
+        .launch(launch_request(&repo, Some("doomed")))
+        .await
+        .expect_err("its program is missing");
+    assert!(!refused.is_empty());
+    assert!(
+        !repo.join(".floti/worktrees/ledger").exists(),
+        "the worktree was removed"
+    );
+    let branches = std::process::Command::new("git")
+        .args(["branch", "--list", "agent/*"])
+        .current_dir(&repo)
+        .output()
+        .expect("git lists the branches");
+    assert!(
+        String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
+        "its branch was removed: {}",
+        String::from_utf8_lossy(&branches.stdout)
+    );
+    assert!(world.sessions().await.is_empty());
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_restore_of_a_session_whose_agent_file_cannot_be_loaded_is_refused_unless_asked_without_it()
+ {
+    let world = World::new();
+    world.agent("scribe", "---\nbackend: claude-code\n---\nWrite it.\n");
+    let host = world.host().await;
+    let scribe = world
+        .launch(launch_request(&world.project("notes"), Some("scribe")))
+        .await
+        .expect("the scribe starts");
+    world.type_line(&scribe, "carry on").await;
+
+    let mut client = world.client().await;
+    client
+        .request::<HostStop>(&HostStopRequest {
+            reason: HostStopReason::Update,
+        })
+        .await
+        .expect("the stop is taken");
+    drop(client);
+    assert_eq!(host.stopped().await, HostStopReason::Update);
+    world.agent("scribe", "---\nworktree: maybe\n---\nBroken now.\n");
+
+    let host = world.host().await;
+    let mut client = world.client().await;
+    let offer = client
+        .request::<SessionRestorable>(&())
+        .await
+        .expect("the offer is read")
+        .expect("there is an offer");
+    let offered = offer
+        .sessions
+        .iter()
+        .find(|session| session.id == scribe.id())
+        .expect("offered");
+    assert!(
+        offered
+            .agent_problem
+            .as_deref()
+            .is_some_and(|problem| problem.contains("scribe.md cannot be loaded")),
+        "{offered:?}"
+    );
+    let runs = world.run_count();
+    let result = client
+        .request::<SessionRestore>(&RestoreSessionsRequest {
+            sessions: vec![SessionToRestore {
+                id: scribe.id(),
+                cols: 80,
+                rows: 24,
+                without_agent: false,
+            }],
+        })
+        .await
+        .expect("the restore is taken");
+    drop(client);
+    assert!(result.restored.is_empty(), "{result:?}");
+    assert_eq!(result.failed.len(), 1, "{result:?}");
+    assert!(
+        result.failed[0].reason.contains("scribe.md"),
+        "{:?}",
+        result.failed[0]
+    );
+    assert_eq!(world.run_count(), runs, "nothing ran");
     host.stop(HostStopReason::Stop).await;
 }

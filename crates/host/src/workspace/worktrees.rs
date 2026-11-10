@@ -100,7 +100,7 @@ impl Repository {
             .filter(|_| !listed.lines().any(|line| line == "bare"))
             .ok_or_else(|| {
                 format!(
-                    "{} is in a git repository that has no working tree, so no worktree can be made there and no agent was started.",
+                    "{} is in a git repository that has no working tree, so no worktree can be made there.",
                     folder.display()
                 )
             })?;
@@ -135,15 +135,19 @@ impl Repository {
     /// A sentence when `from` has no commit checked out or git refuses. Nothing
     /// is left behind then.
     pub(crate) fn make(&self, from: &Path, wanted: &str) -> Result<Made, String> {
-        let commit = run_git(from, &["rev-parse", "--verify", "HEAD^{commit}"], GIT_TIMEOUT)
-            .map_err(|_| {
-                format!(
-                    "{} has no commit checked out, so no worktree can be made from it and no agent was started.",
-                    from.display()
-                )
-            })?
-            .trim()
-            .to_owned();
+        let commit = run_git(
+            from,
+            &["rev-parse", "--verify", "HEAD^{commit}"],
+            GIT_TIMEOUT,
+        )
+        .map_err(|_| {
+            format!(
+                "{} has no commit checked out, so no worktree can be made from it.",
+                from.display()
+            )
+        })?
+        .trim()
+        .to_owned();
         let name = choose_name(wanted, self.taken_names()?.iter().map(String::as_str));
         let branch = format!("{BRANCH_PREFIX}{name}");
         let folder = self.worktrees_folder().join(&name);
@@ -154,9 +158,7 @@ impl Repository {
             &["worktree", "add", "-b", &branch, &path, &commit],
             CHECKOUT_TIMEOUT,
         )
-        .map_err(|problem| {
-            format!("Floti could not make the worktree {name}: {problem} No agent was started.")
-        })?;
+        .map_err(|problem| format!("Floti could not make the worktree {name}: {problem}"))?;
         Ok(Made {
             repository: self.clone(),
             name,
@@ -210,29 +212,18 @@ impl Repository {
             Ok(text) => text,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
             Err(err) => {
-                return Err(format!(
-                    "Floti could not read {}: {err} No agent was started.",
-                    file.display()
-                ));
+                return Err(format!("Floti could not read {}: {err}", file.display()));
             }
         };
         let Some(text) = with_exclude_line(&existing) else {
             return Ok(());
         };
         if let Some(parent) = file.parent() {
-            std::fs::create_dir_all(parent).map_err(|err| {
-                format!(
-                    "Floti could not make {}: {err} No agent was started.",
-                    parent.display()
-                )
-            })?;
+            std::fs::create_dir_all(parent)
+                .map_err(|err| format!("Floti could not make {}: {err}", parent.display()))?;
         }
-        std::fs::write(&file, text).map_err(|err| {
-            format!(
-                "Floti could not write {}: {err} No agent was started.",
-                file.display()
-            )
-        })
+        std::fs::write(&file, text)
+            .map_err(|err| format!("Floti could not write {}: {err}", file.display()))
     }
 }
 
@@ -269,10 +260,10 @@ fn git_did_not_run(problem: &str) -> bool {
 /// answer.
 fn not_a_repository(folder: &Path, problem: &str) -> String {
     if git_did_not_run(problem) {
-        return format!("{problem} No worktree was made and no agent was started.");
+        return format!("{problem} No worktree was made.");
     }
     format!(
-        "{} is not in a git repository, so no worktree can be made there and no agent was started.",
+        "{} is not in a git repository, so no worktree can be made there.",
         folder.display()
     )
 }

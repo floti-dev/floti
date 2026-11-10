@@ -4730,6 +4730,17 @@
             "null"
           ]
         },
+        "permissionMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PermissionMode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The permission mode its newest session in Floti ran with (protocol\n2.3), which a resume as its agent keeps. Absent for one launched with\nnone, and from a host before 2.3."
+        },
         "project": {
           "description": "The folder it ran in, exactly as recorded.",
           "type": "string"
@@ -5394,6 +5405,68 @@
         "cwd",
         "cols",
         "rows"
+      ],
+      "type": "object"
+    },
+    "LaunchedAs": {
+      "description": "What a session was launched with, as its launch composed it.",
+      "properties": {
+        "agentFile": {
+          "description": "The agent file it was composed from, as the host spells its path;\nnull for no agent, the default the host makes from its backends, and\nan agent a host serves with no agents folder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "allowedTools": {
+          "description": "The tools its agent lets it use without asking.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "disallowedTools": {
+          "description": "The tools its agent never lets it use.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "effort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EffortLevel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The effort it runs with, or null for the backend's own."
+        },
+        "model": {
+          "description": "The model it runs with, or null for the backend's own.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tools": {
+          "description": "The agent tool families its launch was given, such as `floti-agents`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "worktree": {
+          "description": "Whether it works in an agent worktree Floti made for it.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "allowedTools",
+        "disallowedTools",
+        "tools",
+        "worktree"
       ],
       "type": "object"
     },
@@ -9672,6 +9745,17 @@
             }
           ],
           "description": "What this child last told the session that started it with\n`agents_report`, until its next turn starts. Absent when it has told\nnothing since, for a session with no parent, and from a host before\nthis field, which reads as none."
+        },
+        "launchedAs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LaunchedAs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What the session was launched with beyond its agent, profile and\npermission mode, which have fields of their own (protocol 2.3): the\nsessions pane's Launched as. Absent for a plain command line, a row\nwritten before it, and from a host before 2.3."
         },
         "name": {
           "description": "The name handed to the agent, so the session can be found in its own\nresume list later. Never rewritten; a rename writes `label`.",

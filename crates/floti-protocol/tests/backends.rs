@@ -39,6 +39,7 @@ fn session(backend: BackendId) -> SessionRecord {
         last_report: None,
         outlive: false,
         permission_mode: None,
+        launched_as: None,
     }
 }
 

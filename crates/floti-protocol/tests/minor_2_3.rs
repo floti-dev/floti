@@ -2,8 +2,9 @@
 //! reads what the client sends: protocol 2.3 adds a session record's
 //! `agent`, beside the `role` it retires, the `agents:*` channels, and what
 //! starting a session as an agent needs (a launch's and a resume's `agent`, a
-//! launch's `chosen`, History's and the restore offer's agent, a restore's
-//! `withoutAgent`), and changes nothing else. A 2.2 frame is a 2.3 frame with
+//! launch's `chosen`, History's and the restore offer's agent, History's
+//! permission mode, a restore's `withoutAgent`, and what a session was
+//! launched with, `launchedAs`), and changes nothing else. A 2.2 frame is a 2.3 frame with
 //! every addition left out and a 2.3 frame is a 2.2 frame with fields the
 //! older reader ignores. `role` keeps its shape and is written with
 //! `agent`'s value, and a record that names only `role` is read with that as
@@ -70,11 +71,11 @@ const AGENTS_CHANNELS: &[&str] = &[
 /// Each type 2.3 changes, with the optional properties it adds: nothing else
 /// of it changes.
 const CHANGED_TYPES: &[(&str, &[&str])] = &[
-    ("HistorySession", &["agent"]),
+    ("HistorySession", &["agent", "permissionMode"]),
     ("LaunchSessionRequest", &["agent", "chosen"]),
     ("RestorableSession", &["agent", "agentProblem"]),
     ("ResumeSessionRequest", &["agent"]),
-    ("SessionRecord", &["agent"]),
+    ("SessionRecord", &["agent", "launchedAs"]),
     ("SessionToRestore", &["withoutAgent"]),
 ];
 
@@ -204,6 +205,8 @@ fn read(value: &Value) -> SessionRecord {
 fn a_record_that_names_only_role_is_read_with_it_as_its_agent() {
     let record = read(&record_2_2(Some("reviewer")));
     assert_eq!(record.agent.as_deref(), Some("reviewer"));
+    // Nor did it say what the session was launched with.
+    assert_eq!(record.launched_as, None);
     assert_eq!(record.role.as_deref(), Some("reviewer"));
 
     let none = read(&record_2_2(None));

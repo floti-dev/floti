@@ -10,6 +10,7 @@ use ts_rs::TS;
 
 use crate::backend::BackendId;
 use crate::channel::Catalogue;
+use crate::channels::sessions::EffortLevel;
 
 pub fn declare(catalogue: &mut Catalogue) {
     catalogue
@@ -160,6 +161,35 @@ pub struct SessionRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub permission_mode: Option<PermissionMode>,
+    /// What the session was launched with beyond its agent, profile and
+    /// permission mode, which have fields of their own (protocol 2.3): the
+    /// sessions pane's Launched as. Absent for a plain command line, a row
+    /// written before it, and from a host before 2.3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub launched_as: Option<LaunchedAs>,
+}
+
+/// What a session was launched with, as its launch composed it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchedAs {
+    /// The agent file it was composed from, as the host spells its path;
+    /// null for no agent, the default the host makes from its backends, and
+    /// an agent a host serves with no agents folder.
+    pub agent_file: Option<String>,
+    /// The model it runs with, or null for the backend's own.
+    pub model: Option<String>,
+    /// The effort it runs with, or null for the backend's own.
+    pub effort: Option<EffortLevel>,
+    /// The tools its agent lets it use without asking.
+    pub allowed_tools: Vec<String>,
+    /// The tools its agent never lets it use.
+    pub disallowed_tools: Vec<String>,
+    /// The agent tool families its launch was given, such as `floti-agents`.
+    pub tools: Vec<String>,
+    /// Whether it works in an agent worktree Floti made for it.
+    pub worktree: bool,
 }
 
 impl SessionRecord {

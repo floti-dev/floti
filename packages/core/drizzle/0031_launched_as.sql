@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `launched_as` text;

@@ -325,6 +325,14 @@ export const sessions = sqliteTable(
      * writes it.
      */
     extraStarts: integer('extra_starts').notNull().default(0),
+    /**
+     * What the session was launched with beyond its agent, profile and
+     * permission mode, as JSON in the protocol's `LaunchedAs` shape: the agent
+     * file, model and effort, tool rules, tool families and whether it works
+     * in an agent worktree. Null for a plain command line and a row written
+     * before it. Only the Floti host writes it.
+     */
+    launchedAs: text('launched_as'),
     status: text('status', { enum: ['running', 'exited', 'lost'] })
       .notNull()
       .default('running'),

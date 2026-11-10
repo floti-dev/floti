@@ -267,6 +267,7 @@ mod tests {
             last_report: None,
             outlive: false,
             permission_mode: None,
+            launched_as: None,
         }
     }
 

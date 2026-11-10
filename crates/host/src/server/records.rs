@@ -36,7 +36,7 @@ const RECORD_COLUMNS: &str = "id, name, label, cwd, branch, project_path, profil
      parent_session_id, \
      (SELECT coalesce(nullif(parent.label, ''), parent.name) FROM sessions AS parent \
       WHERE parent.id = sessions.parent_session_id), \
-     agent, stopped, command, outlive, permission_mode, title, stopped_by, kept";
+     agent, stopped, command, outlive, permission_mode, title, stopped_by, kept, launched_as";
 
 /// The backend a row ran on, from its `backend` column.
 ///
@@ -603,7 +603,7 @@ pub(crate) fn read_history_session(
             &format!(
                 "SELECT h.session_id, h.project, h.prompt_count, h.first_at, h.last_at, \
                  h.first_prompt, h.title_prompt, h.transcript_file, h.transcript_bytes, \
-                 h.project_exists, n.name, t.title, g.agent \
+                 h.project_exists, n.name, t.title, g.agent, g.permission_mode \
                  FROM history_sessions h \
                  LEFT JOIN history_names n ON n.session_id = lower(h.session_id) \
                  LEFT JOIN {AGENT_TITLES} t ON t.conversation = lower(h.session_id) \
@@ -631,6 +631,7 @@ pub(crate) fn read_history_session(
                     label: non_empty(row.get(10)?),
                     agent_title: non_empty(row.get(11)?),
                     agent: non_empty(row.get(12)?).map(|agent| agent.trim().to_owned()),
+                    permission_mode: named(row.get(13)?),
                     transcript_file: row.get(7)?,
                     transcript_bytes: row.get::<_, Option<i64>>(8)?.map(unsigned),
                     project_exists: row.get::<_, Option<bool>>(9)?.unwrap_or(false),
@@ -813,6 +814,10 @@ fn record_from(row: &Row<'_>) -> rusqlite::Result<SessionRecord> {
         // Only a child that has exited is drawn as a stopped row; a running
         // or a lost one is drawn as what it is.
         kept: status == "exited" && row.get::<_, bool>(24)?,
+        // A value this host cannot read is not known, as an older row's is.
+        launched_as: row
+            .get::<_, Option<String>>(25)?
+            .and_then(|json| serde_json::from_str(&json).ok()),
         command: row
             .get::<_, Option<String>>(19)?
             .filter(|line| !line.trim().is_empty()),

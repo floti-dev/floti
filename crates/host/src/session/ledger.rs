@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, PoisonError};
 
 use floti_protocol::BackendId;
+use floti_protocol::channels::common::LaunchedAs;
 use rusqlite::{OptionalExtension, params};
 
 use super::SessionExit;
@@ -62,6 +63,10 @@ pub struct SessionOrigin {
     /// The agent it was started as: the one its parent started it as, or the
     /// one a person picked when starting it. `None` for no agent.
     pub agent: Option<String>,
+    /// What it was launched with beyond its agent, profile and permission
+    /// mode, for the sessions pane's Launched as. `None` for a plain command
+    /// line.
+    pub launched: Option<LaunchedAs>,
     /// The name it runs with Remote Control under, when it runs with it. Its
     /// children are launched with Remote Control under "<this name> ›
     /// <their name>".
@@ -137,6 +142,18 @@ impl SessionLedger for Mutex<Store> {
             .map_err(|err| Error::io("record the session's arguments", io::Error::other(err)))?;
         let store = self.lock().unwrap_or_else(PoisonError::into_inner);
         let parent = row.origin.parent.as_ref();
+        let launched = row
+            .origin
+            .launched
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|err| {
+                Error::io(
+                    "record what the session was launched with",
+                    io::Error::other(err),
+                )
+            })?;
         // A session that resumes a conversation starts with the title the
         // newest row in that conversation had: it is the same work.
         let id = store
@@ -145,9 +162,9 @@ impl SessionLedger for Mutex<Store> {
                 "INSERT INTO sessions (name, cwd, argv, claude_session_id, backend, \
                  project_path, profile_id, permission_mode, branch, parent_session_id, \
                  parent_conversation_id, child_name, agent, command, outlive, can_start, \
-                 child_worktree, remote_control_name, title, status) \
+                 child_worktree, remote_control_name, launched_as, title, status) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, \
-                 ?16, ?17, ?18, \
+                 ?16, ?17, ?18, ?19, \
                  (SELECT title FROM sessions AS earlier WHERE ?4 IS NOT NULL \
                   AND earlier.title IS NOT NULL \
                   AND (earlier.claude_session_id = ?4 OR earlier.last_claude_session_id = ?4) \
@@ -172,6 +189,7 @@ impl SessionLedger for Mutex<Store> {
                     parent.is_some_and(|link| link.can_start),
                     parent.is_some_and(|link| link.worktree),
                     row.origin.remote_control_name,
+                    launched,
                 ],
                 |found| found.get(0),
             )

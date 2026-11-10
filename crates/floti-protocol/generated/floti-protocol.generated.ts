@@ -1772,6 +1772,12 @@ agentTitle?: string,
  */
 agent?: string, 
 /**
+ * The permission mode its newest session in Floti ran with (protocol
+ * 2.3), which a resume as its agent keeps. Absent for one launched with
+ * none, and from a host before 2.3.
+ */
+permissionMode?: PermissionMode, 
+/**
  * The transcript on disk, or null once it has been reaped.
  */
 transcriptFile: string | null, transcriptBytes: number | null, 
@@ -2023,6 +2029,41 @@ agent?: string,
  * apply, as they did for a client before 2.3.
  */
 chosen?: LaunchChoices, cols: number, rows: number, };
+
+/**
+ * What a session was launched with, as its launch composed it.
+ */
+export type LaunchedAs = { 
+/**
+ * The agent file it was composed from, as the host spells its path;
+ * null for no agent, the default the host makes from its backends, and
+ * an agent a host serves with no agents folder.
+ */
+agentFile: string | null, 
+/**
+ * The model it runs with, or null for the backend's own.
+ */
+model: string | null, 
+/**
+ * The effort it runs with, or null for the backend's own.
+ */
+effort: EffortLevel | null, 
+/**
+ * The tools its agent lets it use without asking.
+ */
+allowedTools: Array<string>, 
+/**
+ * The tools its agent never lets it use.
+ */
+disallowedTools: Array<string>, 
+/**
+ * The agent tool families its launch was given, such as `floti-agents`.
+ */
+tools: Array<string>, 
+/**
+ * Whether it works in an agent worktree Floti made for it.
+ */
+worktree: boolean, };
 
 /**
  * What a profile launch composed, for the pane to report before the terminal
@@ -3468,7 +3509,14 @@ outlive?: boolean,
  * The permission mode the session was launched in, or absent for a
  * session launched with none and from a host before this field.
  */
-permissionMode?: PermissionMode, };
+permissionMode?: PermissionMode, 
+/**
+ * What the session was launched with beyond its agent, profile and
+ * permission mode, which have fields of their own (protocol 2.3): the
+ * sessions pane's Launched as. Absent for a plain command line, a row
+ * written before it, and from a host before 2.3.
+ */
+launchedAs?: LaunchedAs, };
 
 export type SessionResizeRequest = { id: number, cols: number, rows: number, };
 

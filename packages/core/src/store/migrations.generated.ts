@@ -240,5 +240,11 @@ export const MIGRATIONS: readonly EmbeddedMigration[] = [
       "CREATE INDEX `agent_versions_name_idx` ON `agent_versions` (`folder`,`name`);",
       "CREATE INDEX `agent_versions_renamed_idx` ON `agent_versions` (`folder`,`renamed_to`);"
     ]
+  },
+  {
+    "tag": "0031_launched_as",
+    "statements": [
+      "ALTER TABLE `sessions` ADD `launched_as` text;"
+    ]
   }
 ]

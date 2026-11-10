@@ -72,7 +72,7 @@ use std::sync::{Arc, Mutex, RwLock, Weak};
 use std::time::Duration;
 
 use floti_protocol::BackendId;
-use floti_protocol::channels::common::PermissionMode;
+use floti_protocol::channels::common::{LaunchedAs, PermissionMode};
 use floti_protocol::channels::sessions::Profile;
 use tokio::sync::broadcast::{self, error::RecvError};
 
@@ -442,7 +442,10 @@ impl Hosted {
         // works in.
         let wants_worktree = request.worktree.is_some() || agent.worktree;
         let repository = if wants_worktree {
-            Some(Repository::of(&folder)?)
+            Some(
+                Repository::of(&folder)
+                    .map_err(|problem| format!("{problem} No agent was started."))?,
+            )
         } else {
             Repository::of(&folder).ok()
         };
@@ -515,9 +518,11 @@ impl Hosted {
 
         // Everything is judged: only now is anything written.
         let made = match (&repository, wants_worktree) {
-            (Some(repository), true) => {
-                Some(repository.make(&folder, request.worktree.as_deref().unwrap_or(&name))?)
-            }
+            (Some(repository), true) => Some(
+                repository
+                    .make(&folder, request.worktree.as_deref().unwrap_or(&name))
+                    .map_err(|problem| format!("{problem} No agent was started."))?,
+            ),
             _ => None,
         };
         let project_path = self.known_project(&folder.display().to_string());
@@ -551,6 +556,10 @@ impl Hosted {
                     branch: None,
                     remote_control_name: remote_control.name.clone(),
                     agent: Some(agent.name.clone()),
+                    launched: Some(LaunchedAs {
+                        agent_file: self.agent_file(&agent),
+                        ..LaunchedAs::default()
+                    }),
                     parent: Some(ParentLink {
                         session: parent,
                         conversation_id: facts.conversation_id.clone(),
@@ -755,11 +764,13 @@ impl Hosted {
         );
         let mut composition = super::composition_of(profile.as_ref());
         composition.permission_mode = mode;
+        let mut agent_file = None;
         if let Some(agent) = child.agent.as_deref() {
             let (reopened, warning) =
                 self.reopen_as_agent(agent, backend.as_ref(), profile.as_ref(), mode)?;
             if let Some(reopened) = reopened {
                 composition = reopened.composition;
+                agent_file = reopened.file;
             }
             if let Some(warning) = warning {
                 log_line!("floti host: {name}: {warning}");
@@ -811,6 +822,10 @@ impl Hosted {
                         } else {
                             agent.to_owned()
                         }
+                    }),
+                    launched: Some(LaunchedAs {
+                        agent_file,
+                        ..LaunchedAs::default()
                     }),
                     parent: Some(ParentLink {
                         session: parent,
