@@ -53,8 +53,8 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   - **End-to-end** tests are very few: the main workflows, on their happy
     paths, through the built app.
 - While building, run only the tests for what changed. A full suite is a
-  regression check, and it runs on CI: push the branch and read its results
-  on Windows, macOS and Linux.
+  regression check, and it runs on CI on every push, on Windows, macOS and
+  Linux. Nobody waits on it to merge.
 - Unit and integration tests validate the work. End-to-end tests run only
   before a release is cut (the `procedures` skill): never while building, to
   check a fix or to finish a task.
@@ -69,9 +69,11 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   without linking. A test that passed runs again only after the code it
   covers changed.
 - `pnpm check` is the gate. CI runs it on Windows, macOS and Linux on every
-  push, then builds. All three jobs are required: a failure on any one fails
-  the run and stops the release, and a branch merges only once all three
-  passed. End-to-end tests run locally only, never in CI.
+  push, then builds. A failure on any one fails the run and stops the
+  release, and the owner reads CI on all three before a release. A branch
+  merges on its own tests, run locally, and a review that runs the suite for
+  what changed locally; nobody waits on CI to merge. End-to-end tests run
+  locally only, never in CI.
 - `pnpm test:posix` runs the overlay, process-tree and data-directory
   tests where that code is the POSIX one: natively on macOS and
   Linux, and under Linux in WSL from Windows.
