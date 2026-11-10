@@ -11,11 +11,13 @@ import { WarnIcon } from './icons'
  * narrow launcher `--permission-mode` came apart as `--` at the end of one line
  * and `permission-mode` at the start of the next - which reads as two
  * arguments. Each word of a mono part that starts with one is kept whole; the
- * line still breaks at the spaces between them.
+ * line still breaks at the spaces between them. A path has no spaces to break
+ * at, and a long one (a new worktree's) may break anywhere rather than run
+ * past the launcher's edge.
  */
 export function LaunchSentence({ parts }: { parts: readonly SentencePart[] }): JSX.Element {
   return (
-    <p data-launch-sentence className="text-[11.5px] leading-[1.55] text-fg-subtle">
+    <p data-launch-sentence className="text-[11.5px] leading-[1.55] text-fg-subtle [overflow-wrap:anywhere]">
       {parts.map((part, index) =>
         part.mono ? (
           <span key={index} className="font-mono text-fg-muted">

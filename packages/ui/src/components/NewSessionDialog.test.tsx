@@ -389,7 +389,7 @@ const inGit = (of: Project): Project => ({
 const agentRows = (): { name: string; detail: string; disabled: boolean }[] =>
   Array.from(picker('Agent').options).map((option) => ({
     name: option.label,
-    detail: option.querySelectorAll('span')[1]?.textContent ?? '',
+    detail: option.dataset.detail ?? '',
     disabled: option.disabled
   }))
 
