@@ -1,8 +1,8 @@
 /**
  * What a text editor does when you press a key, as pure functions over a string.
  *
- * Helm edits files in two places - the config console and the content viewer -
- * and both are a `<textarea>`. That is a decision with evidence behind it (SPEC
+ * Helm edits files in the Files view - a note, and a file's own view - and
+ * each is a `<textarea>`. That is a decision with evidence behind it (SPEC
  * "The editors"), and it comes with a consequence: a textarea gives you
  * selection, scrolling, an IME and a native undo stack, and *nothing else*. Tab
  * moves focus, Enter starts a line in column one, and a bracket is a bracket.

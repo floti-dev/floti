@@ -1,24 +1,23 @@
-//! A client's own data carried into the host: `carry:*`. Seven requests, no
+//! A client's own data carried into the host: `carry:*`. Six requests, no
 //! capability, and batches that read in camel case as the client builds them.
 
 use floti_protocol::channel::{from_payload, to_payload};
 use floti_protocol::channels::carry::{
-    CarriedConfigVersion, CarriedConversation, CarriedConversationPart, CarriedConversations,
-    CarriedUsageRow, CarriedUsageRows, CarryConversations, CarryFinish, CarryMissing, CarryNames,
-    CarryStatusRead, CarryUsage, CarryVersions,
+    CarriedConversation, CarriedConversationPart, CarriedConversations, CarriedUsageRow,
+    CarriedUsageRows, CarryConversations, CarryFinish, CarryMissing, CarryNames, CarryStatusRead,
+    CarryUsage,
 };
 use floti_protocol::channels::sessions::{ArchiveMessage, ArchiveRole, ArchiveSessionState};
 use floti_protocol::{Catalogue, ChannelKind, RequestChannel};
 use serde_json::json;
 
 #[test]
-fn the_carry_channels_are_seven_requests_needing_no_capability() {
+fn the_carry_channels_are_six_requests_needing_no_capability() {
     let catalogue = Catalogue::protocol();
     let names = [
         CarryStatusRead::NAME,
         CarryMissing::NAME,
         CarryNames::NAME,
-        CarryVersions::NAME,
         CarryUsage::NAME,
         CarryConversations::NAME,
         CarryFinish::NAME,
@@ -29,7 +28,6 @@ fn the_carry_channels_are_seven_requests_needing_no_capability() {
             "carry:status",
             "carry:missing",
             "carry:names",
-            "carry:versions",
             "carry:usage",
             "carry:conversations",
             "carry:finish",
@@ -112,25 +110,5 @@ fn a_conversation_part_and_a_usage_row_read_in_camel_case() {
             "uuid": "u2", "at": 3, "model": "claude-opus-4-1", "input": 1, "output": 2,
             "cacheWrite5m": 3, "cacheWrite1h": 4, "cacheRead": 5,
         }]})
-    );
-
-    let version: serde_json::Value = from_payload(
-        &to_payload(&CarriedConfigVersion {
-            scope_path: "C:\\a repo".into(),
-            file_path: ".claude/settings.json".into(),
-            content: "{}".into(),
-            content_hash: "44136fa3".into(),
-            reason: "edit".into(),
-            created_at: "2026-10-01T00:00:00.000Z".into(),
-        })
-        .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(
-        version,
-        json!({
-            "scopePath": "C:\\a repo", "filePath": ".claude/settings.json", "content": "{}",
-            "contentHash": "44136fa3", "reason": "edit", "createdAt": "2026-10-01T00:00:00.000Z",
-        })
     );
 }

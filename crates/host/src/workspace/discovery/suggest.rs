@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use super::scan::is_harness;
-use crate::config_console::normalize;
+use crate::agent_config::normalize;
 
 /// The nearest folder at or above `start` that holds a `harness.yaml`. The
 /// host is normally started from inside the harness it serves, so where it

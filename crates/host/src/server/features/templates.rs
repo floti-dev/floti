@@ -23,7 +23,7 @@ use floti_protocol::channels::workspace::{
 
 use super::config::off_the_workers;
 use super::{Caller, Feature, FeatureContext};
-use crate::config_console::normalize;
+use crate::agent_config::{NO_AGENT_CONFIG, normalize};
 use crate::server::hosted::Hosted;
 use crate::workspace::discovery::add_roots;
 use crate::workspace::settings::SettingsService;
@@ -101,12 +101,10 @@ impl Templates {
         let Some(backend) = backends.iter().find(|backend| {
             backend
                 .config()
-                .and_then(|config| config.console())
+                .and_then(|config| config.agent_config())
                 .is_some()
         }) else {
-            return refused(vec![
-                "No agent on this host has a config console.".to_owned(),
-            ]);
+            return refused(vec![NO_AGENT_CONFIG.to_owned()]);
         };
         let (files, skipped) = match resolve_import(backend.as_ref(), request) {
             Ok(resolved) => resolved,

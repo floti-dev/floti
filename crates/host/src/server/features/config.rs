@@ -1,119 +1,52 @@
-//! The config console: `config:*` but `config:render`, which is the
-//! workspace's.
+//! What composition reads of an agent's config: `config:scopes`,
+//! `config:tree` and `config:effective`.
 //!
-//! The console is built for the first backend whose config source has one
-//! ([`ConfigSource::console`](crate::agent::ConfigSource::console)), the way
-//! history is indexed from the first backend that declares history. Every
-//! channel is served whether or not such a backend exists; with none, each
-//! is answered with a sentence saying so.
-//!
-//! Snapshots are kept in floti.db. `config:watch` records the file the
-//! calling client's editor has open, until it says otherwise or its
-//! connection ends. `config:externalChange` is served one client at a time:
-//! an outside change to a watched file goes, carrying its path, only to the
-//! clients watching that file, each once, and a client watching another
-//! file or none hears nothing. A change made through the host is no outside
-//! change and goes to nobody.
-//!
-//! The MCP commands and the doctor run the agent's CLI for up to a minute.
-//! They run off the runtime's workers, so other clients are never kept
-//! waiting on them; one client's requests are still answered in order.
+//! The reader is built for the first backend whose config source says where
+//! the agent keeps its config
+//! ([`ConfigSource::agent_config`](crate::agent::ConfigSource::agent_config)),
+//! the way history is indexed from the first backend that declares history.
+//! Every channel is served whether or not such a backend exists; with none,
+//! each is answered with a sentence saying so. None of them writes anything.
 
 use std::sync::Arc;
 
 use floti_protocol::channel::Router;
-use floti_protocol::channels::workspace::{
-    AddMcpServer, ApproveMcpServer, ConfigChangedOutside, CreateConfigFile, DeleteConfigFile,
-    ListConfigScopes, ListConfigSnapshots, ListMcpServers, PreviewMcpServer, ReadConfigFile,
-    ReadConfigSnapshot, ReadConfigTree, ReadEffectiveView, RemoveMcpServer, RenameConfigFile,
-    RestoreConfigSnapshot, RunDoctor, WatchConfigFile, WriteConfigFile,
-};
+use floti_protocol::channels::workspace::{ListConfigScopes, ReadConfigTree, ReadEffectiveView};
 use tokio::runtime::{Handle, RuntimeFlavor};
 
 use super::{Caller, Feature, FeatureContext};
-use crate::config_console::{ConfigConsole, SnapshotStore, change_sink};
-use crate::session::ClientId;
-
-/// The answer to every config channel on a host none of whose agents has a
-/// config console.
-const NO_CONSOLE: &str = "No agent on this host has a config console.";
+use crate::agent_config::{ConfigReader, NO_AGENT_CONFIG};
 
 pub(crate) struct Config {
-    console: Option<ConfigConsole>,
+    reader: Option<ConfigReader>,
 }
 
 impl Config {
     pub fn new(context: &FeatureContext) -> crate::Result<Self> {
-        context.events.serve_per_client::<ConfigChangedOutside>();
-        let console = context
+        let reader = context
             .hosted
             .backends()
             .iter()
-            .find_map(|backend| Some((Arc::clone(backend), backend.config()?.console()?)))
+            .find_map(|backend| Some((Arc::clone(backend), backend.config()?.agent_config()?)))
             .map(|(backend, agent)| {
-                let events = Arc::clone(&context.events);
-                let store: Arc<dyn SnapshotStore> = context.hosted.ledger().shared_store();
-                let sink = change_sink(move |client, change| {
-                    if let Err(err) = events.emit_to::<ConfigChangedOutside>(client, change) {
-                        log_line!("floti host: {err}");
-                    }
-                });
-                ConfigConsole::new(backend, agent, store, sink)
+                ConfigReader::new(backend, agent, context.hosted.ledger().shared_store())
             });
-        Ok(Self { console })
+        Ok(Self { reader })
     }
 
-    fn console(&self) -> Result<&ConfigConsole, String> {
-        self.console.as_ref().ok_or_else(|| NO_CONSOLE.to_owned())
+    fn reader(&self) -> Result<&ConfigReader, String> {
+        self.reader
+            .as_ref()
+            .ok_or_else(|| NO_AGENT_CONFIG.to_owned())
     }
 }
 
 impl Feature for Config {
-    fn requests<'a>(&'a self, Caller { client, .. }: Caller, router: &mut Router<'a>) {
+    fn requests<'a>(&'a self, _: Caller, router: &mut Router<'a>) {
         router
-            .handle::<ListConfigScopes>(|()| self.console()?.scopes())
-            .handle::<ReadConfigTree>(|scope| self.console()?.tree(&scope.scope_path))
-            .handle::<ReadConfigFile>(|file| self.console()?.read(&file.path))
-            .handle::<WriteConfigFile>(|request| self.console()?.write(&request))
-            .handle::<ListConfigSnapshots>(|file| {
-                self.console()?.snapshots(&file.scope_path, &file.path)
-            })
-            .handle::<ReadConfigSnapshot>(|snapshot| self.console()?.snapshot(snapshot.id))
-            .handle::<RestoreConfigSnapshot>(|request| {
-                self.console()?.restore(request.id, &request.path)
-            })
-            .handle::<WatchConfigFile>(move |request| {
-                self.console()?.watch(client, request.path.as_deref())
-            })
-            .handle::<CreateConfigFile>(|request| self.console()?.create(&request))
-            .handle::<RenameConfigFile>(|request| self.console()?.rename(&request))
-            .handle::<DeleteConfigFile>(|request| self.console()?.delete(&request))
-            .handle::<ReadEffectiveView>(|request| self.console()?.effective(&request))
-            .handle::<PreviewMcpServer>(|request| Ok(self.console()?.mcp_preview(&request)))
-            .handle::<AddMcpServer>(|request| {
-                let console = self.console()?;
-                off_the_workers(|| console.mcp_add(&request))
-            })
-            .handle::<RemoveMcpServer>(|request| {
-                let console = self.console()?;
-                off_the_workers(|| console.mcp_remove(&request))
-            })
-            .handle::<ApproveMcpServer>(|request| self.console()?.mcp_approve(&request))
-            .handle::<ListMcpServers>(|request| {
-                let console = self.console()?;
-                Ok(off_the_workers(|| console.mcp_list(&request.cwd)))
-            })
-            .handle::<RunDoctor>(|()| {
-                let console = self.console()?;
-                Ok(off_the_workers(|| console.doctor()))
-            });
-    }
-
-    fn client_left(&self, client: ClientId) {
-        if let Some(console) = &self.console {
-            // Forgetting a watch opens nothing, so it cannot be refused.
-            let _ = console.watch(client, None);
-        }
+            .handle::<ListConfigScopes>(|()| self.reader()?.scopes())
+            .handle::<ReadConfigTree>(|scope| self.reader()?.tree(&scope.scope_path))
+            .handle::<ReadEffectiveView>(|request| self.reader()?.effective(&request));
     }
 }
 

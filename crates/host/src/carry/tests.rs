@@ -1,13 +1,11 @@
 //! The merge rules, each against a real `floti.db` in a temporary folder.
 
 use floti_protocol::channels::carry::{
-    CarriedConfigVersion, CarriedConversation, CarriedConversationPart, CarriedSessionName,
-    CarriedUsageRow, CarryMerged,
+    CarriedConversation, CarriedConversationPart, CarriedSessionName, CarriedUsageRow, CarryMerged,
 };
 use floti_protocol::channels::sessions::{ArchiveMessage, ArchiveRole, ArchiveSessionState};
 
 use super::*;
-use crate::config_console::snapshots;
 use crate::history::archive::{self, ArchiveInput};
 use crate::store::Store;
 use crate::testkit::TestDirs;
@@ -354,78 +352,6 @@ fn a_session_the_host_has_named_keeps_its_name() {
         )
     );
     assert_eq!(world.count("SELECT COUNT(*) FROM history_names"), 2);
-}
-
-fn version(content: &str, hash: &str, created_at: &str) -> CarriedConfigVersion {
-    CarriedConfigVersion {
-        scope_path: "C:\\a repo".to_owned(),
-        file_path: ".claude/settings.json".to_owned(),
-        content: content.to_owned(),
-        content_hash: hash.to_owned(),
-        reason: "approve".to_owned(),
-        created_at: created_at.to_owned(),
-    }
-}
-
-#[test]
-fn a_config_version_the_host_has_is_not_added_again_and_a_new_one_keeps_its_time_and_reason() {
-    let world = World::new();
-    world
-        .conn()
-        .execute(
-            "INSERT INTO config_snapshots (project_path, file_path, content, content_hash, reason, created_at)
-             VALUES ('C:\\a repo', '.claude/settings.json', '{\"host\":1}', 'h-host', 'edit', '2026-09-05T00:00:00.000Z')",
-            [],
-        )
-        .unwrap();
-    let merged = merge_versions(
-        world.conn(),
-        &[
-            // The host's own version, sent back.
-            version("{\"host\":1}", "h-host", "2026-09-05T00:00:00.000Z"),
-            // An older version only Helm had.
-            version("{\"helm\":1}", "h-helm", "2026-09-01T00:00:00.000Z"),
-        ],
-    )
-    .unwrap();
-    assert_eq!(merged, CarryMerged { added: 1, kept: 1 });
-
-    let listed = snapshots::list(world.conn(), "C:\\a repo", ".claude/settings.json").unwrap();
-    assert_eq!(
-        listed
-            .iter()
-            .map(|meta| (meta.content_hash.as_str(), meta.created_at.as_str()))
-            .collect::<Vec<_>>(),
-        [
-            ("h-host", "2026-09-05T00:00:00.000Z"),
-            ("h-helm", "2026-09-01T00:00:00.000Z"),
-        ],
-        "newest first by when each was taken"
-    );
-    let copied = snapshots::read(world.conn(), listed[1].id)
-        .unwrap()
-        .unwrap();
-    assert_eq!(copied.content, "{\"helm\":1}");
-    let reason: String = world
-        .conn()
-        .query_row(
-            "SELECT reason FROM config_snapshots WHERE content_hash = 'h-helm'",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(reason, "approve");
-
-    let again = merge_versions(
-        world.conn(),
-        &[version(
-            "{\"helm\":1}",
-            "h-helm",
-            "2026-09-01T00:00:00.000Z",
-        )],
-    )
-    .unwrap();
-    assert_eq!(again, CarryMerged { added: 0, kept: 1 });
 }
 
 fn usage(uuid: &str, input: u64) -> CarriedUsageRow {

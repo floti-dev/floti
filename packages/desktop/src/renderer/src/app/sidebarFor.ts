@@ -9,7 +9,7 @@ export type SidebarView = 'sessions' | 'files' | 'profiles' | 'settings' | `plug
  * The rail starts a piece of work and the tab it leaves open carries on with
  * it: clicking the tab brings this view back, so nobody has to return to the
  * rail for a list the tab already belongs to. A tab with its list inside it
- * (History, Config) or no list at all (Browser) leaves the
+ * (History) or no list at all (Browser) leaves the
  * sidebar as it is. Profiles is reached from the rail alone - a session started
  * from a profile is a session, and belongs to Sessions.
  */
@@ -26,7 +26,6 @@ export function sidebarFor(ref: PaneRef): SidebarView | null {
     case 'settings':
       return 'settings'
     case 'history':
-    case 'config':
     case 'browser':
     case 'plugin':
     case 'plugin-pages':

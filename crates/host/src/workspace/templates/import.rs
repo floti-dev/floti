@@ -15,7 +15,9 @@ use floti_protocol::channels::workspace::{ConfigFile, ConfigScopeKind, ImportInt
 use super::authoring::ImportFile;
 use super::below;
 use crate::agent::AgentBackend;
-use crate::config_console::{config_unit, normalize, project_scope, read_tree, user_scope};
+use crate::agent_config::{
+    NO_AGENT_CONFIG, config_unit, normalize, project_scope, read_tree, user_scope,
+};
 
 /// The files `request` names, resolved against its scope's tree, and a
 /// sentence for each one that was skipped. An `Err` is a refusal of the
@@ -26,8 +28,8 @@ pub fn resolve_import(
 ) -> Result<(Vec<ImportFile>, Vec<String>), String> {
     let console = backend
         .config()
-        .and_then(|config| config.console())
-        .ok_or_else(|| "No agent on this host has a config console.".to_owned())?;
+        .and_then(|config| config.agent_config())
+        .ok_or_else(|| NO_AGENT_CONFIG.to_owned())?;
     let wanted = normalize(Path::new(&request.scope_path));
     let scope = if wanted
         .as_os_str()

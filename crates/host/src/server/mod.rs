@@ -38,8 +38,8 @@
 //! machine-wide overview, the restore offer and restore, and the session
 //! terminal stream), plain terminals (`pterm:*` and their stream); history
 //! (`history:*`), the transcript archive (`archive:*`) and usage (`usage:*`);
-//! the config console (`config:*` but `config:render`, with
-//! `config:externalChange`); and `host:stop`. Every other declared channel
+//! what composition reads of an agent's config (`config:scopes`,
+//! `config:tree` and `config:effective`); and `host:stop`. Every other declared channel
 //! is on the not-yet-served list ([`unserved`]) with the feature that will
 //! serve it, and is answered with an error naming it.
 

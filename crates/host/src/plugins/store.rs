@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use rusqlite::{Connection, OptionalExtension, params};
 
-use crate::config_console::time::now_iso;
+use crate::agent_config::time::now_iso;
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

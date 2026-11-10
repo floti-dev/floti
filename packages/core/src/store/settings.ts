@@ -184,7 +184,7 @@ function paneProblem(pane: unknown): string | null {
   }
   const hostProblem = tabHostProblem(host)
   if (hostProblem !== null) return hostProblem
-  if (kind === 'history' || kind === 'config') return null
+  if (kind === 'history') return null
   if (kind === 'session') {
     // A row id on its host. Never reopened from here - only read after a
     // crash, to find where the session that is being reopened was.
@@ -740,7 +740,7 @@ export function validateSetting(key: keyof AppSettings, value: unknown): string 
 }
 
 /** Rail ids an older build could hide that name nothing now. See `readSettings`. */
-const RETIRED_RAIL_DESTINATIONS: ReadonlySet<string> = new Set(['pulls'])
+const RETIRED_RAIL_DESTINATIONS: ReadonlySet<string> = new Set(['pulls', 'config'])
 
 export function readSettings(store: Store): AppSettings {
   const rows = store.db.select().from(appSettings).all()

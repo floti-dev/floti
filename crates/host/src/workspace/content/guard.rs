@@ -1,19 +1,19 @@
 //! Which paths a note save may write.
 //!
-//! Saving a note goes through the config console's [`SnapshotWriter`], not
+//! Saving a note goes through the host's [`SnapshotWriter`], not
 //! beside it: the snapshot before the bytes are touched, the abort when it
 //! cannot be taken, the conflict when the file on disk is not the one the
 //! editor opened, and the refusal to rewrite what is not text are the
 //! guarantees a note wants too. The only thing of its own is this guard.
 //!
-//! [`SnapshotWriter`]: crate::config_console::SnapshotWriter
+//! [`SnapshotWriter`]: crate::agent_config::SnapshotWriter
 
 use std::path::{Component, Path, PathBuf};
 
 use floti_protocol::channels::workspace::ContentFileKind;
 
 use super::kinds::content_file_kind;
-use crate::config_console::{PathGuard, normalize};
+use crate::agent_config::{PathGuard, normalize};
 
 /// Folders that are never content, whatever they hold. `repos` matters most:
 /// each repository under a harness is a scope of its own, and a save that

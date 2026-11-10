@@ -15,15 +15,13 @@ import { ListIcon } from './icons'
  * an `<a>` with a data attribute and no destination, so navigation happens here
  * or not at all.
  *
- * Shared by the content viewer and the config console, which is the whole
- * point: a `SKILL.md` is markdown by every rule this applies to a note, and a
- * second renderer in the console would be a second set of typography, a second
- * shiki wrapper and a second answer to "what does a table look like".
+ * Every rendered note goes through it, so there is one set of typography, one
+ * shiki wrapper and one answer to "what does a table look like".
  *
- * What differs between the two is named rather than forked. A `.claude` tree is
- * not a vault, so the console passes no `onOpenPath` and a `[[wikilink]]` there
- * is inert; and `toc` is off where the pane is a column beside a list rather
- * than a page.
+ * What differs between its uses is named rather than forked: where a folder is
+ * not a vault, no `onOpenPath` is passed and a `[[wikilink]]` there is inert;
+ * and `toc` is off where the pane is a column beside a list rather than a
+ * page.
  */
 export function MarkdownBody({
   path,
@@ -53,7 +51,7 @@ export function MarkdownBody({
   /** A term to mark and scroll to - the search hit a document was opened from. */
   highlight?: string | null
   /** Which pane this is, so a driver can tell two rendered bodies apart. */
-  surface?: 'content' | 'config'
+  surface?: 'content'
   /** Omitted where `[[wikilinks]]` mean nothing, which makes them inert. */
   onOpenPath?: ((path: string, heading: string | null) => void) | undefined
   onOpenExternal: (url: string) => void

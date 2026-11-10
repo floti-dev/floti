@@ -78,9 +78,8 @@ pub(super) struct Limit<'a> {
     pub allow_more: Option<u32>,
 }
 
-/// A limit a start can be refused by: every one there is. The protocol's
-/// [`NoticeLimit`] has one more, which it keeps until its next major and no
-/// host refuses with.
+/// A limit a start can be refused by: every one there is, each one of the
+/// protocol's [`NoticeLimit`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum StartLimit {
     Children,

@@ -13,8 +13,8 @@ use floti_protocol::channels::sessions::{
 };
 use floti_protocol::channels::workspace::{
     DEFAULT_AGENT_CHILDREN_PER_PARENT, DEFAULT_AGENT_COMMANDS_PER_PARENT, DEFAULT_AGENT_DEPTH,
-    DEFAULT_AGENT_HEAVY_PER_HOST, DEFAULT_AGENT_SESSIONS_PER_HOST, DEFAULT_AGENT_STARTS_PER_PARENT,
-    DEFAULT_SESSION_AGENTS, HostSettings, HostSettingsPatch,
+    DEFAULT_AGENT_SESSIONS_PER_HOST, DEFAULT_AGENT_STARTS_PER_PARENT, DEFAULT_SESSION_AGENTS,
+    HostSettings, HostSettingsPatch,
 };
 use floti_protocol::record::{records, records_dir};
 use floti_protocol::version::negotiate;
@@ -199,7 +199,7 @@ fn child_of(parent: &SessionRecord) -> SessionRecord {
         name: "reviewer".into(),
         parent_id: Some(parent.id),
         parent_name: Some(parent.label.clone().unwrap_or_else(|| parent.name.clone())),
-        role: Some("reviewer".into()),
+        agent: Some("reviewer".into()),
         ..parent.clone()
     }
 }
@@ -209,23 +209,23 @@ fn session_v21() -> SessionRecord {
 }
 
 #[test]
-fn s31_a_client_on_2_1_reads_a_childs_parent_and_role_and_a_session_with_neither_carries_none() {
+fn s31_a_client_reads_a_childs_parent_and_agent_and_a_session_with_neither_carries_none() {
     let parent = session_v21();
     let child = child_of(&parent);
 
     let read_child: SessionRecord = from_payload(&to_payload(&child).unwrap()).unwrap();
     assert_eq!(read_child.parent_id, Some(parent.id));
     assert_eq!(read_child.parent_name.as_deref(), Some("PR review"));
-    assert_eq!(read_child.role.as_deref(), Some("reviewer"));
+    assert_eq!(read_child.agent.as_deref(), Some("reviewer"));
 
     let read_parent: SessionRecord = from_payload(&to_payload(&parent).unwrap()).unwrap();
     assert_eq!(read_parent.parent_id, None);
     assert_eq!(read_parent.parent_name, None);
-    assert_eq!(read_parent.role, None);
+    assert_eq!(read_parent.agent, None);
 
     // On the wire a session with neither says null, never a made-up value.
     let wire = serde_json::to_value(&parent).unwrap();
-    for field in ["parentId", "parentName", "role"] {
+    for field in ["parentId", "parentName", "agent"] {
         assert_eq!(wire[field], Value::Null, "{field}");
     }
 }
@@ -242,10 +242,10 @@ fn s31_a_2_0_client_reads_every_field_it_knows_of_a_2_1_childs_record() {
 }
 
 #[test]
-fn s31_a_2_0_record_read_by_a_2_1_client_has_no_parent_and_no_role() {
+fn s31_a_2_0_record_read_by_a_later_client_has_no_parent_and_no_agent() {
     let read = session_v21();
     assert_eq!(
-        (read.parent_id, read.parent_name, read.role),
+        (read.parent_id, read.parent_name, read.agent),
         (None, None, None)
     );
     assert_eq!(read.name, "helm-3");
@@ -257,7 +257,7 @@ fn s31_a_2_0_record_read_by_a_2_1_client_has_no_parent_and_no_role() {
 fn command_child(parent: &SessionRecord, code: i32) -> SessionRecord {
     SessionRecord {
         name: "tests".into(),
-        role: None,
+        agent: None,
         command: Some("pnpm test --filter core".into()),
         status: SessionStatus::Exited,
         ended_at: Some("2026-10-03T14:52:00Z".into()),
@@ -275,7 +275,7 @@ fn s23_a_client_on_2_1_reads_a_command_childs_command_and_exit_code_and_an_agent
         from_payload(&to_payload(&command_child(&parent, 3)).unwrap()).unwrap();
     assert_eq!(read.command.as_deref(), Some("pnpm test --filter core"));
     assert_eq!(read.exit_code, Some(3));
-    assert_eq!(read.role, None);
+    assert_eq!(read.agent, None);
     assert_eq!(read.parent_id, Some(parent.id));
 
     // A command child still running has no exit code to carry yet.
@@ -577,7 +577,6 @@ fn settings_from_a_host_before_2_1_read_as_the_defaults() {
         read.agent_starts_per_parent,
         DEFAULT_AGENT_STARTS_PER_PARENT
     );
-    assert_eq!(read.agent_heavy_per_host, DEFAULT_AGENT_HEAVY_PER_HOST);
     assert_eq!(
         (DEFAULT_SESSION_AGENTS, DEFAULT_AGENT_CHILDREN_PER_PARENT),
         (true, 4)
@@ -586,10 +585,9 @@ fn settings_from_a_host_before_2_1_read_as_the_defaults() {
         (
             DEFAULT_AGENT_SESSIONS_PER_HOST,
             DEFAULT_AGENT_DEPTH,
-            DEFAULT_AGENT_STARTS_PER_PARENT,
-            DEFAULT_AGENT_HEAVY_PER_HOST
+            DEFAULT_AGENT_STARTS_PER_PARENT
         ),
-        (8, 2, 16, 1)
+        (8, 2, 16)
     );
     assert_eq!(
         read.agent_commands_per_parent,
@@ -613,10 +611,9 @@ fn a_2_0_clients_settings_patch_changes_none_of_the_agents_settings() {
             patch.agent_sessions_per_host,
             patch.agent_depth,
             patch.agent_starts_per_parent,
-            patch.agent_commands_per_parent,
-            patch.agent_heavy_per_host
+            patch.agent_commands_per_parent
         ),
-        (None, None, None, None, None, None, None)
+        (None, None, None, None, None, None)
     );
     // A patch that sets none of them does not say them either.
     let said = serde_json::to_value(&patch).unwrap();
@@ -627,7 +624,6 @@ fn a_2_0_clients_settings_patch_changes_none_of_the_agents_settings() {
         "agentDepth",
         "agentStartsPerParent",
         "agentCommandsPerParent",
-        "agentHeavyPerHost",
     ] {
         assert!(said.get(key).is_none(), "{key} in {said}");
     }

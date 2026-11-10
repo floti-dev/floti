@@ -216,7 +216,6 @@ fn record(id: u64) -> SessionRecord {
         parent_id: Some(2),
         parent_name: Some("lead".into()),
         agent: Some("reviewer".into()),
-        role: Some("reviewer".into()),
         command: None,
         stopped: false,
         ended_by: None,
@@ -243,7 +242,6 @@ fn command_child(id: u64) -> SessionRecord {
         id,
         name: "tests".into(),
         agent: None,
-        role: None,
         command: Some("pnpm test --filter @helm/core".into()),
         exit_code: Some(1),
         ..record(id)
@@ -712,12 +710,12 @@ fn standing_notices_and_their_two_requests_round_trip_over_cbor() {
 #[test]
 fn a_notice_names_its_kind_and_limit_the_way_the_clients_read_them() {
     let wire = serde_json::to_value(StandingNotice {
-        limit: Some(NoticeLimit::Heavy),
+        limit: Some(NoticeLimit::Starts),
         ..notice(NoticeKind::NeedsYou)
     })
     .unwrap();
     assert_eq!(wire["kind"], "needs-you");
-    assert_eq!(wire["limit"], "heavy");
+    assert_eq!(wire["limit"], "starts");
     for (limit, said) in [
         (NoticeLimit::Children, "children"),
         (NoticeLimit::Sessions, "sessions"),

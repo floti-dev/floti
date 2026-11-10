@@ -28,9 +28,9 @@ test('the rail’s menu is walked with the keys, marking the row it is on and no
   await expect(menu).toHaveCSS('outline-style', 'none')
 
   // Typing a name's first letter goes to its row, and Enter unticks it.
-  await window.keyboard.press('c')
+  await window.keyboard.press('b')
   await window.keyboard.press('Enter')
-  await expect(window.locator('[data-rail="config"]')).toHaveCount(0)
+  await expect(window.locator('[data-rail="browser"]')).toHaveCount(0)
 })
 
 test('clicking a tab brings its sidebar back, opened and pointed at it', async ({ helm }) => {

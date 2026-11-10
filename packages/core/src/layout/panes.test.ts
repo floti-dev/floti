@@ -54,7 +54,7 @@ const BROWSER: PaneRef = { kind: 'browser' }
 const HISTORY: PaneRef = { kind: 'history' }
 const ALPHA_DIR = 'C:\\work\\alpha'
 const SETTINGS: PaneRef = { kind: 'settings' }
-const CONFIG: PaneRef = { kind: 'config' }
+const PLANS: PaneRef = project('plans')
 const SESSIONS: PaneRef = { kind: 'sessions' }
 const plugin = (tab: string, params: Record<string, string | number | boolean> = {}, title: string | null = null): PaneRef => ({
   kind: 'plugin',
@@ -154,15 +154,15 @@ describe('openTab', () => {
 
   it('opens into the group asked for by id, and the focused one when that group is gone', () => {
     const layout = layoutOf(row([g(HISTORY), g(SETTINGS)]), 0)
-    expect(shape(openTab(layout, CONFIG, 2))).toEqual([' *history', '>settings *config'])
-    expect(shape(openTab(layout, CONFIG, 9))).toEqual(['>history *config', ' *settings'])
+    expect(shape(openTab(layout, PLANS, 2))).toEqual([' *history', '>settings *project:plans'])
+    expect(shape(openTab(layout, PLANS, 9))).toEqual(['>history *project:plans', ' *settings'])
   })
 })
 
 describe('closeTab', () => {
   it('hands the front to the neighbour that slides into its place', () => {
-    const layout = activateTab(layoutOf(g(HISTORY, SETTINGS, CONFIG)), 'settings')
-    expect(shape(closeTab(layout, 'settings'))).toEqual(['>history *config'])
+    const layout = activateTab(layoutOf(g(HISTORY, SETTINGS, PLANS)), 'settings')
+    expect(shape(closeTab(layout, 'settings'))).toEqual(['>history *project:plans'])
   })
 
   it('takes the left neighbour when the last tab closes', () => {
@@ -171,28 +171,28 @@ describe('closeTab', () => {
   })
 
   it('leaves the front alone when a background tab closes', () => {
-    const layout = layoutOf(g(HISTORY, SETTINGS, CONFIG))
-    expect(shape(closeTab(layout, 'history'))).toEqual(['>settings *config'])
+    const layout = layoutOf(g(HISTORY, SETTINGS, PLANS))
+    expect(shape(closeTab(layout, 'history'))).toEqual(['>settings *project:plans'])
   })
 
   it('drops a group that empties, giving its room and the focus to the pane before it', () => {
-    const layout = layoutOf(row([g(HISTORY), g(SETTINGS), g(CONFIG)], [0.2, 0.3, 0.5]), 1)
+    const layout = layoutOf(row([g(HISTORY), g(SETTINGS), g(PLANS)], [0.2, 0.3, 0.5]), 1)
     const closed = closeTab(layout, 'settings')
-    expect(shape(closed)).toEqual(['>*history', ' *config'])
+    expect(shape(closed)).toEqual(['>*history', ' *project:plans'])
     expect(tree(closed.root)).toBe('row(1, 3)')
     expect(sizes(closed.root)).toEqual([[0.5, 0.5]])
   })
 
   it('gives a first pane’s room to the one after it', () => {
-    const layout = layoutOf(row([g(HISTORY), g(SETTINGS), g(CONFIG)], [0.2, 0.3, 0.5]), 0)
+    const layout = layoutOf(row([g(HISTORY), g(SETTINGS), g(PLANS)], [0.2, 0.3, 0.5]), 0)
     const closed = closeTab(layout, 'history')
-    expect(shape(closed)).toEqual(['>*settings', ' *config'])
+    expect(shape(closed)).toEqual(['>*settings', ' *project:plans'])
     expect(sizes(closed.root)).toEqual([[0.5, 0.5]])
   })
 
   it('collapses a split left holding one pane into that pane', () => {
-    const layout = layoutOf(row([g(HISTORY), column([g(SETTINGS), g(CONFIG)])]))
-    const closed = closeTab(layout, 'config')
+    const layout = layoutOf(row([g(HISTORY), column([g(SETTINGS), g(PLANS)])]))
+    const closed = closeTab(layout, 'project:plans')
     expect(tree(closed.root)).toBe('row(1, 2)')
     expect(shape(closed)).toEqual(['>*history', ' *settings'])
   })
@@ -208,20 +208,20 @@ describe('closeTab', () => {
 
 describe('moveTab', () => {
   it('reorders within a group, counting the target after the tab has left', () => {
-    const layout = layoutOf(g(HISTORY, SETTINGS, CONFIG))
-    expect(shape(moveTab(layout, 'history', 1, 2))).toEqual(['>settings config *history'])
-    expect(shape(moveTab(layout, 'config', 1, 0))).toEqual(['>*config history settings'])
+    const layout = layoutOf(g(HISTORY, SETTINGS, PLANS))
+    expect(shape(moveTab(layout, 'history', 1, 2))).toEqual(['>settings project:plans *history'])
+    expect(shape(moveTab(layout, 'project:plans', 1, 0))).toEqual(['>*project:plans history settings'])
   })
 
   it('moves a tab to another group, in front there, and focuses it', () => {
-    const layout = layoutOf(row([g(HISTORY, SETTINGS), g(CONFIG)]), 0)
-    expect(shape(moveTab(layout, 'history', 2, 0))).toEqual([' *settings', '>*history config'])
+    const layout = layoutOf(row([g(HISTORY, SETTINGS), g(PLANS)]), 0)
+    expect(shape(moveTab(layout, 'history', 2, 0))).toEqual([' *settings', '>*history project:plans'])
   })
 
   it('collapses when the tab leaves a group empty', () => {
-    const layout = layoutOf(row([g(HISTORY), g(CONFIG)]), 0)
+    const layout = layoutOf(row([g(HISTORY), g(PLANS)]), 0)
     const moved = moveTab(layout, 'history', 2, 1)
-    expect(shape(moved)).toEqual(['>config *history'])
+    expect(shape(moved)).toEqual(['>project:plans *history'])
     expect(moved.root).toEqual({ group: 2 })
   })
 
@@ -247,41 +247,41 @@ describe('splitWith', () => {
   })
 
   it('takes half of the room the pane it was dropped on had, in the same split', () => {
-    const layout = layoutOf(row([g(HISTORY, SETTINGS), g(CONFIG)], [0.6, 0.4]))
+    const layout = layoutOf(row([g(HISTORY, SETTINGS), g(PLANS)], [0.6, 0.4]))
     const split = splitWith(layout, 'settings', 2, 'right')
     expect(tree(split.root)).toBe('row(1, 2, 3)')
     expect(sizes(split.root)).toEqual([[0.6, 0.2, 0.2]])
   })
 
   it('nests a split across the other axis', () => {
-    const layout = layoutOf(row([g(HISTORY, SETTINGS), g(CONFIG)]))
+    const layout = layoutOf(row([g(HISTORY, SETTINGS), g(PLANS)]))
     const split = splitWith(layout, 'settings', 2, 'bottom')
     expect(tree(split.root)).toBe('row(1, column(2, 3))')
-    expect(shape(split)).toEqual([' *history', ' *config', '>*settings'])
+    expect(shape(split)).toEqual([' *history', ' *project:plans', '>*settings'])
   })
 
   it('will not split a pane’s only tab off from that pane', () => {
-    const layout = layoutOf(row([g(HISTORY), g(CONFIG)]))
-    expect(splitWith(layout, 'config', 2, 'left')).toBe(layout)
+    const layout = layoutOf(row([g(HISTORY), g(PLANS)]))
+    expect(splitWith(layout, 'project:plans', 2, 'left')).toBe(layout)
   })
 
   it('moves another pane’s only tab, and that pane’s room goes beside it', () => {
-    const layout = layoutOf(row([g(HISTORY), g(CONFIG)]))
-    const split = splitWith(layout, 'config', 1, 'left')
+    const layout = layoutOf(row([g(HISTORY), g(PLANS)]))
+    const split = splitWith(layout, 'project:plans', 1, 'left')
     expect(tree(split.root)).toBe('row(3, 1)')
     expect(sizes(split.root)).toEqual([[0.25, 0.75]])
-    expect(shape(split)).toEqual(['>*config', ' *history'])
+    expect(shape(split)).toEqual(['>*project:plans', ' *history'])
   })
 
   it('never reuses an id, so a pane held across an await cannot become another', () => {
-    const layout = layoutOf(row([g(HISTORY), g(CONFIG, SETTINGS)]))
+    const layout = layoutOf(row([g(HISTORY), g(PLANS, SETTINGS)]))
     const closed = closeGroup(layout, 1)
     const split = splitWith(closed, 'settings', 2, 'right')
     expect(split.groups.map((group) => group.id)).toEqual([2, 3])
   })
 
   it('ignores a tab nobody holds and a pane that does not exist', () => {
-    expect(splitWith(lone, 'config', 1, 'right')).toBe(lone)
+    expect(splitWith(lone, 'project:plans', 1, 'right')).toBe(lone)
     expect(splitWith(lone, 'settings', 7, 'right')).toBe(lone)
   })
 })
@@ -290,7 +290,7 @@ describe('neighbourAt and besideOf', () => {
   // 1 | 2
   //   |---
   //   | 3
-  const grid = layoutOf(row([g(HISTORY), column([g(SETTINGS), g(CONFIG)], [0.3, 0.7])]))
+  const grid = layoutOf(row([g(HISTORY), column([g(SETTINGS), g(PLANS)], [0.3, 0.7])]))
 
   it('finds the pane across each side, preferring the one sharing most of it', () => {
     expect(neighbourAt(grid, 1, 'right')).toBe(3)
@@ -303,7 +303,7 @@ describe('neighbourAt and besideOf', () => {
   })
 
   it('takes the first in reading order on a tie', () => {
-    const even = layoutOf(row([g(HISTORY), column([g(SETTINGS), g(CONFIG)])]))
+    const even = layoutOf(row([g(HISTORY), column([g(SETTINGS), g(PLANS)])]))
     expect(neighbourAt(even, 1, 'right')).toBe(2)
   })
 
@@ -326,14 +326,14 @@ describe('sendBeside', () => {
   })
 
   it('appends to the other pane when there are two, from either side', () => {
-    const layout = layoutOf(row([g(HISTORY), g(SETTINGS, CONFIG)]), 1)
-    expect(shape(sendBeside(layout))).toEqual(['>history *config', ' *settings'])
-    expect(shape(sendBeside(focusGroup(layout, 1)))).toEqual(['>settings config *history'])
+    const layout = layoutOf(row([g(HISTORY), g(SETTINGS, PLANS)]), 1)
+    expect(shape(sendBeside(layout))).toEqual(['>history *project:plans', ' *settings'])
+    expect(shape(sendBeside(focusGroup(layout, 1)))).toEqual(['>settings project:plans *history'])
   })
 
   it('goes to the pane on the right of the middle one of three', () => {
-    const layout = layoutOf(row([g(HISTORY), g(SETTINGS, SESSIONS), g(CONFIG)]), 1)
-    expect(shape(sendBeside(layout))).toEqual([' *history', ' *settings', '>config *sessions'])
+    const layout = layoutOf(row([g(HISTORY), g(SETTINGS, SESSIONS), g(PLANS)]), 1)
+    expect(shape(sendBeside(layout))).toEqual([' *history', ' *settings', '>project:plans *sessions'])
   })
 
   it('does nothing to a lone tab in a lone pane', () => {
@@ -390,24 +390,24 @@ describe('placeIn', () => {
 
 describe('closeGroup', () => {
   it('merges the closed pane into the other rather than closing its tabs', () => {
-    const layout = layoutOf(row([g(HISTORY), g(SETTINGS, CONFIG)]), 0)
+    const layout = layoutOf(row([g(HISTORY), g(SETTINGS, PLANS)]), 0)
     const closed = closeGroup(layout, 2)
-    expect(shape(closed)).toEqual(['>*history settings config'])
+    expect(shape(closed)).toEqual(['>*history settings project:plans'])
     expect(closed.root).toEqual({ group: 1 })
   })
 
   it('hands a pane’s tabs to the same side its room goes to', () => {
-    const layout = layoutOf(row([g(HISTORY), g(SETTINGS), g(CONFIG)], [0.2, 0.3, 0.5]), 2)
+    const layout = layoutOf(row([g(HISTORY), g(SETTINGS), g(PLANS)], [0.2, 0.3, 0.5]), 2)
     const closed = closeGroup(layout, 2)
-    expect(shape(closed)).toEqual(['>*history settings', ' *config'])
+    expect(shape(closed)).toEqual(['>*history settings', ' *project:plans'])
     expect(sizes(closed.root)).toEqual([[0.5, 0.5]])
   })
 
   it('hands a first pane to the one after it, across a split by the most shared edge', () => {
-    const layout = layoutOf(row([g(HISTORY), column([g(SETTINGS), g(CONFIG)], [0.3, 0.7])]))
+    const layout = layoutOf(row([g(HISTORY), column([g(SETTINGS), g(PLANS)], [0.3, 0.7])]))
     const closed = closeGroup(layout, 1)
     expect(tree(closed.root)).toBe('column(2, 3)')
-    expect(shape(closed)).toEqual([' *settings', '>*config history'])
+    expect(shape(closed)).toEqual([' *settings', '>*project:plans history'])
   })
 
   it('does nothing with one pane, or a pane that does not exist', () => {
@@ -419,7 +419,7 @@ describe('closeGroup', () => {
 })
 
 describe('resizeSplit', () => {
-  const layout = layoutOf(row([g(HISTORY), column([g(SETTINGS), g(CONFIG)])]))
+  const layout = layoutOf(row([g(HISTORY), column([g(SETTINGS), g(PLANS)])]))
 
   it('sets the shares of the split a path names', () => {
     expect(sizes(resizeSplit(layout, [], [0.3, 0.7]).root)).toEqual([[0.3, 0.7], [0.5, 0.5]])
@@ -501,7 +501,7 @@ describe('notOpenHere', () => {
 
 describe('cycleTab', () => {
   it('walks every group in reading order as one ring and takes the focus with it', () => {
-    const layout = layoutOf(row([g(HISTORY, SETTINGS), column([g(CONFIG), g(SESSIONS)])]), 0)
+    const layout = layoutOf(row([g(HISTORY, SETTINGS), column([g(PLANS), g(SESSIONS)])]), 0)
     const steps = [1, 1, 1, 1] as const
     const seen = steps.reduce<PaneLayout[]>((acc, step) => [...acc, cycleTab(acc.at(-1)!, step)], [
       activateTab(layout, 'history')
@@ -509,7 +509,7 @@ describe('cycleTab', () => {
     expect(seen.map((step) => paneId(activeRef(step.groups.find((group) => group.id === step.focused)!)!))).toEqual([
       'history',
       'settings',
-      'config',
+      'project:plans',
       'sessions',
       'history'
     ])
@@ -524,8 +524,8 @@ describe('cycleTab', () => {
 
 describe('visibleTabs and findTab', () => {
   it('reports the front tab of each group and where any tab is, by group id', () => {
-    const layout = layoutOf(row([g(HISTORY, SETTINGS), column([g(CONFIG), g(SESSIONS)])]))
-    expect(visibleTabs(layout).map(paneId)).toEqual(['settings', 'config', 'sessions'])
+    const layout = layoutOf(row([g(HISTORY, SETTINGS), column([g(PLANS), g(SESSIONS)])]))
+    expect(visibleTabs(layout).map(paneId)).toEqual(['settings', 'project:plans', 'sessions'])
     expect(findTab(layout, 'sessions')).toEqual({ group: 3, index: 0 })
     expect(findTab(layout, 'history')).toEqual({ group: 1, index: 0 })
     expect(findTab(layout, 'nothing')).toBeNull()
@@ -593,7 +593,7 @@ describe('toSaved and fromSaved', () => {
 
   it('reads back what it wrote, and writes that again unchanged', () => {
     const layout = layoutOf(
-      row([g(HISTORY, SESSIONS), column([g(SETTINGS), row([g(CONFIG), g(project('C:\\b'))], [0.3, 0.7])], [0.45, 0.55])], [0.37, 0.63]),
+      row([g(HISTORY, SESSIONS), column([g(SETTINGS), row([g(PLANS), g(project('C:\\b'))], [0.3, 0.7])], [0.45, 0.55])], [0.37, 0.63]),
       3
     )
     const saved = toSaved(layout)
@@ -608,7 +608,7 @@ describe('toSaved and fromSaved', () => {
         axis: 'row',
         children: [
           { axis: 'column', children: [g(HISTORY)], sizes: [1] },
-          { axis: 'row', children: [g(SETTINGS), g(CONFIG)], sizes: [1, 3] }
+          { axis: 'row', children: [g(SETTINGS), g(PLANS)], sizes: [1, 3] }
         ],
         sizes: [2, 2]
       },
@@ -639,6 +639,17 @@ describe('toSaved and fromSaved', () => {
     expect(shape(layout)).toEqual(['>history *settings'])
   })
 
+  it('opens a layout that had a Config tab without it, the rest where it was', () => {
+    const config = { kind: 'config' } as unknown as SavedPane
+    const layout = fromSaved({
+      root: row([g(HISTORY, config, SETTINGS), g(config)]),
+      focused: 0
+    })
+    expect(shape(layout)).toEqual(['>history *settings'])
+    const active = fromSaved({ root: { panes: [HISTORY, config], activeId: 'config' }, focused: 0 })
+    expect(shape(active)).toEqual(['>*history'])
+  })
+
   it('restores a group of only sessions as no group at all, once nothing hosts them', () => {
     const layout = fromSaved({ root: row([g(HISTORY), g(session(4))]), focused: 1 })
     const reconciled = reconcile(layout, (ref) => ref.kind !== 'session', [])
@@ -650,11 +661,11 @@ describe('toSaved and fromSaved', () => {
   })
 
   it('lists a saved layout’s groups in reading order', () => {
-    const saved = { root: row([g(HISTORY), column([g(SETTINGS), g(CONFIG)])]), focused: 0 }
+    const saved = { root: row([g(HISTORY), column([g(SETTINGS), g(PLANS)])]), focused: 0 }
     expect(savedGroups(saved).map((group) => group.panes.map((pane) => paneId(pane)))).toEqual([
       ['history'],
       ['settings'],
-      ['config']
+      ['project:plans']
     ])
     expect(savedGroups(null)).toEqual([])
   })

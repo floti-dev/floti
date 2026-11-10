@@ -38,8 +38,8 @@ request_channel!(
     SearchContent = "content:search", ContentSearchRequest => ContentSearchResult, needs Files
 );
 request_channel!(
-    /// Saves a note, through the same snapshots and conflict check as
-    /// `config:write`.
+    /// Saves a note: the bytes it replaces are snapshotted first, and a
+    /// write whose file changed since the editor read it is a conflict.
     WriteContent = "content:write", WriteConfigRequest => WriteConfigResult, needs Files
 );
 request_channel!(

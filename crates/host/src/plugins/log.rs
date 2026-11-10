@@ -35,7 +35,7 @@ impl PluginLogs {
             kept.pop_front();
         }
         kept.push_back(PluginLogLine {
-            at: crate::config_console::time::now_iso(),
+            at: crate::agent_config::time::now_iso(),
             stream,
             text,
         });

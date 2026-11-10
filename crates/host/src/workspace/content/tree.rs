@@ -21,7 +21,7 @@ use floti_protocol::channels::workspace::{
 };
 
 use super::kinds::{content_extension, content_file_kind, counts_as_content};
-use crate::config_console::mtime_ms;
+use crate::agent_config::mtime_ms;
 use crate::workspace::render::frontmatter::{
     frontmatter_string, frontmatter_tags, parse_note_frontmatter,
 };
@@ -302,7 +302,7 @@ pub fn content_scope(
     kind: floti_protocol::channels::workspace::ConfigScopeKind,
     label: Option<&str>,
 ) -> ContentScope {
-    let base = crate::config_console::normalize(path);
+    let base = crate::agent_config::normalize(path);
     let shown = base.display().to_string();
     let label = label.map(str::to_owned).unwrap_or_else(|| {
         base.file_name()

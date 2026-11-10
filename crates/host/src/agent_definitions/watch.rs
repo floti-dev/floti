@@ -32,7 +32,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use super::{DEFAULT_AGENT_NAME, is_agent_name, is_default_name};
-use crate::config_console::sha256_hex;
+use crate::agent_config::sha256_hex;
 
 /// How long after a burst's first event the folder is measured.
 pub const SETTLE: Duration = Duration::from_millis(200);

@@ -21,7 +21,7 @@ import type {
 export interface ProfileService {
   /** The profiles as they are now. */
   list(): Promise<Profile[]>
-  /** The same, as last known, for readers that cannot wait: the config console's and Files view's folders. */
+  /** The same, as last known, for readers that cannot wait: the Files view's folders. */
   current(): Profile[]
   save(req: SaveProfileRequest): Promise<SaveProfileResult>
   /** Deletes a profile the host lists; false, with nothing sent, for one it does not. */

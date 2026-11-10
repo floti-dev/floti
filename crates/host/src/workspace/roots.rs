@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use floti_protocol::channels::workspace::ProjectKind;
 use rusqlite::Connection;
 
-use crate::config_console::normalize;
+use crate::agent_config::normalize;
 use crate::store::Store;
 use crate::store::projects::read_cached_projects;
 use crate::{Error, Result};

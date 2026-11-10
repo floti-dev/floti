@@ -8,23 +8,19 @@ export {
   type ArchiveWrite,
   type Eviction
 } from './archive'
-export { insertConfigSnapshot, type NewConfigSnapshot } from './config'
 export {
   countCopyableData,
-  readConfigSnapshotPage,
   readConversationKeys,
   readConversationPage,
   readSessionNames,
   readUsagePage,
   DEFAULT_COPY_BUDGET,
   MAX_COPIED_TEXT_BYTES,
-  type ConfigSnapshotPage,
   type ConversationCursor,
   type ConversationKey,
   type ConversationPage,
   type ConversationPageOptions,
   type ConversationPart,
-  type CopiedConfigSnapshot,
   type CopiedConversation,
   type CopiedSessionName,
   type CopyBudget,

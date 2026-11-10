@@ -11,7 +11,7 @@ use floti_protocol::channels::workspace::{FileChangeState, FileView, LineEnding,
 
 use super::changes::read_file_changes;
 use super::paths::{is_inside_root, relative_slashed};
-use crate::config_console::{mtime_ms, normalize, read_file};
+use crate::agent_config::{mtime_ms, normalize, read_file};
 
 /// Past this a file is not read at all: the view says how large it is
 /// instead of freezing on a 40 MB log.

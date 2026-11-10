@@ -1,7 +1,8 @@
-//! Settings, setup, discovery, roots, harnesses, templates, the config
-//! console, content, the Files view and agent worktrees: `app:info`,
-//! `settings:*`, `setup:*`, `discovery:*`, `scan:status`, `git:updated`,
-//! `roots:*`, `harness:create`, `template:*`, `config:*`, `editor:highlight`,
+//! Settings, setup, discovery, roots, harnesses, templates, what composition
+//! reads of an agent's config, content, the Files view and agent worktrees:
+//! `app:info`, `settings:*`, `setup:*`, `discovery:*`, `scan:status`,
+//! `git:updated`, `roots:*`, `harness:create`, `template:*`,
+//! `config:scopes`, `config:tree`, `config:effective`, `editor:highlight`,
 //! `content:*`, `files:*` and `worktrees:*` in `shared/ipc.ts`.
 //!
 //! How the ipc.ts channels map onto the protocol:
@@ -22,8 +23,8 @@
 //!   runtime versions stay in the client.
 //! - Whole-state pushes (`settings:changed`, `discovery:updated`,
 //!   `scan:status`, `git:updated`) are events that carry state: a
-//!   subscription starts with a snapshot. `config:externalChange` and
-//!   `files:changed` are events without state.
+//!   subscription starts with a snapshot. `files:changed` is an event
+//!   without state.
 //! - Every `content:*` and `files:*` channel, and `files:changed`, needs the
 //!   `files` capability.
 //! - `content:artifactBytes` is not in ipc.ts: the desktop's main process
@@ -94,27 +95,11 @@ pub fn declare(catalogue: &mut Catalogue) {
         .request::<ImportIntoTemplate>()
         .request::<PreviewFolderTemplate>()
         .request::<SaveFolderAsTemplate>()
-        // The config console.
+        // What composition reads of an agent's config, and the editors'
+        // highlighter.
         .request::<ListConfigScopes>()
         .request::<ReadConfigTree>()
-        .request::<ReadConfigFile>()
-        .request::<RenderConfigFile>()
-        .request::<WriteConfigFile>()
-        .request::<ListConfigSnapshots>()
-        .request::<ReadConfigSnapshot>()
-        .request::<RestoreConfigSnapshot>()
-        .request::<WatchConfigFile>()
-        .request::<CreateConfigFile>()
-        .request::<RenameConfigFile>()
-        .request::<DeleteConfigFile>()
         .request::<ReadEffectiveView>()
-        .request::<PreviewMcpServer>()
-        .request::<AddMcpServer>()
-        .request::<RemoveMcpServer>()
-        .request::<ApproveMcpServer>()
-        .request::<ListMcpServers>()
-        .request::<RunDoctor>()
-        .event::<ConfigChangedOutside>()
         .request::<HighlightSource>()
         // Content.
         .request::<ListContentScopes>()

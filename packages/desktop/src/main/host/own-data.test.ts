@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   archiveTranscriptFile,
   indexUsageFile,
-  insertConfigSnapshot,
   MAX_COPIED_TEXT_BYTES,
   openStore,
   renameHistorySession,
@@ -45,7 +44,7 @@ function archive(sessionId: string, count: number): void {
   })
 }
 
-/** Helm's database as the switch-off path left it: three conversations, names, usage and config versions. */
+/** Helm's database as the switch-off path left it: three conversations, names, usage and config versions, which stay. */
 function fill(): void {
   archive('aaaa', 3)
   archive('bbbb', 5)
@@ -70,14 +69,12 @@ function fill(): void {
       skipped: 0
     }
   })
+  const version = store.raw.prepare(
+    `INSERT INTO config_snapshots (project_path, file_path, content, content_hash, reason)
+     VALUES ('/work/api', 'CLAUDE.md', ?, ?, 'edit')`
+  )
   for (const content of ['# one', '# two', '# three']) {
-    insertConfigSnapshot(store, {
-      scopePath: '/work/api',
-      filePath: 'CLAUDE.md',
-      content,
-      contentHash: createHash('sha256').update(content).digest('hex'),
-      reason: 'edit'
-    })
+    version.run(content, createHash('sha256').update(content).digest('hex'))
   }
 }
 
@@ -101,7 +98,6 @@ function host(options: HostOptions = {}) {
   connection.answer('carry:status', () => ({ finishedAt }))
   connection.answer('carry:missing', ({ sessionIds }) => ({ sessionIds: sessionIds.filter((id) => !held.has(id)) }))
   connection.answer('carry:names', ({ names }) => ({ added: names.length, kept: 0 }))
-  connection.answer('carry:versions', ({ versions }) => ({ added: versions.length, kept: 0 }))
   connection.answer('carry:usage', ({ rows }) => ({ added: rows.length, kept: 0 }))
   connection.answer('carry:conversations', ({ parts }) => {
     conversationBatches++
@@ -142,7 +138,7 @@ afterEach(() => {
 })
 
 describe('copying Helm’s own data into the local host', () => {
-  it('sends names, config versions, usage and the conversations the host lacks in batches, then finishes, logging only counts', async () => {
+  it('sends names, usage and the conversations the host lacks in batches, and no config version, then finishes, logging only counts', async () => {
     const { connection } = host()
     const link = fakeLink(connection)
     const { copy, logged, states } = copier(link)
@@ -154,8 +150,6 @@ describe('copying Helm’s own data into the local host', () => {
     expect(channels(connection)).toEqual([
       'carry:status',
       'carry:names',
-      'carry:versions',
-      'carry:versions',
       'carry:usage',
       'carry:usage',
       'carry:usage',
@@ -168,8 +162,6 @@ describe('copying Helm’s own data into the local host', () => {
     const parts = (connection.payloads('carry:conversations') as P.CarriedConversations[]).flatMap((batch) => batch.parts)
     expect(parts.filter((part) => part.last).map((part) => part.conversation.sessionId)).toEqual(['aaaa', 'bbbb', 'cccc'])
     expect(parts.flatMap((part) => part.messages).length).toBe(10)
-    // The snapshot's own id stays Helm's.
-    expect((connection.payloads('carry:versions') as P.CarriedConfigVersions[])[0]?.versions[0]).not.toHaveProperty('id')
     expect((connection.payloads('carry:names') as P.CarriedSessionNames[])[0]?.names.map((name) => name.name)).toEqual([
       'Release notes',
       'Billing'
@@ -178,7 +170,7 @@ describe('copying Helm’s own data into the local host', () => {
     expect(states.map((state) => state.state)).toEqual(['copying', 'finished'])
     expect(copy.state()).toEqual({ state: 'finished' })
     expect(logged.at(-1)).toBe(
-      "host: copied Helm's own data into the local host: 3 conversations (10 messages), 5 usage rows, 2 session names and 3 config versions"
+      "host: copied Helm's own data into the local host: 3 conversations (10 messages), 5 usage rows and 2 session names"
     )
     expect(logged.join('\n')).not.toContain(PRIVATE)
   })
@@ -219,12 +211,12 @@ describe('copying Helm’s own data into the local host', () => {
     expect(channels(first.connection)).not.toContain('carry:finish')
     expect(copy.state()).toEqual({
       state: 'unfinished',
-      copied: { conversations: 1, messages: 3, usageRows: 5, sessionNames: 2, configVersions: 3 },
+      copied: { conversations: 1, messages: 3, usageRows: 5, sessionNames: 2 },
       reason: 'the connection to the local host ended'
     })
     expect(logged.at(-1)).toBe(
-      "host: copying Helm's own data into the local host did not finish after 1 conversations (3 messages), 5 usage rows, " +
-        '2 session names and 3 config versions (the connection to the local host ended)'
+      "host: copying Helm's own data into the local host did not finish after 1 conversations (3 messages), 5 usage rows " +
+        'and 2 session names (the connection to the local host ended)'
     )
     expect(logged.join('\n')).not.toContain(PRIVATE)
 
@@ -304,8 +296,8 @@ describe('copying Helm’s own data into the local host', () => {
     expect(Buffer.byteLength(cut, 'utf8')).toBeLessThanOrEqual(MAX_COPIED_TEXT_BYTES)
     expect(cut).toMatch(/\[Cut short when Helm copied it into the local host: .*\]$/)
     expect(logged.at(-1)).toBe(
-      "host: copied Helm's own data into the local host: 4 conversations (11 messages), 5 usage rows, 2 session names " +
-        'and 3 config versions; 1 messages too long for one batch were sent cut short'
+      "host: copied Helm's own data into the local host: 4 conversations (11 messages), 5 usage rows and 2 session names" +
+        '; 1 messages too long for one batch were sent cut short'
     )
   })
 

@@ -20,7 +20,7 @@ use std::path::{MAIN_SEPARATOR, Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use floti_host::agent::claude_code::ClaudeCodeSettings;
-use floti_host::config_console::snapshots;
+use floti_host::agent_config::snapshots;
 use floti_host::platform::links;
 use floti_host::platform::socket::Endpoint;
 use floti_host::server::{HostConfig, HostRun, backends};
@@ -1894,7 +1894,7 @@ fn refuses_a_name_that_is_taken_and_leaves_the_existing_template_alone() {
 /// A host over a test's folders, with a client connected to it. The
 /// templates folder is the host's own, `templates` in its config folder,
 /// seeded as the host started. Claude Code (the fake claude, never run) is
-/// the agent whose config console a template imports from.
+/// the agent whose config a template imports from.
 struct Wire {
     host: RunningHost,
     client: TestClient,

@@ -1,6 +1,6 @@
-//! A config file as the console sees it: its bytes and their hash, which
-//! paths count as configuration, and the key a file's snapshots are kept
-//! under.
+//! A file as the host's readers and its snapshot-first writer see it: its
+//! bytes and their hash, the guard a surface writes behind, and the key a
+//! file's snapshots are kept under.
 
 use std::path::{Component, Path, PathBuf};
 use std::time::UNIX_EPOCH;
@@ -116,64 +116,6 @@ pub trait PathGuard: Send + Sync {
     fn check(&self, scope: &Path, path: &Path) -> Result<(), String>;
 }
 
-/// Which paths the console may write: configuration, inside the scope a
-/// request names. The agent's own config folder is configuration throughout,
-/// whatever it is called.
-#[derive(Debug, Clone)]
-pub struct WriteGuard {
-    agent_config_dir: PathBuf,
-}
-
-impl WriteGuard {
-    pub fn new(agent_config_dir: &Path) -> Self {
-        Self {
-            agent_config_dir: normalize(agent_config_dir),
-        }
-    }
-
-    /// Refuses, in a sentence, a path that is relative, outside `scope`, or
-    /// not configuration: under a `.claude` folder, or a `CLAUDE.md` or
-    /// `.mcp.json` at the top of the scope. The scope check stops a request
-    /// from using one scope's history to write into another's tree.
-    pub fn check(&self, scope: &Path, path: &Path) -> Result<(), String> {
-        if !path.is_absolute() {
-            return Err(format!(
-                "Refusing to write a relative path: {}",
-                path.display()
-            ));
-        }
-        let absolute = normalize(path);
-        let scope = normalize(scope);
-        let Some(segments) = below(&scope, &absolute) else {
-            return Err(format!(
-                "Refusing to write {}: it is not inside {}.",
-                absolute.display(),
-                scope.display()
-            ));
-        };
-        let name = segments.last().map(String::as_str).unwrap_or_default();
-        let in_claude_dir = segments.iter().any(|segment| segment == ".claude")
-            || scope.file_name().is_some_and(|last| last == ".claude")
-            || scope == self.agent_config_dir;
-        let loose =
-            segments.len() == 1 && (name.eq_ignore_ascii_case("claude.md") || name == ".mcp.json");
-        if (in_claude_dir && !segments.is_empty()) || loose {
-            Ok(())
-        } else {
-            Err(format!(
-                "Refusing to write {}: only files under a .claude folder, a CLAUDE.md, or a .mcp.json are configuration.",
-                absolute.display()
-            ))
-        }
-    }
-}
-
-impl PathGuard for WriteGuard {
-    fn check(&self, scope: &Path, path: &Path) -> Result<(), String> {
-        WriteGuard::check(self, scope, path)
-    }
-}
-
 /// The key a file's snapshots are kept under: its path below the scope,
 /// forward-slashed.
 pub fn snapshot_key(scope: &Path, path: &Path) -> String {
@@ -182,55 +124,5 @@ pub fn snapshot_key(scope: &Path, path: &Path) -> String {
     match below(&scope, &path) {
         Some(segments) => segments.join("/"),
         None => path.display().to_string().replace('\\', "/"),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_path_that_climbs_out_of_its_scope_is_outside_it() {
-        let root = std::env::temp_dir().join("floti scope");
-        let guard = WriteGuard::new(&root.join("home").join(".claude"));
-        let outside = root.join("project").join("..").join("elsewhere.json");
-        let refused = guard.check(&root.join("project"), &outside).unwrap_err();
-        assert!(refused.contains("not inside"), "{refused}");
-        assert!(
-            guard
-                .check(
-                    &root.join("project"),
-                    &root.join("project").join(".claude").join("settings.json")
-                )
-                .is_ok()
-        );
-        assert!(
-            guard
-                .check(
-                    &root.join("project"),
-                    &root.join("project").join("CLAUDE.md")
-                )
-                .is_ok()
-        );
-        let not_config = guard
-            .check(
-                &root.join("project"),
-                &root.join("project").join("src").join("a.ts"),
-            )
-            .unwrap_err();
-        assert!(not_config.contains("configuration"), "{not_config}");
-        assert!(guard.check(&root, Path::new("relative.json")).is_err());
-    }
-
-    #[test]
-    fn the_agents_config_folder_is_configuration_whatever_it_is_called() {
-        let dir = std::env::temp_dir().join("claude config");
-        let guard = WriteGuard::new(&dir);
-        assert!(guard.check(&dir, &dir.join("settings.json")).is_ok());
-        assert!(
-            WriteGuard::new(&std::env::temp_dir().join("other"))
-                .check(&dir, &dir.join("settings.json"))
-                .is_err()
-        );
     }
 }

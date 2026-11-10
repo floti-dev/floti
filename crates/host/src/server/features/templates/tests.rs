@@ -1,7 +1,7 @@
 //! `template:*` and `harness:create` as a client's requests reach them:
 //! through the router of a host's features, over a store and a config
 //! folder of their own, with Claude Code (the fake claude) as the agent whose
-//! config console a template imports from. No agent is ever run.
+//! config a template imports from. No agent is ever run.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

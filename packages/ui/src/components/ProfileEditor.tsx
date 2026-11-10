@@ -143,8 +143,7 @@ export function ProfileEditor({
    * The answer is stored against the question it answers, and the two
    * disagreeing is what "still waiting" *means*.
    *
-   * The same shape `useConfig` keeps the config console's effective view in, and
-   * for the same reason: a `loading` flag set beside the request is a second
+   * Kept this way because a `loading` flag set beside the request is a second
    * copy of a fact the key already carries, and the two come apart the moment a
    * slow answer lands after the root has moved on.
    */
@@ -552,9 +551,9 @@ export function ProfileEditor({
             A picker over what is configured, and a sentence saying the pick
             does not reach the session - because it does not. `Profile.mcp` is
             persisted and exported and never placed on the argv: no CLI flag
-            selects an already-configured server by name, and resolving names
-            into a `--mcp-config` document is the config console's job (SPEC
-            4.2). This field was a comma-separated text box that said none of
+            selects an already-configured server by name, and what is
+            configured is the agent's own to manage (`/mcp` for Claude Code).
+            This field was a comma-separated text box that said none of
             that, so the honest thing to show was a list of names that would
             not be used - not a box implying they would.
             ---------------------------------------------------------------- */}
@@ -563,8 +562,8 @@ export function ProfileEditor({
           <p className="mt-1.5 mb-2 text-[11px] leading-[1.55] text-fg-muted">
             Saved with the profile and carried by its YAML export.{' '}
             <strong className="font-medium text-fg">Not applied at launch</strong> - a session
-            loads whatever is configured for its root, which is the config console&rsquo;s MCP
-            view, not this list.
+            loads whatever is configured for its root, which the agent&rsquo;s own commands
+            manage (<code className="font-mono">/mcp</code> for Claude Code), not this list.
           </p>
 
           <div className="overflow-hidden rounded-raised border border-border">

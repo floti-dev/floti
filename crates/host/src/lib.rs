@@ -21,9 +21,10 @@
 //! - [`agent`]: the `AgentBackend` trait every agent CLI is run through.
 //! - [`agent_tools`]: the loopback listener that serves Floti's agent tools
 //!   to the sessions it hosts, one bearer token per session.
-//! - [`config_console`]: an agent's config files, read through its backend and
-//!   changed only through one snapshot-first writer; served to clients as
-//!   `config:*`.
+//! - [`agent_config`]: an agent's config files as composition reads them,
+//!   through its backend and never written, served to clients as
+//!   `config:scopes`, `config:tree` and `config:effective`; and the
+//!   snapshot-first writer a note's save and a template's authoring share.
 //! - [`platform`]: what differs by OS, behind one trait per concern. Nothing
 //!   outside its per-OS files is conditional on the OS.
 //! - [`store`]: `floti.db`, which only the host opens.
@@ -73,12 +74,12 @@ macro_rules! log_line {
 
 pub mod agent;
 pub mod agent_cli;
+pub mod agent_config;
 pub mod agent_definitions;
 pub mod agent_tools;
 pub mod bridge;
 pub mod carry;
 pub mod client;
-pub mod config_console;
 pub mod connect;
 pub mod doctor;
 pub mod error;

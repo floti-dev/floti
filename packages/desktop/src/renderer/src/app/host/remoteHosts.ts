@@ -97,9 +97,9 @@ export interface RemoteHostsDeps {
 
 type RemoteLink = Pick<PageLink, 'connection' | 'onConnected' | 'onEnded'> & Partial<Pick<PageLink, 'reconnectNow'>>
 
-/** The agent a host's row says its session was started as, for its agent tag: `role` from a host before protocol 2.3. */
-function agentOfRow(row: Pick<P.SessionRecord, 'agent' | 'role'>): { agent: string } | null {
-  const agent = row.agent ?? row.role
+/** The agent a host's row says its session was started as, for its agent tag. */
+function agentOfRow(row: Pick<P.SessionRecord, 'agent'>): { agent: string } | null {
+  const agent = row.agent
   return agent === null || agent === undefined || agent === '' ? null : { agent }
 }
 

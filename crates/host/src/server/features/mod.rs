@@ -8,7 +8,7 @@
 //!
 //! - [`sessions`]: launch and live sessions, and plain terminals.
 //! - [`history`]: history, the transcript archive and usage.
-//! - [`config`]: the config console.
+//! - [`config`]: what composition reads of an agent's config.
 //! - [`resources`]: processes and ports, what each hosted session holds.
 //! - [`forwards`]: connections to the loopback ports a session's own process
 //!   tree listens on (`sessions:port`).

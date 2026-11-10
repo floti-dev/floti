@@ -6,11 +6,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ArchiveRow } from '../archive/transcript'
 import type { UsageRow } from '../usage/transcripts'
 import { archiveTranscriptFile, evictToCeiling, readArchivedConversation } from './archive'
-import { insertConfigSnapshot } from './config'
 import {
   MAX_COPIED_TEXT_BYTES,
   countCopyableData,
-  readConfigSnapshotPage,
   readConversationKeys,
   readConversationPage,
   readSessionNames,
@@ -284,63 +282,15 @@ describe('reading the rest to copy', () => {
     ])
   })
 
-  it('pages config file versions by id with their content', () => {
-    for (const content of ['{}', '{"a":1}', '# notes\n']) {
-      insertConfigSnapshot(store, {
-        scopePath: join(dir, 'project'),
-        filePath: '.claude/settings.json',
-        content,
-        contentHash: sha(Buffer.from(content)),
-        reason: 'edit'
-      })
-    }
-    const first = readConfigSnapshotPage(store, null, { maxBytes: 1 << 20, maxRows: 2 })
-    expect(first.rows.map((row) => row.content)).toEqual(['{}', '{"a":1}'])
-    const second = readConfigSnapshotPage(store, first.next, { maxBytes: 1 << 20, maxRows: 2 })
-    expect(second).toMatchObject({ next: null, rows: [{ content: '# notes\n', reason: 'edit' }] })
-    expect(second.rows[0]).toMatchObject({
-      scopePath: join(dir, 'project'),
-      filePath: '.claude/settings.json'
-    })
-    // The byte budget ends a page too, after at least one row.
-    expect(readConfigSnapshotPage(store, null, { maxBytes: 1, maxRows: 10 }).rows).toHaveLength(1)
-  })
-
-  it('leaves out a config file version too long for one batch, counts it and reads on past it', () => {
-    for (const content of ['{}', 'x'.repeat(64), '# notes\n']) {
-      insertConfigSnapshot(store, {
-        scopePath: join(dir, 'project'),
-        filePath: 'CLAUDE.md',
-        content,
-        contentHash: sha(Buffer.from(content)),
-        reason: 'edit'
-      })
-    }
-    const budget = { maxBytes: 1 << 20, maxRows: 1, maxTextBytes: 32 }
-    const pages: Array<{ contents: string[]; skipped: number }> = []
-    for (let after: number | null = null, first = true; first || after !== null; first = false) {
-      const page = readConfigSnapshotPage(store, after, budget)
-      pages.push({ contents: page.rows.map((row) => row.content), skipped: page.skipped })
-      after = page.next
-    }
-    expect(pages).toEqual([
-      { contents: ['{}'], skipped: 0 },
-      { contents: [], skipped: 1 },
-      { contents: ['# notes\n'], skipped: 0 }
-    ])
-  })
-
   it('reads empty tables as empty', () => {
     expect(readUsagePage(store, null)).toEqual({ rows: [], next: null })
     expect(readSessionNames(store)).toEqual([])
-    expect(readConfigSnapshotPage(store, null)).toEqual({ rows: [], next: null, skipped: 0 })
     expect(countCopyableData(store)).toEqual({
       archivedConversations: 0,
       evictedConversations: 0,
       messages: 0,
       usageMessages: 0,
-      sessionNames: 0,
-      configSnapshots: 0
+      sessionNames: 0
     })
   })
 
@@ -350,20 +300,12 @@ describe('reading the rest to copy', () => {
     evictAllBut('new')
     usage(4)
     renameHistorySession(store, 'new', 'Named')
-    insertConfigSnapshot(store, {
-      scopePath: dir,
-      filePath: 'CLAUDE.md',
-      content: '',
-      contentHash: sha(Buffer.from('')),
-      reason: 'create'
-    })
     expect(countCopyableData(store)).toEqual({
       archivedConversations: 1,
       evictedConversations: 1,
       messages: 3,
       usageMessages: 4,
-      sessionNames: 1,
-      configSnapshots: 1
+      sessionNames: 1
     })
   })
 })
@@ -375,13 +317,6 @@ describe('a copy reading helm.db', () => {
     evictAllBut('kept')
     usage(3)
     renameHistorySession(store, 'kept', 'Kept')
-    insertConfigSnapshot(store, {
-      scopePath: dir,
-      filePath: 'CLAUDE.md',
-      content: '# rules\n',
-      contentHash: sha(Buffer.from('# rules\n')),
-      reason: 'edit'
-    })
     // Closing the last connection folds the write-ahead log into the file, so
     // what is on disk is the whole database.
     store.close()
@@ -396,7 +331,6 @@ describe('a copy reading helm.db', () => {
     readAll({ budget: { maxBytes: 100, maxRows: 2 } })
     readUsagePage(store, null, 1)
     readSessionNames(store)
-    readConfigSnapshotPage(store, null)
     expect(changes()).toBe(changedBefore)
     store.close()
 

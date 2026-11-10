@@ -1,7 +1,7 @@
 import type { ConfigScope, Project } from '@helm/core/types'
 
 /**
- * The config console's scope list and the Files view's artifact addresses,
+ * The config scope list a template imports from and the Files view's artifact addresses,
  * for whichever side asks the host: nothing here reaches Node or a disk.
  */
 

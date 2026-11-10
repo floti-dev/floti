@@ -7,7 +7,7 @@ use subtle::ConstantTimeEq;
 
 use super::{Caller, GrantId, KeptGrant};
 use crate::agent::{fill_random, hex};
-use crate::config_console::sha256_hex;
+use crate::agent_config::sha256_hex;
 use crate::session::SessionId;
 
 /// Bytes of randomness in a token. Written as hex, so a token is twice as

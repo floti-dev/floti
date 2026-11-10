@@ -1,4 +1,4 @@
-//! `content:*`, `config:render` and `editor:highlight` as a client's requests
+//! `content:*` and `editor:highlight` as a client's requests
 //! reach them: through the router of a host's features, over a store of
 //! their own and a project the discovery cache holds.
 
@@ -9,7 +9,7 @@ use floti_protocol::channel::{RequestChannel, Router, from_payload, to_payload};
 use floti_protocol::channels::workspace::{
     ConfigScopeKind, ConfigWriteReason, ContentFileKind, ContentRenderRequest,
     ContentSearchRequest, HighlightSource, ListContentScopes, ListContentSnapshots, OpenArtifact,
-    Project, ProjectKind, ReadContentDocument, RenderConfigFile, RenderContent, ResolveWikilink,
+    Project, ProjectKind, ReadContentDocument, RenderContent, ResolveWikilink,
     RestoreContentSnapshot, RestoreSnapshotRequest, ScopedFile, SearchContent, SourceToRender,
     WikilinkRequest, WriteConfigRequest, WriteContent,
 };
@@ -18,7 +18,7 @@ use floti_protocol::{Capability, CapabilitySet, Message};
 
 use super::super::{Caller, Features};
 use crate::agent::AgentBackend;
-use crate::config_console::{hash_content, normalize};
+use crate::agent_config::{hash_content, normalize};
 use crate::server::hosted::Hosted;
 use crate::server::{CATALOGUE, HostRun};
 use crate::session::ClientId;
@@ -149,7 +149,6 @@ async fn every_content_channel_is_served_from_the_content_feature() {
         "content:artifact",
         "content:artifactBytes",
         "content:wikilink",
-        "config:render",
         "editor:highlight",
     ] {
         assert!(handled.contains(&channel), "{channel} is not served");
@@ -285,14 +284,6 @@ async fn a_known_scope_reads_renders_searches_writes_and_restores_through_the_ro
         .unwrap();
     assert!(target.path.is_some());
 
-    let config = world
-        .ask::<RenderConfigFile>(&SourceToRender {
-            path: "settings.json".to_owned(),
-            source: "{ \"a\": 1 }\n".to_owned(),
-        })
-        .unwrap();
-    assert!(config.markdown.is_none());
-    assert!(config.code.unwrap().highlighted);
     let highlight = world
         .ask::<HighlightSource>(&SourceToRender {
             path: "tool.py".to_owned(),

@@ -28,7 +28,7 @@ use floti_protocol::channels::workspace::{
     CachedProject, DiscoveryResult, GitState, HostSettingsPatch,
 };
 
-use crate::config_console::time::now_iso;
+use crate::agent_config::time::now_iso;
 use crate::store::Store;
 use crate::store::projects::{cache_projects, forget_projects, read_cached_projects};
 use crate::workspace::settings::SettingsService;

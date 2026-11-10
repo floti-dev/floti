@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use floti_host::agent::AgentBackend;
 use floti_host::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
-use floti_host::config_console::sha256_hex;
+use floti_host::agent_config::sha256_hex;
 use floti_host::fake_agent;
 use floti_host::platform::process_tree::{Native as NativeTree, ProcessTree};
 use floti_host::platform::socket::Endpoint;

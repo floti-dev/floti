@@ -17,7 +17,7 @@
 
 use std::path::Path;
 
-use crate::config_console::sha256_hex;
+use crate::agent_config::sha256_hex;
 
 /// The Keychain item's service, for every host.
 const SERVICE: &str = "Floti";

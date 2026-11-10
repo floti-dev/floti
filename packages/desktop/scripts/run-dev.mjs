@@ -35,8 +35,7 @@
 // home cannot sign in and cannot host a real session - and a dev mode that
 // cannot launch a session is not one anybody would use to look at the app. The
 // residue is real and named: dev sessions land in the real
-// `~/.claude/history.jsonl`, and the config console still writes the real
-// settings through its snapshot path.
+// `~/.claude/history.jsonl`.
 //
 // `pnpm dev --drive` is the other way round: it starts only the fake agents
 // (`drive-agents.ts`), each chosen in the dev database on every launch, with

@@ -161,7 +161,7 @@ describe('useTemplates', () => {
     expect(result.current.selected).toBeNull()
   })
 
-  it('offers the config console’s scopes, and copies the ticked files of one into the selected template', async () => {
+  it('offers the host’s config scopes, and copies the ticked files of one into the selected template', async () => {
     const { result } = await managing()
     await waitFor(() => expect(result.current.scopes).toEqual([USER, HUB]))
 

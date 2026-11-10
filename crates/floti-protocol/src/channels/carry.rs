@@ -3,8 +3,8 @@
 //! Helm kept some things in its own database before the host ran its
 //! sessions, and the host cannot rebuild them from the agent's files:
 //! conversations it archived whose transcripts the agent has since deleted,
-//! their usage, the names given to sessions in History, and the config
-//! console's file versions. The client reads them from its own database and
+//! their usage, and the names given to sessions in History. The client reads
+//! them from its own database and
 //! sends them here in batches; the host merges each batch into its own, and
 //! what the host already holds wins. The client never names its data folder
 //! and the host never opens the client's database.
@@ -35,7 +35,6 @@ pub fn declare(catalogue: &mut Catalogue) {
         .request::<CarryStatusRead>()
         .request::<CarryMissing>()
         .request::<CarryNames>()
-        .request::<CarryVersions>()
         .request::<CarryUsage>()
         .request::<CarryConversations>()
         .request::<CarryFinish>();
@@ -56,12 +55,6 @@ request_channel! {
     /// Names given to sessions in History. A session the host already has a
     /// name for keeps it.
     CarryNames = "carry:names", CarriedSessionNames => CarryMerged
-}
-
-request_channel! {
-    /// Config file versions. A version the host already has (same folder,
-    /// file, content and time) is not added again.
-    CarryVersions = "carry:versions", CarriedConfigVersions => CarryMerged
 }
 
 request_channel! {
@@ -122,30 +115,6 @@ pub struct CarriedSessionName {
     pub name: String,
     /// ISO 8601.
     pub renamed_at: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct CarriedConfigVersions {
-    pub versions: Vec<CarriedConfigVersion>,
-}
-
-/// One config file as it was before a write, with its bytes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct CarriedConfigVersion {
-    /// The scope's base folder.
-    pub scope_path: String,
-    /// Relative to `scope_path`, forward-slashed.
-    pub file_path: String,
-    pub content: String,
-    /// sha256 of `content`.
-    pub content_hash: String,
-    /// Why the write was made, as stored; one this build does not know is
-    /// kept as it is.
-    pub reason: String,
-    /// ISO 8601.
-    pub created_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

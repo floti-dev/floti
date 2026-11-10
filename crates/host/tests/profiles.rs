@@ -11,7 +11,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use floti_host::config_console::normalize;
+use floti_host::agent_config::normalize;
 use floti_host::platform::socket::Endpoint;
 use floti_host::server::{HostConfig, HostRun, backends};
 use floti_host::store::Store;

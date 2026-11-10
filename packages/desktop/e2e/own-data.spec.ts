@@ -1,11 +1,9 @@
-import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 import {
   archiveTranscriptFile,
   indexUsageFile,
-  insertConfigSnapshot,
   openStore,
   renameHistorySession,
   writeSettings
@@ -17,9 +15,9 @@ import { expect, test as base } from './helm'
 
 /**
  * What only Helm's own database holds - a conversation it archived whose
- * transcript Claude Code has since deleted, the name given to it in History,
- * its usage and a saved version of a CLAUDE.md - is copied into the local
- * host, and reads there as it did from helm.db.
+ * transcript Claude Code has since deleted, the name given to it in History
+ * and its usage - is copied into the local host, and reads there as it did
+ * from helm.db.
  */
 
 const KEPT = sessionUuid(0x11)
@@ -30,9 +28,6 @@ const REFUSED = sessionUuid(0x99)
 const PROMPT = 'draft the migration'
 const REPLY = 'The migration adds two columns to the ledger.'
 const NAME = 'Migration plan'
-const CURRENT = '# Alpha\n\nWhat the file says now.\n'
-const SAVED = '# Alpha\n\nWhat it said before the console wrote it.\n'
-const sha = (text: string): string => createHash('sha256').update(text).digest('hex')
 
 const helmDb = (world: World): string => join(world.dataDir, 'helm.db')
 
@@ -74,7 +69,6 @@ function seedOwnData(world: World): void {
   const at = Date.now() - 60 * 60 * 1000
   appendPrompts(claudeTree(world.claudeDir), [{ sessionId: KEPT, project: world.projects.alpha, display: PROMPT, at }])
   archive(world, KEPT, [PROMPT, REPLY], at)
-  writeFileSync(join(world.projects.alpha, 'CLAUDE.md'), CURRENT)
   const store = openStore({ file: helmDb(world) })
   try {
     renameHistorySession(store, KEPT, NAME)
@@ -97,13 +91,6 @@ function seedOwnData(world: World): void {
         reset: false,
         skipped: 0
       }
-    })
-    insertConfigSnapshot(store, {
-      scopePath: world.projects.alpha,
-      filePath: 'CLAUDE.md',
-      content: SAVED,
-      contentHash: sha(SAVED),
-      reason: 'edit'
     })
     // Helm's profiles and plugins were copied into this host before its own
     // data was: that copy's markers do not stand in for this one's.
@@ -143,29 +130,7 @@ async function showsTheArchivedConversation(window: Page): Promise<void> {
   await expect(window.getByText(REPLY)).toHaveCount(1)
 }
 
-async function chooseScope(window: Page, name: string): Promise<void> {
-  const scope = window.getByRole('combobox', { name: 'Scope' })
-  await expect(scope).not.toHaveValue('')
-  const value = await scope.locator('option', { hasText: new RegExp(`^${name}\\b`) }).getAttribute('value')
-  expect(value).not.toBeNull()
-  if ((await scope.inputValue()) !== value) await scope.selectOption(value!)
-  await expect(scope).toHaveValue(value!)
-}
-
-/** The version helm.db saved is listed, and restoring it puts its bytes back. */
-async function restoresTheSavedVersion(window: Page, world: World): Promise<void> {
-  const file = join(world.projects.alpha, 'CLAUDE.md')
-  await window.getByRole('button', { name: 'Config', exact: true }).click()
-  await chooseScope(window, 'alpha')
-  await window.getByRole('group', { name: 'Configuration files' }).getByRole('button', { name: /CLAUDE\.md/ }).click()
-  await window.getByRole('button', { name: '1 version', exact: true }).click()
-  await expect(window.locator('[data-snapshot-list]')).toContainText(sha(SAVED).slice(0, 12))
-  await window.getByRole('button', { name: 'Restore', exact: true }).click()
-  await expect.poll(() => readFileSync(file, 'utf8')).toBe(SAVED)
-  await expect(window.getByRole('button', { name: '2 versions', exact: true })).toBeVisible()
-}
-
-test('History, the archived conversation and the config console show what only helm.db held, once copied into the host', async ({
+test('History and the archived conversation show what only helm.db held, once copied into the host', async ({
   world,
   helm
 }) => {
@@ -173,10 +138,9 @@ test('History, the archived conversation and the config console show what only h
   await expect.poll(async () => (await copyState(helm.window)).state).toBe('finished')
 
   await showsTheArchivedConversation(helm.window)
-  await restoresTheSavedVersion(helm.window, world)
 
   await expect(helm.window.locator('[data-own-data-banner]')).toHaveCount(0)
-  // The config console's restore wrote the host's database, never Helm's.
+  // The copy wrote the host's database, never Helm's.
   expect(readFileSync(helmDb(world)).equals(before)).toBe(true)
 })
 

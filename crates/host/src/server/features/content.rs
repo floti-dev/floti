@@ -1,5 +1,4 @@
-//! Notes and documents: `content:*`, `config:render` and
-//! `editor:highlight`.
+//! Notes and documents: `content:*` and `editor:highlight`.
 //!
 //! Every `content:*` request names a scope the host knows and a path inside
 //! it ([`ContentService`]); rendering and highlighting read nothing from disk
@@ -19,14 +18,14 @@ use floti_protocol::Bytes;
 use floti_protocol::channel::Router;
 use floti_protocol::channels::workspace::{
     ArtifactBytes, ArtifactHeader, HighlightSource, ListContentScopes, ListContentSnapshots,
-    OpenArtifact, ReadArtifactBytes, ReadContentDocument, RenderConfigFile, RenderContent,
-    ResolveWikilink, RestoreContentSnapshot, SearchContent, WikilinkTarget, WriteContent,
+    OpenArtifact, ReadArtifactBytes, ReadContentDocument, RenderContent, ResolveWikilink,
+    RestoreContentSnapshot, SearchContent, WikilinkTarget, WriteContent,
 };
 
 use super::config::off_the_workers;
 use super::{Caller, Feature, FeatureContext};
 use crate::workspace::content::ContentService;
-use crate::workspace::render::{editor_highlight, render_config};
+use crate::workspace::render::editor_highlight;
 
 pub(crate) struct Content {
     service: Arc<ContentService>,
@@ -91,11 +90,6 @@ impl Feature for Content {
                         .wikilink(&link.scope_path, &link.target, &link.from)
                         .map(|path| WikilinkTarget { path })
                 })
-            })
-            .handle::<RenderConfigFile>(|source| {
-                Ok(off_the_workers(|| {
-                    render_config(&source.path, &source.source)
-                }))
             })
             .handle::<HighlightSource>(|source| {
                 Ok(off_the_workers(|| {

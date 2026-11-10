@@ -21,8 +21,7 @@
 //! text or the new, never half of one, and a write that fails leaves nothing
 //! behind. A new file is put in place only where there is none, so nothing a
 //! client did not read is ever written over. A file that is a link is
-//! written through, as the config console writes one: the file it leads to
-//! gets the text and the link stays.
+//! written through: the file it leads to gets the text and the link stays.
 
 use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
@@ -39,7 +38,7 @@ use super::parse::{AgentFileReading, DefinitionProblem, read_agent_file};
 use super::seed::SHIPPED_AGENTS;
 use super::versions::{self, Reason, Renamed, Version};
 use super::{AgentDefinition, DEFAULT_AGENT_NAME, FolderDefinitions, is_default_name};
-use crate::config_console::sha256_hex;
+use crate::agent_config::sha256_hex;
 use crate::platform::links::is_link;
 
 /// Why a host whose config folder is another host's to write refuses every

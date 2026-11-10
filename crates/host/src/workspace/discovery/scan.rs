@@ -26,8 +26,8 @@ use serde_yaml_ng::Value;
 
 use super::git::read_git_states;
 use super::inventory::{has_claude_dir, read_claude_inventory};
-use crate::config_console::normalize;
-use crate::config_console::time::now_iso;
+use crate::agent_config::normalize;
+use crate::agent_config::time::now_iso;
 
 /// The file whose presence makes a folder a harness.
 pub const HARNESS_MANIFEST: &str = "harness.yaml";

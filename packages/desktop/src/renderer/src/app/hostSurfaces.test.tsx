@@ -2,9 +2,6 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   ArchiveStats,
-  ConfigFile,
-  ConfigFileContent,
-  ConfigScope,
   ContentScope,
   FileView,
   HistoryPage,
@@ -15,7 +12,6 @@ import type {
 import type { PluginInfo } from '../../../shared/ipc'
 import { bridge, remoteBridge, type Invocation } from './bridge.testkit'
 import { noteDocument } from './document.testkit'
-import { useConfig } from './useConfig'
 import { useDocument } from './useDocument'
 import { fileKey, useFiles } from './useFiles'
 import { useHistory } from './useHistory'
@@ -23,7 +19,7 @@ import { useHostPlugins, usePlugins } from './usePlugins'
 import { usePluginSettings } from './usePluginSettings'
 
 /**
- * History, Config, Files, a note and Settings > Plugins pointed at a host on
+ * History, Files, a note and Settings > Plugins pointed at a host on
  * another computer: every read and write goes through that host's bridge, and
  * this PC's is asked nothing of it. Each host is played by its own fake bridge.
  */
@@ -89,57 +85,6 @@ describe('History on build-box', () => {
     await waitFor(() => expect(result.current.summary).toBe(summary))
     rerender({ host: 'local' })
     expect(result.current.summary).toBeNull()
-  })
-})
-
-describe('Config on build-box', () => {
-  const USER: ConfigScope = {
-    kind: 'user',
-    path: '/home/you/.claude',
-    claudeDir: '/home/you/.claude',
-    label: 'User',
-    exists: true
-  }
-  const SETTINGS: ConfigFile = {
-    path: '/home/you/.claude/settings.json',
-    relPath: 'settings.json',
-    kind: 'settings',
-    name: 'settings.json',
-    size: 2,
-    mtimeMs: 0,
-    description: null,
-    binary: false
-  }
-  const content: ConfigFileContent = {
-    path: SETTINGS.path,
-    exists: true,
-    content: '{}',
-    hash: 'b1',
-    size: 2,
-    mtimeMs: 0,
-    binary: false
-  }
-
-  it('reads and writes build-box’s files only: the write is snapshotted there, not here', async () => {
-    buildBox.answer('config:scopes', () => [USER])
-    buildBox.answer('config:tree', () => ({ scope: USER, files: [SETTINGS], errors: [], scannedAt: '' }))
-    buildBox.answer('config:read', () => content)
-    buildBox.answer('config:snapshots', () => [])
-    buildBox.answer('config:render', () => ({ markdown: null, code: null }))
-    buildBox.answer('config:watch', () => undefined)
-    buildBox.answer('config:write', () => ({ ok: true }) as never)
-    const { result } = renderHook(() => useConfig(BUILD_BOX))
-    await waitFor(() => expect(result.current.scopePath).toBe(USER.path))
-    await waitFor(() => expect(result.current.tree?.files).toEqual([SETTINGS]))
-    act(() => result.current.select(SETTINGS))
-    await waitFor(() => expect(buildBox.invoked('config:read').length).toBeGreaterThan(0))
-    await waitFor(() => expect(result.current.loaded?.hash).toBe('b1'))
-
-    act(() => result.current.save('{"model":"opus"}'))
-    expect(buildBox.invoked('config:write')).toEqual([
-      { scopePath: USER.path, path: SETTINGS.path, content: '{"model":"opus"}', expectedHash: 'b1', reason: 'edit' }
-    ])
-    expect(askedHere()).toEqual([])
   })
 })
 

@@ -3,7 +3,9 @@
 
 use std::path::{Path, PathBuf};
 
-use floti_protocol::channels::workspace::{ConfigFile, ConfigScope, ConfigScopeKind, ConfigTree};
+use floti_protocol::channels::workspace::{
+    ConfigFile, ConfigFileKind, ConfigScope, ConfigScopeKind, ConfigTree,
+};
 
 use super::files::normalize;
 use super::time::now_iso;
@@ -93,4 +95,23 @@ pub fn scope_files(
             .filter(|file| Path::new(&file.path) == project.join(&file.rel_path))
             .collect(),
     })
+}
+
+/// Every file that makes one entry of a scope: a skill's whole folder, its
+/// `SKILL.md` first, or the one file for every other kind. Taken from the
+/// tree's own listing, so what an import names and what it copies are the
+/// same set.
+pub fn config_unit<'a>(files: &'a [ConfigFile], file: &'a ConfigFile) -> Vec<&'a ConfigFile> {
+    if file.kind != ConfigFileKind::Skill {
+        return vec![file];
+    }
+    let Some(slash) = file.rel_path.rfind('/') else {
+        return vec![file];
+    };
+    let prefix = format!("{}/", file.rel_path[..slash].to_lowercase());
+    let mut unit = vec![file];
+    unit.extend(files.iter().filter(|candidate| {
+        candidate.path != file.path && candidate.rel_path.to_lowercase().starts_with(&prefix)
+    }));
+    unit
 }

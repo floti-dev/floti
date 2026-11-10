@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use floti_host::agent::AgentBackend;
 use floti_host::fake_agent;
+use floti_host::platform::socket::Endpoint;
 use floti_host::server::HostConfig;
 use floti_host::testkit::{PATIENCE, RunningHost, TestClient, TestDirs};
 use floti_protocol::channel::{from_payload, to_payload};
@@ -27,8 +28,12 @@ use serde_json::Value;
 
 const TERMINAL: &[&str] = &["terminal"];
 
-/// The minor before this one, which the host still serves.
-const PREVIOUS: ProtocolVersion = ProtocolVersion::new(2, 2);
+/// The minor before this one, which the host still serves, or none on a
+/// major's first minor, which serves only itself.
+const PREVIOUS: Option<ProtocolVersion> = match PROTOCOL_VERSION.minor {
+    0 => None,
+    minor => Some(ProtocolVersion::new(PROTOCOL_VERSION.major, minor - 1)),
+};
 
 fn start_request(folder: &Path) -> StartSessionRequest {
     StartSessionRequest {
@@ -92,23 +97,22 @@ fn set_title(data: &Path, id: u64, title: &str) {
     assert_eq!(changed, 1, "the row is there");
 }
 
-/// What the committed record of the previous minor declares for
-/// `SessionRecord`.
-fn record_of_previous() -> Value {
+/// What the committed record of `previous` declares for `SessionRecord`.
+fn record_of(previous: ProtocolVersion) -> Value {
     let text = records(&records_dir())
         .expect("read the records")
         .into_iter()
-        .find_map(|(version, text)| (version == PREVIOUS).then_some(text))
+        .find_map(|(version, text)| (version == previous).then_some(text))
         .expect("there is a record of the previous minor");
     let record: Value = serde_json::from_str(&text).expect("the record is JSON");
     record["types"]["SessionRecord"].clone()
 }
 
 /// Whether `wire`, one session as a frame carries it, has every property
-/// the previous minor declared for a session, with a type it allowed: what a
-/// client that knows only that minor needs to read it.
-fn problems_for_a_previous_reader(wire: &Value) -> Vec<String> {
-    let declared = record_of_previous();
+/// `previous` declared for a session, with a type it allowed: what a client
+/// that knows only that minor needs to read it.
+fn problems_for_a_reader_of(previous: ProtocolVersion, wire: &Value) -> Vec<String> {
+    let declared = record_of(previous);
     let mut problems = Vec::new();
     for (name, schema) in declared["properties"].as_object().unwrap() {
         let Some(found) = wire.get(name) else {
@@ -136,10 +140,34 @@ fn problems_for_a_previous_reader(wire: &Value) -> Vec<String> {
             Value::Object(_) => "object",
         };
         if !allowed.contains(&kind) {
-            problems.push(format!("{name} is {kind}, {PREVIOUS} allows {allowed:?}"));
+            problems.push(format!("{name} is {kind}, {previous} allows {allowed:?}"));
         }
     }
     problems
+}
+
+/// The session list as a client on `previous` reads it, each session with
+/// every field that minor knows: it connects, is told the version it speaks,
+/// and lists.
+async fn listed_by_a_reader_of(endpoint: &Endpoint, previous: ProtocolVersion) -> Vec<Value> {
+    let mut old = TestClient::connect_at(endpoint, previous, TERMINAL).await;
+    assert_eq!(old.welcome.protocol, previous);
+    let payload: Payload = old
+        .request_on(
+            SessionList::NAME,
+            to_payload(&()).expect("encode the request"),
+        )
+        .await
+        .expect("a client a minor behind lists sessions");
+    let wire: Vec<Value> = from_payload(&payload).expect("the list is readable as plain values");
+    for session in &wire {
+        assert_eq!(
+            problems_for_a_reader_of(previous, session),
+            Vec::<String>::new(),
+            "{session}"
+        );
+    }
+    wire
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -188,8 +216,6 @@ async fn s31_a_client_on_this_minor_lists_a_child_with_its_parent_and_agent_and_
     assert_eq!(child.parent_id, Some(lead.id));
     assert_eq!(child.parent_name.as_deref(), Some(lead.name.as_str()));
     assert_eq!(child.agent.as_deref(), Some("reviewer"));
-    // The retired role says the same, for a client before protocol 2.3.
-    assert_eq!(child.role.as_deref(), Some("reviewer"));
     for session in [record(lead.id), record(alone.id)] {
         assert_eq!(
             (&session.parent_id, &session.parent_name, &session.agent),
@@ -207,39 +233,10 @@ async fn s31_a_client_on_this_minor_lists_a_child_with_its_parent_and_agent_and_
 
     // A client one minor behind connects, is told the version it speaks, and
     // reads every field it knows of every session in the same list.
-    let mut old = TestClient::connect_at(&endpoint, PREVIOUS, TERMINAL).await;
-    assert_eq!(old.welcome.protocol, PREVIOUS);
-    let payload: Payload = old
-        .request_on(
-            SessionList::NAME,
-            to_payload(&()).expect("encode the request"),
-        )
-        .await
-        .expect("a client a minor behind lists sessions");
-    let wire: Vec<Value> = from_payload(&payload).expect("the list is readable as plain values");
-    assert_eq!(wire.len(), 3);
-    for session in &wire {
-        assert_eq!(
-            problems_for_a_previous_reader(session),
-            Vec::<String>::new(),
-            "{session}"
-        );
+    if let Some(previous) = PREVIOUS {
+        let wire = listed_by_a_reader_of(&endpoint, previous).await;
+        assert_eq!(wire.len(), 3);
     }
-    // It reads the child's agent from the field it always read it from.
-    let said = |id: u64| {
-        wire.iter()
-            .find(|session| session["id"] == id)
-            .unwrap_or_else(|| panic!("session {id} is on the wire"))
-    };
-    assert_eq!(said(reviewer.id)["role"], "reviewer");
-    assert_eq!(said(lead.id)["role"], Value::Null);
-    // And a reader of this minor that takes only that role from it still
-    // has the child's agent.
-    let mut known = said(reviewer.id).clone();
-    known.as_object_mut().unwrap().remove("agent");
-    let read: SessionRecord =
-        from_payload(&to_payload(&known).expect("encode the record")).expect("read it");
-    assert_eq!(read.agent.as_deref(), Some("reviewer"));
 
     host.stop(HostStopReason::Stop).await;
 }
@@ -291,22 +288,9 @@ async fn a_client_on_this_minor_lists_a_command_child_with_its_command_and_once_
 
     // A client one minor behind reads every field it knows of the same list,
     // the command child's record included.
-    let mut old = TestClient::connect_at(&endpoint, PREVIOUS, TERMINAL).await;
-    let payload: Payload = old
-        .request_on(
-            SessionList::NAME,
-            to_payload(&()).expect("encode the request"),
-        )
-        .await
-        .expect("a client a minor behind lists sessions");
-    let wire: Vec<Value> = from_payload(&payload).expect("the list is readable as plain values");
-    assert_eq!(wire.len(), 3);
-    for session in &wire {
-        assert_eq!(
-            problems_for_a_previous_reader(session),
-            Vec::<String>::new(),
-            "{session}"
-        );
+    if let Some(previous) = PREVIOUS {
+        let wire = listed_by_a_reader_of(&endpoint, previous).await;
+        assert_eq!(wire.len(), 3);
     }
 
     // Once the command exits, the record the host sends with the exit carries
@@ -319,7 +303,12 @@ async fn a_client_on_this_minor_lists_a_command_child_with_its_command_and_once_
             ended["id"] == tests
         })
         .await;
-    assert_eq!(problems_for_a_previous_reader(&exit), Vec::<String>::new());
+    if let Some(previous) = PREVIOUS {
+        assert_eq!(
+            problems_for_a_reader_of(previous, &exit),
+            Vec::<String>::new()
+        );
+    }
     let exited: SessionRecord = serde_json::from_value(exit).expect("the exit is a record");
     assert_eq!(exited.status, SessionStatus::Exited);
     assert_eq!(exited.exit_code, Some(3));

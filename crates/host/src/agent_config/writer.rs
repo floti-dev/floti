@@ -1,10 +1,10 @@
-//! The one writer every change to a config file goes through.
+//! The one writer a note's save and a template's authoring go through.
 //!
 //! Three rules, in this order:
 //!
-//! 1. Nothing is written outside configuration ([`WriteGuard`]). The console
-//!    addresses files by absolute path, so the guard is the floor under any
-//!    request.
+//! 1. Nothing is written outside what the surface allows (its
+//!    [`PathGuard`]). Files are addressed by absolute path, so the guard is
+//!    the floor under any request.
 //! 2. Nothing is written when the bytes on disk are not the bytes the editor
 //!    was based on. That is an outside edit, and the write answers it as a
 //!    conflict rather than replacing it.
@@ -22,7 +22,7 @@ use rusqlite::Connection;
 use super::files::{PathGuard, hash_content, normalize, read_file, snapshot_key};
 use super::snapshots::{self, NewSnapshot};
 
-/// Writes config files, each after a snapshot of what it replaces.
+/// Writes files, each after a snapshot of what it replaces.
 pub struct SnapshotWriter<'a> {
     conn: &'a Connection,
     guard: &'a dyn PathGuard,

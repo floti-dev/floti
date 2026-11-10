@@ -37,7 +37,7 @@ use self::artifact::{ArtifactPiece, ArtifactResponse, Artifacts, artifact_wikili
 use self::guard::{ContentGuard, rebuilt_below};
 use self::search::{ContentCorpus, MAX_HITS, build_corpus, corpus_is_current, search_corpus};
 use self::tree::{ContentTree, content_scope, describe_unlisted, read_content_tree};
-use crate::config_console::{SnapshotWriter, normalize, read_file, snapshot_key, snapshots};
+use crate::agent_config::{SnapshotWriter, normalize, read_file, snapshot_key, snapshots};
 use crate::store::Store;
 use crate::workspace::render::render_markdown;
 use crate::workspace::render::wikilinks::{IndexedFile, WikiIndex, parse_wikilink};
@@ -238,7 +238,7 @@ impl ContentService {
         Ok(search_corpus(&corpus, query, cold, MAX_HITS))
     }
 
-    /// Saves a note through the config console's writer: snapshot first, a
+    /// Saves a note through the snapshot-first writer: snapshot first, a
     /// conflict when the file moved, and the content guard's refusals.
     pub fn write(&self, request: &WriteConfigRequest) -> Result<WriteConfigResult, String> {
         let scope = self.scope(&request.scope_path)?;

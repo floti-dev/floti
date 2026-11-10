@@ -1515,57 +1515,6 @@
         }
       ]
     },
-    "CarriedConfigVersion": {
-      "description": "One config file as it was before a write, with its bytes.",
-      "properties": {
-        "content": {
-          "type": "string"
-        },
-        "contentHash": {
-          "description": "sha256 of `content`.",
-          "type": "string"
-        },
-        "createdAt": {
-          "description": "ISO 8601.",
-          "type": "string"
-        },
-        "filePath": {
-          "description": "Relative to `scope_path`, forward-slashed.",
-          "type": "string"
-        },
-        "reason": {
-          "description": "Why the write was made, as stored; one this build does not know is\nkept as it is.",
-          "type": "string"
-        },
-        "scopePath": {
-          "description": "The scope's base folder.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "scopePath",
-        "filePath",
-        "content",
-        "contentHash",
-        "reason",
-        "createdAt"
-      ],
-      "type": "object"
-    },
-    "CarriedConfigVersions": {
-      "properties": {
-        "versions": {
-          "items": {
-            "$ref": "#/$defs/CarriedConfigVersion"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "versions"
-      ],
-      "type": "object"
-    },
     "CarriedConversation": {
       "description": "An archived conversation's row as the client kept it.",
       "properties": {
@@ -2027,31 +1976,6 @@
       ],
       "type": "object"
     },
-    "ConfigExternalChange": {
-      "description": "A file an editor has open was changed by something other than the host.",
-      "properties": {
-        "exists": {
-          "type": "boolean"
-        },
-        "hash": {
-          "description": "sha256 of the bytes now on disk, or empty when it was removed.",
-          "type": "string"
-        },
-        "mtimeMs": {
-          "$ref": "#/$defs/Millis"
-        },
-        "path": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path",
-        "hash",
-        "exists",
-        "mtimeMs"
-      ],
-      "type": "object"
-    },
     "ConfigFile": {
       "properties": {
         "binary": {
@@ -2155,44 +2079,6 @@
         "other"
       ],
       "type": "string"
-    },
-    "ConfigPath": {
-      "description": "A file, by absolute path.",
-      "properties": {
-        "path": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "type": "object"
-    },
-    "ConfigRendered": {
-      "description": "A config file rendered as what it is. At most one half is set; both are\nnull for a file that is neither prose nor code.",
-      "properties": {
-        "code": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RenderedCode"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "markdown": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RenderedMarkdown"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "type": "object"
     },
     "ConfigScope": {
       "description": "One config tree.",
@@ -2316,7 +2202,7 @@
       "type": "object"
     },
     "ConfigWriteReason": {
-      "description": "Why a snapshot was taken.",
+      "description": "Why a snapshot was taken. A note's versions are taken for an edit or a\nrestore; the other reasons are those of versions an agent's config files\nwere given by earlier releases, which the store still holds.",
       "enum": [
         "edit",
         "create",
@@ -2912,78 +2798,6 @@
       ],
       "type": "object"
     },
-    "CreatableKind": {
-      "description": "A config file the console can create.",
-      "enum": [
-        "skill",
-        "command",
-        "agent",
-        "rule",
-        "settings",
-        "settings-local",
-        "claude-md",
-        "mcp"
-      ],
-      "type": "string"
-    },
-    "CreateConfigRequest": {
-      "properties": {
-        "kind": {
-          "$ref": "#/$defs/CreatableKind"
-        },
-        "name": {
-          "description": "Ignored for the kinds with a fixed name.",
-          "type": "string"
-        },
-        "scopePath": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "scopePath",
-        "kind",
-        "name"
-      ],
-      "type": "object"
-    },
-    "CreateConfigResult": {
-      "properties": {
-        "error": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "ok": {
-          "type": "boolean"
-        },
-        "path": {
-          "description": "The file that now exists.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "relPath": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "snapshotId": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "ok"
-      ],
-      "type": "object"
-    },
     "CreateHarnessOutcome": {
       "properties": {
         "created": {
@@ -3094,67 +2908,6 @@
       },
       "required": [
         "name"
-      ],
-      "type": "object"
-    },
-    "DeleteConfigRequest": {
-      "properties": {
-        "path": {
-          "type": "string"
-        },
-        "scopePath": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "scopePath",
-        "path"
-      ],
-      "type": "object"
-    },
-    "DeleteConfigResult": {
-      "properties": {
-        "error": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "ok": {
-          "type": "boolean"
-        },
-        "removed": {
-          "description": "What came off the disk, each with the snapshot that can put it back.",
-          "items": {
-            "$ref": "#/$defs/DeletedConfigFile"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "ok",
-        "removed"
-      ],
-      "type": "object"
-    },
-    "DeletedConfigFile": {
-      "properties": {
-        "path": {
-          "type": "string"
-        },
-        "relPath": {
-          "type": "string"
-        },
-        "snapshotId": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "path",
-        "relPath",
-        "snapshotId"
       ],
       "type": "object"
     },
@@ -3291,63 +3044,6 @@
       },
       "required": [
         "id"
-      ],
-      "type": "object"
-    },
-    "DoctorReport": {
-      "properties": {
-        "durationMs": {
-          "$ref": "#/$defs/Millis"
-        },
-        "error": {
-          "description": "Set when the command could not be run at all.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "exitCode": {
-          "format": "int32",
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "output": {
-          "description": "The doctor command's output, verbatim.",
-          "type": "string"
-        },
-        "ranAt": {
-          "type": "string"
-        },
-        "rows": {
-          "description": "Parsed `Label: value` lines, in order.",
-          "items": {
-            "$ref": "#/$defs/DoctorRow"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "output",
-        "rows",
-        "ranAt",
-        "durationMs"
-      ],
-      "type": "object"
-    },
-    "DoctorRow": {
-      "properties": {
-        "label": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "label",
-        "value"
       ],
       "type": "object"
     },
@@ -4910,13 +4606,6 @@
           "minimum": 0,
           "type": "integer"
         },
-        "agentHeavyPerHost": {
-          "default": 1,
-          "description": "Retired: Floti has no agent classes and holds children by the limits\nabove only. A host sends the field's default and never reads it; it\nstays, unread, until the protocol's next major removes it.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
         "agentSessionsPerHost": {
           "default": 8,
           "description": "How many agent-started sessions may run on the host at once.",
@@ -5026,15 +4715,6 @@
           ]
         },
         "agentDepth": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "agentHeavyPerHost": {
-          "description": "Retired, as in [`HostSettings`]: a host ignores it, and applies the\nrest of a patch that carries it.",
           "format": "uint32",
           "minimum": 0,
           "type": [
@@ -5731,182 +5411,6 @@
       ],
       "type": "object"
     },
-    "McpAddRequest": {
-      "properties": {
-        "cwd": {
-          "description": "The folder `project` and `local` resolve against.",
-          "type": "string"
-        },
-        "json": {
-          "description": "The server object, as JSON.",
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "scope": {
-          "$ref": "#/$defs/McpScope"
-        }
-      },
-      "required": [
-        "scope",
-        "name",
-        "json",
-        "cwd"
-      ],
-      "type": "object"
-    },
-    "McpApproveRequest": {
-      "properties": {
-        "approved": {
-          "type": "boolean"
-        },
-        "cwd": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "cwd",
-        "name",
-        "approved"
-      ],
-      "type": "object"
-    },
-    "McpDiffLine": {
-      "properties": {
-        "sign": {
-          "$ref": "#/$defs/McpDiffSign"
-        },
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "sign",
-        "text"
-      ],
-      "type": "object"
-    },
-    "McpDiffSign": {
-      "description": "Whether a diff line is kept, added or removed.",
-      "enum": [
-        " ",
-        "+",
-        "-"
-      ],
-      "type": "string"
-    },
-    "McpListRequest": {
-      "properties": {
-        "cwd": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "cwd"
-      ],
-      "type": "object"
-    },
-    "McpPreview": {
-      "description": "What the file would look like afterwards, computed before anything runs.",
-      "properties": {
-        "after": {
-          "type": "string"
-        },
-        "before": {
-          "type": "string"
-        },
-        "diff": {
-          "items": {
-            "$ref": "#/$defs/McpDiffLine"
-          },
-          "type": "array"
-        },
-        "error": {
-          "description": "Set when the JSON is not usable.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "file": {
-          "type": "string"
-        },
-        "replaces": {
-          "description": "Set when the name is already configured in this scope.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "file",
-        "before",
-        "after",
-        "diff"
-      ],
-      "type": "object"
-    },
-    "McpRemoveRequest": {
-      "properties": {
-        "cwd": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "scope": {
-          "$ref": "#/$defs/McpScope"
-        }
-      },
-      "required": [
-        "name",
-        "scope",
-        "cwd"
-      ],
-      "type": "object"
-    },
-    "McpResult": {
-      "properties": {
-        "after": {
-          "description": "The file after the command ran.",
-          "type": "string"
-        },
-        "exitCode": {
-          "format": "int32",
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "ok": {
-          "type": "boolean"
-        },
-        "output": {
-          "description": "What the agent's command printed, trimmed.",
-          "type": "string"
-        },
-        "snapshotId": {
-          "description": "The snapshot taken before the command ran.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "ok",
-        "output",
-        "after"
-      ],
-      "type": "object"
-    },
     "McpScope": {
       "enum": [
         "local",
@@ -6158,21 +5662,6 @@
       "format": "double",
       "type": "number"
     },
-    "MovedFile": {
-      "properties": {
-        "from": {
-          "type": "string"
-        },
-        "to": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "from",
-        "to"
-      ],
-      "type": "object"
-    },
     "NoticeKind": {
       "description": "What a notice is about.",
       "oneOf": [
@@ -6214,11 +5703,6 @@
         {
           "const": "starts",
           "description": "Starts one parent may make in all.",
-          "type": "string"
-        },
-        {
-          "const": "heavy",
-          "description": "Retired: no host refuses a start with it. A host on an earlier\nrelease may still send it; it stays until the protocol's next major\nremoves it.",
           "type": "string"
         }
       ]
@@ -8517,78 +8001,6 @@
       ],
       "type": "object"
     },
-    "RenameConfigRequest": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "path": {
-          "description": "The addressed file: a skill's `SKILL.md`, not its folder.",
-          "type": "string"
-        },
-        "scopePath": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "scopePath",
-        "path",
-        "name"
-      ],
-      "type": "object"
-    },
-    "RenameConfigResult": {
-      "properties": {
-        "error": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "frontmatterRenamed": {
-          "description": "The moved file's frontmatter `name:` was updated to match.",
-          "type": "boolean"
-        },
-        "moved": {
-          "description": "Every file that moved.",
-          "items": {
-            "$ref": "#/$defs/MovedFile"
-          },
-          "type": "array"
-        },
-        "ok": {
-          "type": "boolean"
-        },
-        "path": {
-          "description": "The addressed file at its new place, or null when nothing moved.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "relPath": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "snapshotIds": {
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "ok",
-        "moved",
-        "snapshotIds",
-        "frontmatterRenamed"
-      ],
-      "type": "object"
-    },
     "RenameHistorySessionRequest": {
       "description": "Naming a conversation in history. Null, or only whitespace, restores the\ntitle derived from its prompts.",
       "properties": {
@@ -8639,27 +8051,6 @@
       "required": [
         "template",
         "name"
-      ],
-      "type": "object"
-    },
-    "RenderedCode": {
-      "description": "Highlighted source, for a config file a session runs.",
-      "properties": {
-        "highlighted": {
-          "description": "False when there is no grammar for it, which is not the same as\nhighlighted as plain text.",
-          "type": "boolean"
-        },
-        "html": {
-          "type": "string"
-        },
-        "language": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "html",
-        "language",
-        "highlighted"
       ],
       "type": "object"
     },
@@ -9643,7 +9034,7 @@
       "properties": {
         "agent": {
           "default": null,
-          "description": "The agent the session was started as (a lead, a worker, a reviewer),\nor null for a session started as none: one a person started, and a\ncommand child. Absent from a host before protocol 2.3, which says it\nas `role`; a record read from one has it here all the same.",
+          "description": "The agent the session was started as (a lead, a worker, a reviewer),\nor null for a session started as none: one a person started, and a\ncommand child.",
           "type": [
             "string",
             "null"
@@ -9805,14 +9196,6 @@
         },
         "projectPath": {
           "description": "The discovered project it was launched against, if it was one.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "role": {
-          "default": null,
-          "description": "Retired: the same as `agent`, under the name it had before protocol\n2.3. Still written with `agent`'s value so that a client before 2.3\nreads what it did, and read in place of `agent` from one that sends\nonly this. It leaves the protocol at the next major version.",
           "type": [
             "string",
             "null"
@@ -10193,31 +9576,6 @@
         "subscription",
         "seq",
         "state"
-      ],
-      "type": "object"
-    },
-    "SnapshotContent": {
-      "properties": {
-        "content": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "content"
-      ],
-      "type": "object"
-    },
-    "SnapshotRef": {
-      "description": "A snapshot, by id.",
-      "properties": {
-        "id": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "id"
       ],
       "type": "object"
     },
@@ -11258,18 +10616,6 @@
       ],
       "type": "object"
     },
-    "WatchConfigRequest": {
-      "description": "Which file the client's editor has open, or null to release the watch.",
-      "properties": {
-        "path": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "type": "object"
-    },
     "Welcome": {
       "description": "The host's answer to an accepted `hello`.",
       "properties": {
@@ -11817,164 +11163,12 @@
     {
       "capability": null,
       "kind": "request",
-      "name": "carry:versions",
-      "request": {
-        "$ref": "#/$defs/CarriedConfigVersions"
-      },
-      "response": {
-        "$ref": "#/$defs/CarryMerged"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:create",
-      "request": {
-        "$ref": "#/$defs/CreateConfigRequest"
-      },
-      "response": {
-        "$ref": "#/$defs/CreateConfigResult"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:delete",
-      "request": {
-        "$ref": "#/$defs/DeleteConfigRequest"
-      },
-      "response": {
-        "$ref": "#/$defs/DeleteConfigResult"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:doctor",
-      "request": {
-        "type": "null"
-      },
-      "response": {
-        "$ref": "#/$defs/DoctorReport"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
       "name": "config:effective",
       "request": {
         "$ref": "#/$defs/EffectiveViewRequest"
       },
       "response": {
         "$ref": "#/$defs/EffectiveView"
-      }
-    },
-    {
-      "capability": null,
-      "event": {
-        "$ref": "#/$defs/ConfigExternalChange"
-      },
-      "kind": "event",
-      "name": "config:externalChange",
-      "snapshot": null
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:mcpAdd",
-      "request": {
-        "$ref": "#/$defs/McpAddRequest"
-      },
-      "response": {
-        "$ref": "#/$defs/McpResult"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:mcpApprove",
-      "request": {
-        "$ref": "#/$defs/McpApproveRequest"
-      },
-      "response": {
-        "$ref": "#/$defs/WriteConfigResult"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:mcpList",
-      "request": {
-        "$ref": "#/$defs/McpListRequest"
-      },
-      "response": {
-        "$ref": "#/$defs/McpResult"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:mcpPreview",
-      "request": {
-        "$ref": "#/$defs/McpAddRequest"
-      },
-      "response": {
-        "$ref": "#/$defs/McpPreview"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:mcpRemove",
-      "request": {
-        "$ref": "#/$defs/McpRemoveRequest"
-      },
-      "response": {
-        "$ref": "#/$defs/McpResult"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:read",
-      "request": {
-        "$ref": "#/$defs/ConfigPath"
-      },
-      "response": {
-        "$ref": "#/$defs/ConfigFileContent"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:rename",
-      "request": {
-        "$ref": "#/$defs/RenameConfigRequest"
-      },
-      "response": {
-        "$ref": "#/$defs/RenameConfigResult"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:render",
-      "request": {
-        "$ref": "#/$defs/SourceToRender"
-      },
-      "response": {
-        "$ref": "#/$defs/ConfigRendered"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:restore",
-      "request": {
-        "$ref": "#/$defs/RestoreSnapshotRequest"
-      },
-      "response": {
-        "$ref": "#/$defs/WriteConfigResult"
       }
     },
     {
@@ -11994,66 +11188,12 @@
     {
       "capability": null,
       "kind": "request",
-      "name": "config:snapshot",
-      "request": {
-        "$ref": "#/$defs/SnapshotRef"
-      },
-      "response": {
-        "anyOf": [
-          {
-            "$ref": "#/$defs/SnapshotContent"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:snapshots",
-      "request": {
-        "$ref": "#/$defs/ScopedFile"
-      },
-      "response": {
-        "items": {
-          "$ref": "#/$defs/ConfigSnapshotMeta"
-        },
-        "type": "array"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
       "name": "config:tree",
       "request": {
         "$ref": "#/$defs/ConfigScopeRef"
       },
       "response": {
         "$ref": "#/$defs/ConfigTree"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:watch",
-      "request": {
-        "$ref": "#/$defs/WatchConfigRequest"
-      },
-      "response": {
-        "type": "null"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "config:write",
-      "request": {
-        "$ref": "#/$defs/WriteConfigRequest"
-      },
-      "response": {
-        "$ref": "#/$defs/WriteConfigResult"
       }
     },
     {
@@ -13583,5 +12723,5 @@
   ],
   "x-defaultInitialCredit": 262144,
   "x-maxFrameLen": 16777216,
-  "x-protocolVersion": "2.3"
+  "x-protocolVersion": "3.0"
 }

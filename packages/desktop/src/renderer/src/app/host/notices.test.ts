@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { FakeConnection, fakeReach, reconnectingReach } from '../../../../../test/fake-connection'
 import type * as P from '../../../../shared/host/protocol'
 import type { RequestChannel, RequestPayload, RequestResult } from '../../../../shared/ipc'
-import { limitSentence } from '../attentionView'
 import { createNoticesAdapter, noticeFromHost } from './notices'
 import type { HostAdapter } from './router'
 
@@ -38,12 +37,9 @@ const limit: P.StandingNotice = {
 }
 
 describe('the notices standing on a host, over the window’s own connection', () => {
-  it('shows a notice of a limit there no longer is, from a host on an earlier release, in that host’s own sentence', () => {
-    const heavy: P.StandingNotice = { ...limit, id: 'n-3', limit: 'heavy', allowMore: null, text: 'The heavy limit of 1 holds.' }
-    const shown = noticeFromHost(heavy)
-    expect(shown.limit).toBeNull()
-    expect(limitSentence(shown)).toBe('The heavy limit of 1 holds.')
+  it('carries the limit a notice names, and none for a notice of no limit', () => {
     expect(noticeFromHost(limit).limit).toBe('starts')
+    expect(noticeFromHost({ ...limit, limit: null }).limit).toBeNull()
   })
 
   it('hands the window the host’s list at connect and again at every change, with what a notice leaves out said as null', async () => {

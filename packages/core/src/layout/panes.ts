@@ -1211,11 +1211,12 @@ export function savedGroups(saved: SavedPaneLayout | null): SavedPaneGroup[] {
 
 /**
  * Tab kinds an older build wrote down that open nothing now. The content
- * viewer's tab went when it merged into Files, and the pull request list and
- * its per-PR tabs went when pull requests left Helm for a plugin: a layout
- * naming any of them still loads, without them.
+ * viewer's tab went when it merged into Files, the pull request list and its
+ * per-PR tabs went when pull requests left Helm for a plugin, and Config's tab
+ * went when its page did, the agent's own commands editing its config: a
+ * layout naming any of them still loads, without them.
  */
-export const RETIRED_TAB_KINDS: ReadonlySet<string> = new Set(['content', 'pulls', 'pr'])
+export const RETIRED_TAB_KINDS: ReadonlySet<string> = new Set(['content', 'pulls', 'pr', 'config'])
 
 /**
  * The saved layout as a live one, its groups numbered in reading order. A

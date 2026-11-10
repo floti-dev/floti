@@ -156,8 +156,8 @@ export function useTemplates(): TemplatesState {
     }
   }, [selected, generation])
 
-  // The import picker's sources: every `.claude` tree the config console can
-  // see, `~/.claude` included. Read when the manager opens rather than at
+  // The import picker's sources: every `.claude` tree the host lists as a
+  // config scope, `~/.claude` included. Read when the manager opens rather than at
   // mount, for the same reason the list is.
   useEffect(() => {
     if (!managerOpen) return

@@ -2,7 +2,7 @@
 
 use std::path::{Component, Path, PathBuf};
 
-use crate::config_console::normalize;
+use crate::agent_config::normalize;
 
 /// One component as compared when a path is spelled the way a client typed
 /// it: ignoring case, as the known-roots check does.

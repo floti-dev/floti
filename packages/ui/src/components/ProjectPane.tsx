@@ -6,7 +6,6 @@ import {
   DocIcon,
   CloseIcon,
   LayersIcon,
-  SlidersIcon,
   SparkIcon,
   TerminalIcon,
   WarnIcon
@@ -66,8 +65,6 @@ export interface ProjectPaneProps {
    * any of it.
    */
   onSaveAsTemplate?: ((project: Project) => void) | undefined
-  /** Opens the config console with this project as its scope. */
-  onOpenConfig?: ((project: Project) => void) | undefined
   /** Shows this project in the Files view. */
   onOpenFiles?: ((project: Project) => void) | undefined
   /**
@@ -103,14 +100,14 @@ export interface ProjectPaneProps {
  * sidebar chips carry, laid out so the number that matters - how much this
  * project would contribute to a session - is readable rather than glanceable.
  *
- * The pane is also the project's **hub**. The config console and the content
- * viewer are global entry points in the sidebar and stay that way - DESIGN.md
- * 5b says why, and nothing here changes it: a destination reachable only
- * through a project pane would be a destination a collapsed tree could hide.
- * What the links here add is the *scope*. From the sidebar both panes open on
- * whatever scope they last had and the user picks this project out of a
- * switcher; from here they open on it already. A second route to a pane that is
- * still reachable without it is not the failure that rule is about.
+ * The pane is also the project's **hub**. The Files view is a global entry
+ * point in the sidebar and stays one - DESIGN.md 5b says why, and nothing here
+ * changes it: a destination reachable only through a project pane would be a
+ * destination a collapsed tree could hide. What the link here adds is the
+ * *scope*. From the sidebar Files opens on whatever root it last had and the
+ * user picks this project out of a list; from here it opens on it already. A
+ * second route to a view that is still reachable without it is not the failure
+ * that rule is about.
  */
 export function ProjectPane({
   project,
@@ -122,7 +119,6 @@ export function ProjectPane({
   liveHere,
   onSaveAsProfile,
   onSaveAsTemplate,
-  onOpenConfig,
   onOpenFiles,
   onRemoveRoot,
   agentWorktrees,
@@ -232,34 +228,22 @@ export function ProjectPane({
           <span className="text-[11px] text-fg-subtle">
             Runs <code className="font-mono">claude</code> with this folder as the working directory.
           </span>
-          {/* Pushed to the far end, and ghosts rather than outlines: these go
-              somewhere, the two on the left do something. Two more bordered
-              controls in the row would read as a four-button toolbar and bury
-              the launch button in it - the same call the title bar's settings
-              button makes beside the theme toggle. They carry the sidebar's own
-              icons, so a link and its destination are the same object. */}
-          {(onOpenConfig ?? onOpenFiles) && (
+          {/* Pushed to the far end, and a ghost rather than an outline: it goes
+              somewhere, the two on the left do something. One more bordered
+              control in the row would read as a toolbar and bury the launch
+              button in it - the same call the title bar's settings button makes
+              beside the theme toggle. It carries the sidebar's own icon, so the
+              link and its destination are the same object. */}
+          {onOpenFiles && (
             <span className="ml-auto flex shrink-0 items-center gap-1">
-              {onOpenConfig && (
-                <PaneLink
-                  mark="config"
-                  onClick={() => onOpenConfig(project)}
-                  title={`Open the config console on ${project.name}`}
-                  icon={<SlidersIcon width={13} height={13} />}
-                >
-                  Config
-                </PaneLink>
-              )}
-              {onOpenFiles && (
-                <PaneLink
-                  mark="files"
-                  onClick={() => onOpenFiles(project)}
-                  title={`Show ${project.name} in the Files view`}
-                  icon={<DocIcon width={13} height={13} />}
-                >
-                  Files
-                </PaneLink>
-              )}
+              <PaneLink
+                mark="files"
+                onClick={() => onOpenFiles(project)}
+                title={`Show ${project.name} in the Files view`}
+                icon={<DocIcon width={13} height={13} />}
+              >
+                Files
+              </PaneLink>
             </span>
           )}
         </div>

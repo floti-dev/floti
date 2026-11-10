@@ -5,8 +5,8 @@
 //! (`commands/spec/plan.md` is `/spec:plan`); a workflow is named by the
 //! `meta.name` its script declares. Linked folders are not followed, the
 //! folders the CLI keeps as working storage are skipped, and a credential
-//! file is listed from its directory entry alone, never opened, so the
-//! console can say what it is. Reads only, and only the head of a file that
+//! file is listed from its directory entry alone, never opened, so a
+//! listing can say what it is. Reads only, and only the head of a file that
 //! can carry a description.
 
 use std::cmp::Ordering;
@@ -15,18 +15,17 @@ use std::path::{Component, Path, PathBuf};
 use floti_protocol::channels::workspace::{ConfigFile, ConfigFileKind, Millis};
 
 use super::ClaudeCodeBackend;
-use crate::config_console::{AgentCommand, AgentConfig};
+use crate::agent_config::AgentConfig;
 use crate::{Error, Result};
 
 impl ClaudeCodeBackend {
-    /// Claude Code's side of the config console: its config folder, its
-    /// global config, and `claude` with the environment every session gets,
-    /// for `claude mcp` and `claude doctor`.
+    /// Where Claude Code keeps its config: its config folder and its global
+    /// config.
     ///
     /// The global config is where the CLI keeps it: `.claude.json` in
     /// `CLAUDE_CONFIG_DIR` when that is set, and in the home folder beside
     /// `~/.claude` otherwise.
-    pub fn console_agent(&self) -> AgentConfig {
+    pub fn agent_config(&self) -> AgentConfig {
         let settings = self.settings();
         let global_dir = if settings.pass_config_dir {
             settings.config_dir.clone()
@@ -36,15 +35,9 @@ impl ClaudeCodeBackend {
                 .parent()
                 .map_or_else(|| settings.config_dir.clone(), Path::to_path_buf)
         };
-        let (program, args) = self.command();
         AgentConfig {
             config_dir: settings.config_dir.clone(),
             global_config: global_dir.join(".claude.json"),
-            command: AgentCommand {
-                program,
-                args,
-                env: self.session_env(),
-            },
         }
     }
 }
@@ -82,7 +75,7 @@ const TEXT_EXT: &[&str] = &[
     "sh", "ps1", "py", "bat", "cmd",
 ];
 
-/// The order the config console groups kinds in.
+/// The order a listing groups kinds in.
 const ORDER: &[ConfigFileKind] = &[
     ConfigFileKind::ClaudeMd,
     ConfigFileKind::Settings,
@@ -104,8 +97,8 @@ const HEAD_BYTES: usize = 4096;
 /// The user's config files, then `project`'s.
 ///
 /// One of `credentials` is listed as a row from its directory entry (its
-/// name, size and time) and never opened, not even for a description: the
-/// console names the file and says why it shows nothing of it, and the
+/// name, size and time) and never opened, not even for a description: a
+/// listing names the file and shows nothing of it, and the
 /// sign-in rule is that a credential's existence is all anything looks at.
 pub(super) fn config_files(
     config_dir: &Path,

@@ -1,5 +1,8 @@
-//! The undo history behind every config write, in floti.db's
-//! `config_snapshots` table (the table today's app keeps in helm.db).
+//! The undo history behind every write through the [`SnapshotWriter`], in
+//! floti.db's `config_snapshots` table. It also holds the versions of an
+//! agent's config files that earlier releases took, which stay.
+//!
+//! [`SnapshotWriter`]: super::SnapshotWriter
 //!
 //! A row holds the bytes as they were before a write, inline: a snapshot that
 //! needs the file still on disk is not one. The row goes in before the file

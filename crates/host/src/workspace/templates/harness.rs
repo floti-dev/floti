@@ -17,8 +17,8 @@ use floti_protocol::channels::workspace::{CreateHarnessRequest, HarnessMode};
 
 use super::reader::{TemplateValues, apply_template, template_id_problems, template_path_value};
 use super::{HARNESS_MANIFEST, MINIMAL_TEMPLATE, exists, is_real_dir};
-use crate::config_console::normalize;
-use crate::config_console::time::now_iso;
+use crate::agent_config::normalize;
+use crate::agent_config::time::now_iso;
 
 /// The manifest format this writer produces; not the host's version, nor
 /// the harness's.

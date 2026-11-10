@@ -15,7 +15,7 @@ export interface PaneHeaderProps {
   caption?: ReactNode | undefined
   /** Facts about the contents, right-aligned. Dropped before the caption is. */
   meta?: ReactNode | undefined
-  /** Controls belonging to the pane - the config console's view switcher. */
+  /** Controls belonging to the pane, such as a view switcher. */
   controls?: ReactNode | undefined
   /** The trailing action, normally refresh. Never dropped. */
   action?: ReactNode | undefined
@@ -28,9 +28,9 @@ export interface PaneHeaderProps {
  * what is being looked at, the page's own controls and a refresh.
  *
  * It is a row of the pane's island, not an island of its own (DESIGN.md 3), and
- * it carries no title: the tab directly above it already says "Config", and a
- * second "Config" one row down was the header reading as a card sitting on top
- * of somebody else's pane.
+ * it carries no title: the tab directly above it already names the page, and a
+ * second name one row down was the header reading as a card sitting on top of
+ * somebody else's pane.
  *
  * **It measures itself, not the window.** A pane is as wide as its half of the
  * split, which is a fraction of the row and not a fraction of the screen - so a

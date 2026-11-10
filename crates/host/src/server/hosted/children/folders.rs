@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use floti_protocol::channels::sessions::Profile;
 
 use super::rows;
-use crate::config_console::normalize;
+use crate::agent_config::normalize;
 use crate::store::Store;
 use crate::workspace::files::paths::{real_path, resolves_inside};
 use crate::workspace::roots::KnownRoots;

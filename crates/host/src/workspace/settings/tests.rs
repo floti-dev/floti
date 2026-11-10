@@ -266,7 +266,7 @@ fn the_agents_settings_default_to_on_with_4_children_8_on_the_host_depth_2_and_1
 }
 
 #[test]
-fn a_stored_agent_heavy_per_host_is_ignored_and_a_patch_carrying_it_applies_the_rest() {
+fn an_agent_heavy_per_host_an_earlier_release_stored_is_ignored_and_left_as_it_is() {
     let world = World::new();
     // What an earlier release kept, at any value, good or not.
     for value in ["3", "0", "{ not json"] {
@@ -274,24 +274,14 @@ fn a_stored_agent_heavy_per_host_is_ignored_and_a_patch_carrying_it_applies_the_
         assert_eq!(world.stored(), defaults(), "agentHeavyPerHost {value}");
     }
 
-    // A client on an earlier release still sends it beside the settings it
-    // changes: those apply, it is not stored, and a value its range would
-    // have refused refuses nothing.
-    for heavy in [2, 0, 99] {
-        let written = world
-            .service
-            .write(&HostSettingsPatch {
-                session_mcp: Some(false),
-                agent_children_per_parent: Some(6),
-                agent_heavy_per_host: Some(heavy),
-                ..Default::default()
-            })
-            .unwrap_or_else(|err| panic!("agentHeavyPerHost {heavy}: {err}"));
-        assert!(!written.session_mcp);
-        assert_eq!(written.agent_children_per_parent, 6);
-        assert_eq!(written.agent_heavy_per_host, DEFAULT_AGENT_HEAVY_PER_HOST);
-        assert_eq!(world.stored(), written);
-    }
+    let written = world
+        .service
+        .write(&HostSettingsPatch {
+            session_mcp: Some(false),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(!written.session_mcp);
     let stored: String = world
         .store
         .lock()
@@ -303,17 +293,7 @@ fn a_stored_agent_heavy_per_host_is_ignored_and_a_patch_carrying_it_applies_the_
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(stored, "{ not json", "the patch wrote nothing under it");
-
-    // A patch that carries nothing else changes nothing.
-    let unchanged = world
-        .service
-        .write(&HostSettingsPatch {
-            agent_heavy_per_host: Some(4),
-            ..Default::default()
-        })
-        .unwrap();
-    assert_eq!(unchanged, world.stored());
+    assert_eq!(stored, "{ not json", "a write leaves it alone");
 }
 
 #[test]

@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 
-use floti_host::config_console::{hash_content, normalize, snapshots};
+use floti_host::agent_config::{hash_content, normalize, snapshots};
 use floti_host::server::{HostConfig, HostRun, backends};
 use floti_host::store::Store;
 use floti_host::store::projects::{EMPTY_INVENTORY, cache_projects};
@@ -30,7 +30,7 @@ use floti_host::workspace::render::frontmatter::parse_note_frontmatter;
 use floti_host::workspace::render::wikilinks::{
     IndexedFile, WikiIndex, heading_slug, parse_wikilink,
 };
-use floti_host::workspace::render::{editor_highlight, render_config, render_markdown};
+use floti_host::workspace::render::{editor_highlight, render_markdown};
 use floti_host::workspace::roots::KnownRoots;
 use floti_protocol::channel::{EventChannel, RequestChannel, from_payload, to_payload};
 use floti_protocol::channels::host::HostStopReason;
@@ -39,9 +39,8 @@ use floti_protocol::channels::workspace::{
     ConfigScopeKind, ConfigWriteReason, ContentFileKind, ContentRenderRequest,
     ContentSearchRequest, DiscoveryResult, DiscoveryUpdated, HighlightSource, HostSettingsPatch,
     ListContentScopes, OpenArtifact, Project, ProjectKind, ReadArtifactBytes, ReadContentDocument,
-    RenderConfigFile, RenderContent, ResolveWikilink, ScanForProjects, ScanRequest, ScopedFile,
-    SearchContent, SourceToRender, WikilinkRequest, WriteConfigRequest, WriteConfigResult,
-    WriteSettings,
+    RenderContent, ResolveWikilink, ScanForProjects, ScanRequest, ScopedFile, SearchContent,
+    SourceToRender, WikilinkRequest, WriteConfigRequest, WriteConfigResult, WriteSettings,
 };
 use floti_protocol::{Bytes, Message};
 use serde_json::{Value, json};
@@ -1156,18 +1155,6 @@ fn the_editor_highlighter_stops_past_its_ceiling_and_says_so() {
     assert!(!small.lines.is_empty());
 }
 
-#[test]
-fn a_config_file_renders_as_markdown_or_as_highlighted_source() {
-    let note = render_config("CLAUDE.md", "# Rules\n\n- one\n");
-    assert!(note.code.is_none());
-    assert!(note.markdown.unwrap().html.contains("<h1"));
-    let settings = render_config("settings.json", "{ \"model\": \"opus\" }\n");
-    assert!(settings.markdown.is_none());
-    let code = settings.code.unwrap();
-    assert!(code.highlighted);
-    assert!(code.html.contains("--shiki-dark"));
-}
-
 // ---------------------------------------------------------------------------
 // Writing a note: snapshot first, conflicts, aborts, history and restore.
 
@@ -2011,36 +1998,8 @@ async fn a_client_searches_a_scope_and_resolves_a_wikilink_over_the_wire() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_client_renders_a_config_file_and_highlights_an_editors_source_over_the_wire() {
+async fn a_client_highlights_an_editors_source_over_the_wire() {
     let mut wire = Wire::start().await;
-
-    let note = wire
-        .client
-        .request::<RenderConfigFile>(&SourceToRender {
-            path: "CLAUDE.md".to_owned(),
-            source: "# Rules\n\n- one\n\n<script>alert(1)</script>\n".to_owned(),
-        })
-        .await
-        .expect("a config note renders");
-    assert!(note.code.is_none());
-    let markdown = note.markdown.expect("markdown renders as markdown");
-    assert!(markdown.html.contains("<h1"));
-    assert_no_script_survives(&markdown.html);
-
-    let settings = wire
-        .client
-        .request::<RenderConfigFile>(&SourceToRender {
-            path: "settings.json".to_owned(),
-            source: "{ \"model\": \"opus\" }\n".to_owned(),
-        })
-        .await
-        .expect("a settings file renders");
-    assert!(settings.markdown.is_none());
-    let code = settings.code.expect("json renders as source");
-    assert!(code.highlighted);
-    assert_eq!(code.language, "json");
-    assert!(code.html.contains("--shiki-light"));
-    assert!(code.html.contains("--shiki-dark"));
 
     let small = wire
         .client

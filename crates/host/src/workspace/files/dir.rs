@@ -24,7 +24,7 @@ use floti_protocol::channels::workspace::{
 
 use super::git::{CHECK_IGNORE_TIMEOUT, GitFailure, repo_root_of, run_git};
 use super::paths::{escapes, escapes_after_links, relative_slashed};
-use crate::config_console::{mtime_ms, normalize};
+use crate::agent_config::{mtime_ms, normalize};
 use crate::platform::links::is_link;
 use crate::workspace::content::kinds::{content_extension, content_file_kind};
 use crate::workspace::content::tree::CURATED_SKIPPED_DIRS;

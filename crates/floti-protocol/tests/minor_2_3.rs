@@ -6,12 +6,11 @@
 //! permission mode, a restore's `withoutAgent`, and what a session was
 //! launched with, `launchedAs`), and changes nothing else. A 2.2 frame is a 2.3 frame with
 //! every addition left out and a 2.3 frame is a 2.2 frame with fields the
-//! older reader ignores. `role` keeps its shape and is written with
-//! `agent`'s value, and a record that names only `role` is read with that as
-//! its agent.
+//! older reader ignores. 3.0 took `role` out of a session's record.
 
 use std::collections::BTreeSet;
 
+use floti_protocol::ProtocolVersion;
 use floti_protocol::channel::{from_payload, to_payload};
 use floti_protocol::channels::common::SessionRecord;
 use floti_protocol::channels::sessions::{
@@ -19,8 +18,6 @@ use floti_protocol::channels::sessions::{
 };
 use floti_protocol::record::{Change, Difference, Part, differences, records, records_dir};
 use floti_protocol::version::negotiate;
-use floti_protocol::{PROTOCOL_VERSION, ProtocolVersion};
-use serde::Deserialize;
 use serde_json::{Value, json};
 
 const V2_2: ProtocolVersion = ProtocolVersion::new(2, 2);
@@ -202,70 +199,6 @@ fn read(value: &Value) -> SessionRecord {
 }
 
 #[test]
-fn a_record_that_names_only_role_is_read_with_it_as_its_agent() {
-    let record = read(&record_2_2(Some("reviewer")));
-    assert_eq!(record.agent.as_deref(), Some("reviewer"));
-    // Nor did it say what the session was launched with.
-    assert_eq!(record.launched_as, None);
-    assert_eq!(record.role.as_deref(), Some("reviewer"));
-
-    let none = read(&record_2_2(None));
-    assert_eq!((none.agent, none.role), (None, None));
-}
-
-#[test]
-fn a_2_3_record_says_agent_and_role_with_one_value_whichever_was_set() {
-    let base = read(&record_2_2(None));
-    for (agent, role) in [
-        (Some("worker"), None),
-        (Some("worker"), Some("worker")),
-        (Some("worker"), Some("stale")),
-    ] {
-        let record = SessionRecord {
-            agent: agent.map(str::to_owned),
-            role: role.map(str::to_owned),
-            ..base.clone()
-        };
-        let said = serde_json::to_value(&record).unwrap();
-        assert_eq!(said["agent"], "worker", "{agent:?} {role:?}");
-        assert_eq!(said["role"], "worker", "{agent:?} {role:?}");
-    }
-    // A session started as no agent says null for both, as 2.2 said null
-    // for role.
-    let said = serde_json::to_value(&base).unwrap();
-    assert_eq!(
-        (&said["agent"], &said["role"]),
-        (&Value::Null, &Value::Null)
-    );
-}
-
-/// What a 2.2 client has of a session record: its fields up to 2.2, and no
-/// `agent`.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SessionRecordV22 {
-    id: u64,
-    name: String,
-    parent_name: Option<String>,
-    role: Option<String>,
-}
-
-#[test]
-fn a_2_2_client_reads_a_2_3_childs_role_as_before() {
-    let child = SessionRecord {
-        agent: Some("reviewer".to_owned()),
-        role: None,
-        ..read(&record_2_2(None))
-    };
-    let read: SessionRecordV22 =
-        from_payload(&to_payload(&child).unwrap()).expect("a 2.2 client reads a 2.3 record");
-    assert_eq!(read.id, 12);
-    assert_eq!(read.name, "reviewer");
-    assert_eq!(read.parent_name.as_deref(), Some("lead"));
-    assert_eq!(read.role.as_deref(), Some("reviewer"));
-}
-
-#[test]
 fn a_record_written_and_read_again_keeps_its_agent() {
     let child = SessionRecord {
         agent: Some("lead".to_owned()),
@@ -273,7 +206,6 @@ fn a_record_written_and_read_again_keeps_its_agent() {
     };
     let again: SessionRecord = from_payload(&to_payload(&child).unwrap()).unwrap();
     assert_eq!(again.agent.as_deref(), Some("lead"));
-    assert_eq!(again.role.as_deref(), Some("lead"));
 }
 
 #[test]
@@ -354,7 +286,6 @@ fn a_2_3_launch_without_its_additions_is_the_frame_a_2_2_client_sends() {
 
 #[test]
 fn a_2_3_host_negotiates_the_version_a_2_2_client_speaks() {
-    assert_eq!(PROTOCOL_VERSION, V2_3);
     assert_eq!(negotiate(V2_3, V2_2), Ok(V2_2));
     assert_eq!(negotiate(V2_3, V2_3), Ok(V2_3));
 }

@@ -8,9 +8,9 @@
 //! `.git` and `node_modules` are never copied, at any depth: they are
 //! listed in a folder's preview, marked and unticked, rather than silently
 //! pruned. Bytes are copied, never round-tripped through text. The one file
-//! written as text is `template.yaml`, through the config console's
-//! [`SnapshotWriter`], so it is snapshotted first like every other write the
-//! host makes to a file the user keeps.
+//! written as text is `template.yaml`, through the host's [`SnapshotWriter`],
+//! so it is snapshotted first like every other write the host makes to a
+//! file the user keeps.
 
 use std::fs::OpenOptions;
 use std::io;
@@ -30,7 +30,7 @@ use super::{
     Entry, HARNESS_MANIFEST, KEEP_FILE, MINIMAL_TEMPLATE, TEMPLATE_MANIFEST, TPL_SUFFIX, below,
     collate, entries_of, exists, is_real_dir, label, link_on_the_way, mtime, remove_tree,
 };
-use crate::config_console::{PathGuard, SnapshotWriter, normalize, read_file};
+use crate::agent_config::{PathGuard, SnapshotWriter, normalize, read_file};
 use crate::platform::links;
 
 /// Never copied, at any depth, whatever the user ticks, each with why.

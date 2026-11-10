@@ -14,7 +14,6 @@
 // re-export alone does not bring a name into this file's scope.
 import type { UsageDisplayMode } from './usage/shape'
 // The same, for `CreateConfigRequest` below.
-import type { CreatableKind } from './config/names'
 // The same again: `AppSettings.browserReach` names it.
 import type { BrowserReach, BrowserSearch } from './browser/reach'
 import type { SavedPaneLayout } from './layout/panes'
@@ -105,57 +104,6 @@ export * from './hostFailure'
 export * from './hostAgents'
 export * from './sshConfig'
 
-export {
-  frontmatterField,
-  parseFrontmatter,
-  validateJson,
-  type Frontmatter,
-  type JsonProblem
-} from './config/validate'
-/**
- * The naming rules, for the same reason and by the same argument: the New and
- * Rename dialogs have to refuse a name the CLI could not address *as it is
- * typed*, which means the check runs in the renderer. `create-rename-delete.ts`
- * runs it again on the main side, where it is the guarantee rather than the
- * courtesy.
- */
-export {
-  checkConfigName,
-  configUnit,
-  isRenamable,
-  planConfigFile,
-  renameRefusal,
-  CREATABLE_KINDS,
-  RENAMABLE_KINDS,
-  type ConfigFilePlan,
-  type CreatableKind,
-  type CreatableKindSpec,
-  type NameCheck,
-  type PlanInput,
-  type PlanResult
-} from './config/names'
-export {
-  settingHint,
-  topLevelKey,
-  SETTING_HINTS,
-  type SettingHint
-} from './config/settings-schema'
-/**
- * And the join between a `.claude` tree and what a session would do with it.
- * Pure by the same rule: it reads no file, only an `EffectiveView` that has
- * already been computed, so the window can ask it about a row without a
- * round trip and without a second answer to the question the Effective tab
- * already answers.
- */
-export {
-  computeConfigLive,
-  configFileNote,
-  hookBindings,
-  isRedactedConfigFile,
-  samePath,
-  settingReferences,
-  settingsDeclaredBy
-} from './config/live'
 /**
  * The usage reader's pure half, re-exported for the same reason: the status bar
  * re-derives what it may paint on a timer, from the same functions the main
@@ -1209,8 +1157,8 @@ export interface Profile {
   agent: string | null
   /**
    * MCP server names. Persisted and exported, but not yet placed on the argv:
-   * no CLI flag selects already-configured servers by name, and resolving them
-   * into a `--mcp-config` document is the config console's job (SPEC 4.2).
+   * no CLI flag selects already-configured servers by name, and the agent's own
+   * commands (`/mcp` for Claude Code) manage what is configured.
    */
   mcp: string[]
   /** Submitted as the session's first message. */
@@ -1330,7 +1278,7 @@ export const AGENT_COMMANDS_PER_PARENT = { min: 1, max: 32, default: 4 } as cons
  * `railHidden` is validated against it, so no write can hide the one way back
  * to un-hiding everything else. The ids are the rail's own (`data-rail`).
  */
-export const RAIL_DESTINATIONS = ['sessions', 'profiles', 'history', 'files', 'browser', 'config'] as const
+export const RAIL_DESTINATIONS = ['sessions', 'profiles', 'history', 'files', 'browser'] as const
 
 export type RailDestination = (typeof RAIL_DESTINATIONS)[number]
 
@@ -1401,7 +1349,6 @@ export type WorkspaceTab =
   | { kind: 'project'; path: string; host?: string }
   | { kind: 'history' }
   | { kind: 'sessions' }
-  | { kind: 'config' }
   | { kind: 'settings' }
   /**
    * A file, read beside the session changing it. `root` is the project it was
@@ -2040,7 +1987,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export const UPDATE_CHECK_EVERY_MS = 24 * 60 * 60 * 1000
 
 // ---------------------------------------------------------------------------
-// Config console
+// An agent's config, as composition reads it, and the files a note's save writes
 // ---------------------------------------------------------------------------
 
 /**
@@ -2149,10 +2096,6 @@ export interface ConfigSnapshotMeta {
   createdAt: string
 }
 
-export interface ConfigSnapshot extends ConfigSnapshotMeta {
-  content: string
-}
-
 export interface WriteConfigRequest {
   /** The scope's base directory. Recorded on the snapshot. */
   scopePath: string
@@ -2185,80 +2128,6 @@ export interface WriteConfigResult {
   }
   /** Set when the write was refused for a reason other than a conflict. */
   error?: string
-}
-
-// --- Create, rename, delete -------------------------------------------------
-
-/**
- * The three things a directory supports that replacing one file's bytes does
- * not. All three take the scope by path and the entry by absolute path, the
- * same way `config:write` does, and all three are answered with a structured
- * result rather than a throw: every one of them has failure modes the *user*
- * caused - a name the CLI could not address, a collision, a bundled file Helm
- * cannot record - and those have to be shown in the dialog that asked.
- */
-export interface CreateConfigRequest {
-  scopePath: string
-  kind: CreatableKind
-  /** Ignored for the fixed-name kinds; see `CREATABLE_KINDS`. */
-  name: string
-}
-
-export interface CreateConfigResult {
-  ok: boolean
-  /** Absolute path of the file that now exists, so the console can open it. */
-  path: string | null
-  /** Relative to the scope base, forward-slashed - the tree's own key. */
-  relPath: string | null
-  /** The `create` row taken before the file was touched. */
-  snapshotId: number | null
-  error: string | null
-}
-
-export interface RenameConfigRequest {
-  scopePath: string
-  /** The addressed file - a skill's `SKILL.md`, not its directory. */
-  path: string
-  name: string
-}
-
-export interface RenameConfigResult {
-  ok: boolean
-  /** The addressed file at its new location. Null when nothing moved. */
-  path: string | null
-  relPath: string | null
-  /** Every file that moved. A skill's whole directory, one file for the rest. */
-  moved: Array<{ from: string; to: string }>
-  /** Every row taken - the destinations' `create`s and the sources' `rename`s. */
-  snapshotIds: number[]
-  /**
-   * The moved file's frontmatter `name:` was updated to match.
-   *
-   * Only ever true when it named the *old* address exactly - a file declaring
-   * anything else is not claiming to be the thing being renamed, and Helm does
-   * not edit a field somebody set on purpose.
-   */
-  frontmatterRenamed: boolean
-  error: string | null
-}
-
-export interface DeleteConfigRequest {
-  scopePath: string
-  path: string
-}
-
-export interface DeletedConfigFile {
-  path: string
-  /** Relative to the scope base - the key this file's history is listed under. */
-  relPath: string
-  snapshotId: number
-}
-
-export interface DeleteConfigResult {
-  ok: boolean
-  /** What came off the disk, each with the row that can put it back. */
-  removed: DeletedConfigFile[]
-  error: string | null
 }
 
 // --- Effective view --------------------------------------------------------
@@ -2377,128 +2246,9 @@ export interface EffectiveView {
   computedAt: string
 }
 
-// --- Live state, per file --------------------------------------------------
-
-/**
- * What a resolution has to say about one file in a `.claude` tree.
- *
- * Six states rather than live/dead, because "not live" is three different
- * situations wearing one word: outranked by another layer, empty, or simply
- * not part of the resolution being looked at. They call for three different
- * reactions, so they are three different states.
- *
- *   - `live` - everything in it reaches a session
- *   - `partial` - it contributes, and something in it is outranked
- *   - `shadowed` - it contributes nothing that survives
- *   - `inert` - it is read, and has nothing to say
- *   - `absent` - this resolution never looks at it
- *   - `none` - Helm has no claim to make about it, and makes none
- */
-export type ConfigLiveState = 'live' | 'partial' | 'shadowed' | 'inert' | 'absent' | 'none'
-
-/** One settings leaf as one file declares it, and what outranked it. */
-export interface ConfigSettingLive {
-  key: string
-  /** JSON encoding of *this file's* value, which may not be the winning one. */
-  value: string
-  layer: SettingsLayerKind
-  wins: boolean
-  outrankedBy: { layer: SettingsLayerKind; file: string; value: string } | null
-}
-
-/** One reason a hook file runs: the event, the matcher, and the layer saying so. */
-export interface HookBinding {
-  /** `PreToolUse`, `Stop`, ... - the key under `hooks`. */
-  event: string
-  /** The tool pattern the block matches, or null for a block with none. */
-  matcher: string | null
-  command: string
-  layer: SettingsLayerKind
-  /** The settings file the block is written in. */
-  file: string
-}
-
-export interface ConfigLive {
-  state: ConfigLiveState
-  /** One line for a row. Null when there is nothing to say. */
-  note: string | null
-  /** The whole sentence, for the pill's title. Empty when the state is `none`. */
-  reason: string
-  /** What a session types to reach it: `dev:think`, `/spec:plan`. */
-  invocation: string | null
-  /** Other files resolving under the same name, each with its own invocation. */
-  alsoDefinedBy: Array<{
-    invocation: string
-    source: EffectiveSource
-    origin: string
-    path: string
-  }>
-  /** Two unprefixed sources landed on one name, so which one wins is unpredicted. */
-  contested: boolean
-  settings: ConfigSettingLive[]
-  hooks: HookBinding[]
-  /** Settings leaves naming this file - a status line's command, and so on. */
-  references: Array<{ key: string; layer: SettingsLayerKind; file: string; value: string }>
-}
-
-/**
- * A config file rendered as what it is, rather than as its bytes.
- *
- * Exactly one half is ever set: markdown for the kinds a session reads as
- * prose, highlighted source for the ones it runs. Both are null when the file
- * is neither, which is the case the pane draws as plain mono - and `code` is
- * null too when shiki has no grammar for the extension, so "not highlighted"
- * and "highlighted as plain text" stay different answers.
- */
-export interface ConfigRendered {
-  markdown: RenderedMarkdown | null
-  code: { html: string; language: string; highlighted: boolean } | null
-}
-
-// --- MCP management --------------------------------------------------------
+// --- MCP scopes ------------------------------------------------------------
 
 export type McpScope = 'local' | 'user' | 'project'
-
-export interface McpAddRequest {
-  scope: McpScope
-  name: string
-  /** The server object, as `claude mcp add-json` takes it. */
-  json: string
-  /** Working directory the CLI resolves `project` and `local` against. */
-  cwd: string
-}
-
-/**
- * What the file would look like afterwards, computed before anything is run.
- *
- * The write itself is `claude mcp add-json` rather than a JSON edit (SPEC 4.2),
- * so the result cannot be known for certain in advance - this is Helm merging
- * the same object into the same document and showing the diff. The applied
- * result is re-read afterwards and shown too, so a prediction that was wrong is
- * visible rather than assumed.
- */
-export interface McpPreview {
-  file: string
-  before: string
-  after: string
-  /** Unified-ish diff lines, each tagged. */
-  diff: Array<{ sign: ' ' | '+' | '-'; text: string }>
-  /** Set when the name is already configured in this scope. */
-  replaces: string | null
-  /** Set when the JSON the user typed is not usable. */
-  error: string | null
-}
-
-export interface McpResult {
-  ok: boolean
-  /** What the CLI printed, trimmed. */
-  output: string
-  exitCode: number | null
-  /** The file after the CLI ran, so the pane can show what actually changed. */
-  after: string
-  /** The snapshot taken before the subprocess ran. */
-  snapshotId: number | null
-}
 
 // ---------------------------------------------------------------------------
 // Content viewer
@@ -2936,20 +2686,6 @@ export interface ContentSearchResult {
   /** True when the corpus had to be read from disk rather than served warm. */
   cold: boolean
   truncated: boolean
-}
-
-// --- Health ----------------------------------------------------------------
-
-export interface DoctorReport {
-  /** `claude doctor` stdout, verbatim. */
-  output: string
-  /** Parsed `Label: value` lines, in order. */
-  rows: Array<{ label: string; value: string }>
-  exitCode: number | null
-  ranAt: string
-  durationMs: number
-  /** Set when the CLI could not be run at all. */
-  error: string | null
 }
 
 // ---------------------------------------------------------------------------

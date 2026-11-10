@@ -36,28 +36,11 @@ export {
   type ConsolePanelProps
 } from './components/ConsolePanel'
 export {
-  ConfigConsole,
-  ConfigNothingSelected,
-  type ConfigConsoleProps,
-  type ConfigViewKind
-} from './components/ConfigConsole'
-export {
   CodeEditor,
   type CodeEditorHandle,
   type CodeEditorProps,
   type EditorStatus
 } from './components/CodeEditor'
-export { ConfigEditor, type ConfigEditorProps } from './components/ConfigEditor'
-export {
-  ConfigDeleteDialog,
-  ConfigDeletedNotice,
-  ConfigNewDialog,
-  ConfigRenameDialog,
-  type ConfigDeleteDialogProps,
-  type ConfigDeletedNoticeProps,
-  type ConfigNewDialogProps,
-  type ConfigRenameDialogProps
-} from './components/ConfigFileDialogs'
 export { FilesRootPicker, FilesStatusNote, FilesTree, type FilesTreeProps } from './components/FilesTree'
 export { FileActions, FileCrumb, FileView, type FileViewProps } from './components/FileView'
 export {
@@ -72,12 +55,6 @@ export {
   type ContentDocumentPaneProps,
   type ContentMode
 } from './components/ContentDocumentPane'
-export {
-  EffectiveViewPane,
-  type EffectiveViewPaneProps
-} from './components/EffectiveViewPane'
-export { HealthPanel, type HealthPanelProps } from './components/HealthPanel'
-export { McpPanel, type McpPanelProps } from './components/McpPanel'
 export { NewHarnessDialog, type NewHarnessDialogProps } from './components/NewHarnessDialog'
 export {
   NewSessionDialog,

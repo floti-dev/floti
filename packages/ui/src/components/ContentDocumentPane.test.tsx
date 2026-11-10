@@ -127,7 +127,7 @@ describe('ContentDocumentPane: a note', () => {
     }
     note.unmount()
 
-    // Another note, and the config console's header, which draw the same component.
+    // Another note, which draws the same component.
     const elsewhere = render(<FrontmatterChips fields={[{ key: 'tags', value: 'notes, floti', values: ['notes', 'floti'] }]} />)
     expect(tagged(elsewhere.container).get('#notes')).toBe(inNote.get('#notes'))
     expect(PALETTE_HUES).toContain(tagged(elsewhere.container).get('#floti'))

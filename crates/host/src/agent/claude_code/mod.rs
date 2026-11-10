@@ -685,8 +685,8 @@ impl ConfigSource for ClaudeCodeBackend {
         config::config_files(&self.settings.config_dir, project, &self.credential_paths())
     }
 
-    fn console(&self) -> Option<crate::config_console::AgentConfig> {
-        Some(self.console_agent())
+    fn agent_config(&self) -> Option<crate::agent_config::AgentConfig> {
+        Some(ClaudeCodeBackend::agent_config(self))
     }
 }
 

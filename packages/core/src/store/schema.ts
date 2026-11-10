@@ -12,7 +12,7 @@ import {
 
 /**
  * `profiles` and `config_snapshots` are not read by any surface yet - they exist
- * so that profiles and the config console's snapshots start from a
+ * so that profiles and the versions an earlier Helm took start from a
  * migrated schema rather than a schema change on a database that already holds
  * a user's data.
  */

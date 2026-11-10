@@ -20,7 +20,7 @@ use rusqlite::Connection;
 use super::discovery::git::{GIT_TIMEOUT, run_git};
 use super::files::paths::resolves_inside;
 use super::roots::key;
-use crate::config_console::normalize;
+use crate::agent_config::normalize;
 
 /// Floti's folder in a repository.
 const FLOTI_FOLDER: &str = ".floti";

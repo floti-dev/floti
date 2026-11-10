@@ -143,8 +143,6 @@ fn a_childs_record_names_its_parent_by_row_and_name_and_carries_its_agent() {
     assert_eq!(child.parent_id, Some(parent.0 as u64));
     assert_eq!(child.parent_name.as_deref(), Some("lead"));
     assert_eq!(child.agent.as_deref(), Some("reviewer"));
-    // The retired role says the same, for a client before protocol 2.3.
-    assert_eq!(child.role.as_deref(), Some("reviewer"));
 }
 
 #[test]

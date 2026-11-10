@@ -1,4 +1,4 @@
-import type { NoticeLimit, StandingNotice } from '@helm/core/types'
+import type { StandingNotice } from '@helm/core/types'
 import type { HostConnection, HostSubscription } from '../../../../shared/host/client'
 import type * as P from '../../../../shared/host/protocol'
 import type { HostReach } from './history'
@@ -26,25 +26,8 @@ export function noticeFromHost(notice: P.StandingNotice): StandingNotice {
     childName: notice.childName ?? null,
     text: notice.text,
     since: notice.since,
-    limit: limitOf(notice.limit),
+    limit: notice.limit ?? null,
     allowMore: notice.allowMore ?? null
-  }
-}
-
-/**
- * The limit a notice names, or null for one there is no longer: a host on an
- * earlier release can still say `heavy`, and its notice is shown in the
- * host's own sentence.
- */
-function limitOf(limit: P.StandingNotice['limit']): NoticeLimit | null {
-  switch (limit) {
-    case 'children':
-    case 'sessions':
-    case 'depth':
-    case 'starts':
-      return limit
-    default:
-      return null
   }
 }
 

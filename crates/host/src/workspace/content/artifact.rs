@@ -26,7 +26,7 @@ use std::sync::{Mutex, PoisonError};
 use floti_protocol::channels::workspace::ArtifactLink;
 
 use super::guard::segments_below;
-use crate::config_console::normalize;
+use crate::agent_config::normalize;
 use crate::workspace::render::wikilinks::{WikiIndex, find_wikilinks, parse_wikilink};
 
 /// The scheme an artifact address uses.

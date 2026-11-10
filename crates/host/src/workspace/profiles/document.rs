@@ -20,7 +20,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_yaml_ng::Value;
 
-use crate::config_console::normalize;
+use crate::agent_config::normalize;
 
 /// The document written to disk, in the order a person reads it. An unset
 /// key is written as `null` rather than left out: the export doubles as the

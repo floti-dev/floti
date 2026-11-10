@@ -7,8 +7,8 @@
 //! highlighted as plain text) and from the one file of the app's that names
 //! grammars, `packages/ui/src/lib/languages.ts` (the grammars the app shows by
 //! name). Every name is sent to a running host through a client connection on
-//! the three paths that highlight: a fence in `content:render`, a file in
-//! `config:render` and an editor's source in `editor:highlight`.
+//! the two paths that highlight: a fence in `content:render` and an editor's
+//! source in `editor:highlight`.
 //!
 //! A folder is made known the way the Files tests make one known: a session
 //! starts in it, driven against the fake agent.
@@ -27,8 +27,8 @@ use floti_host::workspace::render::highlight::{ALIASES, PLAIN};
 use floti_protocol::channels::host::HostStopReason;
 use floti_protocol::channels::sessions::{SessionStart, StartSessionRequest};
 use floti_protocol::channels::workspace::{
-    ConfigRendered, ContentRenderRequest, EditorHighlight, HighlightSource, RenderConfigFile,
-    RenderContent, RenderedMarkdown, SourceToRender,
+    ContentRenderRequest, EditorHighlight, HighlightSource, RenderContent, RenderedMarkdown,
+    SourceToRender,
 };
 
 const CAPABILITIES: &[&str] = &["files", "terminal"];
@@ -283,16 +283,6 @@ impl World {
             .unwrap_or_else(|error| panic!("a note with a {info} fence: {}", error.message))
     }
 
-    async fn config_file(&mut self, path: &str, source: &str) -> ConfigRendered {
-        self.client
-            .request::<RenderConfigFile>(&SourceToRender {
-                path: path.to_owned(),
-                source: source.to_owned(),
-            })
-            .await
-            .unwrap_or_else(|error| panic!("config:render of {path}: {}", error.message))
-    }
-
     async fn editor(&mut self, path: &str, source: &str) -> EditorHighlight {
         self.client
             .request::<HighlightSource>(&SourceToRender {
@@ -308,7 +298,7 @@ fn text(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
-/// The file a language is sent as to `config:render` and `editor:highlight`:
+/// The file a language is sent as to `editor:highlight`:
 /// its name is the extension, as an editor's file names it.
 fn sample_path(name: &str) -> String {
     format!("sample.{name}")
@@ -388,27 +378,6 @@ async fn every_language_today_highlights_is_coloured_in_both_themes_through_cont
             )),
         }
 
-        let rendered = world.config_file(&path, code).await;
-        if language == "markdown" {
-            // A markdown file is rendered as a note.
-            if rendered.code.is_some() || rendered.markdown.is_none() {
-                problems.push(format!("config:render {path}: not rendered as markdown"));
-            }
-        } else {
-            match rendered.code {
-                Some(block) if block.highlighted && block.language == language => {
-                    if let Err(why) = coloured_by_a_grammar(&block.html) {
-                        problems.push(format!("config:render {path}: {why}"));
-                    }
-                }
-                Some(block) => problems.push(format!(
-                    "config:render {path}: highlighted {} as {}",
-                    block.highlighted, block.language
-                )),
-                None => problems.push(format!("config:render {path}: rendered as markdown")),
-            }
-        }
-
         let editor = world.editor(&path, code).await;
         if !editor.highlighted || editor.too_large || editor.language != language {
             problems.push(format!(
@@ -424,7 +393,7 @@ async fn every_language_today_highlights_is_coloured_in_both_themes_through_cont
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_plain_text_name_comes_back_plain_through_content_config_and_editor_highlighting() {
+async fn a_plain_text_name_comes_back_plain_through_content_and_editor_highlighting() {
     let today = Today::read();
     let mut world = World::start().await;
     let mut problems = Vec::new();
@@ -440,11 +409,6 @@ async fn a_plain_text_name_comes_back_plain_through_content_config_and_editor_hi
             problems.push(format!(
                 "content:render {name:?}: the text is not there escaped"
             ));
-        }
-
-        match world.config_file(&path, code).await.code {
-            Some(block) if !block.highlighted && block.language == "plaintext" => {}
-            other => problems.push(format!("config:render {path}: {other:?}")),
         }
 
         let editor = world.editor(&path, code).await;

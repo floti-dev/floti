@@ -4,7 +4,7 @@ import { FakeConnection, fakeReach, reconnectingReach } from '../../../../../tes
 import type * as P from '../../../../shared/host/protocol'
 import { configScopesWithScan, hostArtifactUrl, windowArtifactUrl } from '../../../../shared/host/records/content'
 import type { EventChannel, EventPayload, RequestChannel, RequestPayload, RequestResult } from '../../../../shared/ipc'
-import { createConfigAdapter } from './config'
+import { createCompositionAdapter } from './composition'
 import { createFilesAdapter } from './files'
 import type { HostAdapter } from './router'
 
@@ -67,38 +67,37 @@ function on<K extends EventChannel>(adapter: HostAdapter, channel: K, listener: 
   return route(listener)
 }
 
-function configWorld(connection: FakeConnection | null = new FakeConnection(), scanned: Project[] = []) {
+function compositionWorld(connection: FakeConnection | null = new FakeConnection(), scanned: Project[] = []) {
   connection
     ?.answer('config:scopes', () => [scope('user', HOME, 'User'), scope('project', OUTSIDE, 'tooling')])
-    .answer('config:read', () => content('old', 'h1'))
-    .answer('config:write', () => written({}))
-    .answer('config:watch', () => null)
+    .answer('config:tree', ({ scopePath }) => ({ scope: scope('project', scopePath, 'alpha'), files: [], errors: [], scannedAt: 'now' }))
+    .answer('config:effective', (request) => effective(request.cwd ?? ''))
   const link = fakeReach(connection, UNREACHABLE)
-  const adapter = createConfigAdapter({ link, scanned: () => Promise.resolve(scanned) })
+  const adapter = createCompositionAdapter({ link, scanned: () => Promise.resolve(scanned) })
   return { connection: connection ?? new FakeConnection(), link, adapter }
 }
 
-describe('the config console over the window’s own connection', () => {
-  it('saves through the host’s writer, which snapshots first, and answers a stale save with its conflict', async () => {
-    const { adapter, connection } = configWorld()
-    const request = { scopePath: ALPHA, path: CLAUDE_MD, content: 'new', expectedHash: 'h1', reason: 'edit' as const }
-    await expect(ask(adapter, 'config:write', request)).resolves.toEqual({
-      ok: true,
-      file: content('new', 'h2'),
-      snapshotId: 7,
-      unchanged: false
-    })
-    expect(connection.payloads('config:write')).toEqual([request])
+const effective = (cwd: string): P.EffectiveView => ({
+  cwd,
+  profileId: null,
+  profileName: null,
+  overlays: [],
+  skills: [],
+  commands: [],
+  agents: [],
+  workflows: [],
+  sharedNames: [],
+  settingsLayers: [],
+  settings: [],
+  instructions: [],
+  mcpServers: [],
+  warnings: [],
+  computedAt: 'now'
+})
 
-    const onDisk = { onDiskHash: 'h3', onDiskContent: 'theirs', mtimeMs: 2.5 }
-    connection.answer('config:write', () => written({ ok: false, snapshotId: null, conflict: onDisk }))
-    const conflicted = await ask(adapter, 'config:write', request)
-    expect(conflicted).toMatchObject({ ok: false, snapshotId: null, conflict: onDisk })
-    expect(conflicted).not.toHaveProperty('error')
-  })
-
+describe('what composition reads of an agent’s config, over the window’s own connection', () => {
   it('lists the user scope, then the scanned harnesses, then the scanned projects, then the profiles’ folders, each once', async () => {
-    const { adapter } = configWorld(new FakeConnection(), [
+    const { adapter } = compositionWorld(new FakeConnection(), [
       folder(ALPHA, 'repo', 'alpha'),
       folder(HUB, 'harness', 'hub', false),
       folder(OUTSIDE.toUpperCase(), 'folder', 'tooling')
@@ -122,33 +121,25 @@ describe('the config console over the window’s own connection', () => {
     expect(merged[1]?.claudeDir).toBe('c:/work/alpha/.claude')
   })
 
-  it('says the link’s sentence when the host cannot be reached, never no scopes or no files', async () => {
-    const { adapter } = configWorld(null)
-    await expect(ask(adapter, 'config:scopes')).rejects.toThrow(UNREACHABLE)
-    await expect(ask(adapter, 'config:read', { path: CLAUDE_MD })).rejects.toThrow(UNREACHABLE)
-    await expect(ask(adapter, 'config:snapshots', { scopePath: ALPHA, path: CLAUDE_MD })).rejects.toThrow(UNREACHABLE)
+  it('reads a scope’s tree and what a folder and its overlays compose from the host', async () => {
+    const { adapter, connection } = compositionWorld()
+    await expect(ask(adapter, 'config:tree', { scopePath: ALPHA })).resolves.toMatchObject({ files: [], errors: [] })
+    expect(connection.payloads('config:tree')).toEqual([{ scopePath: ALPHA }])
+    await expect(ask(adapter, 'config:effective', { cwd: ALPHA, overlays: [HUB] })).resolves.toMatchObject({ cwd: ALPHA })
+    expect(connection.payloads('config:effective')).toEqual([{ profileId: null, cwd: ALPHA, overlays: [HUB] }])
   })
 
-  it('tells a new connection which file the editor has open, and hands the window its outside changes', async () => {
-    const first = new FakeConnection().answer('config:watch', () => null)
-    const link = reconnectingReach(first)
-    const adapter = createConfigAdapter({ link, scanned: () => Promise.resolve([]) })
-    const changes: unknown[] = []
-    on(adapter, 'config:externalChange', (change) => changes.push(change))
-    await ask(adapter, 'config:watch', { path: CLAUDE_MD })
-    expect(first.payloads('config:watch')).toEqual([{ path: CLAUDE_MD }])
+  it('says the link’s sentence when the host cannot be reached, never no scopes or an empty tree', async () => {
+    const { adapter } = compositionWorld(null)
+    await expect(ask(adapter, 'config:scopes')).rejects.toThrow(UNREACHABLE)
+    await expect(ask(adapter, 'config:tree', { scopePath: ALPHA })).rejects.toThrow(UNREACHABLE)
+    await expect(ask(adapter, 'config:effective', { cwd: ALPHA })).rejects.toThrow(UNREACHABLE)
+  })
 
-    const second = new FakeConnection().answer('config:watch', () => null)
-    await link.reconnect(second)
-    expect(second.payloads('config:watch')).toEqual([{ path: CLAUDE_MD }])
-    const change: P.ConfigExternalChange = { path: CLAUDE_MD, hash: 'h9', exists: true, mtimeMs: 1 }
-    second.push('config:externalChange', change)
-    expect(changes).toEqual([change])
-
-    await ask(adapter, 'config:watch', { path: null })
-    const third = new FakeConnection()
-    await link.reconnect(third)
-    expect(third.payloads('config:watch')).toEqual([])
+  it('serves no channel of the config page, which is gone', () => {
+    const { adapter } = compositionWorld()
+    expect(Object.keys(adapter.requests ?? {}).sort()).toEqual(['config:effective', 'config:scopes', 'config:tree'])
+    expect(adapter.events ?? {}).toEqual({})
   })
 })
 

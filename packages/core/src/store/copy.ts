@@ -17,8 +17,7 @@ import type { Store } from './db'
  *   History can still say the conversation was dropped to stay under the limit;
  * - their usage (`usage_messages`), for the same reason;
  * - the names given to sessions in History (`history_names`), authored rather
- *   than derived;
- * - the config console's file versions (`config_snapshots`).
+ *   than derived.
  *
  * Every function here is a SELECT. Nothing in this file writes the database it
  * reads, so a copy that stops part way, or runs twice, leaves `helm.db` exactly
@@ -96,7 +95,6 @@ export interface CopyCounts {
   messages: number
   usageMessages: number
   sessionNames: number
-  configSnapshots: number
 }
 
 export function countCopyableData(store: Store): CopyCounts {
@@ -110,8 +108,7 @@ export function countCopyableData(store: Store): CopyCounts {
     ),
     messages: count('SELECT COUNT(*) AS n FROM transcript_messages'),
     usageMessages: count('SELECT COUNT(*) AS n FROM usage_messages'),
-    sessionNames: count('SELECT COUNT(*) AS n FROM history_names'),
-    configSnapshots: count('SELECT COUNT(*) AS n FROM config_snapshots')
+    sessionNames: count('SELECT COUNT(*) AS n FROM history_names')
   }
 }
 
@@ -421,84 +418,4 @@ export function readSessionNames(store: Store): CopiedSessionName[] {
     name: row.name,
     renamedAt: row.renamed_at
   }))
-}
-
-// ---------------------------------------------------------------------------
-// Config file versions
-// ---------------------------------------------------------------------------
-
-/** A `config_snapshots` row, with its content. */
-export interface CopiedConfigSnapshot {
-  /** This database's id; the receiver gives the row its own. */
-  id: number
-  scopePath: string
-  filePath: string
-  content: string
-  contentHash: string
-  /**
-   * As stored (a `ConfigWriteReason`), and not narrowed, so a reason a later
-   * build added survives the copy.
-   */
-  reason: string
-  createdAt: string
-}
-
-export interface ConfigSnapshotPage {
-  rows: CopiedConfigSnapshot[]
-  /** The id to pass back for the next page; null once every row was read. */
-  next: number | null
-  /** Versions on this page left out as longer than `MAX_COPIED_TEXT_BYTES`. */
-  skipped: number
-}
-
-/** The next config file versions in id order, after `afterId` (null for the first page). */
-export function readConfigSnapshotPage(
-  store: Store,
-  afterId: number | null,
-  budget: CopyBudget = DEFAULT_COPY_BUDGET
-): ConfigSnapshotPage {
-  const select = store.raw.prepare(
-    `SELECT id, project_path, file_path, content, content_hash, reason, created_at
-     FROM config_snapshots WHERE id > ? ORDER BY id LIMIT ?`
-  )
-  const found = select.all(afterId ?? 0, Math.max(1, budget.maxRows) + 1) as Array<{
-    id: number
-    project_path: string
-    file_path: string
-    content: string
-    content_hash: string
-    reason: string
-    created_at: string
-  }>
-
-  const maxText = budget.maxTextBytes ?? MAX_COPIED_TEXT_BYTES
-  const rows: CopiedConfigSnapshot[] = []
-  let bytes = 0
-  let skipped = 0
-  /** The last row this page took or left out, which the next page starts after. */
-  let read: number | null = null
-  let more = false
-  for (const [index, row] of found.entries()) {
-    const size = Buffer.byteLength(row.content, 'utf8')
-    if (index >= Math.max(1, budget.maxRows) || (rows.length > 0 && bytes + size > budget.maxBytes)) {
-      more = true
-      break
-    }
-    read = row.id
-    if (size > maxText) {
-      skipped++
-      continue
-    }
-    rows.push({
-      id: row.id,
-      scopePath: row.project_path,
-      filePath: row.file_path,
-      content: row.content,
-      contentHash: row.content_hash,
-      reason: row.reason,
-      createdAt: row.created_at
-    })
-    bytes += size
-  }
-  return { rows, next: more ? read : null, skipped }
 }

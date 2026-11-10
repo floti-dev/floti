@@ -294,7 +294,7 @@ export function SearchIcon(props: IconProps): JSX.Element {
   )
 }
 
-/** The config console: sliders, because a scope is a set of knobs with values. */
+/** Data files: sliders, because a data file is a set of knobs with values. */
 export function SlidersIcon(props: IconProps): JSX.Element {
   return (
     <Icon {...props}>
@@ -308,11 +308,10 @@ export function SlidersIcon(props: IconProps): JSX.Element {
 /**
  * Helm's own settings: a gear, which is the one glyph nobody has to learn.
  *
- * Not `SlidersIcon` - that belongs to the config console, which edits Claude's
- * `.claude` trees, and the whole point of this pane is that the two are
- * different things. Eight teeth drawn as a stroked ring with radial ticks
- * rather than a filled cog: at 14px a cog outline turns to mush, and this sits
- * at the same optical weight as its neighbours in the title bar.
+ * Not `SlidersIcon`, which marks data files. Eight teeth drawn as a stroked
+ * ring with radial ticks rather than a filled cog: at 14px a cog outline turns
+ * to mush, and this sits at the same optical weight as its neighbours in the
+ * title bar.
  */
 export function GearIcon(props: IconProps): JSX.Element {
   return (

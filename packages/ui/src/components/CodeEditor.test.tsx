@@ -44,7 +44,7 @@ function Editor({
     <CodeEditor
       value={value}
       onChange={setValue}
-      surface="config"
+      surface="content"
       path={path}
       ariaLabel="Edit file"
       onHighlight={onHighlight}

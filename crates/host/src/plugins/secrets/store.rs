@@ -13,7 +13,7 @@ use floti_protocol::channels::plugins::{PluginSecretState, SecretInfo, SecretInp
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{SecretUse, SecretValue, SecretsAccess, check_declared, refusal};
-use crate::config_console::time::now_iso;
+use crate::agent_config::time::now_iso;
 use crate::platform::secret_seal::SecretSeal;
 use crate::plugins::call::PluginCallError;
 use crate::plugins::manifest::OriginPattern;

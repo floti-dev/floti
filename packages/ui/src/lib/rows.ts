@@ -5,7 +5,7 @@
  * A class string rather than a component, for the same reason `SEGMENT_ON` is
  * one: the app's selectable rows legitimately differ in geometry and in what
  * else marks them - the sidebar's project rows carry an accent edge and a pin
- * star, the config console's carry a scope chip, session history's carry a
+ * star, session history's carry a
  * status pill. What must not differ is the tone.
  *
  * **The hover half is why this exists.** Every one of those sites was written

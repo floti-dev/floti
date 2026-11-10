@@ -9,8 +9,6 @@ import type {
   ArchiveStats,
   ArchivedConversation,
   CachedProject,
-  ConfigFileContent,
-  ConfigRendered,
   ConfigScope,
   ConfigSnapshotMeta,
   ConfigTree,
@@ -21,13 +19,8 @@ import type {
   FileListing,
   FilesStatus,
   FileView,
-  CreateConfigRequest,
-  CreateConfigResult,
-  DeleteConfigRequest,
-  DeleteConfigResult,
   DetectedShell,
   DiscoveryResult,
-  DoctorReport,
   EditorHighlight,
   EffectiveView,
   GitState,
@@ -37,18 +30,12 @@ import type {
   HistoryQuery,
   HistorySession,
   HistorySummary,
-  McpAddRequest,
-  McpPreview,
-  McpResult,
-  McpScope,
   PermissionMode,
   Profile,
   RestoreOffer,
   ProfileDraft,
   FolderTemplateKind,
   FolderTemplatePreview,
-  RenameConfigRequest,
-  RenameConfigResult,
   RenderedMarkdown,
   SaveFolderAsTemplateResult,
   SavedPaneLayout,
@@ -476,47 +463,12 @@ export interface RenameHistorySessionRequest {
   name: string | null
 }
 
-/**
- * Which file the config editor currently has open.
- *
- * The main process watches it so that a change made in another editor reaches
- * the window *before* the user saves over it. Null means nothing is open, which
- * releases the watch - an app that keeps a handle on every file it has ever
- * shown is an app that stops other tools from renaming them on Windows.
- */
-export interface WatchConfigRequest {
-  path: string | null
-}
-
-/** A file the editor has open was changed by something that is not Helm. */
-export interface ConfigExternalChange {
-  path: string
-  /** sha256 of the bytes now on disk, or '' if it has been removed. */
-  hash: string
-  exists: boolean
-  mtimeMs: number
-}
-
 export interface EffectiveViewRequest {
   /** Computed for a saved profile - its root and its overlays. */
   profileId?: number | null
   /** Or for a plain directory, with whatever overlays are passed alongside. */
   cwd?: string | null
   overlays?: string[]
-}
-
-/**
- * Approving a `.mcp.json` server for a project.
- *
- * A server declared in `.mcp.json` gates on first launch until a settings layer
- * lists it, so this writes `enabledMcpjsonServers` into the scope's
- * `settings.local.json` - through the same snapshotted write path as any other
- * edit, because it is one.
- */
-export interface McpApproveRequest {
-  cwd: string
-  name: string
-  approved: boolean
 }
 
 /**
@@ -786,12 +738,11 @@ export interface OwnDataCopied {
   messages: number
   usageRows: number
   sessionNames: number
-  configVersions: number
 }
 
 /**
  * Where the copy of what only Helm's own database holds (archived
- * conversations, their usage, History's names, config versions) into the
+ * conversations, their usage, History's names) into the
  * local host stands. `idle` until Helm has reached the host, and always with
  * sessions in Helm; `finished` once the host says it holds them, whichever
  * start copied them; `unfinished` when a copy stopped part way, which the
@@ -1390,22 +1341,13 @@ export interface IpcRequests {
   'archive:stats': { request: void; response: ArchiveStats }
 
   /**
-   * The config console. This is the one surface that *writes* to a
-   * `.claude` tree, which is why every write goes through `config:write` and
-   * nothing else - the snapshot is taken there, and a second path into the
-   * filesystem would be a path with no undo behind it.
-   */
-  /**
    * A draft, tokenised for an editor's underlay.
    *
    * One channel for both editors, because there is one editor component and one
-   * highlighter. It takes the source rather than a path to read, for the reason
-   * `config:render` does: what is being coloured is what is in the box, which is
-   * not on disk and may never be.
+   * highlighter. It takes the source rather than a path to read: what is being
+   * coloured is what is in the box, which is not on disk and may never be.
    *
-   * Read-only in the strongest sense - it opens no file and writes none - so it
-   * is not a second route into a `.claude` tree. Every byte Helm writes still
-   * goes through `config:write`.
+   * Read-only in the strongest sense: it opens no file and writes none.
    *
    * The window debounces this and drops stale answers against a revision
    * counter; nothing here is on the path between a keystroke and a glyph.
@@ -1415,62 +1357,15 @@ export interface IpcRequests {
     response: EditorHighlight
   }
 
+  /**
+   * What composition reads of an agent's config, and nothing writes: the
+   * scopes and their trees a template imports from, and the effective view of
+   * what a profile composes. Every agent's config directory is read-only to
+   * Floti; the agent's own commands edit it.
+   */
   'config:scopes': { request: void; response: ConfigScope[] }
   'config:tree': { request: { scopePath: string }; response: ConfigTree }
-  'config:read': { request: { path: string }; response: ConfigFileContent }
-  /**
-   * The same bytes as something other than a textarea: markdown rendered, a
-   * hook highlighted. Takes the source rather than reading the file again, so
-   * one channel serves both the file on disk and a draft being edited - and so
-   * the render can never be of a version the pane is not showing.
-   */
-  'config:render': {
-    request: { path: string; source: string }
-    response: ConfigRendered
-  }
-  'config:write': { request: WriteConfigRequest; response: WriteConfigResult }
-  /** Versions of one file, newest first, without their contents. */
-  'config:snapshots': {
-    request: { scopePath: string; path: string }
-    response: ConfigSnapshotMeta[]
-  }
-  /** The bytes of one version, for a preview before restoring it. */
-  'config:snapshot': { request: { id: number }; response: { content: string } | null }
-  'config:restore': { request: { id: number; path: string }; response: WriteConfigResult }
-  /** Tells main which file to watch for changes made outside the app. */
-  'config:watch': { request: WatchConfigRequest; response: void }
-
-  /**
-   * The three things a directory supports that replacing one file's bytes does
-   * not. They are separate channels rather than modes of `config:write` because
-   * each takes a different question - a kind and a name, a new name, or nothing
-   * at all - and because a delete that arrived as a write of zero bytes would
-   * be a delete with no way to tell it from an emptied file.
-   *
-   * All three go through the same snapshot-first path `config:write` does, and
-   * through the same `assertWritable`: a new channel here is a new *question*,
-   * never a second route into the filesystem.
-   */
-  'config:create': { request: CreateConfigRequest; response: CreateConfigResult }
-  /** Moves a skill's whole directory, or a command across its namespace path. */
-  'config:rename': { request: RenameConfigRequest; response: RenameConfigResult }
-  /** Snapshots first, then removes. Each row is restorable through `config:restore`. */
-  'config:delete': { request: DeleteConfigRequest; response: DeleteConfigResult }
-
   'config:effective': { request: EffectiveViewRequest; response: EffectiveView }
-
-  'config:mcpPreview': { request: McpAddRequest; response: McpPreview }
-  /** Runs `claude mcp add-json`, having snapshotted the file it will rewrite. */
-  'config:mcpAdd': { request: McpAddRequest; response: McpResult }
-  'config:mcpRemove': {
-    request: { name: string; scope: McpScope; cwd: string }
-    response: McpResult
-  }
-  'config:mcpApprove': { request: McpApproveRequest; response: WriteConfigResult }
-  /** `claude mcp list`, which health-checks every server, so it is slow. */
-  'config:mcpList': { request: { cwd: string }; response: McpResult }
-
-  'config:doctor': { request: void; response: DoctorReport }
 
   /**
    * Claude Code's cached answer about plan limits, read out of
@@ -1506,9 +1401,8 @@ export interface IpcRequests {
     response: ContentSearchResult
   }
   /**
-   * Saving a note. A different channel from `config:write` because it is a
-   * different *permission* - notes here, configuration there - but the same
-   * snapshot table and the same conflict check behind both.
+   * Saving a note: snapshotted first, and refused as a conflict when the file
+   * on disk is not the one the editor opened.
    */
   'content:write': { request: WriteConfigRequest; response: WriteConfigResult }
   'content:snapshots': {
@@ -2144,14 +2038,6 @@ export interface IpcEvents {
   'update:checked': UpdateCheck
 
   /**
-   * The file the config editor has open changed on disk, and Helm was not the
-   * one who changed it. Pushed rather than discovered at save time: by then the
-   * user has typed a screen of text they are about to lose, and the point of
-   * the warning is to arrive before that.
-   */
-  'config:externalChange': ConfigExternalChange
-
-  /**
    * "This session is still running" - asked by main, answered by the renderer
    * on `session:confirmed`.
    *
@@ -2429,23 +2315,7 @@ export const REQUEST_CHANNELS = Object.keys({
   'editor:highlight': true,
   'config:scopes': true,
   'config:tree': true,
-  'config:read': true,
-  'config:render': true,
-  'config:write': true,
-  'config:snapshots': true,
-  'config:snapshot': true,
-  'config:restore': true,
-  'config:watch': true,
-  'config:create': true,
-  'config:rename': true,
-  'config:delete': true,
   'config:effective': true,
-  'config:mcpPreview': true,
-  'config:mcpAdd': true,
-  'config:mcpRemove': true,
-  'config:mcpApprove': true,
-  'config:mcpList': true,
-  'config:doctor': true,
   'usage:read': true,
   'content:scopes': true,
   'content:document': true,
@@ -2556,7 +2426,6 @@ export const EVENT_CHANNELS = Object.keys({
   'archive:changed': true,
   'usage:changed': true,
   'update:checked': true,
-  'config:externalChange': true,
   'content:artifactConsole': true,
   'term:create': true,
   'term:write': true,

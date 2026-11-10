@@ -64,9 +64,9 @@ import { DevicesSettings, type DevicesSettingsProps } from './DevicesSettings'
 /**
  * Helm's own settings.
  *
- * Deliberately not the config console: that pane edits the `.claude` trees
- * Claude Code reads, which belong to Claude and are shared with every other
- * client on the machine. This one is the app's own configuration, and it is the
+ * Not the `.claude` trees Claude Code reads, which belong to Claude, are shared
+ * with every other client on the machine, and are edited by Claude Code's own
+ * commands. This is the app's own configuration, and it is the
  * permanent home for it - every setting a later feature adds lands here as
  * another row in an existing group or another group at the end.
  *

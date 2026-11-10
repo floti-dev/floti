@@ -1,9 +1,8 @@
 //! Merging a client's own data into `floti.db`, for `carry:*`.
 //!
-//! Helm kept archived conversations, their usage, History's session names
-//! and the config console's file versions in its own database before the
-//! host ran its sessions; the host cannot rebuild them from the agent's
-//! files. Helm reads them and sends them in batches, and each batch is merged
+//! Helm kept archived conversations, their usage and History's session
+//! names in its own database before the host ran its sessions; the host
+//! cannot rebuild them from the agent's files. Helm reads them and sends them in batches, and each batch is merged
 //! here in one transaction. What `floti.db` already holds always wins, and
 //! nothing is written twice, so a batch sent again after a copy that stopped
 //! part way changes nothing it already wrote:
@@ -19,9 +18,6 @@
 //!   duplicates nothing. The archive's size limit is applied after each
 //!   batch, so the oldest conversations go first, copied or not;
 //! - a session name the host has is kept;
-//! - a config file version the host has (same folder, file, content and
-//!   time) is not added again; a new one takes a new id and keeps when it was
-//!   taken and why;
 //! - usage of a message the host has usage for is kept.
 //!
 //! [`finish`] records that the copy ran to the end, under its own settings
@@ -31,8 +27,8 @@
 use std::collections::BTreeSet;
 
 use floti_protocol::channels::carry::{
-    CarriedConfigVersion, CarriedConversationPart, CarriedConversationsMerged, CarriedSessionName,
-    CarriedUsageRow, CarryMerged, CarryStatus,
+    CarriedConversationPart, CarriedConversationsMerged, CarriedSessionName, CarriedUsageRow,
+    CarryMerged, CarryStatus,
 };
 use floti_protocol::channels::sessions::ArchiveSessionState;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -138,44 +134,6 @@ pub fn merge_names(conn: &Connection, names: &[CarriedSessionName]) -> Result<Ca
                 name.renamed_at
             ])?;
             count(&mut merged, written);
-        }
-        Ok(merged)
-    })
-}
-
-/// Merges config file versions; one the host has is not added again.
-pub fn merge_versions(conn: &Connection, versions: &[CarriedConfigVersion]) -> Result<CarryMerged> {
-    in_transaction(conn, "copy config file versions", |tx| {
-        let mut held = tx.prepare(
-            "SELECT 1 FROM config_snapshots
-             WHERE project_path = ? AND file_path = ? AND content_hash = ? AND created_at = ?",
-        )?;
-        let mut insert = tx.prepare(
-            "INSERT INTO config_snapshots
-               (project_path, file_path, content, content_hash, reason, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)",
-        )?;
-        let mut merged = CarryMerged::default();
-        for version in versions {
-            let key = params![
-                version.scope_path,
-                version.file_path,
-                version.content_hash,
-                version.created_at
-            ];
-            if held.exists(key)? {
-                merged.kept += 1;
-                continue;
-            }
-            insert.execute(params![
-                version.scope_path,
-                version.file_path,
-                version.content,
-                version.content_hash,
-                version.reason,
-                version.created_at
-            ])?;
-            merged.added += 1;
         }
         Ok(merged)
     })

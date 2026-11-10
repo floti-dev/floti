@@ -169,7 +169,7 @@ describe('TemplateManager', () => {
     expect(props.onMakeSubstitutable).toHaveBeenCalledWith('tools/run.mjs')
   })
 
-  it('copies in from the config console’s scopes, the user’s ~/.claude included', async () => {
+  it('copies in from the host’s config scopes, the user’s ~/.claude included', async () => {
     const props = renderManager({ selected: 'client', detail: DETAIL })
     const scope = screen.getByRole('combobox', { name: 'Where to copy from' })
     expect(within(scope).getAllByRole('option').map((option) => option.textContent)).toEqual([

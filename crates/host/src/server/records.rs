@@ -802,8 +802,6 @@ fn record_from(row: &Row<'_>) -> rusqlite::Result<SessionRecord> {
         exit_code: row.get::<_, Option<i64>>(13)?.map(|code| code as i32),
         parent_id: row.get::<_, Option<i64>>(15)?.map(unsigned),
         parent_name: row.get(16)?,
-        // The retired role says the same, for a client before protocol 2.3.
-        role: agent.clone(),
         agent,
         stopped: row.get(18)?,
         ended_by: ended_by(

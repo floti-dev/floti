@@ -190,7 +190,7 @@ describe('settings', () => {
             {
               axis: 'column',
               children: [
-                { panes: [{ kind: 'config' }], activeId: null },
+                { panes: [{ kind: 'sessions' }], activeId: null },
                 { panes: [{ kind: 'settings' }], activeId: null }
               ],
               sizes: [0.7, 0.3]
@@ -211,7 +211,7 @@ describe('settings', () => {
       terminalShell: join(dir, 'pwsh.exe'),
       projectShellHeightPct: 42,
       filesWrap: true,
-      railHidden: ['files', 'config'],
+      railHidden: ['files', 'browser'],
       transcriptArchiveMaxBytes: 256 * 1024 * 1024,
       updateCheck: false,
       lastUpdateCheckAt: '2026-08-11T20:04:06.641Z',
@@ -373,20 +373,20 @@ describe('settings', () => {
     expect(readSettings(store).hosts).toEqual([host])
   })
 
-  it('reads what an older build wrote for pull requests, and takes the next write', () => {
+  it('reads what an older build wrote for pull requests and Config, and takes the next write', () => {
     const raw = store.raw.prepare('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)')
-    raw.run('railHidden', JSON.stringify(['pulls', 'config']), '')
+    raw.run('railHidden', JSON.stringify(['pulls', 'config', 'browser']), '')
     raw.run('prPollMinutes', JSON.stringify(15), '')
     raw.run('ghPath', JSON.stringify('C:\\tools\\gh.exe'), '')
 
     const settings = readSettings(store)
-    // The rail no longer has a Pulls destination, and a list naming one would
-    // be refused the next time anything on the rail was hidden.
-    expect(settings.railHidden).toEqual(['config'])
+    // The rail no longer has a Pulls or a Config destination, and a list naming
+    // one would be refused the next time anything on the rail was hidden.
+    expect(settings.railHidden).toEqual(['browser'])
     expect(settings).not.toHaveProperty('prPollMinutes')
     expect(settings).not.toHaveProperty('ghPath')
     expect(() => writeSettings(store, { railHidden: [...settings.railHidden, 'history'] })).not.toThrow()
-    expect(readSettings(store).railHidden).toEqual(['config', 'history'])
+    expect(readSettings(store).railHidden).toEqual(['browser', 'history'])
   })
 
   describe('a pane layout written before panes were a tree', () => {
@@ -396,23 +396,23 @@ describe('settings', () => {
         .run(key, JSON.stringify(value), '')
     }
     const HISTORY = { panes: [{ kind: 'history' }], activeId: 'history' }
-    const CONFIG = { panes: [{ kind: 'config' }], activeId: null }
+    const SESSIONS = { panes: [{ kind: 'sessions' }], activeId: null }
 
     it('reads two groups as the row they were, with the divider where it was left', () => {
-      raw('paneLayout', { groups: [HISTORY, CONFIG], focused: 1 })
+      raw('paneLayout', { groups: [HISTORY, SESSIONS], focused: 1 })
       raw('paneSplitPct', 62)
 
       expect(readSettings(store).paneLayout).toEqual({
-        root: { axis: 'row', children: [HISTORY, CONFIG], sizes: [0.38, 0.62] },
+        root: { axis: 'row', children: [HISTORY, SESSIONS], sizes: [0.38, 0.62] },
         focused: 1
       })
     })
 
     it('reads two groups at the old default split when the divider was never moved', () => {
-      raw('paneLayout', { groups: [HISTORY, CONFIG], focused: 0 })
+      raw('paneLayout', { groups: [HISTORY, SESSIONS], focused: 0 })
 
       expect(readSettings(store).paneLayout).toEqual({
-        root: { axis: 'row', children: [HISTORY, CONFIG], sizes: [0.55, 0.45] },
+        root: { axis: 'row', children: [HISTORY, SESSIONS], sizes: [0.55, 0.45] },
         focused: 0
       })
     })
@@ -639,6 +639,7 @@ describe('settings validation', () => {
               {
                 axis: 'column',
                 children: [
+                  // Retired kinds, which load and open nothing.
                   { panes: [{ kind: 'config' }, { kind: 'content' }], activeId: null },
                   {
                     panes: [
@@ -860,7 +861,7 @@ describe('settings validation', () => {
       good: [
         [],
         ['history'],
-        ['sessions', 'profiles', 'files', 'history', 'browser', 'config'],
+        ['sessions', 'profiles', 'files', 'history', 'browser'],
         // A plugin's rail icon, by its prefixed id.
         ['plugin:sample', 'history']
       ],
@@ -869,8 +870,9 @@ describe('settings validation', () => {
         'history',
         ['settings'],
         ['content'],
-        // Retired with the pull request surface; `readSettings` drops it.
+        // Retired with the pull request surface and Config's page; `readSettings` drops them.
         ['pulls'],
+        ['config'],
         ['history', 'history'],
         [1],
         [''],
@@ -1175,7 +1177,7 @@ describe('settings validation', () => {
       pinnedProjects: [join(dir, 'alpha')],
       windowBounds: { width: 1280, height: 820, x: 40, y: 60 },
       paneLayout: {
-        root: { panes: [{ kind: 'project', path: dir }, { kind: 'config' }], activeId: 'config' },
+        root: { panes: [{ kind: 'project', path: dir }, { kind: 'sessions' }], activeId: 'sessions' },
         focused: 0
       },
       firstRunCompletedAt: '2026-08-11T09:00:00.000Z',
@@ -1232,7 +1234,7 @@ const DEFAULT_SETTINGS_SHAPE = (dir: string): typeof DEFAULT_SETTINGS => ({
   pinnedProjects: [join(dir, 'alpha')],
   windowBounds: { width: 1280, height: 820, x: 40, y: 60 },
   paneLayout: {
-    root: { panes: [{ kind: 'project', path: dir }, { kind: 'config' }], activeId: 'config' },
+    root: { panes: [{ kind: 'project', path: dir }, { kind: 'sessions' }], activeId: 'sessions' },
     focused: 0
   },
   firstRunCompletedAt: '2026-08-11T09:00:00.000Z',

@@ -1,7 +1,7 @@
 // Generated from the floti-protocol crate by `cargo run -p floti-protocol --bin generate`. Do not edit.
 
 /** The protocol version these declarations describe. */
-export const PROTOCOL_VERSION = { major: 2, minor: 3 } as const;
+export const PROTOCOL_VERSION = { major: 3, minor: 0 } as const;
 
 /** The link version of the session keeper a host of this build takes back. */
 export const KEEPER_LINK_VERSION = 1;
@@ -733,34 +733,6 @@ template: string | null, };
 export type Capability = "terminal" | "files" | "pluginPages" | "browser";
 
 /**
- * One config file as it was before a write, with its bytes.
- */
-export type CarriedConfigVersion = { 
-/**
- * The scope's base folder.
- */
-scopePath: string, 
-/**
- * Relative to `scope_path`, forward-slashed.
- */
-filePath: string, content: string, 
-/**
- * sha256 of `content`.
- */
-contentHash: string, 
-/**
- * Why the write was made, as stored; one this build does not know is
- * kept as it is.
- */
-reason: string, 
-/**
- * ISO 8601.
- */
-createdAt: string, };
-
-export type CarriedConfigVersions = { versions: Array<CarriedConfigVersion>, };
-
-/**
  * An archived conversation's row as the client kept it.
  */
 export type CarriedConversation = { sessionId: string, 
@@ -934,15 +906,6 @@ export type CloseSessionResult = {
  */
 closed: boolean, };
 
-/**
- * A file an editor has open was changed by something other than the host.
- */
-export type ConfigExternalChange = { path: string, 
-/**
- * sha256 of the bytes now on disk, or empty when it was removed.
- */
-hash: string, exists: boolean, mtimeMs: Millis, };
-
 export type ConfigFile = { path: string, 
 /**
  * Relative to the scope's base folder, forward-slashed.
@@ -981,17 +944,6 @@ binary: boolean, };
 export type ConfigFileKind = "skill" | "command" | "agent" | "workflow" | "hook" | "settings" | "settings-local" | "claude-md" | "mcp" | "rule" | "other";
 
 /**
- * A file, by absolute path.
- */
-export type ConfigPath = { path: string, };
-
-/**
- * A config file rendered as what it is. At most one half is set; both are
- * null for a file that is neither prose nor code.
- */
-export type ConfigRendered = { markdown: RenderedMarkdown | null, code: RenderedCode | null, };
-
-/**
  * One config tree.
  */
 export type ConfigScope = { kind: ConfigScopeKind, 
@@ -1027,7 +979,9 @@ export type ConfigTree = { scope: ConfigScope, files: Array<ConfigFile>,
 errors: Array<string>, scannedAt: string, };
 
 /**
- * Why a snapshot was taken.
+ * Why a snapshot was taken. A note's versions are taken for an edit or a
+ * restore; the other reasons are those of versions an agent's config files
+ * were given by earlier releases, which the store still holds.
  */
 export type ConfigWriteReason = "edit" | "create" | "restore" | "mcp" | "approve" | "rename" | "delete";
 
@@ -1172,23 +1126,6 @@ target: string, label: string, heading: string | null,
  */
 resolved: string | null, };
 
-/**
- * A config file the console can create.
- */
-export type CreatableKind = "skill" | "command" | "agent" | "rule" | "settings" | "settings-local" | "claude-md" | "mcp";
-
-export type CreateConfigRequest = { scopePath: string, kind: CreatableKind, 
-/**
- * Ignored for the kinds with a fixed name.
- */
-name: string, };
-
-export type CreateConfigResult = { ok: boolean, 
-/**
- * The file that now exists.
- */
-path: string | null, relPath: string | null, snapshotId: number | null, error: string | null, };
-
 export type CreateHarnessOutcome = { 
 /**
  * The harness folder, or null when nothing was written.
@@ -1227,16 +1164,6 @@ export type DeleteAgentRequest = { name: string,
  * nothing.
  */
 expectedHash: string | null, };
-
-export type DeleteConfigRequest = { scopePath: string, path: string, };
-
-export type DeleteConfigResult = { ok: boolean, 
-/**
- * What came off the disk, each with the snapshot that can put it back.
- */
-removed: Array<DeletedConfigFile>, error: string | null, };
-
-export type DeletedConfigFile = { path: string, relPath: string, snapshotId: number, };
 
 /**
  * A shell found on the host's machine.
@@ -1298,22 +1225,6 @@ export type DismissNoticeRequest = {
  * The notice's `id`.
  */
 id: string, };
-
-export type DoctorReport = { 
-/**
- * The doctor command's output, verbatim.
- */
-output: string, 
-/**
- * Parsed `Label: value` lines, in order.
- */
-rows: Array<DoctorRow>, exitCode: number | null, ranAt: string, durationMs: Millis, 
-/**
- * Set when the command could not be run at all.
- */
-error: string | null, };
-
-export type DoctorRow = { label: string, value: string, };
 
 /**
  * A draft, tokenised per line for an editor's underlay.
@@ -1909,13 +1820,7 @@ agentStartsPerParent: number,
  * How many command children one session may have running at once,
  * counted apart from every agent limit above.
  */
-agentCommandsPerParent: number, 
-/**
- * Retired: Floti has no agent classes and holds children by the limits
- * above only. A host sends the field's default and never reads it; it
- * stays, unread, until the protocol's next major removes it.
- */
-agentHeavyPerHost: number, };
+agentCommandsPerParent: number, };
 
 /**
  * A change to some settings. A field left out is unchanged; a nullable
@@ -1925,12 +1830,7 @@ export type HostSettingsPatch = { scanRoots?: Array<string>, pinnedProjects?: Ar
 /**
  * Replaces the whole map.
  */
-backendPaths?: { [key in BackendId]?: string }, terminalShell?: string | null, transcriptArchiveMaxBytes?: number, browserMcp?: boolean, browserMcpLocalOnly?: boolean, sessionMcp?: boolean, restoreWithoutAsking?: boolean, sessionAgents?: boolean, agentChildrenPerParent?: number, agentSessionsPerHost?: number, agentDepth?: number, agentStartsPerParent?: number, agentCommandsPerParent?: number, 
-/**
- * Retired, as in [`HostSettings`]: a host ignores it, and applies the
- * rest of a patch that carries it.
- */
-agentHeavyPerHost?: number, };
+backendPaths?: { [key in BackendId]?: string }, terminalShell?: string | null, transcriptArchiveMaxBytes?: number, browserMcp?: boolean, browserMcpLocalOnly?: boolean, sessionMcp?: boolean, restoreWithoutAsking?: boolean, sessionAgents?: boolean, agentChildrenPerParent?: number, agentSessionsPerHost?: number, agentDepth?: number, agentStartsPerParent?: number, agentCommandsPerParent?: number, };
 
 /**
  * Why the host is being stopped, which decides what its sessions become.
@@ -2173,56 +2073,6 @@ entrypoint: string | null, startedAtMs: number | null, conversationId: string | 
  */
 export type LocateBackendRequest = { backend: BackendId, path: string, };
 
-export type McpAddRequest = { scope: McpScope, name: string, 
-/**
- * The server object, as JSON.
- */
-json: string, 
-/**
- * The folder `project` and `local` resolve against.
- */
-cwd: string, };
-
-export type McpApproveRequest = { cwd: string, name: string, approved: boolean, };
-
-export type McpDiffLine = { sign: McpDiffSign, text: string, };
-
-/**
- * Whether a diff line is kept, added or removed.
- */
-export type McpDiffSign = " " | "+" | "-";
-
-export type McpListRequest = { cwd: string, };
-
-/**
- * What the file would look like afterwards, computed before anything runs.
- */
-export type McpPreview = { file: string, before: string, after: string, diff: Array<McpDiffLine>, 
-/**
- * Set when the name is already configured in this scope.
- */
-replaces: string | null, 
-/**
- * Set when the JSON is not usable.
- */
-error: string | null, };
-
-export type McpRemoveRequest = { name: string, scope: McpScope, cwd: string, };
-
-export type McpResult = { ok: boolean, 
-/**
- * What the agent's command printed, trimmed.
- */
-output: string, exitCode: number | null, 
-/**
- * The file after the command ran.
- */
-after: string, 
-/**
- * The snapshot taken before the command ran.
- */
-snapshotId: number | null, };
-
 export type McpScope = "local" | "user" | "project";
 
 export type Message = { "type": "hello" } & Hello | { "type": "welcome" } & Welcome | { "type": "refused" } & Refused | { "type": "request" } & Request | { "type": "response" } & Response | { "type": "error" } & ErrorReply | { "type": "subscribe" } & Subscribe | { "type": "unsubscribe" } & Unsubscribe | { "type": "subscriptionError" } & SubscriptionError | { "type": "snapshot" } & Snapshot | { "type": "event" } & Event | { "type": "streamOpen" } & StreamOpen | { "type": "streamData" } & StreamData | { "type": "streamCredit" } & StreamCredit | { "type": "streamClose" } & StreamClose | { "type": "restartAsk" } & RestartAsk | { "type": "restart" } & Restart | { "type": "restartState" } & RestartState;
@@ -2236,8 +2086,6 @@ export type Message = { "type": "hello" } & Hello | { "type": "welcome" } & Welc
  */
 export type Millis = number;
 
-export type MovedFile = { from: string, to: string, };
-
 /**
  * What a notice is about.
  */
@@ -2246,7 +2094,7 @@ export type NoticeKind = "needs-you" | "limit" | "error";
 /**
  * The limit that refused a start.
  */
-export type NoticeLimit = "children" | "sessions" | "depth" | "starts" | "heavy";
+export type NoticeLimit = "children" | "sessions" | "depth" | "starts";
 
 /**
  * How a session asks before it acts. The values are the ones the launcher
@@ -2942,26 +2790,6 @@ export type RemovedSessions = {
  */
 removed: number, };
 
-export type RenameConfigRequest = { scopePath: string, 
-/**
- * The addressed file: a skill's `SKILL.md`, not its folder.
- */
-path: string, name: string, };
-
-export type RenameConfigResult = { ok: boolean, 
-/**
- * The addressed file at its new place, or null when nothing moved.
- */
-path: string | null, relPath: string | null, 
-/**
- * Every file that moved.
- */
-moved: Array<MovedFile>, snapshotIds: Array<number>, 
-/**
- * The moved file's frontmatter `name:` was updated to match.
- */
-frontmatterRenamed: boolean, error: string | null, };
-
 /**
  * Naming a conversation in history. Null, or only whitespace, restores the
  * title derived from its prompts.
@@ -2975,16 +2803,6 @@ export type RenameHistorySessionRequest = { sessionId: string, name: string | nu
 export type RenameSessionRequest = { id: number, label: string | null, };
 
 export type RenameTemplateRequest = { template: string, name: string, };
-
-/**
- * Highlighted source, for a config file a session runs.
- */
-export type RenderedCode = { html: string, language: string, 
-/**
- * False when there is no grammar for it, which is not the same as
- * highlighted as plain text.
- */
-highlighted: boolean, };
 
 export type RenderedFrontmatter = { 
 /**
@@ -3450,17 +3268,9 @@ parentName?: string | null,
 /**
  * The agent the session was started as (a lead, a worker, a reviewer),
  * or null for a session started as none: one a person started, and a
- * command child. Absent from a host before protocol 2.3, which says it
- * as `role`; a record read from one has it here all the same.
+ * command child.
  */
 agent?: string | null, 
-/**
- * Retired: the same as `agent`, under the name it had before protocol
- * 2.3. Still written with `agent`'s value so that a client before 2.3
- * reads what it did, and read in place of `agent` from one that sends
- * only this. It leaves the protocol at the next major version.
- */
-role?: string | null, 
 /**
  * The command line a command child runs, as its parent gave it after
  * `--`, or null for every other session. A command child's exit code is
@@ -3645,13 +3455,6 @@ export type Snapshot = { subscription: number,
  * `seq + 1`.
  */
 seq: number, state: unknown, };
-
-export type SnapshotContent = { content: string, };
-
-/**
- * A snapshot, by id.
- */
-export type SnapshotRef = { id: number, };
 
 /**
  * Text to render or highlight as the file at `path` would be. The text is
@@ -4059,11 +3862,6 @@ dollars: number,
 messages: number, };
 
 /**
- * Which file the client's editor has open, or null to release the watch.
- */
-export type WatchConfigRequest = { path: string | null, };
-
-/**
  * The host's answer to an accepted `hello`.
  */
 export type Welcome = { 
@@ -4230,26 +4028,9 @@ export interface RequestChannels {
   "carry:names": { request: CarriedSessionNames; response: CarryMerged; capability: null };
   "carry:status": { request: null; response: CarryStatus; capability: null };
   "carry:usage": { request: CarriedUsageRows; response: CarryMerged; capability: null };
-  "carry:versions": { request: CarriedConfigVersions; response: CarryMerged; capability: null };
-  "config:create": { request: CreateConfigRequest; response: CreateConfigResult; capability: null };
-  "config:delete": { request: DeleteConfigRequest; response: DeleteConfigResult; capability: null };
-  "config:doctor": { request: null; response: DoctorReport; capability: null };
   "config:effective": { request: EffectiveViewRequest; response: EffectiveView; capability: null };
-  "config:mcpAdd": { request: McpAddRequest; response: McpResult; capability: null };
-  "config:mcpApprove": { request: McpApproveRequest; response: WriteConfigResult; capability: null };
-  "config:mcpList": { request: McpListRequest; response: McpResult; capability: null };
-  "config:mcpPreview": { request: McpAddRequest; response: McpPreview; capability: null };
-  "config:mcpRemove": { request: McpRemoveRequest; response: McpResult; capability: null };
-  "config:read": { request: ConfigPath; response: ConfigFileContent; capability: null };
-  "config:rename": { request: RenameConfigRequest; response: RenameConfigResult; capability: null };
-  "config:render": { request: SourceToRender; response: ConfigRendered; capability: null };
-  "config:restore": { request: RestoreSnapshotRequest; response: WriteConfigResult; capability: null };
   "config:scopes": { request: null; response: Array<ConfigScope>; capability: null };
-  "config:snapshot": { request: SnapshotRef; response: SnapshotContent | null; capability: null };
-  "config:snapshots": { request: ScopedFile; response: Array<ConfigSnapshotMeta>; capability: null };
   "config:tree": { request: ConfigScopeRef; response: ConfigTree; capability: null };
-  "config:watch": { request: WatchConfigRequest; response: null; capability: null };
-  "config:write": { request: WriteConfigRequest; response: WriteConfigResult; capability: null };
   "content:artifact": { request: ScopedFile; response: ArtifactLink; capability: "files" };
   "content:artifactBytes": { request: ArtifactBytesRequest; response: ArtifactBytes; capability: "files" };
   "content:document": { request: ScopedFile; response: ContentDocument; capability: "files" };
@@ -4360,7 +4141,6 @@ export interface EventChannels {
   "agentPlugin:cancel": { event: AgentPluginCallCancel; snapshot: null; capability: null };
   "agents:changed": { event: AgentsChange; snapshot: null; capability: null };
   "archive:changed": { event: ArchiveStats; snapshot: ArchiveStats; capability: null };
-  "config:externalChange": { event: ConfigExternalChange; snapshot: null; capability: null };
   "devices:attached": { event: AttachedDevices; snapshot: AttachedDevices; capability: null };
   "discovery:updated": { event: DiscoveryResult; snapshot: DiscoveryResult | null; capability: null };
   "files:changed": { event: FilesChange; snapshot: null; capability: "files" };
@@ -4417,27 +4197,9 @@ export const CHANNELS = [
   { name: "carry:names", kind: "request", capability: null },
   { name: "carry:status", kind: "request", capability: null },
   { name: "carry:usage", kind: "request", capability: null },
-  { name: "carry:versions", kind: "request", capability: null },
-  { name: "config:create", kind: "request", capability: null },
-  { name: "config:delete", kind: "request", capability: null },
-  { name: "config:doctor", kind: "request", capability: null },
   { name: "config:effective", kind: "request", capability: null },
-  { name: "config:externalChange", kind: "event", capability: null },
-  { name: "config:mcpAdd", kind: "request", capability: null },
-  { name: "config:mcpApprove", kind: "request", capability: null },
-  { name: "config:mcpList", kind: "request", capability: null },
-  { name: "config:mcpPreview", kind: "request", capability: null },
-  { name: "config:mcpRemove", kind: "request", capability: null },
-  { name: "config:read", kind: "request", capability: null },
-  { name: "config:rename", kind: "request", capability: null },
-  { name: "config:render", kind: "request", capability: null },
-  { name: "config:restore", kind: "request", capability: null },
   { name: "config:scopes", kind: "request", capability: null },
-  { name: "config:snapshot", kind: "request", capability: null },
-  { name: "config:snapshots", kind: "request", capability: null },
   { name: "config:tree", kind: "request", capability: null },
-  { name: "config:watch", kind: "request", capability: null },
-  { name: "config:write", kind: "request", capability: null },
   { name: "content:artifact", kind: "request", capability: "files" },
   { name: "content:artifactBytes", kind: "request", capability: "files" },
   { name: "content:document", kind: "request", capability: "files" },

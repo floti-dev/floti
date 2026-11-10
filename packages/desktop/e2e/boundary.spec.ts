@@ -115,11 +115,8 @@ test('history and the usage figures come over the window’s own connection', as
   await expectOnlyClientChannels(helm)
 })
 
-test('the config console, the Files view and a note use only client channels', async ({ helm }) => {
+test('the Files view and a note use only client channels', async ({ helm }) => {
   const { window } = helm
-  await window.getByRole('button', { name: 'Config', exact: true }).click()
-  await window.getByRole('group', { name: 'Configuration files' }).first().waitFor()
-
   await window.locator('[data-rail="files"]').click()
   const picker = window.getByRole('button', { name: 'Project', exact: true })
   if ((await picker.textContent()) !== 'alpha') {

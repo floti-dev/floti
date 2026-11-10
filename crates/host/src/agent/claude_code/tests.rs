@@ -2058,7 +2058,7 @@ fn no_answer_carries_a_credential_and_every_credential_path_is_named() {
         .read_config_files(Some(&project))
         .known()
         .unwrap();
-    // The credentials file is a row the console can name, from its directory
+    // The credentials file is a row a listing can name, from its directory
     // entry alone; the session keys sit in working storage and are not listed.
     let credential = files
         .iter()
@@ -2710,7 +2710,7 @@ fn usage_that_cannot_be_read_is_no_number_never_zero() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn config_files_are_the_ones_the_console_lists_with_its_summaries_and_a_credential_unopened() {
+fn config_files_are_listed_with_their_summaries_and_a_credential_unopened() {
     let world = World::new();
     let user = &world.config;
     write(&user.join("CLAUDE.md"), "# me");

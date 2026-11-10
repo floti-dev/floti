@@ -1,7 +1,6 @@
 import {
   DEFAULT_COPY_BUDGET,
   countCopyableData,
-  readConfigSnapshotPage,
   readConversationKeys,
   readConversationPage,
   readSessionNames,
@@ -17,9 +16,10 @@ import type { HostLink } from './link'
 /**
  * What only Helm's own database holds, copied into the local host the first
  * time Helm reaches it with sessions running there: archived conversations
- * whose transcripts Claude Code has since deleted, their usage, the names
- * given to sessions in History and the config console's file versions. The
- * host rebuilds everything else from disk.
+ * whose transcripts Claude Code has since deleted, their usage and the names
+ * given to sessions in History. The host rebuilds everything else from disk.
+ * The config file versions an earlier Helm kept are not copied: nothing in
+ * Floti reads them.
  *
  * Main reads `helm.db` through core's read-only pages and sends each one on
  * the protocol's `carry:*` channels, awaiting every answer, so neither main
@@ -35,8 +35,8 @@ import type { HostLink } from './link'
  * next start, sends everything again, and the host's merge adds only what it
  * lacks. Its state is kept here for the window's notice.
  *
- * No row can stop every copy: core cuts a message too long for one frame and
- * leaves out a config version too long for one, and the log counts both.
+ * No row can stop every copy: core cuts a message too long for one frame, and
+ * the log counts them.
  *
  * What is sent is the user's own conversation text: the log says how many
  * rows of each kind were copied, and why a copy stopped, never what any of it
@@ -64,8 +64,7 @@ const NOTHING_COPIED: OwnDataCopied = {
   conversations: 0,
   messages: 0,
   usageRows: 0,
-  sessionNames: 0,
-  configVersions: 0
+  sessionNames: 0
 }
 
 /** Why a copy stopped, in words that never carry what was sent. */
@@ -77,8 +76,8 @@ function stoppedBecause(error: unknown, what: string): string {
 }
 
 const tally = (copied: OwnDataCopied): string =>
-  `${copied.conversations} conversations (${copied.messages} messages), ${copied.usageRows} usage rows, ` +
-  `${copied.sessionNames} session names and ${copied.configVersions} config versions`
+  `${copied.conversations} conversations (${copied.messages} messages), ${copied.usageRows} usage rows ` +
+  `and ${copied.sessionNames} session names`
 
 export function createOwnDataCopy(deps: OwnDataCopyDeps): OwnDataCopy {
   const { store, log } = deps
@@ -109,33 +108,21 @@ export function createOwnDataCopy(deps: OwnDataCopyDeps): OwnDataCopy {
     const counts = countCopyableData(store)
     log(
       `host: copying Helm's own data into the local host: ${counts.archivedConversations + counts.evictedConversations} ` +
-        `conversations (${counts.messages} messages), ${counts.usageMessages} usage rows, ` +
-        `${counts.sessionNames} session names and ${counts.configSnapshots} config versions to offer`
+        `conversations (${counts.messages} messages), ${counts.usageMessages} usage rows ` +
+        `and ${counts.sessionNames} session names to offer`
     )
     const copied: OwnDataCopied = { ...NOTHING_COPIED }
-    // Rows too long for one frame (core's `MAX_COPIED_TEXT_BYTES`): messages
-    // sent cut short and config versions left in Helm's database.
-    const tooLong = { cut: 0, skipped: 0 }
+    // Messages too long for one frame (core's `MAX_COPIED_TEXT_BYTES`), sent
+    // cut short.
+    let cutShort = 0
     const tooLongSaid = (): string =>
-      (tooLong.cut > 0 ? `; ${tooLong.cut} messages too long for one batch were sent cut short` : '') +
-      (tooLong.skipped > 0 ? `; ${tooLong.skipped} config versions too long for one batch were left out` : '')
+      cutShort > 0 ? `; ${cutShort} messages too long for one batch were sent cut short` : ''
     // What the batch in flight carries, for the sentence if it is refused.
     let what = 'the copy'
     try {
       what = 'a batch of session names'
       for (const names of slices(readSessionNames(store), budget.maxRows)) {
         copied.sessionNames += (await connection.request('carry:names', { names })).added
-      }
-
-      what = 'a batch of config versions'
-      for (let after: number | null = null, first = true; first || after !== null; first = false) {
-        const page = readConfigSnapshotPage(store, after, budget)
-        tooLong.skipped += page.skipped
-        if (page.rows.length > 0) {
-          const versions = page.rows.map(({ id: _id, ...version }) => version)
-          copied.configVersions += (await connection.request('carry:versions', { versions })).added
-        }
-        after = page.next
       }
 
       what = 'a batch of usage rows'
@@ -164,7 +151,7 @@ export function createOwnDataCopy(deps: OwnDataCopyDeps): OwnDataCopy {
             const merged = await connection.request('carry:conversations', { parts: page.parts })
             copied.conversations += merged.added
             copied.messages += merged.messages
-            tooLong.cut += page.cut
+            cutShort += page.cut
           }
           cursor = page.next
         } while (cursor !== null)

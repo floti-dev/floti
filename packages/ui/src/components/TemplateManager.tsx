@@ -37,8 +37,8 @@ import { Overlay } from './Overlay'
  *   badges it, names the four variables in a help line, and offers the rename
  *   that opts a file in.
  * - **A skill you already wrote is somewhere Helm can see.** The import picker
- *   is `config:scopes` and `config:tree` with checkboxes on it - the same
- *   scopes the config console browses, `~/.claude` included, read only.
+ *   is `config:scopes` and `config:tree` with checkboxes on it - every
+ *   `.claude` tree the host lists, `~/.claude` included, read only.
  * - **`template.yaml` is metadata, not a file to edit.** Two fields and a Save,
  *   because a text box full of YAML is a text box in which `label:` can be
  *   misspelled and the template silently drops out of the picker.
@@ -617,8 +617,8 @@ function FileList({
 /**
  * Copying a skill, command, agent, `CLAUDE.md` or `settings.json` in.
  *
- * The sources are `config:scopes` - every `.claude` tree the config console can
- * see, the user's own `~/.claude` included, because importing a skill you wrote
+ * The sources are `config:scopes` - every `.claude` tree the host lists, the
+ * user's own `~/.claude` included, because importing a skill you wrote
  * for yourself is the obvious case and reading is all Helm does there anyway.
  * `ClaudeInventory` could not feed this: it is counts and carries no names.
  *

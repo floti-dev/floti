@@ -115,11 +115,11 @@ export interface CodeEditorProps {
   onChange: (value: string) => void
   /**
    * Which surface this is, which decides the data attribute the textarea
-   * carries: `data-config-editor`, `data-content-editor` or `data-file-view`. A
+   * carries: `data-content-editor` or `data-file-view`. A
    * driver can query any of them and drive it through the value setter, which
    * is the second of SPEC's reasons for a textarea.
    */
-  surface: 'config' | 'content' | 'file'
+  surface: 'content' | 'file'
   /** The file. Its extension decides the language, the indent and the pairs. */
   path: string
   ariaLabel: string
@@ -836,11 +836,7 @@ export function CodeEditor({
 
         <textarea
           ref={areaRef}
-          {...(surface === 'config'
-            ? { 'data-config-editor': true }
-            : surface === 'content'
-              ? { 'data-content-editor': true }
-              : { 'data-file-view': true })}
+          {...(surface === 'content' ? { 'data-content-editor': true } : { 'data-file-view': true })}
           value={value}
           readOnly={readOnly}
           onChange={onChangeValue}

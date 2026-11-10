@@ -1,7 +1,7 @@
 import { LOCAL_HOST_KEY } from '@helm/core/types'
 import { isClientOnly, isHostInternal } from '../../../../shared/host/protocol'
 import type { HelmBridge } from '../../../../shared/ipc'
-import { createConfigAdapter } from './config'
+import { createCompositionAdapter } from './composition'
 import { createFilesAdapter } from './files'
 import { createHistoryAdapter } from './history'
 import { WINDOW_CAPABILITIES, createPageLink, type PageLink } from './link'
@@ -17,7 +17,7 @@ import { createWorkspaceAdapter, type WorkspaceAdapter } from './workspace'
 
 /**
  * One bridge per host: the window's page link to it, that host's own adapters
- * (history, workspace, profiles, config, files, sessions and terminals,
+ * (history, workspace, profiles, composition, files, sessions and terminals,
  * plugins) and a router of its own in front of them.
  *
  * This PC's host is keyed `LOCAL_HOST_KEY`, and its bridge is the window's
@@ -154,7 +154,7 @@ export function createHostBridge(
     createHistoryAdapter(link, deps.log),
     workspace,
     createProfilesAdapter({ link, own, log: deps.log }),
-    createConfigAdapter({ link, scanned: () => workspace.scannedProjects(), log: deps.log }),
+    createCompositionAdapter({ link, scanned: () => workspace.scannedProjects() }),
     createFilesAdapter(link, deps.log),
     createWorktreesAdapter(link),
     createAgentsAdapter(link),

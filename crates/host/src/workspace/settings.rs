@@ -23,8 +23,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use floti_protocol::BackendId;
 use floti_protocol::channels::workspace::{
     DEFAULT_AGENT_CHILDREN_PER_PARENT, DEFAULT_AGENT_COMMANDS_PER_PARENT, DEFAULT_AGENT_DEPTH,
-    DEFAULT_AGENT_HEAVY_PER_HOST, DEFAULT_AGENT_SESSIONS_PER_HOST, DEFAULT_AGENT_STARTS_PER_PARENT,
-    DEFAULT_SESSION_AGENTS, HostSettings, HostSettingsPatch,
+    DEFAULT_AGENT_SESSIONS_PER_HOST, DEFAULT_AGENT_STARTS_PER_PARENT, DEFAULT_SESSION_AGENTS,
+    HostSettings, HostSettingsPatch,
 };
 use rusqlite::{Connection, params};
 use serde::Serialize;
@@ -87,10 +87,6 @@ pub fn defaults() -> HostSettings {
         agent_depth: DEFAULT_AGENT_DEPTH,
         agent_starts_per_parent: DEFAULT_AGENT_STARTS_PER_PARENT,
         agent_commands_per_parent: DEFAULT_AGENT_COMMANDS_PER_PARENT,
-        // Retired in the protocol, which keeps the field until its next
-        // major: always sent as its default, and never read, stored or
-        // written.
-        agent_heavy_per_host: DEFAULT_AGENT_HEAVY_PER_HOST,
     }
 }
 
@@ -459,8 +455,6 @@ pub fn write(
     if let Some(value) = &patch.agent_commands_per_parent {
         put(AGENT_COMMANDS_PER_PARENT, value);
     }
-    // `agent_heavy_per_host` is retired: a client on an earlier release still
-    // sends it, and the rest of its patch is written as if it had not.
     let edit = conn.transaction().map_err(sql("write the settings"))?;
     for (key, value) in &values {
         edit.execute(

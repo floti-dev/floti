@@ -132,18 +132,10 @@ import {
   type PaletteCommand,
   type SecretPluginChoice,
   type StatusPluginItem,
-  ConfigConsole,
-  ConfigDeleteDialog,
-  ConfigDeletedNotice,
-  ConfigEditor,
-  ConfigNewDialog,
-  ConfigNothingSelected,
-  ConfigRenameDialog,
   ConfirmSessionDialog,
   DeleteProfileDialog,
   type ConsoleEntry,
   DocIcon,
-  EffectiveViewPane,
   FileActions,
   FileCrumb,
   FilesRootPicker,
@@ -155,11 +147,9 @@ import {
   GearIcon,
   GlobeIcon,
   HarnessIcon,
-  HealthPanel,
   HistoryIcon,
   ImportIcon,
   LayersIcon,
-  McpPanel,
   NewHarnessDialog,
   NewSessionDialog,
   NewTabMenu,
@@ -194,7 +184,6 @@ import {
   Sidebar,
   shortcutLabel,
   SidebarAction,
-  SlidersIcon,
   StatusBar,
   TabBar,
   TemplateManager,
@@ -300,7 +289,6 @@ import {
   statusHint,
   useNow,
 } from "./sessionView";
-import { useConfig } from "./useConfig";
 import {
   DocumentModeSwitch,
   DocumentTab,
@@ -489,11 +477,10 @@ const NO_PLUGINS: ReadonlyMap<string, PluginInfo> = new Map();
 type OnHost<T> = T & { host: string };
 
 /** The surfaces that show one host's data at a time, with a switch while more than one is connected. */
-type HostSurface = "history" | "usage" | "config" | "files" | "plugins";
+type HostSurface = "history" | "usage" | "files" | "plugins";
 const LOCAL_SURFACES: Readonly<Record<HostSurface, string>> = {
   history: LOCAL_HOST_KEY,
   usage: LOCAL_HOST_KEY,
-  config: LOCAL_HOST_KEY,
   files: LOCAL_HOST_KEY,
   plugins: LOCAL_HOST_KEY,
 };
@@ -829,7 +816,7 @@ export function App(): JSX.Element {
     dismiss: dismissRestore,
   } = restoreState;
   /**
-   * The host History, Usage, Config, Files and Settings > Plugins each show:
+   * The host History, Usage, Files and Settings > Plugins each show:
    * kept in this window only and sent to no host, This PC until switched. A
    * host removed from this device's list falls back to This PC; one that is
    * listed but not connected stays chosen, and its surface says why it cannot
@@ -837,9 +824,8 @@ export function App(): JSX.Element {
    */
   const [surfaceHosts, setSurfaceHosts] =
     useState<Readonly<Record<HostSurface, string>>>(LOCAL_SURFACES);
-  /** A project's Config or Files asked for while that surface showed another host, pointed once it shows this PC. */
+  /** A project's Files asked for while Files showed another host, pointed once it shows that one. */
   const [pendingScope, setPendingScope] = useState<{
-    surface: "config" | "files";
     path: string;
     host: string;
   } | null>(null);
@@ -851,7 +837,6 @@ export function App(): JSX.Element {
   };
   const historyHost = shownHostOf("history");
   const usageHost = shownHostOf("usage");
-  const configHost = shownHostOf("config");
   const filesHost = shownHostOf("files");
   const pluginsHost = shownHostOf("plugins");
   const showHostOn = useCallback(
@@ -876,7 +861,6 @@ export function App(): JSX.Element {
       : { hosts, host, onHostChange: (next) => showHostOn(surface, next) };
   };
   const historyState = useHistory(historyHost);
-  const configState = useConfig(configHost);
   const usage = useUsage(usageHost);
   const check = useUpdate();
   const ownData = useOwnDataCopy();
@@ -1639,10 +1623,6 @@ export function App(): JSX.Element {
     () => openPane({ kind: "history" }),
     [openPane],
   );
-  const openConfig = useCallback(
-    () => openPane({ kind: "config" }),
-    [openPane],
-  );
   /**
    * Settings is a tab like any other rather than a modal: it is a place, worth
    * leaving open beside a session, and a dialog over the window would be one
@@ -1659,29 +1639,6 @@ export function App(): JSX.Element {
     [openPane],
   );
 
-  /**
-   * Config opened **on** a project - the project page's link. The pane arrives
-   * pointed at the project that was on screen instead of at whatever it last
-   * held; re-pointing goes through the hook's own setter, because that is what
-   * clears the open file. Skipped when the scope is already the one asked for,
-   * so returning to a pane keeps what is open in it.
-   */
-  const { scopePath: configScopePath, setScopePath: setConfigScope } =
-    configState;
-  const openConfigAt = useCallback(
-    (project: Project, host: string = LOCAL_HOST_KEY) => {
-      if (configHost !== host) {
-        // Config switches to the project's host, and the scope is pointed
-        // once the switch has cleared what it showed.
-        showHostOn("config", host);
-        setPendingScope({ surface: "config", path: project.path, host });
-      } else if (configScopePath.toLowerCase() !== project.path.toLowerCase()) {
-        setConfigScope(project.path);
-      }
-      openPane({ kind: "config" });
-    },
-    [configHost, showHostOn, configScopePath, setConfigScope, openPane],
-  );
   /**
    * Where the caret should go in the Browser tab - a page's address bar (Ctrl+L,
    * a new page) or its find field (Ctrl+F) - until that page's pane has put it
@@ -2318,9 +2275,8 @@ export function App(): JSX.Element {
   );
 
   /**
-   * What the profile editor's agent and MCP pickers offer: the same
-   * `config:effective` the config console calls, asked about the composition
-   * being *typed* rather than a saved one.
+   * What the profile editor's agent and MCP pickers offer: `config:effective`,
+   * asked about the composition being *typed* rather than a saved one.
    */
   const predictProfile = useCallback(
     async (root: string, overlays: string[]): Promise<ProfilePrediction> => {
@@ -2796,21 +2752,13 @@ export function App(): JSX.Element {
     revision: discovery,
   });
   const { noteOpened, loadListing, setRoot: setFilesRoot } = files;
-  // A project's Config or Files asked for while that surface showed another
-  // host: pointed in the render that switches it to this PC, after the switch
-  // has cleared what the other host's showed (adjusted while rendering, so
-  // the scope is never painted against the wrong host).
-  if (pendingScope !== null) {
-    if (pendingScope.surface === "config" && configHost === pendingScope.host) {
-      setPendingScope(null);
-      setConfigScope(pendingScope.path);
-    } else if (
-      pendingScope.surface === "files" &&
-      filesHost === pendingScope.host
-    ) {
-      setPendingScope(null);
-      setFilesRoot(pendingScope.path);
-    }
+  // A project's Files asked for while Files showed another host: pointed in
+  // the render that switches it to the project's host, after the switch has
+  // cleared what the other host's showed (adjusted while rendering, so the
+  // root is never painted against the wrong host).
+  if (pendingScope !== null && filesHost === pendingScope.host) {
+    setPendingScope(null);
+    setFilesRoot(pendingScope.path);
   }
 
   /** Whether long lines wrap in a file - a setting, so it holds for the next file and the next start. */
@@ -2825,7 +2773,7 @@ export function App(): JSX.Element {
     (project: Project, host: string = LOCAL_HOST_KEY) => {
       if (filesHost !== host) {
         showHostOn("files", host);
-        setPendingScope({ surface: "files", path: project.path, host });
+        setPendingScope({ path: project.path, host });
       } else setFilesRoot(project.path);
       setSidebarView("files");
       setSidebarHidden(false);
@@ -3790,19 +3738,6 @@ export function App(): JSX.Element {
             icon: <HistoryIcon width={13} height={13} />,
           },
         ];
-      case "config":
-        return [
-          {
-            id: paneId(ref),
-            title: "Config",
-            hint:
-              configHost === LOCAL_HOST_KEY
-                ? (configState.scope?.path ??
-                  "Browse and edit .claude configuration")
-                : `${hostName(configHost)} · ${configState.scope?.path ?? ".claude configuration"}`,
-            icon: <SlidersIcon width={13} height={13} />,
-          },
-        ];
       case "settings":
         return [
           {
@@ -4340,47 +4275,8 @@ export function App(): JSX.Element {
     ) : null;
 
   /**
-   * New, Rename and Delete for one entry in a `.claude` tree. Rendered beside
-   * the other modals rather than inside the console: a dialog nested in a pane
-   * that a split can narrow is a dialog that gets clipped.
-   */
-  const configEntryDialog =
-    configState.scope === null ||
-    configState.entryDialog === null ? null : configState.entryDialog ===
-      "new" ? (
-      <ConfigNewDialog
-        scope={configState.scope}
-        files={configState.tree?.files ?? []}
-        busy={configState.entryBusy}
-        error={configState.entryError}
-        onCreate={configState.createFile}
-        onCancel={() => configState.openEntryDialog(null)}
-      />
-    ) : configState.selected === null ? null : configState.entryDialog ===
-      "rename" ? (
-      <ConfigRenameDialog
-        scope={configState.scope}
-        file={configState.selected}
-        files={configState.tree?.files ?? []}
-        busy={configState.entryBusy}
-        error={configState.entryError}
-        onRename={configState.renameFile}
-        onCancel={() => configState.openEntryDialog(null)}
-      />
-    ) : (
-      <ConfigDeleteDialog
-        file={configState.selected}
-        files={configState.tree?.files ?? []}
-        busy={configState.entryBusy}
-        error={configState.entryError}
-        onDelete={configState.deleteFile}
-        onCancel={() => configState.openEntryDialog(null)}
-      />
-    );
-
-  /**
    * Setup owns the whole window rather than sitting in a tab: with no roots
-   * there is no tree, no config scope and no content, and a launcher painted
+   * there is no tree and no content, and a launcher painted
    * empty behind a dialog would be four broken surfaces framing one that works.
    */
   if (setup.needed) {
@@ -4458,7 +4354,6 @@ export function App(): JSX.Element {
               access: [p.path],
             });
           }}
-          onOpenConfig={openConfigAt}
           onOpenFiles={openFilesAt}
           // A harness only: it is the one kind of project with a layout to
           // freeze. Decided here because whether a project is a harness root is
@@ -4917,7 +4812,6 @@ export function App(): JSX.Element {
                 project={project}
                 host={hostName(host)}
                 onLaunch={(p) => void launchOn(host, p)}
-                onOpenConfig={(p) => openConfigAt(p, host)}
                 onOpenFiles={(p) => openFilesAt(p, host)}
                 onSaveAsProfile={(p) => saveAsProfileOn(host, p)}
                 launching={launchingPath === project.path}
@@ -4975,126 +4869,6 @@ export function App(): JSX.Element {
             compact={compact}
             remoteHosts={sessionsPaneHosts}
           />
-        );
-      case "config":
-        return (
-          <ConfigConsole
-            hostChoice={hostChoiceFor("config")}
-            scopes={configState.scopes}
-            scopePath={configState.scopePath}
-            onScopeChange={configState.setScopePath}
-            view={configState.view}
-            onViewChange={configState.setView}
-            tree={configState.tree}
-            treeLoading={configState.treeLoading}
-            listError={configState.listError}
-            live={configState.live}
-            selected={configState.selected}
-            onSelect={configState.select}
-            dirty={configState.dirty}
-            onRefresh={configState.refresh}
-            refreshing={configState.refreshing}
-            compact={compact}
-            onBack={() => configState.select(null)}
-            onNew={
-              configState.scope === null
-                ? undefined
-                : () => configState.openEntryDialog("new")
-            }
-            notice={
-              configState.deleted === null ? null : (
-                <ConfigDeletedNotice
-                  label={configState.deleted.label}
-                  fileCount={configState.deleted.files.length}
-                  busy={configState.entryBusy}
-                  onUndo={configState.undoDelete}
-                  onDismiss={configState.dismissDeleted}
-                />
-              )
-            }
-          >
-            {configState.view === "files" ? (
-              configState.selected === null ? (
-                <ConfigNothingSelected
-                  scope={configState.scope}
-                  fileCount={configState.tree?.files.length ?? 0}
-                />
-              ) : (
-                <ConfigEditor
-                  // Keyed on the path so switching files rebuilds the editor
-                  // rather than leaving one file's draft in another's box.
-                  key={configState.selected.path}
-                  file={configState.selected}
-                  loaded={configState.loaded}
-                  rendered={configState.rendered}
-                  live={configState.live}
-                  siblings={configState.tree?.files ?? []}
-                  snapshots={configState.snapshots}
-                  saving={configState.saving}
-                  error={configState.editorError}
-                  external={configState.external}
-                  onSave={configState.save}
-                  onReload={configState.reload}
-                  onRestore={configState.restore}
-                  onReveal={revealOn(configHost)}
-                  onOpenPath={configState.openPath}
-                  onOpenExternal={openLink}
-                  onDirtyChange={configState.setDirty}
-                  onHighlight={helmHighlight}
-                  onRename={() => configState.openEntryDialog("rename")}
-                  onDelete={() => configState.openEntryDialog("delete")}
-                  justCreated={
-                    configState.selected.path === configState.createdPath
-                  }
-                />
-              )
-            ) : configState.view === "effective" ? (
-              <EffectiveViewPane
-                profiles={profileState.profiles}
-                profileId={configState.effectiveProfileId}
-                onProfileChange={configState.setEffectiveProfileId}
-                cwd={configState.effectiveCwd}
-                onCwdChange={configState.setEffectiveCwd}
-                view={configState.effective}
-                loading={configState.effectiveLoading}
-                error={configState.effectiveError}
-                onReveal={revealOn(configHost)}
-                onOpenFile={configState.openPath}
-              />
-            ) : configState.view === "mcp" ? (
-              <McpPanel
-                cwd={
-                  configState.scope?.kind === "user"
-                    ? (configState.scopes.find((s) => s.kind !== "user")
-                        ?.path ?? "")
-                    : (configState.scope?.path ?? "")
-                }
-                servers={configState.mcpServers}
-                listing={configState.mcpListing}
-                listing_busy={configState.mcpListing_busy}
-                onList={configState.runMcpList}
-                draft={configState.mcpDraft}
-                onDraftChange={configState.setMcpDraft}
-                preview={configState.mcpPreview}
-                onPreview={configState.requestMcpPreview}
-                onApply={configState.applyMcp}
-                onCancelPreview={configState.cancelMcpPreview}
-                applying={configState.mcpApplying}
-                result={configState.mcpResult}
-                onDismissResult={configState.dismissMcpResult}
-                onRemove={configState.removeMcp}
-                onApprove={configState.approveMcp}
-                onOpenFile={configState.openPath}
-              />
-            ) : (
-              <HealthPanel
-                report={configState.doctor}
-                running={configState.doctorRunning}
-                onRun={configState.runDoctor}
-                claudeVersion={info?.claudeVersion ?? null}
-              />
-            )}
-          </ConfigConsole>
         );
       case "browser": {
         const view =
@@ -5779,14 +5553,6 @@ export function App(): JSX.Element {
             inFront("browser"),
             "data-open-browser",
           ),
-          page(
-            "config",
-            "Config",
-            <SlidersIcon {...RAIL_ICON} />,
-            openConfig,
-            inFront("config"),
-            "data-open-config",
-          ),
         ],
         ...railPlugins,
       ]}
@@ -6301,7 +6067,6 @@ export function App(): JSX.Element {
         {templateDialogs}
         {confirmDialog}
         {restartDialog}
-        {configEntryDialog}
         {profileDialog}
         {addingHost && (
           <AddHostDialog

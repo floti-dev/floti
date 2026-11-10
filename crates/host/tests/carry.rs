@@ -1,12 +1,12 @@
 //! Helm's own data carried into a real host over `carry:*`, the way Helm's
 //! main process sends it: a host whose `floti.db` already holds some of it,
 //! a copy that stops part way and is tried again, then everything read back
-//! through History, the archive, the config console and usage.
+//! through History, the archive and usage.
 //!
 //! The rows sent are a Helm database's: archived conversations whose
-//! transcripts are gone, their usage, names given in History and config file
-//! versions. Every folder is temporary and every conversation a fixture; no
-//! agent runs.
+//! transcripts are gone, their usage and names given in History. Config file
+//! versions are not sent, and the ones the host already holds stay. Every
+//! folder is temporary and every conversation a fixture; no agent runs.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,19 +21,15 @@ use floti_host::store::Store;
 use floti_host::testkit::{PATIENCE, RunningHost, TestClient, TestDirs};
 use floti_protocol::channel::from_payload;
 use floti_protocol::channels::carry::{
-    CarriedConfigVersion, CarriedConfigVersions, CarriedConversation, CarriedConversationPart,
-    CarriedConversations, CarriedSessionName, CarriedSessionNames, CarriedUsageRow,
-    CarriedUsageRows, CarryConversations, CarryFinish, CarryMerged, CarryMissing, CarryNames,
-    CarrySessionIds, CarryStatusRead, CarryUsage, CarryVersions,
+    CarriedConversation, CarriedConversationPart, CarriedConversations, CarriedSessionName,
+    CarriedSessionNames, CarriedUsageRow, CarriedUsageRows, CarryConversations, CarryFinish,
+    CarryMerged, CarryMissing, CarryNames, CarrySessionIds, CarryStatusRead, CarryUsage,
 };
 use floti_protocol::channels::host::HostStopReason;
 use floti_protocol::channels::sessions::{
     ArchiveConversation, ArchiveMessage, ArchiveRole, ArchiveSessionState, HistoryQuery,
     HistoryRefresh, HistorySession, HistorySessionRef, HistorySessions, ReadArchiveStats,
     ReadUsage, UsageChanged, UsageSnapshot,
-};
-use floti_protocol::channels::workspace::{
-    ListConfigSnapshots, ReadConfigSnapshot, ScopedFile, SnapshotRef,
 };
 use floti_protocol::{EventChannel, Message};
 use serde_json::json;
@@ -111,7 +107,8 @@ impl World {
     }
 
     /// What the host held before Helm sent anything: its own archive of ONE,
-    /// a name for it, a version of the settings file, usage of one message,
+    /// a name for it, a version of a settings file an earlier release took,
+    /// usage of one message,
     /// and an archive limit with room for two conversations and a half.
     fn seed_host(&mut self) {
         let store = Store::open(&self.dirs.data).expect("open the host's store");
@@ -254,14 +251,7 @@ impl Helms {
 }
 
 /// What Helm's database holds.
-fn helm_db(
-    world: &World,
-) -> (
-    Vec<Helms>,
-    CarriedSessionNames,
-    CarriedConfigVersions,
-    CarriedUsageRows,
-) {
+fn helm_db(world: &World) -> (Vec<Helms>, CarriedSessionNames, CarriedUsageRows) {
     let conversations = vec![
         // The host archived ONE itself; Helm's copy says something else.
         Helms {
@@ -306,20 +296,6 @@ fn helm_db(
             },
         ],
     };
-    let version = |content: &str, hash: &str, created_at: &str| CarriedConfigVersion {
-        scope_path: world.scope(),
-        file_path: SETTINGS.to_owned(),
-        content: content.to_owned(),
-        content_hash: hash.to_owned(),
-        reason: "edit".to_owned(),
-        created_at: created_at.to_owned(),
-    };
-    let versions = CarriedConfigVersions {
-        versions: vec![
-            version("{\"host\":true}", "hash-host", "2026-09-05T00:00:00.000Z"),
-            version("{\"helm\":true}", "hash-helm", "2026-09-01T00:00:00.000Z"),
-        ],
-    };
     let usage = |uuid: &str, at: u64, input: u64| CarriedUsageRow {
         uuid: uuid.to_owned(),
         at,
@@ -337,7 +313,7 @@ fn helm_db(
             usage("shared", world.now - 2 * DAY_MS, 999),
         ],
     };
-    (conversations, names, versions, rows)
+    (conversations, names, rows)
 }
 
 async fn missing(client: &mut TestClient, ids: &[&str]) -> Vec<String> {
@@ -373,7 +349,7 @@ fn listed<'a>(sessions: &'a [HistorySession], id: &str) -> &'a HistorySession {
 async fn helms_data_is_merged_into_a_host_that_already_holds_some_of_it_once_and_survives_a_stopped_copy()
  {
     let world = World::new();
-    let (conversations, names, versions, usage) = helm_db(&world);
+    let (conversations, names, usage) = helm_db(&world);
     let [one, two, three, four] = &conversations[..] else {
         unreachable!()
     };
@@ -425,8 +401,6 @@ async fn helms_data_is_merged_into_a_host_that_already_holds_some_of_it_once_and
         .unwrap();
     assert_eq!((merged.added, merged.messages, merged.evicted), (3, 2, 1));
     let merged = client.request::<CarryNames>(&names).await.unwrap();
-    assert_eq!(merged, CarryMerged { added: 1, kept: 1 });
-    let merged = client.request::<CarryVersions>(&versions).await.unwrap();
     assert_eq!(merged, CarryMerged { added: 1, kept: 1 });
     let merged = client.request::<CarryUsage>(&usage).await.unwrap();
     assert_eq!(merged, CarryMerged { added: 2, kept: 1 });
@@ -489,28 +463,6 @@ async fn helms_data_is_merged_into_a_host_that_already_holds_some_of_it_once_and
     assert!(stats.stored_bytes <= stats.max_bytes);
     assert_eq!(stats.max_bytes, world.own_bytes * 2 + world.own_bytes / 2);
 
-    // The config console lists both versions, newest first, and opens Helm's.
-    let file = ScopedFile {
-        scope_path: world.scope(),
-        path: world.project.join(SETTINGS).display().to_string(),
-    };
-    let listed_versions = client.request::<ListConfigSnapshots>(&file).await.unwrap();
-    assert_eq!(
-        listed_versions
-            .iter()
-            .map(|meta| meta.content_hash.as_str())
-            .collect::<Vec<_>>(),
-        ["hash-host", "hash-helm"]
-    );
-    let opened = client
-        .request::<ReadConfigSnapshot>(&SnapshotRef {
-            id: listed_versions[1].id,
-        })
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(opened.content, "{\"helm\":true}");
-
     // Usage: the week's spend counts the copied usage of TWO, whose
     // transcript is gone, and the host's own row for the shared message.
     let readings = client.request::<ReadUsage>(&()).await.unwrap();
@@ -533,14 +485,6 @@ async fn helms_data_is_merged_into_a_host_that_already_holds_some_of_it_once_and
         .unwrap();
     assert_eq!((again.added, again.messages, again.evicted), (0, 0, 0));
     assert_eq!(client.request::<CarryNames>(&names).await.unwrap().added, 0);
-    assert_eq!(
-        client
-            .request::<CarryVersions>(&versions)
-            .await
-            .unwrap()
-            .added,
-        0
-    );
     assert_eq!(client.request::<CarryUsage>(&usage).await.unwrap().added, 0);
     assert_eq!(
         client
@@ -551,6 +495,19 @@ async fn helms_data_is_merged_into_a_host_that_already_holds_some_of_it_once_and
         Some(at)
     );
     host.stop(HostStopReason::Stop).await;
+
+    // The version of the settings file the host held before stays, alone.
+    let store = Store::open(&world.dirs.data).expect("open the host's store");
+    let held: Vec<String> = store
+        .connection()
+        .prepare("SELECT content_hash FROM config_snapshots")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert_eq!(held, ["hash-host"]);
+    store.close().unwrap();
 }
 
 /// The readings a `usage:changed` subscription starts with.

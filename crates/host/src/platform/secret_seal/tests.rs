@@ -127,6 +127,6 @@ fn a_data_folder_tag_follows_the_launchers_rule() {
     );
     assert_eq!(
         tag,
-        crate::config_console::sha256_hex(folder.to_string_lossy().as_bytes())[..12]
+        crate::agent_config::sha256_hex(folder.to_string_lossy().as_bytes())[..12]
     );
 }

@@ -59,24 +59,7 @@ const DECLARED: &[(&str, ChannelKind, Option<Capability>)] = &[
     ("template:fromFolder", REQUEST, None),
     ("config:scopes", REQUEST, None),
     ("config:tree", REQUEST, None),
-    ("config:read", REQUEST, None),
-    ("config:render", REQUEST, None),
-    ("config:write", REQUEST, None),
-    ("config:snapshots", REQUEST, None),
-    ("config:snapshot", REQUEST, None),
-    ("config:restore", REQUEST, None),
-    ("config:watch", REQUEST, None),
-    ("config:create", REQUEST, None),
-    ("config:rename", REQUEST, None),
-    ("config:delete", REQUEST, None),
     ("config:effective", REQUEST, None),
-    ("config:mcpPreview", REQUEST, None),
-    ("config:mcpAdd", REQUEST, None),
-    ("config:mcpRemove", REQUEST, None),
-    ("config:mcpApprove", REQUEST, None),
-    ("config:mcpList", REQUEST, None),
-    ("config:doctor", REQUEST, None),
-    ("config:externalChange", EVENT, None),
     ("editor:highlight", REQUEST, None),
     ("content:scopes", REQUEST, FILES),
     ("content:document", REQUEST, FILES),
@@ -235,7 +218,6 @@ fn settings() -> HostSettings {
         agent_depth: 1,
         agent_starts_per_parent: 10,
         agent_commands_per_parent: 2,
-        agent_heavy_per_host: 2,
     }
 }
 
@@ -942,11 +924,11 @@ fn template_payloads_survive_the_wire() {
 }
 
 // ---------------------------------------------------------------------------
-// The config console
+// What composition reads of an agent's config
 // ---------------------------------------------------------------------------
 
 #[test]
-fn config_console_file_payloads_survive_the_wire() {
+fn config_scope_and_tree_payloads_survive_the_wire() {
     let scope = ConfigScope {
         kind: ConfigScopeKind::Harness,
         path: "C:\\work\\hub".into(),
@@ -983,121 +965,10 @@ fn config_console_file_payloads_survive_the_wire() {
         encoded(&ConfigFileKind::ClaudeMd),
         Value::Text("claude-md".into())
     );
-    exchange::<ReadConfigFile>(
-        ConfigPath {
-            path: file_content().path,
-        },
-        file_content(),
-    );
-    exchange::<RenderConfigFile>(
-        SourceToRender {
-            path: "C:\\work\\hub\\.claude\\hooks\\stop.sh".into(),
-            source: "echo done\n".into(),
-        },
-        ConfigRendered {
-            markdown: None,
-            code: Some(RenderedCode {
-                html: "<span>echo</span>".into(),
-                language: "shellscript".into(),
-                highlighted: true,
-            }),
-        },
-    );
-    exchange::<RenderConfigFile>(
-        SourceToRender {
-            path: "C:\\work\\hub\\CLAUDE.md".into(),
-            source: "# Plan\n".into(),
-        },
-        ConfigRendered {
-            markdown: Some(rendered()),
-            code: None,
-        },
-    );
-    exchange::<WriteConfigFile>(write_request(), write_result());
-    exchange::<ListConfigSnapshots>(scoped_file(), vec![snapshot_meta()]);
-    exchange::<ReadConfigSnapshot>(
-        SnapshotRef { id: 88 },
-        Some(SnapshotContent {
-            content: "Think first.\n".into(),
-        }),
-    );
-    exchange::<ReadConfigSnapshot>(SnapshotRef { id: 89 }, None);
-    exchange::<RestoreConfigSnapshot>(
-        RestoreSnapshotRequest {
-            id: 88,
-            path: file_content().path,
-        },
-        write_result(),
-    );
-    exchange::<WatchConfigFile>(
-        WatchConfigRequest {
-            path: Some(file_content().path),
-        },
-        (),
-    );
-    exchange::<WatchConfigFile>(WatchConfigRequest { path: None }, ());
-    event::<ConfigChangedOutside>(ConfigExternalChange {
-        path: file_content().path,
-        hash: "".into(),
-        exists: false,
-        mtime_ms: Millis(0.0),
-    });
 }
 
 #[test]
-fn config_console_create_rename_and_delete_payloads_survive_the_wire() {
-    exchange::<CreateConfigFile>(
-        CreateConfigRequest {
-            scope_path: "C:\\work\\hub".into(),
-            kind: CreatableKind::ClaudeMd,
-            name: "".into(),
-        },
-        CreateConfigResult {
-            ok: true,
-            path: Some("C:\\work\\hub\\CLAUDE.md".into()),
-            rel_path: Some("CLAUDE.md".into()),
-            snapshot_id: Some(90),
-            error: None,
-        },
-    );
-    exchange::<RenameConfigFile>(
-        RenameConfigRequest {
-            scope_path: "C:\\work\\hub".into(),
-            path: "C:\\work\\hub\\.claude\\skills\\think\\SKILL.md".into(),
-            name: "ponder".into(),
-        },
-        RenameConfigResult {
-            ok: true,
-            path: Some("C:\\work\\hub\\.claude\\skills\\ponder\\SKILL.md".into()),
-            rel_path: Some(".claude/skills/ponder/SKILL.md".into()),
-            moved: vec![MovedFile {
-                from: ".claude/skills/think/SKILL.md".into(),
-                to: ".claude/skills/ponder/SKILL.md".into(),
-            }],
-            snapshot_ids: vec![91, 92],
-            frontmatter_renamed: true,
-            error: None,
-        },
-    );
-    exchange::<DeleteConfigFile>(
-        DeleteConfigRequest {
-            scope_path: "C:\\work\\hub".into(),
-            path: "C:\\work\\hub\\CLAUDE.md".into(),
-        },
-        DeleteConfigResult {
-            ok: true,
-            removed: vec![DeletedConfigFile {
-                path: "C:\\work\\hub\\CLAUDE.md".into(),
-                rel_path: "CLAUDE.md".into(),
-                snapshot_id: 93,
-            }],
-            error: None,
-        },
-    );
-}
-
-#[test]
-fn config_console_effective_view_payloads_survive_the_wire() {
+fn effective_view_payloads_survive_the_wire() {
     let entry = EffectiveEntry {
         invocation: "dev:think".into(),
         name: "think".into(),
@@ -1186,96 +1057,7 @@ fn config_console_effective_view_payloads_survive_the_wire() {
 }
 
 #[test]
-fn config_console_mcp_and_doctor_payloads_survive_the_wire() {
-    let add = McpAddRequest {
-        scope: McpScope::Local,
-        name: "github".into(),
-        json: "{\"command\":\"gh-mcp\"}".into(),
-        cwd: "C:\\work\\api".into(),
-    };
-    let result = McpResult {
-        ok: true,
-        output: "Added.".into(),
-        exit_code: Some(0),
-        after: "{}".into(),
-        snapshot_id: Some(94),
-    };
-    exchange::<PreviewMcpServer>(
-        add.clone(),
-        McpPreview {
-            file: "C:\\Users\\someone\\.claude.json".into(),
-            before: "{}".into(),
-            after: "{\"mcpServers\":{}}".into(),
-            diff: vec![
-                McpDiffLine {
-                    sign: McpDiffSign::Kept,
-                    text: "{".into(),
-                },
-                McpDiffLine {
-                    sign: McpDiffSign::Added,
-                    text: "  \"mcpServers\": {}".into(),
-                },
-                McpDiffLine {
-                    sign: McpDiffSign::Removed,
-                    text: "}".into(),
-                },
-            ],
-            replaces: None,
-            error: None,
-        },
-    );
-    let signs: Vec<Value> = [McpDiffSign::Kept, McpDiffSign::Added, McpDiffSign::Removed]
-        .iter()
-        .map(encoded)
-        .collect();
-    assert_eq!(
-        signs,
-        [
-            Value::Text(" ".into()),
-            Value::Text("+".into()),
-            Value::Text("-".into())
-        ]
-    );
-    exchange::<AddMcpServer>(add, result.clone());
-    exchange::<RemoveMcpServer>(
-        McpRemoveRequest {
-            name: "github".into(),
-            scope: McpScope::User,
-            cwd: "C:\\work\\api".into(),
-        },
-        result.clone(),
-    );
-    exchange::<ApproveMcpServer>(
-        McpApproveRequest {
-            cwd: "C:\\work\\api".into(),
-            name: "github".into(),
-            approved: true,
-        },
-        write_result(),
-    );
-    exchange::<ListMcpServers>(
-        McpListRequest {
-            cwd: "C:\\work\\api".into(),
-        },
-        McpResult {
-            exit_code: None,
-            ..result
-        },
-    );
-    exchange::<RunDoctor>(
-        (),
-        DoctorReport {
-            output: "Version: 2.1.225\n".into(),
-            rows: vec![DoctorRow {
-                label: "Version".into(),
-                value: "2.1.225".into(),
-            }],
-            exit_code: Some(0),
-            ran_at: "2026-10-27T10:00:00Z".into(),
-            duration_ms: Millis(812.0),
-            error: None,
-        },
-    );
+fn editor_highlight_payloads_survive_the_wire() {
     exchange::<HighlightSource>(
         SourceToRender {
             path: "C:\\work\\api\\.claude\\settings.json".into(),
@@ -1631,18 +1413,16 @@ fn could_not_look_and_nothing_there_stay_different_answers() {
 
 #[test]
 fn milliseconds_sent_as_a_whole_number_decode() {
-    let mut change = encoded(&ConfigExternalChange {
-        path: "C:\\work\\api\\CLAUDE.md".into(),
-        hash: "ab12".into(),
-        exists: true,
+    let mut file = encoded(&ConfigFileContent {
         mtime_ms: Millis(0.0),
+        ..file_content()
     });
-    for (key, value) in change.as_map_mut().unwrap() {
+    for (key, value) in file.as_map_mut().unwrap() {
         if key.as_text() == Some("mtimeMs") {
             *value = Value::Integer(1_761_559_200_000_i64.into());
         }
     }
-    let decoded: ConfigExternalChange = change.deserialized().unwrap();
+    let decoded: ConfigFileContent = file.deserialized().unwrap();
     assert_eq!(decoded.mtime_ms, Millis(1_761_559_200_000.0));
     // And a fraction survives as one.
     assert_eq!(

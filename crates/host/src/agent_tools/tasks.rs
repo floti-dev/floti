@@ -26,7 +26,7 @@ use tokio::task::AbortHandle;
 
 use super::{Caller, Delivery, GrantId, ToolFamily};
 use crate::agent::{fill_random, hex};
-use crate::config_console::time::now_iso;
+use crate::agent_config::time::now_iso;
 
 /// How often a client is asked to poll a working task, in milliseconds. A
 /// poll is a cheap lookup in memory, and the answer is a task that completes

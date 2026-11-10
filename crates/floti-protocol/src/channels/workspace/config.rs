@@ -1,72 +1,21 @@
-//! The config console: `config:*` and `editor:highlight`.
+//! What composition reads of an agent's config, and the editors' highlighter:
+//! `config:scopes`, `config:tree`, `config:effective` and `editor:highlight`.
 //!
-//! Every write is snapshotted first and checked against the hash the editor
-//! read, so an edit made outside the console is a conflict rather than lost.
+//! The scopes and trees are what a template imports from, and the effective
+//! view is what a profile composes. None of them writes anything. The file,
+//! write and version shapes here are the ones `content:*` carries for a note.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::{Millis, RenderedMarkdown};
+use super::Millis;
 
 request_channel!(ListConfigScopes = "config:scopes", () => Vec<ConfigScope>);
 request_channel!(ReadConfigTree = "config:tree", ConfigScopeRef => ConfigTree);
-request_channel!(ReadConfigFile = "config:read", ConfigPath => ConfigFileContent);
-request_channel!(
-    /// The same bytes rendered: markdown as HTML, a hook highlighted. Takes
-    /// the source, so one channel serves the file on disk and a draft.
-    RenderConfigFile = "config:render", SourceToRender => ConfigRendered
-);
-request_channel!(WriteConfigFile = "config:write", WriteConfigRequest => WriteConfigResult);
-request_channel!(
-    /// Versions of one file, newest first, without their contents.
-    ListConfigSnapshots = "config:snapshots", ScopedFile => Vec<ConfigSnapshotMeta>
-);
-request_channel!(
-    /// The bytes of one version, or null when there is no such version.
-    ReadConfigSnapshot = "config:snapshot", SnapshotRef => Option<SnapshotContent>
-);
-request_channel!(
-    RestoreConfigSnapshot = "config:restore", RestoreSnapshotRequest => WriteConfigResult
-);
-request_channel!(
-    /// Which file the client's editor has open, so a change made outside it
-    /// arrives on `config:externalChange` before the user saves over it.
-    WatchConfigFile = "config:watch", WatchConfigRequest => ()
-);
-request_channel!(CreateConfigFile = "config:create", CreateConfigRequest => CreateConfigResult);
-request_channel!(
-    /// Moves a skill's whole folder, or a command across its namespace path.
-    RenameConfigFile = "config:rename", RenameConfigRequest => RenameConfigResult
-);
-request_channel!(
-    /// Snapshots first, then removes. Each row is restorable.
-    DeleteConfigFile = "config:delete", DeleteConfigRequest => DeleteConfigResult
-);
 request_channel!(
     /// What a session started here would actually be given.
     ReadEffectiveView = "config:effective", EffectiveViewRequest => EffectiveView
-);
-request_channel!(
-    /// What the file would look like after adding a server, before anything
-    /// runs.
-    PreviewMcpServer = "config:mcpPreview", McpAddRequest => McpPreview
-);
-request_channel!(AddMcpServer = "config:mcpAdd", McpAddRequest => McpResult);
-request_channel!(RemoveMcpServer = "config:mcpRemove", McpRemoveRequest => McpResult);
-request_channel!(
-    /// Approves or revokes a `.mcp.json` server for a project.
-    ApproveMcpServer = "config:mcpApprove", McpApproveRequest => WriteConfigResult
-);
-request_channel!(
-    /// Lists the servers with a health check of each, so it is slow.
-    ListMcpServers = "config:mcpList", McpListRequest => McpResult
-);
-request_channel!(RunDoctor = "config:doctor", () => DoctorReport);
-event_channel!(
-    /// The file the client's editor has open changed on disk, and the host
-    /// did not change it.
-    ConfigChangedOutside = "config:externalChange", event ConfigExternalChange
 );
 request_channel!(
     /// A draft, tokenised per line for an editor's underlay. Opens no file
@@ -101,13 +50,6 @@ pub struct ConfigScope {
 #[serde(rename_all = "camelCase")]
 pub struct ConfigScopeRef {
     pub scope_path: String,
-}
-
-/// A file, by absolute path.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct ConfigPath {
-    pub path: String,
 }
 
 /// What a file in a config tree is, as the agent resolves it.
@@ -172,7 +114,9 @@ pub struct ConfigFileContent {
     pub binary: bool,
 }
 
-/// Why a snapshot was taken.
+/// Why a snapshot was taken. A note's versions are taken for an edit or a
+/// restore; the other reasons are those of versions an agent's config files
+/// were given by earlier releases, which the store still holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ConfigWriteReason {
@@ -206,20 +150,6 @@ pub struct ConfigSnapshotMeta {
 pub struct ScopedFile {
     pub scope_path: String,
     pub path: String,
-}
-
-/// A snapshot, by id.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct SnapshotRef {
-    #[ts(type = "number")]
-    pub id: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct SnapshotContent {
-    pub content: String,
 }
 
 /// Puts a snapshot's bytes back at `path`.
@@ -279,116 +209,6 @@ pub struct WriteConfigResult {
     /// Set when the write was refused for another reason.
     #[serde(default)]
     pub error: Option<String>,
-}
-
-/// A config file the console can create.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "kebab-case")]
-pub enum CreatableKind {
-    Skill,
-    Command,
-    Agent,
-    Rule,
-    Settings,
-    SettingsLocal,
-    ClaudeMd,
-    Mcp,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateConfigRequest {
-    pub scope_path: String,
-    pub kind: CreatableKind,
-    /// Ignored for the kinds with a fixed name.
-    pub name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateConfigResult {
-    pub ok: bool,
-    /// The file that now exists.
-    pub path: Option<String>,
-    pub rel_path: Option<String>,
-    #[ts(type = "number | null")]
-    pub snapshot_id: Option<u64>,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct RenameConfigRequest {
-    pub scope_path: String,
-    /// The addressed file: a skill's `SKILL.md`, not its folder.
-    pub path: String,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct MovedFile {
-    pub from: String,
-    pub to: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct RenameConfigResult {
-    pub ok: bool,
-    /// The addressed file at its new place, or null when nothing moved.
-    pub path: Option<String>,
-    pub rel_path: Option<String>,
-    /// Every file that moved.
-    pub moved: Vec<MovedFile>,
-    #[ts(type = "Array<number>")]
-    pub snapshot_ids: Vec<u64>,
-    /// The moved file's frontmatter `name:` was updated to match.
-    pub frontmatter_renamed: bool,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DeleteConfigRequest {
-    pub scope_path: String,
-    pub path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DeletedConfigFile {
-    pub path: String,
-    pub rel_path: String,
-    #[ts(type = "number")]
-    pub snapshot_id: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DeleteConfigResult {
-    pub ok: bool,
-    /// What came off the disk, each with the snapshot that can put it back.
-    pub removed: Vec<DeletedConfigFile>,
-    pub error: Option<String>,
-}
-
-/// Which file the client's editor has open, or null to release the watch.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct WatchConfigRequest {
-    pub path: Option<String>,
-}
-
-/// A file an editor has open was changed by something other than the host.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct ConfigExternalChange {
-    pub path: String,
-    /// sha256 of the bytes now on disk, or empty when it was removed.
-    pub hash: String,
-    pub exists: bool,
-    pub mtime_ms: Millis,
 }
 
 /// Where a resolved entry came from.
@@ -550,132 +370,12 @@ pub struct EffectiveView {
     pub computed_at: String,
 }
 
-/// Highlighted source, for a config file a session runs.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct RenderedCode {
-    pub html: String,
-    pub language: String,
-    /// False when there is no grammar for it, which is not the same as
-    /// highlighted as plain text.
-    pub highlighted: bool,
-}
-
-/// A config file rendered as what it is. At most one half is set; both are
-/// null for a file that is neither prose nor code.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct ConfigRendered {
-    pub markdown: Option<RenderedMarkdown>,
-    pub code: Option<RenderedCode>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum McpScope {
     Local,
     User,
     Project,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct McpAddRequest {
-    pub scope: McpScope,
-    pub name: String,
-    /// The server object, as JSON.
-    pub json: String,
-    /// The folder `project` and `local` resolve against.
-    pub cwd: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct McpRemoveRequest {
-    pub name: String,
-    pub scope: McpScope,
-    pub cwd: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct McpApproveRequest {
-    pub cwd: String,
-    pub name: String,
-    pub approved: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct McpListRequest {
-    pub cwd: String,
-}
-
-/// Whether a diff line is kept, added or removed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-pub enum McpDiffSign {
-    #[serde(rename = " ")]
-    Kept,
-    #[serde(rename = "+")]
-    Added,
-    #[serde(rename = "-")]
-    Removed,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct McpDiffLine {
-    pub sign: McpDiffSign,
-    pub text: String,
-}
-
-/// What the file would look like afterwards, computed before anything runs.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct McpPreview {
-    pub file: String,
-    pub before: String,
-    pub after: String,
-    pub diff: Vec<McpDiffLine>,
-    /// Set when the name is already configured in this scope.
-    pub replaces: Option<String>,
-    /// Set when the JSON is not usable.
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct McpResult {
-    pub ok: bool,
-    /// What the agent's command printed, trimmed.
-    pub output: String,
-    pub exit_code: Option<i32>,
-    /// The file after the command ran.
-    pub after: String,
-    /// The snapshot taken before the command ran.
-    #[ts(type = "number | null")]
-    pub snapshot_id: Option<u64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DoctorRow {
-    pub label: String,
-    pub value: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct DoctorReport {
-    /// The doctor command's output, verbatim.
-    pub output: String,
-    /// Parsed `Label: value` lines, in order.
-    pub rows: Vec<DoctorRow>,
-    pub exit_code: Option<i32>,
-    pub ran_at: String,
-    pub duration_ms: Millis,
-    /// Set when the command could not be run at all.
-    pub error: Option<String>,
 }
 
 /// A draft, tokenised per line for an editor's underlay.

@@ -62,10 +62,6 @@ pub enum NoticeLimit {
     Depth,
     /// Starts one parent may make in all.
     Starts,
-    /// Retired: no host refuses a start with it. A host on an earlier
-    /// release may still send it; it stays until the protocol's next major
-    /// removes it.
-    Heavy,
 }
 
 /// One notice standing on a host.

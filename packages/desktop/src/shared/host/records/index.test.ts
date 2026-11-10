@@ -60,22 +60,15 @@ describe('what a session’s agent called it, as the window reads it', () => {
 describe('a host session, as the window reads it', () => {
   it('carries a child’s parent, the parent’s name and its agent', () => {
     const record = sessionFromHost(
-      hostSession({ parentId: 4, parentName: 'lead', agent: 'reviewer', role: 'reviewer' })
+      hostSession({ parentId: 4, parentName: 'lead', agent: 'reviewer' })
     )
     expect(record).toMatchObject({ id: 9, parentId: 4, parentName: 'lead', agent: 'reviewer' })
-    expect(record).not.toHaveProperty('role')
-  })
-
-  it('reads the agent from role when a host says only that', () => {
-    const record = sessionFromHost(hostSession({ parentId: 4, parentName: 'lead', role: 'reviewer' }))
-    expect(record).toMatchObject({ agent: 'reviewer' })
-    expect(record).not.toHaveProperty('role')
   })
 
   it('carries a session nobody started with neither a parent nor an agent', () => {
     for (const bare of [
       hostSession(),
-      hostSession({ parentId: null, parentName: null, agent: null, role: null })
+      hostSession({ parentId: null, parentName: null, agent: null })
     ]) {
       const record = sessionFromHost(bare)
       expect(record).not.toHaveProperty('parentId')

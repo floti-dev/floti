@@ -1,6 +1,6 @@
 //! A client's own data, carried into the host once: `carry:status`,
-//! `carry:missing`, `carry:names`, `carry:versions`, `carry:usage`,
-//! `carry:conversations` and `carry:finish`.
+//! `carry:missing`, `carry:names`, `carry:usage`, `carry:conversations` and
+//! `carry:finish`.
 //!
 //! Each batch is merged ([`crate::carry`]) in one transaction over the shared
 //! store, held only for that batch, so History, the session list and every
@@ -13,7 +13,7 @@ use std::sync::{Arc, MutexGuard};
 use floti_protocol::channel::Router;
 use floti_protocol::channels::carry::{
     CarryConversations, CarryFinish, CarryMerged, CarryMissing, CarryNames, CarrySessionIds,
-    CarryStatusRead, CarryUsage, CarryVersions,
+    CarryStatusRead, CarryUsage,
 };
 
 use super::history::HistoryHandle;
@@ -74,12 +74,6 @@ impl Feature for Carry {
                 if merged.added > 0 {
                     self.stored_changed(true);
                 }
-                Ok(merged)
-            })
-            .handle::<CarryVersions>(|request| {
-                let merged = carry::merge_versions(self.store().connection(), &request.versions)
-                    .map_err(|err| err.to_string())?;
-                said(merged, "config file versions");
                 Ok(merged)
             })
             .handle::<CarryUsage>(|request| {

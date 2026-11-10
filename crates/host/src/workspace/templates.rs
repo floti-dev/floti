@@ -43,7 +43,7 @@ use std::cmp::Ordering;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-use crate::config_console::normalize;
+use crate::agent_config::normalize;
 use crate::platform::folders::Folders;
 use crate::platform::links;
 
@@ -171,5 +171,5 @@ pub(crate) fn label(base: &Path, path: &Path) -> String {
 
 /// The modification time of `meta`, in epoch ms.
 pub(crate) fn mtime(meta: &std::fs::Metadata) -> floti_protocol::channels::workspace::Millis {
-    crate::config_console::mtime_ms(meta)
+    crate::agent_config::mtime_ms(meta)
 }

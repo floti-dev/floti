@@ -474,9 +474,9 @@ pub trait ConfigSource: Send + Sync {
     /// file is listed from its directory entry alone, never opened.
     fn config_files(&self, project: Option<&Path>) -> Result<Vec<ConfigFile>>;
 
-    /// The agent's side of the config console - its config folder, its
-    /// global config and how to run its CLI - when it has one.
-    fn console(&self) -> Option<crate::config_console::AgentConfig> {
+    /// Where the agent keeps its config - its config folder and its global
+    /// config - when it has them.
+    fn agent_config(&self) -> Option<crate::agent_config::AgentConfig> {
         None
     }
 }
