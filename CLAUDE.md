@@ -611,14 +611,17 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   resumed parent included; anything else is not found), in the folder or
   worktree its row recorded, through its backend's `Resumer` with the task as
   the conversation's next turn (`ResumeRequest.prompt`) and its agent composed
-  again, its permission mode decided as a start's is. It keeps its name, parent
-  link, `outlive` and `can_start`, so a resume that also names an agent,
-  backend, folder, profile, worktree or name is refused. Also refused, with
-  nothing started: a child still running, a folder or worktree gone or no
-  longer tracked, a backend whose adapter has no `Resumer`, and a child with
-  no conversation. It is then judged against every limit as a start is, and
-  is one more start and one more running child (a resume adds a row under the
-  same name; the newest row of a name is the child).
+  again. It runs in the permission mode its row recorded at launch, held to
+  the mode its parent was launched in as a start's is (`child_mode`), so a
+  change to its agent file's `permission` line reaches only new starts. It
+  keeps its name, parent link, `outlive` and `can_start`, so a resume that
+  also names an agent, backend, folder, profile, worktree or name is refused.
+  Also refused, with nothing started: a child still running, a folder or
+  worktree gone or no longer tracked, a backend whose adapter has no
+  `Resumer`, and a child with no conversation. It is then judged against every
+  limit as a start is, and is one more start and one more running child (a
+  resume adds a row under the same name; the newest row of a name is the
+  child).
 - `floti agent start`, `send`, `wait`, `read` and `stop` run the same
   tools from a session's own shell (`floti agent read <name> [--lines N]
   [--json]` prints the screen as text, `floti agent stop [--keep] <name>`
