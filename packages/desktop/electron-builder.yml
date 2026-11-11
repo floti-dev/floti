@@ -220,4 +220,6 @@ linux:
     - target: AppImage
       arch: [x64]
 appImage:
-  artifactName: Helm-${version}-linux-${arch}.${ext}
+  # Written out rather than `${arch}`, which an AppImage spells `x86_64`: the
+  # release names every file's CPU as floti's files do, and Linux is x64 only.
+  artifactName: Helm-${version}-linux-x64.${ext}
