@@ -276,7 +276,7 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
                 )}
                 {refused && (
                   <span className="block">
-                    The file on disk is as it was, and your edit is kept.
+                    {isNew ? 'Nothing was written, and your edit is kept.' : 'The file on disk is as it was, and your edit is kept.'}
                     {view === 'form' && unplaced.length < problems.length && ' The problems are marked on their fields.'}
                   </span>
                 )}

@@ -44,8 +44,12 @@ export type AgentOutcome =
   | { kind: 'created'; name: string }
   | { kind: 'saved'; name: string }
   | { kind: 'renamed'; from: string; name: string }
-  /** `from` is the name it had when the save over the change also renamed it; null otherwise. */
-  | { kind: 'savedOver'; name: string; at: string; from: string | null }
+  /**
+   * `from` is the name the page had when the save over the change also gave
+   * it a new one, else null; `moved` says the host moved that file to the new
+   * name, which it does not when the file had been removed and the save made it.
+   */
+  | { kind: 'savedOver'; name: string; at: string; from: string | null; moved: boolean }
   | { kind: 'deleted'; name: string }
   | { kind: 'reloaded'; name: string; undo: () => void }
   | { kind: 'gone'; name: string }
@@ -68,6 +72,18 @@ const forgotten = new Map<string, number>()
 export function forgetAgentDraft(key: string): void {
   kept.delete(key)
   forgotten.set(key, (forgotten.get(key) ?? 0) + 1)
+}
+
+/**
+ * Moves the page's state from tab `from` to tab `to`: a save that gave the
+ * page a new name gives it a new tab, and what was typed while the save was
+ * on its way goes with it. The page under `from` keeps nothing after.
+ */
+export function moveAgentDraft(from: string, to: string): void {
+  if (from === to) return
+  const state = kept.get(from)
+  forgetAgentDraft(from)
+  if (state !== undefined) kept.set(to, state)
 }
 
 const clock = (): string => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -193,7 +209,10 @@ export function useAgentDraft(
           })
         return
       }
-      if (s.external?.file?.hash === file?.hash && s.external !== null) return
+      if (s.external !== null && s.external.file?.hash === file?.hash) {
+        if (s.loadError !== null) update({ loadError: null })
+        return
+      }
       update({ external: { file, at: clock() }, loadError: null })
     },
     [helm, isGone, update]
@@ -318,16 +337,19 @@ export function useAgentDraft(
     if (s.external === null || s.base === null) return null
     const at = s.external.at
     const sent = { draft: s.draft, name: s.name }
-    // A rename moves the file as it is now; a file that was removed has nothing to move.
-    const from = s.external.file !== null && s.name !== s.base.name ? s.base.name : null
-    const result = await write(sent, s.external.file?.hash ?? null, from)
+    // A rename moves the file as it is now; a file that was removed has nothing
+    // to move, and the save makes it under its new name. The tab follows the
+    // name either way.
+    const from = s.name !== s.base.name ? s.base.name : null
+    const renameFrom = s.external.file !== null ? from : null
+    const result = await write(sent, s.external.file?.hash ?? null, renameFrom)
     if (result === null) return null
     if (result.refusal !== null || result.conflict !== null || result.file === null) {
       refused(result)
       return null
     }
     took(result.file, sent)
-    const done: AgentOutcome = { kind: 'savedOver', name: result.file.name, at, from }
+    const done: AgentOutcome = { kind: 'savedOver', name: result.file.name, at, from, moved: renameFrom !== null }
     onOutcome(done)
     return done
   }

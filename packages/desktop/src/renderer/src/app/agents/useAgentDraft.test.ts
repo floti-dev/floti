@@ -238,7 +238,56 @@ describe('useAgentDraft', () => {
     expect(bridge.invoked('agents:write')).toEqual([
       { name: 'issue-triage', text: withoutClass(TEXT), expectedHash: 'h2', renameFrom: 'triage' }
     ])
-    expect(outcomes).toEqual([{ kind: 'savedOver', name: 'issue-triage', at: expect.any(String), from: 'triage' }])
+    expect(outcomes).toEqual([{ kind: 'savedOver', name: 'issue-triage', at: expect.any(String), from: 'triage', moved: true }])
+  })
+
+  it('makes the agent under its new name on Save mine after a rename and the old file’s removal, and names the old name', async () => {
+    bridge.answer('agents:read', ({ name }) => file(name, TEXT, 'h1'))
+    const { result, outcomes } = open({ name: 'foo' })
+    await waitFor(() => expect(result.current.state.loaded).toBe(true))
+    act(() => result.current.setName('bar'))
+    bridge.answer('agents:read', () => {
+      throw new Error('There is no agent file foo.md in the agents folder.')
+    })
+    bridge.answer('agents:list', () => ({ agents: [], bad: [] }) as never)
+    act(() => bridge.emit('agents:changed', { names: ['foo'] }))
+    await waitFor(() => expect(result.current.state.external).toMatchObject({ file: null }))
+
+    bridge.answer('agents:write', ({ name, text }) => change({ file: file(name, text, 'h2') }))
+    await act(async () => void (await result.current.saveMine()))
+    expect(bridge.invoked('agents:write')).toEqual([
+      { name: 'bar', text: withoutClass(TEXT), expectedHash: null, renameFrom: null }
+    ])
+    expect(outcomes).toEqual([{ kind: 'savedOver', name: 'bar', at: expect.any(String), from: 'foo', moved: false }])
+  })
+
+  it('clears a failed read again once the change from outside it holds reads again', async () => {
+    let reachable = true
+    let onDisk = file('lead', TEXT, 'h1')
+    bridge.answer('agents:read', () => {
+      if (!reachable) throw new Error('The connection ended.')
+      return onDisk
+    })
+    bridge.answer('agents:list', () => {
+      throw new Error('The connection ended.')
+    })
+    const { result } = open({ name: 'lead' })
+    await waitFor(() => expect(result.current.state.loaded).toBe(true))
+    act(() => result.current.setDraft(`${TEXT}mine
+`))
+    onDisk = file('lead', `${TEXT}outside
+`, 'h2')
+    act(() => bridge.emit('agents:changed', { names: ['lead'] }))
+    await waitFor(() => expect(result.current.state.external?.file?.hash).toBe('h2'))
+
+    reachable = false
+    act(() => bridge.emit('agents:changed', { names: ['lead'] }))
+    await waitFor(() => expect(result.current.state.loadError).toBe('The connection ended.'))
+
+    reachable = true
+    act(() => bridge.emit('agents:changed', { names: ['lead'] }))
+    await waitFor(() => expect(result.current.state.loadError).toBeNull())
+    expect(result.current.state.external?.file?.hash).toBe('h2')
   })
 
   it('keeps what was typed while a save was on its way', async () => {

@@ -177,6 +177,18 @@ describe('AgentPage', () => {
     expect(document.querySelector('[data-editor-invalid]')?.getAttribute('data-editor-invalid')).toBe('true')
   })
 
+  it('says a refused save of a new agent wrote nothing, as it has no file on disk', () => {
+    const problems = [{ field: 'effort', line: 5, message: 'effort for claude-code must be low, medium, high, xhigh or max' }]
+    const { unmount } = render(<AgentPage {...props({ savedName: null, name: 'triage', dirty: true, problems })} />)
+    const strip = screen.getByRole('alert')
+    expect(strip.textContent).toContain('Nothing was written, and your edit is kept.')
+    expect(strip.textContent).not.toContain('The file on disk')
+    unmount()
+
+    render(<AgentPage {...props({ dirty: true, problems })} />)
+    expect(screen.getByRole('alert').textContent).toContain('The file on disk is as it was, and your edit is kept.')
+  })
+
   it('saves on Ctrl+S only while Save is on', async () => {
     const onSave = vi.fn()
     render(<Held start={props({ onSave })} />)

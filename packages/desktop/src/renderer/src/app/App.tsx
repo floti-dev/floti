@@ -20,7 +20,6 @@ import {
   closedChildTab,
   crumbChips,
   closeTab,
-  replaceTab,
   cycleTab,
   DEFAULT_SETTINGS,
   familiesHere,
@@ -225,8 +224,9 @@ import {
 import { sidebarFor, type SidebarView } from "./sidebarFor";
 import { viewRailItems } from "./railViews";
 import { AgentTab } from "./agents/AgentTab";
-import { forgetAgentDraft, type AgentOutcome } from "./agents/useAgentDraft";
-import { restoreAgent, useAgentToast } from "./agents/useAgentToast";
+import { forgetAgentDraft } from "./agents/useAgentDraft";
+import { useAgentToast } from "./agents/useAgentToast";
+import { agentOutcomeIn, agentRefOn } from "./agents/agentOutcome";
 import { useAgentList } from "./agents/useAgentList";
 import {
   commandRow,
@@ -3709,10 +3709,6 @@ export function App(): JSX.Element {
       (front?.kind === "settings" && settingsSection === "agents"),
   );
   const agentDraftSeq = useRef(0);
-  const agentRefOn = (name: string, host: string): PaneRef =>
-    host === LOCAL_HOST_KEY
-      ? { kind: "agent", name }
-      : { kind: "agent", name, host };
   const newAgent = (copyOf: string | null, host: string = agentsHost): void => {
     agentDraftSeq.current += 1;
     const id = agentDraftSeq.current;
@@ -3722,81 +3718,9 @@ export function App(): JSX.Element {
         : { kind: "agent-draft", id, copyOf, host },
     );
   };
-  const raiseAgentToast = agentToasts.raise;
-  const agentRestore = restoreAgent;
   /** What a page's save, rename, delete or reload does to its tab, and the toast it leaves. */
-  const agentOutcome =
-    (id: string, host: string) =>
-    (outcome: AgentOutcome): void => {
-      const leave = (): void => {
-        forgetAgentDraft(id);
-        markDocDirty(id, false);
-      };
-      switch (outcome.kind) {
-        case "saved":
-          return;
-        case "created":
-          leave();
-          commit((current) =>
-            replaceTab(current, id, agentRefOn(outcome.name, host)),
-          );
-          return;
-        case "renamed": {
-          leave();
-          const renamed = agentRefOn(outcome.name, host);
-          commit((current) => replaceTab(current, id, renamed));
-          raiseAgentToast(
-            `Renamed ${outcome.from} to ${outcome.name}`,
-            "Undo gives it its old name back.",
-            agentRestore(host, outcome.from, () =>
-              commit((current) =>
-                replaceTab(
-                  current,
-                  paneId(renamed),
-                  agentRefOn(outcome.from, host),
-                ),
-              ),
-            ),
-          );
-          return;
-        }
-        case "savedOver":
-          if (outcome.from !== null) {
-            leave();
-            const renamed = agentRefOn(outcome.name, host);
-            commit((current) => replaceTab(current, id, renamed));
-          }
-          raiseAgentToast(
-            `Saved over the change made at ${outcome.at}`,
-            "Undo puts that change back.",
-            agentRestore(host, outcome.name),
-          );
-          return;
-        case "deleted":
-          leave();
-          commit((current) => closeTab(current, id));
-          raiseAgentToast(
-            `Deleted ${outcome.name}`,
-            "Its file is kept in Floti's data folder, so Undo puts it back as it was.",
-            agentRestore(host, outcome.name),
-          );
-          return;
-        case "reloaded":
-          raiseAgentToast(
-            `Reloaded ${outcome.name}.md`,
-            "Undo brings your edit back.",
-            () => {
-              outcome.undo();
-              return Promise.resolve(null);
-            },
-          );
-          return;
-        case "gone":
-          leave();
-          commit((current) => closeTab(current, id));
-          return;
-      }
-    };
+  const agentOutcome = (id: string, host: string) =>
+    agentOutcomeIn({ commit, markDocDirty, raise: agentToasts.raise }, id, host);
   const renderAgent = (
     ref: Extract<PaneRef, { kind: "agent" | "agent-draft" }>,
   ): JSX.Element => {
