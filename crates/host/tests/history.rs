@@ -1429,6 +1429,48 @@ fn each_session_carries_its_agents_last_reply_without_tool_calls() {
 }
 
 #[test]
+fn a_last_reply_is_the_replys_text_and_never_the_thinking_stored_with_it() {
+    let mut world = Archive::new();
+    let thought = [
+        world.user(1, "a question"),
+        world.message(ArchiveRole::Assistant, 2, "Fixed the watcher."),
+        world.message(
+            ArchiveRole::Assistant,
+            3,
+            "The user wants the tests too; I should run them.\n\n[tool: Bash]",
+        ),
+        world.message(
+            ArchiveRole::Assistant,
+            4,
+            "Weighing whether the handle leaks first.\n\nThe tests   pass.",
+        ),
+    ];
+    world.archive("thought.jsonl", "thought", &thought);
+    assert_eq!(
+        archive::last_reply(world.conn(), "thought")
+            .unwrap()
+            .as_deref(),
+        Some("The tests pass.")
+    );
+    let unfinished = [
+        world.user(1, "a question"),
+        world.message(ArchiveRole::Assistant, 2, "Fixed the watcher."),
+        world.message(
+            ArchiveRole::Assistant,
+            3,
+            "The user wants the tests too.\n\n[tool: Bash]",
+        ),
+    ];
+    world.archive("unfinished.jsonl", "unfinished", &unfinished);
+    assert_eq!(
+        archive::last_reply(world.conn(), "unfinished")
+            .unwrap()
+            .as_deref(),
+        Some("Fixed the watcher.")
+    );
+}
+
+#[test]
 fn an_archive_that_cannot_be_searched_is_an_error_and_never_no_match() {
     let mut world = Archive::new();
     let backend = BackendId::claude_code();

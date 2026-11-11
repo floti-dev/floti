@@ -422,6 +422,11 @@ pub struct RestoreOffer {
     /// Left alone: reopening one would be a second process on one
     /// conversation.
     pub elsewhere: u32,
+    /// When this host found the sessions lost, as epoch ms: the newest moment
+    /// it added one to the offer. Absent from a host that does not say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
+    pub lost_at: Option<u64>,
 }
 
 /// One lost session to reopen, at the grid of the pane it goes back to.

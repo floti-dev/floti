@@ -3074,7 +3074,12 @@ sessions: Array<RestorableSession>,
  * Left alone: reopening one would be a second process on one
  * conversation.
  */
-elsewhere: number, };
+elsewhere: number, 
+/**
+ * When this host found the sessions lost, as epoch ms: the newest moment
+ * it added one to the offer. Absent from a host that does not say.
+ */
+lostAt?: number, };
 
 export type RestoreSessionsRequest = { 
 /**

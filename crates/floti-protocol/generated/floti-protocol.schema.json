@@ -8548,6 +8548,15 @@
           "minimum": 0,
           "type": "integer"
         },
+        "lostAt": {
+          "description": "When this host found the sessions lost, as epoch ms: the newest moment\nit added one to the offer. Absent from a host that does not say.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "sessions": {
           "description": "In the order their tabs were in.",
           "items": {

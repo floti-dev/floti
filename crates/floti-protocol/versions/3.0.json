@@ -9518,6 +9518,14 @@
           "minimum": 0,
           "type": "integer"
         },
+        "lostAt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "sessions": {
           "items": {
             "$ref": "#/$defs/RestorableSession"

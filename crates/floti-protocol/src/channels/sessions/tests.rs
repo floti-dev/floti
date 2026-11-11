@@ -525,6 +525,7 @@ fn session_requests_and_answers_round_trip_over_cbor() {
                 title: Some("Review the auth change".into()),
             }],
             elsewhere: 1,
+            lost_at: Some(1_761_560_100_000),
         }),
     );
     exchange::<SessionRestorable>((), None);

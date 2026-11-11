@@ -529,10 +529,16 @@ pub const LAST_REPLY_CHARS: usize = 300;
 /// that says something beyond tool calls.
 const LAST_REPLY_LOOKBACK: i64 = 20;
 
-/// The last thing the agent said in archived conversation `session`: its
-/// newest reply that is more than tool calls, those left out and its
-/// whitespace run together, cut to [`LAST_REPLY_CHARS`]. `None` when the
-/// archive holds no such reply.
+/// The last thing the agent said in archived conversation `session`: the
+/// final paragraph of its newest reply that ends in words rather than a tool
+/// call, its whitespace run together, cut to [`LAST_REPLY_CHARS`]. `None`
+/// when the archive holds no such reply.
+///
+/// A stored body joins a message's thinking, text and tool calls as
+/// paragraphs, so they cannot be told apart. A message's thinking comes
+/// before its text and its tool calls after it, so the last paragraph of a
+/// body that ends in words is text, and a body that ends in a tool call may
+/// hold thinking and no text, and is passed over.
 pub fn last_reply(conn: &Connection, session: &str) -> Result<Option<String>> {
     let mut statement = conn
         .prepare_cached(
@@ -552,19 +558,18 @@ pub fn last_reply(conn: &Connection, session: &str) -> Result<Option<String>> {
     Ok(bodies.iter().find_map(|body| said(body)))
 }
 
-/// A reply's words without its tool calls (`[tool: Name]` parts), on one
-/// line and cut to [`LAST_REPLY_CHARS`]; `None` when nothing else is left.
+/// The last paragraph of a reply, on one line and cut to
+/// [`LAST_REPLY_CHARS`]; `None` when the reply ends in a tool call (`[tool:
+/// Name]`) or holds no words.
 fn said(body: &str) -> Option<String> {
-    let words: Vec<&str> = body
-        .split("\n\n")
+    let last = body
+        .rsplit("\n\n")
         .map(str::trim)
-        .filter(|part| !is_tool_marker(part))
-        .flat_map(str::split_whitespace)
-        .collect();
-    if words.is_empty() {
+        .find(|part| !part.is_empty())?;
+    if is_tool_marker(last) {
         return None;
     }
-    let line = words.join(" ");
+    let line = last.split_whitespace().collect::<Vec<_>>().join(" ");
     Some(match line.char_indices().nth(LAST_REPLY_CHARS) {
         Some((cut, _)) => format!("{}…", line[..cut].trim_end()),
         None => line,

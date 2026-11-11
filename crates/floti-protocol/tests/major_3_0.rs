@@ -84,6 +84,7 @@ const HISTORY_FIELDS: &[(&str, &[&str])] = &[
     ("HistoryPage", &["commands"]),
     ("HistoryQuery", &["parent", "topLevel"]),
     ("RestorableSession", &["conversationId", "title"]),
+    ("RestoreOffer", &["lostAt"]),
     (
         "HistorySession",
         &[
