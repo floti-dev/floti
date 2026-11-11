@@ -157,7 +157,7 @@ export function createHostBridge(
     createCompositionAdapter({ link, scanned: () => workspace.scannedProjects() }),
     createFilesAdapter(link, deps.log),
     createWorktreesAdapter(link),
-    createAgentsAdapter(link),
+    createAgentsAdapter(link, deps.log),
     notices,
     ...sessions,
     // A session a plugin asked for, started after the user's yes, opens as one of the window's tabs.

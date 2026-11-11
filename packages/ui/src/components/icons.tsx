@@ -151,6 +151,15 @@ export function PlusIcon(props: IconProps): JSX.Element {
   )
 }
 
+/** A drag handle: two columns of dots, for a row that is dragged into its order. */
+export function GripIcon(props: IconProps): JSX.Element {
+  return (
+    <Icon {...props}>
+      <path d="M6 4h.01M10 4h.01M6 8h.01M10 8h.01M6 12h.01M10 12h.01" strokeWidth={2.2} />
+    </Icon>
+  )
+}
+
 export function CloseIcon(props: IconProps): JSX.Element {
   return (
     <Icon {...props}>

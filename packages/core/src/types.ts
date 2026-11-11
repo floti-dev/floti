@@ -44,6 +44,13 @@ export {
 } from './browser/reach'
 
 /**
+ * An agent file as the Agents page edits it, re-exported for the same
+ * reason: the page's form reads and writes its draft with it on every edit.
+ * `agents/agentFile.ts` imports nothing.
+ */
+export * from './agents/agentFile'
+
+/**
  * Themes, re-exported for the same reason: the renderer paints the tokens and
  * the Appearance pane draws every theme's swatch, both in the browser bundle.
  * `theme/themes.ts` and `theme/color.ts` import nothing but types and each
@@ -1102,6 +1109,8 @@ export interface LaunchAgent {
   permission: PermissionMode | null
   /** The profile it names, by name. */
   profile: string | null
+  /** Its file's hash, as `agents:read` gives it; null where there is no file. */
+  hash: string | null
   allowedTools: string[]
   disallowedTools: string[]
   worktree: boolean
@@ -1114,7 +1123,54 @@ export interface LaunchAgent {
 export interface BadAgent {
   name: string
   file: string
+  /** Every problem, joined into one sentence fragment. */
   problem: string
+  /** Each problem with the field and line it concerns. */
+  problems: AgentProblem[]
+  /** The file's hash; null when it could not be read. */
+  hash: string | null
+}
+
+/** One problem the host has with an agent file (`AgentProblem` in floti-protocol). */
+export interface AgentProblem {
+  /** The field it concerns, as the file spells it; null for the whole file. */
+  field: string | null
+  /** The file's line, from 1; null when it concerns no one line. */
+  line: number | null
+  message: string
+}
+
+/** A shipped agent the host's folder lacks, which Add writes. */
+export interface ShippedAgentOffer {
+  name: string
+  description: string
+}
+
+/** One agent's file as the host reads it (`AgentFile` in floti-protocol). */
+export interface AgentFileText {
+  name: string
+  /** The file, such as `reviewer.md`. */
+  file: string
+  /** False for a shipped agent a host serves while it has no agents folder. */
+  inFolder: boolean
+  text: string
+  /** The SHA-256 of the file's bytes: what a write or a delete names. */
+  hash: string
+  /** Every problem with it; empty when it is an agent. */
+  problems: AgentProblem[]
+}
+
+/** What a write, a delete, a restore or an add came to (`AgentChange` in floti-protocol). */
+export interface AgentChangeResult {
+  changed: boolean
+  /** The file as it is now; null when there is none. */
+  file: AgentFileText | null
+  /** Why nothing changed, as a sentence; null when the change was made. */
+  refusal: string | null
+  /** The parser's problems, when they are why it was refused. */
+  problems: AgentProblem[]
+  /** The file on disk, when it is not what the change was based on. */
+  conflict: { onDiskHash: string | null; onDiskText: string | null } | null
 }
 
 /** One agent backend a host has installed: an id to send and a name to show. */
@@ -1130,6 +1186,12 @@ export interface LaunchAgents {
   bad: BadAgent[]
   /** The host's agent backends, in its order: a plain command line is not one. */
   backends: InstalledBackend[]
+  /** The agents folder, as the host spells it. */
+  folder: string
+  /** Why this host changes nothing in its agents folder; null when it may. */
+  readOnly: string | null
+  /** The shipped agents the folder lacks, by name. */
+  shipped: ShippedAgentOffer[]
 }
 
 /**

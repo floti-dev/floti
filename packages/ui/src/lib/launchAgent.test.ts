@@ -7,6 +7,7 @@ function agent(name: string, patch: Partial<LaunchAgent> = {}): LaunchAgent {
     name,
     description: `${name} does its work.`,
     file: `${name}.md`,
+    hash: null,
     backends: ['claude-code'],
     listedBackends: [],
     models: {},
@@ -176,8 +177,11 @@ describe('agentOptions', () => {
       researchLead,
       agent('picky', { backends: [], cannotRun: 'Claude Code cannot enforce its rule.' })
     ],
-    bad: [{ name: 'deploy-check', file: 'deploy-check.md', problem: 'permission must be plan or auto' }],
-    backends: [CLAUDE]
+    bad: [{ name: 'deploy-check', file: 'deploy-check.md', problem: 'permission must be plan or auto', problems: [], hash: null }],
+    backends: [CLAUDE],
+    folder: '',
+    readOnly: null,
+    shipped: []
   }
 
   it('lists each agent with its description, one no backend here runs disabled with why, then the bad files', () => {

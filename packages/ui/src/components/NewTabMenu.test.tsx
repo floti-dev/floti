@@ -350,6 +350,7 @@ function launchAgent(name: string, patch: Partial<LaunchAgent> = {}): LaunchAgen
     name,
     description: `${name} does its work.`,
     file: `${name}.md`,
+    hash: null,
     backends: ['claude-code'],
     listedBackends: ['claude-code'],
     models: {},
@@ -379,8 +380,11 @@ const AGENTS: LaunchAgents = {
     launchAgent('lead', { description: 'Delegates work and keeps Trackr true.' }),
     researchLead
   ],
-  bad: [{ name: 'deploy-check', file: 'deploy-check.md', problem: 'permission must be plan' }],
-  backends: [{ id: 'claude-code', name: 'Claude Code' }]
+  bad: [{ name: 'deploy-check', file: 'deploy-check.md', problem: 'permission must be plan', problems: [], hash: null }],
+  backends: [{ id: 'claude-code', name: 'Claude Code' }],
+  folder: '',
+  readOnly: null,
+  shipped: []
 }
 
 describe('NewTabMenu: agent session', () => {
@@ -436,7 +440,7 @@ describe('NewTabMenu: agent session', () => {
   })
 
   it('is disabled, saying why, when the host has no agents', async () => {
-    renderMenu({ agents: { agents: [], bad: [], backends: [] } })
+    renderMenu({ agents: { agents: [], bad: [], backends: [], folder: '', readOnly: null, shipped: [] } })
     const item = screen.getByText('Agent session').closest('[role="menuitem"]')!
     expect(item.getAttribute('aria-disabled')).toBe('true')
     expect(item.getAttribute('title')).toBe('This PC has no agents yet.')

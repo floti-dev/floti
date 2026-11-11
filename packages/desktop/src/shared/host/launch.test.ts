@@ -122,7 +122,17 @@ describe('launchAgentsFromHost', () => {
       cannotRun: null
     })
     expect(agents.agents[1]?.cannotRun).toBe('Runs only on codex, which this host does not have.')
-    expect(agents.bad).toEqual([{ name: 'typo', file: 'typo.md', problem: 'worktree must be yes or no; no body' }])
+    expect(agents.bad).toEqual([
+      {
+        name: 'typo',
+        file: 'typo.md',
+        problem: 'worktree must be yes or no; no body',
+        problems: listing.bad[0]!.problems,
+        hash: 'cd34'
+      }
+    ])
+    expect(agents.folder).toBe(listing.folder)
+    expect(agents.agents[0]?.hash).toBe(listing.agents[0]!.hash)
     expect(agents.backends).toEqual([{ id: 'claude-code', name: 'Claude Code' }])
 
     const written = launchAgentsFromHost(

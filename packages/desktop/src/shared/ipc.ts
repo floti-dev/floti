@@ -3,6 +3,8 @@ import type {
   AgentWorktreeRemoval,
   EffortLevel,
   LaunchAgents,
+  AgentChangeResult,
+  AgentFileText,
   StandingNotice,
   AppSettings,
   LocalHostRestartOffer,
@@ -1479,6 +1481,23 @@ export interface IpcRequests {
    * The host answers from its agents folder as it reads now.
    */
   'agents:list': { request: void; response: LaunchAgents }
+  /** One agent's file on the host: its whole text and hash, and its problems. */
+  'agents:read': { request: { name: string }; response: AgentFileText }
+  /**
+   * Writes a whole text under an agent's name, or renames one to it, once the
+   * host parses it as an agent and the file is the one read at `expectedHash`
+   * (null for an agent the window believes has no file).
+   */
+  'agents:write': {
+    request: { name: string; text: string; expectedHash: string | null; renameFrom: string | null }
+    response: AgentChangeResult
+  }
+  /** Removes an agent's file, keeping its text on the host for `agents:restore`. */
+  'agents:delete': { request: { name: string; expectedHash: string | null }; response: AgentChangeResult }
+  /** Undoes the newest change the host kept for an agent: a toast's Undo. */
+  'agents:restore': { request: { name: string }; response: AgentChangeResult }
+  /** Writes a shipped agent the folder lacks. */
+  'agents:addShipped': { request: { name: string }; response: AgentChangeResult }
   /**
    * Removes one agent worktree with git, keeping its `agent/<name>` branch and
    * the work on it. One a running session works in, one with uncommitted
@@ -1997,6 +2016,8 @@ export interface IpcEvents {
   'pluginWindow:answered': { requestId: string }
   /** The whole list after any write, so every surface showing profiles agrees
    * without each of them refetching. */
+  /** The host's agents folder changed: the names whose files came, went or changed. Watched only while listened to. */
+  'agents:changed': { names: string[] }
   'profiles:changed': Profile[]
   'theme:changed': ThemeState
   /** A user theme file was added, changed or removed. The whole listing. */
@@ -2336,6 +2357,11 @@ export const REQUEST_CHANNELS = Object.keys({
   'worktrees:list': true,
   'worktrees:remove': true,
   'agents:list': true,
+  'agents:read': true,
+  'agents:write': true,
+  'agents:delete': true,
+  'agents:restore': true,
+  'agents:addShipped': true,
   'notices:dismiss': true,
   'notices:allowMore': true,
   'files:editor': true,
@@ -2420,6 +2446,7 @@ export const EVENT_CHANNELS = Object.keys({
   'forwards:changed': true,
   'pluginWindow:asked': true,
   'pluginWindow:answered': true,
+  'agents:changed': true,
   'profiles:changed': true,
   'theme:changed': true,
   'themes:changed': true,

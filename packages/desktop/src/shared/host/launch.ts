@@ -55,7 +55,10 @@ export function launchAgentsFromHost(
       .filter((agent) => agent.file !== null || agent.name !== DEFAULT_AGENT)
       .map(launchAgentFromHost),
     bad: listing.bad.map(badAgentFromHost),
-    backends: installedBackends(backends)
+    backends: installedBackends(backends),
+    folder: listing.folder,
+    readOnly: listing.readOnly,
+    shipped: listing.shipped.map(({ name, description }) => ({ name, description }))
   }
 }
 
@@ -71,6 +74,7 @@ function launchAgentFromHost(agent: P.AgentSummary): LaunchAgent {
     efforts: present(fields.efforts),
     permission: fields.permission,
     profile: fields.profile,
+    hash: agent.hash,
     allowedTools: fields.allowedTools,
     disallowedTools: fields.disallowedTools,
     worktree: agent.worktree,
@@ -90,6 +94,8 @@ function badAgentFromHost(bad: P.BadAgentFile): BadAgent {
   return {
     name: bad.name,
     file: bad.file,
-    problem: bad.problems.map((problem) => problem.message).join('; ')
+    problem: bad.problems.map((problem) => problem.message).join('; '),
+    problems: bad.problems.map(({ field, line, message }) => ({ field, line, message })),
+    hash: bad.hash
   }
 }

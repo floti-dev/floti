@@ -250,3 +250,6 @@ export {
   type ShortcutLabelOptions
 } from './lib/platform'
 export { formatAge, formatBytes, formatMoment, formatResetsIn } from './lib/time'
+export { AgentList, type AgentListProps } from './components/AgentList'
+export { AgentPage, type AgentPageProps, type AgentExternalChange } from './components/AgentPage'
+export { UndoToast, type UndoToastProps } from './components/UndoToast'

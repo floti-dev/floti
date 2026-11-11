@@ -342,6 +342,7 @@ function launchAgent(name: string, patch: Partial<LaunchAgent> = {}): LaunchAgen
     name,
     description: `${name} does its work.`,
     file: `${name}.md`,
+    hash: null,
     backends: ['claude-code'],
     listedBackends: ['claude-code'],
     models: {},
@@ -377,8 +378,11 @@ const docsWriter = launchAgent('docs-writer', { backends: [], listedBackends: ['
 const CLAUDE_BACKEND = { id: 'claude-code', name: 'Claude Code' }
 const AGENTS: LaunchAgents = {
   agents: [docsWriter, researchLead, workerAgent],
-  bad: [{ name: 'deploy-check', file: 'deploy-check.md', problem: 'permission must be plan or auto' }],
-  backends: [CLAUDE_BACKEND]
+  bad: [{ name: 'deploy-check', file: 'deploy-check.md', problem: 'permission must be plan or auto', problems: [], hash: null }],
+  backends: [CLAUDE_BACKEND],
+  folder: '',
+  readOnly: null,
+  shipped: []
 }
 const inGit = (of: Project): Project => ({
   ...of,
