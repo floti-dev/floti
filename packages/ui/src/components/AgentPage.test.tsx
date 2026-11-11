@@ -194,6 +194,15 @@ describe('AgentPage', () => {
     expect(document.querySelectorAll('[data-editor-highlight] .line')[6]).toBe(quiet[0])
   })
 
+  it('deletes at once from the bar, asking nothing first', async () => {
+    const onDelete = vi.fn()
+    render(<AgentPage {...props({ onDelete })} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(onDelete).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
   it('offers Compare, Reload from disk and Save mine for an outside change, and Save waits until one is picked', async () => {
     const start = props({ dirty: true, draft: `${TEXT}mine\n`, external: { text: `${TEXT}theirs\n`, at: '14:31' } })
     render(<AgentPage {...start} />)

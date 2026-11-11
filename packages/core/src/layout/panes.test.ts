@@ -169,6 +169,18 @@ describe('replaceTab', () => {
 })
 
 describe('openTab', () => {
+  it('opens an agent as a page tab in the focused pane, and fronts it where it is already open', () => {
+    const lead: PaneRef = { kind: 'agent', name: 'lead' }
+    const layout = layoutOf(row([g(HISTORY), g(SETTINGS)]), 1)
+    const opened = openTab(layout, lead)
+    expect(opened.groups[1]!.tabs).toEqual([SETTINGS, lead])
+    expect(opened.groups[1]!.activeId).toBe('agent:lead')
+    expect(opened.groups[0]!.tabs).toEqual([HISTORY])
+    const again = openTab({ ...opened, focused: opened.groups[0]!.id }, lead)
+    expect(again.groups.flatMap((group) => group.tabs)).toEqual([HISTORY, SETTINGS, lead])
+    expect(again.focused).toBe(opened.groups[1]!.id)
+  })
+
   it('appends to the focused group and brings the tab to the front', () => {
     const layout = openTab(openTab(EMPTY_LAYOUT, HISTORY), session(1))
     expect(shape(layout)).toEqual(['>history *session:1'])

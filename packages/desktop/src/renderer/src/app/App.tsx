@@ -157,7 +157,6 @@ import {
   HarnessIcon,
   HistoryIcon,
   ImportIcon,
-  LayersIcon,
   NewHarnessDialog,
   NewSessionDialog,
   NewTabMenu,
@@ -225,8 +224,10 @@ import {
   type AddHostActions,
 } from "@helm/ui";
 import { sidebarFor, type SidebarView } from "./sidebarFor";
+import { viewRailItems } from "./railViews";
 import { AgentTab } from "./agents/AgentTab";
 import { forgetAgentDraft, type AgentOutcome } from "./agents/useAgentDraft";
+import { restoreAgent, useAgentToast } from "./agents/useAgentToast";
 import { useAgentList } from "./agents/useAgentList";
 import {
   commandRow,
@@ -487,16 +488,6 @@ const NO_PLUGINS: ReadonlyMap<string, PluginInfo> = new Map();
 /** A plugin's request, with the host whose plugin made it. */
 type OnHost<T> = T & { host: string };
 
-/** A change to an agent made without asking, with its Undo: null once Undo put it back, else why not. */
-interface AgentToast {
-  key: number;
-  title: string;
-  detail: string | null;
-  undo: () => Promise<string | null>;
-  undoing: boolean;
-  error: string | null;
-}
-
 /** The surfaces that show one host's data at a time, with a switch while more than one is connected. */
 type HostSurface = "history" | "usage" | "files" | "plugins" | "agents";
 const LOCAL_SURFACES: Readonly<Record<HostSurface, string>> = {
@@ -689,23 +680,10 @@ export function App(): JSX.Element {
     new Set(),
   );
   /** The one change to an agent made without asking, with its Undo, until it is closed or the next replaces it. */
-  const [agentToast, setAgentToast] = useState<AgentToast | null>(null);
+  const agentToasts = useAgentToast();
+  const agentToast = agentToasts.toast;
   /** Why adding a shipped agent did not, said in the Agents list. */
   const [agentAddError, setAgentAddError] = useState<string | null>(null);
-  /** Runs the toast's Undo: it goes once that worked, and says why when it did not. */
-  const runAgentUndo = async (): Promise<void> => {
-    const toast = agentToast;
-    if (toast === null || toast.undoing) return;
-    setAgentToast({ ...toast, undoing: true, error: null });
-    const problem = await toast.undo();
-    setAgentToast((current) =>
-      current?.key !== toast.key
-        ? current
-        : problem === null
-          ? null
-          : { ...current, undoing: false, error: problem },
-    );
-  };
   /** Where a file opened from a text search lands, by file key: the line and the words. */
   const [fileReveals, setFileReveals] = useState<
     ReadonlyMap<string, QuickOpenAt>
@@ -3617,8 +3595,8 @@ export function App(): JSX.Element {
           detail={agentToast.detail}
           undoing={agentToast.undoing}
           error={agentToast.error}
-          onUndo={() => void runAgentUndo()}
-          onClose={() => setAgentToast(null)}
+          onUndo={() => void agentToasts.runUndo()}
+          onClose={agentToasts.close}
         />
       )}
     </div>
@@ -3755,32 +3733,8 @@ export function App(): JSX.Element {
       .then((result) => setAgentAddError(result.refusal))
       .catch((err: unknown) => setAgentAddError(readable(err)));
   };
-  const raiseAgentToast = (
-    title: string,
-    detail: string | null,
-    undo: () => Promise<string | null>,
-  ): void =>
-    setAgentToast((current) => ({
-      key: (current?.key ?? 0) + 1,
-      title,
-      detail,
-      undo,
-      undoing: false,
-      error: null,
-    }));
-  /** Undo by the host's `agents:restore`: null once it put the agent back, else why not. */
-  const agentRestore =
-    (host: string, name: string, after?: () => void) =>
-    async (): Promise<string | null> => {
-      try {
-        const result = await bridgeFor(host).invoke("agents:restore", { name });
-        if (result.refusal !== null) return result.refusal;
-        after?.();
-        return null;
-      } catch (err) {
-        return readable(err);
-      }
-    };
+  const raiseAgentToast = agentToasts.raise;
+  const agentRestore = restoreAgent;
   /** What a page's save, rename, delete or reload does to its tab, and the toast it leaves. */
   const agentOutcome =
     (id: string, host: string) =>
@@ -5809,33 +5763,11 @@ export function App(): JSX.Element {
       onToggleHidden={toggleRailItem}
       groups={[
         [
-          {
-            id: "sessions",
-            label: "Sessions",
-            icon: <TerminalIcon {...RAIL_ICON} />,
-            kind: "view",
-            current: sidebarShown && sidebarView === "sessions",
-            attention: statusCounts.waiting > 0,
-            onSelect: () => toggleView("sessions"),
-          },
-          {
-            id: "profiles",
-            label: "Profiles",
-            icon: <LayersIcon {...RAIL_ICON} />,
-            kind: "view",
-            current: sidebarShown && sidebarView === "profiles",
-            onSelect: () => toggleView("profiles"),
-            hooks: { "data-open-profiles": true },
-          },
-          {
-            id: "agents",
-            label: "Agents",
-            icon: <AgentCardIcon {...RAIL_ICON} />,
-            kind: "view",
-            current: sidebarShown && sidebarView === "agents",
-            onSelect: () => toggleView("agents"),
-            hooks: { "data-open-agents": true },
-          },
+          ...viewRailItems({
+            shown: sidebarShown ? sidebarView : null,
+            waiting: statusCounts.waiting > 0,
+            onToggle: toggleView,
+          }),
           page(
             "history",
             "Session history",

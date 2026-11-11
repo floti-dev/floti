@@ -98,6 +98,56 @@ describe("one bridge per host", () => {
     ).toHaveLength(1);
   });
 
+  it("the Agents page's reads and edits on build-box's bridge reach only build-box's link", async () => {
+    const w = world();
+    const change = {
+      changed: true,
+      file: null,
+      refusal: null,
+      problems: [],
+      conflict: null,
+    };
+    w.connections["h-build"]!.answer(
+      "agents:list",
+      () =>
+        ({
+          folder: "/home/me/.config/floti/agents",
+          readOnly: null,
+          agents: [],
+          bad: [],
+          shipped: [],
+        }) as never,
+    )
+      .answer("agents:write", () => change as never)
+      .answer("agents:delete", () => change as never)
+      .answer("agents:restore", () => change as never)
+      .answer("agents:render", () => ({ html: "<p>x</p>" }) as never);
+    const there = w.bridges.bridgeFor("h-build");
+    const listed = await there.invoke("agents:list");
+    expect(listed.folder).toBe("/home/me/.config/floti/agents");
+    await there.invoke("agents:write", {
+      name: "triage",
+      text: "---\n---\n",
+      expectedHash: null,
+      renameFrom: null,
+    });
+    await there.invoke("agents:delete", { name: "triage", expectedHash: "h" });
+    await there.invoke("agents:restore", { name: "triage" });
+    await there.invoke("agents:render", { text: "x" });
+    const agents = (id: string): string[] =>
+      w.asked(id).filter((channel) => channel.startsWith("agents:"));
+    expect(agents("h-build")).toEqual([
+      "agents:list",
+      "agents:write",
+      "agents:delete",
+      "agents:restore",
+      "agents:render",
+    ]);
+    expect(agents("h-lab")).toEqual([]);
+    expect(agents(LOCAL_HOST_KEY)).toEqual([]);
+    expect(bridge.invoked("agents:list")).toEqual([]);
+  });
+
   it("makes one link and one bridge per host, the same each time it is asked", () => {
     const w = world();
     const first = w.bridges.hostBridge("h-build");
