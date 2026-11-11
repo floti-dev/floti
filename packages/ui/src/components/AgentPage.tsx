@@ -246,7 +246,8 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
         {comparing && external?.text != null ? (
           <Compare onDisk={external.text} mine={draft} at={external.at} />
         ) : (
-          <div className={cn('flex flex-col gap-3 px-6 py-4', view === 'form' && 'mx-auto w-full max-w-[760px]')}>
+          // Source's editor fills the page: its height is the column's, so the column is the page's.
+          <div className={cn('flex flex-col gap-3 px-6 py-4', view === 'form' ? 'mx-auto w-full max-w-[760px]' : 'h-full')}>
             {(props.bad || props.refusal !== null) && (
               <div data-agent-problems role="alert" className="rounded-well border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-fg-muted">
                 <span className="block text-[12.5px] font-medium text-danger">
@@ -298,18 +299,20 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
                 autoFocusName={isNew}
               />
             ) : (
-              <CodeEditor
-                surface="content"
-                path={file}
-                ariaLabel="Source"
-                value={draft}
-                onChange={props.onDraftChange}
-                onHighlight={props.onHighlight}
-                wrap
-                readOnly={readOnly !== null}
-                invalid={props.bad}
-                quiet={quiet}
-              />
+              <div data-agent-source className="min-h-0 flex-1">
+                <CodeEditor
+                  surface="content"
+                  path={file}
+                  ariaLabel="Source"
+                  value={draft}
+                  onChange={props.onDraftChange}
+                  onHighlight={props.onHighlight}
+                  wrap
+                  readOnly={readOnly !== null}
+                  invalid={props.bad}
+                  quiet={quiet}
+                />
+              </div>
             )}
           </div>
         )}
