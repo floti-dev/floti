@@ -436,8 +436,8 @@ pub fn search_query(search: &str) -> Option<String> {
 }
 
 /// The archived conversations whose messages match `search`, each with the
-/// first matching message's text, keyed by lower-cased id. At most `limit`
-/// conversations. Only a conversation with a row is searched: the messages of
+/// first matching message's [`excerpt`], keyed by lower-cased id. At most
+/// `limit` conversations. Only a conversation with a row is searched: the messages of
 /// one a copy has not finished are not shown yet. A query that fails (the
 /// database locked, a table missing) is an error, never "nothing matched":
 /// History shows the archive as Unknown then.
@@ -477,14 +477,14 @@ pub fn search_archive(
         }
         found
             .entry(session)
-            .or_insert_with(|| decode_body(&body, compressed));
+            .or_insert_with(|| excerpt(&decode_body(&body, compressed), search));
     }
     Ok(found)
 }
 
 /// The messages of archived conversation `session` that match `search`:
-/// the first `limit`, oldest first, and how many match in all. A query that
-/// fails is an error, as [`search_archive`]'s is.
+/// the first `limit`, oldest first, each as its [`excerpt`], and how many
+/// match in all. A query that fails is an error, as [`search_archive`]'s is.
 pub fn matching_lines(
     conn: &Connection,
     search: &str,
@@ -511,7 +511,10 @@ pub fn matching_lines(
                 HistoryMatchLine {
                     uuid: row.get(0)?,
                     at: to_u64(row.get(1)?),
-                    text: decode_body(&row.get::<_, Vec<u8>>(2)?, row.get(3)?),
+                    text: excerpt(
+                        &decode_body(&row.get::<_, Vec<u8>>(2)?, row.get(3)?),
+                        search,
+                    ),
                 },
                 row.get::<_, i64>(4)?,
             ))
@@ -522,40 +525,110 @@ pub fn matching_lines(
     Ok((rows.into_iter().map(|(line, _)| line).collect(), count))
 }
 
+/// How many characters of a matching message History is sent: the part
+/// around its match, never the whole message, which can run to megabytes.
+pub const MATCH_EXCERPT_CHARS: usize = 240;
+
+/// How many of an [`excerpt`]'s characters come before its match.
+const MATCH_LEAD_CHARS: usize = 80;
+
+/// The part of `text` around the first place a word of `search` starts, at
+/// most [`MATCH_EXCERPT_CHARS`] long, with `…` where it was cut. Words are
+/// found as [`search_query`] splits them, ignoring case; a text in which none
+/// is found (the full-text index matched a form of it) gives its start.
+pub fn excerpt(text: &str, search: &str) -> String {
+    let total = text.chars().count();
+    if total <= MATCH_EXCERPT_CHARS {
+        return text.to_owned();
+    }
+    let lowered = search.to_lowercase();
+    let words: Vec<&str> = lowered
+        .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .filter(|word| !word.is_empty())
+        .collect();
+    let found = text
+        .char_indices()
+        .enumerate()
+        .find(|(_, (at, _))| {
+            words
+                .iter()
+                .any(|word| starts_with_folded(&text[*at..], word))
+        })
+        .map_or(0, |(chars, _)| chars);
+    let end = (found.saturating_sub(MATCH_LEAD_CHARS) + MATCH_EXCERPT_CHARS).min(total);
+    let start = end - MATCH_EXCERPT_CHARS;
+    let byte = |chars: usize| {
+        text.char_indices()
+            .nth(chars)
+            .map_or(text.len(), |(at, _)| at)
+    };
+    format!(
+        "{}{}{}",
+        if start > 0 { "…" } else { "" },
+        &text[byte(start)..byte(end)],
+        if end < total { "…" } else { "" }
+    )
+}
+
+/// Whether `text` starts with `word` (lower case) when `text` is lower-cased.
+fn starts_with_folded(text: &str, word: &str) -> bool {
+    let mut folded = text.chars().flat_map(char::to_lowercase);
+    word.chars().all(|expected| folded.next() == Some(expected))
+}
+
 /// How long a [`last_reply`] may be, in characters, before it is cut.
 pub const LAST_REPLY_CHARS: usize = 300;
 
-/// How many of a conversation's newest replies [`last_reply`] reads for one
-/// that says something beyond tool calls.
-const LAST_REPLY_LOOKBACK: i64 = 20;
+/// How many of a conversation's newest messages [`last_reply`] reads for a
+/// turn that ended in a reply.
+const LAST_REPLY_LOOKBACK: i64 = 100;
 
 /// The last thing the agent said in archived conversation `session`: the
-/// final paragraph of its newest reply that ends in words rather than a tool
+/// final paragraph of its newest turn that ended in words rather than a tool
 /// call, its whitespace run together, cut to [`LAST_REPLY_CHARS`]. `None`
-/// when the archive holds no such reply.
+/// when none of its newest [`LAST_REPLY_LOOKBACK`] messages holds one.
 ///
-/// A stored body joins a message's thinking, text and tool calls as
-/// paragraphs, so they cannot be told apart. A message's thinking comes
-/// before its text and its tool calls after it, so the last paragraph of a
-/// body that ends in words is text, and a body that ends in a tool call may
-/// hold thinking and no text, and is passed over.
+/// The archive stores a transcript's rows as they are: Claude Code writes
+/// each of a message's thinking, text and tool calls as a row of its own,
+/// so a thinking row and a text row read alike. A turn is the agent's rows
+/// between two of the user's, and its reply is its last row, which comes
+/// after its thinking. A turn whose last row is a tool call never finished
+/// (the session was lost or stopped mid-turn), so whatever it said or
+/// thought before that call is passed over for the turn before it. A row
+/// that joins several parts (an earlier version wrote a message whole)
+/// gives its last paragraph by the same rule.
 pub fn last_reply(conn: &Connection, session: &str) -> Result<Option<String>> {
+    const DOING: &str = "read a conversation's last reply";
     let mut statement = conn
         .prepare_cached(
-            "SELECT body, compressed FROM transcript_messages
-             WHERE session_id = ?1 AND role = 'assistant'
+            "SELECT role, body, compressed FROM transcript_messages
+             WHERE session_id = ?1
              ORDER BY at DESC, id DESC
              LIMIT ?2",
         )
-        .map_err(sql("read a conversation's last reply"))?;
-    let bodies = statement
-        .query_map(
-            params![session.to_lowercase(), LAST_REPLY_LOOKBACK],
-            |row| Ok(decode_body(&row.get::<_, Vec<u8>>(0)?, row.get(1)?)),
-        )
-        .and_then(Iterator::collect::<rusqlite::Result<Vec<_>>>)
-        .map_err(sql("read a conversation's last reply"))?;
-    Ok(bodies.iter().find_map(|body| said(body)))
+        .map_err(sql(DOING))?;
+    let mut rows = statement
+        .query(params![session.to_lowercase(), LAST_REPLY_LOOKBACK])
+        .map_err(sql(DOING))?;
+    let assistant = role_name(ArchiveRole::Assistant);
+    // Newest first, so the first of the agent's rows after one of the
+    // user's is the last row of its turn.
+    let mut turn_end = true;
+    while let Some(row) = rows.next().map_err(sql(DOING))? {
+        let role: String = row.get(0).map_err(sql(DOING))?;
+        if role != assistant {
+            turn_end = true;
+            continue;
+        }
+        if !std::mem::replace(&mut turn_end, false) {
+            continue;
+        }
+        let body: Vec<u8> = row.get(1).map_err(sql(DOING))?;
+        if let Some(reply) = said(&decode_body(&body, row.get(2).map_err(sql(DOING))?)) {
+            return Ok(Some(reply));
+        }
+    }
+    Ok(None)
 }
 
 /// The last paragraph of a reply, on one line and cut to

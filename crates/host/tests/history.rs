@@ -897,6 +897,96 @@ fn a_parents_listing_gives_the_commands_its_sessions_ran_and_no_other_does() {
 }
 
 #[test]
+fn after_a_clear_a_child_and_its_commands_are_listed_under_the_conversation_they_were_started_in() {
+    let mut world = renamable();
+    world.pass(
+        &[p("c", "write the runner"), p("d", "write the docs")],
+        Pass::default(),
+    );
+    let connection = world.store.connection();
+    // The lead started in conversation A and a /clear moved it to B.
+    connection
+        .execute(
+            "INSERT INTO sessions (name, cwd, argv, claude_session_id, last_claude_session_id, \
+             status) VALUES ('lead', '/work', '[]', 'A', 'B', 'running')",
+            [],
+        )
+        .unwrap();
+    let lead = connection.last_insert_rowid();
+    let started_in = |conversation: &str, child: Option<&str>, command: Option<&str>| {
+        connection
+            .execute(
+                "INSERT INTO sessions (name, cwd, argv, claude_session_id, status, \
+                 parent_session_id, parent_conversation_id, child_name, command) \
+                 VALUES ('child', '/work', '[]', ?1, 'exited', ?2, ?3, 'child', ?4)",
+                rusqlite::params![child, lead, conversation, command],
+            )
+            .unwrap();
+    };
+    started_in("A", Some("c"), None);
+    started_in("B", Some("d"), None);
+    started_in("A", None, Some("pnpm lint"));
+    started_in("B", None, Some("pnpm test"));
+
+    let listed = |parent: &str| {
+        let page = world.sessions(HistoryQuery {
+            parent: Some(parent.to_owned()),
+            ..HistoryQuery::default()
+        });
+        let commands: Vec<String> = page
+            .commands
+            .clone()
+            .unwrap()
+            .into_iter()
+            .map(|c| c.command)
+            .collect();
+        let children: Vec<String> = page.sessions.iter().map(|s| s.session_id.clone()).collect();
+        (children, commands)
+    };
+    assert_eq!(
+        listed("a"),
+        (vec!["c".to_owned()], vec!["pnpm lint".to_owned()])
+    );
+    assert_eq!(
+        listed("b"),
+        (vec!["d".to_owned()], vec!["pnpm test".to_owned()])
+    );
+}
+
+#[test]
+fn a_parents_commands_are_its_newest_as_many_as_the_page_lists() {
+    let world = renamable();
+    let lead = world.family_row("A", None, "running");
+    let connection = world.store.connection();
+    for (line, started) in [
+        ("pnpm lint", "2026-11-07T09:00:00.000Z"),
+        ("pnpm test", "2026-11-07T09:05:00.000Z"),
+        ("pnpm dev", "2026-11-07T09:10:00.000Z"),
+    ] {
+        connection
+            .execute(
+                "INSERT INTO sessions (name, cwd, argv, status, parent_session_id, child_name, \
+                 command, started_at) VALUES ('cmd', '/work', '[]', 'exited', ?1, 'cmd', ?2, ?3)",
+                rusqlite::params![lead, line, started],
+            )
+            .unwrap();
+    }
+    let page = world.sessions(HistoryQuery {
+        parent: Some("a".to_owned()),
+        limit: Some(2),
+        ..HistoryQuery::default()
+    });
+    assert_eq!(
+        page.commands
+            .unwrap()
+            .iter()
+            .map(|c| c.command.as_str())
+            .collect::<Vec<_>>(),
+        ["pnpm test", "pnpm dev"]
+    );
+}
+
+#[test]
 fn a_sessions_prompts_come_in_submission_order() {
     let mut world = Indexed::new();
     world.pass(
@@ -1203,11 +1293,17 @@ fn a_raw_deflate_body_reads_and_searches_decoded_and_one_that_cannot_be_inflated
     // Read: decoded, and the body that cannot be inflated is empty text.
     assert_eq!(world.texts("sess"), [long.as_str(), ""]);
     assert_eq!(world.texts("older"), [other.as_str()]);
-    // Searched: the match is handed back decoded, and the unreadable body
-    // fails nothing.
-    assert_eq!(world.search("zorblatt").get("sess"), Some(&long));
+    // Searched: the match is handed back decoded, as the part around it, and
+    // the unreadable body fails nothing.
+    assert_eq!(
+        world.search("zorblatt").get("sess"),
+        Some(&archive::excerpt(&long, "zorblatt"))
+    );
     let placeholders = world.search("placeholder");
-    assert_eq!(placeholders.get("older"), Some(&other));
+    assert_eq!(
+        placeholders.get("older"),
+        Some(&archive::excerpt(&other, "placeholder"))
+    );
     assert_eq!(placeholders.get("sess").map(String::as_str), Some(""));
 }
 
@@ -1375,17 +1471,19 @@ fn each_session_carries_its_agents_last_reply_without_tool_calls() {
         })
         .unwrap();
     let long = "word ".repeat(100);
+    // One row per part of a message, as Claude Code writes its transcript.
     let said = [
         world.user(1, "a question"),
-        world.message(ArchiveRole::Assistant, 2, "The watcher holds   a\nhandle."),
-        world.message(ArchiveRole::Assistant, 3, "[tool: Read]\n\n[tool]"),
+        world.message(ArchiveRole::Assistant, 2, "[tool: Read]"),
+        world.message(ArchiveRole::Assistant, 3, "The watcher holds   a\nhandle."),
         world.user(4, "and now?"),
+        world.message(ArchiveRole::Assistant, 5, "[tool: Edit]"),
+        world.message(ArchiveRole::Assistant, 6, "[tool: Bash]"),
         world.message(
             ArchiveRole::Assistant,
-            5,
-            &format!("[tool: Edit]\n\nClosing it fixes {long}"),
+            7,
+            &format!("Closing it fixes {long}"),
         ),
-        world.message(ArchiveRole::Assistant, 6, "[tool: Bash]"),
     ];
     world.archive("said.jsonl", "said", &said);
     let silent = [world.user(1, "a question")];
@@ -1429,44 +1527,176 @@ fn each_session_carries_its_agents_last_reply_without_tool_calls() {
 }
 
 #[test]
-fn a_last_reply_is_the_replys_text_and_never_the_thinking_stored_with_it() {
+fn a_last_reply_is_the_last_row_of_a_finished_turn_and_never_a_thinking_or_tool_row() {
     let mut world = Archive::new();
-    let thought = [
+    // As Claude Code writes them: a row for each thinking, text and tool
+    // call, so a thinking row reads like a text row.
+    let finished = [
         world.user(1, "a question"),
         world.message(ArchiveRole::Assistant, 2, "Fixed the watcher."),
+        world.user(3, "and the tests?"),
+        world.message(ArchiveRole::Assistant, 4, "I should run the tests."),
+        world.message(ArchiveRole::Assistant, 5, "[tool: Bash]"),
         world.message(
             ArchiveRole::Assistant,
-            3,
-            "The user wants the tests too; I should run them.\n\n[tool: Bash]",
+            6,
+            "Weighing whether the handle leaks.",
         ),
-        world.message(
-            ArchiveRole::Assistant,
-            4,
-            "Weighing whether the handle leaks first.\n\nThe tests   pass.",
-        ),
+        world.message(ArchiveRole::Assistant, 7, "The tests   pass."),
     ];
-    world.archive("thought.jsonl", "thought", &thought);
+    world.archive("finished.jsonl", "finished", &finished);
     assert_eq!(
-        archive::last_reply(world.conn(), "thought")
+        archive::last_reply(world.conn(), "finished")
             .unwrap()
             .as_deref(),
         Some("The tests pass.")
     );
-    let unfinished = [
+    // A turn that ends in a tool call never finished: its thinking is not
+    // the reply, and the turn before it has one.
+    let lost = [
         world.user(1, "a question"),
         world.message(ArchiveRole::Assistant, 2, "Fixed the watcher."),
+        world.user(3, "and the tests?"),
         world.message(
             ArchiveRole::Assistant,
-            3,
-            "The user wants the tests too.\n\n[tool: Bash]",
+            4,
+            "The user wants the tests too; I should run them.",
         ),
+        world.message(ArchiveRole::Assistant, 5, "[tool: Bash]"),
     ];
-    world.archive("unfinished.jsonl", "unfinished", &unfinished);
+    world.archive("lost.jsonl", "lost", &lost);
     assert_eq!(
-        archive::last_reply(world.conn(), "unfinished")
+        archive::last_reply(world.conn(), "lost")
             .unwrap()
             .as_deref(),
         Some("Fixed the watcher.")
+    );
+    // A message an earlier version stored whole gives its last paragraph.
+    let whole = [
+        world.user(1, "a question"),
+        world.message(
+            ArchiveRole::Assistant,
+            2,
+            "Weighing whether the handle leaks first.\n\nThe tests   pass.",
+        ),
+    ];
+    world.archive("whole.jsonl", "whole", &whole);
+    assert_eq!(
+        archive::last_reply(world.conn(), "whole")
+            .unwrap()
+            .as_deref(),
+        Some("The tests pass.")
+    );
+}
+
+#[test]
+fn only_the_first_sessions_of_a_page_carry_their_last_reply() {
+    let mut world = Archive::new();
+    let backend = BackendId::claude_code();
+    let ids: Vec<String> = (0..51).map(|n| format!("s{n:02}")).collect();
+    let lines: Vec<PromptLine> = ids
+        .iter()
+        .enumerate()
+        .map(|(n, id)| PromptLine {
+            session_id: id.clone(),
+            project: "folder".to_owned(),
+            at: 1_760_000_000_000 + n as u64,
+            text: "a question".to_owned(),
+        })
+        .collect();
+    HistoryIndex::new(world.store.connection(), &backend)
+        .index(&IndexInput {
+            record: RECORD,
+            bytes: 100,
+            reset: false,
+            replaced: &BTreeSet::new(),
+            lines: &lines,
+            transcripts: &BTreeMap::new(),
+            directory_exists: &|_| true,
+            error: None,
+        })
+        .unwrap();
+    for id in &ids {
+        let messages = [
+            world.user(1, "a question"),
+            world.message(ArchiveRole::Assistant, 2, "Done."),
+        ];
+        world.archive(&format!("{id}.jsonl"), id, &messages);
+    }
+    let page = HistoryIndex::new(world.store.connection(), &backend)
+        .sessions(&HistoryQuery::default())
+        .unwrap();
+    assert_eq!(page.sessions.len(), 51);
+    assert!(
+        page.sessions[..50]
+            .iter()
+            .all(|s| s.last_reply.as_deref() == Some("Done.")),
+        "the first fifty carry it"
+    );
+    assert_eq!(page.sessions[50].session_id, "s00");
+    assert_eq!(page.sessions[50].last_reply, None);
+}
+
+#[test]
+fn a_matching_message_is_sent_as_the_part_around_its_match() {
+    let mut world = Archive::new();
+    let backend = BackendId::claude_code();
+    let lines = vec![PromptLine {
+        session_id: "long".to_owned(),
+        project: "folder".to_owned(),
+        at: 1_760_000_000_000,
+        text: "opening question".to_owned(),
+    }];
+    HistoryIndex::new(world.store.connection(), &backend)
+        .index(&IndexInput {
+            record: RECORD,
+            bytes: 100,
+            reset: false,
+            replaced: &BTreeSet::new(),
+            lines: &lines,
+            transcripts: &BTreeMap::new(),
+            directory_exists: &|_| true,
+            error: None,
+        })
+        .unwrap();
+    let body = format!(
+        "{}The Zorblatt handle leaks.{}",
+        "before ".repeat(5_000),
+        " after".repeat(5_000)
+    );
+    let messages = [world.message(ArchiveRole::Assistant, 1, &body)];
+    world.archive("long.jsonl", "long", &messages);
+
+    let found = world.search("zorblatt");
+    let matched = &found["long"];
+    assert!(
+        matched.chars().count() <= archive::MATCH_EXCERPT_CHARS + 2,
+        "{matched}"
+    );
+    assert!(matched.contains("The Zorblatt handle leaks."), "{matched}");
+    assert!(
+        matched.starts_with('…') && matched.ends_with('…'),
+        "{matched}"
+    );
+
+    let page = HistoryIndex::new(world.store.connection(), &backend)
+        .sessions(&HistoryQuery {
+            search: Some("zorblatt".to_owned()),
+            scope: Some(HistorySearchScope::Messages),
+            ..HistoryQuery::default()
+        })
+        .unwrap();
+    let session = &page.sessions[0];
+    assert_eq!(session.matched.as_deref(), Some(matched.as_str()));
+    let line = &session.matches.as_ref().unwrap()[0].text;
+    assert_eq!(line, matched);
+
+    // A message with its match at the very start is cut at its end only.
+    assert_eq!(
+        archive::excerpt(&format!("zorblatt{}", " after".repeat(100)), "zorblatt")
+            .chars()
+            .count(),
+        archive::MATCH_EXCERPT_CHARS + 1
     );
 }
 

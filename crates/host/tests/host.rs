@@ -1788,6 +1788,34 @@ async fn s12_after_a_stop_for_an_update_the_next_start_offers_the_sessions_once_
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn an_offer_whose_titles_cannot_be_read_is_an_error_and_never_an_offer_without_them() {
+    let dirs = TestDirs::new();
+    let agent = fake_agent!(&dirs);
+    let endpoint = dirs.endpoint();
+    let folders = [dirs.folder("project one")];
+    sessions_stopped_for_an_update(&dirs, &endpoint, &agent, &folders).await;
+
+    let host = RunningHost::start(fake_config(&dirs, &endpoint, &agent, &[]));
+    let mut client = TestClient::connect(&endpoint, TERMINAL).await;
+    let offer = client
+        .request::<SessionRestorable>(&())
+        .await
+        .unwrap()
+        .expect("the lost session is offered");
+    assert!(offer.sessions[0].conversation_id.is_some());
+    // History's names can no longer be read, so neither can the title.
+    rusqlite::Connection::open(dirs.data.join("floti.db"))
+        .expect("open floti.db")
+        .execute("DROP TABLE history_names", [])
+        .expect("drop the names");
+    assert!(
+        client.request::<SessionRestorable>(&()).await.is_err(),
+        "could not look is an error, not an offer with no title"
+    );
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn s12_after_floti_host_is_killed_the_next_start_takes_its_sessions_back_and_offers_none() {
     let dirs = TestDirs::new();
     let agent = fake_agent!(&dirs);

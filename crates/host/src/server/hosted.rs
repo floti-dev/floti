@@ -1277,18 +1277,37 @@ impl Hosted {
     }
 
     /// What the last run left running, until a client answers for it; null
-    /// when there was nothing or it has been answered.
-    pub fn restorable(&self) -> Option<RestoreOffer> {
+    /// when there was nothing or it has been answered. A read of a session's
+    /// profile or title that fails is an error, never "none": an offer that
+    /// said a profile was gone, or gave no title, because floti.db could not
+    /// be read would be wrong.
+    pub fn restorable(&self) -> Result<Option<RestoreOffer>> {
         let offer = self.ledger.offer();
-        let lost = offer.as_ref().filter(|lost| !lost.is_empty())?;
+        let Some(lost) = offer.as_ref().filter(|lost| !lost.is_empty()) else {
+            return Ok(None);
+        };
         let store = self.ledger.store();
         let sessions = lost
             .iter()
             .map(|row| {
                 let profile = row
                     .profile_id
-                    .and_then(|id| records::profile_name(&store, id).ok().flatten());
-                RestorableSession {
+                    .map(|id| records::profile_name(&store, id))
+                    .transpose()?
+                    .flatten();
+                let title = row
+                    .conversation_id
+                    .as_deref()
+                    .map(|conversation| records::read_history_session(&store, conversation))
+                    .transpose()?
+                    .flatten()
+                    .map(|session| {
+                        session
+                            .label
+                            .or(session.agent_title)
+                            .unwrap_or(session.title)
+                    });
+                Ok(RestorableSession {
                     id: u64::try_from(row.id.0).unwrap_or(0),
                     name: row.name.clone(),
                     cwd: row.cwd.clone(),
@@ -1302,28 +1321,18 @@ impl Hosted {
                         .agent
                         .as_deref()
                         .and_then(|agent| self.agent_problem(agent)),
-                    title: row.conversation_id.as_deref().and_then(|conversation| {
-                        records::read_history_session(&store, conversation)
-                            .ok()
-                            .flatten()
-                            .map(|session| {
-                                session
-                                    .label
-                                    .or(session.agent_title)
-                                    .unwrap_or(session.title)
-                            })
-                    }),
+                    title,
                     conversation_id: row.conversation_id.clone(),
-                }
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
         // The host cannot yet see conversations running elsewhere, so it
         // counts none rather than guess.
-        Some(RestoreOffer {
+        Ok(Some(RestoreOffer {
             sessions,
             elsewhere: 0,
             lost_at: self.ledger.lost_at(),
-        })
+        }))
     }
 
     /// Why a lost session cannot be reopened, as a sentence, or `None`.

@@ -35,6 +35,11 @@ const DEFAULT_LIMIT: u32 = 2000;
 /// How many matching messages a `messages` search gives each conversation.
 const MATCH_LINES: usize = 2;
 
+/// How many of a page's sessions carry their last reply: the first, as many
+/// as History shows at once. Each is a read of the archive under the store's
+/// lock, so a page of thousands does not read thousands.
+const LAST_REPLY_SESSIONS: usize = 50;
+
 /// The longest name a session can be given by hand, in characters.
 pub const HISTORY_NAME_MAX: usize = 120;
 
@@ -307,11 +312,11 @@ impl<'a> HistoryIndex<'a> {
                 session.last_report = self.last_report(&session.session_id)?;
             }
         }
-        for session in &mut sessions {
+        for session in sessions.iter_mut().take(LAST_REPLY_SESSIONS) {
             session.last_reply = last_reply(self.conn, &session.session_id)?;
         }
         let commands = match query.parent.as_deref().map(str::trim) {
-            Some(parent) if !parent.is_empty() => Some(self.commands(parent)?),
+            Some(parent) if !parent.is_empty() => Some(self.commands(parent, limit)?),
             _ => None,
         };
         Ok(HistoryPage {
@@ -323,29 +328,33 @@ impl<'a> HistoryIndex<'a> {
     }
 
     /// The commands the sessions of conversation `parent` ran as command
-    /// children, oldest first: each row with a command whose parent was in
-    /// that conversation, by the row that started it or the conversation it
-    /// recorded.
-    fn commands(&self, parent: &str) -> Result<Vec<HistoryCommand>> {
+    /// children: the newest `limit`, as many as its children a page lists,
+    /// oldest first. A command belongs to the conversation its parent was in
+    /// when it started it, as a child does ([`CONVERSATION_AGENTS`]'s
+    /// `parent`), so after a `/clear` it is listed under one conversation
+    /// only.
+    fn commands(&self, parent: &str, limit: u32) -> Result<Vec<HistoryCommand>> {
         let fail = sql("read the commands a session ran");
         let mut statement = self
             .conn
             .prepare(
-                "SELECT r.command,
-                   CAST(round((julianday(r.started_at) - 2440587.5) * 86400000) AS INTEGER),
-                   r.status, r.stopped, r.stopped_by, r.exit_code
-                 FROM sessions r
-                 WHERE r.command IS NOT NULL
-                   AND (lower(r.parent_conversation_id) = lower(?1)
-                        OR r.parent_session_id IN (
-                          SELECT p.id FROM sessions p
-                          WHERE lower(p.claude_session_id) = lower(?1)
-                             OR lower(p.last_claude_session_id) = lower(?1)))
-                 ORDER BY r.started_at, r.id",
+                "SELECT command, started, status, stopped, stopped_by, exit_code FROM (
+                   SELECT r.command,
+                     CAST(round((julianday(r.started_at) - 2440587.5) * 86400000) AS INTEGER)
+                       AS started,
+                     r.status, r.stopped, r.stopped_by, r.exit_code, r.started_at, r.id
+                   FROM sessions r
+                   WHERE r.command IS NOT NULL
+                     AND lower(coalesce(r.parent_conversation_id,
+                       (SELECT coalesce(p.last_claude_session_id, p.claude_session_id)
+                         FROM sessions p WHERE p.id = r.parent_session_id))) = lower(?1)
+                   ORDER BY r.started_at DESC, r.id DESC
+                   LIMIT ?2)
+                 ORDER BY started_at, id",
             )
             .map_err(sql("read the commands a session ran"))?;
         statement
-            .query_map([parent], |row| {
+            .query_map(params![parent, i64::from(limit)], |row| {
                 let status: String = row.get(2)?;
                 let ended_by = crate::server::records::ended_by(
                     &status,
@@ -632,14 +641,16 @@ macro_rules! conversation_agents {
         "(SELECT conversation, agent, permission_mode, parent, branch, profile_id, status,
            stopped, stopped_by, exit_code, MAX(id) AS newest FROM (
            SELECT lower(r.claude_session_id) AS conversation, r.agent, r.permission_mode,
-             (SELECT lower(coalesce(p.last_claude_session_id, p.claude_session_id))
-               FROM sessions p WHERE p.id = r.parent_session_id) AS parent,
+             lower(coalesce(r.parent_conversation_id,
+               (SELECT coalesce(p.last_claude_session_id, p.claude_session_id)
+                 FROM sessions p WHERE p.id = r.parent_session_id))) AS parent,
              r.branch, r.profile_id, r.status, r.stopped, r.stopped_by, r.exit_code, r.id
             FROM sessions r WHERE r.claude_session_id IS NOT NULL
            UNION ALL
            SELECT lower(r.last_claude_session_id), r.agent, r.permission_mode,
-             (SELECT lower(coalesce(p.last_claude_session_id, p.claude_session_id))
-               FROM sessions p WHERE p.id = r.parent_session_id),
+             lower(coalesce(r.parent_conversation_id,
+               (SELECT coalesce(p.last_claude_session_id, p.claude_session_id)
+                 FROM sessions p WHERE p.id = r.parent_session_id))),
              r.branch, r.profile_id, r.status, r.stopped, r.stopped_by, r.exit_code, r.id
             FROM sessions r WHERE r.last_claude_session_id IS NOT NULL
          ) GROUP BY conversation)"
@@ -652,7 +663,8 @@ macro_rules! conversation_agents {
 /// (lower-cased), `agent`, null for a session started as none, so a
 /// conversation last resumed without its agent has none, and
 /// `permission_mode`; then that row's `parent` (the lower-cased conversation
-/// of the session that started it, null for none), `branch`, `profile_id`,
+/// the session that started it was in when it did, as its row recorded, else
+/// that session's conversation now; null for none), `branch`, `profile_id`,
 /// and how it ended (`status`, `stopped`, `stopped_by`, `exit_code`).
 pub(crate) const CONVERSATION_AGENTS: &str = conversation_agents!();
 
