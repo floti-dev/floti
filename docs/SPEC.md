@@ -1218,8 +1218,8 @@ about the user's own `gh`: Helm no longer runs it.
   and each plugin's tools) on their own routes; the host hands each browser call to
   Helm's window to answer in the pane. Every request needs a bearer token
   minted for one session and revoked when that session ends; there is no
-  unauthenticated route; and each family has its own tick - `browserMcp` and
-  `sessionMcp` - each of which means no route, no name in the launch's
+  unauthenticated route; and each family has its own tick - `browserMcp`,
+  `sessionMcp` and `sessionAgents` - each of which means no route, no name in the launch's
   `--mcp-config` document and no tool in any list. An agent navigation is
   allowed only where `browserReach` **and** `browserMcpLocalOnly` both allow
   it - the narrower wins, so an agent can never reach further than the pane it

@@ -397,7 +397,7 @@ servers on routes of one endpoint (`crates/host/src/agent_tools`). Every
 request carries a bearer token minted for one session and revoked when that
 session ends; a request with a non-loopback `Origin` is refused before its
 token is compared; and each built-in set has its own setting (`browserMcp`,
-`sessionMcp`) that removes it from every launch. The host has no browser, so
+`sessionMcp`, `sessionAgents`) that removes it from every launch. The host has no browser, so
 it hands each browser call to the attached Helm window, whose main process
 answers it in the pane. A forwarded port is opened only when the user chooses
 Open in browser on a port a session on a host on another computer listens on:

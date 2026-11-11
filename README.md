@@ -220,13 +220,15 @@ Nothing outside this machine can reach it, and every request needs the token
 of the session making it. The host has no browser of its own: it hands each
 browser call to Helm's window, which answers it in the pane.
 
-Each set has its own tick - **Settings → Browser** and **Settings → Sessions** -
-and either one off means those tools are not registered with a session at all.
+Each set has its own tick - **Settings → Browser**, **Settings → Sessions** and
+**Settings → Agents** (Sessions can start agents) - and any one off means those
+tools are not registered with a session at all.
 The browser settings also decide how far those tools may go: they can never
 reach further than the pane itself may, and can be held to this machine while
-the pane is not. The session tools are read-only: they say what is running and
-give an agent no way to affect it, and they never return any part of another
-session's conversation.
+the pane is not. The session-awareness tools are the read-only set: they say
+what is running and give an agent no way to affect it, and they never return
+any part of another session's conversation. The child-session tools reach only
+the session's own children.
 
 A **forwarded port** is opened only when you ask for one. A session on a host
 on another computer that runs a dev server lists its port in the sessions

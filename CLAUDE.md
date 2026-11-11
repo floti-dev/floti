@@ -98,11 +98,12 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 
 ## UI
 
-- Follow DESIGN.md: semantic tokens only (no raw hex in components outside
-  its foreign-ground islands), islands with hairline edges on a sunken
-  canvas, the accent solid-fills nothing but a checked checkbox, no shadows
-  outside modals, no text weight past 500 but 600 on caps labels of 11px or
-  less, mono for machine data. Anything the tokens cannot express is a DESIGN.md amendment.
+- Follow DESIGN.md: semantic tokens only (no raw hex in components outside its
+  foreign-ground islands), islands with hairline edges on a sunken canvas, the
+  accent solid-fills nothing but a checked checkbox, no shadows outside
+  modals, no text weight past 500 but 600 on caps labels of 11px or less, mono
+  for machine data. Anything the tokens cannot express is a DESIGN.md
+  amendment.
 - Look at a UI change before calling it done: `pnpm dev --drive`, then
   `node packages/desktop/scripts/drive-dev.mjs shot <file>.png`. A `--drive`
   window starts only the fake agents. The `dev` skill has the rest.
@@ -143,34 +144,34 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   reads `shared/ipc.ts` and fails naming any channel that is neither.
 - Main owns the window's lifetime and `helm.db`: `will-quit` releases the
   database, and nothing else closes the store.
-- The host owns process lifetime. Every session's and plain terminal's pty and process tree is held by the
-  session keeper (`floti keeper`, `crates/host/src/keeper`), a process the
-  host starts outside its own tie, which holds nothing else: a host that
-  crashes, panics or is killed takes no session with it, and the next host
-  takes them back under the same ids, with their agent tools and the device
-  that started each. A keeper that dies ends what it holds,
-  and the host offers those sessions back. Only a deliberate stop ends the
-  keeper. Quitting a client ends the sessions it started only where its
-  setting for that host says so; a crash ends nothing; stopping the host
-  ends every session. The plain terminals a client opened end when it quits.
-  Helm's setting is `quitSessions`, kept in `helm.db` keyed by host
-  (this PC's is `local`, End when absent; a remote host's is its id, Keep
-  when absent). Quitting with sessions it would
-  end asks first: End and quit, Keep running and quit (this quit only, never
-  written to the setting), or Cancel. Helm never stops the host on its own:
-  its deliberate quit sends `host:quit` and lets go, only Settings' Stop host
-  (after saying how many sessions it ends) and an update of that host (after
-  the user's yes, through `floti update-stop --stop`) send `host:stop`, and a
-  host Helm
-  started (`floti host --desktop`) exits by itself once it runs nothing and
-  no client is attached. When the connection ends without a stop or a quit,
-  the window keeps each tab's screen, dimmed with input off, and Helm starts
-  a new host if a desktop started the one that died, then reconnects. The
-  new host's list decides each: a session or shell it still runs is carried
-  again from its redraw, and nothing is resumed. One it lists lost, or that
-  is lost while it stays (its keeper died), comes back through the host's
-  restore offer, which the window asks for again then; a lost shell, as a
-  new shell in its folder.
+- The host owns process lifetime. Every session's and plain terminal's pty and
+  process tree is held by the session keeper (`floti keeper`,
+  `crates/host/src/keeper`), a process the host starts outside its own tie,
+  which holds nothing else: a host that crashes, panics or is killed takes no
+  session with it, and the next host takes them back under the same ids, with
+  their agent tools and the device that started each. A keeper that dies ends
+  what it holds, and the host offers those sessions back. Only a deliberate
+  stop ends the keeper. Quitting a client ends the sessions it started only
+  where its setting for that host says so; a crash ends nothing; stopping the
+  host ends every session. The plain terminals a client opened end when it
+  quits. Helm's setting is `quitSessions`, kept in `helm.db` keyed by host
+  (this PC's is `local`, End when absent; a remote host's is its id, Keep when
+  absent). Quitting with sessions it would end asks first: End and quit, Keep
+  running and quit (this quit only, never written to the setting), or Cancel.
+  Helm never stops the host on its own: its deliberate quit sends `host:quit`
+  and lets go, only Settings' Stop host (after saying how many sessions it
+  ends) sends `host:stop`, and a host Helm started (`floti host --desktop`)
+  exits by itself once it runs nothing and no client is attached. An update
+  stops a host through `floti update-stop --stop`
+  (`crates/host/src/update_stop.rs`), asked first when it would end sessions,
+  and their rows stay running, so the next host offers them back. When the
+  connection ends without a stop or a quit, the window keeps each tab's
+  screen, dimmed with input off, and Helm starts a new host if a desktop
+  started the one that died, then reconnects. The new host's list decides
+  each: a session or shell it still runs is carried again from its redraw, and
+  nothing is resumed. One it lists lost, or that is lost while it stays (its
+  keeper died), comes back through the host's restore offer, which the window
+  asks for again then; a lost shell, as a new shell in its folder.
 - A host on another computer is reached by main through `floti bridge`,
   over the user's own `ssh -o BatchMode=yes <target>`, the command they
   gave, or `wsl.exe -d <distro>` (on this PC, or through ssh to a Windows
@@ -183,27 +184,28 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   nothing is approved or typed on the host. The link never
   starts that host and a drop ends nothing there; Remove ends the link and
   removes the host's client folder, and ends nothing on the host.
-- Every client sees every session in the host, and tabs, panes and splits are kept per device: `paneLayout`
-  stays in `helm.db` and never reaches the host. A window gives a tab only to
-  a session its saved layout names or that it opened. A running child of a session it has a tab for
-  is shown inside that tab while "Show children in their parent's tab" is on
-  and the pane has room (`familyRoom`), and counts as open here, so the
-  window's connection carries its terminal (`shownSessionIds`) along with
-  those of the sessions that have a tab. A running child's pane there can be
-  closed without ending it: it keeps running, is not open here (its terminal
-  is not carried), and is shown as a child with no room is, by its chip in the
-  parent's crumb and its row in the tree, whose peek's Open puts it back
-  where it was (its Open as tab gives it a tab; Open never does). Which children are shown, shrunk, closed or opened as
-  tabs is this device's `paneLayout` (`families`) and never reaches the
-  host. Every other running session is in the sessions pane
-  as not open here, with Open (a tab whose screen comes through the host's
-  attach, never a second restore path) and End. A child with nowhere
-  on screen here, running or ended, has a peek instead (from its row, or its
-  chip in the parent's crumb): its screen comes through the host's watch-only
-  attach (`session:data` opened with `watch`), which takes no keys and no
-  size, so a peek never types into the child or resizes it; it is drawn at the
-  grid the host reports (`session:size`); its Open as tab is the attach above
-  and closes the peek. Closing a running session's tab asks first, naming its
+- Every client sees every session in the host, and tabs, panes and splits are
+  kept per device: `paneLayout` stays in `helm.db` and never reaches the host.
+  A window gives a tab only to a session its saved layout names or that it
+  opened. A running child of a session it has a tab for is shown inside that
+  tab while "Show children in their parent's tab" is on and the pane has room
+  (`familyRoom`), and counts as open here, so the window's connection carries
+  its terminal (`shownSessionIds`) along with those of the sessions that have
+  a tab. A running child's pane there can be closed without ending it: it
+  keeps running, is not open here (its terminal is not carried), and is shown
+  as a child with no room is, by its chip in the parent's crumb and its row in
+  the tree, whose peek's Open puts it back where it was (its Open as tab gives
+  it a tab; Open never does). Which children are shown, shrunk, closed or
+  opened as tabs is this device's `paneLayout` (`families`) and never reaches
+  the host. Every other running session is in the sessions pane as not open
+  here, with Open (a tab whose screen comes through the host's attach, never a
+  second restore path) and End. A child with nowhere on screen here, running
+  or ended, has a peek instead (from its row, or its chip in the parent's
+  crumb): its screen comes through the host's watch-only attach
+  (`session:data` opened with `watch`), which takes no keys and no size, so a
+  peek never types into the child or resizes it; it is drawn at the grid the
+  host reports (`session:size`); its Open as tab is the attach above and
+  closes the peek. Closing a running session's tab asks first, naming its
   host, which the window names, and the children that end with it and any
   started to outlive it; its button counts what it ends (End 4 sessions).
   Close tab, keep running in the tab's menu ends nothing, and puts a child
@@ -331,10 +333,11 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - A native view paints over all DOM, so it hides while anything is drawn over
   it, through `overlayOpen()` (`ui/src/lib/overlay.ts`), subscribed once in
   `useBrowsers`, and leaves a still of the page in its place
-  (`browser:snapshot`). Toasts are drawn clear of the view while the sidebar
-  shows, and hide it as a dialog does while the sidebar is hidden. The view
-  never enters the top 36px, where Windows draws the window controls, except
-  in fullscreen, when the page has the whole window and there is no title bar.
+  (`browser:snapshot`). The attention toasts (needs you, While you were away)
+  are drawn clear of the view while the sidebar shows, and hide it as a dialog
+  does while the sidebar is hidden. The view never enters the top 36px, where
+  Windows draws the window controls, except in fullscreen, when the page has
+  the whole window and there is no title bar.
 - The browser's keys are one table (`shared/browserKeys.ts`): main reads it in
   `before-input-event` for a key pressed in a page, the window for a key in
   Helm's chrome, and both run the window's one dispatch. A key an agent sends
@@ -354,8 +357,9 @@ The host serves its sessions' agent tools as MCP over HTTP
 (`crates/host/src/agent_tools`): `helm-browser` at `/mcp`, `helm-sessions` at
 `/mcp/sessions`, `floti-agents` at `/mcp/agents` and each plugin's tools at
 `/mcp/plugin/<id>`, on one port. It is the one inbound listener the host has
-besides its local socket and the relay socket beside it. Main binds no listener for them, mints no token and
-writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
+besides its local socket and the relay socket beside it. Main binds no
+listener for them, mints no token and writes no `--mcp-config`, and never
+serves `floti-agents`: only the host does.
 
 - `127.0.0.1` only, on port 0, or on the port the sessions it takes back from
   the keeper were given. A request announcing a non-loopback `Origin`
@@ -378,13 +382,13 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   (`agentCommandsPerParent`, counted apart from the agent limits) on each
   connect and each change (`hostSettingsFor`).
 - Each plugin offering tools is a family, `helm-plugin-<id>`, on while the
-  plugin is on and its tools are not switched off in Settings. The host
-  checks the token, then hands the call on with its caller: an id it mints
-  the first time it meets the session (random, never the browser key or the host's row
-  id, and the id the plugin's `sessions.list` shows), its name and its
-  working directory - never the token, never anything of the conversation.
-  Turning them on reaches sessions started after; turning them off reaches
-  running ones at once.
+  plugin is on and its tools are not switched off in Settings. The host checks
+  the token, then hands the call on with its caller: an id it mints the first
+  time it meets the session (random, never the browser key or the host's row
+  id, and the id the plugin's `sessions.list` shows), its name and its working
+  directory - never the token, never anything of the conversation. Turning
+  them on reaches sessions started after; turning them off reaches running
+  ones at once.
 - Agent tools are registered per launch for every backend that takes them,
   never through an
   agent's own add command or global config. For Claude Code that is a
@@ -416,8 +420,9 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   conversation id or child command line. The shaping types have no field for
   them. The sessions pane may show command lines to the user.
 - Listing is machine-wide. Detail of a session the host did not spawn gives
-  its pid, name, folder, status and version and says so; branch, profile,
-  overlays, process tree and ports are only for sessions it spawned.
+  its pid, name, folder, status and version and says so; its Helm tab, start
+  time, branch, profile, overlays, process tree and ports are only for
+  sessions it spawned.
   A status it could not read is "unknown", never omitted. No tool takes a
   session id.
 - `helm-sessions` is awareness plus the caller's own title: it sends a
@@ -460,64 +465,62 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   name a tool is given is resolved among the caller's own children only, and
   anything else is not found. A start is judged before anything runs: the
   agent it starts and a backend that agent allows, a folder Floti tracks on
-  the path it leads to (a session's own folder does not make one tracked),
-  its repository and agent worktree, the profile, the permission mode, the
-  backend's ability to enforce every rule of the agent (`AgentBackend`
-  refuses one it cannot, naming the rule and the backend), then the limits
-  read afresh from the settings and counted from the child rows, so they hold
-  across a host restart. A child runs in its agent's mode, else its
-  profile's, else auto (where its backend has auto). A parent caps it only when the parent was launched in plan or
-  dont-ask, and bypass-permissions reaches a child only when its parent was
-  launched in it; a parent launched in no mode or in manual does not hold its
-  children to manual (`child_mode` in `hosted/children.rs`). The user's deny
-  rules still win. A child starts and works its task with nothing to answer:
-  nobody is at its terminal, so its adapter launches it with nothing a person
-  must answer before its first turn, without writing the agent's config (for
-  Claude Code `--strict-mcp-config` beside its own `--mcp-config`, so it loads
-  only the servers its launch gives it and no project `.mcp.json` asks to be
-  approved; a session a person starts still loads the project's). Children
-  are held by the generic limits only, and how many work at once is the
-  parent's judgment, made from what each one does. Command children are
-  counted apart, by their rows' command:
-  none of the agent limits (per parent, per host, starts, depth) counts
-  one, and an agent counts toward none of theirs (`agentCommandsPerParent`, 1
-  to 32, default 4, is read afresh on every run; a fifth is refused naming the
+  the path it leads to (a session's own folder does not make one tracked), its
+  repository and agent worktree, the profile, the permission mode, the
+  backend's ability to enforce every rule of the agent (`AgentBackend` refuses
+  one it cannot, naming the rule and the backend), then the limits read afresh
+  from the settings and counted from the child rows, so they hold across a
+  host restart. A child runs in its agent's mode, else its profile's, else
+  auto (where its backend has auto). A parent caps it only when the parent was
+  launched in plan or dont-ask, and bypass-permissions reaches a child only
+  when its parent was launched in it; a parent launched in no mode or in
+  manual does not hold its children to manual (`child_mode` in
+  `hosted/children.rs`). The user's deny rules still win. A child starts and
+  works its task with nothing to answer: nobody is at its terminal, so its
+  adapter launches it with nothing a person must answer before its first turn,
+  without writing the agent's config (for Claude Code `--strict-mcp-config`
+  beside its own `--mcp-config`, so it loads only the servers its launch gives
+  it and no project `.mcp.json` asks to be approved; a session a person starts
+  still loads the project's). Children are held by the generic limits only,
+  and how many work at once is the parent's judgment, made from what each one
+  does. Command children are counted apart, by their rows' command: none of
+  the agent limits (per parent, per host, starts, depth) counts one, and an
+  agent counts toward none of theirs (`agentCommandsPerParent`, 1 to 32,
+  default 4, is read afresh on every run; a fifth is refused naming the
   command-children limit and the running command children that hold it, and
   saying to wait for news and run again). `agents_list` shows a command child
   with its command where any other child shows its agent, and how many command
-  children the parent has left. A
-  child ends when its parent ends, however it ends, and its own children with
-  it, unless it was started to `outlive`; its row keeps the parent's row and
-  conversation, so a restart restores the links and resuming the parent's
-  conversation gives its outliving children back. A session's record names
-  the agent it was started as (`agent`).
-- A child's doings are news for its parent, kept in `floti.db`'s
-  `agent_inbox` keyed by the parent's row and its conversation id, so a
-  restart, or the parent's conversation resumed in Floti, still hears what
-  its children said meanwhile. There are six events: a report
-  (`agents_report`: done, stuck or note, text at most 4,000 characters, a
-  longer answer goes in a file whose path is reported), needs you (a
-  permission prompt, a question or a sign-in, or a child that has not begun
-  its first turn a minute after its launch, saying it has not started its
-  task: a prompt it cannot skip, such as folder trust, waits for a person;
-  `hosted/children/startup.rs`, its minute on Tokio's clock), turn ended (a
-  turn that ended idle with no report; a turn that ended with one is only the report), ended
-  (the exit code, or stopped by the parent, a person or Floti), error (a
-  launch that failed, or an error the program reports; the message is cut to
-  200 characters) and delivered (a text the parent sent that waited in the
-  child's queue was typed in, with that text cut to 200 characters). No event
-  carries any of a child's conversation beyond a report's text, a program's
-  own message and the parent's own text. They are watched from the
-  activity reader (`server/features/sessions.rs`, `hosted/children/news.rs`),
-  which reads the backend's own records first and then the program's own
-  status (OSC 7501), where `blocked` is needs you and `error` is error, and,
-  for an agent with no MCP tools, `done` is a report. `agents_report` is
-  listed, and allowed at launch, only for a session that has a parent (an
-  agent with no MCP tools has no tools to list): the family lists per caller
-  (`ToolFamily::tools_for`, `allowed_tools_in`), and a tool left out of a
-  listing is answered as one the family does not have. A session's record
-  carries its child's `last_report` (protocol 2.1, optional) from a report
-  until the child's next turn starts.
+  children the parent has left. A child ends when its parent ends, however it
+  ends, and its own children with it, unless it was started to `outlive`; its
+  row keeps the parent's row and conversation, so a restart restores the links
+  and resuming the parent's conversation gives its outliving children back. A
+  session's record names the agent it was started as (`agent`).
+- A child's doings are news for its parent, kept in `floti.db`'s `agent_inbox`
+  keyed by the parent's row and its conversation id, so a restart, or the
+  parent's conversation resumed in Floti, still hears what its children said
+  meanwhile. There are six events: a report (`agents_report`: done, stuck or
+  note, text at most 4,000 characters, a longer answer goes in a file whose
+  path is reported), needs you (a permission prompt, a question or a sign-in,
+  or a child that has not begun its first turn a minute after its launch,
+  saying it has not started its task: a prompt it cannot skip, such as folder
+  trust, waits for a person; `hosted/children/startup.rs`, its minute on
+  Tokio's clock), turn ended (a turn that ended idle with no report; a turn
+  that ended with one is only the report), ended (the exit code, or stopped by
+  the parent, a person or Floti), error (a launch that failed, or an error the
+  program reports; the message is cut to 200 characters) and delivered (a text
+  the parent sent that waited in the child's queue was typed in, with that
+  text cut to 200 characters). No event carries any of a child's conversation
+  beyond a report's text, a program's own message and the parent's own text.
+  They are watched from the activity reader (`server/features/sessions.rs`,
+  `hosted/children/news.rs`), which reads the backend's own records first and
+  then the program's own status (OSC 7501, read in `session/activity.rs`),
+  where `blocked` is needs you and `error` is error, and, for an agent with no
+  MCP tools, `done` is a report. `agents_report` is listed, and allowed at
+  launch, only for a session that has a parent (an agent with no MCP tools has
+  no tools to list): the family lists per caller (`ToolFamily::tools_for`,
+  `allowed_tools_in`), and a tool left out of a listing is answered as one the
+  family does not have. A session's record carries its child's `last_report`
+  (protocol 2.1, optional) from a report until the child's next turn starts.
 - Every session's record says how it ended once it has exited (`endedBy`,
   protocol 2.2, optional): `exited` by itself, or stopped by its `parent`,
   a `person` on any device or `floti` (its parent ended, or the host was
@@ -535,12 +538,13 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
 - Kept belongs to the host: `kept` on the child's row in `floti.db`, written
   with `stopped_by` by the first stop (`records::record_stopping`): true for
   `agents_stop` with `keep` (`floti agent stop --keep`) and for a person's
-  stop of that child (a device's quit is not one), false for every other end, and never for a session with no parent.
-  `session:list` gives the running sessions, then each kept child of a
-  running parent, with protocol 2.2's optional `kept` (set only on a child
-  that has exited). Resuming a kept child clears it on every earlier row of
-  its name, and `session:remove` clears it on the rows it names that are kept
-  children and passes over any other; each clear moves the activity
+  stop of that child, but not for a device's quit, which records a person's
+  stop and keeps nothing; false for every other end, and never for a session
+  with no parent. `session:list` gives the running sessions, then each kept
+  child of a running parent, with protocol 2.2's optional `kept` (set only on
+  a child that has exited). Resuming a kept child clears it on every earlier
+  row of its name, and `session:remove` clears it on the rows it names that
+  are kept children and passes over any other; each clear moves the activity
   publication, so every client lists again.
 - `agents_send` (`floti agent send`) puts its text at the end of the child's
   queue, `agent_messages` in `floti.db` beside `agent_inbox`, so a host
@@ -565,24 +569,24 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   session's, not as its user's turn, so Floti delivers nothing through it;
   a Claude Code parent's guide says it may use its own SendMessage, which
   Floti does not see.
-- `agents_wait` (`for` any or all, `children` names) gives the caller's
-  unseen news at once, in order, and holds for the next only where the
-  caller's backend can: `backgrounds_long_calls` for the tool, and
+- `agents_wait` (`for` any or all, `children` names) gives the caller's unseen
+  news at once, in order, and holds for the next only where the caller's
+  backend can: `backgrounds_long_calls` for the tool, and
   `background_command_wakes` with the shell header for `floti agent wait`.
   Anywhere else it answers at once, saying nothing is new yet and to call
   again after the next piece of work. News is marked seen only after the
   answer was handed to the caller in full (`Delivery`), so a wait that is
   cancelled, dropped or cut off by a host restart leaves it unseen for the
   next. A wait running in the background (an MCP task, `agents_start` or
-  `agents_send` with `wait` as one, and `floti agent wait --background`)
-  does not end when a person types into the parent: the person talks to the
-  parent while its waits, its children's news, the messages it queued and
-  its children carry on, and the wait ends on its children's news, every
-  child it is about idle (with `for` all), or the parent ending. A held wait that holds up
-  the parent's turn (a held call that is not a task, `floti agent wait`
-  without `--background`) ends when a person types a key into the parent
-  and when the parent ends. No wait ends on what a terminal sends by itself
-  (focus in and out, mouse reports, answers to its program's queries;
+  `agents_send` with `wait` as one, and `floti agent wait --background`) does
+  not end when a person types into the parent: the person talks to the parent
+  while its waits, its children's news, the messages it queued and its
+  children carry on, and the wait ends on its children's news, every child it
+  is about idle (with `for` all), or the parent ending. A held wait that holds
+  up the parent's turn (a held call that is not a task, `floti agent wait`
+  without `--background`) ends when a person types a key into the parent and
+  when the parent ends. No wait ends on what a terminal sends by itself (focus
+  in and out, mouse reports, answers to its program's queries;
   `session/person.rs`). Each backend's guide asks the parent to wait in the
   background where it can: an MCP task where it has them, else
   `floti agent wait --background` as a background command, so a wait that
@@ -618,15 +622,16 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   (`workspace/worktrees.rs`) after the whole start has been judged, so a
   refused start writes nothing. It is `<repo>/.floti/worktrees/<name>` on a
   new branch `agent/<name>` cut from the commit the start's folder (the
-  parent's, unless the start names one) has checked out, under the repository's main working tree even when the parent
-  is itself in an agent worktree; the name is made unique among those folders
-  and `agent/*` branches (`name-2`), so no two children share a checkout.
-  `/.floti/` is added to the repository's `info/exclude` once, keeping its
-  other lines. A start is refused when its folder is not in a git repository,
-  or is inside an agent worktree that a running session other than the caller
-  works in (naming it). A launch that fails after the worktree was made
-  removes it and its branch; otherwise nothing removes a worktree when its
-  child ends, because its branch holds the work.
+  parent's, unless the start names one) has checked out, under the
+  repository's main working tree even when the parent is itself in an agent
+  worktree; the name is made unique among those folders and `agent/*` branches
+  (`name-2`), so no two children share a checkout. `/.floti/` is added to the
+  repository's `info/exclude` once, keeping its other lines. A start is
+  refused when its folder is not in a git repository, or is inside an agent
+  worktree that a running session other than the caller works in (naming it).
+  A launch that fails after the worktree was made removes it and its branch;
+  otherwise nothing removes a worktree when its child ends, because its branch
+  holds the work.
 - `agents_start` with `resume` (`floti agent start --resume <name>`) reopens
   one of the caller's ended children, resolved among the caller's own
   children like every other name (ended rows and those given back by a
@@ -724,11 +729,11 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
 The host runs them (`crates/host/src/plugins`): their registry, settings,
 secrets, programs, services and their pages' `fetch`. Main keeps the
 `floti-plugin://` and `helm-plugin://` schemes (`main/plugins/protocol.ts`),
-the hidden plugin host window (`main/plugins/background.ts`) and the tool relay
-(`main/host/plugin-tools.ts`); the window draws their pages. `packages/plugin-sdk` holds the manifest validator
-Helm loads with, so a manifest change starts there. `apiVersion` is 1 or 2,
-and both load side by side; anything else is an error in Settings, never a
-crash.
+the hidden plugin host window (`main/plugins/background.ts`) and the tool
+relay (`main/host/plugin-tools.ts`); the window draws their pages.
+`packages/plugin-sdk` holds the manifest validator Helm loads with, so a
+manifest change starts there. `apiVersion` is 1 or 2, and both load side by
+side; anything else is an error in Settings, never a crash.
 
 - Version 2 is the current one. Its pages are served on
   `floti-plugin://<id>/` and get `window.floti`; its background is an ES
@@ -758,9 +763,9 @@ folder: run through npx, that folder is a cache.
   storage or navigation is shared between hosts; This PC's stays
   `<scheme>://<id>/`.
 - Its CSP has `connect-src 'none'`: `floti.fetch` (`helm.fetch` at version 1;
-  the host's `plugins/net`) is its only way out, to origins the manifest
-  lists and to its own service (`service:/path`), checked again on every redirect hop. A version 2 background's
-  `floti.fetch` is held to the same rule.
+  the host's `plugins/net`) is its only way out, to origins the manifest lists
+  and to its own service (`service:/path`), checked again on every redirect
+  hop. A version 2 background's `floti.fetch` is held to the same rule.
 - `guards.ts`: `will-frame-navigate` keeps a plugin frame on its own origin,
   and plugin origins get `clipboard-sanitized-write` and no other permission.
 - The host answers a page's calls, `BroadcastChannel` posts included. The window and the hidden plugin window each ask it over their own
@@ -836,7 +841,8 @@ folder: run through npx, that folder is a cache.
   portable; `templatesDir` in `paths.ts`), which the host reads and seeds at
   its start. The shipped README and example are written only when the
   directory is absent, and nothing there is ever overwritten. The in-app
-  Templates manager makes, renames, imports and deletes templates and edits
+  Templates manager makes templates (from a folder too, `template:fromFolder`),
+  renames, imports, fills (`template:substitute`) and deletes them and edits
   their label and description; it has no file editor.
 - Agents (a lead, a worker, a reviewer: the named definitions a session
   starts its children as) live in `agents` in the host's config folder
@@ -870,21 +876,21 @@ folder: run through npx, that folder is a cache.
   into the child's instructions by its adapter, as its own section after the
   project's, and is never typed to the session.
 - A client lists, reads and edits the agents of the host it asks over
-  `agents:*` (`server/features/agents.rs`, `agent_definitions/editing.rs`).
-  A write is parsed by the parser a start uses first and refused with every
-  problem, each naming its field and line where it has them; a write or a delete whose hash is
-  not the file's, or that names none where there is a file, is a conflict,
-  as `content:write`'s is; a replace, rename or delete keeps the old text in `floti.db`'s
-  `agent_versions`, never in the config folder (the newest 20 per agent), and
-  `agents:restore` undoes the newest change only while its files are as that
-  change left them. Every text is written whole beside its file and put in
-  place in one step (a new one only where no file is), and a file that is a
-  link is written through, keeping the link.
-  `agents:addShipped` writes a shipped agent only where its file is absent.
-  A host started with `FLOTI_CONFIG_READ_ONLY` refuses every change with a
-  sentence and still lists, reads and watches. The folder is watched only
-  while a client listens on `agents:changed`, which tells every listener the
-  names whose files came, went or changed, the host's own writes and an
+  `agents:*` (`server/features/agents.rs`, `agent_definitions/editing.rs`). A
+  write is parsed by the parser a start uses first and refused with every
+  problem, each naming its field and line where it has them; a write or a
+  delete whose hash is not the file's, or that names none where there is a
+  file, is a conflict, as `content:write`'s is; a replace, rename or delete
+  keeps the old text in `floti.db`'s `agent_versions`, never in the config
+  folder (the newest 20 per agent), and `agents:restore` undoes the newest
+  change only while its files are as that change left them. Every text is
+  written whole beside its file and put in place in one step (a new one only
+  where no file is), and a file that is a link is written through, keeping the
+  link. `agents:addShipped` writes a shipped agent only where its file is
+  absent. A host started with `FLOTI_CONFIG_READ_ONLY` refuses every change
+  with a sentence and still lists, reads and watches. The folder is watched
+  only while a client listens on `agents:changed`, which tells every listener
+  the names whose files came, went or changed, the host's own writes and an
   outside editor's alike (`agent_definitions/watch.rs`).
 - A person starts a session as an agent from a launcher (`session:launch`'s
   `agent`, protocol 2.3). The host composes it as it composes a child's
@@ -904,8 +910,8 @@ folder: run through npx, that folder is a cache.
   naming it. A restore of one that cannot be loaded is refused too: the
   restore offer names the problem (`agentProblem`), leaves the row unticked,
   and restores it without the agent only when asked (`withoutAgent`); a
-  restore of one that is gone reopens it without the agent and says so. A session taken back from the keeper is composed by
-  nothing: it never stopped.
+  restore of one that is gone reopens it without the agent and says so. A
+  session taken back from the keeper is composed by nothing: it never stopped.
 - Claude Code's own agents (its `agents/` files, chosen with `--agent`) are
   its subagents, and Floti calls them Subagents wherever it shows them (the
   profile editor and its view of what a profile composes), so the two never
@@ -924,7 +930,8 @@ folder: run through npx, that folder is a cache.
 | `pnpm dev:live` | the installed app's own | the installed app's own | the installed app's own |
 | templates | `~/.config/helm/templates`; `helm-data/templates` when portable | `~/.config/helm/templates` | `~/.config/helm/templates` |
 
-Templates are `helm-data/templates` in the run's own folder for `pnpm dev` and every check, on every OS.
+Templates are `helm-data/templates` in the run's own folder for `pnpm dev` and
+every check, on every OS.
 
 `pnpm dev` is seeded each launch from a copy of the installed app's database;
 `--fresh` gives the first-run state. `pnpm dev --drive` starts only the fake
@@ -940,9 +947,10 @@ app's folder, on any OS.
 - `renderer/src/terminal.ts` and the host's session environment
   (`crates/host/src/session/env.rs`) are tuned for TUI fidelity (SPEC 8.3);
   `ptyEnv` (`main/pty.ts`) is main's own ptys (the spike page's and the
-  drivers'), kept to match. Terminal preferences are passed into `createTerminal`;
-  never route a setting through `term:*`. The palette and contrast options are
-  fixed. `estimateGrid` must keep measuring the way xterm does.
+  drivers'), kept to match. Terminal preferences are passed into
+  `createTerminal`; never route a setting through `term:*`. The palette and
+  contrast options are fixed. `estimateGrid` must keep measuring the way xterm
+  does.
 - Usage figures paint nothing rather than a wrong number. A stale reading of a
   window that is still running paints lower bounds. Roll-over is judged before
   age. Dollar figures are estimates and say so.
