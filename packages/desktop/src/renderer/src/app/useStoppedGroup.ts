@@ -19,10 +19,11 @@ export interface StoppedGroupState {
   /** The group History draws: null when nothing is left in it. */
   shown: StoppedGroup | null;
   /**
-   * Keeps the sessions a stop took that are not back, replacing what the
-   * group held: the offer's Not now keeps them all, a restore keeps those it
-   * did not bring back. `at` is when the host found them lost (epoch ms),
-   * which heads the group, or null when it did not say.
+   * Keeps the sessions a stop took that are not back, added to what the
+   * group holds, by id: the offer's Not now keeps them all, a restore keeps
+   * those it did not bring back, and a second stop's join the first's. `at`
+   * is when the host found them lost (epoch ms), which heads the group, or
+   * null when it did not say; the latest one known heads it.
    */
   keep: (sessions: readonly RestorableSession[], at: number | null) => void;
   /**
@@ -44,16 +45,20 @@ export interface StoppedGroupState {
 export function useStoppedGroup({ running, resume, raiseUndo }: StoppedGroupDeps): StoppedGroupState {
   const [kept, setKept] = useState<StoppedGroup | null>(null);
 
+  // A session seen running is back, wherever it was resumed: it leaves the
+  // group for good, so it does not return there when it exits.
+  // Pruned as it is drawn, so the first render that sees one running is the
+  // last that holds it.
   const shown = useMemo((): StoppedGroup | null => {
     if (kept === null) return null;
-    const sessions = kept.sessions.filter(
-      (lost) => lost.conversationId === undefined || !running.has(lost.conversationId.toLowerCase()),
-    );
+    const sessions = kept.sessions.filter((lost) => !isRunning(lost, running));
+    if (sessions.length === kept.sessions.length) return kept;
     return sessions.length === 0 ? null : { ...kept, sessions };
   }, [kept, running]);
+  if (shown !== kept) setKept(shown);
 
   const keep = useCallback((sessions: readonly RestorableSession[], at: number | null) => {
-    setKept(sessions.length === 0 ? null : { at, sessions });
+    setKept((current) => merged(current, { at, sessions }));
   }, []);
 
   const resumeSessions = useCallback(
@@ -91,11 +96,24 @@ export function useStoppedGroup({ running, resume, raiseUndo }: StoppedGroupDeps
       "Stopped sessions dismissed",
       `${String(count)} ${count === 1 ? "session" : "sessions"} the stop took ${count === 1 ? "is" : "are"} no longer at the top of History.`,
       async () => {
-        setKept(was);
+        setKept((current) => merged(current, was));
         return null;
       },
     );
   }, [shown, raiseUndo]);
 
   return { shown, keep, resume: resumeSessions, dismiss };
+}
+
+function isRunning(lost: RestorableSession, running: StoppedGroupDeps["running"]): boolean {
+  return lost.conversationId !== undefined && running.has(lost.conversationId.toLowerCase());
+}
+
+/** `adding` joined to `current` by session id, the newer copy of each kept; null when nothing is left. */
+function merged(current: StoppedGroup | null, adding: StoppedGroup): StoppedGroup | null {
+  const byId = new Map((current?.sessions ?? []).map((lost) => [lost.id, lost]));
+  for (const lost of adding.sessions) byId.set(lost.id, lost);
+  if (byId.size === 0) return null;
+  const times = [current?.at ?? null, adding.at].filter((at): at is number => at !== null);
+  return { at: times.length === 0 ? null : Math.max(...times), sessions: [...byId.values()] };
 }

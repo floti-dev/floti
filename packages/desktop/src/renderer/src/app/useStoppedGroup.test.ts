@@ -56,7 +56,36 @@ describe("the Stopped group", () => {
     hook.rerender({ ...initial, running: new Set(["conv-1"]) });
     expect(ids(hook.result.current.shown)).toEqual([2]);
     act(() => hook.result.current.keep([lost(1)], null));
-    expect(hook.result.current.shown).toBeNull();
+    expect(ids(hook.result.current.shown)).toEqual([2]);
+  });
+
+  it("does not take back a session resumed elsewhere when it exits", () => {
+    const { hook, initial } = setup();
+    act(() => hook.result.current.keep([lost(1), lost(2)], null));
+    hook.rerender({ ...initial, running: new Set(["conv-1"]) });
+    hook.rerender({ ...initial, running: new Set() });
+    expect(ids(hook.result.current.shown)).toEqual([2]);
+  });
+
+  it("adds a second stop's sessions to the first's, headed by the later stop", () => {
+    const { hook } = setup();
+    act(() => hook.result.current.keep([lost(1), lost(2)], 100));
+    act(() => hook.result.current.keep([lost(2, { title: "again" }), lost(3)], 200));
+    expect(ids(hook.result.current.shown)).toEqual([1, 2, 3]);
+    expect(hook.result.current.shown?.at).toBe(200);
+    expect(hook.result.current.shown?.sessions[1]?.title).toBe("again");
+  });
+
+  it("brings back what was dismissed beside a stop kept since, on Undo", async () => {
+    const { hook, raiseUndo } = setup();
+    act(() => hook.result.current.keep([lost(1)], null));
+    act(() => hook.result.current.dismiss());
+    act(() => hook.result.current.keep([lost(2)], null));
+    const undo = raiseUndo.mock.calls[0]![2];
+    await act(async () => {
+      await undo();
+    });
+    expect(ids(hook.result.current.shown)).toEqual([2, 1]);
   });
 
   it("resumes each by its conversation, as its agent unless its agent has a problem", async () => {
