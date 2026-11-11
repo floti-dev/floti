@@ -805,6 +805,21 @@ overrides the gate; keep it.
   line number in mono, the line with the match in `accent-text` at 500. A row
   opens the file on that line, the words selected in source and marked in a
   rendered note. The last answer stays on screen while the next is asked.
+- **History** (Ctrl+H) is the same palette shape at 680px, over whatever is on
+  screen, taken from a focused terminal as Ctrl+P is. With nothing typed it
+  lists the ten sessions worked in last, each a 34px row: the state dot of one
+  running now, its name (the name given by hand, else its agent's title, else
+  its first prompt's line in quotes, muted), the agent tag, its children's
+  count, and at the right one lower-case word where one is needed, the folder
+  in mono and when. Typed into, it is two lists, **Titles and prompts** and
+  **Conversations**, each with its own count in the switch at the field's
+  right, Tab between them; a conversation is followed by its matching lines as
+  28px rows. A lead's children unfold under it with the Sessions tree's
+  hairline guide. Under the list a preview on `surface` gives the facts in mono
+  and the sentence saying what Enter runs, so a click only highlights. A count
+  that could not be read says Unknown, never 0. A conversation opens read-only
+  in a tab of its own: turns run across the column, the user's tinted with the
+  2px accent edge, tool calls folded to one mono line.
 
 ## 5b. Shell chrome
 
@@ -854,8 +869,8 @@ overrides the gate; keep it.
   pointed at the tab's own row: a session's or a project page's tab brings
   Sessions with its row unfolded and scrolled to, a file's tab brings Files on
   its project with every folder down to it open, and Settings' tab brings its
-  sections. A tab with its list inside it - History -
-  or none at all (Browser) leaves the sidebar alone. Only a click on a tab does
+  sections. A tab with no list of its own (a conversation from History, the
+  Browser) leaves the sidebar alone. Only a click on a tab does
   this: focus moving between two panes does not, or a session beside a file
   would flip the sidebar on every click across. A maximized pane keeps the
   window, and the view still switches for when it is given back.
@@ -1245,7 +1260,7 @@ overrides the gate; keep it.
   rest of what git knows is on the page.
 
   A pinned row whose folder is no longer there keeps its place and says so, in
-  `SessionHistory`'s own words - the **`folder gone`** badge, the hairline
+  History's own words - the **`folder gone`** badge, the hairline
   outline pill. It is **not a button**: a pin is a deliberate act and an
   unplugged drive is not a decision to un-pin, but a row that offered a launch
   which would fail is worse than a row that says why it cannot. Its star is the

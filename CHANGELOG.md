@@ -37,6 +37,20 @@ gets skipped.
   delete. A save the host refuses keeps the edit and says what is wrong, and
   a file changed outside while you edit is shown beside your edit to compare,
   reload or save over. Settings > Agents says how many agents the host has.
+- History is a palette on Ctrl+H, over whatever is on screen (the command
+  palette lists it too), and no longer a page on the rail. With nothing typed
+  it lists the ten sessions you worked in last, each by its title, with its
+  folder, when, whether it runs now, its agent and how many sessions it
+  started. Type to search names, titles, prompts and archived conversations
+  at once, in two counted lists with Tab between them; a folder's name in the
+  search narrows to that folder. Enter resumes where it ran, or shows a
+  session that runs now; Ctrl+Enter opens the whole conversation read-only in
+  a tab at the line that matched, with Find, Rename, Show in Explorer and
+  Resume. → unfolds a lead's children with how each ended, and F2 renames in
+  place. After a crash, the restore offer's Not now keeps its sessions at the
+  top of History until each is back, with Dismiss and Undo. Grouping by
+  project and Resumable only are gone, and a saved layout with a History tab
+  opens without it.
 - Helm and its host speak Floti protocol 3.0. A desktop or host on an earlier
   release is refused at connect with a sentence saying which side to update.
 

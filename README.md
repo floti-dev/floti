@@ -138,10 +138,11 @@ in a harness is yours to decide.
   permission prompts.
 - **Project discovery.** Workspaces and their repos, auto-detected, with each
   one's skill/agent/command counts and git state at a glance.
-- **Session history.** Every session recorded in `~/.claude/history.jsonl`,
+- **History** (Ctrl+H). Every session recorded in `~/.claude/history.jsonl`,
   across every directory - which the CLI's `/resume` cannot show you, because it
-  reads only the one you started it in. Grouped by project, searchable by prompt
-  text, resumable into a tab.
+  reads only the one you started it in. A palette over the window: the sessions
+  worked in last by title, a search over names, prompts and archived
+  conversations, Enter to resume and Ctrl+Enter to read one back in a tab.
 
   Claude Code keeps prompts indefinitely and reaps the transcripts behind them,
   so most of that list is a record rather than a door. Helm marks which is which
