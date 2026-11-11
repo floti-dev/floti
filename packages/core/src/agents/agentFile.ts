@@ -115,6 +115,14 @@ export function copyName(name: string, taken: ReadonlySet<string>): string {
   }
 }
 
+/** Every name a host's agents folder holds: its agents' and the files that are not agents'. */
+export function listedAgentNames(listing: {
+  agents: ReadonlyArray<{ name: string }>
+  bad: ReadonlyArray<{ name: string }>
+}): Set<string> {
+  return new Set([...listing.agents.map((agent) => agent.name), ...listing.bad.map((file) => file.name)])
+}
+
 /** The text a blank agent starts from. */
 export function blankAgentText(): string {
   return '---\ndescription:\n---\n'

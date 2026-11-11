@@ -2016,10 +2016,10 @@ export interface IpcEvents {
   'pluginWindow:asked': PluginUiRequest
   /** The window closed a secret dialog the hidden window handed it. */
   'pluginWindow:answered': { requestId: string }
-  /** The whole list after any write, so every surface showing profiles agrees
-   * without each of them refetching. */
   /** The host's agents folder changed: the names whose files came, went or changed. Watched only while listened to. */
   'agents:changed': { names: string[] }
+  /** The whole list after any write, so every surface showing profiles agrees
+   * without each of them refetching. */
   'profiles:changed': Profile[]
   'theme:changed': ThemeState
   /** A user theme file was added, changed or removed. The whole listing. */

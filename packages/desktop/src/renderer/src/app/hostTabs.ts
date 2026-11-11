@@ -51,12 +51,21 @@ export interface RemoteTabsView {
  * A tab stays while its host is away: a session there is still running, and
  * its tab keeps its last screen and reattaches once the host is back. It goes
  * once its host is removed from this device, or once that host's own word
- * (its scan, its session list, its plugin list) says its thing is gone.
+ * (its scan, its session list, its plugin list) says its thing is gone. An
+ * agent's page, or a new agent's, stays while its host is listed: the page
+ * itself closes once that host no longer has the agent.
  */
 export function keepRemoteTab(ref: PaneRef, view: RemoteTabsView): boolean | undefined {
   const host = hostOf(ref)
   if (host === LOCAL_HOST_KEY) return undefined
-  if (ref.kind !== 'project' && ref.kind !== 'session' && ref.kind !== 'plugin') return undefined
+  if (
+    ref.kind !== 'project' &&
+    ref.kind !== 'session' &&
+    ref.kind !== 'plugin' &&
+    ref.kind !== 'agent' &&
+    ref.kind !== 'agent-draft'
+  )
+    return undefined
   if (!view.settingsLoaded) return true
   if (!view.listed.includes(host)) return false
   const work = view.byHost.get(host)
@@ -69,6 +78,9 @@ export function keepRemoteTab(ref: PaneRef, view: RemoteTabsView): boolean | und
       return work === undefined || !work.listed || work.sessions.some((session) => session.id === ref.id)
     case 'plugin':
       return view.pluginTab(host, ref.plugin, ref.tab) ?? true
+    case 'agent':
+    case 'agent-draft':
+      return true
   }
 }
 

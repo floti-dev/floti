@@ -8,6 +8,10 @@ export interface AgentListState {
   listing: LaunchAgents | null
   error: string | null
   reload: () => void
+  /** Writes a shipped agent the folder lacks. */
+  addShipped: (name: string) => void
+  /** Why the last Add on this host did not add it; null when it did, or nothing was added here. */
+  addError: string | null
 }
 
 /**
@@ -24,6 +28,8 @@ export function useAgentList(host: string, enabled: boolean): AgentListState {
     listing: null,
     error: null
   })
+  /** Why an Add did not, with the host it was on: another host's refusal is never shown as this one's. */
+  const [added, setAdded] = useState<{ host: string; error: string | null }>({ host, error: null })
   /** Which read is the newest, so an answer that arrives after a later one is dropped. */
   const asked = useRef(0)
 
@@ -46,6 +52,23 @@ export function useAgentList(host: string, enabled: boolean): AgentListState {
     return off
   }, [helm, enabled, reload])
 
+  const addShipped = useCallback(
+    (name: string) => {
+      setAdded({ host, error: null })
+      helm
+        .invoke('agents:addShipped', { name })
+        .then((result) => setAdded({ host, error: result.refusal }))
+        .catch((err: unknown) => setAdded({ host, error: readable(err) }))
+    },
+    [helm, host]
+  )
+
   const mine = read.host === host
-  return { listing: mine ? read.listing : null, error: mine ? read.error : null, reload }
+  return {
+    listing: mine ? read.listing : null,
+    error: mine ? read.error : null,
+    reload,
+    addShipped,
+    addError: added.host === host ? added.error : null
+  }
 }

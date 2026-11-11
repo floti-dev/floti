@@ -20,7 +20,6 @@ import {
   closedChildTab,
   crumbChips,
   closeTab,
-  copyName,
   replaceTab,
   cycleTab,
   DEFAULT_SETTINGS,
@@ -682,8 +681,6 @@ export function App(): JSX.Element {
   /** The one change to an agent made without asking, with its Undo, until it is closed or the next replaces it. */
   const agentToasts = useAgentToast();
   const agentToast = agentToasts.toast;
-  /** Why adding a shipped agent did not, said in the Agents list. */
-  const [agentAddError, setAgentAddError] = useState<string | null>(null);
   /** Where a file opened from a text search lands, by file key: the line and the words. */
   const [fileReveals, setFileReveals] = useState<
     ReadonlyMap<string, QuickOpenAt>
@@ -3700,7 +3697,6 @@ export function App(): JSX.Element {
       : `${count} · ${String(outside)} outside Helm`;
   })();
 
-  /** One tab, as its pane's strip draws it. */
   /*
    * The Agents view and its pages (the design's A1-A16 and A25): one host's
    * agents at a time, switched as Files is, read only while the view or
@@ -3725,13 +3721,6 @@ export function App(): JSX.Element {
         ? { kind: "agent-draft", id, copyOf }
         : { kind: "agent-draft", id, copyOf, host },
     );
-  };
-  const addShippedAgent = (name: string): void => {
-    setAgentAddError(null);
-    bridgeFor(agentsHost)
-      .invoke("agents:addShipped", { name })
-      .then((result) => setAgentAddError(result.refusal))
-      .catch((err: unknown) => setAgentAddError(readable(err)));
   };
   const raiseAgentToast = agentToasts.raise;
   const agentRestore = restoreAgent;
@@ -3772,6 +3761,11 @@ export function App(): JSX.Element {
           return;
         }
         case "savedOver":
+          if (outcome.from !== null) {
+            leave();
+            const renamed = agentRefOn(outcome.name, host);
+            commit((current) => replaceTab(current, id, renamed));
+          }
           raiseAgentToast(
             `Saved over the change made at ${outcome.at}`,
             "Undo puts that change back.",
@@ -3808,11 +3802,6 @@ export function App(): JSX.Element {
   ): JSX.Element => {
     const on = hostOf(ref);
     const id = paneId(ref);
-    const taken = new Set(
-      on === agentsHost
-        ? (agentList.listing?.agents.map((agent) => agent.name) ?? [])
-        : [],
-    );
     return (
       <AgentTab
         key={id}
@@ -3823,10 +3812,8 @@ export function App(): JSX.Element {
         target={
           ref.kind === "agent"
             ? { name: ref.name }
-            : {
-                copyOf: ref.copyOf,
-                name: ref.copyOf === null ? "" : copyName(ref.copyOf, taken),
-              }
+            : // A copy's name is chosen when its page reads the folder it is copied in.
+              { copyOf: ref.copyOf, name: "" }
         }
         profiles={
           on === LOCAL_HOST_KEY
@@ -3848,6 +3835,7 @@ export function App(): JSX.Element {
     );
   };
 
+  /** One tab, as its pane's strip draws it. */
   const tabFor = (ref: PaneRef): Tab[] => {
     switch (ref.kind) {
       case "session": {
@@ -6053,7 +6041,7 @@ export function App(): JSX.Element {
         >
           <AgentList
             listing={agentList.listing}
-            error={agentAddError ?? agentList.error}
+            error={agentList.addError ?? agentList.error}
             hostName={hostName(agentsHost)}
             remote={agentsHost !== LOCAL_HOST_KEY}
             selected={
@@ -6062,7 +6050,7 @@ export function App(): JSX.Element {
                 : null
             }
             onOpen={(name) => openPane(agentRefOn(name, agentsHost))}
-            onAdd={addShippedAgent}
+            onAdd={agentList.addShipped}
           />
         </Sidebar>
       )}

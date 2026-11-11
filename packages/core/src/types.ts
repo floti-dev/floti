@@ -1153,8 +1153,6 @@ export interface AgentFileText {
   name: string
   /** The file, such as `reviewer.md`. */
   file: string
-  /** False for a shipped agent a host serves while it has no agents folder. */
-  inFolder: boolean
   text: string
   /** The SHA-256 of the file's bytes: what a write or a delete names. */
   hash: string

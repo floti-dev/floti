@@ -1,5 +1,5 @@
 import { useEffect, type JSX } from 'react'
-import { readAgentDraft, type EditorHighlight } from '@helm/core/types'
+import { listedAgentNames, readAgentDraft, type EditorHighlight } from '@helm/core/types'
 import { AgentPage } from '@helm/ui'
 import { bridgeFor } from '../bridge'
 import { useAgentDraft, type AgentDraftTarget, type AgentOutcome } from './useAgentDraft'
@@ -29,7 +29,7 @@ export interface AgentTabProps {
   onStartSession: ((name: string) => void) | null
 }
 
-/** One agent page: its draft on its host, drawn by `AgentPage`, with Ctrl+S to save. */
+/** One agent page: its draft on its host, drawn by `AgentPage`. */
 export function AgentTab(props: AgentTabProps): JSX.Element {
   const { host, onDirtyChange, onBadChange } = props
   // The host's agents as listed now: the names a new name must not take, its
@@ -46,7 +46,7 @@ export function AgentTab(props: AgentTabProps): JSX.Element {
   useEffect(() => onBadChange(bad), [bad, onBadChange])
   const preview = useInstructionsPreview(host, readAgentDraft(state.draft).body)
 
-  const taken = new Set([...(listing?.agents ?? []).map((a) => a.name), ...(listing?.bad ?? []).map((b) => b.name)])
+  const taken = listing === null ? new Set<string>() : listedAgentNames(listing)
   const savedName = state.base?.name ?? null
   const copyOf = 'copyOf' in props.target ? props.target.copyOf : null
 
@@ -62,15 +62,7 @@ export function AgentTab(props: AgentTabProps): JSX.Element {
   }
 
   return (
-    <div
-      className="h-full min-h-0"
-      onKeyDown={(event) => {
-        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
-          event.preventDefault()
-          void agent.save()
-        }
-      }}
-    >
+    <div className="h-full min-h-0">
       <AgentPage
         savedName={savedName}
         copyOf={copyOf}
@@ -87,7 +79,8 @@ export function AgentTab(props: AgentTabProps): JSX.Element {
         savedAt={state.savedAt}
         problems={state.problems}
         refusal={state.refusal}
-        bad={(state.base?.problems.length ?? 0) > 0}
+        bad={bad}
+        readError={state.base === null ? null : state.loadError}
         external={state.external === null ? null : { text: state.external.file?.text ?? null, at: state.external.at }}
         readOnly={listing?.readOnly ?? null}
         backends={listing?.backends ?? []}

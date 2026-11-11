@@ -13,6 +13,7 @@ import {
   sessionTabIds,
   showClosedFamilyChild,
   type PaneLayout,
+  type PaneRef,
   type SessionRecord
 } from '@helm/core/types'
 import { FakeConnection, fakeReach, reconnectingReach } from '../../../../test/fake-connection'
@@ -295,6 +296,21 @@ describe('a build-box session’s tab', () => {
     expect(keepRemoteTab(ref, { ...viewOf([]), byHost: new Map() })).toBe(true)
     // This PC's tabs are not this function's to decide.
     expect(keepRemoteTab(sessionRef(7), viewOf([]))).toBeUndefined()
+  })
+})
+
+describe('a build-box agent’s page', () => {
+  it('stays while build-box is listed on this device, and goes once it is removed', () => {
+    const pages: PaneRef[] = [
+      { kind: 'agent', name: 'reviewer', host: BUILD },
+      { kind: 'agent-draft', id: 1, copyOf: null, host: BUILD }
+    ]
+    for (const ref of pages) {
+      expect(keepRemoteTab(ref, viewOf([]))).toBe(true)
+      expect(keepRemoteTab(ref, { ...viewOf([], []), settingsLoaded: false })).toBe(true)
+      expect(keepRemoteTab(ref, viewOf([], []))).toBe(false)
+    }
+    expect(keepRemoteTab({ kind: 'agent', name: 'reviewer' }, viewOf([], []))).toBeUndefined()
   })
 })
 

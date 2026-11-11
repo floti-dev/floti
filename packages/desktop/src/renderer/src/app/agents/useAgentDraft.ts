@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   blankAgentText,
+  copyName,
+  listedAgentNames,
   withoutRetiredLines,
   type AgentChangeResult,
   type AgentFileText,
@@ -29,7 +31,10 @@ export interface AgentDraftState {
   external: AgentExternal | null
   saving: boolean
   savedAt: string | null
-  /** Why the file could not be read; null once it was. */
+  /**
+   * Why the file could not be read: the first time, or again after that while
+   * the host still lists it (the page keeps what it last read). Null once it was.
+   */
   loadError: string | null
   loaded: boolean
 }
@@ -39,7 +44,8 @@ export type AgentOutcome =
   | { kind: 'created'; name: string }
   | { kind: 'saved'; name: string }
   | { kind: 'renamed'; from: string; name: string }
-  | { kind: 'savedOver'; name: string; at: string }
+  /** `from` is the name it had when the save over the change also renamed it; null otherwise. */
+  | { kind: 'savedOver'; name: string; at: string; from: string | null }
   | { kind: 'deleted'; name: string }
   | { kind: 'reloaded'; name: string; undo: () => void }
   | { kind: 'gone'; name: string }
@@ -51,9 +57,17 @@ export type AgentOutcome =
  * closed tab's.
  */
 const kept = new Map<string, AgentDraftState>()
+/**
+ * How many times each key was forgotten. A page keeps its state only while
+ * its key has not been forgotten since it opened, so an answer or an Undo
+ * that arrives after its tab closed does not put the closed tab's state back
+ * for the next page opened under the same key.
+ */
+const forgotten = new Map<string, number>()
 
 export function forgetAgentDraft(key: string): void {
   kept.delete(key)
+  forgotten.set(key, (forgotten.get(key) ?? 0) + 1)
 }
 
 const clock = (): string => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -71,6 +85,12 @@ function initial(target: AgentDraftTarget): AgentDraftState {
     loadError: null,
     loaded: 'copyOf' in target && target.copyOf === null
   }
+}
+
+/** What a write sent, so what was typed while it was on its way is kept. */
+interface Sent {
+  draft: string
+  name: string
 }
 
 export interface AgentDraft {
@@ -103,6 +123,8 @@ export function useAgentDraft(
   const [state, setState] = useState<AgentDraftState>(() => kept.get(key) ?? initial(target))
   /** The state as last set, for what runs after an answer arrives. */
   const current = useRef(state)
+  /** How many times the key had been forgotten when this page opened. */
+  const generation = useRef(forgotten.get(key) ?? 0)
   const outcome = useRef(onOutcome)
   useEffect(() => {
     outcome.current = onOutcome
@@ -112,7 +134,7 @@ export function useAgentDraft(
       const s = current.current
       const next = { ...s, ...(typeof patch === 'function' ? patch(s) : patch) }
       current.current = next
-      kept.set(key, next)
+      if ((forgotten.get(key) ?? 0) === generation.current) kept.set(key, next)
       setState(next)
     },
     [key]
@@ -120,27 +142,61 @@ export function useAgentDraft(
 
   const dirtyOf = (s: AgentDraftState): boolean => s.base === null || s.draft !== s.base.text || s.name !== s.base.name
 
+  /**
+   * Whether the host no longer has `name`: its listing answered and names no
+   * agent or bad file by it. A listing that could not be had (a dropped link)
+   * says nothing, so the page stays.
+   */
+  const isGone = useCallback(
+    async (name: string): Promise<boolean> => {
+      try {
+        return !listedAgentNames(await helm.invoke('agents:list')).has(name)
+      } catch {
+        return false
+      }
+    },
+    [helm]
+  )
+
   /** Reads `name` and takes it as the page's base, or holds it beside an unsaved edit. */
   const refresh = useCallback(
     async (name: string): Promise<void> => {
-      let file: AgentFileText | null
+      let file: AgentFileText | null = null
+      let failure: string | null = null
       try {
         file = await helm.invoke('agents:read', { name })
-      } catch {
-        file = null
+      } catch (err) {
+        failure = readable(err)
+      }
+      if (failure !== null && !(await isGone(name))) {
+        // The host still has it, or could not be asked: keep the page as last read and say why.
+        if (current.current.base?.name === name) update({ loadError: failure })
+        return
       }
       const s = current.current
       if (s.base === null || s.base.name !== name) return
-      if (file !== null && file.hash === s.base.hash) return
+      if (file !== null && file.hash === s.base.hash) {
+        if (s.loadError !== null) update({ loadError: null })
+        return
+      }
       if (!dirtyOf(s)) {
         if (file === null) outcome.current({ kind: 'gone', name })
-        else update({ base: file, draft: file.text, name: file.name, problems: file.problems, refusal: null, external: null })
+        else
+          update({
+            base: file,
+            draft: file.text,
+            name: file.name,
+            problems: file.problems,
+            refusal: null,
+            external: null,
+            loadError: null
+          })
         return
       }
       if (s.external?.file?.hash === file?.hash && s.external !== null) return
-      update({ external: { file, at: clock() } })
+      update({ external: { file, at: clock() }, loadError: null })
     },
-    [helm, update]
+    [helm, isGone, update]
   )
 
   const isCopy = 'copyOf' in target
@@ -155,11 +211,14 @@ export function useAgentDraft(
     }
     if (from === null) return
     let live = true
-    helm
-      .invoke('agents:read', { name: from })
-      .then((file) => {
+    // A copy is named after the names its own host's folder holds now, bad files included.
+    const taken = isCopy
+      ? helm.invoke('agents:list').then(listedAgentNames, () => new Set([from]))
+      : Promise.resolve(null)
+    Promise.all([helm.invoke('agents:read', { name: from }), taken])
+      .then(([file, names]) => {
         if (!live) return
-        if (isCopy) update({ draft: file.text, loaded: true })
+        if (names !== null) update({ draft: file.text, name: copyName(from, names), loaded: true })
         else update({ base: file, draft: file.text, name: file.name, problems: file.problems, loaded: true })
       })
       .catch((err: unknown) => live && update({ loadError: readable(err), loaded: true }))
@@ -177,18 +236,23 @@ export function useAgentDraft(
     [helm, refresh]
   )
 
-  /** Takes a change the host made: the file is now `file`. */
-  const took = (file: AgentFileText): void =>
-    update({
+  /**
+   * Takes a change the host made: the file is now `file`. The draft and the
+   * name become the file's unless they were changed while the write was on its
+   * way, which leaves them as typed and the page with an unsaved edit.
+   */
+  const took = (file: AgentFileText, sent: Sent): void =>
+    update((s) => ({
       base: file,
-      draft: file.text,
-      name: file.name,
+      draft: s.draft === sent.draft ? file.text : s.draft,
+      name: s.name === sent.name ? file.name : s.name,
       problems: [],
       refusal: null,
       external: null,
       saving: false,
-      savedAt: clock()
-    })
+      savedAt: clock(),
+      loadError: null
+    }))
 
   /** Holds a refusal: each problem on its field, or the host's sentence, and the edit kept. */
   const refused = (result: AgentChangeResult): void => {
@@ -208,13 +272,16 @@ export function useAgentDraft(
     })
   }
 
-  const write = async (expectedHash: string | null, renameFrom: string | null): Promise<AgentChangeResult | null> => {
-    const s = current.current
+  const write = async (
+    sent: Sent,
+    expectedHash: string | null,
+    renameFrom: string | null
+  ): Promise<AgentChangeResult | null> => {
     update({ saving: true, refusal: null })
     try {
       return await helm.invoke('agents:write', {
-        name: s.name,
-        text: withoutRetiredLines(s.draft),
+        name: sent.name,
+        text: withoutRetiredLines(sent.draft),
         expectedHash,
         renameFrom
       })
@@ -227,14 +294,15 @@ export function useAgentDraft(
   const save = async (): Promise<AgentOutcome | null> => {
     const s = current.current
     if (s.saving || s.external !== null) return null
+    const sent = { draft: s.draft, name: s.name }
     const from = s.base !== null && s.name !== s.base.name ? s.base.name : null
-    const result = await write(s.base?.hash ?? null, from)
+    const result = await write(sent, s.base?.hash ?? null, from)
     if (result === null) return null
     if (result.refusal !== null || result.conflict !== null || result.file === null) {
       refused(result)
       return null
     }
-    took(result.file)
+    took(result.file, sent)
     const done: AgentOutcome =
       s.base === null
         ? { kind: 'created', name: result.file.name }
@@ -249,14 +317,17 @@ export function useAgentDraft(
     const s = current.current
     if (s.external === null || s.base === null) return null
     const at = s.external.at
-    const result = await write(s.external.file?.hash ?? null, null)
+    const sent = { draft: s.draft, name: s.name }
+    // A rename moves the file as it is now; a file that was removed has nothing to move.
+    const from = s.external.file !== null && s.name !== s.base.name ? s.base.name : null
+    const result = await write(sent, s.external.file?.hash ?? null, from)
     if (result === null) return null
     if (result.refusal !== null || result.conflict !== null || result.file === null) {
       refused(result)
       return null
     }
-    took(result.file)
-    const done: AgentOutcome = { kind: 'savedOver', name: result.file.name, at }
+    took(result.file, sent)
+    const done: AgentOutcome = { kind: 'savedOver', name: result.file.name, at, from }
     onOutcome(done)
     return done
   }
@@ -270,6 +341,27 @@ export function useAgentDraft(
     const done: AgentOutcome = { kind: 'reloaded', name: file.name, undo: () => update(mine) }
     onOutcome(done)
     return done
+  }
+
+  /**
+   * Drops the edit. With a change from outside held, the page has no edit
+   * left to keep it for: it takes the file as it is now, or, when the file
+   * was removed, is gone.
+   */
+  const revert = (): void => {
+    const s = current.current
+    if (s.base === null) return
+    const external = s.external
+    if (external === null) {
+      update({ draft: s.base.text, name: s.base.name, problems: s.base.problems, refusal: null })
+      return
+    }
+    if (external.file === null) {
+      outcome.current({ kind: 'gone', name: s.base.name })
+      return
+    }
+    const file = external.file
+    update({ base: file, draft: file.text, name: file.name, problems: file.problems, refusal: null, external: null })
   }
 
   const remove = async (): Promise<AgentOutcome | null> => {
@@ -297,10 +389,7 @@ export function useAgentDraft(
     setDraft: (draft) => update({ draft }),
     setName: (name) => update({ name }),
     save,
-    revert: () =>
-      update((s) =>
-        s.base === null ? {} : { draft: s.base.text, name: s.base.name, problems: s.base.problems, refusal: null }
-      ),
+    revert,
     remove,
     reloadFromDisk,
     saveMine

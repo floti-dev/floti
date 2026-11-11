@@ -66,4 +66,28 @@ describe('useAgentList with two hosts connected', () => {
     renderHook(() => useAgentList(LOCAL_HOST_KEY, false))
     expect(bridge.invoked('agents:list')).toEqual([])
   })
+
+  it('adds a shipped agent on the chosen host, and shows a refused Add only on the host that refused it', async () => {
+    const buildbox = remoteBridge('buildbox')
+    bridge.answer('agents:list', () => listing(['default'], '~/agents'))
+    buildbox.answer('agents:list', () => listing(['default'], '/srv/agents'))
+    bridge.answer('agents:addShipped', () => ({
+      changed: false,
+      file: null,
+      refusal: 'This host changes nothing in its agents folder.',
+      problems: [],
+      conflict: null
+    }))
+    const { result, rerender } = renderHook(({ host }) => useAgentList(host, true), {
+      initialProps: { host: LOCAL_HOST_KEY }
+    })
+    act(() => result.current.addShipped('reviewer'))
+    await waitFor(() => expect(result.current.addError).toBe('This host changes nothing in its agents folder.'))
+    expect(bridge.invoked('agents:addShipped')).toEqual([{ name: 'reviewer' }])
+
+    rerender({ host: 'buildbox' })
+    expect(result.current.addError).toBeNull()
+    rerender({ host: LOCAL_HOST_KEY })
+    expect(result.current.addError).toBe('This host changes nothing in its agents folder.')
+  })
 })

@@ -51,7 +51,6 @@ describe('the agents adapter', () => {
     expect(read).toEqual({
       name: 'lead',
       file: 'lead.md',
-      inFolder: true,
       text: '---\n---\n',
       hash: 'hash-of-8',
       problems: [

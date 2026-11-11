@@ -53,6 +53,7 @@ function props(overrides: Partial<AgentPageProps> = {}): AgentPageProps {
     problems: [],
     refusal: null,
     bad: false,
+    readError: null,
     external: null,
     readOnly: null,
     backends: [CLAUDE],
@@ -147,6 +148,56 @@ describe('AgentPage', () => {
     const permission = screen.getByRole('combobox', { name: 'Permissions' }).closest('[data-agent-field-box]')
     expect(permission?.getAttribute('data-problem')).toBe('true')
     expect(permission?.textContent).toContain('not yolo')
+  })
+
+  it('shows a refused save of a file that loads as Not saved, with each problem, in Form and in Source', async () => {
+    const problems = [
+      { field: 'permission', line: 6, message: 'permission must be plan, dont-ask, manual, accept-edits, auto or bypass-permissions, not yolo' },
+      { field: 'command', line: 3, message: 'command is not a field an agent file has' },
+      { field: null, line: null, message: 'description is given twice' },
+      { field: null, line: null, message: 'description is given twice' }
+    ]
+    render(<AgentPage {...props({ dirty: true, problems })} />)
+    const strip = screen.getByRole('alert')
+    expect(within(strip).getByText('Not saved')).toBeTruthy()
+    expect(strip.textContent).toContain('The problems are marked on their fields.')
+    expect(strip.textContent).toContain('line 3 · command is not a field an agent file has. Fix it in Source.')
+    expect(strip.textContent).not.toContain('not yolo')
+    expect(within(strip).getAllByText(/description is given twice/)).toHaveLength(2)
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Source' }))
+    const inSource = screen.getByRole('alert')
+    expect(within(inSource).getByText('Not saved')).toBeTruthy()
+    expect([...inSource.querySelectorAll('[data-agent-problem]')].map((p) => p.textContent)).toEqual([
+      'line 6 · permission must be plan, dont-ask, manual, accept-edits, auto or bypass-permissions, not yolo',
+      'line 3 · command is not a field an agent file has',
+      'description is given twice',
+      'description is given twice'
+    ])
+    expect(document.querySelector('[data-editor-invalid]')?.getAttribute('data-editor-invalid')).toBe('true')
+  })
+
+  it('saves on Ctrl+S only while Save is on', async () => {
+    const onSave = vi.fn()
+    render(<Held start={props({ onSave })} />)
+    const name = screen.getByRole('textbox', { name: 'Name' })
+    await userEvent.clear(name)
+    await userEvent.type(name, 'Worker{Control>}s{/Control}')
+    expect(onSave).not.toHaveBeenCalled()
+
+    await userEvent.clear(name)
+    await userEvent.type(name, 'issue-lead{Control>}s{/Control}')
+    expect(onSave).toHaveBeenCalledTimes(1)
+  })
+
+  it('says when the file could not be read again, and keeps the page as last read', () => {
+    render(<AgentPage {...props({ readError: 'The connection to build-box ended.' })} />)
+    expect(document.querySelector('[data-agent-read-error]')?.textContent).toBe(
+      'Floti could not read research-lead.md again, so this is the file as last read: The connection to build-box ended.'
+    )
+    expect((screen.getByRole('textbox', { name: 'Description' }) as HTMLInputElement).value).toBe(
+      'Researches a new project with you.'
+    )
   })
 
   it('marks only the model or effort cell of the backend a problem names, and every cell for the whole field', () => {

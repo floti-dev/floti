@@ -5,6 +5,7 @@ import {
   applyAgentDraftChange,
   copyName,
   differingLines,
+  listedAgentNames,
   readAgentDraft,
   withBody,
   withoutRetiredLines,
@@ -138,6 +139,26 @@ describe('applyAgentDraftChange', () => {
 describe('withoutRetiredLines', () => {
   it('drops the class line and nothing else', () => {
     expect(withoutRetiredLines(LEAD)).toBe(LEAD.replace('class: light\n', ''))
+  })
+
+  it('drops a class value that runs over several lines, and every repeat of the key', () => {
+    const text = '---\ndescription: a\nclass:\n  - light\n  - heavy\nmodel:\n  claude-code: opus\nclass: heavy\n---\nbody\n'
+    expect(withoutRetiredLines(text)).toBe('---\ndescription: a\nmodel:\n  claude-code: opus\n---\nbody\n')
+  })
+
+  it('keeps a line of the instructions that starts with class:, and its line endings', () => {
+    const text = '---\r\ndescription: a\r\nclass: light\r\n---\r\nclass: is a word in this body\r\n'
+    expect(withoutRetiredLines(text)).toBe('---\r\ndescription: a\r\n---\r\nclass: is a word in this body\r\n')
+  })
+
+  it('leaves a file with no front matter as it is', () => {
+    expect(withoutRetiredLines('class: light\nYou plan.\n')).toBe('class: light\nYou plan.\n')
+  })
+})
+
+describe('listedAgentNames', () => {
+  it('holds the agents’ names and the bad files’', () => {
+    expect([...listedAgentNames({ agents: [{ name: 'lead' }], bad: [{ name: 'lead-2' }] })]).toEqual(['lead', 'lead-2'])
   })
 })
 

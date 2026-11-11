@@ -51,6 +51,8 @@ export interface AgentPageProps {
   refusal: string | null
   /** Whether the file as read is not an agent (Not loaded). */
   bad: boolean
+  /** Why the file could not be read again; the page shows it as it was last read. Null when it could. */
+  readError: string | null
   external: AgentExternalChange | null
   /** Why the host changes nothing in its agents folder; null when it may. */
   readOnly: string | null
@@ -64,6 +66,7 @@ export interface AgentPageProps {
   previewPending: boolean
   /** Opens a link in the preview outside Floti. */
   onOpenExternal: (url: string) => void
+  /** Saves the draft: the Save button, and Ctrl+S anywhere in the page while Save is on. */
   onSave: () => void
   onRevert: () => void
   onDiscard: () => void
@@ -135,6 +138,8 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
     external === null &&
     issue === null &&
     (isNew || props.dirty || renaming || props.bad)
+  // The host's problems with a save it refused, or with the file as read: "Not saved" or "Not loaded".
+  const refused = !props.bad && problems.length > 0
   const bytes = new TextEncoder().encode(draft).length
   const facts = [file, `${(bytes / 1024).toFixed(1)} KB`, draft.includes('\r\n') ? 'CRLF' : 'LF']
   if (props.remote) facts.push(`on ${props.hostName}`)
@@ -170,7 +175,16 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
   )
 
   return (
-    <div data-agent-page={savedName ?? ''} className="flex h-full min-h-0 flex-col bg-surface">
+    <div
+      data-agent-page={savedName ?? ''}
+      className="flex h-full min-h-0 flex-col bg-surface"
+      onKeyDown={(event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+          event.preventDefault()
+          if (canSave) props.onSave()
+        }
+      }}
+    >
       <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
         <span role="radiogroup" aria-label="View" className="flex shrink-0 gap-0.5 rounded-well border border-border bg-surface-sunken p-0.5">
           {(['form', 'source'] as const).map((each) => (
@@ -248,7 +262,7 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
         ) : (
           // Source's editor fills the page: its height is the column's, so the column is the page's.
           <div className={cn('flex flex-col gap-3 px-6 py-4', view === 'form' ? 'mx-auto w-full max-w-[760px]' : 'h-full')}>
-            {(props.bad || props.refusal !== null) && (
+            {(props.bad || refused || props.refusal !== null) && (
               <div data-agent-problems role="alert" className="rounded-well border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-fg-muted">
                 <span className="block text-[12.5px] font-medium text-danger">
                   {props.bad ? `Floti cannot load ${savedName ?? name}.md` : 'Not saved'}
@@ -260,8 +274,14 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
                     {view === 'form' && unplaced.length < problems.length && ' The problems are marked on their fields.'}
                   </span>
                 )}
-                {(view === 'source' ? problems : unplaced).map((p) => (
-                  <span key={`${p.line ?? ''}${p.message}`} data-agent-problem className="mt-1 block text-danger">
+                {refused && (
+                  <span className="block">
+                    The file on disk is as it was, and your edit is kept.
+                    {view === 'form' && unplaced.length < problems.length && ' The problems are marked on their fields.'}
+                  </span>
+                )}
+                {(view === 'source' ? problems : unplaced).map((p, index) => (
+                  <span key={index} data-agent-problem className="mt-1 block text-danger">
                     {p.line !== null && <span className="font-mono">line {p.line} · </span>}
                     {p.message}
                     {view === 'form' && '. Fix it in Source.'}
@@ -270,6 +290,11 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
               </div>
             )}
             {readOnly !== null && <p className="m-0 text-[12px] text-warn">{readOnly}</p>}
+            {props.readError !== null && (
+              <p data-agent-read-error className="m-0 text-[12px] text-warn">
+                Floti could not read {savedName}.md again, so this is the file as last read: {props.readError}
+              </p>
+            )}
             {view === 'form' &&
               fields.retired.map((line) => (
                 <p key={line.line} data-agent-retired={line.field} className="m-0 text-[12px] text-fg-muted">
@@ -309,7 +334,7 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
                   onHighlight={props.onHighlight}
                   wrap
                   readOnly={readOnly !== null}
-                  invalid={props.bad}
+                  invalid={props.bad || refused}
                   quiet={quiet}
                 />
               </div>

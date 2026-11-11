@@ -80,7 +80,6 @@ function agentFileFromHost(file: P.AgentFile): AgentFileText {
   return {
     name: file.name,
     file: file.file,
-    inFolder: file.inFolder,
     text: file.text,
     hash: file.hash,
     problems: file.problems.map(agentProblemFromHost)
