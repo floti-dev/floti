@@ -181,8 +181,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   removes the host's client folder, and ends nothing on the host.
 - Every client sees every session in the host, and tabs, panes and splits are kept per device: `paneLayout`
   stays in `helm.db` and never reaches the host. A window gives a tab only to
-  a session its saved layout names or that it opened (`unplacedSessionTabs`
-  in `core/layout/panes.ts`). A running child of a session it has a tab for
+  a session its saved layout names or that it opened. A running child of a session it has a tab for
   is shown inside that tab while "Show children in their parent's tab" is on
   and the pane has room (`familyRoom`), and counts as open here, so the
   window's connection carries its terminal (`shownSessionIds`) along with
@@ -219,7 +218,8 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - Do not use `@anthropic-ai/claude-agent-sdk`.
 - Helm renders nothing for a live session and answers no permission
   prompt. The host reads one thing in a session's output, OSC 7501 status
-  reports, kept as the program said them, and draws no conclusion from
+  reports, kept as the program said them (a message cut to 200 characters),
+  and draws no conclusion from
   screen text. It passes every byte on untouched and puts nothing between
   the user and the TUI. What a parent sends its child (`agents_send`) waits
   in the child's queue and arrives as its next turn once it can take one, and
@@ -304,9 +304,10 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - Pages live in one Browser tab, in its own strip (`browserStrip.ts`), never
   among a pane's tabs.
 - From a browser view, a `window.open` with features opens a real popup
-  window; `_blank`, a plain `window.open` and middle-click open a page in the
-  Browser tab that adopts the web contents Chromium made (`createWindow`), so
-  both keep `window.opener` (OAuth needs it). Both share the partition,
+  window; `_blank` and a plain `window.open` open a page in the Browser tab
+  that adopts the web contents Chromium made (`createWindow`), so both keep
+  `window.opener` (OAuth needs it), and a middle-click loads its link in a new
+  page there. Both share the partition,
   permissions, reach rule and exemption registry. A popup shows its host in
   its title bar and is never an agent's: an agent page's opens are more of its
   pages.
@@ -319,7 +320,8 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - A native view paints over all DOM, so it hides while anything is drawn over
   it, through `overlayOpen()` (`ui/src/lib/overlay.ts`), subscribed once in
   `useBrowsers`, and leaves a still of the page in its place
-  (`browser:snapshot`). Toasts are drawn clear of the view instead. The view
+  (`browser:snapshot`). Toasts are drawn clear of the view while the sidebar
+  shows, and hide it as a dialog does while the sidebar is hidden. The view
   never enters the top 36px, where Windows draws the window controls, except
   in fullscreen, when the page has the whole window and there is no title bar.
 - The browser's keys are one table (`shared/browserKeys.ts`): main reads it in
@@ -341,7 +343,7 @@ The host serves its sessions' agent tools as MCP over HTTP
 (`crates/host/src/agent_tools`): `helm-browser` at `/mcp`, `helm-sessions` at
 `/mcp/sessions`, `floti-agents` at `/mcp/agents` and each plugin's tools at
 `/mcp/plugin/<id>`, on one port. It is the one inbound listener the host has
-besides its local socket. Main binds no listener for them, mints no token and
+besides its local socket and the relay socket beside it. Main binds no listener for them, mints no token and
 writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
 
 - `127.0.0.1` on port 0 only. A request announcing a non-loopback `Origin`
@@ -507,7 +509,8 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   stopped). Whoever ends a session writes `stopped_by` on its row before it
   ends it, and the first to say wins (`records::record_stopping`); a stop
   nobody named is a person's. The ended bar, a child's ended header and its
-  peek say "Stopped by <parent>", "Stopped by Floti" or "Stopped"
+  peek say "Stopped by <parent>", "Stopped by its parent" (its name not
+  known), "Stopped by Floti" or "Stopped"
   (`stoppedText`) with no exit code, which shows only for a program that
   exited by itself. `session:notify` is sent only for a session a person
   started whose program exited by itself (`notifies` in
@@ -517,7 +520,7 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
 - Kept belongs to the host: `kept` on the child's row in `floti.db`, written
   with `stopped_by` by the first stop (`records::record_stopping`): true for
   `agents_stop` with `keep` (`floti agent stop --keep`) and for a person's
-  stop, false for every other end, and never for a session with no parent.
+  stop of that child (a device's quit is not one), false for every other end, and never for a session with no parent.
   `session:list` gives the running sessions, then each kept child of a
   running parent, with protocol 2.2's optional `kept` (set only on a child
   that has exited). Resuming a kept child clears it on every earlier row of
@@ -560,7 +563,7 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   does not end when a person types into the parent: the person talks to the
   parent while its waits, its children's news, the messages it queued and
   its children carry on, and the wait ends on its children's news, every
-  child it is about idle, or the parent ending. A held wait that holds up
+  child it is about idle (with `for` all), or the parent ending. A held wait that holds up
   the parent's turn (a held call that is not a task, `floti agent wait`
   without `--background`) ends when a person types a key into the parent
   and when the parent ends. No wait ends on what a terminal sends by itself
@@ -587,7 +590,8 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   once you have what you need and pass `keep` only when you expect to give it
   more work, reach only your own), a child's section (Floti's own, naming
   its parent and the agent it was started as, beside the profile's and the
-  agent's, with the `agents_report` sentence only where the child has the tool) and the guide
+  agent's, with the `agents_report` sentence only where the child has the tool),
+  the title section for a session given `helm-sessions`, and the guide
   to `floti agent` with its backend's lines on waiting (`waiting_guidance`:
   wait in a task or a background command where the backend can, and every
   line that runs `floti agent wait` as a background command passes
@@ -807,20 +811,22 @@ folder: run through npx, that folder is a cache.
   data folder, never `%TEMP%`: they hold junctions into real repositories.
 - Anything removing an overlay or a shim or walking a template unlinks links
   (junctions on Windows, symlinks on macOS and Linux) and never walks into
-  one. `fs.rm` with `recursive: true` has been seen to leave a junction in
-  place.
+  one. `fs.rm` with `recursive: true` has been seen to go through a junction
+  and empty the repository folder it points to.
 - Launch folders are swept only at host start, and the overlay shims an
   earlier Helm left in its data folder only at Helm's start
   (`createServices`), each only where every owning process is provably dead.
   `EPERM` counts as alive; unknown means keep.
 - Templates live in `~/.config/helm/templates` (`helm-data/templates` when
-  portable), which the host reads and Helm's start seeds (`templatesDir` in
-  `paths.ts`). The shipped README and example are written only when the
-  directory is absent, and nothing there is ever overwritten. There is no
-  in-app template editor.
+  portable; `templatesDir` in `paths.ts`), which the host reads and seeds at
+  its start. The shipped README and example are written only when the
+  directory is absent, and nothing there is ever overwritten. The in-app
+  Templates manager makes, renames, imports and deletes templates and edits
+  their label and description; it has no file editor.
 - Agents (a lead, a worker, a reviewer: the named definitions a session
   starts its children as) live in `agents` in the host's config folder
-  (`~/.config/floti`; `~/.config/helm` for the host Helm starts), one
+  (`~/.config/floti`; for the host Helm starts, the folder that holds
+  `templatesDir`, `~/.config/helm` when installed), one
   `<name>.md` each (front matter, then the body), parsed as an
   `AgentDefinition` (`agent_definitions/`). The one a start naming none gets
   is `default`; it was called `agent` before, so a child's row naming `agent`
@@ -851,7 +857,7 @@ folder: run through npx, that folder is a cache.
 - A client lists, reads and edits the agents of the host it asks over
   `agents:*` (`server/features/agents.rs`, `agent_definitions/editing.rs`).
   A write is parsed by the parser a start uses first and refused with every
-  problem, each naming its field and line; a write or a delete whose hash is
+  problem, each naming its field and line where it has them; a write or a delete whose hash is
   not the file's, or that names none where there is a file, is a conflict,
   as `content:write`'s is; a replace, rename or delete keeps the old text in `floti.db`'s
   `agent_versions`, never in the config folder (the newest 20 per agent), and
@@ -879,10 +885,11 @@ folder: run through npx, that folder is a cache.
   what the request leaves out. The agent is on the session's row, and History
   gives a conversation the agent of its newest row. A resume from History
   (`history:resume`'s `agent`) and a restore compose it again from its file as
-  it reads now; one that is gone or cannot be loaded is refused naming it, and
-  the restore offer names the problem (`agentProblem`), leaves the row
-  unticked, and restores it without the agent only when asked
-  (`withoutAgent`). A session taken back from the keeper is composed by
+  it reads now. A resume of one that is gone or cannot be loaded is refused
+  naming it. A restore of one that cannot be loaded is refused too: the
+  restore offer names the problem (`agentProblem`), leaves the row unticked,
+  and restores it without the agent only when asked (`withoutAgent`); a
+  restore of one that is gone reopens it without the agent and says so. A session taken back from the keeper is composed by
   nothing: it never stopped.
 - Claude Code's own agents (its `agents/` files, chosen with `--agent`) are
   its subagents, and Floti calls them Subagents wherever it shows them (the
@@ -901,6 +908,8 @@ folder: run through npx, that folder is a cache.
 | checks | `%LOCALAPPDATA%\Helm\checks\<name>\helm-data` | `~/Library/Application Support/Helm Dev/checks/<name>/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/Helm/checks/<name>/helm-data` |
 | `pnpm dev:live` | the installed app's own | the installed app's own | the installed app's own |
 | templates | `~/.config/helm/templates`; `helm-data/templates` when portable | `~/.config/helm/templates` | `~/.config/helm/templates` |
+
+Templates are `helm-data/templates` in the run's own folder for `pnpm dev` and every check, on every OS.
 
 `pnpm dev` is seeded each launch from a copy of the installed app's database;
 `--fresh` gives the first-run state. `pnpm dev --drive` starts only the fake
