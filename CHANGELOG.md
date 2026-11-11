@@ -37,6 +37,16 @@ gets skipped.
   delete. A save the host refuses keeps the edit and says what is wrong, and
   a file changed outside while you edit is shown beside your edit to compare,
   reload or save over. Settings > Agents says how many agents the host has.
+- The shipped lead, worker and reviewer get work done in fewer rounds. The
+  lead sizes each piece to merge on its own, batches small fixes into one
+  worker, orders the pieces by what depends on what, points its briefs at the
+  project's own rules instead of retyping them, keeps waiting on its children
+  while any runs, and gives each change one review whose findings go back to
+  the worker that built it. The worker runs only the checks for what it
+  changed and no background command that outlives a step. The reviewer
+  reports everything in one review, most severe first, saying whether a user
+  would hit each finding. An agents folder that already has these agents
+  keeps its own; delete one on the Agents page and Add brings in the new one.
 - History is a palette on Ctrl+H, over whatever is on screen (the command
   palette lists it too), and no longer a page on the rail. With nothing typed
   it lists the ten sessions you worked in last, each by its title, with its

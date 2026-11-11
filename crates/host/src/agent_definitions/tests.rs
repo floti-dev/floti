@@ -729,7 +729,7 @@ fn shipped(name: &str) -> AgentDefinition {
 }
 
 #[test]
-fn the_reviewer_reads_and_reports_without_editing() {
+fn the_reviewer_reads_and_gives_one_complete_review_most_severe_first_without_editing() {
     let agent = shipped("reviewer");
     assert!(!agent.can_start && !agent.worktree);
     assert_eq!(agent.disallowed_tools, ["Edit", "Write", "NotebookEdit"]);
@@ -738,7 +738,16 @@ fn the_reviewer_reads_and_reports_without_editing() {
         agent.effort_for(&BackendId::claude_code()),
         Some(EffortLevel::High)
     );
-    for rule in ["change nothing", "acceptance criteria", "file, line"] {
+    for rule in [
+        "change nothing",
+        "This is the change's only review",
+        "run the checks",
+        "not matters of taste",
+        "acceptance criteria",
+        "file, line",
+        "most severe",
+        "say whether a user would hit it",
+    ] {
         assert!(agent.instructions.contains(rule), "{rule}");
     }
 }
@@ -761,7 +770,7 @@ fn the_researcher_finds_out_with_sources_and_changes_no_project_file() {
 }
 
 #[test]
-fn the_worker_edits_in_a_worktree_of_its_own_and_touches_only_the_item_its_task_names() {
+fn the_worker_fixes_its_review_runs_only_its_checks_and_touches_only_its_item() {
     let agent = shipped("worker");
     assert!(agent.worktree && !agent.can_start);
     assert!(
@@ -770,6 +779,10 @@ fn the_worker_edits_in_a_worktree_of_its_own_and_touches_only_the_item_its_task_
         agent.disallowed_tools
     );
     for rule in [
+        "the whole suite only when",
+        "Run no background command that outlives the step it is for",
+        "Review findings sent to you are part of your task",
+        "A bug your change introduced is part of your task",
         "The item your task names",
         "Touch only that item",
         "create none",
@@ -783,18 +796,31 @@ fn the_worker_edits_in_a_worktree_of_its_own_and_touches_only_the_item_its_task_
 }
 
 #[test]
-fn the_lead_plans_with_its_user_starts_each_agent_does_not_edit_and_keeps_a_tracker_it_has() {
+fn the_lead_plans_orders_and_briefs_the_work_sees_one_review_through_and_keeps_a_tracker() {
     let agent = shipped("lead");
     assert!(agent.can_start && !agent.worktree);
     assert_eq!(agent.disallowed_tools, ["Edit", "Write", "NotebookEdit"]);
     for part in [
         "Otherwise your user is the person",
+        "## Planning",
         "Plan with your user",
+        "Size each piece to merge on its own after one review",
+        "Batch small work",
+        "Order by dependency",
+        "Given a body of work",
+        "## Briefs",
         "Start a worker",
         "a reviewer",
         "a researcher",
+        "A brief is all a child knows",
+        "rather than retyping them",
+        "## Seeing it through",
+        "keep a wait on your children going",
+        "A piece is done when",
+        "A change gets one review",
+        "with no second review",
+        "when a user would hit it",
         "Whatever your user types is new direction",
-        "Given a body of work",
         "## Keeping the tracker",
         "This applies only when you have a tracker's tools.",
         "## Voice",
