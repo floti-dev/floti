@@ -1,7 +1,10 @@
 import { fakeClaudeLogs, type FakeClaudeLog } from '../test/world'
-import { claudeRunIn, expect, sessionIdOf, startSession, terminalText, test, typeLine } from './helm'
+import { claudeRunIn, expect, openHistory, sessionIdOf, startSession, terminalText, test, typeLine } from './helm'
 
-test('a session ended in Helm is in the history, and resumes in the folder it ran in', async ({ helm, world }) => {
+test('a session ended in Helm is in History, found by what was said, and resumes in the folder it ran in', async ({
+  helm,
+  world
+}) => {
   const { window } = helm
   const id = await startSession(window, 'alpha')
   const pane = window.getByRole('region', { name: 'First pane' })
@@ -11,12 +14,34 @@ test('a session ended in Helm is in the history, and resumes in the folder it ra
   await typeLine(pane, '/exit')
   await expect(window.getByRole('tab', { name: 'alpha, ended' })).toBeVisible()
 
-  await window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name: 'Session history' }).click()
-  const row = window.getByRole('group', { name: 'Sessions' }).getByRole('button', { name: /^plan the release/ })
-  await expect(row).toContainText('alpha')
-  await row.click()
-  await window.getByRole('button', { name: 'Resume in a tab' }).click()
+  // Ctrl+H, from the terminal: the sessions worked in last, this one among them.
+  const palette = await openHistory(window)
+  const recent = palette.getByRole('listbox', { name: 'Recent sessions' }).getByRole('option', { name: /plan the release/ })
+  await expect(recent).toContainText('alpha')
+  await recent.click()
+  await expect(palette.locator('[data-history-preview]')).toContainText('Enter runs claude --resume in')
 
+  // Typed into: Titles and prompts first, and Tab gives the conversations that mention it.
+  await palette.getByRole('combobox', { name: 'Search History' }).fill('release')
+  const lists = palette.getByRole('tablist', { name: 'History lists' })
+  await expect(lists.getByRole('tab', { name: /^Titles and prompts/ })).toHaveAttribute('aria-selected', 'true')
+  await expect(
+    palette.getByRole('listbox', { name: 'Titles and prompts' }).getByRole('option', { name: /plan the release/ })
+  ).toBeVisible()
+  await window.keyboard.press('Tab')
+  await expect(lists.getByRole('tab', { name: /^Conversations/ })).toHaveAttribute('aria-selected', 'true')
+  // The session, then each line of it that matched.
+  const conversations = palette.getByRole('listbox', { name: 'Conversations' })
+  await expect(conversations.locator('[data-history-row="session"]')).toHaveCount(1)
+  await expect(conversations.locator('[data-history-row="session"]')).toContainText('plan the release')
+  await expect(conversations.locator('[data-history-row="line"]').first()).toContainText('release')
+  await window.keyboard.press('Tab')
+  const match = palette.getByRole('listbox', { name: 'Titles and prompts' }).getByRole('option', { name: /plan the release/ })
+  await expect(match).toHaveAttribute('aria-selected', 'true')
+
+  // Enter resumes it, and the palette closes.
+  await window.keyboard.press('Enter')
+  await expect(palette).toHaveCount(0)
   const tab = window.getByRole('tab', { name: /^plan the release/ })
   await expect(tab).toBeVisible()
   let resumed: FakeClaudeLog | undefined

@@ -70,9 +70,10 @@ test('clicking a tab brings its sidebar back, opened and pointed at it', async (
   await window.getByRole('tab', { name: 'alpha, ready' }).click()
   await expect(sessions.getByRole('button', { name: 'alpha, ready' })).toHaveAttribute('aria-current', 'true')
 
-  // A tab with its own list inside it leaves the sidebar where it was.
-  await rail('history').click()
+  // A tab with no list of its own leaves the sidebar where it was.
+  await rail('browser').click()
   await rail('profiles').click()
-  await window.getByRole('tab', { name: 'Session history' }).click()
+  await expect(profiles).toBeVisible()
+  await window.getByRole('tablist', { name: 'Open tabs' }).getByRole('tab', { name: 'Browser', exact: true }).click()
   await expect(profiles).toBeVisible()
 })

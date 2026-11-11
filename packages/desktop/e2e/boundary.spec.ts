@@ -14,7 +14,7 @@ import {
   startServer,
   type SampleFixture
 } from './plugin-fixture'
-import { claudeRunIn, expect, startSession, terminalText, test as base, typeLine, type Helm } from './helm'
+import { claudeRunIn, expect, openHistory, startSession, terminalText, test as base, typeLine, type Helm } from './helm'
 
 /**
  * Electron IPC carries only what `boundary.rs` lists as client-only: the browser pane, clipboard, window,
@@ -103,10 +103,12 @@ test('history and the usage figures come over the window’s own connection', as
   await typeLine(pane, '/exit')
   await expect(window.getByRole('tab', { name: 'alpha, ended' })).toBeVisible()
 
-  await destination(helm, 'Session history').click()
-  const row = window.getByRole('group', { name: 'Sessions' }).getByRole('button', { name: /^plan the boundary/ })
-  await row.click()
-  await expect(window.getByText('You said: plan the boundary').first()).toBeVisible()
+  // History's palette lists it, and Ctrl+Enter reads its conversation from the archive in a tab.
+  const palette = await openHistory(window)
+  await palette.getByRole('option', { name: /plan the boundary/ }).click()
+  await window.keyboard.press('ControlOrMeta+Enter')
+  await expect(palette).toHaveCount(0)
+  await expect(window.locator('[data-transcript]')).toContainText('You said: plan the boundary')
 
   const channels = await recorded(helm)
   // Read over the window's connection: main was asked none of it.

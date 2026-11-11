@@ -67,7 +67,7 @@ test('a tab dragged to a pane’s side opens a pane there, and one dropped in it
   const { window } = helm
   await startSession(window, 'alpha')
   await startSession(window, 'beta')
-  await window.locator('[data-rail="history"]').click()
+  await window.locator('[data-rail="settings"]').click()
   const first = pane(window, 'First pane')
   await expect(first.getByRole('tab')).toHaveCount(3)
 
@@ -77,21 +77,21 @@ test('a tab dragged to a pane’s side opens a pane there, and one dropped in it
   await expect(second.getByRole('tab')).toHaveText(['beta'])
   await expect(second).toHaveAttribute('data-pane-focused', 'true')
 
-  // History to the second pane's foot: the second pane is split in two, one above the other.
-  await dropOn(first.getByRole('tab', { name: 'Session history' }), second, 'bottom')
+  // Settings to the second pane's foot: the second pane is split in two, one above the other.
+  await dropOn(first.getByRole('tab', { name: 'Settings', exact: true }), second, 'bottom')
   const third = pane(window, 'Third pane')
-  await expect(third.getByRole('tab')).toHaveText(['Session history'])
+  await expect(third.getByRole('tab')).toHaveText(['Settings'])
   const [above, below] = [await second.boundingBox(), await third.boundingBox()]
   expect(below!.x).toBe(above!.x)
   expect(below!.y).toBeGreaterThan(above!.y + above!.height)
   await expect.poll(() => savedShape(window)).toBe('row(1, column(1, 1))')
 
-  // alpha into the middle of the history pane: it joins it, and the pane it
+  // alpha into the middle of the Settings pane: it joins it, and the pane it
   // left - empty now - goes, giving its room to the column beside it.
   await dropOn(first.getByRole('tab', { name: 'alpha, ready' }), third, 'center')
   await expect(window.getByRole('region', { name: /pane$/ })).toHaveCount(2)
   await expect(pane(window, 'First pane').getByRole('tab')).toHaveText(['beta'])
-  await expect(pane(window, 'Second pane').getByRole('tab')).toHaveText(['Session history', 'alpha'])
+  await expect(pane(window, 'Second pane').getByRole('tab')).toHaveText(['Settings', 'alpha'])
   await expect.poll(() => savedShape(window)).toBe('column(1, 2)')
 
   // The drag is over: nothing is left lying over the panes to catch a click,
@@ -109,9 +109,11 @@ test('a divider is dragged to resize the panes either side, and the arrangement 
   relaunch
 }) => {
   let { window } = helm
-  await window.locator('[data-rail="history"]').click()
+  // The sessions pane stays in the first pane once Settings has gone to a second.
+  await window.locator('[data-open-sessions]').click()
   await window.locator('[data-rail="settings"]').click()
   await dropOn(window.getByRole('tab', { name: 'Settings' }), pane(window, 'First pane'), 'right')
+  await expect(pane(window, 'First pane').getByRole('tab')).toHaveText(['Sessions'])
   await expect(pane(window, 'Second pane').getByRole('tab')).toHaveText(['Settings'])
 
   await keepClearOfCursor(helm)

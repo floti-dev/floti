@@ -14,6 +14,7 @@ import {
   flotiHostsAmong,
   launchHelm,
   mainPid,
+  openHistory,
   processAlive,
   sessionIdOf,
   startSession,
@@ -687,15 +688,15 @@ test('tabs, panes and splits come back on this device after a Keep running resta
   await expect.poll(() => terminalText(window, beta)).toContain('You said: draft the schema')
   const runs = [(await claudeRunIn(world, world.projects.alpha)).pid, (await claudeRunIn(world, world.projects.beta)).pid]
 
-  // beta in a pane of its own, with the history beside it there; then beta's tab closed, kept running.
+  // beta in a pane of its own, with the sessions pane beside it there; then beta's tab closed, kept running.
   await window.getByRole('button', { name: /^Split: move this tab to a pane of its own/ }).click()
-  await window.locator('[data-rail="history"]').click()
+  await window.locator('[data-open-sessions]').click()
   const first = window.getByRole('region', { name: 'First pane' })
   const second = window.getByRole('region', { name: 'Second pane' })
-  await expect(second.getByRole('tab')).toHaveText(['beta', 'Session history'])
+  await expect(second.getByRole('tab')).toHaveText(['beta', 'Sessions'])
   await closeKeepRunning(window, second.getByRole('tab', { name: 'beta, ready' }), 'beta')
   await expect(first.getByRole('tab')).toHaveText(['alpha'])
-  await expect(second.getByRole('tab')).toHaveText(['Session history'])
+  await expect(second.getByRole('tab')).toHaveText(['Sessions'])
 
   // Saved in this device's own settings: alpha's tab, the split, and no tab for beta.
   const saved = async (): Promise<string> =>
@@ -724,7 +725,7 @@ test('tabs, panes and splits come back on this device after a Keep running resta
   const firstAgain = window.getByRole('region', { name: 'First pane' })
   const secondAgain = window.getByRole('region', { name: 'Second pane' })
   await expect(firstAgain.getByRole('tab')).toHaveText(['alpha'])
-  await expect(secondAgain.getByRole('tab')).toHaveText(['Session history'])
+  await expect(secondAgain.getByRole('tab')).toHaveText(['Sessions'])
   expect(await sessionIdOf(window, 'alpha, ready')).toBe(alpha)
   // Nothing opened for beta, so the arrangement stands as it was saved.
   await expect(window.getByRole('tab', { name: /^beta/ })).toHaveCount(0)
@@ -896,12 +897,16 @@ test('a session ended in the host is in the history without a refresh, its archi
   await typeLine(pane, '/exit')
   await expect(window.getByRole('tab', { name: 'alpha, ended' })).toBeVisible()
 
-  await window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name: 'Session history' }).click()
-  const row = window.getByRole('group', { name: 'Sessions' }).getByRole('button', { name: /^plan the release/ })
+  // Ctrl+H lists it, and Ctrl+Enter reads it in a tab: the host's archive took
+  // the conversation in the same pass that listed it.
+  const palette = await openHistory(window)
+  const row = palette.getByRole('option', { name: /plan the release/ })
   await expect(row).toContainText('alpha')
   await row.click()
-  // The host's archive took the conversation in the same pass that listed it.
-  await expect(window.getByText('You said: plan the release').first()).toBeVisible()
+  await window.keyboard.press('ControlOrMeta+Enter')
+  await expect(palette).toHaveCount(0)
+  await expect(window.getByRole('tab', { name: 'plan the release', exact: true })).toBeVisible()
+  await expect(window.locator('[data-transcript]')).toContainText('You said: plan the release')
 
   // The host indexed and archived it; Helm's own database holds none of it.
   const store = openStore({ file: join(world.dataDir, 'helm.db') })
@@ -912,8 +917,13 @@ test('a session ended in the host is in the history without a refresh, its archi
     store.close()
   }
 
-  await window.getByRole('button', { name: 'Resume in a tab' }).click()
-  await expect(window.getByRole('tab', { name: /^plan the release/ })).toBeVisible()
+  // Enter, from the palette opened again, resumes it in a session tab of its own.
+  const again = await openHistory(window)
+  await again.getByRole('option', { name: /plan the release/ }).click()
+  await window.keyboard.press('Enter')
+  await expect(again).toHaveCount(0)
+  const session = /^plan the release, /
+  await expect(window.getByRole('tab', { name: session })).toBeVisible()
   let resumed: FakeClaudeLog | undefined
   await expect
     .poll(() => {
@@ -924,7 +934,7 @@ test('a session ended in the host is in the history without a refresh, its archi
   const run = resumed as FakeClaudeLog
   expect(run.argv[run.argv.indexOf('--resume') + 1]).toBe(first.sessionId)
   expect(run.cwd.toLowerCase()).toBe(world.projects.alpha.toLowerCase())
-  const resumedId = await sessionIdOf(window, /^plan the release/)
+  const resumedId = await sessionIdOf(window, session)
   await expect.poll(() => terminalText(window, resumedId)).toContain(`Resumed ${first.sessionId}`)
 })
 

@@ -11,7 +11,7 @@ import {
 import { appendPrompts, claudeTree, sessionUuid, transcriptFile } from '../test/history-fixture'
 import type { World } from '../test/world'
 import type { OwnDataCopyState } from '../src/shared/ipc'
-import { expect, test as base } from './helm'
+import { expect, openHistory, test as base } from './helm'
 
 /**
  * What only Helm's own database holds - a conversation it archived whose
@@ -116,17 +116,23 @@ const copyState = (window: Page): Promise<OwnDataCopyState> =>
       ).helm.invoke('ownData:state')
   )
 
-async function openHistory(window: Page): Promise<void> {
-  await window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name: 'Session history' }).click()
-}
-
-/** History names the session as it was named in Helm, and its conversation opens from the archive. */
+/**
+ * History names the session as it was named in Helm, says its transcript is
+ * gone but the conversation was kept, and Enter reads it from the archive in a
+ * tab named the same.
+ */
 async function showsTheArchivedConversation(window: Page): Promise<void> {
-  await openHistory(window)
-  const row = window.getByRole('group', { name: 'Sessions' }).getByRole('button', { name: new RegExp(`^${NAME}`) })
+  const palette = await openHistory(window)
+  const row = palette.getByRole('option', { name: new RegExp(`^${NAME}`) })
   await expect(row).toBeVisible()
   await row.click()
-  await expect(window.getByText('This conversation cannot be reopened, but Helm kept it')).toBeVisible()
+  await expect(palette.locator('[data-history-preview]')).toContainText(
+    'Floti kept the conversation, so it can be read but not resumed.'
+  )
+  await window.keyboard.press('Enter')
+  await expect(palette).toHaveCount(0)
+  await expect(window.getByRole('tab', { name: NAME, exact: true })).toBeVisible()
+  await expect(window.locator('[data-transcript]')).toContainText(REPLY)
   await expect(window.getByText(REPLY)).toHaveCount(1)
 }
 

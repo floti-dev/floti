@@ -338,13 +338,14 @@ test('a plugin page that crashes says so in its own place, and Reload brings it 
     .poll(() => inHelm<string>(helm, `document.querySelector('[data-plugin-error]')?.textContent ?? ''`))
     .toContain('Sample stopped')
 
-  // Helm itself is untouched: another destination opens.
-  await inHelm(helm, `document.querySelector('[aria-label="Session history"]').click()`)
-  await expect
-    .poll(() => inHelm<boolean>(helm, `[...document.querySelectorAll('[role=tab]')].some((t) => t.textContent.includes('Session history'))`))
-    .toBe(true)
+  // Helm itself is untouched: Ctrl+H opens History over the window, and Escape closes it.
+  const historyField = `document.querySelector('[role=combobox][aria-label="Search History"]') !== null`
+  await inHelm(helm, `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', ctrlKey: true }))`)
+  await expect.poll(() => inHelm<boolean>(helm, historyField)).toBe(true)
+  await inHelm(helm, `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`)
+  await expect.poll(() => inHelm<boolean>(helm, historyField)).toBe(false)
 
-  // The panel stays in the sidebar beside the tab, still saying what happened.
+  // The panel stays in the sidebar, still saying what happened.
   expect(await inHelm<number>(helm, `document.querySelectorAll('[data-plugin-error]').length`)).toBe(1)
   await inHelm(
     helm,

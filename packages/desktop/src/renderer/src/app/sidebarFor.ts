@@ -8,9 +8,8 @@ export type SidebarView = 'sessions' | 'files' | 'profiles' | 'agents' | 'settin
  *
  * The rail starts a piece of work and the tab it leaves open carries on with
  * it: clicking the tab brings this view back, so nobody has to return to the
- * rail for a list the tab already belongs to. A tab with its list inside it
- * (History) or no list at all (Browser) leaves the
- * sidebar as it is. An agent's page brings back Agents. Profiles is reached from the rail alone - a session started
+ * rail for a list the tab already belongs to. A tab with no list of its own
+ * (Browser, a conversation from History) leaves the sidebar as it is. An agent's page brings back Agents. Profiles is reached from the rail alone - a session started
  * from a profile is a session, and belongs to Sessions.
  */
 export function sidebarFor(ref: PaneRef): SidebarView | null {
