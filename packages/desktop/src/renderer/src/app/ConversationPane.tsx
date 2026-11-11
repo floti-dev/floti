@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX } from 'react'
 import type { ArchivedConversation, ConversationRef, HistoryPrompt, HistorySession } from '@helm/core'
 import { hostOf } from '@helm/core/types'
-import { ConversationTab, type ConversationFamily } from '@helm/ui'
+import { ConversationTab, historySpan, type ConversationFamily } from '@helm/ui'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
 
@@ -65,7 +65,7 @@ export function ConversationPane({ tab, onResume, onRename, onReveal, onReadChil
   const facts =
     conversation === null || conversation === undefined || conversation.firstAt === null || conversation.lastAt === null
       ? []
-      : [`${new Date(conversation.firstAt).toLocaleString()} to ${new Date(conversation.lastAt).toLocaleTimeString()}`]
+      : [historySpan(conversation.firstAt, conversation.lastAt)]
 
   return (
     <ConversationTab

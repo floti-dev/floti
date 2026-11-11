@@ -180,6 +180,8 @@ describe('a lead and its children', () => {
     expect(options()[1]?.textContent).toContain('Export retry path')
     expect(options()[1]?.textContent).toMatch(/Done \d\d:\d\d/)
     expect(options()[2]?.textContent).toMatch(/Ended with it \d\d:\d\d/)
+    // Each ended child has the ended dot the Sessions tree gives it.
+    expect(options().slice(1).map((option) => option.querySelector('[data-history-dot]')?.getAttribute('data-history-dot'))).toEqual(['ended', 'ended'])
     press('ArrowDown')
     press('ArrowDown')
     expect(preview()).toContain('Started by Invoice export')
@@ -212,14 +214,17 @@ describe('History typed into', () => {
     press('Tab')
     expect(within(lists).getByRole('tab', { selected: true }).textContent).toBe('Conversations9')
     expect(options().map((option) => option.dataset.historyRow)).toEqual(['session', 'line', 'line'])
+    expect(selected().textContent).toContain('16:03')
     expect(document.body.textContent).toContain('and 4 more in this conversation')
   })
 
-  it('opens on Conversations when only they match, and Ctrl+Enter on a line opens it there', () => {
+  it('opens on Conversations when only they match, on its first matched line, and Ctrl+Enter on a line opens it there', () => {
     const props = renderPalette({ query: 'rate limit', titles: answer([]), conversations: answer([said]) })
-    press('ArrowDown')
     expect(selected().textContent).toContain('16:03')
     expect(preview()).toContain('opens this conversation read-only at 16:03')
+    press('ArrowUp')
+    expect(selected().dataset.historyRow).toBe('session')
+    press('ArrowDown')
     press('Enter', { ctrlKey: true })
     expect(props.onRead).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'c1' }), said.matches?.[0])
   })
@@ -227,6 +232,8 @@ describe('History typed into', () => {
   it('says No match while the other list has some, and Unknown when the archive could not be searched', () => {
     renderPalette({ query: 'sqlite wal', titles: answer([]), conversations: { error: 'database is locked' } })
     expect(document.querySelector('[data-history-state]')?.getAttribute('data-history-state')).toBe('no-match')
+    // No match has nothing to try again; the archive that could not be searched does.
+    expect(keys()).not.toContain('Try again')
     expect(screen.getByRole('tablist').textContent).toContain('ConversationsUnknown')
     press('Tab')
     expect(document.body.textContent).toContain('The archive could not be searched')

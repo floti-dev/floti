@@ -3,18 +3,19 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ArchiveMessage, ArchivedConversation, HistoryCommand, HistoryPrompt, HistorySession } from '@helm/core'
 import { HISTORY_NAME_MAX } from '@helm/core/types'
 import { cn } from '../lib/cn'
-import { clock, commandWord, endedWord, marks, paletteName, queryWords } from '../lib/historyPalette'
+import { clock, commandWord, endedWord, historyMoment, marks, paletteName, queryWords } from '../lib/historyPalette'
 import { formatMoment } from '../lib/time'
 import { AgentTag } from './AgentTag'
 import { ICON_BUTTON } from '../lib/page'
-import { PencilIcon, ResumeIcon, SearchIcon } from './icons'
+import { FolderIcon, PencilIcon, ResumeIcon, SearchIcon } from './icons'
 
 /**
  * A conversation from History, read-only in a tab (H7): named by its title,
  * opened at the line it was asked for, with Find and its count in the bar
  * beside Rename, Show in Explorer and Resume, and a status line that says it
- * is read only. Turns run across the column, the user's tinted with the
- * accent edge, and a run of tool calls is one mono line. Only an archived
+ * is read only. The tab carries the title, so the bar starts with the facts.
+ * Turns run down a centred column, the user's tinted with the accent edge,
+ * and a run of tool calls is one mono line between rules. Only an archived
  * conversation is drawn: Floti renders no part of a live one. Where the archive
  * has none, what the user typed is shown instead.
  */
@@ -147,10 +148,10 @@ export function ConversationTab(props: ConversationTabProps): JSX.Element {
 
   return (
     <div data-conversation-tab className="flex h-full min-h-0 flex-col">
-      <div className="flex min-h-[40px] shrink-0 flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border px-3 py-1.5">
+      <div className="flex min-h-[36px] shrink-0 flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border py-1 pr-2.5 pl-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {renaming === null ? (
-            <h2 className="min-w-0 truncate text-[13px] font-medium text-fg">{props.title}</h2>
+            <h2 className="sr-only">{props.title}</h2>
           ) : (
             <input
               autoFocus
@@ -176,7 +177,7 @@ export function ConversationTab(props: ConversationTabProps): JSX.Element {
           {props.agent !== undefined && <AgentTag name={props.agent} />}
           {facts}
         </div>
-        <label className="flex h-[26px] w-[200px] items-center gap-1.5 rounded-raised border border-border bg-surface-sunken px-2">
+        <label className="flex h-[26px] w-[230px] items-center gap-1.5 rounded-raised border border-border bg-surface-sunken px-2">
           <SearchIcon width={12} height={12} className="shrink-0 text-fg-subtle" />
           <input
             aria-label="Find in the conversation"
@@ -212,10 +213,12 @@ export function ConversationTab(props: ConversationTabProps): JSX.Element {
           <button
             type="button"
             data-conversation-reveal
+            aria-label="Show in Explorer"
+            title="Show in Explorer"
             onClick={props.onReveal}
-            className="h-[26px] rounded-raised px-2 text-[11.5px] text-fg-muted hover:bg-hover hover:text-fg"
+            className={ICON_BUTTON}
           >
-            Show in Explorer
+            <FolderIcon width={13} height={13} />
           </button>
         )}
         {props.onResume !== undefined && (
@@ -236,19 +239,24 @@ export function ConversationTab(props: ConversationTabProps): JSX.Element {
         </p>
       )}
 
-      <div ref={column} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        {props.family !== null && props.family !== undefined && (
-          <Family family={props.family} onReadChild={props.onReadChild} childRuns={props.childRuns} />
-        )}
-        <Body {...props} turns={turns} words={words} current={shownHit} />
+      <div ref={column} className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-[760px] px-[26px] py-[18px]">
+          {props.family !== null && props.family !== undefined && (
+            <Family family={props.family} onReadChild={props.onReadChild} childRuns={props.childRuns} />
+          )}
+          <Body {...props} turns={turns} words={words} current={shownHit} />
+        </div>
       </div>
 
       <footer className="flex h-[24px] shrink-0 items-center gap-3 border-t border-border bg-surface px-3 text-[11px] text-fg-subtle">
         <span className="text-fg-muted">Read only</span>
         {conversation !== null && conversation !== undefined && (
-          <span title={`Captured ${conversation.capturedAt}`}>
-            {conversation.messageCount} {conversation.messageCount === 1 ? 'message' : 'messages'} archived
-          </span>
+          <>
+            <span>
+              {conversation.messageCount} {conversation.messageCount === 1 ? 'message' : 'messages'}
+            </span>
+            <span title={conversation.capturedAt}>archived {historyMoment(Date.parse(conversation.capturedAt))}</span>
+          </>
         )}
         <span className="flex-1" />
         <span>Opened from History · Ctrl+H</span>
@@ -378,11 +386,17 @@ function Body({
     )
   }
   return (
-    <div data-transcript={conversation.sessionId} className="flex flex-col gap-3.5">
+    <div data-transcript={conversation.sessionId} className="flex flex-col gap-[9px]">
       {turns.map((turn) =>
         turn.kind === 'tools' ? (
-          <div key={turn.key} data-transcript-tools={String(turn.names.length)} className="pl-3 font-mono text-[10.5px] text-fg-subtle select-text">
-            {summariseTools(turn.names)}
+          <div
+            key={turn.key}
+            data-transcript-tools={String(turn.names.length)}
+            className="flex items-center gap-2 px-0.5 font-mono text-[10.5px] text-fg-subtle select-text"
+          >
+            <span aria-hidden className="flex-1 border-t border-border" />
+            <span>{summariseTools(turn.names)}</span>
+            <span aria-hidden className="flex-1 border-t border-border" />
           </div>
         ) : (
           <Turn
@@ -421,21 +435,25 @@ function Turn({
       data-transcript-message={mine ? 'user' : 'assistant'}
       data-current-match={current ? '' : undefined}
       className={cn(
-        'relative rounded-raised px-3 py-2',
-        mine && 'bg-accent-soft',
-        current && 'ring-1 ring-accent ring-inset'
+        'relative rounded-raised pt-[7px] pr-[11px] pb-2',
+        mine ? 'bg-accent-soft pl-[11px]' : 'pl-3',
+        // With nothing to find, the line it was opened at is the turn itself.
+        current && words.length === 0 && 'ring-1 ring-accent ring-inset'
       )}
     >
-      {mine && <span aria-hidden className="absolute top-2 bottom-2 left-0 w-[2px] rounded-full bg-accent" />}
-      <div className="mb-0.5 text-[11px] text-fg-subtle" title={formatMoment(at)}>
-        <span className={mine ? 'text-fg-muted' : 'text-fg-muted'}>{mine ? 'You' : 'Claude'}</span> · {clock(at)}
+      {mine && <span aria-hidden className="absolute top-0 bottom-0 left-0 w-[2px] rounded-l-raised bg-accent" />}
+      <div className="mb-px text-[10.5px] text-fg-subtle" title={formatMoment(at)}>
+        {mine ? 'You' : 'Claude'} · {clock(at)}
       </div>
-      <div className="text-[12.5px] leading-relaxed break-words whitespace-pre-wrap text-fg select-text">
+      <div className="text-[12px] leading-[1.55] break-words whitespace-pre-wrap text-fg select-text">
         {words.length === 0
           ? text
           : marks(text, words.join(' ')).map((part, index) =>
               part.hit ? (
-                <mark key={index} className="bg-transparent font-medium text-accent-text">
+                <mark
+                  key={index}
+                  className={cn('rounded-[2px] bg-transparent font-medium text-accent-text', current && 'ring-1 ring-accent')}
+                >
                   {part.text}
                 </mark>
               ) : (

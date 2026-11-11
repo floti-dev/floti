@@ -5,6 +5,7 @@ import {
   agentGone,
   commandWord,
   endedWord,
+  historyMoment,
   historyWhen,
   launchSentence,
   marks,
@@ -100,6 +101,12 @@ describe('when, in a row’s width', () => {
     expect(historyWhen(at(5, 12), NOW)).toBe('Thu')
     expect(historyWhen(at(3, 12), NOW)).toBe('Tue')
     expect(historyWhen(new Date(2026, 9, 28, 12).getTime(), NOW)).toBe('28 Oct')
+  })
+
+  it('says a moment as the facts line does: the day, then the time', () => {
+    expect(historyMoment(at(7, 9, 41), NOW)).toBe('today 09:41')
+    expect(historyMoment(at(5, 17, 30), NOW)).toBe('Thursday 17:30')
+    expect(historyMoment(new Date(2026, 9, 28, 12).getTime(), NOW)).toBe('28 Oct 12:00')
   })
 })
 

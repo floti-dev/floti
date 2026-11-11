@@ -154,16 +154,20 @@ export function historyWhen(at: number, now = Date.now()): string {
 
 /** The facts line's span: "today 08:20 to 09:12", "Thursday 15:48 to 17:22". */
 export function historySpan(first: number, last: number, now = Date.now()): string {
-  const days = Math.round((startOfDay(new Date(now)) - startOfDay(new Date(first))) / 86_400_000)
-  const day =
-    days <= 0
-      ? 'today'
-      : days === 1
-        ? 'yesterday'
-        : days < 7
-          ? new Date(first).toLocaleDateString('en-GB', { weekday: 'long' })
-          : new Date(first).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-  return `${day} ${clock(first)} to ${clock(last)}`
+  return `${dayWord(first, now)} ${clock(first)} to ${clock(last)}`
+}
+
+/** One moment as the facts say it: "today 17:30", "Thursday 17:30", "6 Nov 17:30". */
+export function historyMoment(at: number, now = Date.now()): string {
+  return `${dayWord(at, now)} ${clock(at)}`
+}
+
+function dayWord(at: number, now: number): string {
+  const days = Math.round((startOfDay(new Date(now)) - startOfDay(new Date(at))) / 86_400_000)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 7) return new Date(at).toLocaleDateString('en-GB', { weekday: 'long' })
+  return new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
 /** 24-hour "09:41". */

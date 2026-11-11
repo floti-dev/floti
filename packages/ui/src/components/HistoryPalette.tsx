@@ -23,7 +23,7 @@ import { AgentTag } from './AgentTag'
 import { HostSwitch, type HostChoice } from './HostSwitch'
 import { KeyButton } from './KeyButton'
 import { Overlay } from './Overlay'
-import { ResumeIcon, SearchIcon } from './icons'
+import { HistoryIcon, ResumeIcon } from './icons'
 
 /**
  * History, on Ctrl+H: a palette over the window wherever the user is, not a
@@ -114,7 +114,8 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
   const typed = query.trim() !== ''
   /** The list Tab or a click chose, for the query it was chosen in. */
   const [chosen, setChosen] = useState<{ query: string; list: HistoryListKind } | null>(null)
-  const [cursor, setCursor] = useState(0)
+  /** The highlighted item, or null for where the list starts (`start`). */
+  const [cursor, setCursor] = useState<number | null>(null)
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   const [renaming, setRenaming] = useState<{ id: string; draft: string } | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -186,7 +187,10 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
   }, [typed, stopped, shown, list, open, children])
 
   const { items } = rows
-  const at = Math.min(cursor, Math.max(0, items.length - 1))
+  // Conversations start on the first line that matched, as Ctrl+Shift+F
+  // does; every other list on its first row.
+  const start = typed && list === 'conversations' ? Math.max(0, items.findIndex((item) => item.kind === 'line')) : 0
+  const at = Math.min(cursor ?? start, Math.max(0, items.length - 1))
   const highlighted = items[at]
 
   useEffect(() => {
@@ -265,7 +269,7 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
     }
     if (event.key === 'Enter') {
       event.preventDefault()
-      if (blocked !== null) return props.onRetry()
+      if (blocked !== null) return retries(blocked) ? props.onRetry() : undefined
       if (primary) read(highlighted)
       else activate(highlighted)
       return
@@ -273,7 +277,7 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
     if (event.key === 'Tab' && typed) {
       event.preventDefault()
       setList(list === 'titles' ? 'conversations' : 'titles')
-      setCursor(0)
+      setCursor(null)
       return
     }
     if (event.key === 'F2') {
@@ -313,14 +317,14 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
       onKeyDown={onKeyDown}
     >
       <header className="flex h-[44px] shrink-0 items-center gap-[9px] border-b border-border pr-2.5 pl-[13px]">
-        <SearchIcon width={15} height={15} className="shrink-0 text-accent" />
+        <HistoryIcon width={15} height={15} className="shrink-0 text-accent" />
         <input
           ref={fieldRef}
           autoFocus
           value={query}
           onChange={(event) => {
             props.onQueryChange(event.target.value)
-            setCursor(0)
+            setCursor(null)
           }}
           role="combobox"
           aria-label="Search History"
@@ -339,7 +343,7 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
             conversations={conversations}
             onList={(next) => {
               setList(next)
-              setCursor(0)
+              setCursor(null)
               fieldRef.current?.focus()
             }}
           />
@@ -445,7 +449,7 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
       >
         <HostSwitch surface="History" {...props.hosts} className="mr-1" />
         <Keys
-          blocked={blocked !== null}
+          blocked={blocked === null ? null : retries(blocked) ? 'retry' : 'still'}
           item={highlighted}
           session={session}
           running={session === null ? null : isRunning(session)}
@@ -461,7 +465,7 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
           unfolded={highlighted?.kind === 'child' || (highlighted?.kind === 'session' && open.has(highlighted.session.sessionId))}
           onTab={() => {
             setList(list === 'titles' ? 'conversations' : 'titles')
-            setCursor(0)
+            setCursor(null)
           }}
           onClose={props.onDismiss}
         />
@@ -487,6 +491,11 @@ type Blocked =
   | { kind: 'archive'; message: string }
   | { kind: 'failed'; message: string }
   | { kind: 'no-match'; other: HistoryListKind }
+
+/** A read that failed, which Enter tries again; no match, reading and empty have nothing to try again. */
+function retries(state: Blocked): boolean {
+  return state.kind === 'unreadable' || state.kind === 'archive' || state.kind === 'failed'
+}
 
 function blockedState(props: HistoryPaletteProps, typed: boolean, list: HistoryListKind, shown: HistoryAnswer): Blocked | null {
   if (props.readError !== null && (shown === null || 'error' in shown || shown.sessions.length === 0)) {
@@ -709,7 +718,15 @@ function ItemRow({
         {chosen && <span aria-hidden className="absolute top-[6px] bottom-[6px] left-0 w-[2px] rounded-full bg-accent" />}
         <span aria-hidden className={cn('absolute top-[-4px] left-[21px] border-l border-border-strong', item.last ? 'bottom-[15px]' : 'bottom-0')} />
         <span aria-hidden className="absolute top-[15px] left-[21px] w-[9px] border-t border-border-strong" />
-        {running !== null && <Dot working={running.working} className="absolute top-[12px] left-[34px]" />}
+        {running !== null ? (
+          <Dot working={running.working} className="absolute top-[12px] left-[34px]" />
+        ) : (
+          <span
+            aria-hidden
+            data-history-dot={ended?.danger === true ? 'failed' : 'ended'}
+            className={cn('absolute top-[12px] left-[34px] size-[6px] rounded-full', ended?.danger === true ? 'bg-danger' : 'bg-fg-subtle')}
+          />
+        )}
         {title}
         {session.agent !== undefined && <AgentTag name={session.agent} gone={gone} />}
         <span className={cn('ml-auto shrink-0 text-[11px] tabular-nums', ended?.danger === true ? 'text-danger' : 'text-fg-subtle')}>
@@ -907,11 +924,25 @@ function Preview({
           {gone && <p className="text-warn">The {session.agent} agent is gone. Enter resumes it without the agent.</p>}
           <p className="text-[11px] text-fg-subtle">
             {item.kind === 'line' ? `${CTRL}+Enter opens this conversation read-only at ${clock(item.line.at)}. Enter resumes it: ` : 'Enter runs '}
-            <span className="font-mono text-[10.5px] text-fg-muted">{sentence}</span>, in a new tab
+            <LaunchSentence sentence={sentence} folder={session.project} />, in a new tab
             {parent !== null ? '. Its parent is not told; a lead resumes its own children itself.' : '.'}
           </p>
         </>
       )}
+    </>
+  )
+}
+
+/** The launch sentence with its command and folder in mono, as the rest of the sentence is prose. */
+function LaunchSentence({ sentence, folder }: { sentence: string; folder: string }): JSX.Element {
+  const mono = 'font-mono text-[10.5px] text-fg-muted'
+  const command = 'claude --resume'
+  const head = `${command} in ${folder}`
+  if (!sentence.startsWith(head)) return <span className={mono}>{sentence}</span>
+  return (
+    <>
+      <span className={mono}>{command}</span> in <span className={mono}>{folder}</span>
+      {sentence.slice(head.length)}
     </>
   )
 }
@@ -939,7 +970,8 @@ function Keys({
   onTab,
   onClose
 }: {
-  blocked: boolean
+  /** Why nothing can be chosen: `retry` where a read failed and Enter tries again, `still` where there is nothing to try again. */
+  blocked: 'retry' | 'still' | null
   item: Item | undefined
   session: HistorySession | null
   running: HistoryRunning | null
@@ -970,8 +1002,10 @@ function Keys({
     )
   }
   const other = list === 'titles' ? 'Conversations' : 'Titles and prompts'
-  const enter = blocked
-    ? 'Try again'
+  const enter = blocked !== null
+    ? blocked === 'retry'
+      ? 'Try again'
+      : null
     : item?.kind === 'stopped-all'
       ? `Resume ${String(item.sessions.length)}`
       : session === null
@@ -985,7 +1019,7 @@ function Keys({
           : unresumable(session) !== null
             ? 'Read'
             : 'Resume'
-  const readable = !blocked && session !== null && running === null && unresumable(session) === null
+  const readable = blocked === null && session !== null && running === null && unresumable(session) === null
   return (
     <>
       {enter !== null && (
@@ -998,12 +1032,12 @@ function Keys({
           {item?.kind === 'line' ? `Read at ${clock(item.line.at)}` : 'Read'}
         </KeyButton>
       )}
-      {!blocked && (item?.kind === 'child' || (item?.kind === 'session' && (session?.children ?? 0) > 0)) && (
+      {blocked === null && (item?.kind === 'child' || (item?.kind === 'session' && (session?.children ?? 0) > 0)) && (
         <KeyButton keys={unfolded ? '←' : '→'} onClick={onFold}>
           {unfolded ? 'Fold' : 'Children'}
         </KeyButton>
       )}
-      {!blocked && session !== null && item?.kind !== 'line' && (
+      {blocked === null && session !== null && item?.kind !== 'line' && (
         <KeyButton keys="F2" onClick={onRename}>
           Rename
         </KeyButton>

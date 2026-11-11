@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ArchiveMessage, ArchivedConversation } from '@helm/core'
+import { historyMoment } from '../lib/historyPalette'
 import { historySession } from '../lib/historyPalette.testkit'
 import { ConversationTab, readAsTurns, summariseTools, type ConversationTabProps } from './ConversationTab'
 
@@ -62,7 +63,8 @@ describe('a conversation read back', () => {
     renderTab({ agent: 'researcher' })
     expect(screen.getByRole('heading', { name: 'Rate limits on the public endpoints' })).toBeTruthy()
     expect(document.body.textContent).toContain('Read only')
-    expect(document.body.textContent).toContain('214 messages archived')
+    expect(document.body.textContent).toContain('214 messages')
+    expect(document.body.textContent).toContain(`archived ${historyMoment(Date.parse('2026-11-06T17:30:00Z'))}`)
     expect(document.querySelectorAll('[data-transcript-message="user"]')).toHaveLength(1)
     expect(document.querySelector('[data-transcript-tools]')?.textContent).toBe('Read ×2 · Grep')
   })
