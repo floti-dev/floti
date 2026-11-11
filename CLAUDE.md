@@ -439,14 +439,14 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   off, or an excluded profile, is no route (404), no entry and no tool. Every
   name a tool is given is resolved among the caller's own children only, and
   anything else is not found. A start is judged before anything runs: the
-  agent it starts and the backend that agent allows (`AgentBackend`, which
-  refuses a rule it cannot enforce, naming the rule and the backend), a
-  folder Floti tracks on the path
-  it leads to (a session's own folder does not make one tracked), the
-  permission mode, then the limits read afresh from the settings and counted
-  from the child rows, so they hold across a host restart. A child runs in its
-  agent's mode, and in auto when its agent names none (where its backend has
-  auto). A parent caps it only when the parent was launched in plan or
+  agent it starts and a backend that agent allows, a folder Floti tracks on
+  the path it leads to (a session's own folder does not make one tracked),
+  its repository and agent worktree, the profile, the permission mode, the
+  backend's ability to enforce every rule of the agent (`AgentBackend`
+  refuses one it cannot, naming the rule and the backend), then the limits
+  read afresh from the settings and counted from the child rows, so they hold
+  across a host restart. A child runs in its agent's mode, else its
+  profile's, else auto (where its backend has auto). A parent caps it only when the parent was launched in plan or
   dont-ask, and bypass-permissions reaches a child only when its parent was
   launched in it; a parent launched in no mode or in manual does not hold its
   children to manual (`child_mode` in `hosted/children.rs`). The user's deny
@@ -489,10 +489,11 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   carries any of a child's conversation beyond a report's text, a program's
   own message and the parent's own text. They are watched from the
   activity reader (`server/features/sessions.rs`, `hosted/children/news.rs`),
-  and for an agent with no MCP tools from its program's own status (OSC
-  7501), where `done` is a report, `blocked` is needs you and `error` is
-  error. `agents_report` is listed, and allowed at launch, only for a child
-  whose agent has MCP tools: the family lists per caller
+  which reads the backend's own records first and then the program's own
+  status (OSC 7501), where `blocked` is needs you and `error` is error, and,
+  for an agent with no MCP tools, `done` is a report. `agents_report` is
+  listed, and allowed at launch, only for a session that has a parent (an
+  agent with no MCP tools has no tools to list): the family lists per caller
   (`ToolFamily::tools_for`, `allowed_tools_in`), and a tool left out of a
   listing is answered as one the family does not have. A session's record
   carries its child's `last_report` (protocol 2.1, optional) from a report
@@ -669,9 +670,10 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   handler (`Registry::call_tool`), naming the session as the relay does, and
   is cancelled there when the session drops it. The plugin turned off,
   removed or with its tools switched off loses its route at once (404) and is
-  given to no later launch, until it is back on. A client's offer naming such
-  a plugin is passed over (`PluginRelay::installed`), and that client is sent
-  no call for it.
+  given to no later launch, until it is back on. A client's offer naming a
+  plugin the host serves itself, or one that is off, removed or has its tools
+  off, is passed over (`PluginRelay::installed`), and that client is sent no
+  call for it.
 - For a version 1 plugin a client offers its servers (`agentPlugin:offer`,
   replacing its last offer) and answers their calls (`agentPlugin:call`,
   `agentPlugin:answer`). Each is
@@ -699,8 +701,8 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
 The host runs them (`crates/host/src/plugins`): their registry, settings,
 secrets, programs, services and their pages' `fetch`. Main keeps the
 `floti-plugin://` and `helm-plugin://` schemes (`main/plugins/protocol.ts`),
-the hidden plugin host window and the tool relay (`main/host/plugins.ts`); the
-window draws their pages. `packages/plugin-sdk` holds the manifest validator
+the hidden plugin host window (`main/plugins/background.ts`) and the tool relay
+(`main/host/plugin-tools.ts`); the window draws their pages. `packages/plugin-sdk` holds the manifest validator
 Helm loads with, so a manifest change starts there. `apiVersion` is 1 or 2,
 and both load side by side; anything else is an error in Settings, never a
 crash.
