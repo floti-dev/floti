@@ -36,7 +36,7 @@ With `pnpm dev --drive` running:
 ```bash
 node packages/desktop/scripts/drive-dev.mjs text             # what the window says
 node packages/desktop/scripts/drive-dev.mjs controls         # every button, by label
-node packages/desktop/scripts/drive-dev.mjs click "Session history"
+node packages/desktop/scripts/drive-dev.mjs eval "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'h', ctrlKey: true}))"   # History
 node packages/desktop/scripts/drive-dev.mjs eval "window.helm.invoke('settings:write', {...})"
 node packages/desktop/scripts/drive-dev.mjs shot history.png
 ```

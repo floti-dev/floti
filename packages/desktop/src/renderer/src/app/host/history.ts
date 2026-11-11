@@ -13,10 +13,11 @@ import type { EventPayload } from '../../../../shared/ipc'
 import type { HostAdapter } from './router'
 
 /**
- * Session history, the transcript archive and usage while sessions run in the
- * local host: the host indexes Claude Code's history, archives its transcripts
- * into its own database and reads its usage figures, and the window reads
- * them over its own connection, in ipc.ts's shapes.
+ * History (the Ctrl+H palette), the transcript archive and usage while
+ * sessions run in the local host: the host indexes Claude Code's history,
+ * archives its transcripts into its own database and reads its usage
+ * figures, and the window reads them over its own connection, in ipc.ts's
+ * shapes.
  *
  * On every connect it subscribes to the host's `history:changed`,
  * `archive:changed` and `usage:changed` and hands each state to the window's
