@@ -3208,6 +3208,58 @@ async fn a_resume_of_a_child_that_still_runs_is_refused_and_nothing_starts() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_resume_of_a_child_whose_conversation_a_person_reopened_is_refused_naming_that_session() {
+    let world = World::new();
+    let host = world.host().await;
+    let parent = world
+        .session(CLAUDE, &world.project("reopened"), "parent")
+        .await;
+    let ended = world
+        .ended_child(&parent, json!({ "task": "work", "name": "taken" }))
+        .await;
+    let conversation = ended.record.conversation_id.clone().unwrap();
+
+    // A person reopens the child's conversation from History: a session of
+    // its own, with no parent link.
+    let mut client = world.client().await;
+    client
+        .request::<HistoryRefresh>(&())
+        .await
+        .expect("the history is read");
+    let resumed = client
+        .request::<HistoryResume>(&ResumeSessionRequest {
+            session_id: conversation.clone(),
+            agent: None,
+            cols: 80,
+            rows: 24,
+        })
+        .await
+        .expect("the conversation resumes");
+    drop(client);
+    assert!(!resumed.already_running);
+    let person = world.agent_after(resumed.session, &[ended.run.pid]).await;
+    assert_eq!(person.record.parent_id, None);
+
+    let (rows, runs) = (world.children_made(), world.run_count());
+    let refused = parent
+        .start(json!({ "task": "again", "resume": "taken" }))
+        .await;
+    let sentence = refused.refused();
+    assert!(
+        sentence.contains(&format!(
+            "taken is already running as \"{}\"",
+            person.name()
+        )),
+        "{sentence}"
+    );
+    assert_eq!(world.children_made(), rows);
+    assert_eq!(world.run_count(), runs);
+    assert_eq!(world.runs_of(&conversation).len(), 2, "no second reopen");
+    assert!(alive(person.run.pid));
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_resume_that_asks_for_more_than_the_task_is_refused_naming_what_else_it_gave() {
     let world = World::new();
     let host = world.host().await;

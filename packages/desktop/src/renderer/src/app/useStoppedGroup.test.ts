@@ -172,6 +172,22 @@ describe("the Stopped group", () => {
     expect(ids(hook.result.current.shown)).toEqual([2]);
   });
 
+  it("brings back on Undo a session dismissed again after it ran and was lost in a later stop", async () => {
+    const { hook, raiseUndo, initial } = setup();
+    act(() => hook.result.current.keep([lost(1)], null));
+    act(() => hook.result.current.dismiss());
+    hook.rerender({ ...initial, running: new Set(["conv-1"]) });
+    hook.rerender({ ...initial, running: new Set() });
+    act(() => hook.result.current.keep([lost(1)], null));
+    act(() => hook.result.current.dismiss());
+    expect(hook.result.current.shown).toBeNull();
+    const undo = raiseUndo.mock.calls[1]![2];
+    await act(async () => {
+      await undo();
+    });
+    expect(ids(hook.result.current.shown)).toEqual([1]);
+  });
+
   it("dismisses a read that failed with the group, and its Undo reads the offer again", async () => {
     const { hook, raiseUndo, dismissUnread, readAgain } = setup({ unread: "The host stopped answering." });
     act(() => hook.result.current.dismiss());

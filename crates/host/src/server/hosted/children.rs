@@ -659,6 +659,10 @@ impl Hosted {
         facts: &rows::ParentFacts,
         request: StartChild,
     ) -> Result<ChildStarted, String> {
+        // Held until the child runs, as every reopening of a conversation is,
+        // so a person's resume or restore of the same conversation and this
+        // one never both start it.
+        let _reopening = lock(&self.reopening);
         let wanted = request.resume.as_deref().unwrap_or_default().trim();
         let also: Vec<&str> = [
             ("agent", &request.agent),
@@ -722,6 +726,15 @@ impl Hosted {
                 "Floti never learned which conversation {name} had, so it cannot be resumed. No agent was started."
             ));
         };
+        // A person may have reopened its conversation outside this family
+        // (restored from the restore page, or resumed from History), as a
+        // session with no parent link that children_of never finds.
+        if let Some(runs) = self.running_with(&conversation_id)? {
+            return Err(format!(
+                "{name} is already running as \"{}\", so it was not resumed. No agent was started.",
+                super::label_of(&runs)
+            ));
+        }
         let backend_id = BackendId::new(&child.backend);
         let Some(backend) = self.find_backend(&backend_id).map(Arc::clone) else {
             return Err(format!(

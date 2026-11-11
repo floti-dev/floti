@@ -132,8 +132,13 @@ export function useStoppedGroup({
     if (was === null && !hadUnread) return;
     setKept(null);
     if (hadUnread) dismissUnread();
+    // A conversation dismissed again was lost again since it was last back:
+    // only running from now on keeps it out of this Undo.
     for (const lost of was?.sessions ?? []) {
-      if (lost.conversationId !== undefined) watching.current.add(lost.conversationId.toLowerCase());
+      if (lost.conversationId === undefined) continue;
+      const conversation = lost.conversationId.toLowerCase();
+      watching.current.add(conversation);
+      seenBack.current.delete(conversation);
     }
     const count = was?.sessions.length ?? 0;
     raiseUndo(
