@@ -314,6 +314,7 @@ import {
 import { fileKey, joinRoot, relativeTo, useFiles } from "./useFiles";
 import { useHistoryPalette } from "./useHistoryPalette";
 import { useStoppedGroup } from "./useStoppedGroup";
+import { useConversationResume } from "./useConversationResume";
 import { useArchiveStats } from "./useArchiveStats";
 import { ConversationPane } from "./ConversationPane";
 import { useLauncher } from "./useLauncher";
@@ -872,6 +873,12 @@ export function App(): JSX.Element {
       : LOCAL_HOST_KEY;
   };
   const historyHost = shownHostOf("history");
+  // A refusal said on one host is not said on another.
+  const [historyErrorHost, setHistoryErrorHost] = useState(historyHost);
+  if (historyErrorHost !== historyHost) {
+    setHistoryErrorHost(historyHost);
+    setHistoryError(null);
+  }
   const usageHost = shownHostOf("usage");
   const filesHost = shownHostOf("files");
   const pluginsHost = shownHostOf("plugins");
@@ -2084,35 +2091,24 @@ export function App(): JSX.Element {
    * decided whether it could be reopened and built its `--resume`. Resolves
    * to the sentence a refusal gave, or null.
    */
-  const resumeConversation = useCallback(
-    async (
-      on: string,
-      sessionId: string,
-      agent: string | undefined,
-    ): Promise<string | null> => {
-      try {
-        const { cols, rows } = estimateGrid(
-          bodyRefs.current.get(open.focused) ?? null,
-        );
-        const { session: record } = await bridgeFor(on).invoke(
-          "history:resume",
-          {
-            sessionId,
-            ...(agent === undefined || agent === "" ? {} : { agent }),
-            cols,
-            rows,
-          },
-        );
-        if (on === LOCAL_HOST_KEY) sessionState.adopt(record);
-        else adoptThere(on, record);
-        placeSession(record.id, false, undefined, on);
-        return null;
-      } catch (err: unknown) {
-        return readable(err);
-      }
-    },
-    [sessionState, adoptThere, placeSession, open.focused],
+  const historyGrid = useCallback(
+    () => estimateGrid(bodyRefs.current.get(open.focused) ?? null),
+    [open.focused],
   );
+  const adoptResumed = useCallback(
+    (on: string, record: SessionRecord) => {
+      if (on === LOCAL_HOST_KEY) sessionState.adopt(record);
+      else adoptThere(on, record);
+      placeSession(record.id, false, undefined, on);
+    },
+    [sessionState, adoptThere, placeSession],
+  );
+  /** One resume at a time, from the palette, its Stopped group or a conversation tab. */
+  const historyResume = useConversationResume({
+    grid: historyGrid,
+    adopt: adoptResumed,
+  });
+  const { resumeOn: resumeConversation, exclusive: resumeOnce } = historyResume;
 
   /**
    * The sessions running now on History's host, by lower-cased conversation:
@@ -2161,11 +2157,13 @@ export function App(): JSX.Element {
   });
   const resumeStopped = useCallback(
     async (sessions: readonly RestorableSession[]) => {
-      const refused = await resumeStoppedGroup(sessions);
+      const started = resumeOnce("stopped", () => resumeStoppedGroup(sessions));
+      if (started === null) return;
+      const refused = await started;
       if (refused === null) closeHistory(false);
       else setHistoryError(refused);
     },
-    [resumeStoppedGroup, closeHistory, setHistoryError],
+    [resumeOnce, resumeStoppedGroup, closeHistory, setHistoryError],
   );
 
   /**
@@ -2211,8 +2209,8 @@ export function App(): JSX.Element {
     [openPane],
   );
 
-  /** Whether a conversation runs now on the host of `tab`, by its sessions' records. */
-  const conversationRuns = useCallback(
+  /** The session running a conversation now on the host of `tab`, by its sessions' records, or undefined. */
+  const conversationRecord = useCallback(
     (tab: ConversationRef, conversationId: string) => {
       const host = hostOf(tab);
       const work = host === LOCAL_HOST_KEY ? undefined : hostWork.byHost.get(host);
@@ -2221,28 +2219,48 @@ export function App(): JSX.Element {
       const activity =
         host === LOCAL_HOST_KEY ? sessionState.activity : work?.activity;
       const wanted = conversationId.toLowerCase();
-      return records.some((record) => {
+      return records.find((record) => {
         if (record.status !== "running") return false;
         const conversation =
           activity?.get(record.id)?.claudeSessionId ?? record.claudeSessionId;
         return conversation?.toLowerCase() === wanted;
-      });
+      })?.id;
     },
     [hostWork.byHost, sessionState.sessions, sessionState.activity],
   );
-
-  /** A conversation tab's Rename: named on its host, and the tab takes the name. */
-  const renameConversation = useCallback(
-    (tab: ConversationRef, name: string | null) => {
-      void bridgeFor(hostOf(tab))
-        .invoke("history:rename", { sessionId: tab.sessionId, name })
-        .then((updated) => {
-          if (updated === null) return;
-          commit((current) =>
-            retitleTab(current, paneId(tab), historyTitle(updated)),
-          );
-        });
+  const conversationRuns = useCallback(
+    (tab: ConversationRef, conversationId: string) =>
+      conversationRecord(tab, conversationId) !== undefined,
+    [conversationRecord],
+  );
+  /** A conversation tab's Show: the session running its conversation, in its tab here or a new one. */
+  const showConversation = useCallback(
+    (tab: ConversationRef) => {
+      const id = conversationRecord(tab, tab.sessionId);
+      if (id === undefined) return;
+      const host = hostOf(tab);
+      if (host === LOCAL_HOST_KEY) openSession(id);
+      else openRemoteSession(host, id);
     },
+    [conversationRecord, openSession, openRemoteSession],
+  );
+
+  /** A conversation tab's Rename: named on its host, and the tab takes the name. Resolves to the sentence a refusal gave, or null. */
+  const renameConversation = useCallback(
+    (tab: ConversationRef, name: string | null): Promise<string | null> =>
+      bridgeFor(hostOf(tab))
+        .invoke("history:rename", { sessionId: tab.sessionId, name })
+        .then(
+          (updated) => {
+            if (updated !== null) {
+              commit((current) =>
+                retitleTab(current, paneId(tab), historyTitle(updated)),
+              );
+            }
+            return null;
+          },
+          (err: unknown) => readable(err),
+        ),
     [commit],
   );
 
@@ -5190,9 +5208,13 @@ export function App(): JSX.Element {
           <ConversationPane
             key={paneId(ref)}
             tab={ref}
-            onResume={(tab) =>
-              resumeConversation(hostOf(tab), tab.sessionId, tab.agent)
+            onResume={(tab, agent) =>
+              resumeOnce(tab.sessionId, () =>
+                resumeConversation(hostOf(tab), tab.sessionId, agent),
+              )
             }
+            onShow={showConversation}
+            resuming={historyResume.resuming !== null}
             onRename={renameConversation}
             onReveal={revealOn(hostOf(ref))}
             onReadChild={readChild}
@@ -6492,10 +6514,13 @@ export function App(): JSX.Element {
         )}
         {historyOpen && (
           <HistoryPalette
+            key={historyHost}
             query={history.query}
             onQueryChange={history.setQuery}
             recent={history.recent}
             total={history.summary?.sessions ?? null}
+            totalError={history.summaryError}
+            foldersError={history.foldersError}
             readError={
               history.summary?.error === undefined
                 ? null
@@ -6520,11 +6545,13 @@ export function App(): JSX.Element {
             onResumeStopped={(sessions) => void resumeStopped(sessions)}
             onDismissStopped={dismissStopped}
             onResume={(session, { withoutAgent }) =>
-              void resumeConversation(
-                historyHost,
-                session.sessionId,
-                withoutAgent ? undefined : session.agent,
-              ).then((refused) => {
+              void resumeOnce(session.sessionId, () =>
+                resumeConversation(
+                  historyHost,
+                  session.sessionId,
+                  withoutAgent ? undefined : session.agent,
+                ),
+              )?.then((refused) => {
                 if (refused === null) closeHistory(false);
                 else setHistoryError(refused);
               })
@@ -6554,6 +6581,7 @@ export function App(): JSX.Element {
                 : hostName(historyHost)
             }
             resumeError={historyError}
+            resuming={historyResume.resuming}
           />
         )}
         {paletteOpen && (

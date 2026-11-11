@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX } from 'react'
-import type { ArchivedConversation, ConversationRef, HistoryPrompt, HistorySession } from '@helm/core'
+import type { ArchivedConversation, ConversationRef, HistoryPrompt, HistorySession, LaunchAgents } from '@helm/core'
 import { hostOf } from '@helm/core/types'
-import { ConversationTab, historySpan, type ConversationFamily } from '@helm/ui'
+import { agentGone, ConversationTab, historySpan, type ConversationFamily } from '@helm/ui'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
 
@@ -14,10 +14,18 @@ import { readable } from './errors'
  */
 export interface ConversationPaneProps {
   tab: ConversationRef
-  /** Resumes it on its host; resolves to the sentence a refusal gave, or null. */
-  onResume: (tab: ConversationRef) => Promise<string | null>
-  /** Names it by hand, or clears the name; the tab takes the new title. */
-  onRename: (tab: ConversationRef, name: string | null) => void
+  /**
+   * Resumes it on its host as `agent` (none when its agent is gone); resolves
+   * to the sentence a refusal gave, or null. Null, and nothing started, while
+   * another resume is in flight.
+   */
+  onResume: (tab: ConversationRef, agent: string | undefined) => Promise<string | null> | null
+  /** Shows the session running this conversation now. */
+  onShow: (tab: ConversationRef) => void
+  /** A resume is in flight. */
+  resuming: boolean
+  /** Names it by hand, or clears the name; the tab takes the new title. Resolves to the sentence a refusal gave, or null. */
+  onRename: (tab: ConversationRef, name: string | null) => Promise<string | null>
   /** Absent where its folder cannot be shown from here. */
   onReveal?: ((path: string) => void) | undefined
   /** Opens a child's conversation in a tab of its own, on this tab's host. */
@@ -29,13 +37,23 @@ export interface ConversationPaneProps {
 /** How many children and commands a parent's tab lists, as History lists a parent's children. */
 const FAMILY_LIMIT = 50
 
-export function ConversationPane({ tab, onResume, onRename, onReveal, onReadChild, runsNow }: ConversationPaneProps): JSX.Element {
+export function ConversationPane({
+  tab,
+  onResume,
+  onShow,
+  resuming,
+  onRename,
+  onReveal,
+  onReadChild,
+  runsNow
+}: ConversationPaneProps): JSX.Element {
   const host = hostOf(tab)
   const [conversation, setConversation] = useState<ArchivedConversation | null | undefined>(undefined)
   const [prompts, setPrompts] = useState<HistoryPrompt[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [resumeError, setResumeError] = useState<string | null>(null)
   const [family, setFamily] = useState<ConversationFamily | null>(null)
+  const [agents, setAgents] = useState<Pick<LaunchAgents, 'agents' | 'bad'> | null>(null)
 
   useEffect(() => {
     let live = true
@@ -52,6 +70,11 @@ export function ConversationPane({ tab, onResume, onRename, onReveal, onReadChil
         }
       },
       (err: unknown) => live && setError(readable(err))
+    )
+    // Not known is not gone: a listing that could not be read sends the agent, and the host says if it is gone.
+    helm.invoke('agents:list').then(
+      (listed) => live && setAgents(listed),
+      () => undefined
     )
     helm.invoke('history:sessions', { parent: tab.sessionId, limit: FAMILY_LIMIT }).then(
       (page) => live && setFamily({ children: page.sessions, commands: page.commands ?? [] }),
@@ -79,10 +102,19 @@ export function ConversationPane({ tab, onResume, onRename, onReveal, onReadChil
       at={tab.at ?? null}
       find={tab.find}
       onResume={() => {
+        // A resume composes its agent again from its file as it reads now, or
+        // runs without it when the agent is gone, as History's Enter does.
+        const started = onResume(tab, agentGone(tab.agent, agents) ? undefined : tab.agent)
+        if (started === null) return
         setResumeError(null)
-        void onResume(tab).then(setResumeError)
+        void started.then(setResumeError)
       }}
-      onRename={(name) => onRename(tab, name)}
+      onShow={runsNow(tab, tab.sessionId) ? () => onShow(tab) : undefined}
+      resuming={resuming}
+      onRename={(name) => {
+        setResumeError(null)
+        void onRename(tab, name).then(setResumeError)
+      }}
       onReveal={onReveal === undefined ? undefined : () => onReveal(tab.project)}
       resumeError={resumeError}
       family={family}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   HistoryProject,
   HistoryQuery,
@@ -32,6 +32,10 @@ export interface HistoryPaletteState {
   query: string
   setQuery: (query: string) => void
   summary: HistorySummary | null
+  /** The sentence the summary's read failed with: how many History holds is not known. */
+  summaryError: string | null
+  /** The sentence the recorded folders' read failed with: a folder's name then narrows nothing. */
+  foldersError: string | null
   recent: HistoryAnswer
   titles: HistoryAnswer
   conversations: HistoryAnswer
@@ -94,6 +98,8 @@ export function useHistoryPalette(host: string, open: boolean): HistoryPaletteSt
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   const [summary, setSummary] = useState<HistorySummary | null>(null)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
+  const [foldersError, setFoldersError] = useState<string | null>(null)
   const [recent, setRecent] = useState<HistoryAnswer>(null)
   const [titles, setTitles] = useState<HistoryAnswer>(null)
   const [conversations, setConversations] = useState<HistoryAnswer>(null)
@@ -111,6 +117,8 @@ export function useHistoryPalette(host: string, open: boolean): HistoryPaletteSt
     setQuery('')
     setDebounced('')
     setSummary(null)
+    setSummaryError(null)
+    setFoldersError(null)
     setRecent(null)
     setTitles(null)
     setConversations(null)
@@ -132,15 +140,21 @@ export function useHistoryPalette(host: string, open: boolean): HistoryPaletteSt
     const off = helm.on('history:changed', (next) => {
       if (!live) return
       setSummary(next)
+      setSummaryError(null)
       setVersion((count) => count + 1)
     })
+    // A read that failed is "could not look", never "nothing there".
     helm.invoke('history:summary').then(
-      (next) => live && setSummary(next),
-      () => undefined
+      (next) => {
+        if (!live) return
+        setSummary(next)
+        setSummaryError(null)
+      },
+      (err: unknown) => live && setSummaryError(readable(err))
     )
     helm.invoke('history:projects').then(
       (next) => live && setProjects(next),
-      () => undefined
+      (err: unknown) => live && setFoldersError(readable(err))
     )
     // A listing that could not be read is "not known", never "every agent gone".
     helm.invoke('agents:list').then(
@@ -225,17 +239,34 @@ export function useHistoryPalette(host: string, open: boolean): HistoryPaletteSt
     [helm]
   )
 
+  // A retry answers only the host and the opening it was asked in: one that
+  // lands after the palette moved to another host, or closed, changes nothing.
+  const asking = useRef(shown)
+  useEffect(() => {
+    asking.current = shown
+  }, [shown])
   const retry = useCallback(() => {
+    const at = asking.current
+    const still = (): boolean => asking.current === at
     void helm
       .invoke('history:refresh')
-      .then(setSummary, () => undefined)
-      .finally(() => setVersion((count) => count + 1))
+      .then(
+        (next) => {
+          if (!still()) return
+          setSummary(next)
+          setSummaryError(null)
+        },
+        (err: unknown) => still() && setSummaryError(readable(err))
+      )
+      .finally(() => still() && setVersion((count) => count + 1))
   }, [helm])
 
   return {
     query,
     setQuery,
     summary,
+    summaryError,
+    foldersError,
     recent,
     titles: debounced.trim() === '' ? null : titles,
     conversations: debounced.trim() === '' ? null : split.search === '' ? NOTHING_SAID : conversations,

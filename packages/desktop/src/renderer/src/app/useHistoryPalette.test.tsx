@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HistoryPage, HistoryProject, HistoryQuery, HistorySession } from '@helm/core'
-import { bridge } from './bridge.testkit'
+import type { HistoryPage, HistoryProject, HistoryQuery, HistorySession, HistorySummary } from '@helm/core'
+import { bridge, remoteBridge } from './bridge.testkit'
 import { splitQuery, useHistoryPalette } from './useHistoryPalette'
 
 vi.mock('./bridge', () => import('./bridge.testkit'))
@@ -87,6 +87,49 @@ describe('History’s reads', () => {
       expect(result.current.children.get('lead')).toEqual({ sessions: [session('kid', { parent: 'lead' })], total: 1 })
     )
     expect(bridge.invoked('history:sessions')).toContainEqual({ parent: 'lead', limit: 50 })
+  })
+
+  it('lists a session started outside Floti as soon as the host indexes it, without the window asking', async () => {
+    let sessions = [session('a')]
+    bridge.answer('history:sessions', () => page(...sessions))
+    const { result } = renderHook(() => useHistoryPalette('local', true))
+    await waitFor(() => expect(result.current.recent).toEqual({ sessions: [session('a')], total: 1 }))
+    sessions = [session('terminal'), session('a')]
+    act(() => {
+      bridge.emit('history:changed', { sessions: 2 } as HistorySummary)
+    })
+    await waitFor(() => expect(result.current.recent).toEqual({ sessions: [session('terminal'), session('a')], total: 2 }))
+    expect(result.current.summary).toEqual({ sessions: 2 })
+    expect(bridge.invoked('history:refresh')).toEqual([])
+  })
+
+  it('says the count and the folders could not be read, never that there are none', async () => {
+    bridge.answer('history:summary', () => {
+      throw new Error('The host did not answer.')
+    })
+    bridge.answer('history:projects', () => {
+      throw new Error('database is locked')
+    })
+    bridge.answer('history:sessions', () => page())
+    const { result } = renderHook(() => useHistoryPalette('local', true))
+    await waitFor(() => expect(result.current.summaryError).toBe('The host did not answer.'))
+    await waitFor(() => expect(result.current.foldersError).toBe('database is locked'))
+    expect(result.current.summary).toBeNull()
+  })
+
+  it('drops a retry that lands after History moved to another host', async () => {
+    let settle: (summary: HistorySummary) => void = () => undefined
+    bridge.answer('history:refresh', () => new Promise<HistorySummary>((resolve) => (settle = resolve)))
+    bridge.answer('history:sessions', () => page())
+    remoteBridge('h1').whenUnanswered('pending')
+    const { result, rerender } = renderHook(({ host }) => useHistoryPalette(host, true), { initialProps: { host: 'local' } })
+    act(() => result.current.retry())
+    rerender({ host: 'h1' })
+    await act(async () => {
+      settle({ sessions: 9 } as HistorySummary)
+      await Promise.resolve()
+    })
+    expect(result.current.summary).toBeNull()
   })
 
   it('puts a new name on every list at once, and says a refused rename with its sentence', async () => {

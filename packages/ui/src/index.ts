@@ -200,7 +200,7 @@ export {
 } from './components/HistoryPalette'
 export { ConversationTab, type ConversationFamily, type ConversationTabProps } from './components/ConversationTab'
 export { KeyButton } from './components/KeyButton'
-export { historySpan, type HistoryRunning } from './lib/historyPalette'
+export { agentGone, historySpan, type HistoryRunning } from './lib/historyPalette'
 export { AgentTag, type AgentTagProps } from './components/AgentTag'
 export {
   SessionsPane,

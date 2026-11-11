@@ -78,6 +78,30 @@ describe('a conversation read back', () => {
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
   })
 
+  it('opens at the line it was asked for when Find does not match it, and Next goes to the first match', async () => {
+    renderTab({ find: 'public', at: 'a2' })
+    const scrolled = vi.mocked(Element.prototype.scrollIntoView).mock.contexts as Element[]
+    expect(scrolled.at(-1)?.getAttribute('data-message')).toBe('a2')
+    expect(document.querySelector('[data-current-match]')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Next match' }))
+    expect(document.querySelector('[data-current-match]')?.getAttribute('data-message')).toBe('u1')
+  })
+
+  it('shows the session instead of resuming while the conversation runs, and resumes once while a resume is in flight', async () => {
+    const onResume = vi.fn()
+    const onShow = vi.fn()
+    const { unmount } = render(
+      <ConversationTab title="t" project="C:\code" facts={[]} conversation={CONVERSATION} onRename={vi.fn()} onResume={onResume} onShow={onShow} />
+    )
+    expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Show' }))
+    expect(onShow).toHaveBeenCalled()
+    unmount()
+    renderTab({ onResume, resuming: true })
+    await userEvent.click(screen.getByRole('button', { name: 'Resume' }))
+    expect(onResume).not.toHaveBeenCalled()
+  })
+
   it('renames from its pencil, an empty name going back', async () => {
     const props = renderTab()
     await userEvent.click(screen.getByRole('button', { name: 'Rename' }))

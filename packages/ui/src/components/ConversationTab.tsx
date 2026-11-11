@@ -37,6 +37,13 @@ export interface ConversationTabProps {
   find?: string | undefined
   /** Absent when it cannot be resumed. */
   onResume?: (() => void) | undefined
+  /**
+   * Shows the session running this conversation now. Given while it runs,
+   * Resume becomes Show: a second resume would start a second process.
+   */
+  onShow?: (() => void) | undefined
+  /** A resume is in flight: Resume waits for it. */
+  resuming?: boolean | undefined
   onRename: (name: string | null) => void
   /** Absent when its folder cannot be shown from here. */
   onReveal?: (() => void) | undefined
@@ -122,10 +129,13 @@ export function ConversationTab(props: ConversationTabProps): JSX.Element {
   // Opened at the line it was asked for (that match, else the first) until
   // Find is stepped or changed.
   const [stepped, setStepped] = useState<number | null>(null)
-  const current = stepped ?? Math.max(0, at === null || at === undefined ? 0 : hits.indexOf(at))
+  const atHit = at === null || at === undefined ? -1 : hits.indexOf(at)
+  const current = stepped ?? Math.max(0, atHit)
   const setCurrent = (index: number): void => setStepped(index)
   const shownHit = hits[Math.min(current, Math.max(0, hits.length - 1))]
-  const target = shownHit ?? (stepped === null ? (at ?? undefined) : undefined)
+  // A line asked for that Find does not match is still where it opens.
+  const opensAt = stepped === null && atHit < 0 ? (at ?? undefined) : undefined
+  const target = opensAt ?? shownHit
 
   const column = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -136,7 +146,9 @@ export function ConversationTab(props: ConversationTabProps): JSX.Element {
 
   const step = (by: number): void => {
     if (hits.length === 0) return
-    setCurrent((Math.min(current, hits.length - 1) + by + hits.length) % hits.length)
+    // From a line Find does not match, Next goes to the first match and Previous to the last.
+    const from = opensAt === undefined ? Math.min(current, hits.length - 1) : by > 0 ? -1 : 0
+    setCurrent((from + by + hits.length) % hits.length)
   }
 
   const facts = (
@@ -196,7 +208,7 @@ export function ConversationTab(props: ConversationTabProps): JSX.Element {
           />
           {words.length > 0 && (
             <span data-conversation-count className="shrink-0 font-mono text-[10.5px] text-fg-subtle tabular-nums">
-              {hits.length === 0 ? '0' : `${String(Math.min(current, hits.length - 1) + 1)} of ${String(hits.length)}`}
+              {hits.length === 0 || opensAt !== undefined ? String(hits.length) : `${String(Math.min(current, hits.length - 1) + 1)} of ${String(hits.length)}`}
             </span>
           )}
         </label>
@@ -221,16 +233,28 @@ export function ConversationTab(props: ConversationTabProps): JSX.Element {
             <FolderIcon width={13} height={13} />
           </button>
         )}
-        {props.onResume !== undefined && (
+        {props.onShow !== undefined ? (
           <button
             type="button"
-            data-conversation-resume
-            onClick={props.onResume}
+            data-conversation-show
+            onClick={props.onShow}
             className="flex h-[26px] items-center gap-1.5 rounded-raised border border-border-strong px-2.5 text-[11.5px] text-accent-text hover:bg-hover"
           >
-            <ResumeIcon width={12} height={12} />
-            Resume
+            Show
           </button>
+        ) : (
+          props.onResume !== undefined && (
+            <button
+              type="button"
+              data-conversation-resume
+              disabled={props.resuming === true}
+              onClick={props.onResume}
+              className="flex h-[26px] items-center gap-1.5 rounded-raised border border-border-strong px-2.5 text-[11.5px] text-accent-text hover:bg-hover disabled:text-fg-subtle disabled:hover:bg-transparent"
+            >
+              <ResumeIcon width={12} height={12} />
+              Resume
+            </button>
+          )
         )}
       </div>
       {props.resumeError !== null && props.resumeError !== undefined && (
@@ -244,7 +268,7 @@ export function ConversationTab(props: ConversationTabProps): JSX.Element {
           {props.family !== null && props.family !== undefined && (
             <Family family={props.family} onReadChild={props.onReadChild} childRuns={props.childRuns} />
           )}
-          <Body {...props} turns={turns} words={words} current={shownHit} />
+          <Body {...props} turns={turns} words={words} current={opensAt === undefined ? shownHit : undefined} />
         </div>
       </div>
 
