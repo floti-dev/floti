@@ -1138,6 +1138,8 @@ export interface AgentProblem {
   /** The file's line, from 1; null when it concerns no one line. */
   line: number | null
   message: string
+  /** The backend whose entry of a field keyed by backend (`model`, `effort`) it concerns; absent otherwise. */
+  backend?: string
 }
 
 /** A shipped agent the host's folder lacks, which Add writes. */

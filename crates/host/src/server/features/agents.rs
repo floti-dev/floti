@@ -1,6 +1,6 @@
 //! The host's agents, for its clients: `agents:list`, `agents:read`,
-//! `agents:write`, `agents:delete`, `agents:restore`, `agents:addShipped`
-//! and `agents:changed`.
+//! `agents:write`, `agents:delete`, `agents:restore`, `agents:addShipped`,
+//! `agents:render` and `agents:changed`.
 //!
 //! The agents are the files the host's starts read afresh
 //! ([`FolderDefinitions`]), so a client sees the host it asks, and a change a
@@ -8,6 +8,9 @@
 //! files are read and written by [`AgentEditor`], which keeps what it
 //! replaces in floti.db. A host whose config folder is another host's to
 //! write lists, reads and watches, and changes nothing there.
+//!
+//! `agents:render` renders instructions a client is editing as a note's
+//! draft is rendered, with no notes to link to, reading and writing nothing.
 //!
 //! The folder is watched only while a client listens on `agents:changed`,
 //! and every listening client is told each change, the host's own and an
@@ -18,8 +21,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use floti_protocol::channel::Router;
 use floti_protocol::channels::agents::{
     AddShippedAgent, AgentChange, AgentSummary, AgentUnusedLine, AgentsChange, AgentsChanged,
-    AgentsListing, BadAgentFile, DeleteAgent, ListAgents, ReadAgent, RestoreAgent, ShippedAgent,
-    WriteAgent,
+    AgentsListing, BadAgentFile, DeleteAgent, ListAgents, ReadAgent, RenderAgentInstructions,
+    RestoreAgent, ShippedAgent, WriteAgent,
 };
 use floti_protocol::{ClientChannels, EventChannel as _};
 
@@ -39,6 +42,7 @@ use crate::server::events::Events;
 use crate::server::hosted::Hosted;
 use crate::session::ClientId;
 use crate::store::Store;
+use crate::workspace::render::render_markdown;
 
 /// What a host whose agents come from no folder says: only a test's host is
 /// one.
@@ -294,6 +298,9 @@ impl Feature for Agents {
             })
             .handle::<AddShippedAgent>(|request| {
                 off_the_workers(|| self.change(|editor| editor.add_shipped(&request.name)))
+            })
+            .handle::<RenderAgentInstructions>(|request| {
+                off_the_workers(move || Ok(render_markdown(&request.text, None, None)))
             });
     }
 

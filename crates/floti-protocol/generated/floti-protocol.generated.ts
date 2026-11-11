@@ -153,6 +153,15 @@ body: string,
 problems: Array<AgentProblem>, unusedLines: Array<AgentUnusedLine>, };
 
 /**
+ * An agent's instructions to render.
+ */
+export type AgentInstructions = { 
+/**
+ * The Markdown after the front matter, as the client has it now.
+ */
+text: string, };
+
+/**
  * An agent, by name.
  */
 export type AgentName = { name: string, };
@@ -284,7 +293,13 @@ line: number | null,
 /**
  * What is wrong, as a sentence fragment.
  */
-message: string, };
+message: string, 
+/**
+ * The backend id it concerns, for a problem with one backend's entry of
+ * a field keyed by backend, such as `model` or `effort`. Absent for any
+ * other problem, and from a host before this field.
+ */
+backend?: string, };
 
 /**
  * One agent, as a listing shows it.
@@ -4023,6 +4038,7 @@ export interface RequestChannels {
   "agents:delete": { request: DeleteAgentRequest; response: AgentChange; capability: null };
   "agents:list": { request: null; response: AgentsListing; capability: null };
   "agents:read": { request: AgentName; response: AgentFile; capability: null };
+  "agents:render": { request: AgentInstructions; response: RenderedMarkdown; capability: null };
   "agents:restore": { request: AgentName; response: AgentChange; capability: null };
   "agents:write": { request: WriteAgentRequest; response: AgentChange; capability: null };
   "app:info": { request: null; response: AppInfo; capability: null };
@@ -4191,6 +4207,7 @@ export const CHANNELS = [
   { name: "agents:delete", kind: "request", capability: null },
   { name: "agents:list", kind: "request", capability: null },
   { name: "agents:read", kind: "request", capability: null },
+  { name: "agents:render", kind: "request", capability: null },
   { name: "agents:restore", kind: "request", capability: null },
   { name: "agents:write", kind: "request", capability: null },
   { name: "app:info", kind: "request", capability: null },

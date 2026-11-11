@@ -32,9 +32,9 @@ use floti_host::testkit::{
 };
 use floti_protocol::BackendId;
 use floti_protocol::channels::agents::{
-    AddShippedAgent, AgentName, AgentProblem, AgentUnusedLine, AgentsChange, AgentsListing,
-    DeleteAgent, DeleteAgentRequest, ListAgents, ReadAgent, RestoreAgent, WriteAgent,
-    WriteAgentRequest,
+    AddShippedAgent, AgentInstructions, AgentName, AgentProblem, AgentUnusedLine, AgentsChange,
+    AgentsListing, DeleteAgent, DeleteAgentRequest, ListAgents, ReadAgent, RenderAgentInstructions,
+    RestoreAgent, WriteAgent, WriteAgentRequest,
 };
 use floti_protocol::channels::common::{PermissionMode, SessionRecord};
 use floti_protocol::channels::host::{HostStop, HostStopReason, HostStopRequest};
@@ -2911,6 +2911,7 @@ async fn s19_a_client_lists_the_hosts_agents_its_bad_files_retired_lines_and_mis
             field: Some("worktree".into()),
             line: Some(3),
             message: "worktree must be yes, no, true or false, not maybe".into(),
+            backend: None,
         }]
     );
     let shipped: Vec<&str> = listing
@@ -3122,6 +3123,21 @@ async fn s19_a_host_that_writes_no_config_lists_reads_and_watches_its_agents_and
     assert_eq!(next_change(&mut client).await, ["reviewer"]);
     world.agent("marker", "---\n---\n");
     assert_eq!(next_change(&mut client).await, ["marker"]);
+
+    // An edit's instructions render as a note's draft does, writing nothing.
+    let rendered = client
+        .request::<RenderAgentInstructions>(&AgentInstructions {
+            text: "# Review\n\n- [ ] Read the diff\n\nSee [[nowhere]].\n".into(),
+        })
+        .await
+        .expect("the instructions are rendered");
+    assert!(rendered.html.contains("<h1"), "{}", rendered.html);
+    assert_eq!(rendered.counts.task_items, 1);
+    assert_eq!(rendered.counts.broken_wikilinks, 1);
+    assert_eq!(
+        std::fs::read_to_string(world.agents_dir().join("reviewer.md")).unwrap(),
+        "---\ndescription: Edited by hand.\n---\n"
+    );
     drop(client);
     host.stop(HostStopReason::Stop).await;
 }

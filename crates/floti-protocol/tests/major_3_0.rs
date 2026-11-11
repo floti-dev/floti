@@ -1,7 +1,8 @@
 //! Protocol 3.0 is a major: it removes the channels only Config's page used
 //! (and the copy of its file versions), the types only they carried, and the
-//! three fields 2.x retired, adds only a file view's optional `readOnly`, and
-//! changes nothing else. What composition reads of an agent's config stays:
+//! three fields 2.x retired, adds only a file view's optional `readOnly`, an
+//! agent problem's optional `backend` and `agents:render` with the type it
+//! takes, and changes nothing else. What composition reads of an agent's config stays:
 //! `config:scopes`, `config:tree` and `config:effective`.
 
 use std::collections::BTreeSet;
@@ -96,15 +97,18 @@ fn names(found: &[Difference], part: Part, change: Change) -> Vec<&str> {
 }
 
 #[test]
-fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fields_and_adds_only_a_file_views_read_only()
+fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fields_and_adds_only_its_three_additions()
  {
     assert_eq!(PROTOCOL_VERSION, V3_0);
     let found = differences(&record_text(V2_3), &record_text(V3_0)).unwrap();
     assert_eq!(
         names(&found, Part::Channel, Change::Added),
-        Vec::<&str>::new()
+        ["agents:render"]
     );
-    assert_eq!(names(&found, Part::Type, Change::Added), Vec::<&str>::new());
+    assert_eq!(
+        names(&found, Part::Type, Change::Added),
+        ["AgentInstructions"]
+    );
     assert_eq!(
         names(&found, Part::Channel, Change::Changed),
         Vec::<&str>::new()
@@ -117,6 +121,7 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
     assert_eq!(
         names(&found, Part::Type, Change::Changed),
         [
+            "AgentProblem",
             "FileView",
             "HostSettings",
             "HostSettingsPatch",
@@ -137,6 +142,18 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
     assert_eq!(
         view, before["types"]["FileView"],
         "FileView gains only readOnly"
+    );
+
+    // An agent problem only gains an optional `backend`.
+    let mut problem = after["types"]["AgentProblem"].clone();
+    problem["properties"]
+        .as_object_mut()
+        .unwrap()
+        .remove("backend")
+        .expect("3.0's AgentProblem has backend");
+    assert_eq!(
+        problem, before["types"]["AgentProblem"],
+        "AgentProblem gains only backend"
     );
 
     // Each type that changes only loses its retired field.

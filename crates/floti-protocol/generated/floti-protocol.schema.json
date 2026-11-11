@@ -321,6 +321,19 @@
       ],
       "type": "object"
     },
+    "AgentInstructions": {
+      "description": "An agent's instructions to render.",
+      "properties": {
+        "text": {
+          "description": "The Markdown after the front matter, as the client has it now.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
     "AgentName": {
       "description": "An agent, by name.",
       "properties": {
@@ -547,6 +560,13 @@
     "AgentProblem": {
       "description": "One problem with an agent file.",
       "properties": {
+        "backend": {
+          "description": "The backend id it concerns, for a problem with one backend's entry of\na field keyed by backend, such as `model` or `effort`. Absent for any\nother problem, and from a host before this field.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "field": {
           "description": "The field it concerns, as the file spells it; null for a problem with\nthe whole file, such as front matter that does not parse.",
           "type": [
@@ -11026,6 +11046,17 @@
       },
       "response": {
         "$ref": "#/$defs/AgentFile"
+      }
+    },
+    {
+      "capability": null,
+      "kind": "request",
+      "name": "agents:render",
+      "request": {
+        "$ref": "#/$defs/AgentInstructions"
+      },
+      "response": {
+        "$ref": "#/$defs/RenderedMarkdown"
       }
     },
     {

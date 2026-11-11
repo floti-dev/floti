@@ -166,6 +166,33 @@ fn a_valid_agent_is_created_then_replaced_and_the_next_lookup_reads_each() {
 }
 
 #[test]
+fn a_model_or_effort_problem_names_the_backend_whose_entry_it_is() {
+    let world = World::new();
+    let broken = "---\ndescription: Reads\nmodel:\n  claude-code: opus\n  codex: [a, b]\neffort:\n  codex: loud\n---\nbody\n";
+
+    let refused = world.write("reviewer", broken, None);
+    let named: Vec<(Option<&str>, Option<&str>)> = refused
+        .problems
+        .iter()
+        .map(|problem| (problem.field.as_deref(), problem.backend.as_deref()))
+        .collect();
+    assert_eq!(
+        named,
+        [
+            (Some("model"), Some("codex")),
+            (Some("effort"), Some("codex"))
+        ],
+        "{refused:?}"
+    );
+
+    // A problem with the whole map names no backend.
+    let flat = "---\ndescription: Reads\nmodel: opus\n---\nbody\n";
+    let refused = world.write("reviewer", flat, None);
+    assert_eq!(refused.problems.len(), 1, "{refused:?}");
+    assert_eq!(refused.problems[0].backend, None);
+}
+
+#[test]
 fn a_text_the_parser_refuses_is_refused_naming_each_problem_on_its_field_and_line_and_the_file_is_left()
  {
     let world = World::new();
@@ -181,6 +208,7 @@ fn a_text_the_parser_refuses_is_refused_naming_each_problem_on_its_field_and_lin
                 field: Some("worktree".into()),
                 line: Some(3),
                 message: "worktree must be yes, no, true or false, not maybe".into(),
+                backend: None,
             },
             AgentProblem {
                 field: Some("disalowed_tools".into()),
@@ -189,6 +217,7 @@ fn a_text_the_parser_refuses_is_refused_naming_each_problem_on_its_field_and_lin
                     "disalowed_tools is not a field an agent file has (the fields are {})",
                     crate::agent_definitions::parse::FIELDS.join(", ")
                 ),
+                backend: None,
             },
         ]
     );
@@ -237,6 +266,7 @@ fn front_matter_that_does_not_parse_or_is_missing_names_the_line_it_concerns() {
             message:
                 "it has no front matter: an agent file starts with --- lines around its fields"
                     .into(),
+            backend: None,
         }]
     );
     assert!(world.text("reviewer.md").is_none(), "nothing was written");
@@ -614,6 +644,7 @@ fn a_bad_file_is_read_with_each_value_as_written_on_its_line_and_its_problems() 
             field: Some("effort".into()),
             line: Some(3),
             message: "effort for claude-code must be low, medium, high, xhigh or max".into(),
+            backend: Some("claude-code".into()),
         }]
     );
     assert_eq!(read.body, "The body.\n");

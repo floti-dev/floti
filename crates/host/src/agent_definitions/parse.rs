@@ -65,6 +65,9 @@ pub struct DefinitionProblem {
     pub line: Option<u32>,
     /// What is wrong, as a sentence fragment.
     pub message: String,
+    /// The backend id of the entry it concerns, for a field keyed by
+    /// backend (`model`, `effort`); `None` otherwise.
+    pub backend: Option<String>,
 }
 
 impl DefinitionProblem {
@@ -75,6 +78,7 @@ impl DefinitionProblem {
             field: None,
             line: None,
             message: message.into(),
+            backend: None,
         }
     }
 
@@ -83,6 +87,7 @@ impl DefinitionProblem {
             field: None,
             line: Some(line),
             message: message.into(),
+            backend: None,
         }
     }
 }
@@ -214,14 +219,16 @@ pub fn read_agent_file(name: &str, source: &str) -> AgentFileReading {
                 line: line_of(&values, &spelled),
                 field: Some(spelled).filter(|spelled| !spelled.is_empty()),
                 message: "a key that is not text".to_owned(),
+                backend: None,
             });
             continue;
         };
-        if let Err(message) = apply(&mut agent, key, value) {
+        if let Err(FieldError { message, backend }) = apply(&mut agent, key, value) {
             problems.push(DefinitionProblem {
                 field: Some(key.to_owned()),
                 line: line_of(&values, key),
                 message,
+                backend,
             });
         }
     }
@@ -320,8 +327,33 @@ fn dedented(lines: &[&str]) -> String {
         .join("\n")
 }
 
+/// Why a field's value was refused, and the backend whose entry it was for a
+/// field keyed by backend.
+struct FieldError {
+    message: String,
+    backend: Option<String>,
+}
+
+impl From<String> for FieldError {
+    fn from(message: String) -> Self {
+        Self {
+            message,
+            backend: None,
+        }
+    }
+}
+
+impl FieldError {
+    fn of_backend(backend: &str, message: String) -> Self {
+        Self {
+            message,
+            backend: Some(backend.to_owned()),
+        }
+    }
+}
+
 /// Sets the field `key` of `agent` from `value`.
-fn apply(agent: &mut AgentDefinition, key: &str, value: &Value) -> Result<(), String> {
+fn apply(agent: &mut AgentDefinition, key: &str, value: &Value) -> Result<(), FieldError> {
     match key {
         "description" => agent.description = text(key, value)?.unwrap_or_default(),
         "profile" => agent.profile = text(key, value)?,
@@ -340,10 +372,10 @@ fn apply(agent: &mut AgentDefinition, key: &str, value: &Value) -> Result<(), St
             agent.unused_lines.push(retired.to_owned());
         }
         other => {
-            return Err(format!(
+            return Err(FieldError::from(format!(
                 "{other} is not a field an agent file has (the fields are {})",
                 FIELDS.join(", ")
-            ));
+            )));
         }
     }
     Ok(())
@@ -446,7 +478,7 @@ fn backends(value: &Value) -> Result<Vec<BackendId>, String> {
 }
 
 /// A map from a backend id to a text.
-fn keyed_text(key: &str, value: &Value) -> Result<BTreeMap<String, String>, String> {
+fn keyed_text(key: &str, value: &Value) -> Result<BTreeMap<String, String>, FieldError> {
     let map = keyed(key, value)?;
     let mut out = BTreeMap::new();
     for (backend, item) in map {
@@ -454,14 +486,17 @@ fn keyed_text(key: &str, value: &Value) -> Result<BTreeMap<String, String>, Stri
             Value::String(text) if !text.trim().is_empty() => {
                 out.insert(backend, text.trim().to_owned());
             }
-            _ => return Err(format!("{key} for {backend} must be text")),
+            _ => {
+                let message = format!("{key} for {backend} must be text");
+                return Err(FieldError::of_backend(&backend, message));
+            }
         }
     }
     Ok(out)
 }
 
 /// A map from a backend id to an effort.
-fn efforts(value: &Value) -> Result<BTreeMap<String, EffortLevel>, String> {
+fn efforts(value: &Value) -> Result<BTreeMap<String, EffortLevel>, FieldError> {
     let mut out = BTreeMap::new();
     for (backend, item) in keyed("effort", value)? {
         let level = item
@@ -474,7 +509,9 @@ fn efforts(value: &Value) -> Result<BTreeMap<String, EffortLevel>, String> {
                 "max" => Some(EffortLevel::Max),
                 _ => None,
             })
-            .ok_or_else(|| format!("effort for {backend} must be {EFFORTS}"))?;
+            .ok_or_else(|| {
+                FieldError::of_backend(&backend, format!("effort for {backend} must be {EFFORTS}"))
+            })?;
         out.insert(backend, level);
     }
     Ok(out)

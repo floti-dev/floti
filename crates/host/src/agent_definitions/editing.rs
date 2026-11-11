@@ -162,6 +162,7 @@ pub fn problem(problem: &DefinitionProblem) -> AgentProblem {
         field: problem.field.clone(),
         line: problem.line,
         message: problem.message.clone(),
+        backend: problem.backend.clone(),
     }
 }
 

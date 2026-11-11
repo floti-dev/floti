@@ -8,10 +8,10 @@ use std::fmt::Debug;
 
 use floti_protocol::channel::{from_payload, to_payload};
 use floti_protocol::channels::agents::{
-    AddShippedAgent, AgentChange, AgentConflict, AgentFields, AgentFile, AgentName, AgentProblem,
-    AgentSummary, AgentUnusedLine, AgentWrittenValue, AgentsChange, AgentsListing, BadAgentFile,
-    DeleteAgent, DeleteAgentRequest, ListAgents, ReadAgent, RestoreAgent, ShippedAgent, WriteAgent,
-    WriteAgentRequest,
+    AddShippedAgent, AgentChange, AgentConflict, AgentFields, AgentFile, AgentInstructions,
+    AgentName, AgentProblem, AgentSummary, AgentUnusedLine, AgentWrittenValue, AgentsChange,
+    AgentsListing, BadAgentFile, DeleteAgent, DeleteAgentRequest, ListAgents, ReadAgent,
+    RestoreAgent, ShippedAgent, WriteAgent, WriteAgentRequest,
 };
 use floti_protocol::channels::common::PermissionMode;
 use floti_protocol::channels::sessions::EffortLevel;
@@ -71,6 +71,7 @@ fn problem(field: Option<&str>, line: Option<u32>, message: &str) -> AgentProble
         field: field.map(str::to_owned),
         line,
         message: message.to_owned(),
+        backend: None,
     }
 }
 
@@ -127,6 +128,7 @@ fn every_agents_channel_is_declared_with_its_kind_and_no_capability() {
         ("agents:delete", ChannelKind::Request),
         ("agents:restore", ChannelKind::Request),
         ("agents:addShipped", ChannelKind::Request),
+        ("agents:render", ChannelKind::Request),
         ("agents:changed", ChannelKind::Event { snapshot: false }),
     ] {
         let decl = catalogue
@@ -271,4 +273,44 @@ fn a_write_or_a_delete_may_leave_out_its_hash_and_its_rename() {
     let delete: DeleteAgentRequest =
         from_payload(&to_payload(&serde_json::json!({ "name": "old" })).unwrap()).unwrap();
     assert_eq!(delete.expected_hash, None);
+}
+
+#[test]
+fn a_problem_names_its_backend_only_when_it_has_one() {
+    let mut model = problem(Some("model"), Some(4), "model for codex must be text");
+    model.backend = Some("codex".into());
+    let json = serde_json::to_value(&model).unwrap();
+    assert_eq!(json["backend"], "codex");
+    assert_eq!(
+        over_the_wire(&model, |payload| Message::Response(Response {
+            id: 5,
+            payload
+        })),
+        model
+    );
+
+    let whole = problem(None, None, "it could not be read");
+    let json = serde_json::to_value(&whole).unwrap();
+    assert!(json.get("backend").is_none(), "{json}");
+    // A host before the field sends none, which reads as none.
+    let earlier: AgentProblem = from_payload(
+        &to_payload(&serde_json::json!({ "field": "effort", "line": 5, "message": "m" })).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(earlier.backend, None);
+}
+
+#[test]
+fn instructions_to_render_survive_a_frame() {
+    let request = AgentInstructions {
+        text: "# Review\n\nRead the [[diff]] first.".into(),
+    };
+    let back = over_the_wire(&request, |payload| {
+        Message::Request(Request {
+            id: 4,
+            channel: "agents:render".into(),
+            payload,
+        })
+    });
+    assert_eq!(back, request);
 }

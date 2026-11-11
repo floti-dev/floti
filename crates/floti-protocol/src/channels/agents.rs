@@ -1,6 +1,6 @@
 //! The agents a host's sessions start children as: `agents:list`,
 //! `agents:read`, `agents:write`, `agents:delete`, `agents:restore`,
-//! `agents:addShipped` and `agents:changed`.
+//! `agents:addShipped`, `agents:render` and `agents:changed`.
 //!
 //! An agent is a `<name>.md` file in the agents folder of the host's config
 //! folder, read afresh by every start. A client sees and edits the agents of
@@ -18,6 +18,8 @@
 //! - A host whose config folder is another host's to write (a development or
 //!   check run) lists, reads and watches, and refuses every change with a
 //!   sentence saying so.
+//! - `agents:render` renders an agent's instructions as the client edits
+//!   them, before they are saved, the way `content:render` renders a note.
 //! - `agents:changed` is sent to every subscriber while one listens, for any
 //!   change to the folder, the host's own and an outside editor's alike.
 
@@ -30,6 +32,7 @@ use ts_rs::TS;
 use crate::channel::Catalogue;
 use crate::channels::common::PermissionMode;
 use crate::channels::sessions::EffortLevel;
+use crate::channels::workspace::RenderedMarkdown;
 
 pub fn declare(catalogue: &mut Catalogue) {
     catalogue
@@ -39,6 +42,7 @@ pub fn declare(catalogue: &mut Catalogue) {
         .request::<DeleteAgent>()
         .request::<RestoreAgent>()
         .request::<AddShippedAgent>()
+        .request::<RenderAgentInstructions>()
         .event::<AgentsChanged>();
 }
 
@@ -75,6 +79,11 @@ request_channel!(
     /// Writes a shipped agent the folder does not have, never over a file
     /// that is there.
     AddShippedAgent = "agents:addShipped", AgentName => AgentChange
+);
+request_channel!(
+    /// Instructions as Markdown, rendered as `content:render` renders a
+    /// note's draft, with no note to link to: nothing is read or written.
+    RenderAgentInstructions = "agents:render", AgentInstructions => RenderedMarkdown
 );
 event_channel!(
     /// The agents folder changed: a file came, went or has other text.
@@ -164,6 +173,20 @@ pub struct AgentProblem {
     pub line: Option<u32>,
     /// What is wrong, as a sentence fragment.
     pub message: String,
+    /// The backend id it concerns, for a problem with one backend's entry of
+    /// a field keyed by backend, such as `model` or `effort`. Absent for any
+    /// other problem, and from a host before this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub backend: Option<String>,
+}
+
+/// An agent's instructions to render.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentInstructions {
+    /// The Markdown after the front matter, as the client has it now.
+    pub text: String,
 }
 
 /// A shipped agent, as the host would write it.

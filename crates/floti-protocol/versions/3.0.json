@@ -102,6 +102,16 @@
         "$ref": "#/$defs/AgentFile"
       }
     },
+    "agents:render": {
+      "capability": null,
+      "kind": "request",
+      "request": {
+        "$ref": "#/$defs/AgentInstructions"
+      },
+      "response": {
+        "$ref": "#/$defs/RenderedMarkdown"
+      }
+    },
     "agents:restore": {
       "capability": null,
       "kind": "request",
@@ -1951,6 +1961,17 @@
       ],
       "type": "object"
     },
+    "AgentInstructions": {
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
     "AgentName": {
       "properties": {
         "name": {
@@ -2147,6 +2168,12 @@
     },
     "AgentProblem": {
       "properties": {
+        "backend": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "field": {
           "type": [
             "string",
