@@ -24,7 +24,7 @@ use floti_host::platform::folders::UserEnv;
 use floti_host::server::{HostConfig, HostRun, backends};
 use floti_host::store::Store;
 use floti_host::store::projects::{EMPTY_INVENTORY, cache_projects};
-use floti_host::testkit::{PATIENCE, RunningHost, TestClient, TestDirs, link_folder};
+use floti_host::testkit::{PATIENCE, RunningHost, TestClient, TestDirs, link_file, link_folder};
 use floti_host::workspace::content::ContentService;
 use floti_host::workspace::content::guard::ContentGuard;
 use floti_host::workspace::content::search::{MAX_HITS, build_corpus, search_corpus};
@@ -1513,6 +1513,61 @@ fn a_save_or_restore_through_a_link_in_a_known_root_into_the_agents_config_is_re
     assert_eq!(view.read_only, None);
 
     Native.unlink_folder(&link).unwrap();
+}
+
+#[test]
+fn a_new_note_saved_through_a_dangling_link_into_the_agents_config_is_refused_and_nothing_made() {
+    let world = World::new();
+    let work = world.scanned("work", ProjectKind::Folder);
+    let home = normalize(&world.dirs.home);
+    let config = home.join(".claude");
+    std::fs::create_dir_all(&config).unwrap();
+    // A file symlink (developer mode or elevation on Windows; this fails
+    // rather than skips without them) to a config file not made yet.
+    let target = config.join("CLAUDE.md");
+    std::fs::create_dir_all(work.join("notes")).unwrap();
+    let note = work.join("notes").join("x.md");
+    link_file(&target, &note);
+
+    let before = world.snapshot_count();
+    let refused = world.write(&work, &note, "# Mine\n", None).unwrap_err();
+    assert!(
+        refused.contains("Claude Code's own config, which Claude Code edits itself"),
+        "{refused}"
+    );
+    assert!(!target.exists(), "nothing was made in the agent's config");
+    assert_eq!(world.snapshot_count(), before, "no version was taken");
+    let view = world.files.read(&shown(&work), &shown(&note)).unwrap();
+    let why = view
+        .read_only
+        .expect("a note through the link is read-only");
+    assert!(why.contains("Claude Code edits itself"), "{why}");
+
+    std::fs::remove_file(&note).unwrap();
+}
+
+#[test]
+fn a_projects_own_claude_folder_is_not_an_agents_config_and_its_skill_saves() {
+    let world = World::new();
+    let project = world.scanned("project", ProjectKind::Folder);
+    let skill = project
+        .join(".claude")
+        .join("skills")
+        .join("x")
+        .join("SKILL.md");
+    put(&skill, "# The skill\n");
+    let saved = world
+        .write(
+            &project,
+            &skill,
+            "# The skill, edited\n",
+            Some(hash_content("# The skill\n")),
+        )
+        .unwrap();
+    assert!(saved.ok, "{saved:?}");
+    assert_eq!(text(&skill), "# The skill, edited\n");
+    let view = world.files.read(&shown(&project), &shown(&skill)).unwrap();
+    assert_eq!(view.read_only, None);
 }
 
 #[test]

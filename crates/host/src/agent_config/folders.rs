@@ -11,9 +11,11 @@
 //! `~/.claude/skills` is a common setup), and a save through it lands in the
 //! config however it is spelled, so the path and each config path are
 //! resolved as the disk resolves them ([`real_path`], the resolution the
-//! Files view's known-root check uses) and compared again. The spelled
-//! comparison stays, so a path that cannot be resolved is still the agent's
-//! when it names its config.
+//! Files view's known-root check uses) and compared again. A link whose
+//! target is not there yet does not resolve, yet a save through it creates
+//! the target, so such a link is followed to where it points ([`leads_to`]).
+//! The spelled comparison stays, so a path that cannot be resolved is still
+//! the agent's when it names its config.
 //!
 //! [`ConfigSource::agent_config`]: crate::agent::ConfigSource::agent_config
 
@@ -22,8 +24,50 @@ use std::sync::Arc;
 
 use super::files::normalize;
 use crate::agent::AgentBackend;
+use crate::platform::links::is_link;
 use crate::workspace::content::guard::segments_below;
 use crate::workspace::files::paths::real_path;
+
+/// How many links that do not resolve a path is followed through before it
+/// is judged where it has got to, as an OS gives up on a loop.
+const MAX_LINK_HOPS: usize = 40;
+
+/// Where a write to `path` lands: the path as the disk resolves it
+/// ([`real_path`]), with each link on the way whose target is not there yet
+/// (a dangling file or folder link) replaced by that target, so a save that
+/// would create the target through the link is judged where it creates it.
+/// A relative target is taken from the link's own folder, resolved. A loop
+/// stops after [`MAX_LINK_HOPS`] links, at wherever it has got to.
+fn leads_to(path: &Path) -> PathBuf {
+    let mut path = normalize(path);
+    if let Ok(real) = std::fs::canonicalize(&path) {
+        // It resolves, so no link on its way dangles.
+        return real;
+    }
+    for _ in 0..MAX_LINK_HOPS {
+        match past_dangling_link(&path) {
+            Some(followed) => path = followed,
+            None => break,
+        }
+    }
+    real_path(&path)
+}
+
+/// `path` with its deepest link that does not resolve replaced by the link's
+/// target, or `None` when no link on its way dangles.
+fn past_dangling_link(path: &Path) -> Option<PathBuf> {
+    let link = path
+        .ancestors()
+        .find(|at| is_link(at) && std::fs::canonicalize(at).is_err())?;
+    let target = std::fs::read_link(link).ok()?;
+    let rest = path.strip_prefix(link).ok()?;
+    let target = if target.is_absolute() {
+        target
+    } else {
+        real_path(link.parent()?).join(target)
+    };
+    Some(normalize(&target.join(rest)))
+}
 
 /// One agent's config: the paths that hold it and who edits them.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,7 +84,7 @@ impl AgentFolder {
     /// relinked while the host runs.
     fn holds(&self, path: &Path, real: &Path) -> bool {
         self.paths.iter().any(|held| {
-            segments_below(held, path).is_some() || segments_below(&real_path(held), real).is_some()
+            segments_below(held, path).is_some() || segments_below(&leads_to(held), real).is_some()
         })
     }
 
@@ -104,7 +148,7 @@ impl AgentConfigFolders {
             return None;
         }
         let path = normalize(path);
-        let real = real_path(&path);
+        let real = leads_to(&path);
         self.agents
             .iter()
             .find(|agent| agent.holds(&path, &real))
@@ -202,6 +246,65 @@ mod tests {
 
         Native.unlink_folder(&link).unwrap();
         Native.unlink_folder(&other_home.join(".claude")).unwrap();
+    }
+
+    #[test]
+    fn a_link_whose_target_is_not_there_yet_is_judged_where_a_save_would_create_it() {
+        use crate::platform::links::{Native, remove_tree};
+        use crate::testkit::{TestDirs, link_file, link_folder};
+
+        let dirs = TestDirs::new();
+        let held = folders(&dirs.home);
+        let config = dirs.home.join(".claude");
+        std::fs::create_dir_all(&config).unwrap();
+        let project = dirs.folder("a project");
+        let notes = dirs.folder("a project/notes");
+
+        // A file link to a config file not made yet, absolute and relative.
+        link_file(&config.join("CLAUDE.md"), &notes.join("x.md"));
+        let relative = Path::new("..")
+            .join("..")
+            .join("home dir")
+            .join(".claude")
+            .join("new.md");
+        link_file(&relative, &notes.join("relative.md"));
+
+        // A folder link whose target folder is gone.
+        let gone = config.join("gone");
+        std::fs::create_dir_all(&gone).unwrap();
+        link_folder(&gone, &project.join("gone link"));
+        std::fs::remove_dir(&gone).unwrap();
+
+        // A file link through that dangling folder link: two hops.
+        link_file(&project.join("gone link").join("y.md"), &notes.join("y.md"));
+
+        for dangling in [
+            notes.join("x.md"),
+            notes.join("relative.md"),
+            project.join("gone link").join("x.md"),
+            notes.join("y.md"),
+        ] {
+            assert!(
+                std::fs::canonicalize(&dangling).is_err(),
+                "{} does not resolve",
+                dangling.display()
+            );
+            assert!(
+                held.holding(&dangling).is_some(),
+                "{} leads into the agent's config",
+                dangling.display()
+            );
+        }
+
+        // A dangling link elsewhere is not the agent's.
+        link_file(&dirs.root().join("elsewhere.md"), &notes.join("z.md"));
+        assert_eq!(held.holding(&notes.join("z.md")), None);
+
+        // A link to itself stops after the hop cap, outside the config.
+        link_file(&notes.join("loop.md"), &notes.join("loop.md"));
+        assert_eq!(held.holding(&notes.join("loop.md")), None);
+
+        remove_tree(&Native, &project).unwrap();
     }
 
     #[test]
