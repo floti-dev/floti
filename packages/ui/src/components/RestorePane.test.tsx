@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { RestorableSession, RestoreOffer } from '@helm/core/types'
-import { RestorePane, type RestorePaneProps } from './RestorePane'
+import { RestorePane, RestoreUnreadPane, type RestorePaneProps } from './RestorePane'
 
 const NOW = new Date(2026, 9, 2, 13, 0, 0).getTime()
 const EARLIER = NOW - 20 * 60_000
@@ -156,5 +156,34 @@ describe('RestorePane', () => {
     await userEvent.click(box)
     await userEvent.click(button('Resume 2 sessions'))
     expect(props.onResume).toHaveBeenLastCalledWith([{ id: 4 }, { id: 5, withoutAgent: true }])
+  })
+})
+
+describe('when what was running could not be read', () => {
+  it('says it could not read it, never that there is nothing, and offers Try again and Not now', async () => {
+    const onTryAgain = vi.fn()
+    const onNotNow = vi.fn()
+    render(
+      <RestoreUnreadPane
+        message="The sessions' titles could not be read."
+        retrying={false}
+        onTryAgain={onTryAgain}
+        onNotNow={onNotNow}
+        lostWith="this PC’s host"
+      />
+    )
+    const pane = screen.getByRole('region', { name: 'Could not read what was running when this PC’s host stopped' })
+    expect(pane.textContent).toContain("The sessions' titles could not be read.")
+    expect(pane.textContent).not.toContain('Resume')
+    await userEvent.click(button('Try again'))
+    expect(onTryAgain).toHaveBeenCalledTimes(1)
+    await userEvent.click(button('Not now'))
+    expect(onNotNow).toHaveBeenCalledTimes(1)
+  })
+
+  it('holds Try again while the read it asked for is under way', () => {
+    render(<RestoreUnreadPane message="Unreadable." retrying onTryAgain={vi.fn()} onNotNow={vi.fn()} />)
+    expect(screen.getByRole('heading').textContent).toBe('Could not read what was running when Helm closed')
+    expect(button('Reading…')).toHaveProperty('disabled', true)
   })
 })

@@ -4266,7 +4266,7 @@
       "type": "object"
     },
     "HistoryMatchLine": {
-      "description": "One archived message that matched a search: where it is in the\nconversation, and what it says.",
+      "description": "One archived message that matched a search: where it is in the\nconversation, and the part of it around the match.",
       "properties": {
         "at": {
           "description": "Epoch ms.",
@@ -4275,7 +4275,7 @@
           "type": "integer"
         },
         "text": {
-          "description": "The message's text.",
+          "description": "An excerpt of the message's text, at most 240 characters, around the\nfirst place a word of the query starts (its start when none is found),\nwith `…` where it was cut. A message that short is sent whole.",
           "type": "string"
         },
         "uuid": {
@@ -4609,7 +4609,7 @@
           ]
         },
         "matches": {
-          "description": "For a `messages` search, the first matching messages, oldest first, up\nto two.",
+          "description": "For a `messages` search, the first matching messages, oldest first, up\nto two, each sent as an excerpt around its match rather than whole.",
           "items": {
             "$ref": "#/$defs/HistoryMatchLine"
           },

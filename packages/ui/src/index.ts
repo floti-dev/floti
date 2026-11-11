@@ -227,7 +227,13 @@ export {
 } from './components/PluginPages'
 export { UsageStatus, type UsageStatusProps } from './components/UsageStatus'
 export { TitleBar } from './components/TitleBar'
-export { RestorePane, type RestorePaneProps, type RestorePick } from './components/RestorePane'
+export {
+  RestorePane,
+  RestoreUnreadPane,
+  type RestorePaneProps,
+  type RestorePick,
+  type RestoreUnreadPaneProps
+} from './components/RestorePane'
 export { WelcomePane, type WelcomePaneProps } from './components/WelcomePane'
 export * from './components/icons'
 export { cn } from './lib/cn'

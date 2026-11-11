@@ -75,6 +75,14 @@ export interface HistoryPaletteProps {
   /** A profile's name by its id, or null for one not known. */
   profileName: (id: number) => string | null
   stopped: StoppedGroup | null
+  /**
+   * The sentence the read of what the host was running when it stopped
+   * failed with: the Stopped group says it could not read it, never that
+   * there is nothing. Null or absent when the read did not fail.
+   */
+  stoppedUnread?: string | null | undefined
+  /** Reads what the host was running again, after that read failed. */
+  onRetryStopped?: (() => void) | undefined
   onResumeStopped: (sessions: readonly RestorableSession[]) => void
   onDismissStopped: () => void
   onResume: (session: HistorySession, options: { withoutAgent: boolean }) => void
@@ -100,6 +108,7 @@ export interface HistoryPaletteProps {
 }
 
 type Item =
+  | { kind: 'stopped-unread'; key: string; message: string }
   | { kind: 'stopped-all'; key: string; sessions: readonly RestorableSession[] }
   | { kind: 'stopped'; key: string; lost: RestorableSession }
   | { kind: 'session'; key: string; session: HistorySession }
@@ -118,6 +127,7 @@ const CTRL = isMac() ? '⌘' : 'Ctrl'
 
 export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
   const { query, recent, titles, conversations, children, running, agents, stopped } = props
+  const unread = props.stoppedUnread ?? null
   const ids = useId()
   const typed = query.trim() !== ''
   /** The list Tab or a click chose, for the query it was chosen in. */
@@ -148,19 +158,22 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
       out.push({ kind: 'item', key: item.key, item, index: items.length })
       items.push(item)
     }
-    if (!typed && stopped !== null && stopped.sessions.length > 0) {
-      const back = stopped.sessions.filter(
+    const lostSessions = stopped?.sessions ?? []
+    if (!typed && (lostSessions.length > 0 || unread !== null)) {
+      const back = lostSessions.filter(
         (lost) => lost.blocked === null && lost.agentProblem === undefined && lost.conversationId !== undefined
       )
+      const at = stopped?.at ?? null
       out.push({
         kind: 'section',
         key: 'stopped',
-        label: stopped.at === null ? 'Stopped' : `Stopped at ${clock(stopped.at)}`,
-        count: stopped.sessions.length,
+        label: at === null ? 'Stopped' : `Stopped at ${clock(at)}`,
+        count: lostSessions.length > 0 ? lostSessions.length : undefined,
         dismiss: true
       })
+      if (unread !== null) push({ kind: 'stopped-unread', key: 'stopped-unread', message: unread })
       if (back.length > 0) push({ kind: 'stopped-all', key: 'stopped-all', sessions: back })
-      for (const lost of stopped.sessions) push({ kind: 'stopped', key: `stopped-${String(lost.id)}`, lost })
+      for (const lost of lostSessions) push({ kind: 'stopped', key: `stopped-${String(lost.id)}`, lost })
       out.push({ kind: 'section', key: 'recent', label: 'Recent' })
     } else if (!typed) {
       out.push({ kind: 'section', key: 'recent', label: 'Recent' })
@@ -199,7 +212,7 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
       }
     }
     return { out, items }
-  }, [typed, stopped, shown, list, open, children])
+  }, [typed, stopped, unread, shown, list, open, children])
 
   const { items } = rows
   // Conversations start on the first line that matched, as Ctrl+Shift+F
@@ -224,10 +237,13 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
   const gone = (session: HistorySession): boolean => agentGone(session.agent, agents)
 
   const sessionOf = (item: Item | undefined): HistorySession | null =>
-    item === undefined || item.kind === 'stopped-all' || item.kind === 'stopped' ? null : item.session
+    item === undefined || item.kind === 'stopped-unread' || item.kind === 'stopped-all' || item.kind === 'stopped'
+      ? null
+      : item.session
 
   const activate = (item: Item | undefined): void => {
     if (item === undefined || busy) return
+    if (item.kind === 'stopped-unread') return props.onRetryStopped?.()
     if (item.kind === 'stopped-all') return props.onResumeStopped(item.sessions)
     if (item.kind === 'stopped') return props.onResumeStopped([item.lost])
     const session = item.session
@@ -548,7 +564,10 @@ function blockedState(props: HistoryPaletteProps, typed: boolean, list: HistoryL
   if (props.readError !== null && (shown === null || 'error' in shown || shown.sessions.length === 0)) {
     return { kind: 'unreadable', ...props.readError }
   }
-  const stoppedRows = !typed && props.stopped !== null && props.stopped.sessions.length > 0
+  const stoppedRows =
+    !typed &&
+    ((props.stopped !== null && props.stopped.sessions.length > 0) ||
+      (props.stoppedUnread !== null && props.stoppedUnread !== undefined))
   if (shown === null) return stoppedRows ? null : { kind: 'reading' }
   if ('error' in shown) {
     if (typed && list === 'conversations') return { kind: 'archive', message: shown.error }
@@ -699,6 +718,15 @@ function ItemRow({
   onDraft: (draft: string) => void
   onFinishRename: (keep: boolean) => void
 }): JSX.Element {
+  if (item.kind === 'stopped-unread') {
+    return (
+      <div {...common} data-history-row="stopped-unread" className={cn(ROW, 'h-[34px] pr-2.5 pl-[30px] text-[12.5px]', chosen ? CHOSEN : 'hover:bg-hover')}>
+        {chosen && EDGE}
+        <span className="min-w-0 truncate text-warn">Could not read what was running when it stopped</span>
+        <span className="ml-auto shrink-0 text-[11px] text-fg-subtle">Try again</span>
+      </div>
+    )
+  }
   if (item.kind === 'stopped-all') {
     return (
       <div {...common} data-history-row="stopped-all" className={cn(ROW, 'h-[34px] pr-2.5 pl-[30px]', chosen ? CHOSEN : 'hover:bg-hover')}>
@@ -906,6 +934,16 @@ function Preview({
       )}
     </div>
   )
+  if (item.kind === 'stopped-unread') {
+    return box(
+      <>
+        <p className="text-warn">{item.message}</p>
+        <p className="text-[11px] text-fg-subtle">
+          Sessions it was running may still be waiting to be reopened. Enter reads them again.
+        </p>
+      </>
+    )
+  }
   if (item.kind === 'stopped-all' || item.kind === 'stopped') {
     const all = item.kind === 'stopped-all' ? item.sessions : [item.lost]
     const names = all.map((lost) => lost.title ?? lost.name)
@@ -1061,7 +1099,9 @@ function Keys({
     ? blocked === 'retry'
       ? 'Try again'
       : null
-    : item?.kind === 'stopped-all'
+    : item?.kind === 'stopped-unread'
+      ? 'Try again'
+      : item?.kind === 'stopped-all'
       ? `Resume ${String(item.sessions.length)}`
       : session === null
         ? item?.kind === 'stopped'

@@ -203,7 +203,7 @@ pub struct HistorySession {
     #[ts(optional)]
     pub last_report: Option<ChildReport>,
     /// For a `messages` search, the first matching messages, oldest first, up
-    /// to two.
+    /// to two, each sent as an excerpt around its match rather than whole.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub matches: Option<Vec<HistoryMatchLine>>,
@@ -242,7 +242,7 @@ pub struct HistoryCommand {
 }
 
 /// One archived message that matched a search: where it is in the
-/// conversation, and what it says.
+/// conversation, and the part of it around the match.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryMatchLine {
@@ -251,7 +251,9 @@ pub struct HistoryMatchLine {
     /// Epoch ms.
     #[ts(type = "number")]
     pub at: u64,
-    /// The message's text.
+    /// An excerpt of the message's text, at most 240 characters, around the
+    /// first place a word of the query starts (its start when none is found),
+    /// with `…` where it was cut. A message that short is sent whole.
     pub text: String,
 }
 

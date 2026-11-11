@@ -198,6 +198,78 @@ export function RestorePane({
   )
 }
 
+export interface RestoreUnreadPaneProps {
+  /** The sentence the read of what was running failed with. */
+  message: string
+  /** True while the read asked for by Try again is under way. */
+  retrying: boolean
+  onTryAgain: () => void
+  onNotNow: () => void
+  /** As `RestorePaneProps.lostWith`: the host the sessions went with, absent when they went with Helm. */
+  lostWith?: string
+}
+
+/**
+ * The restore page when what was running could not be read. Could not look
+ * is never said as nothing to restore: after a crash, an offer that silently
+ * vanished would read as Helm having forgotten every session.
+ */
+export function RestoreUnreadPane({
+  message,
+  retrying,
+  onTryAgain,
+  onNotNow,
+  lostWith
+}: RestoreUnreadPaneProps): JSX.Element {
+  const headingId = useId()
+  const stopped = lostWith === undefined ? 'Helm closed' : `${lostWith} stopped`
+  return (
+    <div
+      data-restore-pane
+      data-restore-unread
+      aria-labelledby={headingId}
+      role="region"
+      className="h-full overflow-auto px-6"
+    >
+      <div className="mx-auto w-full max-w-[560px] pt-24 pb-10">
+        <div className="mb-1.5 flex items-center gap-2.5">
+          <HistoryIcon width={20} height={20} className="shrink-0 text-accent-text" />
+          <h1 id={headingId} className="m-0 text-[18px] font-medium tracking-[-0.01em] text-fg">
+            Could not read what was running when {stopped}
+          </h1>
+        </div>
+        <p className="mt-0 mb-1.5 ml-[30px] leading-normal text-warn">{message}</p>
+        <p className="mt-0 mb-[18px] ml-[30px] leading-normal text-fg-muted">
+          Sessions it was running may still be waiting to be reopened. Try again reads them again; Not now keeps this
+          at the top of History (Ctrl+H).
+        </p>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onNotNow}
+            className="rounded-well border border-border-strong px-3.5 py-1.5 text-[12.5px] text-fg transition-colors hover:bg-hover"
+          >
+            Not now
+          </button>
+          <button
+            type="button"
+            data-restore-retry
+            onClick={onTryAgain}
+            disabled={retrying}
+            className={cn(
+              'rounded-well border border-accent px-4 py-1.5 text-[12.5px] font-medium text-accent-text',
+              'transition-colors hover:bg-accent-soft active:bg-active',
+              'disabled:cursor-default disabled:border-border-strong disabled:text-fg-subtle disabled:hover:bg-transparent'
+            )}
+          >
+            {retrying ? 'Reading…' : 'Try again'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Row({
   session,
   on,

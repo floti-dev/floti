@@ -183,6 +183,7 @@ import {
   RefreshIcon,
   RepoIcon,
   RestorePane,
+  RestoreUnreadPane,
   SaveAsTemplateDialog,
   HistoryPalette,
   SessionsPane,
@@ -849,6 +850,9 @@ export function App(): JSX.Element {
   const restoreState = useRestore(hostLink.reconnects);
   const {
     offer: restoreOffer,
+    unread: restoreUnread,
+    retry: retryRestore,
+    dismissUnread: dismissRestoreUnread,
     restore: restoreLost,
     dismiss: dismissRestore,
   } = restoreState;
@@ -1156,8 +1160,9 @@ export function App(): JSX.Element {
       // saved tab is kept rather than taken for a session that has gone.
       if (ref.kind === "session")
         return !sessionsListed || sessionsById.has(ref.id);
-      // Answered, it has nothing left to show.
-      if (ref.kind === "restore") return restoreOffer !== null;
+      // Answered, it has nothing left to show; a read that failed says so.
+      if (ref.kind === "restore")
+        return restoreOffer !== null || restoreUnread !== null;
       // Kept while the list is still being read, so a restored tab is not
       // dropped before its plugin has had a chance to load.
       if (ref.kind === "plugin") {
@@ -1185,6 +1190,7 @@ export function App(): JSX.Element {
       sessionsById,
       sessionsListed,
       restoreOffer,
+      restoreUnread,
       plugins,
       pluginState.list,
       settingsLoaded,
@@ -2172,9 +2178,17 @@ export function App(): JSX.Element {
    * answered, so History keeps them in this window.
    */
   const notNow = useCallback(() => {
-    if (restoreOffer !== null) keepStopped(restoreOffer.sessions, restoreOffer.lostAt ?? null);
+    // A read that failed answered nothing: the host still holds its offer,
+    // and Try again, here or in History, asks for it.
+    if (restoreOffer === null) return;
+    keepStopped(restoreOffer.sessions, restoreOffer.lostAt ?? null);
     dismissRestore();
   }, [restoreOffer, dismissRestore, keepStopped]);
+  /** The Stopped group's Dismiss: what it kept, and that a read failed. */
+  const dismissStoppedGroup = useCallback(() => {
+    dismissStopped();
+    dismissRestoreUnread();
+  }, [dismissStopped, dismissRestoreUnread]);
 
   /** A conversation read-only in a tab, at `at` when a matched line was chosen. */
   const openConversation = useCallback(
@@ -2449,6 +2463,19 @@ export function App(): JSX.Element {
       );
     else commit((current) => openTab(current, { kind: "restore" }));
   }, [restoreOffer, restoreUnasked, resumeLost, commit]);
+  /*
+   * A read of the offer that failed opens the same tab, saying so, whatever
+   * `restoreWithoutAsking` says: nothing can be reopened unasked from an
+   * offer nobody could read. Once per failure: a Try again that fails again
+   * leaves the tab where it is, or closed if it was set aside.
+   */
+  const hadUnread = useRef(false);
+  useEffect(() => {
+    const unread = restoreUnread !== null;
+    if (unread && !hadUnread.current)
+      commit((current) => openTab(current, { kind: "restore" }));
+    hadUnread.current = unread;
+  }, [restoreUnread, commit]);
 
   const blankProfile = useCallback(
     (root: string, name: string): ProfileDraft => ({
@@ -4182,7 +4209,7 @@ export function App(): JSX.Element {
         ];
       }
       case "restore":
-        return restoreOffer === null
+        return restoreOffer === null && restoreUnread === null
           ? []
           : [
               {
@@ -5345,7 +5372,20 @@ export function App(): JSX.Element {
       case "plugin-pages":
         return renderPluginPages(ref);
       case "restore":
-        return restoreOffer === null ? null : (
+        if (restoreOffer === null)
+          return restoreUnread === null ? null : (
+            <RestoreUnreadPane
+              lostWith={LOCAL_HOST_NAME}
+              message={restoreUnread}
+              retrying={restoreState.retrying}
+              onTryAgain={retryRestore}
+              // Not now keeps it at the top of History, where Try again is too.
+              onNotNow={() =>
+                commit((current) => closeTab(current, "restore"))
+              }
+            />
+          );
+        return (
           <RestorePane
             // Opened again with what a lost tab asked for ticked.
             key={restoreChosen === null ? "every" : restoreChosen.join(",")}
@@ -6543,7 +6583,11 @@ export function App(): JSX.Element {
             }
             stopped={historyHost === LOCAL_HOST_KEY ? stoppedShown : null}
             onResumeStopped={(sessions) => void resumeStopped(sessions)}
-            onDismissStopped={dismissStopped}
+            stoppedUnread={
+              historyHost === LOCAL_HOST_KEY ? restoreUnread : null
+            }
+            onRetryStopped={retryRestore}
+            onDismissStopped={dismissStoppedGroup}
             onResume={(session, { withoutAgent }) =>
               void resumeOnce(session.sessionId, () =>
                 resumeConversation(

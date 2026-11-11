@@ -318,6 +318,26 @@ describe('after a crash', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(props.onDismissStopped).toHaveBeenCalled()
   })
+  it('says what was running could not be read, never nothing, and Enter tries again', async () => {
+    const props = renderPalette({ stoppedUnread: "The sessions' titles could not be read.", onRetryStopped: vi.fn() })
+    expect(document.querySelector('[data-history-section="stopped"]')?.textContent).toContain('Stopped')
+    expect(selected().getAttribute('data-history-row')).toBe('stopped-unread')
+    expect(selected().textContent).toContain('Could not read what was running when it stopped')
+    expect(preview()).toContain("The sessions' titles could not be read.")
+    expect(keys()).toContain('Try again')
+    press('Enter')
+    expect(props.onRetryStopped).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('[data-history-section="recent"]')).not.toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    expect(props.onDismissStopped).toHaveBeenCalled()
+  })
+
+  it('says it above the sessions it did keep when a later read fails', () => {
+    renderPalette({ stopped: group, stoppedUnread: 'The host stopped answering.' })
+    expect(document.querySelector('[data-history-section="stopped"]')?.textContent).toContain('Stopped at 09:41')
+    expect(options()[0]?.getAttribute('data-history-row')).toBe('stopped-unread')
+    expect(options()[1]?.textContent).toContain('Resume the 2 that can come back')
+  })
 })
 
 describe('a resume in flight', () => {

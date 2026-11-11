@@ -1622,7 +1622,7 @@ exitCode?: number, };
 
 /**
  * One archived message that matched a search: where it is in the
- * conversation, and what it says.
+ * conversation, and the part of it around the match.
  */
 export type HistoryMatchLine = { 
 /**
@@ -1634,7 +1634,9 @@ uuid: string,
  */
 at: number, 
 /**
- * The message's text.
+ * An excerpt of the message's text, at most 240 characters, around the
+ * first place a word of the query starts (its start when none is found),
+ * with `…` where it was cut. A message that short is sent whole.
  */
 text: string, };
 
@@ -1820,7 +1822,7 @@ exitCode?: number,
 lastReport?: ChildReport, 
 /**
  * For a `messages` search, the first matching messages, oldest first, up
- * to two.
+ * to two, each sent as an excerpt around its match rather than whole.
  */
 matches?: Array<HistoryMatchLine>, 
 /**

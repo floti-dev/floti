@@ -16,8 +16,20 @@ import { readable } from './errors'
  * owns what is said about it afterwards.
  */
 export interface RestoreState {
-  /** What a crash took, until it is answered. Null when there was nothing. */
+  /** What a crash took, until it is answered. Null when there was nothing, or the read failed. */
   offer: RestoreOffer | null
+  /**
+   * The sentence the last read of the offer failed with: what was running is
+   * not known, which is never said as nothing to restore. Null when the last
+   * read answered, with an offer or with none, and before the first answers.
+   */
+  unread: string | null
+  /** True while a read asked for with `retry` is under way. */
+  retrying: boolean
+  /** Reads the offer again after a read failed. */
+  retry: () => void
+  /** Forgets that the read failed, until the next read fails again. */
+  dismissUnread: () => void
   busy: boolean
   /**
    * Reopens these, each at its pane's grid, and answers the offer. Resolves to
@@ -79,6 +91,10 @@ export function restoreReport(
 
 export function useRestore(reconnects = 0): RestoreState {
   const [offer, setOffer] = useState<RestoreOffer | null>(null)
+  const [unread, setUnread] = useState<string | null>(null)
+  /** How many times `retry` asked: each asks the host again. */
+  const [retries, setRetries] = useState(0)
+  const [retrying, setRetrying] = useState(false)
   const [busy, setBusy] = useState(false)
   const [report, setReport] = useState<{ text: string; failed: boolean } | null>(null)
   /** Sessions lost while the window had its host (their keeper went): each makes the host offer them back. */
@@ -97,15 +113,28 @@ export function useRestore(reconnects = 0): RestoreState {
     void helm
       .invoke('session:restorable')
       .then((answer) => {
-        if (live) setOffer(answer)
+        if (!live) return
+        setOffer(answer)
+        setUnread(null)
       })
-      // No offer is the state of every ordinary start, and a window that could
-      // not ask is no worse off than one that had nothing to ask about.
-      .catch(() => undefined)
+      // Could not look is not nothing there: after a crash an offer that
+      // silently vanished would be the worst case. An offer already shown
+      // stays; what the failed read would have said is not known.
+      .catch((err: unknown) => {
+        if (live) setUnread(readable(err))
+      })
+      .finally(() => {
+        if (live) setRetrying(false)
+      })
     return () => {
       live = false
     }
-  }, [reconnects, losses])
+  }, [reconnects, losses, retries])
+
+  const retry = useCallback(() => {
+    setRetrying(true)
+    setRetries((count) => count + 1)
+  }, [])
 
   const restore = useCallback(
     async (
@@ -137,6 +166,10 @@ export function useRestore(reconnects = 0): RestoreState {
 
   return {
     offer,
+    unread,
+    retrying,
+    retry,
+    dismissUnread: useCallback(() => setUnread(null), []),
     busy,
     restore,
     dismiss,

@@ -91,6 +91,51 @@ describe('useRestore', () => {
     expect(bridge.invoked('session:restorable')).toHaveLength(2)
   })
 
+  it('says it could not read what was running when the read fails, and Try again reads again', async () => {
+    bridge.answer('session:restorable', () => {
+      throw new Error("Error invoking remote method 'session:restorable': Error: The sessions' titles could not be read.")
+    })
+    const { result: hook } = renderHook(() => useRestore())
+    await waitFor(() => expect(hook.current.unread).toBe("The sessions' titles could not be read."))
+    expect(hook.current.offer).toBeNull()
+    expect(hook.current.retrying).toBe(false)
+
+    bridge.answer('session:restorable', () => OFFER)
+    act(() => hook.current.retry())
+    expect(hook.current.retrying).toBe(true)
+
+    await waitFor(() => expect(hook.current.offer).toEqual(OFFER))
+    expect(hook.current.unread).toBeNull()
+    expect(hook.current.retrying).toBe(false)
+    expect(bridge.invoked('session:restorable')).toHaveLength(2)
+  })
+
+  it('keeps an offer it already holds when a later read fails, and forgets the failure when asked', async () => {
+    const { result: hook, rerender } = renderHook(({ reconnects }) => useRestore(reconnects), {
+      initialProps: { reconnects: 0 }
+    })
+    await waitFor(() => expect(hook.current.offer).toEqual(OFFER))
+    bridge.answer('session:restorable', () => {
+      throw new Error('The host stopped answering.')
+    })
+
+    rerender({ reconnects: 1 })
+
+    await waitFor(() => expect(hook.current.unread).toBe('The host stopped answering.'))
+    expect(hook.current.offer).toEqual(OFFER)
+    act(() => hook.current.dismissUnread())
+    expect(hook.current.unread).toBeNull()
+  })
+
+  it('a read that answers with nothing is nothing to restore, never could not read', async () => {
+    bridge.answer('session:restorable', () => null)
+    const { result: hook } = renderHook(() => useRestore())
+    await waitFor(() => expect(bridge.invoked('session:restorable')).toHaveLength(1))
+    await waitFor(() => expect(hook.current.retrying).toBe(false))
+    expect(hook.current.offer).toBeNull()
+    expect(hook.current.unread).toBeNull()
+  })
+
   it('answers not now with nothing', async () => {
     bridge.answer('session:restore', () => ({ restored: [], failed: [] }))
     const { result: hook } = renderHook(() => useRestore())
