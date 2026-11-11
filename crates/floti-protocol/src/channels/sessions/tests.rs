@@ -14,7 +14,7 @@ use crate::capability::Capability;
 use crate::channel::{
     Catalogue, ChannelKind, EventChannel, RequestChannel, StreamChannel, from_payload, to_payload,
 };
-use crate::channels::common::{LaunchedAs, SessionStatus};
+use crate::channels::common::{ChildReport, EndedBy, LaunchedAs, SessionStatus};
 use crate::frame::{FrameDecoder, encode_frame};
 use crate::message::{Event, Message, Request, Response, Snapshot, StreamData, StreamOpen};
 
@@ -301,6 +301,23 @@ fn history_session() -> HistorySession {
         archive: Some(ArchiveSessionState::Evicted),
         archived_messages: Some(0),
         matched: Some("auth".into()),
+        parent: Some("7f21".into()),
+        children: Some(3),
+        branch: Some("feat/auth".into()),
+        profile_id: Some(7),
+        ended_by: Some(EndedBy::Floti),
+        exit_code: Some(1),
+        last_report: Some(ChildReport {
+            state: "stuck".into(),
+            text: "Needs the lock decided".into(),
+            at: "2026-10-02T09:00:00Z".into(),
+        }),
+        matches: Some(vec![HistoryMatchLine {
+            uuid: "m1".into(),
+            at: 1_761_550_100_000,
+            text: "the auth middleware".into(),
+        }]),
+        match_count: Some(4),
     }
 }
 
@@ -863,6 +880,8 @@ fn history_and_archive_channels_round_trip_over_cbor() {
             project: Some("C:\\work\\api".into()),
             resumable_only: Some(true),
             limit: Some(50),
+            parent: Some("7f21".into()),
+            top_level: Some(true),
         },
         HistoryPage {
             sessions: vec![history_session()],

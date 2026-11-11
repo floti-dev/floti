@@ -638,6 +638,15 @@ pub(crate) fn read_history_session(
                     archive: None,
                     archived_messages: None,
                     matched: None,
+                    parent: None,
+                    children: None,
+                    branch: None,
+                    profile_id: None,
+                    ended_by: None,
+                    exit_code: None,
+                    last_report: None,
+                    matches: None,
+                    match_count: None,
                 })
             },
         )
@@ -830,7 +839,7 @@ fn record_from(row: &Row<'_>) -> rusqlite::Result<SessionRecord> {
 
 /// How a row ended: by itself, or stopped by whoever its row names. Only a
 /// row that has exited says; a running or a lost one does not.
-fn ended_by(status: &str, stopped: bool, by: Option<&str>) -> Option<EndedBy> {
+pub(crate) fn ended_by(status: &str, stopped: bool, by: Option<&str>) -> Option<EndedBy> {
     (status == "exited").then(|| {
         if stopped {
             stopped_by_of(by).ended_by()

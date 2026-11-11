@@ -4221,6 +4221,31 @@
       ],
       "type": "object"
     },
+    "HistoryMatchLine": {
+      "description": "One archived message that matched a search: where it is in the\nconversation, and what it says.",
+      "properties": {
+        "at": {
+          "description": "Epoch ms.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "description": "The message's text.",
+          "type": "string"
+        },
+        "uuid": {
+          "description": "The message's id in the archived conversation.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "at",
+        "text"
+      ],
+      "type": "object"
+    },
     "HistoryPage": {
       "properties": {
         "sessions": {
@@ -4336,6 +4361,13 @@
             "null"
           ]
         },
+        "parent": {
+          "description": "Only the conversations started by the sessions of this one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "project": {
           "default": null,
           "description": "One recorded folder, compared case-insensitively.",
@@ -4369,6 +4401,13 @@
           "description": "Case-insensitive substring. Null or empty means no filter.",
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "topLevel": {
+          "description": "Leave out the conversations another session started.",
+          "type": [
+            "boolean",
             "null"
           ]
         }
@@ -4424,6 +4463,41 @@
           "$ref": "#/$defs/BackendId",
           "description": "The backend that recorded it, and that a resume runs."
         },
+        "branch": {
+          "description": "The branch its newest session in Floti ran on, as recorded at launch.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "children": {
+          "description": "How many conversations its sessions started, ended ones included.\nAbsent for none.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "endedBy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EndedBy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How its newest session in Floti ended, once it has exited."
+        },
+        "exitCode": {
+          "description": "That session's exit code, where its program exited with one.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "firstAt": {
           "format": "uint64",
           "minimum": 0,
@@ -4445,9 +4519,46 @@
           "minimum": 0,
           "type": "integer"
         },
+        "lastReport": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChildReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A child's newest report to its parent, read when the query lists a\nparent's children. Absent for one that never reported."
+        },
         "match": {
           "default": null,
           "description": "The first prompt that matched the search, when the query had one.\nNull for an unfiltered listing.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matchCount": {
+          "description": "For a `messages` search, how many of its messages matched.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "matches": {
+          "description": "For a `messages` search, the first matching messages, oldest first, up\nto two.",
+          "items": {
+            "$ref": "#/$defs/HistoryMatchLine"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "parent": {
+          "description": "The conversation of the session that started its newest session in\nFloti, for a child. Absent for one nothing started.",
           "type": [
             "string",
             "null"
@@ -4463,6 +4574,15 @@
             }
           ],
           "description": "The permission mode its newest session in Floti ran with (protocol\n2.3), which a resume as its agent keeps. Absent for one launched with\nnone, and from a host before 2.3."
+        },
+        "profileId": {
+          "description": "The profile its newest session in Floti was launched with.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "project": {
           "description": "The folder it ran in, exactly as recorded.",

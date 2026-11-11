@@ -16,6 +16,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use floti_protocol::BackendId;
+use floti_protocol::channels::common::ChildReport;
 use floti_protocol::channels::sessions::{
     ArchiveSessionState, HistoryPage, HistoryProject, HistoryPrompt, HistoryQuery,
     HistorySearchScope, HistorySession, HistorySummary,
@@ -23,13 +24,16 @@ use floti_protocol::channels::sessions::{
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
 
-use super::archive::search_archive;
+use super::archive::{matching_lines, search_archive};
 use super::sql;
 use crate::Result;
 use crate::agent::claude_code::session_title_from;
 
 /// The most sessions one page returns when the query names no limit.
 const DEFAULT_LIMIT: u32 = 2000;
+
+/// How many matching messages a `messages` search gives each conversation.
+const MATCH_LINES: usize = 2;
 
 /// The longest name a session can be given by hand, in characters.
 pub const HISTORY_NAME_MAX: usize = 120;
@@ -231,6 +235,15 @@ impl<'a> HistoryIndex<'a> {
             clauses.push("s.project_key = ?".to_owned());
             filter.push(SqlValue::Text(project.to_lowercase()));
         }
+        if let Some(parent) = query.parent.as_deref().map(str::trim)
+            && !parent.is_empty()
+        {
+            clauses.push("g.parent = ?".to_owned());
+            filter.push(SqlValue::Text(parent.to_lowercase()));
+        }
+        if query.top_level == Some(true) {
+            clauses.push("g.parent IS NULL".to_owned());
+        }
         if query.resumable_only == Some(true) {
             clauses.push("s.transcript_file IS NOT NULL AND s.project_exists = 1".to_owned());
         }
@@ -282,7 +295,16 @@ impl<'a> HistoryIndex<'a> {
             for session in &mut sessions {
                 if let Some(hit) = found.get(&session.session_id.to_lowercase()) {
                     session.matched = Some(hit.clone());
+                    let (lines, count) =
+                        matching_lines(self.conn, search, &session.session_id, MATCH_LINES)?;
+                    session.matches = Some(lines);
+                    session.match_count = Some(count);
                 }
+            }
+        }
+        if query.parent.is_some() {
+            for session in &mut sessions {
+                session.last_report = self.last_report(&session.session_id)?;
             }
         }
         Ok(HistoryPage {
@@ -290,6 +312,30 @@ impl<'a> HistoryIndex<'a> {
             total: to_u32(total),
             took_ms: started.elapsed().as_secs_f64() * 1000.0,
         })
+    }
+
+    /// The newest report a session of conversation `session_id` sent its
+    /// parent, or `None` for one that never reported.
+    fn last_report(&self, session_id: &str) -> Result<Option<ChildReport>> {
+        self.conn
+            .query_row(
+                "SELECT i.state, i.detail, i.at FROM agent_inbox i
+                 JOIN sessions r ON r.id = i.child_session_id
+                 WHERE i.event = 'report'
+                   AND (lower(r.claude_session_id) = lower(?1)
+                        OR lower(r.last_claude_session_id) = lower(?1))
+                 ORDER BY i.id DESC LIMIT 1",
+                [session_id],
+                |row| {
+                    Ok(ChildReport {
+                        state: row.get::<_, Option<String>>(0)?.unwrap_or_default(),
+                        text: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                        at: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(sql("read a child's last report"))
     }
 
     /// One session's prompts, in submission order.
@@ -443,6 +489,14 @@ impl<'a> HistoryIndex<'a> {
                 "evicted" => Some(ArchiveSessionState::Evicted),
                 _ => None,
             });
+        let ended_by = match row.get::<_, Option<String>>("row_status")? {
+            Some(status) => crate::server::records::ended_by(
+                &status,
+                row.get::<_, Option<bool>>("row_stopped")?.unwrap_or(false),
+                row.get::<_, Option<String>>("row_stopped_by")?.as_deref(),
+            ),
+            None => None,
+        };
         Ok(HistorySession {
             session_id: row.get("session_id")?,
             backend: self.backend.clone(),
@@ -472,6 +526,22 @@ impl<'a> HistoryIndex<'a> {
             archive,
             archived_messages: row.get::<_, Option<i64>>("archived_messages")?.map(to_u32),
             matched: row.get("matched")?,
+            parent: row.get("parent")?,
+            children: row
+                .get::<_, Option<i64>>("children")?
+                .map(to_u32)
+                .filter(|count| *count > 0),
+            branch: row
+                .get::<_, Option<String>>("branch")?
+                .filter(|branch| !branch.trim().is_empty()),
+            profile_id: row.get::<_, Option<i64>>("profile_id")?.map(to_u64),
+            ended_by,
+            exit_code: ended_by
+                .and(row.get::<_, Option<i64>>("exit_code")?)
+                .and_then(|code| i32::try_from(code).ok()),
+            last_report: None,
+            matches: None,
+            match_count: None,
         })
     }
 }
@@ -500,12 +570,19 @@ pub(crate) const AGENT_TITLES: &str = agent_titles!();
 /// The table [`CONVERSATION_AGENTS`] is, as a literal for `concat!`.
 macro_rules! conversation_agents {
     () => {
-        "(SELECT conversation, agent, permission_mode, MAX(id) AS newest FROM (
-           SELECT lower(claude_session_id) AS conversation, agent, permission_mode, id
-            FROM sessions WHERE claude_session_id IS NOT NULL
+        "(SELECT conversation, agent, permission_mode, parent, branch, profile_id, status,
+           stopped, stopped_by, exit_code, MAX(id) AS newest FROM (
+           SELECT lower(r.claude_session_id) AS conversation, r.agent, r.permission_mode,
+             (SELECT lower(coalesce(p.last_claude_session_id, p.claude_session_id))
+               FROM sessions p WHERE p.id = r.parent_session_id) AS parent,
+             r.branch, r.profile_id, r.status, r.stopped, r.stopped_by, r.exit_code, r.id
+            FROM sessions r WHERE r.claude_session_id IS NOT NULL
            UNION ALL
-           SELECT lower(last_claude_session_id), agent, permission_mode, id
-            FROM sessions WHERE last_claude_session_id IS NOT NULL
+           SELECT lower(r.last_claude_session_id), r.agent, r.permission_mode,
+             (SELECT lower(coalesce(p.last_claude_session_id, p.claude_session_id))
+               FROM sessions p WHERE p.id = r.parent_session_id),
+             r.branch, r.profile_id, r.status, r.stopped, r.stopped_by, r.exit_code, r.id
+            FROM sessions r WHERE r.last_claude_session_id IS NOT NULL
          ) GROUP BY conversation)"
     };
 }
@@ -515,7 +592,9 @@ macro_rules! conversation_agents {
 /// History composes again, and the mode it keeps. Columns `conversation`
 /// (lower-cased), `agent`, null for a session started as none, so a
 /// conversation last resumed without its agent has none, and
-/// `permission_mode`.
+/// `permission_mode`; then that row's `parent` (the lower-cased conversation
+/// of the session that started it, null for none), `branch`, `profile_id`,
+/// and how it ended (`status`, `stopped`, `stopped_by`, `exit_code`).
 pub(crate) const CONVERSATION_AGENTS: &str = conversation_agents!();
 
 /// The columns every session read takes, with what the archive holds for it
@@ -527,7 +606,9 @@ const SESSION_COLUMNS: &str =
         a.state AS archive_state,
         CASE WHEN a.session_id IS NULL THEN NULL ELSE a.message_count END AS archived_messages,
         n.name AS label, t.title AS agent_title, g.agent AS agent,
-        g.permission_mode AS permission_mode";
+        g.permission_mode AS permission_mode, g.parent AS parent, c.children AS children,
+        g.branch AS branch, g.profile_id AS profile_id, g.status AS row_status,
+        g.stopped AS row_stopped, g.stopped_by AS row_stopped_by, g.exit_code AS exit_code";
 
 const JOINS: &str = concat!(
     "LEFT JOIN transcript_sessions a ON a.session_id = lower(s.session_id)
@@ -537,7 +618,11 @@ const JOINS: &str = concat!(
     " t ON t.conversation = lower(s.session_id)
      LEFT JOIN ",
     conversation_agents!(),
-    " g ON g.conversation = lower(s.session_id)"
+    " g ON g.conversation = lower(s.session_id)
+     LEFT JOIN (SELECT k.parent, COUNT(*) AS children FROM ",
+    conversation_agents!(),
+    " k JOIN history_sessions kh ON lower(kh.session_id) = k.conversation
+       WHERE k.parent IS NOT NULL GROUP BY k.parent) c ON c.parent = lower(s.session_id)"
 );
 
 /// Ranks the prompts with no rank yet, and says how many there were.

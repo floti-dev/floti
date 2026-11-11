@@ -1594,6 +1594,24 @@ export type Hello = { protocol: ProtocolVersion, client: ClientInfo,
  */
 capabilities: Array<string>, };
 
+/**
+ * One archived message that matched a search: where it is in the
+ * conversation, and what it says.
+ */
+export type HistoryMatchLine = { 
+/**
+ * The message's id in the archived conversation.
+ */
+uuid: string, 
+/**
+ * Epoch ms.
+ */
+at: number, 
+/**
+ * The message's text.
+ */
+text: string, };
+
 export type HistoryPage = { 
 /**
  * Most recently active first.
@@ -1649,7 +1667,15 @@ project: string | null,
 /**
  * Drop conversations that could not be resumed.
  */
-resumableOnly: boolean | null, limit: number | null, };
+resumableOnly: boolean | null, limit: number | null, 
+/**
+ * Only the conversations started by the sessions of this one.
+ */
+parent?: string, 
+/**
+ * Leave out the conversations another session started.
+ */
+topLevel?: boolean, };
 
 /**
  * What a search is over: prompts typed, or every archived message.
@@ -1729,7 +1755,47 @@ archivedMessages: number | null,
  * The first prompt that matched the search, when the query had one.
  * Null for an unfiltered listing.
  */
-match: string | null, };
+match: string | null, 
+/**
+ * The conversation of the session that started its newest session in
+ * Floti, for a child. Absent for one nothing started.
+ */
+parent?: string, 
+/**
+ * How many conversations its sessions started, ended ones included.
+ * Absent for none.
+ */
+children?: number, 
+/**
+ * The branch its newest session in Floti ran on, as recorded at launch.
+ */
+branch?: string, 
+/**
+ * The profile its newest session in Floti was launched with.
+ */
+profileId?: number, 
+/**
+ * How its newest session in Floti ended, once it has exited.
+ */
+endedBy?: EndedBy, 
+/**
+ * That session's exit code, where its program exited with one.
+ */
+exitCode?: number, 
+/**
+ * A child's newest report to its parent, read when the query lists a
+ * parent's children. Absent for one that never reported.
+ */
+lastReport?: ChildReport, 
+/**
+ * For a `messages` search, the first matching messages, oldest first, up
+ * to two.
+ */
+matches?: Array<HistoryMatchLine>, 
+/**
+ * For a `messages` search, how many of its messages matched.
+ */
+matchCount?: number, };
 
 /**
  * Names one conversation by the id its agent gave it.

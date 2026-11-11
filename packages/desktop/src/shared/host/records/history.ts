@@ -48,7 +48,16 @@ export function historySessionFromHost(session: P.HistorySession): HistorySessio
     projectExists: session.projectExists,
     archive: session.archive,
     archivedMessages: session.archivedMessages,
-    ...(session.match === null ? {} : { match: session.match })
+    ...(session.match === null ? {} : { match: session.match }),
+    ...(session.parent == null ? {} : { parent: session.parent }),
+    ...(session.children == null ? {} : { children: session.children }),
+    ...(session.branch == null ? {} : { branch: session.branch }),
+    ...(session.profileId == null ? {} : { profileId: session.profileId }),
+    ...(session.endedBy == null ? {} : { endedBy: session.endedBy }),
+    ...(session.exitCode == null ? {} : { exitCode: session.exitCode }),
+    ...(session.lastReport == null ? {} : { lastReport: session.lastReport }),
+    ...(session.matches == null ? {} : { matches: session.matches }),
+    ...(session.matchCount == null ? {} : { matchCount: session.matchCount })
   }
 }
 
@@ -63,7 +72,9 @@ export function historyQueryForHost(query: HistoryQuery): P.HistoryQuery {
     scope: query.scope ?? null,
     project: query.project ?? null,
     resumableOnly: query.resumableOnly ?? null,
-    limit: query.limit ?? null
+    limit: query.limit ?? null,
+    ...(query.parent === undefined ? {} : { parent: query.parent }),
+    ...(query.topLevel === undefined ? {} : { topLevel: query.topLevel })
   }
 }
 

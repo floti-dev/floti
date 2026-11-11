@@ -1,8 +1,10 @@
 //! Protocol 3.0 is a major: it removes the channels only Config's page used
 //! (and the copy of its file versions), the types only they carried, and the
 //! three fields 2.x retired, adds only a file view's optional `readOnly`, an
-//! agent problem's optional `backend` and `agents:render` with the type it
-//! takes, and changes nothing else. What composition reads of an agent's config stays:
+//! agent problem's optional `backend`, `agents:render` with the type it
+//! takes, and History's optional fields (a conversation's family, how it
+//! ended and its matching lines, and a query for a parent's children or the
+//! top level), and changes nothing else. What composition reads of an agent's config stays:
 //! `config:scopes`, `config:tree` and `config:effective`.
 
 use std::collections::BTreeSet;
@@ -76,6 +78,25 @@ const RETIRED_FIELDS: &[(&str, &str)] = &[
     ("SessionRecord", "role"),
 ];
 
+/// The optional fields History's types gain.
+const HISTORY_FIELDS: &[(&str, &[&str])] = &[
+    ("HistoryQuery", &["parent", "topLevel"]),
+    (
+        "HistorySession",
+        &[
+            "parent",
+            "children",
+            "branch",
+            "profileId",
+            "endedBy",
+            "exitCode",
+            "lastReport",
+            "matches",
+            "matchCount",
+        ],
+    ),
+];
+
 fn record_text(version: ProtocolVersion) -> String {
     records(&records_dir())
         .unwrap()
@@ -97,7 +118,7 @@ fn names(found: &[Difference], part: Part, change: Change) -> Vec<&str> {
 }
 
 #[test]
-fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fields_and_adds_only_its_three_additions()
+fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fields_and_adds_only_its_additions()
  {
     assert_eq!(PROTOCOL_VERSION, V3_0);
     let found = differences(&record_text(V2_3), &record_text(V3_0)).unwrap();
@@ -107,7 +128,7 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
     );
     assert_eq!(
         names(&found, Part::Type, Change::Added),
-        ["AgentInstructions"]
+        ["AgentInstructions", "HistoryMatchLine"]
     );
     assert_eq!(
         names(&found, Part::Channel, Change::Changed),
@@ -123,6 +144,8 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
         [
             "AgentProblem",
             "FileView",
+            "HistoryQuery",
+            "HistorySession",
             "HostSettings",
             "HostSettingsPatch",
             "NoticeLimit",
@@ -155,6 +178,18 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
         problem, before["types"]["AgentProblem"],
         "AgentProblem gains only backend"
     );
+
+    // History's types only gain optional fields.
+    for (name, fields) in HISTORY_FIELDS {
+        let mut was = after["types"][*name].clone();
+        let properties = was["properties"].as_object_mut().unwrap();
+        for field in *fields {
+            properties
+                .remove(*field)
+                .unwrap_or_else(|| panic!("3.0's {name} has {field}"));
+        }
+        assert_eq!(was, before["types"][*name], "{name} gains only {fields:?}");
+    }
 
     // Each type that changes only loses its retired field.
     for (name, field) in RETIRED_FIELDS {

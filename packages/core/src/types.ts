@@ -899,6 +899,36 @@ export interface HistorySession {
    * can tell "matched here" from "this is just the start of it".
    */
   match?: string | undefined
+  /**
+   * The conversation of the session that started its newest session in
+   * Floti, for a child; absent for one nothing started.
+   */
+  parent?: string
+  /** How many conversations its sessions started, ended ones included; absent for none. */
+  children?: number
+  /** The branch its newest session in Floti ran on. */
+  branch?: string
+  /** The profile its newest session in Floti was launched with. */
+  profileId?: number
+  /** How its newest session in Floti ended, once it has exited. */
+  endedBy?: EndedBy
+  /** That session's exit code, where its program exited with one. */
+  exitCode?: number
+  /** A child's newest report to its parent, read when a query lists a parent's children. */
+  lastReport?: ChildReport
+  /** For a `messages` search: the first matching messages, oldest first, up to two. */
+  matches?: HistoryMatchLine[]
+  /** For a `messages` search: how many of its messages matched. */
+  matchCount?: number
+}
+
+/** One archived message that matched a search, and where it is in its conversation. */
+export interface HistoryMatchLine {
+  /** The message's id in the archived conversation. */
+  uuid: string
+  /** Epoch ms. */
+  at: number
+  text: string
 }
 
 /**
@@ -1056,6 +1086,10 @@ export interface HistoryQuery {
   /** Drop sessions that could not be resumed. */
   resumableOnly?: boolean | undefined
   limit?: number | undefined
+  /** Only the conversations started by the sessions of this one. */
+  parent?: string | undefined
+  /** Leave out the conversations another session started. */
+  topLevel?: boolean | undefined
 }
 
 export interface HistoryPage {

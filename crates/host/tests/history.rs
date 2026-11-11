@@ -22,6 +22,7 @@ use floti_host::server::HostConfig;
 use floti_host::store::Store;
 use floti_host::testkit::{PATIENCE, RunningHost, TestClient, TestDirs};
 use floti_protocol::channel::from_payload;
+use floti_protocol::channels::common::EndedBy;
 use floti_protocol::channels::host::HostStopReason;
 use floti_protocol::channels::sessions::{
     ArchiveChanged, ArchiveConversation, ArchiveMessage, ArchiveRole, ArchiveSessionState,
@@ -738,6 +739,92 @@ fn renaming_a_session_the_index_does_not_have_answers_null() {
     assert_eq!(world.sql_count("SELECT COUNT(*) FROM history_names"), 0);
 }
 
+impl Indexed {
+    /// A row of the host's in `conversation`, started by row `parent`, and
+    /// its id.
+    fn family_row(&self, conversation: &str, parent: Option<i64>, ended: &str) -> i64 {
+        let connection = self.store.connection();
+        connection
+            .execute(
+                "INSERT INTO sessions (name, cwd, argv, claude_session_id, status, branch, \
+                 parent_session_id, stopped, stopped_by, exit_code) \
+                 VALUES ('agent', '/work', '[]', ?1, ?2, 'feat/queue', ?3, ?4, ?5, ?6)",
+                rusqlite::params![
+                    conversation,
+                    if ended == "running" {
+                        "running"
+                    } else {
+                        "exited"
+                    },
+                    parent,
+                    ended == "floti",
+                    (ended == "floti").then_some("floti"),
+                    (ended == "failed").then_some(1),
+                ],
+            )
+            .unwrap();
+        connection.last_insert_rowid()
+    }
+
+    /// A report child row `child` sent parent row `parent`.
+    fn report(&self, parent: i64, child: i64, state: &str, text: &str) {
+        self.store
+            .connection()
+            .execute(
+                "INSERT INTO agent_inbox (parent_session_id, child_session_id, child_name, \
+                 event, state, detail) VALUES (?1, ?2, 'worker', 'report', ?3, ?4)",
+                rusqlite::params![parent, child, state, text],
+            )
+            .unwrap();
+    }
+}
+
+#[test]
+fn a_child_names_its_parents_conversation_and_the_parent_counts_its_children() {
+    let mut world = renamable();
+    world.pass(&[p("c", "write the runner")], Pass::default());
+    let lead = world.family_row("A", None, "running");
+    let child = world.family_row("b", Some(lead), "floti");
+    world.family_row("c", Some(lead), "failed");
+    world.report(lead, child, "note", "started");
+    world.report(lead, child, "stuck", "The runner needs the queue's lock");
+
+    let page = world.all();
+    let listed = |id: &str| page.sessions.iter().find(|s| s.session_id == id).unwrap();
+    assert_eq!(listed("a").children, Some(2));
+    assert_eq!(listed("a").parent, None);
+    assert_eq!(listed("a").ended_by, None, "a running row has not ended");
+    assert_eq!(listed("b").parent.as_deref(), Some("a"));
+    assert_eq!(listed("b").children, None);
+    assert_eq!(listed("b").branch.as_deref(), Some("feat/queue"));
+    assert_eq!(listed("b").ended_by, Some(EndedBy::Floti));
+    assert_eq!(listed("c").ended_by, Some(EndedBy::Exited));
+    assert_eq!(listed("c").exit_code, Some(1));
+    assert_eq!(
+        listed("b").last_report,
+        None,
+        "only a parent's listing reads reports"
+    );
+
+    let top = world.sessions(HistoryQuery {
+        top_level: Some(true),
+        ..HistoryQuery::default()
+    });
+    assert_eq!(ids(&top), ["a"]);
+
+    let children = world.sessions(HistoryQuery {
+        parent: Some("A".to_owned()),
+        ..HistoryQuery::default()
+    });
+    assert_eq!(ids(&children), ["c", "b"]);
+    let report = children.sessions[1].last_report.as_ref().unwrap();
+    assert_eq!(
+        (report.state.as_str(), report.text.as_str()),
+        ("stuck", "The runner needs the queue's lock")
+    );
+    assert_eq!(children.sessions[0].last_report, None);
+}
+
 #[test]
 fn a_sessions_prompts_come_in_submission_order() {
     let mut world = Indexed::new();
@@ -1123,6 +1210,62 @@ fn a_message_search_finds_it_through_the_history_list_and_a_prompt_search_does_n
         [("sess", Some("the answer is zorblatt"))]
     );
     assert_eq!(scoped(HistorySearchScope::Prompts).total, 0);
+}
+
+#[test]
+fn a_message_search_gives_each_conversation_its_first_two_matching_lines_and_their_count() {
+    let mut world = Archive::new();
+    let backend = BackendId::claude_code();
+    let lines = vec![PromptLine {
+        session_id: "sess".to_owned(),
+        project: "folder".to_owned(),
+        at: 1_760_000_000_000,
+        text: "opening question".to_owned(),
+    }];
+    HistoryIndex::new(world.store.connection(), &backend)
+        .index(&IndexInput {
+            record: RECORD,
+            bytes: 100,
+            reset: false,
+            replaced: &BTreeSet::new(),
+            lines: &lines,
+            transcripts: &BTreeMap::new(),
+            directory_exists: &|_| true,
+            error: None,
+        })
+        .unwrap();
+    let messages = [
+        world.message(ArchiveRole::Assistant, 30, "third zorblatt"),
+        world.user(10, "first zorblatt"),
+        world.user(15, "nothing here"),
+        world.message(ArchiveRole::Assistant, 20, "second zorblatt"),
+    ];
+    world.archive("lines.jsonl", "sess", &messages);
+    let page = HistoryIndex::new(world.store.connection(), &backend)
+        .sessions(&HistoryQuery {
+            search: Some("zorblatt".to_owned()),
+            scope: Some(HistorySearchScope::Messages),
+            ..HistoryQuery::default()
+        })
+        .unwrap();
+    let found = &page.sessions[0];
+    let matched: Vec<(&str, u64)> = found
+        .matches
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|line| (line.text.as_str(), line.at))
+        .collect();
+    assert_eq!(
+        matched,
+        [
+            ("first zorblatt", messages[1].at),
+            ("second zorblatt", messages[3].at)
+        ]
+    );
+    assert_eq!(found.match_count, Some(3));
+    let ids: Vec<&str> = messages.iter().map(|m| m.uuid.as_str()).collect();
+    assert_eq!(found.matches.as_ref().unwrap()[0].uuid, ids[1]);
 }
 
 #[test]

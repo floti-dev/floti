@@ -28,32 +28,67 @@ describe('what a session’s agent called it, as the window reads it', () => {
     expect(sessionFromHost(hostSession())).not.toHaveProperty('title')
   })
 
+  const conversation = (patch: Partial<P.HistorySession> = {}): P.HistorySession => ({
+    sessionId: '3d1f0c2a-0000-4000-8000-000000000001',
+    backend: 'claude-code',
+    project: '/work/docs',
+    projectName: 'docs',
+    promptCount: 2,
+    firstAt: 1,
+    lastAt: 2,
+    firstPrompt: 'fix the login form',
+    title: 'fix the login form',
+    titleFallback: false,
+    label: null,
+    transcriptFile: null,
+    transcriptBytes: null,
+    projectExists: true,
+    archive: null,
+    archivedMessages: null,
+    match: null,
+    ...patch
+  })
+
   it('carries the title a conversation’s agent gave it in History beside the derived one', () => {
-    const conversation = (patch: Partial<P.HistorySession> = {}): P.HistorySession => ({
-      sessionId: '3d1f0c2a-0000-4000-8000-000000000001',
-      backend: 'claude-code',
-      project: '/work/docs',
-      projectName: 'docs',
-      promptCount: 2,
-      firstAt: 1,
-      lastAt: 2,
-      firstPrompt: 'fix the login form',
-      title: 'fix the login form',
-      titleFallback: false,
-      label: null,
-      transcriptFile: null,
-      transcriptBytes: null,
-      projectExists: true,
-      archive: null,
-      archivedMessages: null,
-      match: null,
-      ...patch
-    })
     expect(historySessionFromHost(conversation({ agentTitle: 'Login form' }))).toMatchObject({
       title: 'fix the login form',
       agentTitle: 'Login form'
     })
     expect(historySessionFromHost(conversation())).not.toHaveProperty('agentTitle')
+  })
+
+  it('carries a conversation’s family, how it ended and its matching lines, and leaves out what the host did not say', () => {
+    const report = { state: 'stuck', text: 'Needs the lock', at: '2026-11-07T09:21:00Z' }
+    const line = { uuid: 'm1', at: 5, text: 'the rate limit' }
+    expect(
+      historySessionFromHost(
+        conversation({
+          parent: 'lead',
+          children: 3,
+          branch: 'feat/queue',
+          profileId: 4,
+          endedBy: 'floti',
+          exitCode: 1,
+          lastReport: report,
+          matches: [line],
+          matchCount: 6
+        })
+      )
+    ).toMatchObject({
+      parent: 'lead',
+      children: 3,
+      branch: 'feat/queue',
+      profileId: 4,
+      endedBy: 'floti',
+      exitCode: 1,
+      lastReport: report,
+      matches: [line],
+      matchCount: 6
+    })
+    const plain = historySessionFromHost(conversation())
+    for (const field of ['parent', 'children', 'branch', 'profileId', 'endedBy', 'exitCode', 'lastReport', 'matches', 'matchCount']) {
+      expect(plain).not.toHaveProperty(field)
+    }
   })
 })
 

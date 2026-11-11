@@ -30,6 +30,7 @@ use flate2::write::DeflateEncoder;
 
 use floti_protocol::channels::sessions::{
     ArchiveMessage, ArchiveRole, ArchiveSessionState, ArchiveStats, ArchivedConversation,
+    HistoryMatchLine,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -480,6 +481,48 @@ pub fn search_archive(
             .or_insert_with(|| decode_body(&body, compressed));
     }
     Ok(found)
+}
+
+/// The messages of archived conversation `session` that match `search`:
+/// the first `limit`, oldest first, and how many match in all. Nothing for a
+/// search FTS5 refuses, as [`search_archive`] reads it.
+pub fn matching_lines(
+    conn: &Connection,
+    search: &str,
+    session: &str,
+    limit: usize,
+) -> Result<(Vec<HistoryMatchLine>, u32)> {
+    let Some(query) = search_query(search) else {
+        return Ok((Vec::new(), 0));
+    };
+    let session = session.to_lowercase();
+    let Ok(mut statement) = conn.prepare(
+        "SELECT m.uuid, m.at, m.body, m.compressed, COUNT(*) OVER ()
+         FROM transcript_fts f
+         JOIN transcript_messages m ON m.id = f.rowid
+         WHERE transcript_fts MATCH ?1 AND m.session_id = ?2
+         ORDER BY m.at, m.id
+         LIMIT ?3",
+    ) else {
+        return Ok((Vec::new(), 0));
+    };
+    let Ok(rows) = statement
+        .query_map(params![query, session, to_i64(limit as u64)], |row| {
+            Ok((
+                HistoryMatchLine {
+                    uuid: row.get(0)?,
+                    at: to_u64(row.get(1)?),
+                    text: decode_body(&row.get::<_, Vec<u8>>(2)?, row.get(3)?),
+                },
+                row.get::<_, i64>(4)?,
+            ))
+        })
+        .and_then(Iterator::collect::<rusqlite::Result<Vec<_>>>)
+    else {
+        return Ok((Vec::new(), 0));
+    };
+    let count = rows.first().map_or(0, |(_, count)| to_u32(*count));
+    Ok((rows.into_iter().map(|(line, _)| line).collect(), count))
 }
 
 /// What the archive holds, against `max_bytes`.

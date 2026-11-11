@@ -8,7 +8,7 @@ use ts_rs::TS;
 
 use crate::backend::BackendId;
 use crate::channel::Catalogue;
-use crate::channels::common::{PermissionMode, SessionRecord};
+use crate::channels::common::{ChildReport, EndedBy, PermissionMode, SessionRecord};
 
 pub(super) fn declare(catalogue: &mut Catalogue) {
     catalogue
@@ -171,6 +171,60 @@ pub struct HistorySession {
     /// Null for an unfiltered listing.
     #[serde(default, rename = "match")]
     pub matched: Option<String>,
+    /// The conversation of the session that started its newest session in
+    /// Floti, for a child. Absent for one nothing started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub parent: Option<String>,
+    /// How many conversations its sessions started, ended ones included.
+    /// Absent for none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub children: Option<u32>,
+    /// The branch its newest session in Floti ran on, as recorded at launch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub branch: Option<String>,
+    /// The profile its newest session in Floti was launched with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub profile_id: Option<u64>,
+    /// How its newest session in Floti ended, once it has exited.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ended_by: Option<EndedBy>,
+    /// That session's exit code, where its program exited with one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub exit_code: Option<i32>,
+    /// A child's newest report to its parent, read when the query lists a
+    /// parent's children. Absent for one that never reported.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub last_report: Option<ChildReport>,
+    /// For a `messages` search, the first matching messages, oldest first, up
+    /// to two.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub matches: Option<Vec<HistoryMatchLine>>,
+    /// For a `messages` search, how many of its messages matched.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub match_count: Option<u32>,
+}
+
+/// One archived message that matched a search: where it is in the
+/// conversation, and what it says.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryMatchLine {
+    /// The message's id in the archived conversation.
+    pub uuid: String,
+    /// Epoch ms.
+    #[ts(type = "number")]
+    pub at: u64,
+    /// The message's text.
+    pub text: String,
 }
 
 /// One recorded folder, with how much history it holds.
@@ -235,6 +289,14 @@ pub struct HistoryQuery {
     pub resumable_only: Option<bool>,
     #[serde(default)]
     pub limit: Option<u32>,
+    /// Only the conversations started by the sessions of this one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub parent: Option<String>,
+    /// Leave out the conversations another session started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub top_level: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]

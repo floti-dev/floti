@@ -5520,6 +5520,27 @@
       ],
       "type": "object"
     },
+    "HistoryMatchLine": {
+      "properties": {
+        "at": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "at",
+        "text"
+      ],
+      "type": "object"
+    },
     "HistoryPage": {
       "properties": {
         "sessions": {
@@ -5626,6 +5647,12 @@
             "null"
           ]
         },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "project": {
           "default": null,
           "type": [
@@ -5655,6 +5682,12 @@
           "default": null,
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "topLevel": {
+          "type": [
+            "boolean",
             "null"
           ]
         }
@@ -5703,6 +5736,37 @@
         "backend": {
           "$ref": "#/$defs/BackendId"
         },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "children": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "endedBy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EndedBy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exitCode": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "firstAt": {
           "format": "uint64",
           "minimum": 0,
@@ -5722,8 +5786,41 @@
           "minimum": 0,
           "type": "integer"
         },
+        "lastReport": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChildReport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "match": {
           "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matchCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "matches": {
+          "items": {
+            "$ref": "#/$defs/HistoryMatchLine"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "parent": {
           "type": [
             "string",
             "null"
@@ -5737,6 +5834,14 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "profileId": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
           ]
         },
         "project": {
