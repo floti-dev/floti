@@ -66,6 +66,7 @@ import { createPortForwards } from './host/forwards'
 import { createCollector, type CheckContext } from './checkkit'
 import { applicationMenuTemplate, windowChromeFor } from './chrome'
 import { createQuitGate, quitEnds } from './quit'
+import { createReopen, type QuitPhase } from './reopen'
 import { requestSmallCorners } from './corners'
 import { runSelftest } from './selftest'
 import { runFidelity } from './fidelity'
@@ -720,11 +721,18 @@ function startApp(options: AppOptions = {}): void {
     plugins.shutdown()
   })
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+  // A reopen while the quit below is underway opens no window in this process;
+  // it relaunches Helm once the quit has finished (reopen.ts).
+  let hostStop: QuitPhase = 'running'
+  const reopen = createReopen({
+    quitPhase: () => hostStop,
+    windowCount: () => BrowserWindow.getAllWindows().length,
+    openWindow: () => {
       win = createWindow('index', services.settings.windowBounds ?? null, windowTheme())
-    }
+    },
+    relaunch: () => app.relaunch()
   })
+  app.on('activate', () => reopen.activate())
 
   /*
    * The host owns the sessions' lifetime and outlives Helm. A deliberate quit tells it what becomes of what this device started,
@@ -741,7 +749,6 @@ function startApp(options: AppOptions = {}): void {
    * ends any other way tells no host anything, so nothing ends and the next
    * start reattaches.
    */
-  let hostStop: 'running' | 'stopping' | 'stopped' = 'running'
   app.on('before-quit', (event) => {
     if (hostStop !== 'stopped') {
       event.preventDefault()
@@ -765,6 +772,7 @@ function startApp(options: AppOptions = {}): void {
         ])
           .finally(() => {
             hostStop = 'stopped'
+            reopen.quitFinished()
             app.quit()
           })
       }

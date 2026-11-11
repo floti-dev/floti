@@ -46,7 +46,10 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   (this PC's is `local`, End when absent; a remote host's is its id, Keep when
   absent). Quitting with sessions it would end asks first: End and quit, Keep
   running and quit (this quit only, never written to the setting), or Cancel.
-  Helm never stops the host on its own: its deliberate quit sends `host:quit`
+  A quit is held until every host has been told, so a reopen in that wait
+  (macOS's `activate`) opens no window in the quitting process; Helm calls
+  `app.relaunch()` as the quit finishes and a fresh Helm starts once the old
+  one has exited (`main/reopen.ts`). Helm never stops the host on its own: its deliberate quit sends `host:quit`
   and lets go, only Settings' Stop host (after saying how many sessions it
   ends) sends `host:stop`, and a host Helm started (`floti host --desktop`)
   exits by itself once it runs nothing and no client is attached. An update
