@@ -924,6 +924,21 @@ export interface HistorySession {
   matches?: HistoryMatchLine[]
   /** For a `messages` search: how many of its messages matched. */
   matchCount?: number
+  /** The last thing its agent said in the archived conversation, tool calls left out, cut to 300 characters. */
+  lastReply?: string
+}
+
+/** One command a session ran as a command child: it has no conversation, so it is never a session of History's. */
+export interface HistoryCommand {
+  command: string
+  /** Epoch ms. */
+  startedAt: number
+  /** True while it still runs. */
+  running: boolean
+  /** How it ended, once it has. */
+  endedBy?: EndedBy
+  /** Its exit code, where it exited by itself with one. */
+  exitCode?: number
 }
 
 /** One archived message that matched a search, and where it is in its conversation. */
@@ -1103,6 +1118,8 @@ export interface HistoryPage {
   total: number
   /** How long the query itself took, in milliseconds. */
   tookMs: number
+  /** For a query naming a `parent`: the commands its sessions ran, oldest first. */
+  commands?: HistoryCommand[]
 }
 
 /**

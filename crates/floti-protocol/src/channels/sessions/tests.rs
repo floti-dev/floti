@@ -318,6 +318,7 @@ fn history_session() -> HistorySession {
             text: "the auth middleware".into(),
         }]),
         match_count: Some(4),
+        last_reply: Some("Closing the watcher in teardown fixes it.".into()),
     }
 }
 
@@ -889,6 +890,13 @@ fn history_and_archive_channels_round_trip_over_cbor() {
             sessions: vec![history_session()],
             total: 1,
             took_ms: 0.75,
+            commands: Some(vec![HistoryCommand {
+                command: "pnpm test".into(),
+                started_at: 1_761_550_000_000,
+                running: false,
+                ended_by: Some(EndedBy::Exited),
+                exit_code: Some(1),
+            }]),
         },
     );
     exchange::<HistoryPrompts>(

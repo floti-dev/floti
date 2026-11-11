@@ -5520,6 +5520,44 @@
       ],
       "type": "object"
     },
+    "HistoryCommand": {
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "endedBy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EndedBy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exitCode": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "startedAt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command",
+        "startedAt",
+        "running"
+      ],
+      "type": "object"
+    },
     "HistoryMatchLine": {
       "properties": {
         "at": {
@@ -5543,6 +5581,15 @@
     },
     "HistoryPage": {
       "properties": {
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/HistoryCommand"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "sessions": {
           "items": {
             "$ref": "#/$defs/HistorySession"
@@ -5785,6 +5832,12 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "lastReply": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "lastReport": {
           "anyOf": [

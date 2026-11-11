@@ -18,13 +18,13 @@ use std::time::Instant;
 use floti_protocol::BackendId;
 use floti_protocol::channels::common::ChildReport;
 use floti_protocol::channels::sessions::{
-    ArchiveSessionState, HistoryPage, HistoryProject, HistoryPrompt, HistoryQuery,
+    ArchiveSessionState, HistoryCommand, HistoryPage, HistoryProject, HistoryPrompt, HistoryQuery,
     HistorySearchScope, HistorySession, HistorySummary,
 };
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
 
-use super::archive::{matching_lines, search_archive};
+use super::archive::{last_reply, matching_lines, search_archive};
 use super::sql;
 use crate::Result;
 use crate::agent::claude_code::session_title_from;
@@ -307,11 +307,63 @@ impl<'a> HistoryIndex<'a> {
                 session.last_report = self.last_report(&session.session_id)?;
             }
         }
+        for session in &mut sessions {
+            session.last_reply = last_reply(self.conn, &session.session_id)?;
+        }
+        let commands = match query.parent.as_deref().map(str::trim) {
+            Some(parent) if !parent.is_empty() => Some(self.commands(parent)?),
+            _ => None,
+        };
         Ok(HistoryPage {
             sessions,
             total: to_u32(total),
             took_ms: started.elapsed().as_secs_f64() * 1000.0,
+            commands,
         })
+    }
+
+    /// The commands the sessions of conversation `parent` ran as command
+    /// children, oldest first: each row with a command whose parent was in
+    /// that conversation, by the row that started it or the conversation it
+    /// recorded.
+    fn commands(&self, parent: &str) -> Result<Vec<HistoryCommand>> {
+        let fail = sql("read the commands a session ran");
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT r.command,
+                   CAST(round((julianday(r.started_at) - 2440587.5) * 86400000) AS INTEGER),
+                   r.status, r.stopped, r.stopped_by, r.exit_code
+                 FROM sessions r
+                 WHERE r.command IS NOT NULL
+                   AND (lower(r.parent_conversation_id) = lower(?1)
+                        OR r.parent_session_id IN (
+                          SELECT p.id FROM sessions p
+                          WHERE lower(p.claude_session_id) = lower(?1)
+                             OR lower(p.last_claude_session_id) = lower(?1)))
+                 ORDER BY r.started_at, r.id",
+            )
+            .map_err(sql("read the commands a session ran"))?;
+        statement
+            .query_map([parent], |row| {
+                let status: String = row.get(2)?;
+                let ended_by = crate::server::records::ended_by(
+                    &status,
+                    row.get::<_, Option<bool>>(3)?.unwrap_or(false),
+                    row.get::<_, Option<String>>(4)?.as_deref(),
+                );
+                Ok(HistoryCommand {
+                    command: row.get(0)?,
+                    started_at: row.get::<_, Option<i64>>(1)?.map_or(0, to_u64),
+                    running: status == "running",
+                    ended_by,
+                    exit_code: ended_by
+                        .and(row.get::<_, Option<i64>>(5)?)
+                        .and_then(|code| i32::try_from(code).ok()),
+                })
+            })
+            .and_then(Iterator::collect::<rusqlite::Result<Vec<_>>>)
+            .map_err(fail)
     }
 
     /// The newest report a session of conversation `session_id` sent its
@@ -428,7 +480,8 @@ impl<'a> HistoryIndex<'a> {
 
     /// One session by id, whatever case it is asked with, or `None`.
     pub fn session(&self, session_id: &str) -> Result<Option<HistorySession>> {
-        self.conn
+        let found = self
+            .conn
             .query_row(
                 &format!(
                     "{SESSION_COLUMNS}, NULL AS matched
@@ -441,7 +494,12 @@ impl<'a> HistoryIndex<'a> {
                 |row| self.session_row(row),
             )
             .optional()
-            .map_err(sql("read a history session"))
+            .map_err(sql("read a history session"))?;
+        let Some(mut session) = found else {
+            return Ok(None);
+        };
+        session.last_reply = last_reply(self.conn, &session.session_id)?;
+        Ok(Some(session))
     }
 
     /// Names a session by hand, or clears its name when `name` is null or
@@ -542,6 +600,7 @@ impl<'a> HistoryIndex<'a> {
             last_report: None,
             matches: None,
             match_count: None,
+            last_reply: None,
         })
     }
 }

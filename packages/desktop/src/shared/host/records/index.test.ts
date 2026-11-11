@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type * as P from '../protocol'
-import { historySessionFromHost } from './history'
+import { historyPageFromHost, historySessionFromHost } from './history'
 import { profileFromHost, sessionFromHost, splitSettingsPatch } from './index'
 
 const hostSession = (patch: Partial<P.SessionRecord> = {}): P.SessionRecord => ({
@@ -71,7 +71,8 @@ describe('what a session’s agent called it, as the window reads it', () => {
           exitCode: 1,
           lastReport: report,
           matches: [line],
-          matchCount: 6
+          matchCount: 6,
+          lastReply: 'Closing it fixes it.'
         })
       )
     ).toMatchObject({
@@ -83,12 +84,32 @@ describe('what a session’s agent called it, as the window reads it', () => {
       exitCode: 1,
       lastReport: report,
       matches: [line],
-      matchCount: 6
+      matchCount: 6,
+      lastReply: 'Closing it fixes it.'
     })
     const plain = historySessionFromHost(conversation())
-    for (const field of ['parent', 'children', 'branch', 'profileId', 'endedBy', 'exitCode', 'lastReport', 'matches', 'matchCount']) {
+    for (const field of ['parent', 'children', 'branch', 'profileId', 'endedBy', 'exitCode', 'lastReport', 'matches', 'matchCount', 'lastReply']) {
       expect(plain).not.toHaveProperty(field)
     }
+  })
+})
+
+describe('a history page, as the window reads it', () => {
+  it('carries the commands a parent’s sessions ran only when the host says them', () => {
+    const page = { sessions: [], total: 0, tookMs: 1 }
+    expect(historyPageFromHost(page)).not.toHaveProperty('commands')
+    expect(
+      historyPageFromHost({
+        ...page,
+        commands: [
+          { command: 'pnpm test', startedAt: 5, running: false, endedBy: 'exited', exitCode: 1 },
+          { command: 'pnpm dev', startedAt: 6, running: true }
+        ]
+      }).commands
+    ).toEqual([
+      { command: 'pnpm test', startedAt: 5, running: false, endedBy: 'exited', exitCode: 1 },
+      { command: 'pnpm dev', startedAt: 6, running: true }
+    ])
   })
 })
 

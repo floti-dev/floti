@@ -826,6 +826,77 @@ fn a_child_names_its_parents_conversation_and_the_parent_counts_its_children() {
 }
 
 #[test]
+fn a_parents_listing_gives_the_commands_its_sessions_ran_and_no_other_does() {
+    let world = renamable();
+    let lead = world.family_row("A", None, "running");
+    let other = world.family_row("z", None, "running");
+    let connection = world.store.connection();
+    let command = |parent: i64, line: &str, started: &str, status: &str, code: Option<i64>| {
+        connection
+            .execute(
+                "INSERT INTO sessions (name, cwd, argv, status, parent_session_id, child_name, \
+                 command, started_at, exit_code) \
+                 VALUES ('cmd', '/work', '[]', ?1, ?2, 'cmd', ?3, ?4, ?5)",
+                rusqlite::params![status, parent, line, started, code],
+            )
+            .unwrap();
+    };
+    command(
+        lead,
+        "pnpm test",
+        "2026-11-07T09:05:00.000Z",
+        "exited",
+        Some(1),
+    );
+    command(
+        lead,
+        "pnpm lint",
+        "2026-11-07T09:00:00.000Z",
+        "exited",
+        Some(0),
+    );
+    command(
+        lead,
+        "pnpm dev",
+        "2026-11-07T09:10:00.000Z",
+        "running",
+        None,
+    );
+    command(
+        other,
+        "cargo check",
+        "2026-11-07T09:00:00.000Z",
+        "exited",
+        Some(0),
+    );
+
+    let page = world.sessions(HistoryQuery {
+        parent: Some("a".to_owned()),
+        ..HistoryQuery::default()
+    });
+    let commands = page
+        .commands
+        .expect("a parent's listing reads its commands");
+    assert_eq!(
+        commands
+            .iter()
+            .map(|c| (c.command.as_str(), c.running, c.ended_by, c.exit_code))
+            .collect::<Vec<_>>(),
+        [
+            ("pnpm lint", false, Some(EndedBy::Exited), Some(0)),
+            ("pnpm test", false, Some(EndedBy::Exited), Some(1)),
+            ("pnpm dev", true, None, None),
+        ]
+    );
+    assert_eq!(commands[0].started_at, 1_794_042_000_000);
+    assert_eq!(
+        world.all().commands,
+        None,
+        "only a parent's listing reads commands"
+    );
+}
+
+#[test]
 fn a_sessions_prompts_come_in_submission_order() {
     let mut world = Indexed::new();
     world.pass(
@@ -1276,6 +1347,85 @@ fn input_fts5_would_refuse_matches_nothing_rather_than_failing() {
     for term in ["\"", "(", "NEAR(", "a AND", "*", "^"] {
         archive::search_archive(world.conn(), term, 2000).expect("no failure");
     }
+}
+
+#[test]
+fn each_session_carries_its_agents_last_reply_without_tool_calls() {
+    let mut world = Archive::new();
+    let backend = BackendId::claude_code();
+    let lines: Vec<PromptLine> = ["said", "silent"]
+        .iter()
+        .map(|id| PromptLine {
+            session_id: (*id).to_owned(),
+            project: "folder".to_owned(),
+            at: 1_760_000_000_000,
+            text: "a question".to_owned(),
+        })
+        .collect();
+    HistoryIndex::new(world.store.connection(), &backend)
+        .index(&IndexInput {
+            record: RECORD,
+            bytes: 100,
+            reset: false,
+            replaced: &BTreeSet::new(),
+            lines: &lines,
+            transcripts: &BTreeMap::new(),
+            directory_exists: &|_| true,
+            error: None,
+        })
+        .unwrap();
+    let long = "word ".repeat(100);
+    let said = [
+        world.user(1, "a question"),
+        world.message(ArchiveRole::Assistant, 2, "The watcher holds   a\nhandle."),
+        world.message(ArchiveRole::Assistant, 3, "[tool: Read]\n\n[tool]"),
+        world.user(4, "and now?"),
+        world.message(
+            ArchiveRole::Assistant,
+            5,
+            &format!("[tool: Edit]\n\nClosing it fixes {long}"),
+        ),
+        world.message(ArchiveRole::Assistant, 6, "[tool: Bash]"),
+    ];
+    world.archive("said.jsonl", "said", &said);
+    let silent = [world.user(1, "a question")];
+    world.archive("silent.jsonl", "silent", &silent);
+
+    let index = HistoryIndex::new(world.store.connection(), &backend);
+    let page = index.sessions(&HistoryQuery::default()).unwrap();
+    let reply = |id: &str| {
+        page.sessions
+            .iter()
+            .find(|s| s.session_id == id)
+            .unwrap()
+            .last_reply
+            .clone()
+    };
+    let last = reply("said").expect("a reply that says something");
+    assert!(last.starts_with("Closing it fixes word word"), "{last}");
+    assert!(last.ends_with('…'));
+    assert_eq!(last.chars().count(), archive::LAST_REPLY_CHARS + 1);
+    assert_eq!(reply("silent"), None);
+    assert_eq!(
+        index
+            .session("SAID")
+            .unwrap()
+            .unwrap()
+            .last_reply
+            .as_deref(),
+        Some(last.as_str())
+    );
+    let earlier = [
+        world.user(1, "a question"),
+        world.message(ArchiveRole::Assistant, 2, "The watcher holds   a\nhandle."),
+    ];
+    world.archive("short.jsonl", "short", &earlier);
+    assert_eq!(
+        archive::last_reply(world.conn(), "short")
+            .unwrap()
+            .as_deref(),
+        Some("The watcher holds a handle.")
+    );
 }
 
 #[test]

@@ -1595,6 +1595,32 @@ export type Hello = { protocol: ProtocolVersion, client: ClientInfo,
 capabilities: Array<string>, };
 
 /**
+ * One command a session ran as a command child (`floti agent run`). A
+ * command has no conversation, so it is never a session of History's.
+ */
+export type HistoryCommand = { 
+/**
+ * The command line, as it was run.
+ */
+command: string, 
+/**
+ * When it started, epoch ms.
+ */
+startedAt: number, 
+/**
+ * True while it still runs.
+ */
+running: boolean, 
+/**
+ * How it ended, once it has.
+ */
+endedBy?: EndedBy, 
+/**
+ * Its exit code, where it exited by itself with one.
+ */
+exitCode?: number, };
+
+/**
  * One archived message that matched a search: where it is in the
  * conversation, and what it says.
  */
@@ -1624,7 +1650,12 @@ total: number,
 /**
  * How long the query took, in ms.
  */
-tookMs: number, };
+tookMs: number, 
+/**
+ * For a query naming a `parent`, the commands its sessions ran, oldest
+ * first. Absent for any other query.
+ */
+commands?: Array<HistoryCommand>, };
 
 /**
  * One recorded folder, with how much history it holds.
@@ -1795,7 +1826,13 @@ matches?: Array<HistoryMatchLine>,
 /**
  * For a `messages` search, how many of its messages matched.
  */
-matchCount?: number, };
+matchCount?: number, 
+/**
+ * The last thing its agent said in the archived conversation, tool
+ * calls left out, cut to 300 characters. Absent where the archive holds
+ * no reply.
+ */
+lastReply?: string, };
 
 /**
  * Names one conversation by the id its agent gave it.

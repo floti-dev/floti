@@ -211,6 +211,34 @@ pub struct HistorySession {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub match_count: Option<u32>,
+    /// The last thing its agent said in the archived conversation, tool
+    /// calls left out, cut to 300 characters. Absent where the archive holds
+    /// no reply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub last_reply: Option<String>,
+}
+
+/// One command a session ran as a command child (`floti agent run`). A
+/// command has no conversation, so it is never a session of History's.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryCommand {
+    /// The command line, as it was run.
+    pub command: String,
+    /// When it started, epoch ms.
+    #[ts(type = "number")]
+    pub started_at: u64,
+    /// True while it still runs.
+    pub running: bool,
+    /// How it ended, once it has.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ended_by: Option<EndedBy>,
+    /// Its exit code, where it exited by itself with one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub exit_code: Option<i32>,
 }
 
 /// One archived message that matched a search: where it is in the
@@ -308,6 +336,11 @@ pub struct HistoryPage {
     pub total: u32,
     /// How long the query took, in ms.
     pub took_ms: f64,
+    /// For a query naming a `parent`, the commands its sessions ran, oldest
+    /// first. Absent for any other query.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub commands: Option<Vec<HistoryCommand>>,
 }
 
 /// Naming a conversation in history. Null, or only whitespace, restores the

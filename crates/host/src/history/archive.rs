@@ -522,6 +522,60 @@ pub fn matching_lines(
     Ok((rows.into_iter().map(|(line, _)| line).collect(), count))
 }
 
+/// How long a [`last_reply`] may be, in characters, before it is cut.
+pub const LAST_REPLY_CHARS: usize = 300;
+
+/// How many of a conversation's newest replies [`last_reply`] reads for one
+/// that says something beyond tool calls.
+const LAST_REPLY_LOOKBACK: i64 = 20;
+
+/// The last thing the agent said in archived conversation `session`: its
+/// newest reply that is more than tool calls, those left out and its
+/// whitespace run together, cut to [`LAST_REPLY_CHARS`]. `None` when the
+/// archive holds no such reply.
+pub fn last_reply(conn: &Connection, session: &str) -> Result<Option<String>> {
+    let mut statement = conn
+        .prepare_cached(
+            "SELECT body, compressed FROM transcript_messages
+             WHERE session_id = ?1 AND role = 'assistant'
+             ORDER BY at DESC, id DESC
+             LIMIT ?2",
+        )
+        .map_err(sql("read a conversation's last reply"))?;
+    let bodies = statement
+        .query_map(
+            params![session.to_lowercase(), LAST_REPLY_LOOKBACK],
+            |row| Ok(decode_body(&row.get::<_, Vec<u8>>(0)?, row.get(1)?)),
+        )
+        .and_then(Iterator::collect::<rusqlite::Result<Vec<_>>>)
+        .map_err(sql("read a conversation's last reply"))?;
+    Ok(bodies.iter().find_map(|body| said(body)))
+}
+
+/// A reply's words without its tool calls (`[tool: Name]` parts), on one
+/// line and cut to [`LAST_REPLY_CHARS`]; `None` when nothing else is left.
+fn said(body: &str) -> Option<String> {
+    let words: Vec<&str> = body
+        .split("\n\n")
+        .map(str::trim)
+        .filter(|part| !is_tool_marker(part))
+        .flat_map(str::split_whitespace)
+        .collect();
+    if words.is_empty() {
+        return None;
+    }
+    let line = words.join(" ");
+    Some(match line.char_indices().nth(LAST_REPLY_CHARS) {
+        Some((cut, _)) => format!("{}…", line[..cut].trim_end()),
+        None => line,
+    })
+}
+
+/// `[tool]` or `[tool: Name]`, as the archive stores a tool call.
+fn is_tool_marker(part: &str) -> bool {
+    part == "[tool]" || (part.starts_with("[tool: ") && part.ends_with(']'))
+}
+
 /// What the archive holds, against `max_bytes`.
 pub fn read_stats(conn: &Connection, max_bytes: u64) -> Result<ArchiveStats> {
     conn.query_row(

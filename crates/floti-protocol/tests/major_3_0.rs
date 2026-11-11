@@ -81,6 +81,7 @@ const RETIRED_FIELDS: &[(&str, &str)] = &[
 
 /// The optional fields History's types gain.
 const HISTORY_FIELDS: &[(&str, &[&str])] = &[
+    ("HistoryPage", &["commands"]),
     ("HistoryQuery", &["parent", "topLevel"]),
     ("RestorableSession", &["conversationId", "title"]),
     (
@@ -95,6 +96,7 @@ const HISTORY_FIELDS: &[(&str, &[&str])] = &[
             "lastReport",
             "matches",
             "matchCount",
+            "lastReply",
         ],
     ),
 ];
@@ -130,7 +132,7 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
     );
     assert_eq!(
         names(&found, Part::Type, Change::Added),
-        ["AgentInstructions", "HistoryMatchLine"]
+        ["AgentInstructions", "HistoryCommand", "HistoryMatchLine"]
     );
     assert_eq!(
         names(&found, Part::Channel, Change::Changed),
@@ -146,6 +148,7 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
         [
             "AgentProblem",
             "FileView",
+            "HistoryPage",
             "HistoryQuery",
             "HistorySession",
             "HostSettings",

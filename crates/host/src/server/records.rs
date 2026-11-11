@@ -647,6 +647,7 @@ pub(crate) fn read_history_session(
                     last_report: None,
                     matches: None,
                     match_count: None,
+                    last_reply: None,
                 })
             },
         )

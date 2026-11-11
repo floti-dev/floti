@@ -57,12 +57,28 @@ export function historySessionFromHost(session: P.HistorySession): HistorySessio
     ...(session.exitCode == null ? {} : { exitCode: session.exitCode }),
     ...(session.lastReport == null ? {} : { lastReport: session.lastReport }),
     ...(session.matches == null ? {} : { matches: session.matches }),
-    ...(session.matchCount == null ? {} : { matchCount: session.matchCount })
+    ...(session.matchCount == null ? {} : { matchCount: session.matchCount }),
+    ...(session.lastReply == null ? {} : { lastReply: session.lastReply })
   }
 }
 
 export function historyPageFromHost(page: P.HistoryPage): HistoryPage {
-  return { sessions: page.sessions.map(historySessionFromHost), total: page.total, tookMs: page.tookMs }
+  return {
+    sessions: page.sessions.map(historySessionFromHost),
+    total: page.total,
+    tookMs: page.tookMs,
+    ...(page.commands == null
+      ? {}
+      : {
+          commands: page.commands.map((command) => ({
+            command: command.command,
+            startedAt: command.startedAt,
+            running: command.running,
+            ...(command.endedBy == null ? {} : { endedBy: command.endedBy }),
+            ...(command.exitCode == null ? {} : { exitCode: command.exitCode })
+          }))
+        })
+  }
 }
 
 /** The window's query, with every field it left out said as null. */

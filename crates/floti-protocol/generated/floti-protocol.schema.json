@@ -4221,6 +4221,50 @@
       ],
       "type": "object"
     },
+    "HistoryCommand": {
+      "description": "One command a session ran as a command child (`floti agent run`). A\ncommand has no conversation, so it is never a session of History's.",
+      "properties": {
+        "command": {
+          "description": "The command line, as it was run.",
+          "type": "string"
+        },
+        "endedBy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EndedBy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How it ended, once it has."
+        },
+        "exitCode": {
+          "description": "Its exit code, where it exited by itself with one.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "running": {
+          "description": "True while it still runs.",
+          "type": "boolean"
+        },
+        "startedAt": {
+          "description": "When it started, epoch ms.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command",
+        "startedAt",
+        "running"
+      ],
+      "type": "object"
+    },
     "HistoryMatchLine": {
       "description": "One archived message that matched a search: where it is in the\nconversation, and what it says.",
       "properties": {
@@ -4248,6 +4292,16 @@
     },
     "HistoryPage": {
       "properties": {
+        "commands": {
+          "description": "For a query naming a `parent`, the commands its sessions ran, oldest\nfirst. Absent for any other query.",
+          "items": {
+            "$ref": "#/$defs/HistoryCommand"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "sessions": {
           "description": "Most recently active first.",
           "items": {
@@ -4518,6 +4572,13 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "lastReply": {
+          "description": "The last thing its agent said in the archived conversation, tool\ncalls left out, cut to 300 characters. Absent where the archive holds\nno reply.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "lastReport": {
           "anyOf": [
