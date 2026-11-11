@@ -213,7 +213,6 @@ import {
   type RailItem,
   type RestorePick,
   type HistoryRunning,
-  type StoppedGroup,
   type SettingsSectionId,
   type Tab,
   type TabIndicator,
@@ -314,6 +313,7 @@ import {
 } from "./DocumentTab";
 import { fileKey, joinRoot, relativeTo, useFiles } from "./useFiles";
 import { useHistoryPalette } from "./useHistoryPalette";
+import { useStoppedGroup } from "./useStoppedGroup";
 import { useArchiveStats } from "./useArchiveStats";
 import { ConversationPane } from "./ConversationPane";
 import { useLauncher } from "./useLauncher";
@@ -731,8 +731,6 @@ export function App(): JSX.Element {
   const [historyOpen, setHistoryOpen] = useState(false);
   /** What had the keyboard when History opened, given back when it closes without acting. */
   const historyReturn = useRef<HTMLElement | null>(null);
-  /** The sessions a stop took, at the top of History until each is back or the group is dismissed. */
-  const [stopped, setStopped] = useState<StoppedGroup | null>(null);
   /** The sentence History's last resume or rename was refused with. */
   const [historyError, setHistoryError] = useState<string | null>(null);
   /** The rail's current view, pressed again, puts the sidebar away. */
@@ -2145,66 +2143,30 @@ export function App(): JSX.Element {
     return { shown, ids };
   }, [historyHost, hostWork.byHost, sessionState.sessions, sessionState.activity, open]);
 
-  /** The stop's group, without those back already: a conversation running again is back. */
-  const stoppedShown = useMemo((): StoppedGroup | null => {
-    if (stopped === null) return null;
-    const sessions = stopped.sessions.filter(
-      (lost) =>
-        lost.conversationId === undefined ||
-        !historyRunning.shown.has(lost.conversationId.toLowerCase()),
-    );
-    return sessions.length === 0 ? null : { ...stopped, sessions };
-  }, [stopped, historyRunning]);
-
-  /**
-   * Resumes sessions from the stop's group, each by its conversation, in its
-   * own folder, as its agent unless the offer named its agent's problem. Each
-   * that comes back leaves the group; one that is refused stays, and History
-   * says why.
-   */
+  const resumeHere = useCallback(
+    (conversationId: string, agent: string | undefined) =>
+      resumeConversation(LOCAL_HOST_KEY, conversationId, agent),
+    [resumeConversation],
+  );
+  /** The sessions a stop took, at the top of History until each is back or the group is dismissed. */
+  const {
+    shown: stoppedShown,
+    keep: keepStopped,
+    resume: resumeStoppedGroup,
+    dismiss: dismissStopped,
+  } = useStoppedGroup({
+    running: historyRunning.shown,
+    resume: resumeHere,
+    raiseUndo: agentToasts.raise,
+  });
   const resumeStopped = useCallback(
     async (sessions: readonly RestorableSession[]) => {
-      const back = new Set<number>();
-      let refused: string | null = null;
-      for (const lost of sessions) {
-        if (lost.conversationId === undefined) {
-          refused = `Floti never learned which conversation ${lost.title ?? lost.name} was, so it cannot be resumed.`;
-          continue;
-        }
-        const answer = await resumeConversation(
-          LOCAL_HOST_KEY,
-          lost.conversationId,
-          lost.agentProblem === undefined ? lost.agent : undefined,
-        );
-        if (answer === null) back.add(lost.id);
-        else refused = answer;
-      }
-      setStopped((current) => {
-        if (current === null) return null;
-        const left = current.sessions.filter((lost) => !back.has(lost.id));
-        return left.length === 0 ? null : { ...current, sessions: left };
-      });
+      const refused = await resumeStoppedGroup(sessions);
       if (refused === null) closeHistory(false);
       else setHistoryError(refused);
     },
-    [resumeConversation, closeHistory, setHistoryError],
+    [resumeStoppedGroup, closeHistory, setHistoryError],
   );
-
-  /** The stop's group taken away, with Undo: nothing in History asks first. */
-  const dismissStopped = useCallback(() => {
-    const was = stopped;
-    if (was === null) return;
-    setStopped(null);
-    const count = was.sessions.length;
-    agentToasts.raise(
-      "Stopped sessions dismissed",
-      `${String(count)} ${count === 1 ? "session" : "sessions"} the stop took ${count === 1 ? "is" : "are"} no longer at the top of History.`,
-      async () => {
-        setStopped(was);
-        return null;
-      },
-    );
-  }, [stopped, agentToasts]);
 
   /**
    * The restore offer's Not now: its sessions stay at the top of History
@@ -2212,10 +2174,9 @@ export function App(): JSX.Element {
    * answered, so History keeps them in this window.
    */
   const notNow = useCallback(() => {
-    if (restoreOffer !== null && restoreOffer.sessions.length > 0)
-      setStopped({ at: null, sessions: restoreOffer.sessions });
+    if (restoreOffer !== null) keepStopped(restoreOffer.sessions);
     dismissRestore();
-  }, [restoreOffer, dismissRestore]);
+  }, [restoreOffer, dismissRestore, keepStopped]);
 
   /** A conversation read-only in a tab, at `at` when a matched line was chosen. */
   const openConversation = useCallback(
@@ -2376,7 +2337,7 @@ export function App(): JSX.Element {
       const left = restoreOffer.sessions.filter(
         (session) => !pairs.has(session.id),
       );
-      setStopped(left.length === 0 ? null : { at: null, sessions: left });
+      keepStopped(left);
       setRestoreChosen(null);
       commit((current) => {
         // A session lost with its host while its tab was open comes back in
@@ -2396,7 +2357,7 @@ export function App(): JSX.Element {
         return placed;
       });
     },
-    [restoreOffer, restoreLost, sessionState, commit, open],
+    [restoreOffer, restoreLost, sessionState, commit, open, keepStopped],
   );
 
   /*
