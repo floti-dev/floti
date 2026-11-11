@@ -56,8 +56,9 @@
 //! host's refusal (to standard error, with a non-zero status). `floti session
 //! title <text>` is run from a session's own shell too: it titles that session.
 //! `floti update [--channel <name>]` replaces this floti with its channel's
-//! newest release, then the desktop app where it is installed, once the app
-//! has quit; every download is checked against its SHA-256 and its minisign
+//! newest release, then the desktop app where it is installed and older,
+//! once the app has quit, asking first where that ends this computer's
+//! host's sessions; every download is checked against its SHA-256 and its minisign
 //! signature with the key built into the binary before it is used, and a
 //! failed check stops it with one line and nothing replaced
 //! ([`floti_host::update`]). `--channel` chooses a channel, `stable` at
@@ -132,7 +133,10 @@ fn main() -> ExitCode {
             None => usage(),
         },
         ["update", ..] => match floti_host::update::parse(&args[1..]) {
-            Some(channel) => ExitCode::from(floti_host::update::run(channel)),
+            Some(channel) => ExitCode::from(floti_host::update::run(
+                channel,
+                &update_stop::host_sessions,
+            )),
             None => usage(),
         },
         ["agent", ..] => agent(&args[1..]),

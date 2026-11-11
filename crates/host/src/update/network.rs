@@ -3,9 +3,10 @@
 //! ring, as `floti.fetch` uses it).
 //!
 //! Only `https` is fetched, with certificates the OS trusts and the system
-//! proxy, or `http` to this computer's loopback address, which only a test
-//! serves. A redirect is followed (a GitHub release download is one) only
-//! to an address that rule allows. A body is passed on piece by piece as it
+//! proxy. A build with the testkit also fetches `http` from this computer's
+//! loopback address, where a test serves a release; a release build never
+//! does. A redirect is followed (a GitHub release download is one) only to
+//! an address that rule allows. A body is passed on piece by piece as it
 //! arrives, so a desktop installer is never held whole in memory, and one
 //! that ends before the length its response announced is cut off, not done.
 
@@ -65,11 +66,20 @@ pub fn get_whole(network: &dyn Network, url: &Url, limit: u64) -> Result<Vec<u8>
     Ok(body)
 }
 
-/// Whether `url` may be fetched: `https`, or `http` to a loopback address.
+/// Whether this build fetches `http` from this computer: only one with the
+/// testkit, whose tests serve releases there.
+const LOOPBACK_HTTP: bool = cfg!(any(test, feature = "testkit"));
+
+/// Whether `url` may be fetched: `https`, or, in a build with the testkit,
+/// `http` to a loopback address.
 pub fn allowed_url(url: &Url) -> bool {
+    allowed(url, LOOPBACK_HTTP)
+}
+
+fn allowed(url: &Url, loopback_http: bool) -> bool {
     match url.scheme() {
         "https" => true,
-        "http" => is_loopback(url),
+        "http" => loopback_http && is_loopback(url),
         _ => false,
     }
 }
@@ -209,15 +219,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_https_and_loopback_http_are_fetched() {
-        let allowed = |url: &str| allowed_url(&Url::parse(url).unwrap());
-        assert!(allowed("https://floti.dev/update.json"));
-        assert!(allowed("http://127.0.0.1:8080/update.json"));
-        assert!(allowed("http://localhost/update.json"));
-        assert!(allowed("http://[::1]/update.json"));
-        assert!(!allowed("http://floti.dev/update.json"));
-        assert!(!allowed("http://localhost.example.com/"));
-        assert!(!allowed("file:///update.json"));
-        assert!(!allowed("ftp://floti.dev/update.json"));
+    fn a_release_build_fetches_https_only() {
+        let release = |url: &str| allowed(&Url::parse(url).unwrap(), false);
+        assert!(release("https://floti.dev/update.json"));
+        assert!(release("https://127.0.0.1/update.json"));
+        assert!(!release("http://127.0.0.1:8080/update.json"));
+        assert!(!release("http://localhost/update.json"));
+        assert!(!release("http://floti.dev/update.json"));
+        assert!(!release("file:///update.json"));
+    }
+
+    #[test]
+    fn a_test_build_also_fetches_http_from_this_computer() {
+        let test = |url: &str| allowed_url(&Url::parse(url).unwrap());
+        assert!(test("https://floti.dev/update.json"));
+        assert!(test("http://127.0.0.1:8080/update.json"));
+        assert!(test("http://localhost/update.json"));
+        assert!(test("http://[::1]/update.json"));
+        assert!(!test("http://floti.dev/update.json"));
+        assert!(!test("http://localhost.example.com/"));
+        assert!(!test("file:///update.json"));
+        assert!(!test("ftp://floti.dev/update.json"));
     }
 }

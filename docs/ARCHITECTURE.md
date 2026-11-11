@@ -57,8 +57,10 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   (`crates/host/src/update_stop.rs`), asked first when it would end sessions,
   and their rows stay running, so the next host offers them back. `floti
   update` (`crates/host/src/update`) replaces the floti binary, then the
-  desktop app once it has quit, each only after its download has passed its
-  signature and SHA-256 checks ([PACKAGING.md](PACKAGING.md#floti-update));
+  desktop app where it is older once it has quit, each only after its
+  download has passed its signature and SHA-256 checks
+  ([PACKAGING.md](PACKAGING.md#floti-update)), and asks first where
+  installing the app stops the host and ends sessions;
   a host already running keeps the binary it started from until it next
   starts. When the
   connection ends without a stop or a quit, the window keeps each tab's

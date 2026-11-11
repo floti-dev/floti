@@ -172,6 +172,32 @@ pub fn run(asker: &Asker, step: Step) -> u8 {
     outcome.code()
 }
 
+/// How many sessions the host on this computer runs, asked as the host
+/// itself, as `--ask` with no client folder asks: 0 when no host runs.
+/// `floti update` asks it before it installs a desktop app whose installer
+/// stops that host.
+pub fn host_sessions() -> Result<usize, String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| format!("could not start: {err}"))?;
+    let outcome = runtime.block_on(perform(UserEnv::from_process(), &Asker::Host, Step::Ask));
+    runtime.shutdown_background();
+    sessions_of(outcome)
+}
+
+/// The count an `--ask` as the host itself ended with.
+fn sessions_of(outcome: Outcome) -> Result<usize, String> {
+    match outcome {
+        Outcome::Count(running) => Ok(running),
+        Outcome::Failed(BridgeExit::Unreachable, _) => Ok(0),
+        Outcome::Failed(_, why) => Err(why),
+        Outcome::Ask(_) | Outcome::NothingToEnd | Outcome::Stopped => {
+            Err("the host's answer was not a count".to_owned())
+        }
+    }
+}
+
 async fn perform(env: UserEnv, asker: &Asker, step: Step) -> Outcome {
     let folders = match folders::resolve(&env) {
         Ok(folders) => folders,
@@ -461,6 +487,19 @@ mod tests {
             assert_ne!(code, 0, "{exit:?}");
             assert_ne!(code, NOTHING_TO_END_EXIT, "{exit:?}");
         }
+    }
+
+    #[test]
+    fn floti_update_is_told_the_host_s_count_and_none_when_no_host_runs() {
+        assert_eq!(sessions_of(Outcome::Count(2)), Ok(2));
+        assert_eq!(
+            sessions_of(Outcome::Failed(BridgeExit::Unreachable, "no host".into())),
+            Ok(0)
+        );
+        assert_eq!(
+            sessions_of(Outcome::Failed(BridgeExit::Failed, "refused".into())),
+            Err("refused".to_owned())
+        );
     }
 
     #[test]

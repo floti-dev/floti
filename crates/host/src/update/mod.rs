@@ -1,26 +1,35 @@
 //! `floti update [--channel <name>]`: replaces the running floti with its
-//! channel's newest release, then the desktop app where it is installed,
-//! once the app has quit.
+//! channel's newest release, and the desktop app where it is installed and
+//! older, once the app has quit.
 //!
-//! 1. It downloads `https://floti.dev/update.json` and its signature
+//! 1. It removes what an earlier update left beside the running floti
+//!    (`floti.old-<pid>.exe`, `.floti-<version>.<pid>[.exe]`) where the
+//!    process that left it is known to have ended.
+//! 2. It downloads `https://floti.dev/update.json` and its signature
 //!    `update.json.minisig`, and checks the signature with the key built
 //!    into the binary and its trusted comment, `floti update.json`
 //!    ([`signature`]). The channel is the one `--channel` names, which is
 //!    then remembered ([`channel`]), or the one remembered, `stable` at
 //!    first. A channel the manifest does not have is an error naming it.
-//! 2. When the channel's version is not newer than this floti's, it says
-//!    floti is up to date and changes nothing: an update never installs an
-//!    older or equal version.
-//! 3. It downloads this computer's floti (`<url><file>`) beside the running
-//!    one, under a name of its own, and, where the desktop app is
-//!    installed, the release's desktop file into `update` in the data
-//!    folder. Each file's signature (`<url><file>.minisig`) is fetched
-//!    first; once the file is on disk it is checked against that
-//!    signature, whose trusted comment must be `floti <version> <file>`,
-//!    and against its SHA-256 in the manifest.
-//! 4. Only when everything has passed does it replace anything: floti
+//! 3. It decides what to replace. floti, when the channel's version is newer
+//!    than this one's; a version this floti cannot read its own version as
+//!    stops the update, so an older or equal version is never installed. A
+//!    floti that is part of the desktop app's install is never replaced on
+//!    its own: the app's installer brings its own, and it says so. The app,
+//!    when it is installed and its own version is older than the channel's
+//!    or cannot be told, so an app behind an up-to-date floti is still
+//!    updated. Where installing the app stops this computer's host
+//!    (Windows), and that host runs sessions, it says how many end and asks
+//!    on the terminal, no by default; with no terminal to ask on it leaves
+//!    the app and says why. With nothing to replace, it says floti is up to
+//!    date and changes nothing.
+//! 4. It downloads this computer's floti beside the running one, under a
+//!    name of its own, and the app's release file into `update` in the data
+//!    folder, each checked against its signature and its SHA-256
+//!    ([`release_file`]).
+//! 5. Only when everything has passed does it replace anything: floti
 //!    first ([`Installs::replace_binary`]), then, once no process of the
-//!    app is left, the app ([`Installs::replace_desktop`]). While the app
+//!    app is left, the app ([`Installs::install_desktop`]). While the app
 //!    runs it says it is waiting for it to quit, and looks again every
 //!    second.
 //!
@@ -36,17 +45,18 @@
 pub mod channel;
 pub mod manifest;
 pub mod network;
+pub mod release_file;
 pub mod signature;
 pub mod versions;
 
 #[cfg(test)]
 mod tests;
 
-use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use floti_protocol::Knowable;
 use minisign_verify::PublicKey;
 use url::Url;
 
@@ -54,10 +64,12 @@ use crate::platform::folders::{self, UserEnv};
 use crate::platform::installs::{self, Desktop, Installs};
 use crate::platform::links::{self, remove_tree};
 use crate::platform::process_table::{self, ProcessTable};
+use crate::platform::process_tree::{self, ProcessTree};
 use crate::version::{FLOTI_VERSION, cpu_name, os_name};
 use manifest::{FileEntry, Release};
-use network::{FetchError, Network, get_whole};
-use signature::{FileCheck, MANIFEST_COMMENT, check_whole, file_comment};
+use network::{Network, get_whole};
+use release_file::{fetch_refusal, fetch_signature};
+use signature::{MANIFEST_COMMENT, check_whole};
 use versions::Version;
 
 /// Where the manifest is.
@@ -74,69 +86,108 @@ pub const STAGING_FOLDER: &str = "update";
 pub const APP_POLL: Duration = Duration::from_secs(1);
 
 const MANIFEST_LIMIT: u64 = 1024 * 1024;
-const SIGNATURE_LIMIT: u64 = 16 * 1024;
-const FILE_LIMIT: u64 = 2 * 1024 * 1024 * 1024;
 
-/// Why an update stopped, as the one line it prints.
+/// What went wrong, as a fact. `floti update` adds what that means for the
+/// update ([`failure_line`]).
 #[derive(Debug, thiserror::Error)]
 pub enum UpdateError {
-    #[error("could not download {file} from {url}: {reason}, so nothing was updated.")]
+    #[error("could not download {file} from {url}: {reason}.")]
     Network {
         file: String,
         url: String,
         reason: String,
     },
-    #[error("{file} has no signature ({file}.minisig is not there), so nothing was updated.")]
+    #[error("{file} has no signature ({file}.minisig is not there).")]
     MissingSignature { file: String },
-    #[error("{file} does not match its signature, so nothing was updated.")]
+    #[error("{file} does not match its signature.")]
     BadSignature { file: String },
-    #[error("{file} is not signed with the key built into floti, so nothing was updated.")]
+    #[error("{file} is not signed with the key built into floti.")]
     WrongKey { file: String },
-    #[error(
-        "the signature of {file} is for \"{found}\", not \"{wanted}\", so nothing was updated."
-    )]
+    #[error("the signature of {file} is for \"{found}\", not \"{wanted}\".")]
     WrongComment {
         file: String,
         found: String,
         wanted: String,
     },
-    #[error("{file} does not match its SHA-256 in update.json, so nothing was updated.")]
+    #[error("{file} does not match its SHA-256 in update.json.")]
     WrongSha256 { file: String },
-    #[error("the download of {file} stopped before its end ({reason}), so nothing was updated.")]
+    #[error("the download of {file} stopped before its end ({reason}).")]
     CutOff { file: String, reason: String },
     #[error("{0}")]
     Manifest(String),
     #[error("update.json has no channel \"{channel}\"; it has {}.", known.join(", "))]
     NoChannel { channel: String, known: Vec<String> },
-    #[error("floti {version} on {channel} has no build for {target}, so nothing was updated.")]
+    #[error("floti {version} on {channel} has no build for {target}.")]
     NoBuild {
         channel: String,
         version: String,
         target: String,
     },
-    #[error("{reason}, so nothing was updated.")]
+    #[error(
+        "this floti's own version, \"{version}\", is not a version, so floti cannot tell which release is newer."
+    )]
+    RunningVersion { version: String },
+    #[error("{reason}.")]
     Disk { reason: String },
-    #[error("floti could not be replaced, so nothing was updated: {reason}")]
+    #[error("floti could not be replaced: {reason}")]
     Replace { reason: String },
+    /// floti was replaced; the app was not.
     #[error("floti is updated to {version}, but {app} is not: {reason}")]
     Desktop {
         version: String,
         app: String,
         reason: String,
     },
+    /// Only the app was to be updated, and it was not.
+    #[error("{app} could not be updated to {version}: {reason}")]
+    DesktopAlone {
+        version: String,
+        app: String,
+        reason: String,
+    },
+}
+
+/// The line `floti update` prints for `err`: the fact, then that nothing
+/// was updated, unless floti already was.
+pub fn failure_line(err: &UpdateError) -> String {
+    let line = err.to_string();
+    match err {
+        UpdateError::Desktop { .. } => line,
+        _ => nothing_updated(&line),
+    }
+}
+
+/// `line` as a sentence, then "Nothing was updated."
+fn nothing_updated(line: &str) -> String {
+    let stop = if line.ends_with('.') { "" } else { "." };
+    format!("{line}{stop} Nothing was updated.")
 }
 
 /// How an update ended well.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
-    /// The channel has nothing newer than this floti.
+    /// The channel has nothing newer than this floti and the app.
     UpToDate { channel: String, newest: String },
-    /// floti was replaced, and the desktop app with it when `desktop` names it.
+    /// floti was replaced when `floti` is true, and the desktop app when
+    /// `desktop` names it.
     Updated {
         version: String,
+        floti: bool,
         desktop: Option<String>,
     },
+    /// Only the app had an update, and it was left as it is: the person
+    /// said no, or there was no terminal to ask on.
+    DesktopLeft { version: String, app: String },
 }
+
+/// Counts the sessions this computer's host runs, which installing the
+/// desktop app over its install ends where that stops the host; 0 when no
+/// host runs.
+pub type SessionsEnding<'a> = &'a dyn Fn() -> Result<usize, String>;
+
+/// Asks a person a yes-or-no question, no by default; `None` when there is
+/// no terminal to ask on.
+pub type Confirm<'a> = &'a dyn Fn(&str) -> Option<bool>;
 
 /// What one update runs with: every piece of the machine it touches, so a
 /// test can hand it fakes.
@@ -150,6 +201,10 @@ pub struct Updater<'a> {
     pub network: &'a dyn Network,
     pub installs: &'a dyn Installs,
     pub processes: &'a dyn ProcessTable,
+    /// Whether a process is alive, for what earlier updates left.
+    pub is_alive: &'a dyn Fn(u32) -> Knowable<bool>,
+    pub sessions_ending: SessionsEnding<'a>,
+    pub confirm: Confirm<'a>,
     /// Waits, between looks at a running app.
     pub pause: &'a dyn Fn(Duration),
     /// The user, for where the desktop app is.
@@ -167,6 +222,11 @@ pub struct Updater<'a> {
 impl Updater<'_> {
     /// Runs the update.
     pub fn run(&mut self) -> Result<Outcome, UpdateError> {
+        self.sweep_leftovers();
+        let running =
+            Version::parse(self.running_version).ok_or_else(|| UpdateError::RunningVersion {
+                version: self.running_version.to_owned(),
+            })?;
         let channel = self
             .chosen_channel
             .clone()
@@ -176,80 +236,102 @@ impl Updater<'_> {
         if self.chosen_channel.is_some() {
             channel::remember(&self.data, &channel)?;
         }
-        let running = Version::parse(self.running_version);
-        if running.is_some_and(|running| release.version <= running) {
+        let version = release.version().clone();
+
+        let installed = self.installs.desktop(&self.env);
+        let bundled_in = installed
+            .clone()
+            .filter(|app| self.installs.bundles(app, &self.running_binary));
+        if let Some(app) = &bundled_in {
+            self.say_bundled(app);
+        }
+        let floti = if bundled_in.is_none() && version > running {
+            Some(release.floti.clone().ok_or_else(|| UpdateError::NoBuild {
+                channel: channel.clone(),
+                version: version.to_string(),
+                target: self.target.clone(),
+            })?)
+        } else {
+            None
+        };
+        let mut desktop = self.desktop_step(installed, &release);
+        let mut left = None;
+        if let Some((app, _)) = &desktop
+            && !self.may_install_desktop(app)
+        {
+            left = Some(app.name.to_owned());
+            desktop = None;
+        }
+        if floti.is_none() && desktop.is_none() {
+            if let Some(app) = left {
+                return Ok(Outcome::DesktopLeft {
+                    version: version.to_string(),
+                    app,
+                });
+            }
             self.say(&format!(
-                "floti {} is up to date on {channel} (its newest is {}).",
-                self.running_version, release.version
+                "floti {} is up to date on {channel} (its newest is {version}).",
+                self.running_version
             ));
             return Ok(Outcome::UpToDate {
                 channel,
-                newest: release.version.to_string(),
+                newest: version.to_string(),
             });
         }
-        let floti = release.floti.clone().ok_or_else(|| UpdateError::NoBuild {
-            channel: channel.clone(),
-            version: release.version.to_string(),
-            target: self.target.clone(),
-        })?;
-        let desktop = self.installs.desktop(&self.env);
-        let desktop_file = match (&desktop, &release.desktop) {
-            (Some(_), Some(entry)) => Some(entry.clone()),
-            (Some(app), None) => {
-                self.say(&format!(
-                    "floti {} has no {} for {}, so {} stays as it is.",
-                    release.version, app.name, self.target, app.name
-                ));
-                None
-            }
-            (None, _) => None,
-        };
 
         let staging = self.data.join(STAGING_FOLDER);
         clear(&staging).map_err(|reason| UpdateError::Disk { reason })?;
-        let new_binary = self.beside_running(&release.version);
+        let new_binary = floti.as_ref().map(|_| self.beside_running(&version));
         let checked = self.download_all(
             &release,
-            &floti,
-            &new_binary,
-            desktop_file.as_ref(),
+            floti.as_ref().zip(new_binary.as_deref()),
+            desktop.as_ref().map(|(_, entry)| entry),
             &staging,
         );
-        if let Err(err) = checked {
-            let _ = std::fs::remove_file(&new_binary);
+        let discard = |new_binary: &Option<PathBuf>| {
+            if let Some(path) = new_binary {
+                let _ = std::fs::remove_file(path);
+            }
             let _ = clear(&staging);
+        };
+        if let Err(err) = checked {
+            discard(&new_binary);
             return Err(err);
         }
 
-        if let Err(err) = self
-            .installs
-            .replace_binary(&self.running_binary, &new_binary)
-        {
-            let _ = std::fs::remove_file(&new_binary);
-            let _ = clear(&staging);
-            return Err(UpdateError::Replace {
-                reason: err.to_string(),
-            });
+        if let Some(new) = &new_binary {
+            if let Err(err) = self.installs.replace_binary(&self.running_binary, new) {
+                discard(&new_binary);
+                return Err(UpdateError::Replace {
+                    reason: err.to_string(),
+                });
+            }
+            self.say(&format!(
+                "floti is updated from {} to {version}.",
+                self.running_version
+            ));
         }
-        self.say(&format!(
-            "floti is updated from {} to {}.",
-            self.running_version, release.version
-        ));
 
-        let updated_desktop = match (desktop, desktop_file) {
-            (Some(app), Some(entry)) => {
-                let result = self.replace_desktop(&app, &staging.join(&entry.file), &release);
+        let updated_desktop = match desktop {
+            Some((app, entry)) => {
+                let result = self.install_desktop(
+                    &app,
+                    &staging.join(&entry.file),
+                    &version,
+                    new_binary.is_some(),
+                );
                 let _ = clear(&staging);
                 result?;
                 Some(app.name.to_owned())
             }
-            _ => {
+            None => {
                 let _ = clear(&staging);
                 None
             }
         };
         Ok(Outcome::Updated {
-            version: release.version.to_string(),
+            version: version.to_string(),
+            floti: new_binary.is_some(),
             desktop: updated_desktop,
         })
     }
@@ -259,12 +341,141 @@ impl Updater<'_> {
         let _ = self.out.flush();
     }
 
+    /// Says that this floti is `app`'s, and where floti installed on its
+    /// own is, when it is there.
+    fn say_bundled(&mut self, app: &Desktop) {
+        let mut line = format!(
+            "This floti is part of {} ({}), so it is updated with {}, never on its own.",
+            app.name,
+            app.path.display(),
+            app.name
+        );
+        if let Some(standalone) = self
+            .installs
+            .standalone_binary(&self.env)
+            .filter(|path| path.is_file() && *path != self.running_binary)
+        {
+            line.push_str(&format!(
+                " floti installed on its own is {0}; `{0} update` updates it.",
+                standalone.display()
+            ));
+        }
+        self.say(&line);
+    }
+
+    /// Removes what an earlier update left beside the running floti, where
+    /// the process that left it has ended. Nothing it cannot remove stops
+    /// this update.
+    fn sweep_leftovers(&self) {
+        let Some(folder) = self.running_binary.parent() else {
+            return;
+        };
+        let Ok(entries) = std::fs::read_dir(folder) else {
+            return;
+        };
+        let stem = self
+            .running_binary
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let extension = self.extension();
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let Some(pid) = name
+                .to_str()
+                .and_then(|name| leftover_pid(name, &stem, &extension))
+            else {
+                continue;
+            };
+            if matches!((self.is_alive)(pid), Knowable::Known(false)) {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+
+    /// The running binary's extension with its dot, or nothing.
+    fn extension(&self) -> String {
+        self.running_binary
+            .extension()
+            .map(|extension| format!(".{}", extension.to_string_lossy()))
+            .unwrap_or_default()
+    }
+
+    /// The installed app and its release file, when the app is older than
+    /// the release or its version cannot be told, and the release has one
+    /// for this computer.
+    fn desktop_step(
+        &mut self,
+        installed: Option<Desktop>,
+        release: &Release,
+    ) -> Option<(Desktop, FileEntry)> {
+        let app = installed?;
+        let current = self
+            .installs
+            .desktop_version(&app)
+            .and_then(|version| Version::parse(&version));
+        if current.is_some_and(|current| current >= *release.version()) {
+            return None;
+        }
+        match &release.desktop {
+            Some(entry) => Some((app, entry.clone())),
+            None => {
+                self.say(&format!(
+                    "floti {} has no {} for {}, so {} stays as it is.",
+                    release.version(),
+                    app.name,
+                    self.target,
+                    app.name
+                ));
+                None
+            }
+        }
+    }
+
+    /// Whether `app` may be installed now. Where that stops this computer's
+    /// host and the host runs sessions, the person is asked first.
+    fn may_install_desktop(&mut self, app: &Desktop) -> bool {
+        if !self.installs.installing_desktop_stops_host() {
+            return true;
+        }
+        let ending = match (self.sessions_ending)() {
+            Ok(0) => return true,
+            Ok(1) => "1 session; it comes back".to_owned(),
+            Ok(running) => format!("{running} sessions; they come back"),
+            Err(why) => {
+                self.say(&format!(
+                    "floti could not ask this computer's host which sessions updating {} ends: {why}",
+                    app.name
+                ));
+                "the sessions it runs; they come back".to_owned()
+            }
+        };
+        let name = app.name;
+        let question = format!(
+            "Updating {name} stops this computer's host, ending {ending} when {name} next starts. Update {name} now?"
+        );
+        match (self.confirm)(&question) {
+            Some(true) => true,
+            Some(false) => {
+                self.say(&format!(
+                    "{name} stays as it is; floti update updates it when run again."
+                ));
+                false
+            }
+            None => {
+                self.say(&format!(
+                    "{name} stays as it is: updating it ends sessions, and there is no terminal to ask on first. Run floti update in a terminal to update {name}."
+                ));
+                false
+            }
+        }
+    }
+
     /// The manifest, its signature checked.
     fn manifest(&self) -> Result<Vec<u8>, UpdateError> {
         let bytes = get_whole(self.network, &self.manifest_url, MANIFEST_LIMIT)
             .map_err(|err| fetch_refusal(MANIFEST_FILE, &self.manifest_url, err))?;
-        let signature_url = signature_url(&self.manifest_url);
-        let signature = self.signature(MANIFEST_FILE, &signature_url)?;
+        let signature = fetch_signature(self.network, MANIFEST_FILE, &self.manifest_url)?;
         check_whole(
             self.key,
             &bytes,
@@ -275,94 +486,66 @@ impl Updater<'_> {
         Ok(bytes)
     }
 
-    fn signature(&self, file: &str, url: &Url) -> Result<Vec<u8>, UpdateError> {
-        get_whole(self.network, url, SIGNATURE_LIMIT).map_err(|err| match err {
-            FetchError::NotFound => UpdateError::MissingSignature {
-                file: file.to_owned(),
-            },
-            other => fetch_refusal(&format!("{file}.minisig"), url, other),
-        })
-    }
-
     /// Where the new floti is written: beside the running one, under a
     /// name of this run's own, with the running one's extension.
     fn beside_running(&self, version: &Version) -> PathBuf {
-        let extension = self
-            .running_binary
-            .extension()
-            .map(|extension| format!(".{}", extension.to_string_lossy()))
-            .unwrap_or_default();
         self.running_binary.with_file_name(format!(
-            ".floti-{version}.{}{extension}",
-            std::process::id()
+            ".floti-{version}.{}{}",
+            std::process::id(),
+            self.extension()
         ))
     }
 
     fn download_all(
         &mut self,
         release: &Release,
-        floti: &FileEntry,
-        new_binary: &Path,
+        floti: Option<(&FileEntry, &Path)>,
         desktop: Option<&FileEntry>,
         staging: &Path,
     ) -> Result<(), UpdateError> {
-        self.say(&format!(
-            "Downloading floti {} from {}.",
-            release.version, release.channel
-        ));
-        self.download(release, floti, new_binary)?;
+        if let Some((entry, path)) = floti {
+            self.say(&format!(
+                "Downloading floti {} from {}.",
+                release.version(),
+                release.channel
+            ));
+            release.folder.fetch(self.network, self.key, entry, path)?;
+        }
         if let Some(entry) = desktop {
             std::fs::create_dir_all(staging).map_err(|err| UpdateError::Disk {
                 reason: format!("could not make {}: {err}", staging.display()),
             })?;
             self.say(&format!("Downloading {}.", entry.file));
-            self.download(release, entry, &staging.join(&entry.file))?;
+            release
+                .folder
+                .fetch(self.network, self.key, entry, &staging.join(&entry.file))?;
         }
         Ok(())
     }
 
-    /// Downloads `entry` to `path` and checks it. A file that fails a check
-    /// is removed.
-    fn download(
-        &self,
-        release: &Release,
-        entry: &FileEntry,
-        path: &Path,
-    ) -> Result<(), UpdateError> {
-        let url = release.file_url(&entry.file);
-        let signature = self.signature(&entry.file, &signature_url(&url))?;
-        let comment = file_comment(&release.version.to_string(), &entry.file);
-        let check = FileCheck::new(self.key, &signature, &entry.file, &comment)?;
-        let result = (|| {
-            let mut file = File::create(path).map_err(|err| UpdateError::Disk {
-                reason: format!("could not write {}: {err}", path.display()),
-            })?;
-            self.network
-                .get(&url, FILE_LIMIT, &mut |piece| file.write_all(piece))
-                .map_err(|err| fetch_refusal(&entry.file, &url, err))?;
-            file.sync_all().map_err(|err| UpdateError::Disk {
-                reason: format!("could not write {}: {err}", path.display()),
-            })?;
-            drop(file);
-            check.finish(self.key, path, &entry.sha256)
-        })();
-        if result.is_err() {
-            let _ = std::fs::remove_file(path);
-        }
-        result
-    }
-
-    /// Waits until `app` has quit, then replaces it with `downloaded`.
-    fn replace_desktop(
+    /// Waits until `app` has quit, then installs `downloaded` over it.
+    fn install_desktop(
         &mut self,
         app: &Desktop,
         downloaded: &Path,
-        release: &Release,
+        version: &Version,
+        floti_updated: bool,
     ) -> Result<(), UpdateError> {
-        let failed = |reason: String| UpdateError::Desktop {
-            version: release.version.to_string(),
-            app: app.name.to_owned(),
-            reason,
+        let failed = |reason: String| {
+            let (version, app) = (version.to_string(), app.name.to_owned());
+            if floti_updated {
+                UpdateError::Desktop {
+                    version,
+                    app,
+                    reason,
+                }
+            } else {
+                UpdateError::DesktopAlone {
+                    version,
+                    app,
+                    reason,
+                }
+            }
         };
         let mut said = false;
         loop {
@@ -387,30 +570,25 @@ impl Updater<'_> {
             (self.pause)(APP_POLL);
         }
         self.installs
-            .replace_desktop(app, downloaded)
+            .install_desktop(app, downloaded)
             .map_err(|err| failed(err.to_string()))?;
-        self.say(&format!("{} is updated to {}.", app.name, release.version));
+        self.say(&format!("{} is updated to {version}.", app.name));
         Ok(())
     }
 }
 
-/// `url` with `.minisig` after it.
-fn signature_url(url: &Url) -> Url {
-    Url::parse(&format!("{url}.minisig")).expect("a URL with .minisig after it is a URL")
-}
-
-fn fetch_refusal(file: &str, url: &Url, err: FetchError) -> UpdateError {
-    match err {
-        FetchError::Cut(reason) => UpdateError::CutOff {
-            file: file.to_owned(),
-            reason,
-        },
-        other => UpdateError::Network {
-            file: file.to_owned(),
-            url: url.to_string(),
-            reason: other.to_string(),
-        },
+/// The process id in `name` when it is something an update leaves beside
+/// the running binary `<stem><extension>`: `<stem>.old-<pid><extension>`,
+/// the binary moved aside, or `.floti-<version>.<pid><extension>`, a
+/// download.
+fn leftover_pid(name: &str, stem: &str, extension: &str) -> Option<u32> {
+    let base = name.strip_suffix(extension)?;
+    if let Some(pid) = base.strip_prefix(&format!("{stem}.old-")) {
+        return pid.parse().ok();
     }
+    let (version, pid) = base.strip_prefix(".floti-")?.rsplit_once('.')?;
+    Version::parse(version)?;
+    pid.parse().ok()
 }
 
 /// Removes the staging folder and everything in it, never walking into a
@@ -430,9 +608,10 @@ pub fn parse(args: &[String]) -> Option<Option<String>> {
     }
 }
 
-/// `floti update`, run by a person: the exit status.
-pub fn run(chosen_channel: Option<String>) -> u8 {
-    match run_native(chosen_channel) {
+/// `floti update`, run by a person: the exit status. `sessions_ending`
+/// counts the sessions this computer's host runs.
+pub fn run(chosen_channel: Option<String>, sessions_ending: SessionsEnding<'_>) -> u8 {
+    match run_native(chosen_channel, sessions_ending) {
         Ok(_) => 0,
         Err(line) => {
             eprintln!("floti update: {line}");
@@ -441,13 +620,18 @@ pub fn run(chosen_channel: Option<String>) -> u8 {
     }
 }
 
-fn run_native(chosen_channel: Option<String>) -> Result<Outcome, String> {
+fn run_native(
+    chosen_channel: Option<String>,
+    sessions_ending: SessionsEnding<'_>,
+) -> Result<Outcome, String> {
     let env = UserEnv::from_process();
-    let folders = folders::resolve(&env).map_err(|err| err.to_string())?;
-    let running_binary = running_binary()?;
-    let network = network::Https::new()?;
-    let (manifest_url, key) = manifest_and_key(&folders.data);
+    let folders = folders::resolve(&env).map_err(|err| nothing_updated(&err.to_string()))?;
+    let running_binary = running_binary().map_err(|line| nothing_updated(&line))?;
+    let network = network::Https::new().map_err(|line| nothing_updated(&line))?;
+    let manifest_url = manifest_url(&folders.data);
+    let key = signature::trusted_key(&folders.data);
     let pause = |wait: Duration| std::thread::sleep(wait);
+    let is_alive = |pid: u32| process_tree::Native.is_alive(pid);
     let mut stdout = std::io::stdout();
     let mut updater = Updater {
         running_version: FLOTI_VERSION,
@@ -457,6 +641,9 @@ fn run_native(chosen_channel: Option<String>) -> Result<Outcome, String> {
         network: &network,
         installs: &installs::Native,
         processes: &process_table::Native,
+        is_alive: &is_alive,
+        sessions_ending,
+        confirm: &ask_on_terminal,
         pause: &pause,
         env,
         running_binary,
@@ -464,20 +651,39 @@ fn run_native(chosen_channel: Option<String>) -> Result<Outcome, String> {
         chosen_channel,
         out: &mut stdout,
     };
-    updater.run().map_err(|err| err.to_string())
+    updater.run().map_err(|err| failure_line(&err))
 }
 
-/// The manifest's address and the key it and every file are checked with.
-fn manifest_and_key(data: &Path) -> (Url, PublicKey) {
+/// Asks `question` on the terminal, no by default; `None` when standard
+/// input is not a terminal.
+fn ask_on_terminal(question: &str) -> Option<bool> {
+    use std::io::{BufRead, IsTerminal};
+    let stdin = std::io::stdin();
+    if !stdin.is_terminal() {
+        return None;
+    }
+    let mut out = std::io::stdout();
+    let _ = write!(out, "{question} [y/N] ");
+    let _ = out.flush();
+    let mut answer = String::new();
+    if stdin.lock().read_line(&mut answer).is_err() {
+        return Some(false);
+    }
+    let answer = answer.trim();
+    Some(answer.eq_ignore_ascii_case("y") || answer.eq_ignore_ascii_case("yes"))
+}
+
+/// The manifest's address: the built-in one, or, in a build with the
+/// testkit only, the one the marker in the data folder `data` names.
+pub fn manifest_url(data: &Path) -> Url {
     #[cfg(any(test, feature = "testkit"))]
-    if let Some(overrides) = signature::test_overrides(data) {
-        return overrides;
+    if let Some(url) =
+        signature::test_marker(data, "manifest").and_then(|text| Url::parse(&text).ok())
+    {
+        return url;
     }
     let _ = data;
-    (
-        Url::parse(MANIFEST_URL).expect("the manifest's address is a URL"),
-        signature::built_in_key(),
-    )
+    Url::parse(MANIFEST_URL).expect("the manifest's address is a URL")
 }
 
 /// The floti running now, a link it was started through followed to the

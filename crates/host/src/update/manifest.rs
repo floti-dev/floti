@@ -15,19 +15,18 @@
 //! schema other than 1 is refused: it is a manifest this floti cannot read.
 //!
 //! Everything a file's name and address are made from is checked here,
-//! before anything is downloaded: the folder `url` is `https` (or `http` to
-//! this computer, for tests) and ends in `/`, each `file` is a plain file
+//! before anything is downloaded: the folder `url` is `https` (or, in a
+//! build with the testkit, `http` to this computer) and ends in `/`
+//! ([`ReleaseFolder`]), each `file` is a plain file
 //! name, so it can name nothing outside that folder or outside the folder it
 //! is downloaded into, and each `sha256` is 64 hex digits.
 
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
-use url::Url;
-
 use super::UpdateError;
-use super::network::allowed_url;
+use super::release_file::ReleaseFolder;
 use super::versions::Version;
+use serde::Deserialize;
 
 /// The schema this floti reads.
 pub const SCHEMA: u32 = 1;
@@ -58,13 +57,33 @@ pub struct FileEntry {
     pub sha256: String,
 }
 
+impl FileEntry {
+    /// The entry for `file` with `sha256`, when `file` is a plain file name
+    /// and `sha256` is 64 hex digits; the digest is kept in lowercase.
+    pub fn checked(file: &str, sha256: &str) -> Result<Self, UpdateError> {
+        if !plain_file_name(file) {
+            return Err(UpdateError::Manifest(format!(
+                "update.json names \"{file}\", which is not a plain file name."
+            )));
+        }
+        if sha256.len() != 64 || !sha256.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(UpdateError::Manifest(format!(
+                "update.json gives {file} a SHA-256 that is not 64 hex digits."
+            )));
+        }
+        Ok(Self {
+            file: file.to_owned(),
+            sha256: sha256.to_ascii_lowercase(),
+        })
+    }
+}
+
 /// One channel's release, for one target.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Release {
     pub channel: String,
-    pub version: Version,
-    /// The folder every file downloads from, ending in `/`.
-    pub url: Url,
+    /// The folder every file downloads from, and the release's version.
+    pub folder: ReleaseFolder,
     /// The floti for the target, when the release has one.
     pub floti: Option<FileEntry>,
     /// The desktop app for the target, when the release has one.
@@ -72,19 +91,16 @@ pub struct Release {
 }
 
 impl Release {
-    /// Where `file` downloads from: the release's folder and its name.
-    pub fn file_url(&self, file: &str) -> Url {
-        // Checked a plain file name, so it can only land in the folder.
-        self.url
-            .join(file)
-            .expect("a plain file name joins onto the release's folder")
+    /// The release's version.
+    pub fn version(&self) -> &Version {
+        self.folder.version()
     }
 }
 
 /// The release `channel` names in the manifest `bytes`, for `target`.
 pub fn release(bytes: &[u8], channel: &str, target: &str) -> Result<Release, UpdateError> {
     let manifest: ManifestFile = serde_json::from_slice(bytes)
-        .map_err(|err| UpdateError::Manifest(format!("update.json cannot be read: {err}")))?;
+        .map_err(|err| UpdateError::Manifest(format!("update.json cannot be read: {err}.")))?;
     if manifest.schema != SCHEMA {
         return Err(UpdateError::Manifest(format!(
             "update.json is schema {}, which this floti does not read; install the newest floti by hand.",
@@ -103,40 +119,21 @@ pub fn release(bytes: &[u8], channel: &str, target: &str) -> Result<Release, Upd
             found.version
         ))
     })?;
-    let url = Url::parse(&found.url)
-        .ok()
-        .filter(|url| url.path().ends_with('/') && allowed_url(url) && url.query().is_none())
-        .ok_or_else(|| {
-            UpdateError::Manifest(format!(
-                "update.json's {channel} channel downloads from \"{}\", which is not an https folder.",
-                found.url
-            ))
-        })?;
-    let entry = |files: &BTreeMap<String, FileEntry>| -> Result<Option<FileEntry>, UpdateError> {
-        let Some(entry) = files.get(target) else {
-            return Ok(None);
-        };
-        if !plain_file_name(&entry.file) {
-            return Err(UpdateError::Manifest(format!(
-                "update.json names \"{}\", which is not a plain file name.",
-                entry.file
-            )));
-        }
-        if entry.sha256.len() != 64 || !entry.sha256.chars().all(|c| c.is_ascii_hexdigit()) {
-            return Err(UpdateError::Manifest(format!(
-                "update.json gives {} a SHA-256 that is not 64 hex digits.",
-                entry.file
-            )));
-        }
-        Ok(Some(FileEntry {
-            file: entry.file.clone(),
-            sha256: entry.sha256.to_ascii_lowercase(),
-        }))
+    let folder = ReleaseFolder::new(&found.url, version).ok_or_else(|| {
+        UpdateError::Manifest(format!(
+            "update.json's {channel} channel downloads from \"{}\", which is not an https folder.",
+            found.url
+        ))
+    })?;
+    let entry = |files: &BTreeMap<String, FileEntry>| {
+        files
+            .get(target)
+            .map(|entry| FileEntry::checked(&entry.file, &entry.sha256))
+            .transpose()
     };
     Ok(Release {
         channel: channel.to_owned(),
-        version,
-        url,
+        folder,
         floti: entry(&found.floti)?,
         desktop: entry(&found.desktop)?,
     })
@@ -178,13 +175,13 @@ mod tests {
     #[test]
     fn a_channel_s_release_for_a_target_is_read_and_unknown_fields_are_ignored() {
         let release = release(&manifest(good()), "stable", "linux-x64").unwrap();
-        assert_eq!(release.version.to_string(), "2.6.0");
+        assert_eq!(release.version().to_string(), "2.6.0");
         let floti = release.floti.clone().unwrap();
         assert_eq!(floti.file, "floti-2.6.0-linux-x64");
         assert_eq!(floti.sha256, SHA.to_ascii_lowercase());
         assert_eq!(release.desktop, None);
         assert_eq!(
-            release.file_url(&floti.file).as_str(),
+            release.folder.file_url(&floti.file).as_str(),
             "https://example.com/download/v2.6.0/floti-2.6.0-linux-x64"
         );
     }
@@ -245,6 +242,8 @@ mod tests {
                 String::from_utf8_lossy(&bytes)
             );
         }
+        // A test build fetches from this computer; a release build does not
+        // (`network::allowed`).
         let loopback = with("url", "http://127.0.0.1:4000/v/".into());
         assert!(release(&loopback, "stable", "linux-x64").is_ok());
     }

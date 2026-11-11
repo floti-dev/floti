@@ -1,6 +1,13 @@
 //! Windows: the running `floti.exe` is renamed aside and the new one moved
-//! into its name; the desktop app is the per-user NSIS install, updated by
-//! the release's own installer run silently.
+//! into its name; the desktop app is the per-user NSIS install, installed
+//! or updated by the release's own installer run silently.
+//!
+//! The installer is started out of any job the caller is in
+//! (`CREATE_BREAKAWAY_FROM_JOB`), so it finishes even when what ran
+//! `floti update` ends first: a session's shell is in its host's job, and
+//! the installer stops that host before it replaces anything
+//! (`packages/desktop/build/installer.nsh`). A job that refuses to let go is
+//! no reason not to install; the installer then starts inside it.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -15,7 +22,18 @@ use crate::{Error, Result};
 /// `electron-builder.yml`.
 pub const DESKTOP_NAME: &str = "Helm";
 
+/// Where every per-user uninstall entry is, under `HKEY_CURRENT_USER`.
+const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
+
 pub struct Native;
+
+/// One per-user uninstall entry: what it runs to uninstall, and the version
+/// it says is installed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UninstallEntry {
+    pub uninstall_string: String,
+    pub display_version: String,
+}
 
 impl Native {
     fn program(install: &Path) -> PathBuf {
@@ -24,6 +42,14 @@ impl Native {
 
     fn uninstaller(install: &Path) -> PathBuf {
         install.join(format!("Uninstall {DESKTOP_NAME}.exe"))
+    }
+
+    /// The folder per-user programs are installed in for `env`.
+    fn programs(env: &UserEnv) -> Option<PathBuf> {
+        desktop_dir_override(env).or_else(|| {
+            env.var_any_case("LOCALAPPDATA")
+                .map(|local| PathBuf::from(local).join("Programs"))
+        })
     }
 
     /// Where a running exe goes aside: `<stem>.old.exe` beside it, or, when
@@ -47,6 +73,32 @@ impl Native {
             }
         }
     }
+
+    /// The version the uninstall entry of the install at `install` gives,
+    /// among `entries`: the one whose uninstaller is that install's.
+    pub fn uninstall_version(entries: &[UninstallEntry], install: &Path) -> Option<String> {
+        let uninstaller = Self::uninstaller(install).to_string_lossy().to_lowercase();
+        entries
+            .iter()
+            .find(|entry| {
+                let program = entry.uninstall_string.trim_start();
+                let program = match program.strip_prefix('"') {
+                    Some(quoted) => quoted.split('"').next().unwrap_or_default(),
+                    None => program.split(" /").next().unwrap_or_default().trim_end(),
+                };
+                program.to_lowercase() == uninstaller
+            })
+            .map(|entry| entry.display_version.trim().to_owned())
+            .filter(|version| !version.is_empty())
+    }
+}
+
+/// Whether `path` is inside `folder`, letter case aside, as Windows names
+/// files.
+fn inside(path: &Path, folder: &Path) -> bool {
+    let lower = |path: &Path| PathBuf::from(path.to_string_lossy().to_lowercase());
+    let (path, folder) = (lower(path), lower(folder));
+    path != folder && path.starts_with(&folder)
 }
 
 impl Installs for Native {
@@ -63,12 +115,22 @@ impl Installs for Native {
         Ok(())
     }
 
+    fn bundles(&self, desktop: &Desktop, running: &Path) -> bool {
+        inside(running, &desktop.path)
+    }
+
+    fn standalone_binary(&self, env: &UserEnv) -> Option<PathBuf> {
+        env.var_any_case("LOCALAPPDATA").map(|local| {
+            PathBuf::from(local)
+                .join("Programs")
+                .join("Floti")
+                .join("bin")
+                .join("floti.exe")
+        })
+    }
+
     fn desktop(&self, env: &UserEnv) -> Option<Desktop> {
-        let programs = desktop_dir_override(env).or_else(|| {
-            env.var_any_case("LOCALAPPDATA")
-                .map(|local| PathBuf::from(local).join("Programs"))
-        })?;
-        let install = programs.join(DESKTOP_NAME);
+        let install = Self::programs(env)?.join(DESKTOP_NAME);
         // A portable copy has no uninstaller and is not an install.
         (Self::program(&install).is_file() && Self::uninstaller(&install).is_file()).then_some(
             Desktop {
@@ -76,6 +138,24 @@ impl Installs for Native {
                 path: install,
             },
         )
+    }
+
+    fn desktop_target(&self, env: &UserEnv) -> Option<Desktop> {
+        // The installer puts a new install where it updates one.
+        Self::programs(env).map(|programs| Desktop {
+            name: DESKTOP_NAME,
+            path: programs.join(DESKTOP_NAME),
+        })
+    }
+
+    fn desktop_version(&self, desktop: &Desktop) -> Option<String> {
+        Self::uninstall_version(&system::uninstall_entries(), &desktop.path)
+    }
+
+    fn installing_desktop_stops_host(&self) -> bool {
+        // installer.nsh stops this computer's host before it replaces
+        // the floti.exe the install holds.
+        true
     }
 
     fn is_desktop_process(&self, desktop: &Desktop, row: &ProcessRow) -> bool {
@@ -92,14 +172,15 @@ impl Installs for Native {
         command_line.to_lowercase().contains(&wanted)
     }
 
-    fn replace_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
-        let status = Command::new(release)
-            .arg("/S")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map_err(|source| Error::path("run", release, source))?;
+    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
+        let status = system::run_out_of_job(
+            Command::new(release)
+                .arg("/S")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null()),
+        )
+        .map_err(|source| Error::path("run", release, source))?;
         if status.success() {
             Ok(())
         } else {
@@ -112,9 +193,154 @@ impl Installs for Native {
     }
 }
 
+/// What only Windows itself can answer: the uninstall entries in the
+/// registry, and starting a program out of a job. Elsewhere there are no
+/// entries, and a program starts as it is.
+#[cfg(windows)]
+mod system {
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, ExitStatus};
+
+    use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_NO_MORE_ITEMS, ERROR_SUCCESS};
+    use windows_sys::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, KEY_READ, RRF_RT_REG_SZ, RegCloseKey, RegEnumKeyExW, RegGetValueW,
+        RegOpenKeyExW,
+    };
+    use windows_sys::Win32::System::Threading::CREATE_BREAKAWAY_FROM_JOB;
+
+    use super::{UNINSTALL_KEY, UninstallEntry};
+
+    fn wide(text: &str) -> Vec<u16> {
+        text.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+
+    /// Every per-user uninstall entry that has both values; none when the
+    /// key cannot be read.
+    pub fn uninstall_entries() -> Vec<UninstallEntry> {
+        let path = wide(UNINSTALL_KEY);
+        let mut key: HKEY = std::ptr::null_mut();
+        // SAFETY: `path` is nul-terminated and `key` receives the handle.
+        let opened =
+            unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, path.as_ptr(), 0, KEY_READ, &mut key) };
+        if opened != ERROR_SUCCESS {
+            return Vec::new();
+        }
+        let mut entries = Vec::new();
+        for index in 0.. {
+            // Registry key names are at most 255 characters.
+            let mut name = [0u16; 256];
+            let mut length = name.len() as u32;
+            // SAFETY: `name` holds `length` characters; the other outputs
+            // are not asked for.
+            let status = unsafe {
+                RegEnumKeyExW(
+                    key,
+                    index,
+                    name.as_mut_ptr(),
+                    &mut length,
+                    std::ptr::null(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                )
+            };
+            if status == ERROR_NO_MORE_ITEMS {
+                break;
+            }
+            if status != ERROR_SUCCESS {
+                continue;
+            }
+            let mut subkey = name[..length as usize].to_vec();
+            subkey.push(0);
+            if let (Some(uninstall_string), Some(display_version)) = (
+                string_value(key, &subkey, "UninstallString"),
+                string_value(key, &subkey, "DisplayVersion"),
+            ) {
+                entries.push(UninstallEntry {
+                    uninstall_string,
+                    display_version,
+                });
+            }
+        }
+        // SAFETY: `key` was opened above and is closed once.
+        unsafe { RegCloseKey(key) };
+        entries
+    }
+
+    /// The text value `value` of `key`'s subkey `subkey` (nul-terminated).
+    fn string_value(key: HKEY, subkey: &[u16], value: &str) -> Option<String> {
+        let value = wide(value);
+        let mut size: u32 = 0;
+        // SAFETY: both names are nul-terminated; with no buffer the call
+        // only says how many bytes the value needs.
+        let sized = unsafe {
+            RegGetValueW(
+                key,
+                subkey.as_ptr(),
+                value.as_ptr(),
+                RRF_RT_REG_SZ,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut size,
+            )
+        };
+        if sized != ERROR_SUCCESS || size == 0 {
+            return None;
+        }
+        let mut buffer = vec![0u16; (size as usize).div_ceil(2)];
+        let mut size = (buffer.len() * 2) as u32;
+        // SAFETY: `buffer` holds `size` bytes.
+        let read = unsafe {
+            RegGetValueW(
+                key,
+                subkey.as_ptr(),
+                value.as_ptr(),
+                RRF_RT_REG_SZ,
+                std::ptr::null_mut(),
+                buffer.as_mut_ptr().cast(),
+                &mut size,
+            )
+        };
+        if read != ERROR_SUCCESS {
+            return None;
+        }
+        let text = &buffer[..(size as usize / 2).min(buffer.len())];
+        let text = text.split(|&unit| unit == 0).next().unwrap_or_default();
+        Some(String::from_utf16_lossy(text))
+    }
+
+    /// Runs `command` out of the caller's job and waits for it; inside the
+    /// job when the job refuses to let it go.
+    pub fn run_out_of_job(command: &mut Command) -> std::io::Result<ExitStatus> {
+        command.creation_flags(CREATE_BREAKAWAY_FROM_JOB);
+        match command.status() {
+            Err(err) if err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) => {
+                command.creation_flags(0);
+                command.status()
+            }
+            status => status,
+        }
+    }
+}
+
+#[cfg(not(windows))]
+mod system {
+    use std::process::{Command, ExitStatus};
+
+    use super::UninstallEntry;
+
+    pub fn uninstall_entries() -> Vec<UninstallEntry> {
+        Vec::new()
+    }
+
+    pub fn run_out_of_job(command: &mut Command) -> std::io::Result<ExitStatus> {
+        command.status()
+    }
+}
+
 #[cfg(any(test, feature = "testkit"))]
 impl super::FakeDesktop for Native {
-    fn fake_install(&self, apps: &Path) {
+    fn fake_install(&self, apps: &Path, _version: &str) {
         let install = apps.join(DESKTOP_NAME);
         std::fs::create_dir_all(&install).expect("make the fake install folder");
         std::fs::write(Self::program(&install), b"fake app").expect("write the fake app");

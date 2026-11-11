@@ -2,6 +2,7 @@
 //! table faked: each check that stops it, and what it replaces when none
 //! does.
 
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::io::{self, Cursor};
 use std::path::{Path, PathBuf};
@@ -9,10 +10,11 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+use floti_protocol::Knowable;
 use url::Url;
 
 use super::network::{FetchError, Network};
-use super::{APP_POLL, Outcome, STAGING_FOLDER, UpdateError, Updater, channel};
+use super::{APP_POLL, Outcome, STAGING_FOLDER, UpdateError, Updater, channel, failure_line};
 use crate::Result;
 use crate::platform::folders::UserEnv;
 use crate::platform::installs::{Desktop, Installs};
@@ -115,9 +117,34 @@ impl Network for FakeNetwork {
 /// Installs that rename as the real ones do and record the desktop's.
 struct FakeInstalls {
     desktop: Option<Desktop>,
+    /// The installed app's version, when it can be told.
+    desktop_version: Option<String>,
+    /// Whether installing the app stops this computer's host, as on Windows.
+    stops_host: bool,
+    /// Whether the running floti is the app's own.
+    bundled: bool,
+    standalone: Option<PathBuf>,
     desktop_installs: Mutex<Vec<Vec<u8>>>,
     binary_replaced_first: Mutex<bool>,
     running_binary: PathBuf,
+}
+
+impl FakeInstalls {
+    fn at_version(mut self, version: &str) -> Self {
+        self.desktop_version = Some(version.into());
+        self
+    }
+
+    fn stopping_the_host(mut self) -> Self {
+        self.stops_host = true;
+        self
+    }
+
+    fn bundling_floti(mut self, standalone: Option<PathBuf>) -> Self {
+        self.bundled = true;
+        self.standalone = standalone;
+        self
+    }
 }
 
 impl Installs for FakeInstalls {
@@ -125,15 +152,35 @@ impl Installs for FakeInstalls {
         std::fs::rename(new, running).map_err(|err| crate::Error::path("replace", running, err))
     }
 
+    fn bundles(&self, _desktop: &Desktop, _running: &Path) -> bool {
+        self.bundled
+    }
+
+    fn standalone_binary(&self, _env: &UserEnv) -> Option<PathBuf> {
+        self.standalone.clone()
+    }
+
     fn desktop(&self, _env: &UserEnv) -> Option<Desktop> {
         self.desktop.clone()
+    }
+
+    fn desktop_target(&self, _env: &UserEnv) -> Option<Desktop> {
+        self.desktop.clone()
+    }
+
+    fn desktop_version(&self, _desktop: &Desktop) -> Option<String> {
+        self.desktop_version.clone()
+    }
+
+    fn installing_desktop_stops_host(&self) -> bool {
+        self.stops_host
     }
 
     fn is_desktop_process(&self, _desktop: &Desktop, row: &ProcessRow) -> bool {
         row.name == "Helm.exe"
     }
 
-    fn replace_desktop(&self, _desktop: &Desktop, release: &Path) -> Result<()> {
+    fn install_desktop(&self, _desktop: &Desktop, release: &Path) -> Result<()> {
         *self.binary_replaced_first.lock().unwrap() =
             std::fs::read(&self.running_binary).unwrap() != b"old floti";
         self.desktop_installs
@@ -225,6 +272,14 @@ struct World {
     signer: Signer,
     network: FakeNetwork,
     running_binary: PathBuf,
+    running_version: Cell<&'static str>,
+    /// What counting the host's sessions answers.
+    sessions: RefCell<std::result::Result<usize, String>>,
+    /// What the person answers; `None` is no terminal.
+    answer: Cell<Option<bool>>,
+    questions: RefCell<Vec<String>>,
+    /// Whether each process id is alive; any other is unknown.
+    alive: RefCell<HashMap<u32, Knowable<bool>>>,
     dirs: TestDirs,
 }
 
@@ -237,6 +292,11 @@ impl World {
             signer: Signer::new(),
             network: FakeNetwork::default(),
             running_binary,
+            running_version: Cell::new(RUNNING),
+            sessions: RefCell::new(Ok(0)),
+            answer: Cell::new(None),
+            questions: RefCell::default(),
+            alive: RefCell::default(),
             dirs,
         }
     }
@@ -302,6 +362,10 @@ impl World {
                 name: APP,
                 path: self.dirs.folder("apps").join(APP),
             }),
+            desktop_version: None,
+            stops_host: false,
+            bundled: false,
+            standalone: None,
             desktop_installs: Mutex::new(Vec::new()),
             binary_replaced_first: Mutex::new(false),
             running_binary: self.running_binary.clone(),
@@ -320,15 +384,30 @@ impl World {
         let pauses = Mutex::new(Vec::new());
         let pause = |wait: Duration| pauses.lock().unwrap().push(wait);
         let key = self.signer.public();
+        let is_alive = |pid: u32| {
+            self.alive
+                .borrow()
+                .get(&pid)
+                .cloned()
+                .unwrap_or(Knowable::Unknown)
+        };
+        let sessions_ending = || self.sessions.borrow().clone();
+        let confirm = |question: &str| {
+            self.questions.borrow_mut().push(question.to_owned());
+            self.answer.get()
+        };
         let mut out = Vec::new();
         let result = Updater {
-            running_version: RUNNING,
+            running_version: self.running_version.get(),
             target: TARGET.into(),
             manifest_url: Url::parse(MANIFEST).unwrap(),
             key: &key,
             network: &self.network,
             installs,
             processes: &processes,
+            is_alive: &is_alive,
+            sessions_ending: &sessions_ending,
+            confirm: &confirm,
             pause: &pause,
             env: UserEnv::default(),
             running_binary: self.running_binary.clone(),
@@ -389,6 +468,7 @@ fn a_newer_version_replaces_floti_after_its_checks_pass() {
         run.result.unwrap(),
         Outcome::Updated {
             version: "2.1.0".into(),
+            floti: true,
             desktop: None
         }
     );
@@ -418,7 +498,7 @@ fn an_older_or_equal_version_is_never_installed() {
         let world = World::new();
         let release = Published::new(version);
         world.publish(&[("stable", &release)]);
-        let run = world.update(&world.installs(true), 0, None);
+        let run = world.update(&world.installs(true).at_version(version), 0, None);
         assert_eq!(
             run.result.unwrap(),
             Outcome::UpToDate {
@@ -463,8 +543,12 @@ fn a_bad_signature_stops_the_update_and_leaves_floti_as_it_was() {
     );
     assert_eq!(
         err.to_string(),
+        format!("{} does not match its signature.", release.floti_file())
+    );
+    assert_eq!(
+        failure_line(&err),
         format!(
-            "{} does not match its signature, so nothing was updated.",
+            "{} does not match its signature. Nothing was updated.",
             release.floti_file()
         )
     );
@@ -501,7 +585,7 @@ fn a_missing_signature_stops_the_update_and_says_so() {
     assert_eq!(
         err.to_string(),
         format!(
-            "{0} has no signature ({0}.minisig is not there), so nothing was updated.",
+            "{0} has no signature ({0}.minisig is not there).",
             release.floti_file()
         )
     );
@@ -619,6 +703,7 @@ fn a_running_app_is_waited_for_and_replaced_once_it_has_quit() {
         run.result.unwrap(),
         Outcome::Updated {
             version: "2.1.0".into(),
+            floti: true,
             desktop: Some(APP.into())
         }
     );
@@ -745,7 +830,7 @@ fn a_release_with_no_floti_for_this_computer_changes_nothing() {
     let err = world.update(&world.installs(false), 0, None).error();
     assert_eq!(
         err.to_string(),
-        "floti 2.1.0 on stable has no build for linux-x64, so nothing was updated."
+        "floti 2.1.0 on stable has no build for linux-x64."
     );
 }
 
@@ -760,4 +845,341 @@ fn update_takes_nothing_or_a_channel() {
     assert_eq!(super::parse(&args(&["--channel"])), None);
     assert_eq!(super::parse(&args(&["--channel", "../x"])), None);
     assert_eq!(super::parse(&args(&["--now"])), None);
+}
+
+#[test]
+fn a_floti_whose_own_version_cannot_be_read_updates_nothing() {
+    let world = World::new();
+    world.publish(&[("stable", &Published::new("2.1.0"))]);
+    world.running_version.set("dev");
+    let err = world.update(&world.installs(false), 0, None).error();
+    assert!(
+        matches!(&err, UpdateError::RunningVersion { version } if version == "dev"),
+        "{err}"
+    );
+    assert!(world.network.asked().is_empty(), "nothing is fetched");
+    assert_eq!(world.binary(), b"old floti");
+}
+
+#[test]
+fn an_app_behind_an_up_to_date_floti_is_updated_alone() {
+    let world = World::new();
+    world.running_version.set("2.1.0");
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    let installs = world.installs(true).at_version("2.0.0");
+    let run = world.update(&installs, 0, None);
+    assert_eq!(
+        run.result.unwrap(),
+        Outcome::Updated {
+            version: "2.1.0".into(),
+            floti: false,
+            desktop: Some(APP.into())
+        }
+    );
+    assert_eq!(
+        world.binary(),
+        b"old floti",
+        "floti is not downloaded again"
+    );
+    assert!(
+        !world.network.asked().contains(&release.floti_url()),
+        "{:?}",
+        world.network.asked()
+    );
+    assert_eq!(
+        *installs.desktop_installs.lock().unwrap(),
+        vec![release.desktop.clone().unwrap()]
+    );
+    assert_eq!(world.leftovers(), Vec::<String>::new());
+}
+
+#[test]
+fn an_app_at_the_newest_version_is_left_and_one_of_unknown_version_is_updated() {
+    let world = World::new();
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    let current = world.installs(true).at_version("2.1.0");
+    let run = world.update(&current, 0, None);
+    assert!(
+        matches!(
+            run.result,
+            Ok(Outcome::Updated {
+                floti: true,
+                desktop: None,
+                ..
+            })
+        ),
+        "{}",
+        run.out
+    );
+    assert!(current.desktop_installs.lock().unwrap().is_empty());
+
+    let world = World::new();
+    world.running_version.set("2.1.0");
+    world.publish(&[("stable", &release)]);
+    let unknown = world.installs(true);
+    let run = world.update(&unknown, 0, None);
+    assert!(
+        matches!(
+            run.result,
+            Ok(Outcome::Updated {
+                floti: false,
+                desktop: Some(_),
+                ..
+            })
+        ),
+        "{}",
+        run.out
+    );
+    assert_eq!(unknown.desktop_installs.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn a_floti_inside_the_app_is_never_replaced_and_the_app_brings_its_own() {
+    let world = World::new();
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    let standalone = world.dirs.folder("standalone bin").join("floti.exe");
+    std::fs::write(&standalone, b"standalone floti").unwrap();
+    let installs = world
+        .installs(true)
+        .at_version("2.0.0")
+        .bundling_floti(Some(standalone.clone()));
+    let run = world.update(&installs, 0, None);
+    assert_eq!(
+        run.result.unwrap(),
+        Outcome::Updated {
+            version: "2.1.0".into(),
+            floti: false,
+            desktop: Some(APP.into())
+        }
+    );
+    assert_eq!(world.binary(), b"old floti");
+    let app = installs
+        .desktop
+        .as_ref()
+        .unwrap()
+        .path
+        .display()
+        .to_string();
+    let standalone = standalone.display().to_string();
+    assert!(
+        run.out.contains(&format!(
+            "This floti is part of Helm ({app}), so it is updated with Helm, never on its own. floti installed on its own is {standalone}; `{standalone} update` updates it."
+        )),
+        "{}",
+        run.out
+    );
+    assert_eq!(installs.desktop_installs.lock().unwrap().len(), 1);
+
+    // With no floti installed on its own, only the first sentence.
+    let world = World::new();
+    world.publish(&[("stable", &release)]);
+    let missing = world.dirs.root().join("nowhere").join("floti.exe");
+    let installs = world.installs(true).bundling_floti(Some(missing));
+    let run = world.update(&installs, 0, None);
+    assert!(run.out.contains("never on its own.\n"), "{}", run.out);
+}
+
+#[test]
+fn installing_an_app_that_stops_the_host_asks_first_saying_how_many_sessions_end() {
+    let world = World::new();
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    *world.sessions.borrow_mut() = Ok(2);
+    world.answer.set(Some(true));
+    let installs = world.installs(true).stopping_the_host();
+    let run = world.update(&installs, 0, None);
+    assert!(matches!(
+        run.result,
+        Ok(Outcome::Updated {
+            desktop: Some(_),
+            ..
+        })
+    ));
+    assert_eq!(
+        *world.questions.borrow(),
+        vec![
+            "Updating Helm stops this computer's host, ending 2 sessions; they come back when Helm next starts. Update Helm now?"
+                .to_owned()
+        ]
+    );
+    assert_eq!(installs.desktop_installs.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn no_to_the_question_updates_floti_alone_and_leaves_the_app() {
+    let world = World::new();
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    *world.sessions.borrow_mut() = Ok(1);
+    world.answer.set(Some(false));
+    let installs = world.installs(true).stopping_the_host();
+    let run = world.update(&installs, 0, None);
+    assert_eq!(
+        run.result.unwrap(),
+        Outcome::Updated {
+            version: "2.1.0".into(),
+            floti: true,
+            desktop: None
+        }
+    );
+    assert!(world.questions.borrow()[0].contains("ending 1 session; it comes back"));
+    assert!(
+        run.out
+            .contains("Helm stays as it is; floti update updates it when run again."),
+        "{}",
+        run.out
+    );
+    assert_eq!(world.binary(), release.floti);
+    assert!(installs.desktop_installs.lock().unwrap().is_empty());
+    assert!(
+        !world.network.asked().contains(&release.desktop_url()),
+        "the app is not downloaded"
+    );
+}
+
+#[test]
+fn with_no_terminal_to_ask_on_the_app_is_left_and_the_line_says_why() {
+    let world = World::new();
+    world.running_version.set("2.1.0");
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    *world.sessions.borrow_mut() = Ok(3);
+    world.answer.set(None);
+    let installs = world.installs(true).at_version("2.0.0").stopping_the_host();
+    let run = world.update(&installs, 0, None);
+    assert_eq!(
+        run.result.unwrap(),
+        Outcome::DesktopLeft {
+            version: "2.1.0".into(),
+            app: APP.into()
+        }
+    );
+    assert_eq!(
+        run.out.trim_end(),
+        "Helm stays as it is: updating it ends sessions, and there is no terminal to ask on first. Run floti update in a terminal to update Helm."
+    );
+    assert!(installs.desktop_installs.lock().unwrap().is_empty());
+}
+
+#[test]
+fn nothing_is_asked_when_the_host_runs_no_session_or_installing_stops_no_host() {
+    let world = World::new();
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    world.answer.set(Some(false));
+    let installs = world.installs(true).stopping_the_host();
+    let run = world.update(&installs, 0, None);
+    assert!(matches!(
+        run.result,
+        Ok(Outcome::Updated {
+            desktop: Some(_),
+            ..
+        })
+    ));
+
+    let world = World::new();
+    world.publish(&[("stable", &release)]);
+    *world.sessions.borrow_mut() = Ok(4);
+    world.answer.set(Some(false));
+    let installs = world.installs(true);
+    let run = world.update(&installs, 0, None);
+    assert!(matches!(
+        run.result,
+        Ok(Outcome::Updated {
+            desktop: Some(_),
+            ..
+        })
+    ));
+    assert!(world.questions.borrow().is_empty());
+}
+
+#[test]
+fn a_host_that_cannot_be_asked_still_gets_the_question() {
+    let world = World::new();
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    *world.sessions.borrow_mut() = Err("the host closed the connection.".into());
+    world.answer.set(Some(false));
+    let installs = world.installs(true).stopping_the_host();
+    let run = world.update(&installs, 0, None);
+    assert!(run.result.is_ok());
+    assert!(
+        run.out.contains(
+            "floti could not ask this computer's host which sessions updating Helm ends: the host closed the connection."
+        ),
+        "{}",
+        run.out
+    );
+    assert!(world.questions.borrow()[0].contains("ending the sessions it runs"));
+}
+
+#[test]
+fn what_an_earlier_update_left_is_removed_once_its_process_has_ended() {
+    let world = World::new();
+    let bin = world.running_binary.parent().unwrap().to_path_buf();
+    for name in [
+        "floti.old-11.exe",
+        "floti.old-12.exe",
+        "floti.old-13.exe",
+        ".floti-2.1.0.11.exe",
+        ".floti-2.1.0-beta.1.12.exe",
+        ".floti-not-a-version.11.exe",
+        "floti.old.exe",
+        "notes.txt",
+    ] {
+        std::fs::write(bin.join(name), b"left").unwrap();
+    }
+    world
+        .alive
+        .borrow_mut()
+        .extend([(11, Knowable::Known(false)), (12, Knowable::Known(true))]);
+    world.publish(&[("stable", &Published::new("2.0.0"))]);
+    let run = world.update(&world.installs(false), 0, None);
+    assert!(run.result.is_ok());
+    let mut left = world.leftovers();
+    left.sort();
+    assert_eq!(
+        left,
+        vec![
+            ".floti-2.1.0-beta.1.12.exe",
+            ".floti-not-a-version.11.exe",
+            "floti.old-12.exe",
+            "floti.old-13.exe",
+            "floti.old.exe",
+            "notes.txt",
+        ],
+        "only what a process known to have ended left"
+    );
+}
+
+#[test]
+fn a_failure_line_says_nothing_was_updated_unless_floti_was() {
+    let refused = UpdateError::Replace {
+        reason: "access denied".into(),
+    };
+    assert_eq!(
+        failure_line(&refused),
+        "floti could not be replaced: access denied. Nothing was updated."
+    );
+    let alone = UpdateError::DesktopAlone {
+        version: "2.1.0".into(),
+        app: APP.into(),
+        reason: "The Helm installer ended with 2.".into(),
+    };
+    assert_eq!(
+        failure_line(&alone),
+        "Helm could not be updated to 2.1.0: The Helm installer ended with 2. Nothing was updated."
+    );
+    let after_floti = UpdateError::Desktop {
+        version: "2.1.0".into(),
+        app: APP.into(),
+        reason: "The Helm installer ended with 2.".into(),
+    };
+    assert_eq!(
+        failure_line(&after_floti),
+        "floti is updated to 2.1.0, but Helm is not: The Helm installer ended with 2."
+    );
 }

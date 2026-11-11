@@ -587,8 +587,9 @@ capture locally on any OS, into `reports/screenshots`.
 ## floti update
 
 `floti update` replaces the floti that runs it with its channel's newest
-release, then the desktop app where it is installed, once the app has quit
-(`crates/host/src/update`). A person runs it; nothing runs it on a timer.
+release, and the desktop app where it is installed and older, once the app
+has quit (`crates/host/src/update`). A person runs it; nothing runs it on a
+timer.
 
 **The manifest.** It reads `https://floti.dev/update.json` and its signature
 `update.json.minisig`:
@@ -605,7 +606,9 @@ Targets are named as floti's release files are: `windows-x64`,
 `windows-arm64`, `macos-arm64`, `linux-x64`, `linux-arm64`. Fields it does
 not know are ignored; a schema other than 1 is refused. The folder must be
 `https` and end in `/`, and each file a plain file name, so a manifest can
-name nothing outside its release folder.
+name nothing outside its release folder. Only `https` is fetched, redirects
+included; a test build alone also fetches `http` from this computer, where
+its tests serve a release.
 
 **The channel** is `stable` until `floti update --channel <name>` chooses
 another. The choice is remembered in `update-channel.json` in Floti's data
@@ -627,27 +630,49 @@ build has no switch, variable or flag that changes the key; only a test
 build (the crate's testkit) reads a test's key and manifest address from a
 marker in its data folder.
 
+**What it replaces.** floti, when the channel's version is newer than the
+running one; a version older than or equal to it is never installed, and a
+floti whose own version is not a version updates nothing. A floti inside the
+desktop app's install (`resources\floti.exe` on Windows, inside `Helm.app`
+on macOS, on the AppImage's mount on Linux) is never replaced on its own:
+the app's installer brings its own, and `floti update` says so and names
+floti installed on its own where it is there. The desktop app, when it is
+installed and its own version is older than the channel's or cannot be told,
+so an app behind an up-to-date floti is still updated. With nothing to
+replace, it says floti is up to date and changes nothing.
+
+**Asking first.** On Windows the app's installer stops this computer's host
+before it replaces anything (`installer.nsh`), which ends the sessions it
+runs. So before it downloads the app, `floti update` asks the host, as the
+host itself, how many sessions it runs (as `floti update-stop --ask` does).
+With one or more it says how many end and asks `[y/N]` on the terminal, no
+by default; no leaves the app as it is and updates floti alone. With no
+terminal on standard input it leaves the app and says why in one line, with
+what to run. The installer is started out of any job `floti update` is in,
+so it finishes even when stopping the host ends the session that ran it.
+This question stands until an update hands sessions through the keeper.
+
 **The order.** Nothing is replaced until everything has passed: the
 manifest, this computer's floti (written beside the running one under a
-name of its own) and, when the desktop app is installed, its file (kept in
-`update` in the data folder). A version older than or equal to the running
-one is never installed: floti says it is up to date and changes nothing. A
+name of its own) and the app's file (kept in `update` in the data folder). A
 failed check stops the update with one line on standard error naming the
-file and what failed, removes what was downloaded, and leaves the old floti
-working. Then floti is replaced, then the app: while it runs, `floti update`
-says it is waiting for it to quit and looks again each second.
+file and what failed and that nothing was updated, removes what was
+downloaded, and leaves the old floti working. Then floti is replaced, then
+the app: while it runs, `floti update` says it is waiting for it to quit and
+looks again each second. What an earlier update left beside floti
+(`floti.old-<pid>.exe`, `.floti-<version>.<pid>`) is removed at the start
+of the next, once the process that left it is known to have ended.
 
 **Where things are replaced** (`crates/host/src/platform/installs`):
 
-| | floti | the desktop app |
-|---|---|---|
-| Windows | The running `floti.exe` is renamed to `floti.old.exe` and the new one moved into its name, as `install.ps1` does; the next update removes the old one. | The per-user NSIS install, `%LOCALAPPDATA%\Programs\Helm` (`Helm.exe` beside `Uninstall Helm.exe`), updated by running the release's setup.exe with `/S`. |
-| macOS | Written beside, made executable, renamed over. | `Helm.app` in `~/Applications`, else `/Applications`: the release's zip is unpacked beside it with `ditto -x -k --noqtn` and swapped in by rename. |
-| Linux | Written beside, made executable, renamed over. | The AppImage at `~/Applications/Floti.AppImage`, where `floti add desktop` installs it (AppImage's own tools look there, and it is outside the data folder `floti uninstall` keeps): written beside, made executable, renamed over. |
+| | floti | the desktop app | its version |
+|---|---|---|---|
+| Windows | The running `floti.exe` is renamed to `floti.old.exe` and the new one moved into its name, as `install.ps1` does; the next update removes the old one. | The per-user NSIS install, `%LOCALAPPDATA%\Programs\Helm` (`Helm.exe` beside `Uninstall Helm.exe`), updated by running the release's setup.exe with `/S`. | `DisplayVersion` of the per-user uninstall entry whose `UninstallString` is that install's uninstaller. |
+| macOS | Written beside, made executable, renamed over. | `Helm.app` in `~/Applications`, else `/Applications`: the release's zip is unpacked beside it with `ditto -x -k --noqtn` and swapped in by rename. | `CFBundleShortVersionString` in its `Info.plist`. |
+| Linux | Written beside, made executable, renamed over. | The AppImage at `~/Applications/Helm.AppImage` (AppImage's own tools look there, and it is outside the data folder `floti uninstall` keeps), where the desktop's first install puts it: written beside, made executable, renamed over. | Unknown, so it is always updated. |
 
-`FLOTI_DESKTOP_DIR` moves the folder the app is looked for in on every OS;
-tests use it. A release with no desktop file for this computer updates
-floti alone and says so. No downloaded file carries a quarantine flag or a
+A release with no desktop file for this computer updates floti alone and
+says so. No downloaded file carries a quarantine flag or a
 download mark: floti's own process writes them, which neither Gatekeeper's
 quarantine nor Windows' mark of the web applies to, and `--noqtn` keeps
 `ditto` from carrying one over from the archive.

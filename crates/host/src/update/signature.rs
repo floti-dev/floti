@@ -35,20 +35,30 @@ pub fn built_in_key() -> PublicKey {
     PublicKey::decode(BUILT_IN_KEY).expect("minisign.pub holds a minisign public key")
 }
 
+/// The key the manifest and every release file are checked with: the one
+/// built in, or, in a build with the testkit only, the one the marker in
+/// the data folder `data` names.
+pub fn trusted_key(data: &std::path::Path) -> PublicKey {
+    #[cfg(any(test, feature = "testkit"))]
+    if let Some(key) = test_marker(data, "key").and_then(|text| PublicKey::decode(&text).ok()) {
+        return key;
+    }
+    let _ = data;
+    built_in_key()
+}
+
 /// The file in a data folder that, in a build with the testkit only, names
 /// the manifest's address and the key to check with in place of the
 /// built-in ones: `{"manifest": "<url>", "key": "<minisign.pub text>"}`.
 #[cfg(any(test, feature = "testkit"))]
 pub const TEST_UPDATE_MARKER: &str = "floti-test-update.json";
 
-/// The test's manifest address and key, when `data` holds the marker.
+/// The text the marker in `data` gives `field`, when it is there.
 #[cfg(any(test, feature = "testkit"))]
-pub fn test_overrides(data: &std::path::Path) -> Option<(url::Url, PublicKey)> {
+pub fn test_marker(data: &std::path::Path, field: &str) -> Option<String> {
     let text = std::fs::read_to_string(data.join(TEST_UPDATE_MARKER)).ok()?;
     let marker: serde_json::Value = serde_json::from_str(&text).ok()?;
-    let manifest = url::Url::parse(marker["manifest"].as_str()?).ok()?;
-    let key = PublicKey::decode(marker["key"].as_str()?).ok()?;
-    Some((manifest, key))
+    marker[field].as_str().map(str::to_owned)
 }
 
 /// `text` as a signature of `file`, with exactly `comment` as its trusted

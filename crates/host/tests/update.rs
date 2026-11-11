@@ -4,7 +4,10 @@
 //!
 //! The test key and the manifest's address reach the binary only through
 //! the testkit's marker in the data folder (`floti-test-update.json`); the
-//! desktop app is looked for only in the folder `FLOTI_DESKTOP_DIR` names.
+//! desktop app is looked for only in the folder `FLOTI_DESKTOP_DIR` names,
+//! which a build with the testkit reads. No host runs for the test's data
+//! folder, so on Windows, where installing the app stops the host, there
+//! is nothing to ask before it.
 //! Everything is under the test's `TestDirs`. On Windows the release's
 //! installer is the fake program, which records how it was run.
 
@@ -23,6 +26,9 @@ use floti_host::update::signature::TEST_UPDATE_MARKER;
 use floti_host::version::{cpu_name, os_name};
 
 const NEWER: &str = "999.0.0";
+/// The fake desktop install's version, where the OS keeps one in the
+/// install (macOS); elsewhere it is unknown, which counts as older.
+const OLDER: &str = "1.0.0";
 const RECORD_VAR: &str = "FLOTI_FAKE_PROGRAM_RECORD";
 
 #[derive(Clone)]
@@ -175,7 +181,7 @@ impl World {
         let floti = bin.join(format!("floti{}", std::env::consts::EXE_SUFFIX));
         std::fs::copy(env!("CARGO_BIN_EXE_floti"), &floti).expect("copy the built floti");
         let apps = dirs.folder("apps dir");
-        Native.fake_install(&apps);
+        Native.fake_install(&apps, OLDER);
         let record = dirs.root().join("installer runs.jsonl");
 
         let server = Server::start();
@@ -296,7 +302,7 @@ async fn a_bad_signature_stops_floti_update_with_one_line_and_nothing_replaced()
     assert_eq!(
         stderr.trim_end(),
         format!(
-            "floti update: {} does not match its signature, so nothing was updated.",
+            "floti update: {} does not match its signature. Nothing was updated.",
             world.desktop_file
         )
     );
