@@ -31,8 +31,10 @@
     "verify:installer": "pnpm --filter @helm/desktop verify:installer",
     "dist:win": "pnpm --filter @helm/desktop dist:win",
     "dist:mac": "pnpm --filter @helm/desktop dist:mac",
+    "dist:linux": "pnpm --filter @helm/desktop dist:linux",
     "verify:artifact": "pnpm --filter @helm/desktop verify:artifact",
     "verify:mac-artifact": "pnpm --filter @helm/desktop verify:mac-artifact",
+    "verify:linux-artifact": "pnpm --filter @helm/desktop verify:linux-artifact",
     "screenshots": "pnpm --filter @helm/desktop screenshots",
     "db:generate": "pnpm --filter @helm/core db:generate",
     "icon": "pnpm --filter @helm/desktop icon"
