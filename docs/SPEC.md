@@ -1026,7 +1026,8 @@ session is a feature that belongs somewhere else.
 
 A dev-server viewport in a workspace tab (M16), and since M17 something a Claude
 session can drive. The pane itself is described in the network posture above and
-its rules live in CLAUDE.md; what follows is the agent half, because it is the
+its rules live in CLAUDE.md and [ARCHITECTURE.md](ARCHITECTURE.md#browser-pane);
+what follows is the agent half, because it is the
 part with a security surface.
 
 **What a session gets.** Ten tools, served by `main/browser-mcp.ts`:
@@ -1045,7 +1046,7 @@ a transcript.
 renders a message or answers a prompt. A session calls a tool the way it calls
 any other MCP tool, and Helm's whole part is to be at the other end of it - the
 same boundary the transcript archive was admitted under, from the other
-direction. See 4.4 and CLAUDE.md's Scope.
+direction. See 4.4 and CLAUDE.md's Boundaries.
 
 **How a session reaches it.** An MCP endpoint over HTTP on `127.0.0.1`, on a
 port the kernel picks per run, with a bearer token minted per *session*.

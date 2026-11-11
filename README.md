@@ -280,7 +280,16 @@ what keeps the app portable and a future mobile client possible.
   each design decision. Read this before changing anything.
 - [CLAUDE.md](CLAUDE.md) - the rules that are load-bearing rather than
   stylistic. Each is short on purpose; the argument behind it is in a comment at
-  the code site it governs, and the detail is in `.claude/skills/`.
+  the code site it governs, and how each subsystem behaves is in the docs below.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - what each process owns, how
+  sessions live and end, tabs and families, the browser pane, overlays,
+  templates and the Files view.
+- [docs/AGENT-TOOLS.md](docs/AGENT-TOOLS.md) - the tools a session is given:
+  the browser, session awareness, child sessions, plugin tools, and agent
+  definitions.
+- [docs/PLUGINS.md](docs/PLUGINS.md) - how Floti runs a plugin.
+- [docs/SECURITY.md](docs/SECURITY.md) - credentials, keys, the secret store
+  and the browser's permissions.
 - [docs/PACKAGING.md](docs/PACKAGING.md) - what the build produces, where data
   goes, and why there is no auto-updater.
 - [packages/plugin-sdk/README.md](packages/plugin-sdk/README.md) - writing a

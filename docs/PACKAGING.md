@@ -189,6 +189,20 @@ the directory **absent**, and nothing there is ever overwritten. Helm records no
 hashes of what it seeded, so it cannot distinguish an edited file from an
 untouched one; deleting the directory is what puts the originals back.
 
+Where each run keeps its data, on each OS (`appMode` in `paths.ts` decides):
+
+| run | Windows | macOS | Linux |
+|---|---|---|---|
+| installed | `%APPDATA%\Helm` | `~/Library/Application Support/Helm` | `${XDG_CONFIG_HOME:-~/.config}/Helm` |
+| portable | `helm-data` beside the exe | none | none |
+| `pnpm dev` | `%LOCALAPPDATA%\Helm\dev\helm-data` | `~/Library/Application Support/Helm Dev/dev/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/Helm/dev/helm-data` |
+| checks | `%LOCALAPPDATA%\Helm\checks\<name>\helm-data` | `~/Library/Application Support/Helm Dev/checks/<name>/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/Helm/checks/<name>/helm-data` |
+| `pnpm dev:live` | the installed app's own | the installed app's own | the installed app's own |
+| templates | `~/.config/helm/templates`; `helm-data/templates` when portable | `~/.config/helm/templates` | `~/.config/helm/templates` |
+
+Templates are `helm-data/templates` in the run's own folder for `pnpm dev` and
+every check, on every OS.
+
 ## What the installer does, and what it deliberately does not
 
 - **Per-user**, into `%LOCALAPPDATA%\Programs\Helm`. Nothing Helm does needs

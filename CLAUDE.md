@@ -6,13 +6,28 @@ profiles, session history, a Files view that renders notes and artifacts, and
 a browser pane. Electron and React. It shells out to the
 `claude` CLI and never reimplements it.
 
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - what each process owns, how
+  sessions live and end, tabs and families, the browser pane, overlays,
+  templates, the Files view. Read the part you are changing first.
+- [docs/AGENT-TOOLS.md](docs/AGENT-TOOLS.md) - the host's agent tools listener
+  and its families: `helm-browser`, `helm-sessions`, `floti-agents` (children,
+  news, the queue, waits, worktrees, resume, command children), plugin tools,
+  and agent definitions.
+- [docs/PLUGINS.md](docs/PLUGINS.md) - how Floti runs plugins: API versions,
+  pages, backgrounds, programs, tools and sessions.
+- [docs/SECURITY.md](docs/SECURITY.md) - credentials, device and host keys, the
+  plugin secret store, the browser's permissions.
 - [docs/DESIGN.md](docs/DESIGN.md) - the design system. All UI work follows it.
 - [docs/TESTING.md](docs/TESTING.md) - how the app is tested.
+- [docs/PACKAGING.md](docs/PACKAGING.md) - what the build produces, where the
+  data goes, the network posture.
 - [docs/SPEC.md](docs/SPEC.md) - the evidence behind past decisions. Look there
   when a change would reverse one; it is reference, not required reading.
 
-Rules here are short on purpose. The reasoning behind a rule lives in a comment
-at the code it governs, and in git history.
+This file holds what an agent must not break, one short rule each. How a
+subsystem behaves lives in its doc under `docs/`, and the reasoning behind a
+rule in a comment at the code it governs. A change in behaviour updates the doc
+that describes it, not this file; a line is added here only for a new rule.
 
 ## Layout
 
@@ -45,56 +60,38 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 ## Testing
 
 - Three tiers, and a test sits in the lowest one that can show what it checks:
-  - **Unit** tests are most of them and take milliseconds each: one module's
-    logic, with the disk, processes, network and clock faked.
-  - **Integration** tests are fewer: real processes, ptys, sockets, folders,
-    links and database files where meeting them is the point, with the fake
-    agents in place of real ones.
-  - **End-to-end** tests are very few: the main workflows, on their happy
-    paths, through the built app.
+  unit (most of them: one module's logic, with the disk, processes, network
+  and clock faked), integration (real processes, ptys, sockets, folders and
+  database files where meeting them is the point, with the fake agents in
+  place of real ones) and end-to-end (very few: the main workflows, on their
+  happy paths, through the built app). [docs/TESTING.md](docs/TESTING.md) says
+  which kind a change needs.
 - While building, run only the tests for what changed. A full suite is a
-  regression check. CI runs the TypeScript suite on every push, and the
-  host's Rust suite (`.github/workflows/host.yml`) on every push that touches
-  the host's paths, on Windows, macOS and Linux. Nobody waits on it to merge.
-- Unit and integration tests validate the work. End-to-end tests run only
-  before a release is cut (the `procedures` skill): never while building, to
-  check a fix or to finish a task.
-- Nearly everything in a local app can be shown by a unit or integration test.
-  Something an end-to-end run catches is a gap in those tiers: add the unit or
-  integration test that fails for it, then fix it. Only what needs the whole
-  app running stays end-to-end.
+  regression check. End-to-end tests run only before a release is cut (the
+  `procedures` skill): never while building, to check a fix or to finish a
+  task. Something only an end-to-end run caught is a gap in the lower tiers:
+  add the unit or integration test that fails for it, then fix it.
 - A Rust test run names the binary that holds the tests: `--lib` for a
   module's tests, `--test <file>` for one of `crates/host/tests/*.rs`. A
-  filter alone (`cargo nextest run -p floti-host <filter>`) builds and links
-  every test binary in the crate first. `cargo check` finds compile errors
-  without linking. A test that passed runs again only after the code it
-  covers changed.
-- `pnpm check` is the gate. CI runs it on Windows, macOS and Linux on every
-  push, then builds. A failure on any one fails the run and stops the
-  release, and the owner reads CI on all three before a release. The host's
-  Rust tests are not in `pnpm check` and run in their own workflow. A branch
-  merges on its own tests, run locally, and a review that runs the suite for
-  what changed locally; nobody waits on CI to merge. End-to-end tests run
-  locally only, never in CI.
-- `pnpm test:posix` runs the overlay, process-tree and data-directory
-  tests where that code is the POSIX one: natively on macOS and
-  Linux, and under Linux in WSL from Windows.
-- A test cleans up by construction, never by reaching its own teardown, which
-  a crash skips: every folder it makes is under its run's root, which the
-  process that outlives the tests removes, and every process it starts ends
-  with it. Nobody cleans up by hand after a test run. CI fails a run whose
-  tests leave a test temp folder or a process behind, and
-  `node scripts/test-leftovers.mjs <test command>` is the same check locally.
-  It reports and fails; it never deletes or kills.
+  filter alone builds and links every test binary in the crate first.
+  `cargo check` finds compile errors without linking. A test that passed runs
+  again only after the code it covers changed.
+- `pnpm check` is the gate. The host's Rust tests are not in it and run in
+  `.github/workflows/host.yml`. A branch merges on its own tests, run
+  locally, and a review that runs the suite for what changed locally; nobody
+  waits on CI to merge.
+- A test cleans up by construction, never by reaching its own teardown: every
+  folder it makes is under its run's root, and every process it starts ends
+  with it. `node scripts/test-leftovers.mjs <test command>` reports what a run
+  left; it never deletes or kills.
 - A test waits on an event or a polled condition, bounded by the shared
   patience, never on time. Logic driven by a timer, deadline or grace is tested
-  by stepping time; no test waits one out.
+  by stepping time.
 - Every change ships with its tests: a bug gets a failing test before the fix,
-  a feature gets tests that cover it. [docs/TESTING.md](docs/TESTING.md) says
-  which kind.
+  a feature gets tests that cover it.
 - The in-app drivers (`fidelity`, `claude-check`, `packaging-check`) and
-  `scripts/drive-dev.mjs` are diagnostic tools, not tests. Use them to diagnose
-  something a test cannot reach, or when asked. No change "owes" a driver run.
+  `scripts/drive-dev.mjs` are diagnostic tools, not tests. No change "owes" a
+  driver run.
 
 ## UI
 
@@ -119,711 +116,143 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   exposes three generic functions; a feature adds a channel, not a bridge
   method. `term:*` (the spike page's single pty) and `session:*` (the host's
   sessions) never mix.
-- Each Helm page (the window, and the hidden plugin host window) reaches the
-  host over its own protocol connection, which main pipes to a bridge unread
-  (`hostLink:*`); the bridge holds the device key, never a window. Electron
-  IPC carries only what `channels/boundary.rs` lists as client-only, and its
-  host-internal channels from the hidden plugin window: `registerIpc`
-  registers nothing else, and a page's router (`app/host/router.ts`) refuses
-  any other channel at once. `e2e/boundary.spec.ts` fails naming any channel
-  that crossed. Main runs no session, terminal, config reader, content,
-  template or scan service of its own; those are the host's.
-- The host never opens `helm.db` or learns Helm's data folder. What only
-  `helm.db` holds (archived conversations whose transcript is gone, their
-  usage, History's names) main reads through core's
-  read-only pages (`store/copy.ts`) and sends on `carry:*`, in batches, until
-  the host records in `floti.db` that the copy finished
-  (`main/host/own-data.ts`). The host's merge keeps what it already holds,
-  and a copy that stops part way is sent again at the next connect. The
-  config file versions an earlier Helm kept in `helm.db` are not copied;
-  those already in `floti.db` stay there.
 - A host channel added to `shared/ipc.ts` is also declared in
   `crates/floti-protocol`, or listed there as client-only or host-internal
   with a reason (`channels/boundary.rs`), and the generated files are
   rewritten with `cargo run -p floti-protocol --bin generate`. A crate test
   reads `shared/ipc.ts` and fails naming any channel that is neither.
-- Main owns the window's lifetime and `helm.db`: `will-quit` releases the
-  database, and nothing else closes the store.
+- Electron IPC carries only what `channels/boundary.rs` lists as client-only,
+  and its host-internal channels from the hidden plugin window; every other
+  call goes over the page's own protocol connection to the host.
+  `e2e/boundary.spec.ts` fails naming any channel that crossed. Main runs no
+  session, terminal, config reader, content, template or scan service of its
+  own; those are the host's.
+- The host never opens `helm.db` or learns Helm's data folder; what only
+  `helm.db` holds, main sends it on `carry:*` (`main/host/own-data.ts`). Main
+  owns the window's lifetime and `helm.db`: `will-quit` releases the database,
+  and nothing else closes the store.
 - The host owns process lifetime. Every session's and plain terminal's pty and
   process tree is held by the session keeper (`floti keeper`,
-  `crates/host/src/keeper`), a process the host starts outside its own tie,
-  which holds nothing else: a host that crashes, panics or is killed takes no
-  session with it, and the next host takes them back under the same ids, with
-  their agent tools and the device that started each. A keeper that dies ends
-  what it holds, and the host offers those sessions back. Only a deliberate
-  stop ends the keeper. Quitting a client ends the sessions it started only
-  where its setting for that host says so; a crash ends nothing; stopping the
-  host ends every session. The plain terminals a client opened end when it
-  quits. Helm's setting is `quitSessions`, kept in `helm.db` keyed by host
-  (this PC's is `local`, End when absent; a remote host's is its id, Keep when
-  absent). Quitting with sessions it would end asks first: End and quit, Keep
-  running and quit (this quit only, never written to the setting), or Cancel.
-  Helm never stops the host on its own: its deliberate quit sends `host:quit`
-  and lets go, only Settings' Stop host (after saying how many sessions it
-  ends) sends `host:stop`, and a host Helm started (`floti host --desktop`)
-  exits by itself once it runs nothing and no client is attached. An update
-  stops a host through `floti update-stop --stop`
-  (`crates/host/src/update_stop.rs`), asked first when it would end sessions,
-  and their rows stay running, so the next host offers them back. When the
-  connection ends without a stop or a quit, the window keeps each tab's
-  screen, dimmed with input off, and Helm starts a new host if a desktop
-  started the one that died, then reconnects. The new host's list decides
-  each: a session or shell it still runs is carried again from its redraw, and
-  nothing is resumed. One it lists lost, or that is lost while it stays (its
-  keeper died), comes back through the host's restore offer, which the window
-  asks for again then; a lost shell, as a new shell in its folder.
-- A host on another computer is reached by main through `floti bridge`,
-  over the user's own `ssh -o BatchMode=yes <target>`, the command they
-  gave, or `wsl.exe -d <distro>` (on this PC, or through ssh to a Windows
-  host), one link per host and one page link per host for each window
-  (`hostLink:open` names it). Floti adds no ssh option, never skips a
-  host-key check, reads or writes nothing under `~/.ssh` and holds no SSH
-  secret: a transport that needs a password or a key accepted fails with its
-  last line, and the fix is `ssh <target>` in a terminal. Adding a host is
-  connecting to it: the first connection pins the key it proves, and
-  nothing is approved or typed on the host. The link never
-  starts that host and a drop ends nothing there; Remove ends the link and
-  removes the host's client folder, and ends nothing on the host.
-- Every client sees every session in the host, and tabs, panes and splits are
-  kept per device: `paneLayout` stays in `helm.db` and never reaches the host.
-  A window gives a tab only to a session its saved layout names or that it
-  opened. A running child of a session it has a tab for is shown inside that
-  tab while "Show children in their parent's tab" is on and the pane has room
-  (`familyRoom`), and counts as open here, so the window's connection carries
-  its terminal (`shownSessionIds`) along with those of the sessions that have
-  a tab. A running child's pane there can be closed without ending it: it
-  keeps running, is not open here (its terminal is not carried), and is shown
-  as a child with no room is, by its chip in the parent's crumb and its row in
-  the tree, whose peek's Open puts it back where it was (its Open as tab gives
-  it a tab; Open never does). Which children are shown, shrunk, closed or
-  opened as tabs is this device's `paneLayout` (`families`) and never reaches
-  the host. Every other running session is in the sessions pane as not open
-  here, with Open (a tab whose screen comes through the host's attach, never a
-  second restore path) and End. A child with nowhere on screen here, running
-  or ended, has a peek instead (from its row, or its chip in the parent's
-  crumb): its screen comes through the host's watch-only attach
-  (`session:data` opened with `watch`), which takes no keys and no size, so a
-  peek never types into the child or resizes it; it is drawn at the grid the
-  host reports (`session:size`); its Open as tab is the attach above and
-  closes the peek. Closing a running session's tab asks first, naming its
-  host, which the window names, and the children that end with it and any
-  started to outlive it; its button counts what it ends (End 4 sessions).
-  Close tab, keep running in the tab's menu ends nothing, and puts a child
-  back in its parent's family view.
-- A child that has exited is drawn in the Sessions tree and its parent's
-  family view only while it is kept and its parent runs (`inFamilyTree` in
-  `core/layout/family.ts`): its parent stopped it with `keep`, or a person
-  stopped it. Any other ended child (one that exited by itself, one its parent
-  stopped without `keep`, one that ended with its parent) leaves both at once,
-  stays in History and is still its parent's to resume, and its parent still
-  hears how it ended. When a parent ends, its kept children leave with it, and
-  a running child started to outlive it stays as a top-level row naming it. A
-  kept child's row has Remove and its parent's row has Remove stopped
-  children, which ask nothing and send `session:remove`: the host clears
-  `kept` and every device's tree follows.
+  `crates/host/src/keeper`), so a host that crashes takes no session with it.
+  Helm never stops the host on its own. What quitting, stopping and
+  reconnecting end is in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- Tabs, panes, splits and families are kept per device (`paneLayout` in
+  `helm.db`) and never reach the host.
+- A host on another computer is reached through the user's own
+  `ssh -o BatchMode=yes <target>`, the command they gave, or `wsl.exe`. Floti
+  adds no ssh option, never skips a host-key check, reads or writes nothing
+  under `~/.ssh` and holds no SSH secret.
 - Do not use `@anthropic-ai/claude-agent-sdk`.
-- Helm renders nothing for a live session and answers no permission
-  prompt. The host reads one thing in a session's output, OSC 7501 status
-  reports, kept as the program said them (a message cut to 200 characters),
-  and draws no conclusion from
-  screen text. It passes every byte on untouched and puts nothing between
-  the user and the TUI. What a parent sends its child (`agents_send`) waits
-  in the child's queue and arrives as its next turn once it can take one, and
-  a person typing in that terminal comes first;
-  what a parent reads of its child (`agents_read`) is the screen as text,
-  interpreted by nobody. The host keeps the screen, hands a parent its
-  child's screen as text, and a command child's recent output lines and its
-  last 40 at exit (`session/screen.rs`).
-  Rendering an archived transcript (read-only, after the fact) is allowed.
-  This holds for every agent: no RPC or JSON mode in place of its own TUI.
+- Helm renders nothing for a live session and answers no permission prompt.
+  The host reads one thing in a session's output, OSC 7501 status reports,
+  draws no conclusion from screen text, passes every byte on untouched and
+  puts nothing between the user and the TUI. No agent runs in an RPC or JSON
+  mode in place of its own TUI. Rendering an archived transcript (read-only,
+  after the fact) is allowed.
 - Windows, macOS and Linux: links are junctions (`mklink /J`) on Windows and
   symlinks on macOS and Linux; nothing needs elevation; tests use paths with
   spaces. What differs by OS sits behind one interface per concern (in the
-  host, each a folder under `crates/host/src/platform`: links, the process
-  table, process trees, the local socket and the rest; in the desktop, ending
-  a process tree in `treeKill` and data directories in `isolate.mjs`), with one
-  implementation per OS, and nothing outside it branches on the OS. An OS with
-  no implementation yet reports Unknown and the feature around it keeps working.
+  host, each a folder under `crates/host/src/platform`; in the desktop,
+  `treeKill` and `isolate.mjs`), with one implementation per OS, and nothing
+  outside it branches on the OS. An OS with no implementation yet reports
+  Unknown and the feature around it keeps working.
 
-## Credentials
+## Credentials and keys
 
 - Never handle or store any agent's credential, or GitHub's. Each agent
   backend lists its credential paths (`credential_paths` in the host's
   `AgentBackend`), and nothing opens them. A sign-in is checked by the agent's
   own status command where it has one, by an artefact existing where it does
-  not, and is Unknown otherwise. For Claude Code that is an artefact existing
-  (`.credentials.json`, `ANTHROPIC_API_KEY`, the onboarding record in
-  `.claude.json`). Never open those, `hosts.yml`, an agent's or GitHub's
-  keyring entry or `GH_TOKEN`,
-  and never run a command that prints a credential. The remedy for "not signed
-  in" is a sentence naming the agent's login command (`claude` for Claude
-  Code).
+  not (for Claude Code `.credentials.json`, `ANTHROPIC_API_KEY`, the onboarding
+  record in `.claude.json`), and is Unknown otherwise. Never open those,
+  `hosts.yml`, an agent's or GitHub's keyring entry or `GH_TOKEN`, and never
+  run a command that prints a credential.
 - `~/.claude/sessions` keeps a `<pid>.<sha256>.key` credential beside every
   `<pid>.json`. The host's Claude Code status reader
   (`agent/claude_code/status.rs`) reads `.json` files only; never widen it.
-- The `persist:helm-browser` partition holds the user's cookies and logins.
-  Nothing reads it: main sets its permission, download and certificate
-  handlers and opens pages in it, and the only call on what it stores is
-  `clearStorageData`.
-- The plugin secret store (`crates/host/src/plugins/secrets`) is the one
-  place Helm keeps a secret of the user's, and only one the user typed into
-  it; Floti's own keys are below. Each value
-  is sealed by this OS's store for the user (`platform/secret_seal`) and
-  refused when it cannot be; a value is filled in by the host, for an origin
-  and a plugin the user allowed, and never sent to any client. Helm never reads a Claude or GitHub credential to put there.
-- The user's login is the access to Floti. The host serves whatever reaches
-  its local socket, which only the user's OS account can open, once its Noise
-  handshake completes: a client on the host's computer, or one that comes
-  through `floti connect` over the user's own ssh or command. Every such
-  device is served every channel, as the user could at the host; Floti adds
-  no approval, code, role or prompt of its own, and keeps no list of allowed
-  devices. The host keeps its host key (`host.key`) in its data folder and
-  no device list; at start it deletes the `devices.json` and `enrolment.json`
-  an earlier version kept (`RETIRED_FILES` in `server/mod.rs`). Each client
-  keeps its device key (`device.key`) and the host key it pinned
-  (`host.pub`) at its first connection, and refuses a host that proves
-  another, naming the host, until the user removes it and adds it again.
-  Each is an owner-only file (`platform/private_files`): `0600` on macOS and
-  Linux, an access list naming only the user on Windows. The device key
-  names the device in the attached list (`devices:attached`, Settings >
-  Devices) and records which sessions it started, so quitting a client ends
-  only its own. Disconnect there (`devices:disconnect`) closes every
-  connection of a device's key to that host at once and leaves its sessions
-  running; taking its SSH key away is what keeps it out. A private key is
-  never logged, printed, sent to another client or put in a session's
-  environment; logs name a key by its fingerprint, and a client that fails
-  the handshake is closed without a byte. Keys and the Noise sessions they
-  prove come from snow, through `floti_protocol::noise`; never hand-rolled
-  crypto.
+- Nothing reads the `persist:helm-browser` partition, which holds the user's
+  cookies and logins; the only call on what it stores is `clearStorageData`.
+- The plugin secret store (`crates/host/src/plugins/secrets`) is the one place
+  Helm keeps a secret of the user's, and only one the user typed into it:
+  sealed by this OS's store, refused when it cannot be, never sent to any
+  client. Helm never puts a Claude or GitHub credential there.
+- The user's login is the access to Floti: it adds no approval, code, role or
+  prompt and keeps no list of allowed devices. A private key is never logged,
+  printed, sent to another client or put in a session's environment; logs
+  name a key by its fingerprint. Key files are owner-only
+  (`platform/private_files`). Keys and Noise sessions come from snow, through
+  `floti_protocol::noise`; never hand-rolled crypto.
 - The network posture is stated identically in README, docs/PACKAGING.md, the
   `update:check` comment in `shared/ipc.ts` and SPEC 5; change all four
   together. Helm contacts nothing on its own initiative except the update
-  check. Its windows reach the local host over the host's local socket, which
-  only the user's OS account can open. The local host listens on loopback for
-  its sessions' agent tools, behind a token per session, and holds no port
-  while no tool family is on. Main listens on loopback only for a port of a
-  session on another computer the user forwarded, which closes with that
-  session (`main/host/forwards.ts`). Everything else on the network happens
-  because the user asked for it: the browser pane fetches the page they go
-  to, a plugin they added reaches the hosts its manifest names, and a host on
-  another computer is reached through their own ssh or command. A plugin's
-  programs and service run with the user's rights and are not confined.
+  check.
 
 ## Browser pane
 
 - `will-navigate` and `setWindowOpenHandler` are denied on every web-contents
   in `main/index.ts`. Browser views are exempted by a `webContents.id` registry
   read inside those guards. Widen the registry, never the guard.
-- Pages live in one Browser tab, in its own strip (`browserStrip.ts`), never
-  among a pane's tabs.
-- From a browser view, a `window.open` with features opens a real popup
-  window; `_blank` and a plain `window.open` open a page in the Browser tab
-  that adopts the web contents Chromium made (`createWindow`), so both keep
-  `window.opener` (OAuth needs it), and a middle-click loads its link in a new
-  page there. Both share the partition,
-  permissions, reach rule and exemption registry. A popup shows its host in
-  its title bar and is never an agent's: an agent page's opens are more of its
-  pages.
-- A view can lose its web contents (a page that called `window.close()`). Reach
-  them only through `contentsOf` in `browser.ts`. `registerIpc` wraps every
-  send handler, because a throw there is an uncaught main-process exception.
-- Every navigation goes through `browserReachAllows` in `@helm/core`; an
-  agent's restrictions are composed by `agentReach`. `file:` and custom schemes
-  are refused there.
+- Every navigation goes through `browserReachAllows` in `@helm/core`, an
+  agent's also through `agentReach` and `browserMcpLocalOnly`. `file:` and
+  custom schemes are refused there.
+- A view can lose its web contents. Reach them only through `contentsOf` in
+  `browser.ts`. `registerIpc` wraps every send handler, because a throw there
+  is an uncaught main-process exception.
 - A native view paints over all DOM, so it hides while anything is drawn over
-  it, through `overlayOpen()` (`ui/src/lib/overlay.ts`), subscribed once in
-  `useBrowsers`, and leaves a still of the page in its place
-  (`browser:snapshot`). The attention toasts (needs you, While you were away)
-  are drawn clear of the view while the sidebar shows, and hide it as a dialog
-  does while the sidebar is hidden. The view never enters the top 36px, where
-  Windows draws the window controls, except in fullscreen, when the page has
-  the whole window and there is no title bar.
-- The browser's keys are one table (`shared/browserKeys.ts`): main reads it in
-  `before-input-event` for a key pressed in a page, the window for a key in
-  Helm's chrome, and both run the window's one dispatch. A key an agent sends
-  (`agentInput`) is always the page's.
-- Hide a view with `setVisible(false)`, which keeps the page capturable,
-  scriptable and clickable.
+  it, through `overlayOpen()` (`ui/src/lib/overlay.ts`). Hide a view with
+  `setVisible(false)`. The view never enters the top 36px, where Windows draws
+  the window controls, except in fullscreen.
 - Self-signed certificates are accepted for loopback only, and there is no
   `certificate-error` handler. Downloads are refused and handed to the system
-  browser. Every permission is denied but clipboard writing and fullscreen,
-  and those only to a page in the Browser tab that has the keyboard. Only the
-  address bar searches, on Enter, with the engine in `browserSearch` (`off`
-  refuses); nothing is sent while typing.
+  browser. Every permission is denied but clipboard writing and fullscreen.
 
-## Agent tools - the host's listener
+## Agent tools
 
-The host serves its sessions' agent tools as MCP over HTTP
-(`crates/host/src/agent_tools`): `helm-browser` at `/mcp`, `helm-sessions` at
-`/mcp/sessions`, `floti-agents` at `/mcp/agents` and each plugin's tools at
-`/mcp/plugin/<id>`, on one port. It is the one inbound listener the host has
-besides its local socket and the relay socket beside it. Main binds no
-listener for them, mints no token and writes no `--mcp-config`, and never
-serves `floti-agents`: only the host does.
-
-- `127.0.0.1` only, on port 0, or on the port the sessions it takes back from
-  the keeper were given. A request announcing a non-loopback `Origin`
-  gets 403, and one without `Authorization: Bearer` gets 401 before its body
-  is read. There is no unauthenticated route, not even a health check.
-- One token per session, minted at launch, given to its agent tools and to its
-  environment for `floti agent`, and revoked when it ends. The token is the
-  identity, however it arrives.
+- The host serves them (`crates/host/src/agent_tools`) on `127.0.0.1` only.
+  A request without `Authorization: Bearer` gets 401 before its body is read,
+  one announcing a non-loopback `Origin` gets 403, and there is no
+  unauthenticated route, not even a health check. Main binds no listener for
+  them, mints no token, writes no `--mcp-config` and never serves
+  `floti-agents`.
+- One token per session, minted at launch and revoked when it ends. A
+  session's row keeps the token's SHA-256, never the token.
 - A tool family switched off has no route (404), no entry in `--mcp-config` and
-  no tool. With no session holding a token and nothing a launch could be
-  given, the host holds no port.
-- `helm-browser`, `helm-sessions` and `floti-agents` take name, route,
-  instructions and tools from `crates/host/src/server/browser_tools.json`,
-  `session_tools.json` and `floti_agents.json`. Main reads the browser table
-  too, for the tools it answers.
-- Main tells the host `browserMcp`, `browserMcpLocalOnly`, `sessionMcp`,
-  `sessionAgents` ("Sessions can start agents") and the four agent limits
-  (`agentChildrenPerParent`, `agentSessionsPerHost`, `agentDepth`,
-  `agentStartsPerParent`) and the command-children limit
-  (`agentCommandsPerParent`, counted apart from the agent limits) on each
-  connect and each change (`hostSettingsFor`).
-- Each plugin offering tools is a family, `helm-plugin-<id>`, on while the
-  plugin is on and its tools are not switched off in Settings. The host checks
-  the token, then hands the call on with its caller: an id it mints the first
-  time it meets the session (random, never the browser key or the host's row
-  id, and the id the plugin's `sessions.list` shows), its name and its working
-  directory - never the token, never anything of the conversation. Turning
-  them on reaches sessions started after; turning them off reaches running
-  ones at once.
-- Agent tools are registered per launch for every backend that takes them,
-  never through an
-  agent's own add command or global config. For Claude Code that is a
-  `--mcp-config` file in the session's launch folder under the host's data
-  folder (`crates/host/src/agent/launch_folder.rs`), never
-  `claude mcp add-json`. A launch folder a crash left is swept at host start,
-  and only when every owner is provably gone. At its own start main removes
-  the per-session `--mcp-config` files an earlier Helm wrote in its data
-  folder (`cleanStaleMcpConfigs`), on the same terms.
-- An agent navigation must pass both `browserReach` and `browserMcpLocalOnly`.
-- The host has no browser, so each browser call goes over `agentBrowser:call`
-  to the attached client that declared `browser`, naming the caller's
-  session, and that client's answer is the tool's. In Helm, main runs it
-  against the browser pane (`runBrowserTool` in `main/browser-mcp.ts`,
-  reached through `main/host/browser-tools.ts`). A launch is given
-  `helm-browser` only while such a client is attached, and each token reaches
-  only the families its launch was given (404 otherwise). A call made with
-  none attached, or waiting on a client that leaves, fails at once saying no
-  browser is attached. Nothing there waits on a timer.
-- A tool drives the tabs its own session opened and a tab the user shared with
-  it from the Share button, and only while the page is within `agentReach`. A
-  share is one session per tab, made by session id (the window never sees a
-  token), never inherited by a page the shared one opens, and revoked when
-  the session ends. `browser_tabs` lists all; `browser_close` closes only the
-  session's own.
-- `sessions_list` and `session_detail` (`crates/host/src/server/session_tools.rs`,
-  shaped by `crates/host/src/session/describe.rs`) never return any part of
-  another session's conversation: no transcript, prompt, output, argv,
-  conversation id or child command line. The shaping types have no field for
-  them. The sessions pane may show command lines to the user.
-- Listing is machine-wide. Detail of a session the host did not spawn gives
-  its pid, name, folder, status and version and says so; its Helm tab, start
-  time, branch, profile, overlays, process tree and ports are only for
-  sessions it spawned.
-  A status it could not read is "unknown", never omitted. No tool takes a
-  session id.
-- `helm-sessions` is awareness plus the caller's own title: it sends a
-  session nothing, waits on none, hands none work, and returns no part of any
-  session's conversation. Its one write is `session_title`, which titles the
-  caller's own row (resolved from its token, never from an argument) with one
-  line of at most 60 characters, and refuses anything else; from a session's
-  shell it is `floti session title <text>`, which reaches the family at
-  `FLOTI_AGENT_SESSIONS_URL` with the session's token. Both are allowed at
-  launch (`mcp__helm-sessions__session_title`, `Bash(floti session title:*)`),
-  and each backend's guidance asks the agent to set a title saying what is
-  being done, never the folder's name, and to change it when the work changes.
-  The title is kept on the row in `floti.db`, inherited by a new row of the
-  same conversation, carried to History by conversation (protocol 2.2's
-  optional `title` and `agentTitle`) and shown by the sessions pane beside
-  the name. History calls a conversation by its hand-given name, else its
-  agent's title, else the title of its first prompt that says something.
-- `floti-agents` acts on sessions, and only on the caller's own children:
-  sessions started with `agents_start` by the session whose token made the
-  call. A parent may start its children, type into them (`agents_send`), read
-  their screens (`agents_read`), wait on them and stop them, and may run a
-  command it watches as a command child (`floti agent run`); a grandchild is
-  reached only through its own parent. A child reaches its parent only with
-  `agents_report`, which the parent receives as its child's report, never as
-  its user's words. No tool reaches a session the caller did not start,
-  nothing is typed into a parent, into a session waiting on a permission
-  prompt or into a terminal a person has typed in since its last turn, and no
-  tool returns a transcript, argv or conversation id. A read
-  returns the screen and up to 200 lines above it as plain text, and for a
-  command child its recent output lines, while it runs and, as the last 40
-  lines, after it has exited. A command child is a child like any other for
-  reach: only its own parent waits on, reads or stops it, and a sibling,
-  another parent and its grandparent get not found.
-- `floti-agents` (`server/floti_agents.rs`, the work in
-  `server/hosted/children.rs`) is the host's own family: it works with no
-  client attached, a client quitting reaches a child only through its parent,
-  and a child never adds a tab or a pane to a window. It is given to a launch
-  while `sessionAgents` is on and the launch's profile does not turn it off;
-  off, or an excluded profile, is no route (404), no entry and no tool. Every
-  name a tool is given is resolved among the caller's own children only, and
-  anything else is not found. A start is judged before anything runs: the
-  agent it starts and a backend that agent allows, a folder Floti tracks on
-  the path it leads to (a session's own folder does not make one tracked), its
-  repository and agent worktree, the profile, the permission mode, the
-  backend's ability to enforce every rule of the agent (`AgentBackend` refuses
-  one it cannot, naming the rule and the backend), then the limits read afresh
-  from the settings and counted from the child rows, so they hold across a
-  host restart. A child runs in its agent's mode, else its profile's, else
-  auto (where its backend has auto). A parent caps it only when the parent was
-  launched in plan or dont-ask, and bypass-permissions reaches a child only
-  when its parent was launched in it; a parent launched in no mode or in
-  manual does not hold its children to manual (`child_mode` in
-  `hosted/children.rs`). The user's deny rules still win. A child starts and
-  works its task with nothing to answer: nobody is at its terminal, so its
-  adapter launches it with nothing a person must answer before its first turn,
-  without writing the agent's config (for Claude Code `--strict-mcp-config`
-  beside its own `--mcp-config`, so it loads only the servers its launch gives
-  it and no project `.mcp.json` asks to be approved; a session a person starts
-  still loads the project's). Children are held by the generic limits only,
-  and how many work at once is the parent's judgment, made from what each one
-  does. Command children are counted apart, by their rows' command: none of
-  the agent limits (per parent, per host, starts, depth) counts one, and an
-  agent counts toward none of theirs (`agentCommandsPerParent`, 1 to 32,
-  default 4, is read afresh on every run; a fifth is refused naming the
-  command-children limit and the running command children that hold it, and
-  saying to wait for news and run again). `agents_list` shows a command child
-  with its command where any other child shows its agent, and how many command
-  children the parent has left. A child ends when its parent ends, however it
-  ends, and its own children with it, unless it was started to `outlive`; its
-  row keeps the parent's row and conversation, so a restart restores the links
-  and resuming the parent's conversation gives its outliving children back. A
-  session's record names the agent it was started as (`agent`).
-- A child's doings are news for its parent, kept in `floti.db`'s `agent_inbox`
-  keyed by the parent's row and its conversation id, so a restart, or the
-  parent's conversation resumed in Floti, still hears what its children said
-  meanwhile. There are six events: a report (`agents_report`: done, stuck or
-  note, text at most 4,000 characters, a longer answer goes in a file whose
-  path is reported), needs you (a permission prompt, a question or a sign-in,
-  or a child that has not begun its first turn a minute after its launch,
-  saying it has not started its task: a prompt it cannot skip, such as folder
-  trust, waits for a person; `hosted/children/startup.rs`, its minute on
-  Tokio's clock), turn ended (a turn that ended idle with no report; a turn
-  that ended with one is only the report), ended (the exit code, or stopped by
-  the parent, a person or Floti), error (a launch that failed, or an error the
-  program reports; the message is cut to 200 characters) and delivered (a text
-  the parent sent that waited in the child's queue was typed in, with that
-  text cut to 200 characters). No event carries any of a child's conversation
-  beyond a report's text, a program's own message and the parent's own text.
-  They are watched from the activity reader (`server/features/sessions.rs`,
-  `hosted/children/news.rs`), which reads the backend's own records first and
-  then the program's own status (OSC 7501, read in `session/activity.rs`),
-  where `blocked` is needs you and `error` is error, and, for an agent with no
-  MCP tools, `done` is a report. `agents_report` is listed, and allowed at
-  launch, only for a session that has a parent (an agent with no MCP tools has
-  no tools to list): the family lists per caller (`ToolFamily::tools_for`,
-  `allowed_tools_in`), and a tool left out of a listing is answered as one the
-  family does not have. A session's record carries its child's `last_report`
-  (protocol 2.1, optional) from a report until the child's next turn starts.
-- Every session's record says how it ended once it has exited (`endedBy`,
-  protocol 2.2, optional): `exited` by itself, or stopped by its `parent`,
-  a `person` on any device or `floti` (its parent ended, or the host was
-  stopped). Whoever ends a session writes `stopped_by` on its row before it
-  ends it, and the first to say wins (`records::record_stopping`); a stop
-  nobody named is a person's. The ended bar, a child's ended header and its
-  peek say "Stopped by <parent>", "Stopped by its parent" (its name not
-  known), "Stopped by Floti" or "Stopped"
-  (`stoppedText`) with no exit code, which shows only for a program that
-  exited by itself. `session:notify` is sent only for a session a person
-  started whose program exited by itself (`notifies` in
-  `server/features/sessions.rs`): a stopped session and every child's end,
-  however it came, raise no OS notification; a child that needs a person
-  raises its needs-you notice.
-- Kept belongs to the host: `kept` on the child's row in `floti.db`, written
-  with `stopped_by` by the first stop (`records::record_stopping`): true for
-  `agents_stop` with `keep` (`floti agent stop --keep`) and for a person's
-  stop of that child, but not for a device's quit, which records a person's
-  stop and keeps nothing; false for every other end, and never for a session
-  with no parent. `session:list` gives the running sessions, then each kept
-  child of a running parent, with protocol 2.2's optional `kept` (set only on
-  a child that has exited). Resuming a kept child clears it on every earlier
-  row of its name, and `session:remove` clears it on the rows it names that
-  are kept children and passes over any other; each clear moves the activity
-  publication, so every client lists again.
-- `agents_send` (`floti agent send`) puts its text at the end of the child's
-  queue, `agent_messages` in `floti.db` beside `agent_inbox`, so a host
-  restart keeps it (`hosted/children/queue.rs`, `send.rs`). The queue is
-  typed in order, one message a turn, at the first moment the child can take
-  one: no person has typed into its terminal since its last turn ended (their
-  keys come first, and may be half a line in its prompt), no permission
-  prompt or other dialog is open, and its turn has ended, the turn the last
-  message gave it included. `interrupt` presses the stop key and does not
-  wait for the turn to end, and still waits for the rest. A backend with no
-  signal of its turns takes a message as soon as no person has typed. A turn
-  a message gave that shows no sign in 10 seconds (`UNSEEN_TURN_GRACE`, on
-  Tokio's clock) is taken as over. The queue is tried at once on a send, at
-  each moment the activity reader sees a child's activity move or a turn end,
-  and when a host starts. A send answers at once: sent, when it was typed
-  then, and otherwise queued, saying why and how many wait ahead of it, and
-  the parent hears delivered news when it is typed; with `wait`, a queued
-  text's wait holds until news after its delivery. A send to an ended child
-  or a command child is refused, and a message whose child ends first is
-  dropped. Claude Code's own session messaging socket is documented for a
-  session's own hooks and commands, and a message there arrives as another
-  session's, not as its user's turn, so Floti delivers nothing through it;
-  a Claude Code parent's guide says it may use its own SendMessage, which
-  Floti does not see.
-- `agents_wait` (`for` any or all, `children` names) gives the caller's unseen
-  news at once, in order, and holds for the next only where the caller's
-  backend can: `backgrounds_long_calls` for the tool, and
-  `background_command_wakes` with the shell header for `floti agent wait`.
-  Anywhere else it answers at once, saying nothing is new yet and to call
-  again after the next piece of work. News is marked seen only after the
-  answer was handed to the caller in full (`Delivery`), so a wait that is
-  cancelled, dropped or cut off by a host restart leaves it unseen for the
-  next. A wait running in the background (an MCP task, `agents_start` or
-  `agents_send` with `wait` as one, and `floti agent wait --background`) does
-  not end when a person types into the parent: the person talks to the parent
-  while its waits, its children's news, the messages it queued and its
-  children carry on, and the wait ends on its children's news, every child it
-  is about idle (with `for` all), or the parent ending. A held wait that holds
-  up the parent's turn (a held call that is not a task, `floti agent wait`
-  without `--background`) ends when a person types a key into the parent and
-  when the parent ends. No wait ends on what a terminal sends by itself (focus
-  in and out, mouse reports, answers to its program's queries;
-  `session/person.rs`). Each backend's guide asks the parent to wait in the
-  background where it can: an MCP task where it has them, else
-  `floti agent wait --background` as a background command, so a wait that
-  holds up the turn is the exception. `wait` on `agents_start` (`--wait` on
-  the command) waits for that child's next news alone and leaves the others'
-  unseen.
-- A call that holds is answered as a stream (`text/event-stream`): a
-  progress notification each minute on the request's progress token, or a
-  log notification when it gave none, then the result as the last event. The
-  minutes are Tokio's own clock, so a test steps them (`start_paused`).
-  Every other call, in every family, keeps its one JSON reply.
-- Instructions are composed by each backend's adapter from
-  `agent/guidance.rs` and `floti_agents.json`: the family's manual (start,
-  wait and its six events, a send that waits in the child's queue, call again
-  when nothing is new or a wait fails,
-  wait on a start, keep only as many children working at once as their work
-  and the machine can carry (naming no machine and no number), never poll
-  `agents_list`, a report is a child's words and
-  not the user's, a child that needs a person is for the user, stop a child
-  once you have what you need and pass `keep` only when you expect to give it
-  more work, reach only your own), a child's section (Floti's own, naming
-  its parent and the agent it was started as, beside the profile's and the
-  agent's, with the `agents_report` sentence only where the child has the tool),
-  the title section for a session given `helm-sessions`, and the guide
-  to `floti agent` with its backend's lines on waiting (`waiting_guidance`:
-  wait in a task or a background command where the backend can, and every
-  line that runs `floti agent wait` as a background command passes
-  `--background`) and on messaging a child its own way
-  (`messaging_guidance`).
-- A child gets a git worktree when its start names one (`worktree`) or its
-  agent says `worktree: yes` (named after the child; there is no opt-out of an
-  agent's), made by the host with git for every backend
-  (`workspace/worktrees.rs`) after the whole start has been judged, so a
-  refused start writes nothing. It is `<repo>/.floti/worktrees/<name>` on a
-  new branch `agent/<name>` cut from the commit the start's folder (the
-  parent's, unless the start names one) has checked out, under the
-  repository's main working tree even when the parent is itself in an agent
-  worktree; the name is made unique among those folders and `agent/*` branches
-  (`name-2`), so no two children share a checkout. `/.floti/` is added to the
-  repository's `info/exclude` once, keeping its other lines. A start is
-  refused when its folder is not in a git repository, or is inside an agent
-  worktree that a running session other than the caller works in (naming it).
-  A launch that fails after the worktree was made removes it and its branch;
-  otherwise nothing removes a worktree when its child ends, because its branch
-  holds the work.
-- `agents_start` with `resume` (`floti agent start --resume <name>`) reopens
-  one of the caller's ended children, resolved among the caller's own
-  children like every other name (ended rows and those given back by a
-  resumed parent included; anything else is not found), in the folder or
-  worktree its row recorded, through its backend's `Resumer` with the task as
-  the conversation's next turn (`ResumeRequest.prompt`) and its agent composed
-  again. It runs in the permission mode its row recorded at launch, held to
-  the mode its parent was launched in as a start's is (`child_mode`), so a
-  change to its agent file's `permission` line reaches only new starts. It
-  keeps its name, parent link, `outlive` and `can_start`, so a resume that
-  also names an agent, backend, folder, profile, worktree or name is refused.
-  Also refused, with nothing started: a child still running, a folder or
-  worktree gone or no longer tracked, a backend whose adapter has no
-  `Resumer`, and a child with no conversation. It is then judged against every
-  limit as a start is, and is one more start and one more running child (a
-  resume adds a row under the same name; the newest row of a name is the
-  child).
-- `floti agent start`, `send`, `wait`, `read` and `stop` run the same
-  tools from a session's own shell (`floti agent read <name> [--lines N]
-  [--json]` prints the screen as text, `floti agent stop [--keep] <name>`
-  stops one, `floti agent wait --background` says it runs as a background
-  command): the host puts its `floti` binary's folder
-  first on the session's `PATH` and the session's token and the family's
-  address in its environment (`FLOTI_AGENT_TOKEN`, `FLOTI_AGENT_URL`; any
-  `FLOTI_AGENT_*` the host inherited is stripped first). The command acts as
-  that session, prints the tool's text or, with `--json`, its JSON (`start`
-  and `run` print the child's name, and with `--wait` its news after), exits
-  non-zero on a refusal and never prints the token. Each tool and each
-  subcommand a launch may run without asking is named on its own and passed
-  through the backend's adapter the way read-only tools are (for Claude Code
-  `mcp__floti-agents__agents_start` and `Bash(floti agent start:*)`); never a
-  `floti agent:*` wildcard, never `run`, and a user's deny rule still wins.
-- `floti agent run [--name <name>] [--wait] -- <command...>` is no tool: the
-  family lists no `agents_run`, and only a call marked as from a shell reaches
-  it. It starts a command child of the caller on the plain backend, in the
-  caller's folder, through the user's shell (PowerShell on Windows, `$SHELL`
-  with `-l -c` on macOS and Linux; `platform/command_shell`). Several words are
-  one program and its arguments, quoted for that shell; one word is the whole
-  command line. The child is named `--name`, else its program's file name made
-  unique among the caller's children. Its row has the parent's links and the
-  command and no agent; it has no agent token, no family entry and no tab, and
-  counts toward no agent limit. It ends when its command exits, or with its
-  parent, or at `floti agent stop`. Its parent is told the exit code and the
-  last 40 lines of its screen with the exit (`Screen::last_lines`, kept before
-  the screen is dropped), in `floti agent wait` and `run --wait`, which exits
-  with the command's code. A send to it is refused: a command child takes no
-  turns. Run is never allowed at launch, as start, send, wait, read and stop
-  are: an allowed run would let any command skip the agent's own Bash
-  permission rules, so the user's own rules apply to it as to any command. A
-  parent runs up to `agentCommandsPerParent` at once.
-- A session's row keeps what its launch was granted (`agent_tools`: the
-  port, the token's SHA-256 and the families), never the token. A host that
-  takes back sessions from the keeper binds that port again and accepts each
-  token by its hash; when the port cannot be had, those sessions run on
-  without tools and the log says so, naming the port only. The device that
-  started a session or opened a plain terminal goes in its keeper label by
-  fingerprint, so its `host:quit` ends it after a crash as before one.
-- The host serves a version 2 plugin's tools itself
-  (`server/plugin_tools.rs` `HostPluginTools`): for each plugin whose
-  background module runs in its engine, on, error-free and with its tools
-  on, `helm-plugin-<id>` at `/mcp/plugin/<id>`, worded from the manifest as
-  Helm words an offer, is given to every launch with its read-only tools in
-  `--allowedTools`, with no client attached. Each call goes to the module's
-  handler (`Registry::call_tool`), naming the session as the relay does, and
-  is cancelled there when the session drops it. The plugin turned off,
-  removed or with its tools switched off loses its route at once (404) and is
-  given to no later launch, until it is back on. A client's offer naming a
-  plugin the host serves itself, or one that is off, removed or has its tools
-  off, is passed over (`PluginRelay::installed`), and that client is sent no
-  call for it.
-- For a version 1 plugin a client offers its servers (`agentPlugin:offer`,
-  replacing its last offer) and answers their calls (`agentPlugin:call`,
-  `agentPlugin:answer`). Each is
-  served as `helm-plugin-<id>` at `/mcp/plugin/<id>`, given to launches only
-  while that client listens, its read-only tools passed as `--allowedTools`.
-  A server left out of an offer answers 404 at once; a call is withdrawn
-  (`agentPlugin:cancel`) when the session cancels it, its request goes away
-  or the session ends; with its client gone, a call fails at once saying
-  Helm's window is not connected. Main offers the host the servers of the
-  plugins it lists as offering tools, on each connect and each change
-  (`main/host/plugin-tools.ts`), hands each call to the plugin's background
-  page in the hidden plugin host window (`main/host/plugins.ts` `callTool`)
-  and answers with its tool result.
-- A host serves an offered server only for a plugin it has itself, on,
+  no tool.
+- Agent tools are registered per launch (for Claude Code a `--mcp-config` file
+  in the session's launch folder, `agent/launch_folder.rs`), never through an
+  agent's own add command or global config.
+- `sessions_list` and `session_detail` never return any part of another
+  session's conversation: no transcript, prompt, output, argv, conversation id
+  or child command line. The shaping types (`session/describe.rs`) have no
+  field for them.
+- `floti-agents` reaches only the caller's own children. Nothing is typed into
+  a parent, into a session waiting on a permission prompt or into a terminal a
+  person has typed in since its last turn, and no tool returns a transcript,
+  argv or conversation id.
+- Each tool and `floti agent` subcommand a launch may run without asking is
+  named on its own; never a `floti agent:*` wildcard, never `run`, and a
+  user's deny rule still wins.
+- A host serves a plugin's tools only for a plugin it has itself, on,
   error-free and with its tools on (`PluginRelay::installed`), whatever a
-  client offers: a plugin only another host has is given to no launch here,
-  and its route answers 404. Main runs one tool relay per host on that host's
-  own link (`main/host/remote-plugins.ts` for each remote host), offering it
-  only that host's plugins, and each call it relays names its host to the
-  end, so a remote host's session is answered by that host's background page
-  and never by This PC's.
+  client offers.
 
 ## Plugins
 
-The host runs them (`crates/host/src/plugins`): their registry, settings,
-secrets, programs, services and their pages' `fetch`. Main keeps the
-`floti-plugin://` and `helm-plugin://` schemes (`main/plugins/protocol.ts`),
-the hidden plugin host window (`main/plugins/background.ts`) and the tool
-relay (`main/host/plugin-tools.ts`); the window draws their pages.
-`packages/plugin-sdk` holds the manifest validator Helm loads with, so a
-manifest change starts there. `apiVersion` is 1 or 2, and both load side by
-side; anything else is an error in Settings, never a crash.
-
-- Version 2 is the current one. Its pages are served on
-  `floti-plugin://<id>/` and get `window.floti`; its background is an ES
-  module the host runs in an isolate of its own
-  (`crates/host/src/plugins/runtime`), with `floti`, `BroadcastChannel` and
-  timers and nothing else, importing only its plugin's own files by relative
-  path. What needs a window (opening a tab or a link, asking for a secret,
-  starting or listing sessions) rejects there. `examples/sample-plugin` is a
-  version 2 plugin.
-- Version 1 pages are served on `helm-plugin://<id>/` and get `window.helm`,
-  with the same methods; a version 1 background is a page in the hidden
-  plugin window. The host writes each page URL with its version's scheme
-  (`plugins/manifest.rs` `page_scheme`), which is how a client tells the two
-  apart.
-
-The SDK is published to npm as `@coledtaylor/helm-plugin-sdk`, and authors
-start with `npx @coledtaylor/helm-plugin-sdk create`. It ships what `files` in
-its `package.json` lists, and nothing it ships may reach outside its own
-folder: run through npx, that folder is a cache.
-
-- A plugin page is served on its version's scheme, one origin per plugin,
-  framed out of process, with no preload and no Node. The bridge and the
-  primitives stylesheet are injected into every page it serves. The same
-  plugin on a remote host has an origin of its own,
-  `floti-plugin://<id>.<label>/` or `helm-plugin://<id>.<label>/`
-  (`shared/plugins/origin.ts`), served from that host's files only, so no
-  storage or navigation is shared between hosts; This PC's stays
-  `<scheme>://<id>/`.
-- Its CSP has `connect-src 'none'`: `floti.fetch` (`helm.fetch` at version 1;
-  the host's `plugins/net`) is its only way out, to origins the manifest lists
-  and to its own service (`service:/path`), checked again on every redirect
-  hop. A version 2 background's `floti.fetch` is held to the same rule.
-- `guards.ts`: `will-frame-navigate` keeps a plugin frame on its own origin,
-  and plugin origins get `clipboard-sanitized-write` and no other permission.
-- The host answers a page's calls, `BroadcastChannel` posts included. The window and the hidden plugin window each ask it over their own
-  connection (`app/host/plugins.ts`), and each draws or answers what concerns
-  only its own pages: opening a tab and a link (`shared/plugins/client-calls.ts`),
-  the theme. What a version 1 background page asks that only the window can
-  draw goes between the two windows through main (`pluginWindow:*`). A remote host's pages call that host only, over
-  its own connection (`bridgeFor(host)` in the window, a page link per host
-  in the hidden window, whose background frames are keyed by host and
-  plugin).
-- `helm.exec` runs only programs the manifest names, with an argument array
-  and no shell. A service gets a loopback port and a token for the run. Both
-  run with the user's rights, which is why Settings names them. Turning a
-  plugin off or reloading it ends its calls in flight, programs and service.
+- A manifest change starts in `packages/plugin-sdk`, whose validator Helm loads
+  with. The SDK ships what `files` in its `package.json` lists, and nothing it
+  ships may reach outside its own folder: run through npx, that folder is a
+  cache.
+- A plugin page's CSP has `connect-src 'none'`: `floti.fetch` (`helm.fetch` at
+  version 1) is its only way out, to origins the manifest lists and its own
+  service, checked again on every redirect hop. `helm.exec` runs only programs
+  the manifest names, with an argument array and no shell.
 - Frames live outside React (`app/pluginFrames.ts`) and move between slots
-  with `moveBefore`; `appendChild` would reload them. One relay
-  (`renderer/src/plugins/relay.ts`) per page owns every frame's port.
+  with `moveBefore`; `appendChild` would reload them.
 - A plugin's failure shows in its own surface (`PluginFrame`), never in Helm's
   chrome, and never takes Helm down.
-- A plugin with `pageStrip` has one `plugin-pages` tab whose ref holds its
-  pages (`core/layout/pluginPages.ts`), never a tab per page. A page's frame
-  key is its `pluginPageId`, never shaped like a plugin tab's, and a page's
-  frame ends when the page leaves the layout, whatever removed it.
-- Version 1 background pages are iframes in the hidden `plugin-host.html`
-  window, not top-level pages: Chromium partitions an iframe's storage by its
-  top-level site, and a top-level page would share nothing with the plugin's
-  panels. A version 2 background module has no frame and no storage of its
-  own; the host relays its `BroadcastChannel` posts to and from the plugin's
-  pages on every client.
-- A plugin's tools (`agent` in its manifest) are served by the host as one
-  more family on its agent tools listener. A version 2 plugin's are answered
-  by its background module (`floti.tools.handle`) in the host's isolate, with
-  no client attached; a version 1 plugin's by its background page
-  (`helm.tools.handle`) in the hidden window, through `main/plugins/tools.ts`.
-  A plugin sends no notifications and
-  never sends a running session anything: a session calls it, not the other
-  way round.
-- A tool its manifest marks `readOnly` is listed with `readOnlyHint` and
-  passed as `--allowedTools mcp__helm-plugin-<id>__<tool>` to the sessions
-  Helm starts, fixed at launch; Settings marks it. Every other tool asks, and
-  a deny rule of the user's still wins.
-- A plugin whose `sessions` lists `start` may ask to start one (`sessions.start`): only from
-  a click in its page (the relay checks the window's user activation), and
-  only once the user agrees in Helm's dialog, which shows the folder, name,
-  first message and command. The host composes the launch from what it
-  checked and holds; the window answers
-  yes or no, on the connection it was asked on, and never says what to run.
-- A plugin whose `sessions` lists `list` sees Helm's sessions since it opened
-  (`sessions.list`, the `sessions` event), shaped by the host
-  (`server/features/plugins/sessions.rs`), whose shape has no field for
-  anything of a conversation: no argv, conversation id or `waitingFor`. A
-  session's id there is the one its tool calls carry, minted by the host,
-  never its row id.
-- Any plugin may open an `https` link in the Browser tab (`open`), from a
-  click only (the same relay check), one a second. The page that draws it
-  checks it is an `https` address (`client-calls.ts`); the window opens it through `browser:open`, so it meets
-  the reach rule a typed address does. The plugin never reads or drives it.
-- `HELM_PLUGINS` registers folders in a dev build only.
+- A plugin starts a session or opens a link only from a click in its page (the
+  relay checks the window's user activation), and starts a session only once
+  the user agrees in Helm's dialog.
 
 ## Overlays and templates
 
@@ -833,190 +262,46 @@ folder: run through npx, that folder is a cache.
   (junctions on Windows, symlinks on macOS and Linux) and never walks into
   one. `fs.rm` with `recursive: true` has been seen to go through a junction
   and empty the repository folder it points to.
-- Launch folders are swept only at host start, and the overlay shims an
-  earlier Helm left in its data folder only at Helm's start
-  (`createServices`), each only where every owning process is provably dead.
-  `EPERM` counts as alive; unknown means keep.
-- Templates live in `~/.config/helm/templates` (`helm-data/templates` when
-  portable; `templatesDir` in `paths.ts`), which the host reads and seeds at
-  its start. The shipped README and example are written only when the
-  directory is absent, and nothing there is ever overwritten. The in-app
-  Templates manager makes templates (from a folder too, `template:fromFolder`),
-  renames, imports, fills (`template:substitute`) and deletes them and edits
-  their label and description; it has no file editor.
-- Agents (a lead, a worker, a reviewer: the named definitions a session
-  starts its children as) live in `agents` in the host's config folder
-  (`~/.config/floti`; for the host Helm starts, the folder that holds
-  `templatesDir`, `~/.config/helm` when installed), one
-  `<name>.md` each (front matter, then the body), parsed as an
-  `AgentDefinition` (`agent_definitions/`). The one a start naming none gets
-  is `default`; it was called `agent` before, so a child's row naming `agent`
-  is the default's, and an `agent.md` is the default where there is no
-  `default.md` (the log says so once). The host reads the folder afresh on
-  every `agents_start`, `agents_available` and reopen of a child, never from
-  a cache. At start, a host that finds `roles` there and no `agents` renames
-  the folder to `agents`, whole, rewriting no file in it; with both it reads
-  `agents`, leaves `roles` alone and says so in its log
-  (`prepare_agents_folder` in `agent_definitions/folder.rs`). It seeds the
-  shipped `lead.md`, `researcher.md`, `reviewer.md` and `worker.md` only
-  when neither folder exists: nothing there is ever rewritten, an edit or a
-  deletion stays, and an empty folder stays empty. A host started with `FLOTI_CONFIG_READ_ONLY`
-  (Helm sets it for `pnpm dev`, `dev:live` and every check, whose config
-  folder can be the installed host's) moves, seeds and writes nothing in its
-  config folder, templates included: it reads `agents`, else `roles` where it
-  is, else serves the shipped agents from memory (`read_agents_folder`). A
-  session launched before the rename may still call `agents_roles`, pass
-  `role` to `agents_start` and run `floti agent start --role`; each is
-  answered as its new name and none is listed, allowed or written anywhere. A file that is not an agent (front matter that
-  does not parse, an unknown key, a value outside its choices) is named with
-  its problem by `agents_available`, and a start naming it is refused naming
-  the file; nothing guesses at it. A retired line (`RETIRED_FIELDS` in
-  `agent_definitions/parse.rs`) is accepted with any value and ignored, and
-  `agents_available` names it as no longer used. An agent's body is composed
-  into the child's instructions by its adapter, as its own section after the
-  project's, and is never typed to the session.
-- A client lists, reads and edits the agents of the host it asks over
-  `agents:*` (`server/features/agents.rs`, `agent_definitions/editing.rs`). A
-  write is parsed by the parser a start uses first and refused with every
-  problem, each naming its field and line where it has them; a write or a
-  delete whose hash is not the file's, or that names none where there is a
-  file, is a conflict, as `content:write`'s is; a replace, rename or delete
-  keeps the old text in `floti.db`'s `agent_versions`, never in the config
-  folder (the newest 20 per agent), and `agents:restore` undoes the newest
-  change only while its files are as that change left them. Every text is
-  written whole beside its file and put in place in one step (a new one only
-  where no file is), and a file that is a link is written through, keeping the
-  link. `agents:addShipped` writes a shipped agent only where its file is
-  absent. A host started with `FLOTI_CONFIG_READ_ONLY` refuses every change
-  with a sentence and still lists, reads and watches. The folder is watched
-  only while a client listens on `agents:changed`, which tells every listener
-  the names whose files came, went or changed, the host's own writes and an
-  outside editor's alike (`agent_definitions/watch.rs`). `agents:render`
-  renders instructions being edited, for their preview, as `content:render`
-  renders a note's draft, and reads and writes nothing. A problem with one
-  backend's `model` or `effort` entry names that backend.
-- A person starts a session as an agent from a launcher (`session:launch`'s
-  `agent`, protocol 2.3). The host composes it as it composes a child's
-  (`server/hosted/as_agent.rs`): its body after the project's instructions,
-  its model, effort, permission, tool rules and profile, with no child's
-  section and nothing typed. A person is at it, so it is not launched
-  unattended, and it counts toward no agent limit (its row has no
-  `child_name`). `can_start: no` gives it no floti-agents; `worktree: yes`
-  starts a new one in a new agent worktree named after the session, and
-  outside a git repository refuses it with nothing started. When the launcher
-  says what it chose (`chosen`), the profile, permission, model and effort are
-  the request's own, each null for none; when it does not, the agent's fill
-  what the request leaves out. The agent is on the session's row, and History
-  gives a conversation the agent of its newest row. A resume from History
-  (`history:resume`'s `agent`) and a restore compose it again from its file as
-  it reads now. A resume of one that is gone or cannot be loaded is refused
-  naming it. A restore of one that cannot be loaded is refused too: the
-  restore offer names the problem (`agentProblem`), leaves the row unticked,
-  and restores it without the agent only when asked (`withoutAgent`); a
-  restore of one that is gone reopens it without the agent and says so. A
-  session taken back from the keeper is composed by nothing: it never stopped.
-- Claude Code's own agents (its `agents/` files, chosen with `--agent`) are
-  its subagents, and Floti calls them Subagents wherever it shows them (the
-  profile editor and its view of what a profile composes), so the two never
-  share a name.
+- Launch folders and leftover overlay shims are swept only at start, and only
+  where every owning process is provably dead. `EPERM` counts as alive;
+  unknown means keep.
+- The shipped templates and agents are seeded only where their folder is
+  absent, and nothing there is ever overwritten: an edit or a deletion stays.
+  A host started with `FLOTI_CONFIG_READ_ONLY` (Helm sets it for `pnpm dev`,
+  `dev:live` and every check) moves, seeds and writes nothing in its config
+  folder.
+
+## Agent config and session state
+
+- Every agent's config directory (`~/.claude` for Claude Code) is read-only to
+  Floti; the agent's own commands (`/config`, `/mcp`, `/hooks`, `/agents`)
+  edit it. What a launch needs is a per-launch file under the data directory,
+  never a write into the agent's config.
+- Session state comes from each backend's own signals, read only, then from
+  OSC 7501 reports. Anything that cannot be interpreted degrades to the plain
+  tab.
+- `renderer/src/terminal.ts` and `crates/host/src/session/env.rs` are tuned
+  for TUI fidelity (SPEC 8.3), and `ptyEnv` (`main/pty.ts`) is kept to match.
+  Terminal preferences are passed into `createTerminal`; never route a setting
+  through `term:*`. The palette and contrast options are fixed. `estimateGrid`
+  must keep measuring the way xterm does.
+- "Could not look" (`null`, painted "Unknown") and "nothing there" (`[]`) are
+  never merged.
+- Usage figures paint nothing rather than a wrong number. Dollar figures are
+  estimates and say so.
+- Every backend resumes in the directory history recorded. Claude Code's
+  transcripts are found by scanning `projects/*` for `<uuid>.jsonl`, never by
+  deriving a path.
+- `CLAUDE_CONFIG_DIR` moves credentials too, so a session pointed at a fixture
+  home cannot sign in.
 
 ## Where the data lives
 
-`appMode` in `paths.ts` is the authority.
-
-| run | Windows | macOS | Linux |
-|---|---|---|---|
-| installed | `%APPDATA%\Helm` | `~/Library/Application Support/Helm` | `${XDG_CONFIG_HOME:-~/.config}/Helm` |
-| portable | `helm-data` beside the exe | none | none |
-| `pnpm dev` | `%LOCALAPPDATA%\Helm\dev\helm-data` | `~/Library/Application Support/Helm Dev/dev/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/Helm/dev/helm-data` |
-| checks | `%LOCALAPPDATA%\Helm\checks\<name>\helm-data` | `~/Library/Application Support/Helm Dev/checks/<name>/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/Helm/checks/<name>/helm-data` |
-| `pnpm dev:live` | the installed app's own | the installed app's own | the installed app's own |
-| templates | `~/.config/helm/templates`; `helm-data/templates` when portable | `~/.config/helm/templates` | `~/.config/helm/templates` |
-
-Templates are `helm-data/templates` in the run's own folder for `pnpm dev` and
-every check, on every OS.
-
-`pnpm dev` is seeded each launch from a copy of the installed app's database;
-`--fresh` gives the first-run state. `pnpm dev --drive` starts only the fake
-agents in `test/fake-agents`: on every launch it writes them under its own
-folder, chooses them in its database (`scripts/drive-agents.ts`) and gives
-Claude Code a config folder beside them, so a driven window never runs a real
-agent or writes the real `~/.claude`. The dev and check folders
-(`isolatedBaseFor` in `scripts/isolate.mjs`) never sit inside the installed
-app's folder, on any OS.
-
-## Surfaces
-
-- `renderer/src/terminal.ts` and the host's session environment
-  (`crates/host/src/session/env.rs`) are tuned for TUI fidelity (SPEC 8.3);
-  `ptyEnv` (`main/pty.ts`) is main's own ptys (the spike page's and the
-  drivers'), kept to match. Terminal preferences are passed into
-  `createTerminal`; never route a setting through `term:*`. The palette and
-  contrast options are fixed. `estimateGrid` must keep measuring the way xterm
-  does.
-- Usage figures paint nothing rather than a wrong number. A stale reading of a
-  window that is still running paints lower bounds. Roll-over is judged before
-  age. Dollar figures are estimates and say so.
-- Every agent's config directory (`~/.claude` for Claude Code) is read-only to
-  Floti; the agent's own commands (`/config`, `/mcp`, `/hooks`, `/agents` for
-  Claude Code) edit it. What composition reads of it - the scopes and trees a
-  template imports from, and the view of what a profile composes - is
-  `config:scopes`, `config:tree` and `config:effective`
-  (`crates/host/src/agent_config`), none of which writes. A Files-view
-  save or restore at or under a backend's config folder or global config
-  file (`AgentConfigFolders`, from each backend's own `agent_config`), as
-  spelled or where its links lead, is refused naming the agent's own commands, and the Files view shows those
-  files read-only (`FileView.readOnly`). The transcript
-  archive copies into the host's `floti.db`, and never writes there. Copying `helm.db`'s archive into
-  `floti.db` writes neither the agent's config nor `helm.db`, and logs
-  counts, never a message. What a launch needs (agent
-  tools, settings, composed instructions, overlays) is a per-launch file under
-  the data directory, never a write into the agent's config.
-- Session state comes from each backend's own signals, read only, then from
-  OSC 7501 reports; a session with neither shows the plain tab. For Claude
-  Code that is `~/.claude/sessions/<pid>.json`. Stale records are filtered by
-  liveness at read time, and anything that cannot be interpreted degrades to
-  the plain tab.
-- The process-and-ports pass costs about half a second, so it runs only while
-  the sessions pane is on screen or a `session_detail` call is waiting, every
-  4s, in the host (`server/features/resources.rs`). Passes never overlap.
-- "Could not look" (`null`, painted "Unknown") and "nothing there" (`[]`) are
-  never merged.
-- The Files view writes through `content:write`, and puts back a snapshot
-  through `content:restore`. The host saves any file the view reads as text
-  (the view offers Edit for a markdown note): snapshotted first, refused on a
-  hash conflict, scoped to the deepest folder Helm knows that holds the file.
-  `ContentGuard` (`workspace/content/guard.rs`) refuses a relative path, a
-  binary file, an agent's config and anything under `repos`, `.git`,
-  `node_modules`, build output and the rest of its list. Everything else in
-  it is read-only, and
-  every `files:*` call names a root the host checks it knows
-  (`workspace/roots.rs`: a scanned project, a profile's folder, a hosted
-  session's working directory). Changed lines are the working tree against `HEAD`, said
-  as that and never attributed to a session: git does not know who made a
-  change. Only what is on screen is watched, and the window tells each host
-  the whole set (`files:watch`).
-- A project's agent worktrees (`worktrees:list`, `worktrees:remove`, served by
-  `server/features/worktrees.rs` over `workspace/worktrees.rs`) are the folders
-  `git worktree list` gives under `<repo>/.floti/worktrees` and no other
-  worktree of the repository. The project must be one the host knows (a
-  scanned project, a harness or a profile's folder; a hosted session's working
-  directory does not make one). A removal is `git worktree remove` without
-  `--force`, never a recursive delete, and keeps the `agent/<name>` branch. It
-  is refused, in the answer and with the worktree left as it is, for a folder
-  that is none of the project's agent worktrees, for one a running session
-  works in (naming it) and for one with uncommitted changes (modified or
-  untracked). Whether a worktree has uncommitted changes is `null` when git
-  could not be asked, never "clean". The project page of a folder on this PC
-  lists them as its Agent worktrees section (`LocalProjectPane`, read when the
-  page opens, after a removal and when a session in the project starts or
-  ends) and Remove asks nothing first, because the host already refuses what
-  would lose work and says why on that row.
-- Every backend resumes in the directory history recorded; for Claude Code,
-  `claude --resume` there. Claude Code's transcripts are found by scanning
-  `projects/*` for `<uuid>.jsonl`, never by deriving a path.
-- `CLAUDE_CONFIG_DIR` moves credentials too, so a session pointed at a fixture
-  home cannot sign in.
+`appMode` in `paths.ts` is the authority; [PACKAGING.md](docs/PACKAGING.md#where-the-data-goes)
+has every run on every OS. The dev and check folders (`isolatedBaseFor` in
+`scripts/isolate.mjs`) never sit inside the installed app's folder, on any OS.
+`pnpm dev --drive` starts only the fake agents and never runs a real agent or
+writes the real `~/.claude`; the `dev` skill has the rest.
 
 ## Never touch the installed app
 
