@@ -59,6 +59,10 @@
 //!   host's local socket, unchanged.
 //! - [`doctor`]: `floti doctor`, which asks each host this device uses
 //!   whether it answers, and says how long it took or what stopped it.
+//! - [`update`]: `floti update`, which replaces floti, then the desktop app,
+//!   with its channel's newest release once every download has passed its
+//!   signature and SHA-256 checks.
+//! - [`sha256`]: SHA-256, for config writes and update downloads.
 
 /// Writes a line to standard error, as `eprintln!` does, then rotates the
 /// host's log when that line took it past its limit ([`host_log`]). In
@@ -94,8 +98,10 @@ pub mod resources;
 pub mod server;
 pub mod session;
 pub mod setup;
+pub mod sha256;
 pub mod store;
 pub mod this_computer;
+pub mod update;
 pub mod usage;
 pub mod version;
 pub mod workspace;

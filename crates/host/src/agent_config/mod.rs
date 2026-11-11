@@ -13,7 +13,6 @@ mod effective;
 mod files;
 mod folders;
 mod json;
-mod sha256;
 pub mod snapshots;
 pub(crate) mod time;
 mod tree;
@@ -35,8 +34,8 @@ pub use effective::{EffectiveInput, effective_view};
 pub use files::{PathGuard, hash_content, mtime_ms, normalize, read_file, snapshot_key};
 pub use folders::AgentConfigFolders;
 
+pub use crate::sha256::hex_digest as sha256_hex;
 use json::Json;
-pub use sha256::hex_digest as sha256_hex;
 pub use tree::{config_unit, project_scope, read_tree, user_scope};
 pub use writer::SnapshotWriter;
 

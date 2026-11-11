@@ -55,7 +55,12 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   exits by itself once it runs nothing and no client is attached. An update
   stops a host through `floti update-stop --stop`
   (`crates/host/src/update_stop.rs`), asked first when it would end sessions,
-  and their rows stay running, so the next host offers them back. When the
+  and their rows stay running, so the next host offers them back. `floti
+  update` (`crates/host/src/update`) replaces the floti binary, then the
+  desktop app once it has quit, each only after its download has passed its
+  signature and SHA-256 checks ([PACKAGING.md](PACKAGING.md#floti-update));
+  a host already running keeps the binary it started from until it next
+  starts. When the
   connection ends without a stop or a quit, the window keeps each tab's
   screen, dimmed with input off, and Helm starts a new host if a desktop
   started the one that died, then reconnects. The new host's list decides

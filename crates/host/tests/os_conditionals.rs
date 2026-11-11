@@ -11,9 +11,9 @@
 //! (`node_runtime`), the notification area (`tray`), the log's standard
 //! error (`standard_error`), a terminal's size (`terminal_size`), WSL
 //! distros (`wsl`), the folders a shell hides in (`shell_folders`), the
-//! shell that runs a command line (`command_shell`) and the user's own `PATH`
-//! (`user_path`). A compile-time OS
-//! conditional (`cfg`, `cfg!` or `cfg_attr` naming `windows`, `unix`, `target_os`,
+//! shell that runs a command line (`command_shell`), the user's own `PATH`
+//! (`user_path`) and putting an update in place (`installs`). A
+//! compile-time OS conditional (`cfg`, `cfg!` or `cfg_attr` naming `windows`, `unix`, `target_os`,
 //! `target_family`, `target_vendor` or `target_env`) may appear only in
 //! those folders, and in `src/platform/mod.rs`, which refuses any other OS.
 //! Anywhere else in the crate's source, its tests or its test tools, this
@@ -40,6 +40,7 @@ const CONCERNS: &[&str] = &[
     "wsl",
     "shell_folders",
     "command_shell",
+    "installs",
 ];
 
 /// The words that make a `cfg` depend on the OS.

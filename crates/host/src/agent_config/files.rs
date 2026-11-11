@@ -7,7 +7,7 @@ use std::time::UNIX_EPOCH;
 
 use floti_protocol::channels::workspace::{ConfigFileContent, Millis};
 
-use super::sha256;
+use crate::sha256;
 
 /// `path` made absolute and with `.` and `..` folded away, without asking the
 /// disk, so a path that climbs out of a scope is seen to before anything

@@ -584,6 +584,74 @@ as the page and, on macOS, as the window with its traffic lights. It is no
 check in the gate and nothing waits on it. `pnpm screenshots` runs the same
 capture locally on any OS, into `reports/screenshots`.
 
+## floti update
+
+`floti update` replaces the floti that runs it with its channel's newest
+release, then the desktop app where it is installed, once the app has quit
+(`crates/host/src/update`). A person runs it; nothing runs it on a timer.
+
+**The manifest.** It reads `https://floti.dev/update.json` and its signature
+`update.json.minisig`:
+
+```json
+{"schema": 1,
+ "channels": {"stable": {"version": "2.6.0",
+                         "url": "<release download folder>/",
+                         "floti":   {"<os>-<cpu>": {"file": "...", "sha256": "..."}},
+                         "desktop": {"<os>-<cpu>": {"file": "...", "sha256": "..."}}}}}
+```
+
+Targets are named as floti's release files are: `windows-x64`,
+`windows-arm64`, `macos-arm64`, `linux-x64`, `linux-arm64`. Fields it does
+not know are ignored; a schema other than 1 is refused. The folder must be
+`https` and end in `/`, and each file a plain file name, so a manifest can
+name nothing outside its release folder.
+
+**The channel** is `stable` until `floti update --channel <name>` chooses
+another. The choice is remembered in `update-channel.json` in Floti's data
+folder (`%LOCALAPPDATA%\Floti`, `~/Library/Application Support/Floti`,
+`~/.local/share/floti`), once the manifest has been checked and has that
+channel; a channel it does not have is an error that names it and the ones
+it has.
+
+**The checks.** Each file `F` downloads from `<url>F`, with its signature
+from `<url>F.minisig`, which is fetched first. A signature must verify with
+the minisign public key built into the binary
+(`crates/host/src/update/minisign.pub`, embedded when floti is built), and
+its trusted comment must be exactly `floti update.json` for the manifest and
+`floti <version> F` for a release file, so a signature cannot be moved to
+another file or version. Only minisign's pre-hashed signatures (its default)
+are accepted. A release file is then checked against its SHA-256 in the
+manifest. Both checks are made on the file as it lies on disk. A release
+build has no switch, variable or flag that changes the key; only a test
+build (the crate's testkit) reads a test's key and manifest address from a
+marker in its data folder.
+
+**The order.** Nothing is replaced until everything has passed: the
+manifest, this computer's floti (written beside the running one under a
+name of its own) and, when the desktop app is installed, its file (kept in
+`update` in the data folder). A version older than or equal to the running
+one is never installed: floti says it is up to date and changes nothing. A
+failed check stops the update with one line on standard error naming the
+file and what failed, removes what was downloaded, and leaves the old floti
+working. Then floti is replaced, then the app: while it runs, `floti update`
+says it is waiting for it to quit and looks again each second.
+
+**Where things are replaced** (`crates/host/src/platform/installs`):
+
+| | floti | the desktop app |
+|---|---|---|
+| Windows | The running `floti.exe` is renamed to `floti.old.exe` and the new one moved into its name, as `install.ps1` does; the next update removes the old one. | The per-user NSIS install, `%LOCALAPPDATA%\Programs\Helm` (`Helm.exe` beside `Uninstall Helm.exe`), updated by running the release's setup.exe with `/S`. |
+| macOS | Written beside, made executable, renamed over. | `Helm.app` in `~/Applications`, else `/Applications`: the release's zip is unpacked beside it with `ditto -x -k --noqtn` and swapped in by rename. |
+| Linux | Written beside, made executable, renamed over. | The AppImage at `~/Applications/Floti.AppImage`, where `floti add desktop` installs it (AppImage's own tools look there, and it is outside the data folder `floti uninstall` keeps): written beside, made executable, renamed over. |
+
+`FLOTI_DESKTOP_DIR` moves the folder the app is looked for in on every OS;
+tests use it. A release with no desktop file for this computer updates
+floti alone and says so. No downloaded file carries a quarantine flag or a
+download mark: floti's own process writes them, which neither Gatekeeper's
+quarantine nor Windows' mark of the web applies to, and `--noqtn` keeps
+`ditto` from carrying one over from the archive.
+
 ## Updates: an explicit check, not an updater
 
 `update:check` asks the GitHub releases API for the newest tag, compares it

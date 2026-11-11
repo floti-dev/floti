@@ -1,9 +1,12 @@
-//! SHA-256, for the hash every config write is checked against.
+//! SHA-256: the hash every config write is checked against, and the one
+//! `floti update` checks each download against.
 //!
 //! The hash is over the bytes on disk and goes to clients as lowercase hex,
 //! the same digest today's app sends, so a hash a client read from either
 //! matches. Written out here rather than taken from a crate: it is one
 //! function of FIPS 180-4, and the host takes no dependency for it.
+//! [`Sha256`] takes the bytes in pieces, for a file hashed while it
+//! downloads; [`digest`] is the same over bytes held whole.
 
 const K: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -27,28 +30,86 @@ pub fn hex_digest(bytes: &[u8]) -> String {
 
 /// The SHA-256 of `bytes`.
 pub fn digest(bytes: &[u8]) -> [u8; 32] {
-    let mut state = INITIAL;
-    let (whole, rest) = bytes.as_chunks::<64>();
-    for block in whole {
-        compress(&mut state, block);
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    hasher.finish()
+}
+
+/// A SHA-256 taken over bytes that arrive in pieces.
+#[derive(Debug, Clone)]
+pub struct Sha256 {
+    state: [u32; 8],
+    /// Bytes of a block not yet complete.
+    pending: [u8; 64],
+    pending_len: usize,
+    /// Every byte taken so far.
+    length: u64,
+}
+
+impl Default for Sha256 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Sha256 {
+    pub fn new() -> Self {
+        Self {
+            state: INITIAL,
+            pending: [0; 64],
+            pending_len: 0,
+            length: 0,
+        }
     }
 
-    // The tail, a 1 bit, zeros, and the length in bits: one block or two.
-    let mut tail = [0u8; 128];
-    tail[..rest.len()].copy_from_slice(rest);
-    tail[rest.len()] = 0x80;
-    let blocks = if rest.len() < 56 { 1 } else { 2 };
-    let bits = (bytes.len() as u64).wrapping_mul(8);
-    tail[blocks * 64 - 8..blocks * 64].copy_from_slice(&bits.to_be_bytes());
-    for block in tail[..blocks * 64].as_chunks::<64>().0 {
-        compress(&mut state, block);
+    /// Takes the next piece.
+    pub fn update(&mut self, mut bytes: &[u8]) {
+        self.length = self.length.wrapping_add(bytes.len() as u64);
+        if self.pending_len > 0 {
+            let take = bytes.len().min(64 - self.pending_len);
+            self.pending[self.pending_len..self.pending_len + take].copy_from_slice(&bytes[..take]);
+            self.pending_len += take;
+            bytes = &bytes[take..];
+            if self.pending_len < 64 {
+                return;
+            }
+            let block = self.pending;
+            compress(&mut self.state, &block);
+            self.pending_len = 0;
+        }
+        let (whole, rest) = bytes.as_chunks::<64>();
+        for block in whole {
+            compress(&mut self.state, block);
+        }
+        self.pending[..rest.len()].copy_from_slice(rest);
+        self.pending_len = rest.len();
     }
 
-    let mut out = [0u8; 32];
-    for (word, bytes) in state.iter().zip(out.as_chunks_mut::<4>().0) {
-        bytes.copy_from_slice(&word.to_be_bytes());
+    /// The SHA-256 of every piece taken.
+    pub fn finish(mut self) -> [u8; 32] {
+        // The tail, a 1 bit, zeros, and the length in bits: one block or two.
+        let rest = self.pending_len;
+        let mut tail = [0u8; 128];
+        tail[..rest].copy_from_slice(&self.pending[..rest]);
+        tail[rest] = 0x80;
+        let blocks = if rest < 56 { 1 } else { 2 };
+        let bits = self.length.wrapping_mul(8);
+        tail[blocks * 64 - 8..blocks * 64].copy_from_slice(&bits.to_be_bytes());
+        for block in tail[..blocks * 64].as_chunks::<64>().0 {
+            compress(&mut self.state, block);
+        }
+
+        let mut out = [0u8; 32];
+        for (word, bytes) in self.state.iter().zip(out.as_chunks_mut::<4>().0) {
+            bytes.copy_from_slice(&word.to_be_bytes());
+        }
+        out
     }
-    out
+
+    /// [`Sha256::finish`] as lowercase hex.
+    pub fn finish_hex(self) -> String {
+        crate::agent::hex(&self.finish())
+    }
 }
 
 fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
@@ -131,5 +192,19 @@ mod tests {
             hex_digest(&vec![b'a'; 1_000_000]),
             "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0"
         );
+    }
+
+    #[test]
+    fn bytes_taken_in_pieces_hash_as_they_do_whole() {
+        let bytes: Vec<u8> = (0..1000u32).map(|i| (i * 7 % 251) as u8).collect();
+        let whole = hex_digest(&bytes);
+        for piece in [1, 3, 55, 63, 64, 65, 128, 999] {
+            let mut hasher = Sha256::new();
+            for chunk in bytes.chunks(piece) {
+                hasher.update(chunk);
+            }
+            assert_eq!(hasher.finish_hex(), whole, "pieces of {piece}");
+        }
+        assert_eq!(Sha256::new().finish_hex(), hex_digest(b""));
     }
 }

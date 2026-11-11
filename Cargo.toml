@@ -73,6 +73,13 @@ rustls = { version = "=0.23.46", default-features = false, features = [
     "std",
     "tls12",
 ] }
+# floti update's signature check: each download's minisign signature,
+# verified with the public key built into the binary. Verification only, in
+# pure Rust; the releases are signed elsewhere.
+minisign-verify = "=0.3.0"
+# Signs fake release files with keys made in the test, for floti update's
+# tests. A dev-dependency only: nothing that ships can sign.
+minisign = { version = "=0.10.0", default-features = false }
 # The MCP protocol of the agent tools listener: its server side over
 # streamable HTTP, without the macros or a client.
 rmcp = { version = "3.8", default-features = false, features = [

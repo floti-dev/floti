@@ -67,6 +67,7 @@ html5ever.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
 jiff.workspace = true
+minisign-verify.workspace = true
 notify.workspace = true
 portable-pty.workspace = true
 reqwest.workspace = true
@@ -106,5 +107,6 @@ serde_json.workspace = true
 
 [dev-dependencies]
 floti-host = { path = ".", features = ["testkit"] }
+minisign.workspace = true
 # Paused time, for tests that step an interval rather than wait it out.
 tokio = { workspace = true, features = ["test-util"] }

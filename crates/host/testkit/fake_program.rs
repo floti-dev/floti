@@ -15,7 +15,10 @@
 //! - `--sleep MS`: sleeps.
 //! - `--exit CODE`: exits with `CODE` (0 otherwise).
 //!
-//! Every other argument is only reported.
+//! Every other argument is only reported. With `FLOTI_FAKE_PROGRAM_RECORD`
+//! set, the report is also appended to the file it names, one line a run,
+//! for a test whose program is run by another (`floti update` running it as
+//! the desktop's installer).
 
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
@@ -71,6 +74,14 @@ fn main() {
         "stdin": String::from_utf8_lossy(&stdin),
         "child": child,
     });
+    if let Some(record) = std::env::var_os("FLOTI_FAKE_PROGRAM_RECORD") {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(record)
+            .expect("open the record");
+        writeln!(file, "{report}").expect("record the run");
+    }
     let mut stdout = std::io::stdout().lock();
     writeln!(stdout, "{report}").expect("write the report");
     stdout.flush().expect("flush the report");
