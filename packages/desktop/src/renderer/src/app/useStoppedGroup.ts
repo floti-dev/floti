@@ -1,10 +1,13 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RestorableSession } from "@helm/core/types";
 import type { StoppedGroup } from "@helm/ui";
 
 /** What the Stopped group asks of the window. */
 export interface StoppedGroupDeps {
-  /** The conversations running now, by lower-cased id: one of them is back. */
+  /**
+   * The conversations running now on this PC's host, whose sessions these
+   * are, by lower-cased id: one of them is back.
+   */
   running: { has: (conversation: string) => boolean };
   /**
    * Resumes a conversation on this PC's host, as `agent` when given. Null
@@ -13,6 +16,12 @@ export interface StoppedGroupDeps {
   resume: (conversationId: string, agent: string | undefined) => Promise<string | null>;
   /** Shows a toast whose Undo runs `undo`. */
   raiseUndo: (title: string, detail: string, undo: () => Promise<string | null>) => void;
+  /** The sentence the last read of the restore offer failed with, drawn in the group; null when it read. */
+  unread: string | null;
+  /** Forgets that the read failed. */
+  dismissUnread: () => void;
+  /** Reads the offer again: the host still holds what it could not say. */
+  readAgain: () => void;
 }
 
 export interface StoppedGroupState {
@@ -33,7 +42,11 @@ export interface StoppedGroupState {
    * refusal's sentence.
    */
   resume: (sessions: readonly RestorableSession[]) => Promise<string | null>;
-  /** Takes the group away, with Undo in a toast: nothing asks first. */
+  /**
+   * Takes the group away, a failed read with it, with Undo in a toast:
+   * nothing asks first. Undo brings back what it showed but those that have
+   * run since, and reads the offer again when a read had failed.
+   */
   dismiss: () => void;
 }
 
@@ -42,8 +55,26 @@ export interface StoppedGroupState {
  * group is dismissed. The host forgets a restore offer once it is answered,
  * so this window keeps them.
  */
-export function useStoppedGroup({ running, resume, raiseUndo }: StoppedGroupDeps): StoppedGroupState {
+export function useStoppedGroup({
+  running,
+  resume,
+  raiseUndo,
+  unread,
+  dismissUnread,
+  readAgain,
+}: StoppedGroupDeps): StoppedGroupState {
   const [kept, setKept] = useState<StoppedGroup | null>(null);
+  /**
+   * The conversations of dismissed sessions, and those of them that have run
+   * since: back, so an Undo does not return them.
+   */
+  const watching = useRef(new Set<string>());
+  const seenBack = useRef(new Set<string>());
+  useEffect(() => {
+    for (const conversation of watching.current) {
+      if (running.has(conversation)) seenBack.current.add(conversation);
+    }
+  }, [running]);
 
   // A session seen running is back, wherever it was resumed: it leaves the
   // group for good, so it does not return there when it exits.
@@ -65,17 +96,25 @@ export function useStoppedGroup({ running, resume, raiseUndo }: StoppedGroupDeps
     async (sessions: readonly RestorableSession[]): Promise<string | null> => {
       const back = new Set<number>();
       let refused: string | null = null;
+      // Two stops can each hold a copy of one conversation: it is resumed
+      // once, and every copy follows that answer.
+      const answered = new Map<string, string | null>();
       for (const lost of sessions) {
         if (lost.conversationId === undefined) {
           refused = `Floti never learned which conversation ${lost.title ?? lost.name} was, so it cannot be resumed.`;
           continue;
         }
-        const answer = await resume(
-          lost.conversationId,
-          lost.agentProblem === undefined ? lost.agent : undefined,
-        );
+        const conversation = lost.conversationId.toLowerCase();
+        let answer = answered.get(conversation);
+        if (answer === undefined) {
+          answer = await resume(
+            lost.conversationId,
+            lost.agentProblem === undefined ? lost.agent : undefined,
+          );
+          answered.set(conversation, answer);
+          if (answer !== null) refused = answer;
+        }
         if (answer === null) back.add(lost.id);
-        else refused = answer;
       }
       setKept((current) => {
         if (current === null) return null;
@@ -89,18 +128,33 @@ export function useStoppedGroup({ running, resume, raiseUndo }: StoppedGroupDeps
 
   const dismiss = useCallback(() => {
     const was = shown;
-    if (was === null) return;
+    const hadUnread = unread !== null;
+    if (was === null && !hadUnread) return;
     setKept(null);
-    const count = was.sessions.length;
+    if (hadUnread) dismissUnread();
+    for (const lost of was?.sessions ?? []) {
+      if (lost.conversationId !== undefined) watching.current.add(lost.conversationId.toLowerCase());
+    }
+    const count = was?.sessions.length ?? 0;
     raiseUndo(
       "Stopped sessions dismissed",
-      `${String(count)} ${count === 1 ? "session" : "sessions"} the stop took ${count === 1 ? "is" : "are"} no longer at the top of History.`,
+      count === 0
+        ? "The sessions the stop took that could not be read are no longer at the top of History."
+        : `${String(count)} ${count === 1 ? "session" : "sessions"} the stop took ${count === 1 ? "is" : "are"} no longer at the top of History.`,
       async () => {
-        setKept((current) => merged(current, was));
+        if (was !== null) {
+          const sessions = was.sessions.filter(
+            (lost) =>
+              lost.conversationId === undefined ||
+              !seenBack.current.has(lost.conversationId.toLowerCase()),
+          );
+          setKept((current) => merged(current, { ...was, sessions }));
+        }
+        if (hadUnread) readAgain();
         return null;
       },
     );
-  }, [shown, raiseUndo]);
+  }, [shown, unread, raiseUndo, dismissUnread, readAgain]);
 
   return { shown, keep, resume: resumeSessions, dismiss };
 }

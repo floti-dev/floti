@@ -16,14 +16,17 @@ export interface ConversationResume {
   resuming: string | null;
   /**
    * Runs `task` as the one resume in flight, under `key`. Null, and `task` not
-   * run, while another is in flight: the host does not refuse a conversation
-   * that runs now, so a second Enter or click would start a second process.
+   * run, while another is in flight, so a second Enter or click sends nothing
+   * while the first is on its way.
    */
   exclusive: <T>(key: string, task: () => Promise<T>) => Promise<T> | null;
   /**
    * Resumes a conversation on `host`, in the folder it ran in, as `agent`
-   * when given. Resolves to null when it started, else the sentence it was
-   * refused with. It does not wait for one in flight; `exclusive` does.
+   * when given, and places the session: the one it started, or the one the
+   * host says already runs that conversation (`alreadyRunning`), which it
+   * starts no second time. Resolves to null when either is shown, else the
+   * sentence it was refused with. It does not wait for one in flight;
+   * `exclusive` does.
    */
   resumeOn: (host: string, sessionId: string, agent: string | undefined) => Promise<string | null>;
 }

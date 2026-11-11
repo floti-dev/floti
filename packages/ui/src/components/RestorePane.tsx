@@ -31,7 +31,7 @@ export interface RestorePaneProps {
   lostWith?: string
 }
 
-/** One session to reopen: its row id, and whether it comes back without the agent it was started as. */
+/** One session to reopen: its row id, and whether it comes back without the agent or profile it was started with. */
 export interface RestorePick {
   id: number
   /**
@@ -39,6 +39,24 @@ export interface RestorePick {
    * it anyway: it comes back without its agent.
    */
   withoutAgent?: true
+  /**
+   * Its profile could not be read (`profileProblem`) and the person ticked it
+   * anyway: it comes back without its profile.
+   */
+  withoutProfile?: true
+}
+
+/** True for a session that comes back short of something it had, which is the person's to choose. */
+const short = (session: RestorableSession): boolean =>
+  session.agentProblem !== undefined || session.profileProblem !== undefined
+
+/** What ticking a session that comes back short does, after the host's sentence for each problem. */
+function shortBy(session: RestorableSession): string | null {
+  const said = [
+    session.agentProblem === undefined ? null : `${session.agentProblem} Restored, it comes back without its agent.`,
+    session.profileProblem === undefined ? null : `${session.profileProblem} Restored, it comes back without its profile.`
+  ].filter((line) => line !== null)
+  return said.length === 0 ? null : said.join(' ')
 }
 
 const plural = (count: number, one: string, many: string): string =>
@@ -81,8 +99,9 @@ export function RestorePane({
   lostWith
 }: RestorePaneProps): JSX.Element {
   const headingId = useId()
-  // One whose agent cannot be composed again starts unticked: it would come
-  // back without the agent it was started as, which is the person's to choose.
+  // One whose agent cannot be composed again, or whose profile could not be
+  // read, starts unticked: it would come back without it, which is the
+  // person's to choose.
   const [ticked, setTicked] = useState<ReadonlySet<number>>(
     () =>
       new Set(
@@ -90,7 +109,7 @@ export function RestorePane({
           .filter(
             (session) =>
               session.blocked === null &&
-              session.agentProblem === undefined &&
+              !short(session) &&
               (preselected === undefined || preselected.includes(session.id))
           )
           .map((session) => session.id)
@@ -98,9 +117,11 @@ export function RestorePane({
   )
   const chosen: RestorePick[] = offer.sessions
     .filter((session) => ticked.has(session.id))
-    .map((session) =>
-      session.agentProblem === undefined ? { id: session.id } : { id: session.id, withoutAgent: true }
-    )
+    .map((session) => ({
+      id: session.id,
+      ...(session.agentProblem === undefined ? {} : { withoutAgent: true as const }),
+      ...(session.profileProblem === undefined ? {} : { withoutProfile: true as const })
+    }))
 
   const toggle = (id: number): void =>
     setTicked((current) => {
@@ -284,11 +305,13 @@ function Row({
   const blocked = session.blocked !== null
   const where = [folderName(session.cwd), session.branch].filter((part) => part !== null).join(' · ')
   const agent = session.agent === undefined || session.agent === '' ? undefined : session.agent
+  const problems = shortBy(session)
   return (
     <li
       data-restore-row={session.id}
       {...(blocked ? { 'data-restore-blocked': '' } : {})}
       {...(session.agentProblem === undefined ? {} : { 'data-restore-agent-problem': '' })}
+      {...(session.profileProblem === undefined ? {} : { 'data-restore-profile-problem': '' })}
       className="border-b border-border last:border-b-0"
     >
       <label
@@ -302,21 +325,34 @@ function Row({
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex min-w-0 items-center gap-2">
             <span className={cn('min-w-0 truncate', on ? 'text-fg' : 'text-fg-muted')}>{session.title ?? session.name}</span>
+            {session.titleUnreadable === true && (
+              // Its tab's name stands in: History's name for it is not known,
+              // which is not the same as it having none.
+              <span
+                data-restore-title-unreadable
+                title="History’s name for this session could not be read."
+                className="shrink-0 text-[11px] text-fg-subtle"
+              >
+                name unreadable
+              </span>
+            )}
             {agent !== undefined && <AgentTag name={agent} gone={session.agentProblem !== undefined} />}
           </span>
           {blocked ? (
             <span className="truncate text-[11px] text-fg-subtle">{session.blocked}</span>
-          ) : session.agentProblem !== undefined ? (
-            // The host's sentence naming what is wrong with its agent, and what
-            // ticking it does about that.
-            <span title={session.agentProblem} className="truncate text-[11px] text-warn">
-              {session.agentProblem} Restored, it comes back without its agent.
+          ) : problems !== null ? (
+            // The host's sentence naming what is wrong with its agent or its
+            // profile, and what ticking it does about that.
+            <span title={problems} className="truncate text-[11px] text-warn">
+              {problems}
             </span>
           ) : (
             <span className="truncate font-mono text-[11px] text-fg-subtle">{where}</span>
           )}
         </span>
-        {session.profileGone ? (
+        {session.profileProblem !== undefined ? (
+          <span className="shrink-0 text-[11.5px] text-warn">Profile unreadable</span>
+        ) : session.profileGone ? (
           <span className="shrink-0 text-[11.5px] text-warn">Profile deleted</span>
         ) : (
           session.profile !== null && (

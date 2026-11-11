@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { RestoreOffer } from '@helm/core/types'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { sessionLabel, type RestoreOffer } from '@helm/core/types'
 import type { RestoreSessionsRequest, RestoreSessionsResult } from '../../../shared/ipc'
 import { helm } from './bridge'
 import { readable } from './errors'
@@ -58,35 +58,51 @@ const plural = (count: number, one: string, many: string): string =>
 
 /**
  * What a restore did, in one line, worst news first: what did not come back
- * and why, then what came back short of something, then - only when nobody
- * was asked - that anything happened at all.
+ * and why, else what came back short of something; then those already
+ * running, which are shown rather than started again; then - only when
+ * nobody was asked and nothing else was said - that anything happened at all.
  */
 export function restoreReport(
   result: RestoreSessionsResult,
   unasked: boolean,
   lostWith?: string
 ): { text: string; failed: boolean } | null {
+  const parts: string[] = []
   if (result.failed.length > 0) {
     const reasons = result.failed.map(({ name, reason }) => `“${name}” could not be reopened: ${reason}`)
     const back =
       result.restored.length === 0
         ? ''
         : `Reopened ${plural(result.restored.length, 'session', 'sessions')}. `
-    return { text: back + reasons.join(' '), failed: true }
+    parts.push(back + reasons.join(' '))
+  } else {
+    const warnings = result.restored.flatMap((restored) => restored.launched.warnings)
+    if (warnings.length > 0) parts.push(warnings.join(' '))
   }
-  const warnings = result.restored.flatMap((restored) => restored.launched.warnings)
-  if (warnings.length > 0) return { text: warnings.join(' '), failed: false }
-  if (unasked && result.restored.length > 0) {
+  for (const { session } of result.running ?? []) {
+    parts.push(`“${sessionLabel(session)}” was already running, so it is shown instead of being reopened.`)
+  }
+  if (parts.length === 0 && unasked && result.restored.length > 0) {
     const reopened = `Reopened ${plural(result.restored.length, 'session', 'sessions')}`
-    return {
-      text:
-        lostWith === undefined
-          ? `${reopened} Helm was running when it closed.`
-          : `${reopened} ${lostWith} was running when it stopped.`,
-      failed: false
-    }
+    parts.push(
+      lostWith === undefined
+        ? `${reopened} Helm was running when it closed.`
+        : `${reopened} ${lostWith} was running when it stopped.`
+    )
   }
-  return null
+  return parts.length === 0 ? null : { text: parts.join(' '), failed: result.failed.length > 0 }
+}
+
+/**
+ * Each lost row a restore answered for, to the row now showing it: the
+ * session that reopened it, or the one already running its conversation,
+ * which takes its place as a reopened one would.
+ */
+export function restoredPairs(result: RestoreSessionsResult): Map<number, number> {
+  return new Map([
+    ...result.restored.map(({ from, launched }): [number, number] => [from, launched.session.id]),
+    ...(result.running ?? []).map(({ from, session }): [number, number] => [from, session.id])
+  ])
 }
 
 export function useRestore(reconnects = 0): RestoreState {
@@ -176,4 +192,21 @@ export function useRestore(reconnects = 0): RestoreState {
     report,
     dismissReport: useCallback(() => setReport(null), [])
   }
+}
+
+/**
+ * Opens the restore page (`open`) once for each failed read of the offer,
+ * and not before the saved layout is in (`ready`): a tab opened over none
+ * would be saved over the tabs the person had. A failure that comes first
+ * opens it once the layout is in. A Try again that fails again leaves the
+ * page where it is, or closed if it was set aside.
+ */
+export function useOpenOnFailedRead(unread: string | null, ready: boolean, open: () => void): void {
+  const hadUnread = useRef(false)
+  useEffect(() => {
+    if (!ready) return
+    const failed = unread !== null
+    if (failed && !hadUnread.current) open()
+    hadUnread.current = failed
+  }, [unread, ready, open])
 }

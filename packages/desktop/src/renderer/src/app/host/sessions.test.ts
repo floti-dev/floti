@@ -694,12 +694,12 @@ describe('sessions over the window’s own connection', () => {
     expect(offer?.sessions[0]?.title).toBeUndefined()
   })
 
-  it('says the link’s sentence when the host cannot be reached, never no sessions or no processes', async () => {
+  it('says the link’s sentence when the host cannot be reached, never no sessions, no processes or nothing to restore', async () => {
     const { adapters } = world({ connection: null })
     await expect(ask(adapters, 'session:list')).rejects.toThrow(UNREACHABLE)
     await expect(ask(adapters, 'sessions:resources')).rejects.toThrow(UNREACHABLE)
     await expect(ask(adapters, 'session:activity')).rejects.toThrow(UNREACHABLE)
-    await expect(ask(adapters, 'session:restorable')).resolves.toBeNull()
+    await expect(ask(adapters, 'session:restorable')).rejects.toThrow(UNREACHABLE)
   })
 
   it('opens each running session’s stream again on a new connection, so its screen is drawn afresh', async () => {
@@ -1054,7 +1054,7 @@ describe('sessions over the window’s own connection', () => {
       const w = refusedWorld()
       await expect(ask(w.adapters, 'session:list')).rejects.toThrow(/1\.4/)
       w.adapters.show([7, 9])
-      await expect(ask(w.adapters, 'session:restorable')).resolves.toBeNull()
+      await expect(ask(w.adapters, 'session:restorable')).rejects.toThrow(/1\.4/)
 
       const carried = new FakeConnection()
         .answer('session:list', () => [row({ id: 7 }), row({ id: 9, cwd: '/work dir/api' })])

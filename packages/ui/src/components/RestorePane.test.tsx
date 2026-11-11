@@ -157,6 +157,38 @@ describe('RestorePane', () => {
     await userEvent.click(button('Resume 2 sessions'))
     expect(props.onResume).toHaveBeenLastCalledWith([{ id: 4 }, { id: 5, withoutAgent: true }])
   })
+
+  it('offers a session whose profile could not be read unticked, saying why, and restores it only without its profile once ticked', async () => {
+    const problem = 'Floti could not read the profile this session was started with.'
+    const props = renderPane({
+      offer: {
+        ...OFFER,
+        sessions: [session(4, 'orbit-api'), session(5, 'research', { profile: 'dev', profileProblem: problem })]
+      }
+    })
+    const box = within(row(5)).getByRole('checkbox', { name: 'research' })
+    expect(box).toHaveProperty('checked', false)
+    expect(box).toHaveProperty('disabled', false)
+    expect(row(5).hasAttribute('data-restore-profile-problem')).toBe(true)
+    expect(text(5)).toContain(`${problem} Restored, it comes back without its profile.`)
+    expect(text(5)).toContain('Profile unreadable')
+
+    await userEvent.click(button('Resume 1 session'))
+    expect(props.onResume).toHaveBeenLastCalledWith([{ id: 4 }])
+    await userEvent.click(box)
+    await userEvent.click(button('Resume 2 sessions'))
+    expect(props.onResume).toHaveBeenLastCalledWith([{ id: 4 }, { id: 5, withoutProfile: true }])
+  })
+
+  it('shows a session whose History name could not be read by its tab’s name, saying the name is unreadable', () => {
+    renderPane({
+      offer: { ...OFFER, sessions: [session(4, 'orbit-api', { titleUnreadable: true }), session(5, 'research', { title: 'Fix the export' })] }
+    })
+    expect(row(4).querySelector('[data-restore-title-unreadable]')?.textContent).toBe('name unreadable')
+    expect(text(4)).toContain('orbit-api')
+    expect(row(5).querySelector('[data-restore-title-unreadable]')).toBeNull()
+    expect(text(5)).toContain('Fix the export')
+  })
 })
 
 describe('when what was running could not be read', () => {

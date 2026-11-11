@@ -408,6 +408,43 @@ describe('F2 on the row it was pressed on', () => {
     expect(props.onRename).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 's0' }), 'Mine')
   })
 
+  it('keeps the highlight, preview and footer on the renamed session when the list is read again', () => {
+    const props = renderPalette() as HistoryPaletteProps & { rerender: (next: Partial<HistoryPaletteProps>) => void }
+    press('F2')
+    props.rerender({ recent: answer([RECENT[5]!, RECENT[0]!, RECENT[1]!], 806) })
+    expect(selected().getAttribute('data-history-session')).toBe('s0')
+    expect(preview()).toContain('Your name replaces “Session number 0”')
+  })
+
+  it('places the caret and selects a word in the field, and a double click there or on another row resumes nothing', () => {
+    const props = renderPalette()
+    press('F2')
+    const name = screen.getByRole('textbox', { name: 'Name' })
+    // fireEvent answers false when the press was prevented.
+    expect(fireEvent.mouseDown(name)).toBe(true)
+    fireEvent.doubleClick(name)
+    fireEvent.doubleClick(options()[3]!)
+    expect(props.onResume).not.toHaveBeenCalled()
+    expect(props.onRead).not.toHaveBeenCalled()
+    expect(props.onShow).not.toHaveBeenCalled()
+    expect(screen.getByRole('textbox', { name: 'Name' })).toBeTruthy()
+    // A row is still chosen without taking focus from the search field.
+    expect(fireEvent.mouseDown(options()[3]!)).toBe(false)
+  })
+
+  it('ends the rename, saving nothing, when its row leaves the list, and the keys work again', () => {
+    const props = renderPalette() as HistoryPaletteProps & { rerender: (next: Partial<HistoryPaletteProps>) => void }
+    press('F2')
+    props.rerender({ recent: answer([RECENT[5]!, RECENT[1]!], 806) })
+    expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull()
+    expect(document.activeElement).toBe(field())
+    press('ArrowDown')
+    expect(selected().getAttribute('data-history-session')).toBe('s1')
+    press('Escape')
+    expect(props.onRename).not.toHaveBeenCalled()
+    expect(props.onDismiss).toHaveBeenCalledTimes(1)
+  })
+
   it('starts an unnamed session from its first line without quotes, and a draft left as it was saves nothing', async () => {
     const props = renderPalette({ recent: answer([historySession({ title: 'add rate limits\nto every endpoint' })]) })
     press('F2')
@@ -438,6 +475,12 @@ describe('could not look', () => {
     expect(document.body.textContent).not.toContain('No sessions yet')
     press('Enter')
     expect(props.onRetry).toHaveBeenCalled()
+  })
+
+  it('says a count that failed to read again as that, never the No sessions yet of the 0 read before it', () => {
+    renderPalette({ recent: answer([], 0), total: 0, totalError: 'The host did not answer.' })
+    expect(document.querySelector('[data-history-state]')?.getAttribute('data-history-state')).toBe('uncounted')
+    expect(document.body.textContent).not.toContain('No sessions yet')
   })
 
   it('says the folders could not be read while a query is typed', () => {

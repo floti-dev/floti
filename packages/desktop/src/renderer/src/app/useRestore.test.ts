@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RestoreOffer, SessionRecord } from '@helm/core'
 import type { LaunchedSession, RestoreSessionsResult } from '../../../shared/ipc'
 import { bridge } from './bridge.testkit'
-import { restoreReport, useRestore } from './useRestore'
+import { restoredPairs, restoreReport, useOpenOnFailedRead, useRestore } from './useRestore'
 
 vi.mock('./bridge', () => import('./bridge.testkit'))
 
@@ -192,9 +192,61 @@ describe('restoreReport', () => {
     expect(restoreReport({ restored: [], failed: [] }, true)).toBeNull()
   })
 
+  it('says which were already running, shown rather than reopened, after any failure and in place of the unasked line', () => {
+    const running = (id: number, name: string) => ({ from: id, session: { id: id + 10, name } as SessionRecord })
+    expect(restoreReport({ restored: [{ from: 1, launched: launched(5) }], failed: [], running: [running(2, 'api')] }, true)).toEqual({
+      text: '“api” was already running, so it is shown instead of being reopened.',
+      failed: false
+    })
+    expect(
+      restoreReport(
+        {
+          restored: [],
+          failed: [{ id: 3, name: 'quiet', reason: 'Its folder is gone.' }],
+          running: [running(2, 'api'), running(4, 'web')]
+        },
+        false
+      )
+    ).toEqual({
+      text:
+        '“quiet” could not be reopened: Its folder is gone. “api” was already running, so it is shown instead of being reopened. “web” was already running, so it is shown instead of being reopened.',
+      failed: true
+    })
+  })
+
+  it('pairs each lost row with the session that reopened it or the one already running it', () => {
+    expect([
+      ...restoredPairs({
+        restored: [{ from: 1, launched: launched(5) }],
+        failed: [{ id: 3, name: 'quiet', reason: 'gone' }],
+        running: [{ from: 2, session: { id: 9, name: 'api' } as SessionRecord }]
+      })
+    ]).toEqual([
+      [1, 5],
+      [2, 9]
+    ])
+  })
+
   it('names the host that stopped when the sessions went with it', () => {
     expect(
       restoreReport({ restored: [{ from: 1, launched: launched(5) }], failed: [] }, true, 'this PC’s host')
     ).toEqual({ text: 'Reopened 1 session this PC’s host was running when it stopped.', failed: false })
+  })
+})
+
+describe('useOpenOnFailedRead', () => {
+  it('opens the restore page only once the saved layout is in, and once per failure', () => {
+    const open = vi.fn()
+    const { rerender } = renderHook(({ unread, ready }) => useOpenOnFailedRead(unread, ready, open), {
+      initialProps: { unread: 'The host stopped answering.' as string | null, ready: false }
+    })
+    expect(open).not.toHaveBeenCalled()
+    rerender({ unread: 'The host stopped answering.', ready: true })
+    expect(open).toHaveBeenCalledTimes(1)
+    rerender({ unread: 'Still not answering.', ready: true })
+    expect(open).toHaveBeenCalledTimes(1)
+    rerender({ unread: null, ready: true })
+    rerender({ unread: 'Again.', ready: true })
+    expect(open).toHaveBeenCalledTimes(2)
   })
 })

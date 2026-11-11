@@ -37,6 +37,19 @@ describe("a resume from History", () => {
     expect(adopt).toHaveBeenCalledWith("h1", record);
   });
 
+  it("shows the session already running a conversation, which the host names in place of starting another, as one that came back", async () => {
+    const running = { id: 3, status: "running" } as unknown as SessionRecord;
+    bridge.answer("history:resume", () => ({ session: running, history: {} as HistorySession, alreadyRunning: true }));
+    const { result, adopt } = setup();
+    let refused: string | null = "unset";
+    await act(async () => {
+      refused = await result.current.resumeOn("local", "c1", undefined);
+    });
+    expect(refused).toBeNull();
+    expect(adopt).toHaveBeenCalledTimes(1);
+    expect(adopt).toHaveBeenCalledWith("local", running);
+  });
+
   it("says a refusal with the host's sentence and places nothing", async () => {
     bridge.answer("history:resume", () => {
       throw new Error("Its folder is gone.");

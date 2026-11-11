@@ -457,14 +457,9 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
         }
       },
       'session:restorable': async () => {
-        let connection: HostConnection
-        try {
-          connection = await host()
-        } catch {
-          // No host, no sessions of its to offer back.
-          return null
-        }
-        const offer = await connection.request('session:restorable', null)
+        // A host that cannot be reached could not say what it holds: that is
+        // could not read, never nothing to offer, so an offer already shown stays.
+        const offer = await (await host()).request('session:restorable', null)
         if (offer === null) return null
         return offerFromHost(offer, await own.invoke('windowSessions:lostLayout'))
       },

@@ -322,7 +322,11 @@ import { useLauncher } from "./useLauncher";
 import { useProfiles } from "./useProfiles";
 import { useLiveSessions } from "./useLiveSessions";
 import { useNewSession } from "./useNewSession";
-import { useRestore } from "./useRestore";
+import {
+  restoredPairs,
+  useOpenOnFailedRead,
+  useRestore,
+} from "./useRestore";
 import { useRestartHost, type RestartHostDeps } from "./useRestartHost";
 import { useSessions } from "./useSessions";
 import { LocalProjectPane } from "./LocalProjectPane";
@@ -2117,33 +2121,48 @@ export function App(): JSX.Element {
   const { resumeOn: resumeConversation, exclusive: resumeOnce } = historyResume;
 
   /**
-   * The sessions running now on History's host, by lower-cased conversation:
-   * what History marks running or working and shows rather than resumes, and
-   * the row id each is shown by.
+   * The sessions running now on `host`, by lower-cased conversation: what
+   * History marks running or working and shows rather than resumes, and the
+   * row id each is shown by.
    */
-  const historyRunning = useMemo(() => {
-    const remote = historyHost !== LOCAL_HOST_KEY;
-    const work = remote ? hostWork.byHost.get(historyHost) : undefined;
-    const records = remote ? (work?.sessions ?? []) : sessionState.sessions;
-    const activity = remote
-      ? (work?.activity ?? new Map<number, SessionActivityState>())
-      : sessionState.activity;
-    const shown = new Map<string, HistoryRunning>();
-    const ids = new Map<string, number>();
-    for (const record of records) {
-      if (record.status !== "running") continue;
-      const state = activity.get(record.id);
-      const conversation = state?.claudeSessionId ?? record.claudeSessionId;
-      if (conversation === null) continue;
-      const key = conversation.toLowerCase();
-      shown.set(key, {
-        working: state?.activity === "busy",
-        here: findTab(open, paneId(sessionRef(record.id, historyHost))) !== null,
-      });
-      ids.set(key, record.id);
-    }
-    return { shown, ids };
-  }, [historyHost, hostWork.byHost, sessionState.sessions, sessionState.activity, open]);
+  const runningOn = useCallback(
+    (host: string) => {
+      const remote = host !== LOCAL_HOST_KEY;
+      const work = remote ? hostWork.byHost.get(host) : undefined;
+      const records = remote ? (work?.sessions ?? []) : sessionState.sessions;
+      const activity = remote
+        ? (work?.activity ?? new Map<number, SessionActivityState>())
+        : sessionState.activity;
+      const shown = new Map<string, HistoryRunning>();
+      const ids = new Map<string, number>();
+      for (const record of records) {
+        if (record.status !== "running") continue;
+        const state = activity.get(record.id);
+        const conversation = state?.claudeSessionId ?? record.claudeSessionId;
+        if (conversation === null) continue;
+        const key = conversation.toLowerCase();
+        shown.set(key, {
+          working: state?.activity === "busy",
+          here: findTab(open, paneId(sessionRef(record.id, host))) !== null,
+        });
+        ids.set(key, record.id);
+      }
+      return { shown, ids };
+    },
+    [hostWork.byHost, sessionState.sessions, sessionState.activity, open],
+  );
+  const historyRunning = useMemo(
+    () => runningOn(historyHost),
+    [runningOn, historyHost],
+  );
+  /** This PC's, where the Stopped group's sessions ran, whichever host History shows. */
+  const localRunning = useMemo(
+    () =>
+      historyHost === LOCAL_HOST_KEY
+        ? historyRunning.shown
+        : runningOn(LOCAL_HOST_KEY).shown,
+    [historyHost, historyRunning, runningOn],
+  );
 
   const resumeHere = useCallback(
     (conversationId: string, agent: string | undefined) =>
@@ -2157,9 +2176,12 @@ export function App(): JSX.Element {
     resume: resumeStoppedGroup,
     dismiss: dismissStopped,
   } = useStoppedGroup({
-    running: historyRunning.shown,
+    running: localRunning,
     resume: resumeHere,
     raiseUndo: agentToasts.raise,
+    unread: restoreUnread,
+    dismissUnread: dismissRestoreUnread,
+    readAgain: retryRestore,
   });
   const resumeStopped = useCallback(
     async (sessions: readonly RestorableSession[]) => {
@@ -2184,11 +2206,6 @@ export function App(): JSX.Element {
     keepStopped(restoreOffer.sessions, restoreOffer.lostAt ?? null);
     dismissRestore();
   }, [restoreOffer, dismissRestore, keepStopped]);
-  /** The Stopped group's Dismiss: what it kept, and that a read failed. */
-  const dismissStoppedGroup = useCallback(() => {
-    dismissStopped();
-    dismissRestoreUnread();
-  }, [dismissStopped, dismissRestoreUnread]);
 
   /** A conversation read-only in a tab, at `at` when a matched line was chosen. */
   const openConversation = useCallback(
@@ -2376,7 +2393,7 @@ export function App(): JSX.Element {
         savedGroups(layout).findIndex((group) =>
           group.panes.some((pane) => pane.kind === "session" && pane.id === id),
         );
-      const picks = chosen.map(({ id, withoutAgent }) => {
+      const picks = chosen.map(({ id, withoutAgent, withoutProfile }) => {
         const there = open.groups[paneOf(id)];
         const body =
           (there === undefined ? undefined : bodyRefs.current.get(there.id)) ??
@@ -2385,6 +2402,7 @@ export function App(): JSX.Element {
           id,
           ...estimateGrid(body ?? null),
           ...(withoutAgent === true ? { withoutAgent } : {}),
+          ...(withoutProfile === true ? { withoutProfile } : {}),
         };
       });
       const result = await restoreLost(picks, {
@@ -2394,12 +2412,11 @@ export function App(): JSX.Element {
       if (result === null) return;
       for (const { launched } of result.restored)
         sessionState.adopt(launched.session);
-      const pairs = new Map(
-        result.restored.map(({ from, launched }) => [
-          from,
-          launched.session.id,
-        ]),
-      );
+      // One whose conversation already ran is shown where it would have
+      // reopened, and is back as a reopened one is.
+      for (const { session } of result.running ?? [])
+        sessionState.adopt(session);
+      const pairs = restoredPairs(result);
       // Those left behind stay at the top of History until each is back.
       const left = restoreOffer.sessions.filter(
         (session) => !pairs.has(session.id),
@@ -2469,13 +2486,11 @@ export function App(): JSX.Element {
    * offer nobody could read. Once per failure: a Try again that fails again
    * leaves the tab where it is, or closed if it was set aside.
    */
-  const hadUnread = useRef(false);
-  useEffect(() => {
-    const unread = restoreUnread !== null;
-    if (unread && !hadUnread.current)
-      commit((current) => openTab(current, { kind: "restore" }));
-    hadUnread.current = unread;
-  }, [restoreUnread, commit]);
+  const openRestoreTab = useCallback(
+    () => commit((current) => openTab(current, { kind: "restore" })),
+    [commit],
+  );
+  useOpenOnFailedRead(restoreUnread, settingsLoaded, openRestoreTab);
 
   const blankProfile = useCallback(
     (root: string, name: string): ProfileDraft => ({
@@ -6587,7 +6602,7 @@ export function App(): JSX.Element {
               historyHost === LOCAL_HOST_KEY ? restoreUnread : null
             }
             onRetryStopped={retryRestore}
-            onDismissStopped={dismissStoppedGroup}
+            onDismissStopped={dismissStopped}
             onResume={(session, { withoutAgent }) =>
               void resumeOnce(session.sessionId, () =>
                 resumeConversation(

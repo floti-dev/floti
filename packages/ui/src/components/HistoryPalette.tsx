@@ -241,8 +241,10 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
       ? null
       : item.session
 
+  // While a name is typed, nothing resumes or opens: a double click in the
+  // field selects a word.
   const activate = (item: Item | undefined): void => {
-    if (item === undefined || busy) return
+    if (item === undefined || busy || renaming !== null) return
     if (item.kind === 'stopped-unread') return props.onRetryStopped?.()
     if (item.kind === 'stopped-all') return props.onResumeStopped(item.sessions)
     if (item.kind === 'stopped') return props.onResumeStopped([item.lost])
@@ -255,7 +257,7 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
   const read = (item: Item | undefined): void => {
     const session = sessionOf(item)
     // Floti renders no part of a live session (H12).
-    if (item === undefined || busy || session === null || isRunning(session) !== null) return
+    if (item === undefined || busy || renaming !== null || session === null || isRunning(session) !== null) return
     props.onRead(session, item.kind === 'line' ? item.line : null)
   }
 
@@ -280,10 +282,22 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
 
   const startRename = (): void => {
     const session = sessionOf(highlighted)
-    if (session === null || highlighted?.kind === 'line') return
+    if (session === null || highlighted === undefined || highlighted.kind === 'line') return
     const seed = renameSeed(session)
+    // The cursor stays on the renamed row, so a list read again meanwhile
+    // keeps its preview and footer on the session being named.
+    setCursorKey(highlighted.key)
     setRenaming({ session, draft: seed, seed })
   }
+
+  // A renamed row that leaves the list (a read again, a fold) takes its field
+  // with it: the rename ends, saving nothing, and the keys work again.
+  // Ended as it is drawn, so no render shows the rename with no field.
+  if (renaming !== null && !items.some((item) => renamed(item, renaming.session))) setRenaming(null)
+  // The field went with its row, and took the focus with it: back to the search.
+  useEffect(() => {
+    if (renaming === null && document.activeElement === document.body) fieldRef.current?.focus()
+  }, [renaming])
 
   /** Keeps the draft for the session it was typed for, wherever the list has moved; a draft left as it started saves nothing. */
   const finishRename = (keep: boolean): void => {
@@ -543,8 +557,14 @@ function renamed(item: Item, session: HistorySession): boolean {
   return (item.kind === 'session' || item.kind === 'child') && item.session.sessionId === session.sessionId
 }
 
-/** A row is chosen with the pointer without taking focus from the field. */
-const keepFocus = (event: { preventDefault: () => void }): void => event.preventDefault()
+/**
+ * A row is chosen with the pointer without taking focus from the field. A
+ * press in the rename field is its own, so it places the caret.
+ */
+const keepFocus = (event: { preventDefault: () => void; target: EventTarget }): void => {
+  if (event.target instanceof HTMLInputElement) return
+  event.preventDefault()
+}
 
 type Blocked =
   | { kind: 'reading' }
@@ -577,8 +597,9 @@ function blockedState(props: HistoryPaletteProps, typed: boolean, list: HistoryL
   // "Nothing there" only when the host said it holds none: a count that could
   // not be read is said as that, and one not read yet is still reading.
   if (!typed) {
-    if (props.total === 0) return { kind: 'empty' }
+    // A count that failed to read again is not the 0 read before it.
     if (props.totalError !== null && props.totalError !== undefined) return { kind: 'uncounted', message: props.totalError }
+    if (props.total === 0) return { kind: 'empty' }
     return props.total === null ? { kind: 'reading' } : null
   }
   return { kind: 'no-match', other: list === 'titles' ? 'conversations' : 'titles' }

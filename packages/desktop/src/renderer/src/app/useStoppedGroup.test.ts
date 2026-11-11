@@ -26,9 +26,19 @@ const unknown = (id: number, patch: Partial<RestorableSession> = {}): Restorable
 function setup(patch: Partial<StoppedGroupDeps> = {}) {
   const resume = vi.fn<StoppedGroupDeps["resume"]>(async () => null);
   const raiseUndo = vi.fn<StoppedGroupDeps["raiseUndo"]>();
-  const initial: StoppedGroupDeps = { running: new Set(), resume, raiseUndo, ...patch };
+  const dismissUnread = vi.fn<StoppedGroupDeps["dismissUnread"]>();
+  const readAgain = vi.fn<StoppedGroupDeps["readAgain"]>();
+  const initial: StoppedGroupDeps = {
+    running: new Set(),
+    resume,
+    raiseUndo,
+    unread: null,
+    dismissUnread,
+    readAgain,
+    ...patch,
+  };
   const hook = renderHook((deps: StoppedGroupDeps) => useStoppedGroup(deps), { initialProps: initial });
-  return { hook, resume, raiseUndo, initial };
+  return { hook, resume, raiseUndo, dismissUnread, readAgain, initial };
 }
 
 const ids = (group: { sessions: readonly RestorableSession[] } | null) =>
@@ -136,6 +146,45 @@ describe("the Stopped group", () => {
       expect(await undo()).toBeNull();
     });
     expect(ids(hook.result.current.shown)).toEqual([1, 2]);
+  });
+
+  it("resumes a conversation two stops both kept once, and both copies leave", async () => {
+    const { hook, resume } = setup();
+    const sessions = [lost(1, { conversationId: "Conv-A" }), lost(2, { conversationId: "conv-a" }), lost(3)];
+    act(() => hook.result.current.keep(sessions, null));
+    await act(async () => {
+      await hook.result.current.resume(sessions);
+    });
+    expect(resume.mock.calls.map(([id]) => id)).toEqual(["Conv-A", "Conv-3"]);
+    expect(hook.result.current.shown).toBeNull();
+  });
+
+  it("does not bring back on Undo a session that has run since it was dismissed, even once it exits again", async () => {
+    const { hook, raiseUndo, initial } = setup();
+    act(() => hook.result.current.keep([lost(1), lost(2)], null));
+    act(() => hook.result.current.dismiss());
+    hook.rerender({ ...initial, running: new Set(["conv-1"]) });
+    hook.rerender({ ...initial, running: new Set() });
+    const undo = raiseUndo.mock.calls[0]![2];
+    await act(async () => {
+      await undo();
+    });
+    expect(ids(hook.result.current.shown)).toEqual([2]);
+  });
+
+  it("dismisses a read that failed with the group, and its Undo reads the offer again", async () => {
+    const { hook, raiseUndo, dismissUnread, readAgain } = setup({ unread: "The host stopped answering." });
+    act(() => hook.result.current.dismiss());
+    expect(dismissUnread).toHaveBeenCalledTimes(1);
+    expect(raiseUndo).toHaveBeenCalledTimes(1);
+    const [, detail, undo] = raiseUndo.mock.calls[0]!;
+    expect(detail).toBe("The sessions the stop took that could not be read are no longer at the top of History.");
+    expect(readAgain).not.toHaveBeenCalled();
+    await act(async () => {
+      await undo();
+    });
+    expect(readAgain).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.shown).toBeNull();
   });
 
   it("raises nothing when there is nothing to dismiss", () => {
