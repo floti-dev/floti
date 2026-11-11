@@ -366,6 +366,22 @@ pub(crate) fn running_ids(store: &Store) -> Result<Vec<SessionId>> {
         .map_err(sql("read the running sessions"))
 }
 
+/// The ids of the rows still `running` whose current conversation is
+/// `conversation`, newest first.
+pub(crate) fn running_in_conversation(store: &Store, conversation: &str) -> Result<Vec<SessionId>> {
+    let mut statement = store
+        .connection()
+        .prepare(
+            "SELECT id FROM sessions WHERE status = 'running' \
+             AND coalesce(last_claude_session_id, claude_session_id) = ?1 ORDER BY id DESC",
+        )
+        .map_err(sql("read the sessions running a conversation"))?;
+    statement
+        .query_map([conversation], |row| row.get(0).map(SessionId))
+        .and_then(Iterator::collect::<rusqlite::Result<Vec<_>>>)
+        .map_err(sql("read the sessions running a conversation"))
+}
+
 /// Who ended a session that did not exit on its own, as its row keeps it
 /// (`stopped_by`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

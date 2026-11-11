@@ -248,7 +248,9 @@ export function offerFromHost(offer: P.RestoreOffer, layout: SavedPaneLayout | n
     ...(session.agentProblem == null ? {} : { agentProblem: session.agentProblem }),
     // A host before protocol 3.0 names neither.
     ...(session.conversationId == null ? {} : { conversationId: session.conversationId }),
-    ...(session.title == null ? {} : { title: session.title })
+    ...(session.title == null ? {} : { title: session.title }),
+    ...(session.titleUnreadable === true ? { titleUnreadable: true } : {}),
+    ...(session.profileProblem == null ? {} : { profileProblem: session.profileProblem })
   }))
   return {
     sessions,

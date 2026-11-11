@@ -212,13 +212,28 @@ fn message(value: &Value) -> Option<ArchiveMessage> {
         .as_str()
         .filter(|uuid| !uuid.is_empty())?;
     let at = parse_instant(value.get("timestamp")?.as_str()?)?;
-    let text = message_text(value.get("message")?.get("content")?);
+    let content = value.get("message")?.get("content")?;
+    let text = message_text(content);
     (!text.is_empty()).then(|| ArchiveMessage {
         uuid: uuid.to_owned(),
         role,
         at,
         text,
+        thinking: role == ArchiveRole::Assistant && only_thinking(content),
     })
+}
+
+/// Whether every block of a message's content that has something to read is
+/// thinking: the row Claude Code writes for a thinking block of its own.
+fn only_thinking(content: &Value) -> bool {
+    let Some(blocks) = content.as_array() else {
+        return false;
+    };
+    let mut kinds = blocks
+        .iter()
+        .filter(|block| block_text(block).is_some())
+        .map(|block| block.get("type").and_then(Value::as_str));
+    kinds.next() == Some(Some("thinking")) && kinds.all(|kind| kind == Some("thinking"))
 }
 
 /// The readable text of one message's content, blocks joined by blank lines.
@@ -316,6 +331,43 @@ mod tests {
         let mut caveat = row("user", json!("Caveat: the messages below were generated"));
         caveat["isMeta"] = json!(true);
         assert_eq!(message(&caveat), None);
+    }
+
+    #[test]
+    fn a_row_that_is_only_thinking_is_marked_as_thinking() {
+        let thinking = json!([{
+            "type": "thinking",
+            "thinking": "Weighing whether the handle leaks.",
+            "signature": "EqoBCkgIBxABGAIiQ",
+        }]);
+        let marked = message(&row("assistant", thinking)).expect("kept");
+        assert_eq!(marked.text, "Weighing whether the handle leaks.");
+        assert!(marked.thinking);
+        // Text, a tool call or a message stored whole is not thinking.
+        for content in [
+            json!([{ "type": "text", "text": "The tests pass." }]),
+            json!([{ "type": "tool_use", "name": "Bash", "input": {} }]),
+            json!([
+                { "type": "thinking", "thinking": "first" },
+                { "type": "text", "text": "then the reply" },
+            ]),
+            json!("plain"),
+        ] {
+            assert!(
+                !message(&row("assistant", content.clone()))
+                    .unwrap()
+                    .thinking,
+                "{content}"
+            );
+        }
+        assert!(
+            !message(&row(
+                "user",
+                json!([{ "type": "thinking", "thinking": "x" }])
+            ))
+            .unwrap()
+            .thinking
+        );
     }
 
     #[test]

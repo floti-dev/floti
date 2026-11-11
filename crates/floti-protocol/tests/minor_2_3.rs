@@ -274,6 +274,7 @@ fn a_2_3_launch_without_its_additions_is_the_frame_a_2_2_client_sends() {
         cols: 80,
         rows: 24,
         without_agent: false,
+        without_profile: false,
     };
     assert!(
         serde_json::to_value(&restore)

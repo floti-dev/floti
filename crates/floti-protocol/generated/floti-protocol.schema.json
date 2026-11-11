@@ -849,6 +849,26 @@
       ],
       "type": "object"
     },
+    "AlreadyRunning": {
+      "description": "A lost session not reopened because its conversation already runs.",
+      "properties": {
+        "from": {
+          "description": "The lost row that was asked for.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "session": {
+          "$ref": "#/$defs/SessionRecord",
+          "description": "The running session that holds its conversation."
+        }
+      },
+      "required": [
+        "from",
+        "session"
+      ],
+      "type": "object"
+    },
     "AppInfo": {
       "description": "The host's identity.",
       "properties": {
@@ -942,6 +962,10 @@
         },
         "text": {
           "type": "string"
+        },
+        "thinking": {
+          "description": "True for one of the agent's messages that is only its thinking\n(protocol 3.0), which never ends a turn as its reply. Absent for any\nother, and for one archived before the archive told them apart.",
+          "type": "boolean"
         },
         "uuid": {
           "type": "string"
@@ -8523,12 +8547,23 @@
           "description": "True when its profile has since been deleted. It reopens without.",
           "type": "boolean"
         },
+        "profileProblem": {
+          "description": "Why its profile could not be read (protocol 3.0), as a sentence, or\nabsent when it could. Such a session is offered unticked, and\nrestoring it is restoring it without its profile\n(`SessionToRestore.withoutProfile`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "title": {
           "description": "What History calls that conversation: the name given by hand, else the\ntitle its agent gave it, else the one derived from its prompts. Absent\nwhen History does not have it.",
           "type": [
             "string",
             "null"
           ]
+        },
+        "titleUnreadable": {
+          "description": "True when History's name for its conversation could not be read, so\n`title` is absent for that reason rather than because History does\nnot have it. Absent when it was read.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -8597,6 +8632,13 @@
         "restored": {
           "items": {
             "$ref": "#/$defs/RestoredSession"
+          },
+          "type": "array"
+        },
+        "running": {
+          "description": "The asked-for sessions whose conversation a running session already\nholds (protocol 3.0): nothing was started for them, and each names the\nsession to show instead. Absent when there were none.",
+          "items": {
+            "$ref": "#/$defs/AlreadyRunning"
           },
           "type": "array"
         }
@@ -8678,12 +8720,17 @@
     },
     "ResumedSession": {
       "properties": {
+        "alreadyRunning": {
+          "description": "True when a running session already holds this conversation\n(protocol 3.0): nothing was started, and `session` is that one, to\nshow instead. Absent when it was started.",
+          "type": "boolean"
+        },
         "history": {
           "$ref": "#/$defs/HistorySession",
           "description": "The history row it came from."
         },
         "session": {
-          "$ref": "#/$defs/SessionRecord"
+          "$ref": "#/$defs/SessionRecord",
+          "description": "The session started, or with `alreadyRunning` the one that already\nholds the conversation."
         }
       },
       "required": [
@@ -9631,6 +9678,10 @@
         },
         "withoutAgent": {
           "description": "Reopen it without the agent it was started as (protocol 2.3): what a\nperson chose for a session whose agent the offer named a problem with.\nAbsent, its agent is composed again, and a file that cannot be loaded\nrefuses it.",
+          "type": "boolean"
+        },
+        "withoutProfile": {
+          "description": "Reopen it without the profile it was launched from (protocol 3.0):\nwhat a person chose for a session whose profile the offer could not\nread. Absent, a profile that cannot be read refuses it.",
           "type": "boolean"
         }
       },

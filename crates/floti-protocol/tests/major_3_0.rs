@@ -4,8 +4,10 @@
 //! agent problem's optional `backend`, `agents:render` with the type it
 //! takes, and History's optional fields (a conversation's family, how it
 //! ended and its matching lines, a query for a parent's children or the top
-//! level, and an offered session's conversation and title), and changes
-//! nothing else. What composition reads of an agent's config stays:
+//! level, an offered session's conversation, title and the problems reading
+//! them, restoring one without its profile, a resume or restore that names
+//! the running session holding its conversation, and an archived message
+//! marked as thinking), and changes nothing else. What composition reads of an agent's config stays:
 //! `config:scopes`, `config:tree` and `config:effective`.
 
 use std::collections::BTreeSet;
@@ -81,10 +83,22 @@ const RETIRED_FIELDS: &[(&str, &str)] = &[
 
 /// The optional fields History's types gain.
 const HISTORY_FIELDS: &[(&str, &[&str])] = &[
+    ("ArchiveMessage", &["thinking"]),
     ("HistoryPage", &["commands"]),
     ("HistoryQuery", &["parent", "topLevel"]),
-    ("RestorableSession", &["conversationId", "title"]),
+    (
+        "RestorableSession",
+        &[
+            "conversationId",
+            "title",
+            "titleUnreadable",
+            "profileProblem",
+        ],
+    ),
     ("RestoreOffer", &["lostAt"]),
+    ("SessionToRestore", &["withoutProfile"]),
+    ("RestoreSessionsResult", &["running"]),
+    ("ResumedSession", &["alreadyRunning"]),
     (
         "HistorySession",
         &[
@@ -133,7 +147,12 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
     );
     assert_eq!(
         names(&found, Part::Type, Change::Added),
-        ["AgentInstructions", "HistoryCommand", "HistoryMatchLine"]
+        [
+            "AgentInstructions",
+            "AlreadyRunning",
+            "HistoryCommand",
+            "HistoryMatchLine"
+        ]
     );
     assert_eq!(
         names(&found, Part::Channel, Change::Changed),
@@ -148,6 +167,7 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
         names(&found, Part::Type, Change::Changed),
         [
             "AgentProblem",
+            "ArchiveMessage",
             "FileView",
             "HistoryPage",
             "HistoryQuery",
@@ -157,7 +177,10 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
             "NoticeLimit",
             "RestorableSession",
             "RestoreOffer",
-            "SessionRecord"
+            "RestoreSessionsResult",
+            "ResumedSession",
+            "SessionRecord",
+            "SessionToRestore"
         ]
     );
 

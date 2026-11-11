@@ -249,7 +249,7 @@ pub(crate) fn insert_messages(
         let inserted = insert.execute(params![
             message.uuid,
             session,
-            role_name(message.role),
+            stored_role(message),
             to_i64(message.at),
             stored.body.as_ref(),
             stored.compressed,
@@ -391,15 +391,17 @@ pub fn read_conversation(
             .map_err(sql("read an archived conversation"))?;
         conversation.messages = statement
             .query_map([&key], |row| {
+                let role: String = row.get(1)?;
                 Ok(ArchiveMessage {
                     uuid: row.get(0)?,
-                    role: if row.get::<_, String>(1)? == "assistant" {
-                        ArchiveRole::Assistant
-                    } else {
+                    role: if role == role_name(ArchiveRole::User) {
                         ArchiveRole::User
+                    } else {
+                        ArchiveRole::Assistant
                     },
                     at: to_u64(row.get(2)?),
                     text: decode_body(&row.get::<_, Vec<u8>>(3)?, row.get(4)?),
+                    thinking: role == THINKING_ROLE,
                 })
             })
             .and_then(Iterator::collect)
@@ -590,13 +592,14 @@ const LAST_REPLY_LOOKBACK: i64 = 100;
 ///
 /// The archive stores a transcript's rows as they are: Claude Code writes
 /// each of a message's thinking, text and tool calls as a row of its own,
-/// so a thinking row and a text row read alike. A turn is the agent's rows
-/// between two of the user's, and its reply is its last row, which comes
-/// after its thinking. A turn whose last row is a tool call never finished
-/// (the session was lost or stopped mid-turn), so whatever it said or
-/// thought before that call is passed over for the turn before it. A row
-/// that joins several parts (an earlier version wrote a message whole)
-/// gives its last paragraph by the same rule.
+/// and a row that is only thinking is stored as such ([`THINKING_ROLE`]). A
+/// turn is the agent's rows between two of the user's, and its reply is its
+/// last row, which comes after its thinking. A turn whose last row is a tool
+/// call or thinking never finished (it was interrupted, or the session was
+/// lost or stopped mid-turn), so whatever it said or thought before is
+/// passed over for the turn before it. A row that joins several parts (an
+/// earlier version wrote a message whole) gives its last paragraph by the
+/// same rule.
 pub fn last_reply(conn: &Connection, session: &str) -> Result<Option<String>> {
     const DOING: &str = "read a conversation's last reply";
     let mut statement = conn
@@ -610,17 +613,17 @@ pub fn last_reply(conn: &Connection, session: &str) -> Result<Option<String>> {
     let mut rows = statement
         .query(params![session.to_lowercase(), LAST_REPLY_LOOKBACK])
         .map_err(sql(DOING))?;
-    let assistant = role_name(ArchiveRole::Assistant);
+    let user = role_name(ArchiveRole::User);
     // Newest first, so the first of the agent's rows after one of the
     // user's is the last row of its turn.
     let mut turn_end = true;
     while let Some(row) = rows.next().map_err(sql(DOING))? {
         let role: String = row.get(0).map_err(sql(DOING))?;
-        if role != assistant {
+        if role == user {
             turn_end = true;
             continue;
         }
-        if !std::mem::replace(&mut turn_end, false) {
+        if !std::mem::replace(&mut turn_end, false) || role == THINKING_ROLE {
             continue;
         }
         let body: Vec<u8> = row.get(1).map_err(sql(DOING))?;
@@ -714,6 +717,19 @@ fn role_name(role: ArchiveRole) -> &'static str {
     match role {
         ArchiveRole::User => "user",
         ArchiveRole::Assistant => "assistant",
+    }
+}
+
+/// How the archive's `role` column stores one of the agent's messages that
+/// is only its thinking. Read back, it is the agent's, with `thinking` set.
+const THINKING_ROLE: &str = "thinking";
+
+/// The `role` a message is stored under.
+fn stored_role(message: &ArchiveMessage) -> &'static str {
+    if message.thinking && message.role == ArchiveRole::Assistant {
+        THINKING_ROLE
+    } else {
+        role_name(message.role)
     }
 }
 

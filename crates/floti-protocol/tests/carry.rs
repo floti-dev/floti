@@ -70,6 +70,7 @@ fn a_conversation_part_and_a_usage_row_read_in_camel_case() {
                 role: ArchiveRole::User,
                 at: 1,
                 text: "hello".into(),
+                thinking: false,
             }],
             last: true,
         }],

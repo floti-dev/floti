@@ -24,7 +24,7 @@ use floti_protocol::channels::sessions::{
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
 
-use super::archive::{last_reply, matching_lines, search_archive};
+use super::archive::{excerpt, last_reply, matching_lines, search_archive};
 use super::sql;
 use crate::Result;
 use crate::agent::claude_code::session_title_from;
@@ -296,6 +296,13 @@ impl<'a> HistoryIndex<'a> {
             )
             .map_err(sql("count history sessions"))?;
 
+        // A prompt is stored whole, and can run long: what is sent is the
+        // part around its match, as for a message.
+        if archived.is_none() && !search.is_empty() {
+            for session in &mut sessions {
+                session.matched = session.matched.take().map(|text| excerpt(&text, search));
+            }
+        }
         if let Some(found) = &archived {
             for session in &mut sessions {
                 if let Some(hit) = found.get(&session.session_id.to_lowercase()) {

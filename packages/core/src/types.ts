@@ -556,6 +556,12 @@ export interface RestorableSession {
   profile: string | null
   /** True when it had a profile that has since been deleted. It reopens without. */
   profileGone: boolean
+  /**
+   * Why its profile could not be read, as the host's sentence; absent when it
+   * could. Such a session is offered unticked, and restoring it restores it
+   * without its profile (`withoutProfile`).
+   */
+  profileProblem?: string
   /** When it was last spoken to, ms since epoch. Null when that is not known. */
   lastAt: number | null
   /** Why it cannot be reopened, as a sentence, or null when it can. */
@@ -573,6 +579,8 @@ export interface RestorableSession {
   conversationId?: string
   /** What History calls that conversation (`historyTitle`); absent when History does not have it. */
   title?: string
+  /** True when History's name for it could not be read, so `title` is absent for that reason. */
+  titleUnreadable?: boolean
 }
 
 /** What a crash took, offered back once at the next start. */

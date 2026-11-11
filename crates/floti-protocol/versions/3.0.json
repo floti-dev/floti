@@ -2423,6 +2423,23 @@
       ],
       "type": "object"
     },
+    "AlreadyRunning": {
+      "properties": {
+        "from": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "session": {
+          "$ref": "#/$defs/SessionRecord"
+        }
+      },
+      "required": [
+        "from",
+        "session"
+      ],
+      "type": "object"
+    },
     "AppInfo": {
       "properties": {
         "dataDir": {
@@ -2505,6 +2522,9 @@
         },
         "text": {
           "type": "string"
+        },
+        "thinking": {
+          "type": "boolean"
         },
         "uuid": {
           "type": "string"
@@ -9496,11 +9516,20 @@
         "profileGone": {
           "type": "boolean"
         },
+        "profileProblem": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "title": {
           "type": [
             "string",
             "null"
           ]
+        },
+        "titleUnreadable": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -9564,6 +9593,12 @@
         "restored": {
           "items": {
             "$ref": "#/$defs/RestoredSession"
+          },
+          "type": "array"
+        },
+        "running": {
+          "items": {
+            "$ref": "#/$defs/AlreadyRunning"
           },
           "type": "array"
         }
@@ -9641,6 +9676,9 @@
     },
     "ResumedSession": {
       "properties": {
+        "alreadyRunning": {
+          "type": "boolean"
+        },
         "history": {
           "$ref": "#/$defs/HistorySession"
         },
@@ -10517,6 +10555,9 @@
           "type": "integer"
         },
         "withoutAgent": {
+          "type": "boolean"
+        },
+        "withoutProfile": {
           "type": "boolean"
         }
       },

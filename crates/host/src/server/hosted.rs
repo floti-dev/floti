@@ -27,11 +27,11 @@ use std::time::Duration;
 use floti_protocol::channels::common::{ChildReport, LaunchedAs, SessionRecord};
 use floti_protocol::channels::host::{DeviceSession, HostStopReason};
 use floti_protocol::channels::sessions::{
-    CloseSessionRequest, HistorySession, LaunchProfileRequest, LaunchSessionRequest,
-    LaunchedProfile, LaunchedSession, Profile, PtermOpenRequest, PtermOpened, RenameSessionRequest,
-    RestorableSession, RestoreOffer, RestoreSessionsRequest, RestoreSessionsResult,
-    RestoredSession, ResumeSessionRequest, ResumedSession, SessionResizeRequest,
-    StartSessionRequest, UnrestoredSession,
+    AlreadyRunning, CloseSessionRequest, HistorySession, LaunchProfileRequest,
+    LaunchSessionRequest, LaunchedProfile, LaunchedSession, Profile, PtermOpenRequest, PtermOpened,
+    RenameSessionRequest, RestorableSession, RestoreOffer, RestoreSessionsRequest,
+    RestoreSessionsResult, RestoredSession, ResumeSessionRequest, ResumedSession,
+    SessionResizeRequest, SessionToRestore, StartSessionRequest, UnrestoredSession,
 };
 use floti_protocol::noise::PublicKey;
 use floti_protocol::{BackendId, Knowable};
@@ -137,6 +137,11 @@ pub(crate) struct Hosted {
     /// person's Remove, for the same reason: a client lists whether a child
     /// is kept with its row.
     kept_revision: AtomicU64,
+    /// Taken by every reopening of a conversation (a resume from History or
+    /// the launcher, and a restore) from its check that no running session
+    /// holds the conversation until the reopened one is recorded, so two
+    /// reopenings of one conversation never both start.
+    reopening: Mutex<()>,
 }
 
 /// How much is keeping the host busy: its running sessions and plain
@@ -245,6 +250,7 @@ impl Hosted {
             held_distros: AtomicUsize::new(0),
             title_revision: AtomicU64::new(0),
             kept_revision: AtomicU64::new(0),
+            reopening: Mutex::new(()),
             occupancy: watch::Sender::new(Occupancy::default()),
         })
     }
@@ -639,11 +645,20 @@ impl Hosted {
         client: ClientId,
         request: LaunchSessionRequest,
     ) -> std::result::Result<LaunchedSession, String> {
+        let _reopening = request.resume.is_some().then(|| lock(&self.reopening));
         let history = request
             .resume
             .as_deref()
             .map(|id| self.resumable(id))
             .transpose()?;
+        if let Some(history) = &history
+            && let Some(running) = self.running_with(&history.session_id)?
+        {
+            return Err(format!(
+                "This conversation is already running as \"{}\", so it was not reopened a second time.",
+                label_of(&running)
+            ));
+        }
         let starting = if history.is_some() {
             Starting::Resume
         } else {
@@ -800,12 +815,24 @@ impl Hosted {
     /// mode its newest session ran with, so a resume never runs in a mode
     /// nobody chose for it: a child's conversation keeps the mode its parent
     /// held it to. The agent has to allow the conversation's backend.
+    ///
+    /// A conversation a running session already holds is not started a
+    /// second time: the answer names that session (`already_running`), for
+    /// the client to show instead.
     pub fn resume(
         &self,
         client: ClientId,
         request: ResumeSessionRequest,
     ) -> std::result::Result<ResumedSession, String> {
+        let _reopening = lock(&self.reopening);
         let history = self.resumable(&request.session_id)?;
+        if let Some(running) = self.running_with(&history.session_id)? {
+            return Ok(ResumedSession {
+                session: running,
+                history,
+                already_running: true,
+            });
+        }
         let backend = self.named_backend(&history.backend)?;
         let agent = non_empty(request.agent)
             .map(|name| self.person_agent(&name, Starting::Resume))
@@ -859,7 +886,29 @@ impl Hosted {
         Ok(ResumedSession {
             session: launched.session,
             history,
+            already_running: false,
         })
+    }
+
+    /// The running session whose row holds `conversation` now, if any: the
+    /// one a reopening of that conversation shows instead of starting a
+    /// second process on it.
+    fn running_with(
+        &self,
+        conversation: &str,
+    ) -> std::result::Result<Option<SessionRecord>, String> {
+        let rows = records::running_in_conversation(&self.ledger.store(), conversation)
+            .map_err(|err| err.to_string())?;
+        let held: Vec<SessionId> = self
+            .sessions
+            .list()
+            .iter()
+            .map(|session| session.id())
+            .collect();
+        rows.into_iter()
+            .find(|id| held.contains(id))
+            .map(|id| self.record(id).map_err(|err| err.to_string()))
+            .transpose()
     }
 
     /// The checks a conversation to reopen has to pass, made here rather
@@ -1277,43 +1326,53 @@ impl Hosted {
     }
 
     /// What the last run left running, until a client answers for it; null
-    /// when there was nothing or it has been answered. A read of a session's
-    /// profile or title that fails is an error, never "none": an offer that
-    /// said a profile was gone, or gave no title, because floti.db could not
-    /// be read would be wrong.
-    pub fn restorable(&self) -> Result<Option<RestoreOffer>> {
+    /// when there was nothing or it has been answered. A row whose profile
+    /// or title cannot be read is still offered, saying so: an unreadable
+    /// profile is a problem on its row (`profile_problem`), never "deleted",
+    /// and an unreadable title is `title_unreadable`, never "none".
+    pub fn restorable(&self) -> Option<RestoreOffer> {
         let offer = self.ledger.offer();
-        let Some(lost) = offer.as_ref().filter(|lost| !lost.is_empty()) else {
-            return Ok(None);
-        };
+        let lost = offer.as_ref().filter(|lost| !lost.is_empty())?;
         let store = self.ledger.store();
         let sessions = lost
             .iter()
             .map(|row| {
-                let profile = row
-                    .profile_id
-                    .map(|id| records::profile_name(&store, id))
-                    .transpose()?
-                    .flatten();
-                let title = row
-                    .conversation_id
-                    .as_deref()
-                    .map(|conversation| records::read_history_session(&store, conversation))
-                    .transpose()?
-                    .flatten()
-                    .map(|session| {
-                        session
-                            .label
-                            .or(session.agent_title)
-                            .unwrap_or(session.title)
-                    });
-                Ok(RestorableSession {
+                let (profile, profile_problem) = match row.profile_id {
+                    None => (None, None),
+                    Some(id) => match records::profile_name(&store, id) {
+                        Ok(name) => (name, None),
+                        Err(err) => (
+                            None,
+                            Some(format!(
+                                "Floti could not read the profile this session was started with ({err}), so it can only be restored without it."
+                            )),
+                        ),
+                    },
+                };
+                let (title, title_unreadable) = match row.conversation_id.as_deref() {
+                    None => (None, false),
+                    Some(conversation) => {
+                        match records::read_history_session(&store, conversation) {
+                            Ok(session) => (session.map(history_title), false),
+                            Err(err) => {
+                                log_line!(
+                                    "floti host: the restore offer has no title for a session: {err}"
+                                );
+                                (None, true)
+                            }
+                        }
+                    }
+                };
+                RestorableSession {
                     id: u64::try_from(row.id.0).unwrap_or(0),
                     name: row.name.clone(),
                     cwd: row.cwd.clone(),
                     branch: row.branch.clone(),
-                    profile_gone: row.profile_id.is_some() && profile.is_none(),
+                    profile_gone: row.profile_id.is_some()
+                        && profile.is_none()
+                        && profile_problem.is_none(),
                     profile,
+                    profile_problem,
                     last_at: None,
                     blocked: self.blocked(row),
                     agent: row.agent.clone(),
@@ -1322,17 +1381,18 @@ impl Hosted {
                         .as_deref()
                         .and_then(|agent| self.agent_problem(agent)),
                     title,
+                    title_unreadable,
                     conversation_id: row.conversation_id.clone(),
-                })
+                }
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect();
         // The host cannot yet see conversations running elsewhere, so it
         // counts none rather than guess.
-        Ok(Some(RestoreOffer {
+        Some(RestoreOffer {
             sessions,
             elsewhere: 0,
             lost_at: self.ledger.lost_at(),
-        }))
+        })
     }
 
     /// Why a lost session cannot be reopened, as a sentence, or `None`.
@@ -1369,16 +1429,20 @@ impl Hosted {
 
     /// Reopens the sessions asked for, each through its backend's resume in
     /// the folder its row recorded, and answers the offer: it is not offered
-    /// again, whether some, none or all were asked for.
+    /// again, whether some, none or all were asked for. One whose
+    /// conversation a running session already holds is not started a second
+    /// time; the answer names that session (`running`) instead.
     pub fn restore(
         &self,
         client: ClientId,
         request: RestoreSessionsRequest,
     ) -> RestoreSessionsResult {
+        let _reopening = lock(&self.reopening);
         let answered = self.ledger.offer().take();
         let mut result = RestoreSessionsResult {
             restored: Vec::new(),
             failed: Vec::new(),
+            running: Vec::new(),
         };
         for wanted in request.sessions {
             let row = answered.as_ref().and_then(|lost| {
@@ -1396,8 +1460,31 @@ impl Hosted {
                 });
                 continue;
             };
-            let size = TermSize::new(wanted.cols, wanted.rows);
-            match self.reopen(row, size, client, wanted.without_agent) {
+            let running = row
+                .conversation_id
+                .as_deref()
+                .map(|conversation| self.running_with(conversation))
+                .transpose()
+                .map(Option::flatten);
+            match running {
+                Ok(Some(session)) => {
+                    result.running.push(AlreadyRunning {
+                        from: wanted.id,
+                        session,
+                    });
+                    continue;
+                }
+                Ok(None) => {}
+                Err(reason) => {
+                    result.failed.push(UnrestoredSession {
+                        id: wanted.id,
+                        name: row.name.clone(),
+                        reason,
+                    });
+                    continue;
+                }
+            }
+            match self.reopen(row, &wanted, client) {
                 Ok(launched) => result.restored.push(RestoredSession {
                     from: wanted.id,
                     launched,
@@ -1418,23 +1505,27 @@ impl Hosted {
     /// person chose to restore it without (`without_agent`), which the offer
     /// leaves to them when it names the agent's problem. A profile deleted
     /// since is said rather than refused; the conversation is still worth
-    /// having back.
+    /// having back. A profile that cannot be read refuses it, unless the
+    /// person chose to restore it without (`without_profile`), which the
+    /// offer leaves to them when it names that problem.
     fn reopen(
         &self,
         row: &LostRow,
-        size: TermSize,
+        wanted: &SessionToRestore,
         client: ClientId,
-        without_agent: bool,
     ) -> std::result::Result<LaunchedSession, String> {
+        let size = TermSize::new(wanted.cols, wanted.rows);
+        let without_agent = wanted.without_agent;
         let backend = self.reopener(row)?;
-        let profile = row
-            .profile_id
-            .and_then(|id| u64::try_from(id).ok())
-            .and_then(|id| {
-                records::read_profile(&self.ledger.store(), id)
-                    .ok()
-                    .flatten()
-            });
+        let profile_id = row.profile_id.filter(|_| !wanted.without_profile);
+        let profile = match profile_id.and_then(|id| u64::try_from(id).ok()) {
+            None => None,
+            Some(id) => records::read_profile(&self.ledger.store(), id).map_err(|err| {
+                format!(
+                    "Floti could not read the profile this session was started with ({err}). Restore it without its profile to have it back."
+                )
+            })?,
+        };
         let mut composition = composition_of(profile.as_ref());
         composition.permission_mode = row.permission_mode;
         let mut families_off = Vec::new();
@@ -1475,7 +1566,7 @@ impl Hosted {
                 families_off,
                 origin: SessionOrigin {
                     project_path: row.project_path.clone(),
-                    profile_id: row.profile_id,
+                    profile_id,
                     permission_mode: row.permission_mode.map(records::permission_mode_name),
                     agent,
                     launched: Some(LaunchedAs {
@@ -1491,7 +1582,7 @@ impl Hosted {
             size,
             Some(client),
         )?;
-        if row.profile_id.is_some() && profile.is_none() {
+        if profile_id.is_some() && profile.is_none() {
             launched.warnings.insert(
                 0,
                 format!(
@@ -1711,6 +1802,15 @@ fn history_name(history: &HistorySession) -> String {
     } else {
         name
     }
+}
+
+/// What History calls a conversation: the name given by hand, else the
+/// title its agent gave it, else the one derived from its prompts.
+fn history_title(history: HistorySession) -> String {
+    history
+        .label
+        .or(history.agent_title)
+        .unwrap_or(history.title)
 }
 
 fn folder_name(folder: &Path) -> String {

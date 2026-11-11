@@ -450,7 +450,11 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
           rows: req.rows
         })
         const session = adopt(sessionFromHost(resumed.session))
-        return { session, history: historySessionFromHost(resumed.history) }
+        return {
+          session,
+          history: historySessionFromHost(resumed.history),
+          ...(resumed.alreadyRunning === true ? { alreadyRunning: true } : {})
+        }
       },
       'session:restorable': async () => {
         let connection: HostConnection
@@ -471,7 +475,11 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
           adopt(mapped.session)
           return { from, launched: mapped }
         })
-        return { restored, failed: result.failed }
+        const running = (result.running ?? []).map(({ from, session }) => ({
+          from,
+          session: adopt(sessionFromHost(session))
+        }))
+        return { restored, failed: result.failed, ...(running.length === 0 ? {} : { running }) }
       },
       'session:close': async (req) => {
         const entry = records.get(req.id)

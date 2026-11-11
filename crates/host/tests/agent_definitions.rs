@@ -2351,6 +2351,7 @@ async fn s2_a_lost_child_is_reopened_in_its_agent_as_the_file_reads_when_it_come
                     cols: 80,
                     rows: 24,
                     without_agent: false,
+                    without_profile: false,
                 })
                 .collect(),
         })
@@ -2597,6 +2598,7 @@ async fn a_lost_child_whose_row_says_agent_comes_back_as_the_default_with_no_war
                 cols: 80,
                 rows: 24,
                 without_agent: false,
+                without_profile: false,
             }],
         })
         .await
@@ -3670,12 +3672,14 @@ async fn the_restore_offer_names_an_agents_problem_and_restores_it_without_the_a
                     cols: 80,
                     rows: 24,
                     without_agent: false,
+                    without_profile: false,
                 },
                 SessionToRestore {
                     id: scribe.id(),
                     cols: 80,
                     rows: 24,
                     without_agent: true,
+                    without_profile: false,
                 },
             ],
         })
@@ -3919,6 +3923,7 @@ async fn a_restore_of_a_session_whose_agent_file_cannot_be_loaded_is_refused_unl
                 cols: 80,
                 rows: 24,
                 without_agent: false,
+                without_profile: false,
             }],
         })
         .await

@@ -395,7 +395,7 @@ impl Feature for Sessions {
                 lock(&self.focus).set(client, request.ids);
                 Ok(())
             })
-            .handle::<SessionRestorable>(|()| hosted.restorable().map_err(|err| err.to_string()))
+            .handle::<SessionRestorable>(|()| Ok(hosted.restorable()))
             .handle::<HostDeviceSessions>(move |()| {
                 Ok(hosted
                     .device_of(client)

@@ -517,12 +517,14 @@ fn session_requests_and_answers_round_trip_over_cbor() {
                 branch: None,
                 profile: Some("API work".into()),
                 profile_gone: false,
+                profile_problem: Some("Floti could not read this session's profile.".into()),
                 last_at: Some(1_761_560_000_000),
                 blocked: Some("Its folder is gone.".into()),
                 agent: Some("research-lead".into()),
                 agent_problem: Some("research-lead is no longer among this host's agents.".into()),
                 conversation_id: Some("0b9c".into()),
-                title: Some("Review the auth change".into()),
+                title: None,
+                title_unreadable: true,
             }],
             elsewhere: 1,
             lost_at: Some(1_761_560_100_000),
@@ -536,6 +538,7 @@ fn session_requests_and_answers_round_trip_over_cbor() {
                 cols: 100,
                 rows: 30,
                 without_agent: false,
+                without_profile: true,
             }],
         },
         RestoreSessionsResult {
@@ -546,7 +549,11 @@ fn session_requests_and_answers_round_trip_over_cbor() {
             failed: vec![UnrestoredSession {
                 id: 10,
                 name: "web".into(),
-                reason: "Its conversation is running elsewhere.".into(),
+                reason: "Its folder is gone.".into(),
+            }],
+            running: vec![AlreadyRunning {
+                from: 11,
+                session: record(14),
             }],
         },
     );
@@ -954,6 +961,7 @@ fn history_and_archive_channels_round_trip_over_cbor() {
         ResumedSession {
             session: record(12),
             history: history_session(),
+            already_running: true,
         },
     );
     state::<HistoryChanged>(history_summary());
@@ -979,12 +987,21 @@ fn history_and_archive_channels_round_trip_over_cbor() {
                     role: ArchiveRole::User,
                     at: 1_761_550_000_000,
                     text: "Review the auth change".into(),
+                    thinking: false,
                 },
                 ArchiveMessage {
                     uuid: "m2".into(),
                     role: ArchiveRole::Assistant,
                     at: 1_761_550_001_000,
                     text: "Done.".into(),
+                    thinking: false,
+                },
+                ArchiveMessage {
+                    uuid: "m3".into(),
+                    role: ArchiveRole::Assistant,
+                    at: 1_761_550_002_000,
+                    text: "Weighing the next step.".into(),
+                    thinking: true,
                 },
             ],
         }),

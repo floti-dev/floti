@@ -374,9 +374,17 @@ pub struct ResumeSessionRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ResumedSession {
+    /// The session started, or with `alreadyRunning` the one that already
+    /// holds the conversation.
     pub session: SessionRecord,
     /// The history row it came from.
     pub history: HistorySession,
+    /// True when a running session already holds this conversation
+    /// (protocol 3.0): nothing was started, and `session` is that one, to
+    /// show instead. Absent when it was started.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub already_running: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -396,6 +404,12 @@ pub struct ArchiveMessage {
     #[ts(type = "number")]
     pub at: u64,
     pub text: String,
+    /// True for one of the agent's messages that is only its thinking
+    /// (protocol 3.0), which never ends a turn as its reply. Absent for any
+    /// other, and for one archived before the archive told them apart.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub thinking: bool,
 }
 
 /// One archived conversation. `messages` is empty for an evicted one, and the

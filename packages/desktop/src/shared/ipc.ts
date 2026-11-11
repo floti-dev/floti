@@ -340,9 +340,12 @@ export interface ResumeSessionRequest {
 }
 
 export interface ResumedSession {
+  /** The session started, or with `alreadyRunning` the one already running this conversation. */
   session: SessionRecord
   /** The indexed row it came from, for the pane to caption before the TUI paints. */
   history: HistorySession
+  /** True when a running session already holds this conversation: nothing was started, and `session` is that one, to show instead. */
+  alreadyRunning?: boolean
 }
 
 /**
@@ -398,8 +401,12 @@ export interface LaunchedSession {
  * it is going back to. None at all is "not now".
  */
 export interface RestoreSessionsRequest {
-  /** `withoutAgent` reopens one without the agent it was started as: the person's choice for one whose agent the offer named a problem with. */
-  sessions: { id: number; cols: number; rows: number; withoutAgent?: boolean }[]
+  /**
+   * `withoutAgent` reopens one without the agent it was started as, and
+   * `withoutProfile` without the profile it was launched from: the person's
+   * choice for one whose agent or profile the offer named a problem with.
+   */
+  sessions: { id: number; cols: number; rows: number; withoutAgent?: boolean; withoutProfile?: boolean }[]
 }
 
 /** What came back, and what could not, each with the sentence why. */
@@ -407,6 +414,8 @@ export interface RestoreSessionsResult {
   /** `from` is the lost row the session reopened. */
   restored: { from: number; launched: LaunchedSession }[]
   failed: { id: number; name: string; reason: string }[]
+  /** Those not reopened because a running session already holds their conversation: `from` is the lost row, `session` the one to show instead. */
+  running?: { from: number; session: SessionRecord }[]
 }
 
 export interface CloseSessionRequest {

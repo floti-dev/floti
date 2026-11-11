@@ -447,6 +447,19 @@ export type AllowMoreStartsResult = {
 added: number, };
 
 /**
+ * A lost session not reopened because its conversation already runs.
+ */
+export type AlreadyRunning = { 
+/**
+ * The lost row that was asked for.
+ */
+from: number, 
+/**
+ * The running session that holds its conversation.
+ */
+session: SessionRecord, };
+
+/**
  * The host's identity.
  */
 export type AppInfo = { version: string, mode: AppMode, dataDir: string, dbFile: string, 
@@ -491,7 +504,13 @@ export type ArchiveMessage = { uuid: string, role: ArchiveRole,
 /**
  * Epoch ms.
  */
-at: number, text: string, };
+at: number, text: string, 
+/**
+ * True for one of the agent's messages that is only its thinking
+ * (protocol 3.0), which never ends a turn as its reply. Absent for any
+ * other, and for one archived before the archive told them apart.
+ */
+thinking?: boolean, };
 
 export type ArchiveRole = "user" | "assistant";
 
@@ -3031,6 +3050,13 @@ profile: string | null,
  */
 profileGone: boolean, 
 /**
+ * Why its profile could not be read (protocol 3.0), as a sentence, or
+ * absent when it could. Such a session is offered unticked, and
+ * restoring it is restoring it without its profile
+ * (`SessionToRestore.withoutProfile`).
+ */
+profileProblem?: string, 
+/**
  * When it was last spoken to, epoch ms, or null when not known.
  */
 lastAt: number | null, 
@@ -3060,7 +3086,13 @@ conversationId?: string,
  * title its agent gave it, else the one derived from its prompts. Absent
  * when History does not have it.
  */
-title?: string, };
+title?: string, 
+/**
+ * True when History's name for its conversation could not be read, so
+ * `title` is absent for that reason rather than because History does
+ * not have it. Absent when it was read.
+ */
+titleUnreadable?: boolean, };
 
 /**
  * What a crash took, offered back once. Where each session goes on screen is
@@ -3089,7 +3121,13 @@ export type RestoreSessionsRequest = {
  */
 sessions: Array<SessionToRestore>, };
 
-export type RestoreSessionsResult = { restored: Array<RestoredSession>, failed: Array<UnrestoredSession>, };
+export type RestoreSessionsResult = { restored: Array<RestoredSession>, failed: Array<UnrestoredSession>, 
+/**
+ * The asked-for sessions whose conversation a running session already
+ * holds (protocol 3.0): nothing was started for them, and each names the
+ * session to show instead. Absent when there were none.
+ */
+running?: Array<AlreadyRunning>, };
 
 /**
  * Puts a snapshot's bytes back at `path`.
@@ -3115,11 +3153,22 @@ export type ResumeSessionRequest = { sessionId: string,
  */
 agent?: string, cols: number, rows: number, };
 
-export type ResumedSession = { session: SessionRecord, 
+export type ResumedSession = { 
+/**
+ * The session started, or with `alreadyRunning` the one that already
+ * holds the conversation.
+ */
+session: SessionRecord, 
 /**
  * The history row it came from.
  */
-history: HistorySession, };
+history: HistorySession, 
+/**
+ * True when a running session already holds this conversation
+ * (protocol 3.0): nothing was started, and `session` is that one, to
+ * show instead. Absent when it was started.
+ */
+alreadyRunning?: boolean, };
 
 /**
  * A scan root.
@@ -3533,7 +3582,13 @@ export type SessionToRestore = { id: number, cols: number, rows: number,
  * Absent, its agent is composed again, and a file that cannot be loaded
  * refuses it.
  */
-withoutAgent?: boolean, };
+withoutAgent?: boolean, 
+/**
+ * Reopen it without the profile it was launched from (protocol 3.0):
+ * what a person chose for a session whose profile the offer could not
+ * read. Absent, a profile that cannot be read refuses it.
+ */
+withoutProfile?: boolean, };
 
 export type SessionsOverview = { 
 /**

@@ -414,6 +414,29 @@ fn a_search_matches_case_insensitively_and_says_which_prompt_matched() {
 }
 
 #[test]
+fn a_long_prompt_that_matched_is_sent_as_the_excerpt_around_its_match() {
+    let mut world = Indexed::new();
+    let long = format!(
+        "{} then fix the Zorblatt handle leak {}",
+        "context ".repeat(200),
+        "trailing ".repeat(200)
+    );
+    world.pass(&[p("a", &long)], Pass::default());
+    let page = world.search("zorblatt handle");
+    let matched = page.sessions[0].matched.as_deref().expect("a match");
+    assert_eq!(matched, archive::excerpt(&long, "zorblatt handle"));
+    assert!(
+        matched.chars().count() <= archive::MATCH_EXCERPT_CHARS + 2,
+        "{matched}"
+    );
+    assert!(matched.contains("Zorblatt handle leak"), "{matched}");
+    assert!(
+        matched.starts_with('…') && matched.ends_with('…'),
+        "{matched}"
+    );
+}
+
+#[test]
 fn nothing_searched_for_leaves_the_match_unset() {
     assert_eq!(searchable().all().sessions[0].matched, None);
 }
@@ -1126,6 +1149,16 @@ impl Archive {
             role,
             at: 1_760_000_000_000 + at,
             text: text.to_owned(),
+            thinking: false,
+        }
+    }
+
+    /// One of the agent's messages that is only its thinking, as the
+    /// backend marks it.
+    fn thinking(&mut self, at: u64, text: &str) -> ArchiveMessage {
+        ArchiveMessage {
+            thinking: true,
+            ..self.message(ArchiveRole::Assistant, at, text)
         }
     }
 
@@ -1571,6 +1604,21 @@ fn a_last_reply_is_the_last_row_of_a_finished_turn_and_never_a_thinking_or_tool_
             .as_deref(),
         Some("Fixed the watcher.")
     );
+    // Nor does a turn that ends in thinking: interrupted while it thought.
+    let interrupted = [
+        world.user(1, "a question"),
+        world.message(ArchiveRole::Assistant, 2, "Fixed the watcher."),
+        world.user(3, "and the tests?"),
+        world.thinking(4, "The user wants the tests too."),
+        world.user(5, "[Request interrupted by user]"),
+    ];
+    world.archive("interrupted.jsonl", "interrupted", &interrupted);
+    assert_eq!(
+        archive::last_reply(world.conn(), "interrupted")
+            .unwrap()
+            .as_deref(),
+        Some("Fixed the watcher.")
+    );
     // A message an earlier version stored whole gives its last paragraph.
     let whole = [
         world.user(1, "a question"),
@@ -1587,6 +1635,74 @@ fn a_last_reply_is_the_last_row_of_a_finished_turn_and_never_a_thinking_or_tool_
             .as_deref(),
         Some("The tests pass.")
     );
+}
+
+#[test]
+fn a_turn_that_ends_on_thinking_never_finished_and_its_thinking_is_not_the_last_reply() {
+    let world = Claude::new();
+    let alpha = world.project("alpha");
+    // Escape pressed while the agent was thinking: Claude Code writes the
+    // thinking as a row of its own, then the interruption as the user's.
+    world.transcript(
+        "a",
+        ONE,
+        &alpha,
+        &[
+            ("user", &uuid(1), T0, "a question"),
+            ("thinking", &uuid(2), T0 + 1, "Weighing the watcher first."),
+            ("assistant", &uuid(3), T0 + 2, "Fixed the watcher."),
+            ("user", &uuid(4), T0 + 3, "and the tests?"),
+            (
+                "thinking",
+                &uuid(5),
+                T0 + 4,
+                "The user wants the tests run.",
+            ),
+            ("user", &uuid(6), T0 + 5, "[Request interrupted by user]"),
+        ],
+    );
+    // Lost while thinking: nothing after it.
+    world.transcript(
+        "b",
+        TWO,
+        &alpha,
+        &[
+            ("user", &uuid(7), T0, "a question"),
+            ("assistant", &uuid(8), T0 + 1, "Done."),
+            ("user", &uuid(9), T0 + 2, "one more thing"),
+            (
+                "thinking",
+                &uuid(10),
+                T0 + 3,
+                "Considering the one more thing.",
+            ),
+        ],
+    );
+    let store = Mutex::new(world.open_store());
+    pass(&store, &world.backend());
+    let store = store.lock().unwrap();
+    let reply = |id: &str| archive::last_reply(store.connection(), id).unwrap();
+    assert_eq!(reply(ONE).as_deref(), Some("Fixed the watcher."));
+    assert_eq!(reply(TWO).as_deref(), Some("Done."));
+    // The archive still holds the thinking, marked as such.
+    let archived = archive::read_conversation(store.connection(), TWO)
+        .unwrap()
+        .expect("archived");
+    let thinking: Vec<(&str, bool)> = archived
+        .messages
+        .iter()
+        .map(|message| (message.text.as_str(), message.thinking))
+        .collect();
+    assert_eq!(
+        thinking,
+        [
+            ("a question", false),
+            ("Done.", false),
+            ("one more thing", false),
+            ("Considering the one more thing.", true),
+        ]
+    );
+    assert_eq!(archived.messages[3].role, ArchiveRole::Assistant);
 }
 
 #[test]
@@ -1964,11 +2080,16 @@ fn uuid(n: u64) -> String {
     format!("00000000-0000-4000-8000-{n:012x}")
 }
 
+/// One transcript row as the CLI writes it. A `thinking` row is the
+/// agent's row for one thinking block, with its signature.
 fn transcript_row(kind: &str, uuid: &str, cwd: &Path, at_ms: u64, text: &str) -> String {
-    let content = if kind == "assistant" {
-        json!([{ "type": "text", "text": text }])
-    } else {
-        json!(text)
+    let (kind, content) = match kind {
+        "assistant" => (kind, json!([{ "type": "text", "text": text }])),
+        "thinking" => (
+            "assistant",
+            json!([{ "type": "thinking", "thinking": text, "signature": "EqoBCkgIBxABGAIiQ" }]),
+        ),
+        _ => (kind, json!(text)),
     };
     let row = json!({
         "type": kind,

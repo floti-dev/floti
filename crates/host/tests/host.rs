@@ -1788,12 +1788,12 @@ async fn s12_after_a_stop_for_an_update_the_next_start_offers_the_sessions_once_
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn an_offer_whose_titles_cannot_be_read_is_an_error_and_never_an_offer_without_them() {
+async fn an_offer_whose_titles_cannot_be_read_still_offers_each_session_saying_so() {
     let dirs = TestDirs::new();
     let agent = fake_agent!(&dirs);
     let endpoint = dirs.endpoint();
     let folders = [dirs.folder("project one")];
-    sessions_stopped_for_an_update(&dirs, &endpoint, &agent, &folders).await;
+    let started = sessions_stopped_for_an_update(&dirs, &endpoint, &agent, &folders).await;
 
     let host = RunningHost::start(fake_config(&dirs, &endpoint, &agent, &[]));
     let mut client = TestClient::connect(&endpoint, TERMINAL).await;
@@ -1803,15 +1803,185 @@ async fn an_offer_whose_titles_cannot_be_read_is_an_error_and_never_an_offer_wit
         .unwrap()
         .expect("the lost session is offered");
     assert!(offer.sessions[0].conversation_id.is_some());
+    assert!(!offer.sessions[0].title_unreadable);
     // History's names can no longer be read, so neither can the title.
     rusqlite::Connection::open(dirs.data.join("floti.db"))
         .expect("open floti.db")
         .execute("DROP TABLE history_names", [])
         .expect("drop the names");
+    let offer = client
+        .request::<SessionRestorable>(&())
+        .await
+        .expect("an unreadable title does not fail the offer")
+        .expect("the lost session is still offered");
+    let session = &offer.sessions[0];
+    assert_eq!(session.id, started[0].id);
+    assert_eq!(session.cwd, started[0].cwd);
+    assert_eq!(session.conversation_id, started[0].conversation_id);
+    assert_eq!(session.title, None);
     assert!(
-        client.request::<SessionRestorable>(&()).await.is_err(),
-        "could not look is an error, not an offer with no title"
+        session.title_unreadable,
+        "it says the title could not be read"
     );
+    assert_eq!(session.blocked, None, "it can still be restored");
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_whose_profile_cannot_be_read_is_offered_with_its_problem_and_restored_only_without_it()
+ {
+    let dirs = TestDirs::new();
+    let agent = fake_agent!(&dirs);
+    let endpoint = dirs.endpoint();
+    let folders = [dirs.folder("project one"), dirs.folder("project two")];
+    let started = sessions_stopped_for_an_update(&dirs, &endpoint, &agent, &folders).await;
+    // Both were launched from a profile.
+    rusqlite::Connection::open(dirs.data.join("floti.db"))
+        .expect("open floti.db")
+        .execute("UPDATE sessions SET profile_id = 1", [])
+        .expect("give the rows a profile");
+
+    let host = RunningHost::start(fake_config(&dirs, &endpoint, &agent, &[]));
+    let mut client = TestClient::connect(&endpoint, TERMINAL).await;
+    // Profiles can no longer be read; the rows still can.
+    rusqlite::Connection::open(dirs.data.join("floti.db"))
+        .expect("open floti.db")
+        .execute("ALTER TABLE profiles RENAME COLUMN name TO unreadable", [])
+        .expect("break the profiles");
+    let offer = client
+        .request::<SessionRestorable>(&())
+        .await
+        .expect("an unreadable profile does not fail the offer")
+        .expect("the lost sessions are offered");
+    assert_eq!(offer.sessions.len(), 2);
+    for session in &offer.sessions {
+        let problem = session
+            .profile_problem
+            .as_deref()
+            .expect("its row names the problem");
+        assert!(problem.contains("could not read the profile"), "{problem}");
+        assert_eq!(session.profile, None);
+        assert!(!session.profile_gone, "could not read is not deleted");
+        assert_eq!(session.blocked, None);
+    }
+
+    let result = client
+        .request::<SessionRestore>(&RestoreSessionsRequest {
+            sessions: started
+                .iter()
+                .zip([false, true])
+                .map(|(record, without_profile)| SessionToRestore {
+                    id: record.id,
+                    cols: 80,
+                    rows: 24,
+                    without_agent: false,
+                    without_profile,
+                })
+                .collect(),
+        })
+        .await
+        .unwrap();
+    // Asked with its profile, it is refused saying why; asked without, it
+    // comes back without one.
+    assert_eq!(result.failed.len(), 1, "{result:?}");
+    assert_eq!(result.failed[0].id, started[0].id);
+    assert!(
+        result.failed[0].reason.contains("without its profile"),
+        "{:?}",
+        result.failed[0]
+    );
+    assert_eq!(result.restored.len(), 1, "{result:?}");
+    assert_eq!(result.restored[0].from, started[1].id);
+    let session = &result.restored[0].launched.session;
+    assert_eq!(session.cwd, started[1].cwd);
+    assert_eq!(session.conversation_id, started[1].conversation_id);
+    assert_eq!(session.profile_id, None, "it runs without the profile");
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_restore_skips_a_session_whose_conversation_already_runs_naming_it_and_restores_the_rest()
+{
+    let dirs = TestDirs::new();
+    let agent = fake_agent!(&dirs);
+    let endpoint = dirs.endpoint();
+    let folders = [
+        dirs.folder("project one"),
+        dirs.folder("project two"),
+        dirs.folder("project three"),
+    ];
+    let started = sessions_stopped_for_an_update(&dirs, &endpoint, &agent, &folders).await;
+    let runs_before: Vec<u32> = agent.records().iter().map(|record| record.pid).collect();
+
+    let host = RunningHost::start(fake_config(&dirs, &endpoint, &agent, &[]));
+    let mut client = TestClient::connect(&endpoint, TERMINAL).await;
+    assert!(
+        client
+            .request::<SessionRestorable>(&())
+            .await
+            .unwrap()
+            .is_some()
+    );
+    // The second one's conversation was reopened meanwhile (from History,
+    // say): a running session's row holds it now.
+    let elsewhere = dirs.folder("elsewhere");
+    let running = client
+        .request::<SessionStart>(&start_request(&elsewhere))
+        .await
+        .unwrap();
+    let conversation = started[1]
+        .conversation_id
+        .clone()
+        .expect("a conversation id");
+    rusqlite::Connection::open(dirs.data.join("floti.db"))
+        .expect("open floti.db")
+        .execute(
+            "UPDATE sessions SET claude_session_id = ?1, last_claude_session_id = ?1 WHERE id = ?2",
+            rusqlite::params![conversation, i64::try_from(running.id).unwrap()],
+        )
+        .expect("the running session holds the conversation");
+
+    let result = client
+        .request::<SessionRestore>(&RestoreSessionsRequest {
+            sessions: started
+                .iter()
+                .map(|record| SessionToRestore {
+                    id: record.id,
+                    cols: 80,
+                    rows: 24,
+                    without_agent: false,
+                    without_profile: false,
+                })
+                .collect(),
+        })
+        .await
+        .unwrap();
+    assert!(result.failed.is_empty(), "{:?}", result.failed);
+    assert_eq!(
+        result
+            .restored
+            .iter()
+            .map(|restored| restored.from)
+            .collect::<Vec<_>>(),
+        [started[0].id, started[2].id]
+    );
+    assert_eq!(result.running.len(), 1, "{result:?}");
+    assert_eq!(result.running[0].from, started[1].id);
+    assert_eq!(result.running[0].session.id, running.id);
+    // Nothing was started in its folder: its lost row is the only one there.
+    let there: Vec<i64> = rows(&dirs.data)
+        .into_iter()
+        .filter(|row| row.cwd == started[1].cwd)
+        .map(|row| row.id)
+        .collect();
+    assert_eq!(there, [i64::try_from(started[1].id).unwrap()]);
+    for restored in [&started[0], &started[2]] {
+        assert_eq!(
+            runs_in(&agent, Path::new(&restored.cwd), &runs_before).len(),
+            1
+        );
+    }
+    assert_eq!(client.request::<SessionList>(&()).await.unwrap().len(), 3);
     host.stop(HostStopReason::Stop).await;
 }
 
@@ -1885,6 +2055,7 @@ async fn s13_restoring_some_sessions_resumes_each_in_its_recorded_folder_and_ans
                     cols: 100,
                     rows: 30,
                     without_agent: false,
+                    without_profile: false,
                 })
                 .collect(),
         })
@@ -1939,6 +2110,7 @@ async fn s13_restoring_some_sessions_resumes_each_in_its_recorded_folder_and_ans
                 cols: 80,
                 rows: 24,
                 without_agent: false,
+                without_profile: false,
             }],
         })
         .await
@@ -2159,6 +2331,7 @@ async fn s3_restoring_a_claude_code_conversation_on_todays_backends_resumes_it_i
                 cols: 100,
                 rows: 30,
                 without_agent: false,
+                without_profile: false,
             }],
         })
         .await
@@ -2250,6 +2423,7 @@ async fn s3_a_row_with_no_backend_recorded_reopens_through_claude_code_and_a_mis
                     cols: 80,
                     rows: 24,
                     without_agent: false,
+                    without_profile: false,
                 })
                 .to_vec(),
         })

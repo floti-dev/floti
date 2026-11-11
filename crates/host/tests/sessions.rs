@@ -692,6 +692,54 @@ async fn a_conversation_from_history_resumes_in_its_recorded_folder_on_its_backe
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_resume_of_a_conversation_already_running_starts_nothing_and_names_the_running_session() {
+    let world = ClaudeWorld::new();
+    let project = world.folder("the export");
+    world.history(CONVERSATION, &project);
+    let host = world.host();
+    let mut client = world.client().await;
+    world.indexed(CONVERSATION).await;
+    let resume = ResumeSessionRequest {
+        session_id: CONVERSATION.into(),
+        agent: None,
+        cols: 80,
+        rows: 24,
+    };
+    let first = client
+        .request::<HistoryResume>(&resume)
+        .await
+        .expect("the first resume");
+    assert!(!first.already_running);
+    world.run(|argv| flag(argv, "--resume") == Some(CONVERSATION));
+
+    // History again, and the launcher: neither starts a second process on
+    // the conversation.
+    let again = client
+        .request::<HistoryResume>(&resume)
+        .await
+        .expect("a resume of a running conversation is answered");
+    assert!(again.already_running);
+    assert_eq!(again.session.id, first.session.id);
+    assert_eq!(again.history.session_id, CONVERSATION);
+    let launcher = client
+        .request::<SessionLaunch>(&LaunchSessionRequest {
+            resume: Some(CONVERSATION.into()),
+            backend: None,
+            ..launch_request(&project)
+        })
+        .await
+        .expect_err("the launcher does not reopen it a second time");
+    assert!(launcher.message.contains("already running"), "{launcher:?}");
+    let listed = client.request::<SessionList>(&()).await.unwrap();
+    assert_eq!(
+        listed.iter().map(|record| record.id).collect::<Vec<_>>(),
+        [first.session.id],
+        "one session holds the conversation"
+    );
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn the_launchers_resume_runs_in_the_folder_history_recorded_not_the_one_picked() {
     let world = ClaudeWorld::new();
     let project = world.folder("the export");

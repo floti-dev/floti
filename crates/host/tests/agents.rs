@@ -3842,6 +3842,7 @@ async fn s21_a_child_and_its_parent_reopened_through_the_restore_offer_run_remot
                     cols: 80,
                     rows: 24,
                     without_agent: false,
+                    without_profile: false,
                 })
                 .collect(),
         })

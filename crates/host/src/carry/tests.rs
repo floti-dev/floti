@@ -82,6 +82,7 @@ fn message(uuid: &str, at: u64, text: &str) -> ArchiveMessage {
         },
         at,
         text: text.to_owned(),
+        thinking: false,
     }
 }
 

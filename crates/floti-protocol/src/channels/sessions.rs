@@ -381,6 +381,13 @@ pub struct RestorableSession {
     pub profile: Option<String>,
     /// True when its profile has since been deleted. It reopens without.
     pub profile_gone: bool,
+    /// Why its profile could not be read (protocol 3.0), as a sentence, or
+    /// absent when it could. Such a session is offered unticked, and
+    /// restoring it is restoring it without its profile
+    /// (`SessionToRestore.withoutProfile`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub profile_problem: Option<String>,
     /// When it was last spoken to, epoch ms, or null when not known.
     #[ts(type = "number | null")]
     pub last_at: Option<u64>,
@@ -409,6 +416,12 @@ pub struct RestorableSession {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub title: Option<String>,
+    /// True when History's name for its conversation could not be read, so
+    /// `title` is absent for that reason rather than because History does
+    /// not have it. Absent when it was read.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub title_unreadable: bool,
 }
 
 /// What a crash took, offered back once. Where each session goes on screen is
@@ -444,6 +457,12 @@ pub struct SessionToRestore {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[ts(as = "Option<bool>", optional)]
     pub without_agent: bool,
+    /// Reopen it without the profile it was launched from (protocol 3.0):
+    /// what a person chose for a session whose profile the offer could not
+    /// read. Absent, a profile that cannot be read refuses it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub without_profile: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -477,6 +496,23 @@ pub struct UnrestoredSession {
 pub struct RestoreSessionsResult {
     pub restored: Vec<RestoredSession>,
     pub failed: Vec<UnrestoredSession>,
+    /// The asked-for sessions whose conversation a running session already
+    /// holds (protocol 3.0): nothing was started for them, and each names the
+    /// session to show instead. Absent when there were none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<AlreadyRunning>>", optional)]
+    pub running: Vec<AlreadyRunning>,
+}
+
+/// A lost session not reopened because its conversation already runs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AlreadyRunning {
+    /// The lost row that was asked for.
+    #[ts(type = "number")]
+    pub from: u64,
+    /// The running session that holds its conversation.
+    pub session: SessionRecord,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

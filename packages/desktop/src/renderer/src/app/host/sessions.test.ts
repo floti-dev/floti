@@ -659,6 +659,41 @@ describe('sessions over the window’s own connection', () => {
     expect(connection.streamsFor('session:data', 7)).toHaveLength(1)
   })
 
+  it('hands on a restore’s sessions already running, and an offered row’s unreadable title and profile', async () => {
+    const { adapters, connection } = world()
+    connection
+      .answer('session:restore', () => ({ restored: [], failed: [], running: [{ from: 4, session: row({ id: 9 }) }] }))
+      .answer('session:restorable', () => ({
+        sessions: [
+          {
+            id: 4,
+            name: 'app',
+            cwd: '/work dir/app',
+            branch: null,
+            profile: null,
+            profileGone: false,
+            profileProblem: 'Floti could not read the profile this session was started with.',
+            lastAt: null,
+            blocked: null,
+            titleUnreadable: true
+          }
+        ],
+        elsewhere: 0
+      }))
+    const restored = await ask(adapters, 'session:restore', { sessions: [{ id: 4, cols: 80, rows: 24, withoutProfile: true }] })
+    expect(restored.running?.map(({ from, session }) => [from, session.id])).toEqual([[4, 9]])
+    // The running one is carried, so its tab draws it.
+    expect(connection.streamsFor('session:data', 9)).toHaveLength(1)
+    expect(connection.payloads('session:restore')).toEqual([{ sessions: [{ id: 4, cols: 80, rows: 24, withoutProfile: true }] }])
+
+    const offer = await ask(adapters, 'session:restorable')
+    expect(offer?.sessions[0]).toMatchObject({
+      profileProblem: 'Floti could not read the profile this session was started with.',
+      titleUnreadable: true
+    })
+    expect(offer?.sessions[0]?.title).toBeUndefined()
+  })
+
   it('says the link’s sentence when the host cannot be reached, never no sessions or no processes', async () => {
     const { adapters } = world({ connection: null })
     await expect(ask(adapters, 'session:list')).rejects.toThrow(UNREACHABLE)
