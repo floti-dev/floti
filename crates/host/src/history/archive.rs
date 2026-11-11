@@ -437,9 +437,10 @@ pub fn search_query(search: &str) -> Option<String> {
 
 /// The archived conversations whose messages match `search`, each with the
 /// first matching message's text, keyed by lower-cased id. At most `limit`
-/// conversations. A search FTS5 refuses whatever the quoting matches
-/// nothing rather than failing. Only a conversation with a row is searched:
-/// the messages of one a copy has not finished are not shown yet.
+/// conversations. Only a conversation with a row is searched: the messages of
+/// one a copy has not finished are not shown yet. A query that fails (the
+/// database locked, a table missing) is an error, never "nothing matched":
+/// History shows the archive as Unknown then.
 pub fn search_archive(
     conn: &Connection,
     search: &str,
@@ -449,18 +450,18 @@ pub fn search_archive(
     let Some(query) = search_query(search) else {
         return Ok(found);
     };
-    let Ok(mut statement) = conn.prepare(
-        "SELECT m.session_id, m.body, m.compressed
-         FROM transcript_fts f
-         JOIN transcript_messages m ON m.id = f.rowid
-         JOIN transcript_sessions s ON s.session_id = m.session_id
-         WHERE transcript_fts MATCH ?
-         ORDER BY rank
-         LIMIT ?",
-    ) else {
-        return Ok(found);
-    };
-    let Ok(rows) = statement
+    let mut statement = conn
+        .prepare(
+            "SELECT m.session_id, m.body, m.compressed
+             FROM transcript_fts f
+             JOIN transcript_messages m ON m.id = f.rowid
+             JOIN transcript_sessions s ON s.session_id = m.session_id
+             WHERE transcript_fts MATCH ?
+             ORDER BY rank
+             LIMIT ?",
+        )
+        .map_err(sql("search the archive"))?;
+    let rows = statement
         .query_map(params![query, to_i64(limit as u64 * 4)], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -469,9 +470,7 @@ pub fn search_archive(
             ))
         })
         .and_then(Iterator::collect::<rusqlite::Result<Vec<_>>>)
-    else {
-        return Ok(found);
-    };
+        .map_err(sql("search the archive"))?;
     for (session, body, compressed) in rows {
         if found.len() >= limit {
             break;
@@ -484,8 +483,8 @@ pub fn search_archive(
 }
 
 /// The messages of archived conversation `session` that match `search`:
-/// the first `limit`, oldest first, and how many match in all. Nothing for a
-/// search FTS5 refuses, as [`search_archive`] reads it.
+/// the first `limit`, oldest first, and how many match in all. A query that
+/// fails is an error, as [`search_archive`]'s is.
 pub fn matching_lines(
     conn: &Connection,
     search: &str,
@@ -496,17 +495,17 @@ pub fn matching_lines(
         return Ok((Vec::new(), 0));
     };
     let session = session.to_lowercase();
-    let Ok(mut statement) = conn.prepare(
-        "SELECT m.uuid, m.at, m.body, m.compressed, COUNT(*) OVER ()
-         FROM transcript_fts f
-         JOIN transcript_messages m ON m.id = f.rowid
-         WHERE transcript_fts MATCH ?1 AND m.session_id = ?2
-         ORDER BY m.at, m.id
-         LIMIT ?3",
-    ) else {
-        return Ok((Vec::new(), 0));
-    };
-    let Ok(rows) = statement
+    let mut statement = conn
+        .prepare(
+            "SELECT m.uuid, m.at, m.body, m.compressed, COUNT(*) OVER ()
+             FROM transcript_fts f
+             JOIN transcript_messages m ON m.id = f.rowid
+             WHERE transcript_fts MATCH ?1 AND m.session_id = ?2
+             ORDER BY m.at, m.id
+             LIMIT ?3",
+        )
+        .map_err(sql("read a conversation's matching lines"))?;
+    let rows = statement
         .query_map(params![query, session, to_i64(limit as u64)], |row| {
             Ok((
                 HistoryMatchLine {
@@ -518,9 +517,7 @@ pub fn matching_lines(
             ))
         })
         .and_then(Iterator::collect::<rusqlite::Result<Vec<_>>>)
-    else {
-        return Ok((Vec::new(), 0));
-    };
+        .map_err(sql("read a conversation's matching lines"))?;
     let count = rows.first().map_or(0, |(_, count)| to_u32(*count));
     Ok((rows.into_iter().map(|(line, _)| line).collect(), count))
 }

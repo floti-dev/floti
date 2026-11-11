@@ -1279,6 +1279,30 @@ fn input_fts5_would_refuse_matches_nothing_rather_than_failing() {
 }
 
 #[test]
+fn an_archive_that_cannot_be_searched_is_an_error_and_never_no_match() {
+    let mut world = Archive::new();
+    let backend = BackendId::claude_code();
+    let messages = [world.user(1, "the word is zorblatt")];
+    world.archive("broken.jsonl", "sess", &messages);
+    world
+        .conn()
+        .execute_batch("DROP TABLE transcript_fts")
+        .expect("drop the archive's search table");
+    assert!(archive::search_archive(world.conn(), "zorblatt", 10).is_err());
+    assert!(archive::matching_lines(world.conn(), "zorblatt", "sess", 2).is_err());
+    let index = HistoryIndex::new(world.store.connection(), &backend);
+    let answer = index.sessions(&HistoryQuery {
+        search: Some("zorblatt".to_owned()),
+        scope: Some(HistorySearchScope::Messages),
+        ..HistoryQuery::default()
+    });
+    assert!(
+        answer.is_err(),
+        "a failed archive search is could-not-look: {answer:?}"
+    );
+}
+
+#[test]
 fn a_conversation_the_ceiling_dropped_is_no_longer_found() {
     let mut world = Archive::new();
     let messages = [world.user(1, &"the word is zorblatt ".repeat(20))];
