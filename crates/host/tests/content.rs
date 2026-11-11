@@ -24,7 +24,7 @@ use floti_host::platform::folders::UserEnv;
 use floti_host::server::{HostConfig, HostRun, backends};
 use floti_host::store::Store;
 use floti_host::store::projects::{EMPTY_INVENTORY, cache_projects};
-use floti_host::testkit::{PATIENCE, RunningHost, TestClient, TestDirs};
+use floti_host::testkit::{PATIENCE, RunningHost, TestClient, TestDirs, link_folder};
 use floti_host::workspace::content::ContentService;
 use floti_host::workspace::content::guard::ContentGuard;
 use floti_host::workspace::content::search::{MAX_HITS, build_corpus, search_corpus};
@@ -1445,6 +1445,74 @@ fn a_save_or_restore_into_a_claude_config_dir_inside_a_known_root_is_refused() {
     let global = work.join("claude config").join(".claude.json");
     put(&global, "{}\n");
     refused_and_unchanged(&world, &work, &[(global, "{}\n")]);
+}
+
+#[test]
+fn a_save_or_restore_through_a_link_in_a_known_root_into_the_agents_config_is_refused() {
+    use floti_host::platform::links::{FolderLinks, Native};
+
+    let world = World::new();
+    let work = world.scanned("work", ProjectKind::Folder);
+    let home = normalize(&world.dirs.home);
+    let [(skill, skill_text), _] = agent_config_in(&home.join(".claude"));
+    // A junction on Windows, a symlink elsewhere: the known root holds a
+    // link to the fake home's skills, spelled nowhere near `.claude`.
+    let link = work.join("skills-link");
+    link_folder(&home.join(".claude").join("skills"), &link);
+    let through = link.join("x").join("SKILL.md");
+    assert_eq!(text(&through), skill_text, "the link leads to the skill");
+
+    let version = world.version_of(&work, &through, "# An older text\n");
+    let before = world.snapshot_count();
+    let refused = world
+        .write(
+            &work,
+            &through,
+            "# Rewritten\n",
+            Some(hash_content(skill_text)),
+        )
+        .unwrap_err();
+    assert!(
+        refused.contains("Claude Code's own config, which Claude Code edits itself"),
+        "{refused}"
+    );
+    let refused = world
+        .content
+        .restore(version, &shown(&through))
+        .unwrap_err();
+    assert!(refused.contains("Claude Code edits itself"), "{refused}");
+    // A new file through the link would land in the config too.
+    let new = link.join("new").join("SKILL.md");
+    let refused = world.write(&work, &new, "# New\n", None).unwrap_err();
+    assert!(refused.contains("Claude Code edits itself"), "{refused}");
+    assert_eq!(text(&skill), skill_text, "the skill is unchanged");
+    assert!(!home.join(".claude").join("skills").join("new").exists());
+    assert_eq!(world.snapshot_count(), before, "no version was taken");
+
+    // The Files view says it is read-only, wherever it reads it from.
+    let view = world.files.read(&shown(&work), &shown(&through)).unwrap();
+    let why = view
+        .read_only
+        .expect("a file through the link is read-only");
+    assert!(why.contains("Claude Code edits itself"), "{why}");
+
+    // A note elsewhere in the root is still the Files view's to save.
+    let note = work.join("notes").join("today.md");
+    put(&note, "# Today\n");
+    let saved = world
+        .write(
+            &work,
+            &note,
+            "# Today, again\n",
+            Some(hash_content("# Today\n")),
+        )
+        .unwrap();
+    assert!(saved.ok);
+    assert_eq!(text(&note), "# Today, again\n");
+    let view = world.files.read(&shown(&work), &shown(&note)).unwrap();
+    assert_eq!(view.read_only, None);
+
+    Native.unlink_folder(&link).unwrap();
 }
 
 #[test]

@@ -6,6 +6,15 @@
 //! Code), and its global config file. A path at or under either is the
 //! agent's own, and the agent's own commands edit it.
 //!
+//! A path is judged both as it is spelled and where it leads. A folder Floti
+//! knows can hold a junction or symlink into an agent's config (a link to
+//! `~/.claude/skills` is a common setup), and a save through it lands in the
+//! config however it is spelled, so the path and each config path are
+//! resolved as the disk resolves them ([`real_path`], the resolution the
+//! Files view's known-root check uses) and compared again. The spelled
+//! comparison stays, so a path that cannot be resolved is still the agent's
+//! when it names its config.
+//!
 //! [`ConfigSource::agent_config`]: crate::agent::ConfigSource::agent_config
 
 use std::path::{Path, PathBuf};
@@ -14,6 +23,7 @@ use std::sync::Arc;
 use super::files::normalize;
 use crate::agent::AgentBackend;
 use crate::workspace::content::guard::segments_below;
+use crate::workspace::files::paths::real_path;
 
 /// One agent's config: the paths that hold it and who edits them.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,10 +34,14 @@ struct AgentFolder {
 }
 
 impl AgentFolder {
-    fn holds(&self, path: &Path) -> bool {
-        self.paths
-            .iter()
-            .any(|held| segments_below(held, path).is_some())
+    /// Whether `path` as spelled, or `real` (where it leads), is at or under
+    /// one of this agent's config paths, spelled or resolved likewise. Each
+    /// config path is resolved per call: the folder can be made, moved or
+    /// relinked while the host runs.
+    fn holds(&self, path: &Path, real: &Path) -> bool {
+        self.paths.iter().any(|held| {
+            segments_below(held, path).is_some() || segments_below(&real_path(held), real).is_some()
+        })
     }
 
     /// The sentence saying who edits it: the agent itself, with its own
@@ -83,12 +97,17 @@ impl AgentConfigFolders {
     }
 
     /// Why `path` is not Floti's to write - it is at or under an agent's
-    /// config - or `None` when no agent's config holds it.
+    /// config, as spelled or where its links lead - or `None` when no agent's
+    /// config holds it.
     pub fn holding(&self, path: &Path) -> Option<String> {
+        if self.agents.is_empty() {
+            return None;
+        }
         let path = normalize(path);
+        let real = real_path(&path);
         self.agents
             .iter()
-            .find(|agent| agent.holds(&path))
+            .find(|agent| agent.holds(&path, &real))
             .map(AgentFolder::edited_by)
     }
 }
@@ -139,6 +158,50 @@ mod tests {
         ] {
             assert_eq!(folders.holding(&not), None, "{}", not.display());
         }
+    }
+
+    #[test]
+    fn a_path_through_a_link_into_an_agents_config_is_its_own_wherever_it_is_spelled() {
+        use crate::platform::links::{FolderLinks, Native};
+        use crate::testkit::{TestDirs, link_folder};
+
+        let dirs = TestDirs::new();
+        let held = folders(&dirs.home);
+        let skills = dirs.home.join(".claude").join("skills");
+        std::fs::create_dir_all(skills.join("x")).unwrap();
+        std::fs::write(skills.join("x").join("SKILL.md"), "# x\n").unwrap();
+        let project = dirs.folder("a project");
+        let link = project.join("skills link");
+        link_folder(&skills, &link);
+
+        // A file there and one not made yet both land in the config.
+        for through in [
+            link.join("x").join("SKILL.md"),
+            link.join("new").join("SKILL.md"),
+            link.clone(),
+        ] {
+            assert!(
+                held.holding(&through).is_some(),
+                "{} leads into the agent's config",
+                through.display()
+            );
+        }
+        assert_eq!(
+            held.holding(&project.join("notes").join("a.md")),
+            None,
+            "a note beside the link is not the agent's"
+        );
+
+        // A config folder that is itself a link holds where it leads too.
+        let real = dirs.folder("real config");
+        let other_home = dirs.folder("other home");
+        link_folder(&real, &other_home.join(".claude"));
+        let linked = folders(&other_home);
+        assert!(linked.holding(&real.join("CLAUDE.md")).is_some());
+        assert_eq!(linked.holding(&dirs.folder("elsewhere").join("a.md")), None);
+
+        Native.unlink_folder(&link).unwrap();
+        Native.unlink_folder(&other_home.join(".claude")).unwrap();
     }
 
     #[test]

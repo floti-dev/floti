@@ -922,8 +922,8 @@ app's folder, on any OS.
   `config:scopes`, `config:tree` and `config:effective`
   (`crates/host/src/agent_config`), and nothing there writes. A Files-view
   save or restore at or under a backend's config folder or global config
-  file (`AgentConfigFolders`, from each backend's own `agent_config`) is
-  refused naming the agent's own commands, and the Files view shows those
+  file (`AgentConfigFolders`, from each backend's own `agent_config`), as
+  spelled or where its links lead, is refused naming the agent's own commands, and the Files view shows those
   files read-only (`FileView.readOnly`). The transcript
   archive copies into the host's `floti.db`, and never writes there. Copying `helm.db`'s archive into
   `floti.db` writes neither the agent's config nor `helm.db`, and logs
