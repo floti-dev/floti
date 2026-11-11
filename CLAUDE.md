@@ -152,13 +152,16 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   and the host offers those sessions back. Only a deliberate stop ends the
   keeper. Quitting a client ends the sessions it started only where its
   setting for that host says so; a crash ends nothing; stopping the host
-  ends every session. Helm's setting is `quitSessions`, kept in `helm.db` keyed by host
+  ends every session. The plain terminals a client opened end when it quits.
+  Helm's setting is `quitSessions`, kept in `helm.db` keyed by host
   (this PC's is `local`, End when absent; a remote host's is its id, Keep
   when absent). Quitting with sessions it would
   end asks first: End and quit, Keep running and quit (this quit only, never
   written to the setting), or Cancel. Helm never stops the host on its own:
   its deliberate quit sends `host:quit` and lets go, only Settings' Stop host
-  (after saying how many sessions it ends) sends `host:stop`, and a host Helm
+  (after saying how many sessions it ends) and an update of that host (after
+  the user's yes, through `floti update-stop --stop`) send `host:stop`, and a
+  host Helm
   started (`floti host --desktop`) exits by itself once it runs nothing and
   no client is attached. When the connection ends without a stop or a quit,
   the window keeps each tab's screen, dimmed with input off, and Helm starts
@@ -169,8 +172,9 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   restore offer, which the window asks for again then; a lost shell, as a
   new shell in its folder.
 - A host on another computer is reached by main through `floti bridge`,
-  over the user's own `ssh -o BatchMode=yes <target>` or the command they
-  gave, one link per host and one page link per host for each window
+  over the user's own `ssh -o BatchMode=yes <target>`, the command they
+  gave, or `wsl.exe -d <distro>` (on this PC, or through ssh to a Windows
+  host), one link per host and one page link per host for each window
   (`hostLink:open` names it). Floti adds no ssh option, never skips a
   host-key check, reads or writes nothing under `~/.ssh` and holds no SSH
   secret: a transport that needs a password or a key accepted fails with its
