@@ -31,7 +31,7 @@ export interface RailItem {
    */
   hideable?: boolean | undefined
   onSelect: () => void
-  /** The hooks the drivers reach a destination by - `data-open-history` and kin. */
+  /** The hooks the drivers reach a destination by - `data-open-files` and kin. */
   hooks?: Record<`data-${string}`, string | boolean> | undefined
 }
 
@@ -62,8 +62,8 @@ export interface RailProps {
  * The destinations, as a strip of icons down the left edge.
  *
  * Ordered by use rather than alphabetically or by feature: the sessions tree is
- * where the day is spent, history is reached for after a crash, the rest are
- * occasional and the rare ones sit below a rule. The order is the caller's,
+ * where the day is spent, the rest are occasional and the rare ones sit below a
+ * rule. The order is the caller's,
  * because how often each is used is a fact about the person and not about the
  * component.
  *

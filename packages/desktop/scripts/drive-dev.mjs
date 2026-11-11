@@ -9,9 +9,9 @@
 //
 //   pnpm dev --drive                          # in one terminal
 //   node scripts/drive-dev.mjs text           # what the window says
-//   node scripts/drive-dev.mjs click "History"
+//   node scripts/drive-dev.mjs click "Settings"
 //   node scripts/drive-dev.mjs eval "document.title"
-//   node scripts/drive-dev.mjs shot history.png
+//   node scripts/drive-dev.mjs shot settings.png
 //
 // `--port=` if the app said a different one.
 //

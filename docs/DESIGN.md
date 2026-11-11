@@ -175,7 +175,7 @@ reading width, and make the header read as a summary card sitting above some
 other pane's contents.
 
 **A page draws no island at all.** The pane it sits in is already one - its
-hairline, its surface, its tab strip - so every page (history, content,
+hairline, its surface, its tab strip - so every page (a conversation,
 settings, a project, the browser) is drawn on the pane's own surface, edge to
 edge. Its bar is a row under the tab strip with a hairline below it; a list
 beside its detail is split by a hairline on the list's right edge; a long page
@@ -623,7 +623,7 @@ overrides the gate; keep it.
 - **Page bars**: a page's own controls sit in one row directly under the tab
   strip, as tall as the strip, with a hairline below - scope switcher, what is
   being looked at, counts, the page's controls and a refresh (`PaneHeader`,
-  and `PAGE_BAR` for history and the
+  and `PAGE_BAR` for the
   sessions pane). **No mark and no title**: the tab directly
   above already names the page, and a second name a row down is what made the
   header read as a card on top of somebody else's pane. It **measures itself,
@@ -845,7 +845,7 @@ overrides the gate; keep it.
   a 20px glyph (`RAIL_ICON`) drawn with a stroke thinned to keep the 1.6px line
   of the rest of the chrome - bigger, not bolder. Ordered by how often each is
   reached for rather than by feature - Sessions,
-  Profiles and session history, a hairline, then Files and the browser, and
+  Profiles, a hairline, then Files and the browser, and
   Settings pinned to the foot. The order is a fact
   about how Helm is used, so it is fixed rather than learned: a rail that
   reordered itself would move under muscle memory.
@@ -888,7 +888,7 @@ overrides the gate; keep it.
   editors - side by side, one above the other, and either inside the other -
   each a tab strip, a crumb row for a session's or a file's tab, and its body.
   Any tab may sit in any pane - a session beside a session, a session beside
-  the project page it came from, history under both - which is what a pane is
+  the project page it came from, a conversation read back under both - which is what a pane is
   for. There is no count of them; a pane is not split below 200 by 140px, and
   that is what stops it. A pane is named by its place in reading order, left to
   right and top to bottom: "First pane", "Second pane". A new tab opens in the **focused**
@@ -1179,7 +1179,7 @@ overrides the gate; keep it.
   button, and counts what was delivered with `tracePointer` - so "the app
   ignored it" and "it never arrived" stop being the same red line. `SESS-15`
   and `S-21` both assert `buttons: 1` for exactly that reason.
-- **Narrow panes**: session history is a bounded list beside a detail, and
+- **Narrow panes**: the sessions pane is a bounded list beside a detail, and
   that needs roughly 700px
   before both are readable. In one of two panes none of them get it, so each
   collapses to **one at a time**: the list until something is

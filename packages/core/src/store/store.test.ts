@@ -395,33 +395,33 @@ describe('settings', () => {
         .prepare('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)')
         .run(key, JSON.stringify(value), '')
     }
-    const HISTORY = { panes: [{ kind: 'history' }], activeId: 'history' }
+    const SETTINGS = { panes: [{ kind: 'settings' }], activeId: 'settings' }
     const SESSIONS = { panes: [{ kind: 'sessions' }], activeId: null }
 
     it('reads two groups as the row they were, with the divider where it was left', () => {
-      raw('paneLayout', { groups: [HISTORY, SESSIONS], focused: 1 })
+      raw('paneLayout', { groups: [SETTINGS, SESSIONS], focused: 1 })
       raw('paneSplitPct', 62)
 
       expect(readSettings(store).paneLayout).toEqual({
-        root: { axis: 'row', children: [HISTORY, SESSIONS], sizes: [0.38, 0.62] },
+        root: { axis: 'row', children: [SETTINGS, SESSIONS], sizes: [0.38, 0.62] },
         focused: 1
       })
     })
 
     it('reads two groups at the old default split when the divider was never moved', () => {
-      raw('paneLayout', { groups: [HISTORY, SESSIONS], focused: 0 })
+      raw('paneLayout', { groups: [SETTINGS, SESSIONS], focused: 0 })
 
       expect(readSettings(store).paneLayout).toEqual({
-        root: { axis: 'row', children: [HISTORY, SESSIONS], sizes: [0.55, 0.45] },
+        root: { axis: 'row', children: [SETTINGS, SESSIONS], sizes: [0.55, 0.45] },
         focused: 0
       })
     })
 
     it('reads one group as that group, and the result is a layout the writer accepts', () => {
-      raw('paneLayout', { groups: [HISTORY], focused: 0 })
+      raw('paneLayout', { groups: [SETTINGS], focused: 0 })
 
       const { paneLayout } = readSettings(store)
-      expect(paneLayout).toEqual({ root: HISTORY, focused: 0 })
+      expect(paneLayout).toEqual({ root: SETTINGS, focused: 0 })
       expect(validateSetting('paneLayout', paneLayout)).toBeNull()
     })
 
@@ -452,7 +452,7 @@ describe('settings', () => {
       const one = (pane: Record<string, unknown>) => ({ root: { panes: [pane], activeId: null }, focused: 0 })
       expect(validateSetting('paneLayout', one({ kind: 'session', id: 5, host: 'local' }))).toMatch(/this PC/)
       expect(validateSetting('paneLayout', one({ kind: 'session', id: 5, host: '' }))).toMatch(/host/)
-      expect(validateSetting('paneLayout', one({ kind: 'history', host: 'h-build' }))).toMatch(/no host/)
+      expect(validateSetting('paneLayout', one({ kind: 'settings', host: 'h-build' }))).toMatch(/no host/)
     })
 
     it('keeps how each parent tab arranges its children, and refuses an arrangement that is not one', () => {
@@ -500,7 +500,7 @@ describe('settings', () => {
 })
 
 /** Two groups to split, for the validator's split cases. */
-const H = { panes: [{ kind: 'history' }], activeId: null }
+const H = { panes: [{ kind: 'sessions' }], activeId: null }
 const S = { panes: [{ kind: 'settings' }], activeId: null }
 
 /** Splits nested `depth` deep, alternating axis, each beside one group. */
@@ -622,7 +622,7 @@ describe('settings validation', () => {
       good: [
         null,
         { root: { panes: [], activeId: null }, focused: 0 },
-        { root: { panes: [{ kind: 'history' }], activeId: 'history' }, focused: 0 },
+        { root: { panes: [{ kind: 'settings' }], activeId: 'settings' }, focused: 0 },
         {
           root: {
             axis: 'row',
@@ -640,7 +640,7 @@ describe('settings validation', () => {
                 axis: 'column',
                 children: [
                   // Retired kinds, which load and open nothing.
-                  { panes: [{ kind: 'config' }, { kind: 'content' }], activeId: null },
+                  { panes: [{ kind: 'config' }, { kind: 'content' }, { kind: 'history' }], activeId: null },
                   {
                     panes: [
                       { kind: 'settings' },
@@ -651,7 +651,7 @@ describe('settings validation', () => {
                 ],
                 sizes: [0.5, 0.5]
               },
-              { panes: [{ kind: 'history' }], activeId: null }
+              { panes: [{ kind: 'settings' }], activeId: null }
             ],
             sizes: [0.4, 0.35, 0.25]
           },
@@ -729,12 +729,12 @@ describe('settings validation', () => {
         { root: [], focused: 0 },
         // The shape a layout had before panes were a tree. Read back, it is
         // upgraded (`upgradeSavedLayout`); written, it is a bug in the writer.
-        { groups: [{ panes: [{ kind: 'history' }], activeId: 'history' }], focused: 0 },
+        { groups: [{ panes: [{ kind: 'settings' }], activeId: 'settings' }], focused: 0 },
         // The single strip that shape replaced.
-        { panes: [{ kind: 'history' }], activeId: 'history' },
+        { panes: [{ kind: 'settings' }], activeId: 'settings' },
         // A split of fewer than two, across no axis, or with a share missing,
         // spare, zero, negative or not a number.
-        { root: { axis: 'row', children: [{ panes: [{ kind: 'history' }], activeId: null }], sizes: [1] }, focused: 0 },
+        { root: { axis: 'row', children: [{ panes: [{ kind: 'settings' }], activeId: null }], sizes: [1] }, focused: 0 },
         {
           root: { axis: 'diagonal', children: [H, S], sizes: [0.5, 0.5] },
           focused: 0
@@ -777,7 +777,7 @@ describe('settings validation', () => {
         { root: { panes: [{ kind: 'file', root: 'C:\\a' }], activeId: null }, focused: 0 },
         { root: { panes: [{ kind: 'file', root: '', path: 'C:\\a\\b.ts' }], activeId: null }, focused: 0 },
         { root: { panes: [{ kind: 'project', path: '' }], activeId: null }, focused: 0 },
-        { root: { panes: ['history'], activeId: null }, focused: 0 },
+        { root: { panes: ['settings'], activeId: null }, focused: 0 },
         // An id is compared against tabs, never parsed, so anything that is not
         // a string cannot match one.
         { root: { panes: [], activeId: 7 }, focused: 0 },
@@ -787,8 +787,8 @@ describe('settings validation', () => {
           root: {
             axis: 'row',
             children: [
-              { panes: Array.from({ length: 60 }, () => ({ kind: 'history' })), activeId: null },
-              { panes: Array.from({ length: 41 }, () => ({ kind: 'history' })), activeId: null }
+              { panes: Array.from({ length: 60 }, () => ({ kind: 'settings' })), activeId: null },
+              { panes: Array.from({ length: 41 }, () => ({ kind: 'settings' })), activeId: null }
             ],
             sizes: [0.5, 0.5]
           },
