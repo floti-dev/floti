@@ -39,7 +39,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 | command | does |
 |---|---|
 | `pnpm dev` | the app with its own data directory (see "Where the data lives") |
-| `pnpm check` | typecheck, lint and unit and integration tests - the gate |
+| `pnpm check` | typecheck, lint and the TypeScript unit and integration tests - the gate |
 | `pnpm build` | production build |
 
 ## Testing
@@ -53,8 +53,9 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   - **End-to-end** tests are very few: the main workflows, on their happy
     paths, through the built app.
 - While building, run only the tests for what changed. A full suite is a
-  regression check, and it runs on CI on every push, on Windows, macOS and
-  Linux. Nobody waits on it to merge.
+  regression check. CI runs the TypeScript suite on every push, and the
+  host's Rust suite (`.github/workflows/host.yml`) on every push that touches
+  the host's paths, on Windows, macOS and Linux. Nobody waits on it to merge.
 - Unit and integration tests validate the work. End-to-end tests run only
   before a release is cut (the `procedures` skill): never while building, to
   check a fix or to finish a task.
@@ -70,7 +71,8 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   covers changed.
 - `pnpm check` is the gate. CI runs it on Windows, macOS and Linux on every
   push, then builds. A failure on any one fails the run and stops the
-  release, and the owner reads CI on all three before a release. A branch
+  release, and the owner reads CI on all three before a release. The host's
+  Rust tests are not in `pnpm check` and run in their own workflow. A branch
   merges on its own tests, run locally, and a review that runs the suite for
   what changed locally; nobody waits on CI to merge. End-to-end tests run
   locally only, never in CI.
@@ -96,10 +98,11 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 
 ## UI
 
-- Follow DESIGN.md: semantic tokens only (no raw hex in components), islands
-  with hairline edges on a sunken canvas, the accent never solid-fills
-  anything, no shadows outside modals, no text weight past 500, mono for
-  machine data. Anything the tokens cannot express is a DESIGN.md amendment.
+- Follow DESIGN.md: semantic tokens only (no raw hex in components outside
+  its foreign-ground islands), islands with hairline edges on a sunken
+  canvas, the accent solid-fills nothing but a checked checkbox, no shadows
+  outside modals, no text weight past 500 but 600 on caps labels of 11px or
+  less, mono for machine data. Anything the tokens cannot express is a DESIGN.md amendment.
 - Look at a UI change before calling it done: `pnpm dev --drive`, then
   `node packages/desktop/scripts/drive-dev.mjs shot <file>.png`. A `--drive`
   window starts only the fake agents. The `dev` skill has the rest.
@@ -595,8 +598,8 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   agent's), made by the host with git for every backend
   (`workspace/worktrees.rs`) after the whole start has been judged, so a
   refused start writes nothing. It is `<repo>/.floti/worktrees/<name>` on a
-  new branch `agent/<name>` cut from the commit the parent's folder has
-  checked out, under the repository's main working tree even when the parent
+  new branch `agent/<name>` cut from the commit the start's folder (the
+  parent's, unless the start names one) has checked out, under the repository's main working tree even when the parent
   is itself in an agent worktree; the name is made unique among those folders
   and `agent/*` branches (`name-2`), so no two children share a checkout.
   `/.floti/` is added to the repository's `info/exclude` once, keeping its
@@ -630,7 +633,8 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   first on the session's `PATH` and the session's token and the family's
   address in its environment (`FLOTI_AGENT_TOKEN`, `FLOTI_AGENT_URL`; any
   `FLOTI_AGENT_*` the host inherited is stripped first). The command acts as
-  that session, prints the tool's text or, with `--json`, its JSON, exits
+  that session, prints the tool's text or, with `--json`, its JSON (`start`
+  and `run` print the child's name, and with `--wait` its news after), exits
   non-zero on a refusal and never prints the token. Each tool and each
   subcommand a launch may run without asking is named on its own and passed
   through the backend's adapter the way read-only tools are (for Claude Code
