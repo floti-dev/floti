@@ -188,6 +188,15 @@ describe('SettingsPane - Agents', () => {
     expect(group().querySelector('header p')).toBeNull()
   })
 
+  it('opens with a row naming how many agents the host has, with Open Agents', async () => {
+    const onOpen = vi.fn()
+    renderPane({ agentsOverview: { count: 5, hostName: 'This PC', folder: '~/.config/floti/agents', onOpen } })
+    expect(within(group()).getByText('5 agents on This PC')).toBeTruthy()
+    expect(within(group()).getByText(/Kept as files in ~\/\.config\/floti\/agents\./)).toBeTruthy()
+    await userEvent.click(within(group()).getByRole('button', { name: 'Open Agents' }))
+    expect(onOpen).toHaveBeenCalledOnce()
+  })
+
   it('keeps the choice to show children in their parent’s tab, on by default and kept for this device', async () => {
     const props = renderPane()
     const tick = within(group()).getByRole('checkbox', { name: "Show children in their parent's tab" }) as HTMLInputElement

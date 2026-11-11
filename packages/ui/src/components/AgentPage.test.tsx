@@ -1,0 +1,247 @@
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { useState, type JSX } from 'react'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
+import type { LaunchAgents } from '@helm/core/types'
+import { AgentList } from './AgentList'
+import { AgentPage, type AgentPageProps } from './AgentPage'
+import { UndoToast } from './UndoToast'
+
+const TEXT = [
+  '---',
+  'description: Researches a new project with you.',
+  'backend: claude-code',
+  'effort:',
+  '  claude-code: high',
+  'permission: plan',
+  'class: light',
+  '---',
+  'You research.',
+  ''
+].join('\n')
+
+const CLAUDE = { id: 'claude-code', name: 'Claude Code' }
+
+beforeAll(() => {
+  // The editor measures itself; the test DOM has nothing to measure.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe(): void {}
+      disconnect(): void {}
+    }
+  )
+})
+
+function props(overrides: Partial<AgentPageProps> = {}): AgentPageProps {
+  return {
+    savedName: 'research-lead',
+    copyOf: null,
+    name: 'research-lead',
+    onNameChange: vi.fn(),
+    takenNames: new Set(['research-lead', 'worker']),
+    hostName: 'This PC',
+    remote: false,
+    folder: '~/.config/floti/agents',
+    draft: TEXT,
+    onDraftChange: vi.fn(),
+    dirty: false,
+    saving: false,
+    savedAt: null,
+    problems: [],
+    refusal: null,
+    bad: false,
+    external: null,
+    readOnly: null,
+    backends: [CLAUDE],
+    profiles: ['studio-docs'],
+    onHighlight: null,
+    onSave: vi.fn(),
+    onRevert: vi.fn(),
+    onDiscard: vi.fn(),
+    onCopy: vi.fn(),
+    onDelete: vi.fn(),
+    onStartSession: vi.fn(),
+    onReload: vi.fn(),
+    onSaveMine: vi.fn(),
+    ...overrides
+  }
+}
+
+/** The page with its draft and name held, as the window holds them. */
+function Held({ start }: { start: AgentPageProps }): JSX.Element {
+  const [draft, setDraft] = useState(start.draft)
+  const [name, setName] = useState(start.name)
+  return (
+    <AgentPage
+      {...start}
+      draft={draft}
+      name={name}
+      onDraftChange={(text) => {
+        setDraft(text)
+        start.onDraftChange(text)
+      }}
+      onNameChange={setName}
+      dirty={draft !== start.draft || name !== start.name}
+    />
+  )
+}
+
+describe('AgentPage', () => {
+  it('shows the file’s fields in the form, says the retired line is dropped, and writes a form edit into the draft', async () => {
+    const start = props()
+    render(<Held start={start} />)
+    expect((screen.getByRole('textbox', { name: 'Description' }) as HTMLInputElement).value).toBe(
+      'Researches a new project with you.'
+    )
+    expect((screen.getByRole('combobox', { name: 'Permissions' }) as HTMLSelectElement).value).toBe('plan')
+    expect(screen.getByText(/is a line Floti no longer uses/).textContent).toContain('class: light')
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Effort for Claude Code' }), 'xhigh')
+    expect(start.onDraftChange).toHaveBeenLastCalledWith(TEXT.replace('claude-code: high', 'claude-code: xhigh'))
+    expect(screen.getByText('Unsaved changes')).toBeTruthy()
+
+    // Source is the same draft: the edit made in the form is there.
+    await userEvent.click(screen.getByRole('radio', { name: 'Source' }))
+    expect((screen.getByRole('textbox', { name: 'Source' }) as HTMLTextAreaElement).value).toContain('claude-code: xhigh')
+  })
+
+  it('says the name rule as it is typed, and Save waits for a name the folder accepts', async () => {
+    render(<Held start={props()} />)
+    const name = screen.getByRole('textbox', { name: 'Name' })
+    await userEvent.clear(name)
+    await userEvent.type(name, 'Android Worker')
+    expect(screen.getByText(/lowercase letters, digits and dashes/).textContent).toContain('android-worker would do')
+    expect((screen.getByRole('button', { name: /^Save/ }) as HTMLButtonElement).disabled).toBe(true)
+
+    await userEvent.clear(name)
+    await userEvent.type(name, 'worker')
+    expect(screen.getByText(/There is already an agent called/)).toBeTruthy()
+
+    await userEvent.clear(name)
+    await userEvent.type(name, 'issue-lead')
+    expect(screen.getByText(/Saving renames/).textContent).toBe('Saving renames research-lead.md to issue-lead.md.')
+    expect((screen.getByRole('button', { name: /^Save/ }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('marks each problem on its field and puts one with no field in the strip with its line', () => {
+    render(
+      <AgentPage
+        {...props({
+          bad: true,
+          problems: [
+            { field: 'permission', line: 6, message: 'permission must be plan, dont-ask, manual, accept-edits, auto or bypass-permissions, not yolo' },
+            { field: 'disalowed_tools', line: 9, message: 'disalowed_tools is not a field an agent file has' }
+          ]
+        })}
+      />
+    )
+    const strip = screen.getByRole('alert')
+    expect(within(strip).getByText('Floti cannot load research-lead.md')).toBeTruthy()
+    expect(strip.textContent).toContain('line 9 · disalowed_tools is not a field an agent file has. Fix it in Source.')
+    const permission = screen.getByRole('combobox', { name: 'Permissions' }).closest('[data-agent-field-box]')
+    expect(permission?.getAttribute('data-problem')).toBe('true')
+    expect(permission?.textContent).toContain('not yolo')
+  })
+
+  it('offers Compare, Reload from disk and Save mine for an outside change, and Save waits until one is picked', async () => {
+    const start = props({ dirty: true, draft: `${TEXT}mine\n`, external: { text: `${TEXT}theirs\n`, at: '14:31' } })
+    render(<AgentPage {...start} />)
+    expect(screen.getByText('research-lead.md changed on disk after you opened it')).toBeTruthy()
+    expect((document.querySelector('[data-agent-save]') as HTMLButtonElement).disabled).toBe(true)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Compare' }))
+    const disk = document.querySelector('[data-compare-side="disk"]')!
+    expect(disk.textContent).toContain('On disk now · changed 14:31')
+    expect([...disk.querySelectorAll('[data-compare-line="changed"]')].map((l) => l.textContent)).toEqual(['10theirs'])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save mine' }))
+    expect(start.onSaveMine).toHaveBeenCalledOnce()
+    await userEvent.click(screen.getByRole('button', { name: 'Reload from disk' }))
+    expect(start.onReload).toHaveBeenCalledOnce()
+  })
+
+  it('draws a new page with Discard and Save agent, and names a remote host before the path', () => {
+    const { unmount } = render(<AgentPage {...props({ savedName: null, copyOf: 'worker', name: 'worker-2' })} />)
+    expect(screen.getByText('Copy of worker · not saved')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Discard' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Save agent/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+    unmount()
+    render(<AgentPage {...props({ hostName: 'buildbox', remote: true })} />)
+    expect(screen.getByText('buildbox · ~/.config/floti/agents/research-lead.md')).toBeTruthy()
+  })
+})
+
+const LISTING: LaunchAgents = {
+  agents: [
+    {
+      name: 'lead',
+      description: 'Delegates work.',
+      file: 'lead.md',
+      hash: 'h',
+      backends: ['claude-code'],
+      listedBackends: ['claude-code'],
+      models: {},
+      efforts: {},
+      permission: null,
+      profile: null,
+      allowedTools: [],
+      disallowedTools: [],
+      worktree: false,
+      canStart: true,
+      cannotRun: null
+    }
+  ],
+  bad: [
+    {
+      name: 'deploy-check',
+      file: 'deploy-check.md',
+      problem: 'permission must be plan, not yolo',
+      problems: [{ field: 'permission', line: 4, message: 'permission must be plan, not yolo' }],
+      hash: 'b'
+    }
+  ],
+  backends: [CLAUDE],
+  folder: '~/.config/floti/agents',
+  readOnly: null,
+  shipped: [{ name: 'reviewer', description: 'Read-only review.' }]
+}
+
+describe('AgentList', () => {
+  it('lists the agents, the files that are not agents with their problem, and the shipped agents with Add', async () => {
+    const onOpen = vi.fn()
+    const onAdd = vi.fn()
+    render(
+      <AgentList listing={LISTING} error={null} hostName="This PC" remote={false} selected="lead" onOpen={onOpen} onAdd={onAdd} />
+    )
+    const lead = screen.getByRole('button', { name: /^lead/ })
+    expect(lead.getAttribute('aria-current')).toBe('page')
+    expect(screen.getByRole('heading', { name: /Not loaded/ }).textContent).toBe('Not loaded1')
+    expect(screen.getByText('deploy-check.md')).toBeTruthy()
+    expect(screen.getByText('permission must be plan, not yolo')).toBeTruthy()
+    expect(screen.getByText(/Files in/).textContent).toBe(
+      'Files in ~/.config/floti/agents on This PC, read afresh on every start.'
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }))
+    expect(onAdd).toHaveBeenCalledWith('reviewer')
+    await userEvent.click(screen.getByRole('button', { name: /deploy-check\.md/ }))
+    expect(onOpen).toHaveBeenCalledWith('deploy-check')
+  })
+})
+
+describe('UndoToast', () => {
+  it('stays until closed, with Undo', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval'] })
+    const onUndo = vi.fn()
+    const onClose = vi.fn()
+    render(<UndoToast title="Deleted triage" detail="Undo puts it back." undoing={false} error={null} onUndo={onUndo} onClose={onClose} />)
+    vi.advanceTimersByTime(60 * 60 * 1000)
+    vi.useRealTimers()
+    expect(screen.getByText('Deleted triage')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(onUndo).toHaveBeenCalledOnce()
+    await userEvent.click(screen.getByRole('button', { name: 'Close notification' }))
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+})
