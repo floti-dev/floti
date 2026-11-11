@@ -320,6 +320,142 @@ describe('after a crash', () => {
   })
 })
 
+describe('a resume in flight', () => {
+  it('starts nothing more: Enter, a double click and the Stopped group’s row wait for it', async () => {
+    const props = renderPalette({
+      resuming: 's0',
+      stopped: { at: null, sessions: [{ id: 1, name: 'tab 1', cwd: 'C:\\code\\p1', branch: null, profile: null, profileGone: false, lastAt: null, blocked: null, conversationId: 'c1' }] }
+    })
+    press('Enter')
+    press('ArrowDown')
+    press('ArrowDown')
+    press('Enter')
+    await userEvent.dblClick(options()[2]!)
+    expect(props.onResumeStopped).not.toHaveBeenCalled()
+    expect(props.onResume).not.toHaveBeenCalled()
+  })
+})
+
+describe('the cursor', () => {
+  it('stays on its session when the list is read again in another order', () => {
+    const props = renderPalette() as HistoryPaletteProps & { rerender: (next: Partial<HistoryPaletteProps>) => void }
+    press('ArrowDown')
+    expect(selected().textContent).toContain('Session number 1')
+    props.rerender({ recent: answer([RECENT[4]!, RECENT[0]!, RECENT[2]!, RECENT[1]!], 806) })
+    expect(selected().textContent).toContain('Session number 1')
+    press('Enter')
+    expect(props.onResume).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 's1' }), { withoutAgent: false })
+  })
+})
+
+describe('Enter with a modifier', () => {
+  const mac = (): void => {
+    vi.spyOn(Object.getPrototypeOf(navigator) as Navigator, 'platform', 'get').mockReturnValue('MacIntel')
+  }
+
+  it('on a Mac, Cmd+Enter reads and Ctrl+Enter does nothing', () => {
+    mac()
+    const props = renderPalette()
+    press('Enter', { ctrlKey: true })
+    expect(props.onResume).not.toHaveBeenCalled()
+    expect(props.onRead).not.toHaveBeenCalled()
+    press('Enter', { metaKey: true })
+    expect(props.onRead).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 's0' }), null)
+    expect(props.onResume).not.toHaveBeenCalled()
+  })
+
+  it('elsewhere, Ctrl+Enter reads and the Windows key with Enter does nothing', () => {
+    const props = renderPalette()
+    press('Enter', { metaKey: true })
+    expect(props.onResume).not.toHaveBeenCalled()
+    expect(props.onRead).not.toHaveBeenCalled()
+    press('Enter', { ctrlKey: true })
+    expect(props.onRead).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('F2 on the row it was pressed on', () => {
+  it('keeps the field on that session while the pointer moves and the list is read again', async () => {
+    const props = renderPalette() as HistoryPaletteProps & { rerender: (next: Partial<HistoryPaletteProps>) => void }
+    press('F2')
+    fireEvent.mouseMove(options()[3]!)
+    fireEvent.click(options()[3]!)
+    props.rerender({ recent: answer([RECENT[5]!, RECENT[0]!, RECENT[1]!], 806) })
+    const name = screen.getByRole('textbox', { name: 'Name' })
+    expect(name.closest('[data-history-session]')?.getAttribute('data-history-session')).toBe('s0')
+    await userEvent.clear(name)
+    await userEvent.type(name, 'Mine{Enter}')
+    expect(props.onRename).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 's0' }), 'Mine')
+  })
+
+  it('starts an unnamed session from its first line without quotes, and a draft left as it was saves nothing', async () => {
+    const props = renderPalette({ recent: answer([historySession({ title: 'add rate limits\nto every endpoint' })]) })
+    press('F2')
+    const name = screen.getByRole('textbox', { name: 'Name' })
+    expect((name as HTMLInputElement).value).toBe('add rate limits')
+    expect(preview()).toContain('Your name replaces “add rate limits”, the first line of its first prompt')
+    await userEvent.type(name, '{Enter}')
+    expect(props.onRename).not.toHaveBeenCalled()
+  })
+
+  it('says a name given by hand is what it replaces, quoted once', () => {
+    renderPalette({ recent: answer([historySession({ label: 'Mine' })]) })
+    press('F2')
+    expect(preview()).toContain('Your name replaces “Mine”, here')
+    expect(preview()).not.toContain('““')
+  })
+})
+
+describe('could not look', () => {
+  it('is never said as nothing there: a count not read yet is reading, one that failed says so, and Enter tries again', () => {
+    render(<HistoryPalette {...renderPropsOnly({ recent: answer([]), total: null })} />)
+    expect(document.body.textContent).not.toContain('No sessions yet')
+    expect(document.querySelector('[data-history-state]')?.getAttribute('data-history-state')).toBe('reading')
+    document.body.innerHTML = ''
+    const props = renderPropsOnly({ recent: answer([]), total: null, totalError: 'The host did not answer.' })
+    render(<HistoryPalette {...props} />)
+    expect(document.body.textContent).toContain('Could not tell what History holds')
+    expect(document.body.textContent).not.toContain('No sessions yet')
+    press('Enter')
+    expect(props.onRetry).toHaveBeenCalled()
+  })
+
+  it('says the folders could not be read while a query is typed', () => {
+    renderPalette({ query: 'atlas', titles: answer([]), conversations: answer([]), foldersError: 'The host did not answer.' })
+    expect(document.querySelector('[data-history-folders-error]')?.textContent).toContain('The host did not answer.')
+  })
+
+  it('reads a parent’s children again after a read that failed', () => {
+    const props = renderPalette({
+      recent: answer([historySession({ sessionId: 'p', children: 2 })]),
+      children: new Map([['p', { error: 'The host did not answer.' }]])
+    })
+    press('ArrowRight')
+    expect(props.onUnfold).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'p' }))
+  })
+})
+
+describe('the Stopped group’s Resume all', () => {
+  it('leaves out a session whose conversation was never learned', () => {
+    const lost = (id: number, conversationId: string | undefined): RestorableSession => ({
+      id,
+      name: `tab ${String(id)}`,
+      cwd: 'C:\\code\\p',
+      branch: null,
+      profile: null,
+      profileGone: false,
+      lastAt: null,
+      blocked: null,
+      ...(conversationId === undefined ? {} : { conversationId })
+    })
+    const sessions = [lost(1, 'c1'), lost(2, undefined)]
+    const props = renderPalette({ stopped: { at: null, sessions } })
+    expect(selected().textContent).toContain('Resume the one that can come back')
+    press('Enter')
+    expect(props.onResumeStopped).toHaveBeenCalledWith([sessions[0]])
+  })
+})
+
 function renderPropsOnly(overrides: Partial<HistoryPaletteProps>): HistoryPaletteProps {
   return {
     query: '',

@@ -18,7 +18,7 @@ import {
   unresumableSentence,
   type HistoryRunning
 } from '../lib/historyPalette'
-import { isMac } from '../lib/platform'
+import { hasPrimaryModifier, isMac } from '../lib/platform'
 import { AgentTag } from './AgentTag'
 import { HostSwitch, type HostChoice } from './HostSwitch'
 import { KeyButton } from './KeyButton'
@@ -55,6 +55,10 @@ export interface HistoryPaletteProps {
   recent: HistoryAnswer
   /** How many sessions History holds, for "Type to search all 806"; null when not known. */
   total: number | null
+  /** The sentence the read of how many it holds failed with; null when it did not fail. */
+  totalError?: string | null | undefined
+  /** The sentence the read of the recorded folders failed with: a folder's name in a query then narrows nothing. */
+  foldersError?: string | null | undefined
   /** The history file could not be read: its path and the system's sentence. */
   readError: { file: string; message: string } | null
   /** Typed: the sessions whose names, titles, prompts or folder match. */
@@ -86,7 +90,11 @@ export interface HistoryPaletteProps {
   hosts?: Partial<HostChoice> | undefined
   /** The shown host's name, for the sentences, when more than one is connected. */
   hostName?: string | undefined
-  /** A resume in flight, by session id. */
+  /**
+   * A resume in flight: a session's id, or any other key for the Stopped
+   * group's. While it is set nothing is resumed, shown or read, so a second
+   * Enter or click never starts a second process.
+   */
   resuming?: string | null | undefined
   resumeError?: string | null | undefined
 }
@@ -114,10 +122,15 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
   const typed = query.trim() !== ''
   /** The list Tab or a click chose, for the query it was chosen in. */
   const [chosen, setChosen] = useState<{ query: string; list: HistoryListKind } | null>(null)
-  /** The highlighted item, or null for where the list starts (`start`). */
-  const [cursor, setCursor] = useState<number | null>(null)
+  /**
+   * The highlighted item by its key, or null for where the list starts
+   * (`start`): a list read again keeps it on the same session, wherever that
+   * session now is.
+   */
+  const [cursorKey, setCursorKey] = useState<string | null>(null)
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
-  const [renaming, setRenaming] = useState<{ id: string; draft: string } | null>(null)
+  /** The session being renamed, the draft, and the name the draft started from. */
+  const [renaming, setRenaming] = useState<{ session: HistorySession; draft: string; seed: string } | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const fieldRef = useRef<HTMLInputElement>(null)
 
@@ -136,7 +149,9 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
       items.push(item)
     }
     if (!typed && stopped !== null && stopped.sessions.length > 0) {
-      const back = stopped.sessions.filter((lost) => lost.blocked === null && lost.agentProblem === undefined)
+      const back = stopped.sessions.filter(
+        (lost) => lost.blocked === null && lost.agentProblem === undefined && lost.conversationId !== undefined
+      )
       out.push({
         kind: 'section',
         key: 'stopped',
@@ -190,8 +205,15 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
   // Conversations start on the first line that matched, as Ctrl+Shift+F
   // does; every other list on its first row.
   const start = typed && list === 'conversations' ? Math.max(0, items.findIndex((item) => item.kind === 'line')) : 0
-  const at = Math.min(cursor ?? start, Math.max(0, items.length - 1))
+  const keyed = cursorKey === null ? -1 : items.findIndex((item) => item.key === cursorKey)
+  const at = Math.min(keyed >= 0 ? keyed : start, Math.max(0, items.length - 1))
   const highlighted = items[at]
+  /** Moves the cursor to the item at `index`; nothing moves it while a name is typed. */
+  const setCursor = (index: number | null): void => {
+    if (renaming !== null) return
+    setCursorKey(index === null ? null : (items[index]?.key ?? null))
+  }
+  const busy = props.resuming !== null && props.resuming !== undefined
 
   useEffect(() => {
     listRef.current?.querySelector(`[data-index="${String(at)}"]`)?.scrollIntoView({ block: 'nearest' })
@@ -205,7 +227,7 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
     item === undefined || item.kind === 'stopped-all' || item.kind === 'stopped' ? null : item.session
 
   const activate = (item: Item | undefined): void => {
-    if (item === undefined) return
+    if (item === undefined || busy) return
     if (item.kind === 'stopped-all') return props.onResumeStopped(item.sessions)
     if (item.kind === 'stopped') return props.onResumeStopped([item.lost])
     const session = item.session
@@ -217,14 +239,16 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
   const read = (item: Item | undefined): void => {
     const session = sessionOf(item)
     // Floti renders no part of a live session (H12).
-    if (item === undefined || session === null || isRunning(session) !== null) return
+    if (item === undefined || busy || session === null || isRunning(session) !== null) return
     props.onRead(session, item.kind === 'line' ? item.line : null)
   }
 
   const unfold = (session: HistorySession): void => {
     if ((session.children ?? 0) === 0 || open.has(session.sessionId)) return
     setOpen(new Set([...open, session.sessionId]))
-    if (!children.has(session.sessionId)) props.onUnfold(session)
+    // Read once, and again after a read that failed.
+    const kids = children.get(session.sessionId)
+    if (kids === undefined || (kids !== null && 'error' in kids)) props.onUnfold(session)
   }
 
   const fold = (item: Item | undefined): void => {
@@ -241,14 +265,15 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
   const startRename = (): void => {
     const session = sessionOf(highlighted)
     if (session === null || highlighted?.kind === 'line') return
-    setRenaming({ id: session.sessionId, draft: session.label ?? paletteName({ ...session, label: null }).text })
+    const seed = renameSeed(session)
+    setRenaming({ session, draft: seed, seed })
   }
 
+  /** Keeps the draft for the session it was typed for, wherever the list has moved; a draft left as it started saves nothing. */
   const finishRename = (keep: boolean): void => {
-    const session = sessionOf(highlighted)
-    if (keep && renaming !== null && session !== null && session.sessionId === renaming.id) {
+    if (keep && renaming !== null && renaming.draft.trim() !== renaming.seed.trim()) {
       const name = renaming.draft.trim()
-      props.onRename(session, name === '' ? null : name)
+      props.onRename(renaming.session, name === '' ? null : name)
     }
     setRenaming(null)
     fieldRef.current?.focus()
@@ -260,7 +285,7 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (renaming !== null) return
-    const primary = isMac() ? event.metaKey : event.ctrlKey
+    const primary = hasPrimaryModifier(event)
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
       if (items.length === 0) return
@@ -270,6 +295,9 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
     if (event.key === 'Enter') {
       event.preventDefault()
       if (blocked !== null) return retries(blocked) ? props.onRetry() : undefined
+      // Enter with the other platform's modifier (Ctrl on a Mac, the Windows
+      // key elsewhere) is neither Enter nor Read, so it does nothing.
+      if (!primary && (event.ctrlKey || event.metaKey)) return
       if (primary) read(highlighted)
       else activate(highlighted)
       return
@@ -350,6 +378,12 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
         )}
       </header>
 
+      {typed && props.foldersError !== null && props.foldersError !== undefined && (
+        <p data-history-folders-error className="px-[13px] pt-1.5 text-[11px] text-warn">
+          Folders could not be read: {props.foldersError}. A folder’s name is searched for as a word.
+        </p>
+      )}
+
       {blocked !== null ? (
         <BlockedBody state={blocked} />
       ) : (
@@ -422,7 +456,7 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
                   gone={sessionOf(row.item) === null ? false : gone(sessionOf(row.item) as HistorySession)}
                   unfolded={row.item.kind === 'session' && open.has(row.item.session.sessionId)}
                   onToggle={(parent) => (open.has(parent.sessionId) ? fold(row.item) : unfold(parent))}
-                  renaming={renaming !== null && chosen ? renaming.draft : null}
+                  renaming={renaming !== null && renamed(row.item, renaming.session) ? renaming.draft : null}
                   onDraft={(draft) => setRenaming((current) => (current === null ? null : { ...current, draft }))}
                   onFinishRename={finishRename}
                 />
@@ -481,6 +515,18 @@ function opening(titles: HistoryAnswer, conversations: HistoryAnswer): HistoryLi
   return has(conversations) ? 'conversations' : 'titles'
 }
 
+/** What F2's field starts with: the name given by hand, else the agent's title, else the first prompt's first line, unquoted. */
+function renameSeed(session: HistorySession): string {
+  const named = session.label ?? session.agentTitle
+  if (named !== undefined && named !== null && named.trim() !== '') return named
+  return (session.title.split(/\r?\n/, 1)[0]?.trim() ?? '').slice(0, HISTORY_NAME_MAX)
+}
+
+/** Whether `item` is the row a rename was started on: a session's or a child's, never a matched line. */
+function renamed(item: Item, session: HistorySession): boolean {
+  return (item.kind === 'session' || item.kind === 'child') && item.session.sessionId === session.sessionId
+}
+
 /** A row is chosen with the pointer without taking focus from the field. */
 const keepFocus = (event: { preventDefault: () => void }): void => event.preventDefault()
 
@@ -490,11 +536,12 @@ type Blocked =
   | { kind: 'unreadable'; file: string; message: string }
   | { kind: 'archive'; message: string }
   | { kind: 'failed'; message: string }
+  | { kind: 'uncounted'; message: string }
   | { kind: 'no-match'; other: HistoryListKind }
 
 /** A read that failed, which Enter tries again; no match, reading and empty have nothing to try again. */
 function retries(state: Blocked): boolean {
-  return state.kind === 'unreadable' || state.kind === 'archive' || state.kind === 'failed'
+  return state.kind === 'unreadable' || state.kind === 'archive' || state.kind === 'failed' || state.kind === 'uncounted'
 }
 
 function blockedState(props: HistoryPaletteProps, typed: boolean, list: HistoryListKind, shown: HistoryAnswer): Blocked | null {
@@ -508,7 +555,13 @@ function blockedState(props: HistoryPaletteProps, typed: boolean, list: HistoryL
     return { kind: 'failed', message: shown.error }
   }
   if (shown.sessions.length > 0 || stoppedRows) return null
-  if (!typed) return props.total === null || props.total === 0 ? { kind: 'empty' } : null
+  // "Nothing there" only when the host said it holds none: a count that could
+  // not be read is said as that, and one not read yet is still reading.
+  if (!typed) {
+    if (props.total === 0) return { kind: 'empty' }
+    if (props.totalError !== null && props.totalError !== undefined) return { kind: 'uncounted', message: props.totalError }
+    return props.total === null ? { kind: 'reading' } : null
+  }
   return { kind: 'no-match', other: list === 'titles' ? 'conversations' : 'titles' }
 }
 
@@ -544,6 +597,8 @@ function BlockedBody({ state }: { state: Blocked }): JSX.Element {
       )
     case 'failed':
       return body('History could not be searched', state.message)
+    case 'uncounted':
+      return body('Could not tell what History holds', state.message)
     case 'no-match':
       return (
         <p data-history-state="no-match" className="px-[13px] pt-3 pb-4 text-[12px] text-fg-muted">
@@ -909,7 +964,7 @@ function Preview({
       )}
       {renaming ? (
         <p className="text-[11px] text-fg-subtle">
-          Your name replaces {name.quoted ? `${name.text}, the first line of its first prompt` : `“${paletteName({ ...session, label: null }).text}”`}, here and in its tab when it is resumed. An agent’s title never overwrites it. Leave it empty to go back.
+          Your name replaces {name.quoted ? `${name.text}, the first line of its first prompt` : `“${name.text}”`}, here and in its tab when it is resumed. An agent’s title never overwrites it. Leave it empty to go back.
         </p>
       ) : running !== null ? (
         <p className="text-[11px] text-fg-subtle">
