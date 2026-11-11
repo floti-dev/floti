@@ -1,6 +1,9 @@
-import type { JSX, ReactNode } from 'react'
+import { useState, type JSX, type ReactNode } from 'react'
 import type { LaunchAgents } from '@helm/core/types'
 import { cn } from '../lib/cn'
+import { PlusIcon } from './icons'
+import { Menu, type MenuEntry } from './Menu'
+import { SidebarAction } from './Sidebar'
 
 export interface AgentListProps {
   /** The host's agents as it lists them now; null while the first answer is on its way. */
@@ -132,5 +135,52 @@ function Section({ title, count, children }: { title: string; count: number; chi
       </h3>
       <ul className="m-0 list-none p-0">{children}</ul>
     </section>
+  )
+}
+
+export interface NewAgentButtonProps {
+  /** The agents a copy can be made of, by name. */
+  agents: readonly string[]
+  disabled: boolean
+  onBlank: () => void
+  onCopy: (name: string) => void
+}
+
+/** The + in the Agents header (the design's A11): a blank agent, or a copy of any agent. */
+export function NewAgentButton({ agents, disabled, onBlank, onCopy }: NewAgentButtonProps): JSX.Element {
+  const [at, setAt] = useState<DOMRect | null>(null)
+  const entries: MenuEntry[] = [
+    { kind: 'item', id: 'blank', label: 'Blank agent' },
+    ...(agents.length === 0
+      ? []
+      : [
+          { kind: 'heading', id: 'copies', label: 'Copy of' } as const,
+          ...agents.map((name) => ({ kind: 'item', id: `copy:${name}`, label: name }) as const)
+        ])
+  ]
+  return (
+    <>
+      <SidebarAction
+        label="New agent"
+        data-new-agent
+        disabled={disabled}
+        onClick={() => setAt((open) => (open === null ? (document.activeElement?.getBoundingClientRect() ?? null) : null))}
+      >
+        <PlusIcon width={13} height={13} />
+      </SidebarAction>
+      {at !== null && (
+        <Menu
+          label="New agent"
+          entries={entries}
+          at={{ below: at }}
+          onDismiss={() => setAt(null)}
+          onSelect={(id) => {
+            setAt(null)
+            if (id === 'blank') onBlank()
+            else if (id.startsWith('copy:')) onCopy(id.slice('copy:'.length))
+          }}
+        />
+      )}
+    </>
   )
 }

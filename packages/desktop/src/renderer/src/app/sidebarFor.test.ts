@@ -12,6 +12,8 @@ describe('sidebarFor', () => {
       [{ kind: 'restore' }, 'sessions'],
       [{ kind: 'file', root: 'C:\\p', path: 'C:\\p\\a.ts' }, 'files'],
       [{ kind: 'settings' }, 'settings'],
+      [{ kind: 'agent', name: 'lead' }, 'agents'],
+      [{ kind: 'agent-draft', id: 1, copyOf: null, host: 'buildbox' }, 'agents'],
       [{ kind: 'history' }, null],
       [{ kind: 'browser' }, null]
     ]

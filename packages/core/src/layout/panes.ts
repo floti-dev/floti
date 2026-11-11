@@ -57,7 +57,21 @@ export type PaneRef =
   | { kind: 'browser' }
   | SessionRef
   | TerminalRef
+  | AgentDraftRef
   | { kind: 'restore' }
+
+/**
+ * A new agent's page, not written yet: blank, or a copy of `copyOf`, on the
+ * host by its id, absent for this PC's. `id` is the window's own name for it.
+ * Never written down: nothing is in the folder until it is saved, when its
+ * tab becomes the agent's own (`replaceTab`).
+ */
+export interface AgentDraftRef {
+  kind: 'agent-draft'
+  id: number
+  copyOf: string | null
+  host?: string
+}
 
 /**
  * A terminal tab: a plain shell in `path`, on the host by its id in the
@@ -236,6 +250,10 @@ function hostlessPaneId(ref: PaneRef): string {
       return `terminal:${String(ref.id)}`
     case 'file':
       return `file:${ref.path}`
+    case 'agent':
+      return `agent:${ref.name}`
+    case 'agent-draft':
+      return `agent-draft:${String(ref.id)}`
     case 'plugin':
       return pluginTabId(ref.plugin, ref.tab, ref.params)
     case 'plugin-pages':
@@ -250,7 +268,7 @@ function hostlessPaneId(ref: PaneRef): string {
 
 /** Whether a tab is written down across a restart. See `SavedPane`. */
 export function isPersistable(ref: PaneRef): ref is SavedPane {
-  return ref.kind !== 'browser' && ref.kind !== 'terminal' && ref.kind !== 'restore'
+  return ref.kind !== 'browser' && ref.kind !== 'terminal' && ref.kind !== 'restore' && ref.kind !== 'agent-draft'
 }
 
 /** The tab in front of a group: its `activeId`, or the last tab if that is gone. */
@@ -645,6 +663,23 @@ export function retitleTab(layout: PaneLayout, id: string, title: string | null)
   if (ref.kind !== 'plugin' || ref.title === title) return layout
   const tabs = group.tabs.map((tab, index) => (index === at.index ? { ...ref, title } : tab))
   return { ...layout, groups: layout.groups.map((other) => (other.id === group.id ? { ...other, tabs } : other)) }
+}
+
+/**
+ * The tab `id` made into `ref` where it stands, in front if it was: a new
+ * agent's page that was saved, or an agent renamed. When `ref` is a tab
+ * already, the one `id` names closes instead and that one comes to the front.
+ */
+export function replaceTab(layout: PaneLayout, id: string, ref: PaneRef): PaneLayout {
+  const at = findTab(layout, id)
+  if (at === null) return layout
+  const next = paneId(ref)
+  if (next === id) return layout
+  if (findTab(layout, next) !== null) return activateTab(closeTab(layout, id), next)
+  const group = groupById(layout, at.group)!
+  const tabs = group.tabs.map((tab, index) => (index === at.index ? ref : tab))
+  const activeId = group.activeId === id ? next : group.activeId
+  return { ...layout, groups: layout.groups.map((other) => (other.id === group.id ? { ...other, tabs, activeId } : other)) }
 }
 
 export function focusGroup(layout: PaneLayout, id: number): PaneLayout {

@@ -1340,7 +1340,7 @@ export const AGENT_COMMANDS_PER_PARENT = { min: 1, max: 32, default: 4 } as cons
  * `railHidden` is validated against it, so no write can hide the one way back
  * to un-hiding everything else. The ids are the rail's own (`data-rail`).
  */
-export const RAIL_DESTINATIONS = ['sessions', 'profiles', 'history', 'files', 'browser'] as const
+export const RAIL_DESTINATIONS = ['sessions', 'profiles', 'agents', 'history', 'files', 'browser'] as const
 
 export type RailDestination = (typeof RAIL_DESTINATIONS)[number]
 
@@ -1431,6 +1431,12 @@ export type WorkspaceTab =
    * `pluginPageId`. Kept across a restart as a plugin tab is.
    */
   | { kind: 'plugin-pages'; plugin: string; pages: PluginPage[]; active: string | null; host?: string }
+  /**
+   * One of a host's agents, opened as a page from the Agents view, by its
+   * name in that host's agents folder. Kept across a restart; an agent that
+   * is gone by then opens saying so.
+   */
+  | { kind: 'agent'; name: string; host?: string }
 
 /** How many tabs are worth writing down. Past this the list is a bug, not a
  * workspace, and a settings row nobody can shrink is worse than a truncation. */

@@ -26,6 +26,7 @@ import {
   placeRestored,
   reconcile,
   replaceSessionTabs,
+  replaceTab,
   resizeSplit,
   retitleTab,
   savedGroups,
@@ -138,6 +139,32 @@ describe('retitleTab', () => {
     expect(retitleTab(layout, 'history', 'Nope')).toBe(layout)
     expect(retitleTab(layout, 'plugin:sample/gone', 'Nope')).toBe(layout)
     expect(retitleTab(layout, 'plugin:sample/detail', 'Same')).toBe(layout)
+  })
+})
+
+describe('replaceTab', () => {
+  const draft: PaneRef = { kind: 'agent-draft', id: 1, copyOf: 'worker' }
+  const lead: PaneRef = { kind: 'agent', name: 'lead' }
+
+  it('makes a new agent page its agent in place, in front if it was', () => {
+    const layout = layoutOf(row([g(HISTORY, draft), g(SETTINGS)]), 1)
+    const saved = replaceTab(layout, 'agent-draft:1', lead)
+    expect(saved.groups[0]!.tabs).toEqual([HISTORY, lead])
+    expect(saved.groups[0]!.activeId).toBe('agent:lead')
+    expect(saved.focused).toBe(layout.focused)
+  })
+
+  it('closes the old tab and fronts the one there already, and leaves a missing one alone', () => {
+    const layout = layoutOf(row([g(lead, draft)]))
+    const saved = replaceTab(layout, 'agent-draft:1', lead)
+    expect(saved.groups[0]!.tabs).toEqual([lead])
+    expect(replaceTab(layout, 'agent:gone', lead)).toBe(layout)
+  })
+
+  it('names an agent tab by host and keeps a new page out of the saved layout', () => {
+    expect(paneId({ kind: 'agent', name: 'worker', host: 'box' })).toBe('host:box/agent:worker')
+    expect(isPersistable(lead)).toBe(true)
+    expect(isPersistable(draft)).toBe(false)
   })
 })
 

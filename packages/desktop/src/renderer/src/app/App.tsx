@@ -20,6 +20,8 @@ import {
   closedChildTab,
   crumbChips,
   closeTab,
+  copyName,
+  replaceTab,
   cycleTab,
   DEFAULT_SETTINGS,
   familiesHere,
@@ -110,6 +112,11 @@ import {
   ChildPeek,
   type TreeNoticeActions,
   NeedsYouToast,
+  AgentCardIcon,
+  AgentList,
+  HostSwitch,
+  NewAgentButton,
+  UndoToast,
   cn,
   CodeIcon,
   CommandPalette,
@@ -217,6 +224,9 @@ import {
   type AddHostActions,
 } from "@helm/ui";
 import { sidebarFor, type SidebarView } from "./sidebarFor";
+import { AgentTab } from "./agents/AgentTab";
+import { forgetAgentDraft, type AgentOutcome } from "./agents/useAgentDraft";
+import { useAgentList } from "./agents/useAgentList";
 import {
   commandRow,
   peeksOnPress,
@@ -476,13 +486,24 @@ const NO_PLUGINS: ReadonlyMap<string, PluginInfo> = new Map();
 /** A plugin's request, with the host whose plugin made it. */
 type OnHost<T> = T & { host: string };
 
+/** A change to an agent made without asking, with its Undo: null once Undo put it back, else why not. */
+interface AgentToast {
+  key: number;
+  title: string;
+  detail: string | null;
+  undo: () => Promise<string | null>;
+  undoing: boolean;
+  error: string | null;
+}
+
 /** The surfaces that show one host's data at a time, with a switch while more than one is connected. */
-type HostSurface = "history" | "usage" | "files" | "plugins";
+type HostSurface = "history" | "usage" | "files" | "plugins" | "agents";
 const LOCAL_SURFACES: Readonly<Record<HostSurface, string>> = {
   history: LOCAL_HOST_KEY,
   usage: LOCAL_HOST_KEY,
   files: LOCAL_HOST_KEY,
   plugins: LOCAL_HOST_KEY,
+  agents: LOCAL_HOST_KEY,
 };
 
 /**
@@ -662,6 +683,24 @@ export function App(): JSX.Element {
   );
   /** Notes with a draft that is not on disk - the tab strip's dot. */
   const [docDirty, setDocDirty] = useState<ReadonlySet<string>>(new Set());
+  /** The one change to an agent made without asking, with its Undo, until it is closed or the next replaces it. */
+  const [agentToast, setAgentToast] = useState<AgentToast | null>(null);
+  /** Why adding a shipped agent did not, said in the Agents list. */
+  const [agentAddError, setAgentAddError] = useState<string | null>(null);
+  /** Runs the toast's Undo: it goes once that worked, and says why when it did not. */
+  const runAgentUndo = async (): Promise<void> => {
+    const toast = agentToast;
+    if (toast === null || toast.undoing) return;
+    setAgentToast({ ...toast, undoing: true, error: null });
+    const problem = await toast.undo();
+    setAgentToast((current) =>
+      current?.key !== toast.key
+        ? current
+        : problem === null
+          ? null
+          : { ...current, undoing: false, error: problem },
+    );
+  };
   /** Where a file opened from a text search lands, by file key: the line and the words. */
   const [fileReveals, setFileReveals] = useState<
     ReadonlyMap<string, QuickOpenAt>
@@ -2433,6 +2472,15 @@ export function App(): JSX.Element {
       if (ref.kind === "browser") browsers.closeAll();
       // Closing the offer is "not now", the same as its button.
       if (ref.kind === "restore") dismissRestore();
+      if (ref.kind === "agent" || ref.kind === "agent-draft") {
+        forgetAgentDraft(id);
+        setDocDirty((current) => {
+          if (!current.has(id)) return current;
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
+      }
       commit((current) => closeTab(current, id));
     },
     [open, closeSession, closeRemoteSession, browsers, commit, dismissRestore],
@@ -2811,6 +2859,8 @@ export function App(): JSX.Element {
         setTreeReveal({ seq, kind: "session", id: paneId(ref) });
       else if (ref.kind === "project")
         setTreeReveal({ seq, kind: "project", path: ref.path });
+      else if (ref.kind === "agent" || ref.kind === "agent-draft")
+        showHostOn("agents", hostOf(ref));
     },
     [revealFile, filesHost, showHostOn],
   );
@@ -3485,7 +3535,9 @@ export function App(): JSX.Element {
       }),
     }));
   const attentionShowing =
-    (needsYou.toasts.length > 0 || awayLists.length > 0) &&
+    (needsYou.toasts.length > 0 ||
+      awayLists.length > 0 ||
+      agentToast !== null) &&
     peek.target === null &&
     confirmAsk === null;
   useEffect(
@@ -3538,6 +3590,17 @@ export function App(): JSX.Element {
           onClose={() => needsYou.closeToast(toast.key)}
         />
       ))}
+      {agentToast !== null && (
+        <UndoToast
+          key={agentToast.key}
+          title={agentToast.title}
+          detail={agentToast.detail}
+          undoing={agentToast.undoing}
+          error={agentToast.error}
+          onUndo={() => void runAgentUndo()}
+          onClose={() => setAgentToast(null)}
+        />
+      )}
     </div>
   ) : null;
 
@@ -3640,6 +3703,175 @@ export function App(): JSX.Element {
   })();
 
   /** One tab, as its pane's strip draws it. */
+  /*
+   * The Agents view and its pages (the design's A1-A16 and A25): one host's
+   * agents at a time, switched as Files is, read only while the view or
+   * Settings > Agents is on screen. Each page reads its own host's.
+   */
+  const agentsHost = shownHostOf("agents");
+  const agentList = useAgentList(
+    agentsHost,
+    (sidebarShown && sidebarView === "agents") ||
+      (front?.kind === "settings" && settingsSection === "agents"),
+  );
+  const agentDraftSeq = useRef(0);
+  const agentRefOn = (name: string, host: string): PaneRef =>
+    host === LOCAL_HOST_KEY
+      ? { kind: "agent", name }
+      : { kind: "agent", name, host };
+  const newAgent = (copyOf: string | null, host: string = agentsHost): void => {
+    agentDraftSeq.current += 1;
+    const id = agentDraftSeq.current;
+    openPane(
+      host === LOCAL_HOST_KEY
+        ? { kind: "agent-draft", id, copyOf }
+        : { kind: "agent-draft", id, copyOf, host },
+    );
+  };
+  const addShippedAgent = (name: string): void => {
+    setAgentAddError(null);
+    bridgeFor(agentsHost)
+      .invoke("agents:addShipped", { name })
+      .then((result) => setAgentAddError(result.refusal))
+      .catch((err: unknown) => setAgentAddError(readable(err)));
+  };
+  const raiseAgentToast = (
+    title: string,
+    detail: string | null,
+    undo: () => Promise<string | null>,
+  ): void =>
+    setAgentToast((current) => ({
+      key: (current?.key ?? 0) + 1,
+      title,
+      detail,
+      undo,
+      undoing: false,
+      error: null,
+    }));
+  /** Undo by the host's `agents:restore`: null once it put the agent back, else why not. */
+  const agentRestore =
+    (host: string, name: string, after?: () => void) =>
+    async (): Promise<string | null> => {
+      try {
+        const result = await bridgeFor(host).invoke("agents:restore", { name });
+        if (result.refusal !== null) return result.refusal;
+        after?.();
+        return null;
+      } catch (err) {
+        return readable(err);
+      }
+    };
+  /** What a page's save, rename, delete or reload does to its tab, and the toast it leaves. */
+  const agentOutcome =
+    (id: string, host: string) =>
+    (outcome: AgentOutcome): void => {
+      const leave = (): void => {
+        forgetAgentDraft(id);
+        markDocDirty(id, false);
+      };
+      switch (outcome.kind) {
+        case "saved":
+          return;
+        case "created":
+          leave();
+          commit((current) =>
+            replaceTab(current, id, agentRefOn(outcome.name, host)),
+          );
+          return;
+        case "renamed": {
+          leave();
+          const renamed = agentRefOn(outcome.name, host);
+          commit((current) => replaceTab(current, id, renamed));
+          raiseAgentToast(
+            `Renamed ${outcome.from} to ${outcome.name}`,
+            "Undo gives it its old name back.",
+            agentRestore(host, outcome.from, () =>
+              commit((current) =>
+                replaceTab(
+                  current,
+                  paneId(renamed),
+                  agentRefOn(outcome.from, host),
+                ),
+              ),
+            ),
+          );
+          return;
+        }
+        case "savedOver":
+          raiseAgentToast(
+            `Saved over the change made at ${outcome.at}`,
+            "Undo puts that change back.",
+            agentRestore(host, outcome.name),
+          );
+          return;
+        case "deleted":
+          leave();
+          commit((current) => closeTab(current, id));
+          raiseAgentToast(
+            `Deleted ${outcome.name}`,
+            "Its file is kept in Floti's data folder, so Undo puts it back as it was.",
+            agentRestore(host, outcome.name),
+          );
+          return;
+        case "reloaded":
+          raiseAgentToast(
+            `Reloaded ${outcome.name}.md`,
+            "Undo brings your edit back.",
+            () => {
+              outcome.undo();
+              return Promise.resolve(null);
+            },
+          );
+          return;
+        case "gone":
+          leave();
+          commit((current) => closeTab(current, id));
+          return;
+      }
+    };
+  const renderAgent = (
+    ref: Extract<PaneRef, { kind: "agent" | "agent-draft" }>,
+  ): JSX.Element => {
+    const on = hostOf(ref);
+    const id = paneId(ref);
+    const taken = new Set(
+      on === agentsHost
+        ? (agentList.listing?.agents.map((agent) => agent.name) ?? [])
+        : [],
+    );
+    return (
+      <AgentTab
+        key={id}
+        host={on}
+        hostName={hostName(on)}
+        remote={on !== LOCAL_HOST_KEY}
+        tabKey={id}
+        target={
+          ref.kind === "agent"
+            ? { name: ref.name }
+            : {
+                copyOf: ref.copyOf,
+                name: ref.copyOf === null ? "" : copyName(ref.copyOf, taken),
+              }
+        }
+        profiles={
+          on === LOCAL_HOST_KEY
+            ? profileState.profiles.map((profile) => profile.name)
+            : null
+        }
+        onDirtyChange={(dirty) => markDocDirty(id, dirty)}
+        onOutcome={agentOutcome(id, on)}
+        onCopy={(name) => newAgent(name, on)}
+        onDiscard={() => {
+          forgetAgentDraft(id);
+          markDocDirty(id, false);
+          commit((current) => closeTab(current, id));
+        }}
+        onStartSession={(name) => showLauncher(null, on, name)}
+      />
+    );
+  };
+
   const tabFor = (ref: PaneRef): Tab[] => {
     switch (ref.kind) {
       case "session": {
@@ -3738,6 +3970,30 @@ export function App(): JSX.Element {
             icon: <HistoryIcon width={13} height={13} />,
           },
         ];
+      case "agent":
+      case "agent-draft": {
+        const on = hostOf(ref);
+        const isNew = ref.kind === "agent-draft";
+        const named = isNew ? "New agent" : ref.name;
+        return [
+          {
+            id: paneId(ref),
+            title: named,
+            ...(on === LOCAL_HOST_KEY ? {} : { host: hostName(on) }),
+            hint: isNew
+              ? ref.copyOf === null
+                ? "A new agent, not saved yet"
+                : `A copy of ${ref.copyOf}, not saved yet`
+              : on === LOCAL_HOST_KEY
+                ? `The ${named} agent`
+                : `The ${named} agent on ${hostName(on)}`,
+            icon: <AgentCardIcon width={13} height={13} />,
+            // A page not written yet reads in italic, as a preview tab does.
+            preview: isNew,
+            dirty: isNew || docDirty.has(paneId(ref)),
+          },
+        ];
+      }
       case "settings":
         return [
           {
@@ -4532,6 +4788,15 @@ export function App(): JSX.Element {
   const renderHelmSettings = (): JSX.Element => (
     <SettingsPane
       section={settingsSection}
+      agentsOverview={{
+        count: agentList.listing?.agents.length ?? null,
+        hostName: hostName(agentsHost),
+        folder: agentList.listing?.folder ?? null,
+        onOpen: () => {
+          setSidebarView("agents");
+          setSidebarHidden(false);
+        },
+      }}
       status={setup.status}
       checking={setup.checking}
       onRecheck={setup.recheck}
@@ -4935,6 +5200,9 @@ export function App(): JSX.Element {
           </div>
         );
       }
+      case "agent":
+      case "agent-draft":
+        return renderAgent(ref);
       case "settings":
         return renderSettings();
       case "plugin": {
@@ -5528,6 +5796,15 @@ export function App(): JSX.Element {
             onSelect: () => toggleView("profiles"),
             hooks: { "data-open-profiles": true },
           },
+          {
+            id: "agents",
+            label: "Agents",
+            icon: <AgentCardIcon {...RAIL_ICON} />,
+            kind: "view",
+            current: sidebarShown && sidebarView === "agents",
+            onSelect: () => toggleView("agents"),
+            hooks: { "data-open-agents": true },
+          },
           page(
             "history",
             "Session history",
@@ -5788,6 +6065,41 @@ export function App(): JSX.Element {
               setSettingsSection(section);
               openPane({ kind: "settings" });
             }}
+          />
+        </Sidebar>
+      )}
+      {sidebarView === "agents" && (
+        <Sidebar
+          title="Agents"
+          scope={
+            hostChoiceFor("agents") === undefined ? undefined : (
+              <HostSwitch surface="Agents" {...hostChoiceFor("agents")} />
+            )
+          }
+          actions={
+            <NewAgentButton
+              agents={agentList.listing?.agents.map((agent) => agent.name) ?? []}
+              disabled={
+                agentList.listing === null ||
+                agentList.listing.readOnly !== null
+              }
+              onBlank={() => newAgent(null)}
+              onCopy={(name) => newAgent(name)}
+            />
+          }
+        >
+          <AgentList
+            listing={agentList.listing}
+            error={agentAddError ?? agentList.error}
+            hostName={hostName(agentsHost)}
+            remote={agentsHost !== LOCAL_HOST_KEY}
+            selected={
+              front?.kind === "agent" && hostOf(front) === agentsHost
+                ? front.name
+                : null
+            }
+            onOpen={(name) => openPane(agentRefOn(name, agentsHost))}
+            onAdd={addShippedAgent}
           />
         </Sidebar>
       )}
@@ -6190,6 +6502,7 @@ export function App(): JSX.Element {
             }
             home={info?.home ?? null}
             initialPath={newSession.initialPath}
+            initialAgent={newSession.initialAgent}
             resumable={newSession.resumable}
             agents={newSession.agents}
             onShowing={newSession.loadResumable}

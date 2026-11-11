@@ -668,6 +668,11 @@ describe('settings validation', () => {
           },
           focused: 0
         },
+        // An agent's page, on this PC and on another host.
+        {
+          root: { panes: [{ kind: 'agent', name: 'lead' }, { kind: 'agent', name: 'worker-2', host: 'buildbox' }], activeId: null },
+          focused: 0
+        },
         // A plugin's one tab holding its pages, with the page in front named.
         {
           root: {
@@ -688,6 +693,8 @@ describe('settings validation', () => {
         }
       ],
       bad: [
+        // An agent's page whose name is not an agent's name.
+        { root: { panes: [{ kind: 'agent', name: 'Not A Name' }], activeId: null }, focused: 0 },
         // A plugin's pages tab with no pages, a page that is not one a
         // manifest could open, or a front page that is not a page id.
         { root: { panes: [{ kind: 'plugin-pages', plugin: 'trackr', pages: [], active: null }], activeId: null }, focused: 0 },

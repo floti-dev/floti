@@ -53,7 +53,8 @@ export interface AgentPageProps {
   /** Why the host changes nothing in its agents folder; null when it may. */
   readOnly: string | null
   backends: readonly InstalledBackend[]
-  profiles: readonly string[]
+  /** The host's profiles, by name; null when the window cannot list them. */
+  profiles: readonly string[] | null
   onHighlight: ((path: string, source: string) => Promise<EditorHighlight>) | null
   onSave: () => void
   onRevert: () => void
@@ -170,10 +171,12 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
             Start a session…
           </button>
         )}
-        <button type="button" data-agent-copy className={BAR_BUTTON} onClick={props.onCopy}>
-          <CopyIcon width={12} height={12} />
-          Copy
-        </button>
+        {!isNew && (
+          <button type="button" data-agent-copy className={BAR_BUTTON} onClick={props.onCopy}>
+            <CopyIcon width={12} height={12} />
+            Copy
+          </button>
+        )}
         {!isNew && (
           <button type="button" data-agent-delete className={BAR_BUTTON} disabled={readOnly !== null} onClick={props.onDelete}>
             <TrashIcon width={12} height={12} />

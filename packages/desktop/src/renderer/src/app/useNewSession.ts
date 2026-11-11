@@ -26,8 +26,10 @@ export interface NewSessionState {
   initialPath: string | null
   /** The host it starts on: `LOCAL_HOST_KEY` for this PC, or a host on another computer's id. */
   host: string
-  /** Opens it on `host` (this PC's by default), with `initialPath` highlighted. */
-  show: (initialPath: string | null, host?: string) => void
+  /** The agent picked when it opened: one an agent's page started it from, else null for No agent. */
+  initialAgent: string | null
+  /** Opens it on `host` (this PC's by default), with `initialPath` highlighted and `agent` picked. */
+  show: (initialPath: string | null, host?: string, agent?: string | null) => void
   /** Moves an open launcher to another host, which it then lists and starts on. */
   setHost: (host: string) => void
   /**
@@ -69,6 +71,7 @@ const PER_FOLDER = 3
 export function useNewSession(): NewSessionState {
   const [open, setOpen] = useState(false)
   const [initialPath, setInitialPath] = useState<string | null>(null)
+  const [initialAgent, setInitialAgent] = useState<string | null>(null)
   const [host, setHostState] = useState<string>(LOCAL_HOST_KEY)
   /** The host as the last call left it, for callbacks that outlive a render. */
   const hostRef = useRef<string>(LOCAL_HOST_KEY)
@@ -110,7 +113,7 @@ export function useNewSession(): NewSessionState {
       // it is answered as having none, so the Agent picker offers No agent
       // alone and nothing says the agents are still being read.
       .catch(() => {
-        if (current === opening.current) setAgents({ agents: [], bad: [], backends: [] })
+        if (current === opening.current) setAgents({ agents: [], bad: [], backends: [], folder: '', readOnly: null, shipped: [] })
       })
     void bridgeFor(hostRef.current)
       .invoke('history:projects')
@@ -124,11 +127,12 @@ export function useNewSession(): NewSessionState {
   }, [])
 
   const show = useCallback(
-    (path: string | null, on: string = LOCAL_HOST_KEY) => {
+    (path: string | null, on: string = LOCAL_HOST_KEY, agent: string | null = null) => {
       hostRef.current = on
       setHostState(on)
       prepare()
       setInitialPath(path)
+      setInitialAgent(agent)
       setOpen(true)
     },
     [prepare]
@@ -198,6 +202,7 @@ export function useNewSession(): NewSessionState {
   return {
     open,
     initialPath,
+    initialAgent,
     host,
     show,
     setHost,

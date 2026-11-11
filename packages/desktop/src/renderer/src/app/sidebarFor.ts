@@ -1,7 +1,7 @@
 import type { PaneRef } from '@helm/core/types'
 
 /** What the sidebar can show: the lists the rail opens and tabs are opened from. */
-export type SidebarView = 'sessions' | 'files' | 'profiles' | 'settings' | `plugin:${string}`
+export type SidebarView = 'sessions' | 'files' | 'profiles' | 'agents' | 'settings' | `plugin:${string}`
 
 /**
  * The sidebar a tab carries on from, or null for a tab that needs none.
@@ -10,7 +10,7 @@ export type SidebarView = 'sessions' | 'files' | 'profiles' | 'settings' | `plug
  * it: clicking the tab brings this view back, so nobody has to return to the
  * rail for a list the tab already belongs to. A tab with its list inside it
  * (History) or no list at all (Browser) leaves the
- * sidebar as it is. Profiles is reached from the rail alone - a session started
+ * sidebar as it is. An agent's page brings back Agents. Profiles is reached from the rail alone - a session started
  * from a profile is a session, and belongs to Sessions.
  */
 export function sidebarFor(ref: PaneRef): SidebarView | null {
@@ -25,6 +25,9 @@ export function sidebarFor(ref: PaneRef): SidebarView | null {
       return 'files'
     case 'settings':
       return 'settings'
+    case 'agent':
+    case 'agent-draft':
+      return 'agents'
     case 'history':
     case 'browser':
     case 'plugin':

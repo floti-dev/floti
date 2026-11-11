@@ -148,7 +148,7 @@ const themeId = (value: unknown): string | null =>
 const ACCENT_HEX = /^#[0-9a-f]{6}$/
 
 /** The tab kinds that belong to one host, and name it when it is not this PC (`WorkspaceTab`, `SessionRef`). */
-const HOSTED_TAB_KINDS: ReadonlySet<string> = new Set(['session', 'project', 'file', 'plugin', 'plugin-pages'])
+const HOSTED_TAB_KINDS: ReadonlySet<string> = new Set(['session', 'project', 'file', 'plugin', 'plugin-pages', 'agent'])
 
 /**
  * Why a tab's `host` is not a host another than this PC, or null when it is
@@ -197,6 +197,13 @@ function paneProblem(pane: unknown): string | null {
   // A kind an older build wrote and this one opens nothing for. Accepted so the
   // rest of the layout it sits in still loads; `fromSaved` drops the tab.
   if (typeof kind === 'string' && RETIRED_TAB_KINDS.has(kind)) return null
+  if (kind === 'agent') {
+    const { name } = pane as Record<string, unknown>
+    if (typeof name !== 'string' || !/^[a-z0-9-]+$/.test(name)) {
+      return `expected an agent's name, got ${describe(name)}`
+    }
+    return null
+  }
   if (kind === 'project') {
     if (typeof path !== 'string' || path.trim() === '') {
       return `expected a project path, got ${describe(path)}`

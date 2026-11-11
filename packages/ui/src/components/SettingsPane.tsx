@@ -90,6 +90,15 @@ import { DevicesSettings, type DevicesSettingsProps } from './DevicesSettings'
  * the same table but they are things Helm remembers, not things anyone chose.
  */
 
+/** What Settings › Agents says of the host's agents, and where Open Agents goes. */
+export interface AgentsOverview {
+  /** How many agents the host lists; null until it answers. */
+  count: number | null
+  hostName: string
+  folder: string | null
+  onOpen: () => void
+}
+
 export interface SettingsPaneProps {
   /** The one section on screen; the sidebar lists the rest (`SettingsSections`). */
   section: SettingsSectionId
@@ -253,6 +262,8 @@ export interface SettingsPaneProps {
    */
   sessionAgents: boolean
   onSessionAgentsChange: (next: boolean) => void
+  /** The host's agents in a sentence, with Open Agents: the Agents group's first row. */
+  agentsOverview?: AgentsOverview | undefined
   agentLimits: AgentLimitSettings
   onAgentLimitsChange: (patch: Partial<AgentLimitSettings>) => void
   /** Whether a parent's tab shows its running children beside its terminal. Kept on this device. */
@@ -405,6 +416,7 @@ export function SettingsPane({
   onSessionMcpChange,
   sessionAgents,
   onSessionAgentsChange,
+  agentsOverview,
   agentLimits,
   onAgentLimitsChange,
   showChildrenInParentTab,
@@ -727,6 +739,7 @@ export function SettingsPane({
           {section === 'agents' && (
             <>
               <AgentsGroup
+                overview={agentsOverview}
                 enabled={sessionAgents}
                 onEnabledChange={onSessionAgentsChange}
                 inParentTab={showChildrenInParentTab}
@@ -1719,11 +1732,13 @@ function SessionsGroup({
  * the host, the second is this device's alone.
  */
 function AgentsGroup({
+  overview,
   enabled,
   onEnabledChange,
   inParentTab,
   onInParentTabChange
 }: {
+  overview: AgentsOverview | undefined
   enabled: boolean
   onEnabledChange: (next: boolean) => void
   inParentTab: boolean
@@ -1731,6 +1746,22 @@ function AgentsGroup({
 }): JSX.Element {
   return (
     <Group name="agents" title="Agents">
+      {overview !== undefined && (
+        <Row
+          label={
+            overview.count === null
+              ? `Agents on ${overview.hostName}`
+              : `${overview.count} ${overview.count === 1 ? 'agent' : 'agents'} on ${overview.hostName}`
+          }
+          hint={`Lead, worker, reviewer and the rest: what a session started as one of them runs with.${
+            overview.folder === null ? '' : ` Kept as files in ${overview.folder}.`
+          }`}
+        >
+          <span data-settings-agents-open>
+            <Action onClick={overview.onOpen}>Open Agents</Action>
+          </span>
+        </Row>
+      )}
       <CheckRow
         label="Sessions can start agents"
         hint="Every session you start gets the floti-agents tools and floti agent. A profile can turn it off for its own sessions."

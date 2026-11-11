@@ -46,8 +46,8 @@ export interface AgentFormProps {
   backends: readonly InstalledBackend[]
   /** The host, as a backend it lacks is said to be missing on ("This PC"). */
   hostName: string
-  /** The profiles the host has, by name. */
-  profiles: readonly string[]
+  /** The profiles the host has, by name; null when the window cannot list them, and the file's is shown unjudged. */
+  profiles: readonly string[] | null
   readOnly: boolean
   /** The instructions' editor: the Files view's, which the page passes in. */
   instructions: ReactNode
@@ -76,7 +76,7 @@ export function AgentForm(props: AgentFormProps): JSX.Element {
     ...backends.filter((b) => !fields.backends.includes(b.id)).map((b) => ({ ...b, installed: true }))
   ]
   const permissionKnown = fields.permission === null || AGENT_PERMISSIONS.some((p) => p.word === fields.permission)
-  const profileKnown = fields.profile === null || profiles.includes(fields.profile)
+  const profileKnown = fields.profile === null || profiles === null || profiles.includes(fields.profile)
 
   return (
     <div data-agent-form className="flex flex-col gap-4">
@@ -161,16 +161,18 @@ export function AgentForm(props: AgentFormProps): JSX.Element {
             label="Profile"
             value={fields.profile ?? ''}
             disabled={readOnly}
-            danger={problemOf('profile').length > 0}
+            danger={problemOf('profile').length > 0 || !profileKnown}
             onChange={(value) => change({ field: 'profile', value: value === '' ? null : value })}
           >
             <option value="">No profile</option>
-            {profiles.map((p) => (
+            {(profiles ?? []).map((p) => (
               <option key={p} value={p}>
                 {p}
               </option>
             ))}
-            {!profileKnown && <option value={fields.profile ?? ''}>{`${fields.profile ?? ''} (no such profile)`}</option>}
+            {fields.profile !== null && !(profiles ?? []).includes(fields.profile) && (
+              <option value={fields.profile}>{profileKnown ? fields.profile : `${fields.profile} (no such profile)`}</option>
+            )}
           </Select>
         </Field>
       </div>

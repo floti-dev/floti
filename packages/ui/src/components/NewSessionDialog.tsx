@@ -70,6 +70,8 @@ export interface NewSessionDialogProps {
   home: string | null
   /** The folder highlighted when it opens - the one in front, usually. */
   initialPath: string | null
+  /** The agent picked when it opens: an agent's page's Start a session… names its own. Absent for No agent. */
+  initialAgent?: string | null | undefined
   /** Conversations that can be reopened, by lower-cased folder path. Absent means not read yet. */
   resumable: ReadonlyMap<string, readonly HistorySession[]>
   /** The folders on screen, so theirs can be read before the highlight reaches them. */
@@ -172,6 +174,7 @@ export function NewSessionDialog({
   profiles,
   home,
   initialPath,
+  initialAgent = null,
   resumable,
   onShowing,
   busy,
@@ -197,8 +200,8 @@ export function NewSessionDialog({
   const [cursor, setCursor] = useState<Cursor | null>(
     initialPath === null ? null : { path: initialPath, resume: null }
   )
-  /** The agent picked. Not remembered: every opening starts at No agent (A17). */
-  const [chosenAgent, setChosenAgent] = useState<string | null>(null)
+  /** The agent picked. Not remembered: every opening starts at No agent (A17), or at the agent whose page opened it. */
+  const [chosenAgent, setChosenAgent] = useState<string | null>(initialAgent)
   /** The pickers the person changed: the rest follow the folder and the agent. */
   const [touched, setTouched] = useState<Touched>({})
   const hostName = hosts?.find((each) => each.id === host)?.name ?? 'This PC'
