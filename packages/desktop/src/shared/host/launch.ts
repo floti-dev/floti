@@ -1,4 +1,4 @@
-import type { BadAgent, InstalledBackend, LaunchAgent, LaunchAgents } from '@helm/core/types'
+import type { AgentProblem, BadAgent, InstalledBackend, LaunchAgent, LaunchAgents } from '@helm/core/types'
 import type { LaunchSessionRequest } from '../ipc'
 import { CLAUDE_CODE_BACKEND } from './backend'
 import type * as P from './protocol'
@@ -90,12 +90,17 @@ function present<T>(map: { [key: string]: T | undefined }): Record<string, T> {
   return kept
 }
 
+/** A host's problem with an agent file, naming its backend only where the host did. */
+export function agentProblemFromHost({ field, line, message, backend }: P.AgentProblem): AgentProblem {
+  return backend === undefined ? { field, line, message } : { field, line, message, backend }
+}
+
 function badAgentFromHost(bad: P.BadAgentFile): BadAgent {
   return {
     name: bad.name,
     file: bad.file,
     problem: bad.problems.map((problem) => problem.message).join('; '),
-    problems: bad.problems.map(({ field, line, message }) => ({ field, line, message })),
+    problems: bad.problems.map(agentProblemFromHost),
     hash: bad.hash
   }
 }

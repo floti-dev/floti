@@ -1,6 +1,6 @@
 import type { AgentChangeResult, AgentFileText, LaunchAgents } from '@helm/core/types'
 import type { HostConnection, HostSubscription } from '../../../../shared/host/client'
-import { launchAgentsFromHost } from '../../../../shared/host/launch'
+import { agentProblemFromHost, launchAgentsFromHost } from '../../../../shared/host/launch'
 import type * as P from '../../../../shared/host/protocol'
 import type { HostReach } from './history'
 import type { HostAdapter } from './router'
@@ -57,7 +57,8 @@ export function createAgentsAdapter(link: HostReach, log: (line: string) => void
       'agents:restore': async ({ name }) =>
         agentChangeFromHost(await (await host()).request('agents:restore', { name })),
       'agents:addShipped': async ({ name }) =>
-        agentChangeFromHost(await (await host()).request('agents:addShipped', { name }))
+        agentChangeFromHost(await (await host()).request('agents:addShipped', { name })),
+      'agents:render': async ({ text }) => (await host()).request('agents:render', { text })
     },
     events: {
       'agents:changed': (listener) => {
@@ -82,7 +83,7 @@ function agentFileFromHost(file: P.AgentFile): AgentFileText {
     inFolder: file.inFolder,
     text: file.text,
     hash: file.hash,
-    problems: file.problems.map(({ field, line, message }) => ({ field, line, message }))
+    problems: file.problems.map(agentProblemFromHost)
   }
 }
 
@@ -91,7 +92,7 @@ function agentChangeFromHost(change: P.AgentChange): AgentChangeResult {
     changed: change.changed,
     file: change.file === null ? null : agentFileFromHost(change.file),
     refusal: change.refusal,
-    problems: change.problems.map(({ field, line, message }) => ({ field, line, message })),
+    problems: change.problems.map(agentProblemFromHost),
     conflict:
       change.conflict === null
         ? null

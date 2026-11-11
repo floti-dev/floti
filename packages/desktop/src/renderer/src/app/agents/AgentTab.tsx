@@ -1,9 +1,10 @@
 import { useEffect, type JSX } from 'react'
-import type { EditorHighlight } from '@helm/core/types'
+import { readAgentDraft, type EditorHighlight } from '@helm/core/types'
 import { AgentPage } from '@helm/ui'
 import { bridgeFor } from '../bridge'
 import { useAgentDraft, type AgentDraftTarget, type AgentOutcome } from './useAgentDraft'
 import { useAgentList } from './useAgentList'
+import { useInstructionsPreview } from './useInstructionsPreview'
 
 export interface AgentTabProps {
   host: string
@@ -16,17 +17,21 @@ export interface AgentTabProps {
   /** The host's profiles, by name; null when the window cannot list them. */
   profiles: readonly string[] | null
   onDirtyChange: (dirty: boolean) => void
+  /** Whether the file as read is not an agent: the tab marks it. */
+  onBadChange: (bad: boolean) => void
   /** A save, a rename, a delete or a reload that the window acts on: the tab, a toast. */
   onOutcome: (outcome: AgentOutcome) => void
   onCopy: (name: string) => void
   onDiscard: () => void
+  /** Opens a link the instructions' preview holds. */
+  onOpenExternal: (url: string) => void
   /** Opens the New session dialog with the agent picked; null where the window cannot. */
   onStartSession: ((name: string) => void) | null
 }
 
 /** One agent page: its draft on its host, drawn by `AgentPage`, with Ctrl+S to save. */
 export function AgentTab(props: AgentTabProps): JSX.Element {
-  const { host, onDirtyChange } = props
+  const { host, onDirtyChange, onBadChange } = props
   // The host's agents as listed now: the names a new name must not take, its
   // backends and its folder, for this page's own host whichever the view shows.
   const { listing } = useAgentList(host, true)
@@ -37,6 +42,9 @@ export function AgentTab(props: AgentTabProps): JSX.Element {
     helm.invoke('editor:highlight', { path, source })
 
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange])
+  const bad = (state.base?.problems.length ?? 0) > 0
+  useEffect(() => onBadChange(bad), [bad, onBadChange])
+  const preview = useInstructionsPreview(host, readAgentDraft(state.draft).body)
 
   const taken = new Set([...(listing?.agents ?? []).map((a) => a.name), ...(listing?.bad ?? []).map((b) => b.name)])
   const savedName = state.base?.name ?? null
@@ -85,6 +93,9 @@ export function AgentTab(props: AgentTabProps): JSX.Element {
         backends={listing?.backends ?? []}
         profiles={props.profiles}
         onHighlight={highlight}
+        preview={preview.rendered}
+        previewPending={preview.pending}
+        onOpenExternal={props.onOpenExternal}
         onSave={() => void agent.save()}
         onRevert={agent.revert}
         onDiscard={props.onDiscard}

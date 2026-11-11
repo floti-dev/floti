@@ -141,6 +141,12 @@ export interface CodeEditorProps {
   bare?: boolean
   /** Lines to mark in the gutter and behind the text. */
   marks?: EditorLineMarks | null
+  /**
+   * Lines drawn quietly, by number from 1, each with a note drawn after its
+   * text: a line that is there but changes nothing, such as a retired field.
+   * The note is drawn, never typed, so the text stays the file's.
+   */
+  quiet?: ReadonlyMap<number, string> | null
   onCaretChange?: ((caret: { line: number; column: number }) => void) | undefined
   onStatusChange?: ((status: EditorStatus) => void) | undefined
   ref?: RefObject<CodeEditorHandle | null>
@@ -148,6 +154,7 @@ export interface CodeEditorProps {
 
 const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' }
 const escapeText = (text: string): string => text.replace(/[&<>]/g, (ch) => ESCAPES[ch] ?? ch)
+const escapeAttribute = (text: string): string => escapeText(text).replace(/"/g, '&quot;')
 
 /** What the tokeniser last said, and what it said it about. */
 interface Coloured {
@@ -185,6 +192,7 @@ export function CodeEditor({
   readOnly = false,
   bare = false,
   marks = null,
+  quiet = null,
   onCaretChange,
   onStatusChange,
   ref
@@ -303,10 +311,12 @@ export function CodeEditor({
         const j = i < drift.head ? i : i >= drift.n - drift.tail ? drift.m - (drift.n - i) : -1
         if (j >= 0) inner = coloured?.lines[j] ?? null
       }
-      parts.push(`<span class="line">${inner ?? escapeText(lines[i] ?? '')}</span>`)
+      const note = quiet?.get(i + 1)
+      const attributes = note === undefined ? '' : ` data-editor-quiet data-editor-note="${escapeAttribute(note)}"`
+      parts.push(`<span class="line"${attributes}>${inner ?? escapeText(lines[i] ?? '')}</span>`)
     }
     return `<code>${parts.join('')}</code>`
-  }, [coloured, drift, lines, winStart, winEnd, plain])
+  }, [coloured, drift, lines, winStart, winEnd, plain, quiet])
 
   // Held stable so React only re-applies the subtree when the markup actually
   // changed - the same rule the content viewer's source body follows, and for

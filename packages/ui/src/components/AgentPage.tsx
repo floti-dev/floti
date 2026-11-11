@@ -6,13 +6,15 @@ import {
   withBody,
   type AgentProblem,
   type EditorHighlight,
-  type InstalledBackend
+  type InstalledBackend,
+  type RenderedMarkdown
 } from '@helm/core/types'
 import { cn } from '../lib/cn'
 import { SEGMENT_ON } from '../lib/segmented'
 import { AgentForm, FORM_FIELDS } from './AgentForm'
 import { CodeEditor } from './CodeEditor'
 import { CopyIcon, SaveIcon, TrashIcon } from './icons'
+import { MarkdownBody } from './MarkdownBody'
 
 /** The file as it is on disk now, when it changed after the page read it. */
 export interface AgentExternalChange {
@@ -56,6 +58,12 @@ export interface AgentPageProps {
   /** The host's profiles, by name; null when the window cannot list them. */
   profiles: readonly string[] | null
   onHighlight: ((path: string, source: string) => Promise<EditorHighlight>) | null
+  /** The instructions as the host renders them, for the live preview; null until the first render. */
+  preview: RenderedMarkdown | null
+  /** Whether the preview is behind the instructions as they are now. */
+  previewPending: boolean
+  /** Opens a link in the preview outside Floti. */
+  onOpenExternal: (url: string) => void
   onSave: () => void
   onRevert: () => void
   onDiscard: () => void
@@ -70,6 +78,8 @@ export interface AgentPageProps {
 const BAR_BUTTON =
   'flex h-6 items-center gap-1.5 rounded-raised px-2 text-[11.5px] text-fg-muted transition-colors hover:bg-hover hover:text-fg disabled:opacity-50'
 const STRIP_BUTTON = 'rounded-well border px-[9px] py-[3px] text-[11.5px] font-medium whitespace-nowrap transition-colors'
+/** What Source draws after a retired line (the design's M3). */
+const RETIRED_NOTE = 'no longer used · saving removes it'
 
 /**
  * One agent, opened as a page (the design's A5-A16): a bar with Form and
@@ -82,6 +92,7 @@ const STRIP_BUTTON = 'rounded-well border px-[9px] py-[3px] text-[11.5px] font-m
 export function AgentPage(props: AgentPageProps): JSX.Element {
   const { draft, savedName, name, problems, external, readOnly } = props
   const fields = readAgentDraft(draft)
+  const quiet = new Map(fields.retired.map((line) => [line.line, RETIRED_NOTE] as const))
   const unparsed = !fields.frontMatter || problems.some((p) => p.field === null && /front matter/.test(p.message))
   const [view, setView] = useState<'form' | 'source'>(unparsed ? 'source' : 'form')
   const [comparing, setComparing] = useState(false)
@@ -128,17 +139,34 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
   const facts = [file, `${(bytes / 1024).toFixed(1)} KB`, draft.includes('\r\n') ? 'CRLF' : 'LF']
   if (props.remote) facts.push(`on ${props.hostName}`)
 
+  // The Files view's editor beside its live preview (the design's A7).
   const instructions = (
-    <CodeEditor
-      surface="content"
-      path={file}
-      ariaLabel="Instructions"
-      value={fields.body}
-      onChange={(body) => props.onDraftChange(withBody(draft, body))}
-      onHighlight={props.onHighlight}
-      wrap
-      readOnly={readOnly !== null}
-    />
+    <div data-agent-instructions className="flex h-[300px] min-h-0 overflow-hidden rounded-well border border-border">
+      <div className="flex w-1/2 min-w-0 shrink-0 flex-col">
+        <CodeEditor
+          surface="content"
+          path={file}
+          ariaLabel="Instructions"
+          value={fields.body}
+          onChange={(body) => props.onDraftChange(withBody(draft, body))}
+          onHighlight={props.onHighlight}
+          wrap
+          bare
+          readOnly={readOnly !== null}
+        />
+      </div>
+      <div data-agent-preview className="flex w-1/2 min-w-0 border-l border-border bg-surface">
+        <MarkdownBody
+          path={file}
+          rendered={props.preview}
+          stale={props.previewPending}
+          compact
+          toc={false}
+          gutter="px-[18px]"
+          onOpenExternal={props.onOpenExternal}
+        />
+      </div>
+    </div>
   )
 
   return (
@@ -280,6 +308,7 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
                 wrap
                 readOnly={readOnly !== null}
                 invalid={props.bad}
+                quiet={quiet}
               />
             )}
           </div>

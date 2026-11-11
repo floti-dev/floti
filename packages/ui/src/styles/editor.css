@@ -303,6 +303,24 @@
   color: var(--helm-accent-text);
 }
 
+/* A quiet line: its text in the subtle colour whatever its tokens say, and its
+ * note after it. The note is positioned from where the text ends and takes no
+ * room, so it never moves a wrap the textarea above does not make. */
+.helm-editor-highlight .line[data-editor-quiet],
+.helm-editor-highlight .line[data-editor-quiet] span {
+  color: var(--helm-fg-subtle) !important;
+}
+
+.helm-editor-highlight .line[data-editor-quiet]::after {
+  content: attr(data-editor-note);
+  position: absolute;
+  margin-left: 14px;
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  white-space: nowrap;
+  color: var(--helm-fg-subtle);
+}
+
 .helm-editor-changed-line {
   position: absolute;
   left: 0;

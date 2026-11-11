@@ -120,8 +120,8 @@ export function AgentForm(props: AgentFormProps): JSX.Element {
           readOnly={readOnly}
           danger={{
             backend: problemOf('backend').length > 0,
-            model: problemOf('model').length > 0,
-            effort: problemOf('effort').length > 0
+            model: cellsMarked(problemOf('model')),
+            effort: cellsMarked(problemOf('effort'))
           }}
           onTicked={(value) => change({ field: 'backends', value })}
           onModels={(value) => change({ field: 'models', value })}
@@ -314,6 +314,16 @@ function Flag({
   )
 }
 
+/**
+ * Which backends' cells a field's problems mark: the one a problem names, or
+ * every one for a problem with the whole field (a model that is not a map).
+ */
+function cellsMarked(problems: readonly AgentProblem[]): (backend: string) => boolean {
+  if (problems.some((p) => p.backend === undefined)) return () => true
+  const named = new Set(problems.map((p) => p.backend))
+  return (backend) => named.has(backend)
+}
+
 interface BackendRow {
   id: string
   name: string
@@ -338,7 +348,8 @@ function BackendTable({
   efforts: Record<string, string>
   hostName: string
   readOnly: boolean
-  danger: { backend: boolean; model: boolean; effort: boolean }
+  /** Whether the table's edge is marked, and which backends' model and effort cells are. */
+  danger: { backend: boolean; model: (backend: string) => boolean; effort: (backend: string) => boolean }
   onTicked: (ids: string[]) => void
   onModels: (models: Record<string, string>) => void
   onEfforts: (efforts: Record<string, string>) => void
@@ -418,7 +429,7 @@ function BackendTable({
               readOnly={readOnly}
               spellCheck={false}
               onChange={(e) => onModels({ ...models, [row.id]: e.target.value.trim() })}
-              className={cn(INPUT, 'h-[24px] font-mono text-[11px]', danger.model && 'border-danger')}
+              className={cn(INPUT, 'h-[24px] font-mono text-[11px]', danger.model(row.id) && 'border-danger')}
             />
             <select
               data-agent-effort={row.id}
@@ -426,7 +437,7 @@ function BackendTable({
               value={effort}
               disabled={readOnly}
               onChange={(e) => onEfforts({ ...efforts, [row.id]: e.target.value })}
-              className={cn(INPUT, 'h-[24px] text-[11.5px]', (danger.effort || !effortKnown) && 'border-danger')}
+              className={cn(INPUT, 'h-[24px] text-[11.5px]', (danger.effort(row.id) || !effortKnown) && 'border-danger')}
             >
               <option value="">Default</option>
               {AGENT_EFFORTS.map((level) => (

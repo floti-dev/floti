@@ -14,7 +14,10 @@ const file = (name: string, text: string): P.AgentFile => ({
   values: [],
   fields: null,
   body: '',
-  problems: [{ field: 'effort', line: 4, message: 'effort for claude-code must be low' }],
+  problems: [
+    { field: 'effort', line: 4, message: 'effort for claude-code must be low', backend: 'claude-code' },
+    { field: 'worktree', line: 5, message: 'worktree must be yes or no' }
+  ],
   unusedLines: []
 })
 
@@ -51,8 +54,12 @@ describe('the agents adapter', () => {
       inFolder: true,
       text: '---\n---\n',
       hash: 'hash-of-8',
-      problems: [{ field: 'effort', line: 4, message: 'effort for claude-code must be low' }]
+      problems: [
+        { field: 'effort', line: 4, message: 'effort for claude-code must be low', backend: 'claude-code' },
+        { field: 'worktree', line: 5, message: 'worktree must be yes or no' }
+      ]
     })
+    expect(read.problems[1]).not.toHaveProperty('backend')
     const written = await call(adapter, 'agents:write', {
       name: 'issue-triage',
       text: 'x',
@@ -68,6 +75,15 @@ describe('the agents adapter', () => {
     expect((await call(adapter, 'agents:restore', { name: 'triage' })).file?.text).toBe('back')
     await call(adapter, 'agents:addShipped', { name: 'reviewer' })
     expect(connection.payloads('agents:addShipped')).toEqual([{ name: 'reviewer' }])
+  })
+
+  it('renders instructions on the host it reaches, as the host renders them', async () => {
+    const rendered = { html: '<h1>Review</h1>', words: 1 } as unknown as P.RenderedMarkdown
+    const connection = new FakeConnection().answer('agents:render', () => rendered)
+    const adapter = createAgentsAdapter(reconnectingReach(connection))
+
+    expect(await call(adapter, 'agents:render', { text: '# Review' })).toBe(rendered)
+    expect(connection.payloads('agents:render')).toEqual([{ text: '# Review' }])
   })
 
   it('subscribes to agents:changed only while the window listens, and again on a new connection', async () => {

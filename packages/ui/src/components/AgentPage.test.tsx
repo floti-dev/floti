@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState, type JSX } from 'react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type { LaunchAgents } from '@helm/core/types'
+import type { LaunchAgents, RenderedMarkdown } from '@helm/core/types'
 import { AgentList } from './AgentList'
 import { AgentPage, type AgentPageProps } from './AgentPage'
 import { UndoToast } from './UndoToast'
@@ -31,6 +31,8 @@ beforeAll(() => {
       disconnect(): void {}
     }
   )
+  // The preview puts a new render at its top; the test DOM does not scroll.
+  Element.prototype.scrollTo = () => undefined
 })
 
 function props(overrides: Partial<AgentPageProps> = {}): AgentPageProps {
@@ -56,6 +58,9 @@ function props(overrides: Partial<AgentPageProps> = {}): AgentPageProps {
     backends: [CLAUDE],
     profiles: ['studio-docs'],
     onHighlight: null,
+    preview: null,
+    previewPending: false,
+    onOpenExternal: vi.fn(),
     onSave: vi.fn(),
     onRevert: vi.fn(),
     onDiscard: vi.fn(),
@@ -142,6 +147,51 @@ describe('AgentPage', () => {
     const permission = screen.getByRole('combobox', { name: 'Permissions' }).closest('[data-agent-field-box]')
     expect(permission?.getAttribute('data-problem')).toBe('true')
     expect(permission?.textContent).toContain('not yolo')
+  })
+
+  it('marks only the model or effort cell of the backend a problem names, and every cell for the whole field', () => {
+    const two = [CLAUDE, { id: 'codex', name: 'Codex' }]
+    const draft = TEXT.replace('backend: claude-code', 'backend: claude-code, codex')
+    const { rerender } = render(
+      <AgentPage
+        {...props({
+          draft,
+          backends: two,
+          bad: true,
+          problems: [{ field: 'effort', line: 4, message: 'effort for codex must be low, medium, high, xhigh or max', backend: 'codex' }]
+        })}
+      />
+    )
+    const marked = (cell: string, id: string): boolean =>
+      document.querySelector(`[data-agent-${cell}="${id}"]`)?.className.includes('border-danger') === true
+    expect([marked('effort', 'codex'), marked('effort', 'claude-code'), marked('model', 'codex')]).toEqual([true, false, false])
+    expect(document.querySelector('[data-agent-backends]')?.className).not.toContain('border-danger')
+
+    rerender(
+      <AgentPage
+        {...props({ draft, backends: two, bad: true, problems: [{ field: 'model', line: 4, message: 'model is a map from a backend id to a value' }] })}
+      />
+    )
+    expect([marked('model', 'codex'), marked('model', 'claude-code'), marked('effort', 'codex')]).toEqual([true, true, false])
+  })
+
+  it('draws the instructions beside their live preview, dimmed while it is behind', () => {
+    const preview = { html: '<p>You research, <em>rendered</em>.</p>', headings: [], frontmatter: { fields: [], error: null } } as unknown as RenderedMarkdown
+    const { rerender } = render(<AgentPage {...props({ preview })} />)
+    const pane = document.querySelector('[data-agent-preview]')
+    expect(pane?.querySelector('em')?.textContent).toBe('rendered')
+    expect(pane?.querySelector('.markdown')?.className).not.toContain('opacity-70')
+    rerender(<AgentPage {...props({ preview, previewPending: true })} />)
+    expect(pane?.querySelector('.markdown')?.className).toContain('opacity-70')
+  })
+
+  it('greys the retired line in Source with the words that say it changes nothing', async () => {
+    render(<AgentPage {...props()} />)
+    await userEvent.click(screen.getByRole('radio', { name: 'Source' }))
+    const quiet = [...document.querySelectorAll('[data-editor-highlight] .line[data-editor-quiet]')]
+    expect(quiet.map((line) => line.textContent)).toEqual(['class: light'])
+    expect(quiet[0]?.getAttribute('data-editor-note')).toBe('no longer used · saving removes it')
+    expect(document.querySelectorAll('[data-editor-highlight] .line')[6]).toBe(quiet[0])
   })
 
   it('offers Compare, Reload from disk and Save mine for an outside change, and Save waits until one is picked', async () => {

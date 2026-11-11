@@ -113,6 +113,7 @@ import {
   type TreeNoticeActions,
   NeedsYouToast,
   AgentCardIcon,
+  WarnIcon,
   AgentList,
   HostSwitch,
   NewAgentButton,
@@ -683,6 +684,10 @@ export function App(): JSX.Element {
   );
   /** Notes with a draft that is not on disk - the tab strip's dot. */
   const [docDirty, setDocDirty] = useState<ReadonlySet<string>>(new Set());
+  /** Agent pages whose file the host cannot load (Not loaded): the tab's warn glyph. */
+  const [badAgentTabs, setBadAgentTabs] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   /** The one change to an agent made without asking, with its Undo, until it is closed or the next replaces it. */
   const [agentToast, setAgentToast] = useState<AgentToast | null>(null);
   /** Why adding a shipped agent did not, said in the Agents list. */
@@ -2474,6 +2479,12 @@ export function App(): JSX.Element {
       if (ref.kind === "restore") dismissRestore();
       if (ref.kind === "agent" || ref.kind === "agent-draft") {
         forgetAgentDraft(id);
+        setBadAgentTabs((current) => {
+          if (!current.has(id)) return current;
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
         setDocDirty((current) => {
           if (!current.has(id)) return current;
           const next = new Set(current);
@@ -2900,6 +2911,15 @@ export function App(): JSX.Element {
     // click must not replace a tab with a draft in it.
     if (mode === "edit") keepTab(paneId(ref));
   };
+  const markAgentBad = useCallback((key: string, bad: boolean) => {
+    setBadAgentTabs((current) => {
+      if (current.has(key) === bad) return current;
+      const next = new Set(current);
+      if (bad) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
   const markDocDirty = useCallback((key: string, dirty: boolean) => {
     setDocDirty((current) => {
       if (current.has(key) === dirty) return current;
@@ -3860,6 +3880,8 @@ export function App(): JSX.Element {
             : null
         }
         onDirtyChange={(dirty) => markDocDirty(id, dirty)}
+        onBadChange={(bad) => markAgentBad(id, bad)}
+        onOpenExternal={openLink}
         onOutcome={agentOutcome(id, on)}
         onCopy={(name) => newAgent(name, on)}
         onDiscard={() => {
@@ -3975,19 +3997,28 @@ export function App(): JSX.Element {
         const on = hostOf(ref);
         const isNew = ref.kind === "agent-draft";
         const named = isNew ? "New agent" : ref.name;
+        const bad = badAgentTabs.has(paneId(ref));
         return [
           {
             id: paneId(ref),
             title: named,
             ...(on === LOCAL_HOST_KEY ? {} : { host: hostName(on) }),
-            hint: isNew
+            hint: bad
+              ? `Floti cannot load ${named}.md`
+              : isNew
               ? ref.copyOf === null
                 ? "A new agent, not saved yet"
                 : `A copy of ${ref.copyOf}, not saved yet`
               : on === LOCAL_HOST_KEY
                 ? `The ${named} agent`
                 : `The ${named} agent on ${hostName(on)}`,
-            icon: <AgentCardIcon width={13} height={13} />,
+            icon: bad ? (
+              <span data-agent-tab-bad className="text-danger">
+                <WarnIcon width={13} height={13} />
+              </span>
+            ) : (
+              <AgentCardIcon width={13} height={13} />
+            ),
             // A page not written yet reads in italic, as a preview tab does.
             preview: isNew,
             dirty: isNew || docDirty.has(paneId(ref)),

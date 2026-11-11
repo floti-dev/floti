@@ -891,7 +891,10 @@ folder: run through npx, that folder is a cache.
   with a sentence and still lists, reads and watches. The folder is watched
   only while a client listens on `agents:changed`, which tells every listener
   the names whose files came, went or changed, the host's own writes and an
-  outside editor's alike (`agent_definitions/watch.rs`).
+  outside editor's alike (`agent_definitions/watch.rs`). `agents:render`
+  renders instructions being edited, for their preview, as `content:render`
+  renders a note's draft, and reads and writes nothing. A problem with one
+  backend's `model` or `effort` entry names that backend.
 - A person starts a session as an agent from a launcher (`session:launch`'s
   `agent`, protocol 2.3). The host composes it as it composes a child's
   (`server/hosted/as_agent.rs`): its body after the project's instructions,
