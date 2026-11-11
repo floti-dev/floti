@@ -520,6 +520,8 @@ fn session_requests_and_answers_round_trip_over_cbor() {
                 blocked: Some("Its folder is gone.".into()),
                 agent: Some("research-lead".into()),
                 agent_problem: Some("research-lead is no longer among this host's agents.".into()),
+                conversation_id: Some("0b9c".into()),
+                title: Some("Review the auth change".into()),
             }],
             elsewhere: 1,
         }),

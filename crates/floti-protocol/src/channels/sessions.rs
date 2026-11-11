@@ -398,6 +398,17 @@ pub struct RestorableSession {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub agent_problem: Option<String>,
+    /// The conversation it was last in, which History resumes it by. Absent
+    /// when Floti never learned it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub conversation_id: Option<String>,
+    /// What History calls that conversation: the name given by hand, else the
+    /// title its agent gave it, else the one derived from its prompts. Absent
+    /// when History does not have it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub title: Option<String>,
 }
 
 /// What a crash took, offered back once. Where each session goes on screen is

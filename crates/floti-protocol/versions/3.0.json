@@ -9409,6 +9409,12 @@
             "null"
           ]
         },
+        "conversationId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "cwd": {
           "type": "string"
         },
@@ -9436,6 +9442,12 @@
         },
         "profileGone": {
           "type": "boolean"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [

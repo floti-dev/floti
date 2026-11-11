@@ -245,7 +245,10 @@ export function offerFromHost(offer: P.RestoreOffer, layout: SavedPaneLayout | n
     blocked: session.blocked,
     // A host before protocol 2.3 names neither.
     ...(session.agent == null ? {} : { agent: session.agent }),
-    ...(session.agentProblem == null ? {} : { agentProblem: session.agentProblem })
+    ...(session.agentProblem == null ? {} : { agentProblem: session.agentProblem }),
+    // A host before protocol 3.0 names neither.
+    ...(session.conversationId == null ? {} : { conversationId: session.conversationId }),
+    ...(session.title == null ? {} : { title: session.title })
   }))
   return { sessions, elsewhere: offer.elsewhere, layout }
 }

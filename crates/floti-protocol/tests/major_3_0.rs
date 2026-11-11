@@ -3,8 +3,9 @@
 //! three fields 2.x retired, adds only a file view's optional `readOnly`, an
 //! agent problem's optional `backend`, `agents:render` with the type it
 //! takes, and History's optional fields (a conversation's family, how it
-//! ended and its matching lines, and a query for a parent's children or the
-//! top level), and changes nothing else. What composition reads of an agent's config stays:
+//! ended and its matching lines, a query for a parent's children or the top
+//! level, and an offered session's conversation and title), and changes
+//! nothing else. What composition reads of an agent's config stays:
 //! `config:scopes`, `config:tree` and `config:effective`.
 
 use std::collections::BTreeSet;
@@ -81,6 +82,7 @@ const RETIRED_FIELDS: &[(&str, &str)] = &[
 /// The optional fields History's types gain.
 const HISTORY_FIELDS: &[(&str, &[&str])] = &[
     ("HistoryQuery", &["parent", "topLevel"]),
+    ("RestorableSession", &["conversationId", "title"]),
     (
         "HistorySession",
         &[
@@ -149,6 +151,7 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
             "HostSettings",
             "HostSettingsPatch",
             "NoticeLimit",
+            "RestorableSession",
             "SessionRecord"
         ]
     );
@@ -179,7 +182,7 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
         "AgentProblem gains only backend"
     );
 
-    // History's types only gain optional fields.
+    // History's types, and an offered session, only gain optional fields.
     for (name, fields) in HISTORY_FIELDS {
         let mut was = after["types"][*name].clone();
         let properties = was["properties"].as_object_mut().unwrap();

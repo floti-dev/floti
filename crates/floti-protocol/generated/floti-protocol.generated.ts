@@ -3010,7 +3010,18 @@ agent?: string,
  * and restoring it is restoring it without its agent
  * (`SessionToRestore.withoutAgent`).
  */
-agentProblem?: string, };
+agentProblem?: string, 
+/**
+ * The conversation it was last in, which History resumes it by. Absent
+ * when Floti never learned it.
+ */
+conversationId?: string, 
+/**
+ * What History calls that conversation: the name given by hand, else the
+ * title its agent gave it, else the one derived from its prompts. Absent
+ * when History does not have it.
+ */
+title?: string, };
 
 /**
  * What a crash took, offered back once. Where each session goes on screen is

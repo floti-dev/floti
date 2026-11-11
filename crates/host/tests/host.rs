@@ -1750,6 +1750,8 @@ async fn s12_after_a_stop_for_an_update_the_next_start_offers_the_sessions_once_
     for (lost, folder) in offer.sessions.iter().zip(&folders) {
         assert_eq!(lost.cwd, folder.to_string_lossy());
         assert_eq!(lost.blocked, None, "{lost:?}");
+        // History resumes it by the conversation it was last in.
+        assert!(lost.conversation_id.is_some(), "{lost:?}");
     }
     assert!(rows(&dirs.data).iter().all(|row| row.status == "lost"));
     // Nothing was started by itself.

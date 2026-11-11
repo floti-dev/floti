@@ -1302,6 +1302,18 @@ impl Hosted {
                         .agent
                         .as_deref()
                         .and_then(|agent| self.agent_problem(agent)),
+                    title: row.conversation_id.as_deref().and_then(|conversation| {
+                        records::read_history_session(&store, conversation)
+                            .ok()
+                            .flatten()
+                            .map(|session| {
+                                session
+                                    .label
+                                    .or(session.agent_title)
+                                    .unwrap_or(session.title)
+                            })
+                    }),
+                    conversation_id: row.conversation_id.clone(),
                 }
             })
             .collect();

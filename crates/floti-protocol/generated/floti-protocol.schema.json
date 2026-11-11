@@ -8422,6 +8422,13 @@
             "null"
           ]
         },
+        "conversationId": {
+          "description": "The conversation it was last in, which History resumes it by. Absent\nwhen Floti never learned it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "cwd": {
           "type": "string"
         },
@@ -8454,6 +8461,13 @@
         "profileGone": {
           "description": "True when its profile has since been deleted. It reopens without.",
           "type": "boolean"
+        },
+        "title": {
+          "description": "What History calls that conversation: the name given by hand, else the\ntitle its agent gave it, else the one derived from its prompts. Absent\nwhen History does not have it.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [

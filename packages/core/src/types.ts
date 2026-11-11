@@ -569,6 +569,10 @@ export interface RestorableSession {
    * agent.
    */
   agentProblem?: string
+  /** The conversation it was last in, which History resumes it by; absent when Floti never learned it. */
+  conversationId?: string
+  /** What History calls that conversation (`historyTitle`); absent when History does not have it. */
+  title?: string
 }
 
 /** What a crash took, offered back once at the next start. */
