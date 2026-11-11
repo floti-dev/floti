@@ -21,9 +21,10 @@ export interface StoppedGroupState {
   /**
    * Keeps the sessions a stop took that are not back, replacing what the
    * group held: the offer's Not now keeps them all, a restore keeps those it
-   * did not bring back.
+   * did not bring back. `at` is when the host found them lost (epoch ms),
+   * which heads the group, or null when it did not say.
    */
-  keep: (sessions: readonly RestorableSession[]) => void;
+  keep: (sessions: readonly RestorableSession[], at: number | null) => void;
   /**
    * Resumes these sessions, each by its conversation, as its agent unless the
    * offer named its agent's problem. Each that comes back leaves the group;
@@ -51,8 +52,8 @@ export function useStoppedGroup({ running, resume, raiseUndo }: StoppedGroupDeps
     return sessions.length === 0 ? null : { ...kept, sessions };
   }, [kept, running]);
 
-  const keep = useCallback((sessions: readonly RestorableSession[]) => {
-    setKept(sessions.length === 0 ? null : { at: null, sessions });
+  const keep = useCallback((sessions: readonly RestorableSession[], at: number | null) => {
+    setKept(sessions.length === 0 ? null : { at, sessions });
   }, []);
 
   const resumeSessions = useCallback(

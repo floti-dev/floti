@@ -2174,7 +2174,7 @@ export function App(): JSX.Element {
    * answered, so History keeps them in this window.
    */
   const notNow = useCallback(() => {
-    if (restoreOffer !== null) keepStopped(restoreOffer.sessions);
+    if (restoreOffer !== null) keepStopped(restoreOffer.sessions, restoreOffer.lostAt ?? null);
     dismissRestore();
   }, [restoreOffer, dismissRestore, keepStopped]);
 
@@ -2372,7 +2372,7 @@ export function App(): JSX.Element {
       const left = restoreOffer.sessions.filter(
         (session) => !pairs.has(session.id),
       );
-      keepStopped(left);
+      keepStopped(left, restoreOffer.lostAt ?? null);
       setRestoreChosen(null);
       commit((current) => {
         // A session lost with its host while its tab was open comes back in

@@ -156,6 +156,7 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
             "HostSettingsPatch",
             "NoticeLimit",
             "RestorableSession",
+            "RestoreOffer",
             "SessionRecord"
         ]
     );

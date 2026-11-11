@@ -1732,6 +1732,7 @@ async fn s12_after_a_stop_for_an_update_the_next_start_offers_the_sessions_once_
     let started = sessions_stopped_for_an_update(&dirs, &endpoint, &agent, &folders).await;
     let runs_before = agent.records().len();
 
+    let before = now_ms();
     let host = RunningHost::start(fake_config(&dirs, &endpoint, &agent, &[]));
     let mut first = TestClient::connect(&endpoint, TERMINAL).await;
     let offer = first
@@ -1739,6 +1740,9 @@ async fn s12_after_a_stop_for_an_update_the_next_start_offers_the_sessions_once_
         .await
         .unwrap()
         .expect("the lost sessions are offered");
+    // It says when this host found them lost.
+    let lost_at = offer.lost_at.expect("the offer says when they were lost");
+    assert!((before..=now_ms()).contains(&lost_at), "{lost_at}");
     assert_eq!(
         offer
             .sessions

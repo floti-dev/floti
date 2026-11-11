@@ -250,7 +250,13 @@ export function offerFromHost(offer: P.RestoreOffer, layout: SavedPaneLayout | n
     ...(session.conversationId == null ? {} : { conversationId: session.conversationId }),
     ...(session.title == null ? {} : { title: session.title })
   }))
-  return { sessions, elsewhere: offer.elsewhere, layout }
+  return {
+    sessions,
+    elsewhere: offer.elsewhere,
+    // A host before protocol 3.0 does not say when they were lost.
+    ...(offer.lostAt == null ? {} : { lostAt: offer.lostAt }),
+    layout
+  }
 }
 
 /**

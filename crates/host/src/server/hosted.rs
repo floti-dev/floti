@@ -229,7 +229,7 @@ impl Hosted {
                 }
             }
         }
-        *ledger.offer() = Some(lost);
+        ledger.offer_lost(lost);
         Ok(Self {
             sessions,
             terminals,
@@ -1322,6 +1322,7 @@ impl Hosted {
         Some(RestoreOffer {
             sessions,
             elsewhere: 0,
+            lost_at: self.ledger.lost_at(),
         })
     }
 

@@ -941,7 +941,8 @@ describe('sessions over the window’s own connection', () => {
         .answer('session:list', () => [lost(7, '/work dir/app'), row({ id: 8, status: 'exited', exitCode: 0 }), lost(9, '/work dir/api')])
         .answer('session:restorable', () => ({
           sessions: [offered(7, 'app', '/work dir/app'), offered(9, 'app', '/work dir/api')],
-          elsewhere: 0
+          elsewhere: 0,
+          lostAt: 1_761_560_100_000
         }))
       await w.link.reconnect(second)
       await settle()
@@ -956,6 +957,8 @@ describe('sessions over the window’s own connection', () => {
         [7, '/work dir/app'],
         [9, '/work dir/api']
       ])
+      // With the moment the host found them lost, which History's Stopped group is headed by.
+      expect(offer?.lostAt).toBe(1_761_560_100_000)
       // Offered, not reopened: the user answers the offer.
       expect(second.payloads('session:restore')).toEqual([])
     })

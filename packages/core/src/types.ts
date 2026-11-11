@@ -585,6 +585,8 @@ export interface RestoreOffer {
    * a second process on one conversation.
    */
   elsewhere: number
+  /** When the host found these sessions lost, as epoch ms; absent from a host that does not say. */
+  lostAt?: number
   /** The panes as the stopped run last wrote them. `placeRestored` reads it. */
   layout: SavedPaneLayout | null
 }

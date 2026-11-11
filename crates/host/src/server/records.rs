@@ -10,6 +10,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use floti_protocol::BackendId;
 use floti_protocol::channels::common::{EndedBy, PermissionMode, SessionRecord, SessionStatus};
@@ -71,6 +72,8 @@ pub(crate) struct HostLedger {
     /// What was lost, a crash's or an update's at the start and a keeper's
     /// since, until a client answers the offer.
     offer: Mutex<Option<Vec<LostRow>>>,
+    /// When a session was last added to `offer`, as epoch ms.
+    lost_at: Mutex<Option<u64>>,
     frozen: AtomicBool,
     next_seq: AtomicU64,
     exits: broadcast::Sender<ExitNotice>,
@@ -109,6 +112,7 @@ impl HostLedger {
         Self {
             store,
             offer: Mutex::new(None),
+            lost_at: Mutex::new(None),
             frozen: AtomicBool::new(false),
             next_seq: AtomicU64::new(1),
             exits,
@@ -164,12 +168,21 @@ impl HostLedger {
         self.offer.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    /// When the host last added a session to the restore offer, as epoch ms.
+    pub fn lost_at(&self) -> Option<u64> {
+        *self.lost_at.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     /// Adds `lost` to the restore offer, which is made again if it had been
-    /// answered.
+    /// answered, and stamps the offer with now.
     pub fn offer_lost(&self, lost: Vec<LostRow>) {
         if lost.is_empty() {
             return;
         }
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |at| u64::try_from(at.as_millis()).unwrap_or(u64::MAX));
+        *self.lost_at.lock().unwrap_or_else(PoisonError::into_inner) = Some(now);
         let mut offer = self.offer();
         let rows = offer.get_or_insert_with(Vec::new);
         rows.extend(lost);
