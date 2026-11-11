@@ -13,11 +13,11 @@ name: floti builds
 # explicit --target keeps the flag off build scripts and proc macros, which
 # must stay dynamic to load.
 on:
-  # `main` is absent for the reason it is in ci.yml: Release calls this on
-  # every push to main, so main is built once per push, not twice. The two path
-  # lists are the same; keep them so.
+  # `main` and the release dry-run branches are absent for the reason they
+  # are in ci.yml: Release calls this on every push to them, so each is built
+  # once per push, not twice. The two path lists are the same; keep them so.
   push:
-    branches-ignore: [main]
+    branches-ignore: [main, 'release-dry-run/**']
     paths:
       - "crates/**"
       - "Cargo.toml"

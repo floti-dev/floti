@@ -206,6 +206,21 @@ export function desktopArgs(places: HostPlaces): string[] {
   return ['--desktop', places.execPath, ...(places.packaged ? [] : ['--desktop-arg', places.appPath])]
 }
 
+/**
+ * The program that is this Helm, for the host to open it again. A packaged
+ * Linux build runs from an AppImage, whose `process.execPath` is inside a
+ * mount that goes away when the app quits; the AppImage's runtime names the
+ * file itself in `APPIMAGE`.
+ */
+export function desktopProgram(
+  execPath: string,
+  packaged: boolean,
+  deps: Pick<LauncherDeps, 'platform' | 'env'>
+): string {
+  const appImage = deps.env['APPIMAGE']
+  return packaged && deps.platform === 'linux' && appImage ? appImage : execPath
+}
+
 /** Where `floti` is looked for: beside a packaged build's resources, or in the checkout's debug build. */
 export function flotiBinary(places: HostPlaces, deps: Pick<LauncherDeps, 'platform' | 'env'>): string {
   const paths = pathsFor(deps.platform)

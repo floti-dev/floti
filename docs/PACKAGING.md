@@ -1,7 +1,7 @@
 # Packaging and updates
 
-What `pnpm dist:win` and `pnpm dist:mac` produce, where their data goes, how a
-release is cut, and why Helm has no auto-updater.
+What `pnpm dist:win`, `pnpm dist:mac` and `pnpm dist:linux` produce, where
+their data goes, how a release is cut, and why Helm has no auto-updater.
 
 ## Artefacts
 
@@ -20,18 +20,40 @@ electron-builder makes a dmg only there:
 | `Helm-<version>-arm64.dmg` | Disk image: Helm.app beside an Applications link to drag it onto. Apple Silicon only. |
 | `Helm-<version>-arm64-mac.zip` | The same Helm.app, zipped, for anyone who would rather not mount an image. |
 
-Every build comes out of the same code. No node module is compiled:
-`npmRebuild: false` and the native modules ship N-API prebuilds for each
-platform, so a clean checkout needs no C compiler, no Python and no build tools.
-The one thing compiled is the `floti` host, which runs every session: both
-commands first run
+`pnpm dist:linux` writes one, on Linux:
+
+| File | What it is |
+|---|---|
+| `Helm-<version>-linux-x64.AppImage` | One file that runs on a recent x64 Linux distribution with no install and no root. Data in `~/.config/Helm`. |
+
+Linux is x64 only. There is no arm64 Linux desktop build; floti itself does
+ship for arm64 Linux, so such a computer can still be a host (see
+[floti for every host](#floti-for-every-host)). The AppImage's executable is
+`helm` (`executableName`), its icon the 256px `build/icon.png`. An AppImage
+runs from a mount that goes away when it quits, so the app tells its host to
+open it again by the AppImage's own path, which the AppImage runtime passes as
+`APPIMAGE`, rather than by `process.execPath` (`desktopProgram` in
+`main/host/launcher.ts`). Inside an AppImage, Electron's sandbox cannot use a
+setuid `chrome-sandbox` and needs unprivileged user namespaces; a distribution
+that restricts them through AppArmor (Ubuntu 24.04 does) needs an AppArmor
+profile for the AppImage before it starts.
+
+Every build comes out of the same code. No node module is rebuilt for
+Electron: `npmRebuild: false`, and the native modules are N-API, so the binary
+the install put there loads in Electron unchanged. On Windows and macOS each
+ships a prebuild, so a clean checkout needs no C compiler, no Python and no
+build tools. On Linux node-pty ships none, and `pnpm install` compiles its
+addon with node-gyp, which needs Python, make and a C++ compiler (the
+ubuntu-latest runner has them). The one thing compiled on purpose is the
+`floti` host, which runs every session: each command first runs
 `scripts/stage-floti.mjs`, which builds it in release with the Rust toolchain
 `rust-toolchain.toml` names and copies it to `packages/desktop/dist-host/`.
-electron-builder carries it beside the app, at `resources\floti.exe` on Windows
-and `Contents/Resources/floti` on macOS, where the app looks for it. A release
-build carries the release's own floti instead of building it again (see
-[floti for every host](#floti-for-every-host)), with the release's SHA-256 list
-beside it as `floti-SHA256SUMS`; a local build carries no list.
+electron-builder carries it beside the app, at `resources\floti.exe` on
+Windows, `Contents/Resources/floti` on macOS and `resources/floti` on Linux,
+where the app looks for it. A release build carries the release's own floti
+instead of building it again (see [floti for every host](#floti-for-every-host)),
+with the release's SHA-256 list beside it as `floti-SHA256SUMS`; a local build
+carries no list.
 
 ### floti for every host
 
@@ -69,13 +91,29 @@ off build scripts and proc macros, which must stay dynamic.
 and the list (`FLOTI_SHA256SUMS`). It refuses a file whose header is another
 platform's or whose SHA-256 the list does not give, and stages the list as
 `dist-host/floti-SHA256SUMS`, which electron-builder carries as
-`resources\floti-SHA256SUMS` on Windows and
-`Contents/Resources/floti-SHA256SUMS` on macOS. The floti inside the app is
+`resources\floti-SHA256SUMS` on Windows, `Contents/Resources/floti-SHA256SUMS`
+on macOS and `resources/floti-SHA256SUMS` on Linux. The floti inside the app is
 therefore byte for byte the one the release lists. On macOS that holds only
 because signing the app leaves floti alone (`signIgnore` in
 `electron-builder.yml`): signing a binary rewrites its signature, and so its
 SHA-256. The linker has already signed it ad-hoc, which is all Apple Silicon
 needs to run it.
+
+### The protocol types
+
+Every release also carries the generated protocol types, the files
+`cargo run -p floti-protocol --bin generate` writes to
+`crates/floti-protocol/generated/`, for anybody writing a client of the host:
+
+| File | What it is |
+|---|---|
+| `floti-protocol-<version>.tar.gz` | A folder `floti-protocol-<version>/` holding `floti-protocol.schema.json` (the JSON Schema of every message), `floti-protocol.frames.json` (encoded example frames, for a client's codec tests) and `floti-protocol.generated.ts` (the TypeScript declarations, with `PROTOCOL_VERSION`). |
+
+The `<version>` is the release's, as in every file's name; the protocol's own
+version is the `PROTOCOL_VERSION` inside. The release's `protocol` job runs
+the crate's `generated_files` test first, so the archive is never stale
+against the protocol the release's floti speaks, and packs it reproducibly:
+the same commit gives the same bytes.
 
 ### Installing floti on a host's computer
 
@@ -106,9 +144,9 @@ checks its SHA-256 before extracting anything: a mismatch, or a platform the
 pin file does not list, fails the build. It then extracts only Node's binary
 and `LICENSE`, with the system tar (Windows' own `tar.exe`, which reads zip),
 into a fresh folder there, and stages them as `dist-host/node/`. The app
-carries them at `resources\node\node.exe` on Windows and
-`Contents/Resources/node/bin/node` on macOS, each with Node's `LICENSE` beside
-it. Node is fetched at build time only; the app never downloads it. To move to
+carries them at `resources\node\node.exe` on Windows,
+`Contents/Resources/node/bin/node` on macOS and `resources/node/bin/node` on
+Linux, each with Node's `LICENSE` beside it. Node is fetched at build time only; the app never downloads it. To move to
 a newer Node, change the version, archive names and checksums in the pin file
 together.
 
@@ -150,6 +188,15 @@ executable `spawn-helper`) and koffi unpacked beside the asar, and a `floti`
 identical to `dist-host/floti` with a signature of its own that verifies. It
 needs macOS;
 `--icon` checks only the .icns, anywhere.
+
+`pnpm verify:linux-artifact` is the Linux counterpart. It extracts the AppImage
+a person downloads with the AppImage's own runtime (`--appimage-extract`, no
+FUSE) and checks the app inside: an x64 Linux `helm`; better-sqlite3's
+prebuild, node-pty's compiled addon and koffi's Linux package unpacked beside
+the asar; a `floti` and `floti-SHA256SUMS` byte for byte the ones it is given
+(`--floti`, `--sums`; by default `dist-host/`'s), floti executable; the pinned
+Node, executable, with its LICENSE; the install scripts and the icon. It needs
+Linux.
 
 ## Where the data goes
 
@@ -257,41 +304,76 @@ hand, no button to press, no artefact built on a developer's machine.
 `.github/workflows/release.yml` reads the version out of
 `packages/desktop/package.json` and, if `v<version>` is not already a tag on the
 remote, runs the checks, builds floti for its five targets, builds the Windows
-artefacts on a clean `windows-latest` runner and the macOS ones on
-`macos-latest`, and publishes one GitHub release with all ten attached: the
-four desktop files, the five floti files and their SHA-256 list. A merge that
-does not bump the version runs the checks and the floti builds, skips both
-desktop build jobs and finishes green.
+artefacts on a clean `windows-latest` runner, the macOS ones on `macos-latest`
+and the Linux one on `ubuntu-latest`, packs the protocol types, and publishes
+one GitHub release with all twelve attached: the five desktop files, the
+protocol types, the five floti files and their SHA-256 list. A merge that does
+not bump the version runs the checks and the floti builds, skips every build
+after them and finishes green.
 
-- **floti is built once, by `floti.yml`.** `release` and `release-mac` need it,
-  so a failed floti build on any target skips the release. Before publishing,
-  `release` checks its folder holds exactly the six floti files and that
-  `sha256sum --check` passes over them.
+| Job | Does |
+|---|---|
+| `version` | The gate (`scripts/release.mjs gate`): the version, its tag, whether it is a preview, whether the build runs and whether this is a dry run. |
+| `check`, `floti` | `ci.yml` and `floti.yml`, called. |
+| `protocol` | The crate's `generated_files` test, then `floti-protocol-<version>.tar.gz`. |
+| `release-windows`, `release-mac`, `release-linux` | One desktop build each, verified from the inside and handed on as a workflow artifact. None publishes anything. |
+| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s and that the folder holds exactly the twelve files (`scripts/release.mjs check`), lists each with its SHA-256 in the run's summary, and uploads them as `release-files`. |
+| `publish` | The only job with write access. Creates the release from `release-files`, publishes it and confirms it. Never runs in a dry run. |
+| `sdk` | The plugin SDK's npm publish, on its own version. Never runs in a dry run. |
 
-- **The Mac build is its own job and publishes nothing.** `release-mac` has the
-  same gate as `release`, builds with `pnpm dist:mac`, runs
-  `verify-mac-artifact.mjs` over the dmg and the zip, and hands them on as a
-  workflow artifact. `release` needs it, downloads them and attaches them with
-  the two exes. A failed Mac build therefore skips the release outright: a
-  version is never published with half its downloads. Every runner is a
-  standard GitHub-hosted one, and no secret or certificate is involved.
-
+- **floti is built once, by `floti.yml`.** Every desktop build needs it, so a
+  failed floti build on any target skips the release.
+- **Each desktop build is its own job and publishes nothing.** A failed build
+  on any OS skips `assemble` and `publish` with it: a version is never
+  published with half its downloads. Every runner is a standard GitHub-hosted
+  one, and no secret, certificate or paid account is involved: the Mac build
+  is ad-hoc signed and the Windows build unsigned.
 - **The gate is whether the tag exists**, asked with `git ls-remote --tags`, not
   whether the commit changed the version. Diffing against the parent gives a
   different answer after a squash, a rebase, a revert or a re-run.
+- **Releases only move forward.** A version that is not tagged yet must be
+  greater, by semver with pre-release parts compared as semver orders them,
+  than the highest `v*` tag; the gate fails otherwise, naming that tag. The
+  desktop's numbering continues: the version is the desktop's, and floti's is
+  the same (`crates/host/build.rs`). The gate also refuses a version that is
+  not `<major>.<minor>.<patch>` with an optional `-<pre-release>` part, which is
+  what the in-app check can read.
 - **`ci.yml` does not run on pushes to `main` on its own.** `release.yml` calls
   it through `workflow_call`, so `main` is checked once per push rather than
   twice. It runs `pnpm check` (typecheck, lint, unit and integration tests)
   and then builds, on Windows, macOS and Linux runners, each its own job; the
   end-to-end tests run locally only. All three jobs are required: a failure on
-  any one fails `check`, and `needs: [version, check]` skips the release and
-  the SDK publish: no tag, no release, no artefacts.
+  any one fails `check`, which skips every build, the release and the SDK
+  publish: no tag, no release, no artefacts.
 - **The release is created as a draft and published in the same job**, which is
-  not an approval gate. `/releases/latest` ignores drafts, and publishing the
-  draft is what creates the tag, so the ref and all ten assets appear
-  together rather than leaving a window where the app announces a version whose
-  download page is empty. A run cancelled mid-upload leaves an unpublished
-  draft; the next run deletes it and starts over.
+  not an approval gate. Publishing the draft is what creates the tag, so the
+  ref and all twelve assets appear together rather than leaving a window where
+  the app announces a version whose download page is empty. A run cancelled
+  mid-upload leaves an unpublished draft; the next run deletes it and starts
+  over.
+- **A preview is a public pre-release.** A version with a pre-release part
+  (`2.4.1-preview.12`) is built, published and tagged exactly like a release,
+  so anybody can download it without a GitHub sign-in, but as a pre-release and
+  never `latest`. `/releases/latest` ignores pre-releases, so no installed Helm
+  is offered it. The in-app check reads only the `<major>.<minor>.<patch>`
+  part, so a preview of 2.4.1 is newer than 2.4.0 and older than the next
+  release after it.
+
+### A dry run
+
+A push to a branch named `release-dry-run/<name>` runs the whole workflow and
+publishes nothing: no tag, no release, no npm. Everything a release builds is
+built and checked, including the notes and every check of the files that needs
+no published release; then `assemble` uploads exactly the twelve files as the
+run's `release-files` artifact, kept for seven days, and the run's summary
+lists each with its SHA-256. The tag-exists gate does not stop a dry run, so
+the version on the branch may be one already released; one that is not tagged
+must still be greater than every tagged one. A run on any branch but `main` is
+a dry run, and the version job's `dry_run` output is what every publishing job
+and step gates on. `ci.yml` and `floti.yml` skip those branches, as they skip
+`main`, so a dry run is checked once.
+
+    git push origin HEAD:release-dry-run/<name>
 - **Notes are the `## <version>` section of [CHANGELOG.md](../CHANGELOG.md)**,
   and **a release with no section for its version fails rather than
   publishing.** No tag is created when that job fails, so the remedy is to write
@@ -321,12 +403,20 @@ desktop build jobs and finishes green.
   on its first `dlopen`. Checking `dist-app/win-unpacked/` instead would check
   electron-builder's scratch directory rather than the file a person downloads.
   It runs on any exe: `pnpm verify:artifact -- path/to/Helm-x.y.z-setup.exe`.
-  The Mac artefacts get `verify-mac-artifact.mjs`, described above.
-- **The confirmation expects all ten files.** After publishing, the job asks
-  `/releases/latest` - the endpoint the in-app check asks - and fails unless it
-  names this tag, is not a draft, and lists exactly the setup exe, the portable
-  exe, the dmg, the zip, the five floti files and `floti-<version>-SHA256SUMS`.
-  A preview is checked for the same ten.
+  The Mac artefacts get `verify-mac-artifact.mjs` and the AppImage
+  `verify-linux-artifact.mjs`, described above.
+- **The confirmation expects all twelve files.** After publishing a release,
+  `publish` asks `/releases/latest` - the endpoint the in-app check asks - and
+  fails unless it names this tag, is not a draft, and lists exactly the files
+  `scripts/release.mjs names` gives. A preview must be published, a
+  pre-release, carry the same twelve and not be what `/releases/latest`
+  answers.
+- **Every version downloads without a sign-in.** For a release and a preview
+  alike, `publish` then fetches the setup exe and `floti-<version>-linux-x64`
+  from `releases/download/<tag>/` with no token at all, and fails unless each
+  answers 200 with the bytes the run built: the desktop app as a new user
+  fetches it, and floti as Settings > Hosts has a computer of another OS or CPU
+  fetch it.
 
 ## Looking at the Mac build
 
@@ -450,7 +540,11 @@ the check reports *"could not ask"* however current the release actually is.
 This is a coupling that breaks silently: **making the repository private turns
 the update check off**, and nothing in the app says so beyond the error string.
 The same fact is why release artefacts cannot be handed to anyone who is not a
-collaborator - a private release page is not a download link.
+collaborator - a private release page is not a download link. It holds for a
+draft too, whatever the repository's visibility, which is why a preview is
+published as a pre-release rather than left a draft: the release workflow
+fetches one desktop file and one floti file of every version with no token,
+and fails unless both answer 200.
 
 ## Install-testing it
 

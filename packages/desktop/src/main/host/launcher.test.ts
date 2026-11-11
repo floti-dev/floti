@@ -12,6 +12,7 @@ import {
   SOCKET_PATH_MAX,
   clientFolder,
   desktopArgs,
+  desktopProgram,
   flotiBinary,
   fromBeforeRestart,
   hostEnvironment,
@@ -416,6 +417,18 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       '--desktop',
       'C:\\Program Files\\Helm\\Helm.exe'
     ])
+  })
+
+  it('names a packaged Linux build by its AppImage, not by the mount it runs from', () => {
+    const WIN_EXE = 'C:\\Program Files\\Helm\\Helm.exe'
+    const mounted = '/tmp/.mount_HelmAb12/helm'
+    const appImage = '/home/me/Apps/Helm-3.0.0-linux-x64.AppImage'
+    expect(desktopProgram(mounted, true, { platform: 'linux', env: { APPIMAGE: appImage } })).toBe(appImage)
+    expect(desktopProgram(mounted, true, { platform: 'linux', env: {} })).toBe(mounted)
+    expect(desktopProgram('/src/helm/node_modules/electron/dist/electron', false, { platform: 'linux', env: { APPIMAGE: appImage } })).toBe(
+      '/src/helm/node_modules/electron/dist/electron'
+    )
+    expect(desktopProgram(WIN_EXE, true, { platform: 'win32', env: { APPIMAGE: appImage } })).toBe(WIN_EXE)
   })
 
   it('waits out a host that is still exiting with the folders, then starts one and connects', async () => {

@@ -22,6 +22,7 @@ import { createBrowserToolRelay, type BrowserToolRelay } from './browser-tools'
 import { createHostFiles, type HostFiles } from './files'
 import {
   LocalHostRefusedError,
+  desktopProgram,
   flotiBinary,
   fromBeforeRestart,
   localHostRestartFrame,
@@ -118,7 +119,7 @@ const places = (): HostPlaces => ({
   resourcesPath: process.resourcesPath,
   repoRoot: repoRoot(),
   templatesDir,
-  execPath: process.execPath,
+  execPath: desktopProgram(process.execPath, app.isPackaged, { platform: process.platform, env: process.env }),
   appPath: app.getAppPath()
 })
 

@@ -16,24 +16,41 @@ name: Release
 # version". Diffing against the parent commit is a different answer after a
 # squash, a rebase, a revert or a re-run of this workflow; asking whether v1.2.3
 # is already tagged is the same answer every time and is the question that
-# actually matters.
+# actually matters. A version that is not tagged must also be greater, by
+# semver, than every version that is: releases only move forward.
+#
+# A push to a branch named `release-dry-run/<name>` runs all of it - the
+# checks, floti, the Windows, macOS and Linux builds, the protocol types, the
+# notes and every check of the files that needs no published release - and
+# publishes nothing: no tag, no release, no npm. It uploads exactly the files a
+# release would carry as the `release-files` workflow artifact and lists each
+# with its SHA-256 in the run's summary. The version job's `dry_run` output is
+# what every publishing job and step gates on; `publish`, the one job with
+# write access to the repository, does not run in a dry run at all.
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'release-dry-run/**']
 
 # Never cancel a release that is already uploading. `main` moving on is not a
-# reason to abandon a tag halfway.
+# reason to abandon a tag halfway. A dry run publishes nothing, so a newer push
+# to its branch replaces it.
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
 
 jobs:
-  # Cheap, and on Linux: reading one JSON field and asking the remote for a tag
-  # does not need a Windows runner.
+  # Cheap, and on Linux: reading one JSON field and asking the remote for its
+  # tags does not need a Windows runner. The decision is
+  # scripts/release.mjs's `gate`.
+  #
+  # Outputs: `version` and `tag`; `preview`, whether the version has a
+  # pre-release part; `release`, whether the build runs (false only for a
+  # version already tagged, outside a dry run); `dry_run`, whether this run
+  # publishes nothing. A run on any branch but main is a dry run.
   version:
     runs-on: ubuntu-latest
     outputs:
@@ -41,61 +58,64 @@ jobs:
       tag: ${{ steps.gate.outputs.tag }}
       release: ${{ steps.gate.outputs.release }}
       preview: ${{ steps.gate.outputs.preview }}
+      dry_run: ${{ steps.gate.outputs.dry_run }}
     steps:
       - uses: actions/checkout@v5
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
       - id: gate
         shell: bash
+        env:
+          DRY_RUN: ${{ github.ref != 'refs/heads/main' }}
         run: |
           set -euo pipefail
 
           version=$(jq -er .version packages/desktop/package.json)
+          tags=$(git ls-remote --tags origin 'refs/tags/v*')
+          args=("$version")
+          if [[ $DRY_RUN == true ]]; then args+=(--dry-run); fi
 
           # src/main/update.ts reads the tag, strips a leading v, and compares
-          # it to app.getVersion() with /(\d+)\.(\d+)\.(\d+)/. A version that
-          # regex cannot read is a version the in-app check silently never
-          # fires for, so refuse it here rather than ship it.
-          if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-            echo "::error file=packages/desktop/package.json::version '$version' is not <major>.<minor>.<patch>"
+          # it to app.getVersion() with /(\d+)\.(\d+)\.(\d+)/. The gate refuses
+          # a version that is not semver, so that regex can always read it, and
+          # one that would not sort after every tagged version.
+          if ! decision=$(node packages/desktop/scripts/release.mjs gate "${args[@]}" <<<"$tags" 2>"$RUNNER_TEMP/gate.err"); then
+            echo "::error file=packages/desktop/package.json::$(cat "$RUNNER_TEMP/gate.err")"
             exit 1
           fi
 
-          tag="v$version"
-          echo "version=$version" >>"$GITHUB_OUTPUT"
-          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          for key in version tag preview release; do
+            echo "$key=$(jq -r ".$key" <<<"$decision")" >>"$GITHUB_OUTPUT"
+          done
+          echo "dry_run=$DRY_RUN" >>"$GITHUB_OUTPUT"
+          jq -r '.ignored[] | "::warning::\(.) is not a v<version> tag; the version gate ignores it"' <<<"$decision"
 
-          # A version with a pre-release part (2.4.1-preview.1) is a preview:
-          # built and uploaded like any release, but left as a draft
-          # pre-release that only the repository's owner sees, never `latest`.
-          # /releases/latest ignores drafts and pre-releases, so no installed
-          # Helm is offered it. The in-app check reads only the
-          # <major>.<minor>.<patch> part, so a preview of 2.4.1 is newer than
-          # 2.4.0 and older than the next release after it.
-          if [[ $version == *-* ]]; then
-            echo "preview=true" >>"$GITHUB_OUTPUT"
-          else
-            echo "preview=false" >>"$GITHUB_OUTPUT"
-          fi
+          tag=$(jq -r .tag <<<"$decision")
+          release=$(jq -r .release <<<"$decision")
+          reason=$(jq -r .reason <<<"$decision")
+          if [[ $(jq -r .preview <<<"$decision") == true ]]; then kind="a preview: a public pre-release, never latest"; else kind="a release: latest"; fi
 
-          # The decision goes to stdout as well as the summary. When the release
-          # job is skipped there are two possible reasons - this gate said no, or
-          # something it depends on failed - and telling them apart afterwards
-          # should not require re-deriving the gate from the tag list.
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "release=false" >>"$GITHUB_OUTPUT"
-            echo "GATE: release=false - $tag is already tagged; bump the version to cut a new one."
-            echo "**No release.** \`$tag\` is already tagged; bump the version to cut a new one." >>"$GITHUB_STEP_SUMMARY"
+          # The decision goes to stdout as well as the summary. When the build
+          # jobs are skipped there are two possible reasons - this gate said no,
+          # or something they depend on failed - and telling them apart
+          # afterwards should not require re-deriving the gate from the tag list.
+          echo "GATE: release=$release dry_run=$DRY_RUN - $reason"
+          if [[ $DRY_RUN == true ]]; then
+            echo "**Dry run of \`$tag\`**, $kind, from \`$GITHUB_REF_NAME\`: everything is built and checked, and nothing is published. $reason" >>"$GITHUB_STEP_SUMMARY"
+          elif [[ $release == true ]]; then
+            echo "**Releasing \`$tag\`**, $kind. $reason" >>"$GITHUB_STEP_SUMMARY"
           else
-            echo "release=true" >>"$GITHUB_OUTPUT"
-            echo "GATE: release=true - $tag does not exist yet."
-            echo "**Releasing \`$tag\`.**" >>"$GITHUB_STEP_SUMMARY"
+            echo "**No release.** $reason" >>"$GITHUB_STEP_SUMMARY"
           fi
 
   # Runs on every push to main, released or not - this is `main`'s only CI, by
-  # design. ci.yml skips pushes to main precisely so this is not a second copy
-  # of the same run. It runs `pnpm check` and the build on Windows, macOS and
-  # Linux, and a failure on any one of them fails it, which skips the tag, the
-  # release and the SDK publish.
+  # design. ci.yml skips pushes to main, and to dry-run branches, precisely so
+  # this is not a second copy of the same run. It runs `pnpm check` and the
+  # build on Windows, macOS and Linux, and a failure on any one of them fails
+  # it, which skips every build, the tag, the release and the SDK publish.
   check:
     uses: ./.github/workflows/ci.yml
 
@@ -108,96 +128,64 @@ jobs:
   floti:
     uses: ./.github/workflows/floti.yml
 
-  # The macOS artefacts, built where electron-builder can make a dmg. Same gate
-  # as the Windows job, and it publishes nothing: it hands the dmg and the zip
-  # to `release`, which attaches them with the Windows files and floti's to
-  # one release. A failure here
-  # skips `release` too, so a version is never published without its Mac build.
-  release-mac:
-    needs: [version, check, floti]
+  # The generated protocol types (crates/floti-protocol/generated) as one
+  # archive, `floti-protocol-<version>.tar.gz`: the JSON Schema, the frame
+  # fixtures and the TypeScript declarations, under a folder of the same name.
+  # The crate's own test proves they are this protocol's before they are packed.
+  protocol:
+    needs: version
     if: needs.version.outputs.release == 'true'
-    runs-on: macos-latest
-    permissions:
-      contents: read
+    runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.version.outputs.version }}
-
     steps:
       - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
+      - name: Rust toolchain
+        run: rustup toolchain install
 
-      - uses: actions/setup-node@v6
+      - uses: Swatinem/rust-cache@v2
         with:
-          node-version: 22
-          cache: pnpm
+          key: protocol
 
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: Check the generated files are this protocol's
+        run: cargo test --locked -p floti-protocol --test generated_files
 
-      - name: Fetch the release's floti files
-        uses: actions/download-artifact@v4
-        with:
-          name: floti-release
-          path: ${{ runner.temp }}/floti-release
-
-      # Ad-hoc signed (`identity: '-'` in electron-builder.yml): there is no
-      # Developer ID, and no certificate or secret is involved. The app carries
-      # the release's floti for macOS arm64 and the release's SHA-256 list,
-      # staged by scripts/stage-floti.mjs, which checks the one against the
-      # other.
-      - name: Build artefacts
-        env:
-          FLOTI_PREBUILT: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-macos-arm64
-          FLOTI_SHA256SUMS: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-SHA256SUMS
-        run: pnpm dist:mac
-
-      - name: Verify the app carries the release's floti and its SHA-256 list
+      # The same commit packs to the same bytes: sorted, owned by nobody,
+      # dated by the commit, and gzipped with no name or time of its own.
+      - name: Pack them
+        shell: bash
         run: |
           set -euo pipefail
-          resources=packages/desktop/dist-app/mac-arm64/Helm.app/Contents/Resources
-          cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-macos-arm64" "$resources/floti"
-          cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-SHA256SUMS" "$resources/floti-SHA256SUMS"
-
-      - name: Verify the artefacts are arm64, ad-hoc signed, with Helm's icon and their native modules
-        run: |
-          node packages/desktop/scripts/verify-mac-artifact.mjs \
-            "packages/desktop/dist-app/Helm-$VERSION-arm64.dmg" \
-            "packages/desktop/dist-app/Helm-$VERSION-arm64-mac.zip"
+          name="floti-protocol-$VERSION"
+          mkdir -p "$RUNNER_TEMP/protocol/$name" "$RUNNER_TEMP/protocol-types"
+          cp crates/floti-protocol/generated/floti-protocol.schema.json \
+             crates/floti-protocol/generated/floti-protocol.frames.json \
+             crates/floti-protocol/generated/floti-protocol.generated.ts \
+             "$RUNNER_TEMP/protocol/$name/"
+          tar --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$(git log -1 --format=%ct)" \
+              -C "$RUNNER_TEMP/protocol" -cf - "$name" \
+            | gzip -9n >"$RUNNER_TEMP/protocol-types/$name.tar.gz"
+          tar -tzvf "$RUNNER_TEMP/protocol-types/$name.tar.gz"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mac-artefacts
-          path: |
-            packages/desktop/dist-app/Helm-${{ env.VERSION }}-arm64.dmg
-            packages/desktop/dist-app/Helm-${{ env.VERSION }}-arm64-mac.zip
+          name: protocol-types
+          path: ${{ runner.temp }}/protocol-types/
           if-no-files-found: error
-          # Already compressed, and only `release` below reads them.
-          compression-level: 0
           retention-days: 1
 
-  release:
-    needs: [version, check, floti, release-mac]
-    # No always()/!cancelled() here, deliberately: a failed `check` or
-    # `release-mac` must skip this job, and the default `needs` behaviour is
-    # what does that. A main that fails the gate, the Windows check or the Mac
-    # build therefore produces no tag and no release.
+  # The Windows artefacts, on a clean windows-latest runner. Like the macOS
+  # and Linux jobs it publishes nothing: it hands its files to `assemble`.
+  release-windows:
+    needs: [version, check, floti]
     if: needs.version.outputs.release == 'true'
     runs-on: windows-latest
-    permissions:
-      contents: write
     env:
-      GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.version.outputs.version }}
-      TAG: ${{ needs.version.outputs.tag }}
-      PREVIEW: ${{ needs.version.outputs.preview }}
 
     steps:
       - uses: actions/checkout@v5
-        with:
-          # Release notes are a git log range against the previous tag, and the
-          # default shallow checkout has neither the history nor the tags.
-          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         # Version comes from `packageManager` in package.json; see ci.yml.
@@ -253,11 +241,176 @@ jobs:
             "packages/desktop/dist-app/Helm-$VERSION-portable.exe" \
             "packages/desktop/dist-app/Helm-$VERSION-setup.exe"
 
-      - name: Fetch the macOS artefacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          path: |
+            packages/desktop/dist-app/Helm-${{ env.VERSION }}-portable.exe
+            packages/desktop/dist-app/Helm-${{ env.VERSION }}-setup.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  # The macOS artefacts, built where electron-builder can make a dmg.
+  release-mac:
+    needs: [version, check, floti]
+    if: needs.version.outputs.release == 'true'
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch the release's floti files
         uses: actions/download-artifact@v4
         with:
-          name: mac-artefacts
-          path: packages/desktop/dist-app
+          name: floti-release
+          path: ${{ runner.temp }}/floti-release
+
+      # Ad-hoc signed (`identity: '-'` in electron-builder.yml): there is no
+      # Developer ID, and no certificate or secret is involved. The app carries
+      # the release's floti for macOS arm64 and the release's SHA-256 list,
+      # staged by scripts/stage-floti.mjs, which checks the one against the
+      # other.
+      - name: Build artefacts
+        env:
+          FLOTI_PREBUILT: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-macos-arm64
+          FLOTI_SHA256SUMS: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-SHA256SUMS
+        run: pnpm dist:mac
+
+      - name: Verify the app carries the release's floti and its SHA-256 list
+        run: |
+          set -euo pipefail
+          resources=packages/desktop/dist-app/mac-arm64/Helm.app/Contents/Resources
+          cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-macos-arm64" "$resources/floti"
+          cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-SHA256SUMS" "$resources/floti-SHA256SUMS"
+
+      - name: Verify the artefacts are arm64, ad-hoc signed, with Helm's icon and their native modules
+        run: |
+          node packages/desktop/scripts/verify-mac-artifact.mjs \
+            "packages/desktop/dist-app/Helm-$VERSION-arm64.dmg" \
+            "packages/desktop/dist-app/Helm-$VERSION-arm64-mac.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-mac
+          path: |
+            packages/desktop/dist-app/Helm-${{ env.VERSION }}-arm64.dmg
+            packages/desktop/dist-app/Helm-${{ env.VERSION }}-arm64-mac.zip
+          if-no-files-found: error
+          # Already compressed, and only `assemble` reads them.
+          compression-level: 0
+          retention-days: 1
+
+  # The Linux AppImage, x64 only. node-pty ships no Linux prebuild, so the
+  # install compiles its N-API addon here, which loads in Electron unchanged.
+  release-linux:
+    needs: [version, check, floti]
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch the release's floti files
+        uses: actions/download-artifact@v4
+        with:
+          name: floti-release
+          path: ${{ runner.temp }}/floti-release
+
+      # The AppImage carries the release's static floti for Linux x64 and the
+      # release's SHA-256 list, staged by scripts/stage-floti.mjs, which checks
+      # the one against the other.
+      - name: Build artefacts
+        env:
+          FLOTI_PREBUILT: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-linux-x64
+          FLOTI_SHA256SUMS: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-SHA256SUMS
+        run: pnpm dist:linux
+
+      - name: Verify the AppImage is x64 and carries the release's floti, its SHA-256 list and its native modules
+        run: |
+          node packages/desktop/scripts/verify-linux-artifact.mjs \
+            "packages/desktop/dist-app/Helm-$VERSION-linux-x64.AppImage" \
+            --floti "$RUNNER_TEMP/floti-release/floti-$VERSION-linux-x64" \
+            --sums "$RUNNER_TEMP/floti-release/floti-$VERSION-SHA256SUMS"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          path: packages/desktop/dist-app/Helm-${{ env.VERSION }}-linux-x64.AppImage
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  # Every file the release carries, in one folder, checked to be exactly the
+  # release's (scripts/release.mjs), and the notes. It publishes nothing: in a
+  # release it hands both to `publish`, and in a dry run `release-files` is
+  # what the run leaves behind.
+  assemble:
+    needs: [version, check, floti, protocol, release-windows, release-mac, release-linux]
+    # No always()/!cancelled() here, deliberately: a failed check or build
+    # must skip this job and `publish` after it, and the default `needs`
+    # behaviour is what does that. A version is never published with half its
+    # downloads.
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
+      DRY_RUN: ${{ needs.version.outputs.dry_run }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Release notes link a range against the previous tag, and the
+          # default shallow checkout has neither the history nor the tags.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Fetch the floti files
+        uses: actions/download-artifact@v4
+        with:
+          name: floti-release
+          path: ${{ runner.temp }}/release
+
+      - name: Fetch the desktop files
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/release
+
+      - name: Fetch the protocol types
+        uses: actions/download-artifact@v4
+        with:
+          name: protocol-types
+          path: ${{ runner.temp }}/release
 
       - name: Compose the release notes
         shell: bash
@@ -289,9 +442,11 @@ jobs:
           # returns and the one the edit box shows - and substitution would
           # rewrite the very placeholder the note is explaining. Strip comments
           # first, then substitute, then drop the blank lines the strip left.
+          mkdir -p "$RUNNER_TEMP/notes"
+          notes="$RUNNER_TEMP/notes/notes.md"
           sed '/^<!--$/,/^-->$/d' .github/release-body.md \
             | sed '/./,$!d' \
-            | sed "s/\${VERSION}/$VERSION/g" >notes.md
+            | sed "s/\${VERSION}/$VERSION/g" >"$notes"
           # The section for this version, from its own heading to the next one.
           # Matched on the exact version so `0.4.10` can never be answered by
           # `0.4.1`'s section.
@@ -335,7 +490,7 @@ jobs:
               echo
               echo "**Full changelog:** https://github.com/$GITHUB_REPOSITORY/compare/$previous...$TAG"
             fi
-          } >>notes.md
+          } >>"$notes"
 
           count=$(git log --no-merges --oneline ${previous:+"$previous..HEAD"} | wc -l)
           if [[ $count -eq 0 ]]; then
@@ -344,17 +499,86 @@ jobs:
           fi
           echo "$count commit(s) since ${previous:-the beginning}."
 
-      # The five floti files and their list, exactly, each matching its
-      # SHA-256: a release is never published missing one.
-      - name: Confirm the floti files and their SHA-256s
+      # Each floti file matches the SHA-256 its list gives.
+      - name: Confirm the floti files' SHA-256s
+        shell: bash
+        working-directory: ${{ runner.temp }}/release
+        run: sha256sum --check --strict "floti-$VERSION-SHA256SUMS"
+
+      # Exactly the release's files - the five desktop files, the protocol
+      # types, the five floti files and their list - and nothing else, each
+      # listed with its SHA-256 in the summary.
+      - name: Confirm the release's files
         shell: bash
         run: |
           set -euo pipefail
-          cd "$RUNNER_TEMP/floti-release"
-          have=$(ls | LC_ALL=C sort | paste -sd ' ' -)
-          expected="floti-$VERSION-SHA256SUMS floti-$VERSION-linux-arm64 floti-$VERSION-linux-x64 floti-$VERSION-macos-arm64 floti-$VERSION-windows-arm64.exe floti-$VERSION-windows-x64.exe"
-          [[ $have == "$expected" ]] || { echo "::error::the floti files are [$have], expected [$expected]"; exit 1; }
-          sha256sum --check --strict "floti-$VERSION-SHA256SUMS"
+          table=$(node packages/desktop/scripts/release.mjs check "$RUNNER_TEMP/release" "$VERSION")
+          {
+            echo
+            if [[ $DRY_RUN == true ]]; then
+              echo "### The files \`$TAG\` would carry, in the \`release-files\` artifact"
+            else
+              echo "### The files \`$TAG\` carries"
+            fi
+            echo
+            echo "$table"
+            echo
+            echo "<details><summary>Release notes</summary>"
+            echo
+            cat "$RUNNER_TEMP/notes/notes.md"
+            echo
+            echo "</details>"
+          } >>"$GITHUB_STEP_SUMMARY"
+          echo "$table"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          compression-level: 0
+          # What a dry run is for, so it stays a week; a release's copy is
+          # read once, by `publish`.
+          retention-days: ${{ needs.version.outputs.dry_run == 'true' && 7 || 1 }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/notes/notes.md
+          if-no-files-found: error
+          retention-days: 1
+
+  # The only job that writes to the repository, and it never runs in a dry run.
+  publish:
+    needs: [version, assemble]
+    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
+      PREVIEW: ${{ needs.version.outputs.preview }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Fetch the release's files
+        uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: ${{ runner.temp }}/release
+
+      - name: Fetch the release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/notes
 
       - name: Publish
         shell: bash
@@ -373,42 +597,34 @@ jobs:
           fi
 
           # Created as a draft and then flipped - deliberately, and NOT a human
-          # approval gate. /releases/latest ignores drafts, so a release that
-          # waits for someone to press publish is a release the in-app check
-          # cannot see. The draft here lives for as long as the upload takes:
-          # publishing it is what creates the tag, so the ref and every
-          # asset become visible in the same instant. `gh release create` with
-          # assets does it the other way round - tag first, upload after - which
-          # leaves a window where the app announces an update whose download
-          # page is empty.
+          # approval gate. The draft here lives for as long as the upload takes:
+          # publishing it is what creates the tag, so the ref and every asset
+          # become visible in the same instant. `gh release create` with assets
+          # does it the other way round - tag first, upload after - which leaves
+          # a window where the app announces an update whose download page is
+          # empty.
+          prerelease=()
+          if [[ $PREVIEW == true ]]; then prerelease=(--prerelease); fi
           gh release create "$TAG" \
-            --draft \
+            --draft "${prerelease[@]}" \
             --target "$GITHUB_SHA" \
             --title "Helm $VERSION" \
-            --notes-file notes.md \
-            "packages/desktop/dist-app/Helm-$VERSION-portable.exe" \
-            "packages/desktop/dist-app/Helm-$VERSION-setup.exe" \
-            "packages/desktop/dist-app/Helm-$VERSION-arm64.dmg" \
-            "packages/desktop/dist-app/Helm-$VERSION-arm64-mac.zip" \
-            "$RUNNER_TEMP/floti-release/floti-$VERSION-windows-x64.exe" \
-            "$RUNNER_TEMP/floti-release/floti-$VERSION-windows-arm64.exe" \
-            "$RUNNER_TEMP/floti-release/floti-$VERSION-macos-arm64" \
-            "$RUNNER_TEMP/floti-release/floti-$VERSION-linux-x64" \
-            "$RUNNER_TEMP/floti-release/floti-$VERSION-linux-arm64" \
-            "$RUNNER_TEMP/floti-release/floti-$VERSION-SHA256SUMS"
+            --notes-file "$RUNNER_TEMP/notes/notes.md" \
+            "$RUNNER_TEMP/release/"*
 
+          # A preview is published like a release, so anybody can download it
+          # without a GitHub sign-in and its tag is made the same way, but as a
+          # pre-release and never `latest`: /releases/latest ignores
+          # pre-releases, so no installed Helm is offered it. The in-app check
+          # reads only the <major>.<minor>.<patch> part, so a preview of 2.4.1
+          # is newer than 2.4.0 and older than the next release after it.
           if [[ $PREVIEW == true ]]; then
-            # A preview stays a draft. Its tag is made here, once every asset
-            # is up, so the version gate sees it and the next push to main does
-            # not build the same preview again; a run that fails before this
-            # line leaves only a draft, which the next push replaces.
-            gh release edit "$TAG" --prerelease
-            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null
+            gh release edit "$TAG" --draft=false --prerelease --latest=false
           else
             gh release edit "$TAG" --draft=false --latest
           fi
 
-      - name: Confirm the preview is a draft with its assets, and not latest
+      - name: Confirm the preview is a published pre-release with its files, and not latest
         if: env.PREVIEW == 'true'
         shell: bash
         run: |
@@ -416,16 +632,16 @@ jobs:
 
           release=$(gh release view "$TAG" --json isDraft,isPrerelease,assets)
           assets=$(jq -r '[.assets[].name] | sort | join(", ")' <<<"$release")
-          expected="Helm-$VERSION-arm64-mac.zip, Helm-$VERSION-arm64.dmg, Helm-$VERSION-portable.exe, Helm-$VERSION-setup.exe, floti-$VERSION-SHA256SUMS, floti-$VERSION-linux-arm64, floti-$VERSION-linux-x64, floti-$VERSION-macos-arm64, floti-$VERSION-windows-arm64.exe, floti-$VERSION-windows-x64.exe"
+          expected=$(node packages/desktop/scripts/release.mjs names "$VERSION" | paste -sd , - | sed 's/,/, /g')
           latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
 
-          [[ $(jq -r .isDraft <<<"$release") == true ]]      || { echo "::error::$TAG is not a draft"; exit 1; }
+          [[ $(jq -r .isDraft <<<"$release") == false ]]     || { echo "::error::$TAG is still a draft"; exit 1; }
           [[ $(jq -r .isPrerelease <<<"$release") == true ]] || { echo "::error::$TAG is not a pre-release"; exit 1; }
           [[ $assets == "$expected" ]]                        || { echo "::error::assets are [$assets], expected [$expected]"; exit 1; }
           [[ $latest != "$TAG" ]]                             || { echo "::error::/releases/latest answers with the preview $TAG"; exit 1; }
 
           {
-            echo "**Preview \`$TAG\`**, a draft pre-release: open it from the repository's Releases page."
+            echo "**Preview [\`$TAG\`](https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG)**, a published pre-release."
             echo
             echo "- \`/releases/latest\` still answers \`$latest\`; $assets"
           } >>"$GITHUB_STEP_SUMMARY"
@@ -439,24 +655,16 @@ jobs:
           # The exact endpoint src/main/update.ts asks. Asserting on it closes
           # the loop that the rest of this workflow only sets up: a release that
           # is published but not `latest`, or latest but missing an asset, is
-          # one the app reports and the user cannot act on.
-          #
-          # This call is authenticated, because a workflow's always is. While
-          # the repository is private that is the *only* way it answers 200 -
-          # the app's unauthenticated request gets a 404 no matter what this
-          # step says. Public visibility is what makes the two agree; until
-          # then, treat a green tick here as "the release is correct", not as
-          # "the update check works".
+          # one the app reports and the user cannot act on. The next step makes
+          # the request the way a person does, with no token.
           latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest")
 
           tag=$(jq -r .tag_name <<<"$latest")
           draft=$(jq -r .draft <<<"$latest")
           assets=$(jq -r '[.assets[].name] | sort | join(", ")' <<<"$latest")
-          # Sorted as jq sorts them: the Mac zip, the dmg, the two exes, then
-          # the floti files (upper case sorts before lower).
-          expected="Helm-$VERSION-arm64-mac.zip, Helm-$VERSION-arm64.dmg, Helm-$VERSION-portable.exe, Helm-$VERSION-setup.exe, floti-$VERSION-SHA256SUMS, floti-$VERSION-linux-arm64, floti-$VERSION-linux-x64, floti-$VERSION-macos-arm64, floti-$VERSION-windows-arm64.exe, floti-$VERSION-windows-x64.exe"
+          expected=$(node packages/desktop/scripts/release.mjs names "$VERSION" | paste -sd , - | sed 's/,/, /g')
 
-          [[ $tag == "$TAG" ]]        || { echo "::error::/releases/latest says $tag, expected $TAG"; exit 1; }
+          [[ $tag == "$TAG" ]]       || { echo "::error::/releases/latest says $tag, expected $TAG"; exit 1; }
           [[ $draft == false ]]       || { echo "::error::$TAG is still a draft"; exit 1; }
           [[ $assets == "$expected" ]] || { echo "::error::assets are [$assets], expected [$expected]"; exit 1; }
 
@@ -466,10 +674,32 @@ jobs:
             echo "- \`/releases/latest\` -> \`$tag\`, published, $assets"
           } >>"$GITHUB_STEP_SUMMARY"
 
+      # Every version downloads without a GitHub sign-in, previews included:
+      # the desktop app for a new user, and the floti a computer of another OS
+      # or CPU fetches when Settings > Hosts installs it there. One of each is
+      # fetched here with no token at all, as they would fetch it, and must
+      # answer 200 with the bytes this run built.
+      - name: Confirm the files download without a sign-in
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/fetched"
+          for name in "Helm-$VERSION-setup.exe" "floti-$VERSION-linux-x64"; do
+            url="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$name"
+            code=$(env -u GH_TOKEN -u GITHUB_TOKEN curl --silent --show-error --location \
+              --retry 3 --retry-all-errors --output "$RUNNER_TEMP/fetched/$name" --write-out '%{http_code}' "$url" || true)
+            [[ $code == 200 ]] || { echo "::error::$url answered $code without a sign-in, expected 200"; exit 1; }
+            cmp "$RUNNER_TEMP/release/$name" "$RUNNER_TEMP/fetched/$name" \
+              || { echo "::error::$url is not the $name this run built"; exit 1; }
+            echo "$url: 200, the file this run built"
+            echo "- \`$name\` downloads without a sign-in" >>"$GITHUB_STEP_SUMMARY"
+          done
+
   # The plugin SDK goes to npm on its own version, the way the app goes to
   # GitHub on its: bump packages/plugin-sdk/package.json, merge, and this job
   # publishes it. Its gate asks the registry, not git, for the reason the app's
   # asks for a tag - "is this version published" is the same answer every time.
+  # A dry run skips it.
   #
   # Trusted publishing: npm trusts this workflow in this repository by OIDC,
   # set up on the package's settings page on npmjs.com, so no npm token is
@@ -478,7 +708,8 @@ jobs:
   # first version was published by hand and why a package npm has never heard
   # of is skipped here rather than failed.
   sdk:
-    needs: [check]
+    needs: [version, check]
+    if: needs.version.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

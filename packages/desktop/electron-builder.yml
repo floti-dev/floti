@@ -193,3 +193,31 @@ mac:
   darkModeSupport: true
 dmg:
   artifactName: Helm-${version}-${arch}.${ext}
+
+# Built by `pnpm dist:linux`, on Linux or the ubuntu-latest runner. One
+# AppImage, x64 only: an arm64 Linux desktop is not built, though floti itself
+# ships for arm64 Linux hosts. An AppImage runs on any recent distribution with
+# no install and no root, and carries everything below in its own image.
+linux:
+  # The local host, as for `win`: `resources/floti`, with the pinned Node
+  # beside it (`node/bin/node`) and, in a release, `floti-SHA256SUMS`.
+  extraResources:
+    - from: dist-host/floti
+      to: floti
+    - from: dist-host/node
+      to: node
+    - from: dist-host
+      to: .
+      filter: [floti-SHA256SUMS]
+  # The 256px PNG the window icon is; electron-builder puts it in the
+  # AppImage's .desktop entry.
+  icon: build/icon.png
+  category: Development
+  # Named rather than derived, so verify-linux-artifact.mjs knows where the
+  # executable is.
+  executableName: helm
+  target:
+    - target: AppImage
+      arch: [x64]
+appImage:
+  artifactName: Helm-${version}-linux-${arch}.${ext}

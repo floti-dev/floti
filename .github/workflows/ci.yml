@@ -1,12 +1,12 @@
 name: CI
 
 on:
-  # `main` is deliberately absent. Every push to `main` runs `Release`, which
-  # calls this workflow as its gate - so `main` is checked exactly once per
-  # push rather than twice. A second run of the same commit on the same three
-  # runners would buy nothing.
+  # `main` is deliberately absent, and so are the release dry-run branches.
+  # Every push to either runs `Release`, which calls this workflow as its gate -
+  # so each is checked exactly once per push rather than twice. A second run of
+  # the same commit on the same three runners would buy nothing.
   push:
-    branches-ignore: [main]
+    branches-ignore: [main, 'release-dry-run/**']
   pull_request:
   workflow_call:
 

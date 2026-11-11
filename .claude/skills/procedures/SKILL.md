@@ -31,16 +31,21 @@ column its migrations never create.
 ## Cutting a release
 
 1. Bump the version in `packages/desktop/package.json`. Merging that to `main`
-   tags, builds and publishes.
+   tags, builds and publishes. It must be greater, by semver, than every `v*`
+   tag, or the release fails. A version with a pre-release part
+   (`2.4.1-preview.12`) publishes as a public pre-release, never `latest`.
 2. Add a `## <version>` section to `CHANGELOG.md`. The release fails without
    one. Write it for someone deciding whether to download the exe: what changed
    for them, grouped by surface. No commit log, no test or tool names.
 
 Run `pnpm check` and `pnpm test:e2e` locally first; CI does not run the
-end-to-end tests. Then merge and push. CI runs `pnpm check` and the build on
-Windows, macOS and Linux - a failure on any of them blocks the release - and
-runs `verify-artifact.mjs` over
-both exes on publish. `packaging-check` and `verify:installer` are not part of a
+end-to-end tests. To see the whole release run first, push the branch to
+`release-dry-run/<name>`: it builds and checks everything, publishes nothing,
+and leaves the files as the run's `release-files` artifact
+(docs/PACKAGING.md, "A dry run"). Then merge and push. CI runs `pnpm check`
+and the build on Windows, macOS and Linux - a failure on any of them blocks
+the release - and verifies the exes, the dmg and zip, and the AppImage from
+the inside before publishing. `packaging-check` and `verify:installer` are not part of a
 release and run only when the owner asks. `verify:installer --yes` installs over
 and then uninstalls the Helm on this machine, leaving none behind.
 
