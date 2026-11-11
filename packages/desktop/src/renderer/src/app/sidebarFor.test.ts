@@ -14,7 +14,7 @@ describe('sidebarFor', () => {
       [{ kind: 'settings' }, 'settings'],
       [{ kind: 'agent', name: 'lead' }, 'agents'],
       [{ kind: 'agent-draft', id: 1, copyOf: null, host: 'buildbox' }, 'agents'],
-      [{ kind: 'history' }, null],
+      [{ kind: 'conversation', sessionId: 'c1', title: 'Rate limits', project: '/work' }, null],
       [{ kind: 'browser' }, null]
     ]
     for (const [ref, view] of cases) expect([ref.kind, sidebarFor(ref)]).toEqual([ref.kind, view])

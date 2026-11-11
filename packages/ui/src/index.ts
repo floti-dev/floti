@@ -192,11 +192,15 @@ export {
   type SessionLost
 } from './components/SessionEndedBar'
 export {
-  SessionHistory,
-  type HistoryGrouping,
-  type ResumeOptions,
-  type SessionHistoryProps
-} from './components/SessionHistory'
+  HistoryPalette,
+  type HistoryAnswer,
+  type HistoryListKind,
+  type HistoryPaletteProps,
+  type StoppedGroup
+} from './components/HistoryPalette'
+export { ConversationTab, type ConversationTabProps } from './components/ConversationTab'
+export { KeyButton } from './components/KeyButton'
+export { type HistoryRunning } from './lib/historyPalette'
 export { AgentTag, type AgentTagProps } from './components/AgentTag'
 export {
   SessionsPane,

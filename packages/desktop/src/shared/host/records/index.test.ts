@@ -248,7 +248,7 @@ describe('a window settings patch, split between the host and Helm', () => {
         axis: 'row' as const,
         children: [
           { panes: [{ kind: 'session' as const, id: 7 }], activeId: 'session:7' },
-          { panes: [{ kind: 'history' as const }], activeId: 'history' }
+          { panes: [{ kind: 'settings' as const }], activeId: 'settings' }
         ],
         sizes: [0.3, 0.7]
       },

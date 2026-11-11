@@ -24,6 +24,7 @@ import {
   DEFAULT_SETTINGS,
   familiesHere,
   familyOf,
+  historyTitle,
   findTab,
   focusGroup,
   fromSaved,
@@ -88,8 +89,12 @@ import {
   type PluginPagesRef,
   type EditorHighlight,
   type FileRef,
+  type ConversationRef,
+  type HistoryMatchLine,
   type HistorySession,
   type LiveSession,
+  type RestorableSession,
+  type SessionActivityState,
   type PaneGroup as PaneGroupState,
   type PaneLayout,
   type PaneRef,
@@ -179,7 +184,7 @@ import {
   RepoIcon,
   RestorePane,
   SaveAsTemplateDialog,
-  SessionHistory,
+  HistoryPalette,
   SessionsPane,
   SessionTree,
   sessionTreeHostProps,
@@ -207,7 +212,8 @@ import {
   type CrumbChip,
   type RailItem,
   type RestorePick,
-  type ResumeOptions,
+  type HistoryRunning,
+  type StoppedGroup,
   type SettingsSectionId,
   type Tab,
   type TabIndicator,
@@ -307,7 +313,9 @@ import {
   type DocumentMode,
 } from "./DocumentTab";
 import { fileKey, joinRoot, relativeTo, useFiles } from "./useFiles";
-import { sessionHistoryProps, useHistory } from "./useHistory";
+import { useHistoryPalette } from "./useHistoryPalette";
+import { useArchiveStats } from "./useArchiveStats";
+import { ConversationPane } from "./ConversationPane";
 import { useLauncher } from "./useLauncher";
 import { useProfiles } from "./useProfiles";
 import { useLiveSessions } from "./useLiveSessions";
@@ -488,6 +496,9 @@ const NO_PLUGINS: ReadonlyMap<string, PluginInfo> = new Map();
 type OnHost<T> = T & { host: string };
 
 /** The surfaces that show one host's data at a time, with a switch while more than one is connected. */
+/** The command palette's entry for History: Floti's own, so no slash, which every plugin command has. */
+const HISTORY_COMMAND = "history";
+
 type HostSurface = "history" | "usage" | "files" | "plugins" | "agents";
 const LOCAL_SURFACES: Readonly<Record<HostSurface, string>> = {
   history: LOCAL_HOST_KEY,
@@ -716,6 +727,14 @@ export function App(): JSX.Element {
   }>({ busy: false, error: null });
   /** Ctrl+Shift+P. */
   const [paletteOpen, setPaletteOpen] = useState(false);
+  /** Ctrl+H: History, over whatever is on screen. */
+  const [historyOpen, setHistoryOpen] = useState(false);
+  /** What had the keyboard when History opened, given back when it closes without acting. */
+  const historyReturn = useRef<HTMLElement | null>(null);
+  /** The sessions a stop took, at the top of History until each is back or the group is dismissed. */
+  const [stopped, setStopped] = useState<StoppedGroup | null>(null);
+  /** The sentence History's last resume or rename was refused with. */
+  const [historyError, setHistoryError] = useState<string | null>(null);
   /** The rail's current view, pressed again, puts the sidebar away. */
   const [sidebarHidden, setSidebarHidden] = useState(false);
   /** The last tab click's row, for the Sessions tree to bring into view. */
@@ -879,7 +898,8 @@ export function App(): JSX.Element {
       ? undefined
       : { hosts, host, onHostChange: (next) => showHostOn(surface, next) };
   };
-  const historyState = useHistory(historyHost);
+  const history = useHistoryPalette(historyHost, historyOpen);
+  const archiveStats = useArchiveStats(historyHost);
   const usage = useUsage(usageHost);
   const check = useUpdate();
   const ownData = useOwnDataCopy();
@@ -1638,10 +1658,21 @@ export function App(): JSX.Element {
     () => openPane({ kind: "sessions" }),
     [openPane],
   );
-  const openHistory = useCallback(
-    () => openPane({ kind: "history" }),
-    [openPane],
-  );
+  const openHistory = useCallback(() => {
+    historyReturn.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    setHistoryError(null);
+    setHistoryOpen(true);
+  }, [setHistoryError]);
+  /** History closed: on Escape or a press outside the keyboard goes back where it was. */
+  const closeHistory = useCallback((giveBack: boolean) => {
+    setHistoryOpen(false);
+    const back = historyReturn.current;
+    historyReturn.current = null;
+    if (giveBack && back !== null) requestAnimationFrame(() => back.focus());
+  }, []);
   /**
    * Settings is a tab like any other rather than a modal: it is a place, worth
    * leaving open beside a session, and a dialog over the window would be one
@@ -2050,31 +2081,173 @@ export function App(): JSX.Element {
   );
 
   /**
-   * A resumed conversation is a session like any other once it exists; main
-   * decided upstream whether it could be reopened and built `--resume` argv.
+   * A conversation from History resumed on host `on`, in the folder it ran in:
+   * a session like any other once it exists, placed in a new tab. The host
+   * decided whether it could be reopened and built its `--resume`. Resolves
+   * to the sentence a refusal gave, or null.
    */
-  const resumeSession = useCallback(
-    async (session: HistorySession, options?: ResumeOptions) => {
-      // On the host whose history it is, in a tab naming that host.
-      const on = historyHost;
-      const record = await historyState.resume(
-        session,
-        bodyRefs.current.get(open.focused) ?? null,
-        options,
-      );
-      if (!record) return;
-      if (on === LOCAL_HOST_KEY) sessionState.adopt(record);
-      else adoptThere(on, record);
-      placeSession(record.id, false, undefined, on);
+  const resumeConversation = useCallback(
+    async (
+      on: string,
+      sessionId: string,
+      agent: string | undefined,
+    ): Promise<string | null> => {
+      try {
+        const { cols, rows } = estimateGrid(
+          bodyRefs.current.get(open.focused) ?? null,
+        );
+        const { session: record } = await bridgeFor(on).invoke(
+          "history:resume",
+          {
+            sessionId,
+            ...(agent === undefined || agent === "" ? {} : { agent }),
+            cols,
+            rows,
+          },
+        );
+        if (on === LOCAL_HOST_KEY) sessionState.adopt(record);
+        else adoptThere(on, record);
+        placeSession(record.id, false, undefined, on);
+        return null;
+      } catch (err: unknown) {
+        return readable(err);
+      }
     },
-    [
-      historyHost,
-      historyState,
-      sessionState,
-      adoptThere,
-      placeSession,
-      open.focused,
-    ],
+    [sessionState, adoptThere, placeSession, open.focused],
+  );
+
+  /**
+   * The sessions running now on History's host, by lower-cased conversation:
+   * what History marks running or working and shows rather than resumes, and
+   * the row id each is shown by.
+   */
+  const historyRunning = useMemo(() => {
+    const remote = historyHost !== LOCAL_HOST_KEY;
+    const work = remote ? hostWork.byHost.get(historyHost) : undefined;
+    const records = remote ? (work?.sessions ?? []) : sessionState.sessions;
+    const activity = remote
+      ? (work?.activity ?? new Map<number, SessionActivityState>())
+      : sessionState.activity;
+    const shown = new Map<string, HistoryRunning>();
+    const ids = new Map<string, number>();
+    for (const record of records) {
+      if (record.status !== "running") continue;
+      const state = activity.get(record.id);
+      const conversation = state?.claudeSessionId ?? record.claudeSessionId;
+      if (conversation === null) continue;
+      const key = conversation.toLowerCase();
+      shown.set(key, {
+        working: state?.activity === "busy",
+        here: findTab(open, paneId(sessionRef(record.id, historyHost))) !== null,
+      });
+      ids.set(key, record.id);
+    }
+    return { shown, ids };
+  }, [historyHost, hostWork.byHost, sessionState.sessions, sessionState.activity, open]);
+
+  /** The stop's group, without those back already: a conversation running again is back. */
+  const stoppedShown = useMemo((): StoppedGroup | null => {
+    if (stopped === null) return null;
+    const sessions = stopped.sessions.filter(
+      (lost) =>
+        lost.conversationId === undefined ||
+        !historyRunning.shown.has(lost.conversationId.toLowerCase()),
+    );
+    return sessions.length === 0 ? null : { ...stopped, sessions };
+  }, [stopped, historyRunning]);
+
+  /**
+   * Resumes sessions from the stop's group, each by its conversation, in its
+   * own folder, as its agent unless the offer named its agent's problem. Each
+   * that comes back leaves the group; one that is refused stays, and History
+   * says why.
+   */
+  const resumeStopped = useCallback(
+    async (sessions: readonly RestorableSession[]) => {
+      const back = new Set<number>();
+      let refused: string | null = null;
+      for (const lost of sessions) {
+        if (lost.conversationId === undefined) {
+          refused = `Floti never learned which conversation ${lost.title ?? lost.name} was, so it cannot be resumed.`;
+          continue;
+        }
+        const answer = await resumeConversation(
+          LOCAL_HOST_KEY,
+          lost.conversationId,
+          lost.agentProblem === undefined ? lost.agent : undefined,
+        );
+        if (answer === null) back.add(lost.id);
+        else refused = answer;
+      }
+      setStopped((current) => {
+        if (current === null) return null;
+        const left = current.sessions.filter((lost) => !back.has(lost.id));
+        return left.length === 0 ? null : { ...current, sessions: left };
+      });
+      if (refused === null) closeHistory(false);
+      else setHistoryError(refused);
+    },
+    [resumeConversation, closeHistory, setHistoryError],
+  );
+
+  /** The stop's group taken away, with Undo: nothing in History asks first. */
+  const dismissStopped = useCallback(() => {
+    const was = stopped;
+    if (was === null) return;
+    setStopped(null);
+    const count = was.sessions.length;
+    agentToasts.raise(
+      "Stopped sessions dismissed",
+      `${String(count)} ${count === 1 ? "session" : "sessions"} the stop took ${count === 1 ? "is" : "are"} no longer at the top of History.`,
+      async () => {
+        setStopped(was);
+        return null;
+      },
+    );
+  }, [stopped, agentToasts]);
+
+  /**
+   * The restore offer's Not now: its sessions stay at the top of History
+   * (Ctrl+H) until each is back. The host forgets an offer once it is
+   * answered, so History keeps them in this window.
+   */
+  const notNow = useCallback(() => {
+    if (restoreOffer !== null && restoreOffer.sessions.length > 0)
+      setStopped({ at: null, sessions: restoreOffer.sessions });
+    dismissRestore();
+  }, [restoreOffer, dismissRestore]);
+
+  /** A conversation read-only in a tab, at `at` when a matched line was chosen. */
+  const openConversation = useCallback(
+    (session: HistorySession, at: HistoryMatchLine | null) => {
+      const find = history.query.trim();
+      openPane({
+        kind: "conversation",
+        sessionId: session.sessionId,
+        title: historyTitle(session),
+        project: session.project,
+        ...(session.agent === undefined ? {} : { agent: session.agent }),
+        ...(historyHost === LOCAL_HOST_KEY ? {} : { host: historyHost }),
+        ...(at === null ? {} : { at: at.uuid }),
+        ...(find === "" ? {} : { find }),
+      });
+    },
+    [openPane, history.query, historyHost],
+  );
+
+  /** A conversation tab's Rename: named on its host, and the tab takes the name. */
+  const renameConversation = useCallback(
+    (tab: ConversationRef, name: string | null) => {
+      void bridgeFor(hostOf(tab))
+        .invoke("history:rename", { sessionId: tab.sessionId, name })
+        .then((updated) => {
+          if (updated === null) return;
+          commit((current) =>
+            retitleTab(current, paneId(tab), historyTitle(updated)),
+          );
+        });
+    },
+    [commit],
   );
 
   /**
@@ -2199,6 +2372,11 @@ export function App(): JSX.Element {
           launched.session.id,
         ]),
       );
+      // Those left behind stay at the top of History until each is back.
+      const left = restoreOffer.sessions.filter(
+        (session) => !pairs.has(session.id),
+      );
+      setStopped(left.length === 0 ? null : { at: null, sessions: left });
       setRestoreChosen(null);
       commit((current) => {
         // A session lost with its host while its tab was open comes back in
@@ -2451,7 +2629,7 @@ export function App(): JSX.Element {
       // Hiding the pane keeps the pages; closing the tab destroys them all.
       if (ref.kind === "browser") browsers.closeAll();
       // Closing the offer is "not now", the same as its button.
-      if (ref.kind === "restore") dismissRestore();
+      if (ref.kind === "restore") notNow();
       if (ref.kind === "agent" || ref.kind === "agent-draft") {
         forgetAgentDraft(id);
         setBadAgentTabs((current) => {
@@ -2469,7 +2647,7 @@ export function App(): JSX.Element {
       }
       commit((current) => closeTab(current, id));
     },
-    [open, closeSession, closeRemoteSession, browsers, commit, dismissRestore],
+    [open, closeSession, closeRemoteSession, browsers, commit, notNow],
   );
 
   const splitFocused = useCallback(() => {
@@ -3067,6 +3245,26 @@ export function App(): JSX.Element {
     return () =>
       window.removeEventListener("keydown", onKeyDown, { capture: true });
   }, [setupNeeded]);
+
+  /**
+   * Ctrl+H, History - in capture, as Ctrl+P is, so a focused terminal never
+   * gets it. Ctrl on every OS: Cmd+H hides the app on macOS. Backspace is its
+   * own key and still sends a terminal what it sends.
+   */
+  useEffect(() => {
+    if (setupNeeded) return undefined;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (!event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)
+        return;
+      if (event.key.toLowerCase() !== "h") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!overlayOpen()) openHistory();
+    };
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
+  }, [setupNeeded, openHistory]);
 
   /**
    * Ctrl+Tab cycles every tab in every pane on screen as one ring, and Ctrl+\
@@ -3845,16 +4043,15 @@ export function App(): JSX.Element {
             icon: <TerminalIcon width={13} height={13} />,
           },
         ];
-      case "history":
+      case "conversation":
         return [
           {
             id: paneId(ref),
-            title: "Session history",
+            title: ref.title,
             hint:
-              historyHost === LOCAL_HOST_KEY
-                ? (historyState.summary?.historyFile ??
-                  "Every session on this machine")
-                : `Every session on ${hostName(historyHost)}`,
+              hostOf(ref) === LOCAL_HOST_KEY
+                ? `${ref.project}, read only`
+                : `${ref.project} on ${hostName(hostOf(ref))}, read only`,
             icon: <HistoryIcon width={13} height={13} />,
           },
         ];
@@ -4752,7 +4949,7 @@ export function App(): JSX.Element {
       onShellPath={chooseShellPath}
       // The archive's own figures, from the one subscription the history pane
       // reads them from, so the two cannot disagree about how much is stored.
-      archiveStats={historyState.archiveStats}
+      archiveStats={archiveStats}
       transcriptArchiveMaxBytes={
         settings?.transcriptArchiveMaxBytes ??
         DEFAULT_SETTINGS.transcriptArchiveMaxBytes
@@ -4992,23 +5189,16 @@ export function App(): JSX.Element {
         const project = projectsByPath.get(ref.path);
         return project ? renderProject(project) : null;
       }
-      case "history":
+      case "conversation":
         return (
-          <SessionHistory
-            {...sessionHistoryProps(historyState)}
-            hostChoice={hostChoiceFor("history")}
-            onResume={(session, options) =>
-              void resumeSession(session, options)
+          <ConversationPane
+            key={paneId(ref)}
+            tab={ref}
+            onResume={(tab) =>
+              resumeConversation(hostOf(tab), tab.sessionId, tab.agent)
             }
-            hostName={hostName(historyHost)}
-            // This PC's profiles; another host's are not known here.
-            profiles={
-              historyHost === LOCAL_HOST_KEY
-                ? profileState.profiles.map((profile) => profile.name)
-                : null
-            }
-            onReveal={revealOn(historyHost)}
-            compact={compact}
+            onRename={renameConversation}
+            onReveal={revealOn(hostOf(ref))}
           />
         );
       case "sessions":
@@ -5151,7 +5341,7 @@ export function App(): JSX.Element {
             }
             busy={restoreState.busy}
             onResume={(picks) => void resumeLost(picks)}
-            onNotNow={dismissRestore}
+            onNotNow={notNow}
             now={now}
           />
         );
@@ -5560,15 +5750,23 @@ export function App(): JSX.Element {
           ],
   );
 
-  const paletteCommands: PaletteCommand[] = [...plugins.entries()].flatMap(
-    ([id, plugin]) =>
+  const paletteCommands: PaletteCommand[] = [
+    // Floti's own: a key with no slash, which no plugin's has.
+    {
+      key: HISTORY_COMMAND,
+      title: "History",
+      source: "Ctrl+H",
+      icon: <HistoryIcon width={13} height={13} />,
+    },
+    ...[...plugins.entries()].flatMap(([id, plugin]) =>
       plugin.commands.map((command) => ({
         key: `${id}/${command.id}`,
         title: command.title,
         source: plugin.name,
         icon: <PluginIcon url={plugin.icon} size={13} />,
       })),
-  );
+    ),
+  ];
 
   /**
    * A command chosen in the palette. One with a tab opens it; one without is
@@ -5577,6 +5775,10 @@ export function App(): JSX.Element {
    */
   const runPluginCommand = (key: string): void => {
     setPaletteOpen(false);
+    if (key === HISTORY_COMMAND) {
+      openHistory();
+      return;
+    }
     const slash = key.indexOf("/");
     const id = key.slice(0, slash);
     const plugin = plugins.get(id);
@@ -5680,14 +5882,6 @@ export function App(): JSX.Element {
             waiting: statusCounts.waiting > 0,
             onToggle: toggleView,
           }),
-          page(
-            "history",
-            "Session history",
-            <HistoryIcon {...RAIL_ICON} />,
-            openHistory,
-            inFront("history"),
-            "data-open-history",
-          ),
         ],
         [
           {
@@ -6296,6 +6490,72 @@ export function App(): JSX.Element {
               );
             }}
             onDismiss={() => setQuickOpenRoot(null)}
+          />
+        )}
+        {historyOpen && (
+          <HistoryPalette
+            query={history.query}
+            onQueryChange={history.setQuery}
+            recent={history.recent}
+            total={history.summary?.sessions ?? null}
+            readError={
+              history.summary?.error === undefined
+                ? null
+                : {
+                    file: history.summary.historyFile,
+                    message: history.summary.error,
+                  }
+            }
+            titles={history.titles}
+            conversations={history.conversations}
+            children={history.children}
+            onUnfold={history.unfold}
+            running={historyRunning.shown}
+            agents={history.agents}
+            profileName={(id) =>
+              historyHost === LOCAL_HOST_KEY
+                ? (profileState.profiles.find((profile) => profile.id === id)
+                    ?.name ?? null)
+                : null
+            }
+            stopped={historyHost === LOCAL_HOST_KEY ? stoppedShown : null}
+            onResumeStopped={(sessions) => void resumeStopped(sessions)}
+            onDismissStopped={dismissStopped}
+            onResume={(session, { withoutAgent }) =>
+              void resumeConversation(
+                historyHost,
+                session.sessionId,
+                withoutAgent ? undefined : session.agent,
+              ).then((refused) => {
+                if (refused === null) closeHistory(false);
+                else setHistoryError(refused);
+              })
+            }
+            onShow={(session) => {
+              const id = historyRunning.ids.get(
+                session.sessionId.toLowerCase(),
+              );
+              if (id === undefined) return;
+              closeHistory(false);
+              if (historyHost === LOCAL_HOST_KEY) openSession(id);
+              else openRemoteSession(historyHost, id);
+            }}
+            onRead={(session, at) => {
+              closeHistory(false);
+              openConversation(session, at);
+            }}
+            onRename={(session, name) =>
+              void history.rename(session, name).then(setHistoryError)
+            }
+            onRetry={history.retry}
+            onDismiss={() => closeHistory(true)}
+            hosts={hostChoiceFor("history")}
+            hostName={
+              hostChoiceFor("history") === undefined
+                ? undefined
+                : hostName(historyHost)
+            }
+            resumeError={historyError}
           />
         )}
         {paletteOpen && (

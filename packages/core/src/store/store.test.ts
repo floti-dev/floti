@@ -181,7 +181,7 @@ describe('settings', () => {
             {
               panes: [
                 { kind: 'project', path: dir },
-                { kind: 'history' },
+                { kind: 'agent', name: 'lead' },
                 { kind: 'sessions' },
                 { kind: 'session', id: 7 }
               ],
@@ -373,20 +373,20 @@ describe('settings', () => {
     expect(readSettings(store).hosts).toEqual([host])
   })
 
-  it('reads what an older build wrote for pull requests and Config, and takes the next write', () => {
+  it('reads what an older build wrote for pull requests, Config and History, and takes the next write', () => {
     const raw = store.raw.prepare('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)')
-    raw.run('railHidden', JSON.stringify(['pulls', 'config', 'browser']), '')
+    raw.run('railHidden', JSON.stringify(['pulls', 'config', 'history', 'browser']), '')
     raw.run('prPollMinutes', JSON.stringify(15), '')
     raw.run('ghPath', JSON.stringify('C:\\tools\\gh.exe'), '')
 
     const settings = readSettings(store)
-    // The rail no longer has a Pulls or a Config destination, and a list naming
+    // The rail no longer has a Pulls, Config or History destination, and a list naming
     // one would be refused the next time anything on the rail was hidden.
     expect(settings.railHidden).toEqual(['browser'])
     expect(settings).not.toHaveProperty('prPollMinutes')
     expect(settings).not.toHaveProperty('ghPath')
-    expect(() => writeSettings(store, { railHidden: [...settings.railHidden, 'history'] })).not.toThrow()
-    expect(readSettings(store).railHidden).toEqual(['browser', 'history'])
+    expect(() => writeSettings(store, { railHidden: [...settings.railHidden, 'agents'] })).not.toThrow()
+    expect(readSettings(store).railHidden).toEqual(['browser', 'agents'])
   })
 
   describe('a pane layout written before panes were a tree', () => {
@@ -867,20 +867,21 @@ describe('settings validation', () => {
       key: 'railHidden',
       good: [
         [],
-        ['history'],
-        ['sessions', 'profiles', 'files', 'history', 'browser'],
+        ['agents'],
+        ['sessions', 'profiles', 'agents', 'files', 'browser'],
         // A plugin's rail icon, by its prefixed id.
-        ['plugin:sample', 'history']
+        ['plugin:sample', 'agents']
       ],
       bad: [
         null,
-        'history',
+        'agents',
         ['settings'],
         ['content'],
-        // Retired with the pull request surface and Config's page; `readSettings` drops them.
+        // Retired with the pull request surface, Config's page and History's; `readSettings` drops them.
         ['pulls'],
         ['config'],
-        ['history', 'history'],
+        ['history'],
+        ['agents', 'agents'],
         [1],
         [''],
         {},

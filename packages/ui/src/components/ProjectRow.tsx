@@ -196,7 +196,7 @@ export function ProjectRow({
  * worth doing to it - taking the pin off - is the star, shown outright because
  * it is the row's only control.
  *
- * "folder gone" is `SessionHistory`'s word for the same fact, deliberately: a
+ * "folder gone" is History's word for the same fact, deliberately: a
  * session whose project directory has vanished wears that badge, and a second
  * vocabulary for one condition is how two surfaces come to disagree about it.
  */

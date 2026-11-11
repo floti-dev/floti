@@ -114,6 +114,12 @@ describe('RestorePane', () => {
     expect(props.onNotNow).toHaveBeenCalledTimes(1)
   })
 
+  it('names each session by what History calls it, and says Not now keeps them at the top of History', () => {
+    renderPane({ offer: { ...OFFER, sessions: [session(4, 'tab baseline', { title: 'Tabs: keep the baseline' })] } })
+    within(row(4)).getByRole('checkbox', { name: 'Tabs: keep the baseline' })
+    expect(document.body.textContent).toContain('Not now keeps them at the top of History (Ctrl+H).')
+  })
+
   it('says how many more are still running elsewhere, and reads one session in the singular', () => {
     renderPane({ offer: { ...OFFER, sessions: [OFFER.sessions[0]!], elsewhere: 2 } })
     screen.getByRole('heading', { name: '1 session was running when Helm closed' })

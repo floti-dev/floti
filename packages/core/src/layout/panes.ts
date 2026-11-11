@@ -58,7 +58,27 @@ export type PaneRef =
   | SessionRef
   | TerminalRef
   | AgentDraftRef
+  | ConversationRef
   | { kind: 'restore' }
+
+/**
+ * A conversation from History, read-only: the conversation by its id, on the
+ * host by its id, absent for this PC's, named by its title, opened at a
+ * message (`at`, by its id) with Find holding what was searched for (`find`).
+ * Never written down: History opens it again in a keystroke.
+ */
+export interface ConversationRef {
+  kind: 'conversation'
+  sessionId: string
+  title: string
+  /** The folder it ran in, which Show in Explorer opens. */
+  project: string
+  /** The agent it was started as, which Resume composes again. */
+  agent?: string
+  host?: string
+  at?: string
+  find?: string
+}
 
 /**
  * A new agent's page, not written yet: blank, or a copy of `copyOf`, on the
@@ -254,13 +274,15 @@ function hostlessPaneId(ref: PaneRef): string {
       return `agent:${ref.name}`
     case 'agent-draft':
       return `agent-draft:${String(ref.id)}`
+    case 'conversation':
+      return `conversation:${ref.sessionId.toLowerCase()}`
     case 'plugin':
       return pluginTabId(ref.plugin, ref.tab, ref.params)
     case 'plugin-pages':
       // One per plugin, whichever pages it holds.
       return pluginPagesId(ref.plugin)
     default:
-      // history, sessions, config, settings, browser: one of each, so
+      // sessions, settings, browser: one of each, so
       // the kind is the identity.
       return ref.kind
   }
@@ -268,7 +290,13 @@ function hostlessPaneId(ref: PaneRef): string {
 
 /** Whether a tab is written down across a restart. See `SavedPane`. */
 export function isPersistable(ref: PaneRef): ref is SavedPane {
-  return ref.kind !== 'browser' && ref.kind !== 'terminal' && ref.kind !== 'restore' && ref.kind !== 'agent-draft'
+  return (
+    ref.kind !== 'browser' &&
+    ref.kind !== 'terminal' &&
+    ref.kind !== 'restore' &&
+    ref.kind !== 'agent-draft' &&
+    ref.kind !== 'conversation'
+  )
 }
 
 /** The tab in front of a group: its `activeId`, or the last tab if that is gone. */
@@ -652,16 +680,21 @@ export function activateTab(layout: PaneLayout, id: string): PaneLayout {
 
 /**
  * A plugin's tab, renamed in place: its page set a title of its own, or put
- * the manifest's back (null). Nothing else about the layout moves, so a page
- * naming itself is not a change of focus. Any other tab is left as it is.
+ * the manifest's back (null). A conversation's tab takes the name it was
+ * given in History, and has no null to go back to. Nothing else about the
+ * layout moves, so a tab naming itself is not a change of focus. Any other
+ * tab is left as it is.
  */
 export function retitleTab(layout: PaneLayout, id: string, title: string | null): PaneLayout {
   const at = findTab(layout, id)
   if (at === null) return layout
   const group = groupById(layout, at.group)!
   const ref = group.tabs[at.index]!
-  if (ref.kind !== 'plugin' || ref.title === title) return layout
-  const tabs = group.tabs.map((tab, index) => (index === at.index ? { ...ref, title } : tab))
+  let renamed: PaneRef
+  if (ref.kind === 'plugin' && ref.title !== title) renamed = { ...ref, title }
+  else if (ref.kind === 'conversation' && title !== null && ref.title !== title) renamed = { ...ref, title }
+  else return layout
+  const tabs = group.tabs.map((tab, index) => (index === at.index ? renamed : tab))
   return { ...layout, groups: layout.groups.map((other) => (other.id === group.id ? { ...other, tabs } : other)) }
 }
 
@@ -1247,11 +1280,12 @@ export function savedGroups(saved: SavedPaneLayout | null): SavedPaneGroup[] {
 /**
  * Tab kinds an older build wrote down that open nothing now. The content
  * viewer's tab went when it merged into Files, the pull request list and its
- * per-PR tabs went when pull requests left Helm for a plugin, and Config's tab
- * went when its page did, the agent's own commands editing its config: a
- * layout naming any of them still loads, without them.
+ * per-PR tabs went when pull requests left Helm for a plugin, Config's tab
+ * went when its page did, the agent's own commands editing its config, and
+ * History's went when it became a palette (Ctrl+H): a layout naming any of
+ * them still loads, without them.
  */
-export const RETIRED_TAB_KINDS: ReadonlySet<string> = new Set(['content', 'pulls', 'pr', 'config'])
+export const RETIRED_TAB_KINDS: ReadonlySet<string> = new Set(['content', 'pulls', 'pr', 'config', 'history'])
 
 /**
  * The saved layout as a live one, its groups numbered in reading order. A

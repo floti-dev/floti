@@ -1378,7 +1378,7 @@ export const AGENT_COMMANDS_PER_PARENT = { min: 1, max: 32, default: 4 } as cons
  * `railHidden` is validated against it, so no write can hide the one way back
  * to un-hiding everything else. The ids are the rail's own (`data-rail`).
  */
-export const RAIL_DESTINATIONS = ['sessions', 'profiles', 'agents', 'history', 'files', 'browser'] as const
+export const RAIL_DESTINATIONS = ['sessions', 'profiles', 'agents', 'files', 'browser'] as const
 
 export type RailDestination = (typeof RAIL_DESTINATIONS)[number]
 
@@ -1447,7 +1447,6 @@ export interface DetectedShell {
  */
 export type WorkspaceTab =
   | { kind: 'project'; path: string; host?: string }
-  | { kind: 'history' }
   | { kind: 'sessions' }
   | { kind: 'settings' }
   /**

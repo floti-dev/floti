@@ -236,7 +236,7 @@ describe('pressing a child’s row when its parent’s tab is here', () => {
       root: {
         axis: 'row',
         children: [
-          { panes: [parentTab as SavedPane, { kind: 'history' }], activeId: 'history' },
+          { panes: [parentTab as SavedPane, { kind: 'sessions' }], activeId: 'sessions' },
           { panes: [{ kind: 'settings' }], activeId: 'settings' }
         ],
         sizes: [0.6, 0.4]
@@ -393,7 +393,7 @@ describe('which rows say a press opens a peek', () => {
       root: {
         axis: 'row',
         children: [
-          { panes: [parentTab as SavedPane, { kind: 'history' }], activeId: 'history' },
+          { panes: [parentTab as SavedPane, { kind: 'sessions' }], activeId: 'sessions' },
           { panes: [{ kind: 'settings' }], activeId: 'settings' }
         ],
         sizes: [0.6, 0.4]

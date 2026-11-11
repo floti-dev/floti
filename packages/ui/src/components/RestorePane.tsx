@@ -156,7 +156,7 @@ export function RestorePane({
 
         <p className="mt-3 mb-[18px] text-[11.5px] leading-normal text-fg-subtle">
           Each one runs <span className="font-mono text-fg-muted">claude --resume</span> in its own
-          folder with its own profile, in the tab it had. Not now leaves them in Session history.
+          folder with its own profile and agent, in the tab it had. Not now keeps them at the top of History (Ctrl+H).
           {elsewhere !== null && <> {elsewhere}</>}
         </p>
 
@@ -226,10 +226,10 @@ function Row({
           blocked ? 'cursor-default' : 'cursor-pointer hover:bg-hover'
         )}
       >
-        <Checkbox checked={on} onChange={onToggle} label={session.name} disabled={blocked} />
+        <Checkbox checked={on} onChange={onToggle} label={session.title ?? session.name} disabled={blocked} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex min-w-0 items-center gap-2">
-            <span className={cn('min-w-0 truncate', on ? 'text-fg' : 'text-fg-muted')}>{session.name}</span>
+            <span className={cn('min-w-0 truncate', on ? 'text-fg' : 'text-fg-muted')}>{session.title ?? session.name}</span>
             {agent !== undefined && <AgentTag name={agent} gone={session.agentProblem !== undefined} />}
           </span>
           {blocked ? (

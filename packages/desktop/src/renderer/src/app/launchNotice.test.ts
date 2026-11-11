@@ -11,7 +11,7 @@ describe('a launch from the sidebar that failed', () => {
     expect(treeLaunchNotice(failed, null, nameOf)).toBe(
       'Could not start a session in app on build-box: claude is not installed there.'
     )
-    expect(treeLaunchNotice(failed, { kind: 'history' }, nameOf)).toBe(
+    expect(treeLaunchNotice(failed, { kind: 'sessions' }, nameOf)).toBe(
       'Could not start a session in app on build-box: claude is not installed there.'
     )
     // This PC's project of the same path is another folder.

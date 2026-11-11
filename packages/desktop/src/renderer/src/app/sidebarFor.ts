@@ -28,7 +28,7 @@ export function sidebarFor(ref: PaneRef): SidebarView | null {
     case 'agent':
     case 'agent-draft':
       return 'agents'
-    case 'history':
+    case 'conversation':
     case 'browser':
     case 'plugin':
     case 'plugin-pages':

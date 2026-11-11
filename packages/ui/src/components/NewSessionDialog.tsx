@@ -1,4 +1,4 @@
-import type { JSX, KeyboardEvent, ReactNode } from 'react'
+import type { JSX, KeyboardEvent } from 'react'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   EFFORT_LEVELS,
@@ -39,6 +39,7 @@ import { formatAge, formatMoment } from '../lib/time'
 import { AgentPicker } from './AgentPicker'
 import { HistoryIcon, LayersIcon, TerminalIcon } from './icons'
 import { LaunchSentence, RunningHere } from './LaunchNotes'
+import { KeyButton } from './KeyButton'
 import { Overlay } from './Overlay'
 import { Picker } from './Picker'
 
@@ -744,30 +745,3 @@ function ResumeOption({
   )
 }
 
-/** A hint in the key strip that is also the control it names. */
-function KeyButton({
-  keys,
-  onClick,
-  disabled = false,
-  children
-}: {
-  keys: string
-  onClick: () => void
-  disabled?: boolean
-  children: ReactNode
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'flex h-[24px] items-center gap-1.5 rounded-raised px-1.5 transition-colors',
-        'hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent'
-      )}
-    >
-      <span className="font-mono text-fg-muted">{keys}</span>
-      {children}
-    </button>
-  )
-}

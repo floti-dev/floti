@@ -40,7 +40,7 @@ import {
 } from './panes'
 
 const session = (id: number, host?: string): PaneRef => sessionRef(id, host)
-const HISTORY: PaneRef = { kind: 'history' }
+const HISTORY: PaneRef = { kind: 'agent', name: 'history' }
 const SETTINGS: PaneRef = { kind: 'settings' }
 
 const g = (...tabs: PaneRef[]): SavedPaneGroup => ({ panes: tabs as SavedPane[], activeId: null })

@@ -15,7 +15,7 @@ const item = (id: string, extra: Partial<RailItem> = {}): RailItem => ({
 })
 
 const GROUPS = [
-  [item('sessions'), item('profiles'), item('files'), item('history')],
+  [item('sessions'), item('profiles'), item('files'), item('agents')],
   [item('browser')]
 ]
 const FOOTER = [item('settings', { hideable: false })]
@@ -49,7 +49,7 @@ const rules = (): number => screen.getByRole('navigation', { name: 'Destinations
 describe('Rail', () => {
   it('draws the destinations in the order given, with a rule between groups and Settings at the foot', () => {
     render(<Harness />)
-    expect(buttons()).toEqual(['sessions', 'profiles', 'files', 'history', 'browser', 'settings'])
+    expect(buttons()).toEqual(['sessions', 'profiles', 'files', 'agents', 'browser', 'settings'])
     expect(rules()).toBe(1)
   })
 
@@ -62,7 +62,7 @@ describe('Rail', () => {
       'Sessions',
       'Profiles',
       'Files',
-      'History',
+      'Agents',
       'Browser',
       'Settings'
     ])
@@ -70,13 +70,13 @@ describe('Rail', () => {
     // A browser tab's native view hides while the menu is up, as for a dialog.
     expect(overlayOpen()).toBe(true)
 
-    fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'History' }))
+    fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Agents' }))
     // Several can be changed in one visit, so the menu stays.
-    expect(within(menu).getByRole('menuitemcheckbox', { name: 'History' }).getAttribute('aria-checked')).toBe('false')
-    expect(buttons()).not.toContain('history')
+    expect(within(menu).getByRole('menuitemcheckbox', { name: 'Agents' }).getAttribute('aria-checked')).toBe('false')
+    expect(buttons()).not.toContain('agents')
 
-    fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'History' }))
-    expect(buttons()).toContain('history')
+    fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Agents' }))
+    expect(buttons()).toContain('agents')
 
     fireEvent.keyDown(menu, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
@@ -94,7 +94,7 @@ describe('Rail', () => {
 
   it('drops a group’s rule along with its last destination, so two rules never touch', () => {
     render(<Harness initial={['browser']} />)
-    expect(buttons()).toEqual(['sessions', 'profiles', 'files', 'history', 'settings'])
+    expect(buttons()).toEqual(['sessions', 'profiles', 'files', 'agents', 'settings'])
     expect(rules()).toBe(0)
   })
 

@@ -1,20 +1,12 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  ArchiveStats,
-  ContentScope,
-  FileView,
-  HistoryPage,
-  HistorySession,
-  HistorySummary,
-  SessionRecord
-} from '@helm/core'
+import type { ContentScope, FileView, HistoryPage, HistorySession, HistorySummary } from '@helm/core'
 import type { PluginInfo } from '../../../shared/ipc'
 import { bridge, remoteBridge, type Invocation } from './bridge.testkit'
 import { noteDocument } from './document.testkit'
 import { useDocument } from './useDocument'
 import { fileKey, useFiles } from './useFiles'
-import { useHistory } from './useHistory'
+import { useHistoryPalette } from './useHistoryPalette'
 import { useHostPlugins, usePlugins } from './usePlugins'
 import { usePluginSettings } from './usePluginSettings'
 
@@ -48,40 +40,35 @@ afterEach(() => {
 describe('History on build-box', () => {
   const summary = { sessions: 3, indexedBytes: 10, historyFile: '/home/you/.claude/history.jsonl' } as HistorySummary
   const session = { sessionId: 'conv-1', resumable: true } as unknown as HistorySession
-  const page = { sessions: [session] } as unknown as HistoryPage
-  const record = { id: 41, cwd: '/home/you/work/infra' } as SessionRecord
+  const page = { sessions: [session], total: 1 } as unknown as HistoryPage
 
-  it('lists build-box’s sessions and resumes there, asking this PC nothing', async () => {
+  it('lists build-box’s sessions worked in last, asking this PC nothing', async () => {
     buildBox.answer('history:summary', () => summary)
-    buildBox.answer('archive:stats', () => ({ sessions: 0, messages: 0 }) as unknown as ArchiveStats)
+    buildBox.answer('history:projects', () => [])
+    buildBox.answer('agents:list', () => ({ agents: [], bad: [] }) as never)
     buildBox.answer('history:sessions', () => page)
-    buildBox.answer('history:resume', () => ({ session: record }) as never)
-    const { result } = renderHook(() => useHistory(BUILD_BOX))
-    await waitFor(() => expect(result.current.summary?.historyFile).toBe('/home/you/.claude/history.jsonl'))
-
-    let resumed: SessionRecord | null = null
-    await act(async () => {
-      resumed = await result.current.resume(session, null)
-    })
-    expect(resumed).toBe(record)
-    expect(buildBox.invoked('history:resume')).toEqual([{ sessionId: 'conv-1', cols: 100, rows: 30 }])
+    const { result } = renderHook(() => useHistoryPalette(BUILD_BOX, true))
+    await waitFor(() => expect(result.current.recent).toEqual({ sessions: [session], total: 1 }))
+    expect(result.current.summary?.historyFile).toBe('/home/you/.claude/history.jsonl')
+    expect(buildBox.invoked('history:sessions')).toEqual([{ topLevel: true, limit: 10 }])
     expect(askedHere()).toEqual([])
   })
 
-  it('says why build-box’s history cannot be read, and shows none of this PC’s', async () => {
-    bridge.answer('history:summary', () => ({ ...summary, historyFile: 'C:\\Users\\you\\.claude\\history.jsonl' }))
-    buildBox.answer('history:summary', () => {
+  it('says why build-box’s sessions cannot be listed, and shows none of this PC’s', async () => {
+    bridge.answer('history:sessions', () => page)
+    buildBox.answer('history:sessions', () => {
       throw new Error('build-box is not connected.')
     })
-    const { result } = renderHook(() => useHistory(BUILD_BOX))
-    await waitFor(() => expect(result.current.error).toContain('build-box is not connected.'))
-    expect(result.current.summary).toBeNull()
+    const { result } = renderHook(() => useHistoryPalette(BUILD_BOX, true))
+    await waitFor(() => expect(result.current.recent).toEqual({ error: 'build-box is not connected.' }))
     expect(askedHere()).toEqual([])
   })
 
   it('switched back to this PC, drops what build-box showed before this PC answers', async () => {
     buildBox.answer('history:summary', () => summary)
-    const { result, rerender } = renderHook(({ host }) => useHistory(host), { initialProps: { host: BUILD_BOX } })
+    const { result, rerender } = renderHook(({ host }) => useHistoryPalette(host, true), {
+      initialProps: { host: BUILD_BOX }
+    })
     await waitFor(() => expect(result.current.summary).toBe(summary))
     rerender({ host: 'local' })
     expect(result.current.summary).toBeNull()
