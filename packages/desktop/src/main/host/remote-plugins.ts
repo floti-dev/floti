@@ -12,7 +12,8 @@ import { createHostPlugins, type HostPlugins } from './plugins'
  *
  * - Page files: a host's plugin pages are served on its own origin for each
  *   plugin (`helm-plugin://<id>.<label>/`, `shared/plugins/origin.ts`), from
- *   that host's files only, cached per plugin version and revision.
+ *   that host's files only, cached per plugin version and revision, never
+ *   older than the newest read the host has shown (`plugins.ts`).
  * - Tools: the relay offers each host only the tool servers of the plugins
  *   that host lists as on with tools on, and a call it relays is answered by
  *   that host's background page for the plugin, in a frame on that host's

@@ -20,7 +20,9 @@ import { isBackgroundPage, pluginFromHost, withBackgroundReports } from './recor
  *
  * - The `helm-plugin://<id>/` scheme: a plugin's page files from the host
  *   (`file`), cached here per plugin version and the host's revision of its
- *   read, and served only for a plugin the host has on (`serves`).
+ *   read, and served only for a plugin the host has on (`serves`). A page's
+ *   document is always read from the host, so its answer says when the host
+ *   has read the plugin again before main's list has heard it.
  * - The hidden plugin host window background pages run in under API v1,
  *   opened while a background page needs it. That window reports whether each
  *   page runs (`backgroundState`), which main alone hears; it tells the
@@ -104,6 +106,13 @@ interface Cached {
   files: Map<string, PluginPageFile>
 }
 
+/**
+ * A page's document, which a frame asks for first whenever it loads. It is
+ * always read from the host, never the cache: its answer names the host's
+ * current read of the plugin, which main's own list may not have heard yet.
+ */
+const isDocument = (path: string): boolean => /\.html?$/i.test(path)
+
 /** How long a tool call waits for a background page that is still starting: a plugin just turned on, or reloaded. */
 export const BACKGROUND_START_WAIT_MS = 15_000
 /** What a session reads when a plugin stops offering the tool it called. */
@@ -122,6 +131,14 @@ export function createHostPlugins(deps: HostPluginsDeps): HostPlugins {
   let said = '[]'
   const reports = new Map<string, PluginBackgroundReport>()
   const cache = new Map<string, Cached>()
+  /**
+   * The newest read of each plugin this connection's host has shown, in its
+   * list or in a file's answer. The window hears the host's list on its own
+   * connection, which can be ahead of main's, and loads a reloaded plugin's
+   * pages from the new read before main's list says it exists; files of an
+   * older read than this are never served from the cache or kept in it.
+   */
+  const newest = new Map<string, number>()
   let subscriptions: HostSubscription[] = []
   /** Tool calls in flight, by plugin, so a plugin that stops offering its tools ends them. */
   const toolCalls = new Map<string, Set<AbortController>>()
@@ -205,10 +222,19 @@ export function createHostPlugins(deps: HostPluginsDeps): HostPlugins {
     )
   }
 
+  /** The host has shown a read of `plugin` numbered `revision`: the cached files of any older read go. */
+  const saw = (plugin: string, revision: number): void => {
+    if (revision <= (newest.get(plugin) ?? 0)) return
+    newest.set(plugin, revision)
+    const cached = cache.get(plugin)
+    if (cached !== undefined && cached.revision < revision) cache.delete(plugin)
+  }
+
   /** The host's list, now the one Helm has: a plugin's cached files go once the host has read it again. */
   const take = (listed: readonly P.PluginInfo[]): void => {
     hosted = listed.map((plugin) => pluginFromHost(plugin, hostKey))
     offered = [...listed]
+    for (const plugin of listed) if (plugin.id !== null) saw(plugin.id, plugin.revision)
     for (const [id, cached] of cache) {
       const now = live(id)
       if (now === null || now.revision !== cached.revision || now.version !== cached.version) cache.delete(id)
@@ -314,6 +340,10 @@ export function createHostPlugins(deps: HostPluginsDeps): HostPlugins {
 
   link.onConnected(async (connection) => {
     for (const subscription of subscriptions) subscription.unsubscribe()
+    // A host reached again may be one that started over and numbers its reads
+    // afresh: nothing read from the last one is served or compared again.
+    cache.clear()
+    newest.clear()
     subscriptions = [
       connection.subscribe('plugins:changed', {
         snapshot: (listed) => take(listed),
@@ -422,14 +452,27 @@ export function createHostPlugins(deps: HostPluginsDeps): HostPlugins {
       const known = live(plugin)
       const cached = cache.get(plugin)
       const hit =
-        known !== null && cached !== undefined && cached.revision === known.revision && cached.version === known.version
+        !isDocument(path) &&
+        known !== null &&
+        cached !== undefined &&
+        cached.revision === known.revision &&
+        cached.version === known.version
           ? cached.files.get(path)
           : undefined
       if (hit !== undefined) return hit
       const { file, answer } = await read(connection, plugin, path)
-      // Kept only for the read the window's list has: a file from a read the
-      // list has not caught up with is served, and asked for again next time.
-      if (file.status === 200 && known !== null && answer.revision === known.revision && answer.version === known.version) {
+      saw(plugin, answer.revision)
+      // Kept only for the read main's list has, when the host has shown none
+      // newer: a file from a read the list has not caught up with is served,
+      // and asked for again next time. A document is never kept.
+      if (
+        file.status === 200 &&
+        !isDocument(path) &&
+        known !== null &&
+        answer.revision === known.revision &&
+        answer.version === known.version &&
+        answer.revision === newest.get(plugin)
+      ) {
         let entry = cache.get(plugin)
         if (entry === undefined || entry.revision !== answer.revision || entry.version !== answer.version) {
           entry = { version: answer.version, revision: answer.revision, files: new Map() }

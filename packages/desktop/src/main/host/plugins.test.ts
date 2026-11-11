@@ -3,7 +3,7 @@ import type { SettingValue } from '@coledtaylor/helm-plugin-sdk'
 import type { PluginFolder } from '@helm/core'
 import type { PluginBackgroundReport } from '../../shared/ipc'
 import type { ToolAnswer, ToolCallRequest } from '../plugins/tools'
-import { FakeConnection, fakeLink } from '../../../test/host-connection'
+import { FakeConnection, fakeLink, reconnectingLink } from '../../../test/host-connection'
 import { HostRequestError } from './client'
 import type * as P from './protocol'
 import { createHostPlugins, NOT_OFFERING, type HostPluginsDeps } from './plugins'
@@ -314,19 +314,67 @@ describe('plugins in the local host', () => {
       await w.link.connect()
       w.connection.snapshot('plugins:changed', [hostPlugin()])
 
-      const first = await w.plugins.file('sample', 'dist/panel.html')
-      const again = await w.plugins.file('sample', 'dist/panel.html')
+      const first = await w.plugins.file('sample', 'dist/panel.js')
+      const again = await w.plugins.file('sample', 'dist/panel.js')
       expect(new TextDecoder().decode(again.body)).toBe(new TextDecoder().decode(first.body))
-      expect(w.connection.payloads('plugins:file')).toEqual([{ plugin: 'sample', path: 'dist/panel.html', offset: 0 }])
+      expect(w.connection.payloads('plugins:file')).toEqual([{ plugin: 'sample', path: 'dist/panel.js', offset: 0 }])
 
       // The folder was edited: the host read it again.
       revision = 2
       w.connection.push('plugins:changed', [hostPlugin({ revision: 2 })])
-      const fresh = await w.plugins.file('sample', 'dist/panel.html')
+      const fresh = await w.plugins.file('sample', 'dist/panel.js')
       expect(new TextDecoder().decode(fresh.body)).toBe('r2 dist/p')
       expect(w.connection.payloads('plugins:file')).toHaveLength(2)
-      await w.plugins.file('sample', 'dist/panel.html')
+      await w.plugins.file('sample', 'dist/panel.js')
       expect(w.connection.payloads('plugins:file')).toHaveLength(2)
+    })
+
+    it('reads a page’s document from the host every time it loads, so its answer can say the host read the plugin again', async () => {
+      const w = world({ hosted: [hostPlugin()] })
+      w.connection.answer('plugins:file', () => ({
+        status: 200,
+        contentType: 'text/html; charset=utf-8',
+        version: '1.0.0',
+        revision: 1,
+        totalBytes: 4,
+        body: body('page')
+      }))
+      await w.link.connect()
+      w.connection.snapshot('plugins:changed', [hostPlugin()])
+      await w.plugins.file('sample', 'dist/panel.html')
+      await w.plugins.file('sample', 'dist/panel.HTM')
+      await w.plugins.file('sample', 'dist/panel.html')
+      expect(w.connection.payloads('plugins:file')).toHaveLength(3)
+    })
+
+    it('starts its cache over on a new connection, whose host may have started again and numbers its reads afresh', async () => {
+      const first = new FakeConnection()
+      const second = new FakeConnection()
+      for (const [connection, text] of [
+        [first, 'old'],
+        [second, 'new']
+      ] as const) {
+        connection.answer('plugins:list', () => [hostPlugin()])
+        connection.answer('plugins:file', () => ({
+          status: 200,
+          contentType: 'text/javascript',
+          version: '1.0.0',
+          revision: 1,
+          totalBytes: 3,
+          body: body(text)
+        }))
+      }
+      const link = reconnectingLink(first)
+      const plugins = createHostPlugins(quietDeps(link))
+      await link.connection()
+      first.snapshot('plugins:changed', [hostPlugin()])
+      expect(new TextDecoder().decode((await plugins.file('sample', 'dist/panel.js')).body)).toBe('old')
+
+      await link.reconnect(second)
+      second.snapshot('plugins:changed', [hostPlugin()])
+      expect(new TextDecoder().decode((await plugins.file('sample', 'dist/panel.js')).body)).toBe('new')
+      expect(new TextDecoder().decode((await plugins.file('sample', 'dist/panel.js')).body)).toBe('new')
+      expect(second.payloads('plugins:file')).toHaveLength(1)
     })
 
     it('reads a large file a piece at a time, and keeps no refusal', async () => {

@@ -200,6 +200,37 @@ describe('each remote host’s plugins and tool relay', () => {
     expect(w.reportsTold()).toBeGreaterThan(0)
   })
 
+  it('serves build-box’s new read of a plugin moved from version 1 to 2 to a page that loads it before main’s list hears of the reload', async () => {
+    const w = twoHosts()
+    // build-box's files as its current read of Trackr has them: version 1, then version 2 at the same paths.
+    let read = { revision: 1, api: 'helm' }
+    w.remote.answer('plugins:file', ({ path }) => {
+      const body = new TextEncoder().encode(`${read.api} r${String(read.revision)} ${path}`)
+      return { status: 200, contentType: 'text/plain', version: '0.2.0', revision: read.revision, totalBytes: body.length, body }
+    })
+    const v1 = listed('trackr', { version: '0.2.0', panels: { main: { title: 'Trackr', url: 'helm-plugin://trackr/pages/panel.html', actions: [] } } })
+    await w.remoteLink.connect()
+    w.remote.snapshot('plugins:changed', [v1])
+    const plugins = w.remotePlugins.byLabel(BUILD_BOX)!
+    const text = async (path: string): Promise<string> => new TextDecoder().decode((await plugins.file('trackr', path)).body)
+    expect(await text('pages/panel.html')).toBe('helm r1 pages/panel.html')
+    expect(await text('pages/panel.js')).toBe('helm r1 pages/panel.js')
+
+    // Reloaded on build-box as version 2, same version string. The window's
+    // own connection heard it and the frame moved to floti-plugin; main's
+    // link has not heard it yet.
+    read = { revision: 2, api: 'floti' }
+    expect(await text('pages/panel.html')).toBe('floti r2 pages/panel.html')
+    expect(await text('pages/panel.js')).toBe('floti r2 pages/panel.js')
+
+    // Main's list catches up: the new read's files are kept from then on.
+    w.remote.push('plugins:changed', [{ ...v1, revision: 2 }])
+    const asked = w.remote.payloads('plugins:file').length
+    expect(await text('pages/panel.js')).toBe('floti r2 pages/panel.js')
+    expect(await text('pages/panel.js')).toBe('floti r2 pages/panel.js')
+    expect(w.remote.payloads('plugins:file')).toHaveLength(asked + 1)
+  })
+
   it('keeps the hidden window open while any host’s background page needs it, and lets go of a host removed', async () => {
     const w = twoHosts()
     await w.localLink.connect()
