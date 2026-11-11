@@ -83,6 +83,16 @@ describe('History with nothing typed', () => {
     expect(props.onResume).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'a1' }), { withoutAgent: false })
   })
 
+  it('gives its agent’s last reply, and none for a session running now', () => {
+    const reply = 'The new --since flag replaces --after.'
+    const { rerender } = renderPalette({ recent: answer([historySession({ lastReply: reply })]) }) as HistoryPaletteProps & {
+      rerender: (next: Partial<HistoryPaletteProps>) => void
+    }
+    expect(preview()).toContain(`Last reply. ${reply}`)
+    rerender({ running: new Map([['a1', { working: false, here: false }]]) })
+    expect(preview()).not.toContain('Last reply')
+  })
+
   it('moves with the arrows, and a click highlights without starting anything', async () => {
     const props = renderPalette()
     press('ArrowDown')

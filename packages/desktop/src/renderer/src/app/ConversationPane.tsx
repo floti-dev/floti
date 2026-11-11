@@ -1,15 +1,16 @@
 import { useEffect, useState, type JSX } from 'react'
-import type { ArchivedConversation, ConversationRef, HistoryPrompt } from '@helm/core'
+import type { ArchivedConversation, ConversationRef, HistoryPrompt, HistorySession } from '@helm/core'
 import { hostOf } from '@helm/core/types'
-import { ConversationTab } from '@helm/ui'
+import { ConversationTab, type ConversationFamily } from '@helm/ui'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
 
 /**
  * A conversation tab's reads, on the tab's own host: the archived
- * conversation, and what was typed where the archive has none. Read once when
- * the tab opens; an archived conversation does not change. Keyed by its tab,
- * so another conversation is another mount.
+ * conversation, what was typed where the archive has none, and the children
+ * and commands its sessions started. Read once when the tab opens; an
+ * archived conversation does not change. Keyed by its tab, so another
+ * conversation is another mount.
  */
 export interface ConversationPaneProps {
   tab: ConversationRef
@@ -19,14 +20,22 @@ export interface ConversationPaneProps {
   onRename: (tab: ConversationRef, name: string | null) => void
   /** Absent where its folder cannot be shown from here. */
   onReveal?: ((path: string) => void) | undefined
+  /** Opens a child's conversation in a tab of its own, on this tab's host. */
+  onReadChild: (tab: ConversationRef, child: HistorySession) => void
+  /** Whether a conversation runs now on this tab's host. */
+  runsNow: (tab: ConversationRef, conversationId: string) => boolean
 }
 
-export function ConversationPane({ tab, onResume, onRename, onReveal }: ConversationPaneProps): JSX.Element {
+/** How many children and commands a parent's tab lists, as History lists a parent's children. */
+const FAMILY_LIMIT = 50
+
+export function ConversationPane({ tab, onResume, onRename, onReveal, onReadChild, runsNow }: ConversationPaneProps): JSX.Element {
   const host = hostOf(tab)
   const [conversation, setConversation] = useState<ArchivedConversation | null | undefined>(undefined)
   const [prompts, setPrompts] = useState<HistoryPrompt[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [resumeError, setResumeError] = useState<string | null>(null)
+  const [family, setFamily] = useState<ConversationFamily | null>(null)
 
   useEffect(() => {
     let live = true
@@ -43,6 +52,10 @@ export function ConversationPane({ tab, onResume, onRename, onReveal }: Conversa
         }
       },
       (err: unknown) => live && setError(readable(err))
+    )
+    helm.invoke('history:sessions', { parent: tab.sessionId, limit: FAMILY_LIMIT }).then(
+      (page) => live && setFamily({ children: page.sessions, commands: page.commands ?? [] }),
+      (err: unknown) => live && setFamily({ error: readable(err) })
     )
     return () => {
       live = false
@@ -72,6 +85,9 @@ export function ConversationPane({ tab, onResume, onRename, onReveal }: Conversa
       onRename={(name) => onRename(tab, name)}
       onReveal={onReveal === undefined ? undefined : () => onReveal(tab.project)}
       resumeError={resumeError}
+      family={family}
+      onReadChild={(child) => onReadChild(tab, child)}
+      childRuns={(child) => runsNow(tab, child.sessionId)}
     />
   )
 }

@@ -198,7 +198,7 @@ export {
   type HistoryPaletteProps,
   type StoppedGroup
 } from './components/HistoryPalette'
-export { ConversationTab, type ConversationTabProps } from './components/ConversationTab'
+export { ConversationTab, type ConversationFamily, type ConversationTabProps } from './components/ConversationTab'
 export { KeyButton } from './components/KeyButton'
 export { type HistoryRunning } from './lib/historyPalette'
 export { AgentTag, type AgentTagProps } from './components/AgentTag'

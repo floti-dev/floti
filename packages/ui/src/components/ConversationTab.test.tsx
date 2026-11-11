@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ArchiveMessage, ArchivedConversation } from '@helm/core'
+import { historySession } from '../lib/historyPalette.testkit'
 import { ConversationTab, readAsTurns, summariseTools, type ConversationTabProps } from './ConversationTab'
 
 const message = (uuid: string, role: 'user' | 'assistant', text: string, minute: number): ArchiveMessage => ({
@@ -107,5 +108,49 @@ describe('a conversation read back', () => {
     expect(document.body.textContent).toContain('Floti has no archive of this conversation. What you typed is kept.')
     expect(document.body.textContent).toContain('add rate limits')
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
+  })
+})
+
+describe('a parent’s tab', () => {
+  const children = [
+    historySession({ sessionId: 'kid', agentTitle: 'Queue worker: write the job runner', agent: 'worker', endedBy: 'floti', lastAt: new Date(2026, 10, 7, 9, 41).getTime() }),
+    historySession({ sessionId: 'live', agentTitle: 'Export retry path: review', agent: 'reviewer' })
+  ]
+  const commands = [
+    { command: 'pnpm lint', startedAt: new Date(2026, 10, 7, 9, 0).getTime(), running: false, endedBy: 'exited' as const, exitCode: 0 },
+    { command: 'pnpm test', startedAt: new Date(2026, 10, 7, 9, 5).getTime(), running: false, endedBy: 'exited' as const, exitCode: 1 }
+  ]
+  const family = (): HTMLElement => document.querySelector('[data-conversation-family]') as HTMLElement
+
+  it('lists its children and the commands it ran before its conversation, and opens a child that has ended', async () => {
+    const props = renderTab({
+      family: { children, commands },
+      onReadChild: vi.fn(),
+      childRuns: (child) => child.sessionId === 'live'
+    })
+    const section = family()
+    expect(section.compareDocumentPosition(document.querySelector('[data-transcript]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(section.textContent).toContain('2 children')
+    expect(section.textContent).toContain('Queue worker: write the job runnerworkerEnded with it 09:41')
+    expect(section.textContent).toContain('Export retry path: reviewreviewerrunning')
+    expect(section.textContent).toContain('2 commands')
+    expect([...section.querySelectorAll('[data-conversation-command]')].map((row) => row.textContent)).toEqual([
+      'pnpm lintExited 009:00',
+      'pnpm testExited 109:05'
+    ])
+    expect(section.querySelector('[data-conversation-command]:last-child .text-danger')?.textContent).toBe('Exited 1')
+    await userEvent.click(screen.getByTitle('Read its conversation'))
+    expect(props.onReadChild).toHaveBeenCalledWith(children[0])
+    expect(section.querySelector('[data-conversation-child="live"]')?.tagName).toBe('DIV')
+  })
+
+  it('lists nothing for a session that started nothing', () => {
+    renderTab({ family: { children: [], commands: [] } })
+    expect(family()).toBeNull()
+  })
+
+  it('says what it started could not be read, with the host’s sentence', () => {
+    renderTab({ family: { error: 'database is locked' } })
+    expect(family().textContent).toBe('What it started could not be read: database is locked')
   })
 })

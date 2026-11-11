@@ -4,8 +4,8 @@ import type { StoppedGroup } from "@helm/ui";
 
 /** What the Stopped group asks of the window. */
 export interface StoppedGroupDeps {
-  /** The conversations running now, lower-cased: one of them is back. */
-  running: ReadonlySet<string>;
+  /** The conversations running now, by lower-cased id: one of them is back. */
+  running: { has: (conversation: string) => boolean };
   /**
    * Resumes a conversation on this PC's host, as `agent` when given. Null
    * when it came back, else the sentence it was refused with.

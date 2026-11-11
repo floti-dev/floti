@@ -1,4 +1,4 @@
-import type { HistorySession, LaunchAgents } from '@helm/core'
+import type { EndedBy, HistoryCommand, HistorySession, LaunchAgents } from '@helm/core'
 
 /**
  * What History's palette says about a session, apart from how it draws it:
@@ -89,6 +89,23 @@ export function rowWord(
   if (word !== null) return { text: word, tone: word === 'folder gone' ? 'warn' : 'subtle' }
   if (gone) return { text: 'agent gone', tone: 'warn' }
   return null
+}
+
+/**
+ * How a command a session ran stands, beside the time it started: "Running",
+ * "Exited 0", "Exited 1" (in danger), "Stopped by it", "Ended with it",
+ * "Stopped"; null for one whose end Floti never learned.
+ */
+export function commandWord(command: HistoryCommand): { text: string; danger: boolean } | null {
+  if (command.running) return { text: 'Running', danger: false }
+  if (command.endedBy === undefined) return null
+  if (command.endedBy === 'exited') {
+    return command.exitCode === undefined
+      ? { text: 'Exited', danger: false }
+      : { text: `Exited ${String(command.exitCode)}`, danger: command.exitCode !== 0 }
+  }
+  const stopped: Record<Exclude<EndedBy, 'exited'>, string> = { parent: 'Stopped by it', floti: 'Ended with it', person: 'Stopped' }
+  return { text: stopped[command.endedBy], danger: false }
 }
 
 /** How a child ended (H9): "Done 09:21", "Ended with it 09:41", "Failed 08:55". */

@@ -16,6 +16,13 @@ const lost = (id: number, patch: Partial<RestorableSession> = {}): RestorableSes
   ...patch,
 });
 
+/** One Floti never learned the conversation of. */
+const unknown = (id: number, patch: Partial<RestorableSession> = {}): RestorableSession => {
+  const session = lost(id, patch);
+  delete session.conversationId;
+  return session;
+};
+
 function setup(patch: Partial<StoppedGroupDeps> = {}) {
   const resume = vi.fn<StoppedGroupDeps["resume"]>(async () => null);
   const raiseUndo = vi.fn<StoppedGroupDeps["raiseUndo"]>();
@@ -39,7 +46,7 @@ describe("the Stopped group", () => {
 
   it("drops a session once its conversation runs again, and goes when all are back", () => {
     const { hook, initial } = setup();
-    act(() => hook.result.current.keep([lost(1), lost(2, { conversationId: undefined })]));
+    act(() => hook.result.current.keep([lost(1), unknown(2)]));
     hook.rerender({ ...initial, running: new Set(["conv-1"]) });
     expect(ids(hook.result.current.shown)).toEqual([2]);
     act(() => hook.result.current.keep([lost(1)]));
@@ -65,7 +72,7 @@ describe("the Stopped group", () => {
   it("keeps a refused session and one with no conversation, and says the last refusal", async () => {
     const resume = vi.fn<StoppedGroupDeps["resume"]>(async (id) => (id === "Conv-2" ? "Its folder is gone." : null));
     const { hook } = setup({ resume });
-    const sessions = [lost(1), lost(2), lost(3, { conversationId: undefined, title: "Export queue" })];
+    const sessions = [lost(1), lost(2), unknown(3, { title: "Export queue" })];
     act(() => hook.result.current.keep(sessions));
     let refused: string | null = null;
     await act(async () => {

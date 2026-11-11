@@ -885,6 +885,11 @@ function Preview({
         </p>
       )}
       {item.kind === 'line' && <p>“{snippet(item.line.text, props.query, 80)}”</p>}
+      {item.kind !== 'line' && session.lastReport === undefined && running === null && session.lastReply !== undefined && (
+        <p>
+          <span className="font-medium text-fg">Last reply.</span> {session.lastReply}
+        </p>
+      )}
       {renaming ? (
         <p className="text-[11px] text-fg-subtle">
           Your name replaces {name.quoted ? `${name.text}, the first line of its first prompt` : `“${paletteName({ ...session, label: null }).text}”`}, here and in its tab when it is resumed. An agent’s title never overwrites it. Leave it empty to go back.

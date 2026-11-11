@@ -2196,6 +2196,41 @@ export function App(): JSX.Element {
     [openPane, history.query, historyHost],
   );
 
+  /** A child's conversation, from its parent's tab, in a tab of its own on the parent's host. */
+  const readChild = useCallback(
+    (tab: ConversationRef, child: HistorySession) => {
+      openPane({
+        kind: "conversation",
+        sessionId: child.sessionId,
+        title: historyTitle(child),
+        project: child.project,
+        ...(child.agent === undefined ? {} : { agent: child.agent }),
+        ...(tab.host === undefined ? {} : { host: tab.host }),
+      });
+    },
+    [openPane],
+  );
+
+  /** Whether a conversation runs now on the host of `tab`, by its sessions' records. */
+  const conversationRuns = useCallback(
+    (tab: ConversationRef, conversationId: string) => {
+      const host = hostOf(tab);
+      const work = host === LOCAL_HOST_KEY ? undefined : hostWork.byHost.get(host);
+      const records =
+        host === LOCAL_HOST_KEY ? sessionState.sessions : (work?.sessions ?? []);
+      const activity =
+        host === LOCAL_HOST_KEY ? sessionState.activity : work?.activity;
+      const wanted = conversationId.toLowerCase();
+      return records.some((record) => {
+        if (record.status !== "running") return false;
+        const conversation =
+          activity?.get(record.id)?.claudeSessionId ?? record.claudeSessionId;
+        return conversation?.toLowerCase() === wanted;
+      });
+    },
+    [hostWork.byHost, sessionState.sessions, sessionState.activity],
+  );
+
   /** A conversation tab's Rename: named on its host, and the tab takes the name. */
   const renameConversation = useCallback(
     (tab: ConversationRef, name: string | null) => {
@@ -5160,6 +5195,8 @@ export function App(): JSX.Element {
             }
             onRename={renameConversation}
             onReveal={revealOn(hostOf(ref))}
+            onReadChild={readChild}
+            runsNow={conversationRuns}
           />
         );
       case "sessions":

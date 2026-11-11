@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { HistorySession, LaunchAgents } from '@helm/core'
+import type { HistoryCommand, HistorySession, LaunchAgents } from '@helm/core'
 import { at, historySession } from './historyPalette.testkit'
 import {
   agentGone,
+  commandWord,
   endedWord,
   historyWhen,
   launchSentence,
@@ -63,6 +64,19 @@ describe('how a child ended', () => {
     expect(ended({ endedBy: 'exited', exitCode: 1 })).toEqual({ text: 'Failed 09:21', danger: true })
     expect(ended({ endedBy: 'person' })).toEqual({ text: 'Stopped 09:21', danger: false })
     expect(ended({})).toBeNull()
+  })
+})
+
+describe('how a command a session ran stands', () => {
+  it('reads running, its exit code, in danger when not 0, and who stopped it', () => {
+    const word = (patch: Partial<HistoryCommand>) => commandWord({ command: 'pnpm test', startedAt: 0, running: false, ...patch })
+    expect(word({ running: true })).toEqual({ text: 'Running', danger: false })
+    expect(word({ endedBy: 'exited', exitCode: 0 })).toEqual({ text: 'Exited 0', danger: false })
+    expect(word({ endedBy: 'exited', exitCode: 2 })).toEqual({ text: 'Exited 2', danger: true })
+    expect(word({ endedBy: 'parent' })).toEqual({ text: 'Stopped by it', danger: false })
+    expect(word({ endedBy: 'floti' })).toEqual({ text: 'Ended with it', danger: false })
+    expect(word({ endedBy: 'person' })).toEqual({ text: 'Stopped', danger: false })
+    expect(word({})).toBeNull()
   })
 })
 

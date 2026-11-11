@@ -1,9 +1,9 @@
 import type { JSX } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ArchiveMessage, ArchivedConversation, HistoryPrompt } from '@helm/core'
+import type { ArchiveMessage, ArchivedConversation, HistoryCommand, HistoryPrompt, HistorySession } from '@helm/core'
 import { HISTORY_NAME_MAX } from '@helm/core/types'
 import { cn } from '../lib/cn'
-import { clock, marks, queryWords } from '../lib/historyPalette'
+import { clock, commandWord, endedWord, marks, paletteName, queryWords } from '../lib/historyPalette'
 import { formatMoment } from '../lib/time'
 import { AgentTag } from './AgentTag'
 import { ICON_BUTTON } from '../lib/page'
@@ -40,7 +40,22 @@ export interface ConversationTabProps {
   /** Absent when its folder cannot be shown from here. */
   onReveal?: (() => void) | undefined
   resumeError?: string | null | undefined
+  /**
+   * What a parent started: its children and the commands it ran, listed
+   * before its conversation (H7). The host's sentence when they could not be
+   * read; null or absent while they are read.
+   */
+  family?: ConversationFamily | null | undefined
+  /** Opens a child's conversation; absent where it cannot be opened from here. */
+  onReadChild?: ((child: HistorySession) => void) | undefined
+  /** Whether a child runs now: Floti shows no part of a running conversation, so it is not opened. */
+  childRuns?: ((child: HistorySession) => boolean) | undefined
 }
+
+/** A parent's children and commands, or why they could not be read. */
+export type ConversationFamily =
+  | { children: readonly HistorySession[]; commands: readonly HistoryCommand[] }
+  | { error: string }
 
 const TOOL_MARKER = /^\[tool(?::\s*(.+))?\]$/
 
@@ -222,6 +237,9 @@ export function ConversationTab(props: ConversationTabProps): JSX.Element {
       )}
 
       <div ref={column} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        {props.family !== null && props.family !== undefined && (
+          <Family family={props.family} onReadChild={props.onReadChild} childRuns={props.childRuns} />
+        )}
         <Body {...props} turns={turns} words={words} current={shownHit} />
       </div>
 
@@ -236,6 +254,96 @@ export function ConversationTab(props: ConversationTabProps): JSX.Element {
         <span>Opened from History · Ctrl+H</span>
       </footer>
     </div>
+  )
+}
+
+const FAMILY_LABEL = 'px-1 pt-1 pb-0.5 text-[10px] font-semibold tracking-[.07em] text-fg-subtle uppercase'
+const FAMILY_ROW = 'flex h-[30px] min-w-0 items-center gap-2 rounded-raised px-1 text-left text-[12px]'
+
+/** What a parent started, before its conversation: children by title and agent, then commands in mono. */
+function Family({
+  family,
+  onReadChild,
+  childRuns
+}: {
+  family: ConversationFamily
+  onReadChild: ((child: HistorySession) => void) | undefined
+  childRuns: ((child: HistorySession) => boolean) | undefined
+}): JSX.Element | null {
+  if ('error' in family) {
+    return (
+      <p role="alert" data-conversation-family className="mb-3.5 text-[12px] text-danger">
+        What it started could not be read: {family.error}
+      </p>
+    )
+  }
+  if (family.children.length === 0 && family.commands.length === 0) return null
+  return (
+    <section
+      data-conversation-family
+      aria-label="What it started"
+      className="mb-3.5 flex flex-col rounded-raised border border-border bg-surface px-2 py-1.5"
+    >
+      {family.children.length > 0 && (
+        <>
+          <h3 className={FAMILY_LABEL}>
+            {family.children.length} {family.children.length === 1 ? 'child' : 'children'}
+          </h3>
+          {family.children.map((child) => {
+            const runs = childRuns?.(child) === true
+            const ended = runs ? { text: 'running', danger: false } : endedWord(child)
+            const inner = (
+              <>
+                <span className="min-w-0 truncate text-fg">{paletteName(child).text}</span>
+                {child.agent !== undefined && <AgentTag name={child.agent} />}
+                <span className="flex-1" />
+                {ended !== null && (
+                  <span className={cn('shrink-0 text-[11px]', ended.danger ? 'text-danger' : 'text-fg-subtle')}>{ended.text}</span>
+                )}
+              </>
+            )
+            return onReadChild === undefined || runs ? (
+              <div key={child.sessionId} data-conversation-child={child.sessionId} className={FAMILY_ROW}>
+                {inner}
+              </div>
+            ) : (
+              <button
+                key={child.sessionId}
+                type="button"
+                data-conversation-child={child.sessionId}
+                title="Read its conversation"
+                onClick={() => onReadChild(child)}
+                className={cn(FAMILY_ROW, 'hover:bg-hover')}
+              >
+                {inner}
+              </button>
+            )
+          })}
+        </>
+      )}
+      {family.commands.length > 0 && (
+        <>
+          <h3 className={FAMILY_LABEL}>
+            {family.commands.length} {family.commands.length === 1 ? 'command' : 'commands'}
+          </h3>
+          {family.commands.map((command, index) => {
+            const word = commandWord(command)
+            return (
+              <div key={`${String(command.startedAt)}-${String(index)}`} data-conversation-command className={FAMILY_ROW}>
+                <span className="min-w-0 truncate font-mono text-[11px] text-fg">{command.command}</span>
+                <span className="flex-1" />
+                {word !== null && (
+                  <span className={cn('shrink-0 text-[11px]', word.danger ? 'text-danger' : 'text-fg-subtle')}>{word.text}</span>
+                )}
+                <span className="shrink-0 font-mono text-[10.5px] text-fg-subtle" title={formatMoment(command.startedAt)}>
+                  {clock(command.startedAt)}
+                </span>
+              </div>
+            )
+          })}
+        </>
+      )}
+    </section>
   )
 }
 
