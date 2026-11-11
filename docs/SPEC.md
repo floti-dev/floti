@@ -1211,10 +1211,11 @@ about the user's own `gh`: Helm no longer runs it.
   ends.
   A Claude session the host runs can drive the browser pane - open a page,
   read it, screenshot it, click, type and evaluate - and can ask what the
-  other Claude Code sessions on this machine are doing. Both reach it through
+  other Claude Code sessions on this machine are doing, and can start and
+  talk to its own child sessions. All reach it through
   **one** MCP endpoint the host binds to `127.0.0.1` on a port the kernel
-  picks, serving named servers (`helm-browser`, `helm-sessions`, and each
-  plugin's tools) on their own routes; the host hands each browser call to
+  picks, serving named servers (`helm-browser`, `helm-sessions`, `floti-agents`
+  and each plugin's tools) on their own routes; the host hands each browser call to
   Helm's window to answer in the pane. Every request needs a bearer token
   minted for one session and revoked when that session ends; there is no
   unauthenticated route; and each family has its own tick - `browserMcp` and

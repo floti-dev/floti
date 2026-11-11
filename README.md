@@ -209,11 +209,12 @@ family is on. Helm's own process listens on `127.0.0.1` only for a port you
 forwarded from a session on another computer, and closes it when that session
 ends.
 
-A Claude session the local host runs can reach two sets of tools - one that
+A Claude session the local host runs can reach three sets of tools - one that
 drives Helm's browser pane (open a page, read it, screenshot it, click and
 type), and one that answers what the *other* Claude Code sessions on this
 machine are doing, so an agent can stay out of a working tree somebody else is
-in - and the tools of a plugin you added that offers them. All of them arrive
+in, and one that starts and talks to the session's own child sessions - and
+the tools of a plugin you added that offers them. All of them arrive
 through one small server the host binds to `127.0.0.1`, on a port the OS picks.
 Nothing outside this machine can reach it, and every request needs the token
 of the session making it. The host has no browser of its own: it hands each

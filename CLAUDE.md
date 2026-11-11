@@ -247,7 +247,8 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   own status command where it has one, by an artefact existing where it does
   not, and is Unknown otherwise. For Claude Code that is an artefact existing
   (`.credentials.json`, `ANTHROPIC_API_KEY`, the onboarding record in
-  `.claude.json`). Never open those, `hosts.yml`, the keyring or `GH_TOKEN`,
+  `.claude.json`). Never open those, `hosts.yml`, an agent's or GitHub's
+  keyring entry or `GH_TOKEN`,
   and never run a command that prints a credential. The remedy for "not signed
   in" is a sentence naming the agent's login command (`claude` for Claude
   Code).
@@ -255,9 +256,12 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   `<pid>.json`. The host's Claude Code status reader
   (`agent/claude_code/status.rs`) reads `.json` files only; never widen it.
 - The `persist:helm-browser` partition holds the user's cookies and logins.
-  Nothing reads it; the only call against it is `clearStorageData`.
+  Nothing reads it: main sets its permission, download and certificate
+  handlers and opens pages in it, and the only call on what it stores is
+  `clearStorageData`.
 - The plugin secret store (`crates/host/src/plugins/secrets`) is the one
-  place Helm keeps a secret, and only one the user typed into it. Each value
+  place Helm keeps a secret of the user's, and only one the user typed into
+  it; Floti's own keys are below. Each value
   is sealed by this OS's store for the user (`platform/secret_seal`) and
   refused when it cannot be; a value is filled in by the host, for an origin
   and a plugin the user allowed, and never sent to any client. Helm never reads a Claude or GitHub credential to put there.
@@ -293,8 +297,11 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   its sessions' agent tools, behind a token per session, and holds no port
   while no tool family is on. Main listens on loopback only for a port of a
   session on another computer the user forwarded, which closes with that
-  session (`main/host/forwards.ts`). A plugin's pages reach only the origins
-  its manifest lists.
+  session (`main/host/forwards.ts`). Everything else on the network happens
+  because the user asked for it: the browser pane fetches the page they go
+  to, a plugin they added reaches the hosts its manifest names, and a host on
+  another computer is reached through their own ssh or command. A plugin's
+  programs and service run with the user's rights and are not confined.
 
 ## Browser pane
 
@@ -346,7 +353,8 @@ The host serves its sessions' agent tools as MCP over HTTP
 besides its local socket and the relay socket beside it. Main binds no listener for them, mints no token and
 writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
 
-- `127.0.0.1` on port 0 only. A request announcing a non-loopback `Origin`
+- `127.0.0.1` only, on port 0, or on the port the sessions it takes back from
+  the keeper were given. A request announcing a non-loopback `Origin`
   gets 403, and one without `Authorization: Bearer` gets 401 before its body
   is read. There is no unauthenticated route, not even a health check.
 - One token per session, minted at launch, given to its agent tools and to its
@@ -367,13 +375,14 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   connect and each change (`hostSettingsFor`).
 - Each plugin offering tools is a family, `helm-plugin-<id>`, on while the
   plugin is on and its tools are not switched off in Settings. The host
-  checks the token, then hands the call on with its caller: an id it minted
-  when the session launched (random, never the browser key or the host's row
+  checks the token, then hands the call on with its caller: an id it mints
+  the first time it meets the session (random, never the browser key or the host's row
   id, and the id the plugin's `sessions.list` shows), its name and its
   working directory - never the token, never anything of the conversation.
   Turning them on reaches sessions started after; turning them off reaches
   running ones at once.
-- Agent tools are registered per launch for every backend, never through an
+- Agent tools are registered per launch for every backend that takes them,
+  never through an
   agent's own add command or global config. For Claude Code that is a
   `--mcp-config` file in the session's launch folder under the host's data
   folder (`crates/host/src/agent/launch_folder.rs`), never
@@ -402,7 +411,9 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   another session's conversation: no transcript, prompt, output, argv,
   conversation id or child command line. The shaping types have no field for
   them. The sessions pane may show command lines to the user.
-- Listing is machine-wide; detail exists only for sessions the host spawned.
+- Listing is machine-wide. Detail of a session the host did not spawn gives
+  its pid, name, folder, status and version and says so; branch, profile,
+  overlays, process tree and ports are only for sessions it spawned.
   A status it could not read is "unknown", never omitted. No tool takes a
   session id.
 - `helm-sessions` is awareness plus the caller's own title: it sends a
@@ -419,7 +430,7 @@ writes no `--mcp-config`, and never serves `floti-agents`: only the host does.
   same conversation, carried to History by conversation (protocol 2.2's
   optional `title` and `agentTitle`) and shown by the sessions pane beside
   the name. History calls a conversation by its hand-given name, else its
-  agent's title, else its first prompt's title.
+  agent's title, else the title of its first prompt that says something.
 - `floti-agents` acts on sessions, and only on the caller's own children:
   sessions started with `agents_start` by the session whose token made the
   call. A parent may start its children, type into them (`agents_send`), read
@@ -744,7 +755,7 @@ folder: run through npx, that folder is a cache.
   `<scheme>://<id>/`.
 - Its CSP has `connect-src 'none'`: `floti.fetch` (`helm.fetch` at version 1;
   the host's `plugins/net`) is its only way out, to origins the manifest
-  lists, checked again on every redirect hop. A version 2 background's
+  lists and to its own service (`service:/path`), checked again on every redirect hop. A version 2 background's
   `floti.fetch` is held to the same rule.
 - `guards.ts`: `will-frame-navigate` keeps a plugin frame on its own origin,
   and plugin origins get `clipboard-sanitized-write` and no other permission.
@@ -924,7 +935,8 @@ app's folder, on any OS.
 
 - `renderer/src/terminal.ts` and the host's session environment
   (`crates/host/src/session/env.rs`) are tuned for TUI fidelity (SPEC 8.3);
-  `ptyEnv` (`main/pty.ts`) is the spike page's single pty, kept to match. Terminal preferences are passed into `createTerminal`;
+  `ptyEnv` (`main/pty.ts`) is main's own ptys (the spike page's and the
+  drivers'), kept to match. Terminal preferences are passed into `createTerminal`;
   never route a setting through `term:*`. The palette and contrast options are
   fixed. `estimateGrid` must keep measuring the way xterm does.
 - Usage figures paint nothing rather than a wrong number. A stale reading of a
@@ -935,7 +947,7 @@ app's folder, on any OS.
   Claude Code) edit it. What composition reads of it - the scopes and trees a
   template imports from, and the view of what a profile composes - is
   `config:scopes`, `config:tree` and `config:effective`
-  (`crates/host/src/agent_config`), and nothing there writes. A Files-view
+  (`crates/host/src/agent_config`), none of which writes. A Files-view
   save or restore at or under a backend's config folder or global config
   file (`AgentConfigFolders`, from each backend's own `agent_config`), as
   spelled or where its links lead, is refused naming the agent's own commands, and the Files view shows those
@@ -955,15 +967,20 @@ app's folder, on any OS.
   4s, in the host (`server/features/resources.rs`). Passes never overlap.
 - "Could not look" (`null`, painted "Unknown") and "nothing there" (`[]`) are
   never merged.
-- The Files view writes one thing: a markdown note in its Edit mode, through
-  `content:write` - snapshotted first, refused on a hash conflict, scoped to
-  the deepest folder Helm knows that holds the note (`assertContentWritable`
-  refuses `repos/` under a harness). Everything else in it is read-only, and
+- The Files view writes through `content:write`, and puts back a snapshot
+  through `content:restore`. The host saves any file the view reads as text
+  (the view offers Edit for a markdown note): snapshotted first, refused on a
+  hash conflict, scoped to the deepest folder Helm knows that holds the file.
+  `ContentGuard` (`workspace/content/guard.rs`) refuses a relative path, a
+  binary file, an agent's config and anything under `repos`, `.git`,
+  `node_modules`, build output and the rest of its list. Everything else in
+  it is read-only, and
   every `files:*` call names a root the host checks it knows
   (`workspace/roots.rs`: a scanned project, a profile's folder, a hosted
   session's working directory). Changed lines are the working tree against `HEAD`, said
   as that and never attributed to a session: git does not know who made a
-  change. Only what is on screen is watched, and main is told the whole set.
+  change. Only what is on screen is watched, and the window tells each host
+  the whole set (`files:watch`).
 - A project's agent worktrees (`worktrees:list`, `worktrees:remove`, served by
   `server/features/worktrees.rs` over `workspace/worktrees.rs`) are the folders
   `git worktree list` gives under `<repo>/.floti/worktrees` and no other

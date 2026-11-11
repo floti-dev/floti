@@ -391,7 +391,8 @@ forwarded from a session on another computer, and closes it when that session
 ends.
 
 The tools are the browser pane's (`helm-browser`), the session-awareness tools
-(`helm-sessions`) and each plugin's that offers them, served as named MCP
+(`helm-sessions`), the child-session tools (`floti-agents`) and each
+plugin's that offers them, served as named MCP
 servers on routes of one endpoint (`crates/host/src/agent_tools`). Every
 request carries a bearer token minted for one session and revoked when that
 session ends; a request with a non-loopback `Origin` is refused before its

@@ -1091,7 +1091,8 @@ export interface IpcRequests {
    * What Helm *contacts* and where it *listens* are stated apart. A listener
    * on loopback contacts nothing, so the agent tools' endpoint (the host's,
    * `crates/host/src/agent_tools`, serving the browser tools, the
-   * session-awareness tools and each plugin's on one port) and a forwarded port
+   * session-awareness tools, the child-session tools and each plugin's on one
+   * port) and a forwarded port
    * (`forwards:open`, `main/host/forwards.ts`, carried over main's own link to
    * a host the user added) are said in the second paragraph and leave the
    * first alone.
