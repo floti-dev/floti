@@ -1,13 +1,13 @@
-//! Windows: the running `floti.exe` is renamed aside and the new one moved
-//! into its name; the desktop app is the per-user NSIS install, installed
-//! or updated by the release's own installer run silently.
+//! Windows: the desktop app is the per-user NSIS install, installed or
+//! updated by the release's own installer run silently. floti itself is put
+//! in place by `platform::standalone`.
 //!
 //! The installer is started out of any job the caller is in
 //! (`CREATE_BREAKAWAY_FROM_JOB`), so it finishes even when what ran
-//! `floti update` ends first: a session's shell is in its host's job, and
-//! the installer stops that host before it replaces anything
-//! (`packages/desktop/build/installer.nsh`). A job that refuses to let go is
-//! no reason not to install; the installer then starts inside it.
+//! `floti update` ends first: a session's shell is in its host's job, which
+//! ends with that host however the host comes to stop. A job that refuses
+//! to let go is no reason not to install; the installer then starts inside
+//! it.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -21,9 +21,6 @@ use crate::{Error, Result};
 /// and its uninstaller: `productName` and `extraMetadata.name` in
 /// `electron-builder.yml`.
 pub const DESKTOP_NAME: &str = "Helm";
-
-/// Where every per-user uninstall entry is, under `HKEY_CURRENT_USER`.
-const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
 
 pub struct Native;
 
@@ -169,7 +166,10 @@ mod system {
     };
     use windows_sys::Win32::System::Threading::CREATE_BREAKAWAY_FROM_JOB;
 
-    use super::{UNINSTALL_KEY, UninstallEntry};
+    use super::UninstallEntry;
+
+    /// Where every per-user uninstall entry is, under `HKEY_CURRENT_USER`.
+    const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
 
     fn wide(text: &str) -> Vec<u16> {
         text.encode_utf16().chain(std::iter::once(0)).collect()
