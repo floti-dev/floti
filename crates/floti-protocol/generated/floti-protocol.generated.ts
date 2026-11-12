@@ -1965,7 +1965,13 @@ agentStartsPerParent: number,
  * How many command children one session may have running at once,
  * counted apart from every agent limit above.
  */
-agentCommandsPerParent: number, };
+agentCommandsPerParent: number, 
+/**
+ * Whether the host looks for a newer floti by itself, at most once a
+ * day, and installs one it finds. A host from before it sends none,
+ * which reads as on.
+ */
+updateCheck: boolean, };
 
 /**
  * A change to some settings. A field left out is unchanged; a nullable
@@ -1975,12 +1981,12 @@ export type HostSettingsPatch = { scanRoots?: Array<string>, pinnedProjects?: Ar
 /**
  * Replaces the whole map.
  */
-backendPaths?: { [key in BackendId]?: string }, terminalShell?: string | null, transcriptArchiveMaxBytes?: number, browserMcp?: boolean, browserMcpLocalOnly?: boolean, sessionMcp?: boolean, restoreWithoutAsking?: boolean, sessionAgents?: boolean, agentChildrenPerParent?: number, agentSessionsPerHost?: number, agentDepth?: number, agentStartsPerParent?: number, agentCommandsPerParent?: number, };
+backendPaths?: { [key in BackendId]?: string }, terminalShell?: string | null, transcriptArchiveMaxBytes?: number, browserMcp?: boolean, browserMcpLocalOnly?: boolean, sessionMcp?: boolean, restoreWithoutAsking?: boolean, sessionAgents?: boolean, agentChildrenPerParent?: number, agentSessionsPerHost?: number, agentDepth?: number, agentStartsPerParent?: number, agentCommandsPerParent?: number, updateCheck?: boolean, };
 
 /**
  * Why the host is being stopped, which decides what its sessions become.
  */
-export type HostStopReason = "stop" | "update" | "restart";
+export type HostStopReason = "stop" | "update" | "restart" | "relaunch";
 
 export type HostStopRequest = { reason: HostStopReason, };
 

@@ -102,13 +102,6 @@ impl Installs for Native {
         Self::uninstall_version(&system::uninstall_entries(), &desktop.path)
     }
 
-    fn installing_desktop_stops_host(&self) -> bool {
-        // The host runs from floti installed on its own, outside the
-        // install, and installer.nsh renames a running copy aside rather
-        // than stopping it.
-        false
-    }
-
     fn carried_floti(&self, _desktop: &Desktop) -> Option<PathBuf> {
         // installer.nsh runs `floti install-self` itself.
         None

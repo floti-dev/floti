@@ -1948,6 +1948,7 @@ fn wire_config(dirs: &TestDirs, endpoint: &Endpoint) -> HostConfig {
             keeper: None,
             wsl: None,
             config_read_only: false,
+            updates: None,
         },
     }
 }

@@ -77,6 +77,7 @@ impl World {
                 keeper: None,
                 wsl: None,
                 config_read_only: false,
+                updates: None,
             },
         )
         .unwrap();

@@ -262,11 +262,12 @@ export function offerFromHost(offer: P.RestoreOffer, layout: SavedPaneLayout | n
 
 /**
  * The settings the host keeps for every client: the folders it scans, the
- * projects pinned out of their harness, and whether setup was finished. Every
- * other setting is Helm's own, the window's, or one Helm tells the host on
- * every connect (`hostSettingsFor`).
+ * projects pinned out of their harness, whether setup was finished, and
+ * whether it looks for updates by itself. Every other setting is Helm's own,
+ * the window's, or one Helm tells the host on every connect
+ * (`hostSettingsFor`).
  */
-export const HOST_WORKSPACE_KEYS = ['scanRoots', 'pinnedProjects', 'firstRunCompletedAt'] as const
+export const HOST_WORKSPACE_KEYS = ['scanRoots', 'pinnedProjects', 'firstRunCompletedAt', 'updateCheck'] as const
 
 export type HostWorkspaceKey = (typeof HOST_WORKSPACE_KEYS)[number]
 
@@ -277,7 +278,8 @@ export function settingsWithHost(own: AppSettings, host: P.HostSettings | null):
     ...own,
     scanRoots: host.scanRoots,
     pinnedProjects: host.pinnedProjects,
-    firstRunCompletedAt: host.firstRunCompletedAt
+    firstRunCompletedAt: host.firstRunCompletedAt,
+    updateCheck: host.updateCheck
   }
 }
 
@@ -291,6 +293,7 @@ export function splitSettingsPatch(patch: Partial<AppSettings>): {
   if (patch.scanRoots !== undefined) host.scanRoots = patch.scanRoots
   if (patch.pinnedProjects !== undefined) host.pinnedProjects = patch.pinnedProjects
   if (patch.firstRunCompletedAt !== undefined) host.firstRunCompletedAt = patch.firstRunCompletedAt
+  if (patch.updateCheck !== undefined) host.updateCheck = patch.updateCheck
   for (const key of HOST_WORKSPACE_KEYS) delete own[key]
   return { host, own }
 }

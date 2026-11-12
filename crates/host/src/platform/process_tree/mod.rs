@@ -129,6 +129,22 @@ pub trait ProcessTree {
         self.prepare_lasting_root(&mut command);
         Ok(Box::new(command.spawn()?))
     }
+
+    /// Starts `program` with `args` in this process's place: what a host
+    /// stopped to be relaunched on a new floti does last. On macOS and Linux
+    /// this process's image is replaced (`exec`), so the new program keeps
+    /// this process's id and whatever started it, launchd, the systemd user
+    /// unit or a desktop, goes on holding it; it returns only when that
+    /// failed. Windows has no `exec`: the program is started alone
+    /// ([`ProcessTree::start_alone`]) and this returns once it has started,
+    /// for the caller to exit.
+    fn replace_this_process(
+        &self,
+        program: &std::path::Path,
+        args: &[&str],
+    ) -> std::io::Result<()> {
+        self.start_alone(program, args).map(|_| ())
+    }
 }
 
 /// A program [`ProcessTree::start_alone`] started.

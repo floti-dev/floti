@@ -127,6 +127,11 @@ pub struct HostSettings {
     /// counted apart from every agent limit above.
     #[serde(default = "default_agent_commands_per_parent")]
     pub agent_commands_per_parent: u32,
+    /// Whether the host looks for a newer floti by itself, at most once a
+    /// day, and installs one it finds. A host from before it sends none,
+    /// which reads as on.
+    #[serde(default = "default_update_check")]
+    pub update_check: bool,
 }
 
 /// What an agents setting reads as when nobody has set it, and when a host
@@ -137,6 +142,8 @@ pub const DEFAULT_AGENT_SESSIONS_PER_HOST: u32 = 8;
 pub const DEFAULT_AGENT_DEPTH: u32 = 2;
 pub const DEFAULT_AGENT_STARTS_PER_PARENT: u32 = 16;
 pub const DEFAULT_AGENT_COMMANDS_PER_PARENT: u32 = 4;
+/// Whether the host looks for updates by itself when nobody has said.
+pub const DEFAULT_UPDATE_CHECK: bool = true;
 
 fn default_session_agents() -> bool {
     DEFAULT_SESSION_AGENTS
@@ -160,6 +167,10 @@ fn default_agent_starts_per_parent() -> u32 {
 
 fn default_agent_commands_per_parent() -> u32 {
     DEFAULT_AGENT_COMMANDS_PER_PARENT
+}
+
+fn default_update_check() -> bool {
+    DEFAULT_UPDATE_CHECK
 }
 
 /// A change to some settings. A field left out is unchanged; a nullable
@@ -226,6 +237,9 @@ pub struct HostSettingsPatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub agent_commands_per_parent: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub update_check: Option<bool>,
 }
 
 /// What setup found for each agent backend the host can run.

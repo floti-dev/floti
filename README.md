@@ -172,28 +172,30 @@ it, and otherwise stays out of the way.
 
 ## Updates
 
-There is no auto-updater, on purpose - see
-[docs/PACKAGING.md](docs/PACKAGING.md) for the three reasons. What Helm does
-instead is *tell* you: it asks GitHub whether a newer release exists and puts a
-line beside the version in the status bar when there is one. Clicking it opens
-the releases page. Helm downloads nothing, replaces nothing and restarts nothing
-- getting the new version is still something you do.
+floti updates itself. While **Settings → Updates → "Update floti by itself"**
+is ticked (it is by default), this PC's host reads floti.dev's signed
+`update.json` at most once a day, and when there is a newer floti it downloads
+it, checks it against the key built into floti and its SHA-256, puts it in
+place and restarts on it. It ends no session to do it: every session and
+terminal runs on in the session keeper and the new host takes them back.
+`floti update` does the same when you run it, and updates the desktop app too
+- see [docs/PACKAGING.md](docs/PACKAGING.md#floti-update).
 
-It asks two ways and no others. On launch, at most once a day, if **Settings →
-Updates → "Tell me about new releases"** is ticked; and whenever you press
-**Check now** in that same group, which is never throttled and works whether the
-tick is on or off - the setting governs whether Helm asks by itself, not whether
-you may. Settings → Updates also shows this build's version, the newest one Helm
-has heard of, and a Release notes link that works offline, because it is a link
-rather than a request.
+Helm itself asks nothing by itself. It puts a line beside the version in the
+status bar when the host runs a newer floti than this Helm, and **Check now** in
+Settings → Updates asks GitHub for the newest release whenever you press it,
+tick on or off. Settings → Updates also shows this build's version, the newest
+one Helm has heard of, and a Release notes link that works offline, because it
+is a link rather than a request.
 
-**Helm contacts nothing on its own initiative except the update check.
+**Helm contacts nothing on its own initiative except the update check, which
+a host makes to floti.dev at most once a day.
 Everything else on the network happens because you asked for it: the browser
 pane fetches the page you navigate to, a plugin you added reaches the hosts its
 manifest names, and a host you added on another computer is reached through
 your own ssh, or the command you gave.** There is no telemetry, no crash reporting, no
-fonts and no CDN, and with the tick off Helm asks nothing at all unless you
-press something.
+fonts and no CDN, and with the tick off nothing asks anything unless you press
+something.
 
 A host on another computer is reached through your own ssh login, or a command
 you choose, running `floti connect` there as you. That login is the access:

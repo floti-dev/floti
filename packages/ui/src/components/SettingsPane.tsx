@@ -1961,14 +1961,14 @@ function UpdatesGroup({
       <Divider />
 
       <Row
-        label="Tell me about new releases"
-        hint="Asks at launch, at most once a day, and says so in the status bar. Check now works either way."
+        label="Update floti by itself"
+        hint="This PC's host looks for a newer floti at most once a day and installs it without ending a session. Check now works either way."
       >
         <span data-settings-update-check={String(updateCheck)}>
           <Checkbox
             checked={updateCheck}
             onChange={() => onUpdateCheckChange(!updateCheck)}
-            label="Check for new releases on launch"
+            label="Look for a newer floti once a day and install it"
           />
         </span>
       </Row>

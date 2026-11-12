@@ -71,6 +71,7 @@ fn start_host_naming(on: ProtocolVersion, version: Option<&str>) -> Host {
             keeper: None,
             wsl: None,
             config_read_only: false,
+            updates: None,
         },
     });
     Host {

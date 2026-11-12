@@ -65,11 +65,6 @@ impl Installs for Native {
         None
     }
 
-    fn installing_desktop_stops_host(&self) -> bool {
-        // The host runs on from the old image's mount until it next stops.
-        false
-    }
-
     fn carried_floti(&self, _desktop: &Desktop) -> Option<PathBuf> {
         // Inside the image; the app runs install-self when it starts.
         None

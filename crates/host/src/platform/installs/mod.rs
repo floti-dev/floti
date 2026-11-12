@@ -84,10 +84,6 @@ pub trait Installs {
     /// The installed `desktop`'s version, or `None` when it cannot be told.
     fn desktop_version(&self, desktop: &Desktop) -> Option<String>;
 
-    /// Whether installing the desktop app over an installed one stops the
-    /// host on this computer, ending the sessions it runs.
-    fn installing_desktop_stops_host(&self) -> bool;
-
     /// The floti `desktop`'s install carries, for `floti update` to run
     /// `install-self` from once it has installed the app, so the Node beside
     /// floti installed on its own is the new app's: `None` where the app's

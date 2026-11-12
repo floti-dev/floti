@@ -1601,23 +1601,24 @@ impl Hosted {
     /// plain stop records each row as exited first, so none is offered for
     /// restore; a stop for an update leaves the rows running, for the next
     /// start to find lost and offer once. Either way each whole process tree
-    /// ends. A restart for an update lets go of the keeper instead, leaving
-    /// every session and plain terminal running there with its row, for the
-    /// next host to take back; without a keeper it is a stop for an update.
-    /// Only the first stop does anything.
+    /// ends. A restart for an update, and a relaunch on a new floti, let go
+    /// of the keeper instead, leaving every session and plain terminal
+    /// running there with its row, for the next host to take back; without
+    /// a keeper each is a stop for an update. Only the first stop does
+    /// anything.
     pub fn stop(&self, reason: HostStopReason) {
         if self.stopped.swap(true, Ordering::SeqCst) {
             return;
         }
         let reason = match (reason, &self.keeper) {
-            (HostStopReason::Restart, Some(keeper)) => {
+            (HostStopReason::Restart | HostStopReason::Relaunch, Some(keeper)) => {
                 // From here no exit writes its row: what the keeper holds
                 // runs on, and the next host records what ends meanwhile.
                 self.ledger.freeze();
                 keeper.let_go();
                 return;
             }
-            (HostStopReason::Restart, None) => HostStopReason::Update,
+            (HostStopReason::Restart | HostStopReason::Relaunch, None) => HostStopReason::Update,
             (reason, _) => reason,
         };
         // From here no session starts and no exit writes its row.

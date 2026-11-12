@@ -86,7 +86,7 @@ use floti_host::keep_awake::run_keep_awake;
 use floti_host::version;
 use floti_host::{ALREADY_RUNNING_EXIT, DesktopCommand, Error, HostOptions, log_line};
 
-const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger]\n       floti install-self [--force]\n       floti update [--channel <name>]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop [--keep] [--json] <name>\n       floti session title <text>";
+const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...] [--after <pid>]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger]\n       floti install-self [--force]\n       floti update [--channel <name>]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop [--keep] [--json] <name>\n       floti session title <text>";
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
@@ -141,7 +141,7 @@ fn main() -> ExitCode {
         ["update", ..] => match floti_host::update::parse(&args[1..]) {
             Some(channel) => ExitCode::from(floti_host::update::run(
                 channel,
-                &update_stop::host_sessions,
+                &update_stop::relaunch_host,
             )),
             None => usage(),
         },
@@ -242,13 +242,17 @@ fn bridge_through(args: &[OsString]) -> Option<(OsString, Transport)> {
 }
 
 /// What follows `host`: nothing, or `--desktop <program>` and any number of
-/// `--desktop-arg <arg>`, each a path or argument kept as the OS gave it.
+/// `--desktop-arg <arg>`, each a path or argument kept as the OS gave it,
+/// and `--after <pid>` from a host relaunching itself on a new floti.
 fn host_options(args: &[OsString]) -> Option<HostOptions> {
     let mut args = args.iter();
     let mut desktop: Option<DesktopCommand> = None;
+    let mut after = None;
     while let Some(flag) = args.next() {
         let value = args.next().filter(|value| !value.is_empty())?.clone();
-        if flag == "--desktop" && desktop.is_none() {
+        if flag == "--after" && after.is_none() {
+            after = Some(value.to_str()?.parse().ok()?);
+        } else if flag == "--desktop" && desktop.is_none() {
             desktop = Some(DesktopCommand {
                 program: value,
                 args: Vec::new(),
@@ -259,7 +263,7 @@ fn host_options(args: &[OsString]) -> Option<HostOptions> {
             return None;
         }
     }
-    Some(HostOptions { desktop })
+    Some(HostOptions { desktop, after })
 }
 
 fn keeper(data: &Path, runtime: &Path) -> ExitCode {

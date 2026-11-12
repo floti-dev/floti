@@ -214,7 +214,6 @@ describe('settings', () => {
       railHidden: ['files', 'browser'],
       transcriptArchiveMaxBytes: 256 * 1024 * 1024,
       updateCheck: false,
-      lastUpdateCheckAt: '2026-08-11T20:04:06.641Z',
       browserReach: 'local',
       browserSearch: 'duckduckgo',
       browserMcp: false,
@@ -904,15 +903,6 @@ describe('settings validation', () => {
       bad: ['true', 'false', 1, 0, null, {}, []]
     },
     {
-      // `'never'` and `'soon'` are the interesting rejections: an unparseable
-      // instant here would make every throttle comparison NaN, and NaN fails
-      // every `>`, so one bad row would mean "never check again" rather than
-      // "check now" - and it would do it silently.
-      key: 'lastUpdateCheckAt',
-      good: [null, '2026-08-11T20:04:06.641Z', '2026-08-11T14:04:06-06:00'],
-      bad: ['never', 'soon', '', 0, 1786478646641, true, {}]
-    },
-    {
       key: 'browserReach',
       good: ['web', 'local'],
       bad: ['none', 'Web', 'loopback', '', null, true, ['web']]
@@ -1202,7 +1192,6 @@ describe('settings validation', () => {
       railHidden: ['browser'],
       transcriptArchiveMaxBytes: 512 * 1024 * 1024,
       updateCheck: true,
-      lastUpdateCheckAt: null,
       browserReach: 'local',
       browserSearch: 'duckduckgo',
       browserMcp: false,
@@ -1259,7 +1248,6 @@ const DEFAULT_SETTINGS_SHAPE = (dir: string): typeof DEFAULT_SETTINGS => ({
   railHidden: ['browser'],
   transcriptArchiveMaxBytes: 512 * 1024 * 1024,
   updateCheck: true,
-  lastUpdateCheckAt: null,
   browserReach: 'local',
   browserSearch: 'duckduckgo',
   browserMcp: false,

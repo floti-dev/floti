@@ -81,6 +81,12 @@ const RETIRED_FIELDS: &[(&str, &str)] = &[
     ("SessionRecord", "role"),
 ];
 
+/// The optional fields the host's settings gain beside losing a retired one.
+const SETTINGS_FIELDS: &[(&str, &str)] = &[
+    ("HostSettings", "updateCheck"),
+    ("HostSettingsPatch", "updateCheck"),
+];
+
 /// The optional fields History's types gain.
 const HISTORY_FIELDS: &[(&str, &[&str])] = &[
     ("ArchiveMessage", &["thinking"]),
@@ -174,6 +180,7 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
             "HistorySession",
             "HostSettings",
             "HostSettingsPatch",
+            "HostStopReason",
             "NoticeLimit",
             "RestorableSession",
             "RestoreOffer",
@@ -222,8 +229,17 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
         assert_eq!(was, before["types"][*name], "{name} gains only {fields:?}");
     }
 
-    // Each type that changes only loses its retired field.
+    // Each type that changes only loses its retired field, and the host's
+    // settings gain only the optional update check.
     for (name, field) in RETIRED_FIELDS {
+        let mut now = after["types"][*name].clone();
+        for (_, added) in SETTINGS_FIELDS.iter().filter(|(each, _)| each == name) {
+            now["properties"]
+                .as_object_mut()
+                .unwrap()
+                .remove(*added)
+                .unwrap_or_else(|| panic!("3.0's {name} has {added}"));
+        }
         let mut was = before["types"][*name].clone();
         was["properties"]
             .as_object_mut()
@@ -233,8 +249,18 @@ fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fi
         if let Some(required) = was.get_mut("required").and_then(Value::as_array_mut) {
             required.retain(|each| each != field);
         }
-        assert_eq!(after["types"][*name], was, "{name} loses only {field}");
+        assert_eq!(now, was, "{name} loses only {field}");
     }
+    // A stop gains only the reason `relaunch`.
+    let mut reason = after["types"]["HostStopReason"].clone();
+    reason["oneOf"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|variant| variant["const"] != "relaunch");
+    assert_eq!(
+        reason, before["types"]["HostStopReason"],
+        "HostStopReason gains only relaunch"
+    );
     // A notice's limit loses only `heavy`.
     let limits = |record: &Value| -> BTreeSet<String> {
         serde_json::to_string(&record["types"]["NoticeLimit"])

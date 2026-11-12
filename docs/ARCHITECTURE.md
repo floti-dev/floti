@@ -65,9 +65,15 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   update` (`crates/host/src/update`) replaces the floti binary, then the
   desktop app where it is older once it has quit, each only after its
   download has passed its signature and SHA-256 checks
-  ([PACKAGING.md](PACKAGING.md#floti-update)); installing the app stops
-  no host, so it asks nothing first, and a host already running keeps the
-  binary it started from until Restart host to update. When the
+  ([PACKAGING.md](PACKAGING.md#floti-update)), and asks the host on this
+  computer to start the new floti in its place; it asks the person nothing.
+  The host updates floti by itself too, at most once a day while its
+  `updateCheck` setting is on. Either way the host relaunches without ending
+  a session: it lets go of its keeper, starts the new floti in its place
+  (`exec` on macOS and Linux, a new process on Windows that waits for the old
+  one to end) and exits, and the new host takes the keeper back, or, when it
+  does not speak the keeper's link version, ends it and offers its sessions
+  back in their tabs ([PACKAGING.md](PACKAGING.md#the-handover)). When the
   connection ends without a stop or a quit, the window keeps each tab's
   screen, dimmed with input off, and Helm starts a new host if a desktop
   started the one that died, then reconnects. The new host's list decides

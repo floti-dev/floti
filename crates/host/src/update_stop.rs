@@ -39,6 +39,7 @@ use floti_host::client::{self, ClientError, ClientKeys, Connection, is_closed};
 use floti_host::keys::read_key_pair;
 use floti_host::platform::folders::{self, Folders, UserEnv};
 use floti_host::server::{HOST_KEY_FILE, LOCK_FILE, local_endpoint};
+use floti_host::update::HostRelaunch;
 use floti_protocol::channel::{RequestChannel, from_payload, to_payload};
 use floti_protocol::channels::common::SessionStatus;
 use floti_protocol::channels::host::{HostStop, HostStopReason, HostStopRequest};
@@ -174,29 +175,49 @@ pub fn run(asker: &Asker, step: Step) -> u8 {
     outcome.code()
 }
 
-/// How many sessions the host on this computer runs, asked as the host
-/// itself, as `--ask` with no client folder asks: 0 when no host runs.
-/// `floti update` asks it before it installs a desktop app whose installer
-/// stops that host.
-pub fn host_sessions() -> Result<usize, String> {
-    let runtime = tokio::runtime::Builder::new_current_thread()
+/// Asks the host on this computer, as the host itself, to start the floti
+/// now at the path it was started from in its place
+/// ([`HostStopReason::Relaunch`]): what `floti update` does once it has
+/// replaced floti. The host lets go of its session keeper, so every session
+/// runs on, and answers before it stops; one that closes the connection
+/// before it answers has taken the request too.
+pub fn relaunch_host() -> HostRelaunch {
+    let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .map_err(|err| format!("could not start: {err}"))?;
-    let outcome = runtime.block_on(perform(UserEnv::from_process(), &Asker::Host, Step::Ask));
+    {
+        Ok(runtime) => runtime,
+        Err(err) => return HostRelaunch::Failed(format!("could not start: {err}")),
+    };
+    let outcome = runtime.block_on(async {
+        let folders = folders::resolve(&UserEnv::from_process())
+            .map_err(|err| Outcome::Failed(BridgeExit::Failed, err.to_string()))?;
+        let mut connection = as_host(&folders).await?;
+        let asked = async {
+            welcomed(&mut connection).await?;
+            let stop = HostStopRequest {
+                reason: HostStopReason::Relaunch,
+            };
+            match request::<HostStop>(&mut connection, &stop).await {
+                Ok(()) | Err(Outcome::Failed(BridgeExit::HostClosed, _)) => Ok(Outcome::Stopped),
+                Err(failed) => Err(failed),
+            }
+        }
+        .await;
+        connection.close().await;
+        asked
+    });
     runtime.shutdown_background();
-    sessions_of(outcome)
+    relaunched(outcome)
 }
 
-/// The count an `--ask` as the host itself ended with.
-fn sessions_of(outcome: Outcome) -> Result<usize, String> {
+/// What asking the host to relaunch ended with.
+fn relaunched(outcome: Result<Outcome, Outcome>) -> HostRelaunch {
     match outcome {
-        Outcome::Count(running) => Ok(running),
-        Outcome::Failed(BridgeExit::Unreachable, _) => Ok(0),
-        Outcome::Failed(_, why) => Err(why),
-        Outcome::Ask(_) | Outcome::NothingToEnd | Outcome::Stopped => {
-            Err("the host's answer was not a count".to_owned())
-        }
+        Ok(_) => HostRelaunch::Relaunched,
+        Err(Outcome::Failed(BridgeExit::Unreachable, _)) => HostRelaunch::NoHost,
+        Err(Outcome::Failed(_, why)) => HostRelaunch::Failed(why),
+        Err(other) => HostRelaunch::Failed(format!("the host answered {other:?}")),
     }
 }
 
@@ -492,15 +513,18 @@ mod tests {
     }
 
     #[test]
-    fn floti_update_is_told_the_host_s_count_and_none_when_no_host_runs() {
-        assert_eq!(sessions_of(Outcome::Count(2)), Ok(2));
+    fn floti_update_hears_whether_the_host_relaunches_and_nothing_when_no_host_runs() {
+        assert_eq!(relaunched(Ok(Outcome::Stopped)), HostRelaunch::Relaunched);
         assert_eq!(
-            sessions_of(Outcome::Failed(BridgeExit::Unreachable, "no host".into())),
-            Ok(0)
+            relaunched(Err(Outcome::Failed(
+                BridgeExit::Unreachable,
+                "no host".into()
+            ))),
+            HostRelaunch::NoHost
         );
         assert_eq!(
-            sessions_of(Outcome::Failed(BridgeExit::Failed, "refused".into())),
-            Err("refused".to_owned())
+            relaunched(Err(Outcome::Failed(BridgeExit::Failed, "refused".into()))),
+            HostRelaunch::Failed("refused".to_owned())
         );
     }
 

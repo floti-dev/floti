@@ -897,9 +897,10 @@ capture locally on any OS, into `reports/screenshots`.
 ## floti update
 
 `floti update` replaces the floti that runs it with its channel's newest
-release, and the desktop app where it is installed and older, once the app
-has quit (`crates/host/src/update`). A person runs it; nothing runs it on a
-timer.
+release, has this computer's host start it in its place, and updates the
+desktop app where it is installed and older, once the app has quit
+(`crates/host/src/update`). The host runs the same checks by itself for
+floti alone (**The host's own update**, below).
 
 **The manifest.** It reads `https://floti.dev/update.json` and its signature
 `update.json.minisig`, which each stable release writes and copies there
@@ -952,15 +953,12 @@ installed and its own version is older than the channel's or cannot be told,
 so an app behind an up-to-date floti is still updated. With nothing to
 replace, it says floti is up to date and changes nothing.
 
-**Asking first.** Installing the app stops no host on any OS: the host runs
-from floti installed on its own, outside the app's install, and the Windows
-installer renames a running copy aside rather than stopping it
-(`installer.nsh`). So `floti update` has nothing to ask before it installs
-the app, and asks nothing (`installing_desktop_stops_host` is false
-everywhere). Its question, which counted the host's sessions as `floti
-update-stop --ask` does and asked `[y/N]` on the terminal, stays in the code
-for a platform that would answer true, and goes with HELM-61's piece 2. The
-installer is started out of any job `floti update` is in, so it finishes
+**It asks nothing.** An update ends no session. Installing the app stops no
+host on any OS: the host runs from floti installed on its own, outside the
+app's install, and the Windows installer renames a running copy aside rather
+than stopping it (`installer.nsh`). Replacing floti ends nothing either: the
+host restarts on it through its session keeper (**The handover**, below).
+The installer is started out of any job `floti update` is in, so it finishes
 whatever ends the session that ran it.
 
 **The order.** Nothing is replaced until everything has passed: the
@@ -968,9 +966,12 @@ manifest, this computer's floti (written beside the running one under a
 name of its own) and the app's file (kept in `update` in the data folder). A
 failed check stops the update with one line on standard error naming the
 file and what failed and that nothing was updated, removes what was
-downloaded, and leaves the old floti working. Then floti is replaced, then
-the app: while it runs, `floti update` says it is waiting for it to quit and
-looks again each second. Then, on macOS, it runs `floti install-self` from
+downloaded, and leaves the old floti working. Then floti is replaced, and
+the host on this computer, where one runs, is asked as the host itself to
+start the new floti in its place (`host:stop` with reason `relaunch`); `floti
+update` says it is, or why it could not ask. Then the app: while it runs,
+`floti update` says it is waiting for it to quit and looks again each
+second. Then, on macOS, it runs `floti install-self` from
 the new app's floti (`Contents/Resources/floti`), so the Node beside floti
 installed on its own is the new app's; the Windows installer runs it
 itself, and the AppImage's floti is inside its image, so its app runs it
@@ -995,49 +996,85 @@ download mark: floti's own process writes them, which neither Gatekeeper's
 quarantine nor Windows' mark of the web applies to, and `--noqtn` keeps
 `ditto` from carrying one over from the archive.
 
-## Updates: an explicit check, not an updater
+### The host's own update
+
+A host keeps floti up to date by itself (`crates/host/src/update/background.rs`)
+while its `updateCheck` setting is on: on by default, kept in `floti.db` and
+shown in Settings → Updates as "Update floti by itself". Only a host running
+floti installed on its own does it; one run from a development build, from
+inside the desktop app, or with `FLOTI_CONFIG_READ_ONLY` set (every
+development run and check) never looks.
+
+It checks at most once a day: at its start when no check has reached the
+manifest within the day, then a day after the last one that did, kept in
+`update-checked.json` in the data folder so a restarted host does not look
+again. A check that could not reach the release (no network, a download cut
+off, a disk that refused the file) is tried again an hour later; one the
+release itself failed (a signature, a checksum, a manifest without this
+computer's build) waits the day. Turning the setting on checks at once when
+the day has passed; turning it off stops the next check. Each check is `floti
+update`'s for floti alone: the same manifest, the same checks, the same
+replacement through `platform/standalone`. The desktop app is left to `floti
+update`. Each line the check says goes to the host's log.
+
+### The handover
+
+Once a newer floti is in place, the host relaunches on it without waiting for
+any session to end (`host:stop` with reason `relaunch`, which `floti update`
+sends too). It lets go of its session keeper (`Keeper::let_go`), as a crash
+would, so every session and plain terminal runs on there, releases its data
+folder and socket, and then starts the floti at the path it was started from
+in its place, with the arguments it was started with. The old host hands
+over itself, in the user's own session; nothing else starts the new one, and
+it is never started by ssh or as a service:
+
+- On macOS and Linux the old host replaces its own process image (`exec`),
+  so the new host keeps its process id: the LaunchAgent and the systemd user
+  unit go on tracking it, and a desktop that started it goes on holding it.
+- On Windows there is no `exec`. The old host starts the new floti alone, as
+  it starts the session keeper (outside its job, with none of its handles),
+  with `--after <pid>`, and exits; the new host waits until that process has
+  ended before it opens anything.
+
+The new host takes the keeper back when it speaks the keeper's link version,
+and every session keeps its tab. One that does not ends the keeper with what
+it holds, and those sessions come back through the restore offer in their
+tabs, as after any keeper that was lost. A client sees the connection end
+without a stop, keeps each tab's screen dimmed, and reconnects.
+
+## Updates in Helm
 
 `update:check` asks the GitHub releases API for the newest tag, compares it
 against `app.getVersion()` and returns a URL. It downloads nothing and executes
-nothing; upgrading is something the user does from the releases page.
+nothing. It happens only when a person presses **Check now** in Settings →
+Updates, which keeps no throttle and works with `updateCheck` off. Offline is
+an expected answer, reported as "could not ask", with the reason, rather than
+silently as "up to date".
 
-It happens two ways and no others, and never on a timer. The app asks on its own
-at launch, at most once a day (`UPDATE_CHECK_EVERY_MS`), when `updateCheck` is
-on; and a person asks by pressing **Check now** in Settings → Updates, which
-keeps no throttle of its own and works with `updateCheck` off. A deliberate act
-that silently did nothing would be worse than no button, and the bound that
-earns the app the right to ask by itself is the launch throttle - which a manual
-check therefore does not stamp. Either way a newer release is reported beside
-the version in the status bar. Offline is an expected answer, reported as "could
-not ask", with the reason, rather than silently as "up to date".
+Helm asks nothing by itself: the host's own update is the automatic check. A
+local host that runs a newer floti than this Helm put a newer release in
+place, and Helm reports that beside the version in the status bar as a check's
+answer, with no request made (`hostVersionNotice` in `main/update.ts`).
+Updating the desktop app itself is `floti update`'s.
 
-There is deliberately no electron-updater. Three reasons, any one of which would
-be enough:
-
-1. **The build is unsigned.** electron-updater's NSIS path downloads a
-   replacement installer and runs it. An unsigned replacement puts a SmartScreen
-   prompt in front of *every* update, and an update mechanism whose happy path
-   is a scary dialog teaches people to dismiss scary dialogs.
-2. **It could only cover half the users.** The portable exe has no install
-   location to replace, so electron-updater applies to the NSIS build alone.
-3. **The app hosts long-lived sessions.** A background updater that restarts
-   the local host ends somebody's `claude` session, possibly mid-turn. An
-   update stops the host only once the user has agreed to the count of
-   sessions it ends (see what the installer does, above).
-
-Code-signing the build would retire reason 1. It would not touch 2 or 3.
+There is deliberately no electron-updater: the build is unsigned, so its NSIS
+path would put a SmartScreen prompt in front of every update, and the portable
+exe has no install location for it to replace. `floti update` is the one
+updater, and its signature check is the one to get right.
 
 ## Network posture
 
-**Helm contacts nothing on its own initiative except the update check.
+**Helm contacts nothing on its own initiative except the update check, which
+a host makes to floti.dev at most once a day.
 Everything else on the network happens because you asked for it: the browser
 pane fetches the page you navigate to, a plugin you added reaches the hosts its
 manifest names, and a host you added on another computer is reached through
 your own ssh, or the command you gave.**
 
 There is no telemetry, no crash reporting, no fonts and no CDN. With
-`updateCheck` off, Helm asks nothing by itself at all; the one remaining route
-is a person pressing Check now, so nothing leaves the machine unasked for.
+`updateCheck` off, nothing asks anything by itself; the one remaining route is
+a person pressing Check now or running `floti update`, so nothing leaves the
+machine unasked for.
 
 **Helm listens only on this machine.** Its windows reach the local host over
 the host's local socket, which only your OS account can open. The local host
@@ -1083,15 +1120,15 @@ them. A service listens on `127.0.0.1` on a port Helm gives it and is reached
 with a token minted for the run - a listener of the plugin's, not Helm's, so
 the inbound paragraph above still describes the app.
 
-## The update check needs the repository to be public
+## Check now needs the repository to be public
 
 `update.ts` sends `User-Agent` and `Accept` and nothing else - no token, because
 Helm handles no GitHub credential. GitHub answers an unauthenticated request for a
 **private** repository's releases with `404`, so while the repository is private
-the check reports *"could not ask"* however current the release actually is.
+Check now reports *"could not ask"* however current the release actually is.
 
 This is a coupling that breaks silently: **making the repository private turns
-the update check off**, and nothing in the app says so beyond the error string.
+Check now off**, and the release files the host's own update downloads with it,, and nothing in the app says so beyond the error string.
 The same fact is why release artefacts cannot be handed to anyone who is not a
 collaborator - a private release page is not a download link. It holds for a
 draft too, whatever the repository's visibility, which is why a preview is

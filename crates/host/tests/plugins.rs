@@ -128,6 +128,7 @@ fn start_host(dirs: &TestDirs, endpoint: &Endpoint, node: Option<PathBuf>) -> Ru
             keeper: None,
             wsl: None,
             config_read_only: false,
+            updates: None,
         },
     })
 }

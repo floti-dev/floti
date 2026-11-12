@@ -14,7 +14,9 @@ use floti_protocol::Knowable;
 use url::Url;
 
 use super::network::{FetchError, Network};
-use super::{APP_POLL, Outcome, STAGING_FOLDER, UpdateError, Updater, channel, failure_line};
+use super::{
+    APP_POLL, HostRelaunch, Outcome, STAGING_FOLDER, UpdateError, Updater, channel, failure_line,
+};
 use crate::Result;
 use crate::platform::folders::UserEnv;
 use crate::platform::installs::{Desktop, Installs};
@@ -120,8 +122,6 @@ struct FakeInstalls {
     desktop: Option<Desktop>,
     /// The installed app's version, when it can be told.
     desktop_version: Option<String>,
-    /// Whether installing the app stops this computer's host, as on Windows.
-    stops_host: bool,
     /// Whether the running floti is the app's own.
     bundled: bool,
     standalone: Option<PathBuf>,
@@ -135,11 +135,6 @@ struct FakeInstalls {
 impl FakeInstalls {
     fn at_version(mut self, version: &str) -> Self {
         self.desktop_version = Some(version.into());
-        self
-    }
-
-    fn stopping_the_host(mut self) -> Self {
-        self.stops_host = true;
         self
     }
 
@@ -197,10 +192,6 @@ impl Installs for FakeInstalls {
 
     fn desktop_version(&self, _desktop: &Desktop) -> Option<String> {
         self.desktop_version.clone()
-    }
-
-    fn installing_desktop_stops_host(&self) -> bool {
-        self.stops_host
     }
 
     fn carried_floti(&self, _desktop: &Desktop) -> Option<PathBuf> {
@@ -304,11 +295,12 @@ struct World {
     network: FakeNetwork,
     running_binary: PathBuf,
     running_version: Cell<&'static str>,
-    /// What counting the host's sessions answers.
-    sessions: RefCell<std::result::Result<usize, String>>,
-    /// What the person answers; `None` is no terminal.
-    answer: Cell<Option<bool>>,
-    questions: RefCell<Vec<String>>,
+    /// What asking this computer's host to relaunch answers, and how often
+    /// it was asked.
+    relaunch: RefCell<HostRelaunch>,
+    relaunches: Cell<usize>,
+    /// Whether the update is the host's own: floti alone, and no host to ask.
+    host_s_own: Cell<bool>,
     /// Whether each process id is alive; any other is unknown.
     alive: RefCell<HashMap<u32, Knowable<bool>>>,
     dirs: TestDirs,
@@ -324,9 +316,9 @@ impl World {
             network: FakeNetwork::default(),
             running_binary,
             running_version: Cell::new(RUNNING),
-            sessions: RefCell::new(Ok(0)),
-            answer: Cell::new(None),
-            questions: RefCell::default(),
+            relaunch: RefCell::new(HostRelaunch::Relaunched),
+            relaunches: Cell::new(0),
+            host_s_own: Cell::new(false),
             alive: RefCell::default(),
             dirs,
         }
@@ -394,7 +386,6 @@ impl World {
                 path: self.dirs.folder("apps").join(APP),
             }),
             desktop_version: None,
-            stops_host: false,
             bundled: false,
             standalone: None,
             carried: None,
@@ -423,10 +414,9 @@ impl World {
                 .cloned()
                 .unwrap_or(Knowable::Unknown)
         };
-        let sessions_ending = || self.sessions.borrow().clone();
-        let confirm = |question: &str| {
-            self.questions.borrow_mut().push(question.to_owned());
-            self.answer.get()
+        let relaunch = || {
+            self.relaunches.set(self.relaunches.get() + 1);
+            self.relaunch.borrow().clone()
         };
         let standalone = FakeStandalone {
             binary: installs.standalone.clone(),
@@ -451,8 +441,9 @@ impl World {
             install_self: &install_self,
             processes: &processes,
             is_alive: &is_alive,
-            sessions_ending: &sessions_ending,
-            confirm: &confirm,
+            relaunch_host: (!self.host_s_own.get())
+                .then_some(&relaunch as &dyn Fn() -> HostRelaunch),
+            with_desktop: !self.host_s_own.get(),
             pause: &pause,
             env: UserEnv::default(),
             running_binary: self.running_binary.clone(),
@@ -1031,39 +1022,97 @@ fn a_floti_inside_the_app_is_never_replaced_and_the_app_brings_its_own() {
 }
 
 #[test]
-fn installing_an_app_that_stops_the_host_asks_first_saying_how_many_sessions_end() {
+fn installing_the_app_asks_nothing_and_ends_no_session() {
     let world = World::new();
     let release = Published::new("2.1.0").with_desktop();
     world.publish(&[("stable", &release)]);
-    *world.sessions.borrow_mut() = Ok(2);
-    world.answer.set(Some(true));
-    let installs = world.installs(true).stopping_the_host();
+    let installs = world.installs(true);
     let run = world.update(&installs, 0, None);
-    assert!(matches!(
-        run.result,
-        Ok(Outcome::Updated {
-            desktop: Some(_),
-            ..
-        })
-    ));
     assert_eq!(
-        *world.questions.borrow(),
-        vec![
-            "Updating Helm stops this computer's host, ending 2 sessions; they come back when Helm next starts. Update Helm now?"
-                .to_owned()
-        ]
+        run.result.unwrap(),
+        Outcome::Updated {
+            version: "2.1.0".into(),
+            floti: true,
+            desktop: Some(APP.into())
+        }
     );
+    assert!(!run.out.contains('?'), "nothing is asked: {}", run.out);
     assert_eq!(installs.desktop_installs.lock().unwrap().len(), 1);
 }
 
 #[test]
-fn no_to_the_question_updates_floti_alone_and_leaves_the_app() {
+fn once_floti_is_replaced_this_computer_s_host_is_asked_to_start_it_in_its_place() {
     let world = World::new();
     let release = Published::new("2.1.0").with_desktop();
     world.publish(&[("stable", &release)]);
-    *world.sessions.borrow_mut() = Ok(1);
-    world.answer.set(Some(false));
-    let installs = world.installs(true).stopping_the_host();
+    let installs = world.installs(true);
+    let run = world.update(&installs, 0, None);
+    assert_eq!(world.relaunches.get(), 1);
+    let replaced = run
+        .out
+        .find("floti is updated from 2.0.0 to 2.1.0.")
+        .unwrap();
+    let relaunched = run
+        .out
+        .find(
+            "This computer's host is starting floti 2.1.0 in its place; its sessions keep running.",
+        )
+        .unwrap_or_else(|| panic!("{}", run.out));
+    let app = run.out.find("Helm is updated to 2.1.0.").unwrap();
+    assert!(replaced < relaunched && relaunched < app, "{}", run.out);
+}
+
+#[test]
+fn with_no_host_running_nothing_is_said_and_a_host_that_cannot_be_asked_is_named() {
+    let world = World::new();
+    let release = Published::new("2.1.0");
+    world.publish(&[("stable", &release)]);
+    *world.relaunch.borrow_mut() = HostRelaunch::NoHost;
+    let run = world.update(&world.installs(false), 0, None);
+    assert!(run.result.is_ok());
+    assert!(!run.out.contains("host"), "{}", run.out);
+
+    let world = World::new();
+    world.publish(&[("stable", &release)]);
+    *world.relaunch.borrow_mut() = HostRelaunch::Failed("the host closed the connection.".into());
+    let run = world.update(&world.installs(false), 0, None);
+    assert!(run.result.is_ok(), "floti is updated all the same");
+    assert!(
+        run.out.contains(
+            "This computer's host was not restarted (the host closed the connection.); it runs floti 2.0.0 until it next starts."
+        ),
+        "{}",
+        run.out
+    );
+    assert_eq!(world.binary(), release.floti);
+}
+
+#[test]
+fn the_host_is_not_asked_when_floti_was_not_replaced() {
+    let world = World::new();
+    world.running_version.set("2.1.0");
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    let installs = world.installs(true).at_version("2.0.0");
+    let run = world.update(&installs, 0, None);
+    assert!(matches!(
+        run.result,
+        Ok(Outcome::Updated {
+            floti: false,
+            desktop: Some(_),
+            ..
+        })
+    ));
+    assert_eq!(world.relaunches.get(), 0);
+}
+
+#[test]
+fn the_host_s_own_update_replaces_floti_alone_and_asks_no_host() {
+    let world = World::new();
+    world.host_s_own.set(true);
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    let installs = world.installs(true);
     let run = world.update(&installs, 0, None);
     assert_eq!(
         run.result.unwrap(),
@@ -1073,95 +1122,13 @@ fn no_to_the_question_updates_floti_alone_and_leaves_the_app() {
             desktop: None
         }
     );
-    assert!(world.questions.borrow()[0].contains("ending 1 session; it comes back"));
-    assert!(
-        run.out
-            .contains("Helm stays as it is; floti update updates it when run again."),
-        "{}",
-        run.out
-    );
     assert_eq!(world.binary(), release.floti);
+    assert_eq!(world.relaunches.get(), 0);
     assert!(installs.desktop_installs.lock().unwrap().is_empty());
     assert!(
         !world.network.asked().contains(&release.desktop_url()),
         "the app is not downloaded"
     );
-}
-
-#[test]
-fn with_no_terminal_to_ask_on_the_app_is_left_and_the_line_says_why() {
-    let world = World::new();
-    world.running_version.set("2.1.0");
-    let release = Published::new("2.1.0").with_desktop();
-    world.publish(&[("stable", &release)]);
-    *world.sessions.borrow_mut() = Ok(3);
-    world.answer.set(None);
-    let installs = world.installs(true).at_version("2.0.0").stopping_the_host();
-    let run = world.update(&installs, 0, None);
-    assert_eq!(
-        run.result.unwrap(),
-        Outcome::DesktopLeft {
-            version: "2.1.0".into(),
-            app: APP.into()
-        }
-    );
-    assert_eq!(
-        run.out.trim_end(),
-        "Helm stays as it is: updating it ends sessions, and there is no terminal to ask on first. Run floti update in a terminal to update Helm."
-    );
-    assert!(installs.desktop_installs.lock().unwrap().is_empty());
-}
-
-#[test]
-fn nothing_is_asked_when_the_host_runs_no_session_or_installing_stops_no_host() {
-    let world = World::new();
-    let release = Published::new("2.1.0").with_desktop();
-    world.publish(&[("stable", &release)]);
-    world.answer.set(Some(false));
-    let installs = world.installs(true).stopping_the_host();
-    let run = world.update(&installs, 0, None);
-    assert!(matches!(
-        run.result,
-        Ok(Outcome::Updated {
-            desktop: Some(_),
-            ..
-        })
-    ));
-
-    let world = World::new();
-    world.publish(&[("stable", &release)]);
-    *world.sessions.borrow_mut() = Ok(4);
-    world.answer.set(Some(false));
-    let installs = world.installs(true);
-    let run = world.update(&installs, 0, None);
-    assert!(matches!(
-        run.result,
-        Ok(Outcome::Updated {
-            desktop: Some(_),
-            ..
-        })
-    ));
-    assert!(world.questions.borrow().is_empty());
-}
-
-#[test]
-fn a_host_that_cannot_be_asked_still_gets_the_question() {
-    let world = World::new();
-    let release = Published::new("2.1.0").with_desktop();
-    world.publish(&[("stable", &release)]);
-    *world.sessions.borrow_mut() = Err("the host closed the connection.".into());
-    world.answer.set(Some(false));
-    let installs = world.installs(true).stopping_the_host();
-    let run = world.update(&installs, 0, None);
-    assert!(run.result.is_ok());
-    assert!(
-        run.out.contains(
-            "floti could not ask this computer's host which sessions updating Helm ends: the host closed the connection."
-        ),
-        "{}",
-        run.out
-    );
-    assert!(world.questions.borrow()[0].contains("ending the sessions it runs"));
 }
 
 #[test]

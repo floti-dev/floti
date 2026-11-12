@@ -29,7 +29,7 @@ import { activePty, killPty, spawnPty, windowsBuildNumber } from './pty'
 import { adoptExistingProfile, createServices, updateSettings, type Services } from './services'
 import { createFilesService, filesRoots } from './files'
 import { attachArtifactConsole, CONTENT_SCHEME, registerContentProtocol, serveArtifactsFrom } from './content'
-import { PLUGIN_SCHEMES } from '../shared/ipc'
+import { PLUGIN_SCHEMES, type UpdateCheck } from '../shared/ipc'
 import { createPluginHost } from './plugins/host'
 import { registerHostPluginProtocol } from './plugins/protocol'
 import { createBackgroundHost } from './plugins/background'
@@ -47,7 +47,7 @@ import {
 import { createBrowserMcp, type BrowserMcpHost } from './browser-mcp'
 import { browserAvailability, readAppArmorRestricts, withBrowserAvailability } from './browser-sandbox'
 import { installIpcRecorder } from './ipc-recorder'
-import { maybeCheckForUpdate } from './update'
+import { hostVersionNotice } from './update'
 import { quitConfirm, sessionConfirm } from './host/confirm'
 import type { Confirm, SessionHost } from './host/session-host'
 import {
@@ -465,6 +465,17 @@ function startApp(options: AppOptions = {}): void {
   void desktopHost.link.connection().catch((err: unknown) => {
     console.warn(err instanceof Error ? err.message : String(err))
   })
+  // A local host running a newer floti than this Helm put a newer release in
+  // place: the window hears it as a check's answer, with no request made.
+  let hostNotice: UpdateCheck | null = null
+  const tellHostNotice = (): void => {
+    if (hostNotice !== null && win !== null && !win.isDestroyed()) win.webContents.send('update:checked', hostNotice)
+  }
+  desktopHost.link.onConnected(async (connection) => {
+    const info = await connection.request('app:info', null)
+    hostNotice = hostVersionNotice(app.getVersion(), info.version, new Date().toISOString())
+    tellHostNotice()
+  })
   // The window carries its terminals, says what it shows and hears the host's
   // notifications over its own connection (`renderer/src/app/host/sessions.ts`).
 
@@ -663,15 +674,9 @@ function startApp(options: AppOptions = {}): void {
       // The window reads its settings and starts its first scan over its own
       // connection (`renderer/src/app/host/workspace.ts`).
 
-      // The one request Helm's own process makes, after the first paint: it
-      // is worth nothing before the window has painted, and it must not be in
-      // front of anything that is.
-      //
-      // Failure is silent on purpose. Offline is the ordinary case, the answer
-      // is a line in the status bar that simply does not appear, and there is
-      // nothing a user would do with a warning that Helm could not reach
-      // GitHub while they work.
-      setImmediate(() => void maybeCheckForUpdate(services, win))
+      // What the local host's version said, for a window that was not
+      // listening yet when it connected.
+      tellHostNotice()
 
       if (win) {
         options.onReady?.({ win, services, sessions, browsers, browserMcp })

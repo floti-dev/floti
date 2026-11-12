@@ -71,6 +71,14 @@ pub enum HostStopReason {
     /// host without a keeper stops as for [`Self::Update`]. What a `restart`
     /// frame asks for.
     Restart,
+    /// It is replaced by the floti now at the path it was started from: it
+    /// lets go of its session keeper as for [`Self::Restart`], exits, and
+    /// that floti starts in its place, with the arguments it was started
+    /// with, and takes the keeper back. What `floti update` asks for once it
+    /// has replaced floti, and what the host's own background update does. A
+    /// host without a keeper stops as for [`Self::Update`] before the new
+    /// one starts.
+    Relaunch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

@@ -77,10 +77,7 @@ fn windows_puts_a_new_install_where_it_updates_one() {
             path: local.join("Programs").join("Helm")
         })
     );
-    // The host runs from floti installed on its own, which the installer
-    // renames aside rather than stopping, and the installer runs
-    // install-self itself.
-    assert!(!windows::Native.installing_desktop_stops_host());
+    // The installer runs install-self itself.
     assert_eq!(
         windows::Native.carried_floti(&Desktop {
             name: "Helm",
@@ -443,9 +440,6 @@ fn macos_hands_its_own_floti_to_install_self_and_the_appimage_none() {
         Some(app.path.join("Contents").join("Resources").join("floti"))
     );
     assert_eq!(linux::Native.carried_floti(&app), None);
-    for installs in [&linux::Native as &dyn Installs, &macos::Native] {
-        assert!(!installs.installing_desktop_stops_host());
-    }
 }
 
 #[test]

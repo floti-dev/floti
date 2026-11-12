@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_SETTINGS } from '@helm/core'
 import type * as P from '../protocol'
 import { historyPageFromHost, historySessionFromHost } from './history'
-import { profileFromHost, sessionFromHost, splitSettingsPatch } from './index'
+import { profileFromHost, sessionFromHost, settingsWithHost, splitSettingsPatch } from './index'
 
 const hostSession = (patch: Partial<P.SessionRecord> = {}): P.SessionRecord => ({
   id: 9,
@@ -261,6 +262,33 @@ describe('a window settings patch, split between the host and Helm', () => {
     expect(split.own).toEqual({ quitSessions: { local: 'keep' } })
     expect(split.host).toEqual({ scanRoots: ['/work'] })
     expect(split.host).not.toHaveProperty('quitSessions')
+  })
+
+  it('sends whether to look for updates to the host, which keeps it, and lays the host\'s value over Helm\'s', () => {
+    const split = splitSettingsPatch({ updateCheck: false, theme: 'dark' })
+
+    expect(split.host).toEqual({ updateCheck: false })
+    expect(split.own).toEqual({ theme: 'dark' })
+    const host: P.HostSettings = {
+      scanRoots: [],
+      pinnedProjects: [],
+      firstRunCompletedAt: null,
+      backendPaths: {},
+      terminalShell: null,
+      transcriptArchiveMaxBytes: 1024,
+      browserMcp: true,
+      browserMcpLocalOnly: false,
+      sessionMcp: true,
+      restoreWithoutAsking: false,
+      sessionAgents: true,
+      agentChildrenPerParent: 4,
+      agentSessionsPerHost: 8,
+      agentDepth: 2,
+      agentStartsPerParent: 16,
+      agentCommandsPerParent: 4,
+      updateCheck: true
+    }
+    expect(settingsWithHost({ ...DEFAULT_SETTINGS, updateCheck: false }, host).updateCheck).toBe(true)
   })
 
   it('keeps the tabs, panes and splits on this device, never in the host', () => {

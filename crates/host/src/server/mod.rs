@@ -94,6 +94,8 @@ use crate::platform::socket::{self, Endpoint, LocalListener, LocalSocket};
 use crate::platform::wsl::{self, WslProgram, WslSide};
 use crate::session::ClientId;
 use crate::store::Store;
+use crate::update;
+use crate::workspace::settings::SettingsService;
 use crate::{Error, Result};
 
 use agent_tools::HostAgentTools;
@@ -339,6 +341,12 @@ pub struct HostRun {
     /// ([`folders::CONFIG_READ_ONLY_VAR`]): the host moves, seeds and writes
     /// no agents there, and serves the shipped ones while there are none.
     pub config_read_only: bool,
+    /// The floti installed on its own this host runs from, which it keeps up
+    /// to date in the background while `updateCheck` is on
+    /// ([`update::background`]), relaunching on a newer one. `None` for a
+    /// host that runs any other floti, or whose config folder is another
+    /// host's: it never looks.
+    pub updates: Option<PathBuf>,
 }
 
 impl HostRun {
@@ -349,6 +357,7 @@ impl HostRun {
     pub fn from_env(env: &UserEnv) -> Self {
         let moved = env.var(folders::DATA_DIR_VAR).is_some();
         let exe = std::env::current_exe().ok();
+        let config_read_only = env.var(folders::CONFIG_READ_ONLY_VAR).is_some();
         Self {
             mode: if moved {
                 AppMode::Dev
@@ -358,9 +367,10 @@ impl HostRun {
             home: env.home.clone(),
             node: node_runtime::runtime(env, exe.as_deref(), &node_runtime::Native),
             desktop: false,
+            updates: update::background::eligible(env, exe.as_deref(), config_read_only),
             keeper: exe,
             wsl: wsl::Native.program(env),
-            config_read_only: env.var(folders::CONFIG_READ_ONLY_VAR).is_some(),
+            config_read_only,
         }
     }
 }
@@ -377,6 +387,7 @@ impl Default for HostRun {
             keeper: None,
             wsl: None,
             config_read_only: false,
+            updates: None,
         }
     }
 }
@@ -521,10 +532,17 @@ impl Host {
             log_line!("floti host: {problem}");
         }
         hosted.use_agents(Arc::new(FolderDefinitions::prepared(agents)));
+        let updates = run
+            .updates
+            .clone()
+            .map(|binary| (binary, folders.data.clone()));
         let features = Arc::new(Features::new(Arc::clone(&hosted), folders, run)?);
         let agent_tools = start_agent_tools(&hosted, &features)?;
 
         let (stopper, stop_requested) = Stopper::new();
+        if let Some((binary, data)) = updates {
+            start_background_update(features.settings(), data, binary, stopper.clone());
+        }
         let (shutdown, shutdown_rx) = watch::channel(false);
         tokio::spawn(hosted::settle_on_exits(
             hosted.ledger().exits(),
@@ -667,6 +685,36 @@ impl Host {
         drop(lock);
         Ok(reason)
     }
+}
+
+/// Keeps floti at `binary` up to date in the background while the
+/// `updateCheck` setting is on, following every change to it, and stops the
+/// host to relaunch on a newer floti once one is in place. A setting that
+/// cannot be read counts as off: nothing is contacted on a guess.
+fn start_background_update(
+    settings: &Arc<SettingsService>,
+    data: PathBuf,
+    binary: PathBuf,
+    stopper: Stopper,
+) {
+    let enabled = settings.read().is_ok_and(|settings| settings.update_check);
+    let (on, watched) = watch::channel(enabled);
+    settings.on_change(move |settings| {
+        on.send_replace(settings.update_check);
+    });
+    tokio::spawn(async move {
+        let swept = binary.clone();
+        let _ = tokio::task::spawn_blocking(move || update::background::sweep_asides(&swept)).await;
+        let check = {
+            let (data, binary) = (data.clone(), binary.clone());
+            move || update::background::check_now(&data, &binary)
+        };
+        let ended =
+            update::background::keep_up_to_date(data, watched, jiff::Timestamp::now, check).await;
+        if ended == update::background::Ended::Relaunch && stopper.stop(HostStopReason::Relaunch) {
+            log_line!("floti host: stopping to start the new floti in its place.");
+        }
+    });
 }
 
 /// The host's agent tools: the listener with its families switched as the

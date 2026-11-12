@@ -297,6 +297,29 @@ fn an_agent_heavy_per_host_an_earlier_release_stored_is_ignored_and_left_as_it_i
 }
 
 #[test]
+fn the_update_check_is_on_until_turned_off_and_a_value_it_cannot_read_is_on() {
+    let world = World::new();
+    assert!(world.stored().update_check);
+
+    let written = world
+        .service
+        .write(&HostSettingsPatch {
+            update_check: Some(false),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(!written.update_check);
+    assert_eq!(world.told(), vec![written.clone()]);
+    assert_eq!(world.stored(), written, "a later read finds what was kept");
+
+    world.raw("updateCheck", "\"no\"");
+    assert!(
+        world.stored().update_check,
+        "an unreadable row keeps the default"
+    );
+}
+
+#[test]
 fn the_command_children_limit_defaults_to_4_and_is_kept_apart_from_the_agent_limits() {
     let world = World::new();
     assert_eq!(world.stored().agent_commands_per_parent, 4);

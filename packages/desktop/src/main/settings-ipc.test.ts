@@ -2,7 +2,7 @@ import { existsSync, writeFileSync } from 'node:fs'
 import { delimiter, dirname, join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
-import { readSettings, UPDATE_CHECK_EVERY_MS, writeSettings, type ThemeListing, type ThemeState } from '@helm/core'
+import { readSettings, type ThemeListing, type ThemeState } from '@helm/core'
 import { createWorld, disposeWorld, seedSettings, type World } from '../../test/world'
 import type { EventChannel, RequestChannel, RequestPayload, RequestResult } from '../shared/ipc'
 import type { Services } from './services'
@@ -344,7 +344,7 @@ describe('settings over IPC', () => {
   })
 
   describe('updates', () => {
-    it('asks the release source on every press, with no throttle and whether or not the launch check is on', async () => {
+    it('asks the release source on every press, with no throttle and whether or not the update check is on', async () => {
       await invoke('ownSettings:write', { updateCheck: false })
       let asked = 0
       update.pointReleases(() => {
@@ -380,52 +380,21 @@ describe('settings over IPC', () => {
       expect(answered.url).toBe(info.releasesUrl)
     })
 
-    it('never stamps a manual check as the launch check, on success or failure', async () => {
-      update.pointReleases(() => Promise.resolve('v9.9.9'))
-      await invoke('update:check')
-      update.pointReleases(() => Promise.reject(new Error('offline')))
-      await invoke('update:check')
-      expect(stored().lastUpdateCheckAt).toBeNull()
-
-      // The launch check does stamp one, which is what makes the line above a
-      // statement about the manual one rather than about a timestamp nothing writes.
-      await invoke('ownSettings:write', { updateCheck: true })
-      update.pointReleases(() => Promise.resolve('v9.9.9'))
-      await update.maybeCheckForUpdate(services, null)
-      expect(stored().lastUpdateCheckAt).not.toBeNull()
-    })
-
-    it('S9: asks GitHub at most once a day at start, keeps the time in helm.db and tells the window of a newer version', async () => {
-      vi.useFakeTimers({ toFake: ['Date'] })
-      try {
-        const start = new Date('2026-11-03T08:00:00.000Z')
-        vi.setSystemTime(start)
-        writeSettings(services.store, { updateCheck: true, lastUpdateCheckAt: null })
-        services.settings = readSettings(services.store)
-        update.pointReleases(() => Promise.resolve('v9.9.9'))
-        const told = () => emitted<{ newer: boolean; latest: string | null }>('update:checked')
-        const toldBefore = told().length
-
-        await update.maybeCheckForUpdate(services, win as unknown as BrowserWindow)
-        expect(update.releasesAsked()).toBe(1)
-        expect(stored().lastUpdateCheckAt).toBe(start.toISOString())
-        expect(told().slice(toldBefore)).toEqual([expect.objectContaining({ newer: true, latest: '9.9.9' })])
-
-        // A second start within the day asks nothing and tells the window nothing.
-        vi.setSystemTime(start.getTime() + UPDATE_CHECK_EVERY_MS - 1)
-        await update.maybeCheckForUpdate(services, win as unknown as BrowserWindow)
-        expect(update.releasesAsked()).toBe(1)
-        expect(told().length).toBe(toldBefore + 1)
-
-        // A start once the day has passed asks again and keeps the new time.
-        const later = new Date(start.getTime() + UPDATE_CHECK_EVERY_MS)
-        vi.setSystemTime(later)
-        await update.maybeCheckForUpdate(services, win as unknown as BrowserWindow)
-        expect(update.releasesAsked()).toBe(2)
-        expect(stored().lastUpdateCheckAt).toBe(later.toISOString())
-      } finally {
-        vi.useRealTimers()
-      }
+    it('S9: hears of a newer release from a local host running a newer floti, with no request made', () => {
+      const at = '2026-11-11T08:00:00.000Z'
+      const asked = update.releasesAsked()
+      expect(update.hostVersionNotice('3.0.0', '3.0.1', at)).toEqual({
+        current: '3.0.0',
+        latest: '3.0.1',
+        newer: true,
+        url: update.RELEASES_PAGE,
+        error: null,
+        checkedAt: at
+      })
+      expect(update.hostVersionNotice('3.0.1', '3.0.1', at)).toBeNull()
+      expect(update.hostVersionNotice('3.0.1', '3.0.0', at)).toBeNull()
+      expect(update.hostVersionNotice('3.0.0', 'not a version', at)).toBeNull()
+      expect(update.releasesAsked()).toBe(asked)
     })
   })
 })

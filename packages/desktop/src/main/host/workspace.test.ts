@@ -29,6 +29,7 @@ const hostSettings = (patch: Partial<P.HostSettings> = {}): P.HostSettings => ({
   agentDepth: 2,
   agentStartsPerParent: 16,
   agentCommandsPerParent: 4,
+  updateCheck: true,
   restoreWithoutAsking: false,
   ...patch
 })
@@ -332,6 +333,25 @@ describe('the workspace through the local host', () => {
     const w = world()
     await w.workspace.settings()
     expect(w.connection.payloads('settings:write')).toEqual([])
+  })
+
+  it('tells the host once that Helm had the update check off, and leaves the setting to the host after', async () => {
+    const own = ownSettings({ updateCheck: false })
+    const first = new FakeConnection()
+    const link = reconnectingLink(first)
+    const w = world(first, own, link)
+    const settings = await w.workspace.settings()
+    expect(first.payloads('settings:write')).toEqual([{ updateCheck: false }])
+    expect(settings.updateCheck).toBe(false)
+    expect(own.own().updateCheck).toBe(true)
+
+    // Turned on at the host since, it stays on: Helm has nothing left to say.
+    const second = new FakeConnection()
+      .answer('settings:read', () => hostSettings({ updateCheck: true }))
+      .answer('settings:write', () => hostSettings())
+    await link.reconnect(second)
+    expect(second.payloads('settings:write')).toEqual([])
+    expect((await w.workspace.settings()).updateCheck).toBe(true)
   })
 
   it('writes the workspace keys to the host and every other key to Helm, and lays the host’s over Helm’s', async () => {

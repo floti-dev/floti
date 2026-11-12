@@ -4913,6 +4913,11 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "updateCheck": {
+          "default": true,
+          "description": "Whether the host looks for a newer floti by itself, at most once a\nday, and installs one it finds. A host from before it sends none,\nwhich reads as on.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -5047,6 +5052,12 @@
             "integer",
             "null"
           ]
+        },
+        "updateCheck": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "type": "object"
@@ -5067,6 +5078,11 @@
         {
           "const": "restart",
           "description": "It is being restarted for an update: it lets go of its session\nkeeper and exits, leaving every session and plain terminal running\nthere for the next host to take back, as a crash would leave them. A\nhost without a keeper stops as for [`Self::Update`]. What a `restart`\nframe asks for.",
+          "type": "string"
+        },
+        {
+          "const": "relaunch",
+          "description": "It is replaced by the floti now at the path it was started from: it\nlets go of its session keeper as for [`Self::Restart`], exits, and\nthat floti starts in its place, with the arguments it was started\nwith, and takes the keeper back. What `floti update` asks for once it\nhas replaced floti, and what the host's own background update does. A\nhost without a keeper stops as for [`Self::Update`] before the new\none starts.",
           "type": "string"
         }
       ]

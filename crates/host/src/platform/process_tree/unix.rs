@@ -121,6 +121,13 @@ impl ProcessTree for Native {
         tell_guard(UNTIE, root_pid);
     }
 
+    fn replace_this_process(&self, program: &std::path::Path, args: &[&str]) -> io::Result<()> {
+        use std::os::unix::process::CommandExt;
+        // Every descriptor of this process's is close-on-exec but the
+        // standard three, so the new program holds nothing of this one's.
+        Err(std::process::Command::new(program).args(args).exec())
+    }
+
     fn prepare_root(&self, command: &mut std::process::Command) {
         use std::os::unix::process::CommandExt;
         command.process_group(0);

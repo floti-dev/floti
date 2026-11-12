@@ -1773,35 +1773,21 @@ export interface AppSettings {
   transcriptArchiveMaxBytes: number
 
   /**
-   * Whether Helm asks GitHub, once per launch, if there is a newer release.
+   * Whether the local host looks for a newer floti by itself, at most once a
+   * day, and installs one it finds without ending a session.
    *
-   * A deliberate amendment to the network posture and the reason README, SPEC
-   * 5, PACKAGING and the `update:check` comment all moved together: until this,
-   * Helm's own process opened no connection at all unless somebody invoked the
-   * channel by hand. It now opens one, at most once a day, on a launch.
+   * The host keeps it (`HostSettings.updateCheck`, `HOST_WORKSPACE_KEYS`):
+   * what the window shows is the host's value, laid over this one, and a
+   * change goes to the host. Helm's own row is what this device had before
+   * the host kept it: a `false` there is written to the host once, on the
+   * next connect, and the row goes back to its default.
    *
-   * The reasoning that made "only when asked" right is untouched, because it
-   * was never about the request - it was about the *download*. Helm still
-   * fetches nothing, replaces nothing and restarts nothing; the whole outcome
-   * is a version number, and a line in the status bar when it is higher. What
-   * "only when asked" actually cost was the person who would have to think to
-   * ask, which is nobody: an update you have to remember to look for is an
-   * update you run without for months.
-   *
-   * On by default and off in one tick, because a machine that must not talk to
-   * anything is a real requirement and not an exotic one.
+   * The automatic contact is the host's, with floti.dev's `update.json`, and
+   * the reason README, SPEC 5, PACKAGING and the `update:check` comment move
+   * together. On by default and off in one tick, because a machine that must
+   * not talk to anything is a real requirement and not an exotic one.
    */
   updateCheck: boolean
-  /**
-   * When the last check actually reached GitHub, ISO 8601, or null.
-   *
-   * Internal state and deliberately not in the settings pane, the same as
-   * `windowBounds` and `firstRunCompletedAt`: it is something Helm remembers,
-   * not something anyone chose. It exists to throttle - `UPDATE_CHECK_EVERY_MS`
-   * - so that restarting the app twenty times in an afternoon, which is what
-   * developing it looks like, is still one request.
-   */
-  lastUpdateCheckAt: string | null
 
   /**
    * How far the browser pane may reach: anywhere, or this machine only.
@@ -2064,7 +2050,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   railHidden: [],
   transcriptArchiveMaxBytes: TRANSCRIPT_ARCHIVE_BYTES.default,
   updateCheck: true,
-  lastUpdateCheckAt: null,
   // `web` rather than `local`, and it is a decision. The pane is framed as a
   // dev-server viewport, but a dev server that pulls an API, a font or a docs
   // page is the ordinary case, and a viewport that could not follow it is one
@@ -2108,15 +2093,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   profilesCopiedToHostAt: null,
   pluginsCopiedToHostAt: null
 }
-
-/**
- * How long a launch waits before asking about releases again.
- *
- * A day. The question changes about as often as a release happens, and the
- * throttle is what keeps "once per launch" from meaning "once per restart" on
- * the machine Helm is being written on.
- */
-export const UPDATE_CHECK_EVERY_MS = 24 * 60 * 60 * 1000
 
 // ---------------------------------------------------------------------------
 // An agent's config, as composition reads it, and the files a note's save writes

@@ -6130,6 +6130,10 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "updateCheck": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -6262,6 +6266,12 @@
             "integer",
             "null"
           ]
+        },
+        "updateCheck": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "type": "object"
@@ -6278,6 +6288,10 @@
         },
         {
           "const": "restart",
+          "type": "string"
+        },
+        {
+          "const": "relaunch",
           "type": "string"
         }
       ]

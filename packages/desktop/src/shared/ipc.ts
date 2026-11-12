@@ -1086,7 +1086,8 @@ export interface IpcRequests {
   /**
    * Ask GitHub whether there is a newer release.
    *
-   * **Helm contacts nothing on its own initiative except the update check.
+   * **Helm contacts nothing on its own initiative except the update check, which
+   * a host makes to floti.dev at most once a day.
    * Everything else on the network happens because you asked for it: the
    * browser pane fetches the page you navigate to, a plugin you added
    * reaches the hosts its manifest names, and a host you added on another
@@ -1125,15 +1126,18 @@ export interface IpcRequests {
    * service run with the user's rights and are not confined, and a service
    * listens on loopback for its own plugin; the four places say both.
    *
-   * The app asks on its own too: once per launch, at most once a day, when
-   * `updateCheck` is on - see `maybeCheckForUpdate`. Neither path downloads
-   * anything. No artefact is fetched, nothing is replaced, nothing restarts.
+   * The update check is the host's: while its `updateCheck` setting is on, a
+   * host running floti installed on its own reads floti.dev's signed
+   * `update.json` at most once a day and installs a newer floti
+   * (`crates/host/src/update/background.rs`). Helm's own process asks nothing
+   * by itself; it hears of a newer release from the local host's version
+   * (`hostVersionNotice`).
    *
    * This channel keeps no throttle of its own. It is a person pressing
    * something - Check now, in Settings under Updates - and a deliberate act
-   * that silently did nothing would be worse than no button. It is also the
-   * only route to an answer when `updateCheck` is off: the setting governs
-   * whether Helm asks by itself, not whether the user may.
+   * that silently did nothing would be worse than no button. It works with
+   * `updateCheck` off: the setting governs whether anything asks by itself,
+   * not whether the user may.
    */
   'update:check': { request: void; response: UpdateCheck }
 
@@ -2067,17 +2071,10 @@ export interface IpcEvents {
   'usage:changed': UsageSnapshot
 
   /**
-   * A launch check found a release, and it is newer than this build.
-   *
-   * Pushed only when the check reached GitHub. It runs once per launch and at
-   * most once a day - `updateCheck` gates it, `UPDATE_CHECK_EVERY_MS` bounds
-   * it - and a failure to reach GitHub sends nothing at all: offline is the
-   * ordinary case here, and a status bar that reported it would be reporting
-   * the network rather than anything about Helm.
-   *
-   * `newer` is the field the window acts on. The payload is sent either way so
-   * a check that found nothing still updates "last checked", which is the one
-   * thing that distinguishes "you are current" from "nobody has looked".
+   * The local host runs a newer floti than this build: a newer release, which
+   * its background update put in place, told as a check's answer with no
+   * request made (`hostVersionNotice` in `main/update.ts`). Pushed when main
+   * connects to the local host, and again when the window is ready.
    */
   'update:checked': UpdateCheck
 

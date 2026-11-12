@@ -1140,7 +1140,8 @@ option open and is what makes the app genuinely portable.
 
 ### Network posture
 
-**Helm contacts nothing on its own initiative except the update check.
+**Helm contacts nothing on its own initiative except the update check, which
+a host makes to floti.dev at most once a day.
 Everything else on the network happens because you asked for it: the browser
 pane fetches the page you navigate to, a plugin you added reaches the hosts its
 manifest names, and a host you added on another computer is reached through
@@ -1163,17 +1164,17 @@ plugin, and its pages reach only what its manifest lists.
 Removing the pull-request surface (2026-10-05, see 4.6) took out the clause
 about the user's own `gh`: Helm no longer runs it.
 
-- **The update check** reaches the GitHub releases API for a version number and
-  a URL. It happens two ways and no
-  others, and never on a timer - at launch, at most once a day
-  (`UPDATE_CHECK_EVERY_MS`), when `updateCheck` is ticked; and when a person
-  presses Check now in Settings → Updates, which is deliberately unthrottled and
-  works with the tick off. `updateCheck` governs whether Helm asks by itself,
-  not whether the user may, so with it off nothing leaves the machine unasked
-  for. It fetches no artefact, replaces nothing and restarts nothing - the
-  whole outcome is a version number and a line in the status bar. See
-  [PACKAGING.md](PACKAGING.md) for why there is no auto-updater; every reason is
-  about replacing the installed app, which this does not do.
+- **The update check** is the host's (2026-11-11). A host running floti
+  installed on its own reads floti.dev's signed `update.json` at most once a
+  day while its `updateCheck` setting is on, and installs a newer floti it
+  finds after its signature and SHA-256 checks, relaunching on it through the
+  session keeper so no session ends ([PACKAGING.md](PACKAGING.md#the-hosts-own-update)).
+  It replaced Helm's own launch check of the GitHub releases API, so there is
+  still one automatic contact, now with floti.dev. Helm's Check now still asks
+  GitHub for a version number when a person presses it, unthrottled and with
+  the tick off. `updateCheck` governs whether anything asks by itself, not
+  whether the user may, so with it off nothing leaves the machine unasked
+  for.
 - **No Claude or GitHub credential is stored, read or handled.** Claude's sign-in is
   detected from the *existence* of an artefact, and nothing opens it. The one
   secret store Helm has is the plugins' (below), and it holds only what the user

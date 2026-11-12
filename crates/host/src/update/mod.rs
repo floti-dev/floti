@@ -1,6 +1,8 @@
 //! `floti update [--channel <name>]`: replaces the running floti with its
-//! channel's newest release, and the desktop app where it is installed and
-//! older, once the app has quit.
+//! channel's newest release, has this computer's host start it in its
+//! place, and updates the desktop app where it is installed and older, once
+//! the app has quit. The host runs the same update in the background, for
+//! floti alone ([`background`]).
 //!
 //! 1. It removes what an earlier update or install left beside the running
 //!    floti: copies put aside (`floti.old-<pid>-<n>.exe`), where nothing
@@ -21,18 +23,18 @@
 //!    its own: the app's installer brings its own, and it says so. The app,
 //!    when it is installed and its own version is older than the channel's
 //!    or cannot be told, so an app behind an up-to-date floti is still
-//!    updated. Where installing the app stops this computer's host
-//!    (Windows), and that host runs sessions, it says how many end and asks
-//!    on the terminal, no by default; with no terminal to ask on it leaves
-//!    the app and says why. With nothing to replace, it says floti is up to
-//!    date and changes nothing.
+//!    updated. It asks nothing: installing either ends no session. With
+//!    nothing to replace, it says floti is up to date and changes nothing.
 //! 4. It downloads this computer's floti beside the running one, under a
 //!    name of its own, and the app's release file into `update` in the data
 //!    folder, each checked against its signature and its SHA-256
 //!    ([`release_file`]).
 //! 5. Only when everything has passed does it replace anything: floti
 //!    first ([`Standalone::replace`], as `floti install-self` puts it in
-//!    place), then, once no process of the app is left, the app
+//!    place), and this computer's host is asked to start the new floti in
+//!    its place ([`HostStopReason::Relaunch`]): it lets go of its session
+//!    keeper, so every session and plain terminal runs on, and the new host
+//!    takes them back. Then, once no process of the app is left, the app
 //!    ([`Installs::install_desktop`]), and then, where the app's own
 //!    installer does not, `floti install-self` from the new app's floti
 //!    ([`Installs::carried_floti`]), so the Node beside floti is the new
@@ -46,9 +48,11 @@
 //! Exit status 0 when floti is up to date or updated, 1 otherwise.
 //!
 //! What is checked and replaced is the per-OS concern
-//! [`platform::installs`](crate::platform::installs). Restarting a running
-//! host on the new binary is not part of it.
+//! [`platform::installs`](crate::platform::installs).
+//!
+//! [`HostStopReason::Relaunch`]: floti_protocol::channels::host::HostStopReason::Relaunch
 
+pub mod background;
 pub mod channel;
 pub mod manifest;
 pub mod network;
@@ -183,19 +187,21 @@ pub enum Outcome {
         floti: bool,
         desktop: Option<String>,
     },
-    /// Only the app had an update, and it was left as it is: the person
-    /// said no, or there was no terminal to ask on.
-    DesktopLeft { version: String, app: String },
 }
 
-/// Counts the sessions this computer's host runs, which installing the
-/// desktop app over its install ends where that stops the host; 0 when no
-/// host runs.
-pub type SessionsEnding<'a> = &'a dyn Fn() -> Result<usize, String>;
+/// How asking this computer's host to start the new floti in its place went.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HostRelaunch {
+    /// No host runs here, so there was nothing to ask.
+    NoHost,
+    /// The host let go of its sessions and is starting the new floti.
+    Relaunched,
+    /// The host could not be asked, with why.
+    Failed(String),
+}
 
-/// Asks a person a yes-or-no question, no by default; `None` when there is
-/// no terminal to ask on.
-pub type Confirm<'a> = &'a dyn Fn(&str) -> Option<bool>;
+/// Asks this computer's host to start the floti now in its place.
+pub type RelaunchHost<'a> = &'a dyn Fn() -> HostRelaunch;
 
 /// What one update runs with: every piece of the machine it touches, so a
 /// test can hand it fakes.
@@ -217,8 +223,13 @@ pub struct Updater<'a> {
     pub processes: &'a dyn ProcessTable,
     /// Whether a process is alive, for what earlier updates left.
     pub is_alive: &'a dyn Fn(u32) -> Knowable<bool>,
-    pub sessions_ending: SessionsEnding<'a>,
-    pub confirm: Confirm<'a>,
+    /// Asks this computer's host to start the new floti in its place once
+    /// floti is replaced; `None` where the host itself is updating, which
+    /// relaunches itself after.
+    pub relaunch_host: Option<RelaunchHost<'a>>,
+    /// Whether the desktop app is updated too. The host's background
+    /// update leaves it.
+    pub with_desktop: bool,
     /// Waits, between looks at a running app.
     pub pause: &'a dyn Fn(Duration),
     /// The user, for where the desktop app is.
@@ -252,7 +263,10 @@ impl Updater<'_> {
         }
         let version = release.version().clone();
 
-        let installed = self.installs.desktop(&self.env);
+        let installed = self
+            .installs
+            .desktop(&self.env)
+            .filter(|_| self.with_desktop);
         let bundled_in = installed
             .clone()
             .filter(|app| self.installs.bundles(app, &self.running_binary));
@@ -268,21 +282,8 @@ impl Updater<'_> {
         } else {
             None
         };
-        let mut desktop = self.desktop_step(installed, &release);
-        let mut left = None;
-        if let Some((app, _)) = &desktop
-            && !self.may_install_desktop(app)
-        {
-            left = Some(app.name.to_owned());
-            desktop = None;
-        }
+        let desktop = self.desktop_step(installed, &release);
         if floti.is_none() && desktop.is_none() {
-            if let Some(app) = left {
-                return Ok(Outcome::DesktopLeft {
-                    version: version.to_string(),
-                    app,
-                });
-            }
             self.say(&format!(
                 "floti {} is up to date on {channel} (its newest is {version}).",
                 self.running_version
@@ -324,6 +325,7 @@ impl Updater<'_> {
                 "floti is updated from {} to {version}.",
                 self.running_version
             ));
+            self.relaunch_host(&version);
         }
 
         let updated_desktop = match desktop {
@@ -468,42 +470,22 @@ impl Updater<'_> {
         }
     }
 
-    /// Whether `app` may be installed now. Where that stops this computer's
-    /// host and the host runs sessions, the person is asked first.
-    fn may_install_desktop(&mut self, app: &Desktop) -> bool {
-        if !self.installs.installing_desktop_stops_host() {
-            return true;
-        }
-        let ending = match (self.sessions_ending)() {
-            Ok(0) => return true,
-            Ok(1) => "1 session; it comes back".to_owned(),
-            Ok(running) => format!("{running} sessions; they come back"),
-            Err(why) => {
-                self.say(&format!(
-                    "floti could not ask this computer's host which sessions updating {} ends: {why}",
-                    app.name
-                ));
-                "the sessions it runs; they come back".to_owned()
-            }
+    /// Asks this computer's host, where one runs, to start floti `version`
+    /// in its place, and says how that went. Nothing it answers stops the
+    /// update: floti is already replaced.
+    fn relaunch_host(&mut self, version: &Version) {
+        let Some(relaunch) = self.relaunch_host else {
+            return;
         };
-        let name = app.name;
-        let question = format!(
-            "Updating {name} stops this computer's host, ending {ending} when {name} next starts. Update {name} now?"
-        );
-        match (self.confirm)(&question) {
-            Some(true) => true,
-            Some(false) => {
-                self.say(&format!(
-                    "{name} stays as it is; floti update updates it when run again."
-                ));
-                false
-            }
-            None => {
-                self.say(&format!(
-                    "{name} stays as it is: updating it ends sessions, and there is no terminal to ask on first. Run floti update in a terminal to update {name}."
-                ));
-                false
-            }
+        match relaunch() {
+            HostRelaunch::NoHost => {}
+            HostRelaunch::Relaunched => self.say(&format!(
+                "This computer's host is starting floti {version} in its place; its sessions keep running."
+            )),
+            HostRelaunch::Failed(why) => self.say(&format!(
+                "This computer's host was not restarted ({why}); it runs floti {} until it next starts.",
+                self.running_version
+            )),
         }
     }
 
@@ -658,10 +640,10 @@ pub fn parse(args: &[String]) -> Option<Option<String>> {
     }
 }
 
-/// `floti update`, run by a person: the exit status. `sessions_ending`
-/// counts the sessions this computer's host runs.
-pub fn run(chosen_channel: Option<String>, sessions_ending: SessionsEnding<'_>) -> u8 {
-    match run_native(chosen_channel, sessions_ending) {
+/// `floti update`, run by a person: the exit status. `relaunch_host` asks
+/// this computer's host to start the new floti in its place.
+pub fn run(chosen_channel: Option<String>, relaunch_host: RelaunchHost<'_>) -> u8 {
+    match run_native(chosen_channel, relaunch_host) {
         Ok(_) => 0,
         Err(line) => {
             eprintln!("floti update: {line}");
@@ -672,7 +654,7 @@ pub fn run(chosen_channel: Option<String>, sessions_ending: SessionsEnding<'_>) 
 
 fn run_native(
     chosen_channel: Option<String>,
-    sessions_ending: SessionsEnding<'_>,
+    relaunch_host: RelaunchHost<'_>,
 ) -> Result<Outcome, String> {
     let env = UserEnv::from_process();
     let folders = folders::resolve(&env).map_err(|err| nothing_updated(&err.to_string()))?;
@@ -694,8 +676,8 @@ fn run_native(
         install_self: &run_install_self,
         processes: &process_table::Native,
         is_alive: &is_alive,
-        sessions_ending,
-        confirm: &ask_on_terminal,
+        relaunch_host: Some(relaunch_host),
+        with_desktop: true,
         pause: &pause,
         env,
         running_binary,
@@ -726,25 +708,6 @@ fn run_install_self(floti: &Path) -> Result<String, String> {
     Err(last(&said)
         .or_else(|| last(&printed))
         .unwrap_or_else(|| "install-self failed and wrote nothing".to_owned()))
-}
-
-/// Asks `question` on the terminal, no by default; `None` when standard
-/// input is not a terminal.
-fn ask_on_terminal(question: &str) -> Option<bool> {
-    use std::io::{BufRead, IsTerminal};
-    let stdin = std::io::stdin();
-    if !stdin.is_terminal() {
-        return None;
-    }
-    let mut out = std::io::stdout();
-    let _ = write!(out, "{question} [y/N] ");
-    let _ = out.flush();
-    let mut answer = String::new();
-    if stdin.lock().read_line(&mut answer).is_err() {
-        return Some(false);
-    }
-    let answer = answer.trim();
-    Some(answer.eq_ignore_ascii_case("y") || answer.eq_ignore_ascii_case("yes"))
 }
 
 /// The manifest's address: the built-in one, or, in a build with the

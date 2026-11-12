@@ -218,6 +218,7 @@ fn settings() -> HostSettings {
         agent_depth: 1,
         agent_starts_per_parent: 10,
         agent_commands_per_parent: 2,
+        update_check: false,
     }
 }
 

@@ -239,7 +239,7 @@ describe('SettingsPane', () => {
         ['textbox', 'Starts per parent']
       ],
       Updates: [
-        ['checkbox', 'Check for new releases on launch'],
+        ['checkbox', 'Look for a newer floti once a day and install it'],
         ['button', 'Check now'],
         ['button', 'Release notes']
       ],
@@ -559,7 +559,7 @@ describe('SettingsPane', () => {
 
     it('turns the launch check off, and on again', async () => {
       const { props, rerender } = renderPane({ section: 'updates', updateCheck: true })
-      const tick = (): HTMLElement => screen.getByRole('checkbox', { name: 'Check for new releases on launch' })
+      const tick = (): HTMLElement => screen.getByRole('checkbox', { name: 'Look for a newer floti once a day and install it' })
 
       await userEvent.click(tick())
       expect(props.onUpdateCheckChange).toHaveBeenLastCalledWith(false)

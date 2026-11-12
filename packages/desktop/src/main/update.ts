@@ -1,32 +1,19 @@
-import { app, net, type BrowserWindow } from 'electron'
-import {
-  readSettings,
-  writeSettings,
-  UPDATE_CHECK_EVERY_MS,
-  type AppSettings,
-  type Store
-} from '@helm/core'
+import { app, net } from 'electron'
 import type { UpdateCheck } from '../shared/ipc'
 
 /**
- * Updates, decided rather than automated. The reasoning is in
- * `docs/PACKAGING.md`; the short version is three facts about this build:
+ * What Helm's own process knows about newer releases. It makes one kind of
+ * request, and only when a person asks: Check now in Settings
+ * (`checkForUpdate`, through `update:check`), which reads a version number
+ * and hands back a link. It downloads nothing and executes nothing.
  *
- *   - It is unsigned. electron-updater's NSIS path replaces the installed app
- *     with a downloaded one, and an unsigned replacement puts a SmartScreen
- *     prompt in front of every update. An update mechanism whose happy path is
- *     a scary dialog is worse than none.
- *   - Half the artefacts cannot use it anyway. The portable exe has no install
- *     location to replace, so electron-updater covers the NSIS build only.
- *   - The app hosts long-lived `claude` sessions. A background updater that
- *     restarts the app is a background updater that ends someone's session.
- *
- * So: an explicit check that reads a version number and hands the user a link.
- * It downloads nothing and executes nothing. This is the only outbound request
- * the app makes, and it happens two ways and no others: at launch, at most once
- * a day, if the setting says so (`maybeCheckForUpdate`); and when a person
- * presses Check now in Settings (`checkForUpdate`, through `update:check`).
- * Never on a timer and never in the background.
+ * Helm asks nothing by itself. The local host keeps floti up to date in the
+ * background while its `updateCheck` setting is on (`crates/host/src/update/
+ * background.rs`), which is the one automatic contact, with floti.dev's
+ * `update.json`. Helm hears of a newer release from that host: a host that
+ * runs a newer floti than this Helm is one that put a newer release in place,
+ * and `hostVersionNotice` turns that into the same answer a check gives, for
+ * the status bar. Updating the desktop app itself is `floti update`'s.
  */
 
 /** Where releases are published. Not a filesystem path and not a user's - the
@@ -133,50 +120,21 @@ function fetchLatestTag(): Promise<string> {
 }
 
 /**
- * The launch check: ask, at most once a day, and only if the setting is on.
- *
- * Split from `checkForUpdate` rather than folded into it because they answer to
- * different callers. The channel is a person pressing something and must always
- * ask - a throttle there would make a deliberate act do nothing and say
- * nothing. This one is the app deciding on its own, and the whole reason it is
- * allowed to is that it is bounded.
- *
- * The timestamp is written **after** a successful answer, not before. Writing
- * it first would turn a fortnight offline into a fortnight of throttle with no
- * answer behind it; as written, a machine that could not reach GitHub asks
- * again on its next launch.
+ * What the window is told when the local host runs `hostVersion` and this
+ * Helm is `current`: a newer release, without a request, when the host's is
+ * strictly higher (its background update put it in place); nothing otherwise.
  */
-export async function maybeCheckForUpdate(
-  services: { settings: AppSettings; store: Store },
-  win: BrowserWindow | null
-): Promise<void> {
-  if (!services.settings.updateCheck) return
-
-  const last = services.settings.lastUpdateCheckAt
-  const lastMs = last === null ? null : Date.parse(last)
-  // `Number.isFinite` rather than trusting the row: the validator refuses an
-  // unparseable instant on the way in, but a row written by another build is a
-  // fact about the past, and NaN here would fail the comparison and mean
-  // "never ask again".
-  if (lastMs !== null && Number.isFinite(lastMs) && Date.now() - lastMs < UPDATE_CHECK_EVERY_MS) {
-    return
-  }
-
-  const result = await checkForUpdate()
-  if (result.error !== null) return
-
-  writeSettings(services.store, { lastUpdateCheckAt: result.checkedAt })
-  services.settings = readSettings(services.store)
-  if (win && !win.isDestroyed()) win.webContents.send('update:checked', result)
+export function hostVersionNotice(current: string, hostVersion: string, checkedAt: string): UpdateCheck | null {
+  if (!isNewer(current, hostVersion)) return null
+  return { current, latest: hostVersion, newer: true, url: RELEASES_PAGE, error: null, checkedAt }
 }
 
 /**
  * Ask now, whoever is asking and however recently anyone last did.
  *
- * Deliberately unthrottled. `maybeCheckForUpdate` is the bounded one, and the
- * bound is what earns the app the right to ask on its own. This one is only
- * ever reached because a person pressed something, and a deliberate act that
- * silently did nothing would be worse than no button at all.
+ * Deliberately unthrottled: it is only ever reached because a person pressed
+ * something, and a deliberate act that silently did nothing would be worse
+ * than no button at all.
  */
 export async function checkForUpdate(): Promise<UpdateCheck> {
   const current = app.getVersion()

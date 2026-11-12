@@ -25,7 +25,7 @@ import { CLAUDE_CODE_BACKEND, type Emit } from './sessions'
 
 /**
  * Discovery, scan roots, harnesses, setup, templates and the host's half of
- * the settings. The local host scans its own
+ * the settings, the update check among them. The local host scans its own
  * machine's folders, keeps the scan roots, the pinned projects and whether
  * setup was finished, checks Claude Code for setup, makes harnesses and keeps
  * the templates; Helm's main process does none of it.
@@ -179,11 +179,24 @@ export function createHostWorkspace({
     })
   }
 
+  /**
+   * A Helm that had the update check turned off before the host kept it says
+   * so to the host, once: Helm's own row then goes back to its default, so a
+   * later change made at the host is never undone from here.
+   */
+  const carryUpdateCheck = async (connection: HostConnection, current: P.HostSettings): Promise<P.HostSettings> => {
+    if (own().updateCheck) return current
+    const next = current.updateCheck ? await connection.request('settings:write', { updateCheck: false }) : current
+    writeOwn({ updateCheck: true })
+    return next
+  }
+
   link.onConnected(async (connection) => {
     for (const subscription of subscriptions) subscription.unsubscribe()
     const ended = (channel: string) => (error: Error) => log(`host: ${channel} ended (${error.message})`)
     try {
-      adoptSettings(await copyOnFirstConnect(connection, await connection.request('settings:read', null)))
+      const read = await connection.request('settings:read', null)
+      adoptSettings(await carryUpdateCheck(connection, await copyOnFirstConnect(connection, read)))
     } catch (error) {
       log(`host: could not read the local host's settings (${(error as Error).message})`)
     }

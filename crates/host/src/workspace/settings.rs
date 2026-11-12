@@ -24,7 +24,7 @@ use floti_protocol::BackendId;
 use floti_protocol::channels::workspace::{
     DEFAULT_AGENT_CHILDREN_PER_PARENT, DEFAULT_AGENT_COMMANDS_PER_PARENT, DEFAULT_AGENT_DEPTH,
     DEFAULT_AGENT_SESSIONS_PER_HOST, DEFAULT_AGENT_STARTS_PER_PARENT, DEFAULT_SESSION_AGENTS,
-    HostSettings, HostSettingsPatch,
+    DEFAULT_UPDATE_CHECK, HostSettings, HostSettingsPatch,
 };
 use rusqlite::{Connection, params};
 use serde::Serialize;
@@ -56,6 +56,7 @@ const AGENT_SESSIONS_PER_HOST: &str = "agentSessionsPerHost";
 const AGENT_DEPTH: &str = "agentDepth";
 const AGENT_STARTS_PER_PARENT: &str = "agentStartsPerParent";
 const AGENT_COMMANDS_PER_PARENT: &str = "agentCommandsPerParent";
+const UPDATE_CHECK: &str = "updateCheck";
 
 /// What each limit may be set to. A limit of none is the setting "Sessions
 /// can start agents" turned off, so the lowest is one; the highest keeps a
@@ -87,6 +88,7 @@ pub fn defaults() -> HostSettings {
         agent_depth: DEFAULT_AGENT_DEPTH,
         agent_starts_per_parent: DEFAULT_AGENT_STARTS_PER_PARENT,
         agent_commands_per_parent: DEFAULT_AGENT_COMMANDS_PER_PARENT,
+        update_check: DEFAULT_UPDATE_CHECK,
     }
 }
 
@@ -128,6 +130,9 @@ pub fn read(conn: &Connection) -> Result<HostSettings> {
     });
     take(SESSION_AGENTS, &mut |text| {
         set(text, &mut settings.session_agents)
+    });
+    take(UPDATE_CHECK, &mut |text| {
+        set(text, &mut settings.update_check)
     });
     // A limit outside its range keeps its default, as a value that does not
     // parse does: a row another build wrote must not widen a limit.
@@ -454,6 +459,9 @@ pub fn write(
     }
     if let Some(value) = &patch.agent_commands_per_parent {
         put(AGENT_COMMANDS_PER_PARENT, value);
+    }
+    if let Some(value) = &patch.update_check {
+        put(UPDATE_CHECK, value);
     }
     let edit = conn.transaction().map_err(sql("write the settings"))?;
     for (key, value) in &values {

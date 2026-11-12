@@ -113,14 +113,18 @@ pub mod testkit;
 pub use error::{Error, Result};
 
 use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use floti_protocol::channels::host::HostStopReason;
 use jiff::Timestamp;
 use tokio::sync::{mpsc, watch};
 
+use floti_protocol::Knowable;
 use host_log::HostLog;
 use platform::folders::{Folders, UserEnv};
+use platform::process_tree::{self, ProcessTree};
 use platform::standard_error;
 use platform::startup::{self, StopSignals};
 use platform::tray::{self, NotificationArea};
@@ -141,7 +145,36 @@ pub struct HostOptions {
     /// nothing and no client is attached ([`server::idle`]). `None` is a host
     /// started on its own, which runs until it is stopped.
     pub desktop: Option<DesktopCommand>,
+    /// The host this one was relaunched in place of (`floti host ... --after
+    /// <pid>`): it waits until that process has ended before it opens
+    /// anything, since that host holds the data folder until it exits.
+    pub after: Option<u32>,
 }
+
+impl HostOptions {
+    /// The arguments after `floti host` that start a host like this one in
+    /// its place, once the process `pid` has ended.
+    fn relaunch_args(&self, pid: u32) -> Vec<OsString> {
+        let mut args: Vec<OsString> = vec!["host".into()];
+        if let Some(desktop) = &self.desktop {
+            args.push("--desktop".into());
+            args.push(desktop.program.clone());
+            for arg in &desktop.args {
+                args.push("--desktop-arg".into());
+                args.push(arg.clone());
+            }
+        }
+        args.push("--after".into());
+        args.push(pid.to_string().into());
+        args
+    }
+}
+
+/// How long a relaunched host waits for the one it replaces to end.
+const PREDECESSOR_WAIT: Duration = Duration::from_secs(60);
+
+/// How often it looks.
+const PREDECESSOR_POLL: Duration = Duration::from_millis(25);
 
 /// The program that started a host, and the arguments that open it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -172,7 +205,22 @@ pub struct DesktopCommand {
 /// its standard error goes there from then on, a panic's message and a
 /// failed allocation's last line included, after a line naming its version,
 /// process and start.
+///
+/// A host stopped to be relaunched ([`HostStopReason::Relaunch`]: `floti
+/// update` or its own background update put a new floti where it was
+/// started from) starts that floti in its place as the last thing it does,
+/// with the arguments it was started with, through
+/// [`ProcessTree::replace_this_process`]: the old host hands over, in the
+/// user's own session, rather than anything else starting the new one. The
+/// new host takes back the session keeper the old one let go of.
 pub fn run_host(options: HostOptions) -> Result<()> {
+    // Before an update can move or replace it: the path a relaunch starts,
+    // and how it starts it.
+    let program = std::env::current_exe().ok();
+    let relaunch_args = options.relaunch_args(std::process::id());
+    if let Some(pid) = options.after {
+        wait_for_predecessor(pid, &process_tree::Native);
+    }
     let env = UserEnv::from_process();
     if let Some(refusal) = startup::launch_refusal(&env, startup::account()) {
         return not_started(Err(Error::Refused(refusal)));
@@ -232,8 +280,49 @@ pub fn run_host(options: HostOptions) -> Result<()> {
         HostStopReason::Restart => {
             "Floti host stopped to be restarted for an update; its sessions run on in the session keeper."
         }
+        HostStopReason::Relaunch => {
+            "Floti host stopped to start the new floti in its place; its sessions run on in the session keeper."
+        }
     });
+    if reason == HostStopReason::Relaunch {
+        return relaunch(program.as_deref(), &relaunch_args, &process_tree::Native);
+    }
     Ok(())
+}
+
+/// Starts the floti at `program` with `args` in this host's place.
+fn relaunch(program: Option<&Path>, args: &[OsString], tree: &impl ProcessTree) -> Result<()> {
+    let program: PathBuf = program.map(Path::to_path_buf).ok_or_else(|| {
+        Error::Refused("floti cannot find its own file to start again.".to_owned())
+    })?;
+    let words: Vec<&str> = args
+        .iter()
+        .map(|arg| {
+            arg.to_str().ok_or_else(|| {
+                Error::Refused(format!(
+                    "the argument {} is not valid Unicode, so the new host was not started.",
+                    arg.display()
+                ))
+            })
+        })
+        .collect::<Result<_>>()?;
+    log_line!("floti host: starting {} in its place.", program.display());
+    tree.replace_this_process(&program, &words)
+        .map_err(|err| Error::io("start the new floti in the host's place", err))
+}
+
+/// Waits, up to [`PREDECESSOR_WAIT`], until the host `pid` this one was
+/// relaunched in place of has ended. A host relaunched by `exec` is that
+/// process, and does not wait for itself. One that has not ended by then is
+/// left to [`Host::start`], which refuses while it holds the data folder.
+fn wait_for_predecessor(pid: u32, tree: &impl ProcessTree) {
+    if pid == std::process::id() {
+        return;
+    }
+    let deadline = Instant::now() + PREDECESSOR_WAIT;
+    while tree.is_alive(pid) == Knowable::Known(true) && Instant::now() < deadline {
+        std::thread::sleep(PREDECESSOR_POLL);
+    }
 }
 
 /// Opens the host's log in its logs folder and points standard error at it,

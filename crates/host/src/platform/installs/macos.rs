@@ -101,11 +101,6 @@ impl Installs for Native {
         plist_string(&plist, "CFBundleShortVersionString")
     }
 
-    fn installing_desktop_stops_host(&self) -> bool {
-        // The host runs on from the old bundle's files until it next stops.
-        false
-    }
-
     fn carried_floti(&self, desktop: &Desktop) -> Option<PathBuf> {
         Some(
             desktop
