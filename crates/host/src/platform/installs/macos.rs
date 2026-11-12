@@ -178,11 +178,16 @@ impl super::FakeDesktop for Native {
         std::fs::write(Self::info_plist(&app), fake_plist(version)).expect("write the fake app");
     }
 
-    fn fake_release(&self, work: &Path, version: &str, _installer: &Path) -> (String, Vec<u8>) {
+    fn fake_release(&self, work: &Path, version: &str, installer: &Path) -> (String, Vec<u8>) {
         let app = work.join(Self::bundle_name());
-        std::fs::create_dir_all(app.join("Contents")).expect("make the fake release's app");
+        let resources = app.join("Contents").join("Resources");
+        std::fs::create_dir_all(&resources).expect("make the fake release's app");
         std::fs::write(Self::info_plist(&app), fake_plist(version))
             .expect("write the fake release");
+        // The floti it carries is the fake program, which records being run.
+        let carried = resources.join("floti");
+        std::fs::copy(installer, &carried).expect("put the fake floti in the fake app");
+        super::posix::make_executable(&carried).expect("make the fake floti executable");
         let zip = work.join("release.zip");
         let status = Command::new(DITTO)
             .args(["-c", "-k", "--keepParent"])

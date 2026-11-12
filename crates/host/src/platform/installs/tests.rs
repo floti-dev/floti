@@ -695,7 +695,9 @@ fn macos_installs_an_app_from_a_quarantined_zip_with_no_quarantine_flag() {
     use super::FakeDesktop;
 
     let dirs = TestDirs::new();
-    let (file, bytes) = macos::Native.fake_release(&dirs.folder("work"), "3.0.0", Path::new(""));
+    let floti = dirs.root().join("a floti");
+    std::fs::write(&floti, b"floti").unwrap();
+    let (file, bytes) = macos::Native.fake_release(&dirs.folder("work"), "3.0.0", &floti);
     let release = dirs.folder("download").join(file);
     std::fs::write(&release, bytes).unwrap();
     let zip = CString::new(release.as_os_str().as_bytes()).unwrap();
@@ -736,4 +738,39 @@ fn macos_installs_an_app_from_a_quarantined_zip_with_no_quarantine_flag() {
             path.display()
         );
     }
+}
+
+#[test]
+fn linux_writes_a_missing_menu_entry_for_an_installed_app_image_and_leaves_one_that_is_there() {
+    let dirs = TestDirs::new();
+    let user = env(&dirs.home, &[]);
+    let desktop = Desktop {
+        name: "Helm",
+        path: dirs.folder("apps").join("Helm.AppImage"),
+    };
+    let entry = dirs
+        .home
+        .join(".local")
+        .join("share")
+        .join("applications")
+        .join("helm.desktop");
+    assert_eq!(
+        linux::Native.repair_launcher(&user, &desktop).unwrap(),
+        Some(entry.clone())
+    );
+    assert!(entry.is_file());
+    std::fs::write(&entry, b"the user's own").unwrap();
+    assert_eq!(
+        linux::Native.repair_launcher(&user, &desktop).unwrap(),
+        None
+    );
+    assert_eq!(std::fs::read(&entry).unwrap(), b"the user's own");
+    assert_eq!(
+        windows::Native.repair_launcher(&user, &desktop).unwrap(),
+        None
+    );
+    assert_eq!(
+        macos::Native.repair_launcher(&user, &desktop).unwrap(),
+        None
+    );
 }

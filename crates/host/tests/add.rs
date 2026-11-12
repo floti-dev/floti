@@ -25,6 +25,7 @@ use floti_host::platform::installs::{
 };
 use floti_host::sha256::hex_digest;
 use floti_host::testkit::{TestDirs, run_floti};
+use floti_host::update::run_file::RunLock;
 use floti_host::update::signature::TEST_UPDATE_MARKER;
 use floti_host::version::FLOTI_VERSION;
 
@@ -123,6 +124,29 @@ impl World {
         run_floti(command).await
     }
 
+    /// Whether `install-self` was run from the floti the installed app
+    /// carries, as the record of the fake program's runs says.
+    fn carried_install_self_ran(&self) -> bool {
+        std::fs::read_to_string(&self.record)
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+            .any(|run| run["args"] == serde_json::json!(["install-self"]))
+    }
+
+    /// The installed app, as this OS finds it in the test's folder.
+    fn app(&self) -> Desktop {
+        let user = UserEnv {
+            home: Some(self.dirs.home.clone()),
+            vars: [(
+                OsString::from(DESKTOP_DIR_VAR),
+                self.apps.clone().into_os_string(),
+            )]
+            .into(),
+        };
+        Native.desktop_target(&user).unwrap()
+    }
+
     fn installed(&self) -> bool {
         Native.was_updated(&self.apps, FLOTI_VERSION, &self.record)
     }
@@ -172,6 +196,14 @@ async fn floti_add_desktop_installs_the_app_of_its_own_release_and_no_second_flo
     );
     assert_eq!(std::fs::read(&world.floti).unwrap(), before);
     assert_eq!(world.second_floti(), Vec::<PathBuf>::new());
+    // floti runs install-self from the app's own floti where the app's
+    // installer does not (macOS); where it does (Windows) or the floti is
+    // inside an image (Linux), floti runs none.
+    assert_eq!(
+        world.carried_install_self_ran(),
+        Native.carried_floti(&world.app()).is_some(),
+        "{stdout}"
+    );
     // floti writes a menu entry where this OS's install makes none (Linux),
     // under the session's XDG_DATA_HOME, and says where.
     let probe = world.dirs.folder("probe data home");
@@ -225,7 +257,7 @@ async fn an_installed_app_and_a_session_with_no_display_each_change_nothing() {
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert_eq!(
         stderr.trim_end(),
-        "floti add desktop: This test's session has no display, so Helm is not installed here. Nothing was installed."
+        "floti add desktop: This test's session has no display, so Helm is not installed here."
     );
     assert!(!world.installed());
 
@@ -287,4 +319,29 @@ async fn a_release_without_the_desktop_list_installs_nothing_and_says_so_in_one_
         )
     );
     assert!(!world.installed());
+}
+
+#[tokio::test]
+async fn an_add_while_another_holds_the_run_file_refuses_in_one_line() {
+    let world = World::new();
+    // This test's own process, which is alive, holds it.
+    let held = RunLock::take(
+        &world.dirs.data,
+        std::process::id(),
+        "Starting floti update.",
+        &|_| floti_protocol::Knowable::Known(true),
+    )
+    .unwrap();
+    let output = world.add(&["desktop"], "present").await;
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert_eq!(
+        stderr.trim_end(),
+        format!(
+            "floti add desktop: another floti update or floti add desktop is running (process {}), so nothing was installed; run floti add desktop again once it has ended.",
+            std::process::id()
+        )
+    );
+    assert!(!world.installed());
+    drop(held);
 }

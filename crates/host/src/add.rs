@@ -6,8 +6,16 @@
 //!
 //! `floti add desktop`:
 //!
+//! 0. It holds `floti update`'s run file throughout ([`RunLock`]), so a
+//!    second `floti add desktop`, or one while `floti update` runs, refuses
+//!    in one line, and two never write the same download. It writes no
+//!    ended record: the host follows updates by it, and an add is none.
 //! 1. Where the app is already installed ([`Installs::desktop`]) it says
-//!    where, and its version where that can be told, and changes nothing.
+//!    where, and its version where that can be told, and changes nothing
+//!    but a launcher entry floti makes that is missing
+//!    ([`Installs::repair_launcher`]). Where something else is at the
+//!    install's place (a folder with no app in it, an interrupted copy) it
+//!    refuses in one line and leaves it as it is.
 //! 2. In a session with no display ([`installs::missing_display`]) it
 //!    refuses in one sentence saying why.
 //! 3. It reads `Helm-<version>-SHA256SUMS` from the release that is floti's
@@ -43,6 +51,7 @@
 //! app was installed or was already there.
 //!
 //! [`ReleaseFolder::fetch`]: crate::update::release_file::ReleaseFolder::fetch
+//! [`RunLock`]: crate::update::run_file::RunLock
 //! [`release_file::releases_url`]: crate::update::release_file::releases_url
 
 #[cfg(test)]
@@ -51,6 +60,7 @@ mod tests;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use floti_protocol::Knowable;
 use minisign_verify::PublicKey;
 use url::Url;
 
@@ -58,9 +68,11 @@ use crate::bridge::BridgeExit;
 use crate::platform::folders::{self, UserEnv};
 use crate::platform::installs::{self, Desktop, Installs};
 use crate::platform::links::{self, remove_tree};
+use crate::platform::process_tree::{self, ProcessTree};
 use crate::update::manifest::FileEntry;
 use crate::update::network::{self, FetchError, Network, get_whole};
 use crate::update::release_file::{self, ReleaseFolder, signature_url};
+use crate::update::run_file::RunLock;
 use crate::update::signature;
 use crate::update::versions::Version;
 use crate::update::{UpdateError, run_install_self};
@@ -72,6 +84,9 @@ pub const CLIENTS: &[(&str, &str)] = &[("desktop", "the desktop app, at this flo
 /// The folder in the data folder a download is kept in until it is
 /// installed.
 pub const STAGING_FOLDER: &str = "add";
+
+/// What `floti add desktop` says in the run file while it holds it.
+pub const STARTING_LINE: &str = "Starting floti add desktop.";
 
 /// The largest SHA-256 list fetched.
 const SUMS_LIMIT: u64 = 64 * 1024;
@@ -156,6 +171,14 @@ pub enum AddError {
     )]
     NoTarget,
     #[error(
+        "{path} is there but is not an install of {app}, so nothing was installed; move it away to install {app} there."
+    )]
+    NotAnInstall { path: String, app: &'static str },
+    #[error(
+        "another floti update or floti add desktop is running (process {pid}), so nothing was installed; run floti add desktop again once it has ended."
+    )]
+    Busy { pid: u32 },
+    #[error(
         "floti {version} has no published release, so there is no {app} for it (this is a development build)."
     )]
     Unreleased { version: String, app: &'static str },
@@ -195,7 +218,11 @@ pub enum AddError {
 pub fn failure_line(err: &AddError) -> String {
     let line = err.to_string();
     match err {
-        AddError::Launcher { .. } => line,
+        // Each says itself what was and was not installed.
+        AddError::Launcher { .. }
+        | AddError::NoDisplay { .. }
+        | AddError::NotAnInstall { .. }
+        | AddError::Busy { .. } => line,
         _ => nothing_installed(&line),
     }
 }
@@ -230,6 +257,8 @@ pub struct Adder<'a> {
     /// Runs `<floti> install-self` and answers what it printed, or its
     /// failure line.
     pub install_self: &'a dyn Fn(&Path) -> Result<String, String>,
+    /// Whether a process is alive, for a run file another left.
+    pub is_alive: &'a dyn Fn(u32) -> Knowable<bool>,
     /// The user, for where the app goes and whether there is a display.
     pub env: UserEnv,
     /// Floti's data folder, for the staging folder.
@@ -239,16 +268,47 @@ pub struct Adder<'a> {
 }
 
 impl Adder<'_> {
-    /// Installs the desktop app, or says why not and changes nothing.
+    /// Installs the desktop app, or says why not and changes nothing,
+    /// holding `floti update`'s run file throughout. Dropped, the run file
+    /// is removed; no ended record is written.
     pub fn run(&mut self) -> Result<Added, AddError> {
+        let _held = RunLock::take(&self.data, std::process::id(), STARTING_LINE, self.is_alive)
+            .map_err(|err| match err {
+                UpdateError::AlreadyRunning { pid } => AddError::Busy { pid },
+                other => other.into(),
+            })?;
+        self.run_held()
+    }
+
+    fn run_held(&mut self) -> Result<Added, AddError> {
         if let Some(app) = self.installs.desktop(&self.env) {
             self.say_installed(&app);
-            return Ok(Added::AlreadyInstalled(app));
+            return match self.installs.repair_launcher(&self.env, &app) {
+                Ok(Some(entry)) => {
+                    self.say(&format!(
+                        "Its menu entry was missing; it is now {}.",
+                        entry.display()
+                    ));
+                    Ok(Added::AlreadyInstalled(app))
+                }
+                Ok(None) => Ok(Added::AlreadyInstalled(app)),
+                Err(err) => Err(AddError::Launcher {
+                    app: app.name,
+                    path: app.path.display().to_string(),
+                    reason: err.to_string(),
+                }),
+            };
         }
         let target = self
             .installs
             .desktop_target(&self.env)
             .ok_or(AddError::NoTarget)?;
+        if std::fs::symlink_metadata(&target.path).is_ok() {
+            return Err(AddError::NotAnInstall {
+                path: target.path.display().to_string(),
+                app: target.name,
+            });
+        }
         if let Some(reason) = installs::missing_display(self.installs, &self.env) {
             return Err(AddError::NoDisplay {
                 app: target.name,
@@ -470,6 +530,7 @@ fn run_native() -> Result<Added, String> {
     let folders = folders::resolve(&env).map_err(|err| nothing_installed(&err.to_string()))?;
     let network = network::Https::new().map_err(|line| nothing_installed(&line))?;
     let key = signature::trusted_key(&folders.data);
+    let is_alive = |pid: u32| process_tree::Native.is_alive(pid);
     let mut stdout = std::io::stdout();
     let mut adder = Adder {
         running_version: FLOTI_VERSION,
@@ -479,6 +540,7 @@ fn run_native() -> Result<Added, String> {
         network: &network,
         installs: &installs::Native,
         install_self: &run_install_self,
+        is_alive: &is_alive,
         env,
         data: folders.data,
         out: &mut stdout,

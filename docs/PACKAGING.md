@@ -980,8 +980,16 @@ in place. The app, which runs `install-self` at start only when the floti
 there is missing or older ("floti in your own folder"), then uses that floti
 and the host already running; nothing stops or restarts the host.
 
-**What it refuses.** Where the app is already installed it says where, with
-its version where that can be told, and changes nothing. In a session with
+**What it refuses.** It holds `floti update`'s run file (`update-run.json`)
+from start to end, so a second `floti add desktop`, or one while `floti
+update` runs, refuses in one line and two never write the same download; it
+writes no ended record, since a host follows updates by it. Where the app is
+already installed it says where, with its version where that can be told,
+and changes nothing but a menu entry floti makes that is missing (Linux).
+Where something that is not an install is at the install's place (a
+`Helm.app` with no `Info.plist`, a `Programs\Helm` with no uninstaller, a
+folder named `Helm.AppImage`) it refuses in one line and leaves it as it
+is. In a session with
 no display it refuses in one sentence saying why: on Linux when neither
 `DISPLAY` nor `WAYLAND_DISPLAY` is set, on Windows in session 0, where ssh
 logins and services run; a Mac is taken to have one. `floti add` with no

@@ -154,6 +154,15 @@ pub trait Installs {
         let _ = (env, desktop);
         Ok(None)
     }
+
+    /// Adds the launcher entry for the installed `desktop` where floti makes
+    /// one ([`Installs::add_launcher`]) and it is missing, and answers the
+    /// entry it wrote; nothing where it is there or the OS's install makes
+    /// it.
+    fn repair_launcher(&self, env: &UserEnv, desktop: &Desktop) -> Result<Option<PathBuf>> {
+        let _ = (env, desktop);
+        Ok(None)
+    }
 }
 
 /// Why there is no display for the app in the session `env` describes
@@ -272,8 +281,9 @@ pub trait FakeDesktop {
     fn fake_install(&self, apps: &Path, version: &str);
 
     /// A fake release file of the desktop app at `version`, made in `work`:
-    /// its file name and its bytes. On Windows it is `installer`, a program
-    /// that records how it was run.
+    /// its file name and its bytes. `installer` is a program that records
+    /// how it was run: on Windows the release file is it, and on macOS the
+    /// app carries it as its floti.
     fn fake_release(&self, work: &Path, version: &str, installer: &Path) -> (String, Vec<u8>);
 
     /// Whether the fake install in `apps` was updated to `version`. On

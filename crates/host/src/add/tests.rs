@@ -6,6 +6,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use floti_protocol::Knowable;
 use url::Url;
 
 use super::{
@@ -19,6 +20,7 @@ use crate::platform::process_table::ProcessRow;
 use crate::sha256::hex_digest;
 use crate::testkit::TestDirs;
 use crate::update::fakes::{FakeNetwork, Served, Signer};
+use crate::update::run_file::{self, Look, RunLock};
 use crate::update::versions::Version;
 
 const RUNNING: &str = "3.0.0";
@@ -34,6 +36,8 @@ struct FakeInstalls {
     no_display: Option<String>,
     carried: Option<PathBuf>,
     launcher: std::result::Result<Option<PathBuf>, String>,
+    /// What repairing the installed app's launcher entry answers.
+    repair: std::result::Result<Option<PathBuf>, String>,
     install_fails: bool,
     /// The bytes of each file installed, in turn.
     installs: Mutex<Vec<Vec<u8>>>,
@@ -52,6 +56,7 @@ impl FakeInstalls {
             no_display: None,
             carried: None,
             launcher: Ok(None),
+            repair: Ok(None),
             install_fails: false,
             installs: Mutex::default(),
             launchers: Mutex::default(),
@@ -94,6 +99,10 @@ impl Installs for FakeInstalls {
 
     fn no_display(&self, _env: &UserEnv) -> Option<String> {
         self.no_display.clone()
+    }
+
+    fn repair_launcher(&self, _env: &UserEnv, _desktop: &Desktop) -> Result<Option<PathBuf>> {
+        self.repair.clone().map_err(crate::Error::Refused)
     }
 
     fn add_launcher(&self, _env: &UserEnv, _desktop: &Desktop) -> Result<Option<PathBuf>> {
@@ -182,6 +191,8 @@ struct World {
     install_self_fails: bool,
     running: &'static str,
     target: &'static str,
+    /// Whether any other process is alive, for a run file another left.
+    other_alive: Knowable<bool>,
     env: UserEnv,
     dirs: TestDirs,
 }
@@ -203,6 +214,7 @@ impl World {
             install_self_fails: false,
             running: RUNNING,
             target: TARGET,
+            other_alive: Knowable::Known(true),
             env: UserEnv {
                 home: Some(dirs.home.clone()),
                 vars: Default::default(),
@@ -244,6 +256,7 @@ impl World {
                 Ok("floti is at /home/me/.local/bin/floti.\nIt is up to date.\n".to_owned())
             }
         };
+        let is_alive = |_pid: u32| self.other_alive.clone();
         let result = Adder {
             running_version: self.running,
             target: self.target.into(),
@@ -252,6 +265,7 @@ impl World {
             network: &self.network,
             installs: &self.installs,
             install_self: &install_self,
+            is_alive: &is_alive,
             env: self.env.clone(),
             data: self.dirs.data.clone(),
             out: &mut out,
@@ -540,6 +554,139 @@ fn an_app_already_installed_is_named_and_nothing_is_changed() {
 }
 
 #[test]
+fn a_second_add_or_one_during_an_update_refuses_in_one_line_and_downloads_nothing() {
+    let world = World::new();
+    world.publish(&Published::new(RUNNING));
+    let other = RunLock::take(&world.dirs.data, 4242, "Starting floti update.", &|_| {
+        Knowable::Known(true)
+    })
+    .unwrap();
+    let run = world.run();
+    assert_eq!(
+        run.failure(),
+        "another floti update or floti add desktop is running (process 4242), so nothing was installed; run floti add desktop again once it has ended."
+    );
+    assert!(world.network.asked().is_empty());
+    assert!(world.installs.installed().is_empty());
+    assert!(
+        matches!(run_file::look(&world.dirs.data), Look::Running(record) if record.pid == 4242),
+        "the other's run file is left as it is"
+    );
+    drop(other);
+}
+
+#[test]
+fn add_holds_the_run_file_while_it_runs_and_leaves_no_ended_record() {
+    let mut world = World::new();
+    world.publish(&Published::new(RUNNING));
+    // A run file a process that has ended left is taken over.
+    std::mem::forget(
+        RunLock::take(&world.dirs.data, 4242, "Starting floti update.", &|_| {
+            Knowable::Known(true)
+        })
+        .unwrap(),
+    );
+    world.other_alive = Knowable::Known(false);
+    let carried = world.dirs.folder("app resources").join("floti");
+    std::fs::write(&carried, b"the app's floti").unwrap();
+    world.installs.carried = Some(carried);
+    let data = world.dirs.data.clone();
+    let seen = RefCell::new(None);
+    let key = world.signer.public();
+    let mut out = Vec::new();
+    // install-self runs while add holds the run file: what it says then.
+    let install_self = |_floti: &Path| {
+        *seen.borrow_mut() = Some(run_file::look(&data));
+        Ok(String::new())
+    };
+    let result = Adder {
+        running_version: world.running,
+        target: world.target.into(),
+        releases: Url::parse(RELEASES).unwrap(),
+        key: &key,
+        network: &world.network,
+        installs: &world.installs,
+        install_self: &install_self,
+        is_alive: &|_| world.other_alive.clone(),
+        env: world.env.clone(),
+        data: world.dirs.data.clone(),
+        out: &mut out,
+    }
+    .run();
+    assert!(result.is_ok(), "{}", String::from_utf8_lossy(&out));
+    assert!(
+        matches!(seen.borrow().as_ref(), Some(Look::Running(record)) if record.pid == std::process::id() && record.line == super::STARTING_LINE),
+        "{:?}",
+        seen.borrow()
+    );
+    assert_eq!(
+        run_file::look(&world.dirs.data),
+        Look::Absent,
+        "removed once it ends"
+    );
+    assert_eq!(
+        run_file::ended(&world.dirs.data),
+        None,
+        "an add is no update"
+    );
+}
+
+#[test]
+fn something_at_the_install_s_place_that_is_not_an_install_is_left_and_refused() {
+    let world = World::new();
+    world.publish(&Published::new(RUNNING));
+    std::fs::create_dir_all(&world.installs.target.path).unwrap();
+    std::fs::write(world.installs.target.path.join("mine.txt"), b"keep").unwrap();
+    let run = world.run();
+    assert_eq!(
+        run.failure(),
+        format!(
+            "{0} is there but is not an install of Helm, so nothing was installed; move it away to install Helm there.",
+            world.installs.target.path.display()
+        )
+    );
+    assert!(world.network.asked().is_empty());
+    assert!(world.installs.installed().is_empty());
+    assert_eq!(
+        std::fs::read(world.installs.target.path.join("mine.txt")).unwrap(),
+        b"keep"
+    );
+}
+
+#[test]
+fn an_installed_app_missing_its_menu_entry_gets_it_and_is_still_already_installed() {
+    let mut world = World::new();
+    world.installs.installed = true;
+    world.installs.repair = Ok(Some(PathBuf::from(
+        "/home/me/.local/share/applications/helm.desktop",
+    )));
+    let run = world.run();
+    assert_eq!(
+        run.result.as_ref().unwrap(),
+        &Added::AlreadyInstalled(world.installs.target.clone())
+    );
+    assert!(run.out.contains("is already installed at"), "{}", run.out);
+    assert!(
+        run.out.contains(
+            "Its menu entry was missing; it is now /home/me/.local/share/applications/helm.desktop."
+        ),
+        "{}",
+        run.out
+    );
+    assert!(world.network.asked().is_empty());
+
+    world.installs.repair = Err("No HOME or XDG_DATA_HOME names where menu entries go.".into());
+    let run = world.run();
+    assert_eq!(
+        run.failure(),
+        format!(
+            "Helm is installed at {}, but its menu entry could not be written: No HOME or XDG_DATA_HOME names where menu entries go.",
+            world.installs.target.path.display()
+        )
+    );
+}
+
+#[test]
 fn a_session_with_no_display_is_refused_in_one_sentence_before_anything_is_downloaded() {
     let mut world = World::new();
     world.installs.no_display =
@@ -547,7 +694,7 @@ fn a_session_with_no_display_is_refused_in_one_sentence_before_anything_is_downl
     let run = world.run();
     assert_eq!(
         run.failure(),
-        "This session has no display (neither DISPLAY nor WAYLAND_DISPLAY is set), so Helm is not installed here. Nothing was installed."
+        "This session has no display (neither DISPLAY nor WAYLAND_DISPLAY is set), so Helm is not installed here."
     );
     assert!(world.network.asked().is_empty());
 }

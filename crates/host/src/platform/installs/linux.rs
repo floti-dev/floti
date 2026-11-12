@@ -67,6 +67,20 @@ impl Native {
         })
     }
 
+    /// [`Native::data_home`], or why there is none.
+    fn share(env: &UserEnv) -> Result<PathBuf> {
+        Self::data_home(env).ok_or_else(|| {
+            Error::Refused("No HOME or XDG_DATA_HOME names where menu entries go.".to_owned())
+        })
+    }
+
+    /// Where the menu entry is under `share`.
+    fn entry_path(share: &Path) -> PathBuf {
+        share
+            .join("applications")
+            .join(format!("{ENTRY_NAME}.desktop"))
+    }
+
     /// The menu entry for the AppImage at `app_image`.
     pub fn entry_text(app_image: &Path) -> String {
         format!(
@@ -176,9 +190,7 @@ impl Installs for Native {
     }
 
     fn add_launcher(&self, env: &UserEnv, desktop: &Desktop) -> Result<Option<PathBuf>> {
-        let share = Self::data_home(env).ok_or_else(|| {
-            Error::Refused("No HOME or XDG_DATA_HOME names where menu entries go.".to_owned())
-        })?;
+        let share = Self::share(env)?;
         let icon = share
             .join("icons")
             .join("hicolor")
@@ -186,11 +198,16 @@ impl Installs for Native {
             .join("apps")
             .join(format!("{ENTRY_NAME}.png"));
         write_into_place(&icon, ICON)?;
-        let entry = share
-            .join("applications")
-            .join(format!("{ENTRY_NAME}.desktop"));
+        let entry = Self::entry_path(&share);
         write_into_place(&entry, Self::entry_text(&desktop.path).as_bytes())?;
         Ok(Some(entry))
+    }
+
+    fn repair_launcher(&self, env: &UserEnv, desktop: &Desktop) -> Result<Option<PathBuf>> {
+        if Self::entry_path(&Self::share(env)?).is_file() {
+            return Ok(None);
+        }
+        self.add_launcher(env, desktop)
     }
 
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
