@@ -66,8 +66,9 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   place of real ones) and end-to-end (very few: the main workflows, on their
   happy paths, through the built app). [docs/TESTING.md](docs/TESTING.md) says
   which kind a change needs.
-- While building, run only the tests for what changed. A full suite is a
-  regression check. End-to-end tests run only before a release is cut (the
+- While building, run only the tests for what changed, once each. A full
+  suite is a regression check that CI runs; nobody runs one locally unless
+  the owner asks. End-to-end tests run only before a release is cut (the
   `procedures` skill): never while building, to check a fix or to finish a
   task. Something only an end-to-end run caught is a gap in the lower tiers:
   add the unit or integration test that fails for it, then fix it.
@@ -76,10 +77,12 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   filter alone builds and links every test binary in the crate first.
   `cargo check` finds compile errors without linking. A test that passed runs
   again only after the code it covers changed.
-- `pnpm check` is the gate. The host's Rust tests are not in it and run in
-  `.github/workflows/host.yml`. A branch merges on its own tests, run
-  locally, and a review that runs the suite for what changed locally; nobody
-  waits on CI to merge.
+- `pnpm check` is the gate CI runs on every push, beside the host's Rust
+  tests in `.github/workflows/host.yml`. Locally nobody runs it, `pnpm test`
+  or a whole crate's tests unless the owner asks. A branch merges on the
+  tests for what it changed, run once by its worker, and a review that reads
+  their results and runs only a test it doubts or one the worker skipped.
+  Nobody waits on CI to merge.
 - A test cleans up by construction, never by reaching its own teardown: every
   folder it makes is under its run's root, and every process it starts ends
   with it. `node scripts/test-leftovers.mjs <test command>` reports what a run

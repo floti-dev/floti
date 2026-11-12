@@ -20,9 +20,9 @@ checks.
 CI runs the unit and integration tests, as `pnpm check` and the host tests, on
 Windows, macOS and Linux runners on every push. A failure on any one fails the
 run and, from the release workflow, stops the release; the owner reads CI on
-all three before a release. A branch merges on its own tests, run locally, and
-a review that runs the suite for what changed locally: nobody waits on CI to
-merge. The end-to-end tier runs locally only, never in CI.
+all three before a release. A branch merges on the tests for what it changed,
+run once locally by its worker, and a review that reads their results: nobody
+waits on CI to merge. The end-to-end tier runs locally only, never in CI.
 
 **While building, run only the tests for what changed**: the test file beside
 the code (`pnpm vitest run <file>`), the host's tests in the one test binary
@@ -34,10 +34,11 @@ tests run after the build: `cargo nextest run -p floti-host <filter>` compiles
 and links every one of them first, which costs minutes and several gigabytes
 of memory. `cargo check -p <crate>` finds compile errors without linking
 anything. A test that passed is run again only once the code it covers has
-changed. A full suite, every test of every crate and package, is a regression
-check that runs on CI, on every push and on all three OSes, and nobody runs
-one locally. A review still runs the suite for what changed, locally. Nobody
-waits on CI to merge.
+changed. A full suite, every test of every crate and package, `pnpm check`
+and `pnpm test` included, is a regression check that runs on CI, on every
+push and on all three OSes, and nobody runs one locally unless the owner
+asks. A review reads the worker's commands and results, and runs only a test
+it doubts or one the worker skipped. Nobody waits on CI to merge.
 
 **Unit and integration tests validate the work; end-to-end tests run only
 before a release is cut.** An end-to-end run builds the app and drives it,
