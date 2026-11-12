@@ -24,9 +24,20 @@
 //     writes update.json for the release whose files are in <release folder>.
 //     With --as-stable, a preview's files are named as a stable release of
 //     the same number would name them, for a dry run to check that form.
+//
+//   node floti-dev.mjs check-scripts <folder> <sums> <version> <owner/repo>
+//     refuses install.sh and install.ps1 in <folder> unless each is, byte for
+//     byte, the script this commit writes from <sums>.
+//
+//   node floti-dev.mjs check-manifest <update.json> <sums> <version> <owner/repo>
+//     refuses a manifest that does not name <version> alone, on the stable
+//     channel, with exactly the floti files and SHA-256s <sums> gives.
+//
+// `floti-dev` runs both checks with the SHA-256 list the release published,
+// after its signature is checked against the committed public key.
 
 import { createHash } from 'node:crypto'
-import { createReadStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
@@ -200,6 +211,56 @@ export function stableVersion(version) {
   return `${parsed.major}.${parsed.minor}.${parsed.patch}`
 }
 
+/**
+ * Why the install scripts in `scripts` (name to text) are not, byte for byte,
+ * the ones this commit writes for floti `version` from the SHA-256 list
+ * `sums`: one line per script that differs or is missing, none when both
+ * match. `floti-dev` gives it the list the release published, after its
+ * signature is checked, so a script carrying any other SHA-256 is refused.
+ */
+export function scriptsProblems({ scripts, sums, version, repo, read }) {
+  const problems = []
+  for (const { name, text } of installScripts({ sums, version, repo, ...(read === undefined ? {} : { read }) })) {
+    const found = scripts.get(name)
+    if (found === undefined) problems.push(`${name} is missing`)
+    else if (found !== text) problems.push(`${name} is not the script ${version}'s signed SHA-256 list makes`)
+  }
+  return problems
+}
+
+/**
+ * Why the manifest `text` does not name floti `version` alone, on the stable
+ * channel, at the release's own folder, with exactly the floti files and
+ * SHA-256s the list `sums` gives: one line per difference, none when it
+ * does. Its desktop files are not in that list; its signature covers them.
+ */
+export function manifestProblems({ text, sums, version, repo }) {
+  let manifest
+  try {
+    manifest = JSON.parse(text)
+  } catch (error) {
+    return [`update.json is not JSON: ${error instanceof Error ? error.message : String(error)}`]
+  }
+  const problems = []
+  if (manifest?.schema !== MANIFEST_SCHEMA) problems.push(`update.json is schema ${String(manifest?.schema)}, not ${MANIFEST_SCHEMA}`)
+  const channels = Object.keys(manifest?.channels ?? {})
+  if (channels.length !== 1 || channels[0] !== STABLE_CHANNEL) problems.push(`update.json names the channels [${channels.join(', ')}], not ${STABLE_CHANNEL} alone`)
+  const stable = manifest?.channels?.[STABLE_CHANNEL] ?? {}
+  if (stable.version !== version) problems.push(`update.json names version ${String(stable.version)}, not ${version}`)
+  const url = downloadUrl(repo, version, '')
+  if (stable.url !== url) problems.push(`update.json downloads from ${String(stable.url)}, not ${url}`)
+  const expected = releaseFiles(sums, version, repo, RELEASE_TARGETS.map((target) => target.name))
+  const floti = stable.floti ?? {}
+  for (const [target, { name, sha256 }] of expected) {
+    const entry = floti[target]
+    if (entry?.file !== name || entry?.sha256 !== sha256) problems.push(`update.json's floti for ${target} is not ${name} with the SHA-256 the list gives`)
+  }
+  for (const target of Object.keys(floti)) {
+    if (!expected.has(target)) problems.push(`update.json names a floti for ${target}, which the list does not`)
+  }
+  return problems
+}
+
 async function sha256OfFile(file) {
   const hash = createHash('sha256')
   await pipeline(createReadStream(file), hash)
@@ -254,8 +315,30 @@ async function main(args) {
     process.stdout.write(manifestText(manifest))
     return 0
   }
+  const checked = command === 'check-scripts' || command === 'check-manifest'
+  if (checked && positionals.length === 4 && values['release-url'] === undefined && values['as-stable'] === undefined) {
+    const [path, sumsFile, version, repo] = positionals
+    const sums = readFileSync(sumsFile, 'utf8')
+    const problems =
+      command === 'check-scripts'
+        ? scriptsProblems({
+            scripts: new Map(
+              INSTALL_SCRIPTS.filter(({ name }) => existsSync(join(path, name))).map(({ name }) => [name, readFileSync(join(path, name), 'utf8')])
+            ),
+            sums,
+            version,
+            repo
+          })
+        : manifestProblems({ text: readFileSync(path, 'utf8'), sums, version, repo })
+    if (problems.length > 0) {
+      for (const problem of problems) console.error(process.env.GITHUB_ACTIONS === 'true' ? `::error::${problem}` : problem)
+      return 1
+    }
+    console.log(command === 'check-scripts' ? `install.sh and install.ps1 are ${version}'s, from ${sumsFile}` : `update.json names ${version}'s floti files, from ${sumsFile}`)
+    return 0
+  }
   console.error(
-    'usage: node floti-dev.mjs scripts <sums> <version> <owner/repo> <folder> [--release-url <url>] | manifest <release folder> <version> <owner/repo> <file> [--as-stable]'
+    'usage: node floti-dev.mjs scripts <sums> <version> <owner/repo> <folder> [--release-url <url>] | manifest <release folder> <version> <owner/repo> <file> [--as-stable] | check-scripts <folder> <sums> <version> <owner/repo> | check-manifest <update.json> <sums> <version> <owner/repo>'
   )
   return 2
 }

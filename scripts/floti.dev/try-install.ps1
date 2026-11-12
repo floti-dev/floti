@@ -10,7 +10,8 @@
 # `irm | iex` gets on a Windows that has nothing else. First the script is cut
 # off at ten places, each run with Invoke-Expression and a LOCALAPPDATA of its
 # own, which must stay empty, with the user's Path unchanged and no floti file
-# asked for. Then `irm <url>/install.ps1 | iex` runs. floti must be at
+# asked for. Then `irm <url>/install.ps1 | iex` runs, and the session must
+# go on after it: the script never exits a person's window. floti must be at
 # %LOCALAPPDATA%\Programs\Floti\bin\floti.exe, `floti version` must name
 # <Version> and <Target>, its folder must be on the user's Path, and the
 # script must have reached setup, whatever setup made of the runner.
@@ -82,9 +83,13 @@ try {
   if (Select-String -Quiet -Pattern 'GET /floti-' -LiteralPath $log) { Fail 'a script cut off asked the server for a floti file.' }
   Write-Output 'install.ps1 cut off at ten places, the last just before its last line: each ran nothing.'
 
-  $run = Invoke-WindowsPowerShell "irm $url/install.ps1 | iex"
+  # The marker is printed by the session iex ran in, after it: a script that
+  # exits takes that session with it, as it would close a person's window.
+  $marker = 'iex returned to the session that ran it'
+  $run = Invoke-WindowsPowerShell "irm $url/install.ps1 | iex; [Console]::Out.WriteLine('$marker')"
   Write-Output $run.Said
   $said = $run.Said -split "`r?`n"
+  if ($said -notcontains $marker) { Fail "iex never returned: the script ended the PowerShell session it ran in (exit $($run.Code))." }
   $floti = Join-Path $env:LOCALAPPDATA 'Programs\Floti\bin\floti.exe'
   $failed = $said | Where-Object { $_ -like 'floti install: *' } | Select-Object -First 1
   if ($failed) { Fail "it did not install floti: $failed" }

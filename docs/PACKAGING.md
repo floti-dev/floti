@@ -780,19 +780,30 @@ unit test writes for 3.0.0, compared byte for byte, and the host's
 `manifest.rs` tests read that same file for every target.
 
 **`floti-dev`** runs after `publish`, so the scripts never name a file that
-is not downloadable yet. It checks the four files again (exactly those four,
-the signature against the committed key, the version in each), clones the
-site over HTTPS, commits the four files as `floti <version>: the install
-scripts and update.json`, one commit, and pushes it with the deploy key, one
-push, with GitHub's host keys from its API, `BatchMode=yes` and the key in an
-owner-only file removed when the step ends. Files that already say this
-release are left alone. That push to the site's `main` is what publishes
+is not downloadable yet. It fetches the SHA-256 list the release published,
+with no token, and checks its signature against the committed key (the
+`published-sums` action `homebrew` and `winget` use), then checks the four
+files: exactly those four; each script, byte for byte, the one
+`scripts/floti-dev.mjs check-scripts` writes from that list, so it carries
+exactly the published SHA-256s; `update.json`'s signature against the
+committed key, and (`check-manifest`) that it names this version alone, on
+the stable channel, at the release's folder, with that list's floti files
+and SHA-256s. A dry run makes the same checks in `packages-dry-run`, with its
+own list and key. Then it clones the site over HTTPS, commits the four files
+as `floti <version>: the install scripts and update.json`, one commit, and
+pushes it with the deploy key, one push, with GitHub's host keys from its
+API, `BatchMode=yes` and the key in an owner-only file removed when the step
+ends. Files that already say this release are left alone. A push refused
+because the site's `main` moved on since the clone is reported as that, and
+a re-run clones again. That push to the site's `main` is what publishes
 them; every other change there is the owner's, on a branch they merge.
 
 Like `homebrew`, it fails after the release is published while its
 prerequisite is missing, with one line naming it, and a re-run once it exists
-finishes the work. The owner creates it once, in the `release` environment,
-never as a repository secret:
+finishes the work. `sign` keeps the four files as the run's `floti-dev`
+artifact for 90 days, so the re-run can come long after the release. The
+owner creates it once, in the `release` environment, never as a repository
+secret:
 
     # The site's deploy key, with write access; the private half is the secret.
     ssh-keygen -t ed25519 -N "" -C "floti release" -f floti-dev-pages-key
@@ -834,8 +845,9 @@ floti.dev's four files are written from the run's own files as a stable
 release writes them, `update.json` in the stable form when the branch's
 version is a preview and signed with the run's key, and kept for seven days
 as the `floti-dev` artifact. The install scripts run for real there and
-nowhere else: `install-dry-run` on `ubuntu-latest`, `macos-latest` and
-`windows-latest`, and `install-dry-run-debian` as root in a `debian`
+nowhere else: `install-dry-run` on `ubuntu-latest`, `ubuntu-24.04-arm`,
+`macos-latest`, `windows-latest` and `windows-11-arm`, so each CPU detection
+runs on x64 and on arm64, and `install-dry-run-debian` as root in a `debian`
 container, each serving the run's floti files and copies of the scripts made
 to download from `http://127.0.0.1:8765` (`scripts/floti.dev/try-install.sh`
 and `try-install.ps1`). Each cuts its script off at ten places, the last
@@ -844,7 +856,8 @@ just before its last line, and runs every piece with a home or
 for (and on Windows the user's `Path` unchanged). Then it runs the whole
 script as a person does, `curl -fsSL <url>/install.sh | sh` or `irm
 <url>/install.ps1 | iex` in Windows PowerShell, and checks that floti is
-where the script put it, that `floti version` there names the run's version,
+where the script put it, that the PowerShell session `iex` ran in went on
+after it (a line it prints after `iex` must appear), that `floti version` there names the run's version,
 OS and CPU, that on Windows its folder is on the user's `Path`, and that the
 script reached `floti setup`, whatever setup made of the runner (root in the
 container is refused by setup, which is the line it must reach). A dry run never reads the

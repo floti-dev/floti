@@ -45,4 +45,12 @@ export function updateManifest(input: {
 }): UpdateManifest
 export function manifestText(manifest: UpdateManifest): string
 export function stableVersion(version: string): string
+export function scriptsProblems(input: {
+  scripts: ReadonlyMap<string, string>
+  sums: string
+  version: string
+  repo: string
+  read?: (path: string) => string
+}): string[]
+export function manifestProblems(input: { text: string; sums: string; version: string; repo: string }): string[]
 export function releaseManifest(input: { folder: string; version: string; repo: string; asStable?: boolean }): Promise<UpdateManifest>

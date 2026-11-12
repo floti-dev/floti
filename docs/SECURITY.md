@@ -124,10 +124,14 @@ preview.
   whose signature the project's key did not make.
 - All three jobs pin `actions/checkout`, `actions/setup-node` and
   `actions/download-artifact` by commit, run no third-party action, and have
-  `contents: read` only. What they publish is built from the release's
-  SHA-256 list after its signature is checked against the committed public
-  key, and floti.dev's `update.json` is checked against that key again before
-  it is pushed.
+  `contents: read` only. Each fetches the SHA-256 list the release published
+  and checks its signature against the committed public key before using
+  it. `homebrew` and `winget` build what they publish from that list.
+  `floti-dev` publishes what `assemble` built and `sign` signed, and pushes
+  nothing unless each install script is, byte for byte, the script that list
+  makes (so it carries exactly the published SHA-256s), and `update.json`'s
+  signature verifies against the committed key and its floti files and
+  SHA-256s are that list's.
 
 ## Access, keys and devices
 

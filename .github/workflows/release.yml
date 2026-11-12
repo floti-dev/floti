@@ -756,7 +756,7 @@ jobs:
           } >>"$GITHUB_STEP_SUMMARY"
           echo "$table"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-files
           path: ${{ runner.temp }}/release/
@@ -766,12 +766,15 @@ jobs:
 
       # What `floti-dev` copies to floti.dev after `publish`: the install
       # scripts, and for a stable release update.json and its signature.
-      - uses: actions/upload-artifact@v4
+      # Kept 90 days, so `floti-dev` can be re-run long after the release,
+      # once a missing PAGES_DEPLOY_KEY exists: a re-run of a failed job
+      # fetches what this run's `sign` uploaded.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: floti-dev
           path: ${{ runner.temp }}/floti-dev/
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 90
 
   # A dry run's signatures, made as `sign` makes a release's but with a key
   # pair made in this run and checked against that pair's public key. It
@@ -963,6 +966,27 @@ jobs:
           node packages/desktop/scripts/package-managers.mjs winget "$SUMS" "$VERSION" "$GITHUB_REPOSITORY" "$out/winget" >/dev/null
           find "$out" -type f | LC_ALL=C sort | while IFS= read -r file; do echo "--- ${file#"$out"/}"; cat "$file"; done
 
+      - name: Fetch the floti.dev files
+        uses: actions/download-artifact@v4
+        with:
+          name: floti-dev
+          path: ${{ runner.temp }}/floti-dev
+
+      # The checks `floti-dev` makes before it pushes a release's files, with
+      # the run's signature-checked list and key; update.json is the stable
+      # form, so it is checked against the list renamed above.
+      - name: Check the floti.dev files as floti-dev checks a release's
+        shell: bash
+        working-directory: ${{ runner.temp }}/floti-dev
+        env:
+          SUMS: ${{ steps.sums.outputs.sums }}
+        run: |
+          set -euo pipefail
+          scripts="$GITHUB_WORKSPACE/packages/desktop/scripts"
+          node "$scripts/minisign.mjs" verify --public-key "$RUNNER_TEMP/dry-run-sums/dry-run-minisign.pub" --comment "floti update.json" update.json
+          node "$scripts/floti-dev.mjs" check-manifest update.json "$RUNNER_TEMP/stable-sums" "${VERSION%%-*}" "$GITHUB_REPOSITORY"
+          node "$scripts/floti-dev.mjs" check-scripts . "$SUMS" "$VERSION" "$GITHUB_REPOSITORY"
+
       - uses: actions/upload-artifact@v4
         with:
           name: homebrew-formula
@@ -1099,8 +1123,8 @@ jobs:
           }
           Add-Content $env:GITHUB_STEP_SUMMARY "- winget: ``winget validate`` passes the manifests in ``$folder``"
 
-  # floti.dev's install scripts, run for real: the only place they run. Each
-  # runner serves the run's floti files and the scripts `assemble` wrote for
+  # floti.dev's install scripts, run for real: the only place they run, on
+  # x64 and arm64 Linux and Windows and on macOS arm64. Each runner serves the run's floti files and the scripts `assemble` wrote for
   # this from http://127.0.0.1:8765, the release folder written into those
   # scripts in place of the release's own, then cuts each script off at ten
   # places and checks that none ran anything, then runs the whole script as
@@ -1120,12 +1144,26 @@ jobs:
             target: macos-arm64
           - runner: windows-latest
             target: windows-x64
+          # The arm64 runners, so each script's CPU detection picks arm64
+          # where the computer is arm64.
+          - runner: ubuntu-24.04-arm
+            target: linux-arm64
+          - runner: windows-11-arm
+            target: windows-arm64
     runs-on: ${{ matrix.runner }}
     env:
       VERSION: ${{ needs.version.outputs.version }}
 
     steps:
       - uses: actions/checkout@v5
+
+      # The local server is Python's; the Windows arm64 image is not known to
+      # carry it.
+      - uses: actions/setup-python@v5
+        if: matrix.runner == 'windows-11-arm'
+        with:
+          python-version: '3.13'
+          architecture: arm64
 
       - name: Fetch the run's floti files
         uses: actions/download-artifact@v4
@@ -1463,8 +1501,15 @@ jobs:
           trap 'rm -rf "$keys"' EXIT
           printf '%s\n' "${HOMEBREW_TAP_DEPLOY_KEY%$'\n'}" >"$keys/key"
           export GIT_SSH_COMMAND="ssh -i $keys/key -o BatchMode=yes -o IdentitiesOnly=yes -o IdentityAgent=none -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/tap-ssh/known_hosts"
-          if ! git push --quiet "git@github.com:$TAP.git" "HEAD:refs/heads/$BRANCH"; then
-            echo "::error::HOMEBREW_TAP_DEPLOY_KEY could not push to $TAP: add its public half to $TAP as a deploy key with write access (docs/PACKAGING.md, \"Homebrew and winget\")."
+          if ! git push --quiet "git@github.com:$TAP.git" "HEAD:refs/heads/$BRANCH" 2>"$RUNNER_TEMP/tap-push.err"; then
+            cat "$RUNNER_TEMP/tap-push.err" >&2
+            if grep -qE '\[rejected\]|non-fast-forward|fetch first' "$RUNNER_TEMP/tap-push.err"; then
+              echo "::error::$TAP's $BRANCH moved on after this job cloned it, so the push was refused as not a fast-forward; re-run this job, which clones it again."
+            elif grep -qiE 'permission denied|publickey|read only|denied to deploy key' "$RUNNER_TEMP/tap-push.err"; then
+              echo "::error::HOMEBREW_TAP_DEPLOY_KEY could not push to $TAP: add its public half to $TAP as a deploy key with write access (docs/PACKAGING.md, \"Homebrew and winget\")."
+            else
+              echo "::error::could not push to $TAP: $(grep -v '^[[:space:]]*$' "$RUNNER_TEMP/tap-push.err" | tail -n 1)"
+            fi
             exit 1
           fi
           echo "- Homebrew: \`Formula/floti.rb\` in \`$TAP\` is now \`$VERSION\`'s ($(git rev-parse --short HEAD) on \`$BRANCH\`)" >>"$GITHUB_STEP_SUMMARY"
@@ -1614,10 +1659,13 @@ jobs:
   # floti.dev's install scripts and update manifest: install.sh, install.ps1,
   # update.json and update.json.minisig, at the root of
   # floti-dev/floti-dev.github.io, whose main GitHub Pages serves as
-  # https://floti.dev. `sign` made them and checked update.json's signature
-  # against the committed public key; this job checks it again before one
-  # commit and one push. Only a stable release updates them; a preview never
-  # does, and a dry run never reaches this job.
+  # https://floti.dev. `assemble` wrote them and `sign` signed update.json.
+  # Before one commit and one push, this job fetches the SHA-256 list the
+  # release published, checks its signature against the committed public
+  # key, and refuses scripts that are not byte for byte the ones that list
+  # makes, and an update.json whose signature or floti files do not match.
+  # Only a stable release updates them; a preview never does, and a dry run
+  # never reaches this job.
   #
   # It runs after `publish`, so the scripts never name files that are not
   # downloadable yet, and when it fails the release is already out: the error
@@ -1636,6 +1684,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
       SITE: floti-dev/floti-dev.github.io
       PUBLIC_KEY: crates/host/src/update/minisign.pub
 
@@ -1652,26 +1701,33 @@ jobs:
           name: floti-dev
           path: ${{ runner.temp }}/floti-dev
 
-      - uses: ./.github/actions/minisign
+      # The SHA-256 list the release published, fetched as anybody fetches it
+      # and checked against the committed public key.
+      - id: sums
+        uses: ./.github/actions/published-sums
+        with:
+          version: ${{ env.VERSION }}
+          tag: ${{ env.TAG }}
 
-      # Exactly the four files, update.json naming this release on the stable
-      # channel and signed with the key floti update trusts, and each script
-      # naming this version.
+      # Exactly the four files. update.json is signed with the key floti
+      # update trusts and names this release alone, on the stable channel,
+      # with the published list's floti files and SHA-256s; each script is,
+      # byte for byte, the one this commit writes from that list
+      # (scripts/floti-dev.mjs check-scripts and check-manifest).
       - name: Confirm the files
         shell: bash
         working-directory: ${{ runner.temp }}/floti-dev
+        env:
+          SUMS: ${{ steps.sums.outputs.sums }}
         run: |
           set -euo pipefail
           have=$(LC_ALL=C ls -A | paste -sd ' ' -)
           [[ $have == "install.ps1 install.sh update.json update.json.minisig" ]] \
             || { echo "::error::the floti.dev files are [$have], expected install.ps1, install.sh, update.json and update.json.minisig"; exit 1; }
-          node "$GITHUB_WORKSPACE/packages/desktop/scripts/minisign.mjs" verify --public-key "$GITHUB_WORKSPACE/$PUBLIC_KEY" \
-            --comment "floti update.json" update.json
-          jq -e --arg v "$VERSION" '.schema == 1 and (.channels | keys) == ["stable"] and .channels.stable.version == $v' update.json >/dev/null \
-            || { echo "::error::update.json does not name $VERSION alone, on the stable channel"; exit 1; }
-          for script in install.sh install.ps1; do
-            grep -qF "'$VERSION'" "$script" || { echo "::error::$script does not name $VERSION"; exit 1; }
-          done
+          scripts="$GITHUB_WORKSPACE/packages/desktop/scripts"
+          node "$scripts/minisign.mjs" verify --public-key "$GITHUB_WORKSPACE/$PUBLIC_KEY" --comment "floti update.json" update.json
+          node "$scripts/floti-dev.mjs" check-manifest update.json "$SUMS" "$VERSION" "$GITHUB_REPOSITORY"
+          node "$scripts/floti-dev.mjs" check-scripts . "$SUMS" "$VERSION" "$GITHUB_REPOSITORY"
 
       - name: Confirm the site and the deploy key are there
         shell: bash
@@ -1733,8 +1789,15 @@ jobs:
           trap 'rm -rf "$keys"' EXIT
           printf '%s\n' "${PAGES_DEPLOY_KEY%$'\n'}" >"$keys/key"
           export GIT_SSH_COMMAND="ssh -i $keys/key -o BatchMode=yes -o IdentitiesOnly=yes -o IdentityAgent=none -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/site-ssh/known_hosts"
-          if ! git push --quiet "git@github.com:$SITE.git" "HEAD:refs/heads/$BRANCH"; then
-            echo "::error::PAGES_DEPLOY_KEY could not push to $SITE: add its public half to $SITE as a deploy key with write access (docs/PACKAGING.md, \"floti.dev\")."
+          if ! git push --quiet "git@github.com:$SITE.git" "HEAD:refs/heads/$BRANCH" 2>"$RUNNER_TEMP/site-push.err"; then
+            cat "$RUNNER_TEMP/site-push.err" >&2
+            if grep -qE '\[rejected\]|non-fast-forward|fetch first' "$RUNNER_TEMP/site-push.err"; then
+              echo "::error::$SITE's $BRANCH moved on after this job cloned it, so the push was refused as not a fast-forward; re-run this job, which clones it again."
+            elif grep -qiE 'permission denied|publickey|read only|denied to deploy key' "$RUNNER_TEMP/site-push.err"; then
+              echo "::error::PAGES_DEPLOY_KEY could not push to $SITE: add its public half to $SITE as a deploy key with write access (docs/PACKAGING.md, \"floti.dev\")."
+            else
+              echo "::error::could not push to $SITE: $(grep -v '^[[:space:]]*$' "$RUNNER_TEMP/site-push.err" | tail -n 1)"
+            fi
             exit 1
           fi
           echo "- floti.dev: \`install.sh\`, \`install.ps1\`, \`update.json\` and its signature are now \`$VERSION\`'s ($(git rev-parse --short HEAD) on \`$SITE\`'s \`$BRANCH\`)" >>"$GITHUB_STEP_SUMMARY"

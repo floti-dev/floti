@@ -10,10 +10,12 @@ import {
   STABLE_CHANNEL,
   installFunction,
   installScripts,
+  manifestProblems,
   manifestText,
   releaseFolder,
   releaseManifest,
   releaseUrlProblem,
+  scriptsProblems,
   stableVersion,
   updateManifest
 } from '../../scripts/floti-dev.mjs'
@@ -120,6 +122,23 @@ describe('floti.dev’s install scripts', () => {
     }
   })
 
+  it('never exit from install.ps1, which iex runs in the user’s own PowerShell session', () => {
+    const code = lines(script('install.ps1')).filter((line) => !line.trimStart().startsWith('#'))
+    expect(code.filter((line) => /\bexit\b/i.test(line))).toEqual([])
+  })
+
+  it('are refused by the release’s check unless each is the script its signed SHA-256 list makes', () => {
+    const made = new Map(installScripts({ sums: sums(), version: VERSION, repo: REPO }).map(({ name, text }) => [name, text]))
+    expect(scriptsProblems({ scripts: made, sums: sums(), version: VERSION, repo: REPO })).toEqual([])
+    const tampered = new Map(made)
+    tampered.set('install.sh', made.get('install.sh')!.replace(SHA['linux-x64']!, 'f'.repeat(64)))
+    expect(scriptsProblems({ scripts: tampered, sums: sums(), version: VERSION, repo: REPO })).toEqual([
+      "install.sh is not the script 3.0.0's signed SHA-256 list makes"
+    ])
+    const one = new Map([['install.ps1', made.get('install.ps1')!]])
+    expect(scriptsProblems({ scripts: one, sums: sums(), version: VERSION, repo: REPO })).toEqual(['install.sh is missing'])
+  })
+
   it('are printable ASCII, as PowerShell reads a download without a charset as Latin-1', () => {
     for (const { text } of installScripts({ sums: sums(), version: VERSION, repo: REPO })) {
       expect(text).toMatch(/^[\t\n -~]*$/)
@@ -210,6 +229,25 @@ describe('update.json', () => {
       'macos-arm64': { file: 'Helm-3.0.0-arm64-mac.zip', sha256: 'b'.repeat(64) },
       'linux-x64': { file: 'Helm-3.0.0-linux-x64.AppImage', sha256: 'c'.repeat(64) }
     })
+  })
+
+  it('is refused by the release’s check unless it names the version, its folder and exactly the signed list’s floti files', async () => {
+    const fixture = await readFile(join(REPO_ROOT, 'crates', 'host', 'src', 'update', 'fixtures', 'update.json'), 'utf8')
+    const check = (text: string) => manifestProblems({ text, sums: sums(), version: VERSION, repo: REPO })
+    expect(check(fixture)).toEqual([])
+    const changed = (edit: (written: ReturnType<typeof manifest>) => void): string => {
+      const written = manifest()
+      edit(written)
+      return JSON.stringify(written)
+    }
+    expect(check(changed((m) => (m.channels[STABLE_CHANNEL]!.floti['linux-arm64']!.sha256 = 'f'.repeat(64))))).toEqual([
+      "update.json's floti for linux-arm64 is not floti-3.0.0-linux-arm64 with the SHA-256 the list gives"
+    ])
+    expect(check(changed((m) => (m.channels[STABLE_CHANNEL]!.version = '3.0.1')))).toEqual(['update.json names version 3.0.1, not 3.0.0'])
+    expect(check(changed((m) => (m.channels['beta'] = m.channels[STABLE_CHANNEL]!)))).toEqual([
+      'update.json names the channels [stable, beta], not stable alone'
+    ])
+    expect(check('{')[0]).toMatch(/^update\.json is not JSON/)
   })
 
   it('is never written for a preview, and refuses what floti update would refuse', () => {
