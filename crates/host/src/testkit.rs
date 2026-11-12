@@ -515,7 +515,18 @@ fn run_until_crash<F: std::future::Future>(
             () = crashed => None,
         }
     });
+    // A thread of the runtime still running past the bound keeps its I/O
+    // driver, and on Windows each named pipe with I/O pending stays open
+    // until that driver is dropped: the next host in this process is then
+    // refused its socket. Said here, so that failure names its cause.
+    let shutting = Instant::now();
     runtime.shutdown_timeout(PATIENCE);
+    if shutting.elapsed() >= PATIENCE {
+        eprintln!(
+            "floti testkit: the host's runtime still ran a thread {PATIENCE:?} after it was told to \
+             shut down, so what that thread holds, such as the host's socket, is not let go"
+        );
+    }
     drop(run);
     ended
 }

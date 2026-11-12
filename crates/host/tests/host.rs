@@ -304,14 +304,46 @@ fn kill_alone(child: &mut Child) {
     child.wait().expect("reap the host");
 }
 
-/// Every process the host `child` started that is still running, and every
-/// process those started: its sessions' and terminals' programs, what they
-/// started and, on Windows, each pseudoconsole's `conhost.exe`.
-fn started_by(child: &Child) -> Vec<u32> {
-    match descendants(child.id()) {
-        Knowable::Known(pids) => pids,
-        Knowable::Unknown => panic!("the OS would not list what the host started"),
+/// Every process the host `child` on `dirs`' folders started that is still
+/// running, and every process those started: its session keeper, its
+/// sessions' and terminals' programs, what they started and, on Windows,
+/// each pseudoconsole's `conhost.exe`. The keeper is never the host's child
+/// on macOS and Linux, so it and what it holds are found from the keeper's
+/// own process rather than the host's.
+fn started_by(child: &Child, dirs: &TestDirs) -> Vec<u32> {
+    let mut started = descendants_of(child.id());
+    if let Some(keeper) = keeper_of(dirs) {
+        for pid in std::iter::once(keeper).chain(descendants_of(keeper)) {
+            if !started.contains(&pid) {
+                started.push(pid);
+            }
+        }
     }
+    started
+}
+
+/// Every running process `pid` started, and every process those started.
+fn descendants_of(pid: u32) -> Vec<u32> {
+    match descendants(pid) {
+        Knowable::Known(pids) => pids,
+        Knowable::Unknown => panic!("the OS would not list what process {pid} started"),
+    }
+}
+
+/// The session keeper a host on `dirs`' folders started, if one runs: the
+/// process run as `floti keeper` on `dirs`' data folder.
+fn keeper_of(dirs: &TestDirs) -> Option<u32> {
+    let data = dirs.data.to_string_lossy();
+    process_table::Native
+        .processes()
+        .expect("read the process table")
+        .into_iter()
+        .find(|row| {
+            row.command_line
+                .as_deref()
+                .is_some_and(|line| line.contains(" keeper ") && line.contains(data.as_ref()))
+        })
+        .map(|row| row.pid)
 }
 
 /// The host `child`'s own guard on macOS and Linux: a fork of the host, so
@@ -1061,23 +1093,6 @@ fn host_a_desktop_started(dirs: &TestDirs) -> HostProcess {
     )
 }
 
-/// The process in `pids` run as `floti keeper`, the session keeper, if any.
-fn keeper_among(pids: &[u32]) -> Option<u32> {
-    use floti_host::platform::process_table::{self, ProcessTable};
-    let table = process_table::Native
-        .processes()
-        .expect("read the process table");
-    pids.iter().copied().find(|pid| {
-        table.iter().any(|row| {
-            row.pid == *pid
-                && row
-                    .command_line
-                    .as_deref()
-                    .is_some_and(|line| line.contains(" keeper "))
-        })
-    })
-}
-
 /// Starts a shell session in a new folder through `client`, and every
 /// process the host `child` has started for it once it has started one:
 /// what runs in the session keeper, the keeper aside.
@@ -1093,8 +1108,8 @@ async fn a_session_and_its_processes(
         .unwrap();
     let deadline = Instant::now() + PATIENCE;
     loop {
-        let started = started_by(child);
-        let keeper = keeper_among(&started);
+        let started = started_by(child, dirs);
+        let keeper = keeper_of(dirs);
         let held: Vec<u32> = started
             .into_iter()
             .filter(|pid| Some(*pid) != keeper)
@@ -1573,7 +1588,7 @@ async fn a_killed_floti_host_leaves_what_its_sessions_and_terminals_started_to_i
 
     // The host's own guard goes with it; everything else it started stays.
     let guards = guards_of(&host);
-    let started: Vec<u32> = started_by(&host)
+    let started: Vec<u32> = started_by(&host, &dirs)
         .into_iter()
         .filter(|pid| !guards.contains(pid))
         .collect();
@@ -1668,7 +1683,7 @@ async fn a_killed_floti_host_takes_a_plugins_service_run_on_the_node_floti_node_
         tokio::time::sleep(Duration::from_millis(20)).await;
     };
     let pid = service.pid.expect("a running service has a pid");
-    let started = started_by(&host);
+    let started = started_by(&host, &dirs);
     assert!(
         started.contains(&pid),
         "{pid} is not among what the host started: {started:?}"
