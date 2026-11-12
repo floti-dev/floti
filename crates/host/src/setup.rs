@@ -50,8 +50,10 @@
 //!   `sudo loginctl enable-linger <user>`.
 //!
 //! Then, once the host is set up, and only when setting it up did not fail,
-//! the desktop app ([`desktop`]): asked about only with a terminal on
-//! standard input and a display, and installed through `floti add desktop`;
+//! the desktop app ([`desktop`]): asked about only where setup can ask (a
+//! terminal on standard input and output, in the foreground) and the app is
+//! offered (a display, somebody signed in, not WSL), and installed through
+//! `floti add desktop`;
 //! `--desktop` and `--no-desktop` answer in advance. What that step did
 //! never changes the exit status above.
 //!
@@ -79,6 +81,7 @@ use crate::platform::startup::register::{
     NativeSystem, SignInSystem, Started, register_and_start, user_manager_answers,
 };
 use crate::platform::startup::{self, Account, StartAtSignIn, StartupDefinition, StartupKind};
+use crate::platform::terminal_size::{Foreground, Native as NativeTerminal};
 use crate::server::{HOST_KEY_FILE, local_endpoint};
 use crate::this_computer;
 pub use desktop::DesktopChoice;
@@ -223,21 +226,27 @@ pub fn run_setup(options: SetupOptions) -> u8 {
         }
     }
     if outcome.offers_desktop() {
-        native_desktop(options.desktop);
+        native_desktop(options.desktop, outcome != SetupOutcome::AtNextSignIn);
     }
     outcome.code()
 }
 
 /// Setup's desktop step on this computer, for this process's user, asking on
-/// its own standard input and output.
-fn native_desktop(choice: DesktopChoice) {
+/// its own standard input and output; `signed_in` is whether setup found
+/// somebody signed in.
+fn native_desktop(choice: DesktopChoice, signed_in: bool) {
     let env = UserEnv::from_process();
     let stdin = std::io::stdin();
-    let terminal = stdin.is_terminal();
+    let terminal = desktop::can_ask(
+        stdin.is_terminal(),
+        std::io::stdout().is_terminal(),
+        NativeTerminal.owns_standard_input(),
+    );
     DesktopStep {
         choice,
         installs: &installs::Native,
         env: &env,
+        signed_in,
         terminal,
         input: &mut stdin.lock(),
         out: &mut std::io::stdout(),

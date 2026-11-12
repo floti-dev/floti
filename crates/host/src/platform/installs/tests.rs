@@ -3,15 +3,18 @@
 //! its own, which floti is its own, and the renames that put a binary, an
 //! AppImage or an app in place.
 
+use std::cell::RefCell;
 use std::ffi::OsString;
+use std::io;
 use std::path::Path;
 
 use super::{
     DESKTOP_DIR_VAR, DISPLAY_TEST_VAR, Desktop, Installs, display_vars, leftovers, linux, macos,
-    missing_display, plist_string, windows,
+    missing_display, not_offered, plist_string, windows,
 };
 use crate::platform::folders::UserEnv;
 use crate::platform::process_table::ProcessRow;
+use crate::platform::startup::register::{OsCommand, Ran, SignInSystem};
 use crate::testkit::TestDirs;
 
 fn env(home: &Path, vars: &[(&str, &Path)]) -> UserEnv {
@@ -564,7 +567,7 @@ fn linux_has_a_display_with_either_display_variable_and_none_without() {
 }
 
 #[test]
-fn windows_has_no_display_in_session_0_alone_and_macos_always_has_one() {
+fn windows_has_no_display_in_session_0_alone() {
     assert!(windows::Native::no_display_in(Some(0)).is_some());
     assert_eq!(windows::Native::no_display_in(Some(1)), None);
     assert_eq!(
@@ -572,8 +575,140 @@ fn windows_has_no_display_in_session_0_alone_and_macos_always_has_one() {
         None,
         "unknown counts as a display"
     );
+}
+
+/// A Mac as launchd answers for user 501: with a GUI domain or without, or
+/// unable to tell the user's id or to run launchctl at all. It records each
+/// command line asked.
+struct FakeLaunchd {
+    id: Option<&'static str>,
+    domain: Option<bool>,
+    asked: RefCell<Vec<String>>,
+}
+
+impl FakeLaunchd {
+    fn new(id: Option<&'static str>, domain: Option<bool>) -> Self {
+        Self {
+            id,
+            domain,
+            asked: RefCell::default(),
+        }
+    }
+}
+
+impl SignInSystem for FakeLaunchd {
+    fn run(&self, command: &OsCommand) -> io::Result<Ran> {
+        let args: Vec<String> = command
+            .args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        self.asked
+            .borrow_mut()
+            .push(format!("{} {}", command.program, args.join(" ")));
+        let answered = |success: bool, stdout: &str| Ran {
+            success,
+            stdout: stdout.into(),
+            stderr: String::new(),
+        };
+        match command.program.as_str() {
+            "id" => match self.id {
+                Some(id) => Ok(answered(true, id)),
+                None => Ok(answered(false, "")),
+            },
+            "launchctl" => match self.domain {
+                Some(there) => Ok(answered(there, "")),
+                None => Err(io::Error::new(io::ErrorKind::NotFound, "no launchctl")),
+            },
+            other => panic!("only id and launchctl are asked, not {other}"),
+        }
+    }
+
+    fn desktop_session(&self) -> io::Result<bool> {
+        panic!("only the Windows logon task asks for a desktop session")
+    }
+}
+
+#[test]
+fn a_mac_has_a_display_only_when_launchd_has_a_gui_domain_for_the_user() {
+    let signed_in = FakeLaunchd::new(Some("501\n"), Some(true));
+    assert_eq!(macos::no_display_with(&signed_in), None);
+    assert_eq!(
+        *signed_in.asked.borrow(),
+        ["id -u", "launchctl print gui/501"]
+    );
+
+    let nobody = FakeLaunchd::new(Some("501\n"), Some(false));
+    assert_eq!(
+        macos::no_display_with(&nobody).as_deref(),
+        Some("nobody is signed in at this Mac's screen (launchd has no GUI domain for this user)")
+    );
+    assert_eq!(
+        macos::no_display_with(&nobody).as_deref(),
+        Some(macos::NO_GUI_DOMAIN)
+    );
+}
+
+#[test]
+fn a_mac_that_cannot_be_asked_counts_as_having_a_display() {
+    for (id, domain) in [
+        (None, Some(false)),
+        (Some("501\n"), None),
+        (Some("me"), Some(false)),
+    ] {
+        let unknown = FakeLaunchd::new(id, domain);
+        assert_eq!(
+            macos::no_display_with(&unknown),
+            None,
+            "id {id:?}, domain {domain:?}"
+        );
+    }
+}
+
+#[test]
+fn a_wsl_distro_is_not_offered_the_app_though_it_may_have_a_display() {
     let dirs = TestDirs::new();
-    assert_eq!(macos::Native.no_display(&env(&dirs.home, &[])), None);
+    let no_interop = dirs.root().join("no interop");
+    let distro = env(
+        &dirs.home,
+        &[
+            ("WSL_DISTRO_NAME", Path::new("Ubuntu")),
+            ("DISPLAY", Path::new(":0")),
+        ],
+    );
+    assert_eq!(
+        linux::not_offered_in(&distro, &no_interop).as_deref(),
+        Some("this is a WSL distro, whose desktop is Windows' own")
+    );
+    assert_eq!(
+        linux::Native.no_display(&distro),
+        None,
+        "WSLg's display is there, so floti add desktop still installs"
+    );
+
+    let interop = dirs.root().join("WSLInterop");
+    std::fs::write(&interop, b"enabled").unwrap();
+    let plain = env(&dirs.home, &[("DISPLAY", Path::new(":0"))]);
+    assert_eq!(
+        linux::not_offered_in(&plain, &interop).as_deref(),
+        Some(linux::IN_WSL)
+    );
+    assert_eq!(linux::not_offered_in(&plain, &no_interop), None);
+
+    assert_eq!(windows::Native.not_offered(&plain), None);
+    assert_eq!(macos::Native.not_offered(&plain), None);
+}
+
+#[test]
+fn a_test_build_s_display_switch_also_answers_whether_the_app_is_offered() {
+    let dirs = TestDirs::new();
+    let left_out = |vars: &[(&str, &Path)]| {
+        let mut user = env(&dirs.home, vars);
+        user.vars.insert("WSL_DISTRO_NAME".into(), "Ubuntu".into());
+        not_offered(&linux::Native, &user)
+    };
+    assert!(left_out(&[]).is_some());
+    assert_eq!(left_out(&[(DISPLAY_TEST_VAR, Path::new("present"))]), None);
 }
 
 #[test]

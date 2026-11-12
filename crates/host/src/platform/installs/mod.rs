@@ -30,7 +30,10 @@
 //! under `$XDG_DATA_HOME` (`~/.local/share`). The display
 //! ([`Installs::no_display`]): Linux has none without `DISPLAY` or
 //! `WAYLAND_DISPLAY`, Windows none in session 0, where ssh logins and
-//! services run, and macOS is taken to have one.
+//! services run, and macOS none when launchd has no GUI domain for the user,
+//! nobody being signed in at the screen. Setup's question also leaves out a
+//! session the app could run in but does not belong in
+//! ([`Installs::not_offered`]): a WSL distro, whose desktop is Windows'.
 //!
 //! Nothing here adds a quarantine flag or a download mark: the files are
 //! written by floti's own process, which neither Gatekeeper's quarantine nor
@@ -145,6 +148,14 @@ pub trait Installs {
         None
     }
 
+    /// Why `floti setup` does not ask about the app in the session `env`
+    /// describes, though it has a display and `floti add desktop` would
+    /// install it there, as a clause, or `None` where it asks.
+    fn not_offered(&self, env: &UserEnv) -> Option<String> {
+        let _ = env;
+        None
+    }
+
     /// Adds the launcher entry for `desktop`, just installed for the user
     /// `env` describes, where the OS's installer does not make one, and
     /// answers the entry it wrote: nothing on Windows (the installer makes
@@ -174,6 +185,18 @@ pub fn missing_display(installs: &dyn Installs, env: &UserEnv) -> Option<String>
         return (said == "none").then(|| "this test's session has no display".to_owned());
     }
     installs.no_display(env)
+}
+
+/// Why `floti setup` does not ask about the app in the session `env`
+/// describes ([`Installs::not_offered`]), or, in a build with the testkit
+/// where [`DISPLAY_TEST_VAR`] says what the session is, nothing: the test's
+/// session is what that says, whatever computer runs the test.
+pub fn not_offered(installs: &dyn Installs, env: &UserEnv) -> Option<String> {
+    #[cfg(any(test, feature = "testkit"))]
+    if env.var(DISPLAY_TEST_VAR).is_some() {
+        return None;
+    }
+    installs.not_offered(env)
 }
 
 /// The variables [`Installs::display_env`] takes: the display, its

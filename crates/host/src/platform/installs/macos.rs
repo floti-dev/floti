@@ -9,6 +9,7 @@ use super::{Desktop, Installs, NEW_COPY, OLD_COPY, beside, desktop_dir_override,
 use crate::platform::folders::UserEnv;
 use crate::platform::links::{self, remove_tree};
 use crate::platform::process_table::ProcessRow;
+use crate::platform::startup::register::{NativeSystem, SignInSystem, gui_domain};
 use crate::{Error, Result};
 
 /// What the desktop app is called: `productName` in `electron-builder.yml`.
@@ -168,7 +169,24 @@ impl Installs for Native {
         let _ = Self::remove(&old);
         installed
     }
+
+    fn no_display(&self, _env: &UserEnv) -> Option<String> {
+        no_display_with(&NativeSystem)
+    }
 }
+
+/// Why this Mac has no display to open the app on, asked through `system`:
+/// nobody is signed in at its screen, so launchd has no GUI domain for this
+/// user ([`gui_domain`], the way setup learns the host starts at the next
+/// sign-in). `None` when the domain is there, or when the user's id or
+/// launchd could not be asked.
+pub fn no_display_with(system: &dyn SignInSystem) -> Option<String> {
+    matches!(gui_domain(system), Ok(None)).then(|| NO_GUI_DOMAIN.to_owned())
+}
+
+/// What [`no_display_with`] says, as a clause.
+pub const NO_GUI_DOMAIN: &str =
+    "nobody is signed in at this Mac's screen (launchd has no GUI domain for this user)";
 
 #[cfg(any(test, feature = "testkit"))]
 impl super::FakeDesktop for Native {

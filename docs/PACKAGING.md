@@ -962,11 +962,11 @@ changes setup's exit status, which stays the host's.
 
 | Run | What setup does about the desktop app |
 |---|---|
-| `--desktop` | Runs `floti add desktop` without asking, which refuses a session with no display, and says an installed app is there, as it always does. |
-| `--no-desktop` | Looks at nothing, and says one line: the app is left as it is, and `floti add desktop` installs it. |
+| `--desktop` | Runs `floti add desktop` without asking, which refuses a session with no display, and says an installed app is there, as it always does. In a WSL distro with a display it installs, since it was asked for. |
+| `--no-desktop` | Looks at nothing and says nothing. |
 | Neither, the app installed | Says where it is, in `floti add desktop`'s line, and asks nothing. |
-| Neither, no display (a server, an ssh login to Windows) | Asks and says nothing. |
-| Neither, no terminal on standard input | Asks nothing and installs nothing; one line names `floti add desktop`. |
+| Neither, the app not offered | Asks nothing and says nothing. The app is not offered with no display (a server; an ssh login to Windows, which is session 0; a Mac nobody is signed in to at its screen, where launchd has no GUI domain for the user), after setup itself found nobody signed in (the host starts at the next sign-in, on any OS), or in a WSL distro, whose desktop is Windows' own. |
+| Neither, nowhere to ask | Asks nothing and installs nothing; one line names `floti add desktop`. Setup asks only when standard input and standard output are both terminals and it runs in the terminal's foreground, so `floti setup > log`, the desktop's own ssh and `curl ... \| sh &` get the line. |
 | Neither, a terminal and a display | Asks once, `Install the Helm desktop app as well? [Y/n]`: Enter or `y` runs `floti add desktop`, `n` or the end of the input says one line naming it, anything else is asked again. |
 
 `--desktop` and `--no-desktop` together are a usage error, and either goes
@@ -975,11 +975,14 @@ with `--linger` or `--no-linger`. A desktop install that fails says
 is set up all the same." `floti install-self` always passes `--no-desktop`:
 the app that runs it is there already, whether the Windows installer, the
 app at start, `floti update` after a desktop update or `floti add desktop`
-on macOS.
+on macOS, and the last two show what install-self printed, so it says
+nothing about the app.
 
 How each way in reaches the question: `install.sh` under `curl | sh` gives
 setup the terminal (`/dev/tty`) as its input, so a person at a terminal is
-asked and a CI runner or a script with no terminal gets the one line;
+asked and a CI runner or a script with no terminal gets the one line, as
+does the script run as a background job, which is not in the terminal's
+foreground and would be stopped reading it;
 `install.ps1` under `irm | iex` runs setup in the user's own PowerShell
 session, whose console is its input. The desktop's install on another
 computer runs setup over `ssh -o BatchMode=yes` with no terminal, so it asks
@@ -1042,7 +1045,8 @@ folder named `Helm.AppImage`) it refuses in one line and leaves it as it
 is. In a session with
 no display it refuses in one sentence saying why: on Linux when neither
 `DISPLAY` nor `WAYLAND_DISPLAY` is set, on Windows in session 0, where ssh
-logins and services run; a Mac is taken to have one. `floti add` with no
+logins and services run, and on a Mac when nobody is signed in at its
+screen (launchd has no GUI domain for the user). `floti add` with no
 name, or a name it does not know, lists what it can add, which is `desktop`
 alone.
 

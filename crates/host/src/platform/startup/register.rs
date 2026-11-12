@@ -259,14 +259,12 @@ fn launch_agent(
     file: &Path,
     changed: bool,
 ) -> Result<Started, String> {
-    let uid = user_id(system)?;
-    let domain = format!("gui/{uid}");
-    let service = format!("{domain}/{}", definition.name);
     // No GUI domain: nobody is signed in at the screen, and launchd loads the
     // agent from the folder at the next sign-in.
-    if !ran(system, &OsCommand::new("launchctl", &["print", &domain]))?.success {
+    let Some(domain) = gui_domain(system)? else {
         return Ok(Started::AtNextSignIn);
-    }
+    };
+    let service = format!("{domain}/{}", definition.name);
     let loaded = ran(system, &OsCommand::new("launchctl", &["print", &service]))?.success;
     if loaded && changed {
         // launchd keeps the definition it loaded; a changed one is loaded
@@ -284,6 +282,16 @@ fn launch_agent(
         &OsCommand::new("launchctl", &["kickstart", &service]),
     )?;
     Ok(Started::Running)
+}
+
+/// This user's GUI domain on macOS (`gui/<uid>`), asked of launchd with
+/// `launchctl print`, when it has one: someone is signed in at the Mac's
+/// screen. `None` when launchd has none; an error when the user's id or
+/// launchd could not be asked.
+pub fn gui_domain(system: &dyn SignInSystem) -> Result<Option<String>, String> {
+    let domain = format!("gui/{}", user_id(system)?);
+    let answered = ran(system, &OsCommand::new("launchctl", &["print", &domain]))?;
+    Ok(answered.success.then_some(domain))
 }
 
 /// This user's numeric id, from `id -u`.

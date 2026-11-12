@@ -7,8 +7,9 @@ use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
 use super::{
-    ANSWER_AGAIN_LINE, DesktopChoice, DesktopOutcome, DesktopStep, SKIPPED_LINE, Situation, Step,
-    answered_yes, declined_line, failed_line, no_terminal_line, question, situation, step,
+    ANSWER_AGAIN_LINE, DesktopChoice, DesktopOutcome, DesktopStep, NOBODY_SIGNED_IN, Situation,
+    Step, answered_yes, can_ask, declined_line, failed_line, no_terminal_line, question, situation,
+    step,
 };
 use crate::Result;
 use crate::add::Added;
@@ -25,11 +26,13 @@ fn helm() -> Desktop {
     }
 }
 
-/// A computer's installs: the app installed or not, a display or not, and
-/// how many times setup looked.
+/// A computer's installs: the app installed or not, a display or not, a
+/// session the OS leaves the app out of or not, and how many times setup
+/// looked.
 struct FakeInstalls {
     installed: bool,
     no_display: Option<String>,
+    not_offered: Option<String>,
     looked: Cell<usize>,
 }
 
@@ -38,7 +41,15 @@ impl FakeInstalls {
         Self {
             installed: false,
             no_display: None,
+            not_offered: None,
             looked: Cell::new(0),
+        }
+    }
+
+    fn in_wsl() -> Self {
+        Self {
+            not_offered: Some("this is a WSL distro, whose desktop is Windows' own".into()),
+            ..Self::new()
         }
     }
 
@@ -94,12 +105,16 @@ impl Installs for FakeInstalls {
     fn no_display(&self, _env: &UserEnv) -> Option<String> {
         self.no_display.clone()
     }
+
+    fn not_offered(&self, _env: &UserEnv) -> Option<String> {
+        self.not_offered.clone()
+    }
 }
 
 fn found(installed: bool, display: bool, terminal: bool) -> Situation {
     Situation {
         installed: installed.then(helm),
-        no_display: (!display).then(|| "this session has no display".to_owned()),
+        not_offered: (!display).then(|| "this session has no display".to_owned()),
         terminal,
         app: APP.into(),
     }
@@ -125,8 +140,24 @@ fn with_neither_flag_it_asks_only_with_a_terminal_and_a_display() {
         ask(false, true, false),
         Step::NoTerminal { app: APP.into() }
     );
-    assert_eq!(ask(false, false, true), Step::NoDisplay);
-    assert_eq!(ask(false, false, false), Step::NoDisplay);
+    assert_eq!(ask(false, false, true), Step::NotOffered);
+    assert_eq!(ask(false, false, false), Step::NotOffered);
+}
+
+#[test]
+fn it_can_ask_only_with_both_streams_terminals_and_in_the_foreground() {
+    assert!(can_ask(true, true, true));
+    for (stdin, stdout, foreground) in [
+        (false, true, true),
+        (true, false, true),
+        (true, true, false),
+        (false, false, false),
+    ] {
+        assert!(
+            !can_ask(stdin, stdout, foreground),
+            "stdin {stdin}, stdout {stdout}, foreground {foreground}"
+        );
+    }
 }
 
 #[test]
@@ -144,16 +175,34 @@ fn an_app_already_installed_is_said_and_never_asked_about() {
 fn the_situation_names_the_app_and_takes_the_display_from_the_session() {
     let installs = FakeInstalls::new();
     let user = UserEnv::default();
-    assert_eq!(situation(&installs, &user, true), found(false, true, true));
+    assert_eq!(
+        situation(&installs, &user, true, true),
+        found(false, true, true)
+    );
 
     let none = UserEnv {
         home: None,
         vars: [(OsString::from(DISPLAY_TEST_VAR), OsString::from("none"))].into(),
     };
-    let seen = situation(&FakeInstalls::installed(), &none, false);
+    let seen = situation(&FakeInstalls::installed(), &none, true, false);
     assert_eq!(seen.installed, Some(helm()));
-    assert!(seen.no_display.is_some());
+    assert!(seen.not_offered.is_some());
     assert!(!seen.terminal);
+}
+
+#[test]
+fn nobody_signed_in_and_a_session_the_os_leaves_out_are_not_offered_the_app() {
+    let user = UserEnv::default();
+    let seen = situation(&FakeInstalls::new(), &user, false, true);
+    assert_eq!(seen.not_offered.as_deref(), Some(NOBODY_SIGNED_IN));
+    assert_eq!(step(DesktopChoice::Ask, || seen.clone()), Step::NotOffered);
+
+    let seen = situation(&FakeInstalls::in_wsl(), &user, true, true);
+    assert_eq!(
+        seen.not_offered.as_deref(),
+        Some("this is a WSL distro, whose desktop is Windows' own")
+    );
+    assert_eq!(step(DesktopChoice::Ask, || seen), Step::NotOffered);
 }
 
 fn answer(typed: &str) -> (bool, String) {
@@ -199,6 +248,17 @@ fn run(
     typed: &str,
     added: std::result::Result<Added, String>,
 ) -> Ran {
+    run_signed_in(choice, installs, true, terminal, typed, added)
+}
+
+fn run_signed_in(
+    choice: DesktopChoice,
+    installs: &FakeInstalls,
+    signed_in: bool,
+    terminal: bool,
+    typed: &str,
+    added: std::result::Result<Added, String>,
+) -> Ran {
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let mut adds = 0;
     let mut add = |out: &mut dyn Write| {
@@ -210,6 +270,7 @@ fn run(
         choice,
         installs,
         env: &UserEnv::default(),
+        signed_in,
         terminal,
         input: &mut Cursor::new(typed),
         out: &mut out,
@@ -301,7 +362,7 @@ fn with_no_display_nothing_is_asked_said_or_installed() {
         "y\n",
         installed(),
     );
-    assert_eq!(ran.outcome, DesktopOutcome::NoDisplay);
+    assert_eq!(ran.outcome, DesktopOutcome::NotOffered);
     assert_eq!((ran.out.as_str(), ran.err.as_str(), ran.adds), ("", "", 0));
 }
 
@@ -368,6 +429,43 @@ fn no_desktop_says_one_line_and_looks_at_nothing() {
     let installs = FakeInstalls::installed();
     let ran = run(DesktopChoice::Skip, &installs, true, "y\n", installed());
     assert_eq!(ran.outcome, DesktopOutcome::Skipped);
-    assert_eq!(ran.out, format!("{SKIPPED_LINE}\n"));
+    assert_eq!(ran.out, "", "it says nothing");
     assert_eq!((ran.adds, installs.looked.get()), (0, 0));
+}
+
+#[test]
+fn after_setup_found_nobody_signed_in_nothing_is_asked_said_or_installed() {
+    let ran = run_signed_in(
+        DesktopChoice::Ask,
+        &FakeInstalls::new(),
+        false,
+        true,
+        "y\n",
+        installed(),
+    );
+    assert_eq!(ran.outcome, DesktopOutcome::NotOffered);
+    assert_eq!((ran.out.as_str(), ran.err.as_str(), ran.adds), ("", "", 0));
+}
+
+#[test]
+fn in_wsl_nothing_is_asked_but_desktop_still_installs() {
+    let ran = run(
+        DesktopChoice::Ask,
+        &FakeInstalls::in_wsl(),
+        true,
+        "y\n",
+        installed(),
+    );
+    assert_eq!(ran.outcome, DesktopOutcome::NotOffered);
+    assert_eq!((ran.out.as_str(), ran.adds), ("", 0));
+
+    let ran = run(
+        DesktopChoice::Install,
+        &FakeInstalls::in_wsl(),
+        true,
+        "",
+        installed(),
+    );
+    assert_eq!(ran.outcome, DesktopOutcome::Installed);
+    assert_eq!(ran.adds, 1);
 }

@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use super::{Desktop, Installs, NEW_COPY, beside, desktop_dir_override, file_name, posix};
 use crate::platform::folders::UserEnv;
 use crate::platform::process_table::ProcessRow;
+use crate::platform::wsl::{INTEROP_FILE, linux::inside_with};
 use crate::{Error, Result};
 
 /// What the desktop app is called: `productName` in `electron-builder.yml`.
@@ -189,6 +190,10 @@ impl Installs for Native {
         })
     }
 
+    fn not_offered(&self, env: &UserEnv) -> Option<String> {
+        not_offered_in(env, Path::new(INTEROP_FILE))
+    }
+
     fn add_launcher(&self, env: &UserEnv, desktop: &Desktop) -> Result<Option<PathBuf>> {
         let share = Self::share(env)?;
         let icon = share
@@ -222,6 +227,17 @@ impl Installs for Native {
         })
     }
 }
+
+/// Why setup does not offer the app in the session `env` describes, with
+/// `interop` as WSL's interop file: in a WSL distro, whose desktop is
+/// Windows' own, where the app belongs; inside the distro it would be a
+/// second one. `None` elsewhere.
+pub fn not_offered_in(env: &UserEnv, interop: &Path) -> Option<String> {
+    inside_with(env, interop).then(|| IN_WSL.to_owned())
+}
+
+/// What [`not_offered_in`] says, as a clause.
+pub const IN_WSL: &str = "this is a WSL distro, whose desktop is Windows' own";
 
 #[cfg(any(test, feature = "testkit"))]
 impl super::FakeDesktop for Native {

@@ -7,7 +7,7 @@ use windows_sys::Win32::System::Console::{
     CONSOLE_SCREEN_BUFFER_INFO, GetConsoleScreenBufferInfo, GetStdHandle, STD_OUTPUT_HANDLE,
 };
 
-use super::TerminalSize;
+use super::{Foreground, TerminalSize};
 
 /// The Windows implementation.
 #[derive(Debug, Clone, Copy, Default)]
@@ -28,5 +28,12 @@ impl TerminalSize for Native {
         let cols = u16::try_from(window.Right - window.Left + 1).map_err(io::Error::other)?;
         let rows = u16::try_from(window.Bottom - window.Top + 1).map_err(io::Error::other)?;
         Ok((cols, rows))
+    }
+}
+
+impl Foreground for Native {
+    /// A console has no background jobs: whatever reads it reads it.
+    fn owns_standard_input(&self) -> bool {
+        true
     }
 }

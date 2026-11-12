@@ -1,9 +1,10 @@
-//! The terminal's size on macOS and Linux: the window size the pty keeps,
-//! read with `TIOCGWINSZ` on standard output.
+//! The terminal on macOS and Linux: the window size the pty keeps, read
+//! with `TIOCGWINSZ` on standard output, and the terminal's foreground
+//! process group, read with `tcgetpgrp` on standard input.
 
 use std::io;
 
-use super::TerminalSize;
+use super::{Foreground, TerminalSize};
 
 /// The macOS and Linux implementation.
 #[derive(Debug, Clone, Copy, Default)]
@@ -22,5 +23,14 @@ impl TerminalSize for Native {
             return Err(io::Error::last_os_error());
         }
         Ok((size.ws_col, size.ws_row))
+    }
+}
+
+impl Foreground for Native {
+    fn owns_standard_input(&self) -> bool {
+        // SAFETY: plain queries of this process's group and its standard
+        // input's terminal; tcgetpgrp answers -1 when that is no terminal.
+        let foreground = unsafe { libc::tcgetpgrp(libc::STDIN_FILENO) };
+        foreground != -1 && foreground == unsafe { libc::getpgrp() }
     }
 }

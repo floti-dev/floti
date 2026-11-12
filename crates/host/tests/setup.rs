@@ -1307,6 +1307,7 @@ impl DesktopWorld {
             choice,
             installs: &self.installs,
             env: &env,
+            signed_in: true,
             terminal,
             input: &mut io::Cursor::new(typed),
             out: &mut out,
@@ -1365,7 +1366,7 @@ fn no_a_missing_terminal_and_a_missing_display_install_nothing() {
     assert_eq!(err, "");
 
     let (outcome, out, err) = world.step(DesktopChoice::Ask, true, "y\n", "none");
-    assert_eq!(outcome, DesktopOutcome::NoDisplay);
+    assert_eq!(outcome, DesktopOutcome::NotOffered);
     assert_eq!((out.as_str(), err.as_str()), ("", ""));
     assert_eq!(world.installs.installed(), Vec::<Vec<u8>>::new());
 }
