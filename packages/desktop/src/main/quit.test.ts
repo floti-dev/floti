@@ -221,6 +221,32 @@ describe('the quit gate', () => {
     expect(helm.gate.answer()).toBe('keep')
   })
 
+  it('quitting for an update asks nothing, keeps every session, and the window closes without asking', () => {
+    const helm = helmWith(3)
+
+    helm.gate.quitKeeping()
+
+    expect(helm.events).toEqual(['before-quit', 'closed'])
+    expect(helm.asked).not.toHaveBeenCalled()
+    expect(helm.gate.answer()).toBe('keep')
+    expect(quitEnds(helm.gate.answer(), true)).toBe(false)
+  })
+
+  it('quitting for an update while the question is on screen quits keeping the sessions', async () => {
+    const { confirm, answer } = question()
+    const helm = helmWith(2, confirm)
+    helm.gate.requestQuit()
+    expect(helm.asked).toHaveBeenCalledTimes(1)
+
+    helm.gate.quitKeeping()
+    // The question answered late changes nothing: the app has quit.
+    answer('end')
+    await settle()
+
+    expect(helm.events).toEqual(['before-quit', 'closed'])
+    expect(helm.gate.answer()).toBe('keep')
+  })
+
   it('remembers End and quit for before-quit, and nothing while nobody was asked', async () => {
     const { confirm, answer } = question()
     const helm = helmWith(1, confirm)

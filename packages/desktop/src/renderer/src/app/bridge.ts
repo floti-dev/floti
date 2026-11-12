@@ -1,6 +1,7 @@
 import { LOCAL_HOST_KEY, LOCAL_HOST_LABEL, type AppSettings } from '@helm/core/types'
 import type { HelmBridge } from '../../../shared/ipc'
 import { createDevices, type Devices } from './host/devices'
+import { createUpdates, type Updates } from './host/updates'
 import {
   createConnectedHosts,
   createHostBridges,
@@ -107,7 +108,14 @@ export const eachHostBridge = (listener: (host: string, bridge: HelmBridge) => v
  */
 export const devices: Devices = createDevices({ log })
 
-/** The window's own connection to this PC's host, for Settings > Devices. */
+/**
+ * Settings > Updates and the status bar's offer: what this PC's host knows
+ * about newer releases, Check now and Update, over the window's own
+ * connection to it (`host/updates.ts`).
+ */
+export const updates: Updates = createUpdates({ log })
+
+/** The window's own connection to this PC's host, for Settings > Devices and Updates. */
 export const localHostConnection = (): ReturnType<typeof link.connection> => link.connection()
 
 /** Drops the window's wait to connect to this PC's host again, and connects now (`PageLink.reconnectNow`). */

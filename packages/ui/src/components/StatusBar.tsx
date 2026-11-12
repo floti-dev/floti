@@ -51,12 +51,13 @@ export interface StatusBarProps {
   usageDisplay: UsageDisplayMode;
   onUsageDisplayChange: (mode: UsageDisplayMode) => void;
   /**
-   * What the launch's update check found, or null if it made none. Structural
-   * rather than the desktop package's `UpdateCheck`: the bar renders a version
-   * and opens a URL, so it takes a version and a URL.
+   * A newer release than this build, as this PC's host's last check found
+   * it, or null when there is none or nothing is known. Structural rather
+   * than the desktop package's protocol types: the bar renders a version.
    */
-  update: { latest: string; newer: boolean; url: string } | null;
-  onOpenUpdate: (url: string) => void;
+  update: { latest: string } | null;
+  /** Opens Settings > Updates, where Update installs it. */
+  onOpenUpdate: () => void;
   /** Each plugin's item, in the order the plugins were added. Pressing one opens its panel. */
   plugins?: readonly StatusPluginItem[] | undefined;
   /**
@@ -178,12 +179,12 @@ export function StatusBar({
           and is not a warning - colouring it `warn` would put it in the same
           language as a missing CLI, which is a thing you have to fix. This is
           an offer. */}
-      {update !== null && update.newer && (
+      {update !== null && (
         <button
           type="button"
           data-update-available={update.latest}
-          title={`Helm ${update.latest} was released. Opens the releases page - Helm downloads and installs nothing.`}
-          onClick={() => onOpenUpdate(update.url)}
+          title={`Helm ${update.latest} was released. Opens Settings > Updates, where Update installs it.`}
+          onClick={() => onOpenUpdate()}
           className={cn(
             "-mx-1 shrink-0 rounded px-1 text-accent underline decoration-dotted",
             "underline-offset-[3px] transition-colors hover:bg-hover",

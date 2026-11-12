@@ -158,13 +158,14 @@ export interface SettingsPaneProps {
    * to date, offline, the setting off - so it cannot come from `update`.
    */
   releasesUrl: string | null
-  /**
-   * The last check attempted, complete or not. Null means nobody has asked
-   * since launch, which is its own sentence and not an error.
-   */
-  update: UpdateCheckResult | null
+  /** What this PC's host knows about updates. Null until it has been heard. */
+  update: UpdateView | null
+  /** Why the host could not be heard, or why the last press was refused. */
+  updateError: string | null
   updateChecking: boolean
   onCheckForUpdate: () => void
+  /** Asks the host to update floti and Helm. */
+  onInstallUpdate: () => void
   onOpenReleases: () => void
   /**
    * Whether the transcript index has an estimate yet. `cost` is offered only
@@ -302,19 +303,29 @@ export interface SettingsPaneProps {
 }
 
 /**
- * The outcome of a check, as this package needs it.
+ * What this PC's host knows about updates, as Settings > Updates draws it.
  *
- * Structural rather than the desktop package's `UpdateCheck`, for the reason
- * `StatusBarProps.update` gives: the IPC contract belongs to the host. Unlike
- * the bar's version this keeps `error` and `checkedAt`, because the pane's job
- * is to say what happened - including that nothing did.
+ * Structural rather than the desktop package's protocol types, for the reason
+ * `StatusBarProps.update` gives. The host makes every request; this is what
+ * it last told the window.
  */
-export interface UpdateCheckResult {
-  current: string
-  latest: string | null
+export interface UpdateView {
+  /** The channel's newest release, as the host's last check found it. */
+  newest: string | null
+  /** Whether `newest` is a strictly newer release than this build. */
   newer: boolean
-  error: string | null
-  checkedAt: string
+  /** When the host's last check read the release list, as RFC 3339 text. */
+  checkedAt: string | null
+  /** Why the host's last check failed. */
+  failed: string | null
+  /** Whether a check runs on the host now. */
+  checking: boolean
+  /** Why the host neither checks nor updates: a dev or check run, or a floti not installed on its own. */
+  unavailable: 'readOnly' | 'notStandalone' | null
+  /** The update the host runs, while it runs: its last line, and whether it waits for Helm to quit. */
+  installing: { line: string; waitingForApp: boolean } | null
+  /** Why the last update the host ran failed. */
+  installFailed: string | null
 }
 
 /**
@@ -386,8 +397,10 @@ export function SettingsPane({
   appVersion,
   releasesUrl,
   update,
+  updateError,
   updateChecking,
   onCheckForUpdate,
+  onInstallUpdate,
   onOpenReleases,
   terminal,
   onTerminalChange,
@@ -795,8 +808,10 @@ export function SettingsPane({
               appVersion={appVersion}
               releasesUrl={releasesUrl}
               update={update}
+              error={updateError}
               checking={updateChecking}
               onCheckNow={onCheckForUpdate}
+              onInstall={onInstallUpdate}
               onOpenReleases={onOpenReleases}
               updateCheck={updateCheck}
               onUpdateCheckChange={onUpdateCheckChange}
@@ -1380,8 +1395,17 @@ function ArchiveGroup({
 // Updates
 // ---------------------------------------------------------------------------
 
-/** The five things this group can be saying, named so a driver can read one. */
-export type UpdateOutcomeState = 'checking' | 'unasked' | 'newer' | 'current' | 'unreachable'
+/** The things this group can be saying, named so a driver can read one. */
+export type UpdateOutcomeState =
+  | 'unheard'
+  | 'unavailable'
+  | 'installing'
+  | 'checking'
+  | 'installFailed'
+  | 'unreachable'
+  | 'unasked'
+  | 'newer'
+  | 'current'
 
 export interface UpdateOutcome {
   state: UpdateOutcomeState
@@ -1392,42 +1416,67 @@ export interface UpdateOutcome {
 /**
  * The whole of what this group says, as one pure function of what it was given.
  *
- * Separate from the component because the five states are the interesting part
+ * Separate from the component because the states are the interesting part
  * and a component cannot be asked what it would say. Exported so a driver could
  * reach it - though a check should write its own expected sentences rather than
  * import these, because one that asked this function what this function says
  * would be asserting that the code agrees with itself.
  *
- * `unreachable` is `todo` and not `warn`, which is the one judgement in here.
- * Offline is an expected answer, not a fault: nothing is broken, nothing is out
- * of date as far as anyone knows, and a machine on a train has done nothing
- * wrong. A warning triangle would be Helm blaming the user's network for a
- * question Helm asked on its own initiative. The sentence names the reason and
- * says what could not be *asked*, never what failed.
+ * A host that does not update comes first: it is why nothing else here can
+ * happen, and a dev run says so rather than showing an error. A check that
+ * could not reach the release is `todo` and not `warn`: offline is an
+ * expected answer, and a warning triangle would blame the user's network for
+ * a request the host made on its own. An update that failed is `warn`: it
+ * was asked for and did not happen.
  */
-export function updateOutcome(update: UpdateCheckResult | null, checking: boolean): UpdateOutcome {
-  if (checking) return { state: 'checking', tone: 'todo', text: 'Asking GitHub…' }
+export function updateOutcome(
+  update: UpdateView | null,
+  checking: boolean,
+  appVersion: string | null,
+  error: string | null = null
+): UpdateOutcome {
   if (update === null) {
+    return error === null
+      ? { state: 'unheard', tone: 'todo', text: "Waiting to hear from this PC's host." }
+      : { state: 'unheard', tone: 'todo', text: `Could not hear from this PC's host - ${error}.` }
+  }
+  if (update.unavailable === 'readOnly') {
     return {
-      state: 'unasked',
+      state: 'unavailable',
       tone: 'todo',
-      text: 'Helm has not asked GitHub since it started.'
+      text: 'This is a development run: its host checks for nothing and updates nothing.'
     }
   }
-  if (update.error !== null) {
-    return { state: 'unreachable', tone: 'todo', text: `Could not ask GitHub - ${update.error}.` }
+  if (update.unavailable === 'notStandalone') {
+    return {
+      state: 'unavailable',
+      tone: 'todo',
+      text: "This PC's host does not run floti installed on its own, so it checks for nothing and updates nothing."
+    }
   }
-  if (update.newer && update.latest !== null) {
+  if (update.installing !== null) return { state: 'installing', tone: 'todo', text: update.installing.line }
+  if (checking) return { state: 'checking', tone: 'todo', text: 'Looking for a newer release…' }
+  if (update.installFailed !== null) {
+    return { state: 'installFailed', tone: 'warn', text: `The update did not finish - ${update.installFailed}` }
+  }
+  if (error !== null) return { state: 'unreachable', tone: 'todo', text: `Could not ask this PC's host - ${error}.` }
+  if (update.failed !== null) {
+    return { state: 'unreachable', tone: 'todo', text: `Could not check for a newer release - ${update.failed}` }
+  }
+  if (update.newest === null) {
+    return { state: 'unasked', tone: 'todo', text: "This PC's host has not checked for a newer release yet." }
+  }
+  if (update.newer) {
     return {
       state: 'newer',
       tone: 'todo',
-      text: `${update.latest} is available. This build is ${update.current}.`
+      text: `${update.newest} is available. This build is ${appVersion ?? 'unknown'}.`
     }
   }
   return {
     state: 'current',
     tone: 'ok',
-    text: `${update.current} is the newest release. Asked ${askedWhen(update.checkedAt)}.`
+    text: `${appVersion ?? update.newest} is the newest release. Checked ${checkedWhen(update.checkedAt)}.`
   }
 }
 
@@ -1439,35 +1488,14 @@ export function updateOutcome(update: UpdateCheckResult | null, checking: boolea
  * or a payload from another build is a fact about the past, and the sentence
  * around this one is still true without its last clause.
  */
-function askedWhen(checkedAt: string): string {
+function checkedWhen(checkedAt: string | null): string {
+  if (checkedAt === null) return 'this session'
   const at = Date.parse(checkedAt)
   if (!Number.isFinite(at)) return 'this session'
   const age = formatAge(at)
   return age === 'now' ? 'just now' : `${age} ago`
 }
 
-/**
- * Releases: what this build is, what the newest one is, and how to ask.
- *
- * This was a single tick in the Appearance group, and the comment there argued
- * for keeping it there - "here rather than in a group of its own, because from
- * the user's side this is a line in the status bar", the same question the
- * usage row above it answered. That argument was right for as long as it was
- * one tick. It stops holding at six controls: two facts, a sentence, the tick
- * and two buttons, every one of them about releases and none of them about how
- * the app looks. The group outgrew the reason rather than contradicting it.
- *
- * What the old hint carried is kept rather than dropped: Helm downloads
- * nothing and installs nothing, and an update Helm told you about is still an
- * update you go and get.
- *
- * The two buttons are the point of the group and they are deliberately
- * independent of everything above them. Check now is live whatever the tick
- * says - the setting governs whether Helm asks by itself, not whether the user
- * may - and Release notes is live whatever the last check returned, because
- * "up to date", "could not ask" and "never asked" are exactly the three states
- * in which somebody wants to go and look for themselves.
- */
 /**
  * The Files view. One row: whether a long line wraps, which the toggle in a
  * file's own status line writes too, so the two never disagree.
@@ -1895,36 +1923,53 @@ function AgentLimitsGroup({
   )
 }
 
+/**
+ * Releases: what this build is, what the newest one is, and the two things a
+ * person may ask this PC's host: check now, and update.
+ *
+ * Check now is live whatever the tick says - the setting governs whether the
+ * host asks by itself, not whether the user may - and Release notes is live
+ * whatever the last check found, because "up to date", "could not check" and
+ * "never checked" are the states in which somebody wants to look for
+ * themselves. Update is offered only while a newer release exists and the
+ * host updates; Helm closes when the update is ready for it and the update
+ * opens it again, its sessions running throughout. On a host that does not
+ * update, the sentence says why and both buttons that would ask it rest.
+ */
 function UpdatesGroup({
   appVersion,
   releasesUrl,
   update,
+  error,
   checking,
   onCheckNow,
+  onInstall,
   onOpenReleases,
   updateCheck,
   onUpdateCheckChange
 }: {
   appVersion: string | null
   releasesUrl: string | null
-  update: UpdateCheckResult | null
+  update: UpdateView | null
+  error: string | null
   checking: boolean
   onCheckNow: () => void
+  onInstall: () => void
   onOpenReleases: () => void
   updateCheck: boolean
   onUpdateCheckChange: (next: boolean) => void
 }): JSX.Element {
-  const outcome = updateOutcome(update, checking)
+  const outcome = updateOutcome(update, checking, appVersion, error)
+  const updates = update !== null && update.unavailable === null
+  const installing = update !== null && update.installing !== null
 
   return (
-    // The posture belongs to the group rather than to the tick, the way the
-    // Claude CLI group carries its own: it is true of everything in
-    // here, including the button, and it stayed true when the tick stopped
-    // being the only thing that could ask.
+    // The posture belongs to the group rather than to the tick: it is true of
+    // everything in here, the buttons included.
     <Group
       name="updates"
       title="Updates"
-      hint="The only request Helm makes on its own: it reads a version number. Nothing is downloaded."
+      hint="This PC's host makes the only request Helm makes on its own: once a day it reads floti.dev's signed list of releases. Helm itself contacts nothing."
     >
       <div className="pb-1">
         <Verdict
@@ -1936,26 +1981,13 @@ function UpdatesGroup({
           <Fact label="Version">
             <span data-settings-app-version>{appVersion ?? NOTHING}</span>
           </Fact>
-          {/* Empty after a check that could not complete, and that is the
-              intended reading rather than a gap: the last request came back
-              with no version in it, so there is no number here anybody has
-              been told. Painting the previous one would be the status bar's
-              mistake in reverse - a figure on screen that nothing just
-              measured. */}
+          {/* What the host's last check that read the release list found,
+              kept across a check that could not: the release did not stop
+              existing because the network went away. */}
           <Fact label="Latest">
-            <span data-settings-latest-version>{update?.latest ?? NOTHING}</span>
+            <span data-settings-latest-version>{update?.newest ?? NOTHING}</span>
           </Fact>
         </dl>
-
-        {outcome.state === 'unreachable' && (
-          <p
-            data-settings-update-offline
-            className="mt-2.5 text-[11px] leading-[1.55] text-fg-subtle"
-          >
-            Release notes below still opens the releases page - that is a link handed to your
-            browser, not a request Helm makes, so it works from here either way.
-          </p>
-        )}
       </div>
 
       <Divider />
@@ -1974,11 +2006,20 @@ function UpdatesGroup({
       </Row>
 
       <Actions>
-        {/* Disabled only while a check is in flight - never because the tick
-            above is off. A button that greyed itself out when the automatic
-            check was turned off would make the setting mean something it does
-            not say. */}
-        <Action data-settings-update-now onClick={onCheckNow} disabled={checking}>
+        {update?.newer === true && updates && (
+          <Action
+            data-settings-update-install
+            primary
+            onClick={onInstall}
+            disabled={installing}
+            title="Replaces floti and Helm. Helm closes when the update is ready and opens again; every session keeps running."
+          >
+            Update to {update.newest}
+          </Action>
+        )}
+        {/* Disabled while a check is in flight and on a host that does not
+            update - never because the tick above is off. */}
+        <Action data-settings-update-now onClick={onCheckNow} disabled={checking || !updates}>
           <RefreshIcon className={cn('mr-1.5 inline', checking && 'animate-spin')} />
           Check now
         </Action>

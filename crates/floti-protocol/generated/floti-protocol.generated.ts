@@ -4619,7 +4619,6 @@ export const CLIENT_ONLY: readonly OutsideEntry[] = [
   { channels: "theme:*", reason: "the theme of the client's window" },
   { channels: "themes:*", reason: "theme files the client's window draws with" },
   { channels: "plugins:theme", reason: "the theme plugin pages see is the theme of the window framing them" },
-  { channels: "update:checked", reason: "what the desktop's main process tells its window of a newer release it inferred from its host's version" },
   { channels: "files:editor", reason: "names the editor installed on the client's machine" },
   { channels: "files:openInEditor", reason: "opens a file in the editor on the client's machine" },
   { channels: "roots:add", reason: "opens the client's folder picker; the folder it chose arrives on roots:accept" },

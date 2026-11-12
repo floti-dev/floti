@@ -67,8 +67,8 @@ afterPack: ./scripts/after-pack.mjs
 # and the three reasons behind it are in docs/PACKAGING.md; the short version is
 # that the build is unsigned, half the artefacts (the portable exe) have no
 # install location to replace, and the app hosts long-lived sessions a
-# background restart would end. `update:check` asks GitHub for a version number
-# when the user asks it to, and downloads nothing.
+# background restart would end. The desktop is updated by `floti update`, which
+# this PC's host runs when the user presses Update.
 publish: null
 
 win:

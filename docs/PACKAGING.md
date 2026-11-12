@@ -900,7 +900,8 @@ capture locally on any OS, into `reports/screenshots`.
 release, has this computer's host start it in its place, and updates the
 desktop app where it is installed and older, once the app has quit
 (`crates/host/src/update`). The host runs the same checks by itself for
-floti alone (**The host's own update**, below).
+floti alone (**The host's own update**, below), and runs `floti update
+--from-desktop` when the desktop's Update asks it to (**Updates in Helm**).
 
 **The manifest.** It reads `https://floti.dev/update.json` and its signature
 `update.json.minisig`, which each stable release writes and copies there
@@ -1044,18 +1045,40 @@ without a stop, keeps each tab's screen dimmed, and reconnects.
 
 ## Updates in Helm
 
-`update:check` asks the GitHub releases API for the newest tag, compares it
-against `app.getVersion()` and returns a URL. It downloads nothing and executes
-nothing. It happens only when a person presses **Check now** in Settings →
-Updates, which keeps no throttle and works with `updateCheck` off. Offline is
-an expected answer, reported as "could not ask", with the reason, rather than
-silently as "up to date".
+Helm's own process contacts nothing about updates. It learns of a newer
+release from this PC's host, over the window's own connection
+(`renderer/src/app/host/updates.ts`):
 
-Helm asks nothing by itself: the host's own update is the automatic check. A
-local host that runs a newer floti than this Helm put a newer release in
-place, and Helm reports that beside the version in the status bar as a check's
-answer, with no request made (`hostVersionNotice` in `main/update.ts`).
-Updating the desktop app itself is `floti update`'s.
+- **`update:state`** is what the host knows, whole on every change: the
+  floti it runs and the channel it follows, the channel's newest version and
+  when the last check that read the manifest found it (kept in
+  `update-checked.json` beside the time, so a restarted host still knows),
+  why the last check failed, whether one runs, and where an update it runs
+  has got to. The window calls a release newer when the channel's newest is
+  strictly ahead of its own version; the status bar offers it beside the
+  version and opens Settings → Updates.
+- **Check now** is `update:check`: the host checks at once, whatever
+  `updateCheck` says and however recently it last did, and answers once the
+  check has ended. It keeps no throttle. A check that finds a newer floti
+  puts it in place and relaunches the host, as the background check does.
+  Offline is an expected answer, said with its reason, never as "up to date".
+- **Update** is `update:install`: the host starts `floti update
+  --from-desktop` outside its own process tree, so it outlives the host and
+  the app. It writes each step as a JSON line, which the host tells on
+  `update:state`; the line saying it waits for the app is marked, and Helm's
+  main process quits on it, asking nothing and keeping every session on
+  every host running (`followHostUpdate`, `quitKeeping`). The update asks the
+  host to relaunch only once the app is replaced, so the host that started
+  it hears it to its end, then opens the app again (replaced, or as it was
+  when replacing it failed). An update that fails says its last line in
+  Settings → Updates until the next one starts.
+
+The setting that turns the automatic check off is the host's
+(`HostSettings.updateCheck`): the host is the one that asks. A host that does
+not update says why on `update:state` and checks nothing: one whose config
+folder is another host's (`FLOTI_CONFIG_READ_ONLY`: `pnpm dev` and every
+check), and one that runs any floti but the one installed on its own. The
+pane says so rather than showing an error, and Check now and Update rest.
 
 There is deliberately no electron-updater: the build is unsigned, so its NSIS
 path would put a SmartScreen prompt in front of every update, and the portable
@@ -1064,18 +1087,19 @@ updater, and its signature check is the one to get right.
 
 ## Network posture
 
-**Helm contacts nothing on its own initiative except the update check, which
-a host makes at most once a day to floti.dev and to the GitHub release it
-names.
-Everything else on the network happens because you asked for it: the browser
-pane fetches the page you navigate to, a plugin you added reaches the hosts its
-manifest names, and a host you added on another computer is reached through
-your own ssh, or the command you gave.**
+**The host's update check, at most once a day to floti.dev and to the
+GitHub release it names, is the only request Helm makes on its own
+initiative; the app itself contacts nothing.
+Everything else on the network happens because you asked for it: Check
+now and Update ask the host to check or to update, the browser pane
+fetches the page you navigate to, a plugin you added reaches the hosts
+its manifest names, and a host you added on another computer is reached
+through your own ssh, or the command you gave.**
 
 There is no telemetry, no crash reporting, no fonts and no CDN. With
 `updateCheck` off, nothing asks anything by itself; the one remaining route is
-a person pressing Check now or running `floti update`, so nothing leaves the
-machine unasked for.
+a person pressing Check now or Update, or running `floti update`, so nothing
+leaves the machine unasked for.
 
 **Helm listens only on this machine.** Its windows reach the local host over
 the host's local socket, which only your OS account can open. The local host
@@ -1121,16 +1145,17 @@ them. A service listens on `127.0.0.1` on a port Helm gives it and is reached
 with a token minted for the run - a listener of the plugin's, not Helm's, so
 the inbound paragraph above still describes the app.
 
-## Check now needs the repository to be public
+## Updates need the repository to be public
 
-`update.ts` sends `User-Agent` and `Accept` and nothing else - no token, because
-Helm handles no GitHub credential. GitHub answers an unauthenticated request for a
-**private** repository's releases with `404`, so while the repository is private
-Check now reports *"could not ask"* however current the release actually is.
+floti fetches its release files from the GitHub release folder `update.json`
+names with no token, because Floti handles no GitHub credential. GitHub
+answers an unauthenticated request for a **private** repository's release
+files with `404`, so while the repository is private every update stops on
+its first download, however current the release actually is.
 
-This is a coupling that breaks silently: **making the repository private turns
-Check now off, and with it the host's own update, whose release files are
-there**, and nothing in the app says so beyond the error string.
+This is a coupling that breaks silently: **making the repository private
+turns updates off**, the host's own and the one Update starts, and nothing in
+the app says so beyond the failure line.
 The same fact is why release artefacts cannot be handed to anyone who is not a
 collaborator - a private release page is not a download link. It holds for a
 draft too, whatever the repository's visibility, which is why a preview is

@@ -1140,20 +1140,21 @@ option open and is what makes the app genuinely portable.
 
 ### Network posture
 
-**Helm contacts nothing on its own initiative except the update check, which
-a host makes at most once a day to floti.dev and to the GitHub release it
-names.
-Everything else on the network happens because you asked for it: the browser
-pane fetches the page you navigate to, a plugin you added reaches the hosts its
-manifest names, and a host you added on another computer is reached through
-your own ssh, or the command you gave.**
+**The host's update check, at most once a day to floti.dev and to the
+GitHub release it names, is the only request Helm makes on its own
+initiative; the app itself contacts nothing.
+Everything else on the network happens because you asked for it: Check
+now and Update ask the host to check or to update, the browser pane
+fetches the page you navigate to, a plugin you added reaches the hosts
+its manifest names, and a host you added on another computer is reached
+through your own ssh, or the command you gave.**
 
 That replaced "Helm's own process opens exactly one outbound connection"
 (decided 2026-08-15). The browser pane made the old claim false, and the answer
 is an honest replacement rather than a carve-out: what people care about -
 Helm does not phone home, there is no telemetry - is unchanged, and the app has
 stopped claiming something it no longer does. The same wording appears in the
-README, [PACKAGING.md](PACKAGING.md) and the `update:check` comment in
+README, [PACKAGING.md](PACKAGING.md) and the network posture comment in
 `shared/ipc.ts`, and CLAUDE.md's rule that all four move together stays.
 
 Plugins (2026-10-05) moved it by one clause, for the same reason and in the
@@ -1170,13 +1171,13 @@ about the user's own `gh`: Helm no longer runs it.
   day while its `updateCheck` setting is on, and installs a newer floti it
   finds after its signature and SHA-256 checks, relaunching on it through the
   session keeper so no session ends ([PACKAGING.md](PACKAGING.md#the-hosts-own-update)).
-  It replaced Helm's own launch check of the GitHub releases API, so there is
-  still one automatic contact: floti.dev's `update.json`, and the GitHub
-  release it names when there is a newer floti. Helm's Check now still asks
-  GitHub for a version number when a person presses it, unthrottled and with
-  the tick off. `updateCheck` governs whether anything asks by itself, not
-  whether the user may, so with it off nothing leaves the machine unasked
-  for.
+  It is the one automatic contact: floti.dev's `update.json`, and the GitHub
+  release it names when there is a newer floti. The app contacts nothing
+  itself (2026-11-12): it hears of a newer release on the host's
+  `update:state`, and Check now and Update are requests to the host
+  (`update:check`, `update:install`), unthrottled and with the tick off.
+  `updateCheck` governs whether anything asks by itself, not whether the
+  user may, so with it off nothing leaves the machine unasked for.
 - **No Claude or GitHub credential is stored, read or handled.** Claude's sign-in is
   detected from the *existence* of an artefact, and nothing opens it. The one
   secret store Helm has is the plugins' (below), and it holds only what the user

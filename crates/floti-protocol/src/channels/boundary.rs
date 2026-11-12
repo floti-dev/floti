@@ -55,10 +55,6 @@ pub const CLIENT_ONLY: &[Outside] = &[
         "the theme plugin pages see is the theme of the window framing them",
     ),
     outside(
-        "update:checked",
-        "what the desktop's main process tells its window of a newer release it inferred from its host's version",
-    ),
-    outside(
         "files:editor",
         "names the editor installed on the client's machine",
     ),

@@ -3,6 +3,7 @@ import type { ConnectedHosts } from './host/hostBridges'
 import type { HostState, HostStateStore } from './host/hostState'
 import type { SeenHostVersionStore } from './host/hostVersions'
 import type { Devices } from './host/devices'
+import type { Updates } from './host/updates'
 import type { RemoteHostsStore } from './host/remoteHosts'
 import type {
   EventChannel,
@@ -238,6 +239,13 @@ export const devices: Devices = {
     return () => undefined
   },
   disconnect: () => Promise.resolve({ ok: true })
+}
+
+/** No host to hear about updates from, unless a test says otherwise (Settings > Updates). */
+export const updates: Updates = {
+  watch: () => () => undefined,
+  check: () => Promise.resolve({ ok: false, message: 'No host in this test.' }),
+  install: () => Promise.resolve({ ok: false, message: 'No host in this test.' })
 }
 
 /** The window's own connection to this PC's host: none in these tests. */

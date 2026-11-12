@@ -143,14 +143,10 @@ export interface AppInfo {
    */
   home: string
   /**
-   * The releases page, so a window can offer it without having asked GitHub
-   * anything.
-   *
-   * `UpdateCheck.url` carries the same address but only arrives with an answer,
-   * and the three states where somebody most wants this link - up to date, the
-   * setting off, no network - are exactly the three that produce no answer.
-   * Read once at startup with the rest of the app's identity; opened through
-   * `shell:openExternal`, never fetched.
+   * The releases page, so Settings > Updates can offer the release notes
+   * whatever the host's check last found: up to date, no check yet, or one
+   * that could not reach the release. Read once at startup with the rest of
+   * the app's identity; opened through `shell:openExternal`, never fetched.
    */
   releasesUrl: string
 }
@@ -206,27 +202,6 @@ export interface CreateHarnessOutcome {
   problems: string[]
   /** The scan roots after the new harness was added to them. */
   roots: string[]
-}
-
-/**
- * The result of an explicit "is there a newer Helm" check.
- *
- * User-initiated only - see `docs/PACKAGING.md`. Helm makes no network request
- * unless this channel is invoked, which is why `checkedAt` is here: a pane that
- * says "up to date" has to be able to say when it last actually asked.
- */
-export interface UpdateCheck {
-  /** The version running now. */
-  current: string
-  /** The newest published release, or null if the check could not complete. */
-  latest: string | null
-  /** True only when `latest` is a strictly higher version than `current`. */
-  newer: boolean
-  /** Where to go to get it. Opened through `shell:openExternal`, not fetched. */
-  url: string | null
-  /** Why the check could not complete. */
-  error: string | null
-  checkedAt: string
 }
 
 /**
@@ -1083,16 +1058,18 @@ export interface IpcRequests {
     response: SaveFolderAsTemplateResult
   }
 
-  /**
-   * Ask GitHub whether there is a newer release.
+  /*
+   * The network posture, kept beside the channels it governs. The update
+   * check it names is the host's (`update:check` in `crates/floti-protocol`).
    *
-   * **Helm contacts nothing on its own initiative except the update check, which
-   * a host makes at most once a day to floti.dev and to the GitHub release it
-   * names.
-   * Everything else on the network happens because you asked for it: the
-   * browser pane fetches the page you navigate to, a plugin you added
-   * reaches the hosts its manifest names, and a host you added on another
-   * computer is reached through your own ssh, or the command you gave.**
+   * **The host's update check, at most once a day to floti.dev and to the
+   * GitHub release it names, is the only request Helm makes on its own
+   * initiative; the app itself contacts nothing.
+   * Everything else on the network happens because you asked for it: Check
+   * now and Update ask the host to check or to update, the browser pane
+   * fetches the page you navigate to, a plugin you added reaches the hosts
+   * its manifest names, and a host you added on another computer is reached
+   * through your own ssh, or the command you gave.**
    *
    * **Helm listens only on this machine.** Its windows reach the local host
    * over the host's local socket, which only your OS account can open. The
@@ -1130,17 +1107,17 @@ export interface IpcRequests {
    * The update check is the host's: while its `updateCheck` setting is on, a
    * host running floti installed on its own reads floti.dev's signed
    * `update.json` at most once a day and installs a newer floti
-   * (`crates/host/src/update/background.rs`). Helm's own process asks nothing
-   * by itself; it hears of a newer release from the local host's version
-   * (`hostVersionNotice`).
+   * (`crates/host/src/update/background.rs`). The app asks nothing: it hears
+   * of a newer release on the host's `update:state`, and Check now and Update
+   * are requests to that host (`update:check`, `update:install`), which
+   * contacts the release. A dev or check run's host checks nothing and says
+   * so there.
    *
-   * This channel keeps no throttle of its own. It is a person pressing
-   * something - Check now, in Settings under Updates - and a deliberate act
-   * that silently did nothing would be worse than no button. It works with
-   * `updateCheck` off: the setting governs whether anything asks by itself,
-   * not whether the user may.
+   * Check now keeps no throttle. It is a person pressing something, and a
+   * deliberate act that silently did nothing would be worse than no button.
+   * It works with `updateCheck` off: the setting governs whether anything
+   * asks by itself, not whether the user may.
    */
-  'update:check': { request: void; response: UpdateCheck }
 
   /** What `theme: 'system'` currently resolves to on this machine. */
   'theme:resolved': { request: void; response: ResolvedTheme }
@@ -2072,14 +2049,6 @@ export interface IpcEvents {
   'usage:changed': UsageSnapshot
 
   /**
-   * The local host runs a newer floti than this build: a newer release, which
-   * its background update put in place, told as a check's answer with no
-   * request made (`hostVersionNotice` in `main/update.ts`). Pushed when main
-   * connects to the local host, and again when the window is ready.
-   */
-  'update:checked': UpdateCheck
-
-  /**
    * "This session is still running" - asked by main, answered by the renderer
    * on `session:confirmed`.
    *
@@ -2316,7 +2285,6 @@ export const REQUEST_CHANNELS = Object.keys({
   'template:import': true,
   'template:folderPreview': true,
   'template:fromFolder': true,
-  'update:check': true,
   'theme:resolved': true,
   'theme:current': true,
   'themes:list': true,
@@ -2475,7 +2443,6 @@ export const EVENT_CHANNELS = Object.keys({
   'history:changed': true,
   'archive:changed': true,
   'usage:changed': true,
-  'update:checked': true,
   'content:artifactConsole': true,
   'term:create': true,
   'term:write': true,

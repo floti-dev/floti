@@ -285,6 +285,7 @@ import {
   localHostConnection,
   reconnectLocalHost,
   remoteHosts as remoteHostLinks,
+  updates,
 } from "./bridge";
 import { useDevicesSettings } from "./useDevicesSettings";
 import { useForwardedPorts } from "./useForwardedPorts";
@@ -625,6 +626,9 @@ const DEVICES_DEPS = {
   remoteConnection: (id: string) => remoteHostLinks.connection(id),
 };
 
+/** Settings > Updates' reach: the updates store and the window's own connection to this PC's host. */
+const UPDATE_DEPS = { updates, connection: localHostConnection };
+
 /** No remote hosts, as one value so a hook's input does not change every render. */
 const NO_HOSTS: readonly RemoteHost[] = [];
 
@@ -923,7 +927,7 @@ export function App(): JSX.Element {
   const history = useHistoryPalette(historyHost, historyOpen);
   const archiveStats = useArchiveStats(historyHost);
   const usage = useUsage(usageHost);
-  const check = useUpdate();
+  const check = useUpdate(UPDATE_DEPS, info?.version ?? null);
   const ownData = useOwnDataCopy();
   const themes = useThemes();
   /*
@@ -933,17 +937,16 @@ export function App(): JSX.Element {
    */
   const machineSessions = useLiveSessions();
   /**
-   * From `answered` and not `attempted`: the bar's line is a standing fact - a
-   * newer release exists - and a manual check that could not reach GitHub is
-   * not evidence against it. The settings pane takes `attempted` instead.
+   * The bar's offer is a standing fact - a newer release exists - from what
+   * the host's last check that read the release list found, which a check
+   * that could not reach it leaves standing.
    */
-  const answered = check.answered;
   const update =
-    answered !== null &&
-    answered.newer &&
-    answered.latest !== null &&
-    answered.url !== null
-      ? { latest: answered.latest, newer: true, url: answered.url }
+    check.view !== null &&
+    check.view.newer &&
+    check.view.newest !== null &&
+    check.view.unavailable === null
+      ? { latest: check.view.newest }
       : null;
   /** Late-bound for the reason `focusSessionRef` is: starting a session needs
    * the panes, and setup is read before they exist. */
@@ -4994,10 +4997,11 @@ export function App(): JSX.Element {
       // From `app:info` rather than from a check's result: the states that
       // produce no result are exactly the ones where somebody wants this link.
       releasesUrl={info?.releasesUrl ?? null}
-      // `attempted`, not `answered` - see the narrowing above `update`.
-      update={check.attempted}
+      update={check.view}
+      updateError={check.error}
       updateChecking={check.checking}
       onCheckForUpdate={check.check}
+      onInstallUpdate={check.install}
       onOpenReleases={() => {
         if (info?.releasesUrl !== undefined)
           void helmOpenExternal(info.releasesUrl);
@@ -6507,7 +6511,7 @@ export function App(): JSX.Element {
           usageDisplay={settings?.usageDisplay ?? "percent"}
           onUsageDisplayChange={launcher.setUsageDisplay}
           update={update}
-          onOpenUpdate={(url) => void helmOpenExternal(url)}
+          onOpenUpdate={() => openSettings("updates")}
           plugins={statusPlugins}
           // With sessions in this PC's host: each host, where they run and what
           // quitting does there, which opens the setting that decides.

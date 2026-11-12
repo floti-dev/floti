@@ -88,9 +88,9 @@ export {
   type AgentLimitSettings,
   type SettingsPaneProps,
   type TerminalSettings,
-  type UpdateCheckResult,
   type UpdateOutcome,
-  type UpdateOutcomeState
+  type UpdateOutcomeState,
+  type UpdateView
 } from './components/SettingsPane'
 export {
   SETTINGS_SECTIONS,

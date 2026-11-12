@@ -1783,8 +1783,8 @@ export interface AppSettings {
    * next connect, and the row goes back to its default.
    *
    * The automatic contact is the host's, with floti.dev's `update.json` and
-   * the GitHub release it names, and the reason README, SPEC 5, PACKAGING and the `update:check` comment move
-   * together. On by default and off in one tick, because a machine that must
+   * the GitHub release it names, and the reason README, SPEC 5, PACKAGING and
+   * the network posture comment in `shared/ipc.ts` move together. On by default and off in one tick, because a machine that must
    * not talk to anything is a real requirement and not an exotic one.
    */
   updateCheck: boolean

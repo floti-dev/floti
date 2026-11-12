@@ -7,7 +7,6 @@ import { createWorld, disposeWorld, seedSettings, type World } from '../../test/
 import type { EventChannel, RequestChannel, RequestPayload, RequestResult } from '../shared/ipc'
 import type { Services } from './services'
 import type { ThemeService } from './themes'
-import type * as UpdateModule from './update'
 import { PATIENCE } from '../../../../test/patience'
 
 /**
@@ -68,7 +67,6 @@ describe('settings over IPC', () => {
   let themes: ThemeService
   let themesDir: string
   let nativeTheme: Electron.NativeTheme
-  let update: typeof UpdateModule
   const events: Array<{ channel: EventChannel; payload: unknown }> = []
   /** What tells the local host Helm's settings again, as `index.ts` passes it. */
   const hostSettingsChanged = vi.fn()
@@ -110,7 +108,6 @@ describe('settings over IPC', () => {
     delete process.env['CLAUDE_CONFIG_DIR']
 
     nativeTheme = (await import('electron')).nativeTheme
-    update = await import('./update')
     const { createServices } = await import('./services')
     const { createThemeService } = await import('./themes')
     const { registerIpc } = await import('./ipc')
@@ -150,7 +147,6 @@ describe('settings over IPC', () => {
   })
 
   afterAll(() => {
-    update.pointReleases(null)
     themes.stop()
     services.store.close()
     disposeWorld(world)
@@ -340,61 +336,6 @@ describe('settings over IPC', () => {
       electron.pick = null
       await invoke('roots:add')
       expect(acceptedRoots).toEqual([[more]])
-    })
-  })
-
-  describe('updates', () => {
-    it('asks the release source on every press, with no throttle and whether or not the update check is on', async () => {
-      await invoke('ownSettings:write', { updateCheck: false })
-      let asked = 0
-      update.pointReleases(() => {
-        asked += 1
-        return Promise.resolve('v9.9.9')
-      })
-
-      const first = await invoke('update:check')
-      const second = await invoke('update:check')
-      expect(asked).toBe(2)
-      expect(first).toMatchObject({ current: '0.0.0-test', latest: '9.9.9', newer: true, error: null })
-      expect(second.newer).toBe(true)
-      expect(stored().updateCheck).toBe(false)
-    })
-
-    it('counts a release equal to the running build as current', async () => {
-      update.pointReleases(() => Promise.resolve('v0.0.0'))
-      expect(await invoke('update:check')).toMatchObject({ latest: '0.0.0', newer: false, error: null })
-    })
-
-    it('says why it could not ask, and hands back the same releases page either way', async () => {
-      const info = await invoke('ownApp:info')
-      expect(info.version).toBe('0.0.0-test')
-      expect(info.releasesUrl).toMatch(/^https:\/\//)
-
-      update.pointReleases(() => Promise.reject(new Error('getaddrinfo ENOTFOUND api.github.com')))
-      const failed = await invoke('update:check')
-      expect(failed).toMatchObject({ latest: null, newer: false, error: 'getaddrinfo ENOTFOUND api.github.com' })
-
-      update.pointReleases(() => Promise.resolve('v9.9.9'))
-      const answered = await invoke('update:check')
-      expect(failed.url).toBe(info.releasesUrl)
-      expect(answered.url).toBe(info.releasesUrl)
-    })
-
-    it('S9: hears of a newer release from a local host running a newer floti, with no request made', () => {
-      const at = '2026-11-11T08:00:00.000Z'
-      const asked = update.releasesAsked()
-      expect(update.hostVersionNotice('3.0.0', '3.0.1', at)).toEqual({
-        current: '3.0.0',
-        latest: '3.0.1',
-        newer: true,
-        url: update.RELEASES_PAGE,
-        error: null,
-        checkedAt: at
-      })
-      expect(update.hostVersionNotice('3.0.1', '3.0.1', at)).toBeNull()
-      expect(update.hostVersionNotice('3.0.1', '3.0.0', at)).toBeNull()
-      expect(update.hostVersionNotice('3.0.0', 'not a version', at)).toBeNull()
-      expect(update.releasesAsked()).toBe(asked)
     })
   })
 })

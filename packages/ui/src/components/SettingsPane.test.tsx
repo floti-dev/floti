@@ -17,7 +17,7 @@ import {
   updateOutcome,
   type AppearanceSettings,
   type SettingsPaneProps,
-  type UpdateCheckResult
+  type UpdateView
 } from './SettingsPane'
 import type { SetupClaudeStatus } from './SetupPane'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './SettingsSections'
@@ -90,8 +90,10 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
     appVersion: '1.2.0',
     releasesUrl: 'https://github.com/example/helm/releases/latest',
     update: null,
+    updateError: null,
     updateChecking: false,
     onCheckForUpdate: vi.fn(),
+    onInstallUpdate: vi.fn(),
     onOpenReleases: vi.fn(),
     terminal: {
       terminalFontFamily: null,
@@ -484,44 +486,107 @@ describe('SettingsPane', () => {
   })
 
   describe('Updates', () => {
-    const answer = (over: Partial<UpdateCheckResult>): UpdateCheckResult => ({
-      current: '1.2.0',
-      latest: '1.2.0',
+    const view = (over: Partial<UpdateView>): UpdateView => ({
+      newest: '1.2.0',
       newer: false,
-      error: null,
       checkedAt: new Date().toISOString(),
+      failed: null,
+      checking: false,
+      unavailable: null,
+      installing: null,
+      installFailed: null,
       ...over
     })
 
-    it('says what the last check found, in a sentence of its own for each answer', () => {
+    it('says what this PC’s host found, in a sentence of its own for each state', () => {
       const { rerender } = renderPane({ section: 'updates', update: null })
       const updates = group('Updates')
-      expect(within(updates).getByText('Helm has not asked GitHub since it started.')).toBeTruthy()
+      expect(within(updates).getByText("Waiting to hear from this PC's host.")).toBeTruthy()
 
-      rerender({ update: answer({ latest: '1.3.0', newer: true }) })
+      rerender({ update: view({ newest: null, checkedAt: null }) })
+      expect(within(updates).getByText("This PC's host has not checked for a newer release yet.")).toBeTruthy()
+
+      rerender({ update: view({ newest: '1.3.0', newer: true }) })
       expect(within(updates).getByText('1.3.0 is available. This build is 1.2.0.')).toBeTruthy()
 
-      rerender({ update: answer({}) })
-      expect(within(updates).getByText('1.2.0 is the newest release. Asked just now.')).toBeTruthy()
-      expect(within(updates).queryByText(/still opens the releases page/)).toBeNull()
+      rerender({ update: view({}) })
+      expect(within(updates).getByText('1.2.0 is the newest release. Checked just now.')).toBeTruthy()
 
-      rerender({ update: answer({ latest: null, error: 'getaddrinfo ENOTFOUND api.github.com' }) })
-      expect(within(updates).getByText('Could not ask GitHub - getaddrinfo ENOTFOUND api.github.com.')).toBeTruthy()
-      expect(within(updates).getByText(/still opens the releases page/)).toBeTruthy()
+      rerender({ update: view({ failed: 'could not download update.json from https://floti.dev/update.json: offline.' }) })
+      expect(
+        within(updates).getByText(
+          'Could not check for a newer release - could not download update.json from https://floti.dev/update.json: offline.'
+        )
+      ).toBeTruthy()
+
+      rerender({ update: null, updateError: 'The host went away' })
+      expect(within(updates).getByText("Could not hear from this PC's host - The host went away.")).toBeTruthy()
     })
 
-    it('shows this build’s version, and the latest only while the last answer carried one', () => {
-      const { rerender } = renderPane({ section: 'updates', appVersion: '1.2.0', update: answer({ latest: '1.3.0', newer: true }) })
+    it('says why a development run checks for nothing, and rests the buttons that would ask its host', () => {
+      const { rerender } = renderPane({ section: 'updates', update: view({ unavailable: 'readOnly', newest: null }) })
+      const updates = group('Updates')
+      expect(
+        within(updates).getByText('This is a development run: its host checks for nothing and updates nothing.')
+      ).toBeTruthy()
+      expect(within(updates).getByRole('button', { name: 'Check now' })).toHaveProperty('disabled', true)
+      expect(within(updates).queryByRole('button', { name: /^Update to/ })).toBeNull()
+
+      rerender({ update: view({ unavailable: 'notStandalone', newest: '1.3.0', newer: true }) })
+      expect(within(updates).getByText(/does not run floti installed on its own/)).toBeTruthy()
+      expect(within(updates).queryByRole('button', { name: /^Update to/ })).toBeNull()
+    })
+
+    it('shows this build’s version, and the latest release the host’s last check found', () => {
+      const { rerender } = renderPane({
+        section: 'updates',
+        appVersion: '1.2.0',
+        update: view({ newest: '1.3.0', newer: true })
+      })
       const updates = group('Updates')
       expect(fact(updates, 'Version')).toBe('1.2.0')
       expect(fact(updates, 'Latest')).toBe('1.3.0')
 
-      rerender({ update: answer({ latest: null, error: 'no answer within 6000 ms' }) })
+      rerender({ update: view({ newest: null, checkedAt: null }) })
       expect(fact(updates, 'Latest')).toBe('-')
     })
 
-    it('asks whatever the launch setting says, and is busy only while a check is in flight', async () => {
-      const { props, rerender } = renderPane({ section: 'updates', updateCheck: false })
+    it('offers Update only while a newer release exists, and follows the update’s steps', async () => {
+      const { props, rerender } = renderPane({ section: 'updates', update: view({}) })
+      const updates = group('Updates')
+      expect(within(updates).queryByRole('button', { name: /^Update to/ })).toBeNull()
+
+      rerender({ update: view({ newest: '1.3.0', newer: true }) })
+      const install = (): HTMLElement => within(updates).getByRole('button', { name: 'Update to 1.3.0' })
+      await userEvent.click(install())
+      expect(props.onInstallUpdate).toHaveBeenCalledTimes(1)
+
+      rerender({
+        update: view({
+          newest: '1.3.0',
+          newer: true,
+          installing: { line: 'Downloading Helm-1.3.0-setup.exe.', waitingForApp: false }
+        })
+      })
+      expect(within(updates).getByText('Downloading Helm-1.3.0-setup.exe.')).toBeTruthy()
+      expect(install()).toHaveProperty('disabled', true)
+
+      rerender({
+        update: view({
+          newest: '1.3.0',
+          newer: true,
+          installFailed: 'Helm-1.3.0-setup.exe does not match its signature. Nothing was updated.'
+        })
+      })
+      const failed = within(updates).getByText(
+        'The update did not finish - Helm-1.3.0-setup.exe does not match its signature. Nothing was updated.'
+      )
+      expect(failed.getAttribute('data-settings-verdict')).toBe('warn')
+      expect(install()).toHaveProperty('disabled', false)
+    })
+
+    it('checks whatever the automatic setting says, and is busy only while a check is in flight', async () => {
+      const { props, rerender } = renderPane({ section: 'updates', updateCheck: false, update: view({}) })
       const updates = group('Updates')
       const checkNow = (): HTMLElement => within(updates).getByRole('button', { name: 'Check now' })
 
@@ -533,21 +598,22 @@ describe('SettingsPane', () => {
 
       rerender({ updateChecking: true })
       expect(checkNow()).toHaveProperty('disabled', true)
-      expect(within(updates).getByText('Asking GitHub…')).toBeTruthy()
+      expect(within(updates).getByText('Looking for a newer release…')).toBeTruthy()
 
-      rerender({ updateChecking: false, update: answer({}) })
+      rerender({ updateChecking: false })
       expect(checkNow()).toHaveProperty('disabled', false)
     })
 
-    it('keeps Release notes open, to the same page, whatever the last check said', async () => {
+    it('keeps Release notes open, to the same page, whatever the host said', async () => {
       const url = 'https://github.com/example/helm/releases/latest'
       const { props, rerender } = renderPane({ section: 'updates', releasesUrl: url, updateChecking: true })
       const notes = (): HTMLElement => within(group('Updates')).getByRole('button', { name: 'Release notes' })
 
       for (const state of [
         { updateChecking: true, update: null },
-        { updateChecking: false, update: answer({}) },
-        { updateChecking: false, update: answer({ latest: null, error: 'offline' }) }
+        { updateChecking: false, update: view({}) },
+        { updateChecking: false, update: view({ failed: 'offline.' }) },
+        { updateChecking: false, update: view({ unavailable: 'readOnly' as const }) }
       ]) {
         rerender(state)
         expect(notes()).toHaveProperty('disabled', false)
@@ -557,7 +623,7 @@ describe('SettingsPane', () => {
       expect(props.onOpenReleases).toHaveBeenCalledTimes(1)
     })
 
-    it('turns the launch check off, and on again', async () => {
+    it('turns the automatic check off, and on again', async () => {
       const { props, rerender } = renderPane({ section: 'updates', updateCheck: true })
       const tick = (): HTMLElement => screen.getByRole('checkbox', { name: 'Look for a newer floti once a day and install it' })
 
@@ -566,6 +632,16 @@ describe('SettingsPane', () => {
       rerender({ updateCheck: false })
       await userEvent.click(tick())
       expect(props.onUpdateCheckChange).toHaveBeenLastCalledWith(true)
+    })
+
+    it('never calls a version it cannot place newer, and says the host’s order of things', () => {
+      expect(updateOutcome(view({ installing: { line: 'Waiting.', waitingForApp: true } }), true, '1.2.0').state).toBe(
+        'installing'
+      )
+      expect(updateOutcome(view({ unavailable: 'readOnly', installing: null }), true, '1.2.0').state).toBe(
+        'unavailable'
+      )
+      expect(updateOutcome(view({ failed: 'offline.' }), false, '1.2.0', 'refused').state).toBe('unreachable')
     })
   })
 
@@ -881,13 +957,28 @@ describe('SettingsPane', () => {
 })
 
 describe('updateOutcome', () => {
-  const at = new Date().toISOString()
+  const view = (over: Partial<UpdateView>): UpdateView => ({
+    newest: '1.2.0',
+    newer: false,
+    checkedAt: new Date().toISOString(),
+    failed: null,
+    checking: false,
+    unavailable: null,
+    installing: null,
+    installFailed: null,
+    ...over
+  })
 
-  it('is ok when current, and never a warning for a newer release or an unreachable GitHub', () => {
-    expect(updateOutcome({ current: '1.2.0', latest: '1.2.0', newer: false, error: null, checkedAt: at }, false).tone).toBe('ok')
-    expect(updateOutcome({ current: '1.2.0', latest: '1.3.0', newer: true, error: null, checkedAt: at }, false).tone).toBe('todo')
-    expect(updateOutcome({ current: '1.2.0', latest: null, newer: false, error: 'offline', checkedAt: at }, false).tone).toBe('todo')
-    expect(updateOutcome(null, true).tone).toBe('todo')
+  it('is ok when current, and never a warning for a newer release, an unreachable release or a dev run', () => {
+    expect(updateOutcome(view({}), false, '1.2.0').tone).toBe('ok')
+    expect(updateOutcome(view({ newest: '1.3.0', newer: true }), false, '1.2.0').tone).toBe('todo')
+    expect(updateOutcome(view({ failed: 'offline.' }), false, '1.2.0').tone).toBe('todo')
+    expect(updateOutcome(view({ unavailable: 'readOnly' }), false, '1.2.0').tone).toBe('todo')
+    expect(updateOutcome(null, true, '1.2.0').tone).toBe('todo')
+  })
+
+  it('warns only for an update that was asked for and did not finish', () => {
+    expect(updateOutcome(view({ installFailed: 'The installer ended with 2.' }), false, '1.2.0').tone).toBe('warn')
   })
 })
 

@@ -183,9 +183,9 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   (`platform/private_files`). Keys and Noise sessions come from snow, through
   `floti_protocol::noise`; never hand-rolled crypto.
 - The network posture is stated identically in README, docs/PACKAGING.md, the
-  `update:check` comment in `shared/ipc.ts` and SPEC 5; change all four
-  together. Helm contacts nothing on its own initiative except the update
-  check.
+  network posture comment in `shared/ipc.ts` and SPEC 5; change all four
+  together. The host's update check is the only request Helm makes on its own
+  initiative; the app itself contacts nothing.
 
 ## Browser pane
 

@@ -29,7 +29,7 @@ import { activePty, killPty, spawnPty, windowsBuildNumber } from './pty'
 import { adoptExistingProfile, createServices, updateSettings, type Services } from './services'
 import { createFilesService, filesRoots } from './files'
 import { attachArtifactConsole, CONTENT_SCHEME, registerContentProtocol, serveArtifactsFrom } from './content'
-import { PLUGIN_SCHEMES, type UpdateCheck } from '../shared/ipc'
+import { PLUGIN_SCHEMES } from '../shared/ipc'
 import { createPluginHost } from './plugins/host'
 import { registerHostPluginProtocol } from './plugins/protocol'
 import { createBackgroundHost } from './plugins/background'
@@ -47,7 +47,7 @@ import {
 import { createBrowserMcp, type BrowserMcpHost } from './browser-mcp'
 import { browserAvailability, readAppArmorRestricts, withBrowserAvailability } from './browser-sandbox'
 import { installIpcRecorder } from './ipc-recorder'
-import { hostVersionNotice } from './update'
+import { followHostUpdate } from './update'
 import { quitConfirm, sessionConfirm } from './host/confirm'
 import type { Confirm, SessionHost } from './host/session-host'
 import {
@@ -465,16 +465,11 @@ function startApp(options: AppOptions = {}): void {
   void desktopHost.link.connection().catch((err: unknown) => {
     console.warn(err instanceof Error ? err.message : String(err))
   })
-  // A local host running a newer floti than this Helm put a newer release in
-  // place: the window hears it as a check's answer, with no request made.
-  let hostNotice: UpdateCheck | null = null
-  const tellHostNotice = (): void => {
-    if (hostNotice !== null && win !== null && !win.isDestroyed()) win.webContents.send('update:checked', hostNotice)
-  }
-  desktopHost.link.onConnected(async (connection) => {
-    const info = await connection.request('app:info', null)
-    hostNotice = hostVersionNotice(app.getVersion(), info.version, new Date().toISOString())
-    tellHostNotice()
+  // The update this PC's host runs for Update replaces the app once it has
+  // quit: main quits when the update says it waits for it, asking nothing and
+  // keeping every session, and the update opens the new app (update.ts).
+  desktopHost.link.onConnected((connection) => {
+    followHostUpdate(connection, () => quitGate.quitKeeping(), (line) => console.log(line))
   })
   // The window carries its terminals, says what it shows and hears the host's
   // notifications over its own connection (`renderer/src/app/host/sessions.ts`).
@@ -673,10 +668,6 @@ function startApp(options: AppOptions = {}): void {
       pushTheme({ services, themes, plugins, window: () => win })
       // The window reads its settings and starts its first scan over its own
       // connection (`renderer/src/app/host/workspace.ts`).
-
-      // What the local host's version said, for a window that was not
-      // listening yet when it connected.
-      tellHostNotice()
 
       if (win) {
         options.onReady?.({ win, services, sessions, browsers, browserMcp })

@@ -8,12 +8,11 @@ import {
   type ThemeListing,
   type ThemeState
 } from '@helm/core/types'
-import type { AppInfo, ClaudeStatus, UpdateCheck } from '../../../shared/ipc'
+import type { AppInfo, ClaudeStatus } from '../../../shared/ipc'
 import { bridge } from './bridge.testkit'
 import { useLauncher } from './useLauncher'
 import { useSetup } from './useSetup'
 import { useThemes } from './useThemes'
-import { useUpdate } from './useUpdate'
 import { PATIENCE } from '../../../../../../test/patience'
 
 vi.mock('./bridge', () => import('./bridge.testkit'))
@@ -98,52 +97,6 @@ describe('useThemes', () => {
     act(() => result.current.duplicate('graphite'))
     expect(bridge.invoked('themes:duplicate')).toEqual([{ id: 'graphite' }])
     await vi.waitFor(() => expect(bridge.invoked('shell:showItem')).toEqual([{ path: 'C:\\themes\\graphite-copy.json' }]), { timeout: PATIENCE })
-  })
-})
-
-describe('useUpdate', () => {
-  const answer = (over: Partial<UpdateCheck>): UpdateCheck => ({
-    current: '1.2.0',
-    latest: '1.2.0',
-    newer: false,
-    url: 'https://github.com/example/helm/releases/latest',
-    error: null,
-    checkedAt: '2026-10-02T12:00:00.000Z',
-    ...over
-  })
-
-  it('asks main on every press, and is checking only while a request is in flight', async () => {
-    const pending = [deferred<UpdateCheck>(), deferred<UpdateCheck>()]
-    let asked = 0
-    bridge.answer('update:check', () => (pending[asked++] as { promise: Promise<UpdateCheck> }).promise)
-    const { result } = renderHook(() => useUpdate())
-    expect(result.current.checking).toBe(false)
-
-    act(() => result.current.check())
-    expect(result.current.checking).toBe(true)
-    const newer = answer({ latest: '1.3.0', newer: true })
-    await act(async () => pending[0]?.resolve(newer))
-    expect(result.current.checking).toBe(false)
-    expect(result.current.attempted).toEqual(newer)
-    expect(result.current.answered).toEqual(newer)
-
-    act(() => result.current.check())
-    expect(result.current.checking).toBe(true)
-    const offline = answer({ latest: null, error: 'offline' })
-    await act(async () => pending[1]?.resolve(offline))
-    expect(result.current.checking).toBe(false)
-    expect(bridge.invoked('update:check')).toHaveLength(2)
-    // The pane reads the last attempt; the status bar keeps the last answer.
-    expect(result.current.attempted).toEqual(offline)
-    expect(result.current.answered).toEqual(newer)
-  })
-
-  it('adopts the launch check main pushes, and never asks on its own', () => {
-    const { result } = renderHook(() => useUpdate())
-    const pushed = answer({ latest: '1.3.0', newer: true })
-    act(() => bridge.emit('update:checked', pushed))
-    expect(result.current.answered).toEqual(pushed)
-    expect(bridge.invoked('update:check')).toEqual([])
   })
 })
 

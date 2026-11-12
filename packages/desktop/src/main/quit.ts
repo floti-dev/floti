@@ -86,6 +86,13 @@ export interface QuitGate {
   allowClose(closeAgain: () => void): boolean
   /** What the user answered for this quit, or null while nobody was asked. */
   answer(): Exclude<QuitAnswer, 'cancel'> | null
+  /**
+   * Quits asking nothing and leaving every session running, on every host,
+   * as Keep running and quit does: what the app does when `floti update`
+   * waits for it to quit to replace it (`followHostUpdate`). A question on
+   * screen is answered by it.
+   */
+  quitKeeping(): void
 }
 
 export function createQuitGate(host: QuitGateHost): QuitGate {
@@ -104,7 +111,8 @@ export function createQuitGate(host: QuitGateHost): QuitGate {
       .catch((): QuitAnswer => 'cancel')
       .then((answer) => {
         asking = false
-        if (answer === 'cancel') return
+        // A quit for an update came first, keeping the sessions: it stands.
+        if (answer === 'cancel' || answered !== null) return
         answered = answer
         then()
       })
@@ -123,6 +131,11 @@ export function createQuitGate(host: QuitGateHost): QuitGate {
       return step === 'proceed'
     },
 
-    answer: () => answered
+    answer: () => answered,
+
+    quitKeeping() {
+      answered = 'keep'
+      host.quit()
+    }
   }
 }

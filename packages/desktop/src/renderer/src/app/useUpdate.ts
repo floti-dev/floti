@@ -1,71 +1,72 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { UpdateCheck } from '../../../shared/ipc'
-import { helm } from './bridge'
+import type { UpdateView } from '@helm/ui'
+import type { HostConnection } from '../../../shared/host/client'
+import type * as P from '../../../shared/host/protocol'
+import { updateView, type Updates } from './host/updates'
 
 /**
- * What Helm knows about newer releases, and the one way to ask.
+ * What this PC's host knows about newer releases, and the two things a
+ * person may ask of it: check now, and update.
  *
- * This hook was push-only, and the comment here argued against ever giving it
- * an `invoke`: the check is the main process's decision - it owns the setting
- * that gates it and the timestamp that throttles it - and a window that could
- * ask on its own would be a second, unbounded way for the one request Helm
- * makes to happen.
+ * The host is the one that asks the release; the window only listens to it
+ * (`update:state`, held for as long as the window is open) and passes on a
+ * press. Nothing here asks on its own: `check` and `install` are handed to
+ * buttons and to nothing else. Check now is unthrottled on purpose - a
+ * person pressing a button is its own bound.
  *
- * That is amended rather than deleted, because half of it was right. The
- * unbounded thing to fear is a *window* asking - on a render, a focus, a timer,
- * a mount. What `check` adds is not the window asking but a person asking, and
- * a person pressing a button is its own bound: it happens as often as somebody
- * chooses to press it and not once more. `checkForUpdate` is therefore
- * deliberately unthrottled, and `main/update.ts` says why at the code site.
- *
- * Nothing here may call `check` on its own. It is passed to a button and to
- * nothing else.
- *
- * Two results rather than one, because they answer different questions:
- *
- *   `answered` is the last check that actually completed. The status bar reads
- *   it, so a failed manual check cannot take down a link that a successful one
- *   put up - the newer release did not stop existing because the network went
- *   away.
- *
- *   `attempted` is the last check made, complete or not. The settings pane
- *   reads it, because "could not ask" is an outcome a person who just pressed
- *   Check now is owed.
- *
- * Both start null, which covers three situations on purpose: the setting is
- * off, the throttle has not elapsed, or nobody has asked. None of them is a
- * fact about *this* Helm being out of date, so none of them belongs on screen.
+ * `view` is null until the host has been heard, and `error` says why it
+ * could not be, or why the last press was refused; the next state heard
+ * clears it.
  */
-export interface UpdateState {
-  answered: UpdateCheck | null
-  attempted: UpdateCheck | null
-  /** A check the user asked for is in flight, so the button can say so. */
+export interface UpdateHook {
+  view: UpdateView | null
+  error: string | null
+  /** A Check now the user pressed is in flight, or the host is checking. */
   checking: boolean
   check: () => void
+  install: () => void
 }
 
-export function useUpdate(): UpdateState {
-  const [answered, setAnswered] = useState<UpdateCheck | null>(null)
-  const [attempted, setAttempted] = useState<UpdateCheck | null>(null)
-  const [checking, setChecking] = useState(false)
+export interface UpdateDeps {
+  updates: Updates
+  /** The window's own connection to this PC's host. */
+  connection: () => Promise<HostConnection>
+}
 
-  const adopt = useCallback((next: UpdateCheck) => {
-    setAttempted(next)
-    if (next.error === null) setAnswered(next)
-  }, [])
+export function useUpdate(deps: UpdateDeps, appVersion: string | null): UpdateHook {
+  const { updates, connection } = deps
+  const [state, setState] = useState<P.UpdateState | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [asking, setAsking] = useState(false)
 
-  useEffect(() => {
-    const off = helm.on('update:checked', adopt)
-    return off
-  }, [adopt])
+  useEffect(
+    () =>
+      updates.watch(connection, (heard) => {
+        if (heard.ok) {
+          setState(heard.state)
+          setError(null)
+        } else {
+          setError(heard.message)
+        }
+      }),
+    [updates, connection]
+  )
 
   const check = useCallback(() => {
-    setChecking(true)
-    void helm
-      .invoke('update:check')
-      .then(adopt)
-      .finally(() => setChecking(false))
-  }, [adopt])
+    setAsking(true)
+    void updates
+      .check(connection)
+      .then((result) => {
+        if (result.ok) setState(result.state)
+        setError(result.ok ? null : result.message)
+      })
+      .finally(() => setAsking(false))
+  }, [updates, connection])
 
-  return { answered, attempted, checking, check }
+  const install = useCallback(() => {
+    void updates.install(connection).then((result) => setError(result.ok ? null : result.message))
+  }, [updates, connection])
+
+  const view = state === null ? null : updateView(state, appVersion)
+  return { view, error, checking: asking || view?.checking === true, check, install }
 }

@@ -33,7 +33,7 @@ describe("StatusBar: which Helm and which claude", () => {
   it("leads with the version, the build and a newer release, then claude, then the sessions", () => {
     renderBar({
       mode: "dev",
-      update: { latest: "0.5.0", newer: true, url: "https://example.test" },
+      update: { latest: "0.5.0" },
     });
     expect(segments().slice(0, 7)).toEqual([
       "Helm 0.4.2",

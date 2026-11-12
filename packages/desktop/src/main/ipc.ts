@@ -15,7 +15,7 @@ import type { FilesService } from './files'
 import { applyWindowTheme } from './chrome'
 import type { ThemeService } from './themes'
 import { setClaudeOverride } from './claude-cli'
-import { checkForUpdate, RELEASES_PAGE } from './update'
+import { RELEASES_PAGE } from './update'
 import { appMode, dataDir, dbFile } from './paths'
 import type { PluginHost } from './plugins/host'
 import type { OwnDataCopy } from './host/own-data'
@@ -438,8 +438,6 @@ export function registerIpc(ctx: IpcContext): void {
         : await dialog.showOpenDialog(options)
       return { path: result.canceled ? null : (result.filePaths[0] ?? null) }
     },
-
-    'update:check': () => checkForUpdate(),
 
     'theme:resolved': () => ctx.themes.state(services.settings).resolved,
     'theme:current': () => ctx.themes.state(services.settings),

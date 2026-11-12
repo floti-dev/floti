@@ -3,7 +3,7 @@
 What Floti treats as a secret, how a device reaches a host, and what the
 browser pane may do. The network posture is in
 [PACKAGING.md](PACKAGING.md#network-posture), stated identically in README,
-SPEC 5 and the `update:check` comment in `shared/ipc.ts`; change all four
+SPEC 5 and the network posture comment in `shared/ipc.ts`; change all four
 together. The agent tools listener's token and origin rules are in
 [AGENT-TOOLS.md](AGENT-TOOLS.md#the-listener).
 
