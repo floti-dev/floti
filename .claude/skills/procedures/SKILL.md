@@ -45,7 +45,10 @@ checks everything, publishes nothing, and leaves the files and their
 signatures as the run's `release-files` artifact (docs/PACKAGING.md, "A dry
 run"). A real release is signed by the `sign` job with `MINISIGN_SECRET_KEY`
 from the `release` environment, and fails there unless every signature
-verifies against `crates/host/src/update/minisign.pub`. Then merge and push. CI runs `pnpm check`
+verifies against `crates/host/src/update/minisign.pub`. That environment is a
+one-time prerequisite: the owner creates it with a deployment branch policy
+admitting `main` alone, then sets the key as its secret, never as a
+repository secret (docs/PACKAGING.md, "The release environment"). Then merge and push. CI runs `pnpm check`
 and the build on Windows, macOS and Linux - a failure on any of them blocks
 the release - and verifies the exes, the dmg and zip, and the AppImage from
 the inside before publishing. `packaging-check` and `verify:installer` are not part of a

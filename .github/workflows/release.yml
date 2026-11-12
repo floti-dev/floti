@@ -22,9 +22,15 @@ name: Release
 # Every file a release carries has a minisign signature beside it,
 # `<file>.minisig`, with the trusted comment `floti <version> <file>`, and a
 # GitHub build attestation. `sign` is the one job that reads the signing key,
-# `MINISIGN_SECRET_KEY` in the `release` environment, which only main may use,
-# and it checks every signature against the public key floti update trusts,
+# `MINISIGN_SECRET_KEY` in the `release` environment, and it checks every
+# signature against the public key floti update trusts,
 # crates/host/src/update/minisign.pub, before anything is published.
+#
+# The environment is a prerequisite the repository's owner sets up once, in
+# this order (docs/PACKAGING.md, "The release environment"): create `release`
+# with a deployment branch policy that admits main alone, then set the key as
+# that environment's secret. A repository secret named MINISIGN_SECRET_KEY must
+# never exist: every job, a dry run's included, could read it.
 #
 # A push to a branch named `release-dry-run/<name>` runs all of it - the
 # checks, floti, the Windows, macOS and Linux builds, the protocol types, the
@@ -569,7 +575,9 @@ jobs:
   # signature against the public key committed at
   # crates/host/src/update/minisign.pub, the one floti update trusts, before
   # anything is published. The only job that reads the key: the `release`
-  # environment holds it, and only main may use that environment. A dry run
+  # environment holds it, and that environment's deployment branch policy
+  # admits main alone - once the owner has created it that way, which the
+  # comment at the top of this file and docs/PACKAGING.md describe. A dry run
   # never reaches this job; `sign-dry-run` signs that run's files instead.
   #
   # The key reaches one step, as a variable that minisign.mjs writes to an
@@ -590,19 +598,25 @@ jobs:
       PUBLIC_KEY: crates/host/src/update/minisign.pub
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
 
       - name: Fetch the release's files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-unsigned
           path: ${{ runner.temp }}/release
 
       - uses: ./.github/actions/minisign
+
+      # The files to sign, one path per line, made before any step that sees
+      # the key, so that step runs nothing but the signing.
+      - name: List the files to sign
+        shell: bash
+        run: node packages/desktop/scripts/release.mjs names "$VERSION" --unsigned | sed "s|^|$RUNNER_TEMP/release/|" >"$RUNNER_TEMP/to-sign"
 
       - name: Confirm the public key and the signing key are there
         shell: bash
@@ -625,14 +639,14 @@ jobs:
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
         run: |
           set -euo pipefail
-          mapfile -t files < <(node packages/desktop/scripts/release.mjs names "$VERSION" --unsigned | sed "s|^|$RUNNER_TEMP/release/|")
+          mapfile -t files <"$RUNNER_TEMP/to-sign"
           node packages/desktop/scripts/minisign.mjs sign --comment "floti $VERSION {name}" "${files[@]}"
 
       - name: Check every signature against the committed public key
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t files < <(node packages/desktop/scripts/release.mjs names "$VERSION" --unsigned | sed "s|^|$RUNNER_TEMP/release/|")
+          mapfile -t files <"$RUNNER_TEMP/to-sign"
           node packages/desktop/scripts/minisign.mjs verify --public-key "$PUBLIC_KEY" --comment "floti $VERSION {name}" "${files[@]}"
 
       # Exactly the release's files and a signature beside each, and nothing
@@ -687,6 +701,12 @@ jobs:
 
       - uses: ./.github/actions/minisign
 
+      # The files to sign, one path per line, made before any step that sees
+      # the key, so that step runs nothing but the signing.
+      - name: List the files to sign
+        shell: bash
+        run: node packages/desktop/scripts/release.mjs names "$VERSION" --unsigned | sed "s|^|$RUNNER_TEMP/release/|" >"$RUNNER_TEMP/to-sign"
+
       # The secret half lives for this step alone. It reaches minisign.mjs the
       # way the release's does, as MINISIGN_SECRET_KEY, so the dry run signs
       # through the same code.
@@ -699,7 +719,7 @@ jobs:
           mkdir "$keys"
           trap 'rm -f "$keys/minisign.key"' EXIT
           minisign -G -W -p "$keys/minisign.pub" -s "$keys/minisign.key" >/dev/null
-          mapfile -t files < <(node packages/desktop/scripts/release.mjs names "$VERSION" --unsigned | sed "s|^|$RUNNER_TEMP/release/|")
+          mapfile -t files <"$RUNNER_TEMP/to-sign"
           MINISIGN_SECRET_KEY=$(<"$keys/minisign.key") node packages/desktop/scripts/minisign.mjs sign --comment "floti $VERSION {name}" "${files[@]}"
 
       - name: Check every signature against this run's public key
@@ -708,7 +728,7 @@ jobs:
           set -euo pipefail
           keys="$RUNNER_TEMP/dry-run-key"
           [[ ! -e $keys/minisign.key ]] || { echo "::error::the dry run's secret key outlived the step that made it"; exit 1; }
-          mapfile -t files < <(node packages/desktop/scripts/release.mjs names "$VERSION" --unsigned | sed "s|^|$RUNNER_TEMP/release/|")
+          mapfile -t files <"$RUNNER_TEMP/to-sign"
           node packages/desktop/scripts/minisign.mjs verify --public-key "$keys/minisign.pub" --comment "floti $VERSION {name}" "${files[@]}"
 
       - name: Confirm the release's files
@@ -755,20 +775,20 @@ jobs:
       PREVIEW: ${{ needs.version.outputs.preview }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
 
       - name: Fetch the release's files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-files
           path: ${{ runner.temp }}/release
 
       - name: Fetch the release notes
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-notes
           path: ${{ runner.temp }}/notes

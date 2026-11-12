@@ -372,7 +372,7 @@ after them and finishes green.
 | `protocol` | The crate's `generated_files` test, then `floti-protocol-<version>.tar.gz`. |
 | `release-windows`, `release-mac`, `release-linux` | One desktop build each, verified from the inside and handed on as a workflow artifact. None publishes anything. |
 | `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s and that the folder holds exactly the twelve files to sign (`scripts/release.mjs check --unsigned`), and uploads them as `release-unsigned`. |
-| `sign` | The only job that reads the signing key, in the `release` environment. Signs every file, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-four files with their SHA-256s in the run's summary and uploads them as `release-files`. Never runs in a dry run. |
+| `sign` | The only job that reads the signing key, in the `release` environment (a prerequisite: "The release environment"). Signs every file, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-four files with their SHA-256s in the run's summary and uploads them as `release-files`. Never runs in a dry run. |
 | `sign-dry-run` | A dry run's `sign`: the same signing and checks, with a key pair made in the run. Runs only in a dry run. |
 | `publish` | The only job with write access. Attests every file in `release-files`, then creates the release from them, publishes it and confirms it. Never runs in a dry run. |
 | `sdk` | The plugin SDK's npm publish, on its own version. Never runs in a dry run. |
@@ -478,9 +478,11 @@ five floti files and their SHA-256 list - has a minisign signature beside it,
   floti. It is the only key `floti update` trusts.
 - **The secret key is kept only in the `release` environment**, as the secret
   `MINISIGN_SECRET_KEY`: the whole minisign secret key file, made with
-  `minisign -G -W`, so it has no password. Only `main` may use that
-  environment, and `sign` is the only job that names it. SECURITY.md says how
-  the key is handled in the run.
+  `minisign -G -W`, so it has no password. `sign` is the only job that names
+  it. That environment, admitting `main` alone, is a prerequisite the owner
+  creates before setting the secret ("The release environment" below), and no
+  repository secret of that name may exist. SECURITY.md says how the key is
+  handled in the run.
 - **Every signature is checked before anything is published.** `sign` checks
   each one with minisign itself against the committed public key, trusted
   comment included (`scripts/minisign.mjs verify`). A release fails there,
@@ -499,7 +501,7 @@ five floti files and their SHA-256 list - has a minisign signature beside it,
 - **Attestations** come from `actions/attest-build-provenance`, pinned to a
   commit, in `publish` before the release is created: one attestation naming
   every file, signatures included. `publish` is the only job with
-  `id-token: write` and `attestations: write`. A dry run makes none.
+  `attestations: write`. A dry run makes none.
 
 To check a file by hand, with minisign and the public key's second line (the
 one starting `RW`):
@@ -511,6 +513,31 @@ the trusted comment, which must be `floti <version> <file>`. To check the
 attestation, with the GitHub CLI:
 
     gh attestation verify floti-3.0.0-linux-x64 --repo floti-dev/floti
+
+### The release environment
+
+The signing key lives in the repository's `release` environment, and the
+environment has to exist, admitting `main` alone, before the key is put in
+it. Neither is in the repository; the owner sets them up once, in this order,
+with the GitHub CLI:
+
+    # 1. The environment, with a deployment branch policy that admits main alone.
+    gh api -X PUT repos/floti-dev/floti/environments/release \
+      -F 'deployment_branch_policy[protected_branches]=false' \
+      -F 'deployment_branch_policy[custom_branch_policies]=true'
+    gh api -X POST repos/floti-dev/floti/environments/release/deployment-branch-policies \
+      -f name=main -f type=branch
+
+    # 2. Only then, the key, as that environment's secret: the whole file
+    #    `minisign -G -W` wrote, so it has no password.
+    gh secret set MINISIGN_SECRET_KEY --env release --repo floti-dev/floti <minisign.key
+
+The order matters: a secret set in an environment that does not limit its
+branches yet could be read by a job on any branch. **A repository secret
+named `MINISIGN_SECRET_KEY` must never exist**: every job could read it, a
+dry run's included. `gh secret list --repo floti-dev/floti` must not list it;
+`gh secret list --env release --repo floti-dev/floti` does. Until both steps
+are done, a real release fails at `sign`, before anything is published.
 
 ### A dry run
 

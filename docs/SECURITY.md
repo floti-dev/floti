@@ -66,9 +66,12 @@ together. The agent tools listener's token and origin rules are in
   `minisign -Vm <file> -P <public key>`, which must print the trusted comment
   `floti <version> <file>`.
 - The secret half is kept only in the `release` environment of the
-  repository, as `MINISIGN_SECRET_KEY`, which only `main` may use. The `sign`
-  job in `release.yml` is the one job that names it, and two of its steps read
-  it: one to confirm it is set, one to sign. `scripts/minisign.mjs` writes it
+  repository, as `MINISIGN_SECRET_KEY`. That environment is a prerequisite the
+  owner creates, with a deployment branch policy admitting `main` alone,
+  before the secret is set in it (PACKAGING.md, "The release environment",
+  has the commands). A repository secret of that name must never exist: every
+  job could read it. The `sign` job in `release.yml` is the one job that names
+  it, and two of its steps read it: one to confirm it is set, one to sign. `scripts/minisign.mjs` writes it
   to an owner-only file in a folder of its own under `$RUNNER_TEMP` and removes
   that folder before the step ends, whether signing worked or not. It never
   reaches a file in the workspace, a log, an artifact, minisign's environment
@@ -76,7 +79,7 @@ together. The agent tools listener's token and origin rules are in
 - A dry run signs with a key pair made in that run, whose secret half is
   removed in the step that made it, and never reads the `release` environment.
 - Each release's files also carry a GitHub build attestation, made in
-  `publish`, the only job with `id-token: write`.
+  `publish`, the only job with `attestations: write`.
 
 ## Access, keys and devices
 
