@@ -10,7 +10,9 @@
 //!   keeps running from the copy aside, which is removed at once when nothing
 //!   runs it. Copies left aside are removed by a later install or update,
 //!   once nothing runs them: Windows refuses to remove one that a process
-//!   still runs, and that refusal is the test.
+//!   still runs, and that refusal is the test. Each rename waits out, for a
+//!   few seconds, a file something holds for a moment, such as Defender
+//!   scanning the just-written copy.
 //! - macOS and Linux: `~/.local/bin`. The new file is renamed over the old
 //!   one, which leaves a process running it its own copy, so nothing is ever
 //!   put aside. On macOS the new file loses `com.apple.quarantine` first: a
