@@ -14,7 +14,12 @@
 //!    is left as it is, and so is one that says a newer version than this
 //!    one (`floti update` put it there), with its Node, unless `--force`
 //!    asks for this one. Copies an earlier install or update put aside are
-//!    removed once nothing runs them.
+//!    removed once nothing runs them. On a computer whose own CPU is arm64
+//!    ([`Standalone::native_cpu`]), the arm64 build beside this floti
+//!    ([`ARM64_BUILD`], which the Windows desktop installer carries beside
+//!    its x64 floti) is what is put in place, by the same rules, even when
+//!    this floti is x64 emulated there; so a native arm64 floti install.ps1
+//!    put there, of the same version, is left as it is.
 //! 2. The Node runtime: the `node` folder beside this floti, when there is
 //!    one, file by file the same way, into `node` beside the installed one,
 //!    where the host looks for it. A `node`, or a folder in it, that is not
@@ -68,6 +73,10 @@ pub trait InstallSystem {
     /// The version the floti at `floti` says (`floti version`), or `None`
     /// when it says none.
     fn version_of(&self, floti: &Path) -> Option<String>;
+
+    /// This computer's own CPU ([`Standalone::native_cpu`]), whatever this
+    /// floti was built for.
+    fn native_cpu(&self) -> &'static str;
 }
 
 /// This computer, for the user this process runs as.
@@ -98,6 +107,10 @@ impl InstallSystem for NativeSystem {
     fn version_of(&self, floti: &Path) -> Option<String> {
         let output = Command::new(floti).arg("version").output().ok()?;
         version_in(&String::from_utf8_lossy(&output.stdout))
+    }
+
+    fn native_cpu(&self) -> &'static str {
+        NativeStandalone.native_cpu()
     }
 }
 
@@ -254,7 +267,8 @@ fn place_all(
     std::fs::create_dir_all(folder)
         .map_err(|why| format!("could not make {}: {why}", folder.display()))?;
     let floti = folder.join(name);
-    if !force && let Some(newer) = newer_there(&floti, source, version, system) {
+    let chosen = chosen_source(source, system.native_cpu());
+    if !force && let Some(newer) = newer_there(&floti, &chosen, version, system) {
         return Ok((
             floti.clone(),
             vec![format!(
@@ -263,7 +277,7 @@ fn place_all(
             )],
         ));
     }
-    place_file(source, &floti, place)?;
+    place_file(&chosen, &floti, place)?;
     let mut notes = Vec::new();
     if let Some(node) = source.parent().map(|parent| parent.join(SHIPPED_FOLDER))
         && is_real_folder(&node)
@@ -271,6 +285,25 @@ fn place_all(
         place_folder(&node, &folder.join(SHIPPED_FOLDER), place, &mut notes)?;
     }
     Ok((floti, notes))
+}
+
+/// The arm64 build of floti a Windows desktop install carries beside its
+/// x64 one (`resources\floti-arm64.exe`, the release's
+/// `floti-windows-arm64.exe`).
+pub const ARM64_BUILD: &str = "floti-arm64.exe";
+
+/// The floti to put in place for `source`, the floti running install-self,
+/// on a computer whose own CPU is `native_cpu`: the arm64 build beside it
+/// ([`ARM64_BUILD`]) when the computer is arm64 and that file is there, so an
+/// Arm computer gets a native floti even from an x64 one emulated there;
+/// otherwise `source` itself.
+pub fn chosen_source(source: &Path, native_cpu: &str) -> PathBuf {
+    let arm64 = source.with_file_name(ARM64_BUILD);
+    if native_cpu == "arm64" && arm64.is_file() {
+        arm64
+    } else {
+        source.to_path_buf()
+    }
 }
 
 /// The version of the floti at `target` when it is another file than

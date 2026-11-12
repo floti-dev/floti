@@ -77,6 +77,12 @@ pub trait Standalone {
     /// aside, where nothing runs them any more, and answers those it left.
     fn remove_asides(&self, target: &Path) -> Vec<PathBuf>;
 
+    /// This computer's own CPU, as the release's file names say it (`x64`,
+    /// `arm64`), whatever this floti was built for: on Windows the native
+    /// machine `IsWow64Process2` names, so an x64 floti emulated on an Arm
+    /// computer says `arm64`; on macOS and Linux this build's own.
+    fn native_cpu(&self) -> &'static str;
+
     /// The folders an install made for floti alone, deepest first, which
     /// uninstalling removes once they are empty: on Windows
     /// `%LOCALAPPDATA%\Programs\Floti\bin` and `Floti` above it; none on

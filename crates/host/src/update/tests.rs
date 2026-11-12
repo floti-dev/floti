@@ -108,6 +108,10 @@ impl Standalone for FakeStandalone {
         standalone::windows::Native.remove_asides(target)
     }
 
+    fn native_cpu(&self) -> &'static str {
+        "x64"
+    }
+
     fn own_folders(&self, _env: &UserEnv) -> Vec<PathBuf> {
         Vec::new()
     }

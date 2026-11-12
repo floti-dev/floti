@@ -27,6 +27,10 @@ impl Standalone for Native {
         Vec::new()
     }
 
+    fn native_cpu(&self) -> &'static str {
+        crate::version::cpu_name()
+    }
+
     fn own_folders(&self, _env: &UserEnv) -> Vec<PathBuf> {
         Vec::new()
     }

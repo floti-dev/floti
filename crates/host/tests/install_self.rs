@@ -13,7 +13,7 @@ use std::env::consts::EXE_SUFFIX;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
-use floti_host::install_self::{Install, InstallSystem, install_self};
+use floti_host::install_self::{ARM64_BUILD, Install, InstallSystem, install_self};
 use floti_host::platform::standalone::{Native, Standalone};
 use floti_host::testkit::TestDirs;
 
@@ -27,9 +27,15 @@ struct FakeSystem {
     there: Option<&'static str>,
     added: RefCell<Vec<PathBuf>>,
     setups: RefCell<Vec<PathBuf>>,
+    /// This computer's own CPU; x64 when it says none.
+    cpu: Option<&'static str>,
 }
 
 impl InstallSystem for FakeSystem {
+    fn native_cpu(&self) -> &'static str {
+        self.cpu.unwrap_or("x64")
+    }
+
     fn on_path(&self, _floti: &Path) -> Result<bool, String> {
         Ok(self.on_path || !self.added.borrow().is_empty())
     }
@@ -374,4 +380,127 @@ fn a_folder_of_node_that_is_a_file_there_is_left_and_the_rest_of_node_still_goes
     );
     assert!(ran.out.contains("Left "), "{}", ran.out);
     assert_eq!(system.setups.borrow().len(), 1);
+}
+
+// ---------------------------------------------------------------------------
+// An Arm computer gets the arm64 build the installer carries
+// ---------------------------------------------------------------------------
+
+/// Puts the arm64 build beside the carried floti, as the Windows desktop
+/// installer carries it.
+fn with_arm64_build(carried: &Carried, bytes: &[u8]) {
+    std::fs::write(carried.floti.with_file_name(ARM64_BUILD), bytes).unwrap();
+}
+
+fn arm64_machine() -> FakeSystem {
+    FakeSystem {
+        on_path: true,
+        cpu: Some("arm64"),
+        ..FakeSystem::default()
+    }
+}
+
+#[test]
+fn an_arm64_computer_gets_the_arm64_build_beside_the_running_floti() {
+    let dirs = TestDirs::new();
+    // The x64 floti, emulated here, is the one running install-self.
+    let source = carried(&dirs, b"floti 3.1.0 x64");
+    with_arm64_build(&source, b"floti 3.1.0 arm64");
+    let folder = dirs.folder("bin");
+    let system = arm64_machine();
+
+    let ran = run(&source.floti, &folder, &system);
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    let floti = folder.join(floti_name());
+    assert_eq!(std::fs::read(&floti).unwrap(), b"floti 3.1.0 arm64");
+    // Installed under floti's own name, with its Node, and nothing else.
+    assert_eq!(files(&folder), installed_files());
+    assert_eq!(*system.setups.borrow(), std::slice::from_ref(&floti));
+}
+
+#[test]
+fn an_arm64_computer_with_no_arm64_build_beside_it_gets_this_floti() {
+    let dirs = TestDirs::new();
+    let source = carried(&dirs, b"floti 3.1.0 x64");
+    let folder = dirs.folder("bin");
+
+    let ran = run(&source.floti, &folder, &arm64_machine());
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    assert_eq!(
+        std::fs::read(folder.join(floti_name())).unwrap(),
+        b"floti 3.1.0 x64"
+    );
+}
+
+#[test]
+fn an_x64_computer_gets_this_floti_whatever_is_beside_it() {
+    let dirs = TestDirs::new();
+    let source = carried(&dirs, b"floti 3.1.0 x64");
+    with_arm64_build(&source, b"floti 3.1.0 arm64");
+    let folder = dirs.folder("bin");
+    let system = FakeSystem {
+        on_path: true,
+        cpu: Some("x64"),
+        ..FakeSystem::default()
+    };
+
+    let ran = run(&source.floti, &folder, &system);
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    assert_eq!(
+        std::fs::read(folder.join(floti_name())).unwrap(),
+        b"floti 3.1.0 x64"
+    );
+}
+
+#[test]
+fn a_native_arm64_floti_of_the_same_version_there_is_left_untouched() {
+    let dirs = TestDirs::new();
+    let source = carried(&dirs, b"floti 3.1.0 x64");
+    with_arm64_build(&source, b"floti 3.1.0 arm64");
+    let folder = dirs.folder("bin");
+    // install.ps1 put the native arm64 floti there first.
+    let floti = folder.join(floti_name());
+    std::fs::write(&floti, b"floti 3.1.0 arm64").unwrap();
+    let before = std::fs::metadata(&floti).unwrap().modified().unwrap();
+    let system = FakeSystem {
+        there: Some("3.1.0"),
+        ..arm64_machine()
+    };
+
+    let ran = run(&source.floti, &folder, &system);
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    assert_eq!(std::fs::read(&floti).unwrap(), b"floti 3.1.0 arm64");
+    assert_eq!(
+        std::fs::metadata(&floti).unwrap().modified().unwrap(),
+        before,
+        "not written again"
+    );
+    assert_eq!(
+        files(&folder),
+        installed_files(),
+        "and no copy left beside it"
+    );
+    assert_eq!(system.setups.borrow().len(), 1);
+}
+
+#[test]
+fn an_arm64_computer_keeps_a_newer_floti_there_unless_forced() {
+    let dirs = TestDirs::new();
+    let source = carried(&dirs, b"floti 3.1.0 x64");
+    with_arm64_build(&source, b"floti 3.1.0 arm64");
+    let folder = dirs.folder("bin");
+    let floti = folder.join(floti_name());
+    std::fs::write(&floti, b"floti 3.2.0 arm64").unwrap();
+    let system = FakeSystem {
+        there: Some("3.2.0"),
+        ..arm64_machine()
+    };
+
+    let ran = run(&source.floti, &folder, &system);
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    assert_eq!(std::fs::read(&floti).unwrap(), b"floti 3.2.0 arm64");
+
+    let forced = run_as(&source.floti, &folder, &system, true);
+    assert_eq!(forced.code, 0, "{}", forced.err);
+    assert_eq!(std::fs::read(&floti).unwrap(), b"floti 3.1.0 arm64");
 }

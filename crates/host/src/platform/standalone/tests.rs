@@ -424,3 +424,19 @@ fn windows_renames_a_running_floti_aside_so_its_name_is_free_and_answers_the_cop
     assert!(windows::Native.remove_asides(&target).is_empty());
     assert!(names(&bin).is_empty());
 }
+
+#[test]
+fn the_native_machine_is_named_as_the_releases_name_cpus() {
+    assert_eq!(windows::cpu_of_machine(0x8664), Some("x64"));
+    assert_eq!(windows::cpu_of_machine(0xAA64), Some("arm64"));
+    assert_eq!(windows::cpu_of_machine(0x014c), None, "x86 has no build");
+    // Off Windows a computer answers for its own build.
+    assert_eq!(linux::Native.native_cpu(), crate::version::cpu_name());
+    assert_eq!(macos::Native.native_cpu(), crate::version::cpu_name());
+    // On this computer it is one of the two, whatever this build is.
+    assert!(
+        matches!(windows::Native.native_cpu(), "x64" | "arm64"),
+        "{}",
+        windows::Native.native_cpu()
+    );
+}

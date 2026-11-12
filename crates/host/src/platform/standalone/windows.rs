@@ -80,6 +80,12 @@ impl Standalone for Native {
             .collect()
     }
 
+    fn native_cpu(&self) -> &'static str {
+        system::native_machine()
+            .and_then(cpu_of_machine)
+            .unwrap_or_else(crate::version::cpu_name)
+    }
+
     fn own_folders(&self, env: &UserEnv) -> Vec<PathBuf> {
         self.folder(env)
             .map(|bin| {
@@ -132,6 +138,67 @@ impl Standalone for Native {
         // of its handles, so a pipe this process writes to closes when it
         // exits rather than when the deleting ends.
         process_tree::Native.start_apart(&powershell, &args)
+    }
+}
+
+/// `IMAGE_FILE_MACHINE_AMD64`.
+const MACHINE_AMD64: u16 = 0x8664;
+/// `IMAGE_FILE_MACHINE_ARM64`.
+const MACHINE_ARM64: u16 = 0xAA64;
+
+/// The release's name for the CPU an `IMAGE_FILE_MACHINE` value names, for
+/// the two Floti builds for; `None` for any other.
+pub fn cpu_of_machine(machine: u16) -> Option<&'static str> {
+    match machine {
+        MACHINE_AMD64 => Some("x64"),
+        MACHINE_ARM64 => Some("arm64"),
+        _ => None,
+    }
+}
+
+/// What only Windows can say: the computer's native machine.
+#[cfg(windows)]
+mod system {
+    use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+
+    /// `IsWow64Process2`'s signature.
+    type IsWow64Process2 = unsafe extern "system" fn(
+        process: windows_sys::Win32::Foundation::HANDLE,
+        process_machine: *mut u16,
+        native_machine: *mut u16,
+    ) -> windows_sys::core::BOOL;
+
+    /// The native machine `IsWow64Process2` gives for this process, or
+    /// `None` where Windows has no such call (before Windows 10 1511, which
+    /// runs no Arm build either) or it fails. Looked up when asked rather
+    /// than imported, so floti still starts on a Windows without it.
+    pub fn native_machine() -> Option<u16> {
+        let kernel32: Vec<u16> = "kernel32.dll".encode_utf16().chain(Some(0)).collect();
+        // SAFETY: the name is NUL-terminated UTF-16; kernel32 is loaded in
+        // every process, so its handle needs no freeing.
+        let module = unsafe { GetModuleHandleW(kernel32.as_ptr()) };
+        if module.is_null() {
+            return None;
+        }
+        // SAFETY: the module handle is kernel32's and the name is a
+        // NUL-terminated ANSI string.
+        let found = unsafe { GetProcAddress(module, c"IsWow64Process2".as_ptr().cast()) }?;
+        // SAFETY: kernel32's IsWow64Process2 has this signature.
+        let call: IsWow64Process2 = unsafe { std::mem::transmute(found) };
+        let (mut process, mut native) = (0u16, 0u16);
+        // SAFETY: the pseudo handle needs no closing, and both pointers are
+        // to locals the call writes.
+        let ok = unsafe { call(GetCurrentProcess(), &raw mut process, &raw mut native) };
+        (ok != 0).then_some(native)
+    }
+}
+
+/// Elsewhere there is no native machine to ask.
+#[cfg(not(windows))]
+mod system {
+    pub fn native_machine() -> Option<u16> {
+        None
     }
 }
 
