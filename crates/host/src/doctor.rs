@@ -1,4 +1,5 @@
-//! `floti doctor`: whether each host this device uses answers.
+//! `floti doctor`: whether each host this device uses answers, and what is
+//! wrong on this computer.
 //!
 //! It checks this computer's host through its local socket and each host on
 //! another computer this device added through that host's own transport
@@ -9,11 +10,20 @@
 //! why not. For a transport that failed, that is the last line ssh or the
 //! command wrote on standard error, unedited, and the line to try by hand
 //! in a terminal (`ssh build-box floti connect`, or the command followed by
-//! `floti connect`). It exits with [`DoctorExit::NotAnswering`] when any host
-//! does not answer.
+//! `floti connect`).
 //!
-//! It starts no host, pins and pairs nothing, retries nothing, and reads or
-//! writes nothing of ssh's own setup: a host on another computer is reached
+//! Beside this computer's host it reports each problem it finds on this
+//! computer, one line each with the line that fixes it
+//! (`This PC: <problem> | fix: <line>`), and each thing it could not tell,
+//! with why (`This PC: could not tell <what>: <why>`): the host's
+//! start-at-sign-in entry, this floti on the user's `PATH`, and Claude Code
+//! installed and in the tested range ([`this_computer`]). It exits with
+//! [`DoctorExit::Problems`] when any host does not answer or this computer
+//! has a problem; one it could not tell about is not one.
+//!
+//! It starts no host, pins and pairs nothing, retries nothing, registers,
+//! writes and changes nothing on this computer, and reads or writes nothing
+//! of ssh's own setup: a host on another computer is reached
 //! with the device key and pinned host key in the client folder kept for it,
 //! read only, and one whose folder holds no pinned key is reported as not
 //! added yet. This computer's host is reached with a key made for the one
@@ -38,10 +48,12 @@ use tokio::task::JoinSet;
 
 use crate::bridge::{Transport, reach_through, remote_floti_problem};
 use crate::client::{self, ClientError, ClientKeys, Connection, TRANSPORT_HANDSHAKE_DEADLINE};
+use crate::platform::command_shell::{CommandShell, Native as NativeShell};
 use crate::platform::folders::{self, Folders, UserEnv};
 use crate::platform::private_files::{Native as NativeFiles, PrivateFiles};
 use crate::platform::wsl::{self, WslSide, distro_name_problem};
 use crate::server::{host_public_key, local_endpoint};
+use crate::this_computer::{self, Finding};
 
 /// `-d <distro> --`: what follows `wsl.exe` to run a line in `distro`.
 fn in_distro(distro: &str) -> Vec<String> {
@@ -63,10 +75,11 @@ const LOCAL_DEADLINE: Duration = Duration::from_secs(10);
 /// How `floti doctor` ended, which is its exit status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DoctorExit {
-    /// Every host answered, or the hosts were recorded.
+    /// Every host answered and this computer has no problem, or the hosts
+    /// were recorded.
     Answered,
-    /// A host did not answer.
-    NotAnswering,
+    /// A host did not answer, or this computer has a problem.
+    Problems,
     /// The command line was not `floti doctor [--record]`.
     Usage,
     /// The hosts could not be recorded or read: standard input that is not
@@ -79,7 +92,7 @@ impl DoctorExit {
     pub fn code(self) -> u8 {
         match self {
             Self::Answered => 0,
-            Self::NotAnswering => 1,
+            Self::Problems => 1,
             Self::Usage => 2,
             Self::Failed => 3,
         }
@@ -279,19 +292,22 @@ pub fn run_doctor(step: DoctorStep) -> DoctorExit {
                 Ok(runtime) => runtime,
                 Err(err) => return fail(&format!("could not start: {err}")),
             };
-            let lines = runtime.block_on(check(folders, hosts));
+            let env = UserEnv::from_process();
+            let data = folders.data.clone();
+            let here = move || this_computer::findings_here(&env, &data, NativeShell.family());
+            let lines = runtime.block_on(check(folders, hosts, here));
             runtime.shutdown_background();
             let mut out = std::io::stdout().lock();
-            let mut answered = true;
+            let mut well = true;
             for line in &lines {
-                answered &= line.answered;
+                well &= line.well;
                 let _ = writeln!(out, "{}", line.text);
             }
             let _ = out.flush();
-            if answered {
+            if well {
                 DoctorExit::Answered
             } else {
-                DoctorExit::NotAnswering
+                DoctorExit::Problems
             }
         }
     }
@@ -323,35 +339,65 @@ pub fn recorded(data: &Path) -> Result<Vec<RecordedHost>, String> {
     }
 }
 
-/// One host's line.
+/// One line: a host's, or a finding on this computer.
 #[derive(Debug, Clone)]
 struct Line {
     text: String,
-    answered: bool,
+    /// The host answered, or the finding is not a problem.
+    well: bool,
 }
 
-/// Checks this computer's host and each of `hosts` at once, and gives their
-/// lines in that order.
-async fn check(folders: Folders, hosts: Vec<RecordedHost>) -> Vec<Line> {
+/// Checks this computer's host, what `here` finds on this computer, and each
+/// of `hosts`, all at once, and gives their lines in that order.
+async fn check(
+    folders: Folders,
+    hosts: Vec<RecordedHost>,
+    here: impl FnOnce() -> Vec<Finding> + Send + 'static,
+) -> Vec<Line> {
     let mut checks = JoinSet::new();
-    checks.spawn(async move { (0, check_local(&folders).await) });
+    checks.spawn(async move { (0, vec![check_local(&folders).await]) });
+    checks.spawn(async move {
+        let findings = tokio::task::spawn_blocking(here)
+            .await
+            .unwrap_or_else(|err| {
+                vec![Finding::CouldNotTell {
+                    what: "what is wrong on this computer".to_owned(),
+                    why: err.to_string(),
+                }]
+            });
+        (1, findings.iter().filter_map(finding_line).collect())
+    });
     for (at, host) in hosts.into_iter().enumerate() {
-        checks.spawn(async move { (at + 1, check_remote(&host).await) });
+        checks.spawn(async move { (at + 2, vec![check_remote(&host).await]) });
     }
-    let mut lines: Vec<(usize, Line)> = Vec::new();
+    let mut lines: Vec<(usize, Vec<Line>)> = Vec::new();
     while let Some(done) = checks.join_next().await {
         if let Ok(line) = done {
             lines.push(line);
         }
     }
     lines.sort_by_key(|(at, _)| *at);
-    lines.into_iter().map(|(_, line)| line).collect()
+    lines.into_iter().flat_map(|(_, lines)| lines).collect()
+}
+
+/// `finding`'s line, beside this computer's host, or `None` when nothing is
+/// wrong.
+fn finding_line(finding: &Finding) -> Option<Line> {
+    let text = match finding {
+        Finding::Fine => return None,
+        Finding::Problem { problem, fix } => format!("{THIS_PC}: {problem} | fix: {fix}"),
+        Finding::CouldNotTell { what, why } => format!("{THIS_PC}: could not tell {what}: {why}"),
+    };
+    Some(Line {
+        text,
+        well: !finding.is_problem(),
+    })
 }
 
 async fn check_local(folders: &Folders) -> Line {
     let not_answering = |why: &str| Line {
         text: format!("{THIS_PC}: does not answer: {why}"),
-        answered: false,
+        well: false,
     };
     let host = match host_public_key(&folders.data) {
         Ok(Some(host)) => host,
@@ -387,13 +433,13 @@ async fn check_remote(host: &RecordedHost) -> Line {
                     "{}: not added yet: this device has not connected to it, so it holds no key to check it by.",
                     host.name
                 ),
-                answered: false,
+                well: false,
             };
         }
         Err(err) => {
             return Line {
                 text: format!("{}: does not answer: {err}", host.name),
-                answered: false,
+                well: false,
             };
         }
     };
@@ -403,7 +449,7 @@ async fn check_remote(host: &RecordedHost) -> Line {
             host.name,
             host.line_to_try()
         ),
-        answered: false,
+        well: false,
     };
     let (connection, running) = match reach_through(&keys, &host.transport()).await {
         Ok(reached) => reached,
@@ -434,7 +480,7 @@ impl Answer {
                 self.version,
                 self.round_trip.as_millis()
             ),
-            answered: true,
+            well: true,
         }
     }
 }
@@ -496,6 +542,33 @@ mod tests {
             command.line_to_try(),
             "wsl -d \"My Distro\" /opt/floti/floti connect"
         );
+    }
+
+    #[test]
+    fn a_problem_on_this_computer_is_one_line_with_its_fix_and_could_not_tell_is_no_problem() {
+        let problem = finding_line(&Finding::Problem {
+            problem: "the host has no start-at-sign-in entry".to_owned(),
+            fix: "floti setup".to_owned(),
+        })
+        .unwrap();
+        assert_eq!(
+            problem.text,
+            "This PC: the host has no start-at-sign-in entry | fix: floti setup"
+        );
+        assert!(!problem.well);
+
+        let unknown = finding_line(&Finding::CouldNotTell {
+            what: "whether floti is on your PATH".to_owned(),
+            why: "the registry would not say".to_owned(),
+        })
+        .unwrap();
+        assert_eq!(
+            unknown.text,
+            "This PC: could not tell whether floti is on your PATH: the registry would not say"
+        );
+        assert!(unknown.well);
+
+        assert!(finding_line(&Finding::Fine).is_none());
     }
 
     #[test]

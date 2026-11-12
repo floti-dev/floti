@@ -15,7 +15,6 @@ import type {
   SessionsOverview,
   WriteConfigResult
 } from '@helm/core'
-import { CLAUDE_TESTED_RANGE } from '../../claude'
 import type {
   ClaudeAuth,
   ClaudeStatus,
@@ -336,7 +335,9 @@ const AUTH: Record<'true' | 'false', ClaudeAuth> = { true: 'authenticated', fals
 /**
  * What the host found of Claude Code, in the setup pane's words. A host with
  * no Claude Code backend has found nothing about it, which is Unknown - not
- * "not installed" - with the sentence that says why.
+ * "not installed" - with the sentence that says why, and has no tested range
+ * to give: the range is the host's backend's (`TESTED_VERSIONS`), and Helm
+ * keeps none of its own.
  */
 export function claudeStatusFromHost(status: P.BackendStatus | undefined): ClaudeStatus {
   if (status === undefined) {
@@ -347,7 +348,7 @@ export function claudeStatusFromHost(status: P.BackendStatus | undefined): Claud
       version: null,
       semver: null,
       tested: false,
-      testedRange: { ...CLAUDE_TESTED_RANGE },
+      testedRange: { min: '', max: '' },
       configDir: '',
       configDirExists: false,
       auth: 'unknown',

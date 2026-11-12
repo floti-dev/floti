@@ -20,6 +20,14 @@
 //! passes neither. It is turned on with the user's own `loginctl`, never
 //! sudo, and a refusal fails setup before anything is registered.
 //!
+//! First it checks that Claude Code is installed and its version is in the
+//! range the Claude Code backend was tested with, found and asked
+//! (`claude --version`) the backend's own way and without reading a
+//! credential ([`this_computer::claude`]). When it is not, or that could not
+//! be told, setup says so on standard output in one sentence naming what to
+//! run, and goes on with everything else: an agent missing or out of range
+//! changes neither what setup does nor its exit status.
+//!
 //! It ends with one line on standard output and an exit status for each
 //! outcome:
 //!
@@ -41,7 +49,7 @@
 //!   refused lingering also names the fix: an administrator there runs
 //!   `sudo loginctl enable-linger <user>`.
 //!
-//! Checking the agent CLIs and offering the desktop app are not part of it.
+//! Offering the desktop app is not part of it.
 //!
 //! [`register`]: crate::platform::startup::register
 
@@ -56,6 +64,7 @@ use crate::client;
 pub use crate::connect::START_ON_CONNECT_FILE;
 use crate::host_log::LOG_FILE;
 use crate::keys::load_or_create_key_pair;
+use crate::platform::command_shell::{CommandShell, Native as NativeShell};
 use crate::platform::folders::{self, Folders, UserEnv};
 pub use crate::platform::startup::register::Linger;
 use crate::platform::startup::register::{
@@ -63,6 +72,7 @@ use crate::platform::startup::register::{
 };
 use crate::platform::startup::{self, Account, StartAtSignIn, StartupDefinition, StartupKind};
 use crate::server::{HOST_KEY_FILE, local_endpoint};
+use crate::this_computer;
 
 /// What `floti setup` prints once the host is running.
 pub const RUNNING_LINE: &str = "The Floti host is running, and starts at each sign-in.";
@@ -145,6 +155,10 @@ pub fn parse_linger(args: &[&str]) -> Option<Linger> {
 /// Runs `floti setup` for the floti this process is, settling lingering as
 /// `linger` says, says how it ended, and answers its exit status.
 pub fn run_setup(linger: Linger) -> u8 {
+    if let Some(sentence) = claude_sentence(&UserEnv::from_process()) {
+        let mut out = std::io::stdout().lock();
+        let _ = writeln!(out, "{sentence}").and_then(|()| out.flush());
+    }
     let outcome = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -165,6 +179,15 @@ pub fn run_setup(linger: Linger) -> u8 {
         }
     }
     outcome.code()
+}
+
+/// What setup says of Claude Code for the user `env` describes, as one
+/// sentence naming what to run, or `None` when it is installed and in the
+/// tested range.
+pub fn claude_sentence(env: &UserEnv) -> Option<String> {
+    this_computer::claude_here(env, NativeShell.family())
+        .sentence()
+        .map(|sentence| sentence.replace(['\r', '\n'], " "))
 }
 
 async fn native_setup(linger: Linger) -> SetupOutcome {

@@ -394,6 +394,65 @@ fn write_file(file: &Path, bytes: &[u8]) -> Result<(), String> {
     std::fs::write(file, bytes).map_err(|err| format!("could not write {}: {err}", file.display()))
 }
 
+/// Whether `definition` is registered with the OS's per-user mechanism, as
+/// [`register_and_start`] registers it, looked at without changing anything:
+///
+/// - the logon task: `schtasks /Query /TN <name>` succeeds, which it does
+///   only for a task of that name;
+/// - the LaunchAgent: its property list is in `~/Library/LaunchAgents`,
+///   which launchd loads at each sign-in;
+/// - the user unit: its unit file is in `~/.config/systemd/user` and
+///   `systemctl --user is-enabled` says it is enabled.
+///
+/// `Ok(false)` is "not registered"; `Err` is why it could not be told: a
+/// command that could not be run, a file that could not be read, or a
+/// service manager that answered with no state.
+pub fn is_registered(
+    system: &dyn SignInSystem,
+    definition: &StartupDefinition,
+    home: &Path,
+    data: &Path,
+) -> Result<bool, String> {
+    let name = definition.name.as_str();
+    match definition.kind {
+        StartupKind::LogonTask => Ok(ran(
+            system,
+            &OsCommand::new("schtasks", &["/Query", "/TN", name]),
+        )?
+        .success),
+        StartupKind::LaunchAgent => file_there(&definition_file(definition, home, data)),
+        StartupKind::SystemdUserUnit => {
+            if !file_there(&definition_file(definition, home, data))? {
+                return Ok(false);
+            }
+            let state = ran(
+                system,
+                &OsCommand::new("systemctl", &["--user", "is-enabled", name]),
+            )?;
+            if state.success {
+                Ok(true)
+            } else if !state.stdout.trim().is_empty() {
+                // A state such as `disabled` or `masked`: there, not enabled.
+                Ok(false)
+            } else {
+                Err(state.last_line().map_or_else(
+                    || "systemctl --user is-enabled failed and wrote nothing".to_owned(),
+                    str::to_owned,
+                ))
+            }
+        }
+    }
+}
+
+/// Whether `file` is there, or why that could not be told.
+fn file_there(file: &Path) -> Result<bool, String> {
+    match std::fs::metadata(file) {
+        Ok(_) => Ok(true),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(format!("could not look at {}: {err}", file.display())),
+    }
+}
+
 /// Runs `command`; only not being able to run it at all is a failure.
 fn ran(system: &dyn SignInSystem, command: &OsCommand) -> Result<Ran, String> {
     system

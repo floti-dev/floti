@@ -24,15 +24,18 @@ use floti_host::fake_agent;
 use floti_host::platform::folders::{
     CONFIG_DIR_VAR, DATA_DIR_VAR, LOG_DIR_VAR, RUNTIME_DIR_VAR, UserEnv,
 };
+use floti_host::platform::launcher::{Native as NativeLauncher, ProgramLauncher};
 use floti_host::platform::startup::register::linger_refused_line;
 use floti_host::platform::startup::register::{OsCommand, Ran, SignInSystem};
 use floti_host::platform::startup::{StartupDefinition, linux, macos, windows};
 use floti_host::server::{HOST_KEY_FILE, HostConfig, host_public_key, local_endpoint};
+use floti_host::setup::claude_sentence;
 use floti_host::setup::{
     AT_NEXT_SIGN_IN_EXIT, AT_NEXT_SIGN_IN_LINE, KEEPS_RUNNING_LINE, Linger, RUNNING_LINE,
     START_ON_CONNECT_FILE, START_ON_CONNECT_LINE, SetupOutcome, parse_linger, setup,
 };
 use floti_host::testkit::{FakeAgent, PATIENCE, RunningHost, TestDirs};
+use floti_host::this_computer::{Finding, SETUP_FIX, start_at_sign_in};
 use floti_protocol::channels::host::HostStopReason;
 
 const WINDOWS_FLOTI: &str = r"C:\Users\me\AppData\Local\Programs\Floti\bin\floti.exe";
@@ -233,6 +236,13 @@ impl SignInSystem for FakeOs {
                 state.tasks.insert((*name).to_owned(), xml);
                 ok("SUCCESS: The scheduled task has successfully been created.")
             }
+            ("schtasks", ["/Query", "/TN", name]) => {
+                if state.tasks.contains_key(*name) {
+                    ok("Floti host                               N/A                    Ready")
+                } else {
+                    failed("ERROR: The system cannot find the file specified.")
+                }
+            }
             ("schtasks", ["/Run", "/TN", name]) if state.tasks.contains_key(*name) => {
                 self.start_host(&mut state);
                 ok("SUCCESS: Attempted to run the scheduled task.")
@@ -303,6 +313,17 @@ impl SignInSystem for FakeOs {
             ("systemctl", ["--user", "enable", unit]) => {
                 state.enabled.insert((*unit).to_owned());
                 ok("")
+            }
+            ("systemctl", ["--user", "is-enabled", unit]) => {
+                if state.enabled.contains(*unit) {
+                    ok("enabled\n")
+                } else {
+                    Ok(Ran {
+                        success: false,
+                        stdout: "disabled\n".to_owned(),
+                        stderr: String::new(),
+                    })
+                }
             }
             ("systemctl", ["--user", "start", unit]) if state.enabled.contains(*unit) => {
                 self.start_host(&mut state);
@@ -934,4 +955,149 @@ async fn in_a_wsl_distro_whose_systemd_user_manager_answers_setup_registers_the_
     assert!(!dirs.data.join(START_ON_CONNECT_FILE).exists());
     assert_host_answers_with_the_key_setup_made(&dirs).await;
     os.stop().await;
+}
+
+// ---------------------------------------------------------------------------
+// `floti doctor` looks at the entry setup registers, with setup's own code,
+// and changes nothing to look
+// ---------------------------------------------------------------------------
+
+/// The commands that only look, which doctor may run.
+fn only_looks(run: &str) -> bool {
+    run.starts_with("schtasks /Query ")
+        || run.starts_with("systemctl --user is-enabled ")
+        || run == "systemctl --user show-environment"
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn doctor_finds_no_entry_before_setup_and_the_entry_setup_registered_after_on_every_os() {
+    for definition in [
+        logon_task(WINDOWS_FLOTI),
+        macos::launch_agent(Path::new(UNIX_FLOTI)).unwrap(),
+        linux::user_unit(Path::new(UNIX_FLOTI)).unwrap(),
+    ] {
+        let dirs = TestDirs::new();
+        let agent = fake_agent!(&dirs);
+        let os = FakeOs::new(&dirs, &agent, true);
+
+        let before = start_at_sign_in(&os, &definition, &dirs.home, &dirs.data);
+        assert!(
+            matches!(&before, Finding::Problem { fix, .. } if fix == SETUP_FIX),
+            "{:?}: {before:?}",
+            definition.kind
+        );
+        assert!(
+            os.runs().iter().all(|run| only_looks(run)),
+            "{:?}",
+            os.runs()
+        );
+
+        assert_eq!(
+            run_setup(&dirs, &os, &definition).await,
+            SetupOutcome::Running
+        );
+        let registered = os.runs().len();
+        let started = os.starts();
+        assert_eq!(
+            start_at_sign_in(&os, &definition, &dirs.home, &dirs.data),
+            Finding::Fine,
+            "{:?}",
+            definition.kind
+        );
+        assert!(
+            os.runs()[registered..].iter().all(|run| only_looks(run)),
+            "{:?}",
+            os.runs()
+        );
+        assert_eq!(os.starts(), started, "looking started nothing");
+        os.stop().await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn doctor_finds_the_start_on_connect_record_setup_made_in_wsl_without_systemd() {
+    let dirs = TestDirs::new();
+    let agent = fake_agent!(&dirs);
+    let os = FakeOs::new(&dirs, &agent, true).in_wsl(false);
+    let definition = linux::user_unit(Path::new(UNIX_FLOTI)).unwrap();
+    assert!(start_at_sign_in(&os, &definition, &dirs.home, &dirs.data).is_problem());
+    assert_eq!(
+        run_setup(&dirs, &os, &definition).await,
+        SetupOutcome::StartsOnConnect
+    );
+    assert_eq!(
+        start_at_sign_in(&os, &definition, &dirs.home, &dirs.data),
+        Finding::Fine
+    );
+    assert!(
+        os.runs().iter().all(|run| only_looks(run)),
+        "{:?}",
+        os.runs()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Criterion 1: setup checks Claude Code, found and asked the backend's own
+// way, with the fake CLI in place of claude
+// ---------------------------------------------------------------------------
+
+/// The fake Claude Code CLI, which reports the version a `fake-version` file
+/// in its config folder names.
+fn fake_claude() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("test")
+        .join("fake-agents")
+        .join("claude-code.mjs")
+}
+
+/// The test's user with the fake CLI installed as `claude` in their
+/// `~/.local/bin`, where the backend looks before `PATH`, reporting
+/// `version`.
+fn user_with_claude(dirs: &TestDirs, version: &str) -> UserEnv {
+    let bin = dirs.home.join(".local").join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    NativeLauncher.write_wrapper_script(
+        &bin,
+        "claude",
+        floti_host::testkit::node(),
+        &[&fake_claude()],
+    );
+    let config = dirs.root().join("claude config");
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::write(config.join("fake-version"), version).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(config.join("fake-version")).unwrap(),
+        version
+    );
+    let mut env = user(dirs);
+    env.vars
+        .insert("CLAUDE_CONFIG_DIR".into(), config.into_os_string());
+    env
+}
+
+#[test]
+fn setup_says_nothing_of_claude_code_inside_the_tested_range() {
+    let dirs = TestDirs::new();
+    assert_eq!(claude_sentence(&user_with_claude(&dirs, "2.1.300")), None);
+}
+
+#[test]
+fn setup_says_in_one_sentence_what_to_run_for_claude_code_outside_the_tested_range() {
+    let dirs = TestDirs::new();
+    assert_eq!(
+        claude_sentence(&user_with_claude(&dirs, "2.0.9")).as_deref(),
+        Some(
+            "Claude Code 2.0.9 is older than Floti was tested with 2.1.277 up to but not including 2.2.0; to fix it, run: claude update"
+        )
+    );
+    let dirs = TestDirs::new();
+    let newer = claude_sentence(&user_with_claude(&dirs, "2.3.1")).unwrap();
+    assert!(
+        newer.starts_with("Claude Code 2.3.1 is newer than Floti was tested with")
+            && newer.ends_with("; to fix it, run: claude install 2.1.277")
+            && !newer.contains('\n'),
+        "{newer}"
+    );
 }

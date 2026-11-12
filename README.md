@@ -96,8 +96,10 @@ Three things, in the order they matter:
 
 1. **Claude Code.** Helm looks on `PATH` and in the usual install directory. If
    it is somewhere unusual, point at it by hand; the file is run with
-   `--version` before it is accepted. The tested range is 2.1.0 up to 2.2.0 -
-   outside it you get a warning strip and nothing is blocked.
+   `--version` before it is accepted. The tested range is 2.1.277 up to 2.2.0,
+   kept by the host's Claude Code backend - outside it you get a warning strip
+   and nothing is blocked. `floti setup` and `floti doctor` check the same
+   range and say what to run when Claude Code is missing or outside it.
 2. **Signed in.** Detected from the presence of a login, never by reading one.
    The remedy is to run `claude` yourself.
 3. **Where your work is.** Add a folder, or create a harness. Nothing is scanned

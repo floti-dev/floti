@@ -40,8 +40,21 @@ pub struct ShellCommand {
 /// where it is installed.
 pub type FindShell<'a> = &'a dyn Fn(&str) -> Option<PathBuf>;
 
+/// The kind of shell a user of this OS types lines into, for a line that
+/// differs between them, such as an installer's one-line install.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShellFamily {
+    /// PowerShell, on Windows.
+    PowerShell,
+    /// A POSIX shell (sh, bash, zsh), on macOS and Linux.
+    Posix,
+}
+
 /// One OS's way to run a command line in the user's shell.
 pub trait CommandShell {
+    /// The kind of shell this OS's users type lines into.
+    fn family(&self) -> ShellFamily;
+
     /// The shell for the user `env` describes, found through `find`, and its
     /// arguments to run `line` and exit with the line's own exit code.
     fn run_line(&self, env: &UserEnv, find: FindShell<'_>, line: &str) -> ShellCommand;

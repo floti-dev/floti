@@ -434,9 +434,12 @@ describe('the workspace through the local host', () => {
 
     w.connection.answer('setup:status', () => ({ backends: {} }))
     const unknown = await w.workspace.setupStatus()
+    // No backend, no range: the range is the host's backend's, never Helm's own.
     expect(unknown).toMatchObject({
       path: null,
       version: null,
+      tested: false,
+      testedRange: { min: '', max: '' },
       auth: 'unknown'
     })
     expect(unknown.error).toMatch(/no Claude Code backend/)

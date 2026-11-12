@@ -41,6 +41,7 @@ use super::{
     SignInCheck, StatusSource, TestedVersions, ToolRule, ToolSupport, Transcript, UsageSource,
     Version, VersionCheck,
 };
+use crate::platform::command_shell::ShellFamily;
 use crate::platform::folders::UserEnv;
 use crate::platform::launcher::{self, Program, ProgramLauncher};
 use crate::platform::process_tree::ProcessTree;
@@ -58,6 +59,15 @@ pub const TESTED_VERSIONS: TestedVersions = TestedVersions {
     min: Version(2, 1, 277),
     below: Version(2, 2, 0),
 };
+
+/// The line Anthropic's own installer is run with, typed in `shell`: what
+/// to run where Claude Code is not installed, or does not answer.
+pub fn install_line(shell: ShellFamily) -> &'static str {
+    match shell {
+        ShellFamily::PowerShell => "irm https://claude.ai/install.ps1 | iex",
+        ShellFamily::Posix => "curl -fsSL https://claude.ai/install.sh | bash",
+    }
+}
 
 /// The first Claude Code version that supports MCP tasks.
 pub const MCP_TASKS_FROM: Version = Version(2, 1, 304);

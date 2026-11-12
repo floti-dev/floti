@@ -28,4 +28,5 @@ pub mod standard_error;
 pub mod startup;
 pub mod terminal_size;
 pub mod tray;
+pub mod user_path;
 pub mod wsl;

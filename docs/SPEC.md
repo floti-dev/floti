@@ -1376,8 +1376,8 @@ user can see and fix in the editor afterwards. So a profile written by another
 version imports, minus anything this one cannot honour.
 
 What none of this promises is the Claude Code CLI, which is a separate product
-on its own release schedule. `CLAUDE_TESTED_RANGE` is a measurement, not a
-dependency bound - outside it Helm warns and starts anyway (7).
+on its own release schedule. The tested range (`TESTED_VERSIONS`, in the
+host's Claude Code backend) is a measurement, not a dependency bound - outside it Helm warns and starts anyway (7).
 
 ---
 

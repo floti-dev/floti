@@ -27,12 +27,15 @@
 //! this device uses answers, this computer's through its socket and each on
 //! another computer through its own ssh or command, and prints one line per
 //! host: its floti version and round trip, or the last line ssh or the
-//! command wrote and the line to try by hand; it starts, pins and changes
-//! nothing. `floti doctor --record` is how the desktop tells it those hosts,
+//! command wrote and the line to try by hand, and beside them one line for
+//! each problem it finds on this computer with the line that fixes it (no
+//! start-at-sign-in entry, floti not on the user's PATH, Claude Code missing
+//! or out of the tested range); it starts, pins and changes nothing. `floti doctor --record` is how the desktop tells it those hosts,
 //! as JSON on standard input. `floti version` prints one line:
 //! Floti's version, the protocol version, and this OS and CPU. `floti setup`
-//! registers the host to start at this user's sign-in and starts it in the
-//! signed-in session; on a Linux server it first turns lingering on, so the
+//! checks that Claude Code is installed and in the tested range, saying what
+//! to run when it is not, registers the host to start at this user's sign-in
+//! and starts it in the signed-in session; on a Linux server it first turns lingering on, so the
 //! host runs with nobody signed in, and `--linger` or `--no-linger` chooses
 //! either way on any Linux computer. A host started by the OS's mechanism
 //! exits with status 0 whenever it is stopped on purpose, so the systemd

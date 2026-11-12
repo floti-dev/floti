@@ -14,7 +14,6 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import { screenshot, sleep, stripAnsi, waitFor } from './bridge'
 import { answerStartupGates, atPrompt, type Collector, type CheckContext } from './checkkit'
 import type { Check } from './fidelity'
-import { CLAUDE_TESTED_RANGE } from '../shared/claude'
 
 /**
  * The packaging criteria: packaging, first run, and the claim that anyone
@@ -962,10 +961,10 @@ async function cliChecks(ctx: CheckContext): Promise<Check[]> {
   const versionsAgree =
     status.version !== null && independentVersion !== null && status.version === independentVersion
 
-  // The range, compared by hand.
+  // The host's range, compared by hand.
   const handTested =
     status.semver !== null &&
-    !outsideRange(status.semver, CLAUDE_TESTED_RANGE.min, CLAUDE_TESTED_RANGE.max)
+    !outsideRange(status.semver, status.testedRange.min, status.testedRange.max)
 
   // The auth signal, read independently and without opening anything.
   const credentials = join(homedir(), '.claude', '.credentials.json')
@@ -1623,10 +1622,12 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
   )
   const bannerUp = await pollJs(win, `document.querySelector('[data-version-banner]')`, 20_000)
   const bannerText = (await text(win, '[data-version-banner]')).replace(/\s+/g, ' ').trim()
-  const status = await js<{ version: string | null; semver: string | null; tested: boolean }>(
-    win,
-    `window.helm.invoke('setup:status')`
-  )
+  const status = await js<{
+    version: string | null
+    semver: string | null
+    tested: boolean
+    testedRange: { min: string; max: string }
+  }>(win, `window.helm.invoke('setup:status')`)
   const shot = await screenshot(win, shotDir, 'packaging-version-banner.png')
 
   // Not blocked: the launcher underneath still works. A sidebar row opens its
@@ -1665,9 +1666,9 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
   await sleep(800)
   const bannerAfterRestore = await exists(win, '[data-version-banner]')
 
-  const handOutside =
-    stubVersion !== null &&
-    outsideRange(stubVersion, CLAUDE_TESTED_RANGE.min, CLAUDE_TESTED_RANGE.max)
+  // The host's range, which the banner names.
+  const range = status.testedRange
+  const handOutside = stubVersion !== null && range.min !== '' && outsideRange(stubVersion, range.min, range.max)
 
   return [
     {
@@ -1681,8 +1682,8 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
         bannerUp &&
         status.tested === false &&
         bannerText.includes('9.9.9') &&
-        bannerText.includes(CLAUDE_TESTED_RANGE.min) &&
-        bannerText.includes(CLAUDE_TESTED_RANGE.max) &&
+        bannerText.includes(range.min) &&
+        bannerText.includes(range.max) &&
         usable.tabs > 0 &&
         usable.launchEnabled &&
         !usable.overlay &&
@@ -1694,7 +1695,7 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
         stubSaysDirectly: stubVersion,
         helmStatus: status,
         handComputedOutsideRange: handOutside,
-        range: CLAUDE_TESTED_RANGE,
+        range,
         bannerBefore,
         bannerText,
         whileWarned: usable,

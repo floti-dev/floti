@@ -30,7 +30,9 @@ use floti_host::client::{ClientError, ClientKeys, DEVICE_KEY_FILE, PINNED_HOST_F
 use floti_host::connect::NO_HOST_LINE;
 use floti_host::fake_agent;
 use floti_host::keys::load_or_create_key_pair;
+use floti_host::platform::command_shell::{CommandShell, Native as NativeShell};
 use floti_host::platform::folders::{CONFIG_DIR_VAR, DATA_DIR_VAR, LOG_DIR_VAR, RUNTIME_DIR_VAR};
+use floti_host::platform::launcher::{Native as NativeLauncher, ProgramLauncher};
 use floti_host::platform::socket::{
     Endpoint, LocalListener, LocalSocket, LocalStream, Native as NativeSocket,
 };
@@ -1338,11 +1340,77 @@ struct Doctored {
     stderr: String,
 }
 
+/// The Claude Code `floti doctor` finds on this computer.
+#[derive(Debug, Clone, Copy)]
+enum Claude {
+    /// The fake CLI, as `claude` in the user's `~/.local/bin`, reporting
+    /// this version; `None` for its own, which is in the tested range.
+    Installed(Option<&'static str>),
+    /// None anywhere it looks.
+    Missing,
+}
+
+/// The fake Claude Code CLI.
+fn fake_claude() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("test")
+        .join("fake-agents")
+        .join("claude-code.mjs")
+}
+
+/// What a test build of floti says of the two things on this computer it
+/// never looks at, in the order doctor prints them.
+fn not_looked_at() -> [String; 2] {
+    let why = floti_host::this_computer::TEST_BUILD_LOOKS_AT_NOTHING;
+    [
+        format!("This PC: could not tell whether the host starts at sign-in: {why}"),
+        format!("This PC: could not tell whether floti is on your PATH: {why}"),
+    ]
+}
+
 /// Runs `floti doctor` with `args` over `dirs`, giving it `stdin`, with
-/// `fail` as the fake ssh's failure, and waits for it to end.
+/// `fail` as the fake ssh's failure and the fake Claude Code installed, and
+/// waits for it to end.
 async fn doctor(dirs: &TestDirs, args: &[&str], stdin: &[u8], fail: Option<&str>) -> Doctored {
+    doctor_with(dirs, args, stdin, fail, Claude::Installed(None)).await
+}
+
+/// [`doctor`] with `claude` as the Claude Code it finds. Its `PATH` is one
+/// empty folder, so the only `claude` it can find is the test's.
+async fn doctor_with(
+    dirs: &TestDirs,
+    args: &[&str],
+    stdin: &[u8],
+    fail: Option<&str>,
+    claude: Claude,
+) -> Doctored {
+    let bin = dirs.home.join(".local").join("bin");
+    let nothing = dirs.root().join("no programs");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::create_dir_all(&nothing).unwrap();
+    for entry in std::fs::read_dir(&bin).unwrap() {
+        std::fs::remove_file(entry.unwrap().path()).unwrap();
+    }
     let mut command = floti_command(dirs, &dirs.runtime);
-    command.arg("doctor").args(args);
+    command
+        .arg("doctor")
+        .args(args)
+        .env("PATH", &nothing)
+        .env_remove("CLAUDE_CONFIG_DIR")
+        .env_remove("FAKE_AGENT_VERSION");
+    if let Claude::Installed(version) = claude {
+        NativeLauncher.write_wrapper_script(
+            &bin,
+            "claude",
+            floti_host::testkit::node(),
+            &[&fake_claude()],
+        );
+        if let Some(version) = version {
+            command.env("FAKE_AGENT_VERSION", version);
+        }
+    }
     if let Some(fail) = fail {
         command.env("FAKE_SSH_FAIL", fail);
     }
@@ -1425,18 +1493,21 @@ async fn s6_floti_doctor_prints_one_line_per_host_and_fails_when_any_does_not_an
     let checked = doctor(dirs, &[], b"", Some("denied")).await;
     assert_eq!(checked.code, Some(1), "{checked:?}");
     let lines: Vec<&str> = checked.stdout.lines().collect();
-    assert_eq!(lines.len(), 4, "{checked:?}");
+    assert_eq!(lines.len(), 6, "{checked:?}");
     assert!(answers(lines[0], "This PC"), "{checked:?}");
-    assert!(answers(lines[1], "box"), "{checked:?}");
+    // Beside this computer's host, what it could not tell here; Claude Code
+    // is in the tested range, so nothing is said of it.
+    assert_eq!(lines[1..3], not_looked_at(), "{checked:?}");
+    assert!(answers(lines[3], "box"), "{checked:?}");
     assert_eq!(
-        lines[2],
+        lines[4],
         format!(
             "build-box: does not answer: {TARGET}: Permission denied (publickey,password). | try by hand: {}",
             tried_by_hand(&ssh_transport())
         )
     );
     assert!(
-        lines[3].starts_with("new-box: not added yet:"),
+        lines[5].starts_with("new-box: not added yet:"),
         "{checked:?}"
     );
     assert!(checked.stderr.is_empty(), "{checked:?}");
@@ -1467,7 +1538,55 @@ async fn s6_floti_doctor_prints_one_line_per_host_and_fails_when_any_does_not_an
     );
     let checked = doctor(dirs, &[], b"", None).await;
     assert_eq!(checked.code, Some(0), "{checked:?}");
-    assert_eq!(checked.stdout.lines().count(), 2, "{checked:?}");
+    assert_eq!(checked.stdout.lines().count(), 4, "{checked:?}");
+    world.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn floti_doctor_reports_claude_code_missing_or_out_of_range_on_one_line_with_its_fix_beside_the_host()
+ {
+    let world = World::start();
+    let dirs = &world.dirs;
+    let install = floti_host::agent::claude_code::install_line(NativeShell.family());
+    let looked_in: Vec<String> = NativeLauncher
+        .user_bin_folders(&dirs.home)
+        .iter()
+        .map(|folder| folder.display().to_string())
+        .collect();
+
+    let missing = doctor_with(dirs, &[], b"", None, Claude::Missing).await;
+    assert_eq!(missing.code, Some(1), "{missing:?}");
+    let lines: Vec<&str> = missing.stdout.lines().collect();
+    assert_eq!(lines.len(), 4, "{missing:?}");
+    assert!(answers(lines[0], "This PC"), "{missing:?}");
+    assert_eq!(lines[1..3], not_looked_at(), "{missing:?}");
+    assert_eq!(
+        lines[3],
+        format!(
+            "This PC: Claude Code is not installed: there is no claude on PATH or in {} | fix: {install}",
+            looked_in.join(" or ")
+        )
+    );
+
+    let older = doctor_with(dirs, &[], b"", None, Claude::Installed(Some("2.0.3"))).await;
+    assert_eq!(older.code, Some(1), "{older:?}");
+    assert_eq!(
+        older.stdout.lines().last(),
+        Some(
+            "This PC: Claude Code 2.0.3 is older than Floti was tested with 2.1.277 up to but not including 2.2.0 | fix: claude update"
+        ),
+        "{older:?}"
+    );
+
+    let newer = doctor_with(dirs, &[], b"", None, Claude::Installed(Some("2.4.0"))).await;
+    assert_eq!(newer.code, Some(1), "{newer:?}");
+    assert!(
+        newer.stdout.lines().last().is_some_and(|line| line
+            .starts_with("This PC: Claude Code 2.4.0 is newer than")
+            && line.ends_with(" | fix: claude install 2.1.277")),
+        "{newer:?}"
+    );
+    assert!(newer.stderr.is_empty(), "{newer:?}");
     world.stop().await;
 }
 
@@ -1476,9 +1595,14 @@ async fn s6_floti_doctor_starts_no_host_and_says_none_is_running_on_this_compute
     let dirs = TestDirs::new();
     let checked = doctor(&dirs, &[], b"", None).await;
     assert_eq!(checked.code, Some(1), "{checked:?}");
+    let [entry, path] = not_looked_at();
     assert_eq!(
         checked.stdout.lines().collect::<Vec<_>>(),
-        ["This PC: does not answer: no Floti host has started on this computer yet."]
+        [
+            "This PC: does not answer: no Floti host has started on this computer yet.",
+            entry.as_str(),
+            path.as_str(),
+        ]
     );
     // It started none: there is still no host key in the data folder.
     assert!(host_public_key(&dirs.data).unwrap().is_none());

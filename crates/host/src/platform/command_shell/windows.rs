@@ -5,7 +5,7 @@
 //! code, so the line is followed by a check that exits with it: 0 when the
 //! last command succeeded, else the native program's code, else 1.
 
-use super::{CommandShell, FindShell, ShellCommand};
+use super::{CommandShell, FindShell, ShellCommand, ShellFamily};
 use crate::platform::folders::UserEnv;
 
 /// The Windows shell.
@@ -18,6 +18,10 @@ const EXIT_WITH_THE_LINES_CODE: &str =
     "if ($?) { exit 0 } elseif ($LASTEXITCODE) { exit $LASTEXITCODE } else { exit 1 }";
 
 impl CommandShell for Native {
+    fn family(&self) -> ShellFamily {
+        ShellFamily::PowerShell
+    }
+
     fn run_line(&self, _env: &UserEnv, find: FindShell<'_>, line: &str) -> ShellCommand {
         let program = ["pwsh.exe", "powershell.exe"]
             .into_iter()
