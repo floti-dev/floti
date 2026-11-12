@@ -8,19 +8,22 @@ use std::sync::Mutex;
 
 use url::Url;
 
-use super::{AddError, Added, Adder, Request, STAGING_FOLDER, failure_line, list, parse};
+use super::{
+    AddError, Added, Adder, Request, STAGING_FOLDER, desktop_file, desktop_sums_name, failure_line,
+    list, listed_sha256, parse,
+};
 use crate::Result;
 use crate::platform::folders::UserEnv;
 use crate::platform::installs::{DISPLAY_TEST_VAR, Desktop, Installs};
 use crate::platform::process_table::ProcessRow;
 use crate::sha256::hex_digest;
 use crate::testkit::TestDirs;
-use crate::update::channel;
 use crate::update::fakes::{FakeNetwork, Served, Signer};
+use crate::update::versions::Version;
 
 const RUNNING: &str = "3.0.0";
 const TARGET: &str = "linux-x64";
-const MANIFEST: &str = "https://floti.test/update.json";
+const RELEASES: &str = "https://floti.test/releases/download/";
 
 /// Installs that record what they were asked: the app at `target`, installed
 /// already when `installed`.
@@ -112,7 +115,8 @@ impl Installs for FakeInstalls {
     }
 }
 
-/// A release published at `version`, with a desktop file for [`TARGET`].
+/// A release published at `version`: its desktop file for [`TARGET`], and
+/// the signed list of its desktop files' SHA-256s.
 struct Published {
     version: String,
     desktop: Vec<u8>,
@@ -127,7 +131,7 @@ impl Published {
     }
 
     fn folder(&self) -> String {
-        format!("https://floti.test/download/v{}/", self.version)
+        format!("{RELEASES}v{}/", self.version)
     }
 
     fn file(&self) -> String {
@@ -137,6 +141,37 @@ impl Published {
     fn url(&self) -> String {
         format!("{}{}", self.folder(), self.file())
     }
+
+    fn list_file(&self) -> String {
+        format!("Helm-{}-SHA256SUMS", self.version)
+    }
+
+    fn list_url(&self) -> String {
+        format!("{}{}", self.folder(), self.list_file())
+    }
+
+    /// The list as the release workflow writes it: every desktop file,
+    /// sorted, this one with its real SHA-256.
+    fn list(&self) -> Vec<u8> {
+        let v = &self.version;
+        let mut lines = [
+            (format!("Helm-{v}-arm64-mac.zip"), "a".repeat(64)),
+            (format!("Helm-{v}-arm64.dmg"), "b".repeat(64)),
+            (self.file(), hex_digest(&self.desktop)),
+            (format!("Helm-{v}-portable.exe"), "c".repeat(64)),
+            (format!("Helm-{v}-setup.exe"), "d".repeat(64)),
+        ];
+        lines.sort();
+        lines
+            .iter()
+            .map(|(name, sha256)| format!("{sha256}  {name}\n"))
+            .collect::<String>()
+            .into_bytes()
+    }
+
+    fn comment(&self, file: &str) -> String {
+        format!("floti {} {file}", self.version)
+    }
 }
 
 struct World {
@@ -145,6 +180,8 @@ struct World {
     installs: FakeInstalls,
     install_selfs: RefCell<Vec<PathBuf>>,
     install_self_fails: bool,
+    running: &'static str,
+    target: &'static str,
     env: UserEnv,
     dirs: TestDirs,
 }
@@ -164,6 +201,8 @@ impl World {
             installs,
             install_selfs: RefCell::default(),
             install_self_fails: false,
+            running: RUNNING,
+            target: TARGET,
             env: UserEnv {
                 home: Some(dirs.home.clone()),
                 vars: Default::default(),
@@ -180,32 +219,18 @@ impl World {
         self.network.serve(url, Served::Body(bytes.to_vec()));
     }
 
-    /// Publishes a manifest whose channels are `channels`, each naming a
-    /// release; a release in `files` has its desktop file served too.
-    fn publish(&self, channels: &[(&str, &Published)], with_desktop: bool) {
-        let mut listed = serde_json::Map::new();
-        for (name, release) in channels {
-            let mut entry = serde_json::json!({
-                "version": release.version,
-                "url": release.folder(),
-                "floti": {},
-                "desktop": {},
-            });
-            if with_desktop {
-                entry["desktop"] = serde_json::json!({TARGET: {
-                    "file": release.file(),
-                    "sha256": hex_digest(&release.desktop),
-                }});
-            }
-            listed.insert((*name).to_owned(), entry);
-            self.serve_signed(
-                &release.url(),
-                &release.desktop,
-                &format!("floti {} {}", release.version, release.file()),
-            );
-        }
-        let manifest = serde_json::json!({"schema": 1, "channels": listed}).to_string();
-        self.serve_signed(MANIFEST, manifest.as_bytes(), "floti update.json");
+    /// Publishes `release`: its desktop file and its list, each signed.
+    fn publish(&self, release: &Published) {
+        self.serve_signed(
+            &release.url(),
+            &release.desktop,
+            &release.comment(&release.file()),
+        );
+        self.serve_signed(
+            &release.list_url(),
+            &release.list(),
+            &release.comment(&release.list_file()),
+        );
     }
 
     fn run(&self) -> Run {
@@ -220,9 +245,9 @@ impl World {
             }
         };
         let result = Adder {
-            running_version: RUNNING,
-            target: TARGET.into(),
-            manifest_url: Url::parse(MANIFEST).unwrap(),
+            running_version: self.running,
+            target: self.target.into(),
+            releases: Url::parse(RELEASES).unwrap(),
             key: &key,
             network: &self.network,
             installs: &self.installs,
@@ -241,6 +266,10 @@ impl World {
     fn staging_is_gone(&self) -> bool {
         !self.dirs.data.join(STAGING_FOLDER).exists()
     }
+
+    fn position(&self, url: &str) -> Option<usize> {
+        self.network.asked().iter().position(|asked| asked == url)
+    }
 }
 
 impl Run {
@@ -253,11 +282,10 @@ impl Run {
 }
 
 #[test]
-fn installs_the_app_from_the_release_of_floti_s_own_version_once_its_checks_pass() {
+fn installs_the_app_from_its_own_release_after_the_list_s_signature_then_the_file_s_checks() {
     let world = World::new();
     let own = Published::new(RUNNING);
-    let newer = Published::new("3.1.0-preview.1");
-    world.publish(&[("stable", &own), ("preview", &newer)], true);
+    world.publish(&own);
     let run = world.run();
     assert_eq!(
         run.result.as_ref().unwrap(),
@@ -269,22 +297,25 @@ fn installs_the_app_from_the_release_of_floti_s_own_version_once_its_checks_pass
         run.out
     );
     assert_eq!(world.installs.installed(), vec![own.desktop.clone()]);
+    let order = [
+        format!("{}.minisig", own.list_url()),
+        own.list_url(),
+        format!("{}.minisig", own.url()),
+        own.url(),
+    ];
+    let positions: Vec<Option<usize>> = order.iter().map(|url| world.position(url)).collect();
     assert!(
-        !world.network.asked().contains(&newer.url()),
-        "the newest preview is not this floti's release"
+        positions.iter().all(Option::is_some) && positions.is_sorted(),
+        "the list's signature, the list, the file's signature, the file: {:?}",
+        world.network.asked()
     );
     assert!(
         world
             .network
             .asked()
             .iter()
-            .position(|url| *url == format!("{}.minisig", own.url()))
-            < world
-                .network
-                .asked()
-                .iter()
-                .position(|url| *url == own.url()),
-        "the signature is fetched before the file: {:?}",
+            .all(|url| url.starts_with(&own.folder())),
+        "nothing but its own release, no update.json: {:?}",
         world.network.asked()
     );
     assert_eq!(*world.installs.launchers.lock().unwrap(), 1);
@@ -308,11 +339,12 @@ fn installs_the_app_from_the_release_of_floti_s_own_version_once_its_checks_pass
 }
 
 #[test]
-fn the_remembered_channel_s_release_is_taken_when_two_name_floti_s_version() {
-    let world = World::new();
-    channel::remember(&world.dirs.data, "preview").unwrap();
-    let own = Published::new(RUNNING);
-    world.publish(&[("stable", &own), ("preview", &own)], true);
+fn a_preview_floti_adds_its_own_preview_s_app() {
+    let mut world = World::new();
+    world.running = "3.1.0-preview.2";
+    let own = Published::new("3.1.0-preview.2");
+    world.publish(&own);
+    world.publish(&Published::new(RUNNING));
     let run = world.run();
     assert!(run.result.is_ok(), "{}", run.out);
     assert_eq!(world.installs.installed(), vec![own.desktop]);
@@ -326,14 +358,15 @@ type Spoiling<'a> = (&'a str, &'a dyn Fn(&World), String);
 fn a_download_that_fails_a_check_installs_nothing_and_says_which_check() {
     let own = Published::new(RUNNING);
     let file = own.file();
-    let cases: [Spoiling; 4] = [
+    let list = own.list_file();
+    let other = Signer::new();
+    let cases: [Spoiling; 8] = [
         (
-            "signed by another key",
+            "the file signed by another key",
             &|world: &World| {
-                let other = Signer::new();
                 world.network.serve(
                     &format!("{}.minisig", own.url()),
-                    Served::Body(other.sign(&own.desktop, &format!("floti {RUNNING} {file}"))),
+                    Served::Body(other.sign(&own.desktop, &own.comment(&file))),
                 );
             },
             format!("{file} is not signed with the key built into floti. Nothing was installed."),
@@ -343,34 +376,78 @@ fn a_download_that_fails_a_check_installs_nothing_and_says_which_check() {
             &|world: &World| {
                 world.network.serve(
                     &format!("{}.minisig", own.url()),
-                    Served::Body(
-                        world
-                            .signer
-                            .sign(b"other", &format!("floti {RUNNING} {file}")),
-                    ),
+                    Served::Body(world.signer.sign(b"other", &own.comment(&file))),
                 );
             },
             format!("{file} does not match its signature. Nothing was installed."),
         ),
         (
-            "no signature",
+            "no signature for the file",
             &|world: &World| world.network.forget(&format!("{}.minisig", own.url())),
             format!(
                 "{file} has no signature ({file}.minisig is not there). Nothing was installed."
             ),
         ),
         (
-            "another SHA-256",
+            "a file that does not match the list",
             &|world: &World| {
-                let tampered = b"tampered".to_vec();
-                world.serve_signed(&own.url(), &tampered, &format!("floti {RUNNING} {file}"));
+                world.serve_signed(&own.url(), b"tampered", &own.comment(&file));
             },
-            format!("{file} does not match its SHA-256 in update.json. Nothing was installed."),
+            format!("{file} does not match its SHA-256 in {list}. Nothing was installed."),
+        ),
+        (
+            "a list whose signature is of other bytes",
+            &|world: &World| {
+                world.network.serve(
+                    &format!("{}.minisig", own.list_url()),
+                    Served::Body(world.signer.sign(b"another list", &own.comment(&list))),
+                );
+            },
+            format!("{list} does not match its signature. Nothing was installed."),
+        ),
+        (
+            "a list signed by another key",
+            &|world: &World| {
+                world.network.serve(
+                    &format!("{}.minisig", own.list_url()),
+                    Served::Body(other.sign(&own.list(), &own.comment(&list))),
+                );
+            },
+            format!("{list} is not signed with the key built into floti. Nothing was installed."),
+        ),
+        (
+            "a list signed for another version",
+            &|world: &World| {
+                world.network.serve(
+                    &format!("{}.minisig", own.list_url()),
+                    Served::Body(
+                        world
+                            .signer
+                            .sign(&own.list(), &format!("floti 2.9.0 {list}")),
+                    ),
+                );
+            },
+            format!(
+                "the signature of {list} is for \"floti 2.9.0 {list}\", not \"floti {RUNNING} {list}\". Nothing was installed."
+            ),
+        ),
+        (
+            "a list that does not name the file",
+            &|world: &World| {
+                let without: String = String::from_utf8(own.list())
+                    .unwrap()
+                    .lines()
+                    .filter(|line| !line.ends_with(&file))
+                    .map(|line| format!("{line}\n"))
+                    .collect();
+                world.serve_signed(&own.list_url(), without.as_bytes(), &own.comment(&list));
+            },
+            format!("{list} does not list {file}. Nothing was installed."),
         ),
     ];
     for (case, spoil, line) in cases {
         let world = World::new();
-        world.publish(&[("stable", &own)], true);
+        world.publish(&own);
         spoil(&world);
         let run = world.run();
         assert_eq!(run.failure(), line, "{case}");
@@ -384,20 +461,51 @@ fn a_download_that_fails_a_check_installs_nothing_and_says_which_check() {
 }
 
 #[test]
-fn a_manifest_that_fails_its_signature_installs_nothing() {
+fn a_list_signed_by_another_key_is_refused_before_the_list_is_fetched() {
     let world = World::new();
     let own = Published::new(RUNNING);
-    world.publish(&[("stable", &own)], true);
+    world.publish(&own);
     world.network.serve(
-        &format!("{MANIFEST}.minisig"),
-        Served::Body(world.signer.sign(b"{}", "floti update.json")),
+        &format!("{}.minisig", own.list_url()),
+        Served::Body(Signer::new().sign(&own.list(), &own.comment(&own.list_file()))),
     );
+    world.run();
+    assert_eq!(world.position(&own.list_url()), None);
+    assert_eq!(world.position(&own.url()), None);
+}
+
+#[test]
+fn a_published_release_without_the_list_installs_nothing_and_says_so() {
+    let world = World::new();
+    let own = Published::new(RUNNING);
+    world.publish(&own);
+    world.network.forget(&own.list_url());
+    world.network.forget(&format!("{}.minisig", own.list_url()));
     let run = world.run();
     assert_eq!(
         run.failure(),
-        "update.json does not match its signature. Nothing was installed."
+        format!(
+            "floti {RUNNING}'s release has no {}, the signed list of its desktop files' SHA-256s, so floti cannot check Helm for it. Nothing was installed.",
+            own.list_file()
+        )
     );
-    assert!(!world.network.asked().contains(&own.url()));
+    assert_eq!(
+        world.position(&own.url()),
+        None,
+        "the app is not downloaded"
+    );
+    assert!(world.installs.installed().is_empty());
+}
+
+#[test]
+fn a_version_with_no_published_release_is_a_development_build_and_installs_nothing() {
+    let world = World::new();
+    world.publish(&Published::new("2.9.0"));
+    let run = world.run();
+    assert_eq!(
+        run.failure(),
+        "floti 3.0.0 has no published release, so there is no Helm for it (this is a development build). Nothing was installed."
+    );
     assert!(world.installs.installed().is_empty());
 }
 
@@ -461,62 +569,29 @@ fn a_test_build_s_display_switch_overrides_the_os_s_answer() {
         .env
         .vars
         .insert(OsString::from(DISPLAY_TEST_VAR), OsString::from("present"));
-    let own = Published::new(RUNNING);
-    world.publish(&[("stable", &own)], true);
+    world.publish(&Published::new(RUNNING));
     let run = world.run();
     assert!(run.result.is_ok(), "{}", run.out);
 }
 
 #[test]
-fn a_floti_older_than_a_channel_s_newest_is_told_to_update_first() {
-    let world = World::new();
-    world.publish(&[("stable", &Published::new("3.0.1"))], true);
+fn a_computer_the_release_has_no_app_for_installs_nothing() {
+    let mut world = World::new();
+    world.target = "windows-arm64";
+    world.publish(&Published::new(RUNNING));
     let run = world.run();
     assert_eq!(
         run.failure(),
-        "floti 3.0.0 is older than stable's newest, 3.0.1, and update.json lists the files of each channel's newest alone; run floti update, then floti add desktop. Nothing was installed."
+        "floti 3.0.0 has no Helm for windows-arm64. Nothing was installed."
     );
-    assert!(world.installs.installed().is_empty());
-}
-
-#[test]
-fn a_version_no_channel_has_reached_is_a_development_build_and_installs_nothing() {
-    let world = World::new();
-    world.publish(
-        &[
-            ("stable", &Published::new("2.9.0")),
-            ("preview", &Published::new("3.0.0-preview.4")),
-        ],
-        true,
-    );
-    let run = world.run();
-    assert_eq!(
-        run.failure(),
-        "floti 3.0.0 has no published release, so there is no Helm for it (this is a development build). Nothing was installed."
-    );
-    assert_eq!(
-        world.network.asked().len(),
-        2,
-        "update.json and its signature alone"
-    );
-}
-
-#[test]
-fn a_release_with_no_app_for_this_computer_installs_nothing() {
-    let world = World::new();
-    world.publish(&[("stable", &Published::new(RUNNING))], false);
-    let run = world.run();
-    assert_eq!(
-        run.failure(),
-        "floti 3.0.0 has no Helm for linux-x64. Nothing was installed."
-    );
+    assert!(world.network.asked().is_empty());
 }
 
 #[test]
 fn an_installer_that_fails_installs_nothing_and_says_so() {
     let mut world = World::new();
     world.installs.install_fails = true;
-    world.publish(&[("stable", &Published::new(RUNNING))], true);
+    world.publish(&Published::new(RUNNING));
     let run = world.run();
     assert_eq!(
         run.failure(),
@@ -531,7 +606,7 @@ fn the_menu_entry_is_named_and_a_failure_to_write_it_says_the_app_is_installed()
     world.installs.launcher = Ok(Some(PathBuf::from(
         "/home/me/.local/share/applications/helm.desktop",
     )));
-    world.publish(&[("stable", &Published::new(RUNNING))], true);
+    world.publish(&Published::new(RUNNING));
     let run = world.run();
     assert!(
         run.out
@@ -557,7 +632,7 @@ fn the_new_app_s_own_floti_runs_install_self_where_its_installer_does_not() {
     let carried = world.dirs.folder("app resources").join("floti");
     std::fs::write(&carried, b"the app's floti").unwrap();
     world.installs.carried = Some(carried.clone());
-    world.publish(&[("stable", &Published::new(RUNNING))], true);
+    world.publish(&Published::new(RUNNING));
     let run = world.run();
     assert!(run.result.is_ok(), "{}", run.out);
     assert_eq!(*world.install_selfs.borrow(), vec![carried.clone()]);
@@ -579,6 +654,60 @@ fn the_new_app_s_own_floti_runs_install_self_where_its_installer_does_not() {
         world.install_selfs.borrow().is_empty(),
         "no carried floti, no install-self"
     );
+}
+
+#[test]
+fn a_sha256_list_line_gives_its_file_s_digest_in_either_of_sha256sum_s_modes() {
+    let sha = "AB".repeat(32);
+    let list = format!(
+        "{}  other\r\n{sha} *Helm-3.0.0-setup.exe\n{}  Helm-3.0.0-setup.exe.minisig\n",
+        "c".repeat(64),
+        "d".repeat(64)
+    );
+    assert_eq!(
+        listed_sha256(&list, "Helm-3.0.0-setup.exe"),
+        Some(sha.to_ascii_lowercase())
+    );
+    assert_eq!(
+        listed_sha256(&list, "other"),
+        Some("c".repeat(64)),
+        "a CRLF line"
+    );
+    assert_eq!(listed_sha256(&list, "Helm-3.0.0"), None);
+    assert_eq!(
+        listed_sha256("zz  Helm-3.0.0-setup.exe\n", "Helm-3.0.0-setup.exe"),
+        None
+    );
+    let not_hex = format!("{}  f\n", "g".repeat(64));
+    assert_eq!(listed_sha256(&not_hex, "f"), None);
+}
+
+#[test]
+fn the_desktop_files_are_named_as_the_release_workflow_names_them() {
+    let version = Version::parse("3.0.0").unwrap();
+    let workflow = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packages/desktop/scripts/release.mjs"),
+    )
+    .unwrap();
+    for (target, file) in [
+        ("windows-x64", "Helm-${version}-setup.exe"),
+        ("macos-arm64", "Helm-${version}-arm64-mac.zip"),
+        ("linux-x64", "Helm-${version}-linux-x64.AppImage"),
+    ] {
+        assert!(
+            workflow.contains(&format!("`{file}`")),
+            "{file} in release.mjs"
+        );
+        assert_eq!(
+            desktop_file(&version, target).as_deref(),
+            Some(file.replace("${version}", "3.0.0").as_str())
+        );
+    }
+    assert!(workflow.contains("`Helm-${version}-SHA256SUMS`"));
+    assert_eq!(desktop_sums_name(&version), "Helm-3.0.0-SHA256SUMS");
+    for target in ["windows-arm64", "linux-arm64", "freebsd-x64"] {
+        assert_eq!(desktop_file(&version, target), None, "{target}");
+    }
 }
 
 #[test]

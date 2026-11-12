@@ -99,72 +99,44 @@ impl Release {
 
 /// The release `channel` names in the manifest `bytes`, for `target`.
 pub fn release(bytes: &[u8], channel: &str, target: &str) -> Result<Release, UpdateError> {
-    Manifest::read(bytes)?.release(channel, target)
-}
-
-/// A manifest, read. Its signature is checked before it is read.
-#[derive(Debug)]
-pub struct Manifest {
-    file: ManifestFile,
-}
-
-impl Manifest {
-    /// The manifest `bytes`, when this floti reads its schema.
-    pub fn read(bytes: &[u8]) -> Result<Self, UpdateError> {
-        let file: ManifestFile = serde_json::from_slice(bytes)
-            .map_err(|err| UpdateError::Manifest(format!("update.json cannot be read: {err}.")))?;
-        if file.schema != SCHEMA {
-            return Err(UpdateError::Manifest(format!(
-                "update.json is schema {}, which this floti does not read; install the newest floti by hand.",
-                file.schema
-            )));
-        }
-        Ok(Self { file })
+    let manifest: ManifestFile = serde_json::from_slice(bytes)
+        .map_err(|err| UpdateError::Manifest(format!("update.json cannot be read: {err}.")))?;
+    if manifest.schema != SCHEMA {
+        return Err(UpdateError::Manifest(format!(
+            "update.json is schema {}, which this floti does not read; install the newest floti by hand.",
+            manifest.schema
+        )));
     }
-
-    /// Each channel, by name, with the version it names when that is a
-    /// version.
-    pub fn versions(&self) -> Vec<(String, Version)> {
-        self.file
-            .channels
-            .iter()
-            .filter_map(|(name, found)| Some((name.clone(), Version::parse(&found.version)?)))
-            .collect()
-    }
-
-    /// The release `channel` names, for `target`.
-    pub fn release(&self, channel: &str, target: &str) -> Result<Release, UpdateError> {
-        let Some(found) = self.file.channels.get(channel) else {
-            return Err(UpdateError::NoChannel {
-                channel: channel.to_owned(),
-                known: self.file.channels.keys().cloned().collect(),
-            });
-        };
-        let version = Version::parse(&found.version).ok_or_else(|| {
-            UpdateError::Manifest(format!(
-                "update.json's {channel} channel names \"{}\", which is not a version.",
-                found.version
-            ))
-        })?;
-        let folder = ReleaseFolder::new(&found.url, version).ok_or_else(|| {
-            UpdateError::Manifest(format!(
-                "update.json's {channel} channel downloads from \"{}\", which is not an https folder.",
-                found.url
-            ))
-        })?;
-        let entry = |files: &BTreeMap<String, FileEntry>| {
-            files
-                .get(target)
-                .map(|entry| FileEntry::checked(&entry.file, &entry.sha256))
-                .transpose()
-        };
-        Ok(Release {
+    let Some(found) = manifest.channels.get(channel) else {
+        return Err(UpdateError::NoChannel {
             channel: channel.to_owned(),
-            folder,
-            floti: entry(&found.floti)?,
-            desktop: entry(&found.desktop)?,
-        })
-    }
+            known: manifest.channels.keys().cloned().collect(),
+        });
+    };
+    let version = Version::parse(&found.version).ok_or_else(|| {
+        UpdateError::Manifest(format!(
+            "update.json's {channel} channel names \"{}\", which is not a version.",
+            found.version
+        ))
+    })?;
+    let folder = ReleaseFolder::new(&found.url, version).ok_or_else(|| {
+        UpdateError::Manifest(format!(
+            "update.json's {channel} channel downloads from \"{}\", which is not an https folder.",
+            found.url
+        ))
+    })?;
+    let entry = |files: &BTreeMap<String, FileEntry>| {
+        files
+            .get(target)
+            .map(|entry| FileEntry::checked(&entry.file, &entry.sha256))
+            .transpose()
+    };
+    Ok(Release {
+        channel: channel.to_owned(),
+        folder,
+        floti: entry(&found.floti)?,
+        desktop: entry(&found.desktop)?,
+    })
 }
 
 /// A file name of letters, digits, `.`, `-`, `_` and `+`, not starting
@@ -223,29 +195,6 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "update.json has no channel \"beta\"; it has stable."
-        );
-    }
-
-    #[test]
-    fn each_channel_s_version_is_listed_and_one_that_is_not_a_version_left_out() {
-        let bytes = serde_json::json!({"schema": 1, "channels": {
-            "stable": good(),
-            "preview": {"version": "3.0.0-preview.2", "url": "https://example.com/v/"},
-            "odd": {"version": "latest", "url": "https://example.com/v/"},
-        }})
-        .to_string();
-        let versions: Vec<(String, String)> = Manifest::read(bytes.as_bytes())
-            .unwrap()
-            .versions()
-            .into_iter()
-            .map(|(name, version)| (name, version.to_string()))
-            .collect();
-        assert_eq!(
-            versions,
-            vec![
-                ("preview".to_owned(), "3.0.0-preview.2".to_owned()),
-                ("stable".to_owned(), "2.6.0".to_owned()),
-            ]
         );
     }
 

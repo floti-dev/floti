@@ -219,7 +219,7 @@ impl super::FakeDesktop for Native {
 
     fn fake_release(&self, _work: &Path, version: &str, _installer: &Path) -> (String, Vec<u8>) {
         (
-            format!("{DESKTOP_NAME}-{version}-x86_64.AppImage"),
+            format!("{DESKTOP_NAME}-{version}-linux-x64.AppImage"),
             version.as_bytes().to_vec(),
         )
     }

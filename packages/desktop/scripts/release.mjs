@@ -18,13 +18,19 @@
 //   node release.mjs check <folder> <version> [--unsigned]
 //     refuses a folder that does not hold exactly those files, and prints a
 //     Markdown table of each with its size and SHA-256 for the step summary.
+//
+//   node release.mjs desktop-sums <folder> <version>
+//     writes `Helm-<version>-SHA256SUMS` into <folder>: the SHA-256 of each of
+//     the five desktop files there, in sha256sum's format, which `floti add
+//     desktop` checks a download against. The app carries floti's own list,
+//     so that list cannot hold the app; this one is the desktop files'.
 
 import { createHash } from 'node:crypto'
-import { createReadStream, readdirSync, readFileSync, statSync } from 'node:fs'
+import { createReadStream, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
-import { releaseFileNames } from './floti-release.mjs'
+import { formatSums, releaseFileNames } from './floti-release.mjs'
 
 // Semver 2.0.0 without build metadata: a `+` part is ignored in precedence, so
 // two versions differing only there would be two tags no comparison can order.
@@ -132,6 +138,26 @@ export function desktopFileNames(version) {
   ]
 }
 
+/** `Helm-<version>-SHA256SUMS`: the SHA-256 of each desktop file, signed like every file. */
+export function desktopSumsName(version) {
+  return `Helm-${version}-SHA256SUMS`
+}
+
+/**
+ * Writes `Helm-<version>-SHA256SUMS` into `folder`, listing each of the five
+ * desktop files there, sorted, and returns its path. A desktop file missing
+ * from `folder` is an error.
+ */
+export async function writeDesktopSums(folder, version) {
+  const entries = []
+  for (const name of [...desktopFileNames(version)].sort()) {
+    entries.push({ name, sha256: await sha256Of(join(folder, name)) })
+  }
+  const file = join(folder, desktopSumsName(version))
+  writeFileSync(file, formatSums(entries))
+  return file
+}
+
 /** The generated protocol types, as one archive. */
 export function protocolFileName(version) {
   return `floti-protocol-${version}.tar.gz`
@@ -144,11 +170,16 @@ export function signatureName(name) {
 
 /**
  * The files of a release of `version` that are signed, sorted as jq and
- * `LC_ALL=C sort` sort them: the desktop files, the protocol types, the floti
- * files and their SHA-256 list.
+ * `LC_ALL=C sort` sort them: the desktop files and their SHA-256 list, the
+ * protocol types, the floti files and their SHA-256 list.
  */
 export function signedFileNames(version) {
-  return [...desktopFileNames(version), protocolFileName(version), ...releaseFileNames(version)].sort()
+  return [
+    ...desktopFileNames(version),
+    desktopSumsName(version),
+    protocolFileName(version),
+    ...releaseFileNames(version)
+  ].sort()
 }
 
 /**
@@ -213,8 +244,12 @@ async function main(args) {
     for (const name of releaseAssetNames(rest[0], { signed })) console.log(name)
   } else if (command === 'check' && rest.length === 2) {
     process.stdout.write(await check(rest[0], rest[1], { signed }))
+  } else if (command === 'desktop-sums' && given.length === 2) {
+    console.log(await writeDesktopSums(given[0], given[1]))
   } else {
-    console.error('usage: node release.mjs gate <version> [--dry-run] < tags | names <version> [--unsigned] | check <folder> <version> [--unsigned]')
+    console.error(
+      'usage: node release.mjs gate <version> [--dry-run] < tags | names <version> [--unsigned] | check <folder> <version> [--unsigned] | desktop-sums <folder> <version>'
+    )
     return 2
   }
   return 0

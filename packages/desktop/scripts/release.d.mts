@@ -28,6 +28,8 @@ export function taggedVersions(lsRemote: string): { versions: string[]; others: 
 export function highestVersion(versions: string[]): string | null
 export function gate(options: { version: string; lsRemote: string; dryRun: boolean }): GateDecision
 export function desktopFileNames(version: string): string[]
+export function desktopSumsName(version: string): string
+export function writeDesktopSums(folder: string, version: string): Promise<string>
 export function protocolFileName(version: string): string
 export function signatureName(name: string): string
 export function signedFileNames(version: string): string[]

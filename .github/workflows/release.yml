@@ -564,9 +564,22 @@ jobs:
         working-directory: ${{ runner.temp }}/release
         run: sha256sum --check --strict "floti-$VERSION-SHA256SUMS"
 
-      # Exactly the files the release signs - the five desktop files, the
-      # protocol types, the five floti files and their list - and nothing
-      # else. The signing job lists them, signatures and all, in the summary.
+      # The desktop files' SHA-256 list, `Helm-<version>-SHA256SUMS`, which
+      # `floti add desktop` checks a download against. The app carries
+      # floti's own list, so that list cannot hold the app; this one is signed
+      # with the comment `floti <version> <file>` as every file is.
+      - name: Write the desktop files' SHA-256 list
+        shell: bash
+        run: |
+          set -euo pipefail
+          node packages/desktop/scripts/release.mjs desktop-sums "$RUNNER_TEMP/release" "$VERSION"
+          cd "$RUNNER_TEMP/release"
+          sha256sum --check --strict "Helm-$VERSION-SHA256SUMS"
+
+      # Exactly the files the release signs - the five desktop files and
+      # their list, the protocol types, the five floti files and their list -
+      # and nothing else. The signing job lists them, signatures and all, in
+      # the summary.
       - name: Confirm the release's files
         shell: bash
         run: |

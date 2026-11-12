@@ -485,9 +485,11 @@ hand, no button to press, no artefact built on a developer's machine.
 remote, runs the checks, builds floti for its five targets, builds the Windows
 artefacts on a clean `windows-latest` runner, the macOS ones on `macos-latest`
 and the Linux one on `ubuntu-latest`, packs the protocol types, signs every
-file, and publishes one GitHub release with twenty-four files attached: the
-five desktop files, the protocol types, the five floti files and their SHA-256
-list, and a minisign signature beside each of those twelve. A stable release
+file, and publishes one GitHub release with twenty-six files attached: the
+five desktop files and their SHA-256 list (`Helm-<version>-SHA256SUMS`, which
+`floti add desktop` checks a download against), the protocol types, the five
+floti files and their SHA-256 list, and a minisign signature beside each of
+those thirteen. A stable release
 then updates the Homebrew formula and opens the winget pull request ("Homebrew
 and winget"), and copies the install scripts and the update manifest to
 floti.dev ("floti.dev"). A merge that does
@@ -500,8 +502,8 @@ after them and finishes green.
 | `check`, `floti` | `ci.yml` and `floti.yml`, called. |
 | `protocol` | The crate's `generated_files` test, then `floti-protocol-<version>.tar.gz`. |
 | `release-windows`, `release-mac`, `release-linux` | One desktop build each, verified from the inside and handed on as a workflow artifact. None publishes anything. |
-| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s and that the folder holds exactly the twelve files to sign (`scripts/release.mjs check --unsigned`), and uploads them as `release-unsigned`. Writes floti.dev's install scripts and, for a stable release, `update.json` (`scripts/floti-dev.mjs`) as `floti-dev-unsigned`. |
-| `sign` | The only job that reads the signing key, in the `release` environment (a prerequisite: "The release environment"). Signs every file, and `update.json` with the comment `floti update.json`, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-four files with their SHA-256s in the run's summary and uploads them as `release-files`, and floti.dev's files as `floti-dev`. Never runs in a dry run. |
+| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s, writes and checks the desktop files' SHA-256 list (`scripts/release.mjs desktop-sums`), checks that the folder holds exactly the thirteen files to sign (`scripts/release.mjs check --unsigned`), and uploads them as `release-unsigned`. Writes floti.dev's install scripts and, for a stable release, `update.json` (`scripts/floti-dev.mjs`) as `floti-dev-unsigned`. |
+| `sign` | The only job that reads the signing key, in the `release` environment (a prerequisite: "The release environment"). Signs every file, and `update.json` with the comment `floti update.json`, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-six files with their SHA-256s in the run's summary and uploads them as `release-files`, and floti.dev's files as `floti-dev`. Never runs in a dry run. |
 | `sign-dry-run` | A dry run's `sign`: the same signing and checks, with a key pair made in the run. Runs only in a dry run. |
 | `publish` | The only job with write access. Attests every file in `release-files`, then creates the release from them, publishes it and confirms it. Never runs in a dry run. |
 | `homebrew`, `winget` | After `publish`, for a stable release only: push `Formula/floti.rb` to floti-dev/homebrew-tap and open the winget pull request ("Homebrew and winget"). Never run for a preview or in a dry run. |
@@ -539,7 +541,7 @@ after them and finishes green.
   publish: no tag, no release, no artefacts.
 - **The release is created as a draft and published in the same job**, which is
   not an approval gate. Publishing the draft is what creates the tag, so the
-  ref and all twenty-four assets appear together rather than leaving a window where
+  ref and all twenty-six assets appear together rather than leaving a window where
   the app announces a version whose download page is empty. A run cancelled
   mid-upload leaves an unpublished draft; the next run deletes it and starts
   over.
@@ -582,11 +584,11 @@ after them and finishes green.
   It runs on any exe: `pnpm verify:artifact -- path/to/Helm-x.y.z-setup.exe`.
   The Mac artefacts get `verify-mac-artifact.mjs` and the AppImage
   `verify-linux-artifact.mjs`, described above.
-- **The confirmation expects all twenty-four files.** After publishing a
+- **The confirmation expects all twenty-six files.** After publishing a
   release, `publish` asks `/releases/latest` - the endpoint the in-app check
   asks - and fails unless it names this tag, is not a draft, and lists exactly
   the files `scripts/release.mjs names` gives, signatures included. A preview
-  must be published, a pre-release, carry the same twenty-four and not be what
+  must be published, a pre-release, carry the same twenty-six and not be what
   `/releases/latest` answers.
 - **Every version downloads without a sign-in.** For a release and a preview
   alike, `publish` then fetches the setup exe and `floti-<version>-linux-x64`
@@ -864,7 +866,7 @@ every check of the files that needs no published release. `sign-dry-run` makes
 a minisign key pair in the run (`minisign -G -W` under `$RUNNER_TEMP`), signs
 every file with it through the same `scripts/minisign.mjs` a release uses,
 checks every signature against that pair's public key and uploads exactly the
-twenty-four files as the run's `release-files` artifact, kept for seven days.
+twenty-six files as the run's `release-files` artifact, kept for seven days.
 The run's summary lists each with its SHA-256 and gives the run's public key.
 `packages-dry-run` builds the formula and the winget manifests from the run's
 SHA-256 list as a release would, preview or not, after checking the list's
@@ -947,23 +949,25 @@ it:
 | macOS | `~/Applications/Helm.app`, unpacked from `Helm-<version>-arm64-mac.zip` with `ditto -x -k --noqtn` beside it and renamed into place; then `floti install-self` runs from the floti inside it. | `~/Applications` is the Applications entry. |
 | Linux | `~/Applications/Helm.AppImage`, from `Helm-<version>-linux-x64.AppImage`, written beside, made executable and renamed into place. | `applications/helm.desktop` and `icons/hicolor/256x256/apps/helm.png` under `$XDG_DATA_HOME` (`~/.local/share`); the icon is the AppImage's own, built into floti. |
 
-**Which release.** It reads `update.json` and checks its signature exactly as
-`floti update` does, and takes the channel whose version is floti's own: the
-remembered channel first, then the others. The release's desktop files are
-listed with their SHA-256s there alone: `floti-<version>-SHA256SUMS` lists the
-five floti files, and the app carries that list, so the list cannot hold the
-app. So a floti older than a channel's newest is told to run `floti update`
-first, and a floti no channel has reached is a development build with no
-published release: either says so in one line and installs nothing. A release
-with no desktop file for this computer (Windows on Arm, Linux on Arm) says so
-too.
+**Which release.** The release that is floti's own version, preview or
+stable, at `https://github.com/floti-dev/floti/releases/download/v<version>/`;
+`update.json` plays no part. Its desktop files are listed with their
+SHA-256s in `Helm-<version>-SHA256SUMS` ("Releasing"): floti's own list
+cannot hold the app, because the app carries it. A version with no published
+release (a development build), and a release made before the list existed,
+each says so in one line and installs nothing. A release with no desktop file
+for this computer (Windows on Arm, Linux on Arm) says so too.
 
-**The checks.** The file downloads into `add` in Floti's data folder and is
-checked against its signature and its SHA-256 before anything runs, as
-`floti update` checks a file ("floti update", "The checks"). A file that
-fails a check is removed, the line on standard error names it and which check
-it failed, and nothing is installed. The folder is removed once the app is
-installed, or once the install failed.
+**The checks.** The list's signature is fetched first and must verify with
+the key built into floti, with the trusted comment `floti <version>
+Helm-<version>-SHA256SUMS`; a signature by another key is refused before the
+list is fetched. Then the desktop file downloads into `add` in Floti's data
+folder and is checked against its own signature and its SHA-256 in the list
+before anything runs, as `floti update` checks a file ("floti update", "The
+checks"). A list or file that fails a check, or a list that does not name the
+file, stops it: the line on standard error names the file and which check it
+failed, the download is removed, and nothing is installed. The folder is
+removed once the app is installed, or once the install failed.
 
 **Nothing is quarantined.** floti's own process writes the download, which
 neither Gatekeeper's quarantine nor Windows' mark of the web applies to, and
@@ -988,8 +992,9 @@ Progress goes to standard output, one line a step; the status is 0 when the
 app was installed or already there and 1 otherwise. Its tests use fake
 release files served from a loopback port and fake folders
 (`crates/host/tests/add.rs`, `src/add/tests.rs`); a test build alone reads
-`FLOTI_DESKTOP_DIR` for the folder the app goes in and `FLOTI_TEST_DISPLAY`
-for whether there is a display.
+`FLOTI_DESKTOP_DIR` for the folder the app goes in, `FLOTI_TEST_DISPLAY`
+for whether there is a display, and the releases' address and the key from
+the marker in its data folder, as `floti update`'s tests do.
 
 ## floti update
 

@@ -62,6 +62,11 @@ impl Server {
     pub fn serve(&self, path: &str, served: Served) {
         self.served.lock().unwrap().insert(path.to_owned(), served);
     }
+
+    /// Stops serving `path`: it answers 404.
+    pub fn forget(&self, path: &str) {
+        self.served.lock().unwrap().remove(path);
+    }
 }
 
 impl Drop for Server {

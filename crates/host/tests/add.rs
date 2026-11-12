@@ -1,9 +1,9 @@
 //! `floti add`, end to end: a copy of the built `floti`, run from a fake bin
 //! folder, installing a fake desktop app from a loopback HTTP server that
-//! serves a release of floti's own version, signed with a key made in the
-//! test.
+//! serves a release of floti's own version, with its desktop SHA-256 list,
+//! signed with a key made in the test. No `update.json` is served.
 //!
-//! The test key and the manifest's address reach the binary only through
+//! The test key and the releases' address reach the binary only through
 //! the testkit's marker in the data folder (`floti-test-update.json`); the
 //! desktop app is looked for and installed only in the folder
 //! `FLOTI_DESKTOP_DIR` names, and `FLOTI_TEST_DISPLAY` says whether there is
@@ -26,7 +26,7 @@ use floti_host::platform::installs::{
 use floti_host::sha256::hex_digest;
 use floti_host::testkit::{TestDirs, run_floti};
 use floti_host::update::signature::TEST_UPDATE_MARKER;
-use floti_host::version::{FLOTI_VERSION, cpu_name, os_name};
+use floti_host::version::FLOTI_VERSION;
 
 const RECORD_VAR: &str = "FLOTI_FAKE_PROGRAM_RECORD";
 
@@ -41,6 +41,7 @@ struct World {
     data_home: PathBuf,
     local_app_data: PathBuf,
     desktop_file: String,
+    list_file: String,
     dirs: TestDirs,
 }
 
@@ -57,24 +58,13 @@ impl World {
 
         let server = Server::start();
         let signer = Signer::new();
-        let target = format!("{}-{}", os_name(), cpu_name());
-        let folder = format!("/download/v{FLOTI_VERSION}/");
         let (desktop_file, desktop) = Native.fake_release(
             &dirs.folder("release work"),
             FLOTI_VERSION,
             Path::new(env!("CARGO_BIN_EXE_floti-fake-program")),
         );
-        let manifest = serde_json::json!({
-            "schema": 1,
-            "channels": {"stable": {
-                "version": FLOTI_VERSION,
-                "url": server.url(&folder),
-                "floti": {},
-                "desktop": {&target: {"file": desktop_file, "sha256": hex_digest(&desktop)}},
-            }}
-        })
-        .to_string()
-        .into_bytes();
+        let list_file = format!("Helm-{FLOTI_VERSION}-SHA256SUMS");
+        let list = format!("{}  {desktop_file}\n", hex_digest(&desktop));
 
         let world = Self {
             server,
@@ -85,16 +75,21 @@ impl World {
             data_home,
             local_app_data,
             desktop_file,
+            list_file,
             dirs,
         };
-        world.serve_signed("/update.json", &manifest, "floti update.json");
         world.serve_signed(
-            &world.file_path(),
+            &world.file_path(&world.list_file),
+            list.as_bytes(),
+            &format!("floti {FLOTI_VERSION} {}", world.list_file),
+        );
+        world.serve_signed(
+            &world.file_path(&world.desktop_file),
             &desktop,
             &format!("floti {FLOTI_VERSION} {}", world.desktop_file),
         );
         let marker = serde_json::json!({
-            "manifest": world.server.url("/update.json"),
+            "releases": world.server.url("/download/"),
             "key": world.signer.public_text(),
         });
         std::fs::write(world.dirs.data.join(TEST_UPDATE_MARKER), marker.to_string())
@@ -110,8 +105,9 @@ impl World {
         self.server.serve(path, Served::Body(bytes.to_vec()));
     }
 
-    fn file_path(&self) -> String {
-        format!("/download/v{FLOTI_VERSION}/{}", self.desktop_file)
+    /// Where `file` of floti's own release is on the server.
+    fn file_path(&self, file: &str) -> String {
+        format!("/download/v{FLOTI_VERSION}/{file}")
     }
 
     async fn add(&self, args: &[&str], display: &str) -> std::process::Output {
@@ -201,7 +197,7 @@ async fn floti_add_desktop_installs_the_app_of_its_own_release_and_no_second_flo
 async fn a_download_that_fails_its_signature_installs_nothing_and_says_so_in_one_line() {
     let world = World::new();
     world.server.serve(
-        &format!("{}.minisig", world.file_path()),
+        &format!("{}.minisig", world.file_path(&world.desktop_file)),
         Served::Body(world.signer.sign(
             b"another file",
             &format!("floti {FLOTI_VERSION} {}", world.desktop_file),
@@ -271,4 +267,24 @@ async fn floti_add_with_no_name_or_an_unknown_one_lists_what_it_adds() {
         "{stderr}"
     );
     assert!(stderr.contains("  desktop  "), "{stderr}");
+}
+
+#[tokio::test]
+async fn a_release_without_the_desktop_list_installs_nothing_and_says_so_in_one_line() {
+    let world = World::new();
+    world.server.forget(&world.file_path(&world.list_file));
+    world
+        .server
+        .forget(&format!("{}.minisig", world.file_path(&world.list_file)));
+    let output = world.add(&["desktop"], "present").await;
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert_eq!(
+        stderr.trim_end(),
+        format!(
+            "floti add desktop: floti {FLOTI_VERSION}'s release has no {}, the signed list of its desktop files' SHA-256s, so floti cannot check Helm for it. Nothing was installed.",
+            world.list_file
+        )
+    );
+    assert!(!world.installed());
 }

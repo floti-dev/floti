@@ -10,18 +10,19 @@
 //!    where, and its version where that can be told, and changes nothing.
 //! 2. In a session with no display ([`installs::missing_display`]) it
 //!    refuses in one sentence saying why.
-//! 3. It downloads `update.json` and checks its signature, as `floti update`
-//!    does, and finds the channel whose release is floti's own version: the
-//!    remembered channel first, then the others. The release's desktop files
-//!    are listed with their SHA-256s there alone (the release's
-//!    `floti-<version>-SHA256SUMS` lists the floti files, and the app
-//!    carries that list, so it cannot list the app). A floti older than a
-//!    channel's newest is told to run `floti update` first; one that no
-//!    channel names and none is newer than is a development build, with no
-//!    published release, and installs nothing.
-//! 4. It downloads the release's file for this computer into `add` in the
-//!    data folder, checked against its signature and its SHA-256
-//!    ([`ReleaseFolder::fetch`]) before anything runs.
+//! 3. It reads `Helm-<version>-SHA256SUMS` from the release that is floti's
+//!    own version, preview or stable, under the project's GitHub releases
+//!    ([`release_file::releases_url`]): its signature first, made with the
+//!    key built into floti and the trusted comment `floti <version> <file>`,
+//!    then the list. The app carries floti's own list
+//!    (`floti-<version>-SHA256SUMS`), so that list cannot hold the app; this
+//!    one is the desktop files'. A version with no published release (a
+//!    development build), or a release without the list, says so and
+//!    installs nothing.
+//! 4. It downloads the release's file for this computer
+//!    ([`desktop_file`]) into `add` in the data folder, checked against its
+//!    own signature and its SHA-256 in the list ([`ReleaseFolder::fetch`])
+//!    before anything runs.
 //! 5. It installs it where the desktop's installer puts it, per user and with
 //!    no admin rights ([`Installs::install_desktop`]): on Windows by running
 //!    the release's installer silently, which makes the Start menu entry; on
@@ -42,6 +43,7 @@
 //! app was installed or was already there.
 //!
 //! [`ReleaseFolder::fetch`]: crate::update::release_file::ReleaseFolder::fetch
+//! [`release_file::releases_url`]: crate::update::release_file::releases_url
 
 #[cfg(test)]
 mod tests;
@@ -56,12 +58,12 @@ use crate::bridge::BridgeExit;
 use crate::platform::folders::{self, UserEnv};
 use crate::platform::installs::{self, Desktop, Installs};
 use crate::platform::links::{self, remove_tree};
-use crate::update::manifest::{FileEntry, Manifest, Release};
-use crate::update::network::{self, Network, get_whole};
-use crate::update::release_file::{fetch_refusal, fetch_signature};
-use crate::update::signature::{self, MANIFEST_COMMENT, check_whole};
+use crate::update::manifest::FileEntry;
+use crate::update::network::{self, FetchError, Network, get_whole};
+use crate::update::release_file::{self, ReleaseFolder, signature_url};
+use crate::update::signature;
 use crate::update::versions::Version;
-use crate::update::{UpdateError, channel, manifest_url, run_install_self};
+use crate::update::{UpdateError, run_install_self};
 use crate::version::{FLOTI_VERSION, cpu_name, os_name};
 
 /// The clients `floti add` installs, each with what it is.
@@ -71,10 +73,43 @@ pub const CLIENTS: &[(&str, &str)] = &[("desktop", "the desktop app, at this flo
 /// installed.
 pub const STAGING_FOLDER: &str = "add";
 
-/// The manifest's file name, as its signature and errors name it.
-const MANIFEST_FILE: &str = "update.json";
+/// The largest SHA-256 list fetched.
+const SUMS_LIMIT: u64 = 64 * 1024;
 
-const MANIFEST_LIMIT: u64 = 1024 * 1024;
+/// The largest signature fetched, when looking whether a release is there.
+const SIGNATURE_LIMIT: u64 = 16 * 1024;
+
+/// The desktop file a release of `version` has for `target`, as the release
+/// workflow names it (`desktopFileNames` in
+/// `packages/desktop/scripts/release.mjs`): `None` for a target with no
+/// desktop app.
+pub fn desktop_file(version: &Version, target: &str) -> Option<String> {
+    match target {
+        "windows-x64" => Some(format!("Helm-{version}-setup.exe")),
+        "macos-arm64" => Some(format!("Helm-{version}-arm64-mac.zip")),
+        "linux-x64" => Some(format!("Helm-{version}-linux-x64.AppImage")),
+        _ => None,
+    }
+}
+
+/// The signed SHA-256 list of a release's desktop files
+/// (`desktopSumsName` in `packages/desktop/scripts/release.mjs`).
+pub fn desktop_sums_name(version: &Version) -> String {
+    format!("Helm-{version}-SHA256SUMS")
+}
+
+/// The SHA-256 `list`, in sha256sum's format (`<hex>  <name>` or
+/// `<hex> *<name>`), gives `file`, when it gives one.
+pub fn listed_sha256(list: &str, file: &str) -> Option<String> {
+    list.lines().find_map(|line| {
+        let line = line.trim_end_matches('\r');
+        let (sha256, rest) = line.split_at_checked(64)?;
+        let name = rest.strip_prefix(' ')?;
+        let name = name.strip_prefix(['*', ' '])?;
+        (name == file && sha256.chars().all(|c| c.is_ascii_hexdigit()))
+            .then(|| sha256.to_ascii_lowercase())
+    })
+}
 
 /// What `floti add` was asked.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,13 +160,17 @@ pub enum AddError {
     )]
     Unreleased { version: String, app: &'static str },
     #[error(
-        "floti {version} is older than {channel}'s newest, {newest}, and update.json lists the files of each channel's newest alone; run floti update, then floti add desktop."
+        "floti {version}'s release has no {list}, the signed list of its desktop files' SHA-256s, so floti cannot check {app} for it."
     )]
-    NotNewest {
+    NoList {
         version: String,
-        channel: String,
-        newest: String,
+        list: String,
+        app: &'static str,
     },
+    #[error("{list} does not list {file}.")]
+    NotListed { list: String, file: String },
+    #[error("{file} does not match its SHA-256 in {list}.")]
+    WrongSha256 { file: String, list: String },
     #[error("floti {version} has no {app} for {target}.")]
     NoBuild {
         version: String,
@@ -183,7 +222,8 @@ pub struct Adder<'a> {
     pub running_version: &'a str,
     /// This computer, as release files name it: `windows-x64`.
     pub target: String,
-    pub manifest_url: Url,
+    /// Where every release's folder is ([`release_file::releases_url`]).
+    pub releases: Url,
     pub key: &'a PublicKey,
     pub network: &'a dyn Network,
     pub installs: &'a dyn Installs,
@@ -192,7 +232,7 @@ pub struct Adder<'a> {
     pub install_self: &'a dyn Fn(&Path) -> Result<String, String>,
     /// The user, for where the app goes and whether there is a display.
     pub env: UserEnv,
-    /// Floti's data folder: the remembered channel, and the staging folder.
+    /// Floti's data folder, for the staging folder.
     pub data: PathBuf,
     /// Where progress lines go.
     pub out: &'a mut dyn Write,
@@ -219,15 +259,24 @@ impl Adder<'_> {
             Version::parse(self.running_version).ok_or_else(|| UpdateError::RunningVersion {
                 version: self.running_version.to_owned(),
             })?;
-        let release = self.release(&running, target.name)?;
-        let entry = release.desktop.clone().ok_or_else(|| AddError::NoBuild {
+        let file = desktop_file(&running, &self.target).ok_or_else(|| AddError::NoBuild {
             version: running.to_string(),
             app: target.name,
             target: self.target.clone(),
         })?;
+        let releases = self.releases.to_string();
+        let folder =
+            ReleaseFolder::of_version(&self.releases, running.clone()).ok_or_else(|| {
+                UpdateError::Network {
+                    file: file.clone(),
+                    url: releases,
+                    reason: "it is not an https folder".into(),
+                }
+            })?;
+        let entry = self.listed_entry(&folder, &file, target.name)?;
 
         let staging = self.data.join(STAGING_FOLDER);
-        let installed = self.download_and_install(&release, &entry, &target, &staging);
+        let installed = self.download_and_install(&folder, &entry, &target, &staging);
         let _ = clear(&staging);
         installed?;
         self.say(&format!(
@@ -269,50 +318,56 @@ impl Adder<'_> {
         ));
     }
 
-    /// The release that is `running`'s, from the signed manifest.
-    fn release(&self, running: &Version, app: &'static str) -> Result<Release, AddError> {
-        let manifest = Manifest::read(&self.manifest()?)?;
-        let versions = manifest.versions();
-        let remembered = channel::remembered(&self.data);
-        let mut channels: Vec<&(String, Version)> = versions.iter().collect();
-        // The remembered channel first; the rest in their names' order.
-        channels.sort_by_key(|(name, _)| *name != remembered);
-        if let Some((name, _)) = channels.iter().find(|(_, version)| version == running) {
-            return Ok(manifest.release(name, &self.target)?);
-        }
-        match channels.iter().find(|(_, version)| version > running) {
-            Some((name, newest)) => Err(AddError::NotNewest {
-                version: running.to_string(),
-                channel: name.clone(),
-                newest: newest.to_string(),
-            }),
-            None => Err(AddError::Unreleased {
-                version: running.to_string(),
-                app,
-            }),
-        }
+    /// `file`'s entry in the release's signed desktop list: the list's
+    /// signature checked first, then the list.
+    fn listed_entry(
+        &self,
+        folder: &ReleaseFolder,
+        file: &str,
+        app: &'static str,
+    ) -> Result<FileEntry, AddError> {
+        let version = folder.version().to_string();
+        let list = desktop_sums_name(folder.version());
+        let bytes = match folder.fetch_whole(self.network, self.key, &list, SUMS_LIMIT) {
+            Ok(bytes) => bytes,
+            Err(UpdateError::MissingSignature { .. }) => {
+                return Err(if self.published(folder, file)? {
+                    AddError::NoList { version, list, app }
+                } else {
+                    AddError::Unreleased { version, app }
+                });
+            }
+            Err(err) => return Err(err.into()),
+        };
+        let sha256 = listed_sha256(&String::from_utf8_lossy(&bytes), file).ok_or_else(|| {
+            AddError::NotListed {
+                list: list.clone(),
+                file: file.to_owned(),
+            }
+        })?;
+        Ok(FileEntry::checked(file, &sha256)?)
     }
 
-    /// The manifest, its signature checked.
-    fn manifest(&self) -> Result<Vec<u8>, UpdateError> {
-        let bytes = get_whole(self.network, &self.manifest_url, MANIFEST_LIMIT)
-            .map_err(|err| fetch_refusal(MANIFEST_FILE, &self.manifest_url, err))?;
-        let signature = fetch_signature(self.network, MANIFEST_FILE, &self.manifest_url)?;
-        check_whole(
-            self.key,
-            &bytes,
-            &signature,
-            MANIFEST_FILE,
-            MANIFEST_COMMENT,
-        )?;
-        Ok(bytes)
+    /// Whether the release in `folder` is published: whether its `file`'s
+    /// signature is there.
+    fn published(&self, folder: &ReleaseFolder, file: &str) -> Result<bool, UpdateError> {
+        let url = signature_url(&folder.file_url(file));
+        match get_whole(self.network, &url, SIGNATURE_LIMIT) {
+            Ok(_) => Ok(true),
+            Err(FetchError::NotFound) => Ok(false),
+            Err(err) => Err(release_file::fetch_refusal(
+                &format!("{file}.minisig"),
+                &url,
+                err,
+            )),
+        }
     }
 
     /// Downloads `entry` into `staging`, checked, and installs it at
     /// `target`.
     fn download_and_install(
         &mut self,
-        release: &Release,
+        folder: &ReleaseFolder,
         entry: &FileEntry,
         target: &Desktop,
         staging: &Path,
@@ -323,9 +378,15 @@ impl Adder<'_> {
         })?;
         self.say(&format!("Downloading {}.", entry.file));
         let downloaded = staging.join(&entry.file);
-        release
-            .folder
-            .fetch(self.network, self.key, entry, &downloaded)?;
+        folder
+            .fetch(self.network, self.key, entry, &downloaded)
+            .map_err(|err| match err {
+                UpdateError::WrongSha256 { file } => AddError::WrongSha256 {
+                    file,
+                    list: desktop_sums_name(folder.version()),
+                },
+                other => other.into(),
+            })?;
         self.say(&format!(
             "Installing {} in {}.",
             target.name,
@@ -413,7 +474,7 @@ fn run_native() -> Result<Added, String> {
     let mut adder = Adder {
         running_version: FLOTI_VERSION,
         target: format!("{}-{}", os_name(), cpu_name()),
-        manifest_url: manifest_url(&folders.data),
+        releases: release_file::releases_url(&folders.data),
         key: &key,
         network: &network,
         installs: &installs::Native,

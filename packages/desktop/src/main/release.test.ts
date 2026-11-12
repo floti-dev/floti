@@ -1,7 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdtemp } from 'node:fs/promises'
+import { join } from 'node:path'
+import { describe, expect, inject, it } from 'vitest'
+import { RUN_ROOT } from '../../../../test/run-root'
+import { parseSums, sha256Of } from '../../scripts/floti-release.mjs'
 import {
   assetsProblem,
   compareVersions,
+  desktopFileNames,
+  desktopSumsName,
   gate,
   highestVersion,
   parseVersion,
@@ -9,7 +16,8 @@ import {
   signatureName,
   signedFileNames,
   summaryTable,
-  taggedVersions
+  taggedVersions,
+  writeDesktopSums
 } from '../../scripts/release.mjs'
 
 /**
@@ -100,8 +108,9 @@ describe('the version gate', () => {
 })
 
 describe('the files a release carries', () => {
-  it('signs the five desktop files, the protocol types and the six floti files, sorted as jq sorts them', () => {
+  it('signs the five desktop files and their list, the protocol types and the six floti files, sorted as jq sorts them', () => {
     expect(signedFileNames('3.0.0')).toEqual([
+      'Helm-3.0.0-SHA256SUMS',
       'Helm-3.0.0-arm64-mac.zip',
       'Helm-3.0.0-arm64.dmg',
       'Helm-3.0.0-linux-x64.AppImage',
@@ -119,12 +128,12 @@ describe('the files a release carries', () => {
 
   it('carries each signed file with its minisign signature beside it, sorted as jq and LC_ALL=C sort sort them', () => {
     const names = releaseAssetNames('3.0.0')
-    expect(names).toHaveLength(24)
+    expect(names).toHaveLength(26)
     expect(names.slice(0, 4)).toEqual([
+      'Helm-3.0.0-SHA256SUMS',
+      'Helm-3.0.0-SHA256SUMS.minisig',
       'Helm-3.0.0-arm64-mac.zip',
-      'Helm-3.0.0-arm64-mac.zip.minisig',
-      'Helm-3.0.0-arm64.dmg',
-      'Helm-3.0.0-arm64.dmg.minisig'
+      'Helm-3.0.0-arm64-mac.zip.minisig'
     ])
     expect(names.slice(-2)).toEqual(['floti-protocol-3.0.0.tar.gz', 'floti-protocol-3.0.0.tar.gz.minisig'])
     expect(names.filter((name) => !name.endsWith('.minisig'))).toEqual(signedFileNames('3.0.0'))
@@ -139,14 +148,31 @@ describe('the files a release carries', () => {
     expect(assetsProblem([...names.filter((name) => !name.endsWith('.AppImage')), 'notes.md'], '3.0.0')).toBe(
       'missing Helm-3.0.0-linux-x64.AppImage; not a release file: notes.md'
     )
-    expect(assetsProblem(releaseAssetNames('2.9.9'), '3.0.0')).toMatch(/^missing Helm-3\.0\.0-arm64-mac\.zip, .*; not a release file: Helm-2\.9\.9-arm64-mac\.zip/)
+    expect(assetsProblem(releaseAssetNames('2.9.9'), '3.0.0')).toMatch(/^missing Helm-3\.0\.0-SHA256SUMS, .*; not a release file: Helm-2\.9\.9-SHA256SUMS/)
   })
 
   it('refuses a signed folder missing a signature, and an unsigned one holding one', () => {
     const names = releaseAssetNames('3.0.0')
     expect(assetsProblem(names.filter((name) => name !== 'floti-3.0.0-SHA256SUMS.minisig'), '3.0.0')).toBe('missing floti-3.0.0-SHA256SUMS.minisig')
     expect(assetsProblem(signedFileNames('3.0.0'), '3.0.0', { signed: false })).toBeNull()
-    expect(assetsProblem(names, '3.0.0', { signed: false })).toMatch(/^not a release file: Helm-3\.0\.0-arm64-mac\.zip\.minisig, /)
+    expect(assetsProblem(names, '3.0.0', { signed: false })).toMatch(/^not a release file: Helm-3\.0\.0-SHA256SUMS\.minisig, Helm-3\.0\.0-arm64-mac\.zip\.minisig, /)
+  })
+
+  it('writes the SHA-256 list of the desktop files, sorted, in sha256sum format', async () => {
+    const folder = await mkdtemp(join(inject(RUN_ROOT), 'desktop sums '))
+    for (const name of desktopFileNames('3.0.0')) writeFileSync(join(folder, name), `bytes of ${name}`)
+    const file = await writeDesktopSums(folder, '3.0.0')
+    expect(file).toBe(join(folder, desktopSumsName('3.0.0')))
+    expect(desktopSumsName('3.0.0')).toBe('Helm-3.0.0-SHA256SUMS')
+    const listed = parseSums(readFileSync(file, 'utf8'))
+    expect(listed.map((entry) => entry.name)).toEqual([...desktopFileNames('3.0.0')].sort())
+    for (const { name, sha256 } of listed) expect(sha256).toBe(sha256Of(Buffer.from(`bytes of ${name}`)))
+  })
+
+  it('refuses to write the desktop list without every desktop file', async () => {
+    const folder = await mkdtemp(join(inject(RUN_ROOT), 'desktop sums missing '))
+    writeFileSync(join(folder, 'Helm-3.0.0-setup.exe'), 'setup')
+    await expect(writeDesktopSums(folder, '3.0.0')).rejects.toThrow()
   })
 
   it('lists each file with its size and SHA-256 for the step summary', () => {
