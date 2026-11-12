@@ -585,8 +585,8 @@ jobs:
   # whether signing worked or not. Never echo it, never put it in a file of the
   # workspace and never pass it on a command line.
   #
-  # Until the public key is committed this job fails a real release by design:
-  # without it nothing shows the signatures are ones floti update accepts.
+  # Without the committed public key this job fails a real release by design:
+  # nothing would show the signatures are ones floti update accepts.
   sign:
     needs: [version, assemble]
     if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run != 'true'

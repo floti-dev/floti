@@ -488,10 +488,6 @@ five floti files and their SHA-256 list - has a minisign signature beside it,
   comment included (`scripts/minisign.mjs verify`). A release fails there,
   with nothing tagged or published, when that file is missing, when the secret
   is missing, or when any signature does not verify against it.
-  **Until the project's public key is committed at that path, every real
-  release fails at `sign`, by design**: with no key to check against, nothing
-  shows the signatures are ones `floti update` accepts. A dry run is not
-  affected.
 - **minisign is pinned**: version 0.12, its Linux x64 archive checked against
   the SHA-256 written in `.github/actions/minisign/action.yml`.
 - **The signing is reusable.** `scripts/minisign.mjs sign --comment <comment>
