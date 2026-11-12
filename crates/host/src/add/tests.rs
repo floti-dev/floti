@@ -665,13 +665,14 @@ fn an_installed_app_missing_its_menu_entry_gets_it_and_is_still_already_installe
         run.result.as_ref().unwrap(),
         &Added::AlreadyInstalled(world.installs.target.clone())
     );
-    assert!(run.out.contains("is already installed at"), "{}", run.out);
-    assert!(
-        run.out.contains(
-            "Its menu entry was missing; it is now /home/me/.local/share/applications/helm.desktop."
-        ),
-        "{}",
-        run.out
+    // One line, which says what changed and never that nothing did.
+    assert_eq!(
+        run.out,
+        format!(
+            "Helm is already installed at {}; floti update keeps it up to date. Its menu entry was missing, so floti added it at {}.\n",
+            world.installs.target.path.display(),
+            Path::new("/home/me/.local/share/applications/helm.desktop").display()
+        )
     );
     assert!(world.network.asked().is_empty());
 
@@ -684,6 +685,7 @@ fn an_installed_app_missing_its_menu_entry_gets_it_and_is_still_already_installe
             world.installs.target.path.display()
         )
     );
+    assert_eq!(run.out, "", "the failure line alone says the app is there");
 }
 
 #[test]

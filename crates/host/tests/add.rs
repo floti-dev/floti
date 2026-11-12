@@ -147,6 +147,28 @@ impl World {
         Native.desktop_target(&user).unwrap()
     }
 
+    /// The user as the add's own session sees it for menu entries: the
+    /// test's home, with `data_home` as its `XDG_DATA_HOME`.
+    fn launcher_user(&self, data_home: &Path) -> UserEnv {
+        UserEnv {
+            home: Some(self.dirs.home.clone()),
+            vars: [(
+                OsString::from("XDG_DATA_HOME"),
+                data_home.as_os_str().to_owned(),
+            )]
+            .into(),
+        }
+    }
+
+    /// The installed app as add names it: with its version where this OS
+    /// can tell it.
+    fn named(&self) -> String {
+        match Native.desktop_version(&self.app()) {
+            Some(version) => format!("Helm {version}"),
+            None => "Helm".to_owned(),
+        }
+    }
+
     fn installed(&self) -> bool {
         Native.was_updated(&self.apps, FLOTI_VERSION, &self.record)
     }
@@ -262,20 +284,60 @@ async fn an_installed_app_and_a_session_with_no_display_each_change_nothing() {
     assert!(!world.installed());
 
     Native.fake_install(&world.apps, "1.0.0");
+    // Its menu entry is there wherever floti makes one (Linux), so there is
+    // nothing to repair either.
+    let seeded = Native
+        .add_launcher(&world.launcher_user(&world.data_home), &world.app())
+        .unwrap();
+    let entry_before = seeded.as_ref().map(|entry| std::fs::read(entry).unwrap());
     let output = world.add(&["desktop"], "present").await;
     let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
     assert!(output.status.success(), "{stdout}\n{stderr}");
-    assert!(stdout.starts_with("Helm"), "{stdout}");
-    assert!(
-        stdout.contains(&format!("is already installed at {}", world.apps.display())),
-        "{stdout}"
+    assert_eq!(
+        stdout,
+        format!(
+            "{} is already installed at {}; floti update keeps it up to date. Nothing was changed.\n",
+            world.named(),
+            world.app().path.display()
+        )
     );
-    assert!(
-        stdout
-            .trim_end()
-            .ends_with("; floti update keeps it up to date. Nothing was changed."),
-        "{stdout}"
+    assert_eq!(
+        seeded.as_ref().map(|entry| std::fs::read(entry).unwrap()),
+        entry_before
     );
+    assert!(!world.installed(), "nothing was run");
+}
+
+#[tokio::test]
+async fn an_installed_app_missing_its_menu_entry_gets_it_in_one_line_that_says_so() {
+    let world = World::new();
+    Native.fake_install(&world.apps, "1.0.0");
+    // Whether this OS's install leaves floti a menu entry to make (Linux),
+    // asked of the OS's own code in a folder of the probe's own.
+    let probe = world.dirs.folder("probe data home");
+    let entry = world.data_home.join("applications").join("helm.desktop");
+    let makes_one = Native
+        .add_launcher(&world.launcher_user(&probe), &world.app())
+        .unwrap()
+        .is_some();
+    let output = world.add(&["desktop"], "present").await;
+    let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    let said = format!(
+        "{} is already installed at {}; floti update keeps it up to date.",
+        world.named(),
+        world.app().path.display()
+    );
+    let expected = if makes_one {
+        format!(
+            "{said} Its menu entry was missing, so floti added it at {}.\n",
+            entry.display()
+        )
+    } else {
+        format!("{said} Nothing was changed.\n")
+    };
+    assert_eq!(stdout, expected);
+    assert_eq!(entry.is_file(), makes_one);
     assert!(!world.installed(), "nothing was run");
 }
 

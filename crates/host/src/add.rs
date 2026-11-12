@@ -282,16 +282,17 @@ impl Adder<'_> {
 
     fn run_held(&mut self) -> Result<Added, AddError> {
         if let Some(app) = self.installs.desktop(&self.env) {
-            self.say_installed(&app);
+            // One line, after the repair, so it says whether anything changed;
+            // a repair that fails is its own line, which says the app is there.
             return match self.installs.repair_launcher(&self.env, &app) {
-                Ok(Some(entry)) => {
-                    self.say(&format!(
-                        "Its menu entry was missing; it is now {}.",
-                        entry.display()
-                    ));
+                Ok(repaired) => {
+                    let line = match repaired {
+                        Some(entry) => repaired_line(self.installs, &app, &entry),
+                        None => already_installed_line(self.installs, &app),
+                    };
+                    self.say(&line);
                     Ok(Added::AlreadyInstalled(app))
                 }
-                Ok(None) => Ok(Added::AlreadyInstalled(app)),
                 Err(err) => Err(AddError::Launcher {
                     app: app.name,
                     path: app.path.display().to_string(),
@@ -365,11 +366,6 @@ impl Adder<'_> {
     fn say(&mut self, line: &str) {
         let _ = writeln!(self.out, "{line}");
         let _ = self.out.flush();
-    }
-
-    fn say_installed(&mut self, app: &Desktop) {
-        let line = already_installed_line(self.installs, app);
-        self.say(&line);
     }
 
     /// `file`'s entry in the release's signed desktop list: the list's
@@ -479,15 +475,32 @@ impl Adder<'_> {
     }
 }
 
-/// What `floti add desktop`, and `floti setup`, say of the installed `app`:
-/// where it is, and its version where `installs` can tell it.
+/// What `floti add desktop`, and `floti setup`, say of the installed `app`
+/// when nothing was changed: where it is, and its version where `installs`
+/// can tell it.
 pub fn already_installed_line(installs: &dyn Installs, app: &Desktop) -> String {
+    format!("{} Nothing was changed.", installed_clause(installs, app))
+}
+
+/// What `floti add desktop` says of the installed `app` once it wrote the
+/// menu entry that was missing, at `entry`.
+pub fn repaired_line(installs: &dyn Installs, app: &Desktop, entry: &Path) -> String {
+    format!(
+        "{} Its menu entry was missing, so floti added it at {}.",
+        installed_clause(installs, app),
+        entry.display()
+    )
+}
+
+/// Where the installed `app` is, and its version where `installs` can tell
+/// it, as the sentence both lines start with.
+fn installed_clause(installs: &dyn Installs, app: &Desktop) -> String {
     let named = match installs.desktop_version(app) {
         Some(version) => format!("{} {version}", app.name),
         None => app.name.to_owned(),
     };
     format!(
-        "{named} is already installed at {}; floti update keeps it up to date. Nothing was changed.",
+        "{named} is already installed at {}; floti update keeps it up to date.",
         app.path.display()
     )
 }
