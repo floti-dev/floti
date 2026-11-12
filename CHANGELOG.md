@@ -80,6 +80,137 @@ gets skipped.
   the one Helm starts: `~/.config/helm` where that is there, else
   `~/.config/floti`.
 
+## 2.4.1-preview.12
+
+A preview, not a release: nothing offers it as an update.
+
+**Updates**
+
+- floti updates itself. While Settings › Updates › Update floti by itself is
+  ticked (it is by default), this PC's host looks for a newer floti at most
+  once a day, checks the download's signature and SHA-256, puts it in place
+  and restarts on it. No session ends: every session and terminal runs on and
+  the new host takes them back.
+- `floti update` does the same when you run it, asking nothing, and also
+  updates the desktop app where it is installed and older, once the app has
+  quit. `floti update --channel <name>` follows another channel.
+- Helm itself no longer contacts GitHub about updates. It hears what this
+  PC's host found and puts a line beside the version in the status bar when
+  there is a newer release. In Settings › Updates, Check now has the host
+  check at once, and Update has it run `floti update`: Helm closes, is
+  replaced and opens again, and every session keeps running.
+- A host on another computer whose floti is older than this Helm's has
+  Update floti in Settings › Hosts, on its header in the sidebar and on its
+  row on the Sessions page. Where that floti has `floti update`, Update floti
+  starts it at once, with no question first, and the row shows it running:
+  which floti it replaces, the version it installs and any sessions it ends.
+  It stops nothing first, since `floti update` hands the host's sessions to
+  the new one. An older floti without `floti update` is updated by
+  installing this Helm's floti there, which says first what it does. Stop
+  waiting, or ten minutes, ends the wait.
+- The sidebar's host header says older floti, floti too old or newer floti,
+  with both versions in its tooltip, instead of showing the host as
+  retrying. Pressing older floti or floti too old opens its update.
+- Updates follow stable releases only: a preview, this one included, is never
+  offered as an update.
+
+**Installing and removing Floti**
+
+- `floti add desktop` installs the Helm desktop app of floti's own release
+  for your user, with no admin rights: on Windows where the installer puts
+  it, on macOS as `~/Applications/Helm.app` (it opens without Open Anyway),
+  and on Linux as `~/Applications/Helm.AppImage` with a menu entry and icon.
+  It checks the download's signature and SHA-256 before anything runs,
+  changes nothing where the app is installed already, and refuses in a
+  session with no display.
+- `floti setup` asks once, at the end, whether to install the desktop app as
+  well: only at a terminal, on a computer with a display, with somebody
+  signed in, and never in a WSL distro. Where the app is installed it says
+  where, and with no terminal it prints one line naming `floti add desktop`.
+  `floti setup --desktop` installs it without asking and `--no-desktop`
+  leaves it out. A desktop install that fails leaves the host set up and
+  says so.
+- `floti setup` checks that Claude Code is installed and in the tested range,
+  and says in one sentence what to run when it is not. `floti doctor` lists
+  each problem on this computer on one line with its fix: no start-at-sign-in
+  entry, floti not on your PATH, Claude Code missing or outside the range.
+- `floti uninstall` takes off what installing put there: it closes the
+  desktop app, stops the host (saying how many sessions that ended; their
+  history stays), and removes the start-at-sign-in entry, the desktop app,
+  floti's PATH entry on Windows, and floti with its Node. Each step prints
+  one line, or "not found", so running it again changes nothing. Your data
+  and config stay; `floti uninstall --purge` removes them too, with Floti's
+  entry in your keychain or keyring, and never touches `~/.claude`, `~/.ssh`
+  or any repository. Run it from a terminal Floti did not start; inside one
+  of its own sessions it refuses and changes nothing.
+- On Windows on Arm the installer carries a native arm64 floti and puts it in
+  place, so the host no longer runs under emulation, and an emulated floti
+  never replaces a native one.
+- From the next stable release, floti installs with one line:
+  `curl -fsSL https://floti.dev/install.sh | sh` on macOS, Linux and WSL, and
+  `irm https://floti.dev/install.ps1 | iex` on Windows. Each picks the floti
+  for the computer's OS and CPU, checks its SHA-256, puts it in your own
+  folder and runs `floti setup`.
+- Add a host finds floti in `~/.local/bin` (or its Windows folder) on a
+  computer whose login does not have it on PATH.
+
+**Downloads**
+
+- Every file of a release carries a minisign signature and a build
+  attestation. `floti update` and `floti add desktop` check each download's
+  signature against the key built into floti before anything runs.
+- Linux gets a desktop build: `Helm-<version>-linux-x64.AppImage`, for x64
+  Linux with glibc 2.34 or later (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9
+  and newer), with no install and no root. Run without Chromium's sandbox
+  (`--no-sandbox`), it opens no web page: the Browser tab says the browser is
+  off and gives the one command, with Copy, that turns the sandbox on.
+- A preview downloads without a GitHub sign-in.
+
+**Config, Agents and History**
+
+- Config is removed: its page, its rail entry and its tab. Claude Code edits
+  its own config - `/config`, `/mcp`, `/hooks` and `/agents`, or ask the
+  session - and Floti writes nothing into an agent's config folder: Files
+  shows a file in `~/.claude` (or `CLAUDE_CONFIG_DIR`) read-only and says who
+  edits it. Profiles, overlays and templates compose sessions as before.
+- Agents is a page of its own, after Profiles in the rail: each host's
+  agents, the files in its agents folder that are not agents and what is
+  wrong with them, and the shipped agents the folder lacks, each with Add.
+  Edit an agent's fields and instructions with a live preview, or its whole
+  file in Source; save, rename, copy or delete it, and Undo a delete.
+- The shipped lead, worker and reviewer get work done in fewer rounds. An
+  agents folder that already has them keeps its own; delete one on the
+  Agents page and Add brings in the new one.
+- History is a palette on Ctrl+H, over whatever is on screen, and no longer a
+  page on the rail. It lists the sessions you worked in last; type to search
+  names, titles, prompts and archived conversations. Enter resumes, and
+  Ctrl+Enter opens the whole conversation read-only in a tab. After a crash,
+  the restore offer's Not now keeps its sessions at the top of History until
+  each is back.
+- Helm and its host speak Floti protocol 3.1. A desktop or host on a release
+  before 3.0 is refused at connect with a sentence saying which side to
+  update.
+- Installing Helm on Windows puts floti in `%LOCALAPPDATA%\Programs\Floti\bin`,
+  adds it to your PATH and sets the host up to start when you sign in, and
+  installing it over an earlier Helm stops no host and ends no session. On
+  macOS and Linux Helm puts floti in `~/.local/bin`.
+
+**Terminals**
+
+- A program's own copy (OSC 52) reaches your clipboard, from the terminal
+  that has the keyboard only.
+- On a Mac, Option+drag selects text over a program that captures the mouse,
+  and Option+click no longer types arrow keys into it.
+
+**Fixes**
+
+- Reopening Helm while it is still quitting opens a fresh Helm once the quit
+  has finished, instead of nothing.
+- A plugin page that opens just after its host updated the plugin shows the
+  new files, not the old ones from the cache.
+- A parent cannot resume a child while you have that child's conversation
+  open as a session of its own.
+
 ## 2.4.1-preview.11
 
 A preview, not a release: nothing offers it as an update.
