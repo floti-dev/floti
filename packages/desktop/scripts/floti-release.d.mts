@@ -20,6 +20,7 @@ export interface BinaryFacts {
 
 export const RELEASE_TARGETS: readonly ReleaseTarget[]
 export const STAGED_SUMS_NAME: string
+export const STAGED_ARM64_NAME: string
 export function desktopVersion(file?: string): string
 export function targetNamed(name: string): ReleaseTarget
 export function targetFor(platform: string, arch: string): ReleaseTarget | null
@@ -42,3 +43,4 @@ export function stagePrebuilt(options: {
   platform?: string
   arch?: string
 }): { binary: string; sums: string | null; target: ReleaseTarget }
+export function stageWindowsArm64(options: { prebuilt?: string; sums?: string; stagedDir: string; version: string }): string | null

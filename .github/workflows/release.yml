@@ -259,21 +259,24 @@ jobs:
           name: floti-release
           path: ${{ runner.temp }}/floti-release
 
-      # The artefacts carry the release's floti for Windows x64 and the
-      # release's SHA-256 list, staged by scripts/stage-floti.mjs, which checks
-      # the one against the other.
+      # The artefacts carry the release's floti for Windows x64, its floti
+      # for Windows on arm64 as floti-arm64.exe, which `floti install-self`
+      # installs on an arm64 computer, and the release's SHA-256 list, staged
+      # by scripts/stage-floti.mjs, which checks both against the list.
       - name: Build artefacts
         env:
           FLOTI_PREBUILT: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-windows-x64.exe
+          FLOTI_PREBUILT_ARM64: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-windows-arm64.exe
           FLOTI_SHA256SUMS: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-SHA256SUMS
         run: pnpm dist:win
 
-      - name: Verify the app carries the release's floti and its SHA-256 list
+      - name: Verify the app carries the release's two Windows flotis and its SHA-256 list
         shell: bash
         run: |
           set -euo pipefail
           resources=packages/desktop/dist-app/win-unpacked/resources
           cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-windows-x64.exe" "$resources/floti.exe"
+          cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-windows-arm64.exe" "$resources/floti-arm64.exe"
           cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-SHA256SUMS" "$resources/floti-SHA256SUMS"
 
       - name: Verify the artefacts carry their unpacked native modules

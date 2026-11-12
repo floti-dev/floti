@@ -18,7 +18,8 @@
 //     writes their SHA-256 list beside them.
 //
 // scripts/stage-floti.mjs uses `stagePrebuilt` to put one of these files in
-// the desktop's resources in place of a local build.
+// the desktop's resources in place of a local build, and on Windows
+// `stageWindowsArm64` to put the arm64 file beside it.
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -242,16 +243,57 @@ export const STAGED_SUMS_NAME = 'floti-SHA256SUMS'
 export function stagePrebuilt({ prebuilt, sums, stagedDir, version, platform = process.platform, arch = process.arch }) {
   const target = targetFor(platform, arch)
   if (target === null) throw new Error(`no release carries floti for ${platform} ${arch}`)
-  const bytes = readFileSync(prebuilt)
-  const problem = binaryProblem(bytes, target)
-  if (problem !== null) throw new Error(`${prebuilt} is not floti for ${target.name}: ${problem}`)
+  const bytes = checkedRelease({ prebuilt, sums, version, target })
 
   const name = target.os === 'windows' ? 'floti.exe' : 'floti'
   mkdirSync(stagedDir, { recursive: true })
   const stagedSums = join(stagedDir, STAGED_SUMS_NAME)
-  if (sums === undefined) {
-    rmSync(stagedSums, { force: true })
-  } else {
+  if (sums === undefined) rmSync(stagedSums, { force: true })
+  else copyFileSync(sums, stagedSums)
+  const binary = join(stagedDir, name)
+  writeFileSync(binary, bytes)
+  // A workflow artifact does not keep the execute bit.
+  if (target.os !== 'windows') chmodSync(binary, 0o755)
+  return { binary, sums: sums === undefined ? null : stagedSums, target }
+}
+
+/**
+ * The name the Windows desktop carries the release's arm64 floti under,
+ * beside `floti.exe` (x64). `floti install-self`, run from the x64 floti,
+ * installs this one instead on a computer whose own CPU is arm64, so the
+ * installer never leaves an emulated floti there.
+ */
+export const STAGED_ARM64_NAME = 'floti-arm64.exe'
+
+/**
+ * Puts the release's floti for Windows on arm64 in `stagedDir` as
+ * `floti-arm64.exe`, after the checks `stagePrebuilt` makes: its header is
+ * Windows arm64's and the sums list, when given, names it with its SHA-256.
+ * With no `prebuilt`, any copy an earlier run staged is removed, so a build
+ * never carries an arm64 floti of another version. Answers the staged path,
+ * or null.
+ */
+export function stageWindowsArm64({ prebuilt, sums, stagedDir, version }) {
+  const staged = join(stagedDir, STAGED_ARM64_NAME)
+  if (prebuilt === undefined) {
+    rmSync(staged, { force: true })
+    return null
+  }
+  const bytes = checkedRelease({ prebuilt, sums, version, target: targetNamed('windows-arm64') })
+  mkdirSync(stagedDir, { recursive: true })
+  writeFileSync(staged, bytes)
+  return staged
+}
+
+/**
+ * The bytes of the release file `prebuilt`, once its header is `target`'s
+ * and `sums`, when given, lists it under its release name with its SHA-256.
+ */
+function checkedRelease({ prebuilt, sums, version, target }) {
+  const bytes = readFileSync(prebuilt)
+  const problem = binaryProblem(bytes, target)
+  if (problem !== null) throw new Error(`${prebuilt} is not floti for ${target.name}: ${problem}`)
+  if (sums !== undefined) {
     const releaseName = releaseFileName(version, target)
     const listed = parseSums(readFileSync(sums, 'utf8')).find((entry) => entry.name === releaseName)
     if (listed === undefined) throw new Error(`${sums} does not list ${releaseName}`)
@@ -259,13 +301,8 @@ export function stagePrebuilt({ prebuilt, sums, stagedDir, version, platform = p
     if (listed.sha256 !== sha256) {
       throw new Error(`${prebuilt} has SHA-256 ${sha256}, but ${sums} lists ${listed.sha256} for ${releaseName}`)
     }
-    copyFileSync(sums, stagedSums)
   }
-  const binary = join(stagedDir, name)
-  copyFileSync(prebuilt, binary)
-  // A workflow artifact does not keep the execute bit.
-  if (target.os !== 'windows') chmodSync(binary, 0o755)
-  return { binary, sums: sums === undefined ? null : stagedSums, target }
+  return bytes
 }
 
 function check(file, targetName) {

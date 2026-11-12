@@ -108,7 +108,12 @@ Settings > Hosts sends a host of this computer's OS and CPU. The portable exe
 runs the copy inside it. A release build carries the release's own floti
 instead of building it again (see [floti for every host](#floti-for-every-host)),
 with the release's SHA-256 list beside it as `floti-SHA256SUMS`; a local build
-carries no list.
+carries no list. A release's Windows build also carries the release's floti
+for Windows on arm64, as `resourcesloti-arm64.exe`, beside the x64
+`floti.exe`: `floti install-self`, run by the installer from the x64 one,
+installs the arm64 one on a computer whose own CPU is arm64, so Windows on
+Arm never gets an emulated floti from the installer. A local build carries
+no arm64 copy.
 
 ### floti for every host
 
@@ -143,12 +148,16 @@ off build scripts and proc macros, which must stay dynamic.
 
 `release.yml` calls the same workflow, and its desktop jobs hand
 `stage-floti.mjs` the release's file for their own platform (`FLOTI_PREBUILT`)
-and the list (`FLOTI_SHA256SUMS`). It refuses a file whose header is another
-platform's or whose SHA-256 the list does not give, and stages the list as
+and the list (`FLOTI_SHA256SUMS`), and the Windows job the Windows arm64 file
+as well (`FLOTI_PREBUILT_ARM64`), which a Windows build given the list must
+have. It refuses a file whose header is another platform's or whose SHA-256
+the list does not give, stages the arm64 file as `dist-host/floti-arm64.exe`,
+and stages the list as
 `dist-host/floti-SHA256SUMS`, which electron-builder carries as
 `resources\floti-SHA256SUMS` on Windows, `Contents/Resources/floti-SHA256SUMS`
 on macOS and `resources/floti-SHA256SUMS` on Linux. The floti inside the app is
-therefore byte for byte the one the release lists. On macOS that holds only
+therefore byte for byte the one the release lists, and `release-windows`
+compares both Windows copies with the release's files. On macOS that holds only
 because signing the app leaves floti alone (`signIgnore` in
 `electron-builder.yml`): signing a binary rewrites its signature, and so its
 SHA-256. The linker has already signed it ad-hoc, which is all Apple Silicon

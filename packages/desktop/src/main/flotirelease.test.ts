@@ -5,6 +5,7 @@ import { describe, expect, inject, it } from 'vitest'
 import { RUN_ROOT } from '../../../../test/run-root'
 import {
   RELEASE_TARGETS,
+  STAGED_ARM64_NAME,
   STAGED_SUMS_NAME,
   binaryFacts,
   binaryProblem,
@@ -16,6 +17,7 @@ import {
   releaseFilesProblem,
   sha256Of,
   stagePrebuilt,
+  stageWindowsArm64,
   sumsFileName,
   targetFor,
   targetNamed,
@@ -244,5 +246,50 @@ describe("the desktop takes its own floti from the release's files", () => {
       'no release carries floti for darwin x64'
     )
     expect(existsSync(join(stagedDir, 'floti'))).toBe(false)
+  })
+})
+
+describe("the Windows desktop carries the release's arm64 floti beside its own", () => {
+  async function release() {
+    const folder = await mkdtemp(join(inject(RUN_ROOT), 'floti arm64 '))
+    const prebuilt = join(folder, 'floti-3.0.0-windows-arm64.exe')
+    const bytes = pe(0xaa64)
+    writeFileSync(prebuilt, bytes)
+    const sums = join(folder, 'floti-3.0.0-SHA256SUMS')
+    writeFileSync(sums, formatSums([{ name: 'floti-3.0.0-windows-arm64.exe', sha256: sha256Of(bytes) }]))
+    return { folder, prebuilt, sums, bytes, stagedDir: join(folder, 'dist-host') }
+  }
+
+  it('stages it as floti-arm64.exe once the sums list it', async () => {
+    const { prebuilt, sums, bytes, stagedDir } = await release()
+    const staged = stageWindowsArm64({ prebuilt, sums, stagedDir, version: VERSION })
+    expect(staged).toBe(join(stagedDir, STAGED_ARM64_NAME))
+    expect(STAGED_ARM64_NAME).toBe('floti-arm64.exe')
+    expect(readFileSync(staged!)).toEqual(Buffer.from(bytes))
+  })
+
+  it('removes a copy an earlier run staged when it is given none', async () => {
+    const { prebuilt, sums, stagedDir } = await release()
+    stageWindowsArm64({ prebuilt, sums, stagedDir, version: VERSION })
+    expect(stageWindowsArm64({ stagedDir, version: VERSION })).toBeNull()
+    expect(existsSync(join(stagedDir, STAGED_ARM64_NAME))).toBe(false)
+  })
+
+  it('refuses the x64 build, and one the sums do not describe, staging nothing', async () => {
+    const { prebuilt, sums, stagedDir } = await release()
+    writeFileSync(prebuilt, pe(0x8664))
+    expect(() => stageWindowsArm64({ prebuilt, stagedDir, version: VERSION })).toThrow(
+      'is not floti for windows-arm64: it is built for windows x64, not windows arm64'
+    )
+    writeFileSync(prebuilt, pe(0xaa64))
+    writeFileSync(sums, formatSums([{ name: 'floti-3.0.0-windows-arm64.exe', sha256: '0'.repeat(64) }]))
+    expect(() => stageWindowsArm64({ prebuilt, sums, stagedDir, version: VERSION })).toThrow(
+      `lists ${'0'.repeat(64)} for floti-3.0.0-windows-arm64.exe`
+    )
+    writeFileSync(sums, '')
+    expect(() => stageWindowsArm64({ prebuilt, sums, stagedDir, version: VERSION })).toThrow(
+      'does not list floti-3.0.0-windows-arm64.exe'
+    )
+    expect(existsSync(join(stagedDir, STAGED_ARM64_NAME))).toBe(false)
   })
 })
