@@ -247,4 +247,37 @@ mod tests {
         let loopback = with("url", "http://127.0.0.1:4000/v/".into());
         assert!(release(&loopback, "stable", "linux-x64").is_ok());
     }
+
+    /// The manifest the release workflow writes for floti.dev
+    /// (`packages/desktop/scripts/floti-dev.mjs`), as that script's unit test
+    /// writes it for 3.0.0 and compares it with this file byte for byte.
+    const RELEASE_MANIFEST: &[u8] = include_bytes!("fixtures/update.json");
+
+    #[test]
+    fn the_manifest_a_release_writes_is_read_for_every_target() {
+        let folder = "https://github.com/floti-dev/floti/releases/download/v3.0.0/";
+        let targets = [
+            ("windows-x64", ".exe", Some("Helm-3.0.0-setup.exe")),
+            ("windows-arm64", ".exe", None),
+            ("macos-arm64", "", Some("Helm-3.0.0-arm64-mac.zip")),
+            ("linux-x64", "", Some("Helm-3.0.0-linux-x64.AppImage")),
+            ("linux-arm64", "", None),
+        ];
+        for (target, extension, desktop) in targets {
+            let release = release(RELEASE_MANIFEST, "stable", target).unwrap();
+            assert_eq!(release.channel, "stable");
+            assert_eq!(release.version().to_string(), "3.0.0");
+            let floti = release.floti.clone().unwrap();
+            assert_eq!(floti.file, format!("floti-3.0.0-{target}{extension}"));
+            assert_eq!(
+                release.folder.file_url(&floti.file).as_str(),
+                format!("{folder}{}", floti.file)
+            );
+            assert_eq!(
+                release.desktop.clone().map(|entry| entry.file).as_deref(),
+                desktop,
+                "{target}"
+            );
+        }
+    }
 }

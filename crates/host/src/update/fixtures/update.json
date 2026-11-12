@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "channels": {
+    "stable": {
+      "version": "3.0.0",
+      "url": "https://github.com/floti-dev/floti/releases/download/v3.0.0/",
+      "floti": {
+        "windows-x64": {
+          "file": "floti-3.0.0-windows-x64.exe",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "windows-arm64": {
+          "file": "floti-3.0.0-windows-arm64.exe",
+          "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "macos-arm64": {
+          "file": "floti-3.0.0-macos-arm64",
+          "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        "linux-x64": {
+          "file": "floti-3.0.0-linux-x64",
+          "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "linux-arm64": {
+          "file": "floti-3.0.0-linux-arm64",
+          "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+        }
+      },
+      "desktop": {
+        "windows-x64": {
+          "file": "Helm-3.0.0-setup.exe",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "macos-arm64": {
+          "file": "Helm-3.0.0-arm64-mac.zip",
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "linux-x64": {
+          "file": "Helm-3.0.0-linux-x64.AppImage",
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      }
+    }
+  }
+}

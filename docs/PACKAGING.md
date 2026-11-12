@@ -450,7 +450,8 @@ file, and publishes one GitHub release with twenty-four files attached: the
 five desktop files, the protocol types, the five floti files and their SHA-256
 list, and a minisign signature beside each of those twelve. A stable release
 then updates the Homebrew formula and opens the winget pull request ("Homebrew
-and winget"). A merge that does
+and winget"), and copies the install scripts and the update manifest to
+floti.dev ("floti.dev"). A merge that does
 not bump the version runs the checks and the floti builds, skips every build
 after them and finishes green.
 
@@ -460,12 +461,14 @@ after them and finishes green.
 | `check`, `floti` | `ci.yml` and `floti.yml`, called. |
 | `protocol` | The crate's `generated_files` test, then `floti-protocol-<version>.tar.gz`. |
 | `release-windows`, `release-mac`, `release-linux` | One desktop build each, verified from the inside and handed on as a workflow artifact. None publishes anything. |
-| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s and that the folder holds exactly the twelve files to sign (`scripts/release.mjs check --unsigned`), and uploads them as `release-unsigned`. |
-| `sign` | The only job that reads the signing key, in the `release` environment (a prerequisite: "The release environment"). Signs every file, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-four files with their SHA-256s in the run's summary and uploads them as `release-files`. Never runs in a dry run. |
+| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s and that the folder holds exactly the twelve files to sign (`scripts/release.mjs check --unsigned`), and uploads them as `release-unsigned`. Writes floti.dev's install scripts and, for a stable release, `update.json` (`scripts/floti-dev.mjs`) as `floti-dev-unsigned`. |
+| `sign` | The only job that reads the signing key, in the `release` environment (a prerequisite: "The release environment"). Signs every file, and `update.json` with the comment `floti update.json`, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-four files with their SHA-256s in the run's summary and uploads them as `release-files`, and floti.dev's files as `floti-dev`. Never runs in a dry run. |
 | `sign-dry-run` | A dry run's `sign`: the same signing and checks, with a key pair made in the run. Runs only in a dry run. |
 | `publish` | The only job with write access. Attests every file in `release-files`, then creates the release from them, publishes it and confirms it. Never runs in a dry run. |
 | `homebrew`, `winget` | After `publish`, for a stable release only: push `Formula/floti.rb` to floti-dev/homebrew-tap and open the winget pull request ("Homebrew and winget"). Never run for a preview or in a dry run. |
+| `floti-dev` | After `publish`, for a stable release only: commits `install.sh`, `install.ps1`, `update.json` and `update.json.minisig` to floti-dev/floti-dev.github.io ("floti.dev"). Never runs for a preview or in a dry run. |
 | `packages-dry-run`, `homebrew-dry-run`, `winget-dry-run` | A dry run's formula (and its stable form) and manifests, built from the run's signature-checked SHA-256 list and checked by Homebrew and winget. Run only in a dry run. |
+| `install-dry-run`, `install-dry-run-debian` | floti.dev's install scripts run for real against a local server holding the run's files, on Linux, macOS, Windows and in a Debian container ("A dry run"). Run only in a dry run. |
 | `sdk` | The plugin SDK's npm publish, on its own version. Never runs in a dry run. |
 
 - **floti is built once, by `floti.yml`.** Every desktop build needs it, so a
@@ -474,9 +477,10 @@ after them and finishes green.
   on any OS skips `assemble` and `publish` with it: a version is never
   published with half its downloads. Every runner is a standard GitHub-hosted
   one, and no certificate or paid account is involved: the Mac build is
-  ad-hoc signed and the Windows build unsigned. There are three secrets, each
+  ad-hoc signed and the Windows build unsigned. There are four secrets, each
   read by one job: the minisign key by `sign`, the tap's deploy key by
-  `homebrew` and the winget token by `winget`.
+  `homebrew`, the winget token by `winget` and the site's deploy key by
+  `floti-dev`.
 - **The gate is whether the tag exists**, asked with `git ls-remote --tags`, not
   whether the commit changed the version. Diffing against the parent gives a
   different answer after a squash, a rebase, a revert or a re-run.
@@ -718,11 +722,93 @@ floti-dev/floti` lists `HOMEBREW_TAP_DEPLOY_KEY` and `WINGET_TOKEN` beside
 `MINISIGN_SECRET_KEY`, and `gh secret list --repo floti-dev/floti` lists none
 of them.
 
+### floti.dev
+
+floti.dev is floti-dev/floti-dev.github.io, served by GitHub Pages from its
+`main` over HTTPS. A stable release puts four files at its root:
+
+| File | What it is |
+|---|---|
+| `install.sh` | `curl -fsSL https://floti.dev/install.sh \| sh` on macOS, Linux and WSL. |
+| `install.ps1` | `irm https://floti.dev/install.ps1 \| iex` on Windows. |
+| `update.json` | The manifest `floti update` reads ("floti update"), naming the `stable` channel alone. |
+| `update.json.minisig` | Its signature, with the trusted comment `floti update.json`, by the project's key. |
+
+**The install scripts** are `scripts/floti.dev/install.sh.template` and
+`install.ps1.template`, filled in by `scripts/floti-dev.mjs scripts` in
+`assemble`: the release's version, its download folder
+(`releases/download/v<version>`) and each floti's SHA-256 from the release's
+`floti-<version>-SHA256SUMS`. Each carries the install function of
+`scripts/install/install.sh` or `install.ps1`, the one the desktop sends a
+computer over SSH ("Installing floti on a host's computer"), so the steps are
+the same code: floti goes into `~/.local/bin` or
+`%LOCALAPPDATA%\Programs\Floti\bin` under a temporary name, is checked against
+its SHA-256, and only then moved into place. A script:
+
+1. picks the floti for the computer's OS and CPU: macOS arm64 (a shell under
+   Rosetta counts as arm64), Linux x64 and arm64, WSL included, and Windows
+   x64 and arm64, read from the system's own record of its CPU, so an x64
+   PowerShell on an arm64 computer gets arm64. Any other pair is refused in
+   one line naming it;
+2. downloads it from the release folder and installs it, as above;
+3. on Windows, appends the folder to the user's own `Path` as written, kept
+   an expandable string, and tells Explorer the environment changed, as `floti
+   install-self` does, and puts it on the session's `Path` too. On macOS and
+   Linux no startup file is changed: when the folder is not on `PATH`, the
+   script says so and that `floti doctor` gives the line;
+4. runs `floti setup`, with the terminal as its input where there is one,
+   never the rest of the download. Its lines and, from `install.sh`, its exit
+   status are the script's.
+
+Each script is one function called on its last line, so a script cut off
+halfway runs nothing; the PowerShell one never exits, since `iex` runs it in
+the user's own session. Both are printable ASCII, because Windows PowerShell
+reads a download that names no charset as Latin-1. Neither has a switch: the
+dry run makes copies that download from its local server through the same
+template, with `--release-url`, which only http to this computer or https
+passes.
+
+**update.json** comes from `scripts/floti-dev.mjs manifest`, also in
+`assemble`: the floti targets from the release's SHA-256 list, and the
+desktop files `floti update` installs, hashed there: `windows-x64` the setup
+exe, `macos-arm64` the Mac zip, `linux-x64` the AppImage. A preview writes
+none (decision I13), so a channel other than `stable` appears only once it
+is added there. `sign` signs it through `scripts/minisign.mjs` with the
+comment `floti update.json` and checks it against the committed public key.
+`crates/host/src/update/fixtures/update.json` is the manifest the script's
+unit test writes for 3.0.0, compared byte for byte, and the host's
+`manifest.rs` tests read that same file for every target.
+
+**`floti-dev`** runs after `publish`, so the scripts never name a file that
+is not downloadable yet. It checks the four files again (exactly those four,
+the signature against the committed key, the version in each), clones the
+site over HTTPS, commits the four files as `floti <version>: the install
+scripts and update.json`, one commit, and pushes it with the deploy key, one
+push, with GitHub's host keys from its API, `BatchMode=yes` and the key in an
+owner-only file removed when the step ends. Files that already say this
+release are left alone. That push to the site's `main` is what publishes
+them; every other change there is the owner's, on a branch they merge.
+
+Like `homebrew`, it fails after the release is published while its
+prerequisite is missing, with one line naming it, and a re-run once it exists
+finishes the work. The owner creates it once, in the `release` environment,
+never as a repository secret:
+
+    # The site's deploy key, with write access; the private half is the secret.
+    ssh-keygen -t ed25519 -N "" -C "floti release" -f floti-dev-pages-key
+    gh repo deploy-key add floti-dev-pages-key.pub --repo floti-dev/floti-dev.github.io \
+      --allow-write --title "floti release workflow"
+    gh secret set PAGES_DEPLOY_KEY --env release --repo floti-dev/floti <floti-dev-pages-key
+    rm floti-dev-pages-key floti-dev-pages-key.pub
+
+The site's Pages settings serve `main` from its root with HTTPS enforced, on
+the domain `CNAME` names.
+
 ### A dry run
 
 A push to a branch named `release-dry-run/<name>` runs the whole workflow and
-publishes nothing: no tag, no release, no attestation, no npm, no tap push and
-no winget pull request. Everything a
+publishes nothing: no tag, no release, no attestation, no npm, no tap push,
+no winget pull request and nothing on floti.dev. Everything a
 release builds is built and checked, including the notes, the signatures and
 every check of the files that needs no published release. `sign-dry-run` makes
 a minisign key pair in the run (`minisign -G -W` under `$RUNNER_TEMP`), signs
@@ -743,7 +829,25 @@ runner, then `brew style` and `brew audit --strict` on both formulas, then
 download cache so the formula installed is the very text a release would
 push.
 `winget-dry-run` runs `winget validate` on the manifests. They are kept for
-seven days as the `homebrew-formula` and `winget-manifests` artifacts. A dry run never reads the
+seven days as the `homebrew-formula` and `winget-manifests` artifacts.
+floti.dev's four files are written from the run's own files as a stable
+release writes them, `update.json` in the stable form when the branch's
+version is a preview and signed with the run's key, and kept for seven days
+as the `floti-dev` artifact. The install scripts run for real there and
+nowhere else: `install-dry-run` on `ubuntu-latest`, `macos-latest` and
+`windows-latest`, and `install-dry-run-debian` as root in a `debian`
+container, each serving the run's floti files and copies of the scripts made
+to download from `http://127.0.0.1:8765` (`scripts/floti.dev/try-install.sh`
+and `try-install.ps1`). Each cuts its script off at ten places, the last
+just before its last line, and runs every piece with a home or
+`LOCALAPPDATA` of its own, which must stay empty, with no floti file asked
+for (and on Windows the user's `Path` unchanged). Then it runs the whole
+script as a person does, `curl -fsSL <url>/install.sh | sh` or `irm
+<url>/install.ps1 | iex` in Windows PowerShell, and checks that floti is
+where the script put it, that `floti version` there names the run's version,
+OS and CPU, that on Windows its folder is on the user's `Path`, and that the
+script reached `floti setup`, whatever setup made of the runner (root in the
+container is refused by setup, which is the line it must reach). A dry run never reads the
 `release` environment or its secrets, and makes no attestation. The tag-exists gate does not stop a dry run, so
 the version on the branch may be one already released; one that is not tagged
 must still be greater than every tagged one. A run on any branch but `main` is
@@ -785,7 +889,8 @@ has quit (`crates/host/src/update`). A person runs it; nothing runs it on a
 timer.
 
 **The manifest.** It reads `https://floti.dev/update.json` and its signature
-`update.json.minisig`:
+`update.json.minisig`, which each stable release writes and copies there
+("floti.dev"):
 
 ```json
 {"schema": 1,

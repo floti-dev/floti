@@ -81,10 +81,12 @@ together. The agent tools listener's token and origin rules are in
 - Each release's files also carry a GitHub build attestation, made in
   `publish`, the only job with `attestations: write`.
 
-## The package manager credentials
+## The package manager and website credentials
 
-A stable release updates the Homebrew tap and opens a winget pull request
-(PACKAGING.md, "Homebrew and winget", has the owner's setup). Each credential
+A stable release updates the Homebrew tap, opens a winget pull request and
+copies the install scripts and the update manifest to floti.dev
+(PACKAGING.md, "Homebrew and winget" and "floti.dev", have the owner's
+setup). Each credential
 is a secret of the `release` environment, never a repository secret, and is
 read by one job, which runs after `publish` and never in a dry run or for a
 preview.
@@ -110,10 +112,22 @@ preview.
   finds one pull request. It never syncs the fork, so the token never needs
   the `workflow` scope. If it leaks, it is revoked where it was made and
   replaced.
-- Both jobs pin `actions/checkout` and `actions/setup-node` by commit, run no
-  third-party action, and have `contents: read` only. What they publish is
-  built from the release's SHA-256 list after its signature is checked
-  against the committed public key.
+- `PAGES_DEPLOY_KEY` is the private half of an SSH deploy key with write
+  access to floti-dev/floti-dev.github.io, the site served as floti.dev, and
+  nothing else. Only the `floti-dev` job names it, as `homebrew` names its
+  key: one step confirms it is set, and the other writes it to an owner-only
+  file in a folder of its own under `$RUNNER_TEMP`, runs the one `git push`
+  with `BatchMode=yes` and GitHub's host keys from its API, and removes the
+  folder when the step ends. A leaked key could change the install scripts
+  people pipe into a shell, so it is revoked on the site's deploy keys page
+  and replaced; `floti update` would still refuse a manifest it changed,
+  whose signature the project's key did not make.
+- All three jobs pin `actions/checkout`, `actions/setup-node` and
+  `actions/download-artifact` by commit, run no third-party action, and have
+  `contents: read` only. What they publish is built from the release's
+  SHA-256 list after its signature is checked against the committed public
+  key, and floti.dev's `update.json` is checked against that key again before
+  it is pushed.
 
 ## Access, keys and devices
 

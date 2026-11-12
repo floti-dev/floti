@@ -3,9 +3,11 @@
 # With a URL it downloads <URL>/<file name>; with - it reads the file from
 # standard input. The file is written beside floti.exe under a temporary
 # name, checked against <sha256>, and only then moved into place, so a floti
-# that was there keeps working when anything fails. It prints the installed
-# path on one line; a failure is one line on standard error starting
-# "floti install: ", and status 1. The desktop sends it with
+# that was there keeps working when anything fails. Install-Floti answers the
+# installed path, or writes one line on standard error starting
+# "floti install: " and answers nothing; it never exits, because floti.dev's
+# install.ps1 carries it into the user's own session (irm | iex). The last
+# line prints the path and exits 0, or exits 1. The desktop sends it with
 # -EncodedCommand, which cmd caps near 8000 characters: keep it short.
 # One function, called on its last line: a script cut off runs nothing.
 function Install-Floti {
@@ -14,6 +16,7 @@ function Install-Floti {
   # Progress on a redirected stream is written as CLIXML, burying the last line.
   $ProgressPreference = 'SilentlyContinue'
   $tmp = $null
+  $protocol = [Net.ServicePointManager]::SecurityProtocol
   try {
     if (-not ($Version -and $File -and $Sha256 -and $From)) { throw 'usage: Install-Floti <version> <file name> <sha256> <URL | ->' }
     $dir = Join-Path $env:LOCALAPPDATA 'Programs\Floti\bin'
@@ -24,7 +27,7 @@ function Install-Floti {
       $out = [IO.File]::Create($tmp)
       try { $in.CopyTo($out) } finally { $out.Close() }
     } else {
-      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+      [Net.ServicePointManager]::SecurityProtocol = $protocol -bor [Net.SecurityProtocolType]::Tls12
       (New-Object Net.WebClient).DownloadFile("$From/$File", $tmp)
     }
     # .NET, not Get-FileHash: a script function that Windows PowerShell cannot
@@ -39,12 +42,12 @@ function Install-Floti {
     try { Move-Item -LiteralPath $tmp -Destination $dest }
     catch { if (Test-Path -LiteralPath $old) { Move-Item -Force -LiteralPath $old -Destination $dest }; throw }
     Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $old
-    [Console]::Out.WriteLine($dest)
-    exit 0
+    $dest
   } catch {
     if ($tmp -and (Test-Path -LiteralPath $tmp)) { Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $tmp }
     [Console]::Error.WriteLine("floti install: $($_.Exception.Message)")
-    exit 1
+  } finally {
+    [Net.ServicePointManager]::SecurityProtocol = $protocol
   }
 }
-Install-Floti @args
+$p = Install-Floti @args; if ($p) { [Console]::Out.WriteLine($p); exit 0 }; exit 1

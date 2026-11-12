@@ -1,0 +1,67 @@
+# floti.dev's install script for macOS, Linux and WSL:
+#
+#   curl -fsSL https://floti.dev/install.sh | sh
+#
+# It installs floti {{version}} in your own folder, ~/.local/bin, with no admin
+# rights, then runs `floti setup`, which starts the Floti host at each sign-in.
+# It picks the floti for this computer's OS and CPU, downloads it from the
+# release, and checks it against the SHA-256 written below before it is put in
+# place. The whole script is one function called on its last line, so a
+# script cut off halfway runs nothing.
+#
+# Written by Floti's release workflow from scripts/floti.dev/install.sh.template
+# (packages/desktop/scripts/floti-dev.mjs); the install steps inside are
+# scripts/install/install.sh, the same ones the desktop app sends a computer it
+# installs floti on.
+
+floti_get() {
+{{install_function}}
+
+  version='{{version}}'
+  release='{{release_url}}'
+
+  system=$(uname -s)
+  machine=$(uname -m)
+  case "$system" in
+    Darwin) os=macos ;;
+    Linux) os=linux ;;
+    *) os=$system ;;
+  esac
+  case "$machine" in
+    x86_64 | amd64) cpu=x64 ;;
+    arm64 | aarch64) cpu=arm64 ;;
+    *) cpu=$machine ;;
+  esac
+  # A shell running under Rosetta says x86_64 on Apple Silicon.
+  if [ "$os-$cpu" = macos-x64 ] && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = 1 ]; then
+    cpu=arm64
+  fi
+  case "$os-$cpu" in
+    macos-arm64) sha256='{{sha256 macos-arm64}}' ;;
+    linux-x64) sha256='{{sha256 linux-x64}}' ;;
+    linux-arm64) sha256='{{sha256 linux-arm64}}' ;;
+    *)
+      echo "floti install: Floti has no build for $system $machine; it runs on macOS on Apple Silicon, Linux on x64 and arm64, and Windows on x64 and arm64." >&2
+      return 1
+      ;;
+  esac
+
+  echo "Installing floti $version for $os $cpu."
+  floti=$(floti_install "$version" "floti-$version-$os-$cpu" "$sha256" "$release") || return 1
+  echo "floti $version is at $floti."
+  folder=${floti%/*}
+  case ":$PATH:" in
+    *":$folder:"*) ;;
+    *) echo "$folder is not on your PATH: $floti doctor gives the line that puts it there." ;;
+  esac
+
+  # Setup reads the terminal, never the rest of this script: under
+  # `curl | sh` standard input is the download.
+  if (exec </dev/tty) 2>/dev/null; then
+    "$floti" setup </dev/tty
+  else
+    "$floti" setup </dev/null
+  fi
+}
+
+floti_get

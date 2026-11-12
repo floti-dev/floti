@@ -9,3 +9,9 @@ packages/core/drizzle/** text eol=lf
 
 # The install script runs under sh on the host's computer, so it stays LF.
 scripts/install/*.sh text eol=lf
+
+# floti.dev's install scripts are made from these on Linux and run under sh,
+# and the manifest fixture is compared byte for byte with what the release
+# workflow's script writes, so a Windows checkout keeps them LF too.
+scripts/floti.dev/** text eol=lf
+crates/host/src/update/fixtures/** text eol=lf

@@ -1,0 +1,70 @@
+# floti.dev's install script for Windows:
+#
+#   irm https://floti.dev/install.ps1 | iex
+#
+# It installs floti {{version}} in your own folder,
+# %LOCALAPPDATA%\Programs\Floti\bin, with no admin rights, puts that folder on
+# your PATH, then runs `floti setup`, which starts the Floti host at each
+# sign-in. It picks the floti for this computer's CPU, downloads it from the
+# release, and checks it against the SHA-256 written below before it is put
+# in place. The whole script is one function called on its last line, so a
+# script cut off halfway runs nothing. It runs in your own PowerShell session,
+# so it never exits it: a failure is one line starting "floti install: ".
+#
+# Written by Floti's release workflow from scripts/floti.dev/install.ps1.template
+# (packages/desktop/scripts/floti-dev.mjs); the install steps inside are
+# scripts/install/install.ps1, the same ones the desktop app sends a computer
+# it installs floti on.
+
+function Get-Floti {
+{{install_function}}
+
+  $version = '{{version}}'
+  $release = '{{release_url}}'
+  $sums = @{
+    'windows-x64' = '{{sha256 windows-x64}}'
+    'windows-arm64' = '{{sha256 windows-arm64}}'
+  }
+
+  # The computer's own CPU, as the system keeps it: an x64 PowerShell on an
+  # arm64 computer says AMD64 in its own environment.
+  $machine = (Get-ItemProperty -ErrorAction SilentlyContinue -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment').PROCESSOR_ARCHITECTURE
+  if (-not $machine) { $machine = $env:PROCESSOR_ARCHITECTURE }
+  $cpu = switch ($machine) { 'AMD64' { 'x64' } 'ARM64' { 'arm64' } default { $machine } }
+  $target = "windows-$cpu"
+  if (-not $sums.ContainsKey($target)) {
+    [Console]::Error.WriteLine("floti install: Floti has no build for Windows on $machine; it runs on Windows on x64 and arm64, macOS on Apple Silicon, and Linux on x64 and arm64.")
+    return
+  }
+
+  Write-Host "Installing floti $version for Windows $cpu."
+  $floti = Install-Floti $version "floti-$version-$target.exe" $sums[$target] $release
+  if (-not $floti) { return }
+  Write-Host "floti $version is at $floti."
+
+  # The folder goes on the user's own Path as it is written, kept an
+  # expandable string, as floti install-self puts it there: .NET's
+  # SetEnvironmentVariable would write the expanded value, freezing every
+  # %VARIABLE% in it.
+  $folder = Split-Path -Parent $floti
+  $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+  try {
+    $written = [string]$key.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+    $system = [string](Get-ItemProperty -ErrorAction SilentlyContinue -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment').Path
+    $onPath = [Environment]::ExpandEnvironmentVariables("$system;$written") -split ';' | ForEach-Object { $_.Trim().TrimEnd('\') }
+    if ($onPath -notcontains $folder) {
+      $key.SetValue('Path', (($written.TrimEnd(';'), $folder) -join ';').TrimStart(';'), 'ExpandString')
+      # Removing a variable that is not there tells Explorer the environment
+      # changed, so a terminal started from now on finds floti.
+      [Environment]::SetEnvironmentVariable('FLOTI_INSTALL_ANNOUNCES_PATH', $null, 'User')
+      Write-Host "Put $folder on your PATH, for terminals started from now on."
+    }
+  } finally {
+    $key.Close()
+  }
+  if (($env:Path -split ';') -notcontains $folder) { $env:Path = "$($env:Path.TrimEnd(';'));$folder" }
+
+  & $floti setup
+}
+
+Get-Floti

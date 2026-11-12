@@ -49,14 +49,17 @@ verifies against `crates/host/src/update/minisign.pub`. That environment is a
 one-time prerequisite: the owner creates it with a deployment branch policy
 admitting `main` alone, then sets the key as its secret, never as a
 repository secret (docs/PACKAGING.md, "The release environment"). A stable
-release then pushes the Homebrew formula to floti-dev/homebrew-tap and opens
-the winget pull request, after the release is published; a preview does
-neither. Each needs a prerequisite the owner creates once - the tap and
-`HOMEBREW_TAP_DEPLOY_KEY`, a winget-pkgs fork and `WINGET_TOKEN` on a GitHub
-account kept for this alone, with no access to floti-dev - and its job
-fails naming the missing one, to be re-run once it exists (docs/PACKAGING.md,
-"Homebrew and winget"). A dry run builds the formula and manifests, checks
-them with Homebrew and winget, and pushes nothing. Then merge and push. CI runs `pnpm check`
+release then pushes the Homebrew formula to floti-dev/homebrew-tap, opens
+the winget pull request and commits the install scripts and `update.json` to
+floti-dev/floti-dev.github.io (floti.dev), after the release is published; a
+preview does none of these. Each needs a prerequisite the owner creates once
+- the tap and `HOMEBREW_TAP_DEPLOY_KEY`, a winget-pkgs fork and
+`WINGET_TOKEN` on a GitHub account kept for this alone, with no access to
+floti-dev, and `PAGES_DEPLOY_KEY` for the site - and its job fails naming the
+missing one, to be re-run once it exists (docs/PACKAGING.md, "Homebrew and
+winget" and "floti.dev"). A dry run builds the formula, the manifests and
+floti.dev's files, checks them with Homebrew and winget, runs the install
+scripts for real in CI runners, and pushes nothing. Then merge and push. CI runs `pnpm check`
 and the build on Windows, macOS and Linux - a failure on any of them blocks
 the release - and verifies the exes, the dmg and zip, and the AppImage from
 the inside before publishing. `packaging-check` and `verify:installer` are not part of a

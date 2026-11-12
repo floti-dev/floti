@@ -42,19 +42,29 @@ name: Release
 # "Homebrew and winget"); while one is missing its job fails, with one line
 # naming what to create, after the release is already published.
 #
+# A stable release also copies floti.dev's install scripts and the update
+# manifest floti update reads (install.sh, install.ps1, update.json and its
+# signature, written by scripts/floti-dev.mjs in `assemble` and signed in
+# `sign`) to floti-dev/floti-dev.github.io: `floti-dev`, after `publish`, in
+# the `release` environment, with one secret of its own, PAGES_DEPLOY_KEY,
+# and the same rule while it is missing. A preview copies nothing.
+#
 # A push to a branch named `release-dry-run/<name>` runs all of it - the
 # checks, floti, the Windows, macOS and Linux builds, the protocol types, the
 # notes, the signatures and every check of the files that needs no published
 # release - and publishes nothing: no tag, no release, no attestation, no npm,
-# no tap push and no winget pull request. It signs with a key made for that
+# no tap push, no winget pull request and nothing on floti.dev. It signs with a key made for that
 # run (`sign-dry-run`), never reads the `release` environment, uploads exactly
 # the files a release would carry as the `release-files` workflow artifact and
 # lists each with its SHA-256 in the run's summary. It also builds the formula
 # and the winget manifests from the run's files, checks them with Homebrew and
-# winget, and uploads them as `homebrew-formula` and `winget-manifests`. The
+# winget, and uploads them as `homebrew-formula` and `winget-manifests`. It
+# writes floti.dev's four files from the run's own files, update.json signed
+# with the run's key, uploads them as `floti-dev`, and runs the install
+# scripts for real against a local server (`install-dry-run`). The
 # version job's `dry_run` output is what every publishing job and step gates
-# on; `sign`, `publish`, `homebrew` and `winget`, the jobs that read a secret
-# or write anywhere, do not run in a dry run at all.
+# on; `sign`, `publish`, `homebrew`, `winget` and `floti-dev`, the jobs that
+# read a secret or write anywhere, do not run in a dry run at all.
 
 on:
   push:
@@ -428,6 +438,8 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
       TAG: ${{ needs.version.outputs.tag }}
+      PREVIEW: ${{ needs.version.outputs.preview }}
+      DRY_RUN: ${{ needs.version.outputs.dry_run }}
 
     steps:
       - uses: actions/checkout@v5
@@ -569,12 +581,53 @@ jobs:
             echo "</details>"
           } >>"$GITHUB_STEP_SUMMARY"
 
+      # floti.dev's install scripts, with this release's version, download
+      # folder and floti SHA-256s written in, and update.json, which `floti
+      # update` reads (scripts/floti-dev.mjs). A preview writes no manifest
+      # (decision I13), so a preview's dry run writes the one a stable
+      # release of the same number would, its files renamed, to check that
+      # form. A dry run also writes the scripts again, downloading from the
+      # local server `install-dry-run` serves the run's files from.
+      - name: Write the floti.dev files
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/floti-dev"
+          sums="$RUNNER_TEMP/release/floti-$VERSION-SHA256SUMS"
+          node packages/desktop/scripts/floti-dev.mjs scripts "$sums" "$VERSION" "$GITHUB_REPOSITORY" "$out"
+          if [[ $PREVIEW == false ]]; then
+            node packages/desktop/scripts/floti-dev.mjs manifest "$RUNNER_TEMP/release" "$VERSION" "$GITHUB_REPOSITORY" "$out/update.json"
+          elif [[ $DRY_RUN == true ]]; then
+            node packages/desktop/scripts/floti-dev.mjs manifest "$RUNNER_TEMP/release" "$VERSION" "$GITHUB_REPOSITORY" "$out/update.json" --as-stable
+          else
+            echo "$VERSION is a preview, so it writes no update.json."
+          fi
+          if [[ $DRY_RUN == true ]]; then
+            node packages/desktop/scripts/floti-dev.mjs scripts "$sums" "$VERSION" "$GITHUB_REPOSITORY" "$RUNNER_TEMP/floti-dev-local" \
+              --release-url http://127.0.0.1:8765
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: release-unsigned
           path: ${{ runner.temp }}/release/
           if-no-files-found: error
           compression-level: 0
+          retention-days: 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: floti-dev-unsigned
+          path: ${{ runner.temp }}/floti-dev/
+          if-no-files-found: error
+          retention-days: 1
+
+      - uses: actions/upload-artifact@v4
+        if: env.DRY_RUN == 'true'
+        with:
+          name: install-scripts-local
+          path: ${{ runner.temp }}/floti-dev-local/
+          if-no-files-found: error
           retention-days: 1
 
       - uses: actions/upload-artifact@v4
@@ -608,6 +661,7 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
       TAG: ${{ needs.version.outputs.tag }}
+      PREVIEW: ${{ needs.version.outputs.preview }}
       PUBLIC_KEY: crates/host/src/update/minisign.pub
 
     steps:
@@ -623,13 +677,28 @@ jobs:
           name: release-unsigned
           path: ${{ runner.temp }}/release
 
+      - name: Fetch the floti.dev files
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: floti-dev-unsigned
+          path: ${{ runner.temp }}/floti-dev
+
       - uses: ./.github/actions/minisign
 
       # The files to sign, one path per line, made before any step that sees
-      # the key, so that step runs nothing but the signing.
+      # the key, so that step runs nothing but the signing. update.json is
+      # signed with its own comment, and only a stable release has one.
       - name: List the files to sign
         shell: bash
-        run: node packages/desktop/scripts/release.mjs names "$VERSION" --unsigned | sed "s|^|$RUNNER_TEMP/release/|" >"$RUNNER_TEMP/to-sign"
+        run: |
+          set -euo pipefail
+          node packages/desktop/scripts/release.mjs names "$VERSION" --unsigned | sed "s|^|$RUNNER_TEMP/release/|" >"$RUNNER_TEMP/to-sign"
+          manifest="$RUNNER_TEMP/floti-dev/update.json"
+          if [[ $PREVIEW == false && ! -s $manifest ]]; then
+            echo "::error::assemble wrote no update.json for the stable release $VERSION"
+            exit 1
+          fi
+          if [[ -e $manifest ]]; then echo "$manifest" >"$RUNNER_TEMP/manifest-to-sign"; else : >"$RUNNER_TEMP/manifest-to-sign"; fi
 
       - name: Confirm the public key and the signing key are there
         shell: bash
@@ -653,14 +722,22 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t files <"$RUNNER_TEMP/to-sign"
+          mapfile -t manifest <"$RUNNER_TEMP/manifest-to-sign"
           node packages/desktop/scripts/minisign.mjs sign --comment "floti $VERSION {name}" "${files[@]}"
+          if (( ${#manifest[@]} > 0 )); then
+            node packages/desktop/scripts/minisign.mjs sign --comment "floti update.json" "${manifest[@]}"
+          fi
 
       - name: Check every signature against the committed public key
         shell: bash
         run: |
           set -euo pipefail
           mapfile -t files <"$RUNNER_TEMP/to-sign"
+          mapfile -t manifest <"$RUNNER_TEMP/manifest-to-sign"
           node packages/desktop/scripts/minisign.mjs verify --public-key "$PUBLIC_KEY" --comment "floti $VERSION {name}" "${files[@]}"
+          if (( ${#manifest[@]} > 0 )); then
+            node packages/desktop/scripts/minisign.mjs verify --public-key "$PUBLIC_KEY" --comment "floti update.json" "${manifest[@]}"
+          fi
 
       # Exactly the release's files and a signature beside each, and nothing
       # else, each listed with its SHA-256 in the summary.
@@ -685,6 +762,15 @@ jobs:
           path: ${{ runner.temp }}/release/
           if-no-files-found: error
           compression-level: 0
+          retention-days: 1
+
+      # What `floti-dev` copies to floti.dev after `publish`: the install
+      # scripts, and for a stable release update.json and its signature.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: floti-dev
+          path: ${{ runner.temp }}/floti-dev/
+          if-no-files-found: error
           retention-days: 1
 
   # A dry run's signatures, made as `sign` makes a release's but with a key
@@ -712,6 +798,12 @@ jobs:
           name: release-unsigned
           path: ${{ runner.temp }}/release
 
+      - name: Fetch the floti.dev files
+        uses: actions/download-artifact@v4
+        with:
+          name: floti-dev-unsigned
+          path: ${{ runner.temp }}/floti-dev
+
       - uses: ./.github/actions/minisign
 
       # The files to sign, one path per line, made before any step that sees
@@ -722,7 +814,8 @@ jobs:
 
       # The secret half lives for this step alone. It reaches minisign.mjs the
       # way the release's does, as MINISIGN_SECRET_KEY, so the dry run signs
-      # through the same code.
+      # through the same code, update.json with its own comment as `sign`
+      # signs a stable release's.
       - name: Sign every file with a key made for this run
         shell: bash
         run: |
@@ -734,6 +827,8 @@ jobs:
           minisign -G -W -p "$keys/minisign.pub" -s "$keys/minisign.key" >/dev/null
           mapfile -t files <"$RUNNER_TEMP/to-sign"
           MINISIGN_SECRET_KEY=$(<"$keys/minisign.key") node packages/desktop/scripts/minisign.mjs sign --comment "floti $VERSION {name}" "${files[@]}"
+          MINISIGN_SECRET_KEY=$(<"$keys/minisign.key") node packages/desktop/scripts/minisign.mjs sign --comment "floti update.json" \
+            "$RUNNER_TEMP/floti-dev/update.json"
 
       - name: Check every signature against this run's public key
         shell: bash
@@ -743,6 +838,8 @@ jobs:
           [[ ! -e $keys/minisign.key ]] || { echo "::error::the dry run's secret key outlived the step that made it"; exit 1; }
           mapfile -t files <"$RUNNER_TEMP/to-sign"
           node packages/desktop/scripts/minisign.mjs verify --public-key "$keys/minisign.pub" --comment "floti $VERSION {name}" "${files[@]}"
+          node packages/desktop/scripts/minisign.mjs verify --public-key "$keys/minisign.pub" --comment "floti update.json" \
+            "$RUNNER_TEMP/floti-dev/update.json"
 
       - name: Confirm the release's files
         shell: bash
@@ -767,6 +864,30 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           # What a dry run is for, so it stays a week.
+          retention-days: 7
+
+      # The four files a stable release copies to floti.dev, as `sign` hands
+      # them to `floti-dev`, with update.json signed by this run's key.
+      - name: List the floti.dev files
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo
+            echo "### The files a stable release copies to floti.dev, in the \`floti-dev\` artifact"
+            echo
+            echo "\`update.json\` is signed with this run's key, with the trusted comment \`floti update.json\`."
+            echo
+            echo '| File | SHA-256 |'
+            echo '|---|---|'
+            (cd "$RUNNER_TEMP/floti-dev" && sha256sum -- * | while read -r sum name; do echo "| \`$name\` | \`$sum\` |"; done)
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: floti-dev
+          path: ${{ runner.temp }}/floti-dev/
+          if-no-files-found: error
           retention-days: 7
 
       # The SHA-256 list, its signature and this run's public key, which
@@ -977,6 +1098,94 @@ jobs:
             exit 1
           }
           Add-Content $env:GITHUB_STEP_SUMMARY "- winget: ``winget validate`` passes the manifests in ``$folder``"
+
+  # floti.dev's install scripts, run for real: the only place they run. Each
+  # runner serves the run's floti files and the scripts `assemble` wrote for
+  # this from http://127.0.0.1:8765, the release folder written into those
+  # scripts in place of the release's own, then cuts each script off at ten
+  # places and checks that none ran anything, then runs the whole script as
+  # a person does (`curl | sh`, or Windows PowerShell's `irm | iex`) and checks
+  # the floti it installed, then that setup ran. The drivers are
+  # scripts/floti.dev/try-install.sh and try-install.ps1. Publishes nothing.
+  install-dry-run:
+    needs: [version, assemble]
+    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: linux-x64
+          - runner: macos-latest
+            target: macos-arm64
+          - runner: windows-latest
+            target: windows-x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fetch the run's floti files
+        uses: actions/download-artifact@v4
+        with:
+          name: floti-release
+          path: ${{ runner.temp }}/served
+
+      - name: Fetch the scripts that download from the local server
+        uses: actions/download-artifact@v4
+        with:
+          name: install-scripts-local
+          path: ${{ runner.temp }}/served
+
+      - name: Install floti with install.sh
+        if: runner.os != 'Windows'
+        shell: bash
+        run: sh scripts/floti.dev/try-install.sh "$RUNNER_TEMP/served" "$VERSION" "${{ matrix.target }}"
+
+      # Windows PowerShell, not pwsh: its children would inherit PowerShell
+      # 7's module path, which Windows PowerShell cannot load its own modules
+      # from.
+      - name: Install floti with install.ps1
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/floti.dev/try-install.ps1 -Served (Join-Path $env:RUNNER_TEMP 'served') -Version $env:VERSION -Target '${{ matrix.target }}'
+
+  # install.sh in a Debian container, as root, with curl and nothing else of
+  # the runner's: python3 only serves the files. Root is refused by setup,
+  # which is the line the script must reach.
+  install-dry-run-debian:
+    needs: [version, assemble]
+    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    container: debian:stable-slim
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+
+    steps:
+      - name: Install curl, and python3 to serve the files
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends curl ca-certificates python3 >/dev/null
+
+      - uses: actions/checkout@v5
+
+      - name: Fetch the run's floti files
+        uses: actions/download-artifact@v4
+        with:
+          name: floti-release
+          path: ${{ runner.temp }}/served
+
+      - name: Fetch the scripts that download from the local server
+        uses: actions/download-artifact@v4
+        with:
+          name: install-scripts-local
+          path: ${{ runner.temp }}/served
+
+      - name: Install floti with install.sh
+        shell: sh
+        run: sh scripts/floti.dev/try-install.sh "$RUNNER_TEMP/served" "$VERSION" linux-x64
 
   # The only job that writes to the repository or makes an attestation, and it
   # never runs in a dry run.
@@ -1401,6 +1610,134 @@ jobs:
           fi
           echo "$title: $url"
           echo "- winget: [$title]($url)" >>"$GITHUB_STEP_SUMMARY"
+
+  # floti.dev's install scripts and update manifest: install.sh, install.ps1,
+  # update.json and update.json.minisig, at the root of
+  # floti-dev/floti-dev.github.io, whose main GitHub Pages serves as
+  # https://floti.dev. `sign` made them and checked update.json's signature
+  # against the committed public key; this job checks it again before one
+  # commit and one push. Only a stable release updates them; a preview never
+  # does, and a dry run never reaches this job.
+  #
+  # It runs after `publish`, so the scripts never name files that are not
+  # downloadable yet, and when it fails the release is already out: the error
+  # names what to create, and re-running this job once it exists finishes the
+  # work. The deploy key, PAGES_DEPLOY_KEY in the `release` environment, is a
+  # prerequisite the owner creates (docs/PACKAGING.md, "floti.dev"). It reaches
+  # two steps: one confirms it is set, and the other runs the one push and
+  # nothing else.
+  floti-dev:
+    needs: [version, publish]
+    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'false' && needs.version.outputs.preview == 'false'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.version.outputs.version }}
+      SITE: floti-dev/floti-dev.github.io
+      PUBLIC_KEY: crates/host/src/update/minisign.pub
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+
+      - name: Fetch the floti.dev files
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: floti-dev
+          path: ${{ runner.temp }}/floti-dev
+
+      - uses: ./.github/actions/minisign
+
+      # Exactly the four files, update.json naming this release on the stable
+      # channel and signed with the key floti update trusts, and each script
+      # naming this version.
+      - name: Confirm the files
+        shell: bash
+        working-directory: ${{ runner.temp }}/floti-dev
+        run: |
+          set -euo pipefail
+          have=$(LC_ALL=C ls -A | paste -sd ' ' -)
+          [[ $have == "install.ps1 install.sh update.json update.json.minisig" ]] \
+            || { echo "::error::the floti.dev files are [$have], expected install.ps1, install.sh, update.json and update.json.minisig"; exit 1; }
+          node "$GITHUB_WORKSPACE/packages/desktop/scripts/minisign.mjs" verify --public-key "$GITHUB_WORKSPACE/$PUBLIC_KEY" \
+            --comment "floti update.json" update.json
+          jq -e --arg v "$VERSION" '.schema == 1 and (.channels | keys) == ["stable"] and .channels.stable.version == $v' update.json >/dev/null \
+            || { echo "::error::update.json does not name $VERSION alone, on the stable channel"; exit 1; }
+          for script in install.sh install.ps1; do
+            grep -qF "'$VERSION'" "$script" || { echo "::error::$script does not name $VERSION"; exit 1; }
+          done
+
+      - name: Confirm the site and the deploy key are there
+        shell: bash
+        env:
+          PAGES_DEPLOY_KEY: ${{ secrets.PAGES_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z ${PAGES_DEPLOY_KEY:-} ]]; then
+            echo "::error::PAGES_DEPLOY_KEY is not set in the release environment: add a deploy key with write access to $SITE and set its private half as that environment's secret (docs/PACKAGING.md, \"floti.dev\")."
+            exit 1
+          fi
+          if ! gh api "repos/$SITE" --silent 2>"$RUNNER_TEMP/site.err"; then
+            if grep -q 'HTTP 404' "$RUNNER_TEMP/site.err"; then
+              echo "::error::$SITE does not exist or is not public (docs/PACKAGING.md, \"floti.dev\")."
+            else
+              echo "::error::could not ask GitHub about $SITE: $(tr '\n' ' ' <"$RUNNER_TEMP/site.err")"
+            fi
+            exit 1
+          fi
+
+      # Cloned over HTTPS, as anybody can: the key is needed only to push.
+      - name: Commit the files to the site
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet --depth 1 "https://github.com/$SITE.git" "$RUNNER_TEMP/site"
+          cd "$RUNNER_TEMP/site"
+          cp "$RUNNER_TEMP/floti-dev/install.sh" "$RUNNER_TEMP/floti-dev/install.ps1" \
+            "$RUNNER_TEMP/floti-dev/update.json" "$RUNNER_TEMP/floti-dev/update.json.minisig" .
+          git add install.sh install.ps1 update.json update.json.minisig
+          if git diff --cached --quiet; then
+            echo "floti.dev already carries $VERSION's files."
+            echo "- floti.dev: the install scripts and \`update.json\` were already \`$VERSION\`'s" >>"$GITHUB_STEP_SUMMARY"
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit --quiet -m "floti $VERSION: the install scripts and update.json"
+          echo "branch=$(git symbolic-ref --short HEAD)" >>"$GITHUB_OUTPUT"
+          echo "changed=true" >>"$GITHUB_OUTPUT"
+          # GitHub's SSH host keys, from its API over HTTPS, for the push.
+          mkdir -p "$RUNNER_TEMP/site-ssh"
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' >"$RUNNER_TEMP/site-ssh/known_hosts"
+
+      # The key goes to an owner-only file in a folder of its own, removed when
+      # the step ends, whether the push worked or not. Never echo it.
+      - name: Push it
+        if: steps.commit.outputs.changed == 'true'
+        shell: bash
+        working-directory: ${{ runner.temp }}/site
+        env:
+          PAGES_DEPLOY_KEY: ${{ secrets.PAGES_DEPLOY_KEY }}
+          BRANCH: ${{ steps.commit.outputs.branch }}
+        run: |
+          set -euo pipefail
+          umask 077
+          keys=$(mktemp -d "$RUNNER_TEMP/site-key.XXXXXX")
+          trap 'rm -rf "$keys"' EXIT
+          printf '%s\n' "${PAGES_DEPLOY_KEY%$'\n'}" >"$keys/key"
+          export GIT_SSH_COMMAND="ssh -i $keys/key -o BatchMode=yes -o IdentitiesOnly=yes -o IdentityAgent=none -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/site-ssh/known_hosts"
+          if ! git push --quiet "git@github.com:$SITE.git" "HEAD:refs/heads/$BRANCH"; then
+            echo "::error::PAGES_DEPLOY_KEY could not push to $SITE: add its public half to $SITE as a deploy key with write access (docs/PACKAGING.md, \"floti.dev\")."
+            exit 1
+          fi
+          echo "- floti.dev: \`install.sh\`, \`install.ps1\`, \`update.json\` and its signature are now \`$VERSION\`'s ($(git rev-parse --short HEAD) on \`$SITE\`'s \`$BRANCH\`)" >>"$GITHUB_STEP_SUMMARY"
 
   # The plugin SDK goes to npm on its own version, the way the app goes to
   # GitHub on its: bump packages/plugin-sdk/package.json, merge, and this job
