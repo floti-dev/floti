@@ -113,7 +113,13 @@ for Windows on arm64, as `resources\floti-arm64.exe`, beside the x64
 `floti.exe`: `floti install-self`, run by the installer from the x64 one,
 installs the arm64 one on a computer whose own CPU is arm64, so Windows on
 Arm never gets an emulated floti from the installer. A local build carries
-no arm64 copy.
+no arm64 copy. The installer and the portable exe unpack their payload with
+electron-builder's nsis7z plugin, which is 7-Zip 19.00 and cannot read the
+ARM64 filter newer 7-Zip gives ARM64 executables on its own; NSIS leaves a
+file it cannot read out of the install without failing it. So
+`scripts/dist-win.mjs` packs the payload with BCJ2 throughout
+(`ELECTRON_BUILDER_7Z_FILTER`), and `verify-artifact.mjs` fails an artefact
+with any file packed with a filter 19.00 cannot read.
 
 ### floti for every host
 

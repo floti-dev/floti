@@ -56,6 +56,13 @@ if ($run.ExitCode -ne 0) { Fail "$Installer /S exited $($run.ExitCode)." }
 
 $failures = New-Object System.Collections.Generic.List[string]
 if (-not (Test-Path -LiteralPath (Join-Path $app 'Helm.exe') -PathType Leaf)) { $failures.Add("the app is not at $app\Helm.exe.") }
+# A release's installer carries both Windows flotis; an install that left
+# one out unpacked its payload short (scripts/dist-win.mjs says how).
+foreach ($carried in 'floti.exe', 'floti-arm64.exe') {
+  if (-not (Test-Path -LiteralPath (Join-Path $app "resources\$carried") -PathType Leaf)) {
+    $failures.Add("the installed app has no resources\$carried, so install-self has no such floti to pick.")
+  }
+}
 
 if (Test-Path -LiteralPath $floti -PathType Leaf) {
   $have = (Get-FileHash -Algorithm SHA256 -LiteralPath $floti).Hash

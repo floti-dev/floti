@@ -1,5 +1,6 @@
 // Builds the Windows artefacts, after making sure electron-builder can find a
-// working pnpm.
+// working pnpm, with their payload packed so the installer's 7-Zip can unpack
+// every file of it (`ELECTRON_BUILDER_7Z_FILTER`, below).
 //
 // Why this file exists, measured on 2026-08-10:
 //
@@ -141,6 +142,22 @@ if (declared !== null && first !== null && firstVersion !== declared) {
       `Using ${working} through a shim in ${shimDir} for this build only.`
   )
 }
+
+/**
+ * The filter every file in the Windows artefacts' 7z payload is packed with.
+ *
+ * The installer and the portable exe unpack that payload with the nsis7z
+ * plugin electron-builder ships, which is 7-Zip 19.00. The 7za that packs it
+ * is newer and, left to itself, gives each ARM64 executable the ARM64 filter
+ * (7-Zip 23), which 19.00 cannot decode, and NSIS then leaves that file out
+ * of the install without failing it. That is how an install came to lack
+ * `resources\floti-arm64.exe`, so `floti install-self` on Windows on Arm put
+ * the x64 floti in place. BCJ2 is what it gives x64 executables anyway, and
+ * 19.00 reads it; naming it turns the choice per file off.
+ * `verify-artifact.mjs` refuses an artefact with a file packed any other way
+ * 19.00 cannot read.
+ */
+env.ELECTRON_BUILDER_7Z_FILTER = 'BCJ2'
 
 const builder = join(repoRoot, 'node_modules', 'electron-builder', 'out', 'cli', 'cli.js')
 if (!existsSync(builder)) {

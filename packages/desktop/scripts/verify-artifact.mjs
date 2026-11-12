@@ -76,6 +76,16 @@ const REQUIRED = [
  */
 const MIN_ENTRIES = 50
 
+/**
+ * The filters 7-Zip added after 19.00, the version of the nsis7z plugin the
+ * installer and the portable exe unpack the payload with: ARM64 and RISCV, as
+ * a 7-Zip that knows them names them and as one that does not (`0A`, `0B`).
+ * A file packed with one is left out of the install without failing it, so
+ * finding one fails the artefact. scripts/dist-win.mjs packs with BCJ2 to
+ * keep them out.
+ */
+const UNREADABLE_FILTER = /(^|\s)(ARM64|RISCV|0A|0B)(\s|:|$)/
+
 function locate7z() {
   const candidates = [
     process.env.SEVENZIP,
@@ -129,7 +139,8 @@ function listEntries(sevenZip, archive) {
       // normalise so REQUIRED can be written one way.
       path: record.Path.replace(/\//g, '\\'),
       size: Number(record.Size ?? '0'),
-      directory: (record.Attributes ?? '').includes('D')
+      directory: (record.Attributes ?? '').includes('D'),
+      method: record.Method ?? ''
     })
   }
   return entries
@@ -172,6 +183,14 @@ function verify(sevenZip, exe, scratch) {
   }
 
   const failures = []
+  for (const entry of inner) {
+    if (!entry.directory && UNREADABLE_FILTER.test(entry.method)) {
+      failures.push(
+        `${label}: ${entry.path} is packed with ${entry.method}, which the installer's 7-Zip 19.00 cannot unpack, ` +
+          'so an install would leave it out'
+      )
+    }
+  }
   for (const required of REQUIRED) {
     const size = files.get(required)
     if (size === undefined) failures.push(`${label}: missing ${required}`)
@@ -234,8 +253,9 @@ if (failures.length > 0) {
   console.error(`\n${String(failures.length)} problem(s):`)
   for (const failure of failures) console.error(`  ${failure}`)
   console.error(
-    '\nAn artefact with no app.asar.unpacked is one that dies on its first dlopen.\n' +
-      'See the header of scripts/dist-win.mjs for the cause this is guarding against.'
+    '\nAn artefact with no app.asar.unpacked is one that dies on its first dlopen, and a file packed with a\n' +
+      'filter 7-Zip 19.00 cannot read is one an install leaves out.\n' +
+      'See the header of scripts/dist-win.mjs for the causes this is guarding against.'
   )
   process.exit(1)
 }
