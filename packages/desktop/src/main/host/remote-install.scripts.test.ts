@@ -57,6 +57,8 @@ async function computer(name: string): Promise<{ root: string; env: NodeJS.Proce
 
 function installer(env: NodeJS.ProcessEnv, deps: Partial<RemoteInstallDeps>): ReturnType<typeof createRemoteInstaller> {
   return createRemoteInstaller({
+    restartState: () => Promise.reject(new Error('Nothing asks what a restart ends here.')),
+    keeperLink: 1,
     run: spawnTransportRun(spawn, env),
     platform: process.platform,
     arch: process.arch,

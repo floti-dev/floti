@@ -6,6 +6,8 @@ import {
   flotiLine,
   flotiPathProblem,
   formatProtocol,
+  hasFlotiUpdate,
+  hostFlotiOlder,
   installFolderFor,
   judgeProtocol,
   parseShortVersion,
@@ -20,12 +22,15 @@ import {
   systemOfBuild,
   type FlotiFound,
   type FlotiOs,
+  type FlotiUpdateVia,
   type HostCheck,
   type HostTransport,
   type InstallOutcome,
   type ProtocolVersionNumbers,
   type RemoteSystem
 } from '@helm/core/types'
+import type { HostConnection, HostSubscription } from './client'
+import type * as P from './protocol'
 import { runsAsWritten, systemWsl, transportArgv, type TransportPrograms } from './remote-launcher'
 
 /**
@@ -55,6 +60,31 @@ import { runsAsWritten, systemWsl, transportArgv, type TransportPrograms } from 
  *   there keeps working when anything fails. Then `<path> setup` there.
  * - Every failure is the last line written there, unedited, with the step it
  *   failed at.
+ *
+ * An added host's Update floti (`checkUpdate`) offers the same, and more:
+ * a host whose floti is older than this Helm's gets the offer even while
+ * this Helm can talk to it. Where the floti there has `floti update`
+ * (`hasFlotiUpdate`), the update is that, which relaunches the host through
+ * its session keeper, so it stops nothing first and ends no session the new
+ * host can take back:
+ *
+ * - A host this Helm is connected to, which keeps floti up to date
+ *   (`update:state` names no reason it does not), is asked over that
+ *   connection (`update:install`). It runs `floti update --from-desktop`,
+ *   which, on a computer that also has the desktop app, waits for that app
+ *   to quit (an app connected to that host quits by itself), replaces it,
+ *   relaunches the host once and opens the app again; the update's steps
+ *   and its failure are heard on `update:state`.
+ * - Any other host whose floti has it runs `floti update` over the same
+ *   login.
+ * - A floti without it, or a connected host that does not keep floti up to
+ *   date (a floti inside a portable app, a development build), is updated
+ *   by the install above.
+ *
+ * The offer says beforehand how many sessions a `floti update` ends: none
+ * when the host's session keeper speaks the keeper link this Helm's floti
+ * takes back, every running one when it does not, as Restart host to
+ * update says it for this PC's host (`restartAsk`, `askRemoteHostRestart`).
  */
 
 /** How one run of the transport ended, with what it wrote. */
@@ -111,7 +141,21 @@ export interface RemoteInstallDeps {
   /** The folder of the release of `version` its files are downloaded from. */
   releaseBase: (version: string) => string
   newId?: () => string
+  /**
+   * What restarting `host` would mean, asked in place of a `hello`
+   * (`askRemoteHostRestart`): its sessions and its session keeper's link.
+   */
+  restartState: (host: UpdateTarget) => Promise<P.RestartState>
+  /** The keeper link the floti this Helm carries takes back (`KEEPER_LINK_VERSION`). */
+  keeperLink: number
   log: (line: string) => void
+}
+
+/** An added host, as Update floti checks it. */
+export interface UpdateTarget {
+  id: string
+  transport: HostTransport
+  floti?: string | undefined
 }
 
 export interface RemoteInstaller {
@@ -120,13 +164,22 @@ export interface RemoteInstaller {
    * there. `signal` stops a check under way: the add-a-host dialog's Cancel.
    */
   check(target: { transport: HostTransport; floti?: string | undefined }, signal?: AbortSignal): Promise<HostCheck>
+  /**
+   * What updating added host `host` offers: as `check`, and an update for a
+   * floti older than this Helm's that it can still talk to, through
+   * `floti update` wherever the floti there has it. `connection` is main's
+   * connection to that host now, or null.
+   */
+  checkUpdate(host: UpdateTarget, connection: HostConnection | null): Promise<HostCheck>
   /** Does what the check with `id` offered. Rejects for an id no check gave, or one used or cancelled. */
   install(id: string): Promise<InstallOutcome>
   /** Forgets the offer: nothing is run there. */
   cancel(id: string): void
 }
 
-interface Plan {
+/** An install, or an update by installing over the floti there. */
+interface InstallPlan {
+  kind: 'install'
   transport: HostTransport
   /** The floti an update replaces, by the path the host keeps or on `PATH`. */
   floti: string | undefined
@@ -134,6 +187,19 @@ interface Plan {
   os: FlotiOs
   cpu: string
   source: { how: 'copy' } | { how: 'download'; file: string; sha256: string }
+}
+
+/** A `floti update` there, over the host's connection or its login. */
+type UpdatePlan =
+  | { kind: 'flotiUpdate'; via: 'connection'; connection: HostConnection; floti: string | undefined }
+  | { kind: 'flotiUpdate'; via: 'login'; transport: HostTransport; floti: string | undefined }
+
+type Plan = InstallPlan | UpdatePlan
+
+/** What an update for an added host is checked with. */
+interface ForUpdate {
+  host: UpdateTarget
+  connection: HostConnection | null
 }
 
 /** `update-stop`'s status when no host is running there, and `floti`'s for usage it does not know. */
@@ -281,7 +347,8 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
     transport: HostTransport,
     floti: string | undefined,
     system: RemoteSystem,
-    found: FlotiFound | null
+    found: FlotiFound | null,
+    talks = false
   ): Promise<HostCheck> => {
     const own = await deps.ownBuild()
     const source = chooseSource({
@@ -296,7 +363,7 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
     }
     const action = found === null ? 'install' : 'update'
     const id = newId()
-    plans.set(id, { transport, floti, action, os: system.os, cpu: system.cpu, source })
+    plans.set(id, { kind: 'install', transport, floti, action, os: system.os, cpu: system.cpu, source })
     return {
       kind: 'offer',
       id,
@@ -307,10 +374,90 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
         how: source.how,
         version: deps.version,
         folder: installFolderFor(system.os),
-        sessions: action === 'update' ? await sessionsThere(transport, floti) : null
+        sessions: action === 'update' ? await sessionsThere(transport, floti) : null,
+        talks
       }
     }
   }
+
+  /**
+   * How many sessions a `floti update` ends on `host`: none when its keeper
+   * speaks the link this Helm's floti takes back, every running one when it
+   * does not; null when the host could not be asked.
+   */
+  const endsThere = async (host: UpdateTarget): Promise<number | null> => {
+    try {
+      const state = await deps.restartState(host)
+      return state.keeperLink === deps.keeperLink ? 0 : state.sessions
+    } catch (error) {
+      deps.log(`host: could not ask what updating floti there ends (${(error as Error).message})`)
+      return null
+    }
+  }
+
+  /** The offer to run `floti update` on the host, `via` its connection or its login. */
+  const flotiUpdateOffer = async (
+    forUpdate: ForUpdate,
+    via: FlotiUpdateVia,
+    floti: string | undefined,
+    system: RemoteSystem,
+    found: FlotiFound,
+    talks: boolean
+  ): Promise<HostCheck> => {
+    const { host, connection } = forUpdate
+    const id = newId()
+    plans.set(
+      id,
+      via === 'connection' && connection !== null
+        ? { kind: 'flotiUpdate', via, connection, floti }
+        : { kind: 'flotiUpdate', via: 'login', transport: host.transport, floti }
+    )
+    return {
+      kind: 'offer',
+      id,
+      offer: {
+        system,
+        found,
+        action: 'update',
+        how: 'flotiUpdate',
+        via,
+        version: deps.version,
+        folder: system.os === null ? '' : installFolderFor(system.os),
+        sessions: await endsThere(host),
+        talks
+      }
+    }
+  }
+
+  /**
+   * The update a floti found there is offered, too old to talk to or, for
+   * an added host's Update floti, older than this Helm's: `floti update`
+   * where it has it (over the host's connection when that host keeps floti
+   * up to date, otherwise over its login), otherwise an install over it.
+   */
+  const updateOffer = async (
+    transport: HostTransport,
+    floti: string | undefined,
+    system: RemoteSystem,
+    found: FlotiFound,
+    protocol: ProtocolVersionNumbers,
+    talks: boolean,
+    forUpdate: ForUpdate | null
+  ): Promise<HostCheck> => {
+    if (forUpdate === null || !hasFlotiUpdate(protocol)) return offer(transport, floti, system, found, talks)
+    const { connection } = forUpdate
+    if (connection === null) return flotiUpdateOffer(forUpdate, 'login', floti, system, found, talks)
+    // The connected host updates itself only when it keeps floti up to date.
+    const state = await updateStateOf(connection)
+    if (state !== null && state.unavailable === null) {
+      return flotiUpdateOffer(forUpdate, 'connection', floti, system, found, talks)
+    }
+    return offer(transport, floti, system, found, talks)
+  }
+
+  /** Whether a floti this Helm talks to is offered an update: only for an added host's Update floti, and only when older. */
+  const olderForUpdate = (found: FlotiFound, forUpdate: ForUpdate | null): boolean =>
+    forUpdate !== null && hostFlotiOlder(found.version, deps.version)
 
   /**
    * floti where the install scripts put it, on a login whose PATH does not
@@ -320,7 +467,8 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
   const standaloneThere = async (
     transport: HostTransport,
     os: FlotiOs,
-    signal?: AbortSignal
+    signal: AbortSignal | undefined,
+    forUpdate: ForUpdate | null
   ): Promise<HostCheck | null> => {
     const probed = await runThere(transport, standaloneProbeLine(os), null, signal)
     if (probed.error !== undefined || probed.code !== 0) return null
@@ -328,51 +476,89 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
     if (there === null || flotiPathProblem(there.path) !== null) return null
     const { protocolNumbers, os: builtFor, cpu, ...named } = there.found
     const verdict = judgeProtocol(protocolNumbers, deps.protocol)
-    if (verdict === 'ok') return { kind: 'ready', found: named, system: systemOfBuild(builtFor, cpu), floti: there.path }
+    const system = systemOfBuild(builtFor, cpu)
     if (verdict === 'newer') return { kind: 'newer', found: named, ours: formatProtocol(deps.protocol), helm: deps.version }
-    return offer(transport, there.path, systemOfBuild(builtFor, cpu), named)
+    if (verdict === 'ok' && !olderForUpdate(named, forUpdate)) {
+      return { kind: 'ready', found: named, system, floti: there.path }
+    }
+    return updateOffer(transport, there.path, system, named, protocolNumbers, verdict === 'ok', forUpdate)
+  }
+
+  /** What is on that computer; with `forUpdate`, an older floti there is offered an update too. */
+  const inspect = async (
+    { transport, floti }: { transport: HostTransport; floti?: string | undefined },
+    signal: AbortSignal | undefined,
+    forUpdate: ForUpdate | null
+  ): Promise<HostCheck> => {
+    const asked = await runThere(transport, flotiLine(floti, 'version'), null, signal)
+    if (asked.error !== undefined) return failedCheck(asked)
+    const found = asked.code === 0 ? parseVersionLine(asked.stdout) : null
+    if (found !== null) {
+      // floti's connection goes where its version line went: anything the
+      // login printed before it would land in the middle of the handshake.
+      const printed = firstLineBeforeVersion(asked.stdout)
+      if (printed !== null) return { kind: 'failed', lastLine: printed, cause: 'loginOutput' }
+      const { protocolNumbers, os, cpu, ...named } = found
+      const verdict = judgeProtocol(protocolNumbers, deps.protocol)
+      if (verdict === 'newer') {
+        return { kind: 'newer', found: named, ours: formatProtocol(deps.protocol), helm: deps.version }
+      }
+      if (verdict === 'ok' && !olderForUpdate(named, forUpdate)) {
+        return { kind: 'ready', found: named, system: systemOfBuild(os, cpu) }
+      }
+      return updateOffer(transport, floti, systemOfBuild(os, cpu), named, protocolNumbers, verdict === 'ok', forUpdate)
+    }
+    const said = `${asked.stderr}\n${asked.stdout}`
+    // A floti from before `floti version`: too old, whatever it is.
+    const old = asked.code === USAGE_EXIT && /^usage: floti /m.test(said)
+    if (!old && !saysNotFound(asked.code, said)) return failedCheck(asked)
+    const system = await systemThere(transport, signal)
+    if ('kind' in system) return system
+    if (!old) {
+      if (floti === undefined && system.os !== null) {
+        const there = await standaloneThere(transport, system.os, signal, forUpdate)
+        if (there !== null) return there
+      }
+      return offer(transport, floti, system, null)
+    }
+    const short = await runThere(transport, flotiLine(floti, '--version'))
+    const version = (short.code === 0 ? parseShortVersion(short.stdout) : null) ?? 'of unknown version'
+    return offer(transport, floti, system, { version, protocol: null })
+  }
+
+  /** `floti update` over the host's login: it has ended, the host relaunched on the new floti, when it exits 0. */
+  const updateOverLogin = async (transport: HostTransport, floti: string | undefined): Promise<InstallOutcome> => {
+    const ran = await runThere(transport, flotiLine(floti, 'update'))
+    if (ran.code !== 0) return { ok: false, step: 'update', lastLine: lastLineOf(ran) }
+    deps.log('host: floti update ran there over its login')
+    return { ok: true, ...(floti !== undefined ? { floti } : {}), startsAtNextSignIn: false }
+  }
+
+  /** `floti update` over the host's connection (`update:install`), followed on `update:state` to its end. */
+  const updateOverConnection = async (
+    connection: HostConnection,
+    floti: string | undefined
+  ): Promise<InstallOutcome> => {
+    const outcome = await followUpdate(connection)
+    if (!outcome.ok) return outcome
+    deps.log('host: floti update ran there; its host relaunched')
+    return { ...outcome, ...(floti !== undefined ? { floti } : {}) }
   }
 
   return {
-    async check({ transport, floti }, signal) {
-      const asked = await runThere(transport, flotiLine(floti, 'version'), null, signal)
-      if (asked.error !== undefined) return failedCheck(asked)
-      const found = asked.code === 0 ? parseVersionLine(asked.stdout) : null
-      if (found !== null) {
-        // floti's connection goes where its version line went: anything the
-        // login printed before it would land in the middle of the handshake.
-        const printed = firstLineBeforeVersion(asked.stdout)
-        if (printed !== null) return { kind: 'failed', lastLine: printed, cause: 'loginOutput' }
-        const { protocolNumbers, os, cpu, ...named } = found
-        const verdict = judgeProtocol(protocolNumbers, deps.protocol)
-        if (verdict === 'ok') return { kind: 'ready', found: named, system: systemOfBuild(os, cpu) }
-        if (verdict === 'newer') {
-          return { kind: 'newer', found: named, ours: formatProtocol(deps.protocol), helm: deps.version }
-        }
-        return offer(transport, floti, systemOfBuild(os, cpu), named)
-      }
-      const said = `${asked.stderr}\n${asked.stdout}`
-      // A floti from before `floti version`: too old, whatever it is.
-      const old = asked.code === USAGE_EXIT && /^usage: floti /m.test(said)
-      if (!old && !saysNotFound(asked.code, said)) return failedCheck(asked)
-      const system = await systemThere(transport, signal)
-      if ('kind' in system) return system
-      if (!old) {
-        if (floti === undefined && system.os !== null) {
-          const there = await standaloneThere(transport, system.os, signal)
-          if (there !== null) return there
-        }
-        return offer(transport, floti, system, null)
-      }
-      const short = await runThere(transport, flotiLine(floti, '--version'))
-      const version = (short.code === 0 ? parseShortVersion(short.stdout) : null) ?? 'of unknown version'
-      return offer(transport, floti, system, { version, protocol: null })
-    },
+    check: (target, signal) => inspect(target, signal, null),
+
+    checkUpdate: (host, connection) => inspect(host, undefined, { host, connection }),
 
     async install(id) {
       const plan = plans.get(id)
       if (plan === undefined) throw new Error('That offer is no longer open. Check the host again.')
       plans.delete(id)
+      if (plan.kind === 'flotiUpdate') {
+        return plan.via === 'connection'
+          ? updateOverConnection(plan.connection, plan.floti)
+          : updateOverLogin(plan.transport, plan.floti)
+      }
       const { transport } = plan
       if (plan.action === 'update') {
         const stop = await runThere(transport, flotiLine(plan.floti, 'update-stop --stop'))
@@ -409,6 +595,89 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
       plans.delete(id)
     }
   }
+}
+
+/**
+ * The host's `update:state` as it stands, from a subscription's first state;
+ * null when it could not be heard (a host from before the channel, or a
+ * connection that ended).
+ */
+export function updateStateOf(connection: Pick<HostConnection, 'subscribe'>): Promise<P.UpdateState | null> {
+  return new Promise((done) => {
+    let settled = false
+    let subscription: HostSubscription | null = null
+    const settle = (state: P.UpdateState | null): void => {
+      if (settled) return
+      settled = true
+      subscription?.unsubscribe()
+      done(state)
+    }
+    subscription = connection.subscribe('update:state', {
+      snapshot: settle,
+      event: settle,
+      error: () => settle(null)
+    })
+    if (settled) subscription.unsubscribe()
+  })
+}
+
+/** What an update that ended without replacing floti and relaunching the host says, when it said nothing. */
+export const UPDATE_REPLACED_NOTHING = 'floti update ended without replacing floti there.'
+
+/**
+ * Asks the host to run `floti update` (`update:install`) and follows it on
+ * `update:state` to its end:
+ *
+ * - The connection ending once the host has answered is the host
+ *   relaunching on the new floti, which
+ *   `floti update --from-desktop` asks for once everything is replaced: it
+ *   went well. A link that dropped for another reason connects again and
+ *   shows what the host runs then.
+ * - `installFailed` is the line it failed with.
+ * - An update that ends with the host still on this connection replaced no
+ *   floti (the channel has nothing newer), and is told by its last line.
+ * - A refused `update:install` is the host's reason.
+ */
+export function followUpdate(
+  connection: Pick<HostConnection, 'subscribe' | 'request' | 'ended'>
+): Promise<InstallOutcome> {
+  return new Promise((done) => {
+    let settled = false
+    let started = false
+    let lastLine: string | null = null
+    let subscription: HostSubscription | null = null
+    const settle = (outcome: InstallOutcome): void => {
+      if (settled) return
+      settled = true
+      subscription?.unsubscribe()
+      done(outcome)
+    }
+    const hear = (state: P.UpdateState): void => {
+      if (state.installing !== null) {
+        started = true
+        lastLine = state.installing.line
+        return
+      }
+      if (!started) return
+      settle({ ok: false, step: 'update', lastLine: state.installFailed ?? lastLine ?? UPDATE_REPLACED_NOTHING })
+    }
+    // Subscribed first, so no step between the start and the first state is missed.
+    subscription = connection.subscribe('update:state', { snapshot: hear, event: hear, error: () => undefined })
+    if (settled) subscription.unsubscribe()
+    // Only a started update relaunches the host: a connection that ended
+    // before the host answered, or had ended already, ran nothing.
+    let answered = false
+    void connection.ended.then((why) =>
+      settle(answered ? { ok: true, startsAtNextSignIn: false } : { ok: false, step: 'update', lastLine: why })
+    )
+    connection.request('update:install', null).then(
+      () => {
+        answered = true
+      },
+      (error: unknown) =>
+        settle({ ok: false, step: 'update', lastLine: error instanceof Error ? error.message : String(error) })
+    )
+  })
 }
 
 /** The most of a run's output kept: its last lines are what is shown. */

@@ -48,11 +48,11 @@ import { createPageLinks, type PageLinks } from './page-link'
 import { doctorHosts, recordDoctorHosts } from './doctor-hosts'
 import type { PortForwards } from './forwards'
 import { createRemoteHostLinks, type RemoteHostLinks } from './remote'
-import { openRemotePageBridge, remoteClientFolder, startRemoteHost, systemWsl } from './remote-launcher'
+import { askRemoteHostRestart, openRemotePageBridge, remoteClientFolder, startRemoteHost, systemWsl } from './remote-launcher'
 import { createRemoteInstaller, spawnTransportRun, type RemoteInstaller } from './remote-install'
 import { createWslKeepAwake } from './wsl-awake'
 import { listWslDistros } from './wsl-distros'
-import { PROTOCOL_VERSION } from './protocol'
+import { KEEPER_LINK_VERSION, PROTOCOL_VERSION } from './protocol'
 import { RELEASES_DOWNLOAD } from '../update'
 import type { LocalHostRestartOffer, PluginBackgroundReport, RemoteHostStates } from '../../shared/ipc'
 import { LOCAL_HOST_KEY } from '@helm/core/types'
@@ -414,6 +414,15 @@ export function createDesktopRemoteInstaller(log: (line: string) => void): Remot
     },
     script: (os: FlotiOs) => readFile(join(scripts, os === 'windows' ? 'install.ps1' : 'install.sh'), 'utf8'),
     releaseBase: (version) => `${RELEASES_DOWNLOAD}/v${version}`,
+    restartState: (host) =>
+      localFloti.after(() =>
+        askRemoteHostRestart(
+          at,
+          { ...programs, appVersion: app.getVersion(), log },
+          { folder: remoteClientFolder(at, process.platform, host.id), transport: host.transport, floti: host.floti, deviceName: hostname() }
+        )
+      ),
+    keeperLink: KEEPER_LINK_VERSION,
     log
   })
 }

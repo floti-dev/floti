@@ -299,7 +299,11 @@ export function registerIpc(ctx: IpcContext): void {
       if ('host' in target) {
         const host = ctx.services.settings.hosts.find((each) => each.id === target.host)
         if (host === undefined) return Promise.reject(new Error('This PC has no such host.'))
-        return ctx.remoteInstall.check({ transport: host.transport, floti: host.floti })
+        // An added host's Update floti: over its connection when it has one.
+        return ctx.remoteInstall.checkUpdate(
+          { id: host.id, transport: host.transport, floti: host.floti },
+          ctx.remoteHosts.connection(host.id)
+        )
       }
       // A host being added is checked as the settings would keep it.
       const problem = remoteHostsProblem([{ id: 'checked', name: 'checked', transport: target.transport, ...(target.floti !== undefined ? { floti: target.floti } : {}) }])

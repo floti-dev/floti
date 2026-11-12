@@ -3,7 +3,11 @@ import {
   chooseSource,
   compareVersions,
   describeInstallFailure,
+  FLOTI_UPDATE_SINCE,
+  hasFlotiUpdate,
   hostFlotiOlder,
+  olderHostSentence,
+  parseProtocol,
   installFolderFor,
   parseStandaloneProbe,
   standaloneProbeLine,
@@ -161,6 +165,34 @@ describe('which floti goes to a computer', () => {
       fix: 'Nothing replaced a floti that was there. Check that ~/.local/bin there can be written to and, for a download, that build-box reaches github.com, then try again.'
     })
     expect(describeInstallFailure('stop', 'build-box', '~/.local/bin').fix).toContain('its sessions are still running')
+    expect(describeInstallFailure('update', 'build-box', '~/.local/bin')).toEqual({
+      title: 'floti update failed on build-box',
+      fix: 'floti update replaces nothing until every download has passed its checks, and its sessions keep running. Run floti update in a terminal there to see all of its output, then try again.'
+    })
+  })
+})
+
+describe('an older floti on another computer, and floti update there', () => {
+  it('has floti update from protocol 3.1 on, the first that serves update:install', () => {
+    expect(FLOTI_UPDATE_SINCE).toEqual({ major: 3, minor: 1 })
+    expect(hasFlotiUpdate({ major: 3, minor: 1 })).toBe(true)
+    expect(hasFlotiUpdate({ major: 3, minor: 4 })).toBe(true)
+    expect(hasFlotiUpdate({ major: 4, minor: 0 })).toBe(true)
+    expect(hasFlotiUpdate({ major: 3, minor: 0 })).toBe(false)
+    expect(hasFlotiUpdate({ major: 2, minor: 9 })).toBe(false)
+  })
+
+  it('reads a protocol as floti version names it back into its numbers', () => {
+    expect(parseProtocol('3.1')).toEqual({ major: 3, minor: 1 })
+    expect(parseProtocol(' 12.0 ')).toEqual({ major: 12, minor: 0 })
+    expect(parseProtocol('3')).toBeNull()
+    expect(parseProtocol('unknown')).toBeNull()
+  })
+
+  it('names both versions for a connected host whose floti is older, and says the offer tells what it ends', () => {
+    expect(olderHostSentence('build-box', '2.5.0', '2.6.0')).toBe(
+      'build-box runs floti 2.5.0, older than the floti 2.6.0 this Helm carries. Update floti there says first what it ends.'
+    )
   })
 })
 

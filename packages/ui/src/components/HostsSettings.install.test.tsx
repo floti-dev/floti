@@ -11,7 +11,8 @@ const NOT_FOUND_OFFER: InstallOffer = {
   how: 'copy',
   version: '2.6.0',
   folder: '~/.local/bin',
-  sessions: null
+  sessions: null,
+  talks: false
 }
 
 function actions(check: HostCheck, outcome: InstallOutcome = { ok: true, floti: '/home/me/.local/bin/floti', startsAtNextSignIn: false }) {
@@ -100,5 +101,91 @@ describe('installing floti from a host’s row in Settings > Hosts', () => {
     rerender({ hosts: [host({ state: 'tooOld', host: '0.9', client: '1.0' })], updateRequest: { id: 'h-build', nonce: 1 } })
     expect(await screen.findByText('Update floti on build-box?')).toBeTruthy()
     expect(install.check).toHaveBeenCalledWith({ host: 'h-build' })
+  })
+})
+
+describe('updating an older floti from a connected host’s row in Settings > Hosts', () => {
+  const OLDER_OFFER: InstallOffer = {
+    ...NOT_FOUND_OFFER,
+    action: 'update',
+    how: 'flotiUpdate',
+    via: 'connection',
+    found: { version: '2.5.0', protocol: '3.1' },
+    sessions: 0,
+    talks: true
+  }
+
+  it('names both versions on a connected host whose floti is older, offers Update floti, and says floti update ends no session', async () => {
+    const install = actions({ kind: 'offer', id: 'offer-3', offer: OLDER_OFFER }, { ok: true, startsAtNextSignIn: false })
+    const { onInstalled } = renderHosts(install, {
+      hosts: [host({ state: 'connected', version: '2.5.0', olderThan: '2.6.0' })]
+    })
+    const row = screen.getByRole('group', { name: 'build-box' })
+    expect(within(row).getByText('Older floti')).toBeTruthy()
+    expect(row.querySelector('[data-settings-host-older]')?.textContent).toBe(
+      'build-box runs floti 2.5.0, older than the floti 2.6.0 this Helm carries. Update floti there says first what it ends.'
+    )
+    await userEvent.click(within(row).getByRole('button', { name: 'Update floti' }))
+    expect(install.check).toHaveBeenCalledWith({ host: 'h-build' })
+    const panel = (await screen.findByText('Update floti on build-box?')).closest('[data-settings-host-offer]') as HTMLElement
+    expect(panel.textContent).toContain('build-box has floti 2.5.0, older than the floti 2.6.0 this Helm carries.')
+    expect(panel.textContent).toContain('Helm can run floti update there now')
+    const steps = panel.querySelector('[data-settings-host-offer-steps]')?.textContent ?? ''
+    expect(steps).toContain('Asks the floti host on build-box to run floti update')
+    expect(panel.querySelector('[data-settings-host-offer-sessions]')?.textContent).toContain('no session ends')
+    // Nothing about stopping the host, copying a build or running setup.
+    expect(steps).not.toContain('Stops the floti host')
+    expect(steps).not.toContain('floti setup')
+    expect(install.install).not.toHaveBeenCalled()
+
+    await userEvent.click(within(panel).getByRole('button', { name: 'Update floti on build-box' }))
+    expect(install.install).toHaveBeenCalledWith('offer-3', 'h-build')
+    // floti update replaced floti where it was: no new path to keep.
+    await vi.waitFor(() => expect(row.querySelector('[data-settings-host-offer]')).toBeNull())
+    expect(onInstalled).not.toHaveBeenCalled()
+  })
+
+  it('S13: a floti update whose new host cannot take the keeper back names the sessions it ends, on its button too', async () => {
+    const install = actions({
+      kind: 'offer',
+      id: 'offer-4',
+      offer: { ...OLDER_OFFER, via: 'login', talks: false, found: { version: '2.5.0', protocol: '3.1' }, sessions: 3 }
+    })
+    renderHosts(install, { hosts: [host({ state: 'tooOld', host: '3.1', client: '3.2' })] })
+    const row = screen.getByRole('group', { name: 'build-box' })
+    await userEvent.click(within(row).getByRole('button', { name: 'Update floti' }))
+    const panel = (await screen.findByText('Update floti on build-box?')).closest('[data-settings-host-offer]') as HTMLElement
+    expect(panel.textContent).toContain('too old for this Helm to talk to')
+    expect(panel.querySelector('[data-settings-host-offer-steps]')?.textContent).toContain(
+      'Runs floti update on build-box over the same login'
+    )
+    expect(panel.querySelector('[data-settings-host-offer-sessions]')?.textContent).toContain('ending 3 sessions')
+    expect(within(panel).getByRole('button', { name: 'Update floti on build-box, ending 3 sessions' })).toBeTruthy()
+  })
+
+  it('a floti update that failed there shows its last line with the fix', async () => {
+    const install = actions(
+      { kind: 'offer', id: 'offer-5', offer: OLDER_OFFER },
+      { ok: false, step: 'update', lastLine: 'floti-2.6.0-linux-x64 does not match its signature.' }
+    )
+    renderHosts(install, { hosts: [host({ state: 'connected', version: '2.5.0', olderThan: '2.6.0' })] })
+    const row = screen.getByRole('group', { name: 'build-box' })
+    await userEvent.click(within(row).getByRole('button', { name: 'Update floti' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Update floti on build-box' }))
+    const problem = await screen.findByRole('alert')
+    expect(problem.textContent).toContain('floti update failed on build-box')
+    expect(problem.querySelector('[data-settings-host-problem-line]')?.textContent).toBe(
+      'floti-2.6.0-linux-x64 does not match its signature.'
+    )
+  })
+
+  it('a connected host on this Helm’s floti, or one that names no version, offers nothing', () => {
+    renderHosts(actions({ kind: 'ready', found: { version: '2.6.0', protocol: '3.1' }, system: NOT_FOUND_OFFER.system }), {
+      hosts: [host({ state: 'connected', version: '2.6.0' })]
+    })
+    const row = screen.getByRole('group', { name: 'build-box' })
+    expect(within(row).queryByRole('button', { name: 'Update floti' })).toBeNull()
+    expect(row.querySelector('[data-settings-host-older]')).toBeNull()
+    expect(within(row).getByText('Connected')).toBeTruthy()
   })
 })

@@ -96,29 +96,86 @@ export interface InstallOffer {
   /** The floti found there, which an update replaces; null when there is none. */
   found: FlotiFound | null
   action: 'install' | 'update'
-  /** `copy`: this Helm's own floti, over the same login. `download`: that computer fetches the release's. */
-  how: 'copy' | 'download'
-  /** The version installed: this Helm's. */
+  /**
+   * - `copy`: this Helm's own floti, over the same login, then `floti setup`.
+   * - `download`: that computer fetches the release's, then `floti setup`.
+   * - `flotiUpdate`: the floti there runs `floti update`, which fetches its
+   *   channel's newest floti and relaunches the host through its session
+   *   keeper ([`FlotiUpdateVia`] says how it is asked).
+   */
+  how: 'copy' | 'download' | 'flotiUpdate'
+  /** For `flotiUpdate`, how the floti there is asked to run it; absent otherwise. */
+  via?: FlotiUpdateVia
+  /** This Helm's version: what `copy` and `download` install, and what an older floti there is behind. */
   version: string
   /** Where it goes there, as that computer's user would write it. */
   folder: string
-  /** For an update, how many sessions it ends there, or null when that floti cannot say. */
+  /**
+   * For an update, how many sessions it ends there, or null when that floti
+   * cannot say. A `flotiUpdate` ends none when the new host takes the session
+   * keeper back, and every running one when it cannot.
+   */
   sessions: number | null
+  /**
+   * Whether this Helm can talk to the floti found there now: an older floti
+   * on a protocol it speaks, as against one too old to talk to.
+   */
+  talks: boolean
 }
 
-/** The step of an install or update that failed. */
-export type InstallStep = 'stop' | 'install' | 'setup'
+/**
+ * How `floti update` is asked to run on a host's computer: `connection`, by
+ * `update:install` over the host's own connection, which runs
+ * `floti update --from-desktop` there; `login`, by running `floti update`
+ * over the same login an install uses.
+ */
+export type FlotiUpdateVia = 'connection' | 'login'
+
+/** The step of an install or update that failed. `update` is a `floti update` run there. */
+export type InstallStep = 'stop' | 'install' | 'setup' | 'update'
 
 /** How an install or update ended. */
 export type InstallOutcome =
   | {
       ok: true
-      /** The full path floti was put at there. */
-      floti: string
+      /**
+       * The full path floti was put at there; absent for a `floti update`,
+       * which replaced floti where it was.
+       */
+      floti?: string
       /** Setup registered the host, nobody is signed in there, and it starts at the next sign-in. */
       startsAtNextSignIn: boolean
     }
   | { ok: false; step: InstallStep; lastLine: string }
+
+/**
+ * The first protocol whose floti has `floti update` and whose host serves
+ * `update:install`: every floti that speaks it, or a later one, updates
+ * itself. A floti on an older protocol is updated by an install.
+ */
+export const FLOTI_UPDATE_SINCE: ProtocolVersionNumbers = { major: 3, minor: 1 }
+
+/** Whether a floti speaking `protocol` has `floti update`. */
+export function hasFlotiUpdate(protocol: ProtocolVersionNumbers): boolean {
+  return (
+    protocol.major > FLOTI_UPDATE_SINCE.major ||
+    (protocol.major === FLOTI_UPDATE_SINCE.major && protocol.minor >= FLOTI_UPDATE_SINCE.minor)
+  )
+}
+
+/** `1.0` read back into its numbers, or null for anything else. */
+export function parseProtocol(text: string): ProtocolVersionNumbers | null {
+  const match = /^(\d+)\.(\d+)$/.exec(text.trim())
+  return match === null ? null : { major: Number(match[1]), minor: Number(match[2]) }
+}
+
+/**
+ * The sentence Settings > Hosts says about a connected host on another
+ * computer whose floti is older than this Helm's, naming both versions.
+ */
+export function olderHostSentence(name: string, hostVersion: string, helmVersion: string): string {
+  return `${name} runs floti ${hostVersion}, older than the floti ${helmVersion} this Helm carries. Update floti there says first what it ends.`
+}
 
 /**
  * What `remoteHosts:check` is asked about: a host being added, or one added
@@ -506,6 +563,12 @@ export function describeInstallFailure(
   host: string,
   folder: string
 ): { title: string; fix: string } {
+  if (step === 'update') {
+    return {
+      title: `floti update failed on ${host}`,
+      fix: `floti update replaces nothing until every download has passed its checks, and its sessions keep running. Run floti update in a terminal there to see all of its output, then try again.`
+    }
+  }
   if (step === 'stop') {
     return {
       title: `Helm could not stop the floti host on ${host} for the update`,

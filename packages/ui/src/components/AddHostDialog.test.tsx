@@ -34,7 +34,8 @@ const OFFER: InstallOffer = {
   how: 'download',
   version: '3.0.0',
   folder: '~/.local/bin',
-  sessions: null
+  sessions: null,
+  talks: false
 }
 const CONFIG: SshConfigHosts = { found: true, hosts: ['build-box', 'studio-mac', 'homelab'] }
 

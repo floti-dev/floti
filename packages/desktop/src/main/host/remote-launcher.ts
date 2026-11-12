@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { formatProtocol, type HostTransport } from '@helm/core/types'
-import { HostRefusedError, connectHost, type HostConnection } from './client'
+import { HostRefusedError, connectHost, restartFrame, streamTransport, type HostConnection } from './client'
 import {
   BRIDGE_EXIT,
   clause,
@@ -16,6 +16,7 @@ import {
   type LocalHost,
   type PageBridge
 } from './launcher'
+import type { RestartState } from './protocol'
 
 /**
  * Reaches a host on another computer, through the `floti` program:
@@ -342,6 +343,50 @@ async function connectRemote(
       })()
       return closing
     }
+  }
+}
+
+/**
+ * What restarting a remote host would mean, asked as Restart host to update
+ * asks this PC's (`localHostRestartFrame`): `restartAsk` in place of a
+ * `hello`, through a bridge of its own in the host's client folder, which
+ * holds the host to the key main's link pinned. The host answers the floti it
+ * runs, its sessions and its session keeper's link version, then closes the
+ * connection; nothing there changes. Rejects with a `RemoteHostError` whose
+ * line is the one to show.
+ */
+export async function askRemoteHostRestart(
+  places: HostPlaces,
+  deps: RemoteLauncherDeps,
+  target: RemoteTarget & { deviceName: string }
+): Promise<RestartState> {
+  const spawned = spawnBridge(places, deps, target)
+  if ('missing' in spawned) throw new RemoteHostError(`Helm could not find floti at ${spawned.binary}.`)
+  const { binary, child } = spawned
+  const exited = exitOf(child)
+  const said = readStandardError(child)
+  if (child.stdout === null || child.stdin === null) {
+    closeInput(child)
+    const exit = await exited
+    await said.ended
+    throw remoteFailure(exit, said.last(), binary)
+  }
+  try {
+    const state = await restartFrame({
+      transport: streamTransport(child.stdout, child.stdin),
+      appVersion: deps.appVersion,
+      deviceName: target.deviceName,
+      restart: false
+    })
+    closeInput(child)
+    await exited
+    return state
+  } catch (error) {
+    closeInput(child)
+    const exit = await exited
+    await said.ended
+    deps.log(`host: asking a remote host what a restart would end failed (${(error as Error).message})`)
+    throw remoteFailure(exit, said.last(), binary)
   }
 }
 

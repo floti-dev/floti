@@ -137,8 +137,12 @@ export function flotiLine(floti: string | undefined, rest: string): string {
  *   the host starts at the next sign-in. Not a failure.
  */
 export type RemoteHostConnection =
-  /** `version` is the host's floti version, as its welcome said it. */
-  | { state: 'connected'; version?: string }
+  /**
+   * `version` is the host's floti version, as its welcome said it.
+   * `olderThan` is this Helm's version when the host's floti is older than
+   * it, and Update floti is offered there; absent otherwise.
+   */
+  | { state: 'connected'; version?: string; olderThan?: string }
   | { state: 'retrying' }
   | { state: 'keyChanged' }
   | { state: 'failed'; lastLine: string }

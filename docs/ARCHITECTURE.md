@@ -57,7 +57,12 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   own folder, outside its install (`floti install-self`, PACKAGING.md's
   "floti in your own folder"), and a running copy there is renamed aside, so
   the old host runs on until Restart host to update hands its sessions to the
-  new one through the keeper. An update that replaces floti on another host,
+  new one through the keeper. An update of floti on another host runs
+  `floti update` there where that floti has it (over the host's connection
+  with `update:install`, or over its login), which relaunches the host
+  through the keeper, so it ends no session the new host takes back
+  ([PACKAGING.md](PACKAGING.md#installing-floti-on-a-hosts-computer)). An
+  update that installs over an older floti on another host,
   and the one install over a Helm whose host ran from inside its install
   folder, stop the host through `floti update-stop --stop`
   (`crates/host/src/update_stop.rs`), asked first when it would end sessions,

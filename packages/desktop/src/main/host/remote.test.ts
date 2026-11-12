@@ -185,6 +185,22 @@ describe('the links to hosts on other computers', () => {
     expect(w.bridges[0]?.written).toEqual([new Uint8Array([1, 2, 3])])
   })
 
+  it('a connected host whose floti is older than this Helm’s says so, with this Helm’s version, and its connection is main’s', async () => {
+    const w = world()
+    w.links.sync([BUILD, LAB])
+    const older = hostWith()
+    Object.assign(older.welcome, { hostVersion: '2.3.0' })
+    w.startFor(BUILD).resolve(fakeLocalHost(older, false))
+    const same = hostWith()
+    Object.assign(same.welcome, { hostVersion: '2.4.0' })
+    w.startFor(LAB).resolve(fakeLocalHost(same, false))
+    await settle()
+    expect(w.state(BUILD)).toEqual({ state: 'connected', version: '2.3.0', olderThan: '2.4.0' })
+    expect(w.state(LAB)).toEqual({ state: 'connected', version: '2.4.0' })
+    expect(w.links.connection(BUILD.id)).toBe(older.asConnection())
+    expect(w.links.connection(FAR.id)).toBeNull()
+  })
+
   it('S9: a host whose connection drops is retrying, nothing is sent to end a session, and it comes back by itself', async () => {
     const w = world()
     w.links.sync([BUILD])

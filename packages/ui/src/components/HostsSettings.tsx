@@ -16,6 +16,7 @@ import {
   type RemoteHostConnection,
   lineToTryByHand,
   localHostVersionsSentence,
+  olderHostSentence,
   transportFix,
   type LocalHostVersions
 } from '@helm/core/types'
@@ -41,9 +42,12 @@ import { Action, Divider, Group, Select } from './SettingsKit'
  * nothing on it. Where each link stands is the desktop's to say
  * (`connection`); null while it has said nothing.
  *
- * A host whose floti is too old or missing offers to update or install it:
- * what that would do and where is said first, and it is done only after the
- * user's yes. A link that cannot connect says why the way the dialog does
+ * A host whose floti is too old or missing offers to update or install it,
+ * and so does a connected one whose floti is older than this Helm's (naming
+ * both versions): what that would do and where, and how many sessions it
+ * ends, is said first, and it is done only after the user's yes. Where the
+ * floti there has `floti update`, the update is that, and ends no session
+ * its session keeper hands to the new host. A link that cannot connect says why the way the dialog does
  * (`classifyHostFailure`), with the last line written there, unedited.
  *
  * Above them, while this PC's host and this Helm are on different floti
@@ -99,6 +103,9 @@ const CONNECTION_CHIP: Record<RemoteHostConnection['state'], { tone: ChipTone; l
   newer: { tone: 'warn', label: 'Newer floti' },
   startsAtSignIn: { tone: 'neutral', label: 'Starts at next sign-in' }
 }
+
+/** A connected host whose floti is older than this Helm's. */
+const OLDER_CHIP: { tone: ChipTone; label: string } = { tone: 'warn', label: 'Older floti' }
 
 export function HostsSettings({
   hosts,
@@ -179,12 +186,15 @@ function HostRow({
   onReconnect: ((id: string) => void) | undefined
 }): JSX.Element {
   const { host, quit, connection } = entry
+  const older = connection?.state === 'connected' && connection.olderThan !== undefined
   const chip =
     connection === null
       ? null
       : connection.state === 'failed'
         ? { tone: CONNECTION_CHIP.failed.tone, label: failureOf(host, connection.lastLine).chip }
-        : CONNECTION_CHIP[connection.state]
+        : older
+          ? OLDER_CHIP
+          : CONNECTION_CHIP[connection.state]
   const flow = useInstallFlow(install)
   const startUpdate = (): void =>
     flow.start({ host: host.id }, host, ({ floti, system }) => {
@@ -200,7 +210,7 @@ function HostRow({
   useEffect(() => {
     if (updateRequest !== null) requested()
   }, [updateRequest])
-  const offersUpdate = connection?.state === 'tooOld' || connection?.state === 'missing'
+  const offersUpdate = older || connection?.state === 'tooOld' || connection?.state === 'missing'
   // A link that dropped or could not get in is waiting to try again: the user
   // may have just fixed what it needed, so it can try at once.
   const offersReconnect =
@@ -288,6 +298,14 @@ function LocalHostNotice({
 
 /** What a link that is not simply connected or retrying needs from the user. */
 function ConnectionDetail({ connection, host }: { connection: RemoteHostConnection; host: RemoteHost }): ReactNode {
+  if (connection.state === 'connected') {
+    if (connection.olderThan === undefined || connection.version === undefined) return null
+    return (
+      <p data-settings-host-older className="mt-2 text-[11.5px] leading-[1.5] text-fg-muted">
+        {olderHostSentence(host.name, connection.version, connection.olderThan)}
+      </p>
+    )
+  }
   if (connection.state === 'keyChanged') {
     return (
       <p data-settings-host-key-changed className="mt-2 text-[11.5px] leading-[1.5] text-fg-muted">
@@ -517,7 +535,9 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
   } else if (stage?.step === 'working') {
     panel = (
       <p data-settings-host-working className="text-[11.5px] leading-[1.5] text-fg-muted">
-        {stage.offer.action === 'install' ? 'Installing' : 'Updating'} floti {stage.offer.version} on {name}…
+        {stage.offer.how === 'flotiUpdate'
+          ? `Running floti update on ${name}…`
+          : `${stage.offer.action === 'install' ? 'Installing' : 'Updating'} floti ${stage.offer.version} on ${name}…`}
       </p>
     )
   } else if (stage?.step === 'problem') {
@@ -569,12 +589,17 @@ export function installQuestion(name: string, offer: InstallOffer): string {
 export function OfferDetails({ name, offer }: { name: string; offer: InstallOffer }): JSX.Element {
   const { system, found, action, how, version, folder, sessions } = offer
   const update = action === 'update'
+  const behind = offer.talks
+    ? `${name} has floti ${found?.version ?? ''}, older than the floti ${version} this Helm carries.`
+    : `${name} has floti ${found?.version ?? ''}, too old for this Helm to talk to.`
   return (
     <>
       <p className="text-[11.5px] leading-[1.5] text-fg-muted">
-        {update
-          ? `${name} has floti ${found?.version ?? ''}, too old for this Helm to talk to. Helm can update it to ${version} now, as you, with no admin rights.`
-          : `${name} answers, but floti is not installed there. Helm can install it now, as you, with no admin rights.`}
+        {how === 'flotiUpdate'
+          ? `${behind} Helm can run floti update there now, as you, with no admin rights.`
+          : update
+            ? `${behind} Helm can update it to ${version} now, as you, with no admin rights.`
+            : `${name} answers, but floti is not installed there. Helm can install it now, as you, with no admin rights.`}
       </p>
       <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-fg-muted">
         <span className="text-fg">{name}</span>
@@ -586,30 +611,65 @@ export function OfferDetails({ name, offer }: { name: string; offer: InstallOffe
         </span>
       </div>
       <p className="text-[11.5px] text-fg-muted">What it does on {name}</p>
-      <ul data-settings-host-offer-steps className="list-disc pl-4 text-[11.5px] leading-[1.5] text-fg">
-        {update && (
+      {how === 'flotiUpdate' ? (
+        <FlotiUpdateSteps name={name} via={offer.via ?? 'login'} sessions={sessions} />
+      ) : (
+        <ul data-settings-host-offer-steps className="list-disc pl-4 text-[11.5px] leading-[1.5] text-fg">
+          {update && (
+            <li>
+              {sessions === 0
+                ? 'Stops the floti host there for the update; no session is running there'
+                : `Stops the floti host there for the update, ending ${sessions === null ? 'the sessions it runs' : sessionsWord(sessions)}; they are offered back with claude --resume when it starts again`}
+            </li>
+          )}
           <li>
-            {sessions === 0
-              ? 'Stops the floti host there for the update; no session is running there'
-              : `Stops the floti host there for the update, ending ${sessions === null ? 'the sessions it runs' : sessionsWord(sessions)}; they are offered back with claude --resume when it starts again`}
+            {how === 'copy'
+              ? `Copies this PC’s floti ${version} over the same login and checks its SHA-256 there`
+              : `Downloads floti ${version} for ${system.label} from its release and checks the SHA-256`}
           </li>
-        )}
-        <li>
-          {how === 'copy'
-            ? `Copies this PC’s floti ${version} over the same login and checks its SHA-256 there`
-            : `Downloads floti ${version} for ${system.label} from its release and checks the SHA-256`}
-        </li>
-        <li>
-          Puts it in <span className="font-mono">{folder}</span>
-        </li>
-        <li>Runs floti setup: the host starts now, and again at each sign-in</li>
-      </ul>
+          <li>
+            Puts it in <span className="font-mono">{folder}</span>
+          </li>
+          <li>Runs floti setup: the host starts now, and again at each sign-in</li>
+        </ul>
+      )}
       {how === 'download' && (
         <p className="text-[11px] leading-[1.5] text-fg-subtle">
           This PC has no floti for {system.label}, so {name} fetches its own. This PC sends only to {name}.
         </p>
       )}
     </>
+  )
+}
+
+/**
+ * What a `floti update` there does, in order: how it is asked, what it
+ * fetches and checks, what becomes of the sessions, and the desktop app.
+ */
+function FlotiUpdateSteps({
+  name,
+  via,
+  sessions
+}: {
+  name: string
+  via: 'connection' | 'login'
+  sessions: number | null
+}): JSX.Element {
+  return (
+    <ul data-settings-host-offer-steps className="list-disc pl-4 text-[11.5px] leading-[1.5] text-fg">
+      <li>
+        {via === 'connection'
+          ? `Asks the floti host on ${name} to run floti update`
+          : `Runs floti update on ${name} over the same login`}
+      </li>
+      <li>floti update downloads the newest floti there and checks its signature and SHA-256 before it replaces anything</li>
+      <li data-settings-host-offer-sessions>
+        {sessions === null || sessions === 0
+          ? 'The host there restarts on it and takes every session back from its session keeper: no session ends'
+          : `The host there restarts on it, ending ${sessionsWord(sessions)}, whose session keeper the new floti cannot take back; they are offered back when it starts`}
+      </li>
+      <li>Where the desktop app is installed there, it is replaced too, once it has quit</li>
+    </ul>
   )
 }
 

@@ -190,6 +190,32 @@ SHA-256. Otherwise the computer downloads the release's file for itself from
 computer, nothing is offered. Then the app runs `<path> setup` there and keeps
 the installed path, which the host's bridge is given with `--floti`.
 
+An added host whose floti is older than this desktop's gets the same Update
+floti, in Settings > Hosts and on its sidebar row, whether or not this
+desktop can still talk to it (`checkUpdate` in
+`packages/desktop/src/main/host/remote-install.ts`). Where the floti there
+has `floti update` (protocol 3.1 and later, `hasFlotiUpdate`), the update is
+that rather than an install, so it stops nothing first:
+
+- A connected host that keeps floti up to date (`update:state` names no
+  reason it does not) is asked over its connection with `update:install`.
+  It runs `floti update --from-desktop`, which on a computer that also has
+  the desktop app waits for that app to quit (an app connected to that host
+  quits by itself), replaces it, relaunches the host once and opens the app
+  again. The desktop follows `update:state`: the connection ending once the
+  host has answered is the host relaunching, `installFailed` is a failure,
+  and an update that ends with the host still connected replaced nothing.
+- Any other host whose floti has it runs `floti update` over the same
+  login.
+- A floti without it, or a connected host that runs a floti it does not keep
+  up to date, is updated by the install above.
+
+`floti update` relaunches the host through its session keeper. Before the
+offer, the desktop asks the host what a restart would mean (`restartAsk`
+through a bridge of its own, as Restart host to update asks this PC's), and
+the offer says no session ends when the keeper speaks the link this
+desktop's floti takes back, and how many end when it does not.
+
 Beside `floti` goes the Node runtime the local host runs plugin services on.
 `scripts/node-runtime.json` pins its version (a Node 24 LTS release) and, for
 win32-x64, darwin-arm64 and linux-x64, the archive from nodejs.org and its

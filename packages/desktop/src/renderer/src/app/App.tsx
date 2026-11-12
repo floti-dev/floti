@@ -4866,8 +4866,9 @@ export function App(): JSX.Element {
         openRemoteSession(host.id, Number(key.slice(host.id.length + 1))),
       onEndSession: (key: string) =>
         closeRemoteSession(host.id, Number(key.slice(host.id.length + 1))),
-      // A floti too old or newer than this Helm, with both versions; too old
-      // offers the same yes-first update Settings > Hosts does.
+      // A floti too old or newer than this Helm, with both versions, or a
+      // connected one older than it; too old and older offer the same
+      // yes-first update Settings > Hosts does.
       floti:
         connection?.state === "tooOld" || connection?.state === "newer"
           ? {
@@ -4875,7 +4876,15 @@ export function App(): JSX.Element {
               host: connection.host,
               client: connection.client,
             }
-          : null,
+          : connection?.state === "connected" &&
+              connection.olderThan !== undefined &&
+              connection.version !== undefined
+            ? {
+                verdict: "older" as const,
+                host: connection.version,
+                client: connection.olderThan,
+              }
+            : null,
       onUpdateFloti: () => {
         openSettings("hosts");
         setHostUpdateRequest((last) => ({

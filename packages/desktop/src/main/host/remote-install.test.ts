@@ -3,9 +3,15 @@ import { FLOTI_TARGETS, SYSTEM_LINE, standaloneProbeLine, type HostTransport } f
 import { RELEASE_TARGETS } from '../../../scripts/floti-release.mjs'
 import type { ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
+import { FakeConnection } from '../../../test/fake-connection'
+import type { HostSubscription, SubscriptionHandlers } from '../../shared/host/client'
+import type * as P from '../../shared/host/protocol'
+import type { EventChannels } from '../../shared/host/protocol'
 import {
   createRemoteInstaller,
   decodeOutput,
+  followUpdate,
+  updateStateOf,
   installLine,
   lastLineOf,
   spawnTransportRun,
@@ -41,6 +47,8 @@ interface World {
 function world(rules: [prefix: string, answer: Answer][], options: Partial<RemoteInstallDeps> = {}): World {
   const runs: World['runs'] = []
   const installer = createRemoteInstaller({
+    restartState: () => Promise.reject(new Error('Nothing asks what a restart ends here.')),
+    keeperLink: 1,
     run: async (argv, stdinFile) => {
       const line = argv.at(-1) ?? ''
       runs.push({ argv, line, stdinFile })
@@ -95,7 +103,8 @@ describe('installing floti on a host’s computer, from the desktop', () => {
         how: 'copy',
         version: '2.6.0',
         folder: '~/.local/bin',
-        sessions: null
+        sessions: null,
+        talks: false
       }
     })
   })
@@ -227,7 +236,8 @@ describe('installing floti on a host’s computer, from the desktop', () => {
         found: { version: '2.1.0', protocol: '1.0' },
         system: { os: 'linux', cpu: 'x64' },
         how: 'copy',
-        sessions: 2
+        sessions: 2,
+        talks: false
       }
     })
     expect(w.lines()).toEqual(['floti version', 'floti update-stop --ask'])
@@ -443,6 +453,8 @@ describe('installing floti in a WSL distro', () => {
       stdinFile: string | null
     }[] = []
     const installer = createRemoteInstaller({
+      restartState: () => Promise.reject(new Error('Nothing asks what a restart ends here.')),
+      keeperLink: 1,
       run: async (argv, stdinFile, _signal, how) => {
         const line = unwrapped(argv.at(-1) ?? '')
         runs.push({ argv, line, how, stdinFile })
@@ -568,5 +580,280 @@ describe('installing floti in a WSL distro', () => {
     })
     expect(calls[0]?.args).toEqual(['-d', '"My Distro"', '--', 'floti connect'])
     expect(calls[0]?.options.argv0).toBe('"C:\\Program Files\\wsl.exe"')
+  })
+})
+
+/**
+ * An added host's Update floti, with its connection and its login faked: a
+ * floti older than this Helm's is offered an update even while this Helm can
+ * talk to it, and one with `floti update` runs that, over the host's
+ * connection when it keeps floti up to date and over its login otherwise.
+ */
+describe('updating an added host’s floti from the desktop', () => {
+  const PROTOCOL_3_1 = { major: 3, minor: 1 }
+  const HOST = { id: 'h-build', transport: SSH }
+  const IDLE: P.UpdateState = {
+    running: '2.5.0',
+    channel: 'stable',
+    unavailable: null,
+    newest: '2.6.0',
+    checkedAt: '2026-11-11T08:00:00Z',
+    failed: null,
+    checking: false,
+    installing: null,
+    installFailed: null
+  }
+  const step = (line: string): P.UpdateState => ({ ...IDLE, installing: { line, waitingForApp: false } })
+
+  /** A host on a connection that answers `update:state` with `state` the moment it is subscribed to. */
+  class UpdatingHost extends FakeConnection {
+    constructor(private readonly state: P.UpdateState) {
+      super()
+    }
+
+    override subscribe<C extends keyof EventChannels>(channel: C, handlers: SubscriptionHandlers<C>): HostSubscription {
+      const subscription = super.subscribe(channel, handlers)
+      if (channel === 'update:state') this.snapshot('update:state', this.state)
+      return subscription
+    }
+  }
+
+  /** What the host's restart frame answers: its sessions and its keeper's link. */
+  const restart = (sessions: number, keeperLink: number | null) => async (): Promise<P.RestartState> => ({
+    hostVersion: '2.5.0',
+    protocol: PROTOCOL_3_1,
+    sessions,
+    keeperLink
+  })
+
+  const OLDER = ['floti version', { stdout: 'floti 2.5.0 protocol 3.1 linux x64\n' }] as [string, Answer]
+
+  it('offers a floti older than this Helm’s, which it can talk to, floti update over its login, ending no session its keeper hands over', async () => {
+    const w = world([OLDER], { protocol: PROTOCOL_3_1, restartState: restart(3, 1) })
+    const check = await w.installer.checkUpdate(HOST, null)
+    expect(check).toEqual({
+      kind: 'offer',
+      id: 'offer-1',
+      offer: {
+        system: { os: 'linux', cpu: 'x64', label: 'Linux · x64' },
+        found: { version: '2.5.0', protocol: '3.1' },
+        action: 'update',
+        how: 'flotiUpdate',
+        via: 'login',
+        version: '2.6.0',
+        folder: '~/.local/bin',
+        sessions: 0,
+        talks: true
+      }
+    })
+    // Nothing is stopped or counted for an install: only floti version ran.
+    expect(w.lines()).toEqual(['floti version'])
+  })
+
+  it('adding the same host finds it ready: only an added host’s Update floti offers an update to a floti it can talk to', async () => {
+    const w = world([OLDER], { protocol: PROTOCOL_3_1, restartState: restart(3, 1) })
+    expect(await w.installer.check({ transport: SSH })).toMatchObject({ kind: 'ready' })
+  })
+
+  it('a floti as new as this Helm’s is ready, and nothing is offered', async () => {
+    const w = world([['floti version', { stdout: 'floti 2.6.0 protocol 3.1 linux x64\n' }]], { protocol: PROTOCOL_3_1 })
+    expect(await w.installer.checkUpdate(HOST, null)).toMatchObject({ kind: 'ready' })
+  })
+
+  it('S13: says beforehand how many sessions end when the new host cannot take the keeper back, and nothing when it cannot ask', async () => {
+    const other = world([OLDER], { protocol: PROTOCOL_3_1, restartState: restart(3, 2) })
+    expect(await other.installer.checkUpdate(HOST, null)).toMatchObject({ offer: { how: 'flotiUpdate', sessions: 3 } })
+    const none = world([OLDER], { protocol: PROTOCOL_3_1, restartState: restart(2, null) })
+    expect(await none.installer.checkUpdate(HOST, null)).toMatchObject({ offer: { sessions: 2 } })
+    const unasked = world([OLDER], { protocol: PROTOCOL_3_1 })
+    expect(await unasked.installer.checkUpdate(HOST, null)).toMatchObject({ offer: { sessions: null } })
+  })
+
+  it('runs floti update over the same login, by the path the host keeps, and the host is linked again where it was', async () => {
+    const w = world(
+      [
+        ['/home/me/.local/bin/floti version', { stdout: 'floti 2.5.0 protocol 3.1 linux x64\n' }],
+        ['/home/me/.local/bin/floti update', { stdout: 'floti is updated from 2.5.0 to 2.6.0.\n' }]
+      ],
+      { protocol: PROTOCOL_3_1, restartState: restart(1, 1) }
+    )
+    await w.installer.checkUpdate({ ...HOST, floti: '/home/me/.local/bin/floti' }, null)
+    const outcome = await w.installer.install('offer-1')
+    expect(outcome).toEqual({ ok: true, floti: '/home/me/.local/bin/floti', startsAtNextSignIn: false })
+    expect(w.runs.map((run) => run.argv)).toEqual([
+      [...BATCH, '/home/me/.local/bin/floti version'],
+      [...BATCH, '/home/me/.local/bin/floti update']
+    ])
+    expect(w.runs.every((run) => run.stdinFile === null)).toBe(true)
+  })
+
+  it('a floti update that fails there says its last line, at the update step', async () => {
+    const w = world(
+      [OLDER, ['floti update', { code: 1, stderr: 'floti update: floti-2.6.0-linux-x64 does not match its signature.\n' }]],
+      { protocol: PROTOCOL_3_1, restartState: restart(0, 1) }
+    )
+    await w.installer.checkUpdate(HOST, null)
+    expect(await w.installer.install('offer-1')).toEqual({
+      ok: false,
+      step: 'update',
+      lastLine: 'floti update: floti-2.6.0-linux-x64 does not match its signature.'
+    })
+  })
+
+  it('a floti too old to talk to that has floti update runs it over its login, where adding it would install', async () => {
+    const w = world([OLDER, ['floti update-stop --ask', { stdout: '2\n' }]], {
+      protocol: { major: 3, minor: 2 },
+      restartState: restart(2, 1)
+    })
+    expect(await w.installer.checkUpdate(HOST, null)).toMatchObject({
+      offer: { how: 'flotiUpdate', via: 'login', sessions: 0, talks: false }
+    })
+    expect(await w.installer.check({ transport: SSH })).toMatchObject({
+      offer: { how: 'copy', action: 'update', sessions: 2, talks: false }
+    })
+  })
+
+  it('a floti older than this Helm’s without floti update is updated by an install, saying the sessions it ends', async () => {
+    const w = world(
+      [
+        ['floti version', { stdout: 'floti 2.5.0 protocol 3.0 linux x64\n' }],
+        ['floti update-stop --ask', { stdout: '2\n' }]
+      ],
+      { protocol: { major: 3, minor: 0 }, restartState: restart(2, 1) }
+    )
+    expect(await w.installer.checkUpdate(HOST, null)).toMatchObject({
+      offer: { how: 'copy', action: 'update', sessions: 2, talks: true }
+    })
+    expect(w.lines()).toEqual(['floti version', 'floti update-stop --ask'])
+  })
+
+  it('a connected host that keeps floti up to date is asked over its connection, and the update is followed until its host relaunches', async () => {
+    const host = new UpdatingHost(IDLE)
+    const w = world([OLDER], { protocol: PROTOCOL_3_1, restartState: restart(4, 1) })
+    const check = await w.installer.checkUpdate(HOST, host.asConnection())
+    expect(check).toMatchObject({ offer: { how: 'flotiUpdate', via: 'connection', sessions: 0, talks: true } })
+    // Only floti version ran there, and only the state was heard.
+    expect(w.lines()).toEqual(['floti version'])
+    expect(host.subscriptions.has('update:state')).toBe(false)
+    expect(host.payloads('update:install')).toEqual([])
+
+    const asked = new Promise<void>((resolve) =>
+      host.answer('update:install', () => {
+        resolve()
+        return null
+      })
+    )
+    const outcome = w.installer.install('offer-1')
+    await asked
+    expect(host.payloads('update:install')).toEqual([null])
+    host.push('update:state', step('Downloading floti-2.6.0-linux-x64.'))
+    host.push('update:state', step('floti is updated from 2.5.0 to 2.6.0.'))
+    host.close()
+    await expect(outcome).resolves.toEqual({ ok: true, startsAtNextSignIn: false })
+    expect(host.subscriptions.has('update:state')).toBe(false)
+    expect(w.lines()).toEqual(['floti version'])
+  })
+
+  it('a connected host that does not keep floti up to date is updated by an install', async () => {
+    const host = new UpdatingHost({ ...IDLE, unavailable: 'notStandalone' })
+    const w = world([OLDER, ['floti update-stop --ask', { stdout: '1\n' }]], { protocol: PROTOCOL_3_1 })
+    expect(await w.installer.checkUpdate(HOST, host.asConnection())).toMatchObject({
+      offer: { how: 'copy', action: 'update', sessions: 1, talks: true }
+    })
+  })
+})
+
+describe('following a floti update over a host’s connection', () => {
+  const IDLE: P.UpdateState = {
+    running: '2.5.0',
+    channel: 'stable',
+    unavailable: null,
+    newest: '2.6.0',
+    checkedAt: null,
+    failed: null,
+    checking: false,
+    installing: null,
+    installFailed: null
+  }
+  const step = (line: string): P.UpdateState => ({ ...IDLE, installing: { line, waitingForApp: false } })
+
+  /** The host's answer to `update:install`, settled by the test. */
+  function answering(host: FakeConnection): Promise<void> {
+    return new Promise((resolve) => {
+      host.answer('update:install', () => {
+        resolve()
+        return null
+      })
+    })
+  }
+
+  it('fails with the line the update failed with', async () => {
+    const host = new FakeConnection()
+    const asked = answering(host)
+    const outcome = followUpdate(host.asConnection())
+    await asked
+    host.push('update:state', step('Starting floti update.'))
+    host.push('update:state', { ...IDLE, installFailed: 'floti-2.6.0-linux-x64 does not match its SHA-256 in update.json.' })
+    await expect(outcome).resolves.toEqual({
+      ok: false,
+      step: 'update',
+      lastLine: 'floti-2.6.0-linux-x64 does not match its SHA-256 in update.json.'
+    })
+  })
+
+  it('an update that ends with the host still connected replaced nothing, and says its last line', async () => {
+    const host = new FakeConnection()
+    const asked = answering(host)
+    const outcome = followUpdate(host.asConnection())
+    await asked
+    host.snapshot('update:state', step('Starting floti update.'))
+    host.push('update:state', step('floti is up to date: stable has 2.5.0.'))
+    host.push('update:state', IDLE)
+    await expect(outcome).resolves.toEqual({ ok: false, step: 'update', lastLine: 'floti is up to date: stable has 2.5.0.' })
+  })
+
+  it('a state from before the update started is not its end', async () => {
+    const host = new FakeConnection()
+    const asked = answering(host)
+    const outcome = followUpdate(host.asConnection())
+    host.snapshot('update:state', IDLE)
+    await asked
+    host.push('update:state', step('Starting floti update.'))
+    host.close()
+    await expect(outcome).resolves.toEqual({ ok: true, startsAtNextSignIn: false })
+  })
+
+  it('a refused update:install is the host’s reason', async () => {
+    const host = new FakeConnection().answer('update:install', () => {
+      throw new Error('This host does not update itself: it runs a floti from inside the desktop app.')
+    })
+    await expect(followUpdate(host.asConnection())).resolves.toEqual({
+      ok: false,
+      step: 'update',
+      lastLine: 'This host does not update itself: it runs a floti from inside the desktop app.'
+    })
+  })
+
+  it('a connection that ended before the host answered ran nothing', async () => {
+    const host = new FakeConnection()
+    host.close()
+    host.answer('update:install', () => new Promise<null>(() => undefined) as unknown as null)
+    await expect(followUpdate(host.asConnection())).resolves.toEqual({
+      ok: false,
+      step: 'update',
+      lastLine: 'The connection to the local host was closed.'
+    })
+  })
+
+  it('reads the host’s update state from the first state it is told, and nothing when it cannot be heard', async () => {
+    const host = new FakeConnection()
+    const heard = updateStateOf(host.asConnection())
+    host.snapshot('update:state', IDLE)
+    await expect(heard).resolves.toEqual(IDLE)
+    expect(host.subscriptions.has('update:state')).toBe(false)
+    const deaf = new FakeConnection()
+    const unheard = updateStateOf(deaf.asConnection())
+    deaf.subscriptions.get('update:state')?.error?.(new Error('No such channel: update:state.') as never)
+    await expect(unheard).resolves.toBeNull()
   })
 })

@@ -131,10 +131,12 @@ export interface SessionsPaneHost {
   /**
    * Its floti refused this device's hello (P6): too old, which Update floti
    * fixes there, or newer, which updating Helm on this PC fixes. `host` is the
-   * protocol its floti speaks and `client` this Helm's.
+   * protocol its floti speaks and `client` this Helm's. `older` is a
+   * connected host whose floti is older than this Helm's, which Update floti
+   * fixes too: `host` is its floti version and `client` this Helm's.
    */
   floti?:
-    | { verdict: "tooOld" | "newer"; host: string; client: string }
+    | { verdict: "tooOld" | "newer" | "older"; host: string; client: string }
     | null
     | undefined;
   /** Starts the yes-first update of its floti, in Settings > Hosts. */
@@ -571,7 +573,7 @@ function HostSection({
         >
           {name}
         </span>
-        {!connected && (
+        {(!connected || floti?.verdict === "older") && (
           <span
             data-sessions-host-floti={floti?.verdict}
             className="shrink-0 text-[11px] text-warn"
@@ -580,18 +582,22 @@ function HostSection({
               ? "not connected, retrying"
               : floti.verdict === "tooOld"
                 ? "floti too old"
-                : "newer floti"}
+                : floti.verdict === "older"
+                  ? "older floti"
+                  : "newer floti"}
           </span>
         )}
       </div>
-      {!connected && floti !== null && (
+      {floti !== null && (!connected || floti.verdict === "older") && (
         <div className="flex min-w-0 items-center gap-2 px-2.5 pb-1.5 pl-[22px]">
           <span className="min-w-0 flex-1 text-[11px] leading-[1.4] text-fg-muted">
             {floti.verdict === "tooOld"
               ? `Its floti speaks protocol ${floti.host}; this Helm speaks ${floti.client}.`
-              : `It speaks protocol ${floti.host}; this Helm speaks ${floti.client}. Update Helm on this PC.`}
+              : floti.verdict === "older"
+                ? `It runs floti ${floti.host}; this Helm carries ${floti.client}.`
+                : `It speaks protocol ${floti.host}; this Helm speaks ${floti.client}. Update Helm on this PC.`}
           </span>
-          {floti.verdict === "tooOld" && onUpdateFloti !== undefined && (
+          {floti.verdict !== "newer" && onUpdateFloti !== undefined && (
             <button
               type="button"
               data-sessions-host-update={id}

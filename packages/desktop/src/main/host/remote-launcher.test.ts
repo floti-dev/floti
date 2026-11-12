@@ -1,11 +1,12 @@
 import type { HostTransport } from '@helm/core/types'
 import { describe, expect, it } from 'vitest'
-import { FakeChild, connects, type Program } from '../../../test/fake-child'
+import { FakeChild, answersRestart, connects, type Program } from '../../../test/fake-child'
 import { FrameDecoder, encodeFrame } from './frame'
 import { BRIDGE_EXIT, type HostPlaces } from './launcher'
 import {
   KEY_CHANGED_LINE,
   RemoteHostError,
+  askRemoteHostRestart,
   openRemotePageBridge,
   remoteClientFolder,
   startRemoteHost,
@@ -296,5 +297,40 @@ describe('the floti a host keeps, and a host that refuses this Helm', () => {
       })
     )
     expect(error.refused).toEqual({ host: '0.9', client: '1.0', update: 'host' })
+  })
+})
+
+describe('asking a remote host what a restart would end', () => {
+  it('sends restartAsk in place of hello through its own bridge in the host’s client folder, and reads the host’s answer', async () => {
+    const asked: string[] = []
+    const w = world([answersRestart({ hostVersion: '2.3.0', sessions: 4, keeperLink: 1 }, asked)])
+    const state = await askRemoteHostRestart(PLACES, w.deps, {
+      folder: FOLDER,
+      transport: SSH,
+      floti: '/home/me/.local/bin/floti',
+      deviceName: 'my-pc'
+    })
+    expect(state).toMatchObject({ hostVersion: '2.3.0', sessions: 4, keeperLink: 1 })
+    expect(asked).toEqual(['restartAsk'])
+    expect(w.spawned[0]?.args).toEqual([
+      'bridge',
+      FOLDER,
+      '--floti',
+      '/home/me/.local/bin/floti',
+      '--',
+      'ssh',
+      '-o',
+      'BatchMode=yes',
+      'me@build-box'
+    ])
+    expect(w.spawned[0]?.options.env).toEqual(USER_ENV)
+  })
+
+  it('a bridge that ends before the host answers says its last line', async () => {
+    const w = world([endsWith(BRIDGE_EXIT.transportEnded, 'ssh: connect to host build-box port 22: Connection refused')])
+    const error = await remoteError(
+      askRemoteHostRestart(PLACES, w.deps, { folder: FOLDER, transport: SSH, deviceName: 'my-pc' })
+    )
+    expect(error.lastLine).toBe('ssh: connect to host build-box port 22: Connection refused')
   })
 })

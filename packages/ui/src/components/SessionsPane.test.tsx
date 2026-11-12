@@ -681,6 +681,34 @@ describe("SessionsPane: every host under its name", () => {
     ).toBeNull();
   });
 
+  it("says a connected host’s floti is older, naming both versions, with Update floti, and keeps its sessions undimmed", async () => {
+    const onUpdateFloti = vi.fn();
+    renderPane({
+      remoteHosts: [
+        {
+          ...BUILD,
+          floti: { verdict: "older", host: "2.5.0", client: "2.6.0" },
+          onUpdateFloti,
+        },
+      ],
+    });
+    const build = screen.getByRole("region", { name: "build-box" });
+    expect(build.querySelector("[data-sessions-host-floti]")?.textContent).toBe(
+      "older floti",
+    );
+    expect(build.textContent).toContain(
+      "It runs floti 2.5.0; this Helm carries 2.6.0.",
+    );
+    expect(build.textContent).not.toContain("not connected");
+    expect(
+      build.querySelector("[data-remote-session]")?.parentElement?.className,
+    ).not.toContain("opacity-50");
+    await userEvent.click(
+      within(build).getByRole("button", { name: "Update floti" }),
+    );
+    expect(onUpdateFloti).toHaveBeenCalledTimes(1);
+  });
+
   it("lists a build-box session with no tab here as not open here, with Open and End through build-box", async () => {
     const onOpenSession = vi.fn();
     const onEndSession = vi.fn();

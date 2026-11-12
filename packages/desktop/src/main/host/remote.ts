@@ -1,4 +1,4 @@
-import { NO_HOST_LINE, saysNotFound, type RemoteHost, type RemoteHostConnection } from '@helm/core/types'
+import { NO_HOST_LINE, hostFlotiOlder, saysNotFound, type RemoteHost, type RemoteHostConnection } from '@helm/core/types'
 import type { RemoteHostStates } from '../../shared/ipc'
 import type { HostConnection, HostSubscription } from './client'
 import type { LocalHost, PageBridge } from './launcher'
@@ -31,7 +31,9 @@ import type { WslKeepAwake } from './wsl-awake'
  *   the host proves then.
  * - A quit tells each connected host whether the sessions this device started
  *   there end, by that host's own choice (Keep them running unless set).
- * - Where each stands goes to the window on `remoteHosts:changed`. A host
+ * - Where each stands goes to the window on `remoteHosts:changed`. A
+ *   connected host whose floti is older than this Helm's says so, with this
+ *   Helm's version, and is offered Update floti. A host
  *   whose floti refused this device's hello is too old or newer, with both versions; one
  *   whose login has no floti is missing; one Helm installed floti on while
  *   nobody was signed in there starts at the next sign-in, which is no
@@ -63,6 +65,8 @@ export interface RemoteHostLinks {
   sync(hosts: readonly RemoteHost[]): void
   /** Where each host stands, by id; a host nothing has been heard from yet is absent. */
   states(): RemoteHostStates
+  /** Main's connection now to host `id`, or null when it is not connected. */
+  connection(id: string): HostConnection | null
   /** Main's connection now to the host this device reaches with `ssh <target>`, or null. */
   reachedWithSsh(target: string): HostConnection | null
   /** The page links to one host, or null for a host this device does not have. */
@@ -77,11 +81,12 @@ export interface RemoteHostLinks {
    */
   quit(endsOn: (id: string) => boolean): Promise<void>
   /**
-   * Helm installed or updated floti on host `id`, at `floti`: its link tries
-   * again now, and with `startsAtNextSignIn` a host that is not running there
-   * yet starts at the next sign-in rather than having failed.
+   * Helm installed or updated floti on host `id`, at `floti` (absent for a
+   * floti found on the login's `PATH`): its link tries again now, and with
+   * `startsAtNextSignIn` a host that is not running there yet starts at the
+   * next sign-in rather than having failed.
    */
-  installed(id: string, floti: string, startsAtNextSignIn: boolean): void
+  installed(id: string, floti: string | undefined, startsAtNextSignIn: boolean): void
   /**
    * Host `host`, being added, connected on `connected`, which pinned its key:
    * its link starts on that connection rather than making another. The
@@ -228,7 +233,12 @@ export function createRemoteHostLinks(deps: RemoteHostLinksDeps): RemoteHostLink
         if (!entry.link.endedOnPurpose()) setState(entry, { state: 'retrying' })
       })
       atSignIn.delete(entry.host.id)
-      setState(entry, { state: 'connected', version: connection.welcome.hostVersion })
+      const version = connection.welcome.hostVersion
+      setState(entry, {
+        state: 'connected',
+        version,
+        ...(hostFlotiOlder(version, deps.appVersion) ? { olderThan: deps.appVersion } : {})
+      })
       deps.wsl?.connected(entry.host)
     })
     // Before the first connect, so what hangs on the link hears it.
@@ -285,6 +295,8 @@ export function createRemoteHostLinks(deps: RemoteHostLinksDeps): RemoteHostLink
     },
 
     states: () => Object.fromEntries(states),
+
+    connection: (id) => entries.get(id)?.link.current() ?? null,
 
     reachedWithSsh(target) {
       for (const entry of entries.values()) {
