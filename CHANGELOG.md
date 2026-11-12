@@ -70,6 +70,15 @@ gets skipped.
   Linux Helm puts floti in `~/.local/bin` and sets the host up the first time
   it starts, and again whenever it carries a newer floti. Helm runs that floti
   from then on.
+- On macOS and Linux, installing floti now puts it on your PATH: when
+  `~/.local/bin` is not on it already, one line marked `# added by floti`
+  goes at the end of the startup file your shell reads (`~/.zshenv` for zsh,
+  bash's login file or `~/.profile`, fish's `config.fish`), and the install
+  says which file it changed. On a Linux desktop a bash or sh terminal picks
+  it up after you next sign in. For a shell Floti does not know, the install
+  changes no file and says so. `floti uninstall` takes that line out again
+  and leaves every line you wrote. On Windows, a host the desktop installs
+  over ssh now gets floti's folder on its Path too.
 - Installing an update no longer stops the host or ends a session: the host
   keeps running until you choose Restart host to update, which hands every
   session to the new host. The one exception is the first install over a
