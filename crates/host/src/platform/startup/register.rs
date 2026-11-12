@@ -397,8 +397,10 @@ fn write_file(file: &Path, bytes: &[u8]) -> Result<(), String> {
 /// Whether `definition` is registered with the OS's per-user mechanism, as
 /// [`register_and_start`] registers it, looked at without changing anything:
 ///
-/// - the logon task: `schtasks /Query /TN <name>` succeeds, which it does
-///   only for a task of that name;
+/// - the logon task: it is a row of `schtasks /Query /FO CSV /NH`, which
+///   lists every task this user can see, named by its path (`\Floti host`).
+///   That listing failing is could not tell, never "not registered": a query
+///   of the one name fails the same way for a missing task as for a refusal;
 /// - the LaunchAgent: its property list is in `~/Library/LaunchAgents`,
 ///   which launchd loads at each sign-in;
 /// - the user unit: its unit file is in `~/.config/systemd/user` and
@@ -415,11 +417,13 @@ pub fn is_registered(
 ) -> Result<bool, String> {
     let name = definition.name.as_str();
     match definition.kind {
-        StartupKind::LogonTask => Ok(ran(
-            system,
-            &OsCommand::new("schtasks", &["/Query", "/TN", name]),
-        )?
-        .success),
+        StartupKind::LogonTask => {
+            let listed = must(
+                system,
+                &OsCommand::new("schtasks", &["/Query", "/FO", "CSV", "/NH"]),
+            )?;
+            Ok(lists_task(&listed.stdout, name))
+        }
         StartupKind::LaunchAgent => file_there(&definition_file(definition, home, data)),
         StartupKind::SystemdUserUnit => {
             if !file_there(&definition_file(definition, home, data))? {
@@ -442,6 +446,18 @@ pub fn is_registered(
             }
         }
     }
+}
+
+/// Whether `listing`, schtasks' CSV rows with no header, holds the task in
+/// the root folder named `name`: a row whose first field is `\<name>`.
+pub fn lists_task(listing: &str, name: &str) -> bool {
+    let wanted = format!("\\{name}");
+    listing.lines().any(|row| {
+        row.trim_start()
+            .strip_prefix('"')
+            .and_then(|rest| rest.split_once('"'))
+            .is_some_and(|(task, _)| task.eq_ignore_ascii_case(&wanted))
+    })
 }
 
 /// Whether `file` is there, or why that could not be told.

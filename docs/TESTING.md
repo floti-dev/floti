@@ -735,15 +735,17 @@ cannot tell) and lingering through `loginctl show-user` and `loginctl
 enable-linger` (off, on, or refused). Nothing there registers anything with
 this computer or turns lingering on for real. The same fake OS answers the
 read-only looks `floti doctor` makes at the entry setup registered
-(`schtasks /Query`, `systemctl --user is-enabled`), and setup's Claude Code
-check runs the fake CLI installed as `claude` in the test's home.
+(`schtasks /Query /FO CSV /NH`, `systemctl --user is-enabled`), and setup's
+Claude Code check runs the fake CLI installed as `claude` in the test's home.
 
 `floti doctor`'s problems on this computer are tested in two places. The
 checks themselves (`crates/host/src/this_computer`, `platform/user_path`)
 are unit tests over a fake OS, a fake `claude` and a fake `PATH`, with each
 OS's startup files and system lists written under the test's own root. The
-program (`crates/host/tests/remote.rs`) runs with its `PATH` set to one empty
-folder and the fake CLI as the only `claude`; a test build of floti never
+program (`crates/host/tests/remote.rs`, and the desktop's
+`doctor-hosts.floti.test.ts`) runs with its home in the test's folder, its
+`PATH` set to one empty folder and the fake CLI as the only `claude`, in that
+home's `~/.local/bin`; a test build of floti never
 looks at this computer's sign-in entries or the user's `PATH` and says it
 could not tell, so no test reads the real ones.
 

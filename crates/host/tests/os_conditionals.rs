@@ -10,8 +10,9 @@
 //! plugin secrets (`secret_seal`), the Node runtime's layout
 //! (`node_runtime`), the notification area (`tray`), the log's standard
 //! error (`standard_error`), a terminal's size (`terminal_size`), WSL
-//! distros (`wsl`), the folders a shell hides in (`shell_folders`) and the
-//! shell that runs a command line (`command_shell`). A compile-time OS
+//! distros (`wsl`), the folders a shell hides in (`shell_folders`), the
+//! shell that runs a command line (`command_shell`) and the user's own `PATH`
+//! (`user_path`). A compile-time OS
 //! conditional (`cfg`, `cfg!` or `cfg_attr` naming `windows`, `unix`, `target_os`,
 //! `target_family`, `target_vendor` or `target_env`) may appear only in
 //! those folders, and in `src/platform/mod.rs`, which refuses any other OS.
@@ -33,6 +34,7 @@ const CONCERNS: &[&str] = &[
     "secret_seal",
     "node_runtime",
     "tray",
+    "user_path",
     "standard_error",
     "terminal_size",
     "wsl",

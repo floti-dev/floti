@@ -27,9 +27,9 @@ pub(super) const SYSTEM: SystemPath = SystemPath {
 };
 
 impl UserPath for Native {
-    fn has(&self, env: &UserEnv, folder: &Path) -> Result<bool, String> {
+    fn has(&self, env: &UserEnv, floti: &Path) -> Result<bool, String> {
         let home = env.require_home().map_err(|err| err.to_string())?;
-        posix::has(&SYSTEM, Path::new("/"), home, folder)
+        posix::has(&SYSTEM, Path::new("/"), env, home, floti)
     }
 
     fn fix(&self, env: &UserEnv, folder: &Path) -> String {

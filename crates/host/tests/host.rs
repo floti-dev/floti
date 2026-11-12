@@ -12,9 +12,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use floti_host::agent::AgentBackend;
-use floti_host::agent::claude_code::ClaudeCodeSettings;
+use floti_host::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
+use floti_host::agent::{Version, VersionCheck};
 use floti_host::host_log::{KEPT_LOGS, LOG_FILE};
 use floti_host::platform::folders::{CONFIG_DIR_VAR, DATA_DIR_VAR, LOG_DIR_VAR, RUNTIME_DIR_VAR};
+use floti_host::platform::launcher::{Native as NativeLauncher, ProgramLauncher};
 use floti_host::platform::node_runtime::NODE_VAR;
 use floti_host::platform::process_table::{self, ProcessTable};
 use floti_host::platform::process_tree::{Native as NativeTree, ProcessTree, descendants};
@@ -2198,6 +2200,72 @@ fn todays_backends(dirs: &TestDirs, endpoint: &Endpoint, claude_config: &Path) -
         backends: floti_host::server::backends(&dirs.user_env(), Some(claude)),
         inherited_env: std::env::vars_os().collect(),
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_host_whose_path_holds_no_claude_launches_and_asks_the_version_of_the_one_found_in_the_folder_searched_first()
+ {
+    let dirs = TestDirs::new();
+    let endpoint = dirs.endpoint();
+    let claude_config = resolved(&dirs.folder("claude config"));
+    let project = resolved(&dirs.folder("a project"));
+    // The fake CLI under a name no folder on PATH holds, only in the folder
+    // the backend looks in before PATH, as the native installer's
+    // ~/.local/bin is for a host started at sign-in.
+    let first = dirs.folder("user bin");
+    let name = "floti-test-claude-in-user-bin";
+    NativeLauncher.write_wrapper_script(
+        &first,
+        name,
+        floti_host::testkit::node(),
+        &[&fake_claude()],
+    );
+    assert!(
+        NativeLauncher.find(std::ffi::OsStr::new(name)).is_none(),
+        "no folder on PATH holds it"
+    );
+    let settings = ClaudeCodeSettings {
+        search_first: vec![first],
+        program: name.into(),
+        leading_args: Vec::new(),
+        config_dir: claude_config.clone(),
+        pass_config_dir: true,
+        api_key_set: false,
+    };
+
+    // The version check, and setup's status, ask the file it found.
+    let backend = ClaudeCodeBackend::new(settings.clone(), Arc::new(NativeTree));
+    assert_eq!(
+        backend.version_check(),
+        VersionCheck::Tested(Version(2, 1, 999))
+    );
+    let status = floti_host::workspace::setup::backend_status(&backend, None).unwrap();
+    assert!(status.installed && status.tested, "{status:?}");
+
+    // And a session launches it.
+    let host = RunningHost::start(HostConfig {
+        run: Default::default(),
+        folders: dirs.folders(),
+        endpoint: endpoint.clone(),
+        backends: floti_host::server::backends(&dirs.user_env(), Some(settings)),
+        inherited_env: std::env::vars_os().collect(),
+    });
+    let mut client = TestClient::connect(&endpoint, TERMINAL).await;
+    let started = client
+        .request::<SessionStart>(&claude_code_start(&project))
+        .await
+        .unwrap();
+    client.attach(1, started.id).await;
+    client
+        .type_into(1, b"launched from the first folder\r")
+        .await;
+    client
+        .read_stream_until(1, |bytes| {
+            String::from_utf8_lossy(bytes).contains("You said: launched from the first folder")
+        })
+        .await;
+    assert_eq!(claude_runs(&claude_config).len(), 1);
+    host.stop(HostStopReason::Stop).await;
 }
 
 fn claude_code_start(folder: &Path) -> StartSessionRequest {

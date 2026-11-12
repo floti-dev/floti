@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use super::posix;
 use super::*;
+use crate::platform::links::{FolderLinks, Native as NativeLinks};
 use crate::testkit::TestDirs;
 
 fn env(home: Option<&Path>, vars: &[(&str, &str)]) -> UserEnv {
@@ -20,19 +21,19 @@ fn env(home: Option<&Path>, vars: &[(&str, &str)]) -> UserEnv {
 // Windows: the registry's two values, expanded
 // ---------------------------------------------------------------------------
 
-const FLOTI_BIN: &str = r"C:\Users\me\AppData\Local\Programs\Floti\bin";
+const FLOTI_EXE: &str = r"C:\Users\me\AppData\Local\Programs\Floti\bin\floti.exe";
 
 #[test]
 fn windows_finds_the_folder_in_the_users_value_with_its_variables_expanded_in_any_case() {
     let user = env(None, &[("LOCALAPPDATA", r"C:\Users\me\AppData\Local")]);
     let system = r"C:\Windows\system32;C:\Windows";
     let value = r"%USERPROFILE%\.local\bin;%LocalAppData%\Programs\Floti\bin\";
-    assert!(windows::names([system, value], &user, Path::new(FLOTI_BIN)));
+    assert!(windows::names([system, value], &user, Path::new(FLOTI_EXE)));
     // Any case, and with forward slashes or quotes.
     assert!(windows::names(
         [r#""c:/users/ME/appdata/local/programs/floti/BIN""#],
         &user,
-        Path::new(FLOTI_BIN)
+        Path::new(FLOTI_EXE)
     ));
 }
 
@@ -42,24 +43,50 @@ fn windows_does_not_find_a_folder_on_neither_value_nor_through_an_unknown_variab
     assert!(!windows::names(
         [r"C:\Windows\system32", r"%NOT_SET%\Programs\Floti\bin;;"],
         &user,
-        Path::new(FLOTI_BIN)
+        Path::new(FLOTI_EXE)
     ));
-    assert!(!windows::names([], &user, Path::new(FLOTI_BIN)));
-    // A folder inside one on the PATH is not on it.
+    assert!(!windows::names([], &user, Path::new(FLOTI_EXE)));
+    // A folder above or below floti's is not floti's.
     assert!(!windows::names(
-        [r"C:\Users\me\AppData\Local\Programs\Floti"],
+        [
+            r"C:\Users\me\AppData\Local\Programs\Floti",
+            r"C:\Users\me\AppData\Local\Programs\Floti\bin\tools"
+        ],
         &user,
-        Path::new(FLOTI_BIN)
+        Path::new(FLOTI_EXE)
     ));
 }
 
 #[test]
-fn windows_fix_appends_the_folder_to_the_users_value_in_powershell() {
+fn a_path_folder_whose_floti_is_this_one_by_another_name_counts() {
+    let dirs = TestDirs::new();
+    let real = dirs.root().join("real bin");
+    std::fs::create_dir_all(&real).unwrap();
+    let floti = real.join("floti.exe");
+    std::fs::write(&floti, b"floti").unwrap();
+    let linked = dirs.root().join("linked bin");
+    NativeLinks
+        .link_folder(&real, &linked)
+        .expect("link the folder");
+    let user = env(None, &[]);
+    let value = linked.display().to_string();
+    assert!(windows::names([value.as_str()], &user, &floti));
+    // Another floti of the same name is not this one.
+    let other = dirs.root().join("other bin");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::write(other.join("floti.exe"), b"another").unwrap();
+    let value = other.display().to_string();
+    assert!(!windows::names([value.as_str()], &user, &floti));
+}
+
+#[test]
+fn windows_fix_appends_the_folder_to_the_users_value_as_written_and_keeps_it_expandable() {
     let fix = windows::Native.fix(&env(None, &[]), Path::new(r"C:\Users\o'neil\bin"));
     assert_eq!(
         fix,
-        r"[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ';C:\Users\o''neil\bin', 'User')"
+        r"$key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true); $path = $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames').TrimEnd(';'); $key.SetValue('Path', (($path, 'C:\Users\o''neil\bin') -join ';').TrimStart(';'), 'ExpandString')"
     );
+    assert!(!fix.contains("SetEnvironmentVariable"));
 }
 
 #[cfg(windows)]
@@ -85,8 +112,8 @@ fn windows_reads_a_string_value_and_says_none_for_one_that_is_not_there() {
 // macOS and Linux: the system's list and the user's startup files, read
 // ---------------------------------------------------------------------------
 
-/// A computer's root and a home in the test's tree, and floti's folder in
-/// that home.
+/// A computer's root and a home in the test's tree, with floti in that
+/// home's `~/.local/bin`.
 struct Unix {
     dirs: TestDirs,
     root: PathBuf,
@@ -104,84 +131,161 @@ impl Unix {
         &self.dirs.home
     }
 
-    fn floti_bin(&self) -> PathBuf {
-        self.home().join(".local/bin")
+    fn floti(&self) -> PathBuf {
+        self.home().join(".local").join("bin").join("floti")
     }
 
     fn write(&self, under: &Path, file: &str, text: &str) {
-        let path = under.join(file);
+        let path = file
+            .split('/')
+            .fold(under.to_path_buf(), |path, part| path.join(part));
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, text).unwrap();
     }
 
-    fn has(&self, system: &posix::SystemPath, folder: &Path) -> Result<bool, String> {
-        posix::has(system, &self.root, self.home(), folder)
+    fn has_with(
+        &self,
+        system: &posix::SystemPath,
+        shell: &str,
+        floti: &Path,
+    ) -> Result<bool, String> {
+        let user = env(Some(self.home()), &[("SHELL", shell)]);
+        posix::has(system, &self.root, &user, self.home(), floti)
+    }
+
+    fn has(&self, shell: &str) -> Result<bool, String> {
+        self.has_with(&linux::SYSTEM, shell, &self.floti())
     }
 }
 
 #[test]
 fn a_standard_folder_is_on_every_login_shells_path() {
     let unix = Unix::new();
-    assert_eq!(
-        unix.has(&linux::SYSTEM, Path::new("/usr/local/bin/")),
-        Ok(true)
-    );
-    assert_eq!(
-        unix.has(&macos::SYSTEM, Path::new("/usr/local/bin")),
-        Ok(true)
-    );
-    assert_eq!(unix.has(&linux::SYSTEM, &unix.floti_bin()), Ok(false));
+    let in_usr = Path::new("/usr/local/bin/floti");
+    assert_eq!(unix.has_with(&linux::SYSTEM, "/bin/sh", in_usr), Ok(true));
+    assert_eq!(unix.has_with(&macos::SYSTEM, "/bin/zsh", in_usr), Ok(true));
+    assert_eq!(unix.has("/bin/sh"), Ok(false));
 }
 
 #[test]
 fn macos_reads_etc_paths_and_paths_d_and_linux_etc_environment() {
     let unix = Unix::new();
-    let folder = Path::new("/opt/floti/bin");
-    assert_eq!(unix.has(&macos::SYSTEM, folder), Ok(false));
+    let floti = Path::new("/opt/floti/bin/floti");
+    assert_eq!(unix.has_with(&macos::SYSTEM, "/bin/zsh", floti), Ok(false));
     unix.write(&unix.root, "etc/paths.d/floti", "/opt/floti/bin\n");
-    assert_eq!(unix.has(&macos::SYSTEM, folder), Ok(true));
+    assert_eq!(unix.has_with(&macos::SYSTEM, "/bin/zsh", floti), Ok(true));
     // Linux does not read macOS's list.
-    assert_eq!(unix.has(&linux::SYSTEM, folder), Ok(false));
+    assert_eq!(unix.has_with(&linux::SYSTEM, "/bin/bash", floti), Ok(false));
     unix.write(
         &unix.root,
         "etc/environment",
         "PATH=\"/usr/local/bin:/usr/bin:/opt/floti/bin\"\n",
     );
-    assert_eq!(unix.has(&linux::SYSTEM, folder), Ok(true));
+    assert_eq!(unix.has_with(&linux::SYSTEM, "/bin/bash", floti), Ok(true));
 }
 
 #[test]
-fn a_path_line_in_a_startup_file_names_the_folder_under_home_however_home_is_written() {
-    for line in [
-        "if [ -d \"$HOME/.local/bin\" ] ; then\n    PATH=\"$HOME/.local/bin:$PATH\"\nfi\n",
-        "export PATH=${HOME}/.local/bin:$PATH\n",
-        "path+=(~/.local/bin)\nexport PATH\n",
-        "fish_add_path ~/.local/bin\n",
+fn a_path_line_in_a_file_the_shell_reads_names_the_folder_however_home_is_written() {
+    for (shell, file, line) in [
+        // Ubuntu's own ~/.profile: added only where the folder exists at
+        // sign-in, which it does once floti is in it.
+        (
+            "/bin/sh",
+            ".profile",
+            "if [ -d \"$HOME/.local/bin\" ] ; then\n    PATH=\"$HOME/.local/bin:$PATH\"\nfi\n",
+        ),
+        (
+            "/bin/bash",
+            ".bashrc",
+            "export PATH=${HOME}/.local/bin/:$PATH\n",
+        ),
+        ("/bin/zsh", ".zshrc", "path+=(~/.local/bin)\nexport PATH\n"),
+        (
+            "/usr/bin/fish",
+            ".config/fish/config.fish",
+            "fish_add_path -g ~/.local/bin\n",
+        ),
     ] {
         let unix = Unix::new();
-        let file = if line.contains("fish") {
-            ".config/fish/config.fish"
-        } else {
-            ".zshrc"
-        };
         unix.write(unix.home(), file, line);
-        assert_eq!(
-            unix.has(&linux::SYSTEM, &unix.floti_bin()),
-            Ok(true),
-            "{line}"
-        );
+        assert_eq!(unix.has(shell), Ok(true), "{line}");
     }
 }
 
 #[test]
-fn a_startup_file_that_names_the_folder_only_in_a_comment_or_a_longer_name_does_not_count() {
+fn only_the_files_the_users_shell_reads_count() {
+    let unix = Unix::new();
+    unix.write(
+        unix.home(),
+        ".zshrc",
+        "export PATH=\"$HOME/.local/bin:$PATH\"\n",
+    );
+    assert_eq!(unix.has("/bin/zsh"), Ok(true));
+    assert_eq!(unix.has("/bin/bash"), Ok(false), "bash reads no .zshrc");
+
+    // A login bash reads ~/.bash_profile and skips ~/.profile once it exists.
+    let unix = Unix::new();
+    unix.write(unix.home(), ".profile", "PATH=\"$HOME/.local/bin:$PATH\"\n");
+    assert_eq!(unix.has("/bin/bash"), Ok(true));
+    unix.write(unix.home(), ".bash_profile", "source ~/.bashrc\n");
+    assert_eq!(unix.has("/bin/bash"), Ok(false));
+    // sh still reads it.
+    assert_eq!(unix.has("/bin/sh"), Ok(true));
+}
+
+#[test]
+fn a_folder_below_flotis_or_another_variable_does_not_count() {
     let unix = Unix::new();
     unix.write(
         unix.home(),
         ".profile",
-        "# PATH=\"$HOME/.local/bin:$PATH\"\nexport PATH=\"$HOME/.local/binaries:$PATH\"\nalias l=\"ls $HOME/.local/bin\"\n",
+        "# PATH=\"$HOME/.local/bin:$PATH\"\nexport PATH=\"$HOME/.local/bin/tools:$PATH\"\nexport MANPATH=\"$HOME/.local/bin:$MANPATH\"\nPYTHONPATH=$HOME/.local/bin\nalias l=\"ls $HOME/.local/bin\"\n",
     );
-    assert_eq!(unix.has(&linux::SYSTEM, &unix.floti_bin()), Ok(false));
+    assert_eq!(unix.has("/bin/sh"), Ok(false));
+}
+
+#[test]
+fn brew_shellenv_puts_that_homebrews_bin_on_path() {
+    let unix = Unix::new();
+    let floti = Path::new("/opt/homebrew/bin/floti");
+    assert_eq!(unix.has_with(&macos::SYSTEM, "/bin/zsh", floti), Ok(false));
+    unix.write(
+        unix.home(),
+        ".zprofile",
+        "eval \"$(/opt/homebrew/bin/brew shellenv)\"\n",
+    );
+    assert_eq!(unix.has_with(&macos::SYSTEM, "/bin/zsh", floti), Ok(true));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_floti_linked_from_a_path_folder_is_this_one() {
+    // Homebrew's bin holds a link to the floti in its Cellar, and this floti
+    // runs as the Cellar's.
+    let unix = Unix::new();
+    let cellar = unix
+        .dirs
+        .root()
+        .join("Cellar")
+        .join("floti")
+        .join("3.0.0")
+        .join("bin");
+    std::fs::create_dir_all(&cellar).unwrap();
+    let floti = cellar.join("floti");
+    std::fs::write(&floti, b"floti").unwrap();
+    let bin = unix.dirs.root().join("linuxbrew").join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::os::unix::fs::symlink(&floti, bin.join("floti")).unwrap();
+    assert_eq!(
+        unix.has_with(&linux::SYSTEM, "/bin/bash", &floti),
+        Ok(false)
+    );
+    unix.write(
+        unix.home(),
+        ".bashrc",
+        &format!("eval \"$({}/brew shellenv)\"\n", bin.display()),
+    );
+    assert_eq!(unix.has_with(&linux::SYSTEM, "/bin/bash", &floti), Ok(true));
 }
 
 #[cfg(unix)]
@@ -190,7 +294,7 @@ fn a_startup_file_that_cannot_be_read_is_could_not_tell_never_not_on_path() {
     let unix = Unix::new();
     // A folder where the file should be cannot be read as one.
     std::fs::create_dir_all(unix.home().join(".bashrc").join("inside")).unwrap();
-    let told = unix.has(&linux::SYSTEM, &unix.floti_bin());
+    let told = unix.has("/bin/bash");
     assert!(
         told.as_ref().is_err_and(|why| why.contains(".bashrc")),
         "{told:?}"
@@ -198,28 +302,71 @@ fn a_startup_file_that_cannot_be_read_is_could_not_tell_never_not_on_path() {
 }
 
 #[test]
-fn the_unix_fix_appends_an_export_to_the_file_the_users_shell_reads() {
-    let home = Path::new("/home/me");
-    let folder = Path::new("/home/me/.local/bin");
-    let bash = env(Some(home), &[("SHELL", "/bin/bash")]);
+fn the_unix_fix_appends_to_the_first_file_the_users_shell_reads() {
+    let unix = Unix::new();
+    let folder = unix.home().join(".local").join("bin");
+    let user = |shell: &str| env(Some(unix.home()), &[("SHELL", shell)]);
+    let export = r#"echo 'export PATH="$HOME/.local/bin:$PATH"' >> "#;
     assert_eq!(
-        posix::fix(&bash, folder),
-        r#"echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.profile"#
+        posix::fix(&user("/bin/sh"), &folder),
+        format!("{export}~/.profile")
     );
-    let zsh = env(Some(home), &[("SHELL", "/bin/zsh")]);
     assert_eq!(
-        posix::fix(&zsh, folder),
-        r#"echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshenv"#
+        posix::fix(&user("/bin/zsh"), &folder),
+        format!("{export}~/.zshenv")
     );
-    let fish = env(Some(home), &[("SHELL", "/usr/bin/fish")]);
     assert_eq!(
-        posix::fix(&fish, folder),
-        "fish_add_path '/home/me/.local/bin'"
+        posix::fix(&user("/usr/bin/fish"), &folder),
+        r#"mkdir -p ~/.config/fish && echo 'fish_add_path -g "$HOME/.local/bin"' >> ~/.config/fish/config.fish"#
+    );
+    // bash: ~/.profile until a ~/.bash_profile shadows it.
+    assert_eq!(
+        posix::fix(&user("/bin/bash"), &folder),
+        format!("{export}~/.profile")
+    );
+    unix.write(unix.home(), ".bash_profile", "");
+    assert_eq!(
+        posix::fix(&user("/bin/bash"), &folder),
+        format!("{export}~/.bash_profile")
     );
     // A folder outside home with a quote in it is written so the shell
     // reads it back as it is.
     assert_eq!(
-        posix::fix(&bash, Path::new("/opt/it's $here")),
+        posix::fix(&user("/bin/sh"), Path::new("/opt/it's $here")),
         r#"echo 'export PATH="/opt/it'\''s \$here:$PATH"' >> ~/.profile"#
     );
+}
+
+#[test]
+fn each_shells_fix_is_read_back_as_on_path() {
+    for shell in ["/bin/sh", "/bin/bash", "/bin/zsh", "/usr/bin/fish"] {
+        let unix = Unix::new();
+        let folder = unix.floti().parent().unwrap().to_path_buf();
+        let user = env(Some(unix.home()), &[("SHELL", shell)]);
+        let fix = posix::fix(&user, &folder);
+        let (line, file) = appended(&fix);
+        unix.write(
+            unix.home(),
+            file.strip_prefix("~/").unwrap(),
+            &format!("{line}\n"),
+        );
+        assert_eq!(unix.has(shell), Ok(true), "{shell}: {fix}");
+    }
+}
+
+/// The line `fix` appends and the file it appends it to, read back from its
+/// `echo '<line>' >> <file>`.
+fn appended(fix: &str) -> (String, String) {
+    let echo = fix.rsplit("&& ").next().unwrap();
+    let (quoted, file) = echo
+        .strip_prefix("echo ")
+        .unwrap()
+        .rsplit_once(" >> ")
+        .unwrap();
+    let line = quoted
+        .strip_prefix('\'')
+        .and_then(|rest| rest.strip_suffix('\''))
+        .unwrap()
+        .replace("'\\''", "'");
+    (line, file.to_owned())
 }

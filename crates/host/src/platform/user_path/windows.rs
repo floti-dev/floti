@@ -16,35 +16,52 @@ pub const SYSTEM_KEY: &str = r"SYSTEM\CurrentControlSet\Control\Session Manager\
 pub const USER_KEY: &str = "Environment";
 
 impl UserPath for Native {
-    fn has(&self, env: &UserEnv, folder: &Path) -> Result<bool, String> {
+    fn has(&self, env: &UserEnv, floti: &Path) -> Result<bool, String> {
         let system = registry::string_value(registry::Hive::LocalMachine, SYSTEM_KEY, "Path")?;
         let user = registry::string_value(registry::Hive::CurrentUser, USER_KEY, "Path")?;
         Ok(names(
             [system.as_deref(), user.as_deref()].into_iter().flatten(),
             env,
-            folder,
+            floti,
         ))
     }
 
     fn fix(&self, _env: &UserEnv, folder: &Path) -> String {
         let folder = folder.display().to_string().replace('\'', "''");
+        // The value as written, variables and all, and back as an
+        // expandable string: [Environment]::SetEnvironmentVariable would
+        // write the expanded value as a plain one, freezing every %VARIABLE%.
         format!(
-            "[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ';{folder}', 'User')"
+            "$key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true); $path = $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames').TrimEnd(';'); $key.SetValue('Path', (($path, '{folder}') -join ';').TrimStart(';'), 'ExpandString')"
         )
     }
 }
 
 /// Whether one of `values`, each a `Path` value as the registry keeps it,
-/// names `folder`: each entry with its `%VARIABLE%`s expanded from `env`,
-/// compared without case and without a trailing separator, as Windows finds
-/// programs.
-pub fn names<'a>(values: impl IntoIterator<Item = &'a str>, env: &UserEnv, folder: &Path) -> bool {
-    let wanted = comparable(&folder.display().to_string());
+/// has `floti`: an entry, with its `%VARIABLE%`s expanded from `env`, that is
+/// floti's own folder, compared without case and without a trailing
+/// separator as Windows finds programs, or one whose `floti.exe` is this
+/// one by another name.
+pub fn names<'a>(values: impl IntoIterator<Item = &'a str>, env: &UserEnv, floti: &Path) -> bool {
+    let wanted = floti
+        .parent()
+        .map(|folder| comparable(&folder.display().to_string()));
+    let this = std::fs::canonicalize(floti).ok();
+    let name = floti.file_name().unwrap_or_default();
     values
         .into_iter()
         .flat_map(|value| value.split(';'))
-        .map(|entry| comparable(&expand(entry.trim().trim_matches('"'), env)))
-        .any(|entry| !entry.is_empty() && entry == wanted)
+        .map(|entry| expand(entry.trim().trim_matches('"'), env))
+        .filter(|entry| !entry.is_empty())
+        .any(|entry| {
+            wanted.as_deref() == Some(comparable(&entry).as_str())
+                || this.as_ref().is_some_and(|this| {
+                    std::fs::canonicalize(Path::new(&entry).join(name))
+                        .ok()
+                        .as_ref()
+                        == Some(this)
+                })
+        })
 }
 
 /// `entry` with each `%NAME%` replaced by that variable of `env`, and left

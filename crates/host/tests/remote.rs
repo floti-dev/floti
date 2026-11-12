@@ -1583,7 +1583,7 @@ async fn floti_doctor_reports_claude_code_missing_or_out_of_range_on_one_line_wi
     assert!(
         newer.stdout.lines().last().is_some_and(|line| line
             .starts_with("This PC: Claude Code 2.4.0 is newer than")
-            && line.ends_with(" | fix: claude install 2.1.277")),
+            && line.ends_with(" | fix: claude install 2.1.277 --force")),
         "{newer:?}"
     );
     assert!(newer.stderr.is_empty(), "{newer:?}");

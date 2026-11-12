@@ -64,12 +64,13 @@ fn check(fake: &FakeClaude) -> Finding {
 }
 
 #[test]
-fn claude_in_the_tested_range_is_fine_and_is_asked_for_its_version_where_it_was_found() {
+fn claude_in_the_tested_range_is_fine_and_is_asked_for_its_version_as_it_launches() {
     let fake = FakeClaude::new(Some(INSTALLED), Some("2.1.330 (Claude Code)"));
     assert_eq!(check(&fake), Finding::Fine);
     assert_eq!(
         *fake.asked.lock().unwrap(),
-        [Some(PathBuf::from(INSTALLED))]
+        [None::<PathBuf>],
+        "asked as the backend launches it"
     );
     // The first tested version is in the range.
     let first = FakeClaude::new(Some(INSTALLED), Some("2.1.277 (Claude Code)"));
@@ -125,8 +126,8 @@ fn claude_older_than_the_range_is_fixed_by_updating_it_and_newer_by_installing_t
     assert_eq!(
         check(&newer),
         Finding::Problem {
-            problem: "Claude Code 2.2.0 is newer than Floti was tested with 2.1.277 up to but not including 2.2.0, though it still launches".to_owned(),
-            fix: "claude install 2.1.277".to_owned(),
+            problem: "Claude Code 2.2.0 is newer than Floti was tested with 2.1.277 up to but not including 2.2.0; it still launches, and its auto-updater moves a tested version past the range again unless DISABLE_AUTOUPDATER is set".to_owned(),
+            fix: "claude install 2.1.277 --force".to_owned(),
         }
     );
 }
@@ -231,30 +232,59 @@ fn no_entry() -> Finding {
 }
 
 #[test]
-fn the_logon_task_is_looked_for_with_schtasks_query_only() {
+fn the_logon_task_is_a_row_of_schtasks_csv_listing_and_a_failed_listing_could_not_tell() {
     let dirs = TestDirs::new();
     let task = windows::logon_task(
         Path::new(r"C:\Users\me\AppData\Local\Programs\Floti\bin\floti.exe"),
         r"BOX\me",
     )
     .unwrap();
-    let there = FakeOs::new(|_| ran(true, "Floti host  Ready", ""));
+    let there = FakeOs::new(|_| {
+        ran(
+            true,
+            "\"\\Microsoft\\OneDrive Update\",\"N/A\",\"Ready\"\r\n\"\\floti HOST\",\"N/A\",\"Running\"\r\n",
+            "",
+        )
+    });
     assert_eq!(
         start_at_sign_in(&there, &task, &dirs.home, &dirs.data),
         Finding::Fine
     );
-    assert_eq!(*there.runs.borrow(), ["schtasks /Query /TN Floti host"]);
+    assert_eq!(*there.runs.borrow(), ["schtasks /Query /FO CSV /NH"]);
 
+    // Listed, but not this task: one in a folder, or one whose name only
+    // starts with it.
     let absent = FakeOs::new(|_| {
         ran(
-            false,
+            true,
+            "\"\\Tools\\Floti host\",\"N/A\",\"Ready\"\r\n\"\\Floti host old\",\"N/A\",\"Ready\"\r\n",
             "",
-            "ERROR: The system cannot find the file specified.",
         )
     });
     assert_eq!(
         start_at_sign_in(&absent, &task, &dirs.home, &dirs.data),
         no_entry()
+    );
+    let none = FakeOs::new(|_| {
+        ran(
+            true,
+            "INFO: There are no scheduled tasks presently available at your access level.\r\n",
+            "",
+        )
+    });
+    assert_eq!(
+        start_at_sign_in(&none, &task, &dirs.home, &dirs.data),
+        no_entry()
+    );
+
+    // The listing itself failing says nothing about the task.
+    let refused = FakeOs::new(|_| ran(false, "", "ERROR: Access is denied."));
+    assert_eq!(
+        start_at_sign_in(&refused, &task, &dirs.home, &dirs.data),
+        Finding::CouldNotTell {
+            what: "whether the host starts at sign-in".to_owned(),
+            why: "ERROR: Access is denied.".to_owned(),
+        }
     );
 
     let no_schtasks = FakeOs::new(|_| Err(io::Error::from(io::ErrorKind::NotFound)));
@@ -357,9 +387,9 @@ struct FakePath {
 }
 
 impl UserPath for FakePath {
-    fn has(&self, _env: &UserEnv, folder: &Path) -> Result<bool, String> {
+    fn has(&self, _env: &UserEnv, floti: &Path) -> Result<bool, String> {
         self.holds
-            .map(|holds| Path::new(holds) == folder)
+            .map(|holds| floti.parent() == Some(Path::new(holds)))
             .ok_or_else(|| "the registry would not say".to_owned())
     }
 

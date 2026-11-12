@@ -10,8 +10,10 @@
 //!   and asked with `claude --version`, which prints no credential. Nothing
 //!   here opens or reads one. A problem's fix is Anthropic's own installer,
 //!   `claude update` for a version older than the range, or `claude
-//!   install <first tested>` for one newer; outside the range it still
-//!   launches, as it does in the desktop.
+//!   install <first tested> --force` for one newer (`claude install` does not
+//!   replace an installed claude without `--force`); outside the range it
+//!   still launches, as it does in the desktop. It is asked as the backend
+//!   launches it, so the check and a launch agree.
 //! - [`start_at_sign_in`]: whether the host's start-at-sign-in entry is
 //!   registered, looked at by setup's own registration code
 //!   ([`is_registered`]), or, in a WSL distro whose systemd user manager does
@@ -109,7 +111,8 @@ pub fn claude(
             fix: install_line(shell).to_owned(),
         };
     };
-    let Some(said) = executable.version(Some(&path)) else {
+    // Asked as the backend launches it, so this check and a launch agree.
+    let Some(said) = executable.version(None) else {
         return Finding::Problem {
             problem: format!(
                 "Claude Code at {} did not answer `{}`",
@@ -131,9 +134,10 @@ pub fn claude(
         },
         VersionCheck::Untested { version, .. } => Finding::Problem {
             problem: format!(
-                "Claude Code {version} is newer than {tested}, though it still launches"
+                "Claude Code {version} is newer than {tested}; it still launches, and its auto-updater moves a tested version past the range again unless DISABLE_AUTOUPDATER is set"
             ),
-            fix: format!("claude install {}", range.min),
+            // `claude install` replaces an installed claude only with --force.
+            fix: format!("claude install {} --force", range.min),
         },
         VersionCheck::Unknown => Finding::could_not_tell(
             "which version of Claude Code is installed",
@@ -211,7 +215,7 @@ pub fn floti_on_path(path: &dyn UserPath, env: &UserEnv, floti: &Path) -> Findin
             format!("{} is not in a folder", floti.display()),
         );
     };
-    match path.has(env, folder) {
+    match path.has(env, floti) {
         Ok(true) => Finding::Fine,
         Ok(false) => Finding::Problem {
             problem: format!(

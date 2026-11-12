@@ -208,15 +208,23 @@ impl ClaudeCodeBackend {
     }
 
     /// The executable launched now and the arguments before every launch's
-    /// own: the one the user chose, alone, or the one `settings` name.
+    /// own: the one the user chose, alone, or the one `settings` name, found
+    /// as setup finds it ([`found_program`](Self::found_program)).
     fn command(&self) -> (OsString, Vec<OsString>) {
         match &*self.chosen.read().unwrap_or_else(PoisonError::into_inner) {
             Some(chosen) => (chosen.clone().into_os_string(), Vec::new()),
-            None => (
-                self.settings.program.clone(),
-                self.settings.leading_args.clone(),
-            ),
+            None => (self.found_program(), self.settings.leading_args.clone()),
         }
+    }
+
+    /// The program `settings` name, as the file [`ExecutableSetup::discovered`]
+    /// finds: a bare `claude` in the user's program folders before `PATH`. A
+    /// host started at sign-in may have no such folder on its `PATH`, so
+    /// running the bare name would miss the `claude` setup reports as found.
+    /// The name as it is where nothing is found, for the OS to refuse.
+    fn found_program(&self) -> OsString {
+        self.discovered()
+            .map_or_else(|| self.settings.program.clone(), PathBuf::into_os_string)
     }
 
     /// `claude` with `args` after its leading ones, as the OS has to start
@@ -728,7 +736,7 @@ impl ExecutableSetup for ClaudeCodeBackend {
     fn version(&self, chosen: Option<&Path>) -> Option<String> {
         match chosen {
             Some(chosen) => self.version_output(&chosen.as_os_str().to_owned(), &[]),
-            None => self.version_output(&self.settings.program, &self.settings.leading_args),
+            None => self.version_output(&self.found_program(), &self.settings.leading_args),
         }
     }
 

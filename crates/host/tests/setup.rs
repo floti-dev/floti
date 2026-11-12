@@ -236,12 +236,18 @@ impl SignInSystem for FakeOs {
                 state.tasks.insert((*name).to_owned(), xml);
                 ok("SUCCESS: The scheduled task has successfully been created.")
             }
-            ("schtasks", ["/Query", "/TN", name]) => {
-                if state.tasks.contains_key(*name) {
-                    ok("Floti host                               N/A                    Ready")
-                } else {
-                    failed("ERROR: The system cannot find the file specified.")
+            ("schtasks", ["/Query", "/FO", "CSV", "/NH"]) => {
+                if state.tasks.is_empty() {
+                    return ok(
+                        "INFO: There are no scheduled tasks presently available at your access level.\r\n",
+                    );
                 }
+                let rows: String = state
+                    .tasks
+                    .keys()
+                    .map(|name| format!("\"\\{name}\",\"N/A\",\"Ready\"\r\n"))
+                    .collect();
+                ok(&rows)
             }
             ("schtasks", ["/Run", "/TN", name]) if state.tasks.contains_key(*name) => {
                 self.start_host(&mut state);
@@ -964,7 +970,7 @@ async fn in_a_wsl_distro_whose_systemd_user_manager_answers_setup_registers_the_
 
 /// The commands that only look, which doctor may run.
 fn only_looks(run: &str) -> bool {
-    run.starts_with("schtasks /Query ")
+    run == "schtasks /Query /FO CSV /NH"
         || run.starts_with("systemctl --user is-enabled ")
         || run == "systemctl --user show-environment"
 }
@@ -1096,7 +1102,7 @@ fn setup_says_in_one_sentence_what_to_run_for_claude_code_outside_the_tested_ran
     let newer = claude_sentence(&user_with_claude(&dirs, "2.3.1")).unwrap();
     assert!(
         newer.starts_with("Claude Code 2.3.1 is newer than Floti was tested with")
-            && newer.ends_with("; to fix it, run: claude install 2.1.277")
+            && newer.ends_with("; to fix it, run: claude install 2.1.277 --force")
             && !newer.contains('\n'),
         "{newer}"
     );
