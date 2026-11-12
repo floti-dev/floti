@@ -187,9 +187,9 @@ A preview, not a release: nothing offers it as an update.
   Ctrl+Enter opens the whole conversation read-only in a tab. After a crash,
   the restore offer's Not now keeps its sessions at the top of History until
   each is back.
-- Helm and its host speak Floti protocol 3.1. A desktop or host on a release
-  before 3.0 is refused at connect with a sentence saying which side to
-  update.
+- Helm and its host speak Floti protocol 3.1. A desktop or host too old to
+  speak protocol 3 is refused at connect, with a sentence saying which side
+  to update.
 - Installing Helm on Windows puts floti in `%LOCALAPPDATA%\Programs\Floti\bin`,
   adds it to your PATH and sets the host up to start when you sign in, and
   installing it over an earlier Helm stops no host and ends no session. On
