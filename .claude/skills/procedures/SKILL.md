@@ -48,7 +48,14 @@ from the `release` environment, and fails there unless every signature
 verifies against `crates/host/src/update/minisign.pub`. That environment is a
 one-time prerequisite: the owner creates it with a deployment branch policy
 admitting `main` alone, then sets the key as its secret, never as a
-repository secret (docs/PACKAGING.md, "The release environment"). Then merge and push. CI runs `pnpm check`
+repository secret (docs/PACKAGING.md, "The release environment"). A stable
+release then pushes the Homebrew formula to floti-dev/homebrew-tap and opens
+the winget pull request, after the release is published; a preview does
+neither. Each needs a prerequisite the owner creates once - the tap and
+`HOMEBREW_TAP_DEPLOY_KEY`, a winget-pkgs fork and `WINGET_TOKEN` - and its job
+fails naming the missing one, to be re-run once it exists (docs/PACKAGING.md,
+"Homebrew and winget"). A dry run builds the formula and manifests, checks
+them with Homebrew and winget, and pushes nothing. Then merge and push. CI runs `pnpm check`
 and the build on Windows, macOS and Linux - a failure on any of them blocks
 the release - and verifies the exes, the dmg and zip, and the AppImage from
 the inside before publishing. `packaging-check` and `verify:installer` are not part of a

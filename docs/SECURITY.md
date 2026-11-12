@@ -81,6 +81,34 @@ together. The agent tools listener's token and origin rules are in
 - Each release's files also carry a GitHub build attestation, made in
   `publish`, the only job with `attestations: write`.
 
+## The package manager credentials
+
+A stable release updates the Homebrew tap and opens a winget pull request
+(PACKAGING.md, "Homebrew and winget", has the owner's setup). Each credential
+is a secret of the `release` environment, never a repository secret, and is
+read by one job, which runs after `publish` and never in a dry run or for a
+preview.
+
+- `HOMEBREW_TAP_DEPLOY_KEY` is the private half of an SSH deploy key with
+  write access to floti-dev/homebrew-tap and nothing else. Only the
+  `homebrew` job names it: one step confirms it is set, and the other writes
+  it to an owner-only file in a folder of its own under `$RUNNER_TEMP`, runs
+  the one `git push` to the tap, and removes the folder when the step ends,
+  whether the push worked or not. The push checks GitHub's host key against
+  the keys GitHub's API lists, fetched over HTTPS. The clone before it is
+  anonymous.
+- `WINGET_TOKEN` is a classic token with the `public_repo` scope, of the
+  personal account holding the fork of microsoft/winget-pkgs. Only the last
+  step of the `winget` job reads it, as `GH_TOKEN` for gh, and that step makes
+  one commit on the fork and opens or finds one pull request. The scope
+  reaches every public repository of that account, so the account should hold
+  nothing else that matters, and the token is replaced where it was made if it
+  ever leaks.
+- Both jobs pin `actions/checkout` and `actions/setup-node` by commit, run no
+  third-party action, and have `contents: read` only. What they publish is
+  built from the release's SHA-256 list after its signature is checked
+  against the committed public key.
+
 ## Access, keys and devices
 
 - The user's login is the access to Floti. The host serves whatever reaches

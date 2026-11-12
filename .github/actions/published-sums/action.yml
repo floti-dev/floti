@@ -1,0 +1,43 @@
+name: published-sums
+description: >
+  Fetches a published release's floti-<version>-SHA256SUMS and its signature,
+  as anybody downloads them, with no token, and checks the signature against
+  the committed public key before anything uses the list.
+
+# The package manager jobs build the Homebrew formula and the winget manifests
+# from this list and nothing else, so what they hand on names exactly the files
+# and SHA-256s the release published and signed. Needs node and the checkout.
+inputs:
+  version:
+    description: The release's version.
+    required: true
+  tag:
+    description: The release's tag.
+    required: true
+outputs:
+  sums:
+    description: The checked list's path.
+    value: ${{ steps.fetch.outputs.sums }}
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/minisign
+
+    - id: fetch
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        TAG: ${{ inputs.tag }}
+      run: |
+        set -euo pipefail
+        dir="$RUNNER_TEMP/published-sums"
+        mkdir -p "$dir"
+        sums="$dir/floti-$VERSION-SHA256SUMS"
+        for file in "$sums" "$sums.minisig"; do
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$(basename "$file")"
+          env -u GH_TOKEN -u GITHUB_TOKEN curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+            --output "$file" "$url"
+        done
+        node packages/desktop/scripts/minisign.mjs verify --public-key crates/host/src/update/minisign.pub \
+          --comment "floti $VERSION {name}" "$sums"
+        echo "sums=$sums" >>"$GITHUB_OUTPUT"

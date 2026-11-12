@@ -361,7 +361,9 @@ artefacts on a clean `windows-latest` runner, the macOS ones on `macos-latest`
 and the Linux one on `ubuntu-latest`, packs the protocol types, signs every
 file, and publishes one GitHub release with twenty-four files attached: the
 five desktop files, the protocol types, the five floti files and their SHA-256
-list, and a minisign signature beside each of those twelve. A merge that does
+list, and a minisign signature beside each of those twelve. A stable release
+then updates the Homebrew formula and opens the winget pull request ("Homebrew
+and winget"). A merge that does
 not bump the version runs the checks and the floti builds, skips every build
 after them and finishes green.
 
@@ -375,6 +377,8 @@ after them and finishes green.
 | `sign` | The only job that reads the signing key, in the `release` environment (a prerequisite: "The release environment"). Signs every file, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-four files with their SHA-256s in the run's summary and uploads them as `release-files`. Never runs in a dry run. |
 | `sign-dry-run` | A dry run's `sign`: the same signing and checks, with a key pair made in the run. Runs only in a dry run. |
 | `publish` | The only job with write access. Attests every file in `release-files`, then creates the release from them, publishes it and confirms it. Never runs in a dry run. |
+| `homebrew`, `winget` | After `publish`, for a stable release only: push `Formula/floti.rb` to floti-dev/homebrew-tap and open the winget pull request ("Homebrew and winget"). Never run for a preview or in a dry run. |
+| `homebrew-dry-run`, `winget-dry-run` | A dry run's formula and manifests, built from the run's files and checked by Homebrew and winget. Run only in a dry run. |
 | `sdk` | The plugin SDK's npm publish, on its own version. Never runs in a dry run. |
 
 - **floti is built once, by `floti.yml`.** Every desktop build needs it, so a
@@ -383,8 +387,9 @@ after them and finishes green.
   on any OS skips `assemble` and `publish` with it: a version is never
   published with half its downloads. Every runner is a standard GitHub-hosted
   one, and no certificate or paid account is involved: the Mac build is
-  ad-hoc signed and the Windows build unsigned. The one secret is the minisign
-  key, which only `sign` reads.
+  ad-hoc signed and the Windows build unsigned. There are three secrets, each
+  read by one job: the minisign key by `sign`, the tap's deploy key by
+  `homebrew` and the winget token by `winget`.
 - **The gate is whether the tag exists**, asked with `git ls-remote --tags`, not
   whether the commit changed the version. Diffing against the parent gives a
   different answer after a squash, a rebase, a revert or a re-run.
@@ -535,10 +540,76 @@ dry run's included. `gh secret list --repo floti-dev/floti` must not list it;
 `gh secret list --env release --repo floti-dev/floti` does. Until both steps
 are done, a real release fails at `sign`, before anything is published.
 
+### Homebrew and winget
+
+A stable release also goes to two package managers, with the floti binary
+only: the desktop app is not in either.
+
+- **Homebrew**: the formula `floti` in floti-dev/homebrew-tap, installed with
+  `brew install floti-dev/tap/floti`, for macOS arm64 and Linux x64 and arm64.
+  There is no cask for the desktop app until it is signed: Homebrew
+  quarantines casks. The formula's test runs `floti version`.
+- **winget**: the package `FlotiDev.Floti`, installer type portable, run as
+  `floti`, with the Windows x64 and arm64 exes.
+
+Both are written by `scripts/package-managers.mjs` from the release's own
+download URLs and its SHA-256 list. The `homebrew` and `winget` jobs fetch
+that list from the published release with no token, as anybody does, and check
+its signature against `crates/host/src/update/minisign.pub` before using it.
+A preview updates neither: Homebrew and winget users get stable releases.
+
+- **`homebrew`** clones the tap over HTTPS, writes `Formula/floti.rb`, commits
+  it as `floti <version>` and pushes it with the deploy key, one push. A
+  formula that already says this release is left alone.
+- **`winget`** brings the fork's `master` up to date with
+  microsoft/winget-pkgs, makes one commit holding the three manifests under
+  `manifests/f/FlotiDev/Floti/<version>/` on the branch
+  `FlotiDev.Floti-<version>`, and opens the pull request, titled "New package"
+  the first time and "New version" after. It uses gh and GitHub's API, not an
+  action: winget-releaser and komac update a package winget already has from
+  their own reading of the release, so neither can submit the first version,
+  and both would write manifests of their own rather than these.
+
+**Both run after `publish`, so a release is already published when either
+fails.** While a prerequisite below is missing, its job fails with one line
+naming what to create. Create it, then re-run the failed jobs from the run's
+page: a re-run pushes the formula only if it changed, moves the winget branch
+to a fresh commit and reuses a pull request already open.
+
+The owner creates these once, in this order, each secret in the `release`
+environment ("The release environment"), never as a repository secret:
+
+    # 1. The tap: a public repository with a main branch.
+    gh repo create floti-dev/homebrew-tap --public --add-readme \
+      --description "Homebrew formula for floti"
+
+    # 2. Its deploy key, with write access; the private half is the secret.
+    ssh-keygen -t ed25519 -N "" -C "floti release" -f homebrew-tap-key
+    gh repo deploy-key add homebrew-tap-key.pub --repo floti-dev/homebrew-tap \
+      --allow-write --title "floti release workflow"
+    gh secret set HOMEBREW_TAP_DEPLOY_KEY --env release --repo floti-dev/floti <homebrew-tap-key
+    rm homebrew-tap-key homebrew-tap-key.pub
+
+    # 3. A fork of winget-pkgs in a personal account (an organisation's fork
+    #    cannot let winget's maintainers edit the pull request), and a classic
+    #    token of that account with the public_repo scope, made at
+    #    https://github.com/settings/tokens/new, as the secret.
+    gh repo fork microsoft/winget-pkgs --clone=false
+    gh secret set WINGET_TOKEN --env release --repo floti-dev/floti
+
+The job finds the fork as `<the token's account>/winget-pkgs`. The first pull
+request asks that account to accept Microsoft's contributor licence agreement,
+once, by commenting `@microsoft-github-policy-service agree` on it; winget's
+reviewers merge it after that. `gh secret list --env release --repo
+floti-dev/floti` lists `HOMEBREW_TAP_DEPLOY_KEY` and `WINGET_TOKEN` beside
+`MINISIGN_SECRET_KEY`, and `gh secret list --repo floti-dev/floti` lists none
+of them.
+
 ### A dry run
 
 A push to a branch named `release-dry-run/<name>` runs the whole workflow and
-publishes nothing: no tag, no release, no attestation, no npm. Everything a
+publishes nothing: no tag, no release, no attestation, no npm, no tap push and
+no winget pull request. Everything a
 release builds is built and checked, including the notes, the signatures and
 every check of the files that needs no published release. `sign-dry-run` makes
 a minisign key pair in the run (`minisign -G -W` under `$RUNNER_TEMP`), signs
@@ -546,8 +617,15 @@ every file with it through the same `scripts/minisign.mjs` a release uses,
 checks every signature against that pair's public key and uploads exactly the
 twenty-four files as the run's `release-files` artifact, kept for seven days.
 The run's summary lists each with its SHA-256 and gives the run's public key.
-A dry run never reads the `release` environment or its secret, and makes no
-attestation. The tag-exists gate does not stop a dry run, so
+`homebrew-dry-run` and `winget-dry-run` build the formula and the winget
+manifests from the run's SHA-256 list, as a release would, preview or not.
+The formula goes through `brew style` and `brew audit --strict` in a tap of
+its own on the runner, then `brew install` and `brew test` on macOS arm64 and
+Linux x64, with the run's own file put in Homebrew's download cache so the
+formula installed is the very text a release would push. The manifests go
+through `winget validate`. They are kept for seven days as the
+`homebrew-formula` and `winget-manifests` artifacts. A dry run never reads the
+`release` environment or its secrets, and makes no attestation. The tag-exists gate does not stop a dry run, so
 the version on the branch may be one already released; one that is not tagged
 must still be greater than every tagged one. A run on any branch but `main` is
 a dry run, and the version job's `dry_run` output is what every publishing job
