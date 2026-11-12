@@ -400,6 +400,10 @@ impl UserPath for FakePath {
     fn add(&self, _env: &UserEnv, _folder: &Path) -> Result<bool, String> {
         unreachable!("doctor only looks")
     }
+
+    fn remove(&self, _env: &UserEnv, _folder: &Path) -> Result<bool, String> {
+        unreachable!("doctor only looks")
+    }
 }
 
 #[test]

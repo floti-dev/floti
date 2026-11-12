@@ -34,6 +34,9 @@
 //! one fixed name, so running setup again replaces it and never adds a
 //! second.
 //!
+//! `floti uninstall` takes each entry out again ([`unregister`]) through the
+//! same mechanism, and never turns lingering off.
+//!
 //! All three are compiled on every OS and tested everywhere with a fake
 //! system, like the generators.
 
@@ -453,6 +456,135 @@ pub fn is_registered(
                 ))
             }
         }
+    }
+}
+
+/// Takes `definition`'s entry out of the OS's per-user mechanism, as
+/// [`register_and_start`] put it there, for `floti uninstall`, and answers
+/// whether there was one. It is the explicit act, so it asks nothing.
+///
+/// - The logon task: when `schtasks /Query` lists it, `schtasks /Delete /F`
+///   deletes it; its XML under the data folder goes either way, and the
+///   `startup` folder with it once that is empty.
+/// - The LaunchAgent: when launchd has it loaded in the user's GUI domain,
+///   `launchctl bootout` unloads it (which stops a host it runs); then its
+///   property list goes from `~/Library/LaunchAgents`, so no later sign-in
+///   loads it.
+/// - The user unit: when its file or its link in `default.target.wants` is
+///   there and the user's service manager answers, `systemctl --user disable
+///   --now` disables and stops it, the file goes and the manager reloads.
+///   Where the manager does not answer (a WSL distro without systemd, a login
+///   with no user bus), the link and the file go by hand, which is what
+///   `disable` removes. Lingering is never changed.
+///
+/// `Err` is the one line to say: the last line the failing command wrote,
+/// unedited, or why a file could not be removed.
+pub fn unregister(
+    system: &dyn SignInSystem,
+    definition: &StartupDefinition,
+    home: &Path,
+    data: &Path,
+) -> Result<bool, String> {
+    let name = definition.name.as_str();
+    let file = definition_file(definition, home, data);
+    match definition.kind {
+        StartupKind::LogonTask => {
+            let listed = must(
+                system,
+                &OsCommand::new("schtasks", &["/Query", "/FO", "CSV", "/NH"]),
+            )?;
+            let registered = lists_task(&listed.stdout, name);
+            if registered {
+                must(
+                    system,
+                    &OsCommand::new("schtasks", &["/Delete", "/TN", name, "/F"]),
+                )?;
+            }
+            let written = remove_file(&file)?;
+            if let Some(folder) = file.parent() {
+                // Only when empty: the folder holds nothing else of setup's.
+                let _ = std::fs::remove_dir(folder);
+            }
+            Ok(registered || written)
+        }
+        StartupKind::LaunchAgent => {
+            let there = file_there(&file)?;
+            let loaded = match gui_domain(system)? {
+                Some(domain) => {
+                    let service = format!("{domain}/{name}");
+                    let loaded =
+                        ran(system, &OsCommand::new("launchctl", &["print", &service]))?.success;
+                    if loaded {
+                        must(system, &OsCommand::new("launchctl", &["bootout", &service]))?;
+                    }
+                    loaded
+                }
+                None => false,
+            };
+            remove_file(&file)?;
+            Ok(there || loaded)
+        }
+        StartupKind::SystemdUserUnit => {
+            let wants = file
+                .parent()
+                .map(|folder| folder.join(WANTS_FOLDER).join(&definition.file_name));
+            let linked = wants
+                .as_deref()
+                .is_some_and(|wants| std::fs::symlink_metadata(wants).is_ok());
+            let unit_there = file_there(&file)?;
+            if !unit_there && !linked {
+                return Ok(false);
+            }
+            // systemctl refuses to disable a unit whose file is gone; its
+            // link alone goes by hand.
+            let managed = unit_there && user_manager_answers(system);
+            if managed {
+                must(
+                    system,
+                    &OsCommand::new("systemctl", &["--user", "disable", "--now", name]),
+                )?;
+            }
+            if let Some(wants) = &wants {
+                remove_file(wants)?;
+            }
+            remove_file(&file)?;
+            if managed {
+                must(
+                    system,
+                    &OsCommand::new("systemctl", &["--user", "daemon-reload"]),
+                )?;
+            }
+            Ok(true)
+        }
+    }
+}
+
+/// The folder beside the user units that holds the link `systemctl --user
+/// enable` makes for a unit wanted by `default.target`, as `floti.service`'s
+/// `[Install]` section says.
+pub const WANTS_FOLDER: &str = "default.target.wants";
+
+/// Whether lingering is on for this user, as `loginctl show-user` says; not
+/// when it says otherwise or cannot be asked. Read only, for `floti
+/// uninstall` to say it left it on.
+pub fn lingering_on(system: &dyn SignInSystem) -> bool {
+    let Ok(uid) = user_id(system) else {
+        return false;
+    };
+    system
+        .run(&OsCommand::new(
+            "loginctl",
+            &["show-user", &uid, "--property=Linger", "--value"],
+        ))
+        .is_ok_and(|shown| shown.success && shown.stdout.trim() == "yes")
+}
+
+/// Removes `file`, a file or a link, and answers whether it was there.
+fn remove_file(file: &Path) -> Result<bool, String> {
+    match std::fs::remove_file(file) {
+        Ok(()) => Ok(true),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(format!("could not remove {}: {err}", file.display())),
     }
 }
 

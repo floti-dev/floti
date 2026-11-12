@@ -107,6 +107,23 @@ impl Standalone for FakeStandalone {
     fn remove_asides(&self, target: &Path) -> Vec<PathBuf> {
         standalone::windows::Native.remove_asides(target)
     }
+
+    fn own_folders(&self, _env: &UserEnv) -> Vec<PathBuf> {
+        Vec::new()
+    }
+
+    fn remove_running(&self, _target: &Path) -> io::Result<Option<PathBuf>> {
+        unreachable!("an update removes no floti")
+    }
+
+    fn delete_after_exit(
+        &self,
+        _env: &UserEnv,
+        _files: &[PathBuf],
+        _folders: &[PathBuf],
+    ) -> io::Result<()> {
+        unreachable!("an update leaves nothing to delete after it exits")
+    }
 }
 
 impl Installs for FakeInstalls {

@@ -25,6 +25,11 @@
 //!   them back once, then waits until the host has let go of its data folder,
 //!   which it holds until it exits.
 //!
+//! `floti uninstall` stops the host through [`stop_for_uninstall`], the
+//! same way as the host itself, but for good ([`HostStopReason::Stop`]):
+//! every session ends recorded as stopped, so none is offered back, and the
+//! keeper ends with it.
+//!
 //! Every other ending is the bridge's exit status for it ([`BridgeExit`]):
 //! no host answering is [`BridgeExit::Unreachable`]. Every word besides the
 //! question goes to standard error as one line, and none holds key material.
@@ -36,9 +41,11 @@ use std::time::Duration;
 
 use floti_host::bridge::BridgeExit;
 use floti_host::client::{self, ClientError, ClientKeys, Connection, is_closed};
+use floti_host::keeper::end_left_keeper;
 use floti_host::keys::read_key_pair;
 use floti_host::platform::folders::{self, Folders, UserEnv};
 use floti_host::server::{HOST_KEY_FILE, LOCK_FILE, local_endpoint};
+use floti_host::uninstall::HostStop as UninstallHostStop;
 use floti_host::update::HostRelaunch;
 use floti_protocol::channel::{RequestChannel, from_payload, to_payload};
 use floti_protocol::channels::common::SessionStatus;
@@ -307,12 +314,68 @@ async fn count_running(connection: &mut Connection) -> Result<usize, Outcome> {
 /// every connection.
 async fn stop_for_update(connection: &mut Connection) -> Result<Outcome, Outcome> {
     welcomed(connection).await?;
-    let stop = HostStopRequest {
-        reason: HostStopReason::Update,
-    };
-    match request::<HostStop>(connection, &stop).await {
+    stop_host(connection, HostStopReason::Update).await
+}
+
+/// Asks the host, welcomed already, to stop for `reason`. A host that closes
+/// the connection before it answers has taken the request too.
+async fn stop_host(
+    connection: &mut Connection,
+    reason: HostStopReason,
+) -> Result<Outcome, Outcome> {
+    match request::<HostStop>(connection, &HostStopRequest { reason }).await {
         Ok(()) | Err(Outcome::Failed(BridgeExit::HostClosed, _)) => Ok(Outcome::Stopped),
         Err(failed) => Err(failed),
+    }
+}
+
+/// Stops the host on this computer for good, as the host itself, for `floti
+/// uninstall`: counts the sessions it runs, asks it to stop
+/// ([`HostStopReason::Stop`]), which ends every session and plain terminal
+/// and its session keeper, recording each session as stopped, and waits
+/// until it has exited. With no host answering, a session keeper a host left
+/// running is ended with what it holds.
+pub fn stop_for_uninstall() -> UninstallHostStop {
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(err) => return UninstallHostStop::Failed(format!("could not start: {err}")),
+    };
+    let folders = match folders::resolve(&UserEnv::from_process()) {
+        Ok(folders) => folders,
+        Err(err) => return UninstallHostStop::Failed(err.to_string()),
+    };
+    let stopped = runtime.block_on(async {
+        let mut connection = as_host(&folders).await?;
+        let asked = async {
+            let running = count_running(&mut connection).await?;
+            stop_host(&mut connection, HostStopReason::Stop).await?;
+            Ok(running)
+        }
+        .await;
+        connection.close().await;
+        let running = asked?;
+        host_exited(&folders.data)
+            .await
+            .map_err(|why| Outcome::Failed(BridgeExit::Failed, why))?;
+        Ok::<_, Outcome>(running)
+    });
+    // A wait for the host's exit that ran out may still be blocked.
+    runtime.shutdown_background();
+    match stopped {
+        Ok(running) => UninstallHostStop::Stopped {
+            sessions: Some(running),
+        },
+        Err(Outcome::Failed(BridgeExit::Unreachable, _)) => match end_left_keeper(&folders) {
+            Some(left) => UninstallHostStop::Stopped {
+                sessions: left.sessions,
+            },
+            None => UninstallHostStop::NotRunning,
+        },
+        Err(Outcome::Failed(_, why)) => UninstallHostStop::Failed(why),
+        Err(other) => UninstallHostStop::Failed(format!("the host answered {other:?}")),
     }
 }
 

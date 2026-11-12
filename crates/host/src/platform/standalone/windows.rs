@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use super::Standalone;
 use crate::platform::folders::UserEnv;
+use crate::platform::process_tree::{self, ProcessTree};
 use crate::platform::windows_path;
 
 /// The Windows place.
@@ -78,6 +79,147 @@ impl Standalone for Native {
             .filter(|aside| std::fs::remove_file(aside).is_err())
             .collect()
     }
+
+    fn own_folders(&self, env: &UserEnv) -> Vec<PathBuf> {
+        self.folder(env)
+            .map(|bin| {
+                let floti = bin.parent().map(Path::to_path_buf);
+                std::iter::once(bin).chain(floti).collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn remove_running(&self, target: &Path) -> io::Result<Option<PathBuf>> {
+        match std::fs::symlink_metadata(target) {
+            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(err) => return Err(err),
+            Ok(_) => {}
+        }
+        // Nothing runs it: it goes at once.
+        if std::fs::remove_file(target).is_ok() {
+            return Ok(None);
+        }
+        let aside = free_aside(target)?;
+        rename(target, &aside)?;
+        Ok(std::fs::remove_file(&aside).is_err().then_some(aside))
+    }
+
+    fn delete_after_exit(
+        &self,
+        env: &UserEnv,
+        files: &[PathBuf],
+        folders: &[PathBuf],
+    ) -> io::Result<()> {
+        if files.is_empty() && folders.is_empty() {
+            return Ok(());
+        }
+        let powershell = windows_powershell(env).ok_or_else(|| {
+            io::Error::other("SystemRoot is not set, so Windows PowerShell cannot be found")
+        })?;
+        let script = delete_after_exit_script(std::process::id(), files, folders);
+        let encoded = encoded_command(&script);
+        let args = [
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-WindowStyle",
+            "Hidden",
+            "-EncodedCommand",
+            encoded.as_str(),
+        ];
+        // No window, out of any job this process is in, and holding none
+        // of its handles, so a pipe this process writes to closes when it
+        // exits rather than when the deleting ends.
+        process_tree::Native.start_apart(&powershell, &args)
+    }
+}
+
+/// How many times the deleting tries a file a process still runs.
+const DELETE_TRIES: u32 = 600;
+
+/// How long it waits between tries, in milliseconds: with [`DELETE_TRIES`],
+/// five minutes in all.
+const DELETE_PAUSE_MS: u32 = 500;
+
+/// How long it waits for this process to exit before it starts trying, in
+/// seconds.
+const EXIT_WAIT_SECONDS: u32 = 300;
+
+/// Windows PowerShell 5.1, which every Windows 10 and 11 has, by its full
+/// path under `%SystemRoot%`, so no program of the same name on `PATH` runs
+/// in its place.
+pub fn windows_powershell(env: &UserEnv) -> Option<PathBuf> {
+    env.var_any_case("SystemRoot")
+        .map(PathBuf::from)
+        .filter(|root| windows_path::is_absolute(root))
+        .map(|root| {
+            windows_path::join(
+                &root,
+                &["System32", "WindowsPowerShell", "v1.0", "powershell.exe"],
+            )
+        })
+}
+
+/// The Windows PowerShell script that, once process `pid` has exited,
+/// deletes each of `files`, trying again while a process still runs one,
+/// up to [`DELETE_TRIES`] times, then removes each of `folders` that is
+/// there, empty and not a link (a junction is never walked into or
+/// removed). It writes nothing and stops on nothing.
+pub fn delete_after_exit_script(pid: u32, files: &[PathBuf], folders: &[PathBuf]) -> String {
+    let list = |paths: &[PathBuf]| {
+        paths
+            .iter()
+            .map(|path| quoted(&path.to_string_lossy()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    format!(
+        "$ErrorActionPreference = 'SilentlyContinue'
+Wait-Process -Id {pid} -Timeout {EXIT_WAIT_SECONDS}
+$files = @({files})
+$folders = @({folders})
+for ($try = 0; $try -lt {DELETE_TRIES}; $try++) {{
+  $left = @($files | Where-Object {{ Test-Path -LiteralPath $_ }})
+  if ($left.Count -eq 0) {{ break }}
+  foreach ($file in $left) {{ Remove-Item -LiteralPath $file -Force }}
+  if (@($files | Where-Object {{ Test-Path -LiteralPath $_ }}).Count -eq 0) {{ break }}
+  Start-Sleep -Milliseconds {DELETE_PAUSE_MS}
+}}
+foreach ($folder in $folders) {{
+  $item = Get-Item -LiteralPath $folder -Force
+  if ($item -and $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and -not (Get-ChildItem -LiteralPath $folder -Force | Select-Object -First 1)) {{
+    Remove-Item -LiteralPath $folder -Force
+  }}
+}}
+",
+        files = list(files),
+        folders = list(folders),
+    )
+}
+
+/// `text` as a PowerShell single-quoted string: each quote character
+/// PowerShell ends such a string with (`'` and the typographic single
+/// quotes) doubled, so nothing in a path is read as code.
+pub fn quoted(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('\'');
+    for c in text.chars() {
+        if matches!(c, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+            out.push(c);
+        }
+        out.push(c);
+    }
+    out.push('\'');
+    out
+}
+
+/// `script` as PowerShell's `-EncodedCommand` takes it: Base64 of its
+/// UTF-16LE bytes, which holds no character a command line would quote.
+pub fn encoded_command(script: &str) -> String {
+    use base64::Engine;
+    let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
 /// How long one rename keeps trying while something holds the file, in all.

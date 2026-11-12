@@ -5,7 +5,10 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use super::{Desktop, Installs, NEW_COPY, OLD_COPY, beside, desktop_dir_override, plist_string};
+use super::{
+    Desktop, DesktopRemoval, Installs, NEW_COPY, OLD_COPY, beside, desktop_dir_override,
+    plist_string,
+};
 use crate::platform::folders::UserEnv;
 use crate::platform::links::{self, remove_tree};
 use crate::platform::process_table::ProcessRow;
@@ -123,6 +126,15 @@ impl Installs for Native {
             }),
             None => row.name == DESKTOP_NAME,
         }
+    }
+
+    fn removal(&self, env: &UserEnv) -> Option<DesktopRemoval> {
+        self.desktop(env).map(|desktop| DesktopRemoval {
+            remove: vec![desktop.path.clone()],
+            shown: desktop.path,
+            uninstaller: None,
+            gone_after: None,
+        })
     }
 
     fn opener(&self, desktop: &Desktop) -> (PathBuf, Vec<String>) {

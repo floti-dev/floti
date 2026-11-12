@@ -28,6 +28,11 @@ impl Native {
     }
 }
 
+/// DPAPI keeps nothing in a store, so there is never an entry to remove.
+pub fn remove_entry(_entry: &StoreEntry) -> Result<bool, String> {
+    Ok(false)
+}
+
 fn blob(bytes: &[u8]) -> Result<CRYPT_INTEGER_BLOB, SealError> {
     Ok(CRYPT_INTEGER_BLOB {
         cbData: u32::try_from(bytes.len())

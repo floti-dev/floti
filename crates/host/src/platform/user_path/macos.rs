@@ -34,4 +34,8 @@ impl UserPath for Native {
         // A startup file is the user's own: doctor gives the line to add.
         Ok(false)
     }
+
+    fn remove(&self, env: &UserEnv, folder: &Path) -> Result<bool, String> {
+        posix::remove(env, folder)
+    }
 }

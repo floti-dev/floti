@@ -369,3 +369,256 @@ fn s5_a_start_at_the_users_sign_in_is_not_refused() {
         super::account()
     );
 }
+
+// ---------------------------------------------------------------------------
+// Taking an entry out again, for floti uninstall
+// ---------------------------------------------------------------------------
+
+mod unregistering {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::io;
+    use std::path::{Path, PathBuf};
+
+    use super::super::register::{
+        OsCommand, Ran, SignInSystem, WANTS_FOLDER, lingering_on, unregister,
+    };
+    use super::super::{StartupDefinition, linux, macos, windows};
+    use super::{UNIX_BINARY, WINDOWS_BINARY, WINDOWS_USER};
+    use crate::testkit::TestDirs;
+
+    /// An OS that answers each command line it is given from `answers`,
+    /// succeeding with nothing written where it has none, and records every
+    /// command it was given.
+    #[derive(Default)]
+    struct FakeOs {
+        answers: HashMap<String, Ran>,
+        ran: RefCell<Vec<String>>,
+    }
+
+    impl FakeOs {
+        /// Each command line with whether it succeeds and what it prints;
+        /// one that fails says `<line> refused` on standard error.
+        fn answering(answers: &[(&str, bool, &str)]) -> Self {
+            Self {
+                answers: answers
+                    .iter()
+                    .map(|(line, success, stdout)| {
+                        let ran = Ran {
+                            success: *success,
+                            stdout: (*stdout).to_owned(),
+                            stderr: if *success {
+                                String::new()
+                            } else {
+                                format!("{line} refused")
+                            },
+                        };
+                        ((*line).to_owned(), ran)
+                    })
+                    .collect(),
+                ran: RefCell::default(),
+            }
+        }
+
+        fn ran(&self) -> Vec<String> {
+            self.ran.borrow().clone()
+        }
+    }
+
+    impl SignInSystem for FakeOs {
+        fn run(&self, command: &OsCommand) -> io::Result<Ran> {
+            let line = command.described();
+            self.ran.borrow_mut().push(line.clone());
+            Ok(self.answers.get(&line).cloned().unwrap_or(Ran {
+                success: true,
+                ..Ran::default()
+            }))
+        }
+
+        fn desktop_session(&self) -> io::Result<bool> {
+            Ok(true)
+        }
+    }
+
+    fn write(path: &Path, text: &str) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+
+    fn task() -> StartupDefinition {
+        windows::logon_task(Path::new(WINDOWS_BINARY), WINDOWS_USER).unwrap()
+    }
+
+    const QUERY: &str = "schtasks /Query /FO CSV /NH";
+    const DELETE: &str = "schtasks /Delete /TN Floti host /F";
+    const LISTED: &str =
+        "\"\\Floti host\",\"N/A\",\"Running\"\r\n\"\\Other\",\"N/A\",\"Ready\"\r\n";
+
+    #[test]
+    fn a_listed_logon_task_is_deleted_and_its_xml_and_folder_go() {
+        let dirs = TestDirs::new();
+        let xml = dirs.data.join("startup").join("Floti host.xml");
+        write(&xml, "<Task/>");
+        let os = FakeOs::answering(&[(QUERY, true, LISTED)]);
+
+        assert_eq!(unregister(&os, &task(), &dirs.home, &dirs.data), Ok(true));
+        assert_eq!(os.ran(), [QUERY, DELETE]);
+        assert!(!xml.exists());
+        assert!(!dirs.data.join("startup").exists(), "its emptied folder");
+    }
+
+    #[test]
+    fn a_logon_task_that_is_not_listed_is_not_found_and_nothing_is_deleted() {
+        let dirs = TestDirs::new();
+        let os = FakeOs::answering(&[(QUERY, true, "\"\\Other\",\"N/A\",\"Ready\"\r\n")]);
+        assert_eq!(unregister(&os, &task(), &dirs.home, &dirs.data), Ok(false));
+        assert_eq!(os.ran(), [QUERY]);
+        // A startup folder holding something else stays.
+        let note = dirs.data.join("startup").join("note.txt");
+        write(&note, "mine");
+        assert_eq!(unregister(&os, &task(), &dirs.home, &dirs.data), Ok(false));
+        assert!(note.exists());
+    }
+
+    #[test]
+    fn a_refused_delete_says_schtasks_own_last_line() {
+        let dirs = TestDirs::new();
+        let os = FakeOs::answering(&[(QUERY, true, LISTED), (DELETE, false, "")]);
+        assert_eq!(
+            unregister(&os, &task(), &dirs.home, &dirs.data),
+            Err(format!("{DELETE} refused"))
+        );
+    }
+
+    fn agent() -> StartupDefinition {
+        macos::launch_agent(Path::new(UNIX_BINARY)).unwrap()
+    }
+
+    fn plist(dirs: &TestDirs) -> PathBuf {
+        dirs.home
+            .join("Library")
+            .join("LaunchAgents")
+            .join("dev.floti.host.plist")
+    }
+
+    #[test]
+    fn a_loaded_launch_agent_is_booted_out_and_its_property_list_goes() {
+        let dirs = TestDirs::new();
+        write(&plist(&dirs), "<plist/>");
+        let os = FakeOs::answering(&[("id -u", true, "501\n")]);
+
+        assert_eq!(unregister(&os, &agent(), &dirs.home, &dirs.data), Ok(true));
+        assert_eq!(
+            os.ran(),
+            [
+                "id -u",
+                "launchctl print gui/501",
+                "launchctl print gui/501/dev.floti.host",
+                "launchctl bootout gui/501/dev.floti.host"
+            ]
+        );
+        assert!(!plist(&dirs).exists());
+    }
+
+    #[test]
+    fn with_nobody_at_the_screen_the_property_list_still_goes_and_nothing_else_runs() {
+        let dirs = TestDirs::new();
+        write(&plist(&dirs), "<plist/>");
+        let os = FakeOs::answering(&[
+            ("id -u", true, "501\n"),
+            ("launchctl print gui/501", false, ""),
+        ]);
+        assert_eq!(unregister(&os, &agent(), &dirs.home, &dirs.data), Ok(true));
+        assert_eq!(os.ran(), ["id -u", "launchctl print gui/501"]);
+        assert!(!plist(&dirs).exists());
+        // Again: neither loaded nor there.
+        assert_eq!(unregister(&os, &agent(), &dirs.home, &dirs.data), Ok(false));
+    }
+
+    #[test]
+    fn a_launch_agent_launchd_has_not_loaded_is_not_booted_out() {
+        let dirs = TestDirs::new();
+        let os = FakeOs::answering(&[
+            ("id -u", true, "501\n"),
+            ("launchctl print gui/501/dev.floti.host", false, ""),
+        ]);
+        assert_eq!(unregister(&os, &agent(), &dirs.home, &dirs.data), Ok(false));
+        assert!(!os.ran().iter().any(|line| line.contains("bootout")));
+    }
+
+    fn unit() -> StartupDefinition {
+        linux::user_unit(Path::new(UNIX_BINARY)).unwrap()
+    }
+
+    /// The unit's file and the link `systemctl enable` makes for it.
+    fn unit_files(dirs: &TestDirs) -> (PathBuf, PathBuf) {
+        let folder = dirs.home.join(".config").join("systemd").join("user");
+        (
+            folder.join("floti.service"),
+            folder.join(WANTS_FOLDER).join("floti.service"),
+        )
+    }
+
+    #[test]
+    fn an_enabled_unit_is_disabled_and_stopped_its_file_goes_and_the_manager_reloads() {
+        let dirs = TestDirs::new();
+        let (file, wants) = unit_files(&dirs);
+        write(&file, "[Unit]");
+        write(&wants, "the link systemctl enable made");
+        let os = FakeOs::default();
+
+        assert_eq!(unregister(&os, &unit(), &dirs.home, &dirs.data), Ok(true));
+        assert_eq!(
+            os.ran(),
+            [
+                "systemctl --user show-environment",
+                "systemctl --user disable --now floti.service",
+                "systemctl --user daemon-reload"
+            ]
+        );
+        assert!(!file.exists() && !wants.exists());
+        // Again: nothing there, nothing run.
+        let again = FakeOs::default();
+        assert_eq!(
+            unregister(&again, &unit(), &dirs.home, &dirs.data),
+            Ok(false)
+        );
+        assert!(again.ran().is_empty());
+    }
+
+    #[test]
+    fn with_no_user_manager_the_unit_and_its_link_go_by_hand() {
+        let dirs = TestDirs::new();
+        let (file, wants) = unit_files(&dirs);
+        write(&file, "[Unit]");
+        write(&wants, "the link systemctl enable made");
+        let os = FakeOs::answering(&[("systemctl --user show-environment", false, "")]);
+
+        assert_eq!(unregister(&os, &unit(), &dirs.home, &dirs.data), Ok(true));
+        assert_eq!(os.ran(), ["systemctl --user show-environment"]);
+        assert!(!file.exists() && !wants.exists());
+    }
+
+    #[test]
+    fn a_link_left_without_its_unit_goes_without_asking_systemctl() {
+        let dirs = TestDirs::new();
+        let (_, wants) = unit_files(&dirs);
+        write(&wants, "a link to a unit that is gone");
+        let os = FakeOs::default();
+        assert_eq!(unregister(&os, &unit(), &dirs.home, &dirs.data), Ok(true));
+        assert!(os.ran().is_empty(), "{:?}", os.ran());
+        assert!(!wants.exists());
+    }
+
+    #[test]
+    fn lingering_is_only_read_and_on_only_when_loginctl_says_yes() {
+        const SHOW: &str = "loginctl show-user 1000 --property=Linger --value";
+        let on = FakeOs::answering(&[("id -u", true, "1000\n"), (SHOW, true, "yes\n")]);
+        assert!(lingering_on(&on));
+        assert_eq!(on.ran(), ["id -u", SHOW]);
+        let off = FakeOs::answering(&[("id -u", true, "1000\n"), (SHOW, true, "no\n")]);
+        assert!(!lingering_on(&off));
+        let unknown = FakeOs::answering(&[("id -u", false, "")]);
+        assert!(!lingering_on(&unknown));
+    }
+}

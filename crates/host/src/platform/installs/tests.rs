@@ -909,3 +909,83 @@ fn linux_writes_a_missing_menu_entry_for_an_installed_app_image_and_leaves_one_t
         None
     );
 }
+
+// ---------------------------------------------------------------------------
+// Removing the app, for floti uninstall
+// ---------------------------------------------------------------------------
+
+#[test]
+fn windows_removes_the_app_by_its_own_uninstaller_run_silently_in_place() {
+    let dirs = TestDirs::new();
+    let local = dirs.folder("Local App Data");
+    let user = env(&dirs.home, &[("LOCALAPPDATA", &local)]);
+    assert_eq!(windows::Native.removal(&user), None, "nothing installed");
+    let install = local.join("Programs").join("Helm");
+    std::fs::create_dir_all(&install).unwrap();
+    std::fs::write(install.join("Helm.exe"), b"app").unwrap();
+    assert_eq!(windows::Native.removal(&user), None, "a portable copy");
+    std::fs::write(install.join("Uninstall Helm.exe"), b"uninstaller").unwrap();
+
+    let removal = windows::Native.removal(&user).expect("an install");
+    let (uninstaller, line) = removal.uninstaller.expect("its uninstaller");
+    assert_eq!(uninstaller, install.join("Uninstall Helm.exe"));
+    // `_?=` last and unquoted, spaces and all ("Local App Data").
+    assert_eq!(line, format!("/S _?={}", install.display()));
+    assert_eq!(removal.gone_after, Some(install.join("Helm.exe")));
+    assert_eq!(removal.remove, std::slice::from_ref(&install));
+    assert_eq!(removal.shown, install);
+}
+
+#[test]
+fn macos_removes_the_app_bundle_wherever_it_was_found() {
+    let dirs = TestDirs::new();
+    let apps = dirs.folder("apps dir");
+    let user = env(&dirs.home, &[(DESKTOP_DIR_VAR, &apps)]);
+    assert_eq!(macos::Native.removal(&user), None);
+    let app = apps.join("Helm.app");
+    std::fs::create_dir_all(app.join("Contents")).unwrap();
+    std::fs::write(app.join("Contents").join("Info.plist"), b"<plist/>").unwrap();
+
+    let removal = macos::Native.removal(&user).expect("an install");
+    assert_eq!(removal.uninstaller, None);
+    assert_eq!(removal.gone_after, None);
+    assert_eq!(removal.remove, std::slice::from_ref(&app));
+    assert_eq!(removal.shown, app);
+}
+
+#[test]
+fn linux_removes_the_app_image_its_menu_entry_and_icon_whichever_are_there() {
+    let dirs = TestDirs::new();
+    let apps = dirs.folder("apps dir");
+    let user = env(&dirs.home, &[(DESKTOP_DIR_VAR, &apps)]);
+    assert_eq!(linux::Native.removal(&user), None, "nothing there");
+    let app_image = apps.join("Helm.AppImage");
+    let desktop = Desktop {
+        name: "Helm",
+        path: app_image.clone(),
+    };
+    let entry = linux::Native
+        .add_launcher(&user, &desktop)
+        .unwrap()
+        .unwrap();
+    let icon = dirs
+        .home
+        .join(".local")
+        .join("share")
+        .join("icons")
+        .join("hicolor")
+        .join("256x256")
+        .join("apps")
+        .join("helm.png");
+
+    // A menu entry left by an app removed by hand is still the app's.
+    let removal = linux::Native.removal(&user).expect("its menu entry");
+    assert_eq!(removal.remove, [icon.clone(), entry.clone()]);
+    assert_eq!(removal.shown, app_image);
+
+    std::fs::write(&app_image, b"AppImage").unwrap();
+    let removal = linux::Native.removal(&user).expect("an install");
+    assert_eq!(removal.uninstaller, None);
+    assert_eq!(removal.gone_after, None);
+    assert_eq!(removal.remove, [app_image.clone(), icon, entry]);
+}

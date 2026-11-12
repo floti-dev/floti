@@ -143,6 +143,17 @@ fn path_folders(
 
 /// The line that puts `folder` on the `PATH` of the shell `$SHELL` names,
 /// appended to the first startup file [`has`] reads for that shell.
+/// Takes floti's line for `folder` out of the user's startup files, for
+/// `floti uninstall`, and answers whether it changed anything. The install
+/// script and `floti install-self` add no line to a startup file on macOS or
+/// Linux, so there is none of Floti's to take out, and nothing is read or
+/// changed: a line naming the folder is the user's own, written from
+/// `floti doctor`'s fix or by hand, and stays. Where the install script comes
+/// to add a line of its own, its removal goes here, and only that line goes.
+pub(super) fn remove(_env: &UserEnv, _folder: &Path) -> Result<bool, String> {
+    Ok(false)
+}
+
 pub(super) fn fix(env: &UserEnv, folder: &Path) -> String {
     let written = env
         .home

@@ -44,6 +44,45 @@ impl UserPath for Native {
         registry::announce_environment();
         Ok(true)
     }
+
+    fn remove(&self, env: &UserEnv, folder: &Path) -> Result<bool, String> {
+        let written = registry::string_value(registry::Hive::CurrentUser, USER_KEY, "Path")?;
+        let Some(left) = without_folder(written.as_deref(), &folder.display().to_string(), env)
+        else {
+            return Ok(false);
+        };
+        if left.is_empty() {
+            registry::delete_value(USER_KEY, "Path")?;
+        } else {
+            registry::set_expandable_string(USER_KEY, "Path", &left)?;
+        }
+        registry::announce_environment();
+        Ok(true)
+    }
+}
+
+/// The user's `Path` value `written`, as the registry keeps it, without each
+/// entry that names `folder`: as written, or with its `%VARIABLE%`s expanded
+/// from `env`, compared without case, quotes or a trailing separator, as
+/// Windows finds programs. The other entries stay as written, in their
+/// order, and empty entries go with it. `None` when no entry names it.
+pub fn without_folder(written: Option<&str>, folder: &str, env: &UserEnv) -> Option<String> {
+    let wanted = comparable(folder);
+    let names_it = |entry: &str| {
+        let entry = entry.trim().trim_matches('"');
+        comparable(entry) == wanted || comparable(&expand(entry, env)) == wanted
+    };
+    let entries: Vec<&str> = written.unwrap_or_default().split(';').collect();
+    if !entries.iter().any(|entry| names_it(entry)) {
+        return None;
+    }
+    Some(
+        entries
+            .into_iter()
+            .filter(|entry| !entry.trim().is_empty() && !names_it(entry))
+            .collect::<Vec<_>>()
+            .join(";"),
+    )
 }
 
 /// The user's `Path` value `written`, as the registry keeps it (its
@@ -118,7 +157,7 @@ pub(super) mod registry {
     use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_MORE_DATA, ERROR_SUCCESS};
     use windows_sys::Win32::System::Registry::{
         HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, REG_EXPAND_SZ, RRF_NOEXPAND,
-        RRF_RT_REG_EXPAND_SZ, RRF_RT_REG_SZ, RegGetValueW, RegSetKeyValueW,
+        RRF_RT_REG_EXPAND_SZ, RRF_RT_REG_SZ, RegDeleteKeyValueW, RegGetValueW, RegSetKeyValueW,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
@@ -226,6 +265,24 @@ pub(super) mod registry {
         }
     }
 
+    /// Deletes the value `value` of `subkey` in `HKEY_CURRENT_USER`; one
+    /// that is not there is already deleted.
+    pub fn delete_value(subkey: &str, value: &str) -> Result<(), String> {
+        let subkey_w = wide(subkey);
+        let value_w = wide(value);
+        // SAFETY: both names are NUL-terminated UTF-16 that outlive the call.
+        let status =
+            unsafe { RegDeleteKeyValueW(HKEY_CURRENT_USER, subkey_w.as_ptr(), value_w.as_ptr()) };
+        if status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND {
+            Ok(())
+        } else {
+            Err(format!(
+                "could not delete {value} in HKEY_CURRENT_USER\\{subkey}: {}",
+                std::io::Error::from_raw_os_error(status as i32)
+            ))
+        }
+    }
+
     /// Tells the programs that build environments for new processes, such
     /// as Explorer, that the user's environment changed, so a terminal
     /// opened from them now has it. A program that does not answer within
@@ -269,6 +326,11 @@ pub(super) mod registry {
 
     /// There is no registry off Windows.
     pub fn set_expandable_string(_subkey: &str, _value: &str, _text: &str) -> Result<(), String> {
+        Err("there is no Windows registry on this computer".to_owned())
+    }
+
+    /// There is no registry off Windows.
+    pub fn delete_value(_subkey: &str, _value: &str) -> Result<(), String> {
         Err("there is no Windows registry on this computer".to_owned())
     }
 

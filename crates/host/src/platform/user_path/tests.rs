@@ -415,3 +415,81 @@ fn appended(fix: &str) -> (String, String) {
         .replace("'\\''", "'");
     (line, file.to_owned())
 }
+
+// ---------------------------------------------------------------------------
+// Taking floti's entry off again, for floti uninstall
+// ---------------------------------------------------------------------------
+
+const FLOTI_BIN: &str = r"C:\Users\me\AppData\Local\Programs\Floti\bin";
+
+#[test]
+fn windows_takes_out_only_floti_s_entry_and_keeps_the_rest_as_written() {
+    let user = env(None, &[]);
+    assert_eq!(
+        windows::without_folder(
+            Some(r"%USERPROFILE%\.local\bin;C:\Users\me\AppData\Local\Programs\Floti\bin;D:\tools"),
+            FLOTI_BIN,
+            &user
+        ),
+        Some(r"%USERPROFILE%\.local\bin;D:\tools".to_owned())
+    );
+    // What install-self appended, to a value that was empty or absent.
+    assert_eq!(
+        windows::without_folder(Some(FLOTI_BIN), FLOTI_BIN, &user),
+        Some(String::new())
+    );
+    assert_eq!(
+        windows::without_folder(
+            Some(windows::with_folder(None, FLOTI_BIN).as_str()),
+            FLOTI_BIN,
+            &user
+        ),
+        Some(String::new())
+    );
+    // Not there: nothing to change.
+    assert_eq!(
+        windows::without_folder(Some(r"C:\tools;D:\bin"), FLOTI_BIN, &user),
+        None
+    );
+    assert_eq!(windows::without_folder(None, FLOTI_BIN, &user), None);
+}
+
+#[test]
+fn windows_knows_the_entry_in_any_case_quoted_with_a_trailing_separator_or_by_its_variable() {
+    let user = env(None, &[("LOCALAPPDATA", r"C:\Users\me\AppData\Local")]);
+    for written in [
+        r"c:\users\ME\appdata\local\programs\floti\BIN",
+        r"C:\Users\me\AppData\Local\Programs\Floti\bin\",
+        r#""C:\Users\me\AppData\Local\Programs\Floti\bin""#,
+        r"%LocalAppData%\Programs\Floti\bin",
+    ] {
+        let value = format!(r"C:\tools;{written};;D:\bin;");
+        assert_eq!(
+            windows::without_folder(Some(&value), FLOTI_BIN, &user),
+            Some(r"C:\tools;D:\bin".to_owned()),
+            "{written}"
+        );
+    }
+    // Twice is taken out twice.
+    let twice = format!(r"{FLOTI_BIN};C:\tools;{FLOTI_BIN}\");
+    assert_eq!(
+        windows::without_folder(Some(&twice), FLOTI_BIN, &user),
+        Some(r"C:\tools".to_owned())
+    );
+    // A folder inside it, or one that only starts the same, is not it.
+    let near = format!(r"{FLOTI_BIN}\node;{FLOTI_BIN}2");
+    assert_eq!(windows::without_folder(Some(&near), FLOTI_BIN, &user), None);
+}
+
+#[test]
+fn on_macos_and_linux_there_is_no_line_of_floti_s_to_take_out_and_the_users_own_stays() {
+    let dirs = TestDirs::new();
+    let profile = dirs.home.join(".profile");
+    let line = "PATH=\"$HOME/.local/bin:$PATH\"\n";
+    std::fs::write(&profile, line).unwrap();
+    let user = env(Some(&dirs.home), &[("SHELL", "/bin/bash")]);
+    let folder = dirs.home.join(".local").join("bin");
+    assert_eq!(linux::Native.remove(&user, &folder), Ok(false));
+    assert_eq!(macos::Native.remove(&user, &folder), Ok(false));
+    assert_eq!(std::fs::read_to_string(&profile).unwrap(), line);
+}

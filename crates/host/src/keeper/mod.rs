@@ -361,6 +361,41 @@ impl Drop for Keeper {
 
 /// Tells the keeper on `link` to end everything and exit, and ends its tree
 /// by its pid if it has not gone once it has had its time.
+/// What [`end_left_keeper`] ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LeftKeeper {
+    /// How many running sessions it held, where it speaks this host's link
+    /// version;
+    /// `None` for one of another link version, which says nothing of what
+    /// it holds.
+    pub sessions: Option<usize>,
+}
+
+/// Ends the session keeper a host left running on `folders`, and every
+/// session and plain terminal in it, as a deliberate stop does: what `floti
+/// uninstall` does when no host answers. `None` when no keeper listens.
+pub fn end_left_keeper(folders: &Folders) -> Option<LeftKeeper> {
+    let endpoint = keeper_endpoint(&folders.runtime, &folders.data);
+    let link_version = keeper_link_version(&folders.data).unwrap_or(wire::UNNAMED_LINK_VERSION);
+    let (link, greeting) = KeeperLink::connect(socket::Native, &endpoint, link_version).ok()?;
+    let sessions = match greeting {
+        Greeting::Ours(held) => Some(
+            held.iter()
+                .filter(|program| {
+                    program.exit.is_none()
+                        && program
+                            .label
+                            .as_ref()
+                            .is_some_and(|label| label.kind == HeldKind::Session)
+                })
+                .count(),
+        ),
+        Greeting::Other { .. } => None,
+    };
+    end_keeper(&link);
+    Some(LeftKeeper { sessions })
+}
+
 fn end_keeper(link: &KeeperLink) {
     let pid = link.pid();
     link.shutdown(KEEPER_WAIT);

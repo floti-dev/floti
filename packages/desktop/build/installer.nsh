@@ -59,9 +59,11 @@
 ; floti.exe carried are defines, which a script including this one may set
 ; first to point them elsewhere.
 ;
-; What the install adds outside $INSTDIR, which the uninstaller leaves for
-; now (docs/PACKAGING.md lists it): %LOCALAPPDATA%\Programs\Floti\bin, the
-; entry for it in the user's Path, and setup's logon task "Floti host".
+; What the install adds outside $INSTDIR, which this uninstaller leaves and
+; `floti uninstall` removes (docs/PACKAGING.md lists it):
+; %LOCALAPPDATA%\Programs\Floti\bin, the entry for it in the user's Path, and
+; setup's logon task "Floti host". `floti uninstall` runs this uninstaller
+; itself, silently and in place (`/S _?=$INSTDIR`).
 
 !include "LogicLib.nsh"
 !include "getProcessInfo.nsh"

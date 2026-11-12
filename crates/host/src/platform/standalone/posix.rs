@@ -26,6 +26,32 @@ pub(super) fn replace(target: &Path, new: &Path) -> io::Result<()> {
     std::fs::rename(new, target)
 }
 
+/// Unlinks `target`; a process running it keeps its copy until it exits,
+/// so nothing is left to delete later.
+pub(super) fn remove_running(target: &Path) -> io::Result<Option<PathBuf>> {
+    match std::fs::remove_file(target) {
+        Ok(()) => Ok(None),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(err),
+    }
+}
+
+/// Deletes `files` and each empty folder of `folders` now: on macOS and
+/// Linux no running process holds a file against its deletion.
+pub(super) fn delete_now(files: &[PathBuf], folders: &[PathBuf]) -> io::Result<()> {
+    for file in files {
+        remove_running(file)?;
+    }
+    for folder in folders {
+        let is_folder = std::fs::symlink_metadata(folder)
+            .is_ok_and(|meta| meta.is_dir() && !meta.file_type().is_symlink());
+        if is_folder && std::fs::read_dir(folder)?.next().is_none() {
+            std::fs::remove_dir(folder)?;
+        }
+    }
+    Ok(())
+}
+
 /// Makes `path` executable by everyone and writable by its owner (`0755`).
 /// Compiled on every OS for the tests of the files that use it; it is
 /// `Native` only on macOS and Linux.

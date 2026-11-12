@@ -469,7 +469,8 @@ host no config folder of its own, so the host it starts and the host started
 at sign-in read the same one.
 
 What it adds outside the install folder, which uninstalling the app leaves
-for now (`floti uninstall` removes it, in a later piece):
+and `floti uninstall` removes ([below](#floti-uninstall)), the host's data
+only with `--purge`:
 
 | What | Where |
 |---|---|
@@ -1210,6 +1211,109 @@ and every session keeps its tab. One that does not ends the keeper with what
 it holds, and those sessions come back through the restore offer in their
 tabs, as after any keeper that was lost. A client sees the connection end
 without a stop, keeps each tab's screen dimmed, and reconnects.
+
+## floti uninstall
+
+`floti uninstall` (`crates/host/src/uninstall.rs`) takes off the computer
+what installing Floti put there, either way in: the install scripts, or the
+desktop installer through `floti install-self`. It is the explicit act, so it
+asks nothing. `floti uninstall --purge` removes the data too.
+
+It goes in this order, so a run that stops part way leaves nothing
+half-working, and the next run carries on where it stopped:
+
+1. **The desktop app, if it runs, is closed.** A desktop that started the
+   host would start another as soon as the host stops.
+2. **The host stops for good** (`host:stop` with reason `stop`, as the host
+   itself, which `update-stop.rs` holds): every session and plain terminal
+   ends, each session recorded as stopped so none is offered back, and the
+   session keeper ends with it. One line says how many sessions it ended.
+   With no host answering, a keeper a host left running is ended with what
+   it holds. The sessions' history stays in the data folder.
+3. **The start-at-sign-in entry** (`platform/startup/register.rs`,
+   `unregister`): the logon task "Floti host" (`schtasks /Delete`, and its
+   XML under the data folder), the LaunchAgent `dev.floti.host`
+   (`launchctl bootout` when loaded, then its property list), or the user
+   unit `floti.service` (`systemctl --user disable --now`, its file, then
+   `daemon-reload`; with no user manager answering, the unit and its
+   `default.target.wants` link go by hand). In a WSL distro without systemd,
+   the record that has `floti connect` start the host goes instead.
+   **Lingering is left on**: it is a per-user setting other services may rely
+   on, so a Linux computer with it on gets one line saying so and that
+   `loginctl disable-linger` turns it off.
+4. **The desktop app** (`platform/installs`, `removal`): on Windows by its own
+   NSIS uninstaller, `"Uninstall Helm.exe" /S _?=<install folder>`, run in
+   place so the wait is for the uninstall itself (without `_?=` NSIS copies
+   itself to `%TEMP%` and returns at once); it removes the app, its Start menu
+   entry and its uninstall registry entry, and what it leaves of its folder
+   goes after it. A run whose `Helm.exe` is still there afterwards fails.
+   On macOS the `.app`; on Linux the AppImage, `applications/helm.desktop`
+   and the icon.
+5. **The PATH entry** (`platform/user_path`, `remove`): on Windows each entry
+   of the user's `Path` that names floti's folder, as written or once its
+   variables are expanded, goes, and the rest stay as written, still an
+   expandable string. On macOS and Linux floti adds no line to a startup
+   file, so there is none to remove, and a line the user wrote stays.
+6. **floti and its Node** (`platform/standalone`): the `node` folder, copies
+   an install or update put aside or left part way, and floti itself. A
+   running `floti.exe` can be neither removed nor replaced on Windows, and
+   uninstall runs from it, so it is renamed aside (`floti.old-<pid>-<n>.exe`)
+   and a hidden Windows PowerShell 5.1, started apart from this process
+   (outside its job, with none of its handles, so a script reading
+   uninstall's output is not held open), waits for it to exit and deletes the
+   copy, retrying for up to five minutes while anything still runs it, then
+   `Programs\Floti\bin` and `Programs\Floti` once they are empty and not
+   junctions. That needs no admin rights (a delete at the next restart does),
+   leaves no copy of floti in `%TEMP%` that would have the same problem, and
+   waits on Windows' own refusal to delete a file a process runs, the test
+   install-self and `floti update` already use; the sweep of copies put aside
+   that both make is the fallback. On macOS and Linux the file is unlinked,
+   which the running process survives, and `~/.local/bin` stays: it is the
+   user's.
+
+Then the data. Without `--purge` the data folder, the logs and the config
+folder stay, each named on one line. With `--purge` they go, and on Linux the
+socket's folder under `$XDG_RUNTIME_DIR` too, each unlinking every link it
+holds (a launch folder's junctions into repositories) and never walking into
+one, then Floti's entry in the OS secret store: the Keychain item on macOS,
+the Secret Service item on Linux, and on Windows none, since DPAPI stores
+nothing. A purge refuses, rather than removes, a folder that is the home
+folder or holds it, or that is, holds or is inside `~/.claude` or `~/.ssh`,
+whatever an override named; nothing touches an agent's config, `~/.ssh` or a
+repository. The desktop app's own data folder (`%APPDATA%\Helm`, holding
+`helm.db`) is the app's and stays, as its uninstaller leaves it.
+
+A floti that is not the one in the place the install scripts use, such as one
+Homebrew or winget installed, says so in one line and removes only what it
+installed: steps 1 to 4 and the data, leaving itself and the PATH to whatever
+installed it.
+
+| Line on standard output | Means |
+|---|---|
+| `desktop app: closed, so it starts no host` | It was running and was closed. |
+| `host: stopped, ending 2 sessions` / `host: not running` | The host, or a keeper a host left, was stopped; or nothing answered. |
+| `sign-in entry: removed (logon task "Floti host")` / `not found` | The entry, named as the OS calls it. |
+| `lingering: left on, ...` | Linux, where it is on. |
+| `desktop app: removed (<path>)` / `not found` | |
+| `PATH entry: removed (<folder>)` / `not found` | macOS and Linux always say `not found`. |
+| `floti: removed (<path>)` / `not found` | On Windows followed by `; the copy this process runs from goes once it exits`. |
+| `floti: left as it is; this floti runs from ...` | A floti from elsewhere. |
+| `data: kept (<folder>); floti uninstall --purge removes it` / `removed (<folder>)` / `not found` | And `logs:`, `config:`, with `--purge` `runtime:` where it is apart. |
+| `secret store: removed Floti's key` / `not found` | `--purge` only. |
+
+So a second run says `not found` for each and exits 0. Each line starts with
+what it is about and a colon, for a script to match. A step that fails stops
+the run with one line on standard error, `floti uninstall: <what>: <why>`,
+and status 1; a host that cannot be stopped says nothing was removed. Run
+from inside one of Floti's own sessions (a `floti` among its parent
+processes, the keeper's or the host's), it refuses before changing anything,
+since stopping the host would end it. Any other argument is a usage error,
+status 2.
+
+Its tests use fake folders and a fake system, never the computer's own
+(`crates/host/tests/uninstall.rs`, `src/uninstall/tests.rs`, and the
+`unregister`, `removal`, `remove` and `delete_after_exit` tests in each
+concern). The install and uninstall run for real only on CI runners.
 
 ## Updates in Helm
 

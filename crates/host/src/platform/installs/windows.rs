@@ -16,7 +16,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use super::{Desktop, Installs, desktop_dir_override, file_name};
+use super::{Desktop, DesktopRemoval, Installs, desktop_dir_override, file_name};
 use crate::platform::folders::UserEnv;
 use crate::platform::process_table::ProcessRow;
 use crate::platform::windows_path::{self, comparable, inside};
@@ -137,6 +137,20 @@ impl Installs for Native {
 
     fn no_display(&self, _env: &UserEnv) -> Option<String> {
         Self::no_display_in(system::session_id())
+    }
+
+    fn removal(&self, env: &UserEnv) -> Option<DesktopRemoval> {
+        let desktop = self.desktop(env)?;
+        let install = desktop.path;
+        Some(DesktopRemoval {
+            uninstaller: Some((
+                Self::uninstaller(&install),
+                format!("/S _?={}", install.display()),
+            )),
+            gone_after: Some(Self::program(&install)),
+            remove: vec![install.clone()],
+            shown: install,
+        })
     }
 
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {

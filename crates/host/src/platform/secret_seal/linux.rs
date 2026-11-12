@@ -108,6 +108,56 @@ fn read_or_make_key(entry: &StoreEntry) -> Result<Vec<u8>, SealError> {
         .ok_or_else(|| SealError::Failed("the OS gave no random bytes".into()))
 }
 
+/// Deletes every Secret Service item with the attributes `entry` names, for
+/// `floti uninstall --purge`, and answers whether there was one. With no
+/// session bus, or no Secret Service on it, nothing can have been stored
+/// there, and there is none.
+pub fn remove_entry(entry: &StoreEntry) -> Result<bool, String> {
+    let entry = entry.clone();
+    std::thread::Builder::new()
+        .name("floti secret service".into())
+        .spawn(move || delete_items(&entry))
+        .map_err(|err| format!("could not ask the Secret Service: {err}"))?
+        .join()
+        .map_err(|_| "the Secret Service's thread failed".to_owned())?
+}
+
+/// Deletes the items holding `entry`'s attributes, on a runtime of its own.
+fn delete_items(entry: &StoreEntry) -> Result<bool, String> {
+    let named = entry.secret_service_attributes();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| format!("could not ask the Secret Service: {err}"))?;
+    runtime.block_on(async {
+        let found = tokio::time::timeout(PATIENCE, async {
+            let Ok(service) = SecretService::connect(EncryptionType::Dh).await else {
+                return Ok(false);
+            };
+            let attributes: HashMap<&str, &str> = named
+                .iter()
+                .map(|(key, value)| (*key, value.as_str()))
+                .collect();
+            let items = service.search_items(attributes).await?;
+            let mut removed = false;
+            for item in items.unlocked.iter().chain(items.locked.iter()) {
+                item.ensure_unlocked().await?;
+                item.delete().await?;
+                removed = true;
+            }
+            Ok::<_, secret_service::Error>(removed)
+        })
+        .await;
+        match found {
+            Ok(Ok(removed)) => Ok(removed),
+            Ok(Err(err)) => Err(format!(
+                "the Secret Service would not delete Floti's key: {err}"
+            )),
+            Err(_) => Err("the Secret Service did not answer".to_owned()),
+        }
+    })
+}
+
 impl SecretSeal for Native {
     fn available(&self) -> bool {
         self.key().is_ok()

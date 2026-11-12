@@ -385,7 +385,7 @@ const COPY: &str = ".floti-install-";
 
 /// Removes the copies of `target` (named `name`) that an install which
 /// stopped part way left beside it.
-fn remove_copies(target: &Path, name: &str) {
+pub(crate) fn remove_copies(target: &Path, name: &str) {
     let Some(folder) = target.parent() else {
         return;
     };

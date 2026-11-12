@@ -26,4 +26,21 @@ impl Standalone for Native {
     fn remove_asides(&self, _target: &Path) -> Vec<PathBuf> {
         Vec::new()
     }
+
+    fn own_folders(&self, _env: &UserEnv) -> Vec<PathBuf> {
+        Vec::new()
+    }
+
+    fn remove_running(&self, target: &Path) -> io::Result<Option<PathBuf>> {
+        posix::remove_running(target)
+    }
+
+    fn delete_after_exit(
+        &self,
+        _env: &UserEnv,
+        files: &[PathBuf],
+        folders: &[PathBuf],
+    ) -> io::Result<()> {
+        posix::delete_now(files, folders)
+    }
 }

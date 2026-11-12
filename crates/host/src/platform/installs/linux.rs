@@ -17,7 +17,9 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{Desktop, Installs, NEW_COPY, beside, desktop_dir_override, file_name, posix};
+use super::{
+    Desktop, DesktopRemoval, Installs, NEW_COPY, beside, desktop_dir_override, file_name, posix,
+};
 use crate::platform::folders::UserEnv;
 use crate::platform::process_table::ProcessRow;
 use crate::platform::wsl::{INTEROP_FILE, linux::inside_with};
@@ -80,6 +82,16 @@ impl Native {
         share
             .join("applications")
             .join(format!("{ENTRY_NAME}.desktop"))
+    }
+
+    /// Where the menu entry's icon is under `share`.
+    fn icon_path(share: &Path) -> PathBuf {
+        share
+            .join("icons")
+            .join("hicolor")
+            .join(ICON_SIZE)
+            .join("apps")
+            .join(format!("{ENTRY_NAME}.png"))
     }
 
     /// The menu entry for the AppImage at `app_image`.
@@ -196,13 +208,7 @@ impl Installs for Native {
 
     fn add_launcher(&self, env: &UserEnv, desktop: &Desktop) -> Result<Option<PathBuf>> {
         let share = Self::share(env)?;
-        let icon = share
-            .join("icons")
-            .join("hicolor")
-            .join(ICON_SIZE)
-            .join("apps")
-            .join(format!("{ENTRY_NAME}.png"));
-        write_into_place(&icon, ICON)?;
+        write_into_place(&Self::icon_path(&share), ICON)?;
         let entry = Self::entry_path(&share);
         write_into_place(&entry, Self::entry_text(&desktop.path).as_bytes())?;
         Ok(Some(entry))
@@ -213,6 +219,24 @@ impl Installs for Native {
             return Ok(None);
         }
         self.add_launcher(env, desktop)
+    }
+
+    fn removal(&self, env: &UserEnv) -> Option<DesktopRemoval> {
+        let app_image = Self::app_image(env)?;
+        let launcher = Self::data_home(env)
+            .map(|share| [Self::icon_path(&share), Self::entry_path(&share)])
+            .into_iter()
+            .flatten();
+        let remove: Vec<PathBuf> = std::iter::once(app_image.clone())
+            .chain(launcher)
+            .filter(|path| std::fs::symlink_metadata(path).is_ok())
+            .collect();
+        (!remove.is_empty()).then_some(DesktopRemoval {
+            shown: app_image,
+            uninstaller: None,
+            gone_after: None,
+            remove,
+        })
     }
 
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {

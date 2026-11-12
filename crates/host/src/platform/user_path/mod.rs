@@ -64,4 +64,14 @@ pub trait UserPath {
     /// anything: on Windows, the desktop installer's step; on macOS and
     /// Linux nothing is changed, and `floti doctor` gives the line.
     fn add(&self, env: &UserEnv, folder: &Path) -> Result<bool, String>;
+
+    /// Takes the entry [`UserPath::add`] puts there for `folder` off that
+    /// `PATH`, for `floti uninstall`, and answers whether there was one: on
+    /// Windows each entry of the user's `Path` value that names the folder
+    /// (as written or once its `%VARIABLE%`s are expanded, without case or a
+    /// trailing separator) goes, and the rest stay as written, still an
+    /// expandable string; the value goes when nothing is left in it. On
+    /// macOS and Linux floti adds no line to a startup file, so there is
+    /// none to take out, and a line the user wrote stays.
+    fn remove(&self, env: &UserEnv, folder: &Path) -> Result<bool, String>;
 }

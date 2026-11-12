@@ -43,7 +43,10 @@
 //! leaving a newer one there unless given `--force`, puts
 //! that folder on the user's PATH on Windows, and runs `floti setup` from
 //! there: the desktop's installer and the desktop run it from the floti they
-//! carry. A host started by the OS's mechanism
+//! carry. `floti uninstall` stops the host and its keeper and takes off what
+//! installing put there (the sign-in entry, the desktop app, the PATH entry,
+//! floti and its Node), keeping the data unless given `--purge`. A host
+//! started by the OS's mechanism
 //! exits with status 0 whenever it is stopped on purpose, so the systemd
 //! unit's restart on failure starts again only a host that crashed or was
 //! killed. In WSL, where systemd's user manager does not answer, setup
@@ -95,7 +98,7 @@ use floti_host::keep_awake::run_keep_awake;
 use floti_host::version;
 use floti_host::{ALREADY_RUNNING_EXIT, DesktopCommand, Error, HostOptions, log_line};
 
-const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...] [--after <pid>]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger] [--desktop | --no-desktop]\n       floti install-self [--force]\n       floti add [desktop]\n       floti update [--channel <name>] [--from-desktop | --floti-only]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop [--keep] [--json] <name>\n       floti session title <text>";
+const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...] [--after <pid>]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger] [--desktop | --no-desktop]\n       floti install-self [--force]\n       floti add [desktop]\n       floti update [--channel <name>] [--from-desktop | --floti-only]\n       floti uninstall [--purge]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop [--keep] [--json] <name>\n       floti session title <text>";
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
@@ -152,6 +155,13 @@ fn main() -> ExitCode {
             Some(options) => ExitCode::from(floti_host::update::run(
                 options,
                 &update_stop::relaunch_host,
+            )),
+            None => usage(),
+        },
+        ["uninstall", ..] => match floti_host::uninstall::parse(&args[1..]) {
+            Some(options) => ExitCode::from(floti_host::uninstall::run(
+                options,
+                &update_stop::stop_for_uninstall,
             )),
             None => usage(),
         },

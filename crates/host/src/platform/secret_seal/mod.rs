@@ -18,6 +18,10 @@
 //! [`SecretSeal::available`] is false and every seal is refused: a value is
 //! stored sealed or not at all.
 //!
+//! `floti uninstall --purge` removes the entry ([`remove_entry`]): the
+//! Keychain item on macOS, the Secret Service item on Linux; on Windows there
+//! is none.
+//!
 //! Floti's secrets start empty. `floti.db` sits in Floti's own data folder and
 //! nothing copies the desktop app's secrets table into it, so no value Electron
 //! sealed reaches this module; the user saves each secret again in Floti. A
@@ -40,10 +44,16 @@ mod windows;
 pub use entry::{StoreEntry, data_folder_tag};
 #[cfg(target_os = "linux")]
 pub use linux::Native;
+#[cfg(target_os = "linux")]
+pub use linux::remove_entry;
 #[cfg(target_os = "macos")]
 pub use macos::Native;
+#[cfg(target_os = "macos")]
+pub use macos::remove_entry;
 #[cfg(target_os = "windows")]
 pub use windows::Native;
+#[cfg(target_os = "windows")]
+pub use windows::remove_entry;
 
 /// Why a value could not be sealed or unsealed. Says nothing of the value.
 #[derive(Debug, Clone, PartialEq, Eq)]

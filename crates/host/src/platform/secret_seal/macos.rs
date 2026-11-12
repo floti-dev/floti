@@ -8,7 +8,9 @@
 
 use std::sync::{Mutex, PoisonError};
 
-use security_framework::passwords::{get_generic_password, set_generic_password};
+use security_framework::passwords::{
+    delete_generic_password, get_generic_password, set_generic_password,
+};
 
 use super::{KeySeal, SealError, SecretSeal, StoreEntry};
 
@@ -54,6 +56,16 @@ impl Native {
         let found = std::sync::Arc::new(found);
         *key = Some(std::sync::Arc::clone(&found));
         Ok(found)
+    }
+}
+
+/// Deletes the Keychain item `entry` names, for `floti uninstall --purge`,
+/// and answers whether there was one.
+pub fn remove_entry(entry: &StoreEntry) -> Result<bool, String> {
+    match delete_generic_password(entry.keychain_service(), &entry.keychain_account()) {
+        Ok(()) => Ok(true),
+        Err(err) if err.code() == ITEM_NOT_FOUND => Ok(false),
+        Err(err) => Err(format!("the Keychain would not delete Floti's key: {err}")),
     }
 }
 

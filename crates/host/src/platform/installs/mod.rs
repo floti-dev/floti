@@ -35,6 +35,14 @@
 //! session the app could run in but does not belong in
 //! ([`Installs::not_offered`]): a WSL distro, whose desktop is Windows'.
 //!
+//! `floti uninstall` removes the app the OS's way ([`Installs::removal`]):
+//! on Windows by its own NSIS uninstaller, run silently (`/S`) and in place
+//! (`_?=<install folder>`), so the wait is for the uninstall itself rather
+//! than for the copy NSIS otherwise starts in `%TEMP%` and does not wait for;
+//! the uninstaller left behind then goes with its folder. On macOS the
+//! `.app`, and on Linux the AppImage with its menu entry and icon, are
+//! removed as files.
+//!
 //! Nothing here adds a quarantine flag or a download mark: the files are
 //! written by floti's own process, which neither Gatekeeper's quarantine nor
 //! Windows' mark of the web applies to, and the macOS extraction is told
@@ -88,6 +96,27 @@ pub struct Desktop {
     /// The install: its folder on Windows, the `.app` on macOS, the
     /// AppImage on Linux.
     pub path: PathBuf,
+}
+
+/// What removing the installed desktop app takes, for `floti uninstall`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DesktopRemoval {
+    /// What the line that says it was removed names: the install folder,
+    /// the `.app` or the AppImage.
+    pub shown: PathBuf,
+    /// The app's own uninstaller and its arguments as one line, appended to
+    /// its command line as written, run silently and waited for before
+    /// anything else: on Windows the NSIS uninstaller, run in place
+    /// (`/S _?=<folder>`) so the wait is for the uninstall itself. NSIS reads
+    /// `_?=` to the end of the line and takes no quotes, so the line is never
+    /// quoted.
+    pub uninstaller: Option<(PathBuf, String)>,
+    /// A file the uninstaller must have removed, or it failed: the app's
+    /// program on Windows.
+    pub gone_after: Option<PathBuf>,
+    /// What is removed then, each without walking into a link: what the
+    /// uninstaller leaves of its folder, the app itself and its menu entry.
+    pub remove: Vec<PathBuf>,
 }
 
 /// The OS's way to put a release in place.
@@ -173,6 +202,17 @@ pub trait Installs {
     fn repair_launcher(&self, env: &UserEnv, desktop: &Desktop) -> Result<Option<PathBuf>> {
         let _ = (env, desktop);
         Ok(None)
+    }
+
+    /// What removing the desktop app installed for the user `env` describes
+    /// takes, or `None` when there is nothing of it to remove: on Windows
+    /// its NSIS uninstaller, run silently in place, then what that leaves of
+    /// the install folder; on macOS the `.app`; on Linux the AppImage, and
+    /// the menu entry and icon [`Installs::add_launcher`] wrote, whichever
+    /// of them are there.
+    fn removal(&self, env: &UserEnv) -> Option<DesktopRemoval> {
+        let _ = env;
+        None
     }
 }
 

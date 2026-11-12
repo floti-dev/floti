@@ -242,3 +242,185 @@ fn windows_puts_a_running_copy_aside_and_keeps_it_until_nothing_runs_it() {
     assert!(windows::Native.remove_asides(&target).is_empty());
     assert_eq!(names(&bin), ["floti.exe"]);
 }
+
+#[test]
+fn only_windows_has_folders_of_floti_s_own_to_remove_once_empty() {
+    let dirs = TestDirs::new();
+    let local = dirs.folder("Local App Data");
+    let user = env(Some(&dirs.home), &[("LOCALAPPDATA", &local)]);
+    let programs = local.join("Programs");
+    assert_eq!(
+        windows::Native.own_folders(&user),
+        [programs.join("Floti").join("bin"), programs.join("Floti")]
+    );
+    assert!(
+        windows::Native
+            .own_folders(&env(Some(&dirs.home), &[]))
+            .is_empty()
+    );
+    // ~/.local/bin is the user's.
+    assert!(linux::Native.own_folders(&user).is_empty());
+    assert!(macos::Native.own_folders(&user).is_empty());
+}
+
+#[test]
+fn a_floti_nothing_runs_is_removed_at_once_and_one_not_there_is_already_removed() {
+    let dirs = TestDirs::new();
+    let bin = dirs.folder("bin");
+    for place in [
+        &windows::Native as &dyn Standalone,
+        &linux::Native,
+        &macos::Native,
+    ] {
+        let target = bin.join("floti.exe");
+        std::fs::write(&target, b"floti").unwrap();
+        assert_eq!(place.remove_running(&target).unwrap(), None);
+        assert!(names(&bin).is_empty(), "{:?}", names(&bin));
+        assert_eq!(place.remove_running(&target).unwrap(), None);
+    }
+}
+
+#[test]
+fn on_macos_and_linux_what_is_left_goes_at_once_and_a_folder_holding_something_stays() {
+    let dirs = TestDirs::new();
+    let bin = dirs.folder("bin");
+    let file = bin.join("floti.old-1-0.exe");
+    std::fs::write(&file, b"old").unwrap();
+    let empty = dirs.folder("empty");
+    let full = dirs.folder("full");
+    std::fs::write(full.join("mine"), b"mine").unwrap();
+    for place in [&linux::Native as &dyn Standalone, &macos::Native] {
+        place
+            .delete_after_exit(
+                &dirs.user_env(),
+                std::slice::from_ref(&file),
+                &[empty.clone(), full.clone(), dirs.root().join("never there")],
+            )
+            .unwrap();
+    }
+    assert!(!file.exists());
+    assert!(!empty.exists());
+    assert!(full.join("mine").exists());
+}
+
+#[test]
+fn the_deleting_script_waits_for_this_process_and_names_every_path_quoted() {
+    let files = [PathBuf::from(
+        r"C:\Users\O'Neil\Floti\bin\floti.old-7-0.exe",
+    )];
+    let folders = [
+        PathBuf::from(r"C:\Users\O'Neil\Floti\bin"),
+        PathBuf::from("C:\\Users\\O\u{2019}Neil\\Floti"),
+    ];
+    let script = windows::delete_after_exit_script(4120, &files, &folders);
+    assert!(script.contains("Wait-Process -Id 4120 "), "{script}");
+    assert!(
+        script.contains(r"$files = @('C:\Users\O''Neil\Floti\bin\floti.old-7-0.exe')"),
+        "{script}"
+    );
+    assert!(
+        script.contains(
+            "$folders = @('C:\\Users\\O''Neil\\Floti\\bin', 'C:\\Users\\O\u{2019}\u{2019}Neil\\Floti')"
+        ),
+        "{script}"
+    );
+    // A folder goes only when it is empty and not a junction.
+    assert!(script.contains("ReparsePoint"), "{script}");
+    assert!(
+        script.contains("Get-ChildItem -LiteralPath $folder -Force"),
+        "{script}"
+    );
+    assert!(
+        !script.contains("-Recurse"),
+        "nothing is removed recursively"
+    );
+    // Nothing given, nothing to do: the lists are empty.
+    let none = windows::delete_after_exit_script(1, &[], &[]);
+    assert!(none.contains("$files = @()") && none.contains("$folders = @()"));
+}
+
+#[test]
+fn a_powershell_string_doubles_every_quote_that_would_end_it() {
+    assert_eq!(windows::quoted("plain"), "'plain'");
+    assert_eq!(windows::quoted("it's"), "'it''s'");
+    for quote in ['\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'] {
+        assert_eq!(
+            windows::quoted(&format!("a{quote}b")),
+            format!("'a{quote}{quote}b'")
+        );
+    }
+}
+
+#[test]
+fn the_script_goes_to_powershell_as_base64_of_its_utf16() {
+    use base64::Engine;
+    let script = "Remove-Item -LiteralPath 'C:\\Floti'\n";
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(windows::encoded_command(script))
+        .unwrap();
+    let units: Vec<u16> = decoded
+        .chunks(2)
+        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+        .collect();
+    assert_eq!(String::from_utf16(&units).unwrap(), script);
+}
+
+#[test]
+fn windows_powershell_is_found_by_its_full_path_under_systemroot() {
+    let root = Path::new(r"C:\Windows");
+    assert_eq!(
+        windows::windows_powershell(&env(None, &[("SystemRoot", root)])),
+        Some(PathBuf::from(
+            r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+        ))
+    );
+    assert_eq!(windows::windows_powershell(&env(None, &[])), None);
+    assert_eq!(
+        windows::windows_powershell(&env(None, &[("SystemRoot", Path::new("Windows"))])),
+        None,
+        "not a full path"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_renames_a_running_floti_aside_so_its_name_is_free_and_answers_the_copy() {
+    use std::process::{Command, Stdio};
+
+    let dirs = TestDirs::new();
+    let bin = dirs.folder("bin");
+    let target = bin.join("floti.exe");
+    let system = std::env::var_os("SystemRoot").expect("SystemRoot is set");
+    std::fs::copy(
+        PathBuf::from(system).join("System32").join("PING.EXE"),
+        &target,
+    )
+    .unwrap();
+    let mut running = Running(
+        Command::new(&target)
+            .args(["-n", "600", "127.0.0.1"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+
+    let aside = windows::Native
+        .remove_running(&target)
+        .unwrap()
+        .expect("a running copy is left to delete");
+    assert!(!target.exists(), "its name is free");
+    assert!(aside.exists());
+    assert!(running.0.try_wait().unwrap().is_none(), "it still runs");
+    // The sweep an install or update makes is the fallback.
+    assert_eq!(
+        windows::Native.remove_asides(&target),
+        std::slice::from_ref(&aside)
+    );
+
+    running.0.kill().unwrap();
+    running.0.wait().unwrap();
+    assert!(windows::Native.remove_asides(&target).is_empty());
+    assert!(names(&bin).is_empty());
+}

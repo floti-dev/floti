@@ -18,6 +18,20 @@
 //!   put aside. On macOS the new file loses `com.apple.quarantine` first: a
 //!   copy out of an app opened from a downloaded dmg carries it.
 //!
+//! Uninstalling (`floti uninstall`) takes floti out of that place the same
+//! way. On Windows the running `floti.exe` is renamed aside, since it can be
+//! neither removed nor replaced while it runs, and a hidden Windows
+//! PowerShell started apart from it deletes the copy aside once nothing runs
+//! it, then the folders the install made for floti alone
+//! ([`Standalone::own_folders`]: `bin` and `Floti` above it) once they are
+//! empty. It needs no admin rights (a delete at the next restart does), leaves
+//! no copy of floti behind to delete itself, and waits on Windows' own refusal
+//! to remove a file a process runs, the same test [`Standalone::remove_asides`]
+//! uses. What it could not delete in its few minutes, a later install or
+//! update sweeps as a copy put aside. On macOS and Linux the file is unlinked,
+//! which a process running it survives, and `~/.local/bin` is the user's, so
+//! nothing is left for later.
+//!
 //! Each OS's rule is plain path arithmetic and renames, so all three are
 //! compiled and tested on every OS; the build picks one as [`Native`].
 
@@ -62,4 +76,30 @@ pub trait Standalone {
     /// Removes the copies of `target` an earlier [`Standalone::replace`] put
     /// aside, where nothing runs them any more, and answers those it left.
     fn remove_asides(&self, target: &Path) -> Vec<PathBuf>;
+
+    /// The folders an install made for floti alone, deepest first, which
+    /// uninstalling removes once they are empty: on Windows
+    /// `%LOCALAPPDATA%\Programs\Floti\bin` and `Floti` above it; none on
+    /// macOS and Linux, where `~/.local/bin` is the user's own.
+    fn own_folders(&self, env: &UserEnv) -> Vec<PathBuf>;
+
+    /// Removes `target`, which may be the file this process runs from, and
+    /// answers the copy of it still to delete once nothing runs it, if any.
+    /// On Windows a running file is renamed aside, as
+    /// [`Standalone::replace`] does, so its name is free at once; on macOS
+    /// and Linux it is unlinked, which a process running it survives. A
+    /// `target` that is not there is already removed.
+    fn remove_running(&self, target: &Path) -> io::Result<Option<PathBuf>>;
+
+    /// Deletes each of `files`, then each of `folders` that is empty and not
+    /// a link, once this process has exited, for the user `env` describes.
+    /// On Windows a hidden Windows PowerShell, started apart from this
+    /// process and holding none of its handles, does it; on macOS and Linux
+    /// nothing a process runs needs waiting for, and it is done at once.
+    fn delete_after_exit(
+        &self,
+        env: &UserEnv,
+        files: &[PathBuf],
+        folders: &[PathBuf],
+    ) -> io::Result<()>;
 }

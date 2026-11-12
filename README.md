@@ -76,6 +76,17 @@ a terminal and a display, and says where it is when it is installed already;
 `floti setup --desktop` installs it without asking and `--no-desktop` leaves
 it out.
 
+**Uninstalling Floti** - `floti uninstall` stops the host, which ends any
+running sessions (their history stays), then removes what installing put
+there, either way in: the start-at-sign-in entry, the desktop app (on Windows
+through its own uninstaller), floti's entry in your `PATH` on Windows, and
+floti with its Node. It prints one line for each, or `not found`, so running
+it again changes nothing. Your data and config folders stay;
+`floti uninstall --purge` removes them as well, with Floti's own entry in your
+keychain or keyring, and never touches `~/.claude`, `~/.ssh` or any
+repository. On Linux it leaves lingering as it is, since other services may
+rely on it. Run it from a terminal Floti did not start.
+
 Harness templates are the one thing outside that: they live in
 `~/.config/helm/templates`, because they are folders you write and edit by hand.
 A portable install keeps them in its own `helm-data\templates`, so it still
