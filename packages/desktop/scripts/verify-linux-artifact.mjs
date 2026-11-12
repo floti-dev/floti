@@ -199,9 +199,8 @@ export function appProblems(root, { floti, sums, origin, modes = process.platfor
   else if (!readFileSync(carriedSums).equals(sums)) fail('resources/floti-SHA256SUMS is not the SHA-256 list it was given')
 
   const floor = glibcParts(`GLIBC_${GLIBC_FLOOR}`)
-  for (const path of elfFiles(root)) {
-    const needed = glibcNeeded(readFileSync(join(root, path)))
-    if (needed !== null && compareParts(glibcParts(`GLIBC_${needed}`), floor) > 0) {
+  for (const { path, needed } of glibcByFile(root)) {
+    if (compareParts(glibcParts(`GLIBC_${needed}`), floor) > 0) {
       fail(`${path} needs glibc ${needed}, newer than ${GLIBC_FLOOR}, so it does not load on an older Linux`)
     }
   }
@@ -221,6 +220,16 @@ export function appProblems(root, { floti, sums, origin, modes = process.platfor
     executable(node, 'resources/node/bin/node')
   }
   return problems
+}
+
+/** Each ELF file under `root` that needs some glibc, with the newest it needs, newest first. */
+export function glibcByFile(root) {
+  return elfFiles(root)
+    .flatMap((path) => {
+      const needed = glibcNeeded(readFileSync(join(root, path)))
+      return needed === null ? [] : [{ path, needed }]
+    })
+    .sort((a, b) => compareParts(glibcParts(`GLIBC_${b.needed}`), glibcParts(`GLIBC_${a.needed}`)) || a.path.localeCompare(b.path))
 }
 
 /** Extracts an AppImage with its own runtime into a fresh folder and returns `squashfs-root` in it. */
@@ -253,6 +262,7 @@ function main(args) {
   const floti = option(args, '--floti', join(desktopDir, 'dist-host', 'floti'))
   const sums = option(args, '--sums', join(desktopDir, 'dist-host', 'floti-SHA256SUMS'))
   const problems = []
+  let newest = null
   if (!APPIMAGE_NAME.test(basename(file))) problems.push(`${basename(file)} is not named Helm-<version>-linux-x64.AppImage`)
   for (const [what, path] of [['the AppImage', file], ['--floti', floti], ['--sums', sums]]) {
     if (!existsSync(path)) problems.push(`${what} ${path} does not exist`)
@@ -264,6 +274,9 @@ function main(args) {
     try {
       const root = extract(file, work)
       problems.push(...appProblems(root, { floti: readFileSync(floti), sums: readFileSync(sums), origin: basename(file) }))
+      // Said on success too, so the log shows what the floor was measured against.
+      const needs = glibcByFile(root)
+      newest = needs.length === 0 ? null : `${String(needs.length)} ELF files need glibc; the newest, ${needs[0].needed}, by ${needs[0].path}`
     } catch (error) {
       problems.push(error instanceof Error ? error.message : String(error))
     } finally {
@@ -275,7 +288,7 @@ function main(args) {
     for (const problem of problems) console.error(`FAIL ${problem}`)
     return 1
   }
-  console.log(`verified: ${basename(file)}`)
+  console.log(`verified: ${basename(file)}; ${newest ?? 'no ELF file in it names a glibc version'}`)
   return 0
 }
 

@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { describe, expect, inject, it } from 'vitest'
 import { RUN_ROOT } from '../../../../test/run-root'
-import { APPIMAGE_NAME, GLIBC_FLOOR, appProblems, glibcNeeded } from '../../scripts/verify-linux-artifact.mjs'
+import { APPIMAGE_NAME, GLIBC_FLOOR, appProblems, glibcByFile, glibcNeeded } from '../../scripts/verify-linux-artifact.mjs'
 
 /**
  * How the Linux AppImage check reads an extracted AppImage
@@ -169,8 +169,13 @@ describe('the Linux AppImage check', () => {
       'libffmpeg.so': elfNeeding(['GLIBC_2.35'])
     })
     expect(check(root)).toEqual([
-      'Helm.AppImage: libffmpeg.so needs glibc 2.35, newer than 2.34, so it does not load on an older Linux',
-      'Helm.AppImage: resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node needs glibc 2.42, newer than 2.34, so it does not load on an older Linux'
+      'Helm.AppImage: resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node needs glibc 2.42, newer than 2.34, so it does not load on an older Linux',
+      'Helm.AppImage: libffmpeg.so needs glibc 2.35, newer than 2.34, so it does not load on an older Linux'
+    ])
+    expect(glibcByFile(root).map(({ path, needed }) => `${needed} ${path}`)).toEqual([
+      '2.42 resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node',
+      '2.35 libffmpeg.so',
+      '2.34 resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds/linux-x64.node'
     ])
   })
 
