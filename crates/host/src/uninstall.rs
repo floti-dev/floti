@@ -29,7 +29,9 @@
 //!    the app's, kept where the app alone knows, and are left, which one line
 //!    says.
 //! 5. The `PATH` entry ([`UserPath::remove`]): on Windows the folder's entry
-//!    in the user's `Path`. On macOS and Linux floti adds none.
+//!    in the user's `Path`; on macOS and Linux floti's line, which ends in
+//!    `# added by floti`, from the startup files, and no line the user
+//!    wrote.
 //! 6. The data, with `--purge` (below); without it, a line says what stays.
 //!    It comes before floti, so a purge that fails leaves the floti that
 //!    runs it to try again.

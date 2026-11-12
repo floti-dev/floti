@@ -74,13 +74,16 @@ the app is already installed, and refuses in a session with no display.
 install scripts run, asks once whether to install it as well where there is
 a terminal and a display, and says where it is when it is installed already;
 `floti setup --desktop` installs it without asking and `--no-desktop` leaves
-it out.
+it out. Setup also puts floti's folder on your `PATH` where it is not there:
+on macOS and Linux by adding one line to the startup file your shell reads,
+which it names.
 
 **Uninstalling Floti** - `floti uninstall` stops the host, which ends any
 running sessions (their history stays), then removes what installing put
 there, either way in: the start-at-sign-in entry, the desktop app (on Windows
-through its own uninstaller), floti's entry in your `PATH` on Windows, and
-floti with its Node. It prints one line for each, or `not found`, so running
+through its own uninstaller), floti's entry in your `PATH` (on macOS and
+Linux the one line setup added to your shell's startup file), and floti with
+its Node. It prints one line for each, or `not found`, so running
 it again changes nothing. Your data and config folders stay;
 `floti uninstall --purge` removes them as well, with Floti's own entry in your
 keychain or keyring, and never touches `~/.claude`, `~/.ssh` or any

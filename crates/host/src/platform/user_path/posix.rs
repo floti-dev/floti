@@ -11,11 +11,36 @@
 //! A line inside a condition counts as if the condition held: Ubuntu's
 //! `~/.profile` adds `~/.local/bin` only when that folder exists at sign-in,
 //! and it does once floti is in it.
+//!
+//! floti's own line ([`floti_line`]) is the one `floti doctor` gives, the
+//! install appends ([`add`]) and `floti uninstall` takes out ([`remove`]):
+//! it ends in [`MARKER`], so a line the user wrote is never taken for it.
 
-use std::io;
+use std::fs::OpenOptions;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use super::Added;
 use crate::platform::folders::UserEnv;
+
+/// What ends floti's own `PATH` line in a startup file, a shell comment, so
+/// that `floti uninstall` takes out that line and no line the user wrote.
+pub const MARKER: &str = "# added by floti";
+
+/// Every startup file under the home folder that a shell floti knows reads,
+/// which `floti uninstall` looks in for floti's line, whatever the user's
+/// shell is by then.
+const EVERY_STARTUP_FILE: [&str; 9] = [
+    ".bash_profile",
+    ".bash_login",
+    ".profile",
+    ".bashrc",
+    ".zshenv",
+    ".zprofile",
+    ".zshrc",
+    ".zlogin",
+    ".config/fish/config.fish",
+];
 
 /// Where one OS keeps what a login shell's `PATH` starts with.
 pub(super) struct SystemPath {
@@ -35,7 +60,11 @@ enum Shell {
     Bash,
     Zsh,
     Fish,
-    /// sh, dash, ksh, or a `$SHELL` that is not set.
+    /// sh, and the shells that read what it reads at a login: dash, ash,
+    /// ksh and mksh.
+    Sh,
+    /// A `$SHELL` that is not set, or one naming a shell floti knows no
+    /// startup file of (tcsh, nushell and the like).
     Other,
 }
 
@@ -50,6 +79,7 @@ impl Shell {
             "bash" => Self::Bash,
             "zsh" => Self::Zsh,
             "fish" => Self::Fish,
+            "sh" | "dash" | "ash" | "ksh" | "mksh" => Self::Sh,
             _ => Self::Other,
         }
     }
@@ -77,7 +107,7 @@ impl Shell {
                 .map(at)
                 .collect(),
             Self::Fish => vec![at(".config/fish/config.fish")],
-            Self::Other => vec![at(".profile")],
+            Self::Sh | Self::Other => vec![at(".profile")],
         }
     }
 }
@@ -141,32 +171,13 @@ fn path_folders(
     Ok(folders)
 }
 
-/// The line that puts `folder` on the `PATH` of the shell `$SHELL` names,
-/// appended to the first startup file [`has`] reads for that shell.
-/// Takes floti's line for `folder` out of the user's startup files, for
-/// `floti uninstall`, and answers whether it changed anything. The install
-/// script and `floti install-self` add no line to a startup file on macOS or
-/// Linux, so there is none of Floti's to take out, and nothing is read or
-/// changed: a line naming the folder is the user's own, written from
-/// `floti doctor`'s fix or by hand, and stays. Where the install script comes
-/// to add a line of its own, its removal goes here, and only that line goes.
-pub(super) fn remove(_env: &UserEnv, _folder: &Path) -> Result<bool, String> {
-    Ok(false)
-}
-
+/// The command that puts `folder` on the `PATH` of the shell `$SHELL` names:
+/// it appends [`floti_line`] to the first startup file [`has`] reads for
+/// that shell, the file [`add`] appends it to.
 pub(super) fn fix(env: &UserEnv, folder: &Path) -> String {
-    let written = env
-        .home
-        .as_deref()
-        .and_then(|home| folder.strip_prefix(home).ok())
-        .map_or_else(
-            || folder.display().to_string(),
-            |inside| format!("$HOME/{}", slashed(inside)),
-        );
-    let quoted = double_quoted_inside(&written);
     let shell = Shell::of(env);
+    let line = floti_line(shell, env, folder);
     if shell == Shell::Fish {
-        let line = format!("fish_add_path -g \"{quoted}\"");
         return format!(
             "mkdir -p ~/.config/fish && echo {} >> ~/.config/fish/config.fish",
             single_quoted(&line)
@@ -182,8 +193,122 @@ pub(super) fn fix(env: &UserEnv, folder: &Path) -> String {
             )
         },
     );
-    let export = format!("export PATH=\"{quoted}:$PATH\"");
-    format!("echo {} >> {file}", single_quoted(&export))
+    format!("echo {} >> {file}", single_quoted(&line))
+}
+
+/// Puts `folder` on the `PATH` of the shell `$SHELL` names: appends
+/// [`floti_line`] to the first startup file [`has`] reads for that shell,
+/// the one [`fix`] names, and answers that file. The line goes at the end,
+/// after a line break when the file does not end in one, and nothing else in
+/// the file changes. A link is followed and its target appended to, which
+/// keeps its permissions. The file is made only where it is not there, with
+/// its folder for fish. A file that has the line already is left as it is
+/// ([`Added::Nothing`]), and a shell floti knows no startup file of changes
+/// nothing and gets [`fix`]'s command to run ([`Added::ByHand`]).
+pub(super) fn add(env: &UserEnv, folder: &Path) -> Result<Added, String> {
+    let shell = Shell::of(env);
+    if shell == Shell::Other {
+        return Ok(Added::ByHand {
+            line: fix(env, folder),
+        });
+    }
+    let home = env.require_home().map_err(|err| err.to_string())?;
+    let file = shell.startup_files(home).remove(0);
+    let line = floti_line(shell, env, folder);
+    let text = read(&file)?;
+    if text.lines().any(|written| written.trim_end() == line) {
+        return Ok(Added::Nothing);
+    }
+    if let Some(parent) = file.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|err| format!("could not make {}: {err}", parent.display()))?;
+    }
+    let lead = if text.is_empty() || text.ends_with('\n') {
+        ""
+    } else {
+        "\n"
+    };
+    OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&file)
+        .and_then(|mut out| out.write_all(format!("{lead}{line}\n").as_bytes()))
+        .map_err(|err| format!("could not add to {}: {err}", file.display()))?;
+    Ok(Added::Put { file: Some(file) })
+}
+
+/// Takes floti's line for `folder` ([`floti_line`], as any shell's is
+/// written) out of every startup file of a shell floti knows
+/// ([`EVERY_STARTUP_FILE`]), for `floti uninstall`, and answers whether there
+/// was one. Only floti's line, marker and all, goes; every other line stays
+/// as written, in its order. A link is followed, and its target keeps its
+/// permissions.
+pub(super) fn remove(env: &UserEnv, folder: &Path) -> Result<bool, String> {
+    let home = env.require_home().map_err(|err| err.to_string())?;
+    let flotis = [Shell::Sh, Shell::Fish].map(|shell| floti_line(shell, env, folder));
+    let is_flotis = |written: &str| {
+        flotis
+            .iter()
+            .any(|line| written.trim_end() == line.as_str())
+    };
+    let mut removed = false;
+    for file in EVERY_STARTUP_FILE {
+        let file = file
+            .split('/')
+            .fold(home.to_path_buf(), |path, part| path.join(part));
+        let text = read(&file)?;
+        if !text.split_inclusive('\n').any(is_flotis) {
+            continue;
+        }
+        let kept: String = text
+            .split_inclusive('\n')
+            .filter(|&written| !is_flotis(written))
+            .collect();
+        rewrite(&file, &kept)?;
+        removed = true;
+    }
+    Ok(removed)
+}
+
+/// floti's line that puts `folder` on the `PATH` of `shell`, ending in
+/// [`MARKER`]: `export PATH="$HOME/.local/bin:$PATH"`, or fish's
+/// `fish_add_path -g`, a folder in the home folder written from `$HOME`.
+fn floti_line(shell: Shell, env: &UserEnv, folder: &Path) -> String {
+    let written = env
+        .home
+        .as_deref()
+        .and_then(|home| folder.strip_prefix(home).ok())
+        .map_or_else(
+            || folder.display().to_string(),
+            |inside| format!("$HOME/{}", slashed(inside)),
+        );
+    let quoted = double_quoted_inside(&written);
+    if shell == Shell::Fish {
+        format!("fish_add_path -g \"{quoted}\" {MARKER}")
+    } else {
+        format!("export PATH=\"{quoted}:$PATH\" {MARKER}")
+    }
+}
+
+/// Puts `text` in place of what `file`, or the file it links to, holds: it
+/// is written beside that file under a name of its own, given its
+/// permissions, then renamed over it, so a failure leaves the file as it
+/// was.
+fn rewrite(file: &Path, text: &str) -> Result<(), String> {
+    let target = std::fs::canonicalize(file)
+        .map_err(|err| format!("could not find {}: {err}", file.display()))?;
+    let permissions = std::fs::metadata(&target)
+        .map_err(|err| format!("could not read {}: {err}", target.display()))?
+        .permissions();
+    let name = target.file_name().unwrap_or_default().to_string_lossy();
+    let aside = target.with_file_name(format!(".{name}.floti-{}", std::process::id()));
+    std::fs::write(&aside, text)
+        .and_then(|()| std::fs::set_permissions(&aside, permissions))
+        .and_then(|()| std::fs::rename(&aside, &target))
+        .map_err(|err| {
+            let _ = std::fs::remove_file(&aside);
+            format!("could not change {}: {err}", target.display())
+        })
 }
 
 /// `relative` with `/` between its parts, as a POSIX shell writes it.

@@ -31,8 +31,9 @@
 //! 3. `PATH`: when floti's folder is not on the user's `PATH`, it is put
 //!    there ([`UserPath::add`]): on Windows in the user's `Path` value, kept
 //!    expandable, so a terminal or an ssh login started after it finds
-//!    `floti`. On macOS and Linux nothing is changed and `floti doctor`
-//!    gives the line, as after the install script.
+//!    `floti`; on macOS and Linux floti's line goes at the end of the
+//!    startup file the user's shell reads, the one `floti doctor` names, and
+//!    it says which. Setup, run next, finds it there and adds nothing.
 //! 4. `floti setup --no-desktop`, run from the installed floti, so the host
 //!    registered to start at sign-in is that one; its lines are its own.
 //!    The desktop app that runs install-self is there already, so setup
@@ -52,7 +53,7 @@ use std::process::Command;
 use crate::platform::folders::UserEnv;
 use crate::platform::node_runtime::SHIPPED_FOLDER;
 use crate::platform::standalone::{Native as NativeStandalone, Standalone};
-use crate::platform::user_path::{Native as NativeUserPath, UserPath};
+use crate::platform::user_path::{Added, Native as NativeUserPath, UserPath};
 use crate::update::versions::Version;
 use crate::version::FLOTI_VERSION;
 
@@ -65,8 +66,8 @@ pub trait InstallSystem {
     /// Whether `floti` is on the user's `PATH`, or why that could not be told.
     fn on_path(&self, floti: &Path) -> Result<bool, String>;
 
-    /// Puts `folder` on the user's `PATH`; whether anything was changed.
-    fn add_to_path(&self, folder: &Path) -> Result<bool, String>;
+    /// Puts `folder` on the user's `PATH`, and answers what was changed.
+    fn add_to_path(&self, folder: &Path) -> Result<Added, String>;
 
     /// Runs `floti setup --no-desktop` from `floti`, and answers its exit
     /// status.
@@ -91,7 +92,7 @@ impl InstallSystem for NativeSystem {
         NativeUserPath.has(&self.env, floti)
     }
 
-    fn add_to_path(&self, folder: &Path) -> Result<bool, String> {
+    fn add_to_path(&self, folder: &Path) -> Result<Added, String> {
         NativeUserPath.add(&self.env, folder)
     }
 
@@ -218,19 +219,17 @@ pub fn install_self(
     };
     let path_failed = match system.on_path(&floti).and_then(|on| {
         if on {
-            Ok(false)
+            Ok(Added::Nothing)
         } else {
             system.add_to_path(folder)
         }
     }) {
-        Ok(true) => {
-            say(format!(
-                "Put {} on your PATH, for terminals and logins started from now on.",
-                folder.display()
-            ));
+        Ok(added) => {
+            if let Some(sentence) = added.sentence(folder) {
+                say(sentence);
+            }
             false
         }
-        Ok(false) => false,
         Err(why) => {
             let _ = writeln!(
                 err,
@@ -325,7 +324,7 @@ fn newer_there(
 }
 
 /// Whether `a` and `b` are one file.
-fn same_file(a: &Path, b: &Path) -> bool {
+pub(crate) fn same_file(a: &Path, b: &Path) -> bool {
     matches!(
         (std::fs::canonicalize(a), std::fs::canonicalize(b)),
         (Ok(a), Ok(b)) if a == b

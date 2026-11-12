@@ -4,8 +4,8 @@
 
 use std::path::Path;
 
-use super::UserPath;
 use super::posix::{self, SystemPath};
+use super::{Added, UserPath};
 use crate::platform::folders::UserEnv;
 
 /// The macOS user `PATH`.
@@ -30,9 +30,8 @@ impl UserPath for Native {
         posix::fix(env, folder)
     }
 
-    fn add(&self, _env: &UserEnv, _folder: &Path) -> Result<bool, String> {
-        // A startup file is the user's own: doctor gives the line to add.
-        Ok(false)
+    fn add(&self, env: &UserEnv, folder: &Path) -> Result<Added, String> {
+        posix::add(env, folder)
     }
 
     fn remove(&self, env: &UserEnv, folder: &Path) -> Result<bool, String> {

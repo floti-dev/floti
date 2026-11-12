@@ -7,6 +7,7 @@ use super::*;
 use crate::agent::Version;
 use crate::platform::startup::register::{OsCommand, Ran};
 use crate::platform::startup::{linux, macos, windows};
+use crate::platform::user_path::Added;
 use crate::testkit::TestDirs;
 
 const RANGE: TestedVersions = TestedVersions {
@@ -397,7 +398,7 @@ impl UserPath for FakePath {
         format!("add {}", folder.display())
     }
 
-    fn add(&self, _env: &UserEnv, _folder: &Path) -> Result<bool, String> {
+    fn add(&self, _env: &UserEnv, _folder: &Path) -> Result<Added, String> {
         unreachable!("doctor only looks")
     }
 

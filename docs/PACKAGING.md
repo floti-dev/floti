@@ -463,8 +463,9 @@ puts it there:
 3. On Windows, when the folder is not on the user's PATH, it is appended to
    their `Path` value as written, kept an expandable string, and Explorer is
    told the environment changed, so a terminal or an ssh login started after
-   it finds `floti`. On macOS and Linux no startup file is changed, as after
-   the install script; `floti doctor` gives the line.
+   it finds `floti`. On macOS and Linux floti's line goes at the end of the
+   startup file the user's shell reads, as [floti setup](#floti-setup)
+   adds it after the install script, and it says which file.
 4. `floti setup --no-desktop` runs from the installed floti, which registers
    it to start the host at sign-in and starts it, and neither asks about nor
    installs the desktop app, which is there already. A host already running
@@ -499,7 +500,7 @@ only with `--purge`:
 | What | Where |
 |---|---|
 | floti, copies of it put aside, its Node, and copies an install stopped part way left | `%LOCALAPPDATA%\Programs\Floti\bin\` (`floti.exe`, `floti.old-*.exe`, `node\` with any `node.old-*.exe`, `.floti.exe.floti-install-*`); `~/.local/bin/floti`, `~/.local/bin/node/` and `.floti.floti-install-*` there |
-| The PATH entry (Windows) | that folder, appended to `Path` in `HKEY_CURRENT_USER\Environment` |
+| The PATH entry | on Windows that folder, appended to `Path` in `HKEY_CURRENT_USER\Environment`; on macOS and Linux floti's line, ending `# added by floti`, at the end of the startup file the user's shell reads ([floti setup](#floti-setup)) |
 | The start-at-sign-in entry | the logon task "Floti host" and its XML under the data folder's `startup\`; the LaunchAgent `~/Library/LaunchAgents/dev.floti.host.plist`; the user unit `~/.config/systemd/user/floti.service` |
 | The host's data | `%LOCALAPPDATA%\Floti`, `~/Library/Application Support/Floti`, `~/.local/share/floti` and `~/.local/state/floti`, kept as Helm's data is |
 
@@ -827,8 +828,9 @@ its SHA-256, and only then moved into place. A script:
 3. on Windows, appends the folder to the user's own `Path` as written, kept
    an expandable string, and tells Explorer the environment changed, as `floti
    install-self` does, and puts it on the session's `Path` too. On macOS and
-   Linux no startup file is changed: when the folder is not on `PATH`, the
-   script says so and that `floti doctor` gives the line;
+   Linux the script changes no startup file itself: `floti setup`, next,
+   adds floti's line to the one the user's shell reads and says which
+   ([floti setup](#floti-setup));
 4. runs `floti setup`, with the terminal as its input where there is one,
    never the rest of the download, so setup asks there whether to install the
    desktop app as well ([floti setup](#floti-setup)). Its lines and, from
@@ -934,7 +936,15 @@ where the script put it, that the PowerShell session `iex` ran in went on
 after it (a line it prints after `iex` must appear), that `floti version` there names the run's version,
 OS and CPU, that on Windows its folder is on the user's `Path`, and that the
 script reached `floti setup`, whatever setup made of the runner (root in the
-container is refused by setup, which is the line it must reach).
+container is refused by setup, which is the line it must reach). On macOS
+and Linux `floti` must then be on `PATH`: for a shell floti writes a startup
+file of, setup must have named the file it put floti's line in, or said
+nothing where that shell's files had the folder already, and a new login
+shell of the user's own kind (`$SHELL -l`), started with `env -i` and a
+`PATH` of `/usr/bin:/bin` so that it has nothing of the job's, must find
+that floti through its startup files alone; for a shell floti knows no file
+of, or no `$SHELL`, setup must have given the line to add. The container's
+ordinary user starts with no startup file, so setup makes its `~/.profile`.
 
 Then `scripts/floti.dev/check-setup.sh` or `check-setup.ps1` checks what
 setup left, each missing thing failing the job with one line naming it:
@@ -971,7 +981,9 @@ Last in each of those jobs, on every runner and in both container runs,
    logon task, or the start-on-connect marker), the desktop app where an
    installer put it there (`Helm.exe` and the Start menu's `Helm.lnk`) and,
    on Windows, floti's folder on the user's `Path` must be gone, with the
-   lines that say so. Where a host ran it must say it stopped it, and no
+   lines that say so; on macOS and Linux no startup file may hold floti's
+   line, and where the install added one, uninstall must say it removed
+   it. Where a host ran it must say it stopped it, and no
    host may run after it: no process from floti's folder on Windows, no
    `dev.floti.host` loaded in launchd, no active `floti.service`, and no
    `<floti> host` process where `pgrep` is there to ask. The data folder,
@@ -990,9 +1002,10 @@ made beforehand outside its install place, which removes what the install
 put there and leaves itself, as a floti from elsewhere does: the third
 run's last line is `floti: left as it is`.
 
-`try-installer.ps1`, `try-uninstall.ps1`, `try-uninstall.sh` and
-`try-add-desktop.sh` change the computer they run on, so each refuses in one
-line, before doing anything, unless `GITHUB_ACTIONS` is `true`.
+`try-install.sh`, `try-install.ps1`, `try-installer.ps1`,
+`try-uninstall.ps1`, `try-uninstall.sh` and `try-add-desktop.sh` change the
+computer they run on, so each refuses in one line, before doing anything,
+unless `GITHUB_ACTIONS` is `true`.
 
 `floti add desktop` cannot run in a dry run: it fetches from the releases
 address built into floti and checks the desktop files' list with the key
@@ -1054,6 +1067,38 @@ at sign-in with the OS's per-user mechanism (on a Linux server with
 lingering on; in WSL without systemd it marks the host to start when a
 client connects) and starts it, then says how that ended in one line and
 exits with that outcome's status.
+
+**floti's folder on PATH.** Before the host, when the floti setup runs from
+is the one in the user's own folder (`~/.local/bin/floti`,
+`%LOCALAPPDATA%\Programs\Floti\bin\floti.exe`) and that folder is not on
+the user's `PATH`, setup puts it there and says so in one line, so every way
+in, `curl | sh`, `irm | iex`, the desktop's installer and the desktop's
+install over ssh, ends with `floti` found by the next terminal or login. A
+floti anywhere else, such as a build run from its own folder or Homebrew's,
+changes nothing. On Windows the folder is appended to the user's `Path`
+value. On macOS and Linux it is the line `floti doctor` gives
+(`platform/user_path`), in the file doctor names:
+
+| `$SHELL` | The file | The line |
+|---|---|---|
+| bash | the first of `~/.bash_profile`, `~/.bash_login` and `~/.profile` there, else `~/.profile` | `export PATH="$HOME/.local/bin:$PATH" # added by floti` |
+| zsh | `~/.zshenv` | the same |
+| fish | `~/.config/fish/config.fish` | `fish_add_path -g "$HOME/.local/bin" # added by floti` |
+| sh, dash, ash, ksh, mksh | `~/.profile` | the same as bash |
+| not set, or any other | none | none; setup gives doctor's line to add |
+
+"Not on `PATH`" is doctor's reading: the folder is in none of the folders a
+login shell starts with and no `PATH` line in a file that shell reads names
+it, so a `~/.profile` that adds `~/.local/bin` already, as Ubuntu's and
+Debian's do, gets nothing. The line is appended, after a line break when
+the file does not end in one, and nothing else in the file changes; a file
+that is a link is appended to through it, and keeps its permissions; the
+file is made only where it is not there (with `~/.config/fish` for fish);
+and a file with floti's line already keeps it once. It says
+`Put <folder> on your PATH in <file>, for terminals and logins started from
+now on.` A shell floti knows no startup file of, or a file that could not be
+changed, is one line with the command to run instead. Neither changes
+setup's exit status.
 
 **The desktop app** comes last, once the host is set up, and not at all when
 setting it up failed, so a desktop install that fails leaves a working host
@@ -1364,8 +1409,12 @@ half-working, and the next run carries on where it stopped:
 5. **The PATH entry** (`platform/user_path`, `remove`): on Windows each entry
    of the user's `Path` that names floti's folder, as written or once its
    variables are expanded, goes, and the rest stay as written, still an
-   expandable string. On macOS and Linux floti adds no line to a startup
-   file, so there is none to remove, and a line the user wrote stays.
+   expandable string. On macOS and Linux floti's line for its folder, the
+   one setup adds, marker and all, goes from every startup file of a shell
+   floti knows, whatever the user's shell is now; every other line stays as
+   written, in its order, a line the user wrote naming the same folder
+   included. A file that is a link is changed through it, and keeps its
+   permissions.
 6. **The data, with `--purge`** (below). It comes before floti, so a purge
    that fails leaves the floti that runs it to try again with.
 7. **floti and its Node** (`platform/standalone`): the `node` folder beside
@@ -1427,7 +1476,7 @@ is it Floti's.
 | `lingering: left on, ...` | Linux, where it is on. |
 | `desktop app: removed (<path>)` / `not found` | |
 | `desktop app settings: kept; ...` | After the app is removed, and with `--purge`. |
-| `PATH entry: removed (<folder>)` / `not found` | macOS and Linux always say `not found`. |
+| `PATH entry: removed (<folder>)` / `not found` | On macOS and Linux, whether a startup file had floti's line. |
 | `data: kept (<folder>); floti uninstall --purge removes it` / `removed (<folder>)` / `not found` | And `logs:`, `config:`, with `--purge` `runtime:` where it is apart (or `left as it is`). |
 | `secret store: removed Floti's key` / `not found` | `--purge` only. |
 | `floti: removed (<path>)` / `not found` | Last. On Windows followed by `; the copy this process runs from goes once it exits`, or by what is left for the next sweep. |

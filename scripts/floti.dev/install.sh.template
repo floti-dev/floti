@@ -3,7 +3,9 @@
 #   curl -fsSL https://floti.dev/install.sh | sh
 #
 # It installs floti {{version}} in your own folder, ~/.local/bin, with no admin
-# rights, then runs `floti setup`, which starts the Floti host at each sign-in.
+# rights, then runs `floti setup`, which starts the Floti host at each sign-in
+# and, when ~/.local/bin is not on your PATH, adds the one line that puts it
+# there to the startup file your shell reads, and says which file.
 # It picks the floti for this computer's OS and CPU, downloads it from the
 # release, and checks it against the SHA-256 written below before it is put in
 # place. The whole script is one function called on its last line, so a
@@ -49,11 +51,6 @@ floti_get() {
   echo "Installing floti $version for $os $cpu."
   floti=$(floti_install "$version" "floti-$version-$os-$cpu" "$sha256" "$release") || return 1
   echo "floti $version is at $floti."
-  folder=${floti%/*}
-  case ":$PATH:" in
-    *":$folder:"*) ;;
-    *) echo "$folder is not on your PATH: $floti doctor gives the line that puts it there." ;;
-  esac
 
   # Setup reads the terminal, never the rest of this script: under
   # `curl | sh` standard input is the download. With the terminal, setup asks

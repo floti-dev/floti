@@ -101,13 +101,33 @@ fn windows_add_appends_the_folder_to_the_value_as_written_with_no_empty_entry() 
 }
 
 #[test]
-fn macos_and_linux_add_changes_no_startup_file() {
-    let dirs = TestDirs::new();
-    let user = env(Some(&dirs.home), &[("SHELL", "/bin/bash")]);
-    let folder = dirs.home.join(".local").join("bin");
-    assert_eq!(linux::Native.add(&user, &folder), Ok(false));
-    assert_eq!(macos::Native.add(&user, &folder), Ok(false));
-    assert!(std::fs::read_dir(&dirs.home).unwrap().next().is_none());
+fn an_install_says_what_it_changed_in_one_line() {
+    let folder = Path::new("/home/me/.local/bin");
+    assert_eq!(
+        Added::Put { file: None }.sentence(folder).as_deref(),
+        Some("Put /home/me/.local/bin on your PATH, for terminals and logins started from now on.")
+    );
+    assert_eq!(
+        Added::Put {
+            file: Some(PathBuf::from("/home/me/.zshenv"))
+        }
+        .sentence(folder)
+        .as_deref(),
+        Some(
+            "Put /home/me/.local/bin on your PATH in /home/me/.zshenv, for terminals and logins started from now on."
+        )
+    );
+    assert_eq!(Added::Nothing.sentence(folder), None);
+    let by_hand = Added::ByHand {
+        line: "echo it >> ~/.profile".to_owned(),
+    }
+    .sentence(folder)
+    .unwrap();
+    assert!(
+        by_hand.contains("does not know which startup file")
+            && by_hand.ends_with(": echo it >> ~/.profile"),
+        "{by_hand}"
+    );
 }
 
 #[cfg(windows)]
@@ -351,7 +371,7 @@ fn the_unix_fix_appends_to_the_first_file_the_users_shell_reads() {
     let unix = Unix::new();
     let folder = unix.home().join(".local").join("bin");
     let user = |shell: &str| env(Some(unix.home()), &[("SHELL", shell)]);
-    let export = r#"echo 'export PATH="$HOME/.local/bin:$PATH"' >> "#;
+    let export = r#"echo 'export PATH="$HOME/.local/bin:$PATH" # added by floti' >> "#;
     assert_eq!(
         posix::fix(&user("/bin/sh"), &folder),
         format!("{export}~/.profile")
@@ -362,7 +382,7 @@ fn the_unix_fix_appends_to_the_first_file_the_users_shell_reads() {
     );
     assert_eq!(
         posix::fix(&user("/usr/bin/fish"), &folder),
-        r#"mkdir -p ~/.config/fish && echo 'fish_add_path -g "$HOME/.local/bin"' >> ~/.config/fish/config.fish"#
+        r#"mkdir -p ~/.config/fish && echo 'fish_add_path -g "$HOME/.local/bin" # added by floti' >> ~/.config/fish/config.fish"#
     );
     // bash: ~/.profile until a ~/.bash_profile shadows it.
     assert_eq!(
@@ -378,13 +398,28 @@ fn the_unix_fix_appends_to_the_first_file_the_users_shell_reads() {
     // reads it back as it is.
     assert_eq!(
         posix::fix(&user("/bin/sh"), Path::new("/opt/it's $here")),
-        r#"echo 'export PATH="/opt/it'\''s \$here:$PATH"' >> ~/.profile"#
+        r#"echo 'export PATH="/opt/it'\''s \$here:$PATH" # added by floti' >> ~/.profile"#
     );
+    // dash and the other shells that read ~/.profile, and one floti knows
+    // nothing of, which doctor still gives ~/.profile.
+    for shell in ["/bin/dash", "/bin/ksh", "/bin/tcsh"] {
+        assert_eq!(
+            posix::fix(&user(shell), &folder),
+            format!("{export}~/.profile"),
+            "{shell}"
+        );
+    }
 }
 
 #[test]
 fn each_shells_fix_is_read_back_as_on_path() {
-    for shell in ["/bin/sh", "/bin/bash", "/bin/zsh", "/usr/bin/fish"] {
+    for shell in [
+        "/bin/sh",
+        "/bin/dash",
+        "/bin/bash",
+        "/bin/zsh",
+        "/usr/bin/fish",
+    ] {
         let unix = Unix::new();
         let folder = unix.floti().parent().unwrap().to_path_buf();
         let user = env(Some(unix.home()), &[("SHELL", shell)]);
@@ -482,7 +517,7 @@ fn windows_knows_the_entry_in_any_case_quoted_with_a_trailing_separator_or_by_it
 }
 
 #[test]
-fn on_macos_and_linux_there_is_no_line_of_floti_s_to_take_out_and_the_users_own_stays() {
+fn on_macos_and_linux_a_path_line_the_user_wrote_stays() {
     let dirs = TestDirs::new();
     let profile = dirs.home.join(".profile");
     let line = "PATH=\"$HOME/.local/bin:$PATH\"\n";
@@ -492,4 +527,253 @@ fn on_macos_and_linux_there_is_no_line_of_floti_s_to_take_out_and_the_users_own_
     assert_eq!(linux::Native.remove(&user, &folder), Ok(false));
     assert_eq!(macos::Native.remove(&user, &folder), Ok(false));
     assert_eq!(std::fs::read_to_string(&profile).unwrap(), line);
+}
+
+#[test]
+fn uninstall_takes_flotis_line_and_only_it_out_of_every_shells_files() {
+    let unix = Unix::new();
+    let folder = unix.folder();
+    let (export, _) = appended(&posix::fix(&unix.user("/bin/bash"), &folder));
+    let (fish, _) = appended(&posix::fix(&unix.user("/usr/bin/fish"), &folder));
+    let (elsewhere, _) = appended(&posix::fix(
+        &unix.user("/bin/bash"),
+        Path::new("/opt/floti/bin"),
+    ));
+    // The user's own lines: the same PATH line without the marker, the
+    // marker alone, and floti's line for another folder.
+    let own = format!(
+        "export PATH=\"$HOME/.local/bin:$PATH\"\n{}\n{elsewhere}\n",
+        posix::MARKER
+    );
+    unix.write(
+        unix.home(),
+        ".profile",
+        &format!("umask 022\r\n{export}\r\n{own}{export}\n# the end"),
+    );
+    // Added while the user's shell was another.
+    unix.write(unix.home(), ".zshrc", &format!("{export}\n"));
+    unix.write(
+        unix.home(),
+        ".config/fish/config.fish",
+        &format!("set -x EDITOR vi\n{fish}\n"),
+    );
+
+    let user = unix.user("/bin/zsh");
+    assert_eq!(posix::remove(&user, &folder), Ok(true));
+    assert_eq!(
+        unix.read(".profile"),
+        format!("umask 022\r\n{own}# the end")
+    );
+    assert_eq!(unix.read(".zshrc"), "");
+    assert_eq!(unix.read(".config/fish/config.fish"), "set -x EDITOR vi\n");
+    // Nothing is left beside them, and a second uninstall finds nothing.
+    let mut left: Vec<String> = std::fs::read_dir(unix.home())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    left.sort();
+    assert_eq!(left, [".config", ".profile", ".zshrc"]);
+    assert_eq!(posix::remove(&user, &folder), Ok(false));
+}
+
+// ---------------------------------------------------------------------------
+// macOS and Linux: floti's line, added once by an install
+// ---------------------------------------------------------------------------
+
+/// Every startup file a shell floti knows reads, under the home folder.
+const STARTUP_FILES: [&str; 9] = [
+    ".bash_profile",
+    ".bash_login",
+    ".profile",
+    ".bashrc",
+    ".zshenv",
+    ".zprofile",
+    ".zshrc",
+    ".zlogin",
+    ".config/fish/config.fish",
+];
+
+/// The user `PATH` of a Linux computer whose root is the test's.
+struct LinuxAt<'a>(&'a Path);
+
+impl UserPath for LinuxAt<'_> {
+    fn has(&self, env: &UserEnv, floti: &Path) -> Result<bool, String> {
+        let home = env.require_home().map_err(|err| err.to_string())?;
+        posix::has(&linux::SYSTEM, self.0, env, home, floti)
+    }
+
+    fn fix(&self, env: &UserEnv, folder: &Path) -> String {
+        posix::fix(env, folder)
+    }
+
+    fn add(&self, env: &UserEnv, folder: &Path) -> Result<Added, String> {
+        posix::add(env, folder)
+    }
+
+    fn remove(&self, env: &UserEnv, folder: &Path) -> Result<bool, String> {
+        posix::remove(env, folder)
+    }
+}
+
+impl Unix {
+    fn user(&self, shell: &str) -> UserEnv {
+        env(Some(self.home()), &[("SHELL", shell)])
+    }
+
+    fn folder(&self) -> PathBuf {
+        self.floti().parent().unwrap().to_path_buf()
+    }
+
+    fn at(&self, file: &str) -> PathBuf {
+        file.split('/')
+            .fold(self.home().to_path_buf(), |path, part| path.join(part))
+    }
+
+    fn read(&self, file: &str) -> String {
+        std::fs::read_to_string(self.at(file)).unwrap()
+    }
+}
+
+#[test]
+fn the_install_appends_doctors_line_to_the_file_doctor_names_for_each_shell_and_makes_no_other() {
+    for (shell, file) in [
+        ("/bin/sh", ".profile"),
+        ("/usr/bin/dash", ".profile"),
+        ("/bin/bash", ".profile"),
+        ("/bin/zsh", ".zshenv"),
+        ("/usr/bin/fish", ".config/fish/config.fish"),
+    ] {
+        let unix = Unix::new();
+        let user = unix.user(shell);
+        let path = LinuxAt(&unix.root);
+        assert_eq!(path.has(&user, &unix.floti()), Ok(false), "{shell}");
+        assert_eq!(
+            put_on_path(&path, &user, &unix.floti()),
+            Ok(Added::Put {
+                file: Some(unix.at(file))
+            }),
+            "{shell}"
+        );
+        let (line, named) = appended(&path.fix(&user, &unix.folder()));
+        assert_eq!(named, format!("~/{file}"), "{shell}");
+        assert!(line.ends_with(posix::MARKER), "{line}");
+        assert_eq!(unix.read(file), format!("{line}\n"), "{shell}");
+        assert_eq!(path.has(&user, &unix.floti()), Ok(true), "{shell}");
+        for other in STARTUP_FILES.iter().filter(|other| **other != file) {
+            assert!(!unix.at(other).exists(), "{shell} made {other}");
+        }
+    }
+}
+
+#[test]
+fn an_existing_file_gets_the_line_at_its_end_and_keeps_every_line_it_had() {
+    let unix = Unix::new();
+    // A login bash reads ~/.bash_profile here, so ~/.profile is not made.
+    unix.write(unix.home(), ".bash_profile", "umask 022\nsource ~/.bashrc");
+    let user = unix.user("/bin/bash");
+    assert_eq!(
+        posix::add(&user, &unix.folder()),
+        Ok(Added::Put {
+            file: Some(unix.at(".bash_profile"))
+        })
+    );
+    let (line, _) = appended(&posix::fix(&user, &unix.folder()));
+    assert_eq!(
+        unix.read(".bash_profile"),
+        format!("umask 022\nsource ~/.bashrc\n{line}\n")
+    );
+    assert!(!unix.at(".profile").exists());
+}
+
+#[test]
+fn a_second_install_adds_nothing() {
+    let unix = Unix::new();
+    unix.write(unix.home(), ".zshenv", "export EDITOR=vi\n");
+    let user = unix.user("/bin/zsh");
+    let path = LinuxAt(&unix.root);
+    assert!(matches!(
+        put_on_path(&path, &user, &unix.floti()),
+        Ok(Added::Put { .. })
+    ));
+    let once = unix.read(".zshenv");
+    assert_eq!(put_on_path(&path, &user, &unix.floti()), Ok(Added::Nothing));
+    // Asked to add it again, a file with floti's line keeps it once.
+    assert_eq!(posix::add(&user, &unix.folder()), Ok(Added::Nothing));
+    assert_eq!(unix.read(".zshenv"), once);
+}
+
+#[test]
+fn a_folder_the_shells_startup_files_put_on_path_already_gets_no_line() {
+    let unix = Unix::new();
+    let ubuntu = "if [ -d \"$HOME/.local/bin\" ] ; then\n    PATH=\"$HOME/.local/bin:$PATH\"\nfi\n";
+    unix.write(unix.home(), ".profile", ubuntu);
+    assert_eq!(
+        put_on_path(&LinuxAt(&unix.root), &unix.user("/bin/bash"), &unix.floti()),
+        Ok(Added::Nothing)
+    );
+    assert_eq!(unix.read(".profile"), ubuntu);
+}
+
+#[test]
+fn a_shell_floti_knows_no_startup_file_of_is_given_the_line_and_no_file_changes() {
+    for vars in [&[("SHELL", "/bin/tcsh")][..], &[][..]] {
+        let unix = Unix::new();
+        let user = env(Some(unix.home()), vars);
+        assert_eq!(
+            posix::add(&user, &unix.folder()),
+            Ok(Added::ByHand {
+                line: posix::fix(&user, &unix.folder())
+            }),
+            "{vars:?}"
+        );
+        assert!(std::fs::read_dir(unix.home()).unwrap().next().is_none());
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_linked_startup_file_is_changed_through_its_link_and_keeps_its_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let unix = Unix::new();
+    let dotfiles = unix.dirs.root().join("my dotfiles");
+    std::fs::create_dir_all(&dotfiles).unwrap();
+    let target = dotfiles.join("zshenv");
+    std::fs::write(&target, "export EDITOR=vi\n").unwrap();
+    std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600)).unwrap();
+    std::os::unix::fs::symlink(&target, unix.at(".zshenv")).unwrap();
+    let still_linked = || {
+        assert!(
+            std::fs::symlink_metadata(unix.at(".zshenv"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(
+            std::fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    };
+    let user = unix.user("/bin/zsh");
+    let folder = unix.folder();
+
+    assert_eq!(
+        posix::add(&user, &folder),
+        Ok(Added::Put {
+            file: Some(unix.at(".zshenv"))
+        })
+    );
+    let (line, _) = appended(&posix::fix(&user, &folder));
+    assert_eq!(
+        std::fs::read_to_string(&target).unwrap(),
+        format!("export EDITOR=vi\n{line}\n")
+    );
+    still_linked();
+
+    assert_eq!(posix::remove(&user, &folder), Ok(true));
+    assert_eq!(
+        std::fs::read_to_string(&target).unwrap(),
+        "export EDITOR=vi\n"
+    );
+    still_linked();
 }

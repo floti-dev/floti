@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use super::UserPath;
+use super::{Added, UserPath};
 use crate::platform::folders::UserEnv;
 use crate::platform::windows_path::{comparable, split};
 
@@ -37,12 +37,12 @@ impl UserPath for Native {
         )
     }
 
-    fn add(&self, _env: &UserEnv, folder: &Path) -> Result<bool, String> {
+    fn add(&self, _env: &UserEnv, folder: &Path) -> Result<Added, String> {
         let written = registry::string_value(registry::Hive::CurrentUser, USER_KEY, "Path")?;
         let value = with_folder(written.as_deref(), &folder.display().to_string());
         registry::set_expandable_string(USER_KEY, "Path", &value)?;
         registry::announce_environment();
-        Ok(true)
+        Ok(Added::Put { file: None })
     }
 
     fn remove(&self, env: &UserEnv, folder: &Path) -> Result<bool, String> {

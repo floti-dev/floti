@@ -15,6 +15,7 @@ use std::process::{Child, Command, Stdio};
 
 use floti_host::install_self::{ARM64_BUILD, Install, InstallSystem, install_self};
 use floti_host::platform::standalone::{Native, Standalone};
+use floti_host::platform::user_path::Added;
 use floti_host::testkit::TestDirs;
 
 /// What the fake computer was asked, and how it answers.
@@ -40,12 +41,12 @@ impl InstallSystem for FakeSystem {
         Ok(self.on_path || !self.added.borrow().is_empty())
     }
 
-    fn add_to_path(&self, folder: &Path) -> Result<bool, String> {
+    fn add_to_path(&self, folder: &Path) -> Result<Added, String> {
         if let Some(why) = &self.path_refused {
             return Err(why.clone());
         }
         self.added.borrow_mut().push(folder.to_path_buf());
-        Ok(true)
+        Ok(Added::Put { file: None })
     }
 
     fn setup(&self, floti: &Path) -> Result<u8, String> {

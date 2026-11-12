@@ -22,8 +22,13 @@
 //!   shell (`$SHELL`) reads names it: for bash the first of
 //!   `~/.bash_profile`, `~/.bash_login` and `~/.profile` that exists, and
 //!   `~/.bashrc`; for zsh `~/.zshenv`, `~/.zprofile`, `~/.zshrc` and
-//!   `~/.zlogin`; for fish `~/.config/fish/config.fish`; for any other
-//!   `~/.profile`. The fix appends a line to the first of those.
+//!   `~/.zlogin`; for fish `~/.config/fish/config.fish`; for sh, dash, ash,
+//!   ksh, mksh and any other `~/.profile`. The fix appends floti's line,
+//!   which ends in `# added by floti`, to the first of those, and so does
+//!   the install ([`UserPath::add`]), for every shell but one floti knows no
+//!   startup file of (`$SHELL` not set, or tcsh and the like), which is
+//!   given the fix to run instead. `floti uninstall` takes out that line and
+//!   no other.
 //!
 //! Each OS's rule is plain text arithmetic over what was read, so all three
 //! are compiled and tested on every OS; only reading the Windows registry is
@@ -41,7 +46,7 @@ pub use macos::Native;
 #[cfg(target_os = "windows")]
 pub use windows::Native;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::folders::UserEnv;
 
@@ -60,10 +65,10 @@ pub trait UserPath {
     fn fix(&self, env: &UserEnv, folder: &Path) -> String;
 
     /// Puts `folder` on that `PATH` for every terminal and login started
-    /// after it, as [`UserPath::fix`] does, and answers whether it changed
-    /// anything: on Windows, the desktop installer's step; on macOS and
-    /// Linux nothing is changed, and `floti doctor` gives the line.
-    fn add(&self, env: &UserEnv, folder: &Path) -> Result<bool, String>;
+    /// after it, as [`UserPath::fix`] does, and answers what it changed: on
+    /// Windows the user's `Path` value; on macOS and Linux the startup file
+    /// the fix names, which gets floti's line appended once.
+    fn add(&self, env: &UserEnv, folder: &Path) -> Result<Added, String>;
 
     /// Takes the entry [`UserPath::add`] puts there for `folder` off that
     /// `PATH`, for `floti uninstall`, and answers whether there was one: on
@@ -71,7 +76,54 @@ pub trait UserPath {
     /// (as written or once its `%VARIABLE%`s are expanded, without case or a
     /// trailing separator) goes, and the rest stay as written, still an
     /// expandable string; the value goes when nothing is left in it. On
-    /// macOS and Linux floti adds no line to a startup file, so there is
-    /// none to take out, and a line the user wrote stays.
+    /// macOS and Linux floti's line goes from each startup file of a shell
+    /// floti knows, and every line the user wrote stays.
     fn remove(&self, env: &UserEnv, folder: &Path) -> Result<bool, String>;
+}
+
+/// What [`UserPath::add`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Added {
+    /// The folder was put on the `PATH`: in the user's `Path` value on
+    /// Windows (`file` is `None`), and in the startup file `file` on macOS
+    /// and Linux.
+    Put { file: Option<PathBuf> },
+    /// Nothing was changed: floti's line is there already.
+    Nothing,
+    /// Nothing was changed: floti knows no startup file the user's shell
+    /// reads, and `line` is the command that puts the folder there.
+    ByHand { line: String },
+}
+
+impl Added {
+    /// The one line an install says of it, or `None` where nothing changed.
+    pub fn sentence(&self, folder: &Path) -> Option<String> {
+        let folder = folder.display();
+        match self {
+            Self::Put { file: None } => Some(format!(
+                "Put {folder} on your PATH, for terminals and logins started from now on."
+            )),
+            Self::Put { file: Some(file) } => Some(format!(
+                "Put {folder} on your PATH in {}, for terminals and logins started from now on.",
+                file.display()
+            )),
+            Self::Nothing => None,
+            Self::ByHand { line } => Some(format!(
+                "{folder} is not on your PATH, and Floti does not know which startup file your shell reads, so it changed none; this puts it there: {line}"
+            )),
+        }
+    }
+}
+
+/// Puts the folder of `floti`, this program's own path, on the `PATH` of
+/// the user `env` describes through `path`, when it is not on it already.
+pub fn put_on_path(path: &dyn UserPath, env: &UserEnv, floti: &Path) -> Result<Added, String> {
+    let folder = floti
+        .parent()
+        .filter(|folder| !folder.as_os_str().is_empty())
+        .ok_or_else(|| format!("{} is not in a folder", floti.display()))?;
+    if path.has(env, floti)? {
+        return Ok(Added::Nothing);
+    }
+    path.add(env, folder)
 }

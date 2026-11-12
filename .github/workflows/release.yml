@@ -1349,19 +1349,23 @@ jobs:
         run: sh scripts/floti.dev/try-uninstall.sh refused 'install.sh as root in debian'
 
       # The user reads its own copies under /tmp: the workspace and the
-      # runner's folders belong to root.
+      # runner's folders belong to root. Its home starts with no startup
+      # file, so setup makes ~/.profile for its sh with floti's PATH line in
+      # it, which a new login sh must find floti through and uninstall must
+      # take out again; SHELL is what a login as that user sets.
       - name: Install and uninstall floti as a user, in a WSL distro without systemd
         shell: sh
         run: |
           set -eu
-          useradd --create-home --shell /bin/sh floti-user
+          mkdir /tmp/no-skel
+          useradd --create-home --skel /tmp/no-skel --shell /bin/sh floti-user
           mkdir /tmp/try
           cp -R "$RUNNER_TEMP/served" scripts/floti.dev/try-install.sh scripts/floti.dev/check-setup.sh scripts/floti.dev/try-uninstall.sh /tmp/try/
           : >/tmp/try/summary
           chmod -R a+rX /tmp/try
           chmod a+w /tmp/try/summary
           cd /tmp
-          runuser -u floti-user -- env HOME=/home/floti-user WSL_DISTRO_NAME=Debian GITHUB_STEP_SUMMARY=/tmp/try/summary sh -c '
+          runuser -u floti-user -- env HOME=/home/floti-user SHELL=/bin/sh WSL_DISTRO_NAME=Debian GITHUB_STEP_SUMMARY=/tmp/try/summary sh -c '
             set -eu
             sh /tmp/try/try-install.sh /tmp/try/served "$1" linux-x64
             sh /tmp/try/check-setup.sh start-on-connect "$1" "install.sh as a user in debian taken for WSL"

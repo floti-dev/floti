@@ -21,6 +21,14 @@ param(
   [Parameter(Mandatory)] [string]$Target
 )
 $ErrorActionPreference = 'Stop'
+
+# It installs Floti on this computer and puts it on the user's Path, so it
+# runs only on a CI runner.
+if ($env:GITHUB_ACTIONS -ne 'true') {
+  Write-Output 'try-install.ps1 installs Floti on this computer, so it runs only in GitHub Actions (GITHUB_ACTIONS=true); nothing was changed.'
+  exit 1
+}
+
 $port = 8765
 $url = "http://127.0.0.1:$port"
 

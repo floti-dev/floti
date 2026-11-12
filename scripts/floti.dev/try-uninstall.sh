@@ -10,8 +10,10 @@
 # 1. `floti uninstall` from ~/.local/bin/floti. floti and its node folder,
 #    the sign-in entry and the desktop app where it was installed must be
 #    gone, and the data folder, where setup made one, must stay. Where a host
-#    ran, it says it stopped it. Lingering is left on, and the desktop app's
-#    settings are kept: neither is checked.
+#    ran, it says it stopped it. floti's PATH line (`# added by floti`) must
+#    be in no startup file of any shell floti knows, and where the install
+#    added one, it says it removed it. Lingering is left on, and the desktop
+#    app's settings are kept: neither is checked.
 # 2. `floti uninstall --purge`, and the data folder must be gone.
 # 3. `floti uninstall` again, which changes nothing: no line says anything
 #    was removed, stopped or closed, and the sign-in entry, the desktop app
@@ -56,6 +58,16 @@ esac
 marker="$data/start-on-connect"
 
 [ -x "$floti" ] || fail "there is no $floti to uninstall."
+
+# The startup files, of every shell floti knows, holding floti's PATH line.
+with_path_line() {
+  for file in .bash_profile .bash_login .profile .bashrc .zshenv .zprofile .zshrc .zlogin .config/fish/config.fish; do
+    if [ -f "$HOME/$file" ] && grep -qF '# added by floti' "$HOME/$file"; then
+      printf '%s ' "$HOME/$file"
+    fi
+  done
+}
+had_path_line=$(with_path_line)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 copy="$work/floti"
@@ -124,6 +136,13 @@ if command -v pgrep >/dev/null 2>&1; then
     sleep 0.1
   done
 fi
+left=$(with_path_line)
+[ -z "$left" ] || fail "floti uninstall left floti's PATH line in $left"
+if [ -n "$had_path_line" ]; then
+  said '^PATH entry: removed' ''
+else
+  said '^PATH entry: not found' ''
+fi
 if [ "$had_app" = true ]; then
   said '^desktop app: removed' ''
   [ ! -e "$app" ] || fail "floti uninstall left the desktop app at $app."
@@ -153,6 +172,7 @@ said '^floti: left as it is' 'run again'
 removed="floti and the sign-in entry"
 [ "$had_app" = true ] && removed="floti, the sign-in entry and the desktop app"
 [ "$how" = refused ] && removed="floti, with no sign-in entry there"
+[ -n "$had_path_line" ] && removed="$removed, and floti's PATH line from ${had_path_line% }"
 kept="kept the data"
 [ "$had_data" = true ] || kept="found no data"
 echo "$by: floti uninstall removed $removed and $kept; --purge left no data; run again it found nothing."

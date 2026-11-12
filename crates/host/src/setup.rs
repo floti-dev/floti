@@ -28,6 +28,21 @@
 //! run, and goes on with everything else: an agent missing or out of range
 //! changes neither what setup does nor its exit status.
 //!
+//! Then, when this floti is the one in the user's own folder, where the
+//! install scripts and `floti install-self` put it
+//! ([`Standalone::binary`](crate::platform::standalone::Standalone::binary)),
+//! and that folder is not on the user's `PATH`,
+//! it puts it there ([`user_path::put_on_path`]) and says so in one line: on
+//! Windows in the user's `Path` value, and on macOS and Linux by appending
+//! floti's line to the startup file the user's shell reads, the one
+//! `floti doctor` names, which the line names. So every way floti is
+//! installed, `curl | sh`, `irm | iex`, the desktop's installer and the
+//! desktop's install over ssh, ends with floti on `PATH`. A shell floti knows
+//! no startup file of is given the line to add, and a `PATH` that could not
+//! be changed is said in one line with that line; neither changes setup's
+//! exit status. A floti anywhere else, such as a build run from its own
+//! folder, changes nothing.
+//!
 //! It ends with one line on standard output and an exit status for each
 //! outcome:
 //!
@@ -82,6 +97,7 @@ use crate::platform::startup::register::{
 };
 use crate::platform::startup::{self, Account, StartAtSignIn, StartupDefinition, StartupKind};
 use crate::platform::terminal_size::{Foreground, Native as NativeTerminal};
+use crate::platform::user_path::{self, UserPath};
 use crate::server::{HOST_KEY_FILE, local_endpoint};
 use crate::this_computer;
 pub use desktop::DesktopChoice;
@@ -202,7 +218,11 @@ pub fn parse(args: &[&str]) -> Option<SetupOptions> {
 /// answers the host's exit status.
 pub fn run_setup(options: SetupOptions) -> u8 {
     let linger = options.linger;
-    if let Some(sentence) = claude_sentence(&UserEnv::from_process()) {
+    let env = UserEnv::from_process();
+    for sentence in [claude_sentence(&env), native_path_sentence(&env)]
+        .into_iter()
+        .flatten()
+    {
         let mut out = std::io::stdout().lock();
         let _ = writeln!(out, "{sentence}").and_then(|()| out.flush());
     }
@@ -263,6 +283,49 @@ pub fn claude_sentence(env: &UserEnv) -> Option<String> {
     this_computer::claude_here(env, NativeShell.family())
         .sentence()
         .map(|sentence| sentence.replace(['\r', '\n'], " "))
+}
+
+/// What setup says of putting `floti`, this program's own path, on the
+/// `PATH` of the user `env` describes through `path`, when it is `own`, the
+/// floti in the user's own folder: the line [`user_path::Added::sentence`]
+/// says, or why the `PATH` could not be changed and the line that changes
+/// it. `None` when nothing was changed, or `floti` is not `own`.
+pub fn path_sentence(
+    path: &dyn UserPath,
+    env: &UserEnv,
+    floti: &Path,
+    own: Option<&Path>,
+) -> Option<String> {
+    if !own.is_some_and(|own| crate::install_self::same_file(own, floti)) {
+        return None;
+    }
+    let folder = floti.parent()?;
+    match user_path::put_on_path(path, env, floti) {
+        Ok(added) => added.sentence(folder),
+        Err(why) => Some(format!(
+            "Floti could not put {} on your PATH: {}; this puts it there: {}",
+            folder.display(),
+            why.replace(['\r', '\n'], " "),
+            path.fix(env, folder)
+        )),
+    }
+}
+
+/// Setup's `PATH` step on this computer, for the floti this process is.
+#[cfg(not(feature = "testkit"))]
+fn native_path_sentence(env: &UserEnv) -> Option<String> {
+    use crate::platform::standalone::{Native as NativeStandalone, Standalone};
+    let floti = std::env::current_exe().ok()?;
+    let own = NativeStandalone.binary(env);
+    path_sentence(&user_path::Native, env, &floti, own.as_deref())
+}
+
+/// In a test build of floti, which the crate's tests run as a program, the
+/// user's `PATH` is never changed: the step itself is tested against a fake
+/// `PATH` ([`path_sentence`]).
+#[cfg(feature = "testkit")]
+fn native_path_sentence(_env: &UserEnv) -> Option<String> {
+    None
 }
 
 async fn native_setup(linger: Linger) -> SetupOutcome {
@@ -375,5 +438,124 @@ async fn answers(folders: &Folders, key: &KeyPair, within: Duration) -> bool {
             return false;
         }
         tokio::time::sleep(LOOK_AGAIN).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::platform::user_path::Added;
+    use crate::testkit::TestDirs;
+
+    /// A user `PATH` that holds floti's folder when `on`, and records what
+    /// it was asked to add.
+    struct FakePath {
+        on: bool,
+        refused: Option<&'static str>,
+        added: RefCell<Vec<PathBuf>>,
+    }
+
+    impl FakePath {
+        fn new(on: bool) -> Self {
+            Self {
+                on,
+                refused: None,
+                added: RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    impl UserPath for FakePath {
+        fn has(&self, _env: &UserEnv, _floti: &Path) -> Result<bool, String> {
+            Ok(self.on)
+        }
+
+        fn fix(&self, _env: &UserEnv, folder: &Path) -> String {
+            format!("add {}", folder.display())
+        }
+
+        fn add(&self, _env: &UserEnv, folder: &Path) -> Result<Added, String> {
+            if let Some(why) = self.refused {
+                return Err(why.to_owned());
+            }
+            self.added.borrow_mut().push(folder.to_path_buf());
+            Ok(Added::Put {
+                file: Some(folder.join("startup file")),
+            })
+        }
+
+        fn remove(&self, _env: &UserEnv, _folder: &Path) -> Result<bool, String> {
+            unreachable!("setup never takes floti off PATH")
+        }
+    }
+
+    /// floti in the user's own folder of the test's tree.
+    fn own_floti(dirs: &TestDirs) -> PathBuf {
+        let folder = dirs.home.join(".local").join("bin");
+        std::fs::create_dir_all(&folder).unwrap();
+        let floti = folder.join("floti");
+        std::fs::write(&floti, b"floti").unwrap();
+        floti
+    }
+
+    #[test]
+    fn setup_puts_the_users_own_floti_on_path_and_says_which_file() {
+        let dirs = TestDirs::new();
+        let floti = own_floti(&dirs);
+        let folder = floti.parent().unwrap();
+        let path = FakePath::new(false);
+        let said = path_sentence(&path, &dirs.user_env(), &floti, Some(&floti));
+        assert_eq!(*path.added.borrow(), [folder.to_path_buf()]);
+        assert_eq!(
+            said,
+            Some(format!(
+                "Put {} on your PATH in {}, for terminals and logins started from now on.",
+                folder.display(),
+                folder.join("startup file").display()
+            ))
+        );
+    }
+
+    #[test]
+    fn setup_adds_nothing_where_floti_is_on_path_already_or_is_not_the_users_own() {
+        let dirs = TestDirs::new();
+        let floti = own_floti(&dirs);
+        let on = FakePath::new(true);
+        assert_eq!(
+            path_sentence(&on, &dirs.user_env(), &floti, Some(&floti)),
+            None
+        );
+        assert!(on.added.borrow().is_empty());
+
+        // A floti elsewhere, such as a build run from its own folder.
+        let elsewhere = dirs.folder("a build").join("floti");
+        std::fs::write(&elsewhere, b"floti").unwrap();
+        let off = FakePath::new(false);
+        for own in [Some(floti.as_path()), None] {
+            assert_eq!(path_sentence(&off, &dirs.user_env(), &elsewhere, own), None);
+        }
+        assert!(off.added.borrow().is_empty());
+    }
+
+    #[test]
+    fn a_path_that_could_not_be_changed_is_one_line_with_the_fix() {
+        let dirs = TestDirs::new();
+        let floti = own_floti(&dirs);
+        let folder = floti.parent().unwrap();
+        let path = FakePath {
+            refused: Some("could not add to ~/.profile:\nread-only"),
+            ..FakePath::new(false)
+        };
+        assert_eq!(
+            path_sentence(&path, &dirs.user_env(), &floti, Some(&floti)),
+            Some(format!(
+                "Floti could not put {} on your PATH: could not add to ~/.profile: read-only; this puts it there: add {}",
+                folder.display(),
+                folder.display()
+            ))
+        );
     }
 }
