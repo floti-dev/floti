@@ -247,7 +247,8 @@ test("Helm's shortcuts work from inside a plugin page, and its commands run from
   await ui.keyboard.press('ControlOrMeta+Shift+P')
   const palette = ui.getByRole('dialog', { name: 'Run a command' })
   await expect(palette).toBeVisible()
-  await expect(palette.getByRole('option')).toHaveText([/New item/, /Refresh items/])
+  // Helm's own History is listed with the plugin's two commands.
+  await expect(palette.getByRole('option')).toHaveText([/History/, /New item/, /Refresh items/])
 
   await ui.keyboard.type('new')
   await ui.keyboard.press('Enter')

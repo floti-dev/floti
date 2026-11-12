@@ -12,8 +12,10 @@ test('a setting changed in the settings pane survives a restart', async ({ helm,
   await compact.click()
   await expect(compact).toBeChecked()
 
+  // The Settings tab comes back with the layout, and its Close Settings
+  // button matches the name too, so the rail's gear is named exactly.
   const { window } = await relaunch()
-  await window.getByRole('button', { name: 'Settings' }).click()
+  await window.getByRole('button', { name: 'Settings', exact: true }).click()
   await section(window, 'Appearance').click()
   await expect(window.getByRole('radiogroup', { name: 'Density' }).getByRole('radio', { name: 'Compact' })).toBeChecked()
 })

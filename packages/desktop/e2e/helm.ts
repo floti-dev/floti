@@ -161,8 +161,13 @@ export async function startSession(window: Page, project: string): Promise<numbe
 /**
  * Opens History's palette with Ctrl+H (Ctrl on every OS, a focused terminal
  * included) and returns it once its search field has the keyboard.
+ *
+ * The window must have drawn its rail first: Ctrl+H is heard by the app once
+ * it has mounted, and a press that lands before then is dropped, as it would
+ * be for a person.
  */
 export async function openHistory(window: Page): Promise<Locator> {
+  await expect(window.getByRole('navigation', { name: 'Destinations' })).toBeVisible()
   await window.keyboard.press('Control+h')
   const palette = window.getByRole('dialog', { name: 'History' })
   await expect(palette.getByRole('combobox', { name: 'Search History' })).toBeFocused()
