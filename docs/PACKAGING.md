@@ -425,18 +425,20 @@ Floti came to it, the host started at sign-in is that one, and
 (`crates/host/src/install_self.rs`), run from the floti the app carries,
 puts it there:
 
-1. floti is copied beside the one there under a name of its own, then put in
-   its place. On Windows a running `floti.exe` there is renamed aside
-   (`floti.old-<pid>-<n>.exe`) and keeps running; on macOS and Linux the new
-   file is renamed over the old, which leaves a running process its own
-   copy. A copy there that is this one byte for byte is left as it is, and
-   copies put aside earlier are removed once nothing runs them. The Windows
-   installer carries the arm64 build too, as `resources\floti-arm64.exe`
-   (the release's `floti-windows-arm64.exe`): on a computer whose own CPU is
-   arm64 (`IsWow64Process2`'s native machine, so an x64 floti emulated there
-   still sees Arm), that file is what goes in place, by the same rules, so a
-   native arm64 floti of the same version that `install.ps1` put there is
-   left as it is. Anywhere else floti puts itself.
+1. The floti build for the computer's own CPU is copied beside the one there
+   under a name of its own, then put in its place. On Windows on Arm that is
+   `floti-arm64.exe` beside the running floti (the release's
+   `floti-windows-arm64.exe`, which the installer carries as
+   `resources\floti-arm64.exe` beside its x64 floti); the CPU is
+   `IsWow64Process2`'s native machine, so an x64 floti emulated there still
+   picks the arm64 build. Anywhere else, and where that file is not there,
+   it is the floti that runs install-self. On Windows a running `floti.exe`
+   there is renamed aside (`floti.old-<pid>-<n>.exe`) and keeps running; on
+   macOS and Linux the new file is renamed over the old, which leaves a
+   running process its own copy. A copy there that is the chosen build byte
+   for byte is left as it is, so a native arm64 floti of the same version
+   that `install.ps1` put there stays, and copies put aside earlier are
+   removed once nothing runs them.
 2. The Node runtime beside the carried floti goes, file by file the same
    way, into `node` beside the installed one, where the host looks for it. A
    `node` there that is not a folder (a file or a link of the user's own) is

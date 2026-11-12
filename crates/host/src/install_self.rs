@@ -1,5 +1,7 @@
-//! `floti install-self`: puts the floti that runs it where the install
-//! scripts put floti, the user's own folder ([`Standalone::folder`]:
+//! `floti install-self`: puts the floti build for this computer's own CPU
+//! (the one that runs it, or [`ARM64_BUILD`] beside it on Windows on Arm)
+//! where the install scripts put floti, the user's own folder
+//! ([`Standalone::folder`]:
 //! `%LOCALAPPDATA%\Programs\Floti\bin` or `~/.local/bin`), with the Node
 //! runtime shipped beside it, then runs `floti setup` from there. It is what
 //! the desktop's Windows installer runs from the floti it carries, and what
