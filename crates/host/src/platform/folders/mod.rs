@@ -123,7 +123,7 @@ pub trait FolderLayout {
 /// computer does not change while Floti runs on it, so a host started by the
 /// desktop, at sign-in or by hand reads one folder, even once one of them
 /// has written `~/.config/floti`. The one-time move of `~/.config/helm` to
-/// `~/.config/floti` (HELM-94) is what switches a computer over. This is the
+/// `~/.config/floti`, which the rename makes once, is what switches a computer over. This is the
 /// one look at the disk resolving makes, and it creates nothing.
 pub fn config_folder(home: &Path) -> PathBuf {
     let config = home.join(".config");

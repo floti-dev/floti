@@ -461,7 +461,7 @@ Who runs it:
 The host's config folder is `~/.config/helm` on a computer where that is
 there, which Helm set up before the rename and where its agents, templates
 and plugins are, and `~/.config/floti` elsewhere; it does not change while
-Floti runs there, and the one-time move to `~/.config/floti` (HELM-94) is
+Floti runs there, and the one-time move to `~/.config/floti`, which the rename makes, is
 what switches a computer over. The installed app gives its
 host no config folder of its own, so the host it starts and the host started
 at sign-in read the same one.
