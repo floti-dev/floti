@@ -125,7 +125,7 @@ impl Standalone for FakeStandalone {
         _env: &UserEnv,
         _files: &[PathBuf],
         _folders: &[PathBuf],
-    ) -> io::Result<()> {
+    ) -> io::Result<crate::platform::process_tree::Outliving> {
         unreachable!("an update leaves nothing to delete after it exits")
     }
 }

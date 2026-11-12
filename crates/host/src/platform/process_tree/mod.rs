@@ -47,6 +47,42 @@ use floti_protocol::Knowable;
 
 use crate::Result;
 
+/// Where a program started apart ([`ProcessTree::start_apart`]) runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outliving {
+    /// Apart from this process: out of any job it is in, on Windows.
+    Apart,
+    /// In this process's Windows job, which refused to let it go. It still
+    /// outlives this process, unless `ends_with_job`: the job ends what it
+    /// holds once its last handle closes, which can be before it is done.
+    InJob { ends_with_job: bool },
+}
+
+/// `ERROR_ACCESS_DENIED`, what Windows answers a start out of a job that
+/// does not let what it holds break away.
+pub const BREAKAWAY_REFUSED: i32 = 5;
+
+/// Starts a program through `start`, which is told whether to start it out
+/// of this process's job: out of it first, and when the job refuses
+/// ([`BREAKAWAY_REFUSED`]), inside it, since a program in a job that does not
+/// end what it holds still outlives this process. `ends_with_job` is asked
+/// only then. Any other failure is the start's own.
+pub fn start_outliving(
+    start: &mut dyn FnMut(bool) -> std::io::Result<()>,
+    ends_with_job: &dyn Fn() -> bool,
+) -> std::io::Result<Outliving> {
+    match start(true) {
+        Ok(()) => Ok(Outliving::Apart),
+        Err(err) if err.raw_os_error() == Some(BREAKAWAY_REFUSED) => {
+            start(false)?;
+            Ok(Outliving::InJob {
+                ends_with_job: ends_with_job(),
+            })
+        }
+        Err(err) => Err(err),
+    }
+}
+
 /// How to end a tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ending {
@@ -150,8 +186,9 @@ pub trait ProcessTree {
     /// it outlives this process and leaves nothing for an `exec` that keeps
     /// this process's id to reap. `floti update --from-desktop` starts this
     /// way. Windows starts it alone ([`ProcessTree::start_alone`]), which
-    /// passes it no handle.
-    fn start_apart(&self, program: &std::path::Path, args: &[&str]) -> std::io::Result<()> {
+    /// passes it no handle, out of this process's job, or inside it when the
+    /// job refuses ([`start_outliving`]); the answer says which.
+    fn start_apart(&self, program: &std::path::Path, args: &[&str]) -> std::io::Result<Outliving> {
         let mut command = std::process::Command::new(program);
         command
             .args(args)
@@ -162,7 +199,7 @@ pub trait ProcessTree {
         let mut intermediate = command.spawn()?;
         // On macOS and Linux it has exited already; reaped here.
         let _ = intermediate.wait();
-        Ok(())
+        Ok(Outliving::Apart)
     }
 
     /// Starts `program` with `args` in this process's place: what a host

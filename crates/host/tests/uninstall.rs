@@ -22,14 +22,15 @@ use floti_host::platform::installs::{
 };
 use floti_host::platform::links::{FolderLinks, Native as NativeLinks};
 use floti_host::platform::process_table::ProcessRow;
+use floti_host::platform::process_tree::Outliving;
 use floti_host::platform::secret_seal::StoreEntry;
 use floti_host::platform::standalone::{Native as NativeStandalone, Standalone};
 use floti_host::platform::startup::register::{OsCommand, Ran, SignInSystem, definition_file};
 use floti_host::platform::startup::{self, StartAtSignIn, StartupDefinition, StartupKind};
 use floti_host::testkit::TestDirs;
 use floti_host::uninstall::{
-    Closed, DESKTOP_SETTINGS_LINE, HostStop, IN_SESSION_LINE, LINGER_LINE, Uninstall,
-    UninstallSystem, entry_name, uninstall,
+    Closed, DESKTOP_SETTINGS_LINE, HostStop, IN_SESSION_LINE, JOB_ENDS_IT_FIRST, LINGER_LINE,
+    Uninstall, UninstallSystem, entry_name, uninstall,
 };
 
 /// The OS's sign-in commands: answers as each OS's would while the entry
@@ -83,6 +84,8 @@ struct FakeSystem {
     uninstaller_fails: bool,
     /// Why deleting after exit cannot start, when it cannot.
     deferring_refused: Option<String>,
+    /// Where what deletes after exit runs once started.
+    deferring_where: Outliving,
     secret_entry: Cell<bool>,
     /// Why the secret store refuses, when it does.
     secret_refused: Option<String>,
@@ -107,6 +110,7 @@ impl Default for FakeSystem {
             path_refused: None,
             uninstaller_fails: false,
             deferring_refused: None,
+            deferring_where: Outliving::Apart,
             secret_entry: Cell::new(false),
             secret_refused: None,
             alive: Vec::new(),
@@ -178,14 +182,18 @@ impl UninstallSystem for FakeSystem {
         Ok(self.on_path.replace(false))
     }
 
-    fn delete_after_exit(&self, files: &[PathBuf], folders: &[PathBuf]) -> Result<(), String> {
+    fn delete_after_exit(
+        &self,
+        files: &[PathBuf],
+        folders: &[PathBuf],
+    ) -> Result<Outliving, String> {
         if let Some(why) = &self.deferring_refused {
             return Err(why.clone());
         }
         self.deferred
             .borrow_mut()
             .push((files.to_vec(), folders.to_vec()));
-        Ok(())
+        Ok(self.deferring_where)
     }
 
     fn remove_secret_entry(&self, entry: &StoreEntry) -> Result<bool, String> {
@@ -879,7 +887,7 @@ impl Standalone for HeldPlace {
         env: &UserEnv,
         files: &[PathBuf],
         folders: &[PathBuf],
-    ) -> io::Result<()> {
+    ) -> io::Result<Outliving> {
         NativeStandalone.delete_after_exit(env, files, folders)
     }
 }
@@ -910,6 +918,33 @@ fn deleting_after_exit_that_cannot_start_leaves_the_copy_for_the_next_sweep_and_
     );
     assert!(!world.binary.exists());
     assert!(aside.exists());
+}
+
+#[test]
+fn deleting_after_exit_inside_a_job_that_ends_what_it_holds_says_the_job_may_end_it_first() {
+    for (ends_with_job, unless) in [(false, ""), (true, JOB_ENDS_IT_FIRST)] {
+        let (world, mut system) = World::installed();
+        system.deferring_where = Outliving::InJob { ends_with_job };
+
+        let ran = world.run_with(
+            &world.binary,
+            &HeldPlace,
+            &NativeInstalls,
+            &system,
+            false,
+            Some(world.folders.clone()),
+        );
+        assert_eq!(ran.code, 0, "{}", ran.err);
+        assert_eq!(
+            ran.lines().last().unwrap().to_owned(),
+            format!(
+                "{}; the copy this process runs from goes once it exits{unless}",
+                world.floti_removed_line()
+            ),
+            "ends_with_job {ends_with_job}"
+        );
+        assert_eq!(system.deferred.borrow().len(), 1);
+    }
 }
 
 #[test]

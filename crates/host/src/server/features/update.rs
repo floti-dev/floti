@@ -399,7 +399,9 @@ fn refusal(why: UpdateUnavailable) -> String {
 
 /// Starts `<binary> update --from-desktop` apart from this process.
 fn start_native(binary: &Path) -> std::io::Result<()> {
-    process_tree::Native.start_apart(binary, &["update", "--from-desktop"])
+    process_tree::Native
+        .start_apart(binary, &["update", "--from-desktop"])
+        .map(drop)
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {

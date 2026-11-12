@@ -32,7 +32,7 @@ use windows_sys::Win32::Foundation::{
 use windows_sys::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_BREAKAWAY_OK,
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-    JobObjectExtendedLimitInformation, SetInformationJobObject,
+    JobObjectExtendedLimitInformation, QueryInformationJobObject, SetInformationJobObject,
 };
 use windows_sys::Win32::System::Threading::{
     CREATE_BREAKAWAY_FROM_JOB, CREATE_NO_WINDOW, CreateProcessW, GetCurrentProcess,
@@ -40,7 +40,7 @@ use windows_sys::Win32::System::Threading::{
     PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, STARTUPINFOW, TerminateProcess, WaitForSingleObject,
 };
 
-use super::{Ending, ProcessTree, Started};
+use super::{Ending, Outliving, ProcessTree, Started, start_outliving};
 use crate::{Error, Result};
 
 /// Whether this process's tree ends with it: decided at the first ask, and
@@ -137,69 +137,106 @@ impl ProcessTree for Native {
         command.creation_flags(CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB);
     }
 
-    // `std::process::Command` always lets a child inherit every inheritable
-    // handle, which would keep the pipes this process was handed open for
-    // as long as the child runs: `CreateProcessW` is told to pass none.
     fn start_alone(&self, program: &Path, args: &[&str]) -> io::Result<Box<dyn Started>> {
-        let mut line: Vec<u16> = Vec::new();
-        let words = std::iter::once(program.as_os_str()).chain(args.iter().map(OsStr::new));
-        for (at, word) in words.enumerate() {
-            let units: Vec<u16> = word.encode_wide().collect();
-            // Each word goes in double quotes, so none may hold one or end
-            // with the backslash that would escape the closing one.
-            if units.contains(&u16::from(b'"')) || units.last() == Some(&u16::from(b'\\')) {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!(
-                        "cannot start {}: {} cannot be quoted",
-                        program.display(),
-                        word.display()
-                    ),
-                ));
-            }
-            if at > 0 {
-                line.push(u16::from(b' '));
-            }
-            line.push(u16::from(b'"'));
-            line.extend(units);
-            line.push(u16::from(b'"'));
-        }
-        line.push(0);
-        let application: Vec<u16> = program.as_os_str().encode_wide().chain(Some(0)).collect();
-        // SAFETY: both are plain C structs for which all zeroes is valid.
-        let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
-        startup.cb = u32::try_from(std::mem::size_of::<STARTUPINFOW>()).unwrap_or(u32::MAX);
-        let mut started: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
-        // SAFETY: `application` and `line` are NUL-terminated and outlive
-        // the call, `line` is writable as CreateProcessW asks, and the
-        // environment and folder are this process's (null).
-        let made = unsafe {
-            CreateProcessW(
-                application.as_ptr(),
-                line.as_mut_ptr(),
-                std::ptr::null(),
-                std::ptr::null(),
-                0,
-                CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB,
-                std::ptr::null(),
-                std::ptr::null(),
-                &startup,
-                &mut started,
-            )
-        };
-        if made == 0 {
-            return Err(io::Error::last_os_error());
-        }
-        // SAFETY: the thread handle CreateProcessW made, closed once.
-        unsafe { CloseHandle(started.hThread) };
-        Ok(Box::new(Alone(started.hProcess)))
+        create_alone(program, args, true)
     }
 
     // A pipe for its output would need every inheritable handle passed
-    // with it, the ones this process was handed included.
-    fn start_apart(&self, program: &Path, args: &[&str]) -> io::Result<()> {
-        self.start_alone(program, args).map(|_| ())
+    // with it, the ones this process was handed included. Out of this
+    // process's job when it allows, so a job that ends what it holds cannot
+    // end it; inside one that does not allow it, which it still outlives
+    // unless that job ends what it holds.
+    fn start_apart(&self, program: &Path, args: &[&str]) -> io::Result<Outliving> {
+        start_outliving(
+            &mut |breakaway| create_alone(program, args, breakaway).map(drop),
+            &this_job_ends_what_it_holds,
+        )
     }
+}
+
+/// Starts `program` with `args` passing it no handle, with no window, and
+/// out of this process's job when `breakaway`. `std::process::Command`
+/// always lets a child inherit every inheritable handle, which would keep
+/// the pipes this process was handed open for as long as the child runs:
+/// `CreateProcessW` is told to pass none.
+fn create_alone(program: &Path, args: &[&str], breakaway: bool) -> io::Result<Box<dyn Started>> {
+    let mut line: Vec<u16> = Vec::new();
+    let words = std::iter::once(program.as_os_str()).chain(args.iter().map(OsStr::new));
+    for (at, word) in words.enumerate() {
+        let units: Vec<u16> = word.encode_wide().collect();
+        // Each word goes in double quotes, so none may hold one or end
+        // with the backslash that would escape the closing one.
+        if units.contains(&u16::from(b'"')) || units.last() == Some(&u16::from(b'\\')) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "cannot start {}: {} cannot be quoted",
+                    program.display(),
+                    word.display()
+                ),
+            ));
+        }
+        if at > 0 {
+            line.push(u16::from(b' '));
+        }
+        line.push(u16::from(b'"'));
+        line.extend(units);
+        line.push(u16::from(b'"'));
+    }
+    line.push(0);
+    let application: Vec<u16> = program.as_os_str().encode_wide().chain(Some(0)).collect();
+    // SAFETY: both are plain C structs for which all zeroes is valid.
+    let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
+    startup.cb = u32::try_from(std::mem::size_of::<STARTUPINFOW>()).unwrap_or(u32::MAX);
+    let mut started: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+    // SAFETY: `application` and `line` are NUL-terminated and outlive
+    // the call, `line` is writable as CreateProcessW asks, and the
+    // environment and folder are this process's (null).
+    let made = unsafe {
+        CreateProcessW(
+            application.as_ptr(),
+            line.as_mut_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+            if breakaway {
+                CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB
+            } else {
+                CREATE_NO_WINDOW
+            },
+            std::ptr::null(),
+            std::ptr::null(),
+            &startup,
+            &mut started,
+        )
+    };
+    if made == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: the thread handle CreateProcessW made, closed once.
+    unsafe { CloseHandle(started.hThread) };
+    Ok(Box::new(Alone(started.hProcess)))
+}
+
+/// Whether the job this process is in ends every process in it once its
+/// last handle closes (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). False out of
+/// any job, or when Windows would not say.
+fn this_job_ends_what_it_holds() -> bool {
+    let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    let size = u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())
+        .expect("the job's limits fit in a u32");
+    // SAFETY: a null job is the one this process is in, and `limits` is the
+    // structure this information class names, `size` bytes long.
+    let read = unsafe {
+        QueryInformationJobObject(
+            std::ptr::null_mut(),
+            JobObjectExtendedLimitInformation,
+            std::ptr::from_mut(&mut limits).cast(),
+            size,
+            std::ptr::null_mut(),
+        )
+    };
+    read != 0 && limits.BasicLimitInformation.LimitFlags & JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE != 0
 }
 
 /// The handle of a process [`Native::start_alone`] started, closed when

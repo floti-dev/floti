@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use super::{Standalone, posix};
 use crate::platform::folders::UserEnv;
+use crate::platform::process_tree::Outliving;
 
 /// The Linux place.
 #[derive(Debug, Clone, Copy, Default)]
@@ -44,7 +45,7 @@ impl Standalone for Native {
         _env: &UserEnv,
         files: &[PathBuf],
         folders: &[PathBuf],
-    ) -> io::Result<()> {
-        posix::delete_now(files, folders)
+    ) -> io::Result<Outliving> {
+        posix::delete_now(files, folders).map(|()| Outliving::Apart)
     }
 }

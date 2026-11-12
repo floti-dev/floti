@@ -51,6 +51,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::folders::UserEnv;
+use super::process_tree::Outliving;
 
 #[cfg(test)]
 mod tests;
@@ -100,12 +101,14 @@ pub trait Standalone {
     /// Deletes each of `files`, then each of `folders` that is empty and not
     /// a link, once this process has exited, for the user `env` describes.
     /// On Windows a hidden Windows PowerShell, started apart from this
-    /// process and holding none of its handles, does it; on macOS and Linux
-    /// nothing a process runs needs waiting for, and it is done at once.
+    /// process and holding none of its handles, does it, out of this
+    /// process's job or, where the job refuses, inside it; the answer says
+    /// which ([`Outliving`]). On macOS and Linux nothing a process runs needs
+    /// waiting for, and it is done at once ([`Outliving::Apart`]).
     fn delete_after_exit(
         &self,
         env: &UserEnv,
         files: &[PathBuf],
         folders: &[PathBuf],
-    ) -> io::Result<()>;
+    ) -> io::Result<Outliving>;
 }

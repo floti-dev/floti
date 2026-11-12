@@ -89,7 +89,7 @@ use crate::platform::launcher::{self, ProgramLauncher};
 use crate::platform::links::{self, remove_tree};
 use crate::platform::node_runtime::SHIPPED_FOLDER;
 use crate::platform::process_table::{self, ProcessRow, ProcessTable};
-use crate::platform::process_tree::{self, OneProcess, ProcessTree};
+use crate::platform::process_tree::{self, OneProcess, Outliving, ProcessTree};
 use crate::platform::secret_seal::{self, StoreEntry};
 use crate::platform::standalone::{self, Standalone};
 use crate::platform::startup::register::{self, SignInSystem};
@@ -164,8 +164,12 @@ pub trait UninstallSystem {
     fn remove_from_path(&self, folder: &Path) -> Result<bool, String>;
 
     /// Deletes `files`, then each of `folders` that is empty, once this
-    /// process has exited.
-    fn delete_after_exit(&self, files: &[PathBuf], folders: &[PathBuf]) -> Result<(), String>;
+    /// process has exited, and says where what does it runs.
+    fn delete_after_exit(
+        &self,
+        files: &[PathBuf],
+        folders: &[PathBuf],
+    ) -> Result<Outliving, String>;
 
     /// Removes the OS secret store's `entry`; whether there was one.
     fn remove_secret_entry(&self, entry: &StoreEntry) -> Result<bool, String>;
@@ -196,6 +200,10 @@ pub struct Uninstall<'a> {
 
 /// The line a run inside one of Floti's own sessions fails with.
 pub const IN_SESSION_LINE: &str = "this terminal is one of Floti's own sessions, and uninstalling stops the host, which ends every session, this one with it; run floti uninstall from a terminal Floti did not start. Nothing was changed.";
+
+/// What the floti line adds when what deletes floti once it exits had to
+/// start in a job that ends what it holds when it closes.
+pub const JOB_ENDS_IT_FIRST: &str = ", unless the job this floti runs in, which ends every process in it when it closes, ends that first";
 
 /// What a Linux computer with lingering on is told: it is left on.
 pub const LINGER_LINE: &str =
@@ -585,19 +593,28 @@ fn floti_files(
             removed |= remove_empty_folder(folder);
         }
     } else {
+        let named = pending
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
         match system.delete_after_exit(&pending, &own) {
-            Ok(()) if aside.is_some() => {
-                left = "; the copy this process runs from goes once it exits".to_owned();
+            Ok(outliving) => {
+                let unless = match outliving {
+                    Outliving::InJob {
+                        ends_with_job: true,
+                    } => JOB_ENDS_IT_FIRST,
+                    _ => "",
+                };
+                if aside.is_some() {
+                    left = format!("; the copy this process runs from goes once it exits{unless}");
+                } else if !unless.is_empty() {
+                    left = format!("; {named} goes once this floti exits{unless}");
+                }
             }
-            Ok(()) => {}
             Err(why) => {
                 left = format!(
-                    "; {} is left for the next floti install or update to remove, since what would delete it once this floti exits could not start ({why})",
-                    pending
-                        .iter()
-                        .map(|path| path.display().to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    "; {named} is left for the next floti install or update to remove, since what would delete it once this floti exits could not start ({why})"
                 );
             }
         }
@@ -961,7 +978,11 @@ impl UninstallSystem for NativeSystem<'_> {
         user_path::Native.remove(&self.env, folder)
     }
 
-    fn delete_after_exit(&self, files: &[PathBuf], folders: &[PathBuf]) -> Result<(), String> {
+    fn delete_after_exit(
+        &self,
+        files: &[PathBuf],
+        folders: &[PathBuf],
+    ) -> Result<Outliving, String> {
         standalone::Native
             .delete_after_exit(&self.env, files, folders)
             .map_err(|why| why.to_string())

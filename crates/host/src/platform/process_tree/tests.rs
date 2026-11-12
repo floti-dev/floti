@@ -3,7 +3,10 @@ use std::process::{Command, Stdio};
 
 use floti_protocol::Knowable;
 
-use super::{Ending, Native, OneProcess, ProcessTree, descendants, tree_under};
+use super::{
+    BREAKAWAY_REFUSED, Ending, Native, OneProcess, Outliving, ProcessTree, descendants,
+    start_outliving, tree_under,
+};
 use crate::session::tests::fake_agent_exe;
 
 #[test]
@@ -201,4 +204,66 @@ fn the_descendants_of_this_process_include_its_childs_child() {
     assert!(found.contains(&agent_pid), "{agent_pid} not in {found:?}");
     assert!(found.contains(&grandchild), "{grandchild} not in {found:?}");
     assert!(!found.contains(&std::process::id()), "{found:?}");
+}
+
+/// A start through [`start_outliving`] whose breakaway start answers
+/// `breakaway` and whose start inside the job answers `inside`, with the
+/// job ending what it holds when `ends_with_job`: what it answered, and each
+/// start it was asked for (true for out of the job).
+fn outliving(
+    breakaway: fn() -> std::io::Result<()>,
+    inside: fn() -> std::io::Result<()>,
+    ends_with_job: bool,
+) -> (std::io::Result<Outliving>, Vec<bool>) {
+    let mut asked = Vec::new();
+    let answer = start_outliving(
+        &mut |out_of_job| {
+            asked.push(out_of_job);
+            if out_of_job { breakaway() } else { inside() }
+        },
+        &|| ends_with_job,
+    );
+    (answer, asked)
+}
+
+fn refused() -> std::io::Result<()> {
+    Err(std::io::Error::from_raw_os_error(BREAKAWAY_REFUSED))
+}
+
+#[test]
+fn a_start_the_job_lets_go_runs_apart_and_is_asked_once() {
+    let (answer, asked) = outliving(|| Ok(()), || unreachable!("never inside"), true);
+    assert_eq!(answer.unwrap(), Outliving::Apart);
+    assert_eq!(asked, [true]);
+}
+
+#[test]
+fn a_job_that_refuses_breakaway_gets_it_started_inside_and_says_whether_it_ends_it() {
+    for ends_with_job in [false, true] {
+        let (answer, asked) = outliving(refused, || Ok(()), ends_with_job);
+        assert_eq!(answer.unwrap(), Outliving::InJob { ends_with_job });
+        assert_eq!(asked, [true, false], "out of the job first, then inside");
+    }
+}
+
+#[test]
+fn a_start_that_fails_inside_the_job_too_answers_that_failure() {
+    let (answer, asked) = outliving(
+        refused,
+        || Err(std::io::Error::other("no such program")),
+        false,
+    );
+    assert_eq!(answer.unwrap_err().to_string(), "no such program");
+    assert_eq!(asked, [true, false]);
+}
+
+#[test]
+fn any_other_failure_of_the_breakaway_start_is_not_tried_inside() {
+    let (answer, asked) = outliving(
+        || Err(std::io::Error::from(std::io::ErrorKind::NotFound)),
+        || unreachable!("never inside"),
+        false,
+    );
+    assert_eq!(answer.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    assert_eq!(asked, [true]);
 }

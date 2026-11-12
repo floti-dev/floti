@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use super::Standalone;
 use crate::platform::folders::UserEnv;
 use crate::platform::held_files::{self, HeldFiles};
-use crate::platform::process_tree::{self, ProcessTree};
+use crate::platform::process_tree::{self, Outliving, ProcessTree};
 use crate::platform::windows_path;
 
 /// The Windows place.
@@ -115,9 +115,9 @@ impl Standalone for Native {
         env: &UserEnv,
         files: &[PathBuf],
         folders: &[PathBuf],
-    ) -> io::Result<()> {
+    ) -> io::Result<Outliving> {
         if files.is_empty() && folders.is_empty() {
-            return Ok(());
+            return Ok(Outliving::Apart);
         }
         let powershell = windows_powershell(env).ok_or_else(|| {
             io::Error::other("SystemRoot is not set, so Windows PowerShell cannot be found")
@@ -134,9 +134,10 @@ impl Standalone for Native {
             "-EncodedCommand",
             encoded.as_str(),
         ];
-        // No window, out of any job this process is in, and holding none
-        // of its handles, so a pipe this process writes to closes when it
-        // exits rather than when the deleting ends.
+        // No window, out of any job this process is in (inside it where the
+        // job refuses, which it still outlives), and holding none of its
+        // handles, so a pipe this process writes to closes when it exits
+        // rather than when the deleting ends.
         process_tree::Native.start_apart(&powershell, &args)
     }
 }

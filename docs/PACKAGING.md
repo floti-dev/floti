@@ -971,13 +971,15 @@ Last in each of those jobs, on every runner and in both container runs,
    logon task, or the start-on-connect marker), the desktop app where an
    installer put it there (`Helm.exe` and the Start menu's `Helm.lnk`) and,
    on Windows, floti's folder on the user's `Path` must be gone, with the
-   lines that say so, and where a host ran it must say it stopped it. The
-   data folder, where setup made one, must stay (`data: kept`). On Windows
-   the `floti.exe` it ran from goes once it exits, and `Programs\Floti`
-   after it, which is waited for up to a minute; where the runner would not
-   let the deleting PowerShell start, uninstall says the copy is left for
-   the next sweep, and the job warns instead. Lingering and the desktop
-   app's settings are left as uninstall leaves them, and not checked.
+   lines that say so. Where a host ran it must say it stopped it, and no
+   host may run after it: no process from floti's folder on Windows, no
+   `dev.floti.host` loaded in launchd, no active `floti.service`, and no
+   `<floti> host` process where `pgrep` is there to ask. The data folder,
+   where setup made one, must stay (`data: kept`). On Windows the
+   `floti.exe` it ran from goes once it exits, and `Programs\Floti` after
+   it, which is waited for up to a minute; a run that says the copy is left
+   for a later sweep fails. Lingering and the desktop app's settings are
+   left as uninstall leaves them, and not checked.
 2. `floti uninstall --purge`, and the data folder must be gone.
 3. `floti uninstall` again, which must change nothing: no line says
    anything was removed, stopped or closed, and the sign-in entry, the
@@ -987,6 +989,10 @@ floti removes itself in the first run, so the other two run a copy of it
 made beforehand outside its install place, which removes what the install
 put there and leaves itself, as a floti from elsewhere does: the third
 run's last line is `floti: left as it is`.
+
+`try-installer.ps1`, `try-uninstall.ps1`, `try-uninstall.sh` and
+`try-add-desktop.sh` change the computer they run on, so each refuses in one
+line, before doing anything, unless `GITHUB_ACTIONS` is `true`.
 
 `floti add desktop` cannot run in a dry run: it fetches from the releases
 address built into floti and checks the desktop files' list with the key
@@ -1371,16 +1377,19 @@ half-working, and the next run carries on where it stopped:
    running `floti.exe` can be neither removed nor replaced on Windows, and
    uninstall runs from it, so it is renamed aside (`floti.old-<pid>-<n>.exe`)
    and a hidden Windows PowerShell 5.1, started apart from this process
-   (outside its job, with none of its handles, so a script reading
-   uninstall's output is not held open), waits for it to exit and deletes the
+   (with none of its handles, so a script reading uninstall's output is not
+   held open, and outside its job, or inside it where the job does not let
+   what it holds break away, which it still outlives), waits for it to exit
+   and deletes the
    copy, retrying for up to five minutes while anything still runs it, then
    `Programs\Floti\bin` and `Programs\Floti` once they are empty and not
    junctions. That needs no admin rights (a delete at the next restart does),
    leaves no copy of floti in `%TEMP%` that would have the same problem, and
    waits on Windows' own refusal to delete a file a process runs, the test
    install-self and `floti update` already use; the sweep of copies put aside
-   that both make is the fallback. Where that PowerShell cannot be started
-   (a job that refuses to let it go, as a CI runner's may), one line says the
+   that both make is the fallback. Inside a job that ends every process in
+   it when it closes, the line adds that the job may end that PowerShell
+   first. Where that PowerShell cannot be started at all, one line says the
    copy is left for that sweep, and the run still exits 0. On macOS and Linux
    the file is unlinked, which the running process survives, and
    `~/.local/bin` stays: it is the user's.
