@@ -18,6 +18,8 @@ pub(super) const SYSTEM: SystemPath = SystemPath {
     listed_in: &["/etc/paths"],
     listed_in_folders: &["/etc/paths.d"],
     assigned_in: &[],
+    // Terminal and iTerm start each window's shell as a login.
+    terminals_are_logins: true,
 };
 
 impl UserPath for Native {
@@ -31,7 +33,7 @@ impl UserPath for Native {
     }
 
     fn add(&self, env: &UserEnv, folder: &Path) -> Result<Added, String> {
-        posix::add(env, folder)
+        posix::add(&SYSTEM, env, folder)
     }
 
     fn remove(&self, env: &UserEnv, folder: &Path) -> Result<bool, String> {

@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use super::{Added, UserPath};
+use super::{Added, TakesEffect, UserPath};
 use crate::platform::folders::UserEnv;
 use crate::platform::windows_path::{comparable, split};
 
@@ -42,7 +42,10 @@ impl UserPath for Native {
         let value = with_folder(written.as_deref(), &folder.display().to_string());
         registry::set_expandable_string(USER_KEY, "Path", &value)?;
         registry::announce_environment();
-        Ok(Added::Put { file: None })
+        Ok(Added::Put {
+            file: None,
+            takes: TakesEffect::Now,
+        })
     }
 
     fn remove(&self, env: &UserEnv, folder: &Path) -> Result<bool, String> {

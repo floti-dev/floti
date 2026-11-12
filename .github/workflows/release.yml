@@ -1171,9 +1171,14 @@ jobs:
           - runner: ubuntu-latest
             target: linux-x64
             setup: user-unit
+          # zsh, macOS's own shell, whose ~/.zshenv the runner has none
+          # of: setup must add floti's line there, which a new zsh finds
+          # floti through. The runner's own shell is bash.
           - runner: macos-latest
             target: macos-arm64
             setup: launch-agent
+            login-shell: /bin/zsh
+            path-line: adds-path-line
           - runner: windows-latest
             target: windows-x64
           # The arm64 runners, so each script's CPU detection picks arm64
@@ -1213,7 +1218,11 @@ jobs:
       - name: Install floti with install.sh
         if: runner.os != 'Windows'
         shell: bash
-        run: sh scripts/floti.dev/try-install.sh "$RUNNER_TEMP/served" "$VERSION" "${{ matrix.target }}"
+        env:
+          LOGIN_SHELL: ${{ matrix.login-shell }}
+        run: |
+          if [ -n "$LOGIN_SHELL" ]; then export SHELL="$LOGIN_SHELL"; fi
+          sh scripts/floti.dev/try-install.sh "$RUNNER_TEMP/served" "$VERSION" "${{ matrix.target }}" ${{ matrix.path-line }}
 
       # Windows PowerShell, not pwsh: its children would inherit PowerShell
       # 7's module path, which Windows PowerShell cannot load its own modules
@@ -1248,7 +1257,11 @@ jobs:
       - name: Uninstall floti, then purge, then uninstall again
         if: runner.os != 'Windows'
         shell: bash
-        run: sh scripts/floti.dev/try-uninstall.sh '${{ matrix.setup }}' 'install.sh on ${{ matrix.target }}'
+        env:
+          LOGIN_SHELL: ${{ matrix.login-shell }}
+        run: |
+          if [ -n "$LOGIN_SHELL" ]; then export SHELL="$LOGIN_SHELL"; fi
+          sh scripts/floti.dev/try-uninstall.sh '${{ matrix.setup }}' 'install.sh on ${{ matrix.target }}'
 
       - name: Uninstall floti and the desktop app, then purge, then uninstall again
         if: runner.os == 'Windows'
@@ -1367,7 +1380,7 @@ jobs:
           cd /tmp
           runuser -u floti-user -- env HOME=/home/floti-user SHELL=/bin/sh WSL_DISTRO_NAME=Debian GITHUB_STEP_SUMMARY=/tmp/try/summary sh -c '
             set -eu
-            sh /tmp/try/try-install.sh /tmp/try/served "$1" linux-x64
+            sh /tmp/try/try-install.sh /tmp/try/served "$1" linux-x64 adds-path-line
             sh /tmp/try/check-setup.sh start-on-connect "$1" "install.sh as a user in debian taken for WSL"
             sh /tmp/try/try-uninstall.sh start-on-connect "install.sh as a user in debian taken for WSL"
           ' sh "$VERSION"

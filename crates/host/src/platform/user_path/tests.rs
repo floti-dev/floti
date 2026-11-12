@@ -104,12 +104,18 @@ fn windows_add_appends_the_folder_to_the_value_as_written_with_no_empty_entry() 
 fn an_install_says_what_it_changed_in_one_line() {
     let folder = Path::new("/home/me/.local/bin");
     assert_eq!(
-        Added::Put { file: None }.sentence(folder).as_deref(),
+        Added::Put {
+            file: None,
+            takes: TakesEffect::Now
+        }
+        .sentence(folder)
+        .as_deref(),
         Some("Put /home/me/.local/bin on your PATH, for terminals and logins started from now on.")
     );
     assert_eq!(
         Added::Put {
-            file: Some(PathBuf::from("/home/me/.zshenv"))
+            file: Some(PathBuf::from("/home/me/.zshenv")),
+            takes: TakesEffect::Now
         }
         .sentence(folder)
         .as_deref(),
@@ -117,17 +123,34 @@ fn an_install_says_what_it_changed_in_one_line() {
             "Put /home/me/.local/bin on your PATH in /home/me/.zshenv, for terminals and logins started from now on."
         )
     );
-    assert_eq!(Added::Nothing.sentence(folder), None);
-    let by_hand = Added::ByHand {
-        line: "echo it >> ~/.profile".to_owned(),
-    }
-    .sentence(folder)
-    .unwrap();
-    assert!(
-        by_hand.contains("does not know which startup file")
-            && by_hand.ends_with(": echo it >> ~/.profile"),
-        "{by_hand}"
+    // A Linux desktop's terminals keep the PATH their session started with.
+    assert_eq!(
+        Added::Put {
+            file: Some(PathBuf::from("/home/me/.profile")),
+            takes: TakesEffect::AtNextSignIn
+        }
+        .sentence(folder)
+        .as_deref(),
+        Some(
+            "Put /home/me/.local/bin on your PATH in /home/me/.profile, for logins started from now on, and for terminals once you sign in again."
+        )
     );
+    assert_eq!(Added::Nothing.sentence(folder), None);
+    // No line is given where floti cannot name the file: tcsh reads no
+    // ~/.profile.
+    assert_eq!(
+        Added::ByHand {
+            shell: Some("/bin/tcsh".to_owned())
+        }
+        .sentence(folder)
+        .as_deref(),
+        Some(
+            "/home/me/.local/bin is not on your PATH, and Floti does not know which startup file your shell reads (/bin/tcsh), so it changed none; add /home/me/.local/bin to your PATH in that file."
+        )
+    );
+    let unset = Added::ByHand { shell: None }.sentence(folder).unwrap();
+    assert!(unset.contains("(SHELL is not set)"), "{unset}");
+    assert!(!unset.contains("export"), "{unset}");
 }
 
 #[cfg(windows)]
@@ -607,7 +630,7 @@ impl UserPath for LinuxAt<'_> {
     }
 
     fn add(&self, env: &UserEnv, folder: &Path) -> Result<Added, String> {
-        posix::add(env, folder)
+        posix::add(&linux::SYSTEM, env, folder)
     }
 
     fn remove(&self, env: &UserEnv, folder: &Path) -> Result<bool, String> {
@@ -636,12 +659,18 @@ impl Unix {
 
 #[test]
 fn the_install_appends_doctors_line_to_the_file_doctor_names_for_each_shell_and_makes_no_other() {
-    for (shell, file) in [
-        ("/bin/sh", ".profile"),
-        ("/usr/bin/dash", ".profile"),
-        ("/bin/bash", ".profile"),
-        ("/bin/zsh", ".zshenv"),
-        ("/usr/bin/fish", ".config/fish/config.fish"),
+    // bash's and sh's file is read by logins only, which a Linux desktop's
+    // terminals are not; every zsh and fish reads theirs.
+    for (shell, file, takes) in [
+        ("/bin/sh", ".profile", TakesEffect::AtNextSignIn),
+        ("/usr/bin/dash", ".profile", TakesEffect::AtNextSignIn),
+        ("/bin/bash", ".profile", TakesEffect::AtNextSignIn),
+        ("/bin/zsh", ".zshenv", TakesEffect::Now),
+        (
+            "/usr/bin/fish",
+            ".config/fish/config.fish",
+            TakesEffect::Now,
+        ),
     ] {
         let unix = Unix::new();
         let user = unix.user(shell);
@@ -650,7 +679,8 @@ fn the_install_appends_doctors_line_to_the_file_doctor_names_for_each_shell_and_
         assert_eq!(
             put_on_path(&path, &user, &unix.floti()),
             Ok(Added::Put {
-                file: Some(unix.at(file))
+                file: Some(unix.at(file)),
+                takes
             }),
             "{shell}"
         );
@@ -672,9 +702,10 @@ fn an_existing_file_gets_the_line_at_its_end_and_keeps_every_line_it_had() {
     unix.write(unix.home(), ".bash_profile", "umask 022\nsource ~/.bashrc");
     let user = unix.user("/bin/bash");
     assert_eq!(
-        posix::add(&user, &unix.folder()),
+        posix::add(&linux::SYSTEM, &user, &unix.folder()),
         Ok(Added::Put {
-            file: Some(unix.at(".bash_profile"))
+            file: Some(unix.at(".bash_profile")),
+            takes: TakesEffect::AtNextSignIn
         })
     );
     let (line, _) = appended(&posix::fix(&user, &unix.folder()));
@@ -683,6 +714,19 @@ fn an_existing_file_gets_the_line_at_its_end_and_keeps_every_line_it_had() {
         format!("umask 022\nsource ~/.bashrc\n{line}\n")
     );
     assert!(!unix.at(".profile").exists());
+}
+
+#[test]
+fn on_macos_a_login_file_reaches_new_terminals_at_once() {
+    // Terminal starts each window's shell as a login.
+    let unix = Unix::new();
+    assert_eq!(
+        posix::add(&macos::SYSTEM, &unix.user("/bin/bash"), &unix.folder()),
+        Ok(Added::Put {
+            file: Some(unix.at(".profile")),
+            takes: TakesEffect::Now
+        })
+    );
 }
 
 #[test]
@@ -698,7 +742,10 @@ fn a_second_install_adds_nothing() {
     let once = unix.read(".zshenv");
     assert_eq!(put_on_path(&path, &user, &unix.floti()), Ok(Added::Nothing));
     // Asked to add it again, a file with floti's line keeps it once.
-    assert_eq!(posix::add(&user, &unix.folder()), Ok(Added::Nothing));
+    assert_eq!(
+        posix::add(&linux::SYSTEM, &user, &unix.folder()),
+        Ok(Added::Nothing)
+    );
     assert_eq!(unix.read(".zshenv"), once);
 }
 
@@ -715,15 +762,16 @@ fn a_folder_the_shells_startup_files_put_on_path_already_gets_no_line() {
 }
 
 #[test]
-fn a_shell_floti_knows_no_startup_file_of_is_given_the_line_and_no_file_changes() {
-    for vars in [&[("SHELL", "/bin/tcsh")][..], &[][..]] {
+fn a_shell_floti_knows_no_startup_file_of_is_told_so_and_no_file_changes() {
+    for (vars, shell) in [
+        (&[("SHELL", "/bin/tcsh")][..], Some("/bin/tcsh".to_owned())),
+        (&[][..], None),
+    ] {
         let unix = Unix::new();
         let user = env(Some(unix.home()), vars);
         assert_eq!(
-            posix::add(&user, &unix.folder()),
-            Ok(Added::ByHand {
-                line: posix::fix(&user, &unix.folder())
-            }),
+            posix::add(&linux::SYSTEM, &user, &unix.folder()),
+            Ok(Added::ByHand { shell }),
             "{vars:?}"
         );
         assert!(std::fs::read_dir(unix.home()).unwrap().next().is_none());
@@ -758,9 +806,10 @@ fn a_linked_startup_file_is_changed_through_its_link_and_keeps_its_permissions()
     let folder = unix.folder();
 
     assert_eq!(
-        posix::add(&user, &folder),
+        posix::add(&linux::SYSTEM, &user, &folder),
         Ok(Added::Put {
-            file: Some(unix.at(".zshenv"))
+            file: Some(unix.at(".zshenv")),
+            takes: TakesEffect::Now
         })
     );
     let (line, _) = appended(&posix::fix(&user, &folder));
@@ -776,4 +825,122 @@ fn a_linked_startup_file_is_changed_through_its_link_and_keeps_its_permissions()
         "export EDITOR=vi\n"
     );
     still_linked();
+}
+
+#[test]
+fn uninstall_keeps_every_byte_of_a_file_that_is_not_utf_8() {
+    let unix = Unix::new();
+    let folder = unix.folder();
+    let user = unix.user("/bin/sh");
+    let (line, _) = appended(&posix::fix(&user, &folder));
+    // Latin-1, as an old ~/.profile may be: "café" and "naïve".
+    let before = b"# caf\xe9\nalias na\xefve=ls\n".to_vec();
+    let mut with_line = before.clone();
+    with_line.extend_from_slice(line.as_bytes());
+    with_line.push(b'\n');
+    std::fs::write(unix.at(".profile"), &with_line).unwrap();
+    assert_eq!(posix::remove(&user, &folder), Ok(true));
+    assert_eq!(std::fs::read(unix.at(".profile")).unwrap(), before);
+}
+
+/// Makes `path` read-only until it is dropped, so the test's tree can be
+/// removed however the test ends.
+struct ReadOnly(PathBuf);
+
+impl ReadOnly {
+    fn new(path: &Path) -> Self {
+        set_read_only(path, true);
+        Self(path.to_path_buf())
+    }
+}
+
+impl Drop for ReadOnly {
+    fn drop(&mut self) {
+        set_read_only(&self.0, false);
+    }
+}
+
+fn set_read_only(path: &Path, read_only: bool) {
+    let mut permissions = std::fs::metadata(path).unwrap().permissions();
+    #[allow(clippy::permissions_set_readonly_false)]
+    permissions.set_readonly(read_only);
+    std::fs::set_permissions(path, permissions).unwrap();
+}
+
+#[test]
+fn a_read_only_startup_file_is_refused_and_left_as_it_was_by_install_and_uninstall() {
+    let unix = Unix::new();
+    let folder = unix.folder();
+    let user = unix.user("/bin/sh");
+    let (line, _) = appended(&posix::fix(&user, &folder));
+
+    unix.write(unix.home(), ".profile", "umask 022\n");
+    let added = {
+        let _read_only = ReadOnly::new(&unix.at(".profile"));
+        posix::add(&linux::SYSTEM, &user, &folder)
+    };
+    assert!(
+        added
+            .as_ref()
+            .is_err_and(|why| why.contains(".profile") && why.contains("read-only")),
+        "{added:?}"
+    );
+    assert_eq!(unix.read(".profile"), "umask 022\n");
+
+    let with_line = format!("umask 022\n{line}\n");
+    unix.write(unix.home(), ".profile", &with_line);
+    let removed = {
+        let _read_only = ReadOnly::new(&unix.at(".profile"));
+        posix::remove(&user, &folder)
+    };
+    assert!(
+        removed
+            .as_ref()
+            .is_err_and(|why| why.contains(".profile") && why.contains("read-only")),
+        "{removed:?}"
+    );
+    assert_eq!(unix.read(".profile"), with_line);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_home_that_cannot_be_written_gets_no_file_and_uninstall_still_changes_its_file_in_place() {
+    use std::os::unix::fs::MetadataExt;
+
+    let unix = Unix::new();
+    let folder = unix.folder();
+    let user = unix.user("/bin/sh");
+    let (line, _) = appended(&posix::fix(&user, &folder));
+    let home = unix.home().to_path_buf();
+
+    // No ~/.profile, and a home nothing can be made in.
+    {
+        let _read_only = ReadOnly::new(&home);
+        if std::fs::write(home.join("probe"), b"").is_ok() {
+            // Root writes in any folder: there is nothing to show here.
+            let _ = std::fs::remove_file(home.join("probe"));
+            return;
+        }
+        let added = posix::add(&linux::SYSTEM, &user, &folder);
+        assert!(
+            added.as_ref().is_err_and(|why| why.contains(".profile")),
+            "{added:?}"
+        );
+        assert!(!unix.at(".profile").exists());
+    }
+
+    // A ~/.profile with floti's line and a second hard link to it, in that
+    // home: it is changed in place, so it stays the same file.
+    let with_line = format!("umask 022\n{line}\n");
+    unix.write(&home, ".profile", &with_line);
+    let other = unix.dirs.root().join("profile link");
+    std::fs::hard_link(unix.at(".profile"), &other).unwrap();
+    let inode = std::fs::metadata(unix.at(".profile")).unwrap().ino();
+    {
+        let _read_only = ReadOnly::new(&home);
+        assert_eq!(posix::remove(&user, &folder), Ok(true));
+    }
+    assert_eq!(unix.read(".profile"), "umask 022\n");
+    assert_eq!(std::fs::metadata(unix.at(".profile")).unwrap().ino(), inode);
+    assert_eq!(std::fs::read_to_string(&other).unwrap(), "umask 022\n");
 }

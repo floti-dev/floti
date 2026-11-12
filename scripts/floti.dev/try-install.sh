@@ -2,7 +2,7 @@
 # runner or container and nowhere else: it installs floti in this user's own
 # folder and runs `floti setup`, as a person's `curl | sh` does.
 #
-#   sh try-install.sh <served folder> <version> <target>
+#   sh try-install.sh <served folder> <version> <target> [adds-path-line]
 #
 # <served folder> holds the run's floti files and an install.sh made with
 # `floti-dev.mjs scripts --release-url http://127.0.0.1:8765`. A local server
@@ -15,8 +15,11 @@
 # failure of setup's own, such as root being refused. Then floti must be on
 # PATH: a new login shell of the user's own kind ($SHELL), started from a
 # clean environment, must find it, through the line setup added to the
-# startup file it named or one there already; a shell floti knows no startup
-# file of must have been given the line to add. Needs curl and python3.
+# startup file it named or, without `adds-path-line`, one there already. With
+# `adds-path-line` setup must have added floti's line, so that new shell
+# finds floti through that line alone. A shell floti knows no startup file
+# of must have been told so; root, whom setup refuses, gets no line at all.
+# Needs curl and python3.
 
 set -eu
 
@@ -30,6 +33,12 @@ fi
 served=$1
 version=$2
 target=$3
+adds=false
+case "${4:-}" in
+  adds-path-line) adds=true ;;
+  "") ;;
+  *) echo "::error::try-install.sh knows no \"$4\"; it knows adds-path-line." && exit 1 ;;
+esac
 port=8765
 url="http://127.0.0.1:$port"
 summary=${GITHUB_STEP_SUMMARY:-/dev/null}
@@ -89,23 +98,37 @@ setup=$(grep -E '^(The Floti host |floti setup: )' "$out" | tail -n 1 || true)
 
 # floti on PATH. For a shell floti writes a startup file of, setup says which
 # file it added floti's line to, or says nothing where that shell's startup
-# files had the folder on PATH already; either way a new login shell of the
-# user's own kind ($SHELL), started from a clean environment whose PATH has
-# only the system's folders, so that it has nothing of this job's PATH and
-# only what its startup files add, must find this floti. For any other
-# shell, or none, setup gives the line to add and changes no file.
+# files had the folder on PATH already, which `adds-path-line` refuses; either
+# way a new login shell of the user's own kind ($SHELL), started from a clean
+# environment whose PATH has only the system's folders, so that it has
+# nothing of this job's PATH and only what its startup files add, must find
+# this floti. For any other shell, or none, setup says it knows no startup
+# file and changes none. Root is refused by setup before its PATH step.
 shell=${SHELL:-}
 path_said=$(grep -E '^(Put .* on your PATH|.* is not on your PATH, and Floti |Floti could not put )' "$out" | head -n 1 || true)
-case "${shell##*/}" in
+if [ "$(id -u)" = 0 ]; then
+  shell_kind=root
+else
+  shell_kind=${shell##*/}
+fi
+case "$shell_kind" in
+  root)
+    [ -z "$path_said" ] || fail "setup, refused as root, still said: $path_said"
+    [ "$adds" = false ] || fail "adds-path-line was asked of root, whom setup refuses."
+    on_path="setup, refused as root, changed no startup file"
+    ;;
   bash | zsh | fish | sh | dash | ash | ksh | mksh)
     case "$path_said" in
       "Put "*" on your PATH in "*)
-        changed=$(printf '%s\n' "$path_said" | sed 's/^Put .* on your PATH in \(.*\), for terminals and logins started from now on\.$/\1/')
+        changed=$(printf '%s\n' "$path_said" | sed -E 's/^Put .* on your PATH in (.*), for (terminals|logins) .*$/\1/')
         [ -f "$changed" ] || fail "setup said it put floti on PATH in $changed, which is not there."
         grep -qF '# added by floti' "$changed" || fail "setup said it put floti on PATH in $changed, which has no line of floti's."
-        on_path="setup added floti's line to $changed"
+        on_path="setup said \"$path_said\""
         ;;
-      "") on_path="${shell##*/}'s startup files had floti's folder on PATH already, and setup changed none" ;;
+      "")
+        [ "$adds" = false ] || fail "with SHELL=$shell, setup added no PATH line, which this job must show; a startup file of ${shell##*/} had floti's folder on PATH already."
+        on_path="${shell##*/}'s startup files had floti's folder on PATH already, and setup changed none"
+        ;;
       *) fail "with SHELL=$shell, setup said: $path_said" ;;
     esac
     user=$(id -un)
@@ -114,12 +137,13 @@ case "${shell##*/}" in
     on_path="$on_path; a new ${shell##*/} login shell from a clean environment runs $found"
     ;;
   *)
+    [ "$adds" = false ] || fail "adds-path-line was asked with SHELL=${shell:-not set}, a shell floti writes no startup file of."
     case "$path_said" in
       *" is not on your PATH, and Floti does not know which startup file your shell reads"*)
-        on_path="with SHELL=${shell:-not set}, setup gave the line to add and changed no startup file"
+        on_path="with SHELL=${shell:-not set}, setup said it knows no startup file of that shell and changed none"
         ;;
       "") on_path="with SHELL=${shell:-not set}, floti's folder was on PATH already" ;;
-      *) fail "with SHELL=${shell:-not set}, setup did not give the line to add: \"$path_said\"" ;;
+      *) fail "with SHELL=${shell:-not set}, setup did not say it knows no startup file: \"$path_said\"" ;;
     esac
     ;;
 esac

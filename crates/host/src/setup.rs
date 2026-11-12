@@ -38,10 +38,11 @@
 //! `floti doctor` names, which the line names. So every way floti is
 //! installed, `curl | sh`, `irm | iex`, the desktop's installer and the
 //! desktop's install over ssh, ends with floti on `PATH`. A shell floti knows
-//! no startup file of is given the line to add, and a `PATH` that could not
-//! be changed is said in one line with that line; neither changes setup's
-//! exit status. A floti anywhere else, such as a build run from its own
-//! folder, changes nothing.
+//! no startup file of is told to add the folder itself, and a `PATH` that
+//! could not be changed is said in one line with doctor's line; neither
+//! changes setup's exit status. A floti anywhere else, such as a build run
+//! from its own folder, changes nothing, and so does a setup that refuses to
+//! run as root or a Windows service account.
 //!
 //! It ends with one line on standard output and an exit status for each
 //! outcome:
@@ -219,10 +220,15 @@ pub fn parse(args: &[&str]) -> Option<SetupOptions> {
 pub fn run_setup(options: SetupOptions) -> u8 {
     let linger = options.linger;
     let env = UserEnv::from_process();
-    for sentence in [claude_sentence(&env), native_path_sentence(&env)]
-        .into_iter()
-        .flatten()
-    {
+    // Root, or a Windows service account, is refused below before anything
+    // is set up, and its PATH is left as it is too.
+    let refused = matches!(startup::account(), Account::Privileged(_));
+    let path = if refused {
+        None
+    } else {
+        native_path_sentence(&env)
+    };
+    for sentence in [claude_sentence(&env), path].into_iter().flatten() {
         let mut out = std::io::stdout().lock();
         let _ = writeln!(out, "{sentence}").and_then(|()| out.flush());
     }
@@ -289,7 +295,10 @@ pub fn claude_sentence(env: &UserEnv) -> Option<String> {
 /// `PATH` of the user `env` describes through `path`, when it is `own`, the
 /// floti in the user's own folder: the line [`user_path::Added::sentence`]
 /// says, or why the `PATH` could not be changed and the line that changes
-/// it. `None` when nothing was changed, or `floti` is not `own`.
+/// it. `None` when nothing was changed, or `floti` is not `own`. The folder
+/// is `own`'s, as the user's home names it, not `floti`'s, which the OS may
+/// give with every link resolved (`/var/home` for `/home`): `floti
+/// uninstall` finds the line by that same folder.
 pub fn path_sentence(
     path: &dyn UserPath,
     env: &UserEnv,
@@ -299,8 +308,9 @@ pub fn path_sentence(
     if !own.is_some_and(|own| crate::install_self::same_file(own, floti)) {
         return None;
     }
-    let folder = floti.parent()?;
-    match user_path::put_on_path(path, env, floti) {
+    let own = own?;
+    let folder = own.parent()?;
+    match user_path::put_on_path(path, env, own) {
         Ok(added) => added.sentence(folder),
         Err(why) => Some(format!(
             "Floti could not put {} on your PATH: {}; this puts it there: {}",
@@ -447,7 +457,8 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::platform::user_path::Added;
+    use crate::platform::links::{FolderLinks, Native as NativeLinks};
+    use crate::platform::user_path::{Added, TakesEffect};
     use crate::testkit::TestDirs;
 
     /// A user `PATH` that holds floti's folder when `on`, and records what
@@ -484,6 +495,7 @@ mod tests {
             self.added.borrow_mut().push(folder.to_path_buf());
             Ok(Added::Put {
                 file: Some(folder.join("startup file")),
+                takes: TakesEffect::Now,
             })
         }
 
@@ -516,6 +528,28 @@ mod tests {
                 folder.display(),
                 folder.join("startup file").display()
             ))
+        );
+    }
+
+    #[test]
+    fn a_floti_the_os_names_through_a_link_gets_the_folder_its_home_names() {
+        // The OS gives this program's path with links resolved, as Linux
+        // does for a home under /var/home reached as /home: the line names
+        // the folder as the home does, the one floti uninstall looks for.
+        let dirs = TestDirs::new();
+        let real = own_floti(&dirs);
+        let linked_home = dirs.root().join("linked home");
+        NativeLinks
+            .link_folder(&dirs.home, &linked_home)
+            .expect("link the home");
+        let own = linked_home.join(".local").join("bin").join("floti");
+        let path = FakePath::new(false);
+        let said = path_sentence(&path, &dirs.user_env(), &real, Some(&own)).unwrap();
+        let folder = own.parent().unwrap();
+        assert_eq!(*path.added.borrow(), [folder.to_path_buf()]);
+        assert!(
+            said.starts_with(&format!("Put {} on your PATH", folder.display())),
+            "{said}"
         );
     }
 

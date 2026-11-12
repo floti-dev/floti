@@ -943,8 +943,14 @@ nothing where that shell's files had the folder already, and a new login
 shell of the user's own kind (`$SHELL -l`), started with `env -i` and a
 `PATH` of `/usr/bin:/bin` so that it has nothing of the job's, must find
 that floti through its startup files alone; for a shell floti knows no file
-of, or no `$SHELL`, setup must have given the line to add. The container's
+of, or no `$SHELL`, setup must have said so; as root setup must have said
+nothing of `PATH`. Two runs must show the line itself, so `try-install.sh`
+gets `adds-path-line` there, which refuses "had the folder already": on
+`macos-latest`, run with `SHELL=/bin/zsh` (the runner's own is bash), setup
+adds the line to `~/.zshenv`, which the runner has none of; the container's
 ordinary user starts with no startup file, so setup makes its `~/.profile`.
+The Ubuntu runners have `~/.local/bin` on `PATH` already, through
+`/etc/environment` and `~/.profile`, and show only that it is found.
 
 Then `scripts/floti.dev/check-setup.sh` or `check-setup.ps1` checks what
 setup left, each missing thing failing the job with one line naming it:
@@ -1075,9 +1081,13 @@ the user's `PATH`, setup puts it there and says so in one line, so every way
 in, `curl | sh`, `irm | iex`, the desktop's installer and the desktop's
 install over ssh, ends with `floti` found by the next terminal or login. A
 floti anywhere else, such as a build run from its own folder or Homebrew's,
-changes nothing. On Windows the folder is appended to the user's `Path`
-value. On macOS and Linux it is the line `floti doctor` gives
-(`platform/user_path`), in the file doctor names:
+changes nothing, and neither does a setup refused as root or a Windows
+service account. The folder is the one the user's home names
+(`Standalone::binary`), even where the OS gives setup's own path with its
+links resolved (a home under `/var/home` reached as `/home`), so the line
+is the one `floti uninstall` looks for. On Windows the folder is appended to
+the user's `Path` value. On macOS and Linux it is the line `floti doctor`
+gives (`platform/user_path`), in the file doctor names:
 
 | `$SHELL` | The file | The line |
 |---|---|---|
@@ -1085,7 +1095,7 @@ value. On macOS and Linux it is the line `floti doctor` gives
 | zsh | `~/.zshenv` | the same |
 | fish | `~/.config/fish/config.fish` | `fish_add_path -g "$HOME/.local/bin" # added by floti` |
 | sh, dash, ash, ksh, mksh | `~/.profile` | the same as bash |
-| not set, or any other | none | none; setup gives doctor's line to add |
+| not set, or any other (tcsh, nushell) | none | none: setup says it knows no startup file of that shell, and to add the folder there |
 
 "Not on `PATH`" is doctor's reading: the folder is in none of the folders a
 login shell starts with and no `PATH` line in a file that shell reads names
@@ -1094,10 +1104,14 @@ Debian's do, gets nothing. The line is appended, after a line break when
 the file does not end in one, and nothing else in the file changes; a file
 that is a link is appended to through it, and keeps its permissions; the
 file is made only where it is not there (with `~/.config/fish` for fish);
-and a file with floti's line already keeps it once. It says
+and a file with floti's line already keeps it once. A read-only file, or a
+folder the file cannot be made in, is refused and left as it was. It says
 `Put <folder> on your PATH in <file>, for terminals and logins started from
-now on.` A shell floti knows no startup file of, or a file that could not be
-changed, is one line with the command to run instead. Neither changes
+now on.`, except where only a login reads that file (bash's and sh's) and a
+new terminal is not a login, as on a Linux desktop, whose terminals keep
+the `PATH` the session started with: there it says `for logins started from
+now on, and for terminals once you sign in again.` A file that could not be
+changed is one line with doctor's line to run instead. Neither changes
 setup's exit status.
 
 **The desktop app** comes last, once the host is set up, and not at all when
@@ -1412,9 +1426,12 @@ half-working, and the next run carries on where it stopped:
    expandable string. On macOS and Linux floti's line for its folder, the
    one setup adds, marker and all, goes from every startup file of a shell
    floti knows, whatever the user's shell is now; every other line stays as
-   written, in its order, a line the user wrote naming the same folder
-   included. A file that is a link is changed through it, and keeps its
-   permissions.
+   written, byte for byte and in its order, whatever its encoding, a line
+   the user wrote naming the same folder included. The file is written over
+   in place and cut to its new length, through a link where it is one, so
+   it stays the same file, with its owner, permissions, hard links,
+   extended attributes and ACLs, in a folder that need not be writable; a
+   read-only file is refused and left as it was.
 6. **The data, with `--purge`** (below). It comes before floti, so a purge
    that fails leaves the floti that runs it to try again with.
 7. **floti and its Node** (`platform/standalone`): the `node` folder beside

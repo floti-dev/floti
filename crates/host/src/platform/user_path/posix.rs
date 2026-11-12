@@ -17,10 +17,10 @@
 //! it ends in [`MARKER`], so a line the user wrote is never taken for it.
 
 use std::fs::OpenOptions;
-use std::io::{self, Write};
+use std::io::{self, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-use super::Added;
+use super::{Added, TakesEffect};
 use crate::platform::folders::UserEnv;
 
 /// What ends floti's own `PATH` line in a startup file, a shell comment, so
@@ -52,6 +52,10 @@ pub(super) struct SystemPath {
     pub listed_in_folders: &'static [&'static str],
     /// Files, under the root, with a `PATH=` line (`/etc/environment`).
     pub assigned_in: &'static [&'static str],
+    /// Whether a new terminal starts a login shell, which reads the login
+    /// files (macOS's Terminal does), or inherits the `PATH` its desktop
+    /// session started with (a Linux desktop's terminals).
+    pub terminals_are_logins: bool,
 }
 
 /// The shell `$SHELL` names, by the startup files it reads.
@@ -109,6 +113,13 @@ impl Shell {
             Self::Fish => vec![at(".config/fish/config.fish")],
             Self::Sh | Self::Other => vec![at(".profile")],
         }
+    }
+
+    /// Whether every shell of this kind reads the file floti's line goes in,
+    /// a login or not: zsh's `~/.zshenv` and fish's `config.fish`, but not
+    /// bash's or sh's login file.
+    fn every_shell_reads_the_first_file(self) -> bool {
+        matches!(self, Self::Zsh | Self::Fish)
     }
 }
 
@@ -196,34 +207,44 @@ pub(super) fn fix(env: &UserEnv, folder: &Path) -> String {
     format!("echo {} >> {file}", single_quoted(&line))
 }
 
-/// Puts `folder` on the `PATH` of the shell `$SHELL` names: appends
-/// [`floti_line`] to the first startup file [`has`] reads for that shell,
-/// the one [`fix`] names, and answers that file. The line goes at the end,
-/// after a line break when the file does not end in one, and nothing else in
-/// the file changes. A link is followed and its target appended to, which
-/// keeps its permissions. The file is made only where it is not there, with
-/// its folder for fish. A file that has the line already is left as it is
+/// Puts `folder` on the `PATH` of the shell `$SHELL` names, on an OS whose
+/// login shells start as `system` says: appends [`floti_line`] to the first
+/// startup file [`has`] reads for that shell, the one [`fix`] names, and
+/// answers that file and what it reaches. The line goes at the end, after a
+/// line break when the file does not end in one, and nothing else in the file
+/// changes. A link is followed and its target appended to, which keeps its
+/// permissions. The file is made only where it is not there, with its folder
+/// for fish. A read-only file, or a folder it cannot be made in, is refused
+/// and left as it was. A file that has the line already is left as it is
 /// ([`Added::Nothing`]), and a shell floti knows no startup file of changes
-/// nothing and gets [`fix`]'s command to run ([`Added::ByHand`]).
-pub(super) fn add(env: &UserEnv, folder: &Path) -> Result<Added, String> {
+/// nothing ([`Added::ByHand`]).
+pub(super) fn add(system: &SystemPath, env: &UserEnv, folder: &Path) -> Result<Added, String> {
     let shell = Shell::of(env);
     if shell == Shell::Other {
         return Ok(Added::ByHand {
-            line: fix(env, folder),
+            shell: env
+                .var("SHELL")
+                .map(|shell| shell.to_string_lossy().into_owned())
+                .filter(|shell| !shell.is_empty()),
         });
     }
     let home = env.require_home().map_err(|err| err.to_string())?;
     let file = shell.startup_files(home).remove(0);
     let line = floti_line(shell, env, folder);
-    let text = read(&file)?;
-    if text.lines().any(|written| written.trim_end() == line) {
+    let refused =
+        |why: &dyn std::fmt::Display| format!("could not add to {}: {why}", file.display());
+    let bytes = read_bytes(&file)?;
+    if lines(&bytes).any(|written| written.trim_ascii_end() == line.as_bytes()) {
         return Ok(Added::Nothing);
+    }
+    if file.exists() {
+        refuse_read_only(&file).map_err(|why| refused(&why))?;
     }
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|err| format!("could not make {}: {err}", parent.display()))?;
     }
-    let lead = if text.is_empty() || text.ends_with('\n') {
+    let lead = if bytes.is_empty() || bytes.ends_with(b"\n") {
         ""
     } else {
         "\n"
@@ -233,41 +254,68 @@ pub(super) fn add(env: &UserEnv, folder: &Path) -> Result<Added, String> {
         .create(true)
         .open(&file)
         .and_then(|mut out| out.write_all(format!("{lead}{line}\n").as_bytes()))
-        .map_err(|err| format!("could not add to {}: {err}", file.display()))?;
-    Ok(Added::Put { file: Some(file) })
+        .map_err(|err| refused(&err))?;
+    let takes = if system.terminals_are_logins || shell.every_shell_reads_the_first_file() {
+        TakesEffect::Now
+    } else {
+        TakesEffect::AtNextSignIn
+    };
+    Ok(Added::Put {
+        file: Some(file),
+        takes,
+    })
 }
 
 /// Takes floti's line for `folder` ([`floti_line`], as any shell's is
 /// written) out of every startup file of a shell floti knows
 /// ([`EVERY_STARTUP_FILE`]), for `floti uninstall`, and answers whether there
 /// was one. Only floti's line, marker and all, goes; every other line stays
-/// as written, in its order. A link is followed, and its target keeps its
-/// permissions.
+/// as written, byte for byte and in its order, whatever its encoding. The
+/// file is changed in place ([`rewrite`]), through a link where it is one,
+/// and a read-only one is refused and left as it was.
 pub(super) fn remove(env: &UserEnv, folder: &Path) -> Result<bool, String> {
     let home = env.require_home().map_err(|err| err.to_string())?;
     let flotis = [Shell::Sh, Shell::Fish].map(|shell| floti_line(shell, env, folder));
-    let is_flotis = |written: &str| {
+    let is_flotis = |written: &[u8]| {
         flotis
             .iter()
-            .any(|line| written.trim_end() == line.as_str())
+            .any(|line| written.trim_ascii_end() == line.as_bytes())
     };
     let mut removed = false;
     for file in EVERY_STARTUP_FILE {
         let file = file
             .split('/')
             .fold(home.to_path_buf(), |path, part| path.join(part));
-        let text = read(&file)?;
-        if !text.split_inclusive('\n').any(is_flotis) {
+        let bytes = read_bytes(&file)?;
+        if !lines(&bytes).any(is_flotis) {
             continue;
         }
-        let kept: String = text
-            .split_inclusive('\n')
+        let kept: Vec<u8> = lines(&bytes)
             .filter(|&written| !is_flotis(written))
+            .flatten()
+            .copied()
             .collect();
-        rewrite(&file, &kept)?;
+        rewrite(&file, &bytes, &kept)?;
         removed = true;
     }
     Ok(removed)
+}
+
+/// The lines of `bytes`, each with its line break.
+fn lines(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
+    bytes.split_inclusive(|&byte| byte == b'\n')
+}
+
+/// Why `file`, or the file it links to, must not be written: it is
+/// read-only. A refusal here leaves it as it was even where its owner, or
+/// root, could write it anyway.
+fn refuse_read_only(file: &Path) -> Result<(), String> {
+    let metadata = std::fs::metadata(file).map_err(|err| err.to_string())?;
+    if metadata.permissions().readonly() {
+        Err("it is read-only".to_owned())
+    } else {
+        Ok(())
+    }
 }
 
 /// floti's line that puts `folder` on the `PATH` of `shell`, ending in
@@ -290,25 +338,35 @@ fn floti_line(shell: Shell, env: &UserEnv, folder: &Path) -> String {
     }
 }
 
-/// Puts `text` in place of what `file`, or the file it links to, holds: it
-/// is written beside that file under a name of its own, given its
-/// permissions, then renamed over it, so a failure leaves the file as it
-/// was.
-fn rewrite(file: &Path, text: &str) -> Result<(), String> {
-    let target = std::fs::canonicalize(file)
-        .map_err(|err| format!("could not find {}: {err}", file.display()))?;
-    let permissions = std::fs::metadata(&target)
-        .map_err(|err| format!("could not read {}: {err}", target.display()))?
-        .permissions();
-    let name = target.file_name().unwrap_or_default().to_string_lossy();
-    let aside = target.with_file_name(format!(".{name}.floti-{}", std::process::id()));
-    std::fs::write(&aside, text)
-        .and_then(|()| std::fs::set_permissions(&aside, permissions))
-        .and_then(|()| std::fs::rename(&aside, &target))
-        .map_err(|err| {
-            let _ = std::fs::remove_file(&aside);
-            format!("could not change {}: {err}", target.display())
-        })
+/// Puts `kept`, which is `was` with lines taken out, in place of what
+/// `file`, or the file it links to, holds. The same file is written over and
+/// cut to its new length, never replaced by another, so it keeps its owner,
+/// permissions, hard links, extended attributes and ACLs, and needs no
+/// writable folder: a startup file is the user's own, and a dotfile manager
+/// or a second link to it would lose track of a file renamed over it. A
+/// read-only file is refused before anything is written. The cost is that it
+/// is not atomic: a write that fails part way is undone by writing `was`
+/// back, and only a crash between the write and the cut, a few hundred
+/// bytes, leaves the tail of `was` after `kept`.
+fn rewrite(file: &Path, was: &[u8], kept: &[u8]) -> Result<(), String> {
+    let refused =
+        |why: &dyn std::fmt::Display| format!("could not change {}: {why}", file.display());
+    refuse_read_only(file).map_err(|why| refused(&why))?;
+    let mut out = OpenOptions::new()
+        .write(true)
+        .open(file)
+        .map_err(|err| refused(&err))?;
+    let put = |out: &mut std::fs::File, bytes: &[u8]| {
+        out.seek(SeekFrom::Start(0))?;
+        out.write_all(bytes)?;
+        out.set_len(bytes.len() as u64)?;
+        out.flush()
+    };
+    if let Err(err) = put(&mut out, kept) {
+        let _ = put(&mut out, was);
+        return Err(refused(&err));
+    }
+    Ok(())
 }
 
 /// `relative` with `/` between its parts, as a POSIX shell writes it.
@@ -344,11 +402,18 @@ fn under(root: &Path, absolute: &str) -> PathBuf {
     root.join(absolute.trim_start_matches('/'))
 }
 
-/// The file's text, or nothing for one that is not there.
+/// The file's text, or nothing for one that is not there, for reading
+/// `PATH` lines from; a byte that is not UTF-8 is read as a replacement
+/// character, so the text is never written back.
 fn read(path: &Path) -> Result<String, String> {
+    read_bytes(path).map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// The file's bytes, or none for one that is not there.
+fn read_bytes(path: &Path) -> Result<Vec<u8>, String> {
     match std::fs::read(path) {
-        Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
-        Err(err) if is_absent(&err) => Ok(String::new()),
+        Ok(bytes) => Ok(bytes),
+        Err(err) if is_absent(&err) => Ok(Vec::new()),
         Err(err) => Err(format!("could not read {}: {err}", path.display())),
     }
 }

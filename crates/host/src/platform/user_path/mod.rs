@@ -27,8 +27,8 @@
 //!   which ends in `# added by floti`, to the first of those, and so does
 //!   the install ([`UserPath::add`]), for every shell but one floti knows no
 //!   startup file of (`$SHELL` not set, or tcsh and the like), which is
-//!   given the fix to run instead. `floti uninstall` takes out that line and
-//!   no other.
+//!   told to add the folder itself. `floti uninstall` takes out that line
+//!   and no other.
 //!
 //! Each OS's rule is plain text arithmetic over what was read, so all three
 //! are compiled and tested on every OS; only reading the Windows registry is
@@ -86,30 +86,59 @@ pub trait UserPath {
 pub enum Added {
     /// The folder was put on the `PATH`: in the user's `Path` value on
     /// Windows (`file` is `None`), and in the startup file `file` on macOS
-    /// and Linux.
-    Put { file: Option<PathBuf> },
+    /// and Linux, for what `takes` says.
+    Put {
+        file: Option<PathBuf>,
+        takes: TakesEffect,
+    },
     /// Nothing was changed: floti's line is there already.
     Nothing,
-    /// Nothing was changed: floti knows no startup file the user's shell
-    /// reads, and `line` is the command that puts the folder there.
-    ByHand { line: String },
+    /// Nothing was changed: floti knows no startup file of the user's shell,
+    /// `shell` as `$SHELL` names it (`None` where it is not set), so it
+    /// cannot name the line or the file either.
+    ByHand { shell: Option<String> },
+}
+
+/// What a new `PATH` reaches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TakesEffect {
+    /// Every terminal and login started from now on.
+    Now,
+    /// Every login started from now on, and the terminals of a desktop
+    /// session once the user signs in again: the line is in a file only a
+    /// login shell reads (bash's or sh's), and a Linux desktop's terminals
+    /// are not logins, so they have the `PATH` the session started with.
+    AtNextSignIn,
 }
 
 impl Added {
     /// The one line an install says of it, or `None` where nothing changed.
     pub fn sentence(&self, folder: &Path) -> Option<String> {
         let folder = folder.display();
+        let reaches = |takes: &TakesEffect| match takes {
+            TakesEffect::Now => "for terminals and logins started from now on",
+            TakesEffect::AtNextSignIn => {
+                "for logins started from now on, and for terminals once you sign in again"
+            }
+        };
         match self {
-            Self::Put { file: None } => Some(format!(
-                "Put {folder} on your PATH, for terminals and logins started from now on."
-            )),
-            Self::Put { file: Some(file) } => Some(format!(
-                "Put {folder} on your PATH in {}, for terminals and logins started from now on.",
-                file.display()
+            Self::Put { file: None, takes } => {
+                Some(format!("Put {folder} on your PATH, {}.", reaches(takes)))
+            }
+            Self::Put {
+                file: Some(file),
+                takes,
+            } => Some(format!(
+                "Put {folder} on your PATH in {}, {}.",
+                file.display(),
+                reaches(takes)
             )),
             Self::Nothing => None,
-            Self::ByHand { line } => Some(format!(
-                "{folder} is not on your PATH, and Floti does not know which startup file your shell reads, so it changed none; this puts it there: {line}"
+            Self::ByHand { shell } => Some(format!(
+                "{folder} is not on your PATH, and Floti does not know which startup file your shell reads ({}), so it changed none; add {folder} to your PATH in that file.",
+                shell
+                    .as_deref()
+                    .map_or_else(|| "SHELL is not set".to_owned(), str::to_owned)
             )),
         }
     }

@@ -24,6 +24,8 @@ pub(super) const SYSTEM: SystemPath = SystemPath {
     listed_in: &[],
     listed_in_folders: &[],
     assigned_in: &["/etc/environment"],
+    // A desktop's terminals inherit the PATH its session started with.
+    terminals_are_logins: false,
 };
 
 impl UserPath for Native {
@@ -37,7 +39,7 @@ impl UserPath for Native {
     }
 
     fn add(&self, env: &UserEnv, folder: &Path) -> Result<Added, String> {
-        posix::add(env, folder)
+        posix::add(&SYSTEM, env, folder)
     }
 
     fn remove(&self, env: &UserEnv, folder: &Path) -> Result<bool, String> {

@@ -2,7 +2,7 @@ import type { HostCheck, HostSystem, InstallOffer, InstallOutcome } from '@helm/
 import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { HostsSettings, type HostInstallActions, type HostsSettingsProps, type SettingsHost } from './HostsSettings'
+import { HostsSettings, OfferDetails, type HostInstallActions, type HostsSettingsProps, type SettingsHost } from './HostsSettings'
 
 const NOT_FOUND_OFFER: InstallOffer = {
   system: { os: 'linux', cpu: 'x64', label: 'Linux · x86_64' },
@@ -317,5 +317,30 @@ describe('a floti update running from a host’s row, and how it ends', () => {
     const panel = (await screen.findByText('Update floti on build-box?')).closest('[data-settings-host-offer]') as HTMLElement
     expect(panel).toBeTruthy()
     expect(r.install.install).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('what the install offer says setup does there', () => {
+  const steps = (offer: InstallOffer): string[] => {
+    const { container } = render(<OfferDetails name="build-box" offer={offer} />)
+    const list = container.querySelector('[data-settings-host-offer-steps]') as HTMLElement
+    return Array.from(list.querySelectorAll('li')).map((item) => item.textContent ?? '')
+  }
+
+  it('says that on macOS and Linux setup adds one line to the startup file the shell reads', () => {
+    expect(steps(NOT_FOUND_OFFER).at(-1)).toBe(
+      'Runs floti setup: the host starts now, and again at each sign-in, and if the folder is not on PATH there, one line that puts it there goes at the end of the startup file your shell reads'
+    )
+  })
+
+  it('says that on Windows setup puts the folder on the Path', () => {
+    const windows: InstallOffer = {
+      ...NOT_FOUND_OFFER,
+      system: { os: 'windows', cpu: 'x64', label: 'Windows · x64' },
+      folder: '%LOCALAPPDATA%\\Programs\\Floti\\bin'
+    }
+    expect(steps(windows).at(-1)).toBe(
+      'Runs floti setup: the host starts now, and again at each sign-in, and the folder goes on your Path there if it is not on it'
+    )
   })
 })

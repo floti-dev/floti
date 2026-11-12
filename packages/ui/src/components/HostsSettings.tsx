@@ -723,7 +723,11 @@ export function OfferDetails({ name, offer }: { name: string; offer: InstallOffe
           <li>
             Puts it in <span className="font-mono">{folder}</span>
           </li>
-          <li>Runs floti setup: the host starts now, and again at each sign-in</li>
+          <li>
+            {system.os === 'windows'
+              ? 'Runs floti setup: the host starts now, and again at each sign-in, and the folder goes on your Path there if it is not on it'
+              : 'Runs floti setup: the host starts now, and again at each sign-in, and if the folder is not on PATH there, one line that puts it there goes at the end of the startup file your shell reads'}
+          </li>
         </ul>
       )}
       {how === 'download' && (
