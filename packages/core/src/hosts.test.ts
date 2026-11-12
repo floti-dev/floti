@@ -4,6 +4,7 @@ import {
   describeTransport,
   distroNameProblem,
   formatCommandLine,
+  hostFlotiVerdict,
   lineToTryByHand,
   LOCAL_HOST_KEY,
   remoteHostFromDraft,
@@ -317,5 +318,20 @@ describe('a WSL distro as a host', () => {
     expect(remoteHostsProblem([{ ...here, transport: { kind: 'wsl', distro: 'Ubuntu', through: '' } }])).toMatch(
       /expected the ssh target of the PC/
     )
+  })
+})
+
+describe('hostFlotiVerdict: what the sidebar and the Sessions page say beside a host whose floti is not this Helm’s', () => {
+  it('names both protocols for a floti too old or newer, both versions for a connected older one, and nothing otherwise', () => {
+    expect(hostFlotiVerdict({ state: 'tooOld', host: '0.9', client: '1.0' })).toEqual({ verdict: 'tooOld', host: '0.9', client: '1.0' })
+    expect(hostFlotiVerdict({ state: 'newer', host: '2.0', client: '1.0' })).toEqual({ verdict: 'newer', host: '2.0', client: '1.0' })
+    expect(hostFlotiVerdict({ state: 'connected', version: '2.4.0', olderThan: '2.5.0' })).toEqual({
+      verdict: 'older',
+      host: '2.4.0',
+      client: '2.5.0'
+    })
+    expect(hostFlotiVerdict({ state: 'connected', version: '2.5.0' })).toBeNull()
+    expect(hostFlotiVerdict({ state: 'retrying' })).toBeNull()
+    expect(hostFlotiVerdict(null)).toBeNull()
   })
 })

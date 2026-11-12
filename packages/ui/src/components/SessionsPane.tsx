@@ -1,5 +1,6 @@
 import type { JSX, ReactNode } from "react";
 import type {
+  HostFlotiVerdict,
   LaunchedAs,
   LiveSession,
   PermissionMode,
@@ -135,10 +136,7 @@ export interface SessionsPaneHost {
    * connected host whose floti is older than this Helm's, which Update floti
    * fixes too: `host` is its floti version and `client` this Helm's.
    */
-  floti?:
-    | { verdict: "tooOld" | "newer" | "older"; host: string; client: string }
-    | null
-    | undefined;
+  floti?: HostFlotiVerdict | null | undefined;
   /** Starts the yes-first update of its floti, in Settings > Hosts. */
   onUpdateFloti?: (() => void) | undefined;
   /** Opens a tab here for one of its sessions this device has none for, through that host. */

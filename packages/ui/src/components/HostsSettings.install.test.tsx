@@ -129,6 +129,8 @@ describe('updating an older floti from a connected host’s row in Settings > Ho
     expect(install.check).toHaveBeenCalledWith({ host: 'h-build' })
     const panel = (await screen.findByText('Update floti on build-box?')).closest('[data-settings-host-offer]') as HTMLElement
     expect(panel.textContent).toContain('build-box has floti 2.5.0, older than the floti 2.6.0 this Helm carries.')
+    // The offer says which floti is there; the row does not say it again above it.
+    expect(row.querySelector('[data-settings-host-older]')).toBeNull()
     expect(panel.textContent).toContain('Helm can run floti update there now')
     const steps = panel.querySelector('[data-settings-host-offer-steps]')?.textContent ?? ''
     expect(steps).toContain('Asks the floti host on build-box to run floti update')
@@ -142,6 +144,33 @@ describe('updating an older floti from a connected host’s row in Settings > Ho
     expect(install.install).toHaveBeenCalledWith('offer-3', 'h-build')
     // floti update replaced floti where it was: no new path to keep.
     await vi.waitFor(() => expect(row.querySelector('[data-settings-host-offer]')).toBeNull())
+    expect(onInstalled).not.toHaveBeenCalled()
+  })
+
+  it('an older floti’s sentence comes back when the offer is cancelled', async () => {
+    renderHosts(actions({ kind: 'offer', id: 'offer-3', offer: OLDER_OFFER }), {
+      hosts: [host({ state: 'connected', version: '2.5.0', olderThan: '2.6.0' })]
+    })
+    const row = screen.getByRole('group', { name: 'build-box' })
+    await userEvent.click(within(row).getByRole('button', { name: 'Update floti' }))
+    await userEvent.click(await within(row).findByRole('button', { name: 'Cancel' }))
+    expect(row.querySelector('[data-settings-host-older]')?.textContent).toContain('build-box runs floti 2.5.0')
+  })
+
+  it('a floti update over the login that went well records no path, so the link tries to connect at once', async () => {
+    const install = actions(
+      { kind: 'offer', id: 'offer-6', offer: { ...OLDER_OFFER, via: 'login', talks: false } },
+      { ok: true, startsAtNextSignIn: false }
+    )
+    const onReconnect = vi.fn<(id: string) => void>()
+    const { onInstalled } = renderHosts(install, {
+      hosts: [host({ state: 'tooOld', host: '3.1', client: '3.2' })],
+      onReconnect
+    })
+    const row = screen.getByRole('group', { name: 'build-box' })
+    await userEvent.click(within(row).getByRole('button', { name: 'Update floti' }))
+    await userEvent.click(await within(row).findByRole('button', { name: 'Update floti on build-box' }))
+    await vi.waitFor(() => expect(onReconnect).toHaveBeenCalledWith('h-build'))
     expect(onInstalled).not.toHaveBeenCalled()
   })
 

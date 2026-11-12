@@ -155,6 +155,38 @@ describe('SessionTree with hosts on other computers', () => {
     expect(remote().querySelector('[data-host-rows]')?.getAttribute('data-host-rows')).toBe('live')
   })
 
+  it('says on build-box’s header that its floti is older, with both versions, and a press starts its update', async () => {
+    const hostActions = { ...actions(), onUpdateFloti: vi.fn() }
+    const { view } = renderTree({
+      hosts: [buildBox({ floti: { verdict: 'older', host: '2.4.0', client: '2.5.0' } })],
+      hostActions
+    })
+    const header = group(view.container, 'h1').querySelector('[data-host-header]') as HTMLElement
+    const older = within(header).getByRole('button', { name: 'older floti: update floti on build-box' })
+    expect(older.textContent).toBe('older floti')
+    expect(older.getAttribute('title')).toBe('It runs floti 2.4.0; this Helm carries 2.5.0. Press to update floti on build-box.')
+    expect(header.getAttribute('data-host-state')).toBe('connected')
+    await userEvent.click(older)
+    expect(hostActions.onUpdateFloti).toHaveBeenCalledWith('h1')
+  })
+
+  it('says a floti too old or newer in place of retrying, and offers no update for a newer one', () => {
+    const hostActions = { ...actions(), onUpdateFloti: vi.fn() }
+    const { view, rerender } = renderTree({
+      hosts: [buildBox({ connected: false, floti: { verdict: 'tooOld', host: '3.1', client: '3.2' } })],
+      hostActions
+    })
+    const header = (): HTMLElement => group(view.container, 'h1').querySelector('[data-host-header]') as HTMLElement
+    expect(within(header()).queryByText('retrying')).toBeNull()
+    expect(within(header()).getByRole('button', { name: 'floti too old: update floti on build-box' })).toBeTruthy()
+
+    rerender({ hosts: [buildBox({ connected: false, floti: { verdict: 'newer', host: '4.0', client: '3.2' } })] })
+    const newer = within(header()).getByText('newer floti')
+    expect(newer.tagName).toBe('SPAN')
+    expect(newer.getAttribute('title')).toBe('It speaks protocol 4.0; this Helm speaks 3.2. Update Helm on this PC.')
+    expect(within(header()).queryByText('retrying')).toBeNull()
+  })
+
   it('offers New session, New harness and Rescan on each host header, under the pointer and in its right-click menu', async () => {
     const hostActions = actions()
     const { view } = renderTree({ hosts: [buildBox()], hostActions })

@@ -1,6 +1,6 @@
 import type { JSX, MouseEvent, ReactNode } from 'react'
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import type { DiscoveryResult, Harness, Project } from '@helm/core'
+import type { DiscoveryResult, Harness, HostFlotiVerdict, Project } from '@helm/core'
 import { isProjectPinned, mostPressingState } from '@helm/core/types'
 import { cn } from '../lib/cn'
 import type { SessionState } from '../lib/sessionstate'
@@ -73,6 +73,8 @@ export interface TreeHost {
   name: string
   /** Whether the window reaches it now. While it does not, its header says retrying. */
   connected: boolean
+  /** Its floti against this Helm's, which its header says in place of retrying; null or absent when there is nothing to say. */
+  floti?: HostFlotiVerdict | null | undefined
   discovery: DiscoveryResult | null
   scanning: boolean
   /** Why its folders could not be read: the group says Unknown and this, never its empty state. */
@@ -100,6 +102,8 @@ export interface TreeHostActions {
   onRescan: (host: string) => void
   /** The Add a host line at the end of the list: Settings > Hosts. */
   onAddHost: () => void
+  /** A host header's older floti or floti too old: the yes-first update of its floti, in Settings > Hosts. */
+  onUpdateFloti?: ((host: string) => void) | undefined
   /** Remove on a kept child's row, and Remove stopped children on its parent's, naming the rows. */
   onRemoveSessions?: ((host: string, ids: readonly string[]) => void) | undefined
 }
@@ -432,6 +436,7 @@ export function SessionTree({
                   name={host.name}
                   remote
                   connected={host.connected}
+                  floti={host.floti ?? null}
                   actions={hostActions}
                 />
                 <div data-host-rows={host.connected ? 'live' : 'dimmed'} className={cn(!host.connected && 'opacity-50')}>
@@ -520,7 +525,8 @@ export function sessionTreeHostProps(options: {
 /**
  * A host's header row: a ring dot (the warn colour while it is not reached),
  * its name - a remote host's in mono, as the machine data it is - and
- * "retrying" at the right while the window is not connected to it. Under the
+ * "retrying" at the right while the window is not connected to it, or, for a
+ * floti that is not this Helm's, what it is (`HostFlotiLabel`). Under the
  * pointer it offers New session, New harness and Rescan, which its right-click
  * menu offers too.
  */
@@ -529,12 +535,14 @@ function HostHeader({
   name,
   remote,
   connected,
+  floti = null,
   actions
 }: {
   host: string
   name: string
   remote: boolean
   connected: boolean
+  floti?: HostFlotiVerdict | null
   actions: TreeHostActions
 }): JSX.Element {
   const [menu, setMenu] = useState<MenuAnchor | null>(null)
@@ -569,10 +577,22 @@ function HostHeader({
         className={cn('size-1.5 shrink-0 rounded-full border-[1.5px]', connected ? 'border-success' : 'border-warn')}
       />
       <span className={cn('min-w-0 truncate', remote && 'font-mono text-[10.5px]')}>{name}</span>
-      {!connected && (
-        <span data-host-retrying className="shrink-0 font-normal text-warn" title={`Not connected to ${name}; trying again`}>
-          retrying
-        </span>
+      {floti !== null ? (
+        <HostFlotiLabel
+          name={name}
+          floti={floti}
+          onUpdate={
+            floti.verdict !== 'newer' && actions.onUpdateFloti !== undefined
+              ? () => actions.onUpdateFloti?.(host)
+              : undefined
+          }
+        />
+      ) : (
+        !connected && (
+          <span data-host-retrying className="shrink-0 font-normal text-warn" title={`Not connected to ${name}; trying again`}>
+            retrying
+          </span>
+        )
       )}
       <span className="flex-1" />
       <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/host:opacity-100 focus-within:opacity-100">
@@ -590,6 +610,50 @@ function HostHeader({
         <Menu label={`${name} host`} entries={entries} at={menu} onSelect={choose} onDismiss={() => setMenu(null)} />
       )}
     </div>
+  )
+}
+
+/**
+ * What a host header says about a floti that is not this Helm's, as the
+ * Sessions page says it, with both versions in its tooltip. An older floti or
+ * one too old is a button that starts its update in Settings > Hosts; a newer
+ * one is updated by updating Helm on this PC.
+ */
+function HostFlotiLabel({
+  name,
+  floti,
+  onUpdate
+}: {
+  name: string
+  floti: HostFlotiVerdict
+  onUpdate: (() => void) | undefined
+}): JSX.Element {
+  const label =
+    floti.verdict === 'tooOld' ? 'floti too old' : floti.verdict === 'older' ? 'older floti' : 'newer floti'
+  const said =
+    floti.verdict === 'tooOld'
+      ? `Its floti speaks protocol ${floti.host}; this Helm speaks ${floti.client}.`
+      : floti.verdict === 'older'
+        ? `It runs floti ${floti.host}; this Helm carries ${floti.client}.`
+        : `It speaks protocol ${floti.host}; this Helm speaks ${floti.client}. Update Helm on this PC.`
+  if (onUpdate === undefined) {
+    return (
+      <span data-host-floti={floti.verdict} className="shrink-0 font-normal text-warn" title={said}>
+        {label}
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      data-host-floti={floti.verdict}
+      onClick={onUpdate}
+      title={`${said} Press to update floti on ${name}.`}
+      aria-label={`${label}: update floti on ${name}`}
+      className="shrink-0 font-normal text-warn underline-offset-2 hover:underline"
+    >
+      {label}
+    </button>
   )
 }
 

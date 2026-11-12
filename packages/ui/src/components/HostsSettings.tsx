@@ -200,9 +200,13 @@ function HostRow({
           ? OLDER_CHIP
           : CONNECTION_CHIP[connection.state]
   const flow = useInstallFlow(install)
+  // A floti put at a new path is recorded, which connects to it; a floti
+  // update in place records nothing, so the link tries at once rather than
+  // after its wait.
   const startUpdate = (): void =>
     flow.start({ host: host.id }, host, ({ floti, system }) => {
       if (floti !== undefined) onInstalled(host.id, floti, system)
+      else onReconnect?.(host.id)
     })
   const version = connection?.state === 'connected' ? connection.version : undefined
   const reached = [
@@ -239,7 +243,10 @@ function HostRow({
       >
         {reached}
       </p>
-      {connection !== null && <ConnectionDetail connection={connection} host={host} />}
+      {/* The offer says again which floti is there and which this Helm carries. */}
+      {connection !== null && !(older && flow.panel !== null) && (
+        <ConnectionDetail connection={connection} host={host} />
+      )}
       {flow.panel !== null && <div className="mt-2">{flow.panel}</div>}
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="text-[12px] text-fg-muted">When you quit</span>

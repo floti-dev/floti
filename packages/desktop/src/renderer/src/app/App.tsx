@@ -76,6 +76,7 @@ import {
   LOCAL_HOST_KEY,
   LOCAL_HOST_LABEL,
   failedLastLine,
+  hostFlotiVerdict,
   lineToTryByHand,
   localHostVersions,
   restartHostDetail,
@@ -3588,6 +3589,7 @@ export function App(): JSX.Element {
       id: host.id,
       name: host.name,
       connected: connectedHostIds.includes(host.id),
+      floti: hostFlotiVerdict(remoteView[host.id]?.connection ?? null),
       discovery: work?.discovery ?? null,
       scanning: work?.scanning ?? false,
       scanError: work?.scanError,
@@ -3903,6 +3905,15 @@ export function App(): JSX.Element {
     void removeKept(host, ids);
   };
 
+  /** A host's older floti or floti too old, pressed in the tree or the Sessions page: its yes-first update, in Settings > Hosts. */
+  const updateFlotiOn = (id: string): void => {
+    openSettings("hosts");
+    setHostUpdateRequest((last) => ({
+      id,
+      nonce: (last?.nonce ?? 0) + 1,
+    }));
+  };
+
   /** What each host's group in the tree asks for, through that host. */
   const treeHostActions = {
     onSelect: (host: string, project: Project) =>
@@ -3932,6 +3943,7 @@ export function App(): JSX.Element {
     onNewHarness: (host: string) => setup.openDialog("new", host),
     onRescan: rescanOn,
     onAddHost: () => setAddingHost(true),
+    onUpdateFloti: (host: string) => updateFlotiOn(host),
     onRemoveSessions: removeTreeSessions,
   };
 
@@ -4873,29 +4885,8 @@ export function App(): JSX.Element {
       // A floti too old or newer than this Helm, with both versions, or a
       // connected one older than it; too old and older offer the same
       // yes-first update Settings > Hosts does.
-      floti:
-        connection?.state === "tooOld" || connection?.state === "newer"
-          ? {
-              verdict: connection.state,
-              host: connection.host,
-              client: connection.client,
-            }
-          : connection?.state === "connected" &&
-              connection.olderThan !== undefined &&
-              connection.version !== undefined
-            ? {
-                verdict: "older" as const,
-                host: connection.version,
-                client: connection.olderThan,
-              }
-            : null,
-      onUpdateFloti: () => {
-        openSettings("hosts");
-        setHostUpdateRequest((last) => ({
-          id: host.id,
-          nonce: (last?.nonce ?? 0) + 1,
-        }));
-      },
+      floti: hostFlotiVerdict(connection),
+      onUpdateFloti: () => updateFlotiOn(host.id),
     };
   });
 

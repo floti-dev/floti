@@ -152,6 +152,29 @@ export type RemoteHostConnection =
   | { state: 'startsAtSignIn' }
 
 /**
+ * A host whose floti is not this Helm's, as the sidebar and the Sessions page
+ * say it beside its name: `tooOld` and `newer` name both protocol versions,
+ * `older` (connected, on an older floti) both floti versions; `host` is the
+ * host's and `client` this Helm's.
+ */
+export interface HostFlotiVerdict {
+  verdict: 'tooOld' | 'newer' | 'older'
+  host: string
+  client: string
+}
+
+/** Where a host's floti stands against this Helm's, or null when there is nothing to say. */
+export function hostFlotiVerdict(connection: RemoteHostConnection | null): HostFlotiVerdict | null {
+  if (connection?.state === 'tooOld' || connection?.state === 'newer') {
+    return { verdict: connection.state, host: connection.host, client: connection.client }
+  }
+  if (connection?.state === 'connected' && connection.olderThan !== undefined && connection.version !== undefined) {
+    return { verdict: 'older', host: connection.version, client: connection.olderThan }
+  }
+  return null
+}
+
+/**
  * The last line ssh or the command wrote when it could not reach the host,
  * unedited, or null when the link did not fail that way: what every surface
  * shows beside the line to try by hand.
