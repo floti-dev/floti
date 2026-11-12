@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import {
   classifyHostFailure,
   SYSTEM_LINE,
+  standaloneProbeLine,
   type HostCheck,
   type HostTransport,
   type RemoteHost,
@@ -217,7 +218,9 @@ describe('checking a WSL distro through wsl.exe', () => {
     const runs = log.runs()
     expect(runs.map((run) => [run.program, run.distro, run.line])).toEqual([
       ['wsl', 'Debian', 'floti version'],
-      ['wsl', 'Debian', SYSTEM_LINE]
+      ['wsl', 'Debian', SYSTEM_LINE],
+      // Where install.sh puts floti, off a non-interactive shell's PATH.
+      ['wsl', 'Debian', standaloneProbeLine('linux')]
     ])
   })
 
@@ -234,11 +237,13 @@ describe('checking a WSL distro through wsl.exe', () => {
     const runs = log.runs()
     expect(runs.filter((run) => run.program === 'ssh').map((run) => run.argv.slice(0, 3))).toEqual([
       ['-o', 'BatchMode=yes', 'win-box'],
+      ['-o', 'BatchMode=yes', 'win-box'],
       ['-o', 'BatchMode=yes', 'win-box']
     ])
     expect(runs.filter((run) => run.program === 'wsl').map((run) => [run.distro, run.line])).toEqual([
       ['Ubuntu', 'floti version'],
-      ['Ubuntu', SYSTEM_LINE]
+      ['Ubuntu', SYSTEM_LINE],
+      ['Ubuntu', standaloneProbeLine('linux')]
     ])
   })
 

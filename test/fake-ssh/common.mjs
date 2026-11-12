@@ -37,24 +37,22 @@ export const STANDALONE_PROBE_LINES = {
 /**
  * Answers a `STANDALONE_PROBE_LINES` line as `sh` or `cmd` would, with this
  * process's HOME or LOCALAPPDATA: the path, then that floti's version line,
- * played by FAKE_SSH_STANDALONE_VERSION when set, else run.
+ * which FAKE_SSH_STANDALONE_VERSION plays. Without it, or with no file at
+ * the path, nothing is there: a test that did not ask for one never meets,
+ * or runs, a floti in the real home folder its environment may name.
  */
 function probeStandalone(windows) {
   const path = windows
     ? join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Floti', 'bin', 'floti.exe')
     : join(process.env.HOME ?? '', '.local', 'bin', 'floti')
   process.stdout.write(`${path}\n`)
-  if (!existsSync(path)) {
+  const version = process.env.FAKE_SSH_STANDALONE_VERSION
+  if (!version || !existsSync(path)) {
     process.stderr.write(`sh: 1: ${path}: not found\n`)
     process.exit(127)
   }
-  if (process.env.FAKE_SSH_STANDALONE_VERSION) {
-    process.stdout.write(`${process.env.FAKE_SSH_STANDALONE_VERSION}\n`)
-    process.exit(0)
-  }
-  const child = spawn(path, ['version'], { stdio: 'inherit', windowsHide: true })
-  child.on('error', () => process.exit(127))
-  child.on('exit', (code) => process.exit(code ?? 1))
+  process.stdout.write(`${version}\n`)
+  process.exit(0)
 }
 
 /** What `SYSTEM_LINE` answers on this computer: `Windows_NT AMD64` from `cmd`, `uname -sm` elsewhere. */
