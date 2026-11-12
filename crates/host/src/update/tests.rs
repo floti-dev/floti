@@ -4,7 +4,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::io::{self, Cursor};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -13,7 +13,7 @@ use std::time::Duration;
 use floti_protocol::Knowable;
 use url::Url;
 
-use super::network::{FetchError, Network};
+use super::fakes::{FakeNetwork, Served, Signer};
 use super::{
     APP_POLL, FINISHED_LINE, FromDesktop, HostRelaunch, Options, Outcome, STAGING_FOLDER,
     UpdateError, Updater, channel, failure_line,
@@ -31,93 +31,6 @@ const RUNNING: &str = "2.0.0";
 const TARGET: &str = "linux-x64";
 const MANIFEST: &str = "https://floti.test/update.json";
 const APP: &str = "Helm";
-
-/// A minisign key pair made for the test.
-struct Signer {
-    pair: minisign::KeyPair,
-}
-
-impl Signer {
-    fn new() -> Self {
-        Self {
-            pair: minisign::KeyPair::generate_unencrypted_keypair().expect("make a key pair"),
-        }
-    }
-
-    fn public(&self) -> minisign_verify::PublicKey {
-        let text = self.pair.pk.to_box().expect("box the key").into_string();
-        minisign_verify::PublicKey::decode(&text).expect("read the key back")
-    }
-
-    fn sign(&self, bytes: &[u8], comment: &str) -> Vec<u8> {
-        minisign::sign(
-            Some(&self.pair.pk),
-            &self.pair.sk,
-            Cursor::new(bytes),
-            Some(comment),
-            None,
-        )
-        .expect("sign")
-        .into_string()
-        .into_bytes()
-    }
-}
-
-/// What the fake network answers for an address.
-#[derive(Clone)]
-enum Served {
-    Body(Vec<u8>),
-    /// The first bytes, then the connection drops.
-    CutAfter(Vec<u8>, usize),
-}
-
-#[derive(Default)]
-struct FakeNetwork {
-    served: Mutex<HashMap<String, Served>>,
-    asked: Mutex<Vec<String>>,
-}
-
-impl FakeNetwork {
-    fn serve(&self, url: &str, served: Served) {
-        self.served.lock().unwrap().insert(url.to_owned(), served);
-    }
-
-    fn forget(&self, url: &str) {
-        self.served.lock().unwrap().remove(url);
-    }
-
-    fn asked(&self) -> Vec<String> {
-        self.asked.lock().unwrap().clone()
-    }
-}
-
-impl Network for FakeNetwork {
-    fn get(
-        &self,
-        url: &Url,
-        limit: u64,
-        sink: &mut dyn FnMut(&[u8]) -> io::Result<()>,
-    ) -> Result<(), FetchError> {
-        self.asked.lock().unwrap().push(url.to_string());
-        let served = self.served.lock().unwrap().get(url.as_str()).cloned();
-        match served {
-            None => Err(FetchError::NotFound),
-            Some(Served::Body(body)) => {
-                if body.len() as u64 > limit {
-                    return Err(FetchError::TooLarge(limit));
-                }
-                // In two pieces, as a network hands a body over.
-                let (first, second) = body.split_at(body.len() / 2);
-                sink(first).map_err(FetchError::Sink)?;
-                sink(second).map_err(FetchError::Sink)
-            }
-            Some(Served::CutAfter(body, kept)) => {
-                sink(&body[..kept]).map_err(FetchError::Sink)?;
-                Err(FetchError::Cut("the connection closed".into()))
-            }
-        }
-    }
-}
 
 /// Installs that rename as the real ones do and record the desktop's.
 struct FakeInstalls {

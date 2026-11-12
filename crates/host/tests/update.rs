@@ -16,15 +16,13 @@
 //! (under the test's home and local app data), relaunching on the same
 //! build served as a newer release, with its sessions in a real keeper.
 
-use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Cursor, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+mod common;
+
 use std::path::{Path, PathBuf};
 use std::process::Child;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+
+use common::{Served, Server, Signer};
 
 use floti_host::fake_agent;
 use floti_host::keeper::TEST_KEEPER_LINK_VERSION;
@@ -51,135 +49,6 @@ const NEWER: &str = "999.0.0";
 /// install (macOS); elsewhere it is unknown, which counts as older.
 const OLDER: &str = "1.0.0";
 const RECORD_VAR: &str = "FLOTI_FAKE_PROGRAM_RECORD";
-
-#[derive(Clone)]
-enum Served {
-    Body(Vec<u8>),
-    /// Announces the whole body, sends the first bytes, and closes.
-    CutAfter(Vec<u8>, usize),
-}
-
-/// An HTTP/1.1 server on a loopback port, serving fixed bodies by path, one
-/// connection at a time, until it is dropped.
-struct Server {
-    address: SocketAddr,
-    served: Arc<Mutex<HashMap<String, Served>>>,
-    stop: Arc<AtomicBool>,
-    thread: Option<JoinHandle<()>>,
-}
-
-impl Server {
-    fn start() -> Self {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind a loopback port");
-        let address = listener.local_addr().expect("its address");
-        let served: Arc<Mutex<HashMap<String, Served>>> = Arc::default();
-        let stop = Arc::new(AtomicBool::new(false));
-        let thread = {
-            let served = Arc::clone(&served);
-            let stop = Arc::clone(&stop);
-            std::thread::spawn(move || {
-                for stream in listener.incoming() {
-                    if stop.load(Ordering::SeqCst) {
-                        break;
-                    }
-                    if let Ok(stream) = stream {
-                        answer(stream, &served);
-                    }
-                }
-            })
-        };
-        Self {
-            address,
-            served,
-            stop,
-            thread: Some(thread),
-        }
-    }
-
-    fn url(&self, path: &str) -> String {
-        format!("http://{}{path}", self.address)
-    }
-
-    fn serve(&self, path: &str, served: Served) {
-        self.served.lock().unwrap().insert(path.to_owned(), served);
-    }
-}
-
-impl Drop for Server {
-    fn drop(&mut self) {
-        self.stop.store(true, Ordering::SeqCst);
-        // Wakes the accept so the loop sees the stop.
-        let _ = TcpStream::connect(self.address);
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
-    }
-}
-
-fn answer(stream: TcpStream, served: &Mutex<HashMap<String, Served>>) {
-    let mut reader = BufReader::new(stream);
-    let mut request = String::new();
-    if reader.read_line(&mut request).is_err() {
-        return;
-    }
-    loop {
-        let mut header = String::new();
-        match reader.read_line(&mut header) {
-            Ok(0) | Err(_) => return,
-            Ok(_) if header == "\r\n" => break,
-            Ok(_) => {}
-        }
-    }
-    let path = request.split(' ').nth(1).unwrap_or_default().to_owned();
-    let found = served.lock().unwrap().get(&path).cloned();
-    let mut stream = reader.into_inner();
-    let (status, body, sent) = match found {
-        None => ("404 Not Found", Vec::new(), 0),
-        Some(Served::Body(body)) => {
-            let length = body.len();
-            ("200 OK", body, length)
-        }
-        Some(Served::CutAfter(body, kept)) => ("200 OK", body, kept),
-    };
-    let head = format!(
-        "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    );
-    let _ = stream.write_all(head.as_bytes());
-    let _ = stream.write_all(&body[..sent]);
-    let _ = stream.flush();
-    let _ = stream.shutdown(std::net::Shutdown::Both);
-}
-
-/// A minisign key made for the test.
-struct Signer {
-    pair: minisign::KeyPair,
-}
-
-impl Signer {
-    fn new() -> Self {
-        Self {
-            pair: minisign::KeyPair::generate_unencrypted_keypair().expect("make a key pair"),
-        }
-    }
-
-    fn public_text(&self) -> String {
-        self.pair.pk.to_box().expect("box the key").into_string()
-    }
-
-    fn sign(&self, bytes: &[u8], comment: &str) -> Vec<u8> {
-        minisign::sign(
-            Some(&self.pair.pk),
-            &self.pair.sk,
-            Cursor::new(bytes),
-            Some(comment),
-            None,
-        )
-        .expect("sign")
-        .into_string()
-        .into_bytes()
-    }
-}
 
 /// A fake bin folder holding a copy of the built floti, a fake desktop
 /// install, and a server with a signed release on it.

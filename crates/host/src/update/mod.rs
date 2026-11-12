@@ -83,6 +83,8 @@ pub mod signature;
 pub mod versions;
 
 #[cfg(test)]
+pub(crate) mod fakes;
+#[cfg(test)]
 mod tests;
 
 use std::io::Write;
@@ -885,7 +887,7 @@ fn run_native(options: Options, relaunch_host: RelaunchHost<'_>) -> Result<Outco
 
 /// Runs `<floti> install-self`, from a desktop app just installed, and
 /// answers what it printed, or the last line it wrote when it failed.
-fn run_install_self(floti: &Path) -> Result<String, String> {
+pub(crate) fn run_install_self(floti: &Path) -> Result<String, String> {
     let output = std::process::Command::new(floti)
         .arg("install-self")
         .output()

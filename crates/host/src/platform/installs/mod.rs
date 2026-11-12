@@ -23,6 +23,15 @@
 //!   AppImage itself on Linux ([`Installs::opener`]), there with the display
 //!   and session-bus variables the app ran with ([`Installs::display_env`]).
 //!
+//! A first install (`floti add desktop`) also needs a launcher entry and a
+//! display. The entry ([`Installs::add_launcher`]): the installer makes the
+//! Start menu's on Windows, `~/Applications` is the Applications entry on
+//! macOS, and on Linux floti writes a freedesktop entry and the app's icon
+//! under `$XDG_DATA_HOME` (`~/.local/share`). The display
+//! ([`Installs::no_display`]): Linux has none without `DISPLAY` or
+//! `WAYLAND_DISPLAY`, Windows none in session 0, where ssh logins and
+//! services run, and macOS is taken to have one.
+//!
 //! Nothing here adds a quarantine flag or a download mark: the files are
 //! written by floti's own process, which neither Gatekeeper's quarantine nor
 //! Windows' mark of the web applies to, and the macOS extraction is told
@@ -30,7 +39,9 @@
 //!
 //! In a build with the testkit only, `FLOTI_DESKTOP_DIR` ([`DESKTOP_DIR_VAR`])
 //! moves the folder the app is looked for and installed in, on every OS, so
-//! no test reaches the real ones. A release build has no such switch.
+//! no test reaches the real ones, and `FLOTI_TEST_DISPLAY`
+//! ([`DISPLAY_TEST_VAR`]) says whether there is a display. A release build
+//! has no such switch.
 //!
 //! Each OS's file compiles on every OS, so its logic is tested everywhere;
 //! the build picks one as [`Native`].
@@ -60,6 +71,11 @@ use crate::platform::process_table::ProcessRow;
 /// build with the testkit only.
 #[cfg(any(test, feature = "testkit"))]
 pub const DESKTOP_DIR_VAR: &str = "FLOTI_DESKTOP_DIR";
+
+/// Says whether there is a display, in a build with the testkit only:
+/// `none` or `present`.
+#[cfg(any(test, feature = "testkit"))]
+pub const DISPLAY_TEST_VAR: &str = "FLOTI_TEST_DISPLAY";
 
 /// The desktop app: where it is installed, or where a new install goes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,6 +136,35 @@ pub trait Installs {
         let _ = pid;
         Vec::new()
     }
+
+    /// Why the session `env` describes has no display to open the app on,
+    /// as a clause ("this session has no ..."), or `None` when it has one
+    /// or that cannot be told cheaply.
+    fn no_display(&self, env: &UserEnv) -> Option<String> {
+        let _ = env;
+        None
+    }
+
+    /// Adds the launcher entry for `desktop`, just installed for the user
+    /// `env` describes, where the OS's installer does not make one, and
+    /// answers the entry it wrote: nothing on Windows (the installer makes
+    /// the Start menu's) and macOS (`~/Applications` is the Applications
+    /// entry).
+    fn add_launcher(&self, env: &UserEnv, desktop: &Desktop) -> Result<Option<PathBuf>> {
+        let _ = (env, desktop);
+        Ok(None)
+    }
+}
+
+/// Why there is no display for the app in the session `env` describes
+/// ([`Installs::no_display`]), or, in a build with the testkit, what
+/// [`DISPLAY_TEST_VAR`] says.
+pub fn missing_display(installs: &dyn Installs, env: &UserEnv) -> Option<String> {
+    #[cfg(any(test, feature = "testkit"))]
+    if let Some(said) = env.var(DISPLAY_TEST_VAR) {
+        return (said == "none").then(|| "this test's session has no display".to_owned());
+    }
+    installs.no_display(env)
 }
 
 /// The variables [`Installs::display_env`] takes: the display, its

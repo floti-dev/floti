@@ -8,6 +8,10 @@
 //! ends with that host however the host comes to stop. A job that refuses
 //! to let go is no reason not to install; the installer then starts inside
 //! it.
+//!
+//! A session has no display in session 0, where services and ssh logins
+//! run: nothing started there reaches the signed-in user's desktop. The
+//! installer makes the Start menu entry.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -72,6 +76,15 @@ impl Native {
             .map(|entry| entry.display_version.trim().to_owned())
             .filter(|version| !version.is_empty())
     }
+
+    /// Why a process in the session `session` has no display: session 0
+    /// has none. A session that cannot be told counts as having one.
+    pub fn no_display_in(session: Option<u32>) -> Option<String> {
+        (session == Some(0)).then(|| {
+            "this session has no desktop (it is session 0, where ssh logins and services run)"
+                .to_owned()
+        })
+    }
 }
 
 impl Installs for Native {
@@ -122,6 +135,10 @@ impl Installs for Native {
         (Self::program(&desktop.path), Vec::new())
     }
 
+    fn no_display(&self, _env: &UserEnv) -> Option<String> {
+        Self::no_display_in(system::session_id())
+    }
+
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
         let status = system::run_out_of_job(
             Command::new(release)
@@ -156,9 +173,18 @@ mod system {
         HKEY, HKEY_CURRENT_USER, KEY_READ, RRF_RT_REG_SZ, RegCloseKey, RegEnumKeyExW, RegGetValueW,
         RegOpenKeyExW,
     };
-    use windows_sys::Win32::System::Threading::CREATE_BREAKAWAY_FROM_JOB;
+    use windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId;
+    use windows_sys::Win32::System::Threading::{CREATE_BREAKAWAY_FROM_JOB, GetCurrentProcessId};
 
     use super::UninstallEntry;
+
+    /// The Remote Desktop Services session this process runs in.
+    pub fn session_id() -> Option<u32> {
+        let mut session = 0u32;
+        // SAFETY: `session` receives the id; the process id is this one's.
+        let ok = unsafe { ProcessIdToSessionId(GetCurrentProcessId(), &mut session) };
+        (ok != 0).then_some(session)
+    }
 
     /// Where every per-user uninstall entry is, under `HKEY_CURRENT_USER`.
     const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
@@ -284,6 +310,10 @@ mod system {
 
     pub fn uninstall_entries() -> Vec<UninstallEntry> {
         Vec::new()
+    }
+
+    pub fn session_id() -> Option<u32> {
+        None
     }
 
     pub fn run_out_of_job(command: &mut Command) -> std::io::Result<ExitStatus> {

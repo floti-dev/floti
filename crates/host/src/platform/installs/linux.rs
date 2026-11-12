@@ -6,6 +6,14 @@
 //! AppImages. It is outside Floti's data folder, which `floti uninstall`
 //! keeps. An AppImage carries no version floti can read without running
 //! it, so its version is unknown and an update always installs it.
+//!
+//! A first install adds the app to the desktop's menus the freedesktop way:
+//! `applications/helm.desktop` and the 256px icon at
+//! `icons/hicolor/256x256/apps/helm.png`, both under `$XDG_DATA_HOME`
+//! (`~/.local/share` when it is unset or not absolute). The icon is the one
+//! the AppImage's own entry has (`build/icon.png`), built into floti, so
+//! nothing is read out of the image. Each is written beside and renamed into
+//! place. A session has a display when `DISPLAY` or `WAYLAND_DISPLAY` is set.
 
 use std::path::{Path, PathBuf};
 
@@ -16,6 +24,20 @@ use crate::{Error, Result};
 
 /// What the desktop app is called: `productName` in `electron-builder.yml`.
 pub const DESKTOP_NAME: &str = "Helm";
+
+/// What the menu entry and its icon are called: `executableName` in
+/// `electron-builder.yml`.
+const ENTRY_NAME: &str = "helm";
+
+/// The menu entry's comment: `linux.description` in `electron-builder.yml`.
+const ENTRY_COMMENT: &str =
+    "A desktop for Claude Code sessions, with history, files and a browser pane.";
+
+/// The icon the AppImage's own menu entry has.
+const ICON: &[u8] = include_bytes!("../../../../../packages/desktop/build/icon.png");
+
+/// The icon's size, as the hicolor theme names its folder.
+const ICON_SIZE: &str = "256x256";
 
 /// What an AppImage's runtime names the folder it mounts the image on,
 /// followed by part of the image's name: `$TMPDIR/.mount_HelmXXXXXX`.
@@ -34,6 +56,58 @@ impl Native {
             .or_else(|| env.home.as_ref().map(|home| home.join("Applications")))
             .map(|folder| folder.join(Self::app_image_name()))
     }
+
+    /// The folder menu entries and icons go under for `env`:
+    /// `$XDG_DATA_HOME`, or `~/.local/share`.
+    pub fn data_home(env: &UserEnv) -> Option<PathBuf> {
+        env.absolute_var("XDG_DATA_HOME").or_else(|| {
+            env.home
+                .as_ref()
+                .map(|home| home.join(".local").join("share"))
+        })
+    }
+
+    /// The menu entry for the AppImage at `app_image`.
+    pub fn entry_text(app_image: &Path) -> String {
+        format!(
+            "[Desktop Entry]\nType=Application\nName={DESKTOP_NAME}\nComment={ENTRY_COMMENT}\nExec={}\nIcon={ENTRY_NAME}\nTerminal=false\nCategories=Development;\nStartupWMClass={DESKTOP_NAME}\n",
+            exec_argument(app_image)
+        )
+    }
+}
+
+/// `path` as the program of an entry's `Exec` line: quoted, with `"`, `` ` ``,
+/// `$` and `\` escaped as the Exec rules ask, then each `\` doubled as a
+/// string value's rules ask, and `%` doubled so it is no field code.
+fn exec_argument(path: &Path) -> String {
+    let mut quoted = String::from("\"");
+    for c in path.to_string_lossy().chars() {
+        match c {
+            '"' | '`' | '$' => {
+                quoted.push_str("\\\\");
+                quoted.push(c);
+            }
+            '\\' => quoted.push_str("\\\\\\\\"),
+            '%' => quoted.push_str("%%"),
+            c => quoted.push(c),
+        }
+    }
+    quoted.push('"');
+    quoted
+}
+
+/// Writes `bytes` to `path`, beside it first and renamed into place, making
+/// its folder.
+fn write_into_place(path: &Path, bytes: &[u8]) -> Result<()> {
+    if let Some(folder) = path.parent() {
+        std::fs::create_dir_all(folder).map_err(|source| Error::path("make", folder, source))?;
+    }
+    let new = beside(path, NEW_COPY);
+    std::fs::write(&new, bytes).map_err(|source| Error::path("write", &new, source))?;
+    std::fs::rename(&new, path).map_err(|source| {
+        let _ = std::fs::remove_file(&new);
+        Error::path("write", path, source)
+    })
 }
 
 impl Installs for Native {
@@ -93,6 +167,30 @@ impl Installs for Native {
         std::fs::read(format!("/proc/{pid}/environ"))
             .map(|environ| super::display_vars(&environ))
             .unwrap_or_default()
+    }
+
+    fn no_display(&self, env: &UserEnv) -> Option<String> {
+        (env.var("DISPLAY").is_none() && env.var("WAYLAND_DISPLAY").is_none()).then(|| {
+            "this session has no display (neither DISPLAY nor WAYLAND_DISPLAY is set)".to_owned()
+        })
+    }
+
+    fn add_launcher(&self, env: &UserEnv, desktop: &Desktop) -> Result<Option<PathBuf>> {
+        let share = Self::data_home(env).ok_or_else(|| {
+            Error::Refused("No HOME or XDG_DATA_HOME names where menu entries go.".to_owned())
+        })?;
+        let icon = share
+            .join("icons")
+            .join("hicolor")
+            .join(ICON_SIZE)
+            .join("apps")
+            .join(format!("{ENTRY_NAME}.png"));
+        write_into_place(&icon, ICON)?;
+        let entry = share
+            .join("applications")
+            .join(format!("{ENTRY_NAME}.desktop"));
+        write_into_place(&entry, Self::entry_text(&desktop.path).as_bytes())?;
+        Ok(Some(entry))
     }
 
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {

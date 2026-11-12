@@ -52,7 +52,7 @@ YAML so it travels with the workspace.
 
 ## Install
 
-Windows 10/11, x64. No admin rights are needed for either option.
+Windows 10/11, x64. No admin rights are needed for any of these.
 
 **Portable** - download `Helm-<version>-portable.exe`, put it wherever you like
 and run it. It keeps everything in a `helm-data\` folder beside itself, so the
@@ -63,6 +63,14 @@ your user only, into `%LOCALAPPDATA%\Programs\Helm`, and keeps its data in
 `%APPDATA%\Helm`. Uninstalling removes the program and **keeps** your data - the
 database holds your profiles, session index and the versions of the notes you
 saved.
+
+**From floti** - where floti is installed, `floti add desktop` installs the
+desktop app of floti's own release for your user, with no admin rights: on
+Windows where the installer puts it, on macOS as `~/Applications/Helm.app`, and
+on Linux as `~/Applications/Helm.AppImage` with a menu entry. It checks the
+download's signature and SHA-256 before anything runs, changes nothing where
+the app is already installed, and refuses in a session with no display.
+`floti update` keeps it up to date from then on.
 
 Harness templates are the one thing outside that: they live in
 `~/.config/helm/templates`, because they are folders you write and edit by hand.

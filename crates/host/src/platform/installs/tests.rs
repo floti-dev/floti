@@ -7,8 +7,8 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use super::{
-    DESKTOP_DIR_VAR, Desktop, Installs, display_vars, leftovers, linux, macos, plist_string,
-    windows,
+    DESKTOP_DIR_VAR, DISPLAY_TEST_VAR, Desktop, Installs, display_vars, leftovers, linux, macos,
+    missing_display, plist_string, windows,
 };
 use crate::platform::folders::UserEnv;
 use crate::platform::process_table::ProcessRow;
@@ -542,4 +542,198 @@ fn only_linux_reads_an_app_s_display_variables() {
     assert!(windows::Native.display_env(std::process::id()).is_empty());
     assert!(macos::Native.display_env(std::process::id()).is_empty());
     assert!(linux::Native.display_env(0).is_empty());
+}
+
+#[test]
+fn linux_has_a_display_with_either_display_variable_and_none_without() {
+    let dirs = TestDirs::new();
+    let none = env(&dirs.home, &[]);
+    assert_eq!(
+        linux::Native.no_display(&none).as_deref(),
+        Some("this session has no display (neither DISPLAY nor WAYLAND_DISPLAY is set)")
+    );
+    for name in ["DISPLAY", "WAYLAND_DISPLAY"] {
+        let with = env(&dirs.home, &[(name, Path::new(":0"))]);
+        assert_eq!(linux::Native.no_display(&with), None, "{name}");
+    }
+    let empty = env(&dirs.home, &[("DISPLAY", Path::new(""))]);
+    assert!(
+        linux::Native.no_display(&empty).is_some(),
+        "an empty one is unset"
+    );
+}
+
+#[test]
+fn windows_has_no_display_in_session_0_alone_and_macos_always_has_one() {
+    assert!(windows::Native::no_display_in(Some(0)).is_some());
+    assert_eq!(windows::Native::no_display_in(Some(1)), None);
+    assert_eq!(
+        windows::Native::no_display_in(None),
+        None,
+        "unknown counts as a display"
+    );
+    let dirs = TestDirs::new();
+    assert_eq!(macos::Native.no_display(&env(&dirs.home, &[])), None);
+}
+
+#[test]
+fn a_test_build_s_display_switch_answers_before_the_os() {
+    let dirs = TestDirs::new();
+    let none = env(&dirs.home, &[(DISPLAY_TEST_VAR, Path::new("none"))]);
+    assert!(missing_display(&macos::Native, &none).is_some());
+    let present = env(&dirs.home, &[(DISPLAY_TEST_VAR, Path::new("present"))]);
+    assert_eq!(missing_display(&linux::Native, &present), None);
+    assert!(missing_display(&linux::Native, &env(&dirs.home, &[])).is_some());
+}
+
+#[test]
+fn linux_adds_a_menu_entry_and_its_icon_under_the_data_home() {
+    let dirs = TestDirs::new();
+    let apps = dirs.folder("my apps");
+    let desktop = Desktop {
+        name: "Helm",
+        path: apps.join("Helm.AppImage"),
+    };
+    let share = dirs.home.join(".local").join("share");
+    let entry = linux::Native
+        .add_launcher(&env(&dirs.home, &[]), &desktop)
+        .unwrap()
+        .unwrap();
+    assert_eq!(entry, share.join("applications").join("helm.desktop"));
+    let text = std::fs::read_to_string(&entry).unwrap();
+    assert!(text.starts_with("[Desktop Entry]\n"), "{text}");
+    for line in [
+        "Type=Application",
+        "Name=Helm",
+        "Icon=helm",
+        "Terminal=false",
+        "Categories=Development;",
+        // A Windows path's backslashes are each four in the entry.
+        &format!("Exec=\"{}\"", desktop.path.display()).replace('\\', r"\\\\"),
+    ] {
+        assert!(text.lines().any(|found| found == line), "{line} in {text}");
+    }
+    let icon = share
+        .join("icons")
+        .join("hicolor")
+        .join("256x256")
+        .join("apps")
+        .join("helm.png");
+    let png = std::fs::read(&icon).unwrap();
+    assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n", "the app's icon");
+
+    // XDG_DATA_HOME, when absolute, is where they go instead; written again
+    // over what is there.
+    let data_home = dirs.folder("data home");
+    let moved = linux::Native
+        .add_launcher(&env(&dirs.home, &[("XDG_DATA_HOME", &data_home)]), &desktop)
+        .unwrap()
+        .unwrap();
+    assert_eq!(moved, data_home.join("applications").join("helm.desktop"));
+    linux::Native
+        .add_launcher(&env(&dirs.home, &[("XDG_DATA_HOME", &data_home)]), &desktop)
+        .unwrap();
+    let left: Vec<_> = std::fs::read_dir(data_home.join("applications"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(
+        left,
+        vec![OsString::from("helm.desktop")],
+        "nothing beside it"
+    );
+}
+
+#[test]
+fn linux_quotes_the_app_image_s_path_in_its_menu_entry() {
+    let text = linux::Native::entry_text(Path::new("/home/a b/$x \"q\" 100%/Helm.AppImage"));
+    assert!(
+        text.lines()
+            .any(|line| line == r#"Exec="/home/a b/\\$x \\"q\\" 100%%/Helm.AppImage""#),
+        "{text}"
+    );
+    let text = linux::Native::entry_text(Path::new(r"/home/back\slash/Helm.AppImage"));
+    assert!(
+        text.lines()
+            .any(|line| line == r#"Exec="/home/back\\\\slash/Helm.AppImage""#),
+        "{text}"
+    );
+}
+
+#[test]
+fn windows_and_macos_leave_the_launcher_to_their_installs() {
+    let dirs = TestDirs::new();
+    let user = env(&dirs.home, &[]);
+    let desktop = Desktop {
+        name: "Helm",
+        path: dirs.folder("apps").join("Helm"),
+    };
+    assert_eq!(windows::Native.add_launcher(&user, &desktop).unwrap(), None);
+    assert_eq!(macos::Native.add_launcher(&user, &desktop).unwrap(), None);
+    assert!(!dirs.home.join(".local").exists(), "nothing is written");
+}
+
+/// The quarantine flag on `path`, as `getxattr` reads it.
+#[cfg(target_os = "macos")]
+fn quarantined(path: &Path) -> bool {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let file = CString::new(path.as_os_str().as_bytes()).unwrap();
+    let name = CString::new(crate::platform::standalone::macos::QUARANTINE).unwrap();
+    // SAFETY: NUL-terminated names; a null buffer asks only for the size.
+    let size =
+        unsafe { libc::getxattr(file.as_ptr(), name.as_ptr(), std::ptr::null_mut(), 0, 0, 0) };
+    size >= 0
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_installs_an_app_from_a_quarantined_zip_with_no_quarantine_flag() {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    use super::FakeDesktop;
+
+    let dirs = TestDirs::new();
+    let (file, bytes) = macos::Native.fake_release(&dirs.folder("work"), "3.0.0", Path::new(""));
+    let release = dirs.folder("download").join(file);
+    std::fs::write(&release, bytes).unwrap();
+    let zip = CString::new(release.as_os_str().as_bytes()).unwrap();
+    let name = CString::new(crate::platform::standalone::macos::QUARANTINE).unwrap();
+    let value = b"0083;00000000;Safari;";
+    // SAFETY: NUL-terminated names and a value buffer of the length given.
+    let set = unsafe {
+        libc::setxattr(
+            zip.as_ptr(),
+            name.as_ptr(),
+            value.as_ptr().cast(),
+            value.len(),
+            0,
+            0,
+        )
+    };
+    assert_eq!(set, 0, "{}", std::io::Error::last_os_error());
+    assert!(quarantined(&release));
+
+    // Only the test's own Applications folder, never /Applications.
+    let apps = dirs.folder("apps");
+    let user = env(&dirs.home, &[(DESKTOP_DIR_VAR, &apps)]);
+    let target = macos::Native.desktop_target(&user).unwrap();
+    assert_eq!(target.path, apps.join("Helm.app"));
+    macos::Native.install_desktop(&target, &release).unwrap();
+    assert_eq!(
+        macos::Native.desktop_version(&target).as_deref(),
+        Some("3.0.0")
+    );
+    for path in [
+        target.path.clone(),
+        target.path.join("Contents"),
+        target.path.join("Contents").join("Info.plist"),
+    ] {
+        assert!(
+            !quarantined(&path),
+            "{} carries no quarantine flag",
+            path.display()
+        );
+    }
 }

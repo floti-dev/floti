@@ -933,6 +933,64 @@ as the page and, on macOS, as the window with its traffic lights. It is no
 check in the gate and nothing waits on it. `pnpm screenshots` runs the same
 capture locally on any OS, into `reports/screenshots`.
 
+## floti add desktop
+
+`floti add desktop` is the one way the binary installs the desktop app
+(`crates/host/src/add.rs`); `floti update` then keeps it up to date. It
+installs the app of the release that is floti's own version, for this OS and
+CPU, per user and with no admin rights, where the desktop's installer puts
+it:
+
+| | Where | Its launcher entry |
+|---|---|---|
+| Windows | `%LOCALAPPDATA%\Programs\Helm`, by running the release's `Helm-<version>-setup.exe` with `/S`, which runs `floti install-self` itself. | The Start menu entry the installer makes. |
+| macOS | `~/Applications/Helm.app`, unpacked from `Helm-<version>-arm64-mac.zip` with `ditto -x -k --noqtn` beside it and renamed into place; then `floti install-self` runs from the floti inside it. | `~/Applications` is the Applications entry. |
+| Linux | `~/Applications/Helm.AppImage`, from `Helm-<version>-linux-x64.AppImage`, written beside, made executable and renamed into place. | `applications/helm.desktop` and `icons/hicolor/256x256/apps/helm.png` under `$XDG_DATA_HOME` (`~/.local/share`); the icon is the AppImage's own, built into floti. |
+
+**Which release.** It reads `update.json` and checks its signature exactly as
+`floti update` does, and takes the channel whose version is floti's own: the
+remembered channel first, then the others. The release's desktop files are
+listed with their SHA-256s there alone: `floti-<version>-SHA256SUMS` lists the
+five floti files, and the app carries that list, so the list cannot hold the
+app. So a floti older than a channel's newest is told to run `floti update`
+first, and a floti no channel has reached is a development build with no
+published release: either says so in one line and installs nothing. A release
+with no desktop file for this computer (Windows on Arm, Linux on Arm) says so
+too.
+
+**The checks.** The file downloads into `add` in Floti's data folder and is
+checked against its signature and its SHA-256 before anything runs, as
+`floti update` checks a file ("floti update", "The checks"). A file that
+fails a check is removed, the line on standard error names it and which check
+it failed, and nothing is installed. The folder is removed once the app is
+installed, or once the install failed.
+
+**Nothing is quarantined.** floti's own process writes the download, which
+neither Gatekeeper's quarantine nor Windows' mark of the web applies to, and
+`--noqtn` keeps `ditto` from carrying a flag over from the archive, so the
+ad-hoc signed Mac app opens without Open Anyway.
+
+**One floti.** The app carries this release's floti, so `install-self` from
+it leaves floti installed on its own as it is, and puts the Node beside it
+in place. The app, which runs `install-self` at start only when the floti
+there is missing or older ("floti in your own folder"), then uses that floti
+and the host already running; nothing stops or restarts the host.
+
+**What it refuses.** Where the app is already installed it says where, with
+its version where that can be told, and changes nothing. In a session with
+no display it refuses in one sentence saying why: on Linux when neither
+`DISPLAY` nor `WAYLAND_DISPLAY` is set, on Windows in session 0, where ssh
+logins and services run; a Mac is taken to have one. `floti add` with no
+name, or a name it does not know, lists what it can add, which is `desktop`
+alone.
+
+Progress goes to standard output, one line a step; the status is 0 when the
+app was installed or already there and 1 otherwise. Its tests use fake
+release files served from a loopback port and fake folders
+(`crates/host/tests/add.rs`, `src/add/tests.rs`); a test build alone reads
+`FLOTI_DESKTOP_DIR` for the folder the app goes in and `FLOTI_TEST_DISPLAY`
+for whether there is a display.
+
 ## floti update
 
 `floti update` replaces the floti that runs it with its channel's newest
@@ -1032,7 +1090,7 @@ the process that left them is known to have ended.
 |---|---|---|---|
 | Windows | The running `floti.exe` is renamed aside (`floti.old-<pid>-<n>.exe`) and the new one moved into its name, as `install.ps1` and `floti install-self` do (`platform/standalone`); the old copy is removed at once when nothing runs it, else by the next update or install. | The per-user NSIS install, `%LOCALAPPDATA%\Programs\Helm` (`Helm.exe` beside `Uninstall Helm.exe`), updated by running the release's setup.exe with `/S`. | `DisplayVersion` of the per-user uninstall entry whose `UninstallString` is that install's uninstaller. |
 | macOS | Written beside, made executable, stripped of any quarantine flag, renamed over. | `Helm.app` in `~/Applications`, else `/Applications`: the release's zip is unpacked beside it with `ditto -x -k --noqtn` and swapped in by rename. | `CFBundleShortVersionString` in its `Info.plist`. |
-| Linux | Written beside, made executable, renamed over. | The AppImage at `~/Applications/Helm.AppImage` (AppImage's own tools look there, and it is outside the data folder `floti uninstall` keeps), where the desktop's first install puts it: written beside, made executable, renamed over. | Unknown, so it is always updated. |
+| Linux | Written beside, made executable, renamed over. | The AppImage at `~/Applications/Helm.AppImage` (AppImage's own tools look there, and it is outside the data folder `floti uninstall` keeps), where `floti add desktop` puts it: written beside, made executable, renamed over. | Unknown, so it is always updated. |
 
 A release with no desktop file for this computer updates floti alone and
 says so. No downloaded file carries a quarantine flag or a
@@ -1151,8 +1209,8 @@ through your own ssh, or the command you gave.**
 
 There is no telemetry, no crash reporting, no fonts and no CDN. With
 `updateCheck` off, nothing asks anything by itself; the one remaining route is
-a person pressing Check now or Update, or running `floti update`, so nothing
-leaves the machine unasked for.
+a person pressing Check now or Update, or running `floti update` or
+`floti add desktop`, so nothing leaves the machine unasked for.
 
 **Helm listens only on this machine.** Its windows reach the local host over
 the host's local socket, which only your OS account can open. The local host

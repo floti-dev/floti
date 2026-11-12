@@ -57,6 +57,8 @@
 //! - [`connect`]: `floti connect`, what a transport runs on the host's
 //!   computer: it copies bytes between its standard input and output and the
 //!   host's local socket, unchanged.
+//! - [`add`]: `floti add desktop`, which installs the desktop app from the
+//!   release of floti's own version, checked as `floti update` checks it.
 //! - [`doctor`]: `floti doctor`, which asks each host this device uses
 //!   whether it answers, and says how long it took or what stopped it.
 //! - [`update`]: `floti update`, which replaces floti, then the desktop app,
@@ -76,6 +78,7 @@ macro_rules! log_line {
     }};
 }
 
+pub mod add;
 pub mod agent;
 pub mod agent_cli;
 pub mod agent_config;

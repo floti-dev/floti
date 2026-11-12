@@ -1,0 +1,274 @@
+//! `floti add`, end to end: a copy of the built `floti`, run from a fake bin
+//! folder, installing a fake desktop app from a loopback HTTP server that
+//! serves a release of floti's own version, signed with a key made in the
+//! test.
+//!
+//! The test key and the manifest's address reach the binary only through
+//! the testkit's marker in the data folder (`floti-test-update.json`); the
+//! desktop app is looked for and installed only in the folder
+//! `FLOTI_DESKTOP_DIR` names, and `FLOTI_TEST_DISPLAY` says whether there is
+//! a display, both read by a build with the testkit alone. Menu entries go
+//! under the test's `XDG_DATA_HOME`, floti installed on its own under its
+//! home and local app data. On Windows the release's installer is the fake
+//! program, which records how it was run. Everything is under the test's
+//! `TestDirs`; nothing real is installed.
+
+mod common;
+
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
+
+use common::{Served, Server, Signer};
+use floti_host::platform::folders::UserEnv;
+use floti_host::platform::installs::{
+    DESKTOP_DIR_VAR, DISPLAY_TEST_VAR, Desktop, FakeDesktop, Installs, Native,
+};
+use floti_host::sha256::hex_digest;
+use floti_host::testkit::{TestDirs, run_floti};
+use floti_host::update::signature::TEST_UPDATE_MARKER;
+use floti_host::version::{FLOTI_VERSION, cpu_name, os_name};
+
+const RECORD_VAR: &str = "FLOTI_FAKE_PROGRAM_RECORD";
+
+/// A fake bin folder holding a copy of the built floti, an empty
+/// Applications folder, and a server with floti's own release on it.
+struct World {
+    server: Server,
+    signer: Signer,
+    floti: PathBuf,
+    apps: PathBuf,
+    record: PathBuf,
+    data_home: PathBuf,
+    local_app_data: PathBuf,
+    desktop_file: String,
+    dirs: TestDirs,
+}
+
+impl World {
+    fn new() -> Self {
+        let dirs = TestDirs::new();
+        let bin = dirs.folder("bin dir");
+        let floti = bin.join(format!("floti{}", std::env::consts::EXE_SUFFIX));
+        std::fs::copy(env!("CARGO_BIN_EXE_floti"), &floti).expect("copy the built floti");
+        let apps = dirs.folder("apps dir");
+        let record = dirs.root().join("installer runs.jsonl");
+        let data_home = dirs.folder("data home");
+        let local_app_data = dirs.folder("local app data");
+
+        let server = Server::start();
+        let signer = Signer::new();
+        let target = format!("{}-{}", os_name(), cpu_name());
+        let folder = format!("/download/v{FLOTI_VERSION}/");
+        let (desktop_file, desktop) = Native.fake_release(
+            &dirs.folder("release work"),
+            FLOTI_VERSION,
+            Path::new(env!("CARGO_BIN_EXE_floti-fake-program")),
+        );
+        let manifest = serde_json::json!({
+            "schema": 1,
+            "channels": {"stable": {
+                "version": FLOTI_VERSION,
+                "url": server.url(&folder),
+                "floti": {},
+                "desktop": {&target: {"file": desktop_file, "sha256": hex_digest(&desktop)}},
+            }}
+        })
+        .to_string()
+        .into_bytes();
+
+        let world = Self {
+            server,
+            signer,
+            floti,
+            apps,
+            record,
+            data_home,
+            local_app_data,
+            desktop_file,
+            dirs,
+        };
+        world.serve_signed("/update.json", &manifest, "floti update.json");
+        world.serve_signed(
+            &world.file_path(),
+            &desktop,
+            &format!("floti {FLOTI_VERSION} {}", world.desktop_file),
+        );
+        let marker = serde_json::json!({
+            "manifest": world.server.url("/update.json"),
+            "key": world.signer.public_text(),
+        });
+        std::fs::write(world.dirs.data.join(TEST_UPDATE_MARKER), marker.to_string())
+            .expect("write the test's update marker");
+        world
+    }
+
+    fn serve_signed(&self, path: &str, bytes: &[u8], comment: &str) {
+        self.server.serve(
+            &format!("{path}.minisig"),
+            Served::Body(self.signer.sign(bytes, comment)),
+        );
+        self.server.serve(path, Served::Body(bytes.to_vec()));
+    }
+
+    fn file_path(&self) -> String {
+        format!("/download/v{FLOTI_VERSION}/{}", self.desktop_file)
+    }
+
+    async fn add(&self, args: &[&str], display: &str) -> std::process::Output {
+        let mut command = self.dirs.floti_command(&self.floti);
+        command
+            .arg("add")
+            .args(args)
+            .env(DESKTOP_DIR_VAR, &self.apps)
+            .env(DISPLAY_TEST_VAR, display)
+            .env(RECORD_VAR, &self.record)
+            .env("XDG_DATA_HOME", &self.data_home)
+            .env("LOCALAPPDATA", &self.local_app_data);
+        run_floti(command).await
+    }
+
+    fn installed(&self) -> bool {
+        Native.was_updated(&self.apps, FLOTI_VERSION, &self.record)
+    }
+
+    /// Whether anything was written where floti installed on its own goes,
+    /// or beside the floti that ran.
+    fn second_floti(&self) -> Vec<PathBuf> {
+        let mut found = Vec::new();
+        for folder in [
+            self.dirs.home.join(".local").join("bin"),
+            self.local_app_data.join("Programs").join("Floti"),
+        ] {
+            if folder.exists() {
+                found.push(folder);
+            }
+        }
+        for entry in std::fs::read_dir(self.floti.parent().unwrap()).unwrap() {
+            let path = entry.unwrap().path();
+            if path != self.floti {
+                found.push(path);
+            }
+        }
+        found
+    }
+}
+
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+#[tokio::test]
+async fn floti_add_desktop_installs_the_app_of_its_own_release_and_no_second_floti() {
+    let world = World::new();
+    let before = std::fs::read(&world.floti).unwrap();
+    let output = world.add(&["desktop"], "present").await;
+    let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert!(world.installed(), "{stdout}\n{stderr}");
+    assert!(
+        stdout.contains(&format!("Downloading {}.", world.desktop_file)),
+        "{stdout}"
+    );
+    assert!(stdout.contains(" is installed at "), "{stdout}");
+    assert!(
+        !world.dirs.data.join("add").exists(),
+        "the download is removed once installed"
+    );
+    assert_eq!(std::fs::read(&world.floti).unwrap(), before);
+    assert_eq!(world.second_floti(), Vec::<PathBuf>::new());
+    // floti writes a menu entry where this OS's install makes none (Linux),
+    // under the session's XDG_DATA_HOME, and says where.
+    let probe = world.dirs.folder("probe data home");
+    let user = UserEnv {
+        home: Some(world.dirs.home.clone()),
+        vars: [(OsString::from("XDG_DATA_HOME"), probe.into_os_string())].into(),
+    };
+    let app = Desktop {
+        name: "Helm",
+        path: world.apps.join("probe"),
+    };
+    let writes_one = Native.add_launcher(&user, &app).unwrap().is_some();
+    let entry = world.data_home.join("applications").join("helm.desktop");
+    assert_eq!(entry.is_file(), writes_one, "{stdout}");
+    assert_eq!(
+        stdout.contains(&format!("Its menu entry is {}.", entry.display())),
+        writes_one,
+        "{stdout}"
+    );
+}
+
+#[tokio::test]
+async fn a_download_that_fails_its_signature_installs_nothing_and_says_so_in_one_line() {
+    let world = World::new();
+    world.server.serve(
+        &format!("{}.minisig", world.file_path()),
+        Served::Body(world.signer.sign(
+            b"another file",
+            &format!("floti {FLOTI_VERSION} {}", world.desktop_file),
+        )),
+    );
+    let output = world.add(&["desktop"], "present").await;
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert_eq!(
+        stderr.trim_end(),
+        format!(
+            "floti add desktop: {} does not match its signature. Nothing was installed.",
+            world.desktop_file
+        )
+    );
+    assert!(!world.installed());
+    assert!(!world.dirs.data.join("add").exists());
+}
+
+#[tokio::test]
+async fn an_installed_app_and_a_session_with_no_display_each_change_nothing() {
+    let world = World::new();
+    let output = world.add(&["desktop"], "none").await;
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert_eq!(
+        stderr.trim_end(),
+        "floti add desktop: This test's session has no display, so Helm is not installed here. Nothing was installed."
+    );
+    assert!(!world.installed());
+
+    Native.fake_install(&world.apps, "1.0.0");
+    let output = world.add(&["desktop"], "present").await;
+    let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert!(stdout.starts_with("Helm"), "{stdout}");
+    assert!(
+        stdout.contains(&format!("is already installed at {}", world.apps.display())),
+        "{stdout}"
+    );
+    assert!(
+        stdout
+            .trim_end()
+            .ends_with("; floti update keeps it up to date. Nothing was changed."),
+        "{stdout}"
+    );
+    assert!(!world.installed(), "nothing was run");
+}
+
+#[tokio::test]
+async fn floti_add_with_no_name_or_an_unknown_one_lists_what_it_adds() {
+    let world = World::new();
+    let output = world.add(&[], "present").await;
+    let stdout = text(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
+    assert!(
+        stdout.starts_with("floti add <name> installs one of these"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("  desktop  "), "{stdout}");
+
+    let output = world.add(&["tmux"], "present").await;
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.starts_with("floti add: floti cannot add \"tmux\".\n"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("  desktop  "), "{stderr}");
+}

@@ -61,6 +61,11 @@
 //! put in the session's environment, and print the agent's name or the
 //! host's refusal (to standard error, with a non-zero status). `floti session
 //! title <text>` is run from a session's own shell too: it titles that session.
+//! `floti add desktop` installs the desktop app from the release of this
+//! floti's own version, checked as `floti update` checks a download, where
+//! the app is not installed and the session has a display; `floti add` with
+//! no name or one it does not know lists what it can add
+//! ([`floti_host::add`]).
 //! `floti update [--channel <name>]` replaces this floti with its channel's
 //! newest release, then the desktop app where it is installed and older,
 //! once the app has quit, ending no session and asking nothing; every
@@ -90,7 +95,7 @@ use floti_host::keep_awake::run_keep_awake;
 use floti_host::version;
 use floti_host::{ALREADY_RUNNING_EXIT, DesktopCommand, Error, HostOptions, log_line};
 
-const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...] [--after <pid>]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger]\n       floti install-self [--force]\n       floti update [--channel <name>] [--from-desktop | --floti-only]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop [--keep] [--json] <name>\n       floti session title <text>";
+const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...] [--after <pid>]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger]\n       floti install-self [--force]\n       floti add [desktop]\n       floti update [--channel <name>] [--from-desktop | --floti-only]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop [--keep] [--json] <name>\n       floti session title <text>";
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
@@ -142,6 +147,7 @@ fn main() -> ExitCode {
             Some(folder) => ExitCode::from(end_old_host::run(&folder)),
             None => usage(),
         },
+        ["add", ..] => ExitCode::from(floti_host::add::run(&args[1..])),
         ["update", ..] => match floti_host::update::parse(&args[1..]) {
             Some(options) => ExitCode::from(floti_host::update::run(
                 options,
