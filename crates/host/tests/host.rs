@@ -331,19 +331,27 @@ fn descendants_of(pid: u32) -> Vec<u32> {
 }
 
 /// The session keeper a host on `dirs`' folders started, if one runs: the
-/// process run as `floti keeper` on `dirs`' data folder.
+/// process run as `floti keeper` on `dirs`' data folder. On macOS and Linux
+/// the keeper's own guard is a fork of it with the same command line, so the
+/// keeper is the one of those whose parent is not one of them, whatever
+/// order the OS lists processes in.
 fn keeper_of(dirs: &TestDirs) -> Option<u32> {
     let data = dirs.data.to_string_lossy();
-    process_table::Native
+    let keepers: Vec<(u32, u32)> = process_table::Native
         .processes()
         .expect("read the process table")
         .into_iter()
-        .find(|row| {
+        .filter(|row| {
             row.command_line
                 .as_deref()
                 .is_some_and(|line| line.contains(" keeper ") && line.contains(data.as_ref()))
         })
-        .map(|row| row.pid)
+        .map(|row| (row.pid, row.parent_pid))
+        .collect();
+    keepers
+        .iter()
+        .find(|(_, parent)| !keepers.iter().any(|(pid, _)| pid == parent))
+        .map(|(pid, _)| *pid)
 }
 
 /// The host `child`'s own guard on macOS and Linux: a fork of the host, so
