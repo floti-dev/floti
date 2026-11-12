@@ -172,10 +172,9 @@ the same commit gives the same bytes.
 
 ### Installing floti on a host's computer
 
-Settings > Hosts installs or updates floti on another computer over the
-transport the user gave it, and only after the user says yes to an offer that
-names the computer's OS and CPU, the floti found there, and what will be done
-where. The app carries `scripts/install/install.sh` and `install.ps1` as
+Settings > Hosts installs floti on another computer over the transport the
+user gave it, and only after the user says yes to an offer that names the
+computer's OS and CPU, the floti found there, and what will be done where. The app carries `scripts/install/install.sh` and `install.ps1` as
 `resources/install` (top-level `extraResources`). Each is one function, called
 on its last line, and is sent as the line itself: `sh -c '<script>' ...`, or
 `powershell -EncodedCommand` with its comments left out to stay inside cmd's
@@ -191,11 +190,17 @@ computer, nothing is offered. Then the app runs `<path> setup` there and keeps
 the installed path, which the host's bridge is given with `--floti`.
 
 An added host whose floti is older than this desktop's gets the same Update
-floti, in Settings > Hosts and on its sidebar row, whether or not this
-desktop can still talk to it (`checkUpdate` in
+floti, in Settings > Hosts, on its sidebar header and on its Sessions page
+row, whether or not this desktop can still talk to it (`checkUpdate` in
 `packages/desktop/src/main/host/remote-install.ts`). Where the floti there
 has `floti update` (protocol 3.1 and later, `hasFlotiUpdate`), the update is
-that rather than an install, so it stops nothing first:
+that rather than an install, so it stops nothing first, and Update floti
+starts it at once with no question: the row shows it running, its first line
+naming the floti it replaces, the version it installs where the host's own
+check found it (else the newest on its channel), and the sessions it ends
+where it ends some (`flotiUpdateWorkingLine`). Only an install, which ends
+the sessions there, says first what it does, Update from this desktop's
+floti after an up-to-date outcome included.
 
 - A connected host that keeps floti up to date (`update:state` names no
   reason it does not) and whose own check found a newer floti on its
@@ -222,12 +227,12 @@ minutes (`UPDATE_PATIENCE_MS`), ends it, saying the update may still be
 running there.
 
 `floti update` relaunches the host through its session keeper. For an update
-to this desktop's own version, the offer first asks the host what a restart
+to this desktop's own version, the check first asks the host what a restart
 would mean (`restartAsk` through a bridge of its own, as Restart host to
-update asks this PC's), and says no session ends when the keeper speaks the
-link this desktop's floti takes back, and how many end when it does not. For
-any other version, whose keeper link the desktop cannot know, it says it
-cannot tell.
+update asks this PC's), and the update's first line says how many sessions
+end when the keeper does not speak the link this desktop's floti takes back.
+For any other version, whose keeper link the desktop cannot know, it says
+nothing of them.
 
 Beside `floti` goes the Node runtime the local host runs plugin services on.
 `scripts/node-runtime.json` pins its version (a Node 24 LTS release) and, for

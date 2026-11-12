@@ -93,12 +93,15 @@ import { runsAsWritten, systemWsl, transportArgv, type TransportPrograms } from 
  * (`cancel`), or after `UPDATE_PATIENCE_MS`. Either says it stopped
  * waiting, and the update may still run there.
  *
- * The offer says beforehand how many sessions a `floti update` ends, where
- * it can be told: for an update to this Helm's own version, none when the
- * host's session keeper speaks the keeper link this Helm's floti takes
- * back and every running one when it does not, as Restart host to update
- * says it for this PC's host (`restartAsk`, `askRemoteHostRestart`).
- * Otherwise it says it cannot tell.
+ * A `floti update` offer starts at once: Settings > Hosts runs it as the
+ * check answers, with no question, and shows it running. Only an install,
+ * which stops the host there and ends its sessions, says first what it does
+ * and waits for a yes. The offer carries how many sessions a `floti update`
+ * ends, where it can be told, for the update's first line: for an update to
+ * this Helm's own version, none when the host's session keeper speaks the
+ * keeper link this Helm's floti takes back and every running one when it
+ * does not, as Restart host to update says it for this PC's host
+ * (`restartAsk`, `askRemoteHostRestart`). Otherwise it says nothing of them.
  */
 
 /** How one run of the transport ended, with what it wrote. */

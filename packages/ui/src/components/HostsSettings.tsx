@@ -17,6 +17,7 @@ import {
   type RemoteHostConnection,
   lineToTryByHand,
   localHostVersionsSentence,
+  flotiUpdateWorkingLine,
   olderHostSentence,
   transportFix,
   type LocalHostVersions
@@ -45,10 +46,14 @@ import { Action, Divider, Group, Select } from './SettingsKit'
  *
  * A host whose floti is too old or missing offers to update or install it,
  * and so does a connected one whose floti is older than this Helm's (naming
- * both versions): what that would do and where, and how many sessions it
- * ends, is said first, and it is done only after the user's yes. Where the
- * floti there has `floti update`, the update is that, and ends no session
- * its session keeper hands to the new host. A link that cannot connect says why the way the dialog does
+ * both versions). Where the floti there has `floti update`, Update floti
+ * runs it at once, over the host's connection or its login, and shows it
+ * running: the floti it replaces, the version it installs where that is
+ * known and any sessions it ends go on its first line, and it ends no
+ * session its session keeper hands to the new host. An install (floti
+ * missing, too old for `floti update`, or Update from this Helm's floti)
+ * says first what it does and where, and how many sessions it ends, and is
+ * done only after the user's yes. A link that cannot connect says why the way the dialog does
  * (`classifyHostFailure`), with the last line written there, unedited.
  *
  * Above them, while this PC's host and this Helm are on different floti
@@ -471,6 +476,9 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
     if (check.kind === 'ready') {
       show(null)
       done.current({ floti: check.floti, system: hostSystem(check.system) })
+    } else if (check.kind === 'offer' && check.offer.how === 'flotiUpdate') {
+      // floti update there: started at once, with no question first.
+      begin(check.id, id, check.offer, name)
     } else if (check.kind === 'offer') {
       show({ step: 'offer', id: check.id, host: id, offer: check.offer })
     } else if (check.kind === 'newer') {
@@ -520,7 +528,11 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
 
   const confirm = (): void => {
     if (stage?.step !== 'offer') return
-    const { id, host, offer } = stage
+    begin(stage.id, stage.host, stage.offer, name)
+  }
+
+  /** Does what the check with `id` offered for host `host`, named `hostName`, and shows it working. */
+  function begin(id: string, host: string, offer: InstallOffer, hostName: string): void {
     show({ step: 'working', id, offer, line: null })
     actions.install(id, host).then(
       (outcome) => {
@@ -530,7 +542,7 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
           return
         }
         if (outcome.ok === null) {
-          const words = describeUnsettledUpdate(outcome.ended, name)
+          const words = describeUnsettledUpdate(outcome.ended, hostName)
           show({
             step: 'notice',
             title: words.title,
@@ -540,13 +552,13 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
           })
           return
         }
-        const words = describeInstallFailure(outcome.step, name, offer.folder)
+        const words = describeInstallFailure(outcome.step, hostName, offer.folder)
         show({ step: 'problem', title: words.title, line: outcome.lastLine, fix: words.fix })
       },
       (error: unknown) =>
         show({
           step: 'problem',
-          title: `Installing floti on ${name} failed`,
+          title: `Installing floti on ${hostName} failed`,
           line: (error as Error).message,
           fix: 'Try again.'
         })
@@ -568,7 +580,7 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
     const { id } = stage
     panel = (
       <div data-settings-host-working className="flex flex-col gap-1 text-[11.5px] leading-[1.5] text-fg-muted">
-        <p>Running floti update on {name}…</p>
+        <p data-settings-host-working-first>{flotiUpdateWorkingLine(name, stage.offer)}</p>
         {stage.line !== null && (
           <p data-settings-host-working-line className="font-mono text-[11px] break-words text-fg select-text">
             {stage.line}

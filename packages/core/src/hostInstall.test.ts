@@ -8,6 +8,7 @@ import {
   FLOTI_UPDATE_SINCE,
   hasFlotiUpdate,
   hostFlotiOlder,
+  flotiUpdateWorkingLine,
   olderHostSentence,
   parseProtocol,
   installFolderFor,
@@ -25,6 +26,7 @@ import {
   restartHostQuestion,
   saysNotFound
 } from './hostInstall'
+import type { InstallOffer } from './hostInstall'
 import { flotiLine, flotiPathProblem, remoteHostsProblem } from './hosts'
 
 describe('what a host’s computer answers', () => {
@@ -206,9 +208,33 @@ describe('an older floti on another computer, and floti update there', () => {
     )
   })
 
-  it('names both versions for a connected host whose floti is older, and says the offer tells what it ends', () => {
+  it('names both versions for a connected host whose floti is older', () => {
     expect(olderHostSentence('build-box', '2.5.0', '2.6.0')).toBe(
-      'build-box runs floti 2.5.0, older than the floti 2.6.0 this Helm carries. Update floti there says first what it ends.'
+      'build-box runs floti 2.5.0, older than the floti 2.6.0 this Helm carries.'
+    )
+  })
+
+  it('starts a floti update with the floti it replaces, the one it installs and the sessions it ends', () => {
+    const offer: InstallOffer = {
+      system: { os: 'linux', cpu: 'x64', label: 'Linux · x86_64' },
+      found: { version: '2.5.0', protocol: '3.1' },
+      action: 'update',
+      how: 'flotiUpdate',
+      via: 'connection',
+      updatesTo: '2.6.0',
+      version: '2.6.0',
+      folder: '~/.local/bin',
+      sessions: 0,
+      talks: true
+    }
+    expect(flotiUpdateWorkingLine('build-box', offer)).toBe(
+      'Updating floti on build-box from 2.5.0 to 2.6.0, the newest on its channel…'
+    )
+    expect(flotiUpdateWorkingLine('build-box', { ...offer, via: 'login', updatesTo: null, sessions: null })).toBe(
+      'Updating floti on build-box from 2.5.0 to the newest on its channel…'
+    )
+    expect(flotiUpdateWorkingLine('build-box', { ...offer, sessions: 3 })).toBe(
+      'Updating floti on build-box from 2.5.0 to 2.6.0, the newest on its channel, ending 3 sessions, which are offered back when it starts…'
     )
   })
 })

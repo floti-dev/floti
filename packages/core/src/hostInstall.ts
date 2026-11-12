@@ -226,7 +226,27 @@ export function parseProtocol(text: string): ProtocolVersionNumbers | null {
  * computer whose floti is older than this Helm's, naming both versions.
  */
 export function olderHostSentence(name: string, hostVersion: string, helmVersion: string): string {
-  return `${name} runs floti ${hostVersion}, older than the floti ${helmVersion} this Helm carries. Update floti there says first what it ends.`
+  return `${name} runs floti ${hostVersion}, older than the floti ${helmVersion} this Helm carries.`
+}
+
+/**
+ * The first line of a `floti update` running on host `name`, which starts at
+ * the press of Update floti with no question first: the floti it replaces,
+ * the version it installs where the host's own check told it (over the
+ * connection) or else its channel's newest, and the sessions it ends where it
+ * ends some.
+ */
+export function flotiUpdateWorkingLine(name: string, offer: InstallOffer): string {
+  const from = offer.found === null ? '' : ` from ${offer.found.version}`
+  const to =
+    offer.updatesTo !== undefined && offer.updatesTo !== null
+      ? `${offer.updatesTo}, the newest on its channel`
+      : 'the newest on its channel'
+  const ends =
+    offer.sessions !== null && offer.sessions > 0
+      ? `, ending ${String(offer.sessions)} session${offer.sessions === 1 ? '' : 's'}, which are offered back when it starts`
+      : ''
+  return `Updating floti on ${name}${from} to ${to}${ends}…`
 }
 
 /**
