@@ -9,8 +9,8 @@ import type { UpdateCheck } from '../shared/ipc'
  *
  * Helm asks nothing by itself. The local host keeps floti up to date in the
  * background while its `updateCheck` setting is on (`crates/host/src/update/
- * background.rs`), which is the one automatic contact, with floti.dev's
- * `update.json`. Helm hears of a newer release from that host: a host that
+ * background.rs`), which is the one automatic contact: floti.dev's `update.json`, and
+ * the GitHub release it names when there is a newer floti. Helm hears of a newer release from that host: a host that
  * runs a newer floti than this Helm is one that put a newer release in place,
  * and `hostVersionNotice` turns that into the same answer a check gives, for
  * the status bar. Updating the desktop app itself is `floti update`'s.

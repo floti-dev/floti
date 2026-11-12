@@ -107,6 +107,20 @@ pub trait ProcessTree {
         self.prepare_root(command);
     }
 
+    /// Makes `command` a lasting root ([`ProcessTree::prepare_lasting_root`])
+    /// that is never this process's child, so nothing here ever has to reap
+    /// it, however it ends and whatever this process becomes meanwhile: on
+    /// macOS and Linux it is started through an intermediate that exits at
+    /// once, and leads a session of its own, so it is reparented away from
+    /// this process; an `exec` that keeps this process's id cannot leave it
+    /// an unreaped child of the new image. The child `spawn` hands back is
+    /// that intermediate, which has exited; the program's own id is what it
+    /// says itself. Windows keeps no ended child for its parent, so there it
+    /// is a lasting root. The session keeper starts this way.
+    fn prepare_orphan_root(&self, command: &mut std::process::Command) {
+        self.prepare_lasting_root(command);
+    }
+
     /// Starts `program` with `args` alone: as a lasting root
     /// ([`ProcessTree::prepare_lasting_root`]), with nothing on its standard
     /// input, output and error, and holding nothing of this process's open,
@@ -134,10 +148,11 @@ pub trait ProcessTree {
     /// stopped to be relaunched on a new floti does last. On macOS and Linux
     /// this process's image is replaced (`exec`), so the new program keeps
     /// this process's id and whatever started it, launchd, the systemd user
-    /// unit or a desktop, goes on holding it; it returns only when that
-    /// failed. Windows has no `exec`: the program is started alone
-    /// ([`ProcessTree::start_alone`]) and this returns once it has started,
-    /// for the caller to exit.
+    /// unit or a desktop, goes on holding it. Windows has no `exec`: the
+    /// program is started alone ([`ProcessTree::start_alone`]) and this
+    /// returns once it has started, for the caller to exit. An `exec` that
+    /// fails falls back to that too, saying so in the log, so a failed
+    /// replacement still leaves a host: a LaunchAgent restarts nothing.
     fn replace_this_process(
         &self,
         program: &std::path::Path,

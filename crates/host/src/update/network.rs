@@ -11,6 +11,7 @@
 //! that ends before the length its response announced is cut off, not done.
 
 use std::io;
+use std::time::Duration;
 
 use reqwest::{Client, redirect};
 use url::{Host, Url};
@@ -108,6 +109,14 @@ fn described(err: &(dyn std::error::Error + 'static)) -> String {
     text
 }
 
+/// How long a connection may take to open.
+pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How long a response may go without a byte arriving: a connection left
+/// half-open, as one is after the computer slept, ends here rather than
+/// holding the check, and whatever waits on it, for good.
+pub const READ_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// The network, over reqwest, on a runtime of its own.
 pub struct Https {
     runtime: tokio::runtime::Runtime,
@@ -116,7 +125,14 @@ pub struct Https {
 }
 
 impl Https {
+    /// With [`CONNECT_TIMEOUT`] and [`READ_TIMEOUT`].
     pub fn new() -> Result<Self, String> {
+        Self::with_timeouts(CONNECT_TIMEOUT, READ_TIMEOUT)
+    }
+
+    /// With `connect` to open a connection and `read` between two bytes of
+    /// a response.
+    pub fn with_timeouts(connect: Duration, read: Duration) -> Result<Self, String> {
         // Every rustls client in the process uses ring; a provider installed
         // already is kept.
         let _ = rustls::crypto::ring::default_provider().install_default();
@@ -138,6 +154,8 @@ impl Https {
         let build = |loopback: bool| {
             let builder = Client::builder()
                 .tls_backend_rustls()
+                .connect_timeout(connect)
+                .read_timeout(read)
                 .redirect(policy())
                 .user_agent(concat!("floti/", env!("FLOTI_VERSION")));
             let builder = if loopback {
@@ -217,6 +235,23 @@ impl Network for Https {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_server_that_accepts_and_never_answers_fails_the_fetch_once_the_read_times_out() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        // Accepts, holds the connection open, and never writes a byte.
+        let held = std::thread::spawn(move || listener.accept().map(|(stream, _)| stream));
+        let network =
+            Https::with_timeouts(Duration::from_secs(5), Duration::from_millis(200)).unwrap();
+        let url = Url::parse(&format!("http://{address}/update.json")).unwrap();
+        let fetched = network.get(&url, 1024, &mut |_| Ok(()));
+        assert!(
+            matches!(fetched, Err(FetchError::Failed(_) | FetchError::Cut(_))),
+            "{fetched:?}"
+        );
+        drop(held.join());
+    }
 
     #[test]
     fn a_release_build_fetches_https_only() {

@@ -323,22 +323,7 @@ impl World {
         let name = arguments["name"].as_str().expect("a name").to_owned();
         parent.start(arguments).await.done();
         let child = self.child_of(parent, &name).await;
-        self.type_line(&child, SAID).await;
-        // The fake `claude` logs a line as taken before it records it in its
-        // history and transcript, so a stop in between leaves a conversation
-        // nothing indexes or resumes. Its answer is written last.
-        let conversation = child
-            .record
-            .conversation_id
-            .clone()
-            .expect("a conversation");
-        if self.is_claude_run(&conversation) {
-            eventually("the child's prompt to be in its transcript", async || {
-                self.transcript_holds(&conversation, &format!("You said: {SAID}"))
-                    .then_some(())
-            })
-            .await;
-        }
+        self.say_on_record(&child, SAID).await;
         parent.stop(&name).await.done();
         self.ended("the child to end", &[child.id()]).await;
         self.gone("its process to end", &[&child]).await;
@@ -558,6 +543,28 @@ impl World {
     }
 
     /// Types `line` at `agent`'s prompt and waits until it took it.
+    /// Types `line` into `agent` as a prompt and waits until its
+    /// conversation holds it, so a stop or a crash that follows leaves a
+    /// conversation to index and resume. The fake `claude` logs a line as
+    /// taken before it writes it to its history and transcript, and writes
+    /// its answer last, so the answer in the transcript is the mark; the
+    /// other fake records its conversation when it starts.
+    async fn say_on_record(&self, agent: &Agent, line: &str) {
+        self.type_line(agent, line).await;
+        let conversation = agent
+            .record
+            .conversation_id
+            .clone()
+            .expect("a conversation");
+        if self.is_claude_run(&conversation) {
+            eventually("the prompt to be in its transcript", async || {
+                self.transcript_holds(&conversation, &format!("You said: {line}"))
+                    .then_some(())
+            })
+            .await;
+        }
+    }
+
     async fn type_line(&self, agent: &Agent, line: &str) {
         // A line typed before is taken again only when it is counted again.
         let taken = |agent: &Agent| {
@@ -1518,7 +1525,9 @@ async fn s8_an_outliving_child_runs_on_names_its_parent_and_is_the_resumed_paren
     let folder = world.project("resume");
     let parent = world.session(CLAUDE, &folder, "parent").await;
     // A conversation with a prompt in it is one history can reopen.
-    world.type_line(&parent, "remember this conversation").await;
+    world
+        .say_on_record(&parent, "remember this conversation")
+        .await;
     parent
         .start(json!({ "task": "long job", "name": "keeper", "outlive": true, "backend": OTHER }))
         .await
@@ -2280,7 +2289,7 @@ async fn a_kept_child_stays_listed_across_a_host_restart_until_it_is_resumed_or_
             .await
             .done();
         let child = world.child_of(&parent, name).await;
-        world.type_line(&child, "remember this").await;
+        world.say_on_record(&child, "remember this").await;
         parent.stop_keeping(name).await.done();
         children.push(child);
     }
@@ -3904,8 +3913,8 @@ async fn s21_a_child_and_its_parent_reopened_through_the_restore_offer_run_remot
         .done();
     let child = world.child_of(&parent, "worker").await;
     // Each has been worked with, so there is a conversation to reopen.
-    world.type_line(&parent, "carry on").await;
-    world.type_line(&child, "carry on").await;
+    world.say_on_record(&parent, "carry on").await;
+    world.say_on_record(&child, "carry on").await;
     let worker_line = line(&["api-refactor", "worker"]);
 
     // The host stops for an update: every row is left for the next start.

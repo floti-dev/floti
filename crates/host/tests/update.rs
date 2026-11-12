@@ -519,6 +519,15 @@ impl HostWorld {
         (session.id, pid.unwrap())
     }
 
+    /// The session keeper the first host started, as its log names it.
+    fn keeper_pid(&self) -> u32 {
+        let log = self.dirs.host_log();
+        log.lines()
+            .find_map(|line| line.strip_prefix("floti host: started a session keeper, process "))
+            .and_then(|rest| rest.trim_end_matches('.').parse().ok())
+            .unwrap_or_else(|| panic!("the host started a session keeper:\n{log}"))
+    }
+
     /// Turns the setting on through the host, as Settings does, and waits
     /// until the host has stopped to start the new floti in its place.
     async fn update_now(&self, client: &mut TestClient) {
@@ -594,10 +603,11 @@ async fn the_host_updates_itself_in_the_background_and_its_sessions_run_on_throu
     let mut client = world.client().await;
     let folder = world.dirs.folder("a project");
     let (session, pid) = world.session(&mut client, &folder).await;
+    let keeper = world.keeper_pid();
 
     world.update_now(&mut client).await;
     drop(client);
-    assert!(alive(pid), "the relaunch ended nothing");
+    assert!(alive(pid) && alive(keeper), "the relaunch ended nothing");
 
     let mut client = world.client().await;
     let listed = client.request::<SessionList>(&()).await.unwrap();
@@ -624,8 +634,16 @@ async fn the_host_updates_itself_in_the_background_and_its_sessions_run_on_throu
         "the new host does not look again within the day"
     );
 
+    // A stop after the relaunch ends the keeper and its session at once:
+    // on macOS and Linux the relaunched host is the same process, which
+    // must not be left holding an ended keeper it never reaps.
     world.stop(client).await;
-    until("the session ended with the stop", PATIENCE, || !alive(pid)).await;
+    until(
+        "the keeper and its session ended with the stop",
+        PATIENCE,
+        || !alive(pid) && !alive(keeper),
+    )
+    .await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -638,6 +656,7 @@ async fn after_a_background_update_whose_floti_cannot_take_the_keeper_back_its_s
     let mut client = world.client().await;
     let folder = world.dirs.folder("a project");
     let (session, pid) = world.session(&mut client, &folder).await;
+    let keeper = world.keeper_pid();
     // The new floti speaks this build's link version; the keeper the old
     // host started speaks the one it was told.
     std::fs::remove_file(&marker).unwrap();
@@ -660,7 +679,10 @@ async fn after_a_background_update_whose_floti_cannot_take_the_keeper_back_its_s
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     let mut client = world.client().await;
-    until("the keeper's session ended", PATIENCE, || !alive(pid)).await;
+    until("the keeper and its session ended", PATIENCE, || {
+        !alive(pid) && !alive(keeper)
+    })
+    .await;
     let offer = client
         .request::<SessionRestorable>(&())
         .await

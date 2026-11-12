@@ -1065,7 +1065,8 @@ updater, and its signature check is the one to get right.
 ## Network posture
 
 **Helm contacts nothing on its own initiative except the update check, which
-a host makes to floti.dev at most once a day.
+a host makes at most once a day to floti.dev and to the GitHub release it
+names.
 Everything else on the network happens because you asked for it: the browser
 pane fetches the page you navigate to, a plugin you added reaches the hosts its
 manifest names, and a host you added on another computer is reached through
@@ -1128,7 +1129,8 @@ Helm handles no GitHub credential. GitHub answers an unauthenticated request for
 Check now reports *"could not ask"* however current the release actually is.
 
 This is a coupling that breaks silently: **making the repository private turns
-Check now off**, and the release files the host's own update downloads with it,, and nothing in the app says so beyond the error string.
+Check now off, and with it the host's own update, whose release files are
+there**, and nothing in the app says so beyond the error string.
 The same fact is why release artefacts cannot be handed to anyone who is not a
 collaborator - a private release page is not a download link. It holds for a
 draft too, whatever the repository's visibility, which is why a preview is

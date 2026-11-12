@@ -176,6 +176,11 @@ const PREDECESSOR_WAIT: Duration = Duration::from_secs(60);
 /// How often it looks.
 const PREDECESSOR_POLL: Duration = Duration::from_millis(25);
 
+/// How long a stopped host waits for work still on its runtime's blocking
+/// threads, such as an update check on a stalled connection, before it lets
+/// go of it and exits or relaunches.
+const RUNTIME_RELEASE: Duration = Duration::from_secs(5);
+
 /// The program that started a host, and the arguments that open it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DesktopCommand {
@@ -272,7 +277,9 @@ pub fn run_host(options: HostOptions) -> Result<()> {
         }
         stopped
     });
-    drop(runtime);
+    // Not a plain drop, which waits for every blocking task however long it
+    // takes: the sessions are ended or handed to the keeper by now.
+    runtime.shutdown_timeout(RUNTIME_RELEASE);
     let reason = reason?;
     say(match reason {
         HostStopReason::Stop => "Floti host stopped.",

@@ -1087,7 +1087,8 @@ export interface IpcRequests {
    * Ask GitHub whether there is a newer release.
    *
    * **Helm contacts nothing on its own initiative except the update check, which
-   * a host makes to floti.dev at most once a day.
+   * a host makes at most once a day to floti.dev and to the GitHub release it
+   * names.
    * Everything else on the network happens because you asked for it: the
    * browser pane fetches the page you navigate to, a plugin you added
    * reaches the hosts its manifest names, and a host you added on another

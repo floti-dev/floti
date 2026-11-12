@@ -125,7 +125,42 @@ impl ProcessTree for Native {
         use std::os::unix::process::CommandExt;
         // Every descriptor of this process's is close-on-exec but the
         // standard three, so the new program holds nothing of this one's.
-        Err(std::process::Command::new(program).args(args).exec())
+        let failed = std::process::Command::new(program).args(args).exec();
+        log_line!(
+            "floti host: {} could not take this process's place ({failed}), so it is started apart.",
+            program.display()
+        );
+        self.start_alone(program, args).map(|_| ())
+    }
+
+    fn prepare_orphan_root(&self, command: &mut std::process::Command) {
+        use std::os::unix::process::CommandExt;
+        let open_max = open_max();
+        // SAFETY: the closure makes only `fork`, `_exit`, `setsid` and
+        // `fcntl` calls, which are async-signal-safe, on plain values.
+        unsafe {
+            command.pre_exec(move || {
+                match libc::fork() {
+                    -1 => return Err(io::Error::last_os_error()),
+                    // The program, which goes on to exec, a grandchild.
+                    0 => {}
+                    // The intermediate, which the parent reaps at once.
+                    _ => libc::_exit(0),
+                }
+                if libc::setsid() == -1 {
+                    return Err(io::Error::last_os_error());
+                }
+                // As `prepare_root` does: nothing but the standard three
+                // survives the exec.
+                for fd in 3..open_max {
+                    let flags = libc::fcntl(fd, libc::F_GETFD);
+                    if flags >= 0 && flags & libc::FD_CLOEXEC == 0 {
+                        libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC);
+                    }
+                }
+                Ok(())
+            });
+        }
     }
 
     fn prepare_root(&self, command: &mut std::process::Command) {

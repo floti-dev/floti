@@ -13,7 +13,9 @@
 //! - The host reaches it through [`Keeper`], on a local socket only this
 //!   user can open, named from the host's data folder ([`keeper_endpoint`]),
 //!   over one [`KeeperLink`]. The keeper is started outside the host's own
-//!   tie ([`ProcessTree::prepare_lasting_root`]), so it outlives the host.
+//!   tie and never as the host's child ([`ProcessTree::prepare_orphan_root`]),
+//!   so it outlives the host, and a host that relaunched by `exec` keeps no
+//!   ended keeper unreaped.
 //! - A host starting finds the keeper the last one left ([`Keeper::reattach`])
 //!   and takes back what it holds, whenever the keeper speaks its link
 //!   version ([`floti_protocol::KEEPER_LINK_VERSION`]), whatever floti version
@@ -252,7 +254,7 @@ impl Keeper {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(self.log_file());
-        process_tree::Native.prepare_lasting_root(&mut command);
+        process_tree::Native.prepare_orphan_root(&mut command);
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(err) => {
@@ -278,7 +280,6 @@ impl Keeper {
                     .map_err(|err| Error::io("start the session keeper", err))?
             }
         };
-        let pid = child.id();
         let (said, saying) = mpsc::channel();
         if let Some(stdout) = child.stdout.take() {
             std::thread::spawn(move || {
@@ -287,13 +288,16 @@ impl Keeper {
                 let _ = said.send(line);
             });
         }
-        // Reaped whenever it ends, so it never lingers as a zombie.
+        // Reaped whenever it ends, so it never lingers as a zombie: on macOS
+        // and Linux that is the intermediate, which ends at once.
         std::thread::spawn(move || {
             let _ = child.wait();
         });
         // A keeper that would not bind found one already there: connect to
         // that one all the same.
-        let _ = saying.recv_timeout(KEEPER_WAIT);
+        let ready = saying
+            .recv_timeout(KEEPER_WAIT)
+            .is_ok_and(|line| line.trim() == "ready");
         let (link, greeting) =
             KeeperLink::connect(socket::Native, &self.endpoint, self.link_version)?;
         match greeting {
@@ -305,7 +309,7 @@ impl Keeper {
                     "floti host: started a session keeper, process {}.",
                     link.pid()
                 );
-                if link.pid() != pid {
+                if !ready {
                     log_line!("floti host: another session keeper answered in its place.");
                 }
                 Ok(link)

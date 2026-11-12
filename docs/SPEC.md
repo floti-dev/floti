@@ -1141,7 +1141,8 @@ option open and is what makes the app genuinely portable.
 ### Network posture
 
 **Helm contacts nothing on its own initiative except the update check, which
-a host makes to floti.dev at most once a day.
+a host makes at most once a day to floti.dev and to the GitHub release it
+names.
 Everything else on the network happens because you asked for it: the browser
 pane fetches the page you navigate to, a plugin you added reaches the hosts its
 manifest names, and a host you added on another computer is reached through
@@ -1170,7 +1171,8 @@ about the user's own `gh`: Helm no longer runs it.
   finds after its signature and SHA-256 checks, relaunching on it through the
   session keeper so no session ends ([PACKAGING.md](PACKAGING.md#the-hosts-own-update)).
   It replaced Helm's own launch check of the GitHub releases API, so there is
-  still one automatic contact, now with floti.dev. Helm's Check now still asks
+  still one automatic contact: floti.dev's `update.json`, and the GitHub
+  release it names when there is a newer floti. Helm's Check now still asks
   GitHub for a version number when a person presses it, unthrottled and with
   the tick off. `updateCheck` governs whether anything asks by itself, not
   whether the user may, so with it off nothing leaves the machine unasked
