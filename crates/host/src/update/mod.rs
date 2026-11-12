@@ -751,7 +751,7 @@ impl Updater<'_> {
 /// The process id in `name` when it is a download an update leaves beside
 /// the running binary: `.floti-<version>.<pid><extension>`. Copies put
 /// aside are [`Standalone::remove_asides`]'s.
-fn leftover_pid(name: &str, extension: &str) -> Option<u32> {
+pub(crate) fn leftover_pid(name: &str, extension: &str) -> Option<u32> {
     let base = name.strip_suffix(extension)?;
     let (version, pid) = base.strip_prefix(".floti-")?.rsplit_once('.')?;
     Version::parse(version)?;

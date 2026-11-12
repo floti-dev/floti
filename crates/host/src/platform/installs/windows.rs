@@ -53,9 +53,13 @@ impl Native {
 
     /// The folder per-user programs are installed in for `env`.
     fn programs(env: &UserEnv) -> Option<PathBuf> {
+        // Only a full path: a relative one would be read against whatever
+        // folder floti happened to start in.
         desktop_dir_override(env).or_else(|| {
             env.var_any_case("LOCALAPPDATA")
-                .map(|local| windows_path::join(Path::new(&local), &["Programs"]))
+                .map(PathBuf::from)
+                .filter(|local| windows_path::is_absolute(local))
+                .map(|local| windows_path::join(&local, &["Programs"]))
         })
     }
 

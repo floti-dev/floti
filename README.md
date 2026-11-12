@@ -84,8 +84,9 @@ floti with its Node. It prints one line for each, or `not found`, so running
 it again changes nothing. Your data and config folders stay;
 `floti uninstall --purge` removes them as well, with Floti's own entry in your
 keychain or keyring, and never touches `~/.claude`, `~/.ssh` or any
-repository. On Linux it leaves lingering as it is, since other services may
-rely on it. Run it from a terminal Floti did not start.
+repository. The desktop app's own settings are the app's and stay, as its
+uninstaller leaves them. On Linux it leaves lingering as it is, since other
+services may rely on it. Run it from a terminal Floti did not start.
 
 Harness templates are the one thing outside that: they live in
 `~/.config/helm/templates`, because they are folders you write and edit by hand.

@@ -359,8 +359,6 @@ impl Drop for Keeper {
     }
 }
 
-/// Tells the keeper on `link` to end everything and exit, and ends its tree
-/// by its pid if it has not gone once it has had its time.
 /// What [`end_left_keeper`] ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LeftKeeper {
@@ -396,6 +394,8 @@ pub fn end_left_keeper(folders: &Folders) -> Option<LeftKeeper> {
     Some(LeftKeeper { sessions })
 }
 
+/// Tells the keeper on `link` to end everything and exit, and ends its tree
+/// by its pid if it has not gone once it has had its time.
 fn end_keeper(link: &KeeperLink) {
     let pid = link.pid();
     link.shutdown(KEEPER_WAIT);

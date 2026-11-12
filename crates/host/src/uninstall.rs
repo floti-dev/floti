@@ -4,14 +4,18 @@
 //! asks nothing.
 //!
 //! In this order, so a run that stops part way leaves nothing half-working,
-//! and a run after it carries on where it stopped:
+//! and a run after it, from the same floti, carries on where it stopped:
 //!
-//! 1. The desktop app, while it runs, is closed: one that started the host
-//!    would start another once the host stops.
+//! 1. The desktop app's own processes, while they run, are ended one by one
+//!    and never as a tree ([`close_processes`]): one that started the host
+//!    would start another once the host stops, and the host it started, a
+//!    child of the app, is left for step 2 to stop. A process of the app's
+//!    that this user cannot end, another user's, is left and said so.
 //! 2. The host is stopped for good (`HostStopReason::Stop`), which ends every
-//!    session and plain terminal and its session keeper; with no host
-//!    answering, a keeper a host left running is ended with what it holds.
-//!    The sessions' history stays in the data folder.
+//!    session and plain terminal and its session keeper, and says how many
+//!    sessions it ended; with no host answering, a keeper a host left running
+//!    is ended with what it holds. The sessions' history stays in the data
+//!    folder.
 //! 3. The start-at-sign-in entry ([`register::unregister`]): the logon task
 //!    "Floti host", the LaunchAgent `dev.floti.host` or the user unit
 //!    `floti.service`, and in a WSL distro without systemd the record that
@@ -19,31 +23,46 @@
 //!    setting other services may rely on, so it is left on, and said so.
 //! 4. The desktop app ([`Installs::removal`]): on Windows by its own NSIS
 //!    uninstaller, run silently and waited for; the `.app` on macOS; the
-//!    AppImage, its menu entry and icon on Linux.
+//!    AppImage, its menu entry and icon on Linux. The app's own settings are
+//!    the app's, kept where the app alone knows, and are left, which one line
+//!    says.
 //! 5. The `PATH` entry ([`UserPath::remove`]): on Windows the folder's entry
 //!    in the user's `Path`. On macOS and Linux floti adds none.
-//! 6. floti and its Node, from where the install scripts put floti
-//!    ([`Standalone::folder`]), with the copies an install or update put
-//!    aside or left part way. A running `floti.exe` cannot delete itself on
-//!    Windows, so it is renamed aside and deleted once this process has
-//!    exited ([`Standalone::delete_after_exit`]).
+//! 6. The data, with `--purge` (below); without it, a line says what stays.
+//!    It comes before floti, so a purge that fails leaves the floti that
+//!    runs it to try again.
+//! 7. floti and its Node, from where the install scripts put floti
+//!    ([`Standalone::folder`]), with the copies an install, an update or an
+//!    install script put aside or left part way: install-self's
+//!    `.floti.exe.floti-install-*`, the asides `floti.old-*.exe`,
+//!    install.ps1's `floti.old.exe`, and a `.floti-<version>.<pid>` download
+//!    whose process has ended. A running `floti.exe`
+//!    cannot delete itself on Windows, so it is renamed aside and deleted
+//!    once this process has exited ([`Standalone::delete_after_exit`]);
+//!    where that cannot be started, one line says the copy is left for the
+//!    next install's or update's sweep, and the run still succeeds.
 //!
-//! Its data folder, logs and config folder stay unless `--purge`, which then
-//! removes them, unlinking every link in them and never walking into one, and
-//! Floti's own entry in the OS secret store. Nothing ever touches `~/.claude`,
-//! another agent's config, `~/.ssh` or a repository: a folder that is the home
-//! folder or holds it, or is or holds or is inside `~/.claude` or `~/.ssh`, is
-//! refused rather than removed.
+//! `--purge` removes the data folder, the logs, the socket's folder where it
+//! is apart, and the config folder, unlinking every link in them and never
+//! walking into one, then Floti's own entry in the OS secret store. Each
+//! folder must be Floti's: the one floti uses with no override
+//! ([`Uninstall::layout`]), or, where an override moved it, one holding a
+//! file floti writes there ([`marked`]). Before anything is changed it
+//! refuses the purge outright when the home folder is unknown, and refuses
+//! any folder that is the home folder or holds it, holds a `.git`, or is,
+//! holds or is inside `~/.claude` or `~/.ssh` ([`refusal`]); an override's
+//! folder with no mark of Floti's is refused the same way, but the socket's
+//! folder, which floti marks with nothing, is left and said so.
 //!
 //! A floti that is not the one where the install scripts put floti (one a
 //! package manager installed) removes only what it installed: steps 1 to 4
-//! and the data, and says in one line that it leaves itself and the `PATH`
+//! and the data, and says in one line that it leaves itself, and the `PATH`,
 //! to whatever installed it.
 //!
 //! Each step prints one line on standard output, `<what>: <how it went>`,
 //! such as `sign-in entry: removed (logon task "Floti host")` or
-//! `desktop app: not found`, so a second run says `not found` throughout and
-//! exits 0. A step that fails stops the run with one line on standard error,
+//! `desktop app: not found`, so a second run says `not found` and exits 0. A
+//! step that fails stops the run with one line on standard error,
 //! `floti uninstall: <what>: <why>`, and status 1; so does running it from
 //! one of Floti's own sessions, which stopping the host would end, before
 //! anything is changed.
@@ -54,24 +73,28 @@ mod tests;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use floti_protocol::Knowable;
 
 use crate::connect::START_ON_CONNECT_FILE;
+use crate::host_log::LOG_FILE;
 use crate::install_self::remove_copies;
-use crate::platform::folders::{self, DATA_DIR_VAR, Folders, UserEnv};
+use crate::platform::folders::{self, DATA_DIR_VAR, FolderLayout, Folders, UserEnv};
 use crate::platform::installs::{self, Desktop, Installs};
 use crate::platform::launcher::{self, ProgramLauncher};
 use crate::platform::links::{self, remove_tree};
 use crate::platform::node_runtime::SHIPPED_FOLDER;
 use crate::platform::process_table::{self, ProcessRow, ProcessTable};
-use crate::platform::process_tree::{self, Ending, ProcessTree};
+use crate::platform::process_tree::{self, OneProcess, ProcessTree};
 use crate::platform::secret_seal::{self, StoreEntry};
 use crate::platform::standalone::{self, Standalone};
 use crate::platform::startup::register::{self, SignInSystem};
 use crate::platform::startup::{self, StartAtSignIn, StartupDefinition, StartupKind};
 use crate::platform::user_path::{self, UserPath};
+use crate::server::HOST_KEY_FILE;
+use crate::store::DB_FILE;
+use crate::update::leftover_pid;
 
 /// What `floti uninstall` was told.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -102,6 +125,16 @@ pub enum HostStop {
     Failed(String),
 }
 
+/// What closing the desktop app did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Closed {
+    /// How many of its processes were ended.
+    pub ended: usize,
+    /// How many were left because this user cannot end them: another
+    /// user's.
+    pub skipped: usize,
+}
+
 /// What uninstalling asks of the computer beyond removing files in the
 /// folders it is given. [`NativeSystem`] is this computer; a test fakes it.
 pub trait UninstallSystem {
@@ -109,9 +142,9 @@ pub trait UninstallSystem {
     /// plain terminals, which stopping the host would end with it.
     fn inside_session(&self) -> bool;
 
-    /// Ends the processes of `desktop`, the installed desktop app, and
-    /// answers whether any were running.
-    fn close_desktop(&self, desktop: &Desktop) -> Result<bool, String>;
+    /// Ends the processes of `desktop`, the installed desktop app, each
+    /// alone ([`close_processes`]).
+    fn close_desktop(&self, desktop: &Desktop) -> Result<Closed, String>;
 
     /// Stops the host for good, ending its sessions and its keeper, and
     /// waits until it has exited.
@@ -133,14 +166,21 @@ pub trait UninstallSystem {
 
     /// Removes the OS secret store's `entry`; whether there was one.
     fn remove_secret_entry(&self, entry: &StoreEntry) -> Result<bool, String>;
+
+    /// Whether process `pid` is known to have ended.
+    fn ended(&self, pid: u32) -> bool;
 }
 
 /// What to uninstall, and for whom.
 pub struct Uninstall<'a> {
     /// The user's home folder and environment.
     pub env: &'a UserEnv,
-    /// Floti's folders for that user.
+    /// Floti's folders for that user, overrides applied.
     pub folders: &'a Folders,
+    /// The folders floti uses for that user with no override, where the
+    /// OS's layout can say: a purge removes these without looking for a
+    /// mark of Floti's.
+    pub layout: Option<Folders>,
     /// The floti running this.
     pub running: &'a Path,
     /// This OS's start-at-sign-in entry, for its name and where its file is.
@@ -157,6 +197,10 @@ pub const IN_SESSION_LINE: &str = "this terminal is one of Floti's own sessions,
 /// What a Linux computer with lingering on is told: it is left on.
 pub const LINGER_LINE: &str =
     "lingering: left on, since other services may rely on it; loginctl disable-linger turns it off";
+
+/// What is said of the desktop app's own settings, once it is removed or
+/// with `--purge`: they are the app's, and stay.
+pub const DESKTOP_SETTINGS_LINE: &str = "desktop app settings: kept; they are the desktop app's own, where it keeps them, and floti uninstall leaves them";
 
 /// How long closing the desktop app waits for its processes to go.
 const CLOSE_WAIT: Duration = Duration::from_secs(10);
@@ -211,6 +255,7 @@ pub fn run(options: Options, stop_host: StopHost<'_>) -> u8 {
         &Uninstall {
             env: &env,
             folders: &folders,
+            layout: folders::Native.resolve(&env).ok(),
             running: &running,
             definition: &definition,
             secret_entry,
@@ -261,12 +306,24 @@ fn steps(
     if system.inside_session() {
         return Err(IN_SESSION_LINE.to_owned());
     }
-    if let Some(desktop) = installs.desktop(what.env)
-        && system.close_desktop(&desktop).map_err(|why| {
+    let purge = if what.purge {
+        Some(purge_plan(what)?)
+    } else {
+        None
+    };
+    if let Some(desktop) = installs.desktop(what.env) {
+        let closed = system.close_desktop(&desktop).map_err(|why| {
             format!("desktop app: could not close it: {why}. Nothing was removed.")
-        })?
-    {
-        say("desktop app: closed, so it starts no host".to_owned());
+        })?;
+        if closed.ended > 0 {
+            say("desktop app: closed, so it starts no host".to_owned());
+        }
+        if closed.skipped > 0 {
+            say(format!(
+                "desktop app: left {} running that this user cannot end, such as another user's",
+                processes(closed.skipped)
+            ));
+        }
     }
     match system.stop_host() {
         HostStop::NotRunning => say("host: not running".to_owned()),
@@ -278,22 +335,31 @@ fn steps(
         }
     }
     sign_in_entry(what, system, say)?;
-    desktop_app(what, installs, system, say)?;
-    match place.binary(what.env) {
-        Some(binary) if !there(&binary) || same_file(&binary, what.running) => {
-            path_entry(what, place, system, say)?;
-            floti_files(what, place, &binary, system, say)?;
+    let desktop_removed = desktop_app(what, installs, system, say)?;
+    let standalone = place.binary(what.env);
+    let ours = standalone
+        .as_deref()
+        .is_some_and(|binary| binary == what.running || same_file(binary, what.running));
+    if ours {
+        path_entry(what, place, system, say)?;
+    }
+    match &purge {
+        Some(plan) => {
+            if !desktop_removed {
+                say(DESKTOP_SETTINGS_LINE.to_owned());
+            }
+            purge_data(what, plan, system, say)?;
         }
-        standalone => say(format!(
-            "floti: left as it is; this floti runs from {}, not {}, where the install scripts put floti, so it removes only what it installed, and whatever installed it removes it and its PATH entry",
-            what.running.display(),
-            standalone.map_or_else(
-                || "the folder the install scripts use".to_owned(),
-                |binary| binary.display().to_string()
-            )
+        None => keep_data(what, say),
+    }
+    match standalone {
+        Some(binary) if ours => floti_files(what, place, &binary, system, say)?,
+        _ => say(format!(
+            "floti: left as it is (installed by {}); it removes only what it installed, and leaves itself and its PATH entry to whatever installed it",
+            what.running.display()
         )),
     }
-    data(what, system, say)
+    Ok(())
 }
 
 /// What stopping the host ended, after "stopped, ".
@@ -306,6 +372,15 @@ pub fn ending(sessions: Option<usize>) -> String {
     }
 }
 
+/// `count` processes, in words.
+fn processes(count: usize) -> String {
+    if count == 1 {
+        "1 process".to_owned()
+    } else {
+        format!("{count} processes")
+    }
+}
+
 /// What a person calls `definition`'s entry.
 pub fn entry_name(definition: &StartupDefinition) -> String {
     match definition.kind {
@@ -313,6 +388,56 @@ pub fn entry_name(definition: &StartupDefinition) -> String {
         StartupKind::LaunchAgent => format!("LaunchAgent {}", definition.name),
         StartupKind::SystemdUserUnit => format!("systemd user unit {}", definition.name),
     }
+}
+
+/// Ends one process of the desktop app's.
+pub trait ProcessEnder {
+    /// Ends process `pid` alone, at once, never its tree. A refusal because
+    /// this user may not end it is `PermissionDenied`.
+    fn end(&self, pid: u32) -> io::Result<()>;
+
+    /// Whether process `pid` is still running, as far as can be told.
+    fn alive(&self, pid: u32) -> bool;
+}
+
+/// Ends each process of `rows` that `is_app` says is the desktop app's, one
+/// by one through `ender`, and never as a tree: the host a desktop started
+/// is its child, and is the host stop's to end, which counts its sessions
+/// and ends its keeper the deliberate way. One this user may not end
+/// (another user's) is left and counted; one that had already gone is not
+/// counted at all. Then waits, through `pause`, up to `patience` for those
+/// it ended to go.
+pub fn close_processes(
+    rows: &[ProcessRow],
+    is_app: &dyn Fn(&ProcessRow) -> bool,
+    ender: &dyn ProcessEnder,
+    patience: Duration,
+    pause: &mut dyn FnMut(Duration),
+) -> Result<Closed, String> {
+    let mut ended = Vec::new();
+    let mut skipped = 0;
+    for row in rows.iter().filter(|row| is_app(row)) {
+        match ender.end(row.pid) {
+            Ok(()) => ended.push(row.pid),
+            Err(err) if err.kind() == io::ErrorKind::PermissionDenied => skipped += 1,
+            Err(_) if !ender.alive(row.pid) => {}
+            Err(err) => return Err(format!("could not end its process {}: {err}", row.pid)),
+        }
+    }
+    let mut waited = Duration::ZERO;
+    while ended.iter().any(|pid| ender.alive(*pid)) {
+        if waited >= patience {
+            return Err(format!(
+                "it was still running {patience:?} after it was ended"
+            ));
+        }
+        pause(CLOSE_LOOK);
+        waited += CLOSE_LOOK;
+    }
+    Ok(Closed {
+        ended: ended.len(),
+        skipped,
+    })
 }
 
 fn sign_in_entry(
@@ -350,15 +475,16 @@ fn sign_in_entry(
     Ok(())
 }
 
+/// Removes the desktop app, and answers whether it was there to remove.
 fn desktop_app(
     what: &Uninstall<'_>,
     installs: &dyn Installs,
     system: &dyn UninstallSystem,
     say: &mut Say<'_>,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let Some(removal) = installs.removal(what.env) else {
         say("desktop app: not found".to_owned());
-        return Ok(());
+        return Ok(false);
     };
     if let Some((program, line)) = &removal.uninstaller {
         system.run_uninstaller(program, line).map_err(|why| {
@@ -384,7 +510,8 @@ fn desktop_app(
         "desktop app: removed ({})",
         removal.shown.display()
     ));
-    Ok(())
+    say(DESKTOP_SETTINGS_LINE.to_owned());
+    Ok(true)
 }
 
 fn path_entry(
@@ -410,9 +537,10 @@ fn path_entry(
     Ok(())
 }
 
-/// Removes floti, its Node and what installs left beside it from `binary`'s
-/// folder, then the folders the install made for it once they are empty.
-/// The Node goes first: a run that stops there leaves floti working.
+/// Removes floti, the Node install-self put beside it, and what installs
+/// and install scripts left beside it, from `binary`'s folder, then the
+/// folders the install made for it once they are empty. The Node goes
+/// first: a run that stops there leaves floti working.
 fn floti_files(
     what: &Uninstall<'_>,
     place: &dyn Standalone,
@@ -422,7 +550,8 @@ fn floti_files(
 ) -> Result<(), String> {
     let had_binary = there(binary);
     let mut removed = false;
-    if let Some(folder) = binary.parent() {
+    // Only beside a floti installed on its own is a `node` folder Floti's.
+    if had_binary && let Some(folder) = binary.parent() {
         let node = folder.join(SHIPPED_FOLDER);
         if is_real_folder(&node) {
             remove_tree(&links::Native, &node).map_err(|why| {
@@ -435,6 +564,7 @@ fn floti_files(
         }
     }
     let mut pending = place.remove_asides(binary);
+    pending.extend(remove_script_leftovers(binary, system));
     if let Some(name) = binary.file_name() {
         remove_copies(binary, &name.to_string_lossy());
     }
@@ -443,32 +573,34 @@ fn floti_files(
         .map_err(|why| format!("floti: could not remove {}: {why}", binary.display()))?;
     pending.extend(aside.iter().cloned());
     let own = place.own_folders(what.env);
+    let mut left = String::new();
     if pending.is_empty() {
         for folder in &own {
             removed |= remove_empty_folder(folder);
         }
     } else {
-        system.delete_after_exit(&pending, &own).map_err(|why| {
-            format!(
-                "floti: removed, but what deletes {} once this floti exits could not start: {why}; floti uninstall run again, or the next floti install or update, removes it",
-                pending
-                    .iter()
-                    .map(|path| path.display().to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        })?;
+        match system.delete_after_exit(&pending, &own) {
+            Ok(()) if aside.is_some() => {
+                left = "; the copy this process runs from goes once it exits".to_owned();
+            }
+            Ok(()) => {}
+            Err(why) => {
+                left = format!(
+                    "; {} is left for the next floti install or update to remove, since what would delete it once this floti exits could not start ({why})",
+                    pending
+                        .iter()
+                        .map(|path| path.display().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
     }
-    let left = if aside.is_some() {
-        "; the copy this process runs from goes once it exits"
-    } else {
-        ""
-    };
     if had_binary {
         say(format!("floti: removed ({}){left}", binary.display()));
     } else if removed || !pending.is_empty() {
         say(format!(
-            "floti: removed what was left of it beside {}",
+            "floti: removed what was left of it beside {}{left}",
             binary.display()
         ));
     } else {
@@ -477,68 +609,152 @@ fn floti_files(
     Ok(())
 }
 
-fn data(
-    what: &Uninstall<'_>,
-    system: &dyn UninstallSystem,
-    say: &mut Say<'_>,
-) -> Result<(), String> {
-    let folders = what.folders;
-    // Logs and the socket's folder live in the data folder but on Linux.
-    let mut named = vec![("data", &folders.data)];
-    for (item, folder) in [("logs", &folders.logs), ("runtime", &folders.runtime)] {
-        if !folder.starts_with(&folders.data) {
-            named.push((item, folder));
-        }
-    }
-    named.push(("config", &folders.config));
-    if !what.purge {
-        for (item, folder) in named {
-            if item == "runtime" {
-                continue;
+/// Removes what an install script or an update left beside `binary` when
+/// it stopped part way, and answers what is still to delete once this floti
+/// exits: install.ps1's copy put aside (`floti.old.exe`), which fails to go
+/// only while something runs it, and a `.floti-<version>.<pid>` download
+/// (install.ps1's, install.sh's or `floti update`'s, [`leftover_pid`]) whose
+/// process has ended. A download whose process still runs is that process's,
+/// and is left.
+fn remove_script_leftovers(binary: &Path, system: &dyn UninstallSystem) -> Vec<PathBuf> {
+    let (Some(folder), Some(stem)) = (binary.parent(), binary.file_stem()) else {
+        return Vec::new();
+    };
+    let extension = binary
+        .extension()
+        .map(|extension| format!(".{}", extension.to_string_lossy()))
+        .unwrap_or_default();
+    let script_aside = format!("{}.old{extension}", stem.to_string_lossy());
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return Vec::new();
+    };
+    let mut left = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let path = entry.path();
+        if name == script_aside {
+            if std::fs::remove_file(&path).is_err() {
+                left.push(path);
             }
-            if there(folder) {
-                say(format!(
-                    "{item}: kept ({}); floti uninstall --purge removes it",
-                    folder.display()
-                ));
-            } else {
-                say(format!("{item}: not found"));
-            }
+        } else if leftover_pid(&name, &extension).is_some_and(|pid| system.ended(pid)) {
+            let _ = std::fs::remove_file(&path);
         }
-        return Ok(());
     }
-    for (item, folder) in named {
-        if !there(folder) {
-            say(format!("{item}: not found"));
-            continue;
-        }
-        if let Some(why) = refusal(what.env, folder) {
-            return Err(format!(
-                "{item}: {} was not removed: {why}",
-                folder.display()
-            ));
-        }
-        remove_tree(&links::Native, folder)
-            .map_err(|why| format!("{item}: could not remove {}: {why}", folder.display()))?;
-        say(format!("{item}: removed ({})", folder.display()));
-    }
-    match system.remove_secret_entry(&what.secret_entry) {
-        Ok(true) => say("secret store: removed Floti's key".to_owned()),
-        Ok(false) => say("secret store: not found".to_owned()),
-        Err(why) => return Err(format!("secret store: {why}")),
-    }
-    Ok(())
+    left
 }
 
-/// Why `folder` must never be removed by a purge, or `None` when it may: it
-/// is the home folder or holds it, or is, holds or is inside `~/.claude` or
-/// `~/.ssh`, whatever an override named.
-pub fn refusal(env: &UserEnv, folder: &Path) -> Option<String> {
+/// One folder a purge looks at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PurgeTarget {
+    /// What its lines call it: `data`, `logs`, `runtime` or `config`.
+    pub item: &'static str,
+    pub folder: PathBuf,
+    pub action: PurgeAction,
+}
+
+/// What a purge does with one folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PurgeAction {
+    /// It is Floti's, and goes.
+    Remove,
+    /// It is not there.
+    NotThere,
+    /// It is left, for this reason: the socket's folder an override moved,
+    /// which floti marks with nothing.
+    Leave(String),
+}
+
+/// The folders `what`'s purge looks at, each with what it does, decided
+/// before anything is changed. `Err` refuses the whole purge: the home
+/// folder is unknown, or a folder must never be removed ([`refusal`]), or
+/// is an override's with no mark of Floti's ([`marked`]).
+pub fn purge_plan(what: &Uninstall<'_>) -> Result<Vec<PurgeTarget>, String> {
+    let nothing = "Nothing was changed; floti uninstall without --purge removes the rest";
+    let Some(home) = what.env.home.as_deref() else {
+        return Err(format!(
+            "--purge needs your home folder, to tell what it must never remove, and none is known. {nothing}."
+        ));
+    };
+    let folders = what.folders;
+    let layout = what.layout.as_ref();
+    // Logs and the socket's folder live in the data folder but on Linux.
+    let mut named: Vec<(&'static str, &PathBuf, Option<&PathBuf>)> =
+        vec![("data", &folders.data, layout.map(|layout| &layout.data))];
+    for (item, folder, usual) in [
+        ("logs", &folders.logs, layout.map(|layout| &layout.logs)),
+        (
+            "runtime",
+            &folders.runtime,
+            layout.map(|layout| &layout.runtime),
+        ),
+    ] {
+        if !folder.starts_with(&folders.data) {
+            named.push((item, folder, usual));
+        }
+    }
+    named.push((
+        "config",
+        &folders.config,
+        layout.map(|layout| &layout.config),
+    ));
+    named
+        .into_iter()
+        .map(|(item, folder, usual)| {
+            let action = if !there(folder) {
+                PurgeAction::NotThere
+            } else if let Some(why) = refusal(home, folder) {
+                return Err(format!(
+                    "{item}: {} must never be removed: {why}. {nothing}.",
+                    folder.display()
+                ));
+            } else if usual.is_some_and(|usual| comparable(usual) == comparable(folder))
+                || marked(item, folder)
+            {
+                PurgeAction::Remove
+            } else if item == "runtime" {
+                PurgeAction::Leave("it is not the folder floti uses".to_owned())
+            } else {
+                return Err(format!(
+                    "{item}: {} is not the folder floti uses and holds nothing floti writes there, so it was not removed. {nothing}.",
+                    folder.display()
+                ));
+            };
+            Ok(PurgeTarget {
+                item,
+                folder: folder.clone(),
+                action,
+            })
+        })
+        .collect()
+}
+
+/// Whether `folder`, the purge's `item`, holds a file floti writes there:
+/// the data folder its host key or `floti.db`, the logs the host's log, the
+/// config folder the `agents` or `templates` folder floti seeds.
+pub fn marked(item: &str, folder: &Path) -> bool {
+    let has_file = |name: &str| folder.join(name).is_file();
+    let has_folder = |name: &str| is_real_folder(&folder.join(name));
+    match item {
+        "data" => has_file(HOST_KEY_FILE) || has_file(DB_FILE),
+        "logs" => has_file(LOG_FILE),
+        "config" => has_folder("agents") || has_folder("templates"),
+        _ => false,
+    }
+}
+
+/// Why `folder` must never be removed by a purge for the user whose home
+/// folder is `home`, or `None` when it may: it is a root, the home folder or
+/// holds it, holds a `.git` (a repository), or is, holds or is inside
+/// `~/.claude` or `~/.ssh`, whatever an override named.
+pub fn refusal(home: &Path, folder: &Path) -> Option<String> {
+    if folder.join(".git").exists() {
+        return Some("it holds a .git, so it is a repository".to_owned());
+    }
     let folder = comparable(folder);
     if folder.parent().is_none() {
         return Some("it is the root of a drive".to_owned());
     }
-    let home = env.home.as_deref().map(comparable)?;
+    let home = comparable(home);
     if home.starts_with(&folder) {
         return Some("it is your home folder or holds it".to_owned());
     }
@@ -549,6 +765,58 @@ pub fn refusal(env: &UserEnv, folder: &Path) -> Option<String> {
         }
     }
     None
+}
+
+/// Says what stays without `--purge`.
+fn keep_data(what: &Uninstall<'_>, say: &mut Say<'_>) {
+    let folders = what.folders;
+    let mut named = vec![("data", &folders.data)];
+    if !folders.logs.starts_with(&folders.data) {
+        named.push(("logs", &folders.logs));
+    }
+    named.push(("config", &folders.config));
+    for (item, folder) in named {
+        if there(folder) {
+            say(format!(
+                "{item}: kept ({}); floti uninstall --purge removes it",
+                folder.display()
+            ));
+        } else {
+            say(format!("{item}: not found"));
+        }
+    }
+}
+
+fn purge_data(
+    what: &Uninstall<'_>,
+    plan: &[PurgeTarget],
+    system: &dyn UninstallSystem,
+    say: &mut Say<'_>,
+) -> Result<(), String> {
+    for target in plan {
+        let (item, folder) = (target.item, &target.folder);
+        match &target.action {
+            PurgeAction::NotThere => say(format!("{item}: not found")),
+            PurgeAction::Leave(why) => {
+                say(format!(
+                    "{item}: left as it is ({}); {why}",
+                    folder.display()
+                ));
+            }
+            PurgeAction::Remove => {
+                remove_tree(&links::Native, folder).map_err(|why| {
+                    format!("{item}: could not remove {}: {why}", folder.display())
+                })?;
+                say(format!("{item}: removed ({})", folder.display()));
+            }
+        }
+    }
+    match system.remove_secret_entry(&what.secret_entry) {
+        Ok(true) => say("secret store: removed Floti's key".to_owned()),
+        Ok(false) => say("secret store: not found".to_owned()),
+        Err(why) => return Err(format!("secret store: {why}")),
+    }
+    Ok(())
 }
 
 /// `path` resolved where it can be, for comparing folders: links followed,
@@ -618,6 +886,20 @@ fn is_floti(name: &str) -> bool {
     name.eq_ignore_ascii_case("floti") || name.eq_ignore_ascii_case("floti.exe")
 }
 
+/// This computer's processes, each ended alone ([`OneProcess`]): on
+/// Windows by a handle, which another user's process does not give.
+struct NativeEnder;
+
+impl ProcessEnder for NativeEnder {
+    fn end(&self, pid: u32) -> io::Result<()> {
+        OneProcess::hold(pid)?.end_now()
+    }
+
+    fn alive(&self, pid: u32) -> bool {
+        process_tree::Native.is_alive(pid) == Knowable::Known(true)
+    }
+}
+
 /// This computer, for the user this process runs as.
 pub struct NativeSystem<'a> {
     env: UserEnv,
@@ -631,41 +913,17 @@ impl UninstallSystem for NativeSystem<'_> {
             .is_ok_and(|rows| inside_floti(&rows, std::process::id()))
     }
 
-    fn close_desktop(&self, desktop: &Desktop) -> Result<bool, String> {
+    fn close_desktop(&self, desktop: &Desktop) -> Result<Closed, String> {
         let rows = process_table::Native
             .processes()
             .map_err(|why| format!("could not list its processes: {why}"))?;
-        let ours: Vec<&ProcessRow> = rows
-            .iter()
-            .filter(|row| installs::Native.is_desktop_process(desktop, row))
-            .collect();
-        let pids: HashSet<u32> = ours.iter().map(|row| row.pid).collect();
-        let roots: Vec<u32> = ours
-            .iter()
-            .filter(|row| !pids.contains(&row.parent_pid))
-            .map(|row| row.pid)
-            .collect();
-        if roots.is_empty() {
-            return Ok(false);
-        }
-        let tree = process_tree::Native;
-        for pid in &roots {
-            tree.end_tree(*pid, Ending::Forced)
-                .map_err(|why| why.to_string())?;
-        }
-        let deadline = Instant::now() + CLOSE_WAIT;
-        while roots
-            .iter()
-            .any(|pid| tree.is_alive(*pid) == Knowable::Known(true))
-        {
-            if Instant::now() >= deadline {
-                return Err(format!(
-                    "it was still running {CLOSE_WAIT:?} after it was ended"
-                ));
-            }
-            std::thread::sleep(CLOSE_LOOK);
-        }
-        Ok(true)
+        close_processes(
+            &rows,
+            &|row| installs::Native.is_desktop_process(desktop, row),
+            &NativeEnder,
+            CLOSE_WAIT,
+            &mut std::thread::sleep,
+        )
     }
 
     fn stop_host(&self) -> HostStop {
@@ -705,5 +963,9 @@ impl UninstallSystem for NativeSystem<'_> {
 
     fn remove_secret_entry(&self, entry: &StoreEntry) -> Result<bool, String> {
         secret_seal::remove_entry(entry)
+    }
+
+    fn ended(&self, pid: u32) -> bool {
+        process_tree::Native.is_alive(pid) == Knowable::Known(false)
     }
 }

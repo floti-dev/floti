@@ -989,3 +989,12 @@ fn linux_removes_the_app_image_its_menu_entry_and_icon_whichever_are_there() {
     assert_eq!(removal.gone_after, None);
     assert_eq!(removal.remove, [app_image.clone(), icon, entry]);
 }
+
+#[test]
+fn windows_reads_no_app_folder_from_a_relative_localappdata() {
+    let dirs = TestDirs::new();
+    let relative = env(&dirs.home, &[("LOCALAPPDATA", Path::new("AppData Local"))]);
+    assert_eq!(windows::Native.desktop_target(&relative), None);
+    assert_eq!(windows::Native.desktop(&relative), None);
+    assert_eq!(windows::Native.removal(&relative), None);
+}

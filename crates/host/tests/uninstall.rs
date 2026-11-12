@@ -28,7 +28,8 @@ use floti_host::platform::startup::register::{OsCommand, Ran, SignInSystem, defi
 use floti_host::platform::startup::{self, StartAtSignIn, StartupDefinition, StartupKind};
 use floti_host::testkit::TestDirs;
 use floti_host::uninstall::{
-    HostStop, IN_SESSION_LINE, LINGER_LINE, Uninstall, UninstallSystem, entry_name, uninstall,
+    Closed, DESKTOP_SETTINGS_LINE, HostStop, IN_SESSION_LINE, LINGER_LINE, Uninstall,
+    UninstallSystem, entry_name, uninstall,
 };
 
 /// The OS's sign-in commands: answers as each OS's would while the entry
@@ -80,7 +81,13 @@ struct FakeSystem {
     on_path: Cell<bool>,
     path_refused: Option<String>,
     uninstaller_fails: bool,
+    /// Why deleting after exit cannot start, when it cannot.
+    deferring_refused: Option<String>,
     secret_entry: Cell<bool>,
+    /// Why the secret store refuses, when it does.
+    secret_refused: Option<String>,
+    /// The processes still running; every other has ended.
+    alive: Vec<u32>,
     os: FakeOs,
     closed: RefCell<Vec<PathBuf>>,
     stops: Cell<usize>,
@@ -99,7 +106,10 @@ impl Default for FakeSystem {
             on_path: Cell::new(false),
             path_refused: None,
             uninstaller_fails: false,
+            deferring_refused: None,
             secret_entry: Cell::new(false),
+            secret_refused: None,
+            alive: Vec::new(),
             os: FakeOs {
                 registered: Cell::new(false),
                 ran: RefCell::default(),
@@ -119,9 +129,12 @@ impl UninstallSystem for FakeSystem {
         self.inside_session
     }
 
-    fn close_desktop(&self, desktop: &Desktop) -> Result<bool, String> {
+    fn close_desktop(&self, desktop: &Desktop) -> Result<Closed, String> {
         self.closed.borrow_mut().push(desktop.path.clone());
-        Ok(self.desktop_running.replace(false))
+        Ok(Closed {
+            ended: usize::from(self.desktop_running.replace(false)),
+            skipped: 0,
+        })
     }
 
     fn stop_host(&self) -> HostStop {
@@ -166,6 +179,9 @@ impl UninstallSystem for FakeSystem {
     }
 
     fn delete_after_exit(&self, files: &[PathBuf], folders: &[PathBuf]) -> Result<(), String> {
+        if let Some(why) = &self.deferring_refused {
+            return Err(why.clone());
+        }
         self.deferred
             .borrow_mut()
             .push((files.to_vec(), folders.to_vec()));
@@ -174,7 +190,14 @@ impl UninstallSystem for FakeSystem {
 
     fn remove_secret_entry(&self, entry: &StoreEntry) -> Result<bool, String> {
         self.secrets_asked.borrow_mut().push(entry.clone());
+        if let Some(why) = &self.secret_refused {
+            return Err(why.clone());
+        }
         Ok(self.secret_entry.replace(false))
+    }
+
+    fn ended(&self, pid: u32) -> bool {
+        !self.alive.contains(&pid)
     }
 }
 
@@ -239,6 +262,15 @@ impl World {
         std::fs::write(folder.join("node").join("LICENSE"), b"Node's licence").unwrap();
         let name = world.binary.file_name().unwrap().to_string_lossy();
         std::fs::write(folder.join(format!(".{name}.floti-install-99")), b"half").unwrap();
+        // What an install script left when it stopped part way: its
+        // download, whose process has ended, and install.ps1's copy aside.
+        let extension = world.extension();
+        std::fs::write(
+            folder.join(format!(".floti-3.0.0.4120{extension}")),
+            b"half",
+        )
+        .unwrap();
+        std::fs::write(folder.join(format!("floti.old{extension}")), b"old").unwrap();
 
         NativeInstalls.fake_install(&world.apps, "3.0.0");
         let desktop = NativeInstalls
@@ -270,6 +302,14 @@ impl World {
         self.binary.parent().unwrap().to_path_buf()
     }
 
+    /// floti's extension with its dot (`.exe`), or nothing.
+    fn extension(&self) -> String {
+        self.binary
+            .extension()
+            .map(|extension| format!(".{}", extension.to_string_lossy()))
+            .unwrap_or_default()
+    }
+
     fn entry_file(&self) -> PathBuf {
         definition_file(&self.definition, &self.dirs.home, &self.folders.data)
     }
@@ -289,23 +329,37 @@ impl World {
         system: &FakeSystem,
         purge: bool,
     ) -> Outcome {
+        self.run_with(
+            running,
+            &NativeStandalone,
+            installs,
+            system,
+            purge,
+            Some(self.folders.clone()),
+        )
+    }
+
+    /// Runs with `layout` as the folders floti uses with no override.
+    fn run_with(
+        &self,
+        running: &Path,
+        place: &dyn Standalone,
+        installs: &dyn Installs,
+        system: &FakeSystem,
+        purge: bool,
+        layout: Option<Folders>,
+    ) -> Outcome {
         let (mut out, mut err) = (Vec::new(), Vec::new());
         let what = Uninstall {
             env: &self.env,
             folders: &self.folders,
+            layout,
             running,
             definition: &self.definition,
             secret_entry: StoreEntry::for_moved_data_folder(&self.folders.data),
             purge,
         };
-        let code = uninstall(
-            &what,
-            &NativeStandalone,
-            installs,
-            system,
-            &mut out,
-            &mut err,
-        );
+        let code = uninstall(&what, place, installs, system, &mut out, &mut err);
         Outcome {
             code,
             out: String::from_utf8(out).unwrap(),
@@ -313,8 +367,8 @@ impl World {
         }
     }
 
-    /// The lines a full run prints from the sign-in entry on, after the
-    /// host's: what this OS's install put there, removed.
+    /// The lines a full run prints from the sign-in entry to the PATH entry,
+    /// after the host's: what this OS's install put there, removed.
     fn removed_lines(&self) -> Vec<String> {
         let mut lines = vec![format!(
             "sign-in entry: removed ({})",
@@ -331,9 +385,13 @@ impl World {
                 .path
                 .display()
         ));
+        lines.push(DESKTOP_SETTINGS_LINE.to_owned());
         lines.push(format!("PATH entry: removed ({})", self.folder().display()));
-        lines.push(format!("floti: removed ({})", self.binary.display()));
         lines
+    }
+
+    fn floti_removed_line(&self) -> String {
+        format!("floti: removed ({})", self.binary.display())
     }
 
     fn kept_lines(&self) -> Vec<String> {
@@ -387,6 +445,7 @@ fn a_first_run_removes_what_install_put_there_in_order_and_keeps_the_data() {
     ];
     wanted.extend(world.removed_lines());
     wanted.extend(world.kept_lines());
+    wanted.push(world.floti_removed_line());
     assert_eq!(ran.lines(), wanted);
 
     // What install put there is gone.
@@ -427,15 +486,9 @@ fn a_second_run_finds_nothing_and_exits_0() {
     if world.definition.kind == StartupKind::SystemdUserUnit {
         wanted.push(LINGER_LINE.to_owned());
     }
-    wanted.extend(
-        [
-            "desktop app: not found",
-            "PATH entry: not found",
-            "floti: not found",
-        ]
-        .map(str::to_owned),
-    );
+    wanted.extend(["desktop app: not found", "PATH entry: not found"].map(str::to_owned));
     wanted.extend(world.kept_lines());
+    wanted.push("floti: not found".to_owned());
     assert_eq!(again.lines(), wanted);
     // Nothing is taken out that is not there: no delete, bootout or disable.
     let taken_out = system.os.ran.borrow()[commands..]
@@ -479,8 +532,19 @@ fn purge_removes_the_data_config_and_secret_entry_and_never_walks_into_a_link() 
     .iter()
     .map(|(item, folder)| format!("{item}: removed ({})", folder.display()))
     .chain(["secret store: removed Floti's key".to_owned()])
+    // The data goes before floti, so a purge that fails leaves floti to
+    // try again with.
+    .chain([world.floti_removed_line()])
     .collect();
-    assert_eq!(lines[lines.len() - 5..], purged);
+    assert_eq!(lines[lines.len() - 6..], purged);
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|line| **line == DESKTOP_SETTINGS_LINE)
+            .count(),
+        1,
+        "the app's settings are said to stay once: {lines:?}"
+    );
     assert!(!world.folders.data.exists());
     assert!(!world.folders.logs.exists());
     assert!(!world.folders.runtime.exists());
@@ -499,15 +563,66 @@ fn purge_removes_the_data_config_and_secret_entry_and_never_walks_into_a_link() 
     assert_eq!(again.code, 0, "{}", again.err);
     let lines = again.lines();
     assert_eq!(
-        lines[lines.len() - 5..],
+        lines[lines.len() - 6..],
         [
             "data: not found",
             "logs: not found",
             "runtime: not found",
             "config: not found",
-            "secret store: not found"
+            "secret store: not found",
+            "floti: not found"
         ]
     );
+    // The app is gone already; its settings are still said to stay.
+    assert!(lines.contains(&DESKTOP_SETTINGS_LINE), "{lines:?}");
+}
+
+#[test]
+fn a_purge_of_an_overrides_folder_with_no_mark_of_flotis_changes_nothing() {
+    let (world, system) = World::installed();
+    // The data folder an override named holds only the user's own files.
+    std::fs::remove_file(world.folders.data.join("floti.db")).unwrap();
+    std::fs::write(world.folders.data.join("notes.txt"), b"the user's").unwrap();
+
+    let ran = world.run_with(
+        &world.binary,
+        &NativeStandalone,
+        &NativeInstalls,
+        &system,
+        true,
+        None,
+    );
+    assert_eq!(ran.code, 1);
+    assert!(
+        ran.err.starts_with(&format!(
+            "floti uninstall: data: {} is not the folder floti uses",
+            world.folders.data.display()
+        )),
+        "{}",
+        ran.err
+    );
+    assert!(ran.err.contains("Nothing was changed"), "{}", ran.err);
+    assert!(ran.out.is_empty(), "{}", ran.out);
+    assert_eq!(system.stops.get(), 0, "the host was not stopped");
+    assert!(world.folders.data.join("notes.txt").exists());
+    assert!(world.binary.exists() && world.entry_file().exists());
+    assert!(world.desktop().is_some());
+}
+
+#[test]
+fn a_purge_that_fails_leaves_floti_to_run_it_again() {
+    let (world, mut system) = World::installed();
+    // The secret store refuses, after the folders went.
+    system.secret_refused = Some("the Keychain is locked".to_owned());
+
+    let ran = world.run(&system, true);
+    assert_eq!(ran.code, 1);
+    assert_eq!(
+        ran.err,
+        "floti uninstall: secret store: the Keychain is locked\n"
+    );
+    assert!(world.binary.exists(), "floti is there to try again with");
+    assert!(!ran.out.contains("floti: "), "{}", ran.out);
 }
 
 /// The fake program, running from `path` until the test ends.
@@ -660,7 +775,10 @@ fn a_floti_from_elsewhere_removes_what_it_installed_and_leaves_floti_and_the_pat
         .unwrap()
         .to_owned();
     assert!(
-        floti_line.starts_with("floti: left as it is; this floti runs from"),
+        floti_line.starts_with(&format!(
+            "floti: left as it is (installed by {})",
+            elsewhere.display()
+        )),
         "{floti_line}"
     );
     assert!(
@@ -675,6 +793,123 @@ fn a_floti_from_elsewhere_removes_what_it_installed_and_leaves_floti_and_the_pat
     // What it did install goes.
     assert!(!world.entry_file().exists());
     assert!(world.desktop().is_none());
+}
+
+#[test]
+fn a_download_whose_process_still_runs_is_left_to_it() {
+    let (world, mut system) = World::installed();
+    let download = world
+        .folder()
+        .join(format!(".floti-3.1.0.77{}", world.extension()));
+    std::fs::write(&download, b"being written").unwrap();
+    system.alive = vec![77];
+
+    let ran = world.run(&system, false);
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    assert!(download.exists(), "another floti is still writing it");
+    assert_eq!(files(&world.folder()), [download]);
+    assert!(!world.binary.exists());
+}
+
+#[test]
+fn a_package_managers_floti_with_none_installed_on_its_own_leaves_the_folder_as_it_is() {
+    let (world, system) = World::installed();
+    std::fs::remove_file(&world.binary).unwrap();
+    // A `node` folder of the user's own where floti's would be.
+    assert!(world.folder().join("node").join("LICENSE").exists());
+    let elsewhere = world.dirs.folder("Cellar").join("floti");
+    std::fs::write(&elsewhere, b"a package's floti").unwrap();
+
+    let ran = world.run_as(&elsewhere, &NativeInstalls, &system, false);
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    let floti_line = ran
+        .lines()
+        .into_iter()
+        .find(|line| line.starts_with("floti: "))
+        .unwrap()
+        .to_owned();
+    assert!(
+        floti_line.starts_with(&format!(
+            "floti: left as it is (installed by {})",
+            elsewhere.display()
+        )),
+        "{floti_line}"
+    );
+    assert!(world.folder().join("node").join("LICENSE").exists());
+    assert!(system.path_asked.borrow().is_empty());
+}
+
+/// floti's place as this OS has it, but a floti there is always running:
+/// it is renamed aside, as on Windows, on every OS.
+struct HeldPlace;
+
+impl Standalone for HeldPlace {
+    fn folder(&self, env: &UserEnv) -> Option<PathBuf> {
+        NativeStandalone.folder(env)
+    }
+
+    fn binary(&self, env: &UserEnv) -> Option<PathBuf> {
+        NativeStandalone.binary(env)
+    }
+
+    fn replace(&self, target: &Path, new: &Path) -> io::Result<()> {
+        NativeStandalone.replace(target, new)
+    }
+
+    fn remove_asides(&self, target: &Path) -> Vec<PathBuf> {
+        NativeStandalone.remove_asides(target)
+    }
+
+    fn native_cpu(&self) -> &'static str {
+        NativeStandalone.native_cpu()
+    }
+
+    fn own_folders(&self, env: &UserEnv) -> Vec<PathBuf> {
+        NativeStandalone.own_folders(env)
+    }
+
+    fn remove_running(&self, target: &Path) -> io::Result<Option<PathBuf>> {
+        let aside = target.with_file_name("floti.old-1-0");
+        std::fs::rename(target, &aside)?;
+        Ok(Some(aside))
+    }
+
+    fn delete_after_exit(
+        &self,
+        env: &UserEnv,
+        files: &[PathBuf],
+        folders: &[PathBuf],
+    ) -> io::Result<()> {
+        NativeStandalone.delete_after_exit(env, files, folders)
+    }
+}
+
+#[test]
+fn deleting_after_exit_that_cannot_start_leaves_the_copy_for_the_next_sweep_and_succeeds() {
+    let (world, mut system) = World::installed();
+    system.deferring_refused = Some("the job refused to let it go".to_owned());
+
+    let ran = world.run_with(
+        &world.binary,
+        &HeldPlace,
+        &NativeInstalls,
+        &system,
+        false,
+        Some(world.folders.clone()),
+    );
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    let aside = world.folder().join("floti.old-1-0");
+    let floti_line = ran.lines().last().unwrap().to_owned();
+    assert_eq!(
+        floti_line,
+        format!(
+            "{}; {} is left for the next floti install or update to remove, since what would delete it once this floti exits could not start (the job refused to let it go)",
+            world.floti_removed_line(),
+            aside.display()
+        )
+    );
+    assert!(!world.binary.exists());
+    assert!(aside.exists());
 }
 
 #[test]
