@@ -27,6 +27,13 @@ param(
   [Parameter(Mandatory)] [ValidateSet('after-script', 'alone')] [string]$Order
 )
 $ErrorActionPreference = 'Stop'
+
+# It installs the desktop app on this computer, so it runs only on a CI runner.
+if ($env:GITHUB_ACTIONS -ne 'true') {
+  Write-Output 'try-installer.ps1 installs the desktop app on this computer, so it runs only in GitHub Actions (GITHUB_ACTIONS=true); nothing was changed.'
+  exit 1
+}
+
 $by = "the installer on $Target ($Order)"
 
 function Fail([string]$Why) {

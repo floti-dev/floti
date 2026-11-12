@@ -23,6 +23,12 @@
 
 set -eu
 
+# It installs the desktop app on this computer, so it runs only on a CI runner.
+if [ "${GITHUB_ACTIONS:-}" != true ]; then
+  echo "try-add-desktop.sh installs the desktop app on this computer, so it runs only in GitHub Actions (GITHUB_ACTIONS=true); nothing was changed."
+  exit 1
+fi
+
 version=$1
 tag=$2
 target=$3

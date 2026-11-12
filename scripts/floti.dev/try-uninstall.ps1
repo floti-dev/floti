@@ -7,16 +7,15 @@
 # Three runs, each of which must exit 0:
 #
 # 1. `floti uninstall` from %LOCALAPPDATA%\Programs\Floti\bin\floti.exe. It
-#    must say it stopped the host; floti.exe, the logon task "Floti host",
+#    must say it stopped the host, and no process may run from floti's
+#    folder after it; floti.exe, the logon task "Floti host",
 #    the desktop app where it was installed (Helm.exe and the Start menu's
 #    Helm.lnk) and floti's folder on the user's Path must be gone, and the
 #    data folder, %LOCALAPPDATA%\Floti, must stay. The floti.exe uninstall
 #    runs from is renamed aside and deleted by a detached Windows PowerShell
 #    once it exits, then Programs\Floti goes; that is waited for, up to a
-#    minute. Where the runner would not let that PowerShell start, uninstall
-#    says the copy is left for the next install's sweep, and this warns
-#    rather than fails, as docs/PACKAGING.md allows. The desktop app's
-#    settings are kept, and are not checked.
+#    minute, and a copy uninstall says is left for a later sweep fails it.
+#    The desktop app's settings are kept, and are not checked.
 # 2. `floti uninstall --purge`, and the data folder must be gone.
 # 3. `floti uninstall` again, which changes nothing: no line says anything
 #    was removed, stopped or closed, and the sign-in entry, the desktop app
@@ -30,6 +29,12 @@ param(
   [Parameter(Mandatory)] [string]$By
 )
 $ErrorActionPreference = 'Stop'
+
+# It uninstalls Floti from this computer, so it runs only on a CI runner.
+if ($env:GITHUB_ACTIONS -ne 'true') {
+  Write-Output 'try-uninstall.ps1 uninstalls Floti from this computer, so it runs only in GitHub Actions (GITHUB_ACTIONS=true); nothing was changed.'
+  exit 1
+}
 
 function Fail([string]$Why) {
   # To the host: called inside a function whose output is its answer.
@@ -98,6 +103,20 @@ if ($hadApp) {
 }
 if (-not (Test-Path -LiteralPath $data -PathType Container)) { Fail "floti uninstall removed the data folder $data, which only --purge removes." }
 
+# The host and its session keeper ran from floti's folder; once uninstall
+# has stopped them, nothing may, given up to ten seconds to exit.
+$running = @()
+for ($try = 0; $try -lt 100; $try++) {
+  $running = @(Get-CimInstance Win32_Process | Where-Object {
+      $_.ExecutablePath -and (Split-Path -Parent $_.ExecutablePath) -eq $folder
+    })
+  if ($running.Count -eq 0) { break }
+  Start-Sleep -Milliseconds 100
+}
+if ($running.Count -gt 0) {
+  Fail "after floti uninstall, $($running[0].ExecutablePath) still runs ($($running[0].CommandLine))."
+}
+
 $flotiLine = $said | Where-Object { $_ -like 'floti: removed*' } | Select-Object -First 1
 $aside = 'the copy it ran from was deleted once it exited'
 if ($flotiLine -like '*goes once it exits*') {
@@ -110,8 +129,7 @@ if ($flotiLine -like '*goes once it exits*') {
     Fail "a minute after floti uninstall exited, $programs is still there, holding: $left."
   }
 } elseif ($flotiLine -like '*is left for the next*') {
-  Write-Output "::warning::${By}: $flotiLine"
-  $aside = 'the copy it ran from is left for the next install, since the runner would not let the deleting PowerShell start'
+  Fail "floti uninstall could not have the copy it ran from deleted once it exited: $flotiLine"
 } elseif (Test-Path -LiteralPath $programs) {
   Fail "floti uninstall said `"$flotiLine`" and left $programs."
 }

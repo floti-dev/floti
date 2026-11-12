@@ -25,6 +25,12 @@
 
 set -eu
 
+# It uninstalls Floti from this computer, so it runs only on a CI runner.
+if [ "${GITHUB_ACTIONS:-}" != true ]; then
+  echo "try-uninstall.sh uninstalls Floti from this computer, so it runs only in GitHub Actions (GITHUB_ACTIONS=true); nothing was changed."
+  exit 1
+fi
+
 how=$1
 by=$2
 summary=${GITHUB_STEP_SUMMARY:-/dev/null}
@@ -104,6 +110,19 @@ if [ "$how" = launch-agent ] && launchctl print "gui/$(id -u)/dev.floti.host" >/
 fi
 if [ "$how" = user-unit ] && [ "$(systemctl --user is-enabled floti.service 2>/dev/null || true)" = enabled ]; then
   fail "the user's systemd still has floti.service enabled."
+fi
+if [ "$how" = user-unit ] && [ "$(systemctl --user is-active floti.service 2>/dev/null || true)" = active ]; then
+  fail "the user's systemd still has floti.service active."
+fi
+# The host it said it stopped, by its command line, given up to ten seconds
+# to exit; pgrep is not in every container, where no host ran.
+if command -v pgrep >/dev/null 2>&1; then
+  tries=0
+  while pgrep -f "^$floti host" >/dev/null 2>&1; do
+    tries=$((tries + 1))
+    [ "$tries" -lt 100 ] || fail "after floti uninstall, $floti host still runs (pid $(pgrep -f "^$floti host" | head -n 1))."
+    sleep 0.1
+  done
 fi
 if [ "$had_app" = true ]; then
   said '^desktop app: removed' ''

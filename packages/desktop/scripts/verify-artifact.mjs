@@ -184,7 +184,12 @@ function verify(sevenZip, exe, scratch) {
 
   const failures = []
   for (const entry of inner) {
-    if (!entry.directory && UNREADABLE_FILTER.test(entry.method)) {
+    if (entry.directory || entry.size === 0) continue
+    // A listing with no method for a file is one this check cannot judge,
+    // which must not pass as one it judged.
+    if (entry.method === '') {
+      failures.push(`${label}: 7-Zip gave no Method for ${entry.path}, so whether an install can unpack it is unknown`)
+    } else if (UNREADABLE_FILTER.test(entry.method)) {
       failures.push(
         `${label}: ${entry.path} is packed with ${entry.method}, which the installer's 7-Zip 19.00 cannot unpack, ` +
           'so an install would leave it out'
