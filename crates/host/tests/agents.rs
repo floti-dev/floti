@@ -319,10 +319,26 @@ impl World {
     /// record, and has then been stopped and is gone. `arguments` start it and
     /// name it.
     async fn ended_child(&self, parent: &Agent, arguments: Value) -> Agent {
+        const SAID: &str = "remember this";
         let name = arguments["name"].as_str().expect("a name").to_owned();
         parent.start(arguments).await.done();
         let child = self.child_of(parent, &name).await;
-        self.type_line(&child, "remember this").await;
+        self.type_line(&child, SAID).await;
+        // The fake `claude` logs a line as taken before it records it in its
+        // history and transcript, so a stop in between leaves a conversation
+        // nothing indexes or resumes. Its answer is written last.
+        let conversation = child
+            .record
+            .conversation_id
+            .clone()
+            .expect("a conversation");
+        if self.is_claude_run(&conversation) {
+            eventually("the child's prompt to be in its transcript", async || {
+                self.transcript_holds(&conversation, &format!("You said: {SAID}"))
+                    .then_some(())
+            })
+            .await;
+        }
         parent.stop(&name).await.done();
         self.ended("the child to end", &[child.id()]).await;
         self.gone("its process to end", &[&child]).await;
@@ -454,6 +470,26 @@ impl World {
         );
         runs.sort_by_key(|run| run.pid);
         runs
+    }
+
+    /// Whether the fake `claude` ran `conversation`, rather than the other
+    /// fake.
+    fn is_claude_run(&self, conversation: &str) -> bool {
+        self.claude_logs()
+            .iter()
+            .any(|log| log["sessionId"].as_str() == Some(conversation))
+    }
+
+    /// Whether the fake `claude`'s transcript of `conversation`, wherever
+    /// under `projects` its folder put it, holds `text`.
+    fn transcript_holds(&self, conversation: &str, text: &str) -> bool {
+        let Ok(folders) = std::fs::read_dir(self.claude.join("projects")) else {
+            return false;
+        };
+        folders.flatten().any(|folder| {
+            std::fs::read_to_string(folder.path().join(format!("{conversation}.jsonl")))
+                .is_ok_and(|transcript| transcript.contains(text))
+        })
     }
 
     fn claude_logs(&self) -> Vec<Value> {
