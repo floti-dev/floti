@@ -144,6 +144,27 @@ pub trait ProcessTree {
         Ok(Box::new(command.spawn()?))
     }
 
+    /// Starts `program` with `args` apart: with nothing on its standard
+    /// input, output and error, holding nothing of this process's open, and
+    /// never this process's child ([`ProcessTree::prepare_orphan_root`]), so
+    /// it outlives this process and leaves nothing for an `exec` that keeps
+    /// this process's id to reap. `floti update --from-desktop` starts this
+    /// way. Windows starts it alone ([`ProcessTree::start_alone`]), which
+    /// passes it no handle.
+    fn start_apart(&self, program: &std::path::Path, args: &[&str]) -> std::io::Result<()> {
+        let mut command = std::process::Command::new(program);
+        command
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        self.prepare_orphan_root(&mut command);
+        let mut intermediate = command.spawn()?;
+        // On macOS and Linux it has exited already; reaped here.
+        let _ = intermediate.wait();
+        Ok(())
+    }
+
     /// Starts `program` with `args` in this process's place: what a host
     /// stopped to be relaunched on a new floti does last. On macOS and Linux
     /// this process's image is replaced (`exec`), so the new program keeps

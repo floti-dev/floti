@@ -570,6 +570,8 @@ describe('SettingsPane', () => {
       })
       expect(within(updates).getByText('Downloading Helm-1.3.0-setup.exe.')).toBeTruthy()
       expect(install()).toHaveProperty('disabled', true)
+      // A check now would find what the update is putting in place.
+      expect(within(updates).getByRole('button', { name: 'Check now' })).toHaveProperty('disabled', true)
 
       rerender({
         update: view({
@@ -583,6 +585,7 @@ describe('SettingsPane', () => {
       )
       expect(failed.getAttribute('data-settings-verdict')).toBe('warn')
       expect(install()).toHaveProperty('disabled', false)
+      expect(within(updates).getByRole('button', { name: 'Check now' })).toHaveProperty('disabled', false)
     })
 
     it('checks whatever the automatic setting says, and is busy only while a check is in flight', async () => {

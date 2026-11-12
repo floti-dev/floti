@@ -194,6 +194,12 @@ impl ProcessTree for Native {
         unsafe { CloseHandle(started.hThread) };
         Ok(Box::new(Alone(started.hProcess)))
     }
+
+    // A pipe for its output would need every inheritable handle passed
+    // with it, the ones this process was handed included.
+    fn start_apart(&self, program: &Path, args: &[&str]) -> io::Result<()> {
+        self.start_alone(program, args).map(|_| ())
+    }
 }
 
 /// The handle of a process [`Native::start_alone`] started, closed when

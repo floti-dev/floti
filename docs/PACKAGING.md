@@ -1063,15 +1063,25 @@ release from this PC's host, over the window's own connection
   puts it in place and relaunches the host, as the background check does.
   Offline is an expected answer, said with its reason, never as "up to date".
 - **Update** is `update:install`: the host starts `floti update
-  --from-desktop` outside its own process tree, so it outlives the host and
-  the app. It writes each step as a JSON line, which the host tells on
-  `update:state`; the line saying it waits for the app is marked, and Helm's
-  main process quits on it, asking nothing and keeping every session on
-  every host running (`followHostUpdate`, `quitKeeping`). The update asks the
-  host to relaunch only once the app is replaced, so the host that started
-  it hears it to its end, then opens the app again (replaced, or as it was
-  when replacing it failed). An update that fails says its last line in
-  Settings → Updates until the next one starts.
+  --from-desktop` apart from itself, so it outlives the host and the app and
+  holds nothing of the host's open. Every update keeps the run file
+  `update-run.json` in the data folder while it runs: made with
+  `create_new`, it is the lock that makes a second update (a terminal's, the
+  background check, another Update) refuse, and it holds the update's
+  process and its last line, marked while it waits for the app. When the
+  update ends it writes how in `update-ended.json` and removes the run file.
+  The host follows the two every second and tells each step on
+  `update:state`, and a host that starts while an update runs (relaunched,
+  or after a crash) follows it too, so an Update pressed meanwhile starts
+  nothing and Check now rests. When the run file says the update waits for
+  the app, Helm's main process quits, asking nothing and keeping every
+  session on every host running (`followHostUpdate`, `quitKeeping`). The
+  update asks the host to relaunch only once the app is replaced, then opens
+  the app again (replaced, or as it was when replacing it failed); on Linux
+  with the display and session-bus variables the app ran with, read from its
+  own process, since a host started by the systemd user unit has none. An
+  update that fails says its last line in Settings → Updates until the next
+  one starts.
 
 The setting that turns the automatic check off is the host's
 (`HostSettings.updateCheck`): the host is the one that asks. A host that does

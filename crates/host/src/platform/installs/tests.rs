@@ -6,7 +6,10 @@
 use std::ffi::OsString;
 use std::path::Path;
 
-use super::{DESKTOP_DIR_VAR, Desktop, Installs, leftovers, linux, macos, plist_string, windows};
+use super::{
+    DESKTOP_DIR_VAR, Desktop, Installs, display_vars, leftovers, linux, macos, plist_string,
+    windows,
+};
 use crate::platform::folders::UserEnv;
 use crate::platform::process_table::ProcessRow;
 use crate::testkit::TestDirs;
@@ -510,4 +513,33 @@ fn what_an_install_left_beside_the_app_is_found_with_the_process_that_left_it() 
         path: dirs.root().join("no such folder").join("Helm.AppImage"),
     };
     assert_eq!(leftovers(&nowhere), Vec::new());
+}
+
+#[test]
+fn only_the_display_and_session_bus_variables_are_taken_from_the_app_s_environment() {
+    let environ =
+        b"PATH=/usr/bin\0DISPLAY=:0\0WAYLAND_DISPLAY=wayland-0\0XAUTHORITY=/run/user/1000/xauth\0\
+DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus\0LD_PRELOAD=/tmp/evil.so\0HOME=/home/me\0\
+DISPLAY_EXTRA=x\0XAUTHORITY=\0\xff\xfe=bad\0";
+    assert_eq!(
+        display_vars(environ),
+        vec![
+            ("DISPLAY".to_owned(), ":0".to_owned()),
+            ("WAYLAND_DISPLAY".to_owned(), "wayland-0".to_owned()),
+            ("XAUTHORITY".to_owned(), "/run/user/1000/xauth".to_owned()),
+            (
+                "DBUS_SESSION_BUS_ADDRESS".to_owned(),
+                "unix:path=/run/user/1000/bus".to_owned()
+            ),
+        ]
+    );
+    assert!(display_vars(b"").is_empty());
+}
+
+#[test]
+fn only_linux_reads_an_app_s_display_variables() {
+    // No process has id 0's environment to give, on any OS.
+    assert!(windows::Native.display_env(std::process::id()).is_empty());
+    assert!(macos::Native.display_env(std::process::id()).is_empty());
+    assert!(linux::Native.display_env(0).is_empty());
 }

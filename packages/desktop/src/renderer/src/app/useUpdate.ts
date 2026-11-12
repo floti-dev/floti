@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { UpdateView } from '@helm/ui'
-import type { HostConnection } from '../../../shared/host/client'
 import type * as P from '../../../shared/host/protocol'
 import { updateView, type Updates } from './host/updates'
 
@@ -9,10 +8,10 @@ import { updateView, type Updates } from './host/updates'
  * person may ask of it: check now, and update.
  *
  * The host is the one that asks the release; the window only listens to it
- * (`update:state`, held for as long as the window is open) and passes on a
- * press. Nothing here asks on its own: `check` and `install` are handed to
- * buttons and to nothing else. Check now is unthrottled on purpose - a
- * person pressing a button is its own bound.
+ * (`update:state`, followed across reconnects for as long as the window is
+ * open) and passes on a press. Nothing here asks on its own: `check` and
+ * `install` are handed to buttons and to nothing else. Check now is
+ * unthrottled on purpose - a person pressing a button is its own bound.
  *
  * `view` is null until the host has been heard, and `error` says why it
  * could not be, or why the last press was refused; the next state heard
@@ -29,19 +28,17 @@ export interface UpdateHook {
 
 export interface UpdateDeps {
   updates: Updates
-  /** The window's own connection to this PC's host. */
-  connection: () => Promise<HostConnection>
 }
 
 export function useUpdate(deps: UpdateDeps, appVersion: string | null): UpdateHook {
-  const { updates, connection } = deps
+  const { updates } = deps
   const [state, setState] = useState<P.UpdateState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [asking, setAsking] = useState(false)
 
   useEffect(
     () =>
-      updates.watch(connection, (heard) => {
+      updates.watch((heard) => {
         if (heard.ok) {
           setState(heard.state)
           setError(null)
@@ -49,23 +46,23 @@ export function useUpdate(deps: UpdateDeps, appVersion: string | null): UpdateHo
           setError(heard.message)
         }
       }),
-    [updates, connection]
+    [updates]
   )
 
   const check = useCallback(() => {
     setAsking(true)
     void updates
-      .check(connection)
+      .check()
       .then((result) => {
         if (result.ok) setState(result.state)
         setError(result.ok ? null : result.message)
       })
       .finally(() => setAsking(false))
-  }, [updates, connection])
+  }, [updates])
 
   const install = useCallback(() => {
-    void updates.install(connection).then((result) => setError(result.ok ? null : result.message))
-  }, [updates, connection])
+    void updates.install().then((result) => setError(result.ok ? null : result.message))
+  }, [updates])
 
   const view = state === null ? null : updateView(state, appVersion)
   return { view, error, checking: asking || view?.checking === true, check, install }

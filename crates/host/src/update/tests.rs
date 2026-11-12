@@ -15,8 +15,8 @@ use url::Url;
 
 use super::network::{FetchError, Network};
 use super::{
-    APP_POLL, FromDesktop, HostRelaunch, Options, Outcome, STAGING_FOLDER, Said, UpdateError,
-    Updater, channel, failure_line,
+    APP_POLL, FINISHED_LINE, FromDesktop, HostRelaunch, Options, Outcome, STAGING_FOLDER,
+    UpdateError, Updater, channel, failure_line,
 };
 use crate::Result;
 use crate::platform::folders::UserEnv;
@@ -25,6 +25,7 @@ use crate::platform::process_table::{PortRow, ProcessRow, ProcessTable};
 use crate::platform::standalone::{self, Standalone};
 use crate::sha256::hex_digest;
 use crate::testkit::TestDirs;
+use crate::update::run_file::{self, Look, RunLock, RunRecord};
 
 const RUNNING: &str = "2.0.0";
 const TARGET: &str = "linux-x64";
@@ -133,6 +134,8 @@ struct FakeInstalls {
     running_binary: PathBuf,
     /// Whether installing the app fails.
     install_fails: bool,
+    /// The variables the running app's process has, as `display_env` reads them.
+    display: Vec<(String, String)>,
 }
 
 impl FakeInstalls {
@@ -154,6 +157,14 @@ impl FakeInstalls {
 
     fn failing_to_install(mut self) -> Self {
         self.install_fails = true;
+        self
+    }
+
+    fn with_display(mut self, display: &[(&str, &str)]) -> Self {
+        self.display = display
+            .iter()
+            .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+            .collect();
         self
     }
 }
@@ -214,6 +225,11 @@ impl Installs for FakeInstalls {
         (desktop.path.join("Helm.exe"), Vec::new())
     }
 
+    fn display_env(&self, pid: u32) -> Vec<(String, String)> {
+        assert_eq!(pid, 2, "read from the app's own process");
+        self.display.clone()
+    }
+
     fn install_desktop(&self, _desktop: &Desktop, release: &Path) -> Result<()> {
         if self.install_fails {
             return Err(crate::Error::Refused(
@@ -230,13 +246,17 @@ impl Installs for FakeInstalls {
     }
 }
 
-/// A process table on which the app runs for the first `looks` reads.
+/// A process table on which the app runs for the first `looks` reads. Each
+/// read records what the run file in `data` says then.
 struct FakeProcesses {
     looks: AtomicUsize,
+    data: PathBuf,
+    seen: Mutex<Vec<Look>>,
 }
 
 impl ProcessTable for FakeProcesses {
     fn processes(&self) -> Result<Vec<ProcessRow>> {
+        self.seen.lock().unwrap().push(run_file::look(&self.data));
         let running = self
             .looks
             .try_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
@@ -417,6 +437,7 @@ impl World {
             binary_replaced_first: Mutex::new(false),
             running_binary: self.running_binary.clone(),
             install_fails: false,
+            display: Vec::new(),
         }
     }
 
@@ -428,6 +449,8 @@ impl World {
     ) -> Run {
         let processes = FakeProcesses {
             looks: AtomicUsize::new(app_running_for),
+            data: self.dirs.data.clone(),
+            seen: Mutex::new(Vec::new()),
         };
         let pauses = Mutex::new(Vec::new());
         let pause = |wait: Duration| pauses.lock().unwrap().push(wait);
@@ -444,11 +467,15 @@ impl World {
             self.done.borrow_mut().push("relaunch".into());
             self.relaunch.borrow().clone()
         };
-        let open = |app: &Desktop| {
+        let open = |app: &Desktop, display: &[(String, String)]| {
             let (program, _) = installs.opener(app);
+            let display: Vec<String> = display
+                .iter()
+                .map(|(name, value)| format!(" {name}={value}"))
+                .collect();
             self.done
                 .borrow_mut()
-                .push(format!("open {}", program.display()));
+                .push(format!("open {}{}", program.display(), display.concat()));
             Ok(())
         };
         let standalone = FakeStandalone {
@@ -487,6 +514,7 @@ impl World {
                 .get()
                 .then_some(FromDesktop { open: &open }),
             out: &mut out,
+            held: None,
         }
         .run();
         Run {
@@ -494,6 +522,7 @@ impl World {
             out: String::from_utf8(out).unwrap(),
             pauses: pauses.into_inner().unwrap(),
             installed_from: installed_from.into_inner(),
+            seen: processes.seen.into_inner().unwrap(),
         }
     }
 
@@ -522,6 +551,8 @@ struct Run {
     pauses: Vec<Duration>,
     /// The floti each `install-self` ran from.
     installed_from: Vec<PathBuf>,
+    /// What the run file said at each look for the app.
+    seen: Vec<Look>,
 }
 
 impl Run {
@@ -1333,42 +1364,132 @@ fn what_an_earlier_install_left_beside_the_app_is_removed_once_its_process_has_e
     );
 }
 
-/// Each line of a `--from-desktop` run, read back as the host reads it.
-fn said(out: &str) -> Vec<Said> {
-    out.lines()
-        .map(|line| {
-            serde_json::from_str(line).unwrap_or_else(|err| panic!("{line:?} is not JSON: {err}"))
-        })
-        .collect()
-}
+const WAITING: &str = "Waiting for Helm to quit; it is updated once it has.";
 
 #[test]
-fn from_the_desktop_each_line_is_json_and_the_wait_for_the_app_is_marked() {
+fn the_run_file_says_the_update_waits_for_the_app_while_it_does() {
     let world = World::new();
     world.from_desktop.set(true);
     let release = Published::new("2.1.0").with_desktop();
     world.publish(&[("stable", &release)]);
-    let installs = world.installs(true);
-    let run = world.update(&installs, 2, None);
+    let run = world.update(&world.installs(true), 2, None);
     assert!(run.result.is_ok(), "{}", run.out);
-    let lines = said(&run.out);
-    let waiting: Vec<&Said> = lines.iter().filter(|said| said.waiting_for_app).collect();
-    assert_eq!(waiting.len(), 1, "{}", run.out);
+    let pid = std::process::id();
+    // The first look finds the app running: everything is downloaded and
+    // checked and floti replaced, and the wait is not said yet; each look
+    // after says it.
     assert_eq!(
-        waiting[0].line,
-        "Waiting for Helm to quit; it is updated once it has."
+        run.seen,
+        vec![
+            Look::Running(RunRecord {
+                pid,
+                line: "floti is updated from 2.0.0 to 2.1.0.".into(),
+                waiting_for_app: false
+            }),
+            Look::Running(RunRecord {
+                pid,
+                line: WAITING.into(),
+                waiting_for_app: true
+            }),
+            Look::Running(RunRecord {
+                pid,
+                line: WAITING.into(),
+                waiting_for_app: true
+            }),
+        ]
     );
-    let at = |line: &str| {
-        lines
-            .iter()
-            .position(|said| said.line == line)
-            .unwrap_or_else(|| panic!("{line:?} is not said: {}", run.out))
-    };
-    // Everything is downloaded and checked before the app is asked to quit.
-    assert!(at("Downloading Helm-2.1.0-setup.exe.") < at(&waiting[0].line));
-    assert!(at(&waiting[0].line) < at("Helm is updated to 2.1.0."));
-    // How it ended is `floti update`'s last line, which `run` writes.
-    assert!(lines.iter().all(|said| said.ok.is_none()));
+    assert!(run.out.contains(WAITING), "{}", run.out);
+}
+
+#[test]
+fn an_update_keeps_how_it_ended_and_leaves_no_run_file() {
+    let world = World::new();
+    let release = Published::new("2.1.0");
+    world.publish(&[("stable", &release)]);
+    let run = world.update(&world.installs(false), 0, None);
+    assert!(run.result.is_ok(), "{}", run.out);
+    assert_eq!(run_file::look(&world.dirs.data), Look::Absent);
+    let ended = run_file::ended(&world.dirs.data).unwrap();
+    assert!(ended.ok);
+    assert_eq!(ended.line, FINISHED_LINE);
+    assert_eq!(ended.pid, std::process::id());
+
+    let world = World::new();
+    world.publish(&[("stable", &release)]);
+    world.network.forget(&release.floti_url());
+    let run = world.update(&world.installs(false), 0, None);
+    let err = run.error();
+    let ended = run_file::ended(&world.dirs.data).unwrap();
+    assert!(!ended.ok);
+    assert_eq!(ended.line, failure_line(&err));
+    assert_eq!(run_file::look(&world.dirs.data), Look::Absent);
+}
+
+#[test]
+fn a_second_update_refuses_while_one_runs_and_touches_nothing() {
+    let world = World::new();
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    // The first run's installer, downloaded and waiting for the app.
+    let staged = world.dirs.data.join(STAGING_FOLDER);
+    std::fs::create_dir_all(&staged).unwrap();
+    std::fs::write(
+        staged.join(release.desktop_file()),
+        b"first run's installer",
+    )
+    .unwrap();
+    let first = RunLock::take(&world.dirs.data, 31_337, "Waiting.", &|_| {
+        Knowable::Known(true)
+    })
+    .unwrap();
+    world
+        .alive
+        .borrow_mut()
+        .insert(31_337, Knowable::Known(true));
+
+    let run = world.update(&world.installs(true), 0, None);
+    let err = run.error();
+    assert!(
+        matches!(err, UpdateError::AlreadyRunning { pid: 31_337 }),
+        "{err:?}"
+    );
+    assert_eq!(
+        failure_line(&err),
+        "another floti update is running (process 31337). Nothing was updated."
+    );
+    assert_eq!(world.binary(), b"old floti");
+    assert_eq!(
+        std::fs::read(staged.join(release.desktop_file())).unwrap(),
+        b"first run's installer",
+        "the first run's download is left alone"
+    );
+    assert!(world.network.asked().is_empty(), "nothing was downloaded");
+    // The first run's file is its own.
+    assert!(matches!(
+        run_file::look(&world.dirs.data),
+        Look::Running(RunRecord { pid: 31_337, .. })
+    ));
+    drop(first);
+}
+
+#[test]
+fn a_run_file_left_by_an_update_that_ended_is_taken_over() {
+    let world = World::new();
+    let release = Published::new("2.1.0");
+    world.publish(&[("stable", &release)]);
+    std::mem::forget(
+        RunLock::take(&world.dirs.data, 31_338, "Downloading.", &|_| {
+            Knowable::Known(true)
+        })
+        .unwrap(),
+    );
+    world
+        .alive
+        .borrow_mut()
+        .insert(31_338, Knowable::Known(false));
+    let run = world.update(&world.installs(false), 0, None);
+    assert!(run.result.is_ok(), "{}", run.out);
+    assert_eq!(world.binary(), release.floti);
 }
 
 #[test]
@@ -1392,13 +1513,29 @@ fn from_the_desktop_the_host_relaunches_once_the_app_is_replaced_and_before_it_o
         *world.done.borrow(),
         vec!["relaunch".to_owned(), format!("open {}", app.display())]
     );
-    let lines = said(&run.out);
-    let at = |line: &str| lines.iter().position(|said| said.line == line);
-    assert!(at("Helm is updated to 2.1.0.").is_some(), "{}", run.out);
-    assert!(
-        at("Helm is updated to 2.1.0.") < at("Opening Helm again."),
-        "{}",
-        run.out
+    let updated = run.out.find("Helm is updated to 2.1.0.").unwrap();
+    let opening = run.out.find("Opening Helm again.").unwrap();
+    assert!(updated < opening, "{}", run.out);
+}
+
+#[test]
+fn from_the_desktop_the_app_opens_again_with_the_display_variables_it_ran_with() {
+    let world = World::new();
+    world.from_desktop.set(true);
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    let installs = world
+        .installs(true)
+        .with_display(&[("WAYLAND_DISPLAY", "wayland-0"), ("DISPLAY", ":0")]);
+    let run = world.update(&installs, 1, None);
+    assert!(run.result.is_ok(), "{}", run.out);
+    let app = world.dirs.folder("apps").join(APP).join("Helm.exe");
+    assert_eq!(
+        world.done.borrow().last().cloned(),
+        Some(format!(
+            "open {} WAYLAND_DISPLAY=wayland-0 DISPLAY=:0",
+            app.display()
+        ))
     );
 }
 
@@ -1436,7 +1573,7 @@ fn from_the_desktop_an_app_that_was_not_running_is_not_opened() {
     let run = world.update(&world.installs(true), 0, None);
     assert!(run.result.is_ok(), "{}", run.out);
     assert_eq!(*world.done.borrow(), vec!["relaunch".to_owned()]);
-    assert!(said(&run.out).iter().all(|said| !said.waiting_for_app));
+    assert!(!run.out.contains("Waiting"), "{}", run.out);
 }
 
 #[test]
@@ -1449,26 +1586,4 @@ fn from_the_desktop_with_no_app_installed_the_host_still_relaunches_on_the_new_f
     assert!(run.result.is_ok(), "{}", run.out);
     assert_eq!(*world.done.borrow(), vec!["relaunch".to_owned()]);
     assert_eq!(world.binary(), release.floti);
-}
-
-#[test]
-fn a_said_line_reads_back_and_leaves_out_the_marks_it_does_not_carry() {
-    assert_eq!(
-        Said::step("Downloading.", false),
-        r#"{"line":"Downloading."}"#
-    );
-    assert_eq!(
-        Said::step("Waiting.", true),
-        r#"{"line":"Waiting.","waitingForApp":true}"#
-    );
-    assert_eq!(Said::end("Done.", true), r#"{"line":"Done.","ok":true}"#);
-    let failed: Said = serde_json::from_str(&Said::end("No network.", false)).unwrap();
-    assert_eq!(
-        failed,
-        Said {
-            line: "No network.".into(),
-            waiting_for_app: false,
-            ok: Some(false)
-        }
-    );
 }

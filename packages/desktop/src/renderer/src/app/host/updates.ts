@@ -1,27 +1,31 @@
 import { compareVersions } from '@helm/core/types'
 import type { UpdateView } from '@helm/ui'
-import type { HostConnection } from '../../../../shared/host/client'
+import type { HostSubscription } from '../../../../shared/host/client'
 import type * as P from '../../../../shared/host/protocol'
+import type { HostReach } from './history'
 
 /**
  * Settings > Updates and the status bar's offer, over the window's own
  * connection to this PC's host. The app contacts nothing itself.
  *
- * - What the host knows comes from an `update:state` subscription, sent whole
- *   first and again on every change: what its last check found, a check
- *   running, each step of an update it runs, and why a host that never
- *   checks (a dev or check run) does not.
+ * - What the host knows comes from an `update:state` subscription made on
+ *   every connect, sent whole first and again on every change: what its last
+ *   check found, a check running, each step of an update on this computer,
+ *   and why a host that never checks (a dev or check run) does not. A host
+ *   relaunched on a newer floti ends the connection; the next one subscribes
+ *   again, and its first state clears what the end said.
  * - Check now is `update:check`: the host checks at once and answers once the
  *   check has ended.
  * - Update is `update:install`: the host starts `floti update`, which
  *   replaces floti and this app. Main quits the app when the update waits
  *   for it (`main/update.ts`), and the update opens the new one.
- * - Whether a newer release exists is the channel's newest version against
- *   this app's own: the host's floti is up to date by the time the host
- *   knows of one, and the app is what is behind.
+ * - Whether a newer release exists is the newer of the channel's newest
+ *   version and the host's own floti, against this app's version: the
+ *   host's floti is up to date by the time the host knows of one, and the
+ *   app is what is behind, even where no check is kept.
  */
 
-/** What a watch heard: the host's state, or why it cannot be watched. */
+/** What a watch heard: the host's state, or why it cannot be heard now. */
 export type UpdateHeard = { ok: true; state: P.UpdateState } | { ok: false; message: string }
 
 /** How a Check now ended: the state after it, or why it could not be asked. */
@@ -36,54 +40,56 @@ export interface UpdatesDeps {
 
 export interface Updates {
   /**
-   * Watches `update:state` on the host `connection` reaches: `listener`
-   * hears the whole state first and after every change, or why it cannot be
-   * watched, after which it hears nothing more. Returns the stop.
+   * Watches this PC's host's `update:state`: `listener` hears what was last
+   * heard at once, then the whole state on every change, on every
+   * connection, and why it cannot be heard whenever a connection fails or
+   * ends. Returns the stop.
    */
-  watch(connection: () => Promise<HostConnection>, listener: (heard: UpdateHeard) => void): () => void
+  watch(listener: (heard: UpdateHeard) => void): () => void
   /** Asks the host to check now (`update:check`). */
-  check(connection: () => Promise<HostConnection>): Promise<CheckResult>
+  check(): Promise<CheckResult>
   /** Asks the host to update floti and this app (`update:install`). */
-  install(connection: () => Promise<HostConnection>): Promise<InstallResult>
+  install(): Promise<InstallResult>
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
-export function createUpdates(deps: UpdatesDeps): Updates {
+export function createUpdates(link: HostReach, deps: UpdatesDeps): Updates {
+  const listeners = new Set<(heard: UpdateHeard) => void>()
+  let latest: UpdateHeard | null = null
+  let subscription: HostSubscription | null = null
+
+  const tell = (heard: UpdateHeard): void => {
+    latest = heard
+    for (const listener of [...listeners]) listener(heard)
+  }
+
+  link.onConnected((connection) => {
+    subscription?.unsubscribe()
+    const hear = (state: P.UpdateState): void => tell({ ok: true, state })
+    subscription = connection.subscribe('update:state', {
+      snapshot: hear,
+      event: hear,
+      error: (error) => {
+        deps.log(`update: hearing this PC's host's updates ended (${error.message})`)
+        tell({ ok: false, message: error.message })
+      }
+    })
+  })
+
   return {
-    watch(connection, listener) {
-      let stopped = false
-      let stop = (): void => {
-        stopped = true
+    watch(listener) {
+      listeners.add(listener)
+      if (latest !== null) listener(latest)
+      link.connection().catch((error: unknown) => tell({ ok: false, message: messageOf(error) }))
+      return () => {
+        listeners.delete(listener)
       }
-      const tell = (heard: UpdateHeard): void => {
-        if (!stopped) listener(heard)
-      }
-      connection().then(
-        (reached) => {
-          if (stopped) return
-          const hear = (state: P.UpdateState): void => tell({ ok: true, state })
-          const subscription = reached.subscribe('update:state', {
-            snapshot: hear,
-            event: hear,
-            error: (error) => {
-              deps.log(`update: watching this PC's host's updates ended (${error.message})`)
-              tell({ ok: false, message: error.message })
-            }
-          })
-          stop = () => {
-            stopped = true
-            subscription.unsubscribe()
-          }
-        },
-        (error: unknown) => tell({ ok: false, message: messageOf(error) })
-      )
-      return () => stop()
     },
 
-    async check(connection) {
+    async check() {
       try {
-        const state = await (await connection()).request('update:check', null)
+        const state = await (await link.connection()).request('update:check', null)
         return { ok: true, state }
       } catch (error) {
         deps.log(`update: asking this PC's host to check failed (${messageOf(error)})`)
@@ -91,9 +97,9 @@ export function createUpdates(deps: UpdatesDeps): Updates {
       }
     },
 
-    async install(connection) {
+    async install() {
       try {
-        await (await connection()).request('update:install', null)
+        await (await link.connection()).request('update:install', null)
         return { ok: true }
       } catch (error) {
         deps.log(`update: asking this PC's host to update failed (${messageOf(error)})`)
@@ -103,15 +109,23 @@ export function createUpdates(deps: UpdatesDeps): Updates {
   }
 }
 
+/** The newer of two versions, when either can be placed against the other. */
+function newerOf(a: string | null, b: string): string {
+  if (a === null) return b
+  const order = compareVersions(a, b)
+  return order !== null && order < 0 ? b : a
+}
+
 /**
  * The host's `state` as the window draws it for an app at `appVersion`. A
  * version either side cannot read is never called newer, so a mangled one
  * never offers an update.
  */
 export function updateView(state: P.UpdateState, appVersion: string | null): UpdateView {
-  const order = state.newest !== null && appVersion !== null ? compareVersions(state.newest, appVersion) : null
+  const newest = newerOf(state.newest, state.running)
+  const order = appVersion !== null ? compareVersions(newest, appVersion) : null
   return {
-    newest: state.newest,
+    newest,
     newer: order !== null && order > 0,
     checkedAt: state.checkedAt,
     failed: state.failed,

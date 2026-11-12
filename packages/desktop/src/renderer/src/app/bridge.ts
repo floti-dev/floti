@@ -113,7 +113,7 @@ export const devices: Devices = createDevices({ log })
  * about newer releases, Check now and Update, over the window's own
  * connection to it (`host/updates.ts`).
  */
-export const updates: Updates = createUpdates({ log })
+export const updates: Updates = createUpdates(link, { log })
 
 /** The window's own connection to this PC's host, for Settings > Devices and Updates. */
 export const localHostConnection = (): ReturnType<typeof link.connection> => link.connection()

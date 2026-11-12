@@ -47,15 +47,18 @@
 //! downloaded is removed. Progress goes to standard output, one line a step.
 //! Exit status 0 when floti is up to date or updated, 1 otherwise.
 //!
+//! One update runs at a time on a computer: each takes the run file in the
+//! data folder first and refuses while another holds it ([`run_file`]),
+//! and says each step there too, marked while it waits for the app, so a
+//! host can follow an update it did not start. How it ended is kept beside.
+//!
 //! `floti update --from-desktop` is what the desktop's Update runs, through
-//! its host (`update:install`). Each line is a JSON object on standard
-//! output ([`Said`]), the failure line included, so the host can tell each
-//! step to its clients; the one saying it waits for the app is marked, and a
-//! desktop on this computer quits on it, its sessions running on. The host
-//! is asked to start the new floti only once the app is replaced, so the
-//! host that started the update hears it to its end, and the app that quit
-//! for it is opened again ([`Installs::opener`]), replaced or, when that
-//! failed, as it was.
+//! its host (`update:install`). A desktop on this computer quits when the
+//! run file says the update waits for it, its sessions running on. The host
+//! is asked to start the new floti only once the app is replaced, and the
+//! app that quit for it is opened again ([`Installs::opener`]), replaced or,
+//! when that failed, as it was, with the display and session-bus variables
+//! it ran with ([`Installs::display_env`]).
 //!
 //! What is checked and replaced is the per-OS concern
 //! [`platform::installs`](crate::platform::installs).
@@ -67,6 +70,7 @@ pub mod channel;
 pub mod manifest;
 pub mod network;
 pub mod release_file;
+pub mod run_file;
 pub mod signature;
 pub mod versions;
 
@@ -78,6 +82,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use floti_protocol::Knowable;
+use jiff::Timestamp;
 use minisign_verify::PublicKey;
 use url::Url;
 
@@ -91,6 +96,7 @@ use crate::version::{FLOTI_VERSION, cpu_name, os_name};
 use manifest::{FileEntry, Release};
 use network::{Network, get_whole};
 use release_file::{fetch_refusal, fetch_signature};
+use run_file::RunLock;
 use signature::{MANIFEST_COMMENT, check_whole};
 use versions::Version;
 
@@ -151,6 +157,8 @@ pub enum UpdateError {
     RunningVersion { version: String },
     #[error("{reason}.")]
     Disk { reason: String },
+    #[error("another floti update is running (process {pid})")]
+    AlreadyRunning { pid: u32 },
     #[error("floti could not be replaced: {reason}")]
     Replace { reason: String },
     /// floti was replaced; the app was not.
@@ -213,55 +221,22 @@ pub enum HostRelaunch {
 /// Asks this computer's host to start the floti now in its place.
 pub type RelaunchHost<'a> = &'a dyn Fn() -> HostRelaunch;
 
+/// Opens the desktop app with display and session-bus variables, or says
+/// why it could not.
+pub type OpenDesktop<'a> = &'a dyn Fn(&Desktop, &[(String, String)]) -> Result<(), String>;
+
 /// What an update the desktop's Update started does besides the rest
 /// (`floti update --from-desktop`).
 pub struct FromDesktop<'a> {
-    /// Opens the desktop app again, or says why it could not.
-    pub open: &'a dyn Fn(&Desktop) -> Result<(), String>,
+    /// Opens the desktop app again, with the display and session-bus
+    /// variables it ran with, or says why it could not.
+    pub open: OpenDesktop<'a>,
 }
 
-/// One line `floti update --from-desktop` writes on standard output, as a
-/// JSON object: a step it says, and last how it ended.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Said {
-    /// The sentence, as `floti update` says it in a terminal.
-    pub line: String,
-    /// Everything is downloaded and checked, and it waits for the app to
-    /// quit.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub waiting_for_app: bool,
-    /// On the last line only: whether the update ended well (floti up to
-    /// date or updated), or stopped on this line.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ok: Option<bool>,
-}
+/// The first line an update says, in the run file, before anything else.
+pub const STARTING_LINE: &str = "Starting floti update.";
 
-impl Said {
-    /// The JSON object for a step, `line`.
-    pub fn step(line: &str, waiting_for_app: bool) -> String {
-        Self::encode(Self {
-            line: line.to_owned(),
-            waiting_for_app,
-            ok: None,
-        })
-    }
-
-    /// The JSON object for the last line, `line`: how the update ended.
-    pub fn end(line: &str, ok: bool) -> String {
-        Self::encode(Self {
-            line: line.to_owned(),
-            waiting_for_app: false,
-            ok: Some(ok),
-        })
-    }
-
-    fn encode(said: Self) -> String {
-        serde_json::to_string(&said).unwrap_or_default()
-    }
-}
-
-/// The last line of an update the desktop started that ended well.
+/// The last line of an update that ended well.
 pub const FINISHED_LINE: &str = "floti update has finished.";
 
 /// What `floti update` was asked.
@@ -316,11 +291,32 @@ pub struct Updater<'a> {
     pub from_desktop: Option<FromDesktop<'a>>,
     /// Where progress lines go.
     pub out: &'a mut dyn Write,
+    /// The run file while the update runs: `None` where an updater is made.
+    held: Option<RunLock>,
 }
 
 impl Updater<'_> {
-    /// Runs the update.
+    /// Runs the update, holding the run file throughout, and keeps how it
+    /// ended. Refused, changing nothing, while another update runs.
     pub fn run(&mut self) -> Result<Outcome, UpdateError> {
+        self.held = Some(RunLock::take(
+            &self.data,
+            std::process::id(),
+            STARTING_LINE,
+            self.is_alive,
+        )?);
+        let outcome = self.run_held();
+        if let Some(held) = self.held.take() {
+            let line = outcome.as_ref().err().map(failure_line);
+            held.end(
+                Timestamp::now(),
+                line.as_deref().map_or(Ok(FINISHED_LINE), Err),
+            );
+        }
+        outcome
+    }
+
+    fn run_held(&mut self) -> Result<Outcome, UpdateError> {
         self.sweep_leftovers();
         let running =
             Version::parse(self.running_version).ok_or_else(|| UpdateError::RunningVersion {
@@ -410,7 +406,7 @@ impl Updater<'_> {
         let relaunch_after_app = self.from_desktop.is_some() && new_binary.is_some();
         let updated_desktop = match desktop {
             Some((app, entry)) => {
-                let mut waited = false;
+                let mut waited = None;
                 let result = self.install_desktop(
                     &app,
                     &staging.join(&entry.file),
@@ -422,8 +418,8 @@ impl Updater<'_> {
                 if relaunch_after_app {
                     self.relaunch_host(&version);
                 }
-                if waited {
-                    self.open_desktop(&app);
+                if let Some(display) = waited {
+                    self.open_desktop(&app, &display);
                 }
                 result?;
                 Some(app.name.to_owned())
@@ -447,25 +443,23 @@ impl Updater<'_> {
         self.report(line, false);
     }
 
-    /// Says `line`, as a JSON object marked as waiting for the app when
-    /// `waiting_for_app` and the desktop started the update, as it is
-    /// otherwise.
+    /// Says `line`, and keeps it in the run file, marked as waiting for the
+    /// app when `waiting_for_app`.
     fn report(&mut self, line: &str, waiting_for_app: bool) {
-        if self.from_desktop.is_some() {
-            let _ = writeln!(self.out, "{}", Said::step(line, waiting_for_app));
-        } else {
-            let _ = writeln!(self.out, "{line}");
-        }
+        let _ = writeln!(self.out, "{line}");
         let _ = self.out.flush();
+        if let Some(held) = &mut self.held {
+            held.step(line, waiting_for_app);
+        }
     }
 
-    /// Opens `app` again, when the desktop started the update, and says how
-    /// that went.
-    fn open_desktop(&mut self, app: &Desktop) {
+    /// Opens `app` again with the variables `display`, when the desktop
+    /// started the update, and says how that went.
+    fn open_desktop(&mut self, app: &Desktop, display: &[(String, String)]) {
         let Some(open) = self.from_desktop.as_ref().map(|from| from.open) else {
             return;
         };
-        match open(app) {
+        match open(app, display) {
             Ok(()) => self.say(&format!("Opening {} again.", app.name)),
             Err(why) => self.say(&format!(
                 "{} could not be opened again ({why}); open it yourself.",
@@ -659,14 +653,15 @@ impl Updater<'_> {
     }
 
     /// Waits until `app` has quit, then installs `downloaded` over it.
-    /// `waited` is set once it has found the app running and waited for it.
+    /// `waited` is set once it has found the app running and waited for it,
+    /// to the display and session-bus variables the app ran with.
     fn install_desktop(
         &mut self,
         app: &Desktop,
         downloaded: &Path,
         version: &Version,
         floti_updated: bool,
-        waited: &mut bool,
+        waited: &mut Option<Vec<(String, String)>>,
     ) -> Result<(), UpdateError> {
         let failed = |reason: String| {
             let (version, app) = (version.to_string(), app.name.to_owned());
@@ -691,12 +686,12 @@ impl Updater<'_> {
                     "floti could not tell whether it is running ({err})"
                 ))
             })?;
-            if !rows
+            let Some(running) = rows
                 .iter()
-                .any(|row| self.installs.is_desktop_process(app, row))
-            {
+                .find(|row| self.installs.is_desktop_process(app, row))
+            else {
                 break;
-            }
+            };
             if !said {
                 self.report(
                     &format!(
@@ -706,7 +701,7 @@ impl Updater<'_> {
                     true,
                 );
                 said = true;
-                *waited = true;
+                *waited = Some(self.installs.display_env(running.pid));
             }
             (self.pause)(APP_POLL);
         }
@@ -778,35 +773,41 @@ pub fn parse(args: &[String]) -> Option<Options> {
 }
 
 /// `floti update`: the exit status. `relaunch_host` asks this computer's
-/// host to start the new floti in its place.
+/// host to start the new floti in its place. A line that cannot be written,
+/// to a terminal gone or an output nobody reads, is let go.
 pub fn run(options: Options, relaunch_host: RelaunchHost<'_>) -> u8 {
-    let from_desktop = options.from_desktop;
     match run_native(options, relaunch_host) {
-        Ok(_) => {
-            if from_desktop {
-                println!("{}", Said::end(FINISHED_LINE, true));
-            }
-            0
-        }
+        Ok(_) => 0,
         Err(line) => {
-            if from_desktop {
-                println!("{}", Said::end(&line, false));
-            }
-            eprintln!("floti update: {line}");
+            let _ = writeln!(std::io::stderr(), "floti update: {line}");
             1
         }
     }
 }
 
-/// Opens the installed `app` as this OS does, alone: it outlives this
-/// process and whatever started it.
-fn open_native(app: &Desktop) -> Result<(), String> {
+/// Opens the installed `app` as this OS does, alone, with the variables
+/// `display` over this process's: it outlives this process and whatever
+/// started it.
+fn open_native(app: &Desktop, display: &[(String, String)]) -> Result<(), String> {
     let (program, args) = installs::Native.opener(app);
-    let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    process_tree::Native
-        .start_alone(&program, &args)
-        .map(|_| ())
-        .map_err(|err| format!("could not run {}: {err}", program.display()))
+    let failed = |err: std::io::Error| format!("could not run {}: {err}", program.display());
+    if display.is_empty() {
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        return process_tree::Native
+            .start_alone(&program, &args)
+            .map(|_| ())
+            .map_err(failed);
+    }
+    // Only where the app's display variables were read: the AppImage.
+    let mut command = std::process::Command::new(&program);
+    command
+        .args(&args)
+        .envs(display.iter().map(|(name, value)| (name, value)))
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    process_tree::Native.prepare_lasting_root(&mut command);
+    command.spawn().map(|_| ()).map_err(failed)
 }
 
 fn run_native(options: Options, relaunch_host: RelaunchHost<'_>) -> Result<Outcome, String> {
@@ -843,6 +844,7 @@ fn run_native(options: Options, relaunch_host: RelaunchHost<'_>) -> Result<Outco
         chosen_channel,
         from_desktop: from_desktop.then_some(FromDesktop { open: &open_native }),
         out: &mut stdout,
+        held: None,
     };
     updater.run().map_err(|err| failure_line(&err))
 }

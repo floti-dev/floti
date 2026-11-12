@@ -2017,9 +2017,10 @@ function UpdatesGroup({
             Update to {update.newest}
           </Action>
         )}
-        {/* Disabled while a check is in flight and on a host that does not
-            update - never because the tick above is off. */}
-        <Action data-settings-update-now onClick={onCheckNow} disabled={checking || !updates}>
+        {/* Disabled while a check is in flight, while an update runs and on
+            a host that does not update - never because the tick above is
+            off. */}
+        <Action data-settings-update-now onClick={onCheckNow} disabled={checking || installing || !updates}>
           <RefreshIcon className={cn('mr-1.5 inline', checking && 'animate-spin')} />
           Check now
         </Action>

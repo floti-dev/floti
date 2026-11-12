@@ -696,6 +696,8 @@ impl Host {
 fn start_background_update(features: &Features, data: PathBuf, binary: PathBuf, stopper: Stopper) {
     let settings = features.settings();
     let updates = features.updates();
+    // An update that outlived the host before this one is followed again.
+    updates.follow_running();
     let Some(asks) = updates.take_asks() else {
         return;
     };

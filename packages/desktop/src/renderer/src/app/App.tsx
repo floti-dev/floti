@@ -626,8 +626,8 @@ const DEVICES_DEPS = {
   remoteConnection: (id: string) => remoteHostLinks.connection(id),
 };
 
-/** Settings > Updates' reach: the updates store and the window's own connection to this PC's host. */
-const UPDATE_DEPS = { updates, connection: localHostConnection };
+/** Settings > Updates' reach: the updates store, over the window's own connection to this PC's host. */
+const UPDATE_DEPS = { updates };
 
 /** No remote hosts, as one value so a hook's input does not change every render. */
 const NO_HOSTS: readonly RemoteHost[] = [];

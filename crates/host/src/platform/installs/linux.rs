@@ -88,6 +88,13 @@ impl Installs for Native {
         (desktop.path.clone(), Vec::new())
     }
 
+    fn display_env(&self, pid: u32) -> Vec<(String, String)> {
+        // The user's own process, so its environment is readable to them.
+        std::fs::read(format!("/proc/{pid}/environ"))
+            .map(|environ| super::display_vars(&environ))
+            .unwrap_or_default()
+    }
+
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
         if let Some(folder) = desktop.path.parent() {
             std::fs::create_dir_all(folder)

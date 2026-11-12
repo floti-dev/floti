@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { FakeConnection } from '../../../../test/fake-connection'
+import { FakeConnection, fakeReach } from '../../../../test/fake-connection'
 import { HostRequestError } from '../../../shared/host/client'
 import type * as P from '../../../shared/host/protocol'
 import { PATIENCE } from '../../../../../../test/patience'
@@ -20,8 +20,7 @@ const STATE: P.UpdateState = {
 }
 
 function depsFor(host: FakeConnection): UpdateDeps {
-  const connection = host.asConnection()
-  return { updates: createUpdates({ log: () => undefined }), connection: () => Promise.resolve(connection) }
+  return { updates: createUpdates(fakeReach(host), { log: () => undefined }) }
 }
 
 async function heard(host: FakeConnection): Promise<void> {

@@ -20,7 +20,8 @@
 //!   the AppImage at `~/Applications/Helm.AppImage`, its version unknown,
 //!   written beside, made executable and renamed into place.
 //!   Opened again by its program on Windows, `open` on macOS and the
-//!   AppImage itself on Linux ([`Installs::opener`]).
+//!   AppImage itself on Linux ([`Installs::opener`]), there with the display
+//!   and session-bus variables the app ran with ([`Installs::display_env`]).
 //!
 //! Nothing here adds a quarantine flag or a download mark: the files are
 //! written by floti's own process, which neither Gatekeeper's quarantine nor
@@ -107,6 +108,40 @@ pub trait Installs {
     /// what `floti update --from-desktop` starts once it has replaced the app
     /// that quit for it.
     fn opener(&self, desktop: &Desktop) -> (PathBuf, Vec<String>);
+
+    /// The display and session-bus variables the app's running process
+    /// `pid` has, for opening it again where the process that does so has
+    /// none: a host started by the systemd user unit is not in the
+    /// graphical session. Only [`DISPLAY_VARS`] are taken, from the process
+    /// `floti update` found to be the installed app. Nothing where the OS
+    /// opens an app in the user's session without them (Windows, and
+    /// `open` on macOS).
+    fn display_env(&self, pid: u32) -> Vec<(String, String)> {
+        let _ = pid;
+        Vec::new()
+    }
+}
+
+/// The variables [`Installs::display_env`] takes: the display, its
+/// authority, and the session bus.
+pub const DISPLAY_VARS: [&str; 4] = [
+    "DISPLAY",
+    "WAYLAND_DISPLAY",
+    "XAUTHORITY",
+    "DBUS_SESSION_BUS_ADDRESS",
+];
+
+/// The [`DISPLAY_VARS`] in `environ`, a process's environment as
+/// `/proc/<pid>/environ` holds it: `NAME=value` entries ending in NUL. An
+/// entry that is not UTF-8 or has no value is left out.
+pub fn display_vars(environ: &[u8]) -> Vec<(String, String)> {
+    environ
+        .split(|byte| *byte == 0)
+        .filter_map(|entry| std::str::from_utf8(entry).ok())
+        .filter_map(|entry| entry.split_once('='))
+        .filter(|(name, value)| DISPLAY_VARS.contains(name) && !value.is_empty())
+        .map(|(name, value)| (name.to_owned(), value.to_owned()))
+        .collect()
 }
 
 /// The folder `env`'s [`DESKTOP_DIR_VAR`] names, in a build with the

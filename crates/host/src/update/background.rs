@@ -307,8 +307,8 @@ async fn sleep_or_forever(wait: Option<Duration>) {
     }
 }
 
-/// Whether `err` is the network or the disk, which a later look may get
-/// past, rather than the release itself.
+/// Whether `err` is the network, the disk or another update running, which
+/// a later look may get past, rather than the release itself.
 pub fn retries_soon(err: &UpdateError) -> bool {
     matches!(
         err,
@@ -316,6 +316,7 @@ pub fn retries_soon(err: &UpdateError) -> bool {
             | UpdateError::CutOff { .. }
             | UpdateError::Disk { .. }
             | UpdateError::Replace { .. }
+            | UpdateError::AlreadyRunning { .. }
     )
 }
 
@@ -352,6 +353,7 @@ pub fn check_now(data: &Path, binary: &Path) -> Checked {
         chosen_channel: None,
         from_desktop: None,
         out: &mut said,
+        held: None,
     }
     .run();
     for line in String::from_utf8_lossy(&said).lines() {
