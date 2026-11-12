@@ -836,6 +836,11 @@ jobs:
           brew --version
           brew tap-new --no-git "$TAP" >/dev/null
           cp "$RUNNER_TEMP/homebrew/Formula/floti.rb" "$(brew --repository "$TAP")/Formula/floti.rb"
+          # Homebrew loads no formula from a third-party tap until the tap is
+          # trusted, so a user runs this too (docs/PACKAGING.md, "Homebrew and
+          # winget"). The help is printed so the run records the form it takes.
+          brew trust --help
+          brew trust "$TAP"
           brew style "$TAP/floti"
           brew audit --strict "$TAP/floti"
 
@@ -1086,8 +1091,8 @@ jobs:
             echo "- \`$name\` downloads without a sign-in" >>"$GITHUB_STEP_SUMMARY"
           done
 
-  # Formula/floti.rb in floti-dev/homebrew-tap, so `brew install
-  # floti-dev/tap/floti` installs this release's floti on macOS arm64 and on
+  # Formula/floti.rb in floti-dev/homebrew-tap, so `brew trust floti-dev/tap
+  # && brew install floti-dev/tap/floti` installs this release's floti on macOS arm64 and on
   # Linux x64 and arm64 (decision I9: the binary only, no cask). Only a stable
   # release updates it; a preview never does. The formula is built
   # (scripts/package-managers.mjs) from the SHA-256 list the release published,

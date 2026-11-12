@@ -545,8 +545,14 @@ are done, a real release fails at `sign`, before anything is published.
 A stable release also goes to two package managers, with the floti binary
 only: the desktop app is not in either.
 
-- **Homebrew**: the formula `floti` in floti-dev/homebrew-tap, installed with
-  `brew install floti-dev/tap/floti`, for macOS arm64 and Linux x64 and arm64.
+- **Homebrew**: the formula `floti` in floti-dev/homebrew-tap, for macOS
+  arm64 and Linux x64 and arm64, installed with
+
+      brew trust floti-dev/tap && brew install floti-dev/tap/floti
+
+  Homebrew refuses to load any formula from a third-party tap until the user
+  trusts that tap, so `brew install` alone fails with "Refusing to load
+  formula ... from untrusted tap". This is the line the install page gives.
   There is no cask for the desktop app until it is signed: Homebrew
   quarantines casks. The formula's test runs `floti version`.
 - **winget**: the package `FlotiDev.Floti`, installer type portable, run as
@@ -620,7 +626,7 @@ The run's summary lists each with its SHA-256 and gives the run's public key.
 `homebrew-dry-run` and `winget-dry-run` build the formula and the winget
 manifests from the run's SHA-256 list, as a release would, preview or not.
 The formula goes through `brew style` and `brew audit --strict` in a tap of
-its own on the runner, then `brew install` and `brew test` on macOS arm64 and
+its own on the runner, trusted with `brew trust` as a user's is, then `brew install` and `brew test` on macOS arm64 and
 Linux x64, with the run's own file put in Homebrew's download cache so the
 formula installed is the very text a release would push. The manifests go
 through `winget validate`. They are kept for seven days as the
