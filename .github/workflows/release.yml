@@ -769,17 +769,105 @@ jobs:
           # What a dry run is for, so it stays a week.
           retention-days: 7
 
-  # A dry run's Homebrew formula, built as `homebrew` builds a release's
-  # (scripts/package-managers.mjs) but from this run's SHA-256 list, and
-  # checked by Homebrew itself on macOS arm64 and Linux x64: `brew style` and
-  # `brew audit` in a tap of its own on the runner, then `brew install` and
-  # `brew test`, with the run's own file put in Homebrew's download cache
-  # first. So the formula installed is the very text a release would push,
-  # URLs and all, though nothing is published at them. Pushes nothing. A
-  # preview's dry run builds and checks it too, although a preview never
-  # updates the tap.
-  homebrew-dry-run:
+      # The SHA-256 list, its signature and this run's public key, which
+      # `packages-dry-run` checks as `homebrew` and `winget` check a release's.
+      - name: Gather the SHA-256 list, its signature and the run's public key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/dry-run-sums"
+          cp "$RUNNER_TEMP/release/floti-$VERSION-SHA256SUMS" "$RUNNER_TEMP/release/floti-$VERSION-SHA256SUMS.minisig" \
+            "$RUNNER_TEMP/dry-run-sums/"
+          cp "$RUNNER_TEMP/dry-run-key/minisign.pub" "$RUNNER_TEMP/dry-run-sums/dry-run-minisign.pub"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-sums
+          path: ${{ runner.temp }}/dry-run-sums/
+          if-no-files-found: error
+          retention-days: 1
+
+  # A dry run's Homebrew formula and winget manifests, built as `homebrew` and
+  # `winget` build a release's (scripts/package-managers.mjs): from the run's
+  # SHA-256 list, after its signature is checked by the same published-sums
+  # action, here against the public key of the pair `sign-dry-run` made. A
+  # preview's dry run builds them too, although a preview updates neither.
+  #
+  # Beside them it builds the formula a stable release of the same number
+  # would push, from the same list with the files renamed, so the stable form
+  # is checked even when the branch's version is a preview.
+  packages-dry-run:
     needs: [version, sign-dry-run]
+    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Fetch the run's SHA-256 list, its signature and its public key
+        uses: actions/download-artifact@v4
+        with:
+          name: dry-run-sums
+          path: ${{ runner.temp }}/dry-run-sums
+
+      - id: sums
+        uses: ./.github/actions/published-sums
+        with:
+          version: ${{ env.VERSION }}
+          tag: ${{ env.TAG }}
+          folder: ${{ runner.temp }}/dry-run-sums
+          public-key: ${{ runner.temp }}/dry-run-sums/dry-run-minisign.pub
+
+      - name: Write the formulas and the manifests
+        shell: bash
+        env:
+          SUMS: ${{ steps.sums.outputs.sums }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/packages"
+          mkdir -p "$out/homebrew/Formula" "$out/homebrew-stable/Formula"
+          node packages/desktop/scripts/package-managers.mjs formula "$SUMS" "$VERSION" "$GITHUB_REPOSITORY" \
+            >"$out/homebrew/Formula/floti.rb"
+          stable=${VERSION%%-*}
+          sed "s/ floti-$VERSION-/ floti-$stable-/" "$SUMS" >"$RUNNER_TEMP/stable-sums"
+          node packages/desktop/scripts/package-managers.mjs formula "$RUNNER_TEMP/stable-sums" "$stable" "$GITHUB_REPOSITORY" \
+            >"$out/homebrew-stable/Formula/floti.rb"
+          node packages/desktop/scripts/package-managers.mjs winget "$SUMS" "$VERSION" "$GITHUB_REPOSITORY" "$out/winget" >/dev/null
+          find "$out" -type f | LC_ALL=C sort | while IFS= read -r file; do echo "--- ${file#"$out"/}"; cat "$file"; done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: homebrew-formula
+          path: |
+            ${{ runner.temp }}/packages/homebrew/
+            ${{ runner.temp }}/packages/homebrew-stable/
+          if-no-files-found: error
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: winget-manifests
+          path: ${{ runner.temp }}/packages/winget/
+          if-no-files-found: error
+          retention-days: 7
+
+  # The dry run's formula, checked by Homebrew itself on macOS arm64 and Linux
+  # x64, in the order the documented install line takes: the tap (here a tap of
+  # its own on the runner, made with `brew tap-new`), `brew trust`, then the
+  # formula. `brew style` and `brew audit --strict` check it and the stable
+  # form beside it, then `brew install` and `brew test` run it, with the run's
+  # own file put in Homebrew's download cache first, so the formula installed
+  # is the very text a release would push, URLs and all, though nothing is
+  # published at them. Pushes nothing.
+  homebrew-dry-run:
+    needs: [version, packages-dry-run]
     if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'true'
     strategy:
       fail-fast: false
@@ -794,20 +882,21 @@ jobs:
       VERSION: ${{ needs.version.outputs.version }}
       # The tap's own name, so `brew audit` sees the formula where it will live.
       TAP: floti-dev/tap
+      # Where the stable form is checked, beside it.
+      STABLE_TAP: floti-dev/stable
       HOMEBREW_NO_AUTO_UPDATE: '1'
       HOMEBREW_NO_ANALYTICS: '1'
       HOMEBREW_NO_ENV_HINTS: '1'
       HOMEBREW_NO_INSTALL_CLEANUP: '1'
 
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v6
+      - name: Fetch the formulas
+        uses: actions/download-artifact@v4
         with:
-          node-version: 22
+          name: homebrew-formula
+          path: ${{ runner.temp }}/homebrew-formula
 
-      # The floti files and their SHA-256 list, byte for byte the ones
-      # `release-files` carries.
+      # The floti files, byte for byte the ones `release-files` carries.
       - name: Fetch the run's floti files
         uses: actions/download-artifact@v4
         with:
@@ -819,30 +908,33 @@ jobs:
         shell: bash
         run: command -v brew >/dev/null || echo /home/linuxbrew/.linuxbrew/bin >>"$GITHUB_PATH"
 
-      - name: Write the formula
+      # Homebrew loads no formula from a third-party tap until the tap is
+      # trusted, so the install line a user is given trusts it
+      # (docs/PACKAGING.md, "Homebrew and winget"). Whether `brew trust` takes
+      # a tap that is not tapped yet decides whether that line can trust it
+      # before tapping; the line taps first, and this records the answer.
+      - name: Ask whether brew trust takes a tap before it is tapped
         shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/homebrew/Formula"
-          node packages/desktop/scripts/package-managers.mjs formula \
-            "$RUNNER_TEMP/floti-release/floti-$VERSION-SHA256SUMS" "$VERSION" "$GITHUB_REPOSITORY" \
-            >"$RUNNER_TEMP/homebrew/Formula/floti.rb"
-          cat "$RUNNER_TEMP/homebrew/Formula/floti.rb"
-
-      - name: Check it with brew style and brew audit
-        shell: bash
-        run: |
-          set -euo pipefail
+          set -uo pipefail
           brew --version
-          brew tap-new --no-git "$TAP" >/dev/null
-          cp "$RUNNER_TEMP/homebrew/Formula/floti.rb" "$(brew --repository "$TAP")/Formula/floti.rb"
-          # Homebrew loads no formula from a third-party tap until the tap is
-          # trusted, so a user runs this too (docs/PACKAGING.md, "Homebrew and
-          # winget"). The help is printed so the run records the form it takes.
           brew trust --help
-          brew trust "$TAP"
-          brew style "$TAP/floti"
-          brew audit --strict "$TAP/floti"
+          if brew trust "$TAP"; then said="takes"; else said="refuses"; fi
+          echo "brew trust $said a tap that is not tapped yet."
+          echo "- Homebrew on \`${{ matrix.target }}\`: \`brew trust\` $said a tap that is not tapped yet" >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Tap, trust, and check both formulas with brew style and brew audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pair in "$TAP homebrew" "$STABLE_TAP homebrew-stable"; do
+            read -r tap folder <<<"$pair"
+            brew tap-new --no-git "$tap" >/dev/null
+            brew trust "$tap"
+            cp "$RUNNER_TEMP/homebrew-formula/$folder/Formula/floti.rb" "$(brew --repository "$tap")/Formula/floti.rb"
+            brew style "$tap/floti"
+            brew audit --strict "$tap/floti"
+          done
 
       # `brew --cache` names the file Homebrew would download the formula's URL
       # to; one already there with the right SHA-256 is used as downloaded.
@@ -857,74 +949,37 @@ jobs:
           brew test "$TAP/floti"
           said=$("$(brew --prefix)/bin/floti" version)
           echo "$said"
-          echo "- Homebrew on \`${{ matrix.target }}\`: \`brew style\`, \`brew audit --strict\`, \`brew install\` and \`brew test\` pass; it runs \`$said\`" >>"$GITHUB_STEP_SUMMARY"
+          echo "- Homebrew on \`${{ matrix.target }}\`: \`brew style\` and \`brew audit --strict\` pass the formula and its stable form, \`brew install\` and \`brew test\` pass; it runs \`$said\`" >>"$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
-        if: matrix.target == 'macos-arm64'
-        with:
-          name: homebrew-formula
-          path: ${{ runner.temp }}/homebrew/
-          if-no-files-found: error
-          retention-days: 7
-
-  # A dry run's winget manifests, built as `winget` builds a release's but from
-  # this run's SHA-256 list, and checked with `winget validate`. Opens nothing.
-  # A preview's dry run builds and checks them too, although a preview never
-  # goes to winget.
+  # The dry run's winget manifests, checked with `winget validate`. Opens
+  # nothing.
   winget-dry-run:
-    needs: [version, sign-dry-run]
+    needs: [version, packages-dry-run]
     if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'true'
     runs-on: windows-latest
-    env:
-      VERSION: ${{ needs.version.outputs.version }}
 
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-
-      - name: Fetch the run's floti files
+      - name: Fetch the manifests
         uses: actions/download-artifact@v4
         with:
-          name: floti-release
-          path: ${{ runner.temp }}/floti-release
-
-      - name: Write the manifests
-        id: manifests
-        shell: bash
-        run: |
-          set -euo pipefail
-          node packages/desktop/scripts/package-managers.mjs winget \
-            "$RUNNER_TEMP/floti-release/floti-$VERSION-SHA256SUMS" "$VERSION" "$GITHUB_REPOSITORY" "$RUNNER_TEMP/winget" \
-            >"$RUNNER_TEMP/winget-paths"
-          echo "folder=$(dirname "$(head -n1 "$RUNNER_TEMP/winget-paths")")" >>"$GITHUB_OUTPUT"
-          while IFS= read -r path; do echo "--- $path"; cat "$RUNNER_TEMP/winget/$path"; done <"$RUNNER_TEMP/winget-paths"
+          name: winget-manifests
+          path: ${{ runner.temp }}/winget
 
       - name: Check them with winget validate
         shell: pwsh
-        env:
-          FOLDER: ${{ steps.manifests.outputs.folder }}
         run: |
           if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
             Write-Output '::error::winget is not on this runner, so the manifests cannot be validated'
             exit 1
           }
           Write-Output "winget $(winget --version)"
-          winget validate --manifest (Join-Path $env:RUNNER_TEMP 'winget' $env:FOLDER)
+          $folder = (Get-ChildItem (Join-Path $env:RUNNER_TEMP 'winget') -Recurse -Filter '*.installer.yaml' | Select-Object -First 1).DirectoryName
+          winget validate --manifest $folder
           if ($LASTEXITCODE -ne 0) {
-            Write-Output "::error::winget validate refused the manifests in $env:FOLDER (exit $LASTEXITCODE)"
+            Write-Output "::error::winget validate refused the manifests in $folder (exit $LASTEXITCODE)"
             exit 1
           }
-          Add-Content $env:GITHUB_STEP_SUMMARY "- winget: ``winget validate`` passes the manifests in ``$env:FOLDER``"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: winget-manifests
-          path: ${{ runner.temp }}/winget/
-          if-no-files-found: error
-          retention-days: 7
+          Add-Content $env:GITHUB_STEP_SUMMARY "- winget: ``winget validate`` passes the manifests in ``$folder``"
 
   # The only job that writes to the repository or makes an attestation, and it
   # never runs in a dry run.
@@ -1107,7 +1162,7 @@ jobs:
   # nothing else.
   homebrew:
     needs: [version, publish]
-    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run != 'true' && needs.version.outputs.preview != 'true'
+    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'false' && needs.version.outputs.preview == 'false'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -1201,7 +1256,7 @@ jobs:
           keys=$(mktemp -d "$RUNNER_TEMP/tap-key.XXXXXX")
           trap 'rm -rf "$keys"' EXIT
           printf '%s\n' "${HOMEBREW_TAP_DEPLOY_KEY%$'\n'}" >"$keys/key"
-          export GIT_SSH_COMMAND="ssh -i $keys/key -o IdentitiesOnly=yes -o IdentityAgent=none -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/tap-ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $keys/key -o BatchMode=yes -o IdentitiesOnly=yes -o IdentityAgent=none -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/tap-ssh/known_hosts"
           if ! git push --quiet "git@github.com:$TAP.git" "HEAD:refs/heads/$BRANCH"; then
             echo "::error::HOMEBREW_TAP_DEPLOY_KEY could not push to $TAP: add its public half to $TAP as a deploy key with write access (docs/PACKAGING.md, \"Homebrew and winget\")."
             exit 1
@@ -1220,14 +1275,22 @@ jobs:
   # has from their own reading of the release, so they cannot submit the first
   # version, and they would write manifests of their own rather than these.
   #
-  # WINGET_TOKEN is a classic token with the public_repo scope, of the account
-  # that holds the fork of microsoft/winget-pkgs; the job finds the fork as
-  # <that account>/winget-pkgs. On a re-run it moves its branch to a fresh
-  # commit and reuses a pull request already open. Like `homebrew`, it fails
-  # after the release is out while a prerequisite is missing, naming it.
+  # WINGET_TOKEN is a classic token with the public_repo scope, of a GitHub
+  # account kept for this alone, which holds the fork of microsoft/winget-pkgs
+  # and has no access to floti-dev: public_repo lets the token push to every
+  # public repository its account can, and floti-dev/floti's main is what a
+  # release signs. The job finds the fork as <that account>/winget-pkgs.
+  #
+  # The commit's parent is upstream's master, not the fork's: the fork is never
+  # synced, because syncing is refused without the workflow scope whenever
+  # winget-pkgs has changed its own workflows, and the token never gets that
+  # scope. On a re-run it moves its branch to a fresh commit and reuses a pull
+  # request already open, and once the version is in winget-pkgs it does
+  # nothing. Like `homebrew`, it fails after the release is out while a
+  # prerequisite is missing, naming it.
   winget:
     needs: [version, publish]
-    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run != 'true' && needs.version.outputs.preview != 'true'
+    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'false' && needs.version.outputs.preview == 'false'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -1274,28 +1337,48 @@ jobs:
           set -euo pipefail
           setup='(docs/PACKAGING.md, "Homebrew and winget")'
           if [[ -z ${GH_TOKEN:-} ]]; then
-            echo "::error::WINGET_TOKEN is not set in the release environment: set a classic token with the public_repo scope, of the account holding a fork of $UPSTREAM, as that environment's secret $setup."
+            echo "::error::WINGET_TOKEN is not set in the release environment: set a classic token with the public_repo scope, of a GitHub account kept for this alone that holds a fork of $UPSTREAM and has no access to floti-dev, as that environment's secret $setup."
             exit 1
           fi
           if ! login=$(gh api user --jq .login 2>/dev/null); then
             echo "::error::GitHub does not accept WINGET_TOKEN: replace it with a working classic token with the public_repo scope $setup."
             exit 1
           fi
+
+          # Succeeds when GitHub answers for the path, fails when it answers
+          # 404, and ends the job on any other error rather than guessing.
+          exists() {
+            local said
+            if said=$(gh api "$1" --silent 2>&1); then return 0; fi
+            if grep -q 'HTTP 404' <<<"$said"; then return 1; fi
+            echo "::error::could not ask GitHub for $1: $(tr '\n' ' ' <<<"$said")"
+            exit 1
+          }
+
+          # A re-run after the pull request was merged has nothing left to do.
+          if exists "repos/$UPSTREAM/contents/$FOLDER"; then
+            echo "$ID $VERSION is already in $UPSTREAM."
+            echo "- winget: \`$ID\` \`$VERSION\` is already in \`$UPSTREAM\`" >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           fork="$login/winget-pkgs"
-          if [[ $(gh api "repos/$fork" --jq '.parent.full_name // ""' 2>/dev/null || true) != "$UPSTREAM" ]]; then
+          parent=""
+          if exists "repos/$fork"; then parent=$(gh api "repos/$fork" --jq '.parent.full_name // ""'); fi
+          if [[ $parent != "$UPSTREAM" ]]; then
             echo "::error::$fork is not a fork of $UPSTREAM: fork $UPSTREAM into $login, the account WINGET_TOKEN belongs to $setup."
             exit 1
           fi
 
           # "New package" the first time winget-pkgs hears of it, then "New version".
-          if gh api "repos/$UPSTREAM/contents/$(dirname "$FOLDER")" --silent 2>/dev/null; then kind="New version"; else kind="New package"; fi
+          if exists "repos/$UPSTREAM/contents/$(dirname "$FOLDER")"; then kind="New version"; else kind="New package"; fi
           title="$kind: $ID version $VERSION"
 
-          # One commit on the fork's master, brought up to date with upstream's
-          # first, holding the three manifests.
-          gh api -X POST "repos/$fork/merge-upstream" -f branch=master --silent
-          base=$(gh api "repos/$fork/git/ref/heads/master" --jq .object.sha)
-          tree=$(jq -n --arg base "$(gh api "repos/$fork/git/commits/$base" --jq .tree.sha)" '{base_tree: $base, tree: []}')
+          # One commit holding the three manifests, on upstream's master as it
+          # is now. A fork shares its upstream's objects, so the fork's API
+          # builds on that commit without the fork being synced.
+          base=$(gh api "repos/$UPSTREAM/git/ref/heads/master" --jq .object.sha)
+          tree=$(jq -n --arg base "$(gh api "repos/$UPSTREAM/git/commits/$base" --jq .tree.sha)" '{base_tree: $base, tree: []}')
           while IFS= read -r path; do
             blob=$(jq -n --rawfile content "$RUNNER_TEMP/winget/$path" '{content: $content, encoding: "utf-8"}' \
               | gh api "repos/$fork/git/blobs" --input - --jq .sha)

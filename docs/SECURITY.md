@@ -97,13 +97,19 @@ preview.
   whether the push worked or not. The push checks GitHub's host key against
   the keys GitHub's API lists, fetched over HTTPS. The clone before it is
   anonymous.
-- `WINGET_TOKEN` is a classic token with the `public_repo` scope, of the
-  personal account holding the fork of microsoft/winget-pkgs. Only the last
-  step of the `winget` job reads it, as `GH_TOKEN` for gh, and that step makes
-  one commit on the fork and opens or finds one pull request. The scope
-  reaches every public repository of that account, so the account should hold
-  nothing else that matters, and the token is replaced where it was made if it
-  ever leaks.
+- `WINGET_TOKEN` is a classic token with the `public_repo` scope, of a GitHub
+  account kept for this alone, which holds the fork of microsoft/winget-pkgs
+  and has no access to floti-dev. That scope is not limited to the fork: it
+  lets the token push to, and open or merge pull requests in, every public
+  repository the account can write to. On an account that could push to
+  floti-dev/floti, whose `main` a release builds and signs, a leaked token
+  would be as bad as a leaked signing key; on an account that holds only the
+  fork, it can push branches to that fork and open pull requests as that
+  account, nothing more. Only the last step of the `winget` job reads it, as
+  `GH_TOKEN` for gh, and that step makes one commit on the fork and opens or
+  finds one pull request. It never syncs the fork, so the token never needs
+  the `workflow` scope. If it leaks, it is revoked where it was made and
+  replaced.
 - Both jobs pin `actions/checkout` and `actions/setup-node` by commit, run no
   third-party action, and have `contents: read` only. What they publish is
   built from the release's SHA-256 list after its signature is checked

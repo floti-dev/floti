@@ -52,7 +52,8 @@ repository secret (docs/PACKAGING.md, "The release environment"). A stable
 release then pushes the Homebrew formula to floti-dev/homebrew-tap and opens
 the winget pull request, after the release is published; a preview does
 neither. Each needs a prerequisite the owner creates once - the tap and
-`HOMEBREW_TAP_DEPLOY_KEY`, a winget-pkgs fork and `WINGET_TOKEN` - and its job
+`HOMEBREW_TAP_DEPLOY_KEY`, a winget-pkgs fork and `WINGET_TOKEN` on a GitHub
+account kept for this alone, with no access to floti-dev - and its job
 fails naming the missing one, to be re-run once it exists (docs/PACKAGING.md,
 "Homebrew and winget"). A dry run builds the formula and manifests, checks
 them with Homebrew and winget, and pushes nothing. Then merge and push. CI runs `pnpm check`

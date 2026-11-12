@@ -2,18 +2,29 @@ name: published-sums
 description: >
   Fetches a published release's floti-<version>-SHA256SUMS and its signature,
   as anybody downloads them, with no token, and checks the signature against
-  the committed public key before anything uses the list.
+  the committed public key before anything uses the list. A dry run gives a
+  folder holding its own list and signature, and the public key of the pair
+  sign-dry-run made, instead.
 
 # The package manager jobs build the Homebrew formula and the winget manifests
 # from this list and nothing else, so what they hand on names exactly the files
 # and SHA-256s the release published and signed. Needs node and the checkout.
+# The minisign action it uses runs on Linux x64 only.
 inputs:
   version:
     description: The release's version.
     required: true
   tag:
-    description: The release's tag.
+    description: The release's tag, which the list is downloaded from.
     required: true
+  folder:
+    description: A folder already holding the list and its .minisig; when given, nothing is downloaded.
+    required: false
+    default: ''
+  public-key:
+    description: The minisign public key file the signature is checked against.
+    required: false
+    default: crates/host/src/update/minisign.pub
 outputs:
   sums:
     description: The checked list's path.
@@ -28,16 +39,22 @@ runs:
       env:
         VERSION: ${{ inputs.version }}
         TAG: ${{ inputs.tag }}
+        FOLDER: ${{ inputs.folder }}
+        PUBLIC_KEY: ${{ inputs.public-key }}
       run: |
         set -euo pipefail
         dir="$RUNNER_TEMP/published-sums"
         mkdir -p "$dir"
         sums="$dir/floti-$VERSION-SHA256SUMS"
         for file in "$sums" "$sums.minisig"; do
-          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$(basename "$file")"
-          env -u GH_TOKEN -u GITHUB_TOKEN curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
-            --output "$file" "$url"
+          name=$(basename "$file")
+          if [[ -n $FOLDER ]]; then
+            cp "$FOLDER/$name" "$file"
+          else
+            env -u GH_TOKEN -u GITHUB_TOKEN curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+              --output "$file" "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$name"
+          fi
         done
-        node packages/desktop/scripts/minisign.mjs verify --public-key crates/host/src/update/minisign.pub \
+        node packages/desktop/scripts/minisign.mjs verify --public-key "$PUBLIC_KEY" \
           --comment "floti $VERSION {name}" "$sums"
         echo "sums=$sums" >>"$GITHUB_OUTPUT"
