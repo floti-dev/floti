@@ -1157,7 +1157,10 @@ jobs:
   # desktop installer then runs silently over that install
   # (try-installer.ps1), which must leave the same floti, the release's for
   # this CPU, and the same setup, with nothing running from the app's folder.
-  # Publishes nothing.
+  # Last, try-uninstall.sh or try-uninstall.ps1 runs `floti uninstall`, which
+  # must take off what was installed and keep the data, then `--purge`, which
+  # must remove the data, then `floti uninstall` again, which must find
+  # nothing. Publishes nothing.
   install-dry-run:
     needs: [version, assemble]
     if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'true'
@@ -1242,13 +1245,24 @@ jobs:
         shell: powershell
         run: ./scripts/floti.dev/try-installer.ps1 -Installer (Join-Path $env:RUNNER_TEMP "desktop\Helm-$env:VERSION-setup.exe") -Served (Join-Path $env:RUNNER_TEMP 'served') -Version $env:VERSION -Target '${{ matrix.target }}' -Order after-script
 
+      - name: Uninstall floti, then purge, then uninstall again
+        if: runner.os != 'Windows'
+        shell: bash
+        run: sh scripts/floti.dev/try-uninstall.sh '${{ matrix.setup }}' 'install.sh on ${{ matrix.target }}'
+
+      - name: Uninstall floti and the desktop app, then purge, then uninstall again
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/floti.dev/try-uninstall.ps1 -By 'install.ps1 and the installer on ${{ matrix.target }}'
+
   # The desktop's Windows installer alone, on a clean x64 and a clean arm64
   # runner where nothing of Floti's is there first: run silently and per user,
   # it must put the release's floti for this CPU in
   # %LOCALAPPDATA%\Programs\Floti\bin, put that folder on the user's Path,
   # register the logon task "Floti host" running it, and leave nothing
   # running from the app's own folder (scripts/floti.dev/try-installer.ps1).
-  # Publishes nothing.
+  # Then the same uninstall, purge and second uninstall as `install-dry-run`
+  # (try-uninstall.ps1), which must also remove the app. Publishes nothing.
   installer-dry-run:
     needs: [version, assemble]
     if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'true'
@@ -1283,11 +1297,17 @@ jobs:
         shell: powershell
         run: ./scripts/floti.dev/try-installer.ps1 -Installer (Join-Path $env:RUNNER_TEMP "desktop\Helm-$env:VERSION-setup.exe") -Served (Join-Path $env:RUNNER_TEMP 'served') -Version $env:VERSION -Target '${{ matrix.target }}' -Order alone
 
+      - name: Uninstall floti and the desktop app, then purge, then uninstall again
+        shell: powershell
+        run: ./scripts/floti.dev/try-uninstall.ps1 -By 'the installer on ${{ matrix.target }}'
+
   # install.sh in a Debian container, with curl and nothing else of the
   # runner's: python3 only serves the files. As root, setup is refused, which
   # is the line the script must reach, and registers nothing. Then as an
   # ordinary user in what setup takes for a WSL distro (`WSL_DISTRO_NAME`
   # set), where no systemd runs, setup leaves the start-on-connect marker.
+  # After each, the same uninstall, purge and second uninstall as
+  # `install-dry-run` (try-uninstall.sh).
   install-dry-run-debian:
     needs: [version, assemble]
     if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'true'
@@ -1324,15 +1344,19 @@ jobs:
         shell: sh
         run: sh scripts/floti.dev/check-setup.sh refused "$VERSION" 'install.sh as root in debian'
 
+      - name: Uninstall floti as root, then purge, then uninstall again
+        shell: sh
+        run: sh scripts/floti.dev/try-uninstall.sh refused 'install.sh as root in debian'
+
       # The user reads its own copies under /tmp: the workspace and the
       # runner's folders belong to root.
-      - name: Install floti with install.sh as a user, in a WSL distro without systemd
+      - name: Install and uninstall floti as a user, in a WSL distro without systemd
         shell: sh
         run: |
           set -eu
           useradd --create-home --shell /bin/sh floti-user
           mkdir /tmp/try
-          cp -R "$RUNNER_TEMP/served" scripts/floti.dev/try-install.sh scripts/floti.dev/check-setup.sh /tmp/try/
+          cp -R "$RUNNER_TEMP/served" scripts/floti.dev/try-install.sh scripts/floti.dev/check-setup.sh scripts/floti.dev/try-uninstall.sh /tmp/try/
           : >/tmp/try/summary
           chmod -R a+rX /tmp/try
           chmod a+w /tmp/try/summary
@@ -1341,6 +1365,7 @@ jobs:
             set -eu
             sh /tmp/try/try-install.sh /tmp/try/served "$1" linux-x64
             sh /tmp/try/check-setup.sh start-on-connect "$1" "install.sh as a user in debian taken for WSL"
+            sh /tmp/try/try-uninstall.sh start-on-connect "install.sh as a user in debian taken for WSL"
           ' sh "$VERSION"
           cat /tmp/try/summary >>"$GITHUB_STEP_SUMMARY"
 

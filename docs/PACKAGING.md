@@ -109,7 +109,7 @@ runs the copy inside it. A release build carries the release's own floti
 instead of building it again (see [floti for every host](#floti-for-every-host)),
 with the release's SHA-256 list beside it as `floti-SHA256SUMS`; a local build
 carries no list. A release's Windows build also carries the release's floti
-for Windows on arm64, as `resourcesloti-arm64.exe`, beside the x64
+for Windows on arm64, as `resources\floti-arm64.exe`, beside the x64
 `floti.exe`: `floti install-self`, run by the installer from the x64 one,
 installs the arm64 one on a computer whose own CPU is arm64, so Windows on
 Arm never gets an emulated floti from the installer. A local build carries
@@ -956,6 +956,32 @@ the same setup" means: the same floti on the same `Path`, started by the
 same logon task. `floti doctor` is not the check, because on a runner it
 reports Claude Code missing, which says nothing about setup.
 
+Last in each of those jobs, on every runner and in both container runs,
+`scripts/floti.dev/try-uninstall.sh` or `try-uninstall.ps1` runs
+[`floti uninstall`](#floti-uninstall) three times, each of which must exit 0:
+
+1. `floti uninstall`, from the installed floti. floti and its `node`, the
+   sign-in entry (the unit, the LaunchAgent and what launchd has loaded, the
+   logon task, or the start-on-connect marker), the desktop app where an
+   installer put it there (`Helm.exe` and the Start menu's `Helm.lnk`) and,
+   on Windows, floti's folder on the user's `Path` must be gone, with the
+   lines that say so, and where a host ran it must say it stopped it. The
+   data folder, where setup made one, must stay (`data: kept`). On Windows
+   the `floti.exe` it ran from goes once it exits, and `Programs\Floti`
+   after it, which is waited for up to a minute; where the runner would not
+   let the deleting PowerShell start, uninstall says the copy is left for
+   the next sweep, and the job warns instead. Lingering and the desktop
+   app's settings are left as uninstall leaves them, and not checked.
+2. `floti uninstall --purge`, and the data folder must be gone.
+3. `floti uninstall` again, which must change nothing: no line says
+   anything was removed, stopped or closed, and the sign-in entry, the
+   desktop app and the data each say `not found`.
+
+floti removes itself in the first run, so the other two run a copy of it
+made beforehand outside its install place, which removes what the install
+put there and leaves itself, as a floti from elsewhere does: the third
+run's last line is `floti: left as it is`.
+
 `floti add desktop` cannot run in a dry run: it fetches from the releases
 address built into floti and checks the desktop files' list with the key
 built into it, which refuses a list signed with the run's key. So
@@ -1399,7 +1425,8 @@ status 2.
 Its tests use fake folders and a fake system, never the computer's own
 (`crates/host/tests/uninstall.rs`, `src/uninstall/tests.rs`, and the
 `unregister`, `removal`, `remove` and `delete_after_exit` tests in each
-concern). The install and uninstall run for real only on CI runners.
+concern). The install and uninstall run for real only on CI runners, in the
+release's dry run ([A dry run](#a-dry-run)).
 
 ## Updates in Helm
 
