@@ -443,6 +443,40 @@ fn macos_hands_its_own_floti_to_install_self_and_the_appimage_none() {
 }
 
 #[test]
+fn each_os_opens_the_installed_app_by_its_own_program() {
+    let windows_app = Desktop {
+        name: "Helm",
+        path: std::path::PathBuf::from(r"C:\Users\Me\AppData\Local\Programs\Helm"),
+    };
+    assert_eq!(
+        windows::Native.opener(&windows_app),
+        (
+            std::path::PathBuf::from(r"C:\Users\Me\AppData\Local\Programs\Helm\Helm.exe"),
+            Vec::new()
+        )
+    );
+    let mac_app = Desktop {
+        name: "Helm",
+        path: std::path::PathBuf::from("/Users/me/Applications/Helm.app"),
+    };
+    assert_eq!(
+        macos::Native.opener(&mac_app),
+        (
+            std::path::PathBuf::from("/usr/bin/open"),
+            vec!["/Users/me/Applications/Helm.app".to_owned()]
+        )
+    );
+    let image = Desktop {
+        name: "Helm",
+        path: std::path::PathBuf::from("/home/me/Applications/Helm.AppImage"),
+    };
+    assert_eq!(
+        linux::Native.opener(&image),
+        (image.path.clone(), Vec::new())
+    );
+}
+
+#[test]
 fn what_an_install_left_beside_the_app_is_found_with_the_process_that_left_it() {
     let dirs = TestDirs::new();
     let apps = dirs.folder("apps dir");

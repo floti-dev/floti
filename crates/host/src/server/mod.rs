@@ -95,7 +95,6 @@ use crate::platform::wsl::{self, WslProgram, WslSide};
 use crate::session::ClientId;
 use crate::store::Store;
 use crate::update;
-use crate::workspace::settings::SettingsService;
 use crate::{Error, Result};
 
 use agent_tools::HostAgentTools;
@@ -343,9 +342,10 @@ pub struct HostRun {
     pub config_read_only: bool,
     /// The floti installed on its own this host runs from, which it keeps up
     /// to date in the background while `updateCheck` is on
-    /// ([`update::background`]), relaunching on a newer one. `None` for a
-    /// host that runs any other floti, or whose config folder is another
-    /// host's: it never looks.
+    /// ([`update::background`]), relaunching on a newer one, checks when a
+    /// client asks and updates with the desktop app (`update:*`). `None` for
+    /// a host that runs any other floti, or whose config folder is another
+    /// host's: it never looks, and tells its clients why.
     pub updates: Option<PathBuf>,
 }
 
@@ -541,7 +541,7 @@ impl Host {
 
         let (stopper, stop_requested) = Stopper::new();
         if let Some((binary, data)) = updates {
-            start_background_update(features.settings(), data, binary, stopper.clone());
+            start_background_update(&features, data, binary, stopper.clone());
         }
         let (shutdown, shutdown_rx) = watch::channel(false);
         tokio::spawn(hosted::settle_on_exits(
@@ -688,15 +688,18 @@ impl Host {
 }
 
 /// Keeps floti at `binary` up to date in the background while the
-/// `updateCheck` setting is on, following every change to it, and stops the
-/// host to relaunch on a newer floti once one is in place. A setting that
-/// cannot be read counts as off: nothing is contacted on a guess.
-fn start_background_update(
-    settings: &Arc<SettingsService>,
-    data: PathBuf,
-    binary: PathBuf,
-    stopper: Stopper,
-) {
+/// `updateCheck` setting is on, following every change to it, and checks at
+/// once whenever a client asks (`update:check`), telling clients each check
+/// (`update:state`). It stops the host to relaunch on a newer floti once one
+/// is in place. A setting that cannot be read counts as off: nothing is
+/// contacted on a guess.
+fn start_background_update(features: &Features, data: PathBuf, binary: PathBuf, stopper: Stopper) {
+    let settings = features.settings();
+    let updates = features.updates();
+    let Some(asks) = updates.take_asks() else {
+        return;
+    };
+    let told = updates.teller();
     let enabled = settings.read().is_ok_and(|settings| settings.update_check);
     let (on, watched) = watch::channel(enabled);
     settings.on_change(move |settings| {
@@ -709,8 +712,15 @@ fn start_background_update(
             let (data, binary) = (data.clone(), binary.clone());
             move || update::background::check_now(&data, &binary)
         };
-        let ended =
-            update::background::keep_up_to_date(data, watched, jiff::Timestamp::now, check).await;
+        let ended = update::background::keep_up_to_date(
+            data,
+            watched,
+            asks,
+            jiff::Timestamp::now,
+            check,
+            told,
+        )
+        .await;
         if ended == update::background::Ended::Relaunch && stopper.stop(HostStopReason::Relaunch) {
             log_line!("floti host: stopping to start the new floti in its place.");
         }

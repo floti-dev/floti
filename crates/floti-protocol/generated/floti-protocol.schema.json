@@ -10631,6 +10631,24 @@
       ],
       "type": "object"
     },
+    "UpdateProgress": {
+      "description": "Where a `floti update` the host started has got to.",
+      "properties": {
+        "line": {
+          "description": "The last line it said, as a sentence.",
+          "type": "string"
+        },
+        "waitingForApp": {
+          "description": "Whether everything is downloaded and checked and it waits for the\ndesktop app to quit, to replace it.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "line",
+        "waitingForApp"
+      ],
+      "type": "object"
+    },
     "UpdateSide": {
       "description": "Which side has to be updated for two versions to talk.",
       "enum": [
@@ -10638,6 +10656,94 @@
         "host"
       ],
       "type": "string"
+    },
+    "UpdateState": {
+      "description": "What the host knows about updates now.",
+      "properties": {
+        "channel": {
+          "description": "The channel it follows: `stable` unless `floti update --channel`\nchose another.",
+          "type": "string"
+        },
+        "checkedAt": {
+          "description": "When that check read the manifest, by the host's clock, as RFC 3339\ntext; null when none has.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checking": {
+          "description": "Whether a check runs now.",
+          "type": "boolean"
+        },
+        "failed": {
+          "description": "Why the last check failed, as one sentence; null when it did not, or\nnone has run since the host started.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "installFailed": {
+          "description": "Why the last `floti update` this host started failed, as the line it\nended with; null when it did not, until the next one starts.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "installing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UpdateProgress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The `floti update` this host started, while it runs."
+        },
+        "newest": {
+          "description": "The channel's newest version, as the last check that read the\nmanifest found it; null when none has.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "running": {
+          "description": "The floti this host runs.",
+          "type": "string"
+        },
+        "unavailable": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UpdateUnavailable"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why this host neither checks nor updates; null when it does."
+        }
+      },
+      "required": [
+        "running",
+        "channel",
+        "checking"
+      ],
+      "type": "object"
+    },
+    "UpdateUnavailable": {
+      "description": "Why a host neither checks for updates nor updates anything.",
+      "oneOf": [
+        {
+          "const": "readOnly",
+          "description": "Its config folder is another host's to write: a development run or\na check, which never touches what the installed host reads.",
+          "type": "string"
+        },
+        {
+          "const": "notStandalone",
+          "description": "It does not run floti installed on its own: a development build, a\nfloti inside a portable app, or one started from anywhere else.",
+          "type": "string"
+        }
+      ]
     },
     "UsageGroup": {
       "description": "The two windows a limit is measured over.",
@@ -12967,6 +13073,39 @@
     },
     {
       "capability": null,
+      "kind": "request",
+      "name": "update:check",
+      "request": {
+        "type": "null"
+      },
+      "response": {
+        "$ref": "#/$defs/UpdateState"
+      }
+    },
+    {
+      "capability": null,
+      "kind": "request",
+      "name": "update:install",
+      "request": {
+        "type": "null"
+      },
+      "response": {
+        "type": "null"
+      }
+    },
+    {
+      "capability": null,
+      "event": {
+        "$ref": "#/$defs/UpdateState"
+      },
+      "kind": "event",
+      "name": "update:state",
+      "snapshot": {
+        "$ref": "#/$defs/UpdateState"
+      }
+    },
+    {
+      "capability": null,
       "event": {
         "items": {
           "$ref": "#/$defs/UsageSnapshot"
@@ -13032,5 +13171,5 @@
   ],
   "x-defaultInitialCredit": 262144,
   "x-maxFrameLen": 16777216,
-  "x-protocolVersion": "3.0"
+  "x-protocolVersion": "3.1"
 }

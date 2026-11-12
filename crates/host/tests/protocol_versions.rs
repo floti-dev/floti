@@ -162,9 +162,10 @@ async fn welcomed(host: &Host, client: ProtocolVersion) {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn s6_a_desktop_on_the_hosts_version_or_one_minor_behind_connects() {
-    assert_eq!(PROTOCOL_VERSION, ProtocolVersion::new(3, 0));
+    assert_eq!(PROTOCOL_VERSION, ProtocolVersion::new(3, 1));
     let host = start_host(PROTOCOL_VERSION);
     welcomed(&host, PROTOCOL_VERSION).await;
+    welcomed(&host, ProtocolVersion::new(3, 0)).await;
     // The release before this one is on another major: 2.3 is refused, saying
     // to update the desktop.
     assert_eq!(

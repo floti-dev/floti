@@ -120,7 +120,6 @@ fn no_client_only_channel_appears_in_the_protocol() {
         "path:chooseDirectory",
         "probe:req",
         "term:create",
-        "update:check",
     ] {
         assert!(
             matches!(

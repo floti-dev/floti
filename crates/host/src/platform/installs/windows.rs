@@ -118,6 +118,10 @@ impl Installs for Native {
         comparable(command_line).contains(&wanted)
     }
 
+    fn opener(&self, desktop: &Desktop) -> (PathBuf, Vec<String>) {
+        (Self::program(&desktop.path), Vec::new())
+    }
+
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
         let status = system::run_out_of_job(
             Command::new(release)

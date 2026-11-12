@@ -84,6 +84,10 @@ impl Installs for Native {
         })
     }
 
+    fn opener(&self, desktop: &Desktop) -> (PathBuf, Vec<String>) {
+        (desktop.path.clone(), Vec::new())
+    }
+
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
         if let Some(folder) = desktop.path.parent() {
             std::fs::create_dir_all(folder)

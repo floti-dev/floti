@@ -15,7 +15,8 @@ use url::Url;
 
 use super::network::{FetchError, Network};
 use super::{
-    APP_POLL, HostRelaunch, Outcome, STAGING_FOLDER, UpdateError, Updater, channel, failure_line,
+    APP_POLL, FromDesktop, HostRelaunch, Options, Outcome, STAGING_FOLDER, Said, UpdateError,
+    Updater, channel, failure_line,
 };
 use crate::Result;
 use crate::platform::folders::UserEnv;
@@ -130,6 +131,8 @@ struct FakeInstalls {
     desktop_installs: Mutex<Vec<Vec<u8>>>,
     binary_replaced_first: Mutex<bool>,
     running_binary: PathBuf,
+    /// Whether installing the app fails.
+    install_fails: bool,
 }
 
 impl FakeInstalls {
@@ -146,6 +149,11 @@ impl FakeInstalls {
 
     fn carrying_floti(mut self, carried: PathBuf) -> Self {
         self.carried = Some(carried);
+        self
+    }
+
+    fn failing_to_install(mut self) -> Self {
+        self.install_fails = true;
         self
     }
 }
@@ -202,7 +210,16 @@ impl Installs for FakeInstalls {
         row.name == "Helm.exe"
     }
 
+    fn opener(&self, desktop: &Desktop) -> (PathBuf, Vec<String>) {
+        (desktop.path.join("Helm.exe"), Vec::new())
+    }
+
     fn install_desktop(&self, _desktop: &Desktop, release: &Path) -> Result<()> {
+        if self.install_fails {
+            return Err(crate::Error::Refused(
+                "The Helm installer Helm-2.1.0-setup.exe ended with exit code: 2.".into(),
+            ));
+        }
         *self.binary_replaced_first.lock().unwrap() =
             std::fs::read(&self.running_binary).unwrap() != b"old floti";
         self.desktop_installs
@@ -303,6 +320,11 @@ struct World {
     host_s_own: Cell<bool>,
     /// Whether each process id is alive; any other is unknown.
     alive: RefCell<HashMap<u32, Knowable<bool>>>,
+    /// Whether the desktop's Update started the update.
+    from_desktop: Cell<bool>,
+    /// What the update did to the host and the app, in order: `relaunch`,
+    /// and `open <path>` for each time it opened the app.
+    done: RefCell<Vec<String>>,
     dirs: TestDirs,
 }
 
@@ -320,6 +342,8 @@ impl World {
             relaunches: Cell::new(0),
             host_s_own: Cell::new(false),
             alive: RefCell::default(),
+            from_desktop: Cell::new(false),
+            done: RefCell::default(),
             dirs,
         }
     }
@@ -392,6 +416,7 @@ impl World {
             desktop_installs: Mutex::new(Vec::new()),
             binary_replaced_first: Mutex::new(false),
             running_binary: self.running_binary.clone(),
+            install_fails: false,
         }
     }
 
@@ -416,7 +441,15 @@ impl World {
         };
         let relaunch = || {
             self.relaunches.set(self.relaunches.get() + 1);
+            self.done.borrow_mut().push("relaunch".into());
             self.relaunch.borrow().clone()
+        };
+        let open = |app: &Desktop| {
+            let (program, _) = installs.opener(app);
+            self.done
+                .borrow_mut()
+                .push(format!("open {}", program.display()));
+            Ok(())
         };
         let standalone = FakeStandalone {
             binary: installs.standalone.clone(),
@@ -449,6 +482,10 @@ impl World {
             running_binary: self.running_binary.clone(),
             data: self.dirs.data.clone(),
             chosen_channel: channel.map(str::to_owned),
+            from_desktop: self
+                .from_desktop
+                .get()
+                .then_some(FromDesktop { open: &open }),
             out: &mut out,
         }
         .run();
@@ -874,15 +911,39 @@ fn a_release_with_no_floti_for_this_computer_changes_nothing() {
 }
 
 #[test]
-fn update_takes_nothing_or_a_channel() {
+fn update_takes_nothing_a_channel_or_from_desktop() {
     let args = |list: &[&str]| list.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>();
-    assert_eq!(super::parse(&args(&[])), Some(None));
+    let options = |channel: Option<&str>, from_desktop: bool| Options {
+        channel: channel.map(str::to_owned),
+        from_desktop,
+    };
+    assert_eq!(super::parse(&args(&[])), Some(options(None, false)));
     assert_eq!(
         super::parse(&args(&["--channel", "beta"])),
-        Some(Some("beta".into()))
+        Some(options(Some("beta"), false))
+    );
+    assert_eq!(
+        super::parse(&args(&["--from-desktop"])),
+        Some(options(None, true))
+    );
+    assert_eq!(
+        super::parse(&args(&["--from-desktop", "--channel", "beta"])),
+        Some(options(Some("beta"), true))
+    );
+    assert_eq!(
+        super::parse(&args(&["--channel", "beta", "--from-desktop"])),
+        Some(options(Some("beta"), true))
     );
     assert_eq!(super::parse(&args(&["--channel"])), None);
     assert_eq!(super::parse(&args(&["--channel", "../x"])), None);
+    assert_eq!(
+        super::parse(&args(&["--channel", "a", "--channel", "b"])),
+        None
+    );
+    assert_eq!(
+        super::parse(&args(&["--from-desktop", "--from-desktop"])),
+        None
+    );
     assert_eq!(super::parse(&args(&["--now"])), None);
 }
 
@@ -1269,5 +1330,145 @@ fn what_an_earlier_install_left_beside_the_app_is_removed_once_its_process_has_e
         left,
         vec![".Helm.floti-old-23", ".Helm.floti-update-24"],
         "only what a process known to have ended left"
+    );
+}
+
+/// Each line of a `--from-desktop` run, read back as the host reads it.
+fn said(out: &str) -> Vec<Said> {
+    out.lines()
+        .map(|line| {
+            serde_json::from_str(line).unwrap_or_else(|err| panic!("{line:?} is not JSON: {err}"))
+        })
+        .collect()
+}
+
+#[test]
+fn from_the_desktop_each_line_is_json_and_the_wait_for_the_app_is_marked() {
+    let world = World::new();
+    world.from_desktop.set(true);
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    let installs = world.installs(true);
+    let run = world.update(&installs, 2, None);
+    assert!(run.result.is_ok(), "{}", run.out);
+    let lines = said(&run.out);
+    let waiting: Vec<&Said> = lines.iter().filter(|said| said.waiting_for_app).collect();
+    assert_eq!(waiting.len(), 1, "{}", run.out);
+    assert_eq!(
+        waiting[0].line,
+        "Waiting for Helm to quit; it is updated once it has."
+    );
+    let at = |line: &str| {
+        lines
+            .iter()
+            .position(|said| said.line == line)
+            .unwrap_or_else(|| panic!("{line:?} is not said: {}", run.out))
+    };
+    // Everything is downloaded and checked before the app is asked to quit.
+    assert!(at("Downloading Helm-2.1.0-setup.exe.") < at(&waiting[0].line));
+    assert!(at(&waiting[0].line) < at("Helm is updated to 2.1.0."));
+    // How it ended is `floti update`'s last line, which `run` writes.
+    assert!(lines.iter().all(|said| said.ok.is_none()));
+}
+
+#[test]
+fn from_the_desktop_the_host_relaunches_once_the_app_is_replaced_and_before_it_opens_again() {
+    let world = World::new();
+    world.from_desktop.set(true);
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    let installs = world.installs(true);
+    let run = world.update(&installs, 1, None);
+    assert_eq!(
+        run.result.unwrap(),
+        Outcome::Updated {
+            version: "2.1.0".into(),
+            floti: true,
+            desktop: Some(APP.into())
+        }
+    );
+    let app = world.dirs.folder("apps").join(APP).join("Helm.exe");
+    assert_eq!(
+        *world.done.borrow(),
+        vec!["relaunch".to_owned(), format!("open {}", app.display())]
+    );
+    let lines = said(&run.out);
+    let at = |line: &str| lines.iter().position(|said| said.line == line);
+    assert!(at("Helm is updated to 2.1.0.").is_some(), "{}", run.out);
+    assert!(
+        at("Helm is updated to 2.1.0.") < at("Opening Helm again."),
+        "{}",
+        run.out
+    );
+}
+
+#[test]
+fn from_the_desktop_an_app_that_failed_to_install_opens_again_as_it_was() {
+    let world = World::new();
+    world.from_desktop.set(true);
+    world.running_version.set("2.1.0");
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    let installs = world
+        .installs(true)
+        .at_version("2.0.0")
+        .failing_to_install();
+    let run = world.update(&installs, 1, None);
+    assert!(
+        matches!(run.result, Err(UpdateError::DesktopAlone { .. })),
+        "{}",
+        run.out
+    );
+    let app = world.dirs.folder("apps").join(APP).join("Helm.exe");
+    // floti was not replaced, so the host is not asked to relaunch.
+    assert_eq!(
+        *world.done.borrow(),
+        vec![format!("open {}", app.display())]
+    );
+}
+
+#[test]
+fn from_the_desktop_an_app_that_was_not_running_is_not_opened() {
+    let world = World::new();
+    world.from_desktop.set(true);
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    let run = world.update(&world.installs(true), 0, None);
+    assert!(run.result.is_ok(), "{}", run.out);
+    assert_eq!(*world.done.borrow(), vec!["relaunch".to_owned()]);
+    assert!(said(&run.out).iter().all(|said| !said.waiting_for_app));
+}
+
+#[test]
+fn from_the_desktop_with_no_app_installed_the_host_still_relaunches_on_the_new_floti() {
+    let world = World::new();
+    world.from_desktop.set(true);
+    let release = Published::new("2.1.0");
+    world.publish(&[("stable", &release)]);
+    let run = world.update(&world.installs(false), 0, None);
+    assert!(run.result.is_ok(), "{}", run.out);
+    assert_eq!(*world.done.borrow(), vec!["relaunch".to_owned()]);
+    assert_eq!(world.binary(), release.floti);
+}
+
+#[test]
+fn a_said_line_reads_back_and_leaves_out_the_marks_it_does_not_carry() {
+    assert_eq!(
+        Said::step("Downloading.", false),
+        r#"{"line":"Downloading."}"#
+    );
+    assert_eq!(
+        Said::step("Waiting.", true),
+        r#"{"line":"Waiting.","waitingForApp":true}"#
+    );
+    assert_eq!(Said::end("Done.", true), r#"{"line":"Done.","ok":true}"#);
+    let failed: Said = serde_json::from_str(&Said::end("No network.", false)).unwrap();
+    assert_eq!(
+        failed,
+        Said {
+            line: "No network.".into(),
+            waiting_for_app: false,
+            ok: Some(false)
+        }
     );
 }

@@ -145,7 +145,7 @@ fn names(found: &[Difference], part: Part, change: Change) -> Vec<&str> {
 #[test]
 fn protocol_3_0_removes_the_config_pages_channels_their_types_and_the_retired_fields_and_adds_only_its_additions()
  {
-    assert_eq!(PROTOCOL_VERSION, V3_0);
+    assert_eq!(PROTOCOL_VERSION.major, V3_0.major);
     let found = differences(&record_text(V2_3), &record_text(V3_0)).unwrap();
     assert_eq!(
         names(&found, Part::Channel, Change::Added),

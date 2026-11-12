@@ -236,9 +236,9 @@ fn the_restart_frames_encode_to_their_frozen_bytes_and_decode_back() {
 }
 
 #[test]
-fn s1_this_release_speaks_protocol_3_0_and_refuses_a_client_on_2_3() {
-    assert_eq!(PROTOCOL_VERSION, ProtocolVersion::new(3, 0));
-    assert_eq!(PROTOCOL_VERSION.to_string(), "3.0");
+fn s1_this_release_speaks_protocol_3_1_and_refuses_a_client_on_2_3() {
+    assert_eq!(PROTOCOL_VERSION, ProtocolVersion::new(3, 1));
+    assert_eq!(PROTOCOL_VERSION.to_string(), "3.1");
     let refused = negotiate(PROTOCOL_VERSION, ProtocolVersion::new(2, 3)).unwrap_err();
     assert_eq!(refused.update, UpdateSide::Client);
 }

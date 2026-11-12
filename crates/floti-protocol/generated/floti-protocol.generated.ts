@@ -1,7 +1,7 @@
 // Generated from the floti-protocol crate by `cargo run -p floti-protocol --bin generate`. Do not edit.
 
 /** The protocol version these declarations describe. */
-export const PROTOCOL_VERSION = { major: 3, minor: 0 } as const;
+export const PROTOCOL_VERSION = { major: 3, minor: 1 } as const;
 
 /** The link version of the session keeper a host of this build takes back. */
 export const KEEPER_LINK_VERSION = 1;
@@ -3945,9 +3945,74 @@ reason: string, };
 export type Unsubscribe = { subscription: number, };
 
 /**
+ * Where a `floti update` the host started has got to.
+ */
+export type UpdateProgress = { 
+/**
+ * The last line it said, as a sentence.
+ */
+line: string, 
+/**
+ * Whether everything is downloaded and checked and it waits for the
+ * desktop app to quit, to replace it.
+ */
+waitingForApp: boolean, };
+
+/**
  * Which side has to be updated for two versions to talk.
  */
 export type UpdateSide = "client" | "host";
+
+/**
+ * What the host knows about updates now.
+ */
+export type UpdateState = { 
+/**
+ * The floti this host runs.
+ */
+running: string, 
+/**
+ * The channel it follows: `stable` unless `floti update --channel`
+ * chose another.
+ */
+channel: string, 
+/**
+ * Why this host neither checks nor updates; null when it does.
+ */
+unavailable: UpdateUnavailable | null, 
+/**
+ * The channel's newest version, as the last check that read the
+ * manifest found it; null when none has.
+ */
+newest: string | null, 
+/**
+ * When that check read the manifest, by the host's clock, as RFC 3339
+ * text; null when none has.
+ */
+checkedAt: string | null, 
+/**
+ * Why the last check failed, as one sentence; null when it did not, or
+ * none has run since the host started.
+ */
+failed: string | null, 
+/**
+ * Whether a check runs now.
+ */
+checking: boolean, 
+/**
+ * The `floti update` this host started, while it runs.
+ */
+installing: UpdateProgress | null, 
+/**
+ * Why the last `floti update` this host started failed, as the line it
+ * ended with; null when it did not, until the next one starts.
+ */
+installFailed: string | null, };
+
+/**
+ * Why a host neither checks for updates nor updates anything.
+ */
+export type UpdateUnavailable = "readOnly" | "notStandalone";
 
 /**
  * The two windows a limit is measured over.
@@ -4332,6 +4397,8 @@ export interface RequestChannels {
   "template:preview": { request: TemplatePreviewRequest; response: TemplatePreview; capability: null };
   "template:rename": { request: RenameTemplateRequest; response: TemplateWriteResult; capability: null };
   "template:substitute": { request: TemplateFileRequest; response: TemplateWriteResult; capability: null };
+  "update:check": { request: null; response: UpdateState; capability: null };
+  "update:install": { request: null; response: null; capability: null };
   "usage:read": { request: null; response: Array<UsageSnapshot>; capability: null };
   "worktrees:list": { request: WorktreesProject; response: AgentWorktrees; capability: null };
   "worktrees:remove": { request: RemoveWorktreeRequest; response: WorktreeRemoval; capability: null };
@@ -4366,6 +4433,7 @@ export interface EventChannels {
   "sessions:overview": { event: SessionsOverview; snapshot: SessionsOverview; capability: null };
   "sessions:resources": { event: Array<SessionResources>; snapshot: Array<SessionResources>; capability: null };
   "settings:changed": { event: HostSettings; snapshot: HostSettings; capability: null };
+  "update:state": { event: UpdateState; snapshot: UpdateState; capability: null };
   "usage:changed": { event: Array<UsageSnapshot>; snapshot: Array<UsageSnapshot>; capability: null };
 }
 
@@ -4526,6 +4594,9 @@ export const CHANNELS = [
   { name: "template:preview", kind: "request", capability: null },
   { name: "template:rename", kind: "request", capability: null },
   { name: "template:substitute", kind: "request", capability: null },
+  { name: "update:check", kind: "request", capability: null },
+  { name: "update:install", kind: "request", capability: null },
+  { name: "update:state", kind: "event", capability: null },
   { name: "usage:changed", kind: "event", capability: null },
   { name: "usage:read", kind: "request", capability: null },
   { name: "worktrees:list", kind: "request", capability: null },
@@ -4548,8 +4619,7 @@ export const CLIENT_ONLY: readonly OutsideEntry[] = [
   { channels: "theme:*", reason: "the theme of the client's window" },
   { channels: "themes:*", reason: "theme files the client's window draws with" },
   { channels: "plugins:theme", reason: "the theme plugin pages see is the theme of the window framing them" },
-  { channels: "update:check", reason: "each client checks for its own updates; the host contacts nothing" },
-  { channels: "update:checked", reason: "the client's own update check" },
+  { channels: "update:checked", reason: "what the desktop's main process tells its window of a newer release it inferred from its host's version" },
   { channels: "files:editor", reason: "names the editor installed on the client's machine" },
   { channels: "files:openInEditor", reason: "opens a file in the editor on the client's machine" },
   { channels: "roots:add", reason: "opens the client's folder picker; the folder it chose arrives on roots:accept" },

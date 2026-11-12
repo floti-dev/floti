@@ -124,6 +124,13 @@ impl Installs for Native {
         }
     }
 
+    fn opener(&self, desktop: &Desktop) -> (PathBuf, Vec<String>) {
+        (
+            PathBuf::from("/usr/bin/open"),
+            vec![desktop.path.to_string_lossy().into_owned()],
+        )
+    }
+
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
         let unpacked = beside(&desktop.path, NEW_COPY);
         let old = beside(&desktop.path, OLD_COPY);

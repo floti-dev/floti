@@ -1,4 +1,4 @@
-//! Every host channel from `shared/ipc.ts`, by domain.
+//! Every host channel, by domain.
 //!
 //! Each domain declares its channels in its own file and registers them in
 //! [`declare`]. Payload types that more than one domain uses live in
@@ -87,6 +87,7 @@ pub mod devices;
 pub mod host;
 pub mod plugins;
 pub mod sessions;
+pub mod update;
 pub mod workspace;
 pub mod wsl;
 
@@ -105,4 +106,5 @@ pub fn declare(catalogue: &mut Catalogue) {
     agents::declare(catalogue);
     carry::declare(catalogue);
     wsl::declare(catalogue);
+    update::declare(catalogue);
 }

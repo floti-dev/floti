@@ -19,6 +19,8 @@
 //!   extracted beside it with `ditto --noqtn` and moved in by rename. Linux:
 //!   the AppImage at `~/Applications/Helm.AppImage`, its version unknown,
 //!   written beside, made executable and renamed into place.
+//!   Opened again by its program on Windows, `open` on macOS and the
+//!   AppImage itself on Linux ([`Installs::opener`]).
 //!
 //! Nothing here adds a quarantine flag or a download mark: the files are
 //! written by floti's own process, which neither Gatekeeper's quarantine nor
@@ -100,6 +102,11 @@ pub trait Installs {
     /// there or fresh, once the app has quit. When it fails before the
     /// swap, an installed app is as it was.
     fn install_desktop(&self, target: &Desktop, release: &Path) -> Result<()>;
+
+    /// The program, and its arguments, that open the installed `desktop`:
+    /// what `floti update --from-desktop` starts once it has replaced the app
+    /// that quit for it.
+    fn opener(&self, desktop: &Desktop) -> (PathBuf, Vec<String>);
 }
 
 /// The folder `env`'s [`DESKTOP_DIR_VAR`] names, in a build with the

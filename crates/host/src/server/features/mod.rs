@@ -33,6 +33,8 @@
 //! - [`carry`]: a client's own data, merged into the host's store once.
 //! - [`wsl`]: keeping a WSL distro on this computer running while the host
 //!   inside it has sessions (`wsl:keepAwake`).
+//! - [`update`]: the host's own updates (`update:state`, `update:check`,
+//!   `update:install`).
 
 mod agent_browser;
 mod agent_plugin;
@@ -50,6 +52,7 @@ mod profiles;
 mod resources;
 mod sessions;
 mod templates;
+mod update;
 mod workspace;
 mod worktrees;
 mod wsl;
@@ -75,6 +78,7 @@ pub(crate) use agent_browser::BrowserRelay;
 pub(crate) use agent_plugin::{PluginRelay, PluginServer};
 pub use resources::ResourcesHandle;
 pub(crate) use sessions::ActivityHandle;
+pub(crate) use update::Updates;
 pub(crate) use workspace::WorkspaceContext;
 
 use crate::workspace::settings::SettingsService;
@@ -238,6 +242,7 @@ pub(crate) struct Features {
     browser: Arc<BrowserRelay>,
     plugin_tools: Arc<PluginRelay>,
     host_plugin_tools: Arc<HostPluginTools>,
+    updates: Updates,
     /// The plugin registry the plugins feature keeps: the host waits on its
     /// shutdown before it lets go of the store.
     plugins: crate::plugins::Registry,
@@ -252,10 +257,17 @@ impl Features {
     /// a backend runs.
     pub fn new(hosted: Arc<Hosted>, folders: Folders, run: HostRun) -> crate::Result<Self> {
         let wsl_program = run.wsl.clone();
+        let events = Arc::new(Events::new());
+        let updates = Updates::new(
+            Arc::clone(&events),
+            &folders.data,
+            run.updates.clone(),
+            run.config_read_only,
+        )?;
         let workspace = Arc::new(WorkspaceContext::new(&hosted, folders, run)?);
         let context = FeatureContext {
             hosted,
-            events: Arc::new(Events::new()),
+            events,
             workspace,
         };
         let resources = resources::Resources::new(&context)?;
@@ -304,6 +316,7 @@ impl Features {
         features.push(Box::new(Arc::clone(&browser)));
         features.push(Box::new(Arc::clone(&plugin_tools)));
         features.push(Box::new(wsl::Wsl::new(&context, wsl_program)));
+        features.push(Box::new(updates.clone()));
         Ok(Self {
             features,
             events: context.events,
@@ -314,6 +327,7 @@ impl Features {
             browser,
             plugin_tools,
             host_plugin_tools,
+            updates,
             plugins: plugin_registry,
         })
     }
@@ -358,6 +372,11 @@ impl Features {
     /// runs, for the families the host answers itself.
     pub fn host_plugin_tools(&self) -> &Arc<HostPluginTools> {
         &self.host_plugin_tools
+    }
+
+    /// The host's updates, for the background check to tell and answer.
+    pub fn updates(&self) -> &Updates {
+        &self.updates
     }
 
     /// The processes-and-ports pass, for what inside the host asks for it.
