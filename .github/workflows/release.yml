@@ -60,11 +60,15 @@ name: Release
 # and the winget manifests from the run's files, checks them with Homebrew and
 # winget, and uploads them as `homebrew-formula` and `winget-manifests`. It
 # writes floti.dev's four files from the run's own files, update.json signed
-# with the run's key, uploads them as `floti-dev`, and runs the install
-# scripts for real against a local server (`install-dry-run`). The
+# with the run's key, uploads them as `floti-dev`, runs the install
+# scripts for real against a local server (`install-dry-run`) and checks the
+# setup they ran, and runs the desktop's Windows installer over that install
+# and on a clean runner (`installer-dry-run`). The
 # version job's `dry_run` output is what every publishing job and step gates
 # on; `sign`, `publish`, `homebrew`, `winget` and `floti-dev`, the jobs that
-# read a secret or write anywhere, do not run in a dry run at all.
+# read a secret or write anywhere, do not run in a dry run at all. Nor does
+# `add-desktop`, which runs `floti add desktop` against the release just
+# published and needs a release signed with the project's key.
 
 on:
   push:
@@ -1143,7 +1147,14 @@ jobs:
   # places and checks that none ran anything, then runs the whole script as
   # a person does (`curl | sh`, or Windows PowerShell's `irm | iex`) and checks
   # the floti it installed, then that setup ran. The drivers are
-  # scripts/floti.dev/try-install.sh and try-install.ps1. Publishes nothing.
+  # scripts/floti.dev/try-install.sh and try-install.ps1. Then
+  # check-setup.sh or check-setup.ps1 checks what setup registered there and
+  # that it runs: the systemd user unit, the LaunchAgent, or the logon task
+  # "Floti host" with floti's folder on the user's Path. On Windows the run's
+  # desktop installer then runs silently over that install
+  # (try-installer.ps1), which must leave the same floti, the release's for
+  # this CPU, and the same setup, with nothing running from the app's folder.
+  # Publishes nothing.
   install-dry-run:
     needs: [version, assemble]
     if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'true'
@@ -1153,14 +1164,17 @@ jobs:
         include:
           - runner: ubuntu-latest
             target: linux-x64
+            setup: user-unit
           - runner: macos-latest
             target: macos-arm64
+            setup: launch-agent
           - runner: windows-latest
             target: windows-x64
           # The arm64 runners, so each script's CPU detection picks arm64
           # where the computer is arm64.
           - runner: ubuntu-24.04-arm
             target: linux-arm64
+            setup: user-unit
           - runner: windows-11-arm
             target: windows-arm64
     runs-on: ${{ matrix.runner }}
@@ -1203,9 +1217,74 @@ jobs:
         shell: powershell
         run: ./scripts/floti.dev/try-install.ps1 -Served (Join-Path $env:RUNNER_TEMP 'served') -Version $env:VERSION -Target '${{ matrix.target }}'
 
-  # install.sh in a Debian container, as root, with curl and nothing else of
-  # the runner's: python3 only serves the files. Root is refused by setup,
-  # which is the line the script must reach.
+      - name: Check what setup registered
+        if: runner.os != 'Windows'
+        shell: bash
+        run: sh scripts/floti.dev/check-setup.sh '${{ matrix.setup }}' "$VERSION" 'install.sh on ${{ matrix.target }}'
+
+      - name: Check what setup registered
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/floti.dev/check-setup.ps1 -Version $env:VERSION -By 'install.ps1 on ${{ matrix.target }}'
+
+      - name: Fetch the run's desktop installer
+        if: runner.os == 'Windows'
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-windows
+          path: ${{ runner.temp }}/desktop
+
+      - name: Run the desktop installer over that install
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/floti.dev/try-installer.ps1 -Installer (Join-Path $env:RUNNER_TEMP "desktop\Helm-$env:VERSION-setup.exe") -Served (Join-Path $env:RUNNER_TEMP 'served') -Version $env:VERSION -Target '${{ matrix.target }}' -Order after-script
+
+  # The desktop's Windows installer alone, on a clean x64 and a clean arm64
+  # runner where nothing of Floti's is there first: run silently and per user,
+  # it must put the release's floti for this CPU in
+  # %LOCALAPPDATA%\Programs\Floti\bin, put that folder on the user's Path,
+  # register the logon task "Floti host" running it, and leave nothing
+  # running from the app's own folder (scripts/floti.dev/try-installer.ps1).
+  # Publishes nothing.
+  installer-dry-run:
+    needs: [version, assemble]
+    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            target: windows-x64
+          - runner: windows-11-arm
+            target: windows-arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fetch the run's floti files
+        uses: actions/download-artifact@v4
+        with:
+          name: floti-release
+          path: ${{ runner.temp }}/served
+
+      - name: Fetch the run's desktop installer
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-windows
+          path: ${{ runner.temp }}/desktop
+
+      - name: Run the desktop installer on a clean runner
+        shell: powershell
+        run: ./scripts/floti.dev/try-installer.ps1 -Installer (Join-Path $env:RUNNER_TEMP "desktop\Helm-$env:VERSION-setup.exe") -Served (Join-Path $env:RUNNER_TEMP 'served') -Version $env:VERSION -Target '${{ matrix.target }}' -Order alone
+
+  # install.sh in a Debian container, with curl and nothing else of the
+  # runner's: python3 only serves the files. As root, setup is refused, which
+  # is the line the script must reach, and registers nothing. Then as an
+  # ordinary user in what setup takes for a WSL distro (`WSL_DISTRO_NAME`
+  # set), where no systemd runs, setup leaves the start-on-connect marker.
   install-dry-run-debian:
     needs: [version, assemble]
     if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'true'
@@ -1237,6 +1316,90 @@ jobs:
       - name: Install floti with install.sh
         shell: sh
         run: sh scripts/floti.dev/try-install.sh "$RUNNER_TEMP/served" "$VERSION" linux-x64
+
+      - name: Check that setup, refused as root, registered nothing
+        shell: sh
+        run: sh scripts/floti.dev/check-setup.sh refused "$VERSION" 'install.sh as root in debian'
+
+      # The user reads its own copies under /tmp: the workspace and the
+      # runner's folders belong to root.
+      - name: Install floti with install.sh as a user, in a WSL distro without systemd
+        shell: sh
+        run: |
+          set -eu
+          useradd --create-home --shell /bin/sh floti-user
+          mkdir /tmp/try
+          cp -R "$RUNNER_TEMP/served" scripts/floti.dev/try-install.sh scripts/floti.dev/check-setup.sh /tmp/try/
+          : >/tmp/try/summary
+          chmod -R a+rX /tmp/try
+          chmod a+w /tmp/try/summary
+          cd /tmp
+          runuser -u floti-user -- env HOME=/home/floti-user WSL_DISTRO_NAME=Debian GITHUB_STEP_SUMMARY=/tmp/try/summary sh -c '
+            set -eu
+            sh /tmp/try/try-install.sh /tmp/try/served "$1" linux-x64
+            sh /tmp/try/check-setup.sh start-on-connect "$1" "install.sh as a user in debian taken for WSL"
+          ' sh "$VERSION"
+          cat /tmp/try/summary >>"$GITHUB_STEP_SUMMARY"
+
+  # `floti add desktop` for real, on Windows, macOS and Linux runners, once a
+  # release is published, preview or not, and never in a dry run: floti fetches
+  # from the releases address built into it and checks the desktop files'
+  # list with the key built into it, which a dry run's files, signed with a
+  # key made for that run, are refused by. It downloads the release's floti
+  # for the runner as anybody does, checks it against the run's SHA-256 list,
+  # runs `floti add desktop` and checks the app is where add puts it with its
+  # launcher entry (scripts/floti.dev/try-add-desktop.sh). On Windows and
+  # macOS the app's install also ran `floti install-self`, so the setup it
+  # ran is checked as the install scripts' is. A Linux runner has no display;
+  # add asks only whether DISPLAY is set, and the AppImage is never started,
+  # so DISPLAY is set to one that is not there. Publishes and pushes nothing,
+  # and reads no secret.
+  add-desktop:
+    needs: [version, publish]
+    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            target: windows-x64
+          - runner: macos-latest
+            target: macos-arm64
+          - runner: ubuntu-latest
+            target: linux-x64
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Fetch the run's floti files
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: floti-release
+          path: ${{ runner.temp }}/floti-release
+
+      - name: Install the desktop app with floti add desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ $RUNNER_OS == Linux ]]; then export DISPLAY=:99; fi
+          bash scripts/floti.dev/try-add-desktop.sh "$VERSION" "$TAG" '${{ matrix.target }}' \
+            "$RUNNER_TEMP/floti-release/floti-$VERSION-SHA256SUMS"
+
+      - name: Check the setup the app's install ran
+        if: runner.os == 'macOS'
+        shell: bash
+        run: sh scripts/floti.dev/check-setup.sh launch-agent "$VERSION" 'floti add desktop on ${{ matrix.target }}'
+
+      - name: Check the setup the app's install ran
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/floti.dev/check-setup.ps1 -Version $env:VERSION -By 'floti add desktop on ${{ matrix.target }}'
 
   # The only job that writes to the repository or makes an attestation, and it
   # never runs in a dry run.

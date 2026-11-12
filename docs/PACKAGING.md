@@ -413,7 +413,8 @@ every check, on every OS.
   (`/S`) answers OK, as that check does. The uninstaller runs the default
   check alone. The decision is tested in `crates/host` (`update_stop.rs` and
   `tests/update_stop.rs`), `install-self` in `tests/install_self.rs`;
-  nothing in the suite runs an installer.
+  nothing in the suite runs an installer. The release's dry run runs it for
+  real on Windows runners ([A dry run](#a-dry-run)).
 
 ### floti in your own folder
 
@@ -918,7 +919,51 @@ where the script put it, that the PowerShell session `iex` ran in went on
 after it (a line it prints after `iex` must appear), that `floti version` there names the run's version,
 OS and CPU, that on Windows its folder is on the user's `Path`, and that the
 script reached `floti setup`, whatever setup made of the runner (root in the
-container is refused by setup, which is the line it must reach). A dry run never reads the
+container is refused by setup, which is the line it must reach).
+
+Then `scripts/floti.dev/check-setup.sh` or `check-setup.ps1` checks what
+setup left, each missing thing failing the job with one line naming it:
+`floti version` answers from the installed path with the run's version, and
+
+| Where | What setup must have left |
+|---|---|
+| `ubuntu-latest`, `ubuntu-24.04-arm` | `~/.config/systemd/user/floti.service` running that floti, enabled and active in the user's systemd |
+| `macos-latest` | `~/Library/LaunchAgents/dev.floti.host.plist` running that floti, loaded and running in `gui/<uid>` |
+| `windows-latest`, `windows-11-arm` | the logon task "Floti host" running that `floti.exe host` at sign-in, running, with a host running from its folder and the folder on the user's `Path` |
+| `debian` as root | nothing: no unit and no start-on-connect marker, as a refused setup leaves |
+| `debian` as an ordinary user, with `WSL_DISTRO_NAME` set | the start-on-connect marker in the data folder and no unit, as in a WSL distro where no systemd runs |
+
+On both Windows runners the run's `Helm-<version>-setup.exe` then runs with
+`/S`, per user, as `floti add desktop` runs it: in `install-dry-run` over the
+install script's floti, and in `installer-dry-run` alone on a clean runner,
+where nothing of Floti's may be there first
+(`scripts/floti.dev/try-installer.ps1`). Each must leave, in
+`%LOCALAPPDATA%\Programs\Floti\bin`, the release's
+`floti-<version>-<cpu>.exe` byte for byte, the floti for that runner's CPU,
+and no process running from the app's own folder, so the floti the app
+carries is not the running host; and `check-setup.ps1` must pass as it does
+after `install.ps1`. Those same checks after either way in are what "runs
+the same setup" means: the same floti on the same `Path`, started by the
+same logon task. `floti doctor` is not the check, because on a runner it
+reports Claude Code missing, which says nothing about setup.
+
+`floti add desktop` cannot run in a dry run: it fetches from the releases
+address built into floti and checks the desktop files' list with the key
+built into it, which refuses a list signed with the run's key. So
+`add-desktop` runs only after `publish`, on a published release, preview or
+stable, on `windows-latest`, `macos-latest` and `ubuntu-latest`
+(`scripts/floti.dev/try-add-desktop.sh`): it downloads the release's floti
+for the runner without a token, checks it against the run's SHA-256 list,
+runs `floti add desktop` and checks that it exited 0 and the app is where
+add puts it with its launcher entry (the Start menu's `Helm.lnk` and the
+uninstaller; `~/Applications/Helm.app`; `~/Applications/Helm.AppImage`, its
+`helm.desktop` and icon). On Windows and macOS the app's install ran
+`floti install-self`, so `check-setup` runs there too. The Linux runner has
+no display, and add asks only whether `DISPLAY` is set, so the job sets one
+that is not there; the AppImage is never started. It publishes and pushes
+nothing and reads no secret.
+
+A dry run never reads the
 `release` environment or its secrets, and makes no attestation. The tag-exists gate does not stop a dry run, so
 the version on the branch may be one already released; one that is not tagged
 must still be greater than every tagged one. A run on any branch but `main` is
