@@ -389,7 +389,10 @@ function sha256OfFile(path: string): Promise<string> {
  * (`floti-SHA256SUMS`, absent from a development build), and the install
  * scripts it carries (`install/`, or the checkout's `scripts/install`).
  */
-export function createDesktopRemoteInstaller(log: (line: string) => void): RemoteInstaller {
+export function createDesktopRemoteInstaller(
+  log: (line: string) => void,
+  links: Pick<RemoteHostLinks, 'reconnected'>
+): RemoteInstaller {
   const at = places()
   const join = (...parts: string[]): string => resolve(...parts)
   const scripts = at.packaged ? join(at.resourcesPath, 'install') : join(at.repoRoot, 'scripts', 'install')
@@ -423,6 +426,7 @@ export function createDesktopRemoteInstaller(log: (line: string) => void): Remot
         )
       ),
     keeperLink: KEEPER_LINK_VERSION,
+    hostVersionAfter: (id, signal) => links.reconnected(id, signal),
     log
   })
 }

@@ -106,14 +106,22 @@ export interface InstallOffer {
   how: 'copy' | 'download' | 'flotiUpdate'
   /** For `flotiUpdate`, how the floti there is asked to run it; absent otherwise. */
   via?: FlotiUpdateVia
+  /**
+   * For `flotiUpdate`, the floti it installs, as the host's own check found
+   * its channel's newest; null when that cannot be told beforehand (over the
+   * login). Absent otherwise.
+   */
+  updatesTo?: string | null
   /** This Helm's version: what `copy` and `download` install, and what an older floti there is behind. */
   version: string
   /** Where it goes there, as that computer's user would write it. */
   folder: string
   /**
-   * For an update, how many sessions it ends there, or null when that floti
-   * cannot say. A `flotiUpdate` ends none when the new host takes the session
-   * keeper back, and every running one when it cannot.
+   * For an update, how many sessions it ends there, or null when that cannot
+   * be told beforehand. A `flotiUpdate` ends none when the new host takes the
+   * session keeper back, and every running one when it cannot; it is told
+   * only for an update to this Helm's own version, whose keeper link this
+   * Helm knows.
    */
   sessions: number | null
   /**
@@ -126,8 +134,9 @@ export interface InstallOffer {
 /**
  * How `floti update` is asked to run on a host's computer: `connection`, by
  * `update:install` over the host's own connection, which runs
- * `floti update --from-desktop` there; `login`, by running `floti update`
- * over the same login an install uses.
+ * `floti update --from-desktop` there and updates the desktop app there too;
+ * `login`, by running `floti update --floti-only` over the same login an
+ * install uses, which leaves the desktop app there to its own host's offer.
  */
 export type FlotiUpdateVia = 'connection' | 'login'
 
@@ -147,6 +156,49 @@ export type InstallOutcome =
       startsAtNextSignIn: boolean
     }
   | { ok: false; step: InstallStep; lastLine: string }
+  /**
+   * A `floti update` Helm did not see replace floti: `lastLine` is the last
+   * thing known of it, or null.
+   */
+  | { ok: null; ended: UnsettledUpdate; lastLine: string | null }
+
+/**
+ * How a `floti update` ended without Helm seeing floti replaced:
+ *
+ * - `upToDate`: its channel has nothing newer than the floti there; nothing
+ *   was replaced and no session ended.
+ * - `unconfirmed`: it ended, but the host there is not seen on a newer floti
+ *   (it came back on the same one, or ended its update without relaunching).
+ * - `stoppedWaiting`: Helm stopped waiting for it, at the user's word or
+ *   after `UPDATE_PATIENCE_MS`; it may still be running there.
+ */
+export type UnsettledUpdate = 'upToDate' | 'unconfirmed' | 'stoppedWaiting'
+
+/** How long Helm waits for a `floti update` on a host's computer before it stops waiting. */
+export const UPDATE_PATIENCE_MS = 10 * 60 * 1000
+
+/** `floti update --floti-only`'s status when floti is up to date there (`crates/host/src/update`). */
+export const UPDATE_UP_TO_DATE_EXIT = 4
+
+/** The title and the fix the window shows for a `floti update` that ended unsettled. */
+export function describeUnsettledUpdate(ended: UnsettledUpdate, host: string): { title: string; fix: string } {
+  if (ended === 'upToDate') {
+    return {
+      title: `floti on ${host} is up to date on its channel`,
+      fix: `Nothing was replaced and no session ended: its channel has nothing newer. Update it from this Helm’s own floti instead.`
+    }
+  }
+  if (ended === 'stoppedWaiting') {
+    return {
+      title: `Helm stopped waiting for floti update on ${host}`,
+      fix: `It may still be running there. ${host}’s row says which floti its host runs once it is back.`
+    }
+  }
+  return {
+    title: `Helm did not see floti update replace floti on ${host}`,
+    fix: `${host}’s row says which floti its host runs now. Run floti update in a terminal there to see all of its output.`
+  }
+}
 
 /**
  * The first protocol whose floti has `floti update` and whose host serves
@@ -182,7 +234,13 @@ export function olderHostSentence(name: string, hostVersion: string, helmVersion
  * already, by id. A host being added names the `attempt` the add-a-host
  * dialog minted, which `remoteHosts:cancelAdd` stops.
  */
-export type HostCheckTarget = { transport: HostTransport; floti?: string; attempt?: string } | { host: string }
+export type HostCheckTarget =
+  | { transport: HostTransport; floti?: string; attempt?: string }
+  | {
+      host: string
+      /** Offer an install over the floti there, never `floti update`: after an update found nothing newer. */
+      install?: boolean
+    }
 
 /** The protocol version as `floti version` and the refused hello say it. */
 export interface ProtocolVersionNumbers {

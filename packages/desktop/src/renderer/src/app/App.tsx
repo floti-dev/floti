@@ -401,6 +401,10 @@ const hostInstall: HostInstallActions = {
   check: (target) => helm.invoke("remoteHosts:check", target),
   install: (id, host) => helm.invoke("remoteHosts:install", { id, host }),
   cancel: (id) => void helm.invoke("remoteHosts:cancel", { id }),
+  progress: (id, listener) =>
+    helm.on("remoteHosts:installProgress", (said) => {
+      if (said.id === id) listener(said.line);
+    }),
 };
 
 /**

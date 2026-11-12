@@ -1,5 +1,5 @@
 import type { HostCheck, HostSystem, InstallOffer, InstallOutcome } from '@helm/core/types'
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { HostsSettings, type HostInstallActions, type HostsSettingsProps, type SettingsHost } from './HostsSettings'
@@ -187,5 +187,105 @@ describe('updating an older floti from a connected host’s row in Settings > Ho
     expect(within(row).queryByRole('button', { name: 'Update floti' })).toBeNull()
     expect(row.querySelector('[data-settings-host-older]')).toBeNull()
     expect(within(row).getByText('Connected')).toBeTruthy()
+  })
+})
+
+describe('a floti update running from a host’s row, and how it ends', () => {
+  const UPDATE_OFFER: InstallOffer = {
+    ...NOT_FOUND_OFFER,
+    action: 'update',
+    how: 'flotiUpdate',
+    via: 'login',
+    updatesTo: null,
+    found: { version: '2.5.0', protocol: '3.1' },
+    sessions: null,
+    talks: true
+  }
+
+  /** Install actions whose install ends only when the test says, and whose progress the test tells. */
+  function running(offer: InstallOffer) {
+    let finish: (outcome: InstallOutcome) => void = () => undefined
+    const listeners = new Map<string, (line: string) => void>()
+    const install = {
+      check: vi.fn<HostInstallActions['check']>(async () => ({ kind: 'offer', id: 'offer-7', offer })),
+      install: vi.fn<HostInstallActions['install']>(
+        () =>
+          new Promise<InstallOutcome>((resolve) => {
+            finish = resolve
+          })
+      ),
+      cancel: vi.fn<HostInstallActions['cancel']>(),
+      progress: vi.fn<NonNullable<HostInstallActions['progress']>>((id, listener) => {
+        listeners.set(id, listener)
+        return () => listeners.delete(id)
+      })
+    }
+    return { install, finish: (outcome: InstallOutcome) => finish(outcome), say: (id: string, line: string) => listeners.get(id)?.(line) }
+  }
+
+  async function startUpdate(offer: InstallOffer) {
+    const r = running(offer)
+    renderHosts(r.install, { hosts: [host({ state: 'connected', version: '2.5.0', olderThan: '2.6.0' })] })
+    const row = screen.getByRole('group', { name: 'build-box' })
+    await userEvent.click(within(row).getByRole('button', { name: 'Update floti' }))
+    const panel = (await screen.findByText('Update floti on build-box?')).closest('[data-settings-host-offer]') as HTMLElement
+    return { ...r, row, panel }
+  }
+
+  it('says over the login that it updates floti alone, that the app there is left, and that it cannot tell the sessions', async () => {
+    const { panel } = await startUpdate(UPDATE_OFFER)
+    expect(panel.textContent).toContain('which updates it to the newest floti on its channel')
+    expect(panel.querySelector('[data-settings-host-offer-steps]')?.textContent).toContain(
+      'Runs floti update on build-box over the same login, for floti alone'
+    )
+    expect(panel.querySelector('[data-settings-host-offer-sessions]')?.textContent).toContain(
+      'Helm cannot tell beforehand whether the new floti takes every one back'
+    )
+    expect(panel.querySelector('[data-settings-host-offer-sessions]')?.textContent).not.toContain('no session ends')
+    expect(panel.querySelector('[data-settings-host-offer-app]')?.textContent).toBe(
+      'Leaves the desktop app there as it is: its own host offers it the update'
+    )
+  })
+
+  it('says over the connection which version it installs, and that Helm there is closed for it and opened again', async () => {
+    const { panel } = await startUpdate({ ...UPDATE_OFFER, via: 'connection', updatesTo: '2.6.0', sessions: 0 })
+    expect(panel.textContent).toContain('which updates it to 2.6.0, the newest floti on its channel')
+    expect(panel.querySelector('[data-settings-host-offer-steps]')?.textContent).toContain('downloads floti 2.6.0 there')
+    expect(panel.querySelector('[data-settings-host-offer-app]')?.textContent).toContain(
+      'Helm there is closed for it, its sessions kept running, and opened again once it is replaced'
+    )
+  })
+
+  it('shows each line the update says while it runs, and Stop waiting stops waiting for it', async () => {
+    const r = await startUpdate(UPDATE_OFFER)
+    await userEvent.click(within(r.panel).getByRole('button', { name: 'Update floti on build-box' }))
+    const working = await screen.findByText('Running floti update on build-box…')
+    expect(r.install.progress).toHaveBeenCalledWith('offer-7', expect.any(Function))
+    act(() => r.say('offer-7', 'Downloading floti-2.6.0-linux-x64.'))
+    const line = r.row.querySelector('[data-settings-host-working-line]')
+    expect(line?.textContent).toBe('Downloading floti-2.6.0-linux-x64.')
+    expect(working).toBeTruthy()
+    await userEvent.click(within(r.row).getByRole('button', { name: 'Stop waiting' }))
+    expect(r.install.cancel).toHaveBeenCalledWith('offer-7')
+    act(() => r.finish({ ok: null, ended: 'stoppedWaiting', lastLine: 'Downloading floti-2.6.0-linux-x64.' }))
+    const notice = await screen.findByRole('status')
+    expect(notice.textContent).toContain('Helm stopped waiting for floti update on build-box')
+    expect(notice.textContent).toContain('It may still be running there.')
+    expect(within(notice).queryByRole('button', { name: 'Update from this Helm’s floti' })).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('an update that found nothing newer is no failure, and offers an install from this Helm’s floti instead', async () => {
+    const r = await startUpdate(UPDATE_OFFER)
+    await userEvent.click(within(r.panel).getByRole('button', { name: 'Update floti on build-box' }))
+    act(() => r.finish({ ok: null, ended: 'upToDate', lastLine: 'floti 2.5.0 is up to date on stable (its newest is 2.5.0).' }))
+    const notice = await screen.findByRole('status')
+    expect(notice.textContent).toContain('floti on build-box is up to date on its channel')
+    expect(notice.querySelector('[data-settings-host-notice-line]')?.textContent).toBe(
+      'floti 2.5.0 is up to date on stable (its newest is 2.5.0).'
+    )
+    expect(screen.queryByRole('alert')).toBeNull()
+    await userEvent.click(within(notice).getByRole('button', { name: 'Update from this Helm’s floti' }))
+    expect(r.install.check).toHaveBeenLastCalledWith({ host: 'h-build', install: true })
   })
 })

@@ -4,6 +4,7 @@ import {
   describeHostSystem,
   describeInstallFailure,
   describeTransport,
+  describeUnsettledUpdate,
   hostSystem,
   type HostCheck,
   type HostCheckTarget,
@@ -63,7 +64,10 @@ export interface HostInstallActions {
   check: (target: HostCheckTarget) => Promise<HostCheck>
   /** Does what the check with `id` offered, for the host whose id is `host`. */
   install: (id: string, host: string) => Promise<InstallOutcome>
+  /** Forgets an offer; for a `floti update` under way, stops waiting for it. */
   cancel: (id: string) => void
+  /** Tells `listener` each line the `floti update` for offer `id` says; returns the stop. */
+  progress?: (id: string, listener: (line: string) => void) => () => void
 }
 
 /** One remote host as Settings > Hosts draws it. */
@@ -404,8 +408,10 @@ function TryByHand({ host }: { host: RemoteHost }): JSX.Element {
 type FlowStage =
   | { step: 'checking'; transport: HostTransport | null }
   | { step: 'offer'; id: string; host: string; offer: InstallOffer }
-  | { step: 'working'; offer: InstallOffer }
+  | { step: 'working'; id: string; offer: InstallOffer; line: string | null }
   | { step: 'problem'; title: string; line: string | null; fix: string }
+  /** A `floti update` that ended without Helm seeing floti replaced; `install` offers an install instead. */
+  | { step: 'notice'; title: string; line: string | null; fix: string; install: boolean }
 
 interface InstallFlow {
   /** What to draw for where the flow stands, or null when it is not running. */
@@ -444,6 +450,14 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
   const show = (next: FlowStage | null): void => {
     if (live.current) setStage(next)
   }
+  // A floti update's steps, while it runs.
+  const workingId = stage?.step === 'working' && stage.offer.how === 'flotiUpdate' ? stage.id : null
+  useEffect(() => {
+    if (workingId === null || actions.progress === undefined) return
+    return actions.progress(workingId, (line) =>
+      setStage((now) => (now?.step === 'working' && now.id === workingId ? { ...now, line } : now))
+    )
+  }, [workingId, actions])
 
   const checked = (check: HostCheck, host: RemoteHost): void => {
     const { name, id, transport } = host
@@ -500,12 +514,23 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
   const confirm = (): void => {
     if (stage?.step !== 'offer') return
     const { id, host, offer } = stage
-    show({ step: 'working', offer })
+    show({ step: 'working', id, offer, line: null })
     actions.install(id, host).then(
       (outcome) => {
-        if (outcome.ok) {
+        if (outcome.ok === true) {
           show(null)
           done.current({ floti: outcome.floti, system: hostSystem(offer.system) })
+          return
+        }
+        if (outcome.ok === null) {
+          const words = describeUnsettledUpdate(outcome.ended, name)
+          show({
+            step: 'notice',
+            title: words.title,
+            line: outcome.lastLine,
+            fix: words.fix,
+            install: outcome.ended === 'upToDate'
+          })
           return
         }
         const words = describeInstallFailure(outcome.step, name, offer.folder)
@@ -532,13 +557,58 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
     )
   } else if (stage?.step === 'offer') {
     panel = <OfferPanel name={name} offer={stage.offer} onCancel={cancel} onConfirm={confirm} />
+  } else if (stage?.step === 'working' && stage.offer.how === 'flotiUpdate') {
+    const { id } = stage
+    panel = (
+      <div data-settings-host-working className="flex flex-col gap-1 text-[11.5px] leading-[1.5] text-fg-muted">
+        <p>Running floti update on {name}…</p>
+        {stage.line !== null && (
+          <p data-settings-host-working-line className="font-mono text-[11px] break-words text-fg select-text">
+            {stage.line}
+          </p>
+        )}
+        <div className="mt-1 flex gap-2">
+          <Action data-settings-host-stop-waiting onClick={() => actions.cancel(id)}>
+            Stop waiting
+          </Action>
+        </div>
+      </div>
+    )
   } else if (stage?.step === 'working') {
     panel = (
       <p data-settings-host-working className="text-[11.5px] leading-[1.5] text-fg-muted">
-        {stage.offer.how === 'flotiUpdate'
-          ? `Running floti update on ${name}…`
-          : `${stage.offer.action === 'install' ? 'Installing' : 'Updating'} floti ${stage.offer.version} on ${name}…`}
+        {stage.offer.action === 'install' ? 'Installing' : 'Updating'} floti {stage.offer.version} on {name}…
       </p>
+    )
+  } else if (stage?.step === 'notice') {
+    panel = (
+      <div
+        role="status"
+        data-settings-host-notice
+        className="flex flex-col gap-1 rounded-well border border-border bg-surface-sunken p-3"
+      >
+        <p className="text-[12.5px] text-fg">{stage.title}</p>
+        {stage.line !== null && stage.line !== '' && (
+          <p data-settings-host-notice-line className="font-mono text-[11px] break-words text-fg select-text">
+            {stage.line}
+          </p>
+        )}
+        <p className="text-[11.5px] leading-[1.5] text-fg-muted">{stage.fix}</p>
+        <div className="mt-1 flex gap-2">
+          <Action data-settings-host-notice-back onClick={() => show(null)}>
+            Back
+          </Action>
+          {stage.install && who !== null && (
+            <Action
+              primary
+              data-settings-host-install-instead
+              onClick={() => start({ host: who.id, install: true }, who, done.current)}
+            >
+              Update from this Helm’s floti
+            </Action>
+          )}
+        </div>
+      </div>
     )
   } else if (stage?.step === 'problem') {
     panel = (
@@ -592,11 +662,15 @@ export function OfferDetails({ name, offer }: { name: string; offer: InstallOffe
   const behind = offer.talks
     ? `${name} has floti ${found?.version ?? ''}, older than the floti ${version} this Helm carries.`
     : `${name} has floti ${found?.version ?? ''}, too old for this Helm to talk to.`
+  const to =
+    offer.updatesTo !== undefined && offer.updatesTo !== null
+      ? `, which updates it to ${offer.updatesTo}, the newest floti on its channel`
+      : ', which updates it to the newest floti on its channel'
   return (
     <>
       <p className="text-[11.5px] leading-[1.5] text-fg-muted">
         {how === 'flotiUpdate'
-          ? `${behind} Helm can run floti update there now, as you, with no admin rights.`
+          ? `${behind} Helm can run floti update there now${to}, as you, with no admin rights.`
           : update
             ? `${behind} Helm can update it to ${version} now, as you, with no admin rights.`
             : `${name} answers, but floti is not installed there. Helm can install it now, as you, with no admin rights.`}
@@ -612,7 +686,7 @@ export function OfferDetails({ name, offer }: { name: string; offer: InstallOffe
       </div>
       <p className="text-[11.5px] text-fg-muted">What it does on {name}</p>
       {how === 'flotiUpdate' ? (
-        <FlotiUpdateSteps name={name} via={offer.via ?? 'login'} sessions={sessions} />
+        <FlotiUpdateSteps name={name} via={offer.via ?? 'login'} updatesTo={offer.updatesTo ?? null} sessions={sessions} />
       ) : (
         <ul data-settings-host-offer-steps className="list-disc pl-4 text-[11.5px] leading-[1.5] text-fg">
           {update && (
@@ -649,10 +723,12 @@ export function OfferDetails({ name, offer }: { name: string; offer: InstallOffe
 function FlotiUpdateSteps({
   name,
   via,
+  updatesTo,
   sessions
 }: {
   name: string
   via: 'connection' | 'login'
+  updatesTo: string | null
   sessions: number | null
 }): JSX.Element {
   return (
@@ -660,15 +736,23 @@ function FlotiUpdateSteps({
       <li>
         {via === 'connection'
           ? `Asks the floti host on ${name} to run floti update`
-          : `Runs floti update on ${name} over the same login`}
+          : `Runs floti update on ${name} over the same login, for floti alone`}
       </li>
-      <li>floti update downloads the newest floti there and checks its signature and SHA-256 before it replaces anything</li>
+      <li>
+        {`floti update downloads ${updatesTo === null ? 'the newest floti' : `floti ${updatesTo}`} there and checks its signature and SHA-256 before it replaces anything`}
+      </li>
       <li data-settings-host-offer-sessions>
-        {sessions === null || sessions === 0
-          ? 'The host there restarts on it and takes every session back from its session keeper: no session ends'
-          : `The host there restarts on it, ending ${sessionsWord(sessions)}, whose session keeper the new floti cannot take back; they are offered back when it starts`}
+        {sessions === null
+          ? 'The host there restarts on it and takes its sessions back from its session keeper. Helm cannot tell beforehand whether the new floti takes every one back; any it cannot are ended and offered back when it starts'
+          : sessions === 0
+            ? 'The host there restarts on it and takes every session back from its session keeper: no session ends'
+            : `The host there restarts on it, ending ${sessionsWord(sessions)}, whose session keeper the new floti cannot take back; they are offered back when it starts`}
       </li>
-      <li>Where the desktop app is installed there, it is replaced too, once it has quit</li>
+      <li data-settings-host-offer-app>
+        {via === 'connection'
+          ? 'Where the desktop app is installed there and older, replaces it too: Helm there is closed for it, its sessions kept running, and opened again once it is replaced'
+          : 'Leaves the desktop app there as it is: its own host offers it the update'}
+      </li>
     </ul>
   )
 }

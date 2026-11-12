@@ -302,7 +302,8 @@ export function registerIpc(ctx: IpcContext): void {
         // An added host's Update floti: over its connection when it has one.
         return ctx.remoteInstall.checkUpdate(
           { id: host.id, transport: host.transport, floti: host.floti },
-          ctx.remoteHosts.connection(host.id)
+          ctx.remoteHosts.connection(host.id),
+          { install: target.install === true }
         )
       }
       // A host being added is checked as the settings would keep it.
@@ -339,8 +340,11 @@ export function registerIpc(ctx: IpcContext): void {
       ctx.remoteAdd.cancel(attempt)
     },
     'remoteHosts:install': async ({ id, host }) => {
-      const outcome = await ctx.remoteInstall.install(id)
-      if (outcome.ok) ctx.remoteHosts.installed(host, outcome.floti, outcome.startsAtNextSignIn)
+      // A floti update's steps, shown in the row as they come.
+      const outcome = await ctx.remoteInstall.install(id, (line) =>
+        emit(ctx.window(), 'remoteHosts:installProgress', { id, line })
+      )
+      if (outcome.ok === true) ctx.remoteHosts.installed(host, outcome.floti, outcome.startsAtNextSignIn)
       return outcome
     },
     'remoteHosts:cancel': ({ id }) => {

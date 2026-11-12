@@ -67,6 +67,11 @@ export interface RemoteHostLinks {
   states(): RemoteHostStates
   /** Main's connection now to host `id`, or null when it is not connected. */
   connection(id: string): HostConnection | null
+  /**
+   * The floti version host `id`'s link next connects with, as its welcome
+   * names it, or null once `signal` aborts first.
+   */
+  reconnected(id: string, signal: AbortSignal): Promise<string | null>
   /** Main's connection now to the host this device reaches with `ssh <target>`, or null. */
   reachedWithSsh(target: string): HostConnection | null
   /** The page links to one host, or null for a host this device does not have. */
@@ -159,6 +164,8 @@ export function createRemoteHostLinks(deps: RemoteHostLinksDeps): RemoteHostLink
   const states = new Map<string, RemoteHostConnection>()
   /** The hosts Helm installed floti on while nobody was signed in there. */
   const atSignIn = new Set<string>()
+  /** Who waits for each host's next connection (`reconnected`), told its floti version. */
+  const awaiting = new Map<string, Set<(version: string) => void>>()
   let quitting = false
   /** The hosts as `hostsChanged` was last told them, as JSON; null before the first `sync`. */
   let recorded: string | null = null
@@ -239,6 +246,7 @@ export function createRemoteHostLinks(deps: RemoteHostLinksDeps): RemoteHostLink
         version,
         ...(hostFlotiOlder(version, deps.appVersion) ? { olderThan: deps.appVersion } : {})
       })
+      for (const tell of [...(awaiting.get(entry.host.id) ?? [])]) tell(version)
       deps.wsl?.connected(entry.host)
     })
     // Before the first connect, so what hangs on the link hears it.
@@ -297,6 +305,27 @@ export function createRemoteHostLinks(deps: RemoteHostLinksDeps): RemoteHostLink
     states: () => Object.fromEntries(states),
 
     connection: (id) => entries.get(id)?.link.current() ?? null,
+
+    reconnected(id, signal) {
+      return new Promise((resolve) => {
+        if (signal.aborted) {
+          resolve(null)
+          return
+        }
+        const waiters = awaiting.get(id) ?? new Set()
+        awaiting.set(id, waiters)
+        const end = (version: string | null): void => {
+          waiters.delete(tell)
+          if (waiters.size === 0 && awaiting.get(id) === waiters) awaiting.delete(id)
+          signal.removeEventListener('abort', stop)
+          resolve(version)
+        }
+        const tell = (version: string): void => end(version)
+        const stop = (): void => end(null)
+        waiters.add(tell)
+        signal.addEventListener('abort', stop, { once: true })
+      })
+    },
 
     reachedWithSsh(target) {
       for (const entry of entries.values()) {

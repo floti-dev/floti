@@ -66,6 +66,7 @@ function installer(env: NodeJS.ProcessEnv) {
   return createRemoteInstaller({
     restartState: () => Promise.reject(new Error('Nothing asks what a restart ends here.')),
     keeperLink: 1,
+    hostVersionAfter: () => Promise.reject(new Error('Nothing waits for a host to connect again here.')),
     run: spawnTransportRun(spawn, env),
     programs: PROGRAMS,
     platform: process.platform,

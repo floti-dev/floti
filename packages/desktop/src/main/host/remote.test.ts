@@ -201,6 +201,28 @@ describe('the links to hosts on other computers', () => {
     expect(w.links.connection(FAR.id)).toBeNull()
   })
 
+  it('tells who waits on a host’s next connection the floti version it connects with, and nothing once their wait is stopped', async () => {
+    const w = world()
+    w.links.sync([BUILD])
+    const first = hostWith()
+    w.startFor(BUILD).resolve(fakeLocalHost(first, false))
+    await settle()
+    const next = w.links.reconnected(BUILD.id, new AbortController().signal)
+    const stopping = new AbortController()
+    const stopped = w.links.reconnected(BUILD.id, stopping.signal)
+    stopping.abort()
+    await expect(stopped).resolves.toBeNull()
+    // The host relaunches on a newer floti: the link drops and connects again.
+    first.close()
+    await settle()
+    w.fireTimers()
+    const relaunched = hostWith()
+    Object.assign(relaunched.welcome, { hostVersion: '2.4.0' })
+    w.startFor(BUILD).resolve(fakeLocalHost(relaunched, false))
+    await expect(next).resolves.toBe('2.4.0')
+    await expect(w.links.reconnected(BUILD.id, AbortSignal.abort())).resolves.toBeNull()
+  })
+
   it('S9: a host whose connection drops is retrying, nothing is sent to end a session, and it comes back by itself', async () => {
     const w = world()
     w.links.sync([BUILD])

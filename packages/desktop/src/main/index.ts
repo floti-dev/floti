@@ -656,7 +656,7 @@ function startApp(options: AppOptions = {}): void {
     ...(options.chooseFile !== undefined ? { chooseFile: options.chooseFile } : {}),
     hostSettingsChanged: () => desktopHost.link.writeSettings(),
     remoteHosts,
-    remoteInstall: createDesktopRemoteInstaller((line) => console.log(line)),
+    remoteInstall: createDesktopRemoteInstaller((line) => console.log(line), remoteHosts),
     remoteAdd: createDesktopRemoteAdder({
       hosts: () => services.settings.hosts,
       log: (line) => console.log(line)

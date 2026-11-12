@@ -947,6 +947,7 @@ fn update_takes_nothing_a_channel_or_from_desktop() {
     let options = |channel: Option<&str>, from_desktop: bool| Options {
         channel: channel.map(str::to_owned),
         from_desktop,
+        floti_only: false,
     };
     assert_eq!(super::parse(&args(&[])), Some(options(None, false)));
     assert_eq!(
@@ -976,6 +977,57 @@ fn update_takes_nothing_a_channel_or_from_desktop() {
         None
     );
     assert_eq!(super::parse(&args(&["--now"])), None);
+}
+
+#[test]
+fn update_takes_floti_only_once_and_never_with_from_desktop() {
+    let args = |list: &[&str]| list.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>();
+    let floti_only = |channel: Option<&str>| Options {
+        channel: channel.map(str::to_owned),
+        from_desktop: false,
+        floti_only: true,
+    };
+    assert_eq!(
+        super::parse(&args(&["--floti-only"])),
+        Some(floti_only(None))
+    );
+    assert_eq!(
+        super::parse(&args(&["--floti-only", "--channel", "beta"])),
+        Some(floti_only(Some("beta")))
+    );
+    assert_eq!(super::parse(&args(&["--floti-only", "--floti-only"])), None);
+    assert_eq!(
+        super::parse(&args(&["--floti-only", "--from-desktop"])),
+        None
+    );
+    assert_eq!(
+        super::parse(&args(&["--from-desktop", "--floti-only"])),
+        None
+    );
+}
+
+#[test]
+fn floti_only_says_up_to_date_by_its_own_status_and_every_other_ending_as_before() {
+    let up_to_date = || {
+        Ok(Outcome::UpToDate {
+            channel: "stable".to_owned(),
+            newest: "2.1.0".to_owned(),
+        })
+    };
+    let updated = || {
+        Ok(Outcome::Updated {
+            version: "2.2.0".to_owned(),
+            floti: true,
+            desktop: None,
+        })
+    };
+    assert_eq!(
+        super::exit_status(up_to_date(), true),
+        super::UP_TO_DATE_EXIT
+    );
+    assert_eq!(super::exit_status(up_to_date(), false), 0);
+    assert_eq!(super::exit_status(updated(), true), 0);
+    assert_eq!(super::exit_status(updated(), false), 0);
 }
 
 #[test]

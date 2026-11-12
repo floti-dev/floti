@@ -52,6 +52,14 @@
 //! and says each step there too, marked while it waits for the app, so a
 //! host can follow an update it did not start. How it ended is kept beside.
 //!
+//! `floti update --floti-only` replaces floti alone and leaves the desktop
+//! app as it is, as the host's background update does. It is what another
+//! computer's desktop runs over the login to update this computer's floti:
+//! it never waits for an app, and an app here is offered its own update by
+//! this computer's host. With it, a floti already up to date exits
+//! [`UP_TO_DATE_EXIT`] rather than 0, so whoever ran it can tell nothing was
+//! replaced.
+//!
 //! `floti update --from-desktop` is what the desktop's Update runs, through
 //! its host (`update:install`). A desktop on this computer quits when the
 //! run file says the update waits for it, its sessions running on. The host
@@ -233,6 +241,10 @@ pub struct FromDesktop<'a> {
     pub open: OpenDesktop<'a>,
 }
 
+/// `floti update --floti-only`'s status when floti is up to date on its
+/// channel: nothing was replaced and no host relaunched.
+pub const UP_TO_DATE_EXIT: u8 = 4;
+
 /// The first line an update says, in the run file, before anything else.
 pub const STARTING_LINE: &str = "Starting floti update.";
 
@@ -246,6 +258,9 @@ pub struct Options {
     pub channel: Option<String>,
     /// Whether the desktop's Update started it (`--from-desktop`).
     pub from_desktop: bool,
+    /// Whether it replaces floti alone, leaving the desktop app
+    /// (`--floti-only`).
+    pub floti_only: bool,
 }
 
 /// What one update runs with: every piece of the machine it touches, so a
@@ -747,8 +762,9 @@ fn clear(staging: &Path) -> Result<(), String> {
     remove_tree(&links::Native, staging).map_err(|err| err.to_string())
 }
 
-/// What follows `update`: `--channel <name>` and `--from-desktop`, each at
-/// most once, in either order, or nothing.
+/// What follows `update`: `--channel <name>`, and `--from-desktop` or
+/// `--floti-only`, each at most once, in any order, or nothing.
+/// `--from-desktop` updates the app, so the two never go together.
 pub fn parse(args: &[String]) -> Option<Options> {
     let mut options = Options::default();
     let mut rest = args;
@@ -763,8 +779,16 @@ pub fn parse(args: &[String]) -> Option<Options> {
                 options.channel = Some(name.clone());
                 rest = tail;
             }
-            [flag, tail @ ..] if flag == "--from-desktop" && !options.from_desktop => {
+            [flag, tail @ ..]
+                if flag == "--from-desktop" && !options.from_desktop && !options.floti_only =>
+            {
                 options.from_desktop = true;
+                rest = tail;
+            }
+            [flag, tail @ ..]
+                if flag == "--floti-only" && !options.floti_only && !options.from_desktop =>
+            {
+                options.floti_only = true;
                 rest = tail;
             }
             _ => return None,
@@ -776,7 +800,16 @@ pub fn parse(args: &[String]) -> Option<Options> {
 /// host to start the new floti in its place. A line that cannot be written,
 /// to a terminal gone or an output nobody reads, is let go.
 pub fn run(options: Options, relaunch_host: RelaunchHost<'_>) -> u8 {
-    match run_native(options, relaunch_host) {
+    let floti_only = options.floti_only;
+    exit_status(run_native(options, relaunch_host), floti_only)
+}
+
+/// The status an update that ended with `ended` exits with: 0 when it went
+/// well, [`UP_TO_DATE_EXIT`] for `--floti-only` with nothing to replace, and
+/// 1, with its line on standard error, when it failed.
+fn exit_status(ended: Result<Outcome, String>, floti_only: bool) -> u8 {
+    match ended {
+        Ok(Outcome::UpToDate { .. }) if floti_only => UP_TO_DATE_EXIT,
         Ok(_) => 0,
         Err(line) => {
             let _ = writeln!(std::io::stderr(), "floti update: {line}");
@@ -814,6 +847,7 @@ fn run_native(options: Options, relaunch_host: RelaunchHost<'_>) -> Result<Outco
     let Options {
         channel: chosen_channel,
         from_desktop,
+        floti_only,
     } = options;
     let env = UserEnv::from_process();
     let folders = folders::resolve(&env).map_err(|err| nothing_updated(&err.to_string()))?;
@@ -836,7 +870,7 @@ fn run_native(options: Options, relaunch_host: RelaunchHost<'_>) -> Result<Outco
         processes: &process_table::Native,
         is_alive: &is_alive,
         relaunch_host: Some(relaunch_host),
-        with_desktop: true,
+        with_desktop: !floti_only,
         pause: &pause,
         env,
         running_binary,

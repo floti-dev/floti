@@ -198,23 +198,36 @@ has `floti update` (protocol 3.1 and later, `hasFlotiUpdate`), the update is
 that rather than an install, so it stops nothing first:
 
 - A connected host that keeps floti up to date (`update:state` names no
-  reason it does not) is asked over its connection with `update:install`.
-  It runs `floti update --from-desktop`, which on a computer that also has
-  the desktop app waits for that app to quit (an app connected to that host
-  quits by itself), replaces it, relaunches the host once and opens the app
-  again. The desktop follows `update:state`: the connection ending once the
-  host has answered is the host relaunching, `installFailed` is a failure,
-  and an update that ends with the host still connected replaced nothing.
-- Any other host whose floti has it runs `floti update` over the same
-  login.
+  reason it does not) and whose own check found a newer floti on its
+  channel is asked over its connection with `update:install`, and the offer
+  names that version. It runs `floti update --from-desktop`, which on a
+  computer that also has the desktop app closes that app (keeping its
+  sessions), replaces it, relaunches the host once and opens the app again.
+  The row shows each step from `update:state`. `installFailed` is a
+  failure. The update went well only once the host's link connects again on
+  a newer floti; a host that comes back on the same one, or an update that
+  ends its run while the connection outlives a grace, is said as not seen
+  to replace floti.
+- Any other host whose floti has it runs `floti update --floti-only` over
+  the same login, its output shown as it comes. It leaves the desktop app
+  there to that computer's own host, and never waits for it. Its status 4
+  says floti was up to date on its channel: no failure, and the row offers
+  an install from this desktop's floti instead.
 - A floti without it, or a connected host that runs a floti it does not keep
-  up to date, is updated by the install above.
+  up to date or whose channel has nothing newer, is updated by the install
+  above.
 
-`floti update` relaunches the host through its session keeper. Before the
-offer, the desktop asks the host what a restart would mean (`restartAsk`
-through a bridge of its own, as Restart host to update asks this PC's), and
-the offer says no session ends when the keeper speaks the link this
-desktop's floti takes back, and how many end when it does not.
+No wait on a `floti update` is unbounded: the row's Stop waiting, or ten
+minutes (`UPDATE_PATIENCE_MS`), ends it, saying the update may still be
+running there.
+
+`floti update` relaunches the host through its session keeper. For an update
+to this desktop's own version, the offer first asks the host what a restart
+would mean (`restartAsk` through a bridge of its own, as Restart host to
+update asks this PC's), and says no session ends when the keeper speaks the
+link this desktop's floti takes back, and how many end when it does not. For
+any other version, whose keeper link the desktop cannot know, it says it
+cannot tell.
 
 Beside `floti` goes the Node runtime the local host runs plugin services on.
 `scripts/node-runtime.json` pins its version (a Node 24 LTS release) and, for
@@ -928,6 +941,10 @@ desktop app where it is installed and older, once the app has quit
 (`crates/host/src/update`). The host runs the same checks by itself for
 floti alone (**The host's own update**, below), and runs `floti update
 --from-desktop` when the desktop's Update asks it to (**Updates in Helm**).
+`floti update --floti-only` replaces floti alone and never waits for the
+app, which this computer's host then offers its own update; it exits 4
+rather than 0 when floti is up to date. Another computer's desktop runs it
+over the login ("Installing floti on a host's computer").
 
 **The manifest.** It reads `https://floti.dev/update.json` and its signature
 `update.json.minisig`, which each stable release writes and copies there

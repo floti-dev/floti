@@ -352,13 +352,15 @@ export function AddHostDialog({
       (outcome) => {
         if (!current()) return
         running.current = { ...running.current, offer: null }
-        if (outcome.ok) {
+        if (outcome.ok === true) {
           connect(who, outcome.floti, offer.system, true)
           return
         }
+        // Adding a host installs; only an added host's Update floti runs floti update.
+        const step = outcome.ok === false ? outcome.step : 'update'
         fail(
           who,
-          { lastLine: outcome.lastLine, cause: { kind: 'install', step: outcome.step, folder: offer.folder } },
+          { lastLine: outcome.lastLine ?? '', cause: { kind: 'install', step, folder: offer.folder } },
           { step: 'check' }
         )
       },

@@ -2012,6 +2012,8 @@ export interface IpcEvents {
    * device pinned it, or what its transport last said.
    */
   'remoteHosts:changed': RemoteHostStates
+  /** The last line a `floti update` on a host's computer said, for the offer `id` it runs. */
+  'remoteHosts:installProgress': { id: string; line: string }
   /** Every port forwarded to this PC now, whole, after each change. */
   'forwards:changed': ForwardedPort[]
   /** A background page's ask for the window, from the hidden window through main. */
@@ -2433,6 +2435,7 @@ export const EVENT_CHANNELS = Object.keys({
   'pluginBackground:changed': true,
   'ownData:changed': true,
   'remoteHosts:changed': true,
+  'remoteHosts:installProgress': true,
   'forwards:changed': true,
   'pluginWindow:asked': true,
   'pluginWindow:answered': true,

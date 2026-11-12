@@ -3,6 +3,8 @@ import {
   chooseSource,
   compareVersions,
   describeInstallFailure,
+  describeUnsettledUpdate,
+  UPDATE_UP_TO_DATE_EXIT,
   FLOTI_UPDATE_SINCE,
   hasFlotiUpdate,
   hostFlotiOlder,
@@ -187,6 +189,21 @@ describe('an older floti on another computer, and floti update there', () => {
     expect(parseProtocol(' 12.0 ')).toEqual({ major: 12, minor: 0 })
     expect(parseProtocol('3')).toBeNull()
     expect(parseProtocol('unknown')).toBeNull()
+  })
+
+  it('says how a floti update that ended unsettled ended, never as a failure', () => {
+    expect(UPDATE_UP_TO_DATE_EXIT).toBe(4)
+    expect(describeUnsettledUpdate('upToDate', 'build-box')).toEqual({
+      title: 'floti on build-box is up to date on its channel',
+      fix: 'Nothing was replaced and no session ended: its channel has nothing newer. Update it from this Helm’s own floti instead.'
+    })
+    expect(describeUnsettledUpdate('stoppedWaiting', 'build-box').title).toBe(
+      'Helm stopped waiting for floti update on build-box'
+    )
+    expect(describeUnsettledUpdate('stoppedWaiting', 'build-box').fix).toContain('It may still be running there.')
+    expect(describeUnsettledUpdate('unconfirmed', 'build-box').title).toBe(
+      'Helm did not see floti update replace floti on build-box'
+    )
   })
 
   it('names both versions for a connected host whose floti is older, and says the offer tells what it ends', () => {
