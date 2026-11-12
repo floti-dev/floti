@@ -5,7 +5,9 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use super::{Desktop, Installs, beside, desktop_dir_override, plist_string, posix};
+use super::{
+    Desktop, Installs, NEW_COPY, OLD_COPY, beside, desktop_dir_override, plist_string, posix,
+};
 use crate::platform::folders::UserEnv;
 use crate::platform::links::{self, remove_tree};
 use crate::platform::process_table::ProcessRow;
@@ -128,8 +130,8 @@ impl Installs for Native {
     }
 
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
-        let unpacked = beside(&desktop.path, "floti-update");
-        let old = beside(&desktop.path, "floti-old");
+        let unpacked = beside(&desktop.path, NEW_COPY);
+        let old = beside(&desktop.path, OLD_COPY);
         if let Some(folder) = desktop.path.parent() {
             std::fs::create_dir_all(folder)
                 .map_err(|source| Error::path("make", folder, source))?;

@@ -660,8 +660,10 @@ file and what failed and that nothing was updated, removes what was
 downloaded, and leaves the old floti working. Then floti is replaced, then
 the app: while it runs, `floti update` says it is waiting for it to quit and
 looks again each second. What an earlier update left beside floti
-(`floti.old-<pid>.exe`, `.floti-<version>.<pid>`) is removed at the start
-of the next, once the process that left it is known to have ended.
+(`floti.old-<pid>.exe`, `.floti-<version>.<pid>`) or beside the app (a new
+or old copy, `.Helm.app.floti-update-<pid>` or `.Helm.app.floti-old-<pid>`)
+is removed at the start of the next, once the process that left it is known
+to have ended.
 
 **Where things are replaced** (`crates/host/src/platform/installs`):
 

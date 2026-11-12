@@ -6,7 +6,7 @@
 use std::ffi::OsString;
 use std::path::Path;
 
-use super::{DESKTOP_DIR_VAR, Desktop, Installs, linux, macos, plist_string, windows};
+use super::{DESKTOP_DIR_VAR, Desktop, Installs, leftovers, linux, macos, plist_string, windows};
 use crate::platform::folders::UserEnv;
 use crate::platform::process_table::ProcessRow;
 use crate::testkit::TestDirs;
@@ -487,4 +487,40 @@ fn macos_and_linux_rename_the_new_binary_over_the_running_one() {
         assert_eq!(std::fs::read(&running).unwrap(), b"new");
         assert!(!new.exists());
     }
+}
+
+#[test]
+fn what_an_install_left_beside_the_app_is_found_with_the_process_that_left_it() {
+    let dirs = TestDirs::new();
+    let apps = dirs.folder("apps dir");
+    let app = apps.join("Helm.app");
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::create_dir_all(apps.join(".Helm.app.floti-old-11").join("Contents")).unwrap();
+    std::fs::create_dir_all(apps.join(".Helm.app.floti-update-12")).unwrap();
+    for name in [
+        ".Helm.app.floti-old-x",
+        ".Helm.app.floti-olden-14",
+        ".Other.app.floti-old-15",
+        "Helm.app.floti-old-16",
+    ] {
+        std::fs::write(apps.join(name), b"not one").unwrap();
+    }
+    let desktop = Desktop {
+        name: "Helm",
+        path: app,
+    };
+    let mut found = leftovers(&desktop);
+    found.sort();
+    assert_eq!(
+        found,
+        vec![
+            (apps.join(".Helm.app.floti-old-11"), 11),
+            (apps.join(".Helm.app.floti-update-12"), 12),
+        ]
+    );
+    let nowhere = Desktop {
+        name: "Helm",
+        path: dirs.root().join("no such folder").join("Helm.AppImage"),
+    };
+    assert_eq!(leftovers(&nowhere), Vec::new());
 }

@@ -3,7 +3,8 @@
 //! older, once the app has quit.
 //!
 //! 1. It removes what an earlier update left beside the running floti
-//!    (`floti.old-<pid>.exe`, `.floti-<version>.<pid>[.exe]`) where the
+//!    (`floti.old-<pid>.exe`, `.floti-<version>.<pid>[.exe]`) and beside
+//!    the desktop app (`.Helm.app.floti-old-<pid>` and the like) where the
 //!    process that left it is known to have ended.
 //! 2. It downloads `https://floti.dev/update.json` and its signature
 //!    `update.json.minisig`, and checks the signature with the key built
@@ -363,10 +364,21 @@ impl Updater<'_> {
         self.say(&line);
     }
 
-    /// Removes what an earlier update left beside the running floti, where
-    /// the process that left it has ended. Nothing it cannot remove stops
-    /// this update.
+    /// Removes what an earlier update left beside the running floti and
+    /// beside the desktop app, where the process that left it has ended.
+    /// Nothing it cannot remove stops this update.
     fn sweep_leftovers(&self) {
+        self.sweep_beside_binary();
+        self.sweep_beside_desktop();
+    }
+
+    /// Whether the process `pid` is known to have ended.
+    fn ended(&self, pid: u32) -> bool {
+        matches!((self.is_alive)(pid), Knowable::Known(false))
+    }
+
+    /// The binary moved aside and the downloads left beside floti.
+    fn sweep_beside_binary(&self) {
         let Some(folder) = self.running_binary.parent() else {
             return;
         };
@@ -387,8 +399,23 @@ impl Updater<'_> {
             else {
                 continue;
             };
-            if matches!((self.is_alive)(pid), Knowable::Known(false)) {
+            if self.ended(pid) {
                 let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+
+    /// The new and old copies of the app an install ended before removing
+    /// ([`installs::leftovers`]): an unpacked `.app` or a written AppImage
+    /// on macOS and Linux. A copy is a folder on macOS, removed without
+    /// walking into a link.
+    fn sweep_beside_desktop(&self) {
+        let Some(app) = self.installs.desktop_target(&self.env) else {
+            return;
+        };
+        for (path, pid) in installs::leftovers(&app) {
+            if self.ended(pid) {
+                let _ = remove_tree(&links::Native, &path);
             }
         }
     }

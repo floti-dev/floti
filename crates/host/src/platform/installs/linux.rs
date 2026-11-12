@@ -9,7 +9,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{Desktop, Installs, beside, desktop_dir_override, file_name, posix};
+use super::{Desktop, Installs, NEW_COPY, beside, desktop_dir_override, file_name, posix};
 use crate::platform::folders::UserEnv;
 use crate::platform::process_table::ProcessRow;
 use crate::{Error, Result};
@@ -97,7 +97,7 @@ impl Installs for Native {
             std::fs::create_dir_all(folder)
                 .map_err(|source| Error::path("make", folder, source))?;
         }
-        let new = beside(&desktop.path, "floti-update");
+        let new = beside(&desktop.path, NEW_COPY);
         std::fs::copy(release, &new).map_err(|source| Error::path("write", &new, source))?;
         posix::rename_over(&desktop.path, &new).inspect_err(|_| {
             let _ = std::fs::remove_file(&new);

@@ -1183,3 +1183,40 @@ fn a_failure_line_says_nothing_was_updated_unless_floti_was() {
         "floti is updated to 2.1.0, but Helm is not: The Helm installer ended with 2."
     );
 }
+
+#[test]
+fn what_an_earlier_install_left_beside_the_app_is_removed_once_its_process_has_ended() {
+    let world = World::new();
+    let installs = world.installs(true).at_version(RUNNING);
+    let app = installs.desktop.clone().unwrap().path;
+    let apps = app.parent().unwrap().to_path_buf();
+    // An unpacked app is a folder; a written AppImage is a file.
+    let old = apps.join(".Helm.floti-old-21");
+    std::fs::create_dir_all(old.join("Contents")).unwrap();
+    std::fs::write(old.join("Contents").join("Info.plist"), b"old").unwrap();
+    std::fs::write(apps.join(".Helm.floti-update-22"), b"new").unwrap();
+    std::fs::create_dir_all(apps.join(".Helm.floti-old-23")).unwrap();
+    std::fs::write(apps.join(".Helm.floti-update-24"), b"new").unwrap();
+    world.alive.borrow_mut().extend([
+        (21, Knowable::Known(false)),
+        (22, Knowable::Known(false)),
+        (23, Knowable::Known(true)),
+    ]);
+    world.publish(&[("stable", &Published::new(RUNNING))]);
+    let run = world.update(&installs, 0, None);
+    assert!(
+        matches!(run.result, Ok(Outcome::UpToDate { .. })),
+        "{}",
+        run.out
+    );
+    let mut left: Vec<String> = std::fs::read_dir(&apps)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    left.sort();
+    assert_eq!(
+        left,
+        vec![".Helm.floti-old-23", ".Helm.floti-update-24"],
+        "only what a process known to have ended left"
+    );
+}

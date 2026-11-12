@@ -140,6 +140,13 @@ fn file_name(path: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// What a new copy of the app is called beside it while it is unpacked or
+/// written, before it is moved into place.
+const NEW_COPY: &str = "floti-update";
+
+/// What the app being replaced is called beside it, until it is removed.
+const OLD_COPY: &str = "floti-old";
+
 /// A name beside `path` that this process alone uses: `.<name>.<what>-<pid>`.
 fn beside(path: &Path, what: &str) -> PathBuf {
     path.with_file_name(format!(
@@ -147,6 +154,33 @@ fn beside(path: &Path, what: &str) -> PathBuf {
         file_name(path),
         std::process::id()
     ))
+}
+
+/// What an install of `desktop` left beside it, each with the id of the
+/// process that made it: a new copy or an old one ([`beside`]) that an
+/// install ended before removing.
+pub fn leftovers(desktop: &Desktop) -> Vec<(PathBuf, u32)> {
+    let Some(folder) = desktop.path.parent() else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return Vec::new();
+    };
+    let prefix = format!(".{}.", file_name(&desktop.path));
+    entries
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name();
+            let rest = name.to_str()?.strip_prefix(&prefix)?;
+            let pid = [NEW_COPY, OLD_COPY].iter().find_map(|what| {
+                rest.strip_prefix(what)?
+                    .strip_prefix('-')?
+                    .parse::<u32>()
+                    .ok()
+            })?;
+            Some((entry.path(), pid))
+        })
+        .collect()
 }
 
 /// What a test needs to stand a fake desktop install and a fake release of
