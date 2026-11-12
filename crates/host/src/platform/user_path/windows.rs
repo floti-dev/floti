@@ -43,11 +43,10 @@ impl UserPath for Native {
 /// separator as Windows finds programs, or one whose `floti.exe` is this
 /// one by another name.
 pub fn names<'a>(values: impl IntoIterator<Item = &'a str>, env: &UserEnv, floti: &Path) -> bool {
-    let wanted = floti
-        .parent()
-        .map(|folder| comparable(&folder.display().to_string()));
+    let written = floti.to_string_lossy();
+    let (folder, name) = split_windows_path(&written);
+    let wanted = folder.map(comparable);
     let this = std::fs::canonicalize(floti).ok();
-    let name = floti.file_name().unwrap_or_default();
     values
         .into_iter()
         .flat_map(|value| value.split(';'))
@@ -56,12 +55,31 @@ pub fn names<'a>(values: impl IntoIterator<Item = &'a str>, env: &UserEnv, floti
         .any(|entry| {
             wanted.as_deref() == Some(comparable(&entry).as_str())
                 || this.as_ref().is_some_and(|this| {
-                    std::fs::canonicalize(Path::new(&entry).join(name))
+                    std::fs::canonicalize(Path::new(&entry).join(&name))
                         .ok()
                         .as_ref()
                         == Some(this)
                 })
         })
+}
+
+/// A Windows path's folder and last part, split as Windows splits it, on
+/// its last `\` or `/`, on whichever OS this runs: [`Path::parent`] on
+/// macOS or Linux takes the whole of `C:\...\floti.exe` for one part. A
+/// drive's root keeps its separator (`C:\`), as [`comparable`] keeps it.
+pub(super) fn split_windows_path(path: &str) -> (Option<&str>, String) {
+    match path.rfind(['\\', '/']) {
+        Some(at) => {
+            let folder = &path[..at];
+            let folder = if folder.ends_with(':') {
+                &path[..=at]
+            } else {
+                folder
+            };
+            (Some(folder), path[at + 1..].to_owned())
+        }
+        None => (None, path.to_owned()),
+    }
 }
 
 /// `entry` with each `%NAME%` replaced by that variable of `env`, and left

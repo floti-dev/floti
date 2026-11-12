@@ -1871,7 +1871,7 @@ async fn s13_the_shipped_lead_starts_agents_cannot_edit_and_carries_its_voice_an
         "Start a worker",
         "## Keeping the tracker",
         "## Voice",
-        "ABC-12",
+        "ABC-14 has a choice",
     ] {
         assert!(instructions.contains(part), "{part} in {instructions}");
     }
@@ -2797,7 +2797,7 @@ async fn a_read_only_host_with_neither_folder_serves_the_shipped_agents_and_writ
             .instructions
             .as_deref()
             .unwrap_or_default()
-            .contains("Read the code before you give a finding"),
+            .contains("Read the code around each finding before you give it"),
         "{:?}",
         kid.run.instructions
     );

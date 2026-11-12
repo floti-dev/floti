@@ -43,6 +43,13 @@ use tokio::net::TcpStream;
 
 const TERMINAL: &[&str] = &["terminal"];
 
+/// The minor before this one, which the host still serves, or none on a
+/// major's first minor, which serves only itself.
+const PREVIOUS: Option<ProtocolVersion> = match PROTOCOL_VERSION.minor {
+    0 => None,
+    minor => Some(ProtocolVersion::new(PROTOCOL_VERSION.major, minor - 1)),
+};
+
 /// The backends the host has, by id: the fake `claude`, and the other fake
 /// with its program missing (a child started on it fails to launch).
 const CLAUDE: &str = "claude-code";
@@ -979,10 +986,16 @@ async fn s23_a_client_on_this_minor_follows_dismisses_allows_and_watches_while_o
 
     let mut current = world.client().await;
     assert_eq!(current.welcome.protocol, PROTOCOL_VERSION);
-    // The minor before this one, which the host still serves.
-    let previous = ProtocolVersion::new(PROTOCOL_VERSION.major, PROTOCOL_VERSION.minor - 1);
-    let mut old = TestClient::connect_at(&world.endpoint, previous, TERMINAL).await;
-    assert_eq!(old.welcome.protocol, previous);
+    // A client on the minor before this one, connected before any notice
+    // changes; a major's first minor has none to serve.
+    let mut old = match PREVIOUS {
+        Some(previous) => {
+            let old = TestClient::connect_at(&world.endpoint, previous, TERMINAL).await;
+            assert_eq!(old.welcome.protocol, previous);
+            Some(old)
+        }
+        None => None,
+    };
 
     // The current client follows the standing notices: the ones standing when it
     // connected, then each change.
@@ -1037,32 +1050,34 @@ async fn s23_a_client_on_this_minor_follows_dismisses_allows_and_watches_while_o
         })
         .await;
 
-    // A client a minor behind connects and works as it did: it lists the sessions,
-    // starts one, and types into it.
-    let listed = old
-        .request::<SessionList>(&())
-        .await
-        .expect("a client a minor behind lists the sessions");
-    for parent in [&refused, &other] {
-        assert!(listed.iter().any(|row| row.id == parent.id()), "{listed:?}");
-    }
-    let started = old
-        .request::<SessionStart>(&StartSessionRequest {
-            cwd: text(&world.project("from-previous")),
-            cols: 80,
-            rows: 24,
-            name: Some("from the previous minor".to_owned()),
-            backend: Some(BackendId::new(CLAUDE)),
-            ..StartSessionRequest::default()
+    if let Some(old) = old.as_mut() {
+        // A client a minor behind connects and works as it did: it lists the sessions,
+        // starts one, and types into it.
+        let listed = old
+            .request::<SessionList>(&())
+            .await
+            .expect("a client a minor behind lists the sessions");
+        for parent in [&refused, &other] {
+            assert!(listed.iter().any(|row| row.id == parent.id()), "{listed:?}");
+        }
+        let started = old
+            .request::<SessionStart>(&StartSessionRequest {
+                cwd: text(&world.project("from-previous")),
+                cols: 80,
+                rows: 24,
+                name: Some("from the previous minor".to_owned()),
+                backend: Some(BackendId::new(CLAUDE)),
+                ..StartSessionRequest::default()
+            })
+            .await
+            .expect("a client a minor behind starts a session");
+        old.attach(1, started.id).await;
+        old.type_into(1, b"hello from the previous minor\r").await;
+        old.read_stream_until(1, |screen| {
+            String::from_utf8_lossy(screen).contains("hello from the previous minor")
         })
-        .await
-        .expect("a client a minor behind starts a session");
-    old.attach(1, started.id).await;
-    old.type_into(1, b"hello from the previous minor\r").await;
-    old.read_stream_until(1, |screen| {
-        String::from_utf8_lossy(screen).contains("hello from the previous minor")
-    })
-    .await;
+        .await;
+    }
     host.stop(HostStopReason::Stop).await;
 }
 

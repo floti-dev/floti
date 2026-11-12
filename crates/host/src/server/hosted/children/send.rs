@@ -46,7 +46,10 @@
 //! from the paste's opening.
 //!
 //! **Typing is one turn at a time.** Deliveries to one child are taken in
-//! turn, so the paste and submit of one never come between another's.
+//! turn, so the paste and submit of one never come between another's. A send
+//! holds the child's turn from before it queues its text until it answers, so
+//! a pass a moment starts meanwhile never types that text behind its back and
+//! the answer says truly whether it was sent or why it waits.
 
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -218,6 +221,11 @@ impl Hosted {
             return Err(format!("{} {NO_STOP_KEY}", target.name));
         }
         let child = target.session.id();
+        // Held from before the text is queued until the send has answered:
+        // a pass that a moment starts meanwhile cannot type it, so the
+        // answer says what became of it.
+        let turn = self.children.typing_lock(child);
+        let _one_at_a_time = turn.lock().await;
         let id = {
             let hosted = Arc::clone(self);
             let text = request.text.clone();
@@ -233,7 +241,7 @@ impl Hosted {
             })
             .await?
         };
-        let delivery = self.deliver_to(child, Some(id)).await;
+        let delivery = self.deliver_locked(child, Some(id)).await;
         let queued = if delivery.delivered.contains(&id) {
             None
         } else {
@@ -264,6 +272,12 @@ impl Hosted {
     async fn deliver_to(self: &Arc<Self>, child: SessionId, quiet: Option<i64>) -> Delivery {
         let turn = self.children.typing_lock(child);
         let _one_at_a_time = turn.lock().await;
+        self.deliver_locked(child, quiet).await
+    }
+
+    /// [`Self::deliver_to`], by a caller that holds child `child`'s typing
+    /// lock.
+    async fn deliver_locked(self: &Arc<Self>, child: SessionId, quiet: Option<i64>) -> Delivery {
         let mut delivery = Delivery::default();
         // The records as of now, not as of the last pass: a prompt that
         // appeared since is seen before anything is typed, and a pass that

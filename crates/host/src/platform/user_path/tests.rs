@@ -257,6 +257,47 @@ fn brew_shellenv_puts_that_homebrews_bin_on_path() {
     assert_eq!(unix.has_with(&macos::SYSTEM, "/bin/zsh", floti), Ok(true));
 }
 
+#[test]
+fn a_quoted_folder_with_spaces_is_one_folder_in_a_path_line_and_in_brew_shellenv() {
+    let unix = Unix::new();
+    let floti = unix.home().join("my tools").join("bin").join("floti");
+    assert_eq!(unix.has_with(&linux::SYSTEM, "/bin/sh", &floti), Ok(false));
+    unix.write(
+        unix.home(),
+        ".profile",
+        "export PATH=\"$HOME/my tools\"/bin:$PATH\n",
+    );
+    assert_eq!(unix.has_with(&linux::SYSTEM, "/bin/sh", &floti), Ok(true));
+
+    let brewed = Path::new("/opt/my brew/bin/floti");
+    assert_eq!(unix.has_with(&macos::SYSTEM, "/bin/zsh", brewed), Ok(false));
+    unix.write(
+        unix.home(),
+        ".zprofile",
+        "eval \"$(\"/opt/my brew/bin/brew\" shellenv)\"\n",
+    );
+    assert_eq!(unix.has_with(&macos::SYSTEM, "/bin/zsh", brewed), Ok(true));
+}
+
+#[test]
+fn a_windows_path_splits_into_its_folder_and_name_on_every_os() {
+    assert_eq!(
+        windows::split_windows_path(FLOTI_EXE),
+        (
+            Some(r"C:\Users\me\AppData\Local\Programs\Floti\bin"),
+            "floti.exe".to_owned()
+        )
+    );
+    assert_eq!(
+        windows::split_windows_path("C:/floti.exe"),
+        (Some("C:/"), "floti.exe".to_owned())
+    );
+    assert_eq!(
+        windows::split_windows_path("floti.exe"),
+        (None, "floti.exe".to_owned())
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn a_floti_linked_from_a_path_folder_is_this_one() {
@@ -283,7 +324,9 @@ fn a_floti_linked_from_a_path_folder_is_this_one() {
     unix.write(
         unix.home(),
         ".bashrc",
-        &format!("eval \"$({}/brew shellenv)\"\n", bin.display()),
+        // Quoted, as a shell needs a folder with spaces to be: the test's
+        // tree has them.
+        &format!("eval \"$(\"{}/brew\" shellenv)\"\n", bin.display()),
     );
     assert_eq!(unix.has_with(&linux::SYSTEM, "/bin/bash", &floti), Ok(true));
 }

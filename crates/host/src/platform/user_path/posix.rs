@@ -5,7 +5,9 @@
 //! The folders a `PATH` line adds are read from it: every word of a line
 //! that sets `PATH` (an assignment or export of `PATH`, zsh's `path` array,
 //! fish's `fish_add_path` and `fish_user_paths`, or Homebrew's `brew
-//! shellenv`) that is a full path or starts with `$HOME`, `${HOME}` or `~`.
+//! shellenv`) that is a full path or starts with `$HOME`, `${HOME}` or `~`,
+//! its words split as the shell splits them, so a quoted folder keeps its
+//! spaces.
 //! A line inside a condition counts as if the condition held: Ubuntu's
 //! `~/.profile` adds `~/.local/bin` only when that folder exists at sign-in,
 //! and it does once floti is in it.
@@ -270,12 +272,9 @@ fn path_entries(line: &str, home: &Path) -> Vec<PathBuf> {
     if !sets_path(line) {
         return Vec::new();
     }
-    let words = line
-        .split([':', '"', '\'', '=', '(', ')', ';', ' ', '\t'])
-        .filter(|word| !word.is_empty());
     let mut entries = Vec::new();
-    for word in words {
-        let Some(path) = as_path(word, home) else {
+    for word in shell_words(line) {
+        let Some(path) = as_path(&word, home) else {
             continue;
         };
         if line.contains("shellenv")
@@ -290,6 +289,78 @@ fn path_entries(line: &str, home: &Path) -> Vec<PathBuf> {
         entries.push(path);
     }
     entries
+}
+
+/// Where a character of a line stands, as a shell reads it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Quoting {
+    /// Inside `"..."`: a space is part of the word.
+    Double,
+    /// Inside `'...'`: everything is part of the word.
+    Single,
+    /// Inside `$(...)`: words again, as outside any quote.
+    Command,
+}
+
+/// The words of `line` that could name a folder, split as a shell splits
+/// them: on spaces, tabs, `=`, `(`, `)` and `;` outside quotes, and on `:`,
+/// `PATH`'s own separator, everywhere. A quoted part keeps its spaces and
+/// joins what touches it (`"$HOME/my tools"/bin` is one word), and `$(...)`
+/// inside double quotes starts words of its own, as in
+/// `eval "$("/opt/my brew/bin/brew" shellenv)"`.
+fn shell_words(line: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut stack: Vec<Quoting> = Vec::new();
+    let mut chars = line.chars().peekable();
+    let mut end = |word: &mut String| {
+        if !word.is_empty() {
+            words.push(std::mem::take(word));
+        }
+    };
+    while let Some(c) = chars.next() {
+        let substitution = c == '$' && chars.peek() == Some(&'(');
+        match stack.last().copied() {
+            Some(Quoting::Single) => match c {
+                '\'' => {
+                    stack.pop();
+                }
+                ':' => end(&mut word),
+                _ => word.push(c),
+            },
+            Some(Quoting::Double) => match c {
+                '"' => {
+                    stack.pop();
+                }
+                _ if substitution => {
+                    chars.next();
+                    end(&mut word);
+                    stack.push(Quoting::Command);
+                }
+                ':' => end(&mut word),
+                _ => word.push(c),
+            },
+            outside @ (None | Some(Quoting::Command)) => match c {
+                '"' => stack.push(Quoting::Double),
+                '\'' => stack.push(Quoting::Single),
+                _ if substitution => {
+                    chars.next();
+                    end(&mut word);
+                    stack.push(Quoting::Command);
+                }
+                ')' => {
+                    end(&mut word);
+                    if outside == Some(Quoting::Command) {
+                        stack.pop();
+                    }
+                }
+                ':' | '=' | '(' | ';' | ' ' | '\t' => end(&mut word),
+                _ => word.push(c),
+            },
+        }
+    }
+    end(&mut word);
+    words
 }
 
 /// `word` as a folder: a full path, or one under the home folder.
