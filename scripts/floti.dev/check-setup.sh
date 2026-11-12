@@ -52,7 +52,15 @@ case "$how" in
     ;;
   user-unit)
     [ -f "$unit" ] || fail "setup wrote no systemd user unit at $unit."
-    grep -q "^ExecStart=.*$floti host\$" "$unit" || fail "the user unit at $unit does not run $floti host."
+    # Setup quotes the path as one systemd word, escaping \ and " with a
+    # backslash and % and $ by doubling them; an unquoted path is the same
+    # command to systemd when it needs no quoting.
+    quoted=\"$(printf '%s' "$floti" | sed -e 's/[\\"]/\\&/g' -e 's/%/%%/g' -e 's/\$/$$/g')\"
+    exec=$(grep '^ExecStart=' "$unit" || true)
+    case "$exec" in
+      "ExecStart=$quoted host" | "ExecStart=$floti host") ;;
+      *) fail "the user unit at $unit does not run $floti host: it has \"${exec:-no ExecStart line}\"." ;;
+    esac
     enabled=$(systemctl --user is-enabled floti.service 2>/dev/null || true)
     [ "$enabled" = enabled ] || fail "the user unit floti.service is not enabled (systemctl says \"$enabled\")."
     active=$(systemctl --user is-active floti.service 2>/dev/null || true)
