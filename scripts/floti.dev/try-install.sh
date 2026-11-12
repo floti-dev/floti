@@ -100,7 +100,7 @@ setup=$(grep -E '^(The Floti host |floti setup: )' "$out" | tail -n 1 || true)
 # file it added floti's line to, or says nothing where that shell's startup
 # files had the folder on PATH already, which `adds-path-line` refuses; either
 # way a new login shell of the user's own kind ($SHELL), started from a clean
-# environment whose PATH has only the system's folders, so that it has
+# environment whose PATH is the one a login starts with, so that it has
 # nothing of this job's PATH and only what its startup files add, must find
 # this floti. For any other shell, or none, setup says it knows no startup
 # file and changes none. Root is refused by setup before its PATH step.
@@ -132,8 +132,16 @@ case "$shell_kind" in
       *) fail "with SHELL=$shell, setup said: $path_said" ;;
     esac
     user=$(id -un)
-    found=$(cd / && env -i HOME="$HOME" USER="$user" LOGNAME="$user" SHELL="$shell" PATH=/usr/bin:/bin "$shell" -l -c 'command -v floti' </dev/null 2>"$work/shell.err" || true)
-    [ "$found" = "$floti" ] || fail "a new ${shell##*/} login shell from a clean environment found floti at \"$found\", not $floti. $(tail -n 1 "$work/shell.err")"
+    # The PATH a login starts with before its shell reads anything: on Linux
+    # what pam_env sets from /etc/environment, which `env -i` would skip;
+    # elsewhere, and where it sets none, the system's own folders.
+    login_path=/usr/bin:/bin
+    if [ -r /etc/environment ]; then
+      from_pam=$(sed -n 's/^[[:space:]]*PATH=//p' /etc/environment | tail -n 1 | tr -d "\"'")
+      [ -z "$from_pam" ] || login_path=$from_pam
+    fi
+    found=$(cd / && env -i HOME="$HOME" USER="$user" LOGNAME="$user" SHELL="$shell" PATH="$login_path" "$shell" -l -c 'command -v floti' </dev/null 2>"$work/shell.err" || true)
+    [ "$found" = "$floti" ] || fail "a new ${shell##*/} login shell from a clean environment, starting from PATH=$login_path, found floti at \"$found\", not $floti. $(tail -n 1 "$work/shell.err")"
     on_path="$on_path; a new ${shell##*/} login shell from a clean environment runs $found"
     ;;
   *)

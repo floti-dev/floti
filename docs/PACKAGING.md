@@ -940,9 +940,11 @@ container is refused by setup, which is the line it must reach). On macOS
 and Linux `floti` must then be on `PATH`: for a shell floti writes a startup
 file of, setup must have named the file it put floti's line in, or said
 nothing where that shell's files had the folder already, and a new login
-shell of the user's own kind (`$SHELL -l`), started with `env -i` and a
-`PATH` of `/usr/bin:/bin` so that it has nothing of the job's, must find
-that floti through its startup files alone; for a shell floti knows no file
+shell of the user's own kind (`$SHELL -l`), started with `env -i` and the
+`PATH` a login starts with (on Linux the one `/etc/environment` sets, which
+`pam_env` gives every login and `env -i` would skip, else `/usr/bin:/bin`),
+so that it has nothing of the job's, must find that floti through that and
+its startup files alone; for a shell floti knows no file
 of, or no `$SHELL`, setup must have said so; as root setup must have said
 nothing of `PATH`. Two runs must show the line itself, so `try-install.sh`
 gets `adds-path-line` there, which refuses "had the folder already": on
@@ -950,7 +952,8 @@ gets `adds-path-line` there, which refuses "had the folder already": on
 adds the line to `~/.zshenv`, which the runner has none of; the container's
 ordinary user starts with no startup file, so setup makes its `~/.profile`.
 The Ubuntu runners have `~/.local/bin` on `PATH` already, through
-`/etc/environment` and `~/.profile`, and show only that it is found.
+`/etc/environment`, so setup adds nothing there and they show only that it
+is found.
 
 Then `scripts/floti.dev/check-setup.sh` or `check-setup.ps1` checks what
 setup left, each missing thing failing the job with one line naming it:
