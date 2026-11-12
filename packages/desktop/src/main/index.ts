@@ -45,6 +45,7 @@ import {
   type BrowserHost
 } from './browser'
 import { createBrowserMcp, type BrowserMcpHost } from './browser-mcp'
+import { browserAvailability, readAppArmorRestricts, withBrowserAvailability } from './browser-sandbox'
 import { installIpcRecorder } from './ipc-recorder'
 import { maybeCheckForUpdate } from './update'
 import { quitConfirm, sessionConfirm } from './host/confirm'
@@ -426,6 +427,20 @@ function startApp(options: AppOptions = {}): void {
    * and starts when none answers.
    */
   const checkConfirm = options.confirm
+  /*
+   * Whether the browser pane may run: not in a Linux Helm started without
+   * Chromium's sandbox (`browser-sandbox.ts`). Every read of the browser tools'
+   * switch goes through `browserSettings`, so with the pane off no session is
+   * given the tools.
+   */
+  const browserPane = browserAvailability({
+    platform: process.platform,
+    noSandbox: app.commandLine.hasSwitch('no-sandbox'),
+    env: process.env,
+    appArmorRestricts: process.platform === 'linux' ? readAppArmorRestricts() : null
+  })
+  if (!browserPane.available) console.log("browser: off - Helm is running without Chromium's sandbox (--no-sandbox)")
+  const browserSettings = (): AppSettings => withBrowserAvailability(services.settings, browserPane)
   const desktopHost: DesktopHost = createDesktopHost({
     services,
     window: () => win,
@@ -438,7 +453,8 @@ function startApp(options: AppOptions = {}): void {
         : quitConfirm(() => win),
     browserTools: () => browserMcp,
     runPluginTool: (request, signal) => plugins.runTool(request, signal),
-    pluginBackground
+    pluginBackground,
+    browserAvailability: browserPane
   })
   pluginBackgroundGone = (reason) => {
     desktopHost.plugins.backgroundGone(reason)
@@ -579,8 +595,9 @@ function startApp(options: AppOptions = {}): void {
     onCommand: (command) => emit(win, 'browser:command', command),
     onLogged: (id, entry) => emit(win, 'browser:logged', { id, entry }),
     // With the tools off there is nobody to share a page with.
-    sessionOpener: (session) => (services.settings.browserMcp ? sessions.browserOpener(session) : null),
-    shareTargets: () => (services.settings.browserMcp ? sessions.browserSessions() : [])
+    sessionOpener: (session) => (browserSettings().browserMcp ? sessions.browserOpener(session) : null),
+    shareTargets: () => (browserSettings().browserMcp ? sessions.browserSessions() : []),
+    availability: browserPane
   })
 
   /**
@@ -588,7 +605,7 @@ function startApp(options: AppOptions = {}): void {
    * (`host/browser-tools.ts`). It never listens: the host serves its
    * sessions' tools.
    */
-  browserMcp = createBrowserMcp({ browsers, settings: () => services.settings })
+  browserMcp = createBrowserMcp({ browsers, settings: browserSettings })
   // The `--mcp-config` files an earlier version wrote for its own sessions,
   // where their owning pid is provably dead (`core/launch/mcp.ts`).
   cleanStaleMcpConfigs(mcpConfigDir)

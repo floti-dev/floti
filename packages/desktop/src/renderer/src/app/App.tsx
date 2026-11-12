@@ -109,6 +109,7 @@ import {
 import {
   AppShell,
   BROWSER_ZOOM,
+  BrowserOff,
   BrowserPages,
   BrowserPane,
   AwayList,
@@ -385,6 +386,14 @@ const KIND_ICON = {
  */
 const helmOpenExternal = (url: string): Promise<{ opened: boolean }> =>
   helm.invoke("shell:openExternal", { url });
+
+/** The packaging notes on the browser pane and Chromium's sandbox on Linux. */
+const BROWSER_SANDBOX_DOC =
+  "https://github.com/floti-dev/floti/blob/main/docs/PACKAGING.md#the-browser-pane-needs-the-sandbox";
+
+/** The Browser tab's command copied to the clipboard; true once it is there. */
+const copyCommand = async (command: string): Promise<boolean> =>
+  (await helm.invoke("clipboard:write", command)).outcome === "copied";
 
 /** Settings > Hosts' check, install and cancel on a host's computer: main runs them, through that host's own transport. */
 const hostInstall: HostInstallActions = {
@@ -5286,6 +5295,17 @@ export function App(): JSX.Element {
           />
         );
       case "browser": {
+        // Without Chromium's sandbox the pane opens nothing, and says how to
+        // turn the sandbox on where a page would be.
+        if (!browsers.availability.available) {
+          return (
+            <BrowserOff
+              command={browsers.availability.command}
+              onCopy={copyCommand}
+              onReadMore={() => void helmOpenExternal(BROWSER_SANDBOX_DOC)}
+            />
+          );
+        }
         const view =
           frontPage === null ? undefined : browserViews.get(frontPage);
         const holder = findTab(open, paneId(ref));

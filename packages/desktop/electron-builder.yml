@@ -213,6 +213,9 @@ linux:
   # AppImage's .desktop entry.
   icon: build/icon.png
   category: Development
+  # The menu entry's Comment. Without it electron-builder uses the package's
+  # description, which is written for this repository.
+  description: A desktop for Claude Code sessions, with history, files and a browser pane.
   # Named rather than derived, so verify-linux-artifact.mjs knows where the
   # executable is.
   executableName: helm
@@ -220,6 +223,12 @@ linux:
     - target: AppImage
       arch: [x64]
 appImage:
+  # No arguments in the menu entry. electron-builder's default puts
+  # `--no-sandbox` there, which starts every renderer without Chromium's OS
+  # sandbox for anybody who launches Helm from a desktop integration. AppRun
+  # still adds it when user namespaces are refused; then the browser pane stays
+  # off (main/browser-sandbox.ts).
+  executableArgs: []
   # Written out rather than `${arch}`, which an AppImage spells `x86_64`: the
   # release names every file's CPU as floti's files do, and Linux is x64 only.
   artifactName: Helm-${version}-linux-x64.${ext}

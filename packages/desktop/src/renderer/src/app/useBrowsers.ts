@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { subscribeOverlay, overlayOpen, type ConsoleEntry } from '@helm/ui'
-import type { BrowserShare, BrowserState } from '../../../shared/ipc'
+import type { BrowserAvailability, BrowserShare, BrowserState } from '../../../shared/ipc'
 import { helm } from './bridge'
 import {
   activatePage,
@@ -149,12 +149,21 @@ export interface BrowserPanesState {
   /** The last problem `browser:open` refused with, for the strip to report. */
   error: string | null
   dismissError: () => void
+  /**
+   * Whether the pane runs in this Helm, asked once: off without Chromium's
+   * sandbox, when the Browser tab shows how to turn it on instead of a page.
+   * Available until main has answered.
+   */
+  availability: BrowserAvailability
 }
+
+const AVAILABLE: BrowserAvailability = { available: true }
 
 export function useBrowsers(recent: readonly string[]): BrowserPanesState {
   const [views, setViews] = useState<Map<number, BrowserState>>(() => new Map())
   const [entries, setEntries] = useState<Map<number, ConsoleEntry[]>>(() => new Map())
   const [error, setError] = useState<string | null>(null)
+  const [availability, setAvailability] = useState<BrowserAvailability>(AVAILABLE)
   const [strip, setStrip] = useState<PageStrip>(EMPTY_STRIP)
   /** The strip against the pages main holds, so a page is never drawn that is not there. */
   const shown = useMemo(() => pagesOf(strip, new Set(views.keys())), [strip, views])
@@ -289,6 +298,11 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
    * dialogs at all.
    */
   useEffect(() => subscribeOverlay(cover), [cover])
+
+  // Decided once in main, at start, so asked once.
+  useEffect(() => {
+    void helm.invoke('browser:availability').then(setAvailability, () => undefined)
+  }, [])
 
   // Adopt whatever main is already holding. A renderer reload - dev HMR, or a
   // render process that died - leaves views with no tab, exactly as it leaves
@@ -600,6 +614,7 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
     setSuppressed,
     recent: [...recent],
     error,
-    dismissError: () => setError(null)
+    dismissError: () => setError(null),
+    availability
   }
 }

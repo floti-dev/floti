@@ -21,6 +21,7 @@ import {
   restartLocalHost,
   restartOffer,
   startLocalHost,
+  withoutAppImage,
   type HostPlaces,
   type LauncherDeps
 } from './launcher'
@@ -307,6 +308,40 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       )['FLOTI_RUNTIME_DIR']!
       expect(run.startsWith(`${nested}/`)).toBe(true)
       expect(Buffer.byteLength(`${run}/floti.sock`)).toBeLessThanOrEqual(SOCKET_PATH_MAX)
+    })
+
+    it('leaves out what running from an AppImage put in the environment, since the host outlives the mount', () => {
+      const mount = '/tmp/.mount_HelmAb12'
+      const appRun = {
+        APPIMAGE: '/home/me/Apps/Helm-3.0.0-linux-x64.AppImage',
+        APPDIR: mount,
+        ARGV0: './Helm-3.0.0-linux-x64.AppImage',
+        OWD: '/home/me',
+        PATH: `${mount}:${mount}/usr/sbin:/home/me/.local/bin:/usr/bin`,
+        LD_LIBRARY_PATH: `${mount}/usr/lib`,
+        XDG_DATA_DIRS: `${mount}/usr/share/:/usr/local/share:/usr/share:/usr/share/gnome:/usr/local/share/:/usr/share/`,
+        GSETTINGS_SCHEMA_DIR: `${mount}/usr/share/glib-2.0/schemas`,
+        // A list AppRun does not touch is left as it is.
+        MANPATH: `${mount}/usr/share/man`,
+        HOME: '/home/me'
+      }
+      const env = hostEnvironment(
+        { ...WIN_PLACES, appMode: 'installed', packaged: true, dataDir: '/home/me/.config/Helm', templatesDir: '/home/me/.config/helm/templates' },
+        { platform: 'linux', env: appRun, tmpdir: () => '/tmp' }
+      )
+      expect(env).toEqual({
+        PATH: '/home/me/.local/bin:/usr/bin',
+        XDG_DATA_DIRS: '/usr/local/share:/usr/share:/usr/share/gnome:/usr/local/share/:/usr/share/',
+        MANPATH: `${mount}/usr/share/man`,
+        HOME: '/home/me',
+        FLOTI_CONFIG_DIR: '/home/me/.config/helm'
+      })
+
+      // A folder whose name only starts like the mount's is not inside it.
+      expect(withoutAppImage({ ...appRun, PATH: `${mount}-other/bin:/usr/bin` })['PATH']).toBe(`${mount}-other/bin:/usr/bin`)
+      // Without both of the runtime's variables, nothing says what the mount is.
+      const { APPIMAGE: _appImage, ...noImage } = appRun
+      expect(withoutAppImage(noImage)).toBe(noImage)
     })
   })
 

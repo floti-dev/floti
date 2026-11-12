@@ -314,15 +314,35 @@ jobs:
           retention-days: 1
 
   # The Linux AppImage, x64 only. node-pty ships no Linux prebuild, so the
-  # install compiles its N-API addon here, which loads in Electron unchanged.
+  # install compiles its N-API addon here, which loads in Electron unchanged -
+  # but only on a glibc at least as new as the one it was compiled against.
+  # So it is built in Ubuntu 22.04 (glibc 2.35), not on the runner's own
+  # newer system, and verify-linux-artifact.mjs refuses any file in the
+  # AppImage that needs a glibc newer than 2.34, the floor better-sqlite3's
+  # prebuild already sets.
   release-linux:
     needs: [version, check, floti]
     if: needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
+    container:
+      image: ubuntu:22.04
+    defaults:
+      run:
+        shell: bash
     env:
       VERSION: ${{ needs.version.outputs.version }}
 
     steps:
+      # What the checkout, node-gyp and electron-builder need, which the bare
+      # image does not have.
+      - name: Build tools
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git python3 make g++ xz-utils
+
       - uses: actions/checkout@v5
 
       - uses: pnpm/action-setup@v4
@@ -687,7 +707,7 @@ jobs:
           for name in "Helm-$VERSION-setup.exe" "floti-$VERSION-linux-x64"; do
             url="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$name"
             code=$(env -u GH_TOKEN -u GITHUB_TOKEN curl --silent --show-error --location \
-              --retry 3 --retry-all-errors --output "$RUNNER_TEMP/fetched/$name" --write-out '%{http_code}' "$url" || true)
+              --fail --retry 3 --retry-all-errors --output "$RUNNER_TEMP/fetched/$name" --write-out '%{http_code}' "$url" || true)
             [[ $code == 200 ]] || { echo "::error::$url answered $code without a sign-in, expected 200"; exit 1; }
             cmp "$RUNNER_TEMP/release/$name" "$RUNNER_TEMP/fetched/$name" \
               || { echo "::error::$url is not the $name this run built"; exit 1; }

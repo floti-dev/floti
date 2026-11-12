@@ -4,6 +4,8 @@
   "description": "Helm's Electron shell: main process, preload, renderer.",
   "//productName": "Electron derives app.getName() - and therefore %APPDATA%\\<name> - from this file. Without productName a scoped package name puts the database in %APPDATA%\\@helm/desktop, creating a nested folder from the scope. electron-builder sets the same value for packaged builds.",
   "productName": "Helm",
+  "//desktopName": "The Linux menu entry the AppImage installs, helm.desktop: Electron names the window's app_id and WM_CLASS after it, which is how a Linux desktop ties the running window to the entry's name and icon.",
+  "desktopName": "helm.desktop",
   "author": "Cole Taylor",
   "license": "MIT",
   "private": true,

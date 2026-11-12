@@ -41,6 +41,12 @@ together. The agent tools listener's token and origin rules are in
   and those only to a page in the Browser tab that has the keyboard. Only the
   address bar searches, on Enter, with the engine in `browserSearch` (`off`
   refuses); nothing is sent while typing.
+- No web page runs without Chromium's OS sandbox. A Linux Helm started with
+  `--no-sandbox` (an AppImage's AppRun adds it where user namespaces are
+  refused) opens no browser view and gives no session the browser tools, and
+  the Browser tab shows the AppArmor profile that turns the sandbox on
+  (`main/browser-sandbox.ts`, PACKAGING.md "The browser pane needs the
+  sandbox"). The AppImage's menu entry carries no `--no-sandbox`.
 
 ## The plugin secret store
 

@@ -24,19 +24,70 @@ electron-builder makes a dmg only there:
 
 | File | What it is |
 |---|---|
-| `Helm-<version>-linux-x64.AppImage` | One file that runs on a recent x64 Linux distribution with no install and no root. Data in `~/.config/Helm`. |
+| `Helm-<version>-linux-x64.AppImage` | One file that runs with no install and no root on x64 Linux with glibc 2.34 or later: Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 and anything newer. Data in `~/.config/Helm`. |
 
 Linux is x64 only. There is no arm64 Linux desktop build; floti itself does
 ship for arm64 Linux, so such a computer can still be a host (see
 [floti for every host](#floti-for-every-host)). The AppImage's executable is
-`helm` (`executableName`), its icon the 256px `build/icon.png`. An AppImage
-runs from a mount that goes away when it quits, so the app tells its host to
-open it again by the AppImage's own path, which the AppImage runtime passes as
-`APPIMAGE`, rather than by `process.execPath` (`desktopProgram` in
-`main/host/launcher.ts`). Inside an AppImage, Electron's sandbox cannot use a
-setuid `chrome-sandbox` and needs unprivileged user namespaces; a distribution
-that restricts them through AppArmor (Ubuntu 24.04 does) needs an AppArmor
-profile for the AppImage before it starts.
+`helm` (`executableName`), its icon the 256px `build/icon.png`, its menu entry
+`helm.desktop`, which is also the package's `desktopName`, so a Linux desktop
+ties the running window to the entry's name and icon.
+
+**glibc 2.34 is the floor.** better-sqlite3's Linux prebuild needs it, and
+node-pty's addon, compiled at install, needs whatever glibc it was compiled
+against. The release therefore builds the AppImage in an `ubuntu:22.04`
+container (glibc 2.35), not on the runner's newer system, and
+`verify-linux-artifact.mjs` refuses an AppImage in which any ELF file needs a
+glibc newer than 2.34. A file that did would stop Helm at start on every
+older distribution.
+
+**The AppImage's mount stays out of the host.** An AppImage runs from a mount
+that goes away when it quits, and its AppRun puts that mount at the front of
+`PATH`, `LD_LIBRARY_PATH`, `XDG_DATA_DIRS` and `GSETTINGS_SCHEMA_DIR`. The host
+and its sessions outlive Helm, so Helm takes the mount's entries out of those
+lists, and drops `APPDIR`, `APPIMAGE`, `ARGV0` and `OWD`, before starting
+them (`withoutAppImage` in `main/host/launcher.ts`): a session never searches
+a folder that is gone, which anybody who saw its name could make again. The
+host is told to open Helm again by the AppImage's own path, `APPIMAGE`,
+rather than `process.execPath`, which is inside the mount (`desktopProgram`).
+
+### The browser pane needs the sandbox
+
+Every renderer runs inside Chromium's OS sandbox, and the browser pane is the
+one that loads arbitrary sites. Inside an AppImage the sandbox cannot use a
+setuid `chrome-sandbox` (the image is mounted `nosuid`) and needs unprivileged
+user namespaces instead. Where they are refused, Electron would not start, so
+the AppRun electron-builder writes probes them (`unshare -Ur true`) and adds
+`--no-sandbox` when the probe fails. Ubuntu 23.10 and later refuse them to any
+program without an AppArmor profile allowing it, so there every AppImage
+starts that way.
+
+Helm never runs a web page that way. The menu entry carries no `--no-sandbox`
+(`executableArgs: []` under `appImage`; electron-builder's default adds it,
+and `verify-linux-artifact.mjs` refuses an entry with it), and when main sees
+the switch on Linux the browser pane stays off for that run: no view is
+opened, no session is given the browser tools, and the Browser tab shows
+the fix where a page would be (`main/browser-sandbox.ts`). Everything else
+works as usual. The fix on Ubuntu is a profile letting the AppImage make user
+namespaces, the way Ubuntu's own profiles let browsers make them. It covers
+every `Helm-*.AppImage` in the AppImage's folder, so the next version keeps
+it:
+
+    abi <abi/4.0>,
+    include <tunables/global>
+    profile helm-appimage "/home/<you>/Apps/Helm-*.AppImage" flags=(unconfined) {
+      userns,
+    }
+
+The Browser tab writes the command that installs it with this AppImage's own
+folder filled in, as one `sudo`; with the AppImage in `~/Apps` it is
+
+    printf '%s\n' 'abi <abi/4.0>,' 'include <tunables/global>' 'profile helm-appimage "/home/<you>/Apps/Helm-*.AppImage" flags=(unconfined) {' '  userns,' '}' | sudo sh -c 'cat > /etc/apparmor.d/helm-appimage && apparmor_parser -r /etc/apparmor.d/helm-appimage'
+
+Then start Helm again. Where the namespaces are refused some other way (for
+example `kernel.unprivileged_userns_clone=0` on an older Debian), the tab says
+the sandbox is off without a command, since the fix is the system's
+setting.
 
 Every build comes out of the same code. No node module is rebuilt for
 Electron: `npmRebuild: false`, and the native modules are N-API, so the binary
@@ -195,8 +246,10 @@ FUSE) and checks the app inside: an x64 Linux `helm`; better-sqlite3's
 prebuild, node-pty's compiled addon and koffi's Linux package unpacked beside
 the asar; a `floti` and `floti-SHA256SUMS` byte for byte the ones it is given
 (`--floti`, `--sums`; by default `dist-host/`'s), floti executable; the pinned
-Node, executable, with its LICENSE; the install scripts and the icon. It needs
-Linux.
+Node, executable, with its LICENSE; the install scripts and the icon; no ELF
+file anywhere in the image needing a glibc newer than 2.34, read from each
+file's `.gnu.version_r`; and a `helm.desktop` whose `Exec` has no
+`--no-sandbox`. It needs Linux.
 
 ## Where the data goes
 
@@ -359,21 +412,6 @@ after them and finishes green.
   part, so a preview of 2.4.1 is newer than 2.4.0 and older than the next
   release after it.
 
-### A dry run
-
-A push to a branch named `release-dry-run/<name>` runs the whole workflow and
-publishes nothing: no tag, no release, no npm. Everything a release builds is
-built and checked, including the notes and every check of the files that needs
-no published release; then `assemble` uploads exactly the twelve files as the
-run's `release-files` artifact, kept for seven days, and the run's summary
-lists each with its SHA-256. The tag-exists gate does not stop a dry run, so
-the version on the branch may be one already released; one that is not tagged
-must still be greater than every tagged one. A run on any branch but `main` is
-a dry run, and the version job's `dry_run` output is what every publishing job
-and step gates on. `ci.yml` and `floti.yml` skip those branches, as they skip
-`main`, so a dry run is checked once.
-
-    git push origin HEAD:release-dry-run/<name>
 - **Notes are the `## <version>` section of [CHANGELOG.md](../CHANGELOG.md)**,
   and **a release with no section for its version fails rather than
   publishing.** No tag is created when that job fails, so the remedy is to write
@@ -417,6 +455,22 @@ and step gates on. `ci.yml` and `floti.yml` skip those branches, as they skip
   answers 200 with the bytes the run built: the desktop app as a new user
   fetches it, and floti as Settings > Hosts has a computer of another OS or CPU
   fetch it.
+
+### A dry run
+
+A push to a branch named `release-dry-run/<name>` runs the whole workflow and
+publishes nothing: no tag, no release, no npm. Everything a release builds is
+built and checked, including the notes and every check of the files that needs
+no published release; then `assemble` uploads exactly the twelve files as the
+run's `release-files` artifact, kept for seven days, and the run's summary
+lists each with its SHA-256. The tag-exists gate does not stop a dry run, so
+the version on the branch may be one already released; one that is not tagged
+must still be greater than every tagged one. A run on any branch but `main` is
+a dry run, and the version job's `dry_run` output is what every publishing job
+and step gates on. `ci.yml` and `floti.yml` skip those branches, as they skip
+`main`, so a dry run is checked once.
+
+    git push origin HEAD:release-dry-run/<name>
 
 ## Looking at the Mac build
 

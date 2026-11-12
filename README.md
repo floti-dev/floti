@@ -353,9 +353,12 @@ pnpm db:generate       # drizzle-kit generate, then embed the SQL into the bundl
 
 Bump `version` in `packages/desktop/package.json` and merge it to `main`. That
 is the whole procedure. `.github/workflows/release.yml` runs the checks, builds
-both artefacts on a clean Windows runner, and publishes a GitHub release tagged
-`v<version>` with the exes attached and the commits since the previous tag as
-its notes.
+floti for every host and the desktop app for Windows, macOS and Linux on clean
+runners, and publishes a GitHub release tagged `v<version>` with every file
+attached and that version's section of CHANGELOG.md as its notes. A version
+with a pre-release part publishes as a public pre-release, never `latest`. A
+push to `release-dry-run/<name>` runs all of it and publishes nothing
+([docs/PACKAGING.md](docs/PACKAGING.md#releasing)).
 
 A merge that does not change the version runs the checks and stops there, so
 `main` is always checked and only a bump cuts a release. Nothing is built on

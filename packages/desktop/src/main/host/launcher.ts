@@ -268,8 +268,9 @@ export function hostEnvironment(
   const paths = pathsFor(deps.platform)
   const config = paths.dirname(places.templatesDir)
   const node = places.packaged || deps.env['FLOTI_NODE'] !== undefined ? null : nodeOnPath(deps)
+  const inherited = withoutAppImage(deps.env)
   const { [CONFIG_READ_ONLY]: _inherited, ...env } =
-    node === null ? deps.env : { ...deps.env, FLOTI_NODE: node }
+    node === null ? inherited : { ...inherited, FLOTI_NODE: node }
   if (places.appMode === 'installed') return { ...env, FLOTI_CONFIG_DIR: config }
   const root = paths.join(places.dataDir, 'host')
   return {
@@ -280,6 +281,41 @@ export function hostEnvironment(
     ...(places.appMode === 'portable' ? {} : { [CONFIG_READ_ONLY]: '1' }),
     FLOTI_RUNTIME_DIR: runtimeFolder(places.dataDir, deps)
   }
+}
+
+/** What an AppImage's runtime and its AppRun set to say where the image is mounted. */
+const APPIMAGE_VARIABLES = ['APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']
+
+/** The search lists AppRun puts the mounted image at the front of. */
+const APPIMAGE_LISTS = ['PATH', 'LD_LIBRARY_PATH', 'XDG_DATA_DIRS', 'GSETTINGS_SCHEMA_DIR']
+
+/**
+ * `env` without what running from an AppImage put in it. The image is mounted
+ * at a temporary folder (`APPDIR`) for as long as Helm runs, and AppRun puts
+ * that folder at the front of PATH, LD_LIBRARY_PATH, XDG_DATA_DIRS and
+ * GSETTINGS_SCHEMA_DIR. The host and its sessions outlive Helm, so they would
+ * keep searching a folder that is gone once Helm quits - and that anybody
+ * who saw its name could make again and fill. So the image's own entries are
+ * taken out of those lists, a list left empty is dropped, and so are the
+ * runtime's variables. Without `APPIMAGE` and `APPDIR` the environment is
+ * returned as it is.
+ */
+export function withoutAppImage(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const mount = env['APPDIR']
+  if (env['APPIMAGE'] === undefined || mount === undefined || mount === '') return env
+  const root = mount.replace(/\/+$/, '')
+  const inImage = (entry: string): boolean => entry === root || entry.startsWith(`${root}/`)
+  const cleaned: NodeJS.ProcessEnv = {}
+  for (const [name, value] of Object.entries(env)) {
+    if (APPIMAGE_VARIABLES.includes(name) || value === undefined) continue
+    if (!APPIMAGE_LISTS.includes(name)) {
+      cleaned[name] = value
+      continue
+    }
+    const kept = value.split(':').filter((entry) => entry !== '' && !inImage(entry))
+    if (kept.length > 0) cleaned[name] = kept.join(':')
+  }
+  return cleaned
 }
 
 /** The absolute path of the first `node` on PATH, or null when there is none (or nothing to look with). */

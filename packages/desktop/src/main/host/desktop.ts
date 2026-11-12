@@ -5,7 +5,7 @@ import { createReadStream, existsSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, hostname, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { listProfiles, readPluginFolders, readPluginSettings } from '@helm/core'
+import { listProfiles, readPluginFolders, readPluginSettings, type AppSettings } from '@helm/core'
 import { parseSums, type FlotiOs, type RemoteHost, type SshConfigHosts, type WslDistroList } from '@helm/core/types'
 import { createClientFolderRemoteAdder, type RemoteHostAdder } from './remote-add'
 import { readSshConfigHosts } from './ssh-config'
@@ -20,6 +20,8 @@ import { nativeProfileDialogs } from '../profiles'
 import { updateSettings, type Services } from '../services'
 import { createBrowserToolRelay, type BrowserToolRelay } from './browser-tools'
 import { createHostFiles, type HostFiles } from './files'
+import { withBrowserAvailability } from '../browser-sandbox'
+import type { BrowserAvailability } from '../../shared/ipc'
 import {
   LocalHostRefusedError,
   desktopProgram,
@@ -106,6 +108,8 @@ export interface DesktopHostDeps {
   runPluginTool: (request: ToolCallRequest, signal: AbortSignal) => Promise<ToolAnswer>
   /** The hidden window plugins' background pages run in, which the host's list opens and closes. */
   pluginBackground: BackgroundHost
+  /** Whether the browser pane runs here; while it does not, no session is given the browser tools. */
+  browserAvailability: BrowserAvailability
 }
 
 /** The checkout an unpackaged build runs from: `out/main` is three folders inside it. */
@@ -396,10 +400,12 @@ export function createDesktopHost({
   confirmQuit,
   browserTools,
   runPluginTool,
-  pluginBackground
+  pluginBackground,
+  browserAvailability
 }: DesktopHostDeps): DesktopHost {
   const log = (line: string): void => console.log(line)
-  const link = createLocalHostLink(() => hostSettingsFor(services.settings, findClaudeExecutable()), log)
+  const settings = (): AppSettings => withBrowserAvailability(services.settings, browserAvailability)
+  const link = createLocalHostLink(() => hostSettingsFor(settings(), findClaudeExecutable()), log)
   const send: Emit = (channel, payload) => emit(window(), channel, payload)
   // The window hears discovery, the settings and profiles over its own
   // connection (`renderer/src/app/host`); main keeps the host's scan and
@@ -429,7 +435,7 @@ export function createDesktopHost({
     relist: true,
     layout: services.lost.layout,
     knownProject: (cwd) => workspace.knownProject(cwd),
-    browserTools: () => services.settings.browserMcp,
+    browserTools: () => settings().browserMcp,
     browserIdentityEnded: (key) => browserTools()?.forgetOpener(key),
     log
   })

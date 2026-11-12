@@ -3,6 +3,8 @@
 export const APPIMAGE_NAME: RegExp
 export const UNPACKED: readonly { path: string; elf: boolean }[]
 export const RESOURCES: readonly string[]
+export const GLIBC_FLOOR: string
+export function glibcNeeded(bytes: Uint8Array): string | null
 export function appProblems(
   root: string,
   options: { floti: Uint8Array; sums: Uint8Array; origin: string; modes?: boolean }

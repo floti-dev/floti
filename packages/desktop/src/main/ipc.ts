@@ -503,6 +503,7 @@ export function registerIpc(ctx: IpcContext): void {
     'browser:console': ({ id }) => ctx.browsers.entries(id),
     'browser:snapshot': ({ id }) => ctx.browsers.snapshot(id),
     'browser:shareTargets': () => ctx.browsers.shareTargets(),
+    'browser:availability': () => ctx.browsers.availability,
     'browser:share': ({ id, session }) => ctx.browsers.share(id, session)
   }
 

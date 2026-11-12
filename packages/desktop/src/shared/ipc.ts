@@ -547,6 +547,15 @@ export type QuitAnswer = 'end' | 'keep' | 'cancel'
  * unmount-on-tab-switch, and the renderer must never be the authority on what a
  * page is doing.
  */
+/**
+ * Whether the browser pane runs in this Helm. It runs only inside Chromium's
+ * OS sandbox: a Linux Helm started with `--no-sandbox` (which an AppImage's
+ * AppRun adds when user namespaces are refused) opens no web page and serves
+ * no browser tools (`main/browser-sandbox.ts`). `command` is the one command
+ * that gives this AppImage the sandbox, or null when Helm cannot write one.
+ */
+export type BrowserAvailability = { available: true } | { available: false; command: string | null }
+
 export interface BrowserState {
   id: number
   /** Where it actually is, which is not always where it was asked to go. */
@@ -1648,6 +1657,8 @@ export interface IpcRequests {
    * for a session that is not one of `browser:shareTargets`.
    */
   'browser:share': { request: { id: number; session: number | null }; response: BrowserState | null }
+  /** Whether the pane runs here, decided once at start (`BrowserAvailability`). */
+  'browser:availability': { request: void; response: BrowserAvailability }
 
   /**
    * Plugins (`main/plugins/host.ts`). The list is all the window draws plugins
@@ -2397,6 +2408,7 @@ export const REQUEST_CHANNELS = Object.keys({
   'browser:snapshot': true,
   'browser:shareTargets': true,
   'browser:share': true,
+  'browser:availability': true,
   'plugins:list': true,
   'plugins:add': true,
   'plugins:remove': true,

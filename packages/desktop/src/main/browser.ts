@@ -23,6 +23,7 @@ import { TITLEBAR_HEIGHT } from './chrome'
 import { browserKeyCommand, COMMANDS_FOR_THE_WINDOW, COMMANDS_THAT_REPEAT } from '../shared/browserKeys'
 import {
   BROWSER_TABS_MAX,
+  type BrowserAvailability,
   type BrowserCommandEvent,
   type BrowserConsoleEntry,
   type BrowserOpened,
@@ -300,6 +301,8 @@ interface View {
 }
 
 export interface BrowserHost {
+  /** Whether the pane runs here (`browser-sandbox.ts`). While it does not, nothing opens a view. */
+  readonly availability: BrowserAvailability
   open(request: { url?: string; project?: string | null }): {
     state: BrowserState | null
     problem: string | null
@@ -425,6 +428,11 @@ export interface BrowserHostOptions {
    * `process.platform` unless a test names one.
    */
   platform?: NodeJS.Platform
+  /**
+   * Whether the pane may run: off when Helm runs without Chromium's sandbox
+   * (`browser-sandbox.ts`). Available unless a caller says otherwise.
+   */
+  availability?: BrowserAvailability
   /**
    * A session's identity at the tool endpoint, by the id the window names it
    * by - or null for one that cannot take a share: ended, started without the
@@ -764,6 +772,10 @@ function contentsOf(entry: View): WebContents | null {
 // The host
 // ---------------------------------------------------------------------------
 
+/** What opening a page answers while the pane is off. */
+export const BROWSER_OFF_PROBLEM =
+  "Helm is running without Chromium's sandbox, so it opens no web page. The Browser tab says how to turn the sandbox on."
+
 export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
   const views = new Map<number, View>()
   let nextId = 1
@@ -771,6 +783,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
   const settings = (): AppSettings => options.settings()
   const reach = (): BrowserReach => settings().browserReach
   const platform = options.platform ?? process.platform
+  const availability: BrowserAvailability = options.availability ?? { available: true }
 
   const viewFor = (id: number): View | null => views.get(id) ?? null
 
@@ -1671,7 +1684,10 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       }
     },
 
+    availability,
+
     open({ url, project }) {
+      if (!availability.available) return { state: null, problem: BROWSER_OFF_PROBLEM }
       if (views.size >= BROWSER_TABS_MAX) {
         return {
           state: null,
@@ -1937,6 +1953,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     // -----------------------------------------------------------------------
 
     async openFor(opener, url) {
+      if (!availability.available) return { state: null, problem: BROWSER_OFF_PROBLEM }
       if (views.size >= BROWSER_TABS_MAX) {
         return {
           state: null,

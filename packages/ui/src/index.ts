@@ -7,6 +7,7 @@ export {
   type BrowserPaneState,
   type BrowserShareTarget
 } from './components/BrowserPane'
+export { BrowserOff, type BrowserOffProps } from './components/BrowserOff'
 export { Chip, type ChipProps, type ChipTone } from './components/Chip'
 export { EmptyState, type EmptyStateProps } from './components/EmptyState'
 export { CommandPalette, commandScore, type CommandPaletteProps, type PaletteCommand } from './components/CommandPalette'

@@ -15,7 +15,13 @@
 //   release's SHA-256 list gives, and `floti-SHA256SUMS` beside it is that list;
 // - the pinned Node the local host runs plugin services on is there and
 //   executable, with Node's LICENSE, and so are the install scripts Settings >
-//   Hosts sends and the window icon.
+//   Hosts sends and the window icon;
+// - no ELF file anywhere in it needs a glibc newer than GLIBC_FLOOR. A native
+//   module compiled on a newer system than that is one the app cannot load
+//   on an older one, and Helm then dies at start; the release builds it in an
+//   old enough container, and this is what proves it did;
+// - its menu entry (`helm.desktop`) starts it without `--no-sandbox`, so
+//   launching it from a desktop integration keeps Chromium's sandbox.
 //
 //   node scripts/verify-linux-artifact.mjs <AppImage> [--floti <file>] [--sums <file>]
 //
@@ -25,7 +31,7 @@
 // the first.
 
 import { spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -42,6 +48,105 @@ export const UNPACKED = [
   { path: 'node_modules/node-pty/build/Release/pty.node', elf: true },
   { path: 'node_modules/@koromix/koffi-linux-x64', elf: false }
 ]
+
+/**
+ * The newest glibc any file in the AppImage may need: better-sqlite3's Linux
+ * prebuild already needs 2.34, so that is the oldest Linux Helm runs on
+ * (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9).
+ */
+export const GLIBC_FLOOR = '2.34'
+
+const SHT_GNU_VERNEED = 0x6ffffffe
+
+/** `[major, minor, patch]` of a `GLIBC_x.y[.z]` version name, or null for any other name. */
+function glibcParts(name) {
+  const match = /^GLIBC_(\d+)\.(\d+)(?:\.(\d+))?$/.exec(name)
+  return match === null ? null : [Number(match[1]), Number(match[2]), Number(match[3] ?? 0)]
+}
+
+function compareParts(a, b) {
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i]
+  return 0
+}
+
+/**
+ * The newest `GLIBC_x.y` version a 64-bit little-endian ELF file needs, as
+ * its version-needs section (`.gnu.version_r`) lists them, or null when it
+ * needs none (a static file, or one that is not ELF).
+ *
+ * @param {Uint8Array} bytes
+ */
+export function glibcNeeded(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const at = (offset, size) => offset >= 0 && offset + size <= bytes.byteLength
+  if (!at(0, 64) || bytes[0] !== 0x7f || bytes[1] !== 0x45 || bytes[2] !== 0x4c || bytes[3] !== 0x46) return null
+  if (bytes[4] !== 2 || bytes[5] !== 1) return null
+  const shoff = Number(view.getBigUint64(0x28, true))
+  const shentsize = view.getUint16(0x3a, true)
+  const shnum = view.getUint16(0x3c, true)
+  const section = (index) => {
+    const header = shoff + index * shentsize
+    if (!at(header, 64)) return null
+    return {
+      type: view.getUint32(header + 4, true),
+      offset: Number(view.getBigUint64(header + 24, true)),
+      size: Number(view.getBigUint64(header + 32, true)),
+      link: view.getUint32(header + 40, true),
+      info: view.getUint32(header + 44, true)
+    }
+  }
+  const text = (strings, offset) => {
+    let end = strings.offset + offset
+    while (end < strings.offset + strings.size && at(end, 1) && bytes[end] !== 0) end++
+    return new TextDecoder().decode(bytes.subarray(strings.offset + offset, end))
+  }
+  let newest = null
+  for (let i = 0; i < shnum; i++) {
+    const needs = section(i)
+    if (needs === null || needs.type !== SHT_GNU_VERNEED) continue
+    const strings = section(needs.link)
+    if (strings === null) continue
+    let entry = needs.offset
+    for (let n = 0; n < needs.info && at(entry, 16); n++) {
+      let aux = entry + view.getUint32(entry + 8, true)
+      for (let k = 0; k < view.getUint16(entry + 2, true) && at(aux, 16); k++) {
+        const name = text(strings, view.getUint32(aux + 8, true))
+        const parts = glibcParts(name)
+        if (parts !== null && (newest === null || compareParts(parts, glibcParts(newest)) > 0)) newest = name
+        const next = view.getUint32(aux + 12, true)
+        if (next === 0) break
+        aux += next
+      }
+      const next = view.getUint32(entry + 12, true)
+      if (next === 0) break
+      entry += next
+    }
+  }
+  return newest === null ? null : newest.slice('GLIBC_'.length)
+}
+
+/** Every regular file under `root` that starts with the ELF magic, relative to `root`. Links are not followed. */
+function elfFiles(root) {
+  const found = []
+  const magic = Buffer.alloc(4)
+  const walk = (dir, prefix) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name)
+      const relative = prefix === '' ? entry.name : `${prefix}/${entry.name}`
+      if (entry.isDirectory()) walk(full, relative)
+      else if (entry.isFile()) {
+        const fd = openSync(full, 'r')
+        try {
+          if (readSync(fd, magic, 0, 4, 0) === 4 && magic.equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))) found.push(relative)
+        } finally {
+          closeSync(fd)
+        }
+      }
+    }
+  }
+  walk(root, '')
+  return found.sort()
+}
 
 /** Files the app carries in `resources` beside the asar. */
 export const RESOURCES = ['app.asar', 'icon.png', 'install/install.sh', 'node/LICENSE']
@@ -92,6 +197,22 @@ export function appProblems(root, { floti, sums, origin, modes = process.platfor
   const carriedSums = join(resources, 'floti-SHA256SUMS')
   if (!existsSync(carriedSums)) fail("resources/floti-SHA256SUMS is missing, so Settings > Hosts can check no host's floti")
   else if (!readFileSync(carriedSums).equals(sums)) fail('resources/floti-SHA256SUMS is not the SHA-256 list it was given')
+
+  const floor = glibcParts(`GLIBC_${GLIBC_FLOOR}`)
+  for (const path of elfFiles(root)) {
+    const needed = glibcNeeded(readFileSync(join(root, path)))
+    if (needed !== null && compareParts(glibcParts(`GLIBC_${needed}`), floor) > 0) {
+      fail(`${path} needs glibc ${needed}, newer than ${GLIBC_FLOOR}, so it does not load on an older Linux`)
+    }
+  }
+
+  const entry = join(root, 'helm.desktop')
+  if (!existsSync(entry)) fail('helm.desktop, the menu entry, is missing')
+  else {
+    const exec = /^Exec=(.*)$/m.exec(readFileSync(entry, 'utf8'))
+    if (exec === null) fail('helm.desktop has no Exec line')
+    else if (/(^|\s)--no-sandbox(\s|$)/.test(exec[1])) fail(`helm.desktop starts Helm with --no-sandbox (Exec=${exec[1]})`)
+  }
 
   const node = join(resources, 'node', 'bin', 'node')
   if (!existsSync(node)) fail('resources/node/bin/node is missing, so no plugin service can run in the local host')
