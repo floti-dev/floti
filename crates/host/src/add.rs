@@ -368,14 +368,8 @@ impl Adder<'_> {
     }
 
     fn say_installed(&mut self, app: &Desktop) {
-        let named = match self.installs.desktop_version(app) {
-            Some(version) => format!("{} {version}", app.name),
-            None => app.name.to_owned(),
-        };
-        self.say(&format!(
-            "{named} is already installed at {}; floti update keeps it up to date. Nothing was changed.",
-            app.path.display()
-        ));
+        let line = already_installed_line(self.installs, app);
+        self.say(&line);
     }
 
     /// `file`'s entry in the release's signed desktop list: the list's
@@ -485,8 +479,21 @@ impl Adder<'_> {
     }
 }
 
+/// What `floti add desktop`, and `floti setup`, say of the installed `app`:
+/// where it is, and its version where `installs` can tell it.
+pub fn already_installed_line(installs: &dyn Installs, app: &Desktop) -> String {
+    let named = match installs.desktop_version(app) {
+        Some(version) => format!("{} {version}", app.name),
+        None => app.name.to_owned(),
+    };
+    format!(
+        "{named} is already installed at {}; floti update keeps it up to date. Nothing was changed.",
+        app.path.display()
+    )
+}
+
 /// `clause` with its first letter capitalised, as a sentence starts.
-fn capitalised(clause: &str) -> String {
+pub(crate) fn capitalised(clause: &str) -> String {
     let mut chars = clause.chars();
     match chars.next() {
         Some(first) => first.to_uppercase().chain(chars).collect(),
@@ -526,24 +533,44 @@ pub fn run(args: &[String]) -> u8 {
 }
 
 fn run_native() -> Result<Added, String> {
+    add_desktop_here(&mut std::io::stdout())
+}
+
+/// `floti add desktop` for this process's user, on this computer, its
+/// progress on `out`: how it ended well, or its failure line
+/// ([`failure_line`]). `floti setup` installs the app through it.
+pub fn add_desktop_here(out: &mut dyn Write) -> Result<Added, String> {
     let env = UserEnv::from_process();
     let folders = folders::resolve(&env).map_err(|err| nothing_installed(&err.to_string()))?;
+    add_desktop(env, folders.data, &installs::Native, out)
+}
+
+/// `floti add desktop` for the user `env` describes, with floti's data folder
+/// `data`, installing through `installs`: this release's app, from the
+/// release folder and key the data folder gives ([`release_file::releases_url`],
+/// [`signature::trusted_key`]), over HTTPS. How it ended well, or its failure
+/// line.
+pub fn add_desktop(
+    env: UserEnv,
+    data: PathBuf,
+    installs: &dyn Installs,
+    out: &mut dyn Write,
+) -> Result<Added, String> {
     let network = network::Https::new().map_err(|line| nothing_installed(&line))?;
-    let key = signature::trusted_key(&folders.data);
+    let key = signature::trusted_key(&data);
     let is_alive = |pid: u32| process_tree::Native.is_alive(pid);
-    let mut stdout = std::io::stdout();
     let mut adder = Adder {
         running_version: FLOTI_VERSION,
         target: format!("{}-{}", os_name(), cpu_name()),
-        releases: release_file::releases_url(&folders.data),
+        releases: release_file::releases_url(&data),
         key: &key,
         network: &network,
-        installs: &installs::Native,
+        installs,
         install_self: &run_install_self,
         is_alive: &is_alive,
         env,
-        data: folders.data,
-        out: &mut stdout,
+        data,
+        out,
     };
     adder.run().map_err(|err| failure_line(&err))
 }

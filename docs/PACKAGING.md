@@ -373,7 +373,7 @@ every check, on every OS.
   Once the app's files are in place, `build/installer.nsh` (`nsis.include`)
   runs `floti install-self` from the installed `resources\floti.exe`: floti
   and its Node go to `%LOCALAPPDATA%\Programs\Floti\bin`, that folder goes on
-  the user's PATH, and `floti setup` runs from there
+  the user's PATH, and `floti setup --no-desktop` runs from there
   ([floti in your own folder](#floti-in-your-own-folder) has each step). A
   failure there does not fail the install; it is in the details log, and
   Helm tries again when it starts.
@@ -441,8 +441,10 @@ puts it there:
    told the environment changed, so a terminal or an ssh login started after
    it finds `floti`. On macOS and Linux no startup file is changed, as after
    the install script; `floti doctor` gives the line.
-4. `floti setup` runs from the installed floti, which registers it to start
-   the host at sign-in and starts it. A host already running keeps running.
+4. `floti setup --no-desktop` runs from the installed floti, which registers
+   it to start the host at sign-in and starts it, and neither asks about nor
+   installs the desktop app, which is there already. A host already running
+   keeps running.
 
 Who runs it:
 
@@ -803,8 +805,9 @@ its SHA-256, and only then moved into place. A script:
    Linux no startup file is changed: when the folder is not on `PATH`, the
    script says so and that `floti doctor` gives the line;
 4. runs `floti setup`, with the terminal as its input where there is one,
-   never the rest of the download. Its lines and, from `install.sh`, its exit
-   status are the script's.
+   never the rest of the download, so setup asks there whether to install the
+   desktop app as well ([floti setup](#floti-setup)). Its lines and, from
+   `install.sh`, its exit status are the script's.
 
 Each script is one function called on its last line, so a script cut off
 halfway runs nothing; the PowerShell one never exits, since `iex` runs it in
@@ -939,6 +942,48 @@ theme. The pictures are the run's `helm-macos-screenshots` artifact: each view
 as the page and, on macOS, as the window with its traffic lights. It is no
 check in the gate and nothing waits on it. `pnpm screenshots` runs the same
 capture locally on any OS, into `reports/screenshots`.
+
+## floti setup
+
+`floti setup` (`crates/host/src/setup.rs`) is what the install scripts run,
+and what `floti install-self` runs from the floti it puts in place. It checks
+Claude Code and says what to run when it is missing or outside the tested
+range, makes the data folder and the host key, registers the host to start
+at sign-in with the OS's per-user mechanism (on a Linux server with
+lingering on; in WSL without systemd it marks the host to start when a
+client connects) and starts it, then says how that ended in one line and
+exits with that outcome's status.
+
+**The desktop app** comes last, once the host is set up, and not at all when
+setting it up failed, so a desktop install that fails leaves a working host
+and says so (`crates/host/src/setup/desktop.rs`). It installs only through
+`floti add desktop` ([below](#floti-add-desktop)), and nothing it does
+changes setup's exit status, which stays the host's.
+
+| Run | What setup does about the desktop app |
+|---|---|
+| `--desktop` | Runs `floti add desktop` without asking, which refuses a session with no display, and says an installed app is there, as it always does. |
+| `--no-desktop` | Looks at nothing, and says one line: the app is left as it is, and `floti add desktop` installs it. |
+| Neither, the app installed | Says where it is, in `floti add desktop`'s line, and asks nothing. |
+| Neither, no display (a server, an ssh login to Windows) | Asks and says nothing. |
+| Neither, no terminal on standard input | Asks nothing and installs nothing; one line names `floti add desktop`. |
+| Neither, a terminal and a display | Asks once, `Install the Helm desktop app as well? [Y/n]`: Enter or `y` runs `floti add desktop`, `n` or the end of the input says one line naming it, anything else is asked again. |
+
+`--desktop` and `--no-desktop` together are a usage error, and either goes
+with `--linger` or `--no-linger`. A desktop install that fails says
+`floti add desktop`'s own line on standard error, followed by "The Floti host
+is set up all the same." `floti install-self` always passes `--no-desktop`:
+the app that runs it is there already, whether the Windows installer, the
+app at start, `floti update` after a desktop update or `floti add desktop`
+on macOS.
+
+How each way in reaches the question: `install.sh` under `curl | sh` gives
+setup the terminal (`/dev/tty`) as its input, so a person at a terminal is
+asked and a CI runner or a script with no terminal gets the one line;
+`install.ps1` under `irm | iex` runs setup in the user's own PowerShell
+session, whose console is its input. The desktop's install on another
+computer runs setup over `ssh -o BatchMode=yes` with no terminal, so it asks
+nothing there and installs no desktop app.
 
 ## floti add desktop
 

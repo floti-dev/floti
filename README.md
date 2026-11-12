@@ -70,7 +70,11 @@ Windows where the installer puts it, on macOS as `~/Applications/Helm.app`, and
 on Linux as `~/Applications/Helm.AppImage` with a menu entry. It checks the
 download's signature and SHA-256 before anything runs, changes nothing where
 the app is already installed, and refuses in a session with no display.
-`floti update` keeps it up to date from then on.
+`floti update` keeps it up to date from then on. `floti setup`, which the
+install scripts run, asks once whether to install it as well where there is
+a terminal and a display, and says where it is when it is installed already;
+`floti setup --desktop` installs it without asking and `--no-desktop` leaves
+it out.
 
 Harness templates are the one thing outside that: they live in
 `~/.config/helm/templates`, because they are folders you write and edit by hand.

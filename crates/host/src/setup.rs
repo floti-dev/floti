@@ -49,23 +49,31 @@
 //!   refused lingering also names the fix: an administrator there runs
 //!   `sudo loginctl enable-linger <user>`.
 //!
-//! Offering the desktop app is not part of it.
+//! Then, once the host is set up, and only when setting it up did not fail,
+//! the desktop app ([`desktop`]): asked about only with a terminal on
+//! standard input and a display, and installed through `floti add desktop`;
+//! `--desktop` and `--no-desktop` answer in advance. What that step did
+//! never changes the exit status above.
 //!
 //! [`register`]: crate::platform::startup::register
 
-use std::io::Write;
+pub mod desktop;
+
+use std::io::{IsTerminal, Write};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 use floti_protocol::message::ClientKind;
 use floti_protocol::noise::KeyPair;
 
+use crate::add;
 use crate::client;
 pub use crate::connect::START_ON_CONNECT_FILE;
 use crate::host_log::LOG_FILE;
 use crate::keys::load_or_create_key_pair;
 use crate::platform::command_shell::{CommandShell, Native as NativeShell};
 use crate::platform::folders::{self, Folders, UserEnv};
+use crate::platform::installs;
 pub use crate::platform::startup::register::Linger;
 use crate::platform::startup::register::{
     NativeSystem, SignInSystem, Started, register_and_start, user_manager_answers,
@@ -73,6 +81,8 @@ use crate::platform::startup::register::{
 use crate::platform::startup::{self, Account, StartAtSignIn, StartupDefinition, StartupKind};
 use crate::server::{HOST_KEY_FILE, local_endpoint};
 use crate::this_computer;
+pub use desktop::DesktopChoice;
+use desktop::DesktopStep;
 
 /// What `floti setup` prints once the host is running.
 pub const RUNNING_LINE: &str = "The Floti host is running, and starts at each sign-in.";
@@ -119,6 +129,12 @@ pub enum SetupOutcome {
 }
 
 impl SetupOutcome {
+    /// Whether setup goes on to the desktop app: the host is set up, running
+    /// or not.
+    pub fn offers_desktop(&self) -> bool {
+        !matches!(self, Self::Failed(_))
+    }
+
     /// The process's exit status.
     pub fn code(&self) -> u8 {
         match self {
@@ -141,20 +157,48 @@ impl SetupOutcome {
     }
 }
 
-/// What follows `setup` on the command line: nothing, `--linger` or
-/// `--no-linger`. `None` for anything else.
-pub fn parse_linger(args: &[&str]) -> Option<Linger> {
-    match args {
-        [] => Some(Linger::ByComputer),
-        ["--linger"] => Some(Linger::On),
-        ["--no-linger"] => Some(Linger::AsItIs),
-        _ => None,
-    }
+/// What `floti setup` was told.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SetupOptions {
+    pub linger: Linger,
+    pub desktop: DesktopChoice,
 }
 
-/// Runs `floti setup` for the floti this process is, settling lingering as
-/// `linger` says, says how it ended, and answers its exit status.
-pub fn run_setup(linger: Linger) -> u8 {
+/// What follows `setup` on the command line: at most one of `--linger` and
+/// `--no-linger`, and at most one of `--desktop` and `--no-desktop`, in any
+/// order. `None` for anything else, both of a pair or one given twice
+/// included.
+pub fn parse(args: &[&str]) -> Option<SetupOptions> {
+    fn once<T>(slot: &mut Option<T>, value: T) -> Option<()> {
+        match slot {
+            Some(_) => None,
+            None => {
+                *slot = Some(value);
+                Some(())
+            }
+        }
+    }
+    let (mut linger, mut desktop) = (None, None);
+    for arg in args {
+        match *arg {
+            "--linger" => once(&mut linger, Linger::On)?,
+            "--no-linger" => once(&mut linger, Linger::AsItIs)?,
+            "--desktop" => once(&mut desktop, DesktopChoice::Install)?,
+            "--no-desktop" => once(&mut desktop, DesktopChoice::Skip)?,
+            _ => return None,
+        }
+    }
+    Some(SetupOptions {
+        linger: linger.unwrap_or_default(),
+        desktop: desktop.unwrap_or_default(),
+    })
+}
+
+/// Runs `floti setup` for the floti this process is, as `options` say, says
+/// how it ended, then settles the desktop app when the host is set up, and
+/// answers the host's exit status.
+pub fn run_setup(options: SetupOptions) -> u8 {
+    let linger = options.linger;
     if let Some(sentence) = claude_sentence(&UserEnv::from_process()) {
         let mut out = std::io::stdout().lock();
         let _ = writeln!(out, "{sentence}").and_then(|()| out.flush());
@@ -178,7 +222,29 @@ pub fn run_setup(linger: Linger) -> u8 {
             let _ = writeln!(out, "{line}").and_then(|()| out.flush());
         }
     }
+    if outcome.offers_desktop() {
+        native_desktop(options.desktop);
+    }
     outcome.code()
+}
+
+/// Setup's desktop step on this computer, for this process's user, asking on
+/// its own standard input and output.
+fn native_desktop(choice: DesktopChoice) {
+    let env = UserEnv::from_process();
+    let stdin = std::io::stdin();
+    let terminal = stdin.is_terminal();
+    DesktopStep {
+        choice,
+        installs: &installs::Native,
+        env: &env,
+        terminal,
+        input: &mut stdin.lock(),
+        out: &mut std::io::stdout(),
+        err: &mut std::io::stderr(),
+        add: &mut add::add_desktop_here,
+    }
+    .run();
 }
 
 /// What setup says of Claude Code for the user `env` describes, as one

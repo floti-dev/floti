@@ -26,8 +26,10 @@
 //!    expandable, so a terminal or an ssh login started after it finds
 //!    `floti`. On macOS and Linux nothing is changed and `floti doctor`
 //!    gives the line, as after the install script.
-//! 4. `floti setup`, run from the installed floti, so the host registered
-//!    to start at sign-in is that one; its lines are its own.
+//! 4. `floti setup --no-desktop`, run from the installed floti, so the host
+//!    registered to start at sign-in is that one; its lines are its own.
+//!    The desktop app that runs install-self is there already, so setup
+//!    neither asks about it nor installs one.
 //!
 //! It prints where floti is, and each change it made, one line each; a
 //! failure is one line on standard error starting `floti install-self: `.
@@ -47,6 +49,10 @@ use crate::platform::user_path::{Native as NativeUserPath, UserPath};
 use crate::update::versions::Version;
 use crate::version::FLOTI_VERSION;
 
+/// What install-self runs setup with: never a question about, or an install
+/// of, the desktop app, which is there already.
+pub const SETUP_ARGS: [&str; 2] = ["setup", "--no-desktop"];
+
 /// What installing asks of the computer beyond copying files.
 pub trait InstallSystem {
     /// Whether `floti` is on the user's `PATH`, or why that could not be told.
@@ -55,7 +61,8 @@ pub trait InstallSystem {
     /// Puts `folder` on the user's `PATH`; whether anything was changed.
     fn add_to_path(&self, folder: &Path) -> Result<bool, String>;
 
-    /// Runs `floti setup` from `floti`, and answers its exit status.
+    /// Runs `floti setup --no-desktop` from `floti`, and answers its exit
+    /// status.
     fn setup(&self, floti: &Path) -> Result<u8, String>;
 
     /// The version the floti at `floti` says (`floti version`), or `None`
@@ -79,7 +86,7 @@ impl InstallSystem for NativeSystem {
 
     fn setup(&self, floti: &Path) -> Result<u8, String> {
         let status = Command::new(floti)
-            .arg("setup")
+            .args(SETUP_ARGS)
             .status()
             .map_err(|err| format!("could not run {} setup: {err}", floti.display()))?;
         Ok(status

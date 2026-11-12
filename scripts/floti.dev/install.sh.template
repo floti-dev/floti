@@ -56,7 +56,8 @@ floti_get() {
   esac
 
   # Setup reads the terminal, never the rest of this script: under
-  # `curl | sh` standard input is the download.
+  # `curl | sh` standard input is the download. With the terminal, setup asks
+  # whether to install the desktop app as well; with none, it says how.
   if (exec </dev/tty) 2>/dev/null; then
     "$floti" setup </dev/tty
   else
