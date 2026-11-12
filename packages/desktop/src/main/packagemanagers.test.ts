@@ -100,9 +100,7 @@ describe('the Homebrew formula', () => {
     expect(formula).toMatch(/^# Written by the release workflow of floti-dev\/floti/)
     expect(formula).toContain('\nclass Floti < Formula\n')
     expect(formula).toContain(`\n  desc "${DESCRIPTION}"\n`)
-    expect(formula).toContain('\n  homepage "https://github.com/floti-dev/floti"\n')
-    expect(formula).toContain('\n  version "3.0.0"\n')
-    expect(formula).toContain('\n  license "MIT"\n')
+    expect(formula).toContain('\n  homepage "https://github.com/floti-dev/floti"\n  license "MIT"\n')
     expect(formula.endsWith('\nend\n')).toBe(true)
     // Homebrew's own rules for a description: no article first, no full stop, at most 80 characters.
     expect(DESCRIPTION).not.toMatch(/^(A|An|The|Floti)\b/i)
@@ -147,6 +145,18 @@ describe('the Homebrew formula', () => {
     expect(block(formula, 'test', 2)).toBe(
       '    assert_match(/^floti #{Regexp.escape(version.to_s)} protocol /, shell_output("#{bin}/floti version"))\n'
     )
+  })
+
+  it('leaves a stable version to the URL, which brew audit reads it from', () => {
+    expect(formula).not.toMatch(/^\s*version /m)
+  })
+
+  it('writes a preview version out, which the URL does not give whole', () => {
+    const preview = '2.4.1-preview.11'
+    const text = homebrewFormula({ sums: sums(preview), version: preview, repo: REPO })
+    expect(text).toContain('\n  homepage "https://github.com/floti-dev/floti"\n  version "2.4.1-preview.11"\n  license "MIT"\n')
+    expect(text.match(/^\s*version /gm)).toHaveLength(1)
+    expect(text).toContain(`url "${url('linux-arm64', preview)}"`)
   })
 
   it('is the same text for the same release', () => {

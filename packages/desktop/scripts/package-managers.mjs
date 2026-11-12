@@ -69,13 +69,15 @@ export function releaseFiles(sumsText, version, repo, targets) {
  * The Homebrew formula for floti `version`, one binary per OS and CPU it
  * installs on, each URL in an `on_arm` or `on_intel` block inside `on_macos`
  * or `on_linux`: Homebrew's style allows no `url` directly in an OS block.
- * The version is written out because Homebrew cannot read it from these
- * URLs: its parser takes the digits at the end of a name, the 64 of
- * `-arm64` or `-x64`. The dry run audits the stable form as well as its own. The release's file is the whole download, so `install` takes it
+ * Homebrew reads a stable version from the URL, and `brew audit` refuses a
+ * `version` line that repeats it; a preview's it does not read whole, so a
+ * preview's formula writes it out. The dry run audits the stable form as well
+ * as its own. The release's file is the whole download, so `install` takes it
  * by its own name, the last part of the URL Homebrew fetched it from.
  */
 export function homebrewFormula({ sums, version, repo }) {
   const files = releaseFiles(sums, version, repo, HOMEBREW_TARGETS)
+  const versionLine = parseVersion(version).pre.length > 0 ? `  version "${version}"\n` : ''
   const source = (target, indent) => {
     const { url, sha256 } = files.get(target)
     return `${indent}url "${url}"\n${indent}sha256 "${sha256}"\n`
@@ -84,8 +86,7 @@ export function homebrewFormula({ sums, version, repo }) {
 class Floti < Formula
   desc "${DESCRIPTION}"
   homepage "https://github.com/${repo}"
-  version "${version}"
-  license "${LICENSE}"
+${versionLine}  license "${LICENSE}"
 
   on_macos do
     depends_on arch: :arm64

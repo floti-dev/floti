@@ -859,9 +859,10 @@ jobs:
           retention-days: 7
 
   # The dry run's formula, checked by Homebrew itself on macOS arm64 and Linux
-  # x64, in the order the documented install line takes: the tap (here a tap of
-  # its own on the runner, made with `brew tap-new`), `brew trust`, then the
-  # formula. `brew style` and `brew audit --strict` check it and the stable
+  # x64, in the order the documented install line takes: `brew trust` on the
+  # tap before it is tapped, then the tap (here a tap of its own on the
+  # runner, made with `brew tap-new`, where `brew install` would tap it), then
+  # the formula. `brew style` and `brew audit --strict` check it and the stable
   # form beside it, then `brew install` and `brew test` run it, with the run's
   # own file put in Homebrew's download cache first, so the formula installed
   # is the very text a release would push, URLs and all, though nothing is
@@ -909,28 +910,24 @@ jobs:
         run: command -v brew >/dev/null || echo /home/linuxbrew/.linuxbrew/bin >>"$GITHUB_PATH"
 
       # Homebrew loads no formula from a third-party tap until the tap is
-      # trusted, so the install line a user is given trusts it
-      # (docs/PACKAGING.md, "Homebrew and winget"). Whether `brew trust` takes
-      # a tap that is not tapped yet decides whether that line can trust it
-      # before tapping; the line taps first, and this records the answer.
-      - name: Ask whether brew trust takes a tap before it is tapped
+      # trusted, so the install line a user is given trusts it first, before
+      # it is tapped (docs/PACKAGING.md, "Homebrew and winget"). Both taps are
+      # trusted that way here.
+      - name: Trust both taps before they are tapped
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           brew --version
-          brew trust --help
-          if brew trust "$TAP"; then said="takes"; else said="refuses"; fi
-          echo "brew trust $said a tap that is not tapped yet."
-          echo "- Homebrew on \`${{ matrix.target }}\`: \`brew trust\` $said a tap that is not tapped yet" >>"$GITHUB_STEP_SUMMARY"
+          brew trust "$TAP"
+          brew trust "$STABLE_TAP"
 
-      - name: Tap, trust, and check both formulas with brew style and brew audit
+      - name: Tap, and check both formulas with brew style and brew audit
         shell: bash
         run: |
           set -euo pipefail
           for pair in "$TAP homebrew" "$STABLE_TAP homebrew-stable"; do
             read -r tap folder <<<"$pair"
             brew tap-new --no-git "$tap" >/dev/null
-            brew trust "$tap"
             cp "$RUNNER_TEMP/homebrew-formula/$folder/Formula/floti.rb" "$(brew --repository "$tap")/Formula/floti.rb"
             brew style "$tap/floti"
             brew audit --strict "$tap/floti"
@@ -1146,9 +1143,9 @@ jobs:
             echo "- \`$name\` downloads without a sign-in" >>"$GITHUB_STEP_SUMMARY"
           done
 
-  # Formula/floti.rb in floti-dev/homebrew-tap, so `brew trust floti-dev/tap
-  # && brew install floti-dev/tap/floti` installs this release's floti on macOS arm64 and on
-  # Linux x64 and arm64 (decision I9: the binary only, no cask). Only a stable
+  # Formula/floti.rb in floti-dev/homebrew-tap, so `brew trust floti-dev/tap &&
+  # brew install floti-dev/tap/floti` installs this release's floti on macOS
+  # arm64 and on Linux x64 and arm64 (decision I9: the binary only, no cask). Only a stable
   # release updates it; a preview never does. The formula is built
   # (scripts/package-managers.mjs) from the SHA-256 list the release published,
   # fetched as anybody fetches it and checked against the committed public key

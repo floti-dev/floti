@@ -548,14 +548,13 @@ only: the desktop app is not in either.
 - **Homebrew**: the formula `floti` in floti-dev/homebrew-tap, for macOS
   arm64 and Linux x64 and arm64, installed with
 
-      brew tap floti-dev/tap && brew trust floti-dev/tap && brew install floti-dev/tap/floti
+      brew trust floti-dev/tap && brew install floti-dev/tap/floti
 
   Homebrew refuses to load any formula from a third-party tap until the user
   trusts that tap, so `brew install` alone fails with "Refusing to load
-  formula ... from untrusted tap". The tap comes first so `brew trust` has a
-  tap to trust whether or not it accepts one not tapped yet; each dry run
-  says in its summary whether it does. This is the line the install page
-  gives, and the dry run takes the same order.
+  formula ... from untrusted tap". `brew trust` accepts a tap that is not
+  tapped yet, and `brew install` then taps it. This is the line the install
+  page gives, and the dry run takes the same order.
   There is no cask for the desktop app until it is signed: Homebrew
   quarantines casks. The formula's test runs `floti version`.
 - **winget**: the package `FlotiDev.Floti`, installer type portable, run as
@@ -651,11 +650,11 @@ the run's own pair. Beside them it builds the formula a stable release of the
 same number would push, from the same list with the files renamed, so the
 stable form is checked even when the branch's version is a preview.
 `homebrew-dry-run` takes the documented install order on macOS arm64 and
-Linux x64: a tap of its own on the runner, `brew trust`, then `brew style`
-and `brew audit --strict` on both formulas, then `brew install` and
-`brew test`, with the run's own file put in Homebrew's download cache so the
-formula installed is the very text a release would push. Its summary says
-whether `brew trust` accepted the tap before it was tapped.
+Linux x64: `brew trust` on a tap not tapped yet, then that tap, made on the
+runner, then `brew style` and `brew audit --strict` on both formulas, then
+`brew install` and `brew test`, with the run's own file put in Homebrew's
+download cache so the formula installed is the very text a release would
+push.
 `winget-dry-run` runs `winget validate` on the manifests. They are kept for
 seven days as the `homebrew-formula` and `winget-manifests` artifacts. A dry run never reads the
 `release` environment or its secrets, and makes no attestation. The tag-exists gate does not stop a dry run, so
