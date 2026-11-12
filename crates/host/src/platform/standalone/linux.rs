@@ -15,6 +15,10 @@ impl Standalone for Native {
         posix::folder(env)
     }
 
+    fn binary(&self, env: &UserEnv) -> Option<PathBuf> {
+        posix::binary(env)
+    }
+
     fn replace(&self, target: &Path, new: &Path) -> io::Result<()> {
         posix::replace(target, new)
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FLOTI_TARGETS, SYSTEM_LINE, type HostTransport } from '@helm/core/types'
+import { FLOTI_TARGETS, SYSTEM_LINE, standaloneProbeLine, type HostTransport } from '@helm/core/types'
 import { RELEASE_TARGETS } from '../../../scripts/floti-release.mjs'
 import type { ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
@@ -80,7 +80,9 @@ describe('installing floti on a host’s computer, from the desktop', () => {
     const check = await w.installer.check({ transport: SSH })
     expect(w.runs.map((run) => run.argv)).toEqual([
       [...BATCH, 'floti version'],
-      [...BATCH, SYSTEM_LINE]
+      [...BATCH, SYSTEM_LINE],
+      // Not on the login's PATH, and not where the install script puts it either.
+      [...BATCH, standaloneProbeLine('linux')]
     ])
     expect(w.runs.every((run) => run.stdinFile === null)).toBe(true)
     expect(check).toEqual({
@@ -110,7 +112,8 @@ describe('installing floti on a host’s computer, from the desktop', () => {
     const check = await w.installer.check({ transport: command })
     expect(w.runs.map((run) => run.argv)).toEqual([
       ['wsl.exe', '-d', 'Ubuntu', '--', 'floti version'],
-      ['wsl.exe', '-d', 'Ubuntu', '--', SYSTEM_LINE]
+      ['wsl.exe', '-d', 'Ubuntu', '--', SYSTEM_LINE],
+      ['wsl.exe', '-d', 'Ubuntu', '--', standaloneProbeLine('windows')]
     ])
     expect(check).toMatchObject({ kind: 'noBuild' })
   })
@@ -120,7 +123,7 @@ describe('installing floti on a host’s computer, from the desktop', () => {
     const check = await w.installer.check({ transport: SSH })
     w.installer.cancel(check.kind === 'offer' ? check.id : '')
     await expect(w.installer.install('offer-1')).rejects.toThrow('no longer open')
-    expect(w.lines()).toEqual(['floti version', SYSTEM_LINE])
+    expect(w.lines()).toEqual(['floti version', SYSTEM_LINE, standaloneProbeLine('linux')])
   })
 
   it('S10: copies this Helm’s own floti over the same login, with its SHA-256 for the script to check there, then runs setup there', async () => {
@@ -128,14 +131,14 @@ describe('installing floti on a host’s computer, from the desktop', () => {
     await w.installer.check({ transport: SSH })
     const outcome = await w.installer.install('offer-1')
     expect(outcome).toEqual({ ok: true, floti: '/home/me/.local/bin/floti', startsAtNextSignIn: false })
-    const [put, setup] = w.runs.slice(2)
+    const [put, setup] = w.runs.slice(3)
     expect(put?.argv.slice(0, 4)).toEqual(BATCH)
     expect(put?.stdinFile).toBe('/opt/Helm/resources/floti')
     expect(put?.line).toBe(
       `sh -c '# install.sh\nfloti_install "$@"\n' floti-install '2.6.0' 'floti-2.6.0-linux-x64' '${OWN_SHA}' '-'`
     )
     expect(setup?.argv).toEqual([...BATCH, '/home/me/.local/bin/floti setup'])
-    expect(w.runs.length).toBe(4)
+    expect(w.runs.length).toBe(5)
   })
 
   it('S11: a computer of another OS or CPU is sent the release’s address and SHA-256 to fetch from itself, and this PC runs nothing but the transport', async () => {
@@ -143,7 +146,7 @@ describe('installing floti on a host’s computer, from the desktop', () => {
     const check = await w.installer.check({ transport: SSH })
     expect(check).toMatchObject({ kind: 'offer', offer: { how: 'download', system: { label: 'Linux · aarch64' } } })
     expect(await w.installer.install('offer-1')).toMatchObject({ ok: true })
-    const put = w.runs[2]
+    const put = w.runs[3]
     expect(put?.stdinFile).toBeNull()
     expect(put?.line).toContain(
       `'2.6.0' 'floti-2.6.0-linux-arm64' '${LINUX_SHA}' 'https://github.com/floti-dev/floti/releases/download/v2.6.0'`
@@ -166,6 +169,39 @@ describe('installing floti on a host’s computer, from the desktop', () => {
     const w = world([NO_FLOTI, [SYSTEM_LINE, { stdout: 'Darwin arm64\n' }]], { sums: async () => null })
     const check = await w.installer.check({ transport: SSH })
     expect(check).toMatchObject({ kind: 'noBuild', reason: expect.stringContaining('no published floti') })
+  })
+
+  it('a floti where the install script puts it, off the login’s PATH, is ready and kept by its full path', async () => {
+    const probe = standaloneProbeLine('macos')
+    const w = world([
+      NO_FLOTI,
+      [SYSTEM_LINE, { stdout: 'Darwin arm64\n' }],
+      [probe, { stdout: '/Users/me/.local/bin/floti\nfloti 2.6.0 protocol 1.2 macos arm64\n' }]
+    ])
+    expect(await w.installer.check({ transport: SSH })).toEqual({
+      kind: 'ready',
+      found: { version: '2.6.0', protocol: '1.2' },
+      system: { os: 'macos', cpu: 'arm64', label: 'macOS · arm64' },
+      floti: '/Users/me/.local/bin/floti'
+    })
+    expect(w.lines()).toEqual(['floti version', SYSTEM_LINE, probe])
+
+    // One too old there is offered an update at that path.
+    const old = world([
+      NO_FLOTI,
+      [SYSTEM_LINE, { stdout: 'Linux aarch64\n' }],
+      [standaloneProbeLine('linux'), { stdout: '/home/me/.local/bin/floti\nfloti 2.1.0 protocol 1.0 linux arm64\n' }],
+      ['/home/me/.local/bin/floti update-stop --ask', { stdout: '0\n' }]
+    ])
+    expect(await old.installer.check({ transport: SSH })).toMatchObject({
+      kind: 'offer',
+      offer: { action: 'update', found: { version: '2.1.0' }, sessions: 0 }
+    })
+
+    // A host that keeps its floti's path is asked by that path alone.
+    const kept = world([['/opt/floti version', { code: 127, stderr: 'sh: 1: /opt/floti: not found\n' }], [SYSTEM_LINE, { stdout: 'Darwin arm64\n' }]])
+    await kept.installer.check({ transport: SSH, floti: '/opt/floti' })
+    expect(kept.lines()).not.toContain(probe)
   })
 
   it('a floti this Helm can talk to is ready: nothing is offered', async () => {
@@ -446,18 +482,19 @@ describe('installing floti in a WSL distro', () => {
       floti: '/home/me/.local/bin/floti'
     })
     expect(w.runs.map((run) => run.argv.slice(0, 4))).toEqual(
-      Array.from({ length: 4 }, () => ['C:\\Windows\\System32\\wsl.exe', '-d', 'Debian', '--'])
+      Array.from({ length: 5 }, () => ['C:\\Windows\\System32\\wsl.exe', '-d', 'Debian', '--'])
     )
     expect(w.runs.every((run) => run.how?.asWritten === true)).toBe(true)
     expect(w.runs.map((run) => run.line)).toEqual([
       'floti version',
       SYSTEM_LINE,
+      standaloneProbeLine('linux'),
       expect.stringMatching(/^sh -c /),
       '/home/me/.local/bin/floti setup'
     ])
     // The system line holds characters cmd reads, so it went encoded.
     expect(w.runs[1]?.argv.at(-1)).toBe(wslLine(SYSTEM_LINE))
-    expect(w.runs[2]?.line).toContain(`'floti-2.6.0-linux-x64' '${LINUX_SHA}'`)
+    expect(w.runs[3]?.line).toContain(`'floti-2.6.0-linux-x64' '${LINUX_SHA}'`)
   })
 
   it('S5: a distro on win-box is installed through ssh -o BatchMode=yes win-box wsl.exe -d Ubuntu --, the line as one argument', async () => {
@@ -468,7 +505,7 @@ describe('installing floti in a WSL distro', () => {
     })
     await w.installer.check({ transport: w.transport })
     expect(await w.installer.install('offer-1')).toMatchObject({ ok: true })
-    expect(w.runs).toHaveLength(4)
+    expect(w.runs).toHaveLength(5)
     expect(
       w.runs.every((run) => run.argv.slice(0, -1).join(' ') === 'ssh -o BatchMode=yes win-box wsl.exe -d Ubuntu --')
     ).toBe(true)

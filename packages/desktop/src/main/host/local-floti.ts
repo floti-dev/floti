@@ -81,3 +81,45 @@ async function current(path: string, deps: LocalFlotiDeps): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * The step settled once per run: everything that runs floti on this
+ * computer (the local host's link, each remote host's link and the page
+ * bridges that follow it, doctor's record) waits for `ready` before it
+ * starts a program, so none runs the carried floti for its whole life when
+ * floti installed on its own is about to be used. A bridge left running
+ * from the carried floti, inside the install folder, would be found in use
+ * by the next install, which would then stop the host.
+ */
+export interface LocalFloti {
+  /** Settles the step, once; every later call waits on the same. */
+  ready(): Promise<void>
+  /** Whether this run uses floti installed on its own: false until `ready` has settled. */
+  useStandalone(): boolean
+  /** Runs `start` once `ready` has settled. */
+  after<T>(start: () => Promise<T>): Promise<T>
+}
+
+export function createLocalFloti(ensure: () => Promise<boolean>): LocalFloti {
+  let use = false
+  let settled: Promise<void> | null = null
+  const ready = (): Promise<void> => {
+    settled ??= ensure().then(
+      (standalone) => {
+        use = standalone
+      },
+      () => {
+        use = false
+      }
+    )
+    return settled
+  }
+  return {
+    ready,
+    useStandalone: () => use,
+    after: async (start) => {
+      await ready()
+      return start()
+    }
+  }
+}

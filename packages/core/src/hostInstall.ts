@@ -75,7 +75,16 @@ export interface FlotiFound {
  *   `lastLine` then is (`classifyHostFailure`).
  */
 export type HostCheck =
-  | { kind: 'ready'; found: FlotiFound; system: RemoteSystem }
+  | {
+      kind: 'ready'
+      found: FlotiFound
+      system: RemoteSystem
+      /**
+       * Where it was found, when the login's PATH does not have it but the
+       * install scripts' folder does: the host keeps this path and runs it.
+       */
+      floti?: string
+    }
   | { kind: 'offer'; id: string; offer: InstallOffer }
   | { kind: 'newer'; found: FlotiFound; ours: string; helm: string }
   | { kind: 'noBuild'; system: RemoteSystem; reason: string }
@@ -397,6 +406,38 @@ export function judgeProtocol(
 /** Where floti goes on a computer of `os`, in its own user's folder, as that user would write it. */
 export function installFolderFor(os: FlotiOs): string {
   return os === 'windows' ? '%LOCALAPPDATA%\\Programs\\Floti\\bin' : '~/.local/bin'
+}
+
+/**
+ * The line that looks for floti where the install scripts put it, for a
+ * login whose PATH does not have that folder (a non-interactive ssh login on
+ * macOS reads no startup file that adds `~/.local/bin`): it prints the full
+ * path on its own line, then that floti's `floti version` line. Run by
+ * `sh`, or by Windows' `cmd`, as every line the check sends is.
+ */
+export function standaloneProbeLine(os: FlotiOs): string {
+  return os === 'windows'
+    ? 'echo %LOCALAPPDATA%\\Programs\\Floti\\bin\\floti.exe&& "%LOCALAPPDATA%\\Programs\\Floti\\bin\\floti.exe" version'
+    : 'echo "$HOME/.local/bin/floti" && "$HOME/.local/bin/floti" version'
+}
+
+/**
+ * What `standaloneProbeLine` printed: the path, then the floti `floti
+ * version` names. Null unless the path line comes first and a version line
+ * right after it, so a login that prints anything of its own is not taken
+ * for floti's answer.
+ */
+export function parseStandaloneProbe(
+  output: string
+): { path: string; found: NonNullable<ReturnType<typeof parseVersionLine>> } | null {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+  const [path, version] = lines
+  if (path === undefined || version === undefined) return null
+  const found = parseVersionLine(version)
+  return found === null ? null : { path, found }
 }
 
 /** `floti-<version>-<os>-<cpu>`, with `.exe` on Windows: the release's file for that target. */

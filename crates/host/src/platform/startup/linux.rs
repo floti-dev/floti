@@ -38,7 +38,14 @@ impl StartAtSignIn for Native {
 /// `Restart=on-failure` starts the host again, which takes them back from the
 /// keeper: on a server nobody signs in to start it. Every deliberate end of
 /// the host (a stop from a client or the OS's stop signal, a stop for an
-/// update) exits with status 0, so only a crash or a kill restarts it.
+/// update) exits with status 0, so only a crash or a kill restarts it. A
+/// host that finds another already running on its folders, such as one the
+/// desktop started before setup ran, exits with [`ALREADY_RUNNING_EXIT`]:
+/// the unit counts that as a success and never restarts it
+/// (`SuccessExitStatus`, `RestartPreventExitStatus`), rather than trying
+/// every second until systemd gives up and leaves the unit failed.
+///
+/// [`ALREADY_RUNNING_EXIT`]: crate::ALREADY_RUNNING_EXIT
 pub fn user_unit(binary: &Path) -> Result<StartupDefinition> {
     let exec = quote_exec_word(binary_text(binary, |path| path.starts_with('/'))?);
     let contents = format!(
@@ -51,10 +58,13 @@ ExecStart={exec} host
 KillMode=process
 Restart=on-failure
 RestartSec=1
+SuccessExitStatus={already}
+RestartPreventExitStatus={already}
 
 [Install]
 WantedBy=default.target
-"
+",
+        already = crate::ALREADY_RUNNING_EXIT
     );
 
     Ok(StartupDefinition {

@@ -77,8 +77,8 @@ gets skipped.
   about and stopped first, as before, and its sessions are offered back.
 - The portable exe installs nothing and runs the floti inside it.
 - A host started at sign-in reads the same agents, templates and plugins as
-  the one Helm starts: `~/.config/floti`, or `~/.config/helm` where only that
-  one is there.
+  the one Helm starts: `~/.config/helm` where that is there, else
+  `~/.config/floti`.
 
 ## 2.4.1-preview.11
 

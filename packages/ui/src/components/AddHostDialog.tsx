@@ -275,7 +275,7 @@ export function AddHostDialog({
   const checked = (who: Subject, check: HostCheck): void => {
     const retry: Retry = { step: 'check' }
     if (check.kind === 'ready') {
-      connect(who, undefined, check.system, false)
+      connect(who, check.floti, check.system, false)
     } else if (check.kind === 'offer') {
       running.current = { ...running.current, attempt: null, offer: check.id }
       setScreen({ step: 'install', id: check.id, offer: check.offer })

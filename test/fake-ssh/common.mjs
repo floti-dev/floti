@@ -10,7 +10,7 @@
 // through a shell.
 
 import { spawn } from 'node:child_process'
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, existsSync } from 'node:fs'
 import { machine, type } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,6 +22,40 @@ const FAKE_WSL = join(dirname(fileURLToPath(import.meta.url)), 'wsl.mjs')
 
 /** The desktop's line for a computer's OS and CPU (`SYSTEM_LINE` in packages/core/src/hostInstall.ts). */
 export const SYSTEM_LINE = 'uname -sm || echo %OS% %PROCESSOR_ARCHITECTURE%'
+
+/**
+ * The desktop's lines that look for floti where the install scripts put it
+ * (`standaloneProbeLine` in packages/core/src/hostInstall.ts), by the OS each
+ * is for.
+ */
+export const STANDALONE_PROBE_LINES = {
+  windows:
+    'echo %LOCALAPPDATA%\\Programs\\Floti\\bin\\floti.exe&& "%LOCALAPPDATA%\\Programs\\Floti\\bin\\floti.exe" version',
+  posix: 'echo "$HOME/.local/bin/floti" && "$HOME/.local/bin/floti" version'
+}
+
+/**
+ * Answers a `STANDALONE_PROBE_LINES` line as `sh` or `cmd` would, with this
+ * process's HOME or LOCALAPPDATA: the path, then that floti's version line,
+ * played by FAKE_SSH_STANDALONE_VERSION when set, else run.
+ */
+function probeStandalone(windows) {
+  const path = windows
+    ? join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Floti', 'bin', 'floti.exe')
+    : join(process.env.HOME ?? '', '.local', 'bin', 'floti')
+  process.stdout.write(`${path}\n`)
+  if (!existsSync(path)) {
+    process.stderr.write(`sh: 1: ${path}: not found\n`)
+    process.exit(127)
+  }
+  if (process.env.FAKE_SSH_STANDALONE_VERSION) {
+    process.stdout.write(`${process.env.FAKE_SSH_STANDALONE_VERSION}\n`)
+    process.exit(0)
+  }
+  const child = spawn(path, ['version'], { stdio: 'inherit', windowsHide: true })
+  child.on('error', () => process.exit(127))
+  child.on('exit', (code) => process.exit(code ?? 1))
+}
 
 /** What `SYSTEM_LINE` answers on this computer: `Windows_NT AMD64` from `cmd`, `uname -sm` elsewhere. */
 function ownSystem() {
@@ -115,6 +149,10 @@ export function runLine(line) {
   if (line === SYSTEM_LINE) {
     process.stdout.write(`${process.env.FAKE_SSH_SYSTEM || ownSystem()}\n`)
     process.exit(0)
+  }
+  if (line === STANDALONE_PROBE_LINES.windows || line === STANDALONE_PROBE_LINES.posix) {
+    probeStandalone(line === STANDALONE_PROBE_LINES.windows)
+    return
   }
   // FAKE_SSH_FLOTI_VERSION plays the floti there by its version line alone:
   // a line `floti version` is answered with it, and nothing is run.

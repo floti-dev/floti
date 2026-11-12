@@ -206,16 +206,31 @@ fn linux_definition_is_a_user_unit_wanted_by_default_target_with_the_path_quoted
     let service: Vec<&str> = unit
         .lines()
         .filter(|line| {
-            ["KillMode=", "Restart=", "RestartSec="]
-                .iter()
-                .any(|key| line.starts_with(key))
+            [
+                "KillMode=",
+                "Restart=",
+                "RestartSec=",
+                "SuccessExitStatus=",
+                "RestartPreventExitStatus=",
+            ]
+            .iter()
+            .any(|key| line.starts_with(key))
         })
         .collect();
+    // A host that exits because another already runs on its folders is not
+    // a failure, and is not started again every second.
     assert_eq!(
         service,
-        ["KillMode=process", "Restart=on-failure", "RestartSec=1"],
+        [
+            "KillMode=process",
+            "Restart=on-failure",
+            "RestartSec=1",
+            "SuccessExitStatus=3",
+            "RestartPreventExitStatus=3"
+        ],
         "{unit}"
     );
+    assert_eq!(crate::ALREADY_RUNNING_EXIT, 3);
 
     for absent in [
         "User=",

@@ -1,15 +1,12 @@
 //! How a release is put in place: the running `floti` binary, and the
 //! desktop app, installed fresh or over the one there.
 //!
-//! - **The binary.** On Windows a running `.exe` can be renamed but not
-//!   replaced, so the running one is renamed aside (`floti.old.exe`) and the
-//!   new one moved into its name, as `scripts/install/install.ps1` does; the
-//!   old copy is removed by the next update, once nothing runs it. On macOS
-//!   and Linux the new file, already written beside the running one, is
-//!   made executable and renamed over it, which leaves the running process
-//!   its own copy. A floti inside the desktop app's install is the app's
-//!   ([`Installs::bundles`]) and is never replaced on its own: the app's
-//!   installer brings its own.
+//! - **The binary** is put in place by
+//!   [`platform::standalone`](crate::platform::standalone)
+//!   (`Standalone::replace`), as `floti install-self` puts it, and found
+//!   there by `Standalone::binary`. A floti inside the desktop app's
+//!   install is the app's ([`Installs::bundles`]) and is never replaced on
+//!   its own: the app's installer brings its own.
 //! - **The desktop app.** Where it is installed, which version it is, and
 //!   how it is installed once its process has exited. Windows: the per-user
 //!   NSIS install `electron-builder.yml` makes, `%LOCALAPPDATA%\Programs\Helm`
@@ -73,17 +70,9 @@ pub struct Desktop {
 
 /// The OS's way to put a release in place.
 pub trait Installs {
-    /// Puts `new`, a checked file written beside `running`, in `running`'s
-    /// place. When it fails, `running` is as it was.
-    fn replace_binary(&self, running: &Path, new: &Path) -> Result<()>;
-
     /// Whether `running`, a floti binary, is part of `desktop`'s install,
     /// which brings its own floti with every update.
     fn bundles(&self, desktop: &Desktop, running: &Path) -> bool;
-
-    /// Where floti installed on its own is for the user `env` describes,
-    /// whether it is there or not: where the install scripts put it.
-    fn standalone_binary(&self, env: &UserEnv) -> Option<PathBuf>;
 
     /// The desktop app installed for the user `env` describes, or `None`.
     fn desktop(&self, env: &UserEnv) -> Option<Desktop>;
@@ -98,6 +87,13 @@ pub trait Installs {
     /// Whether installing the desktop app over an installed one stops the
     /// host on this computer, ending the sessions it runs.
     fn installing_desktop_stops_host(&self) -> bool;
+
+    /// The floti `desktop`'s install carries, for `floti update` to run
+    /// `install-self` from once it has installed the app, so the Node beside
+    /// floti installed on its own is the new app's: `None` where the app's
+    /// own installer runs it (Windows) or the floti is inside an image that
+    /// is not mounted (the AppImage, whose app runs it when it starts).
+    fn carried_floti(&self, desktop: &Desktop) -> Option<PathBuf>;
 
     /// Whether `row` is one of `desktop`'s processes. A row the OS gave no
     /// command line for is judged by its name alone, so an app whose

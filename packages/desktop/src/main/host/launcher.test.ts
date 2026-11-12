@@ -178,9 +178,8 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       expect(standaloneFloti({ platform: 'win32', env: { LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local' } })).toBe(
         'C:\\Users\\me\\AppData\\Local\\Programs\\Floti\\bin\\floti.exe'
       )
-      expect(standaloneFloti({ platform: 'win32', env: { USERPROFILE: 'C:\\Users\\me' } })).toBe(
-        'C:\\Users\\me\\AppData\\Local\\Programs\\Floti\\bin\\floti.exe'
-      )
+      // No guess from the profile folder, as the host makes none.
+      expect(standaloneFloti({ platform: 'win32', env: { USERPROFILE: 'C:\\Users\\me' } })).toBeNull()
       expect(standaloneFloti({ platform: 'win32', env: {} })).toBeNull()
       expect(standaloneFloti({ platform: 'darwin', env: { HOME: '/Users/me' } })).toBe('/Users/me/.local/bin/floti')
       expect(standaloneFloti({ platform: 'linux', env: { HOME: '/home/me' } })).toBe('/home/me/.local/bin/floti')

@@ -13,7 +13,7 @@ use std::env::consts::EXE_SUFFIX;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
-use floti_host::install_self::{InstallSystem, install_self};
+use floti_host::install_self::{Install, InstallSystem, install_self};
 use floti_host::platform::standalone::{Native, Standalone};
 use floti_host::testkit::TestDirs;
 
@@ -23,6 +23,8 @@ struct FakeSystem {
     on_path: bool,
     path_refused: Option<String>,
     setup_code: u8,
+    /// What the installed floti says its version is, when it says one.
+    there: Option<&'static str>,
     added: RefCell<Vec<PathBuf>>,
     setups: RefCell<Vec<PathBuf>>,
 }
@@ -43,6 +45,10 @@ impl InstallSystem for FakeSystem {
     fn setup(&self, floti: &Path) -> Result<u8, String> {
         self.setups.borrow_mut().push(floti.to_path_buf());
         Ok(self.setup_code)
+    }
+
+    fn version_of(&self, _floti: &Path) -> Option<String> {
+        self.there.map(str::to_owned)
     }
 }
 
@@ -77,8 +83,19 @@ struct Ran {
 }
 
 fn run(source: &Path, folder: &Path, system: &FakeSystem) -> Ran {
+    run_as(source, folder, system, false)
+}
+
+/// Installs `source`, which is floti 3.1.0, into `folder`.
+fn run_as(source: &Path, folder: &Path, system: &FakeSystem, force: bool) -> Ran {
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let code = install_self(source, folder, &Native, system, &mut out, &mut err);
+    let install = Install {
+        source,
+        version: "3.1.0",
+        folder,
+        force,
+    };
+    let code = install_self(&install, &Native, system, &mut out, &mut err);
     Ran {
         code,
         out: String::from_utf8(out).unwrap(),
@@ -125,7 +142,13 @@ fn installed_files() -> Vec<String> {
 fn a_first_install_puts_floti_and_its_node_in_the_users_folder_on_path_and_runs_setup_there() {
     let dirs = TestDirs::new();
     let source = carried(&dirs, b"floti 3.0.0");
-    let folder = Native.folder(&dirs.user_env()).expect("the user's folder");
+    // The user's own folder, as this OS's install script finds it.
+    let mut user = dirs.user_env();
+    user.vars.insert(
+        "LOCALAPPDATA".into(),
+        dirs.folder("Local App Data").into_os_string(),
+    );
+    let folder = Native.folder(&user).expect("the user's folder");
     let system = FakeSystem::default();
 
     let ran = run(&source.floti, &folder, &system);
@@ -282,4 +305,73 @@ fn a_floti_that_cannot_be_placed_stops_before_setup() {
     assert!(ran.err.starts_with("floti install-self: "), "{}", ran.err);
     assert!(system.setups.borrow().is_empty());
     assert!(system.added.borrow().is_empty());
+}
+
+#[test]
+fn a_newer_floti_there_is_kept_with_its_node_unless_forced() {
+    let dirs = TestDirs::new();
+    let source = carried(&dirs, b"floti 3.1.0");
+    let folder = dirs.folder("bin");
+    let installed = folder.join(floti_name());
+    std::fs::write(&installed, b"floti 3.2.0").unwrap();
+    let system = FakeSystem {
+        on_path: true,
+        there: Some("3.2.0"),
+        ..FakeSystem::default()
+    };
+
+    let ran = run(&source.floti, &folder, &system);
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    assert_eq!(std::fs::read(&installed).unwrap(), b"floti 3.2.0");
+    assert_eq!(files(&folder), [floti_name()], "its Node is its own too");
+    assert!(
+        ran.out.contains("newer than this floti 3.1.0") && ran.out.contains("--force"),
+        "{}",
+        ran.out
+    );
+    assert_eq!(*system.setups.borrow(), std::slice::from_ref(&installed));
+
+    let ran = run_as(&source.floti, &folder, &system, true);
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    assert_eq!(std::fs::read(&installed).unwrap(), b"floti 3.1.0");
+    assert_eq!(files(&folder), installed_files());
+
+    // An older or unreadable one is replaced without being asked.
+    for there in [Some("3.0.9"), None] {
+        std::fs::write(&installed, b"another floti").unwrap();
+        let system = FakeSystem {
+            on_path: true,
+            there,
+            ..FakeSystem::default()
+        };
+        assert_eq!(run(&source.floti, &folder, &system).code, 0);
+        assert_eq!(std::fs::read(&installed).unwrap(), b"floti 3.1.0");
+    }
+}
+
+#[test]
+fn a_folder_of_node_that_is_a_file_there_is_left_and_the_rest_of_node_still_goes() {
+    let dirs = TestDirs::new();
+    let source = carried(&dirs, b"floti 3.1.0");
+    let folder = dirs.folder("bin");
+    // `node/bin` is a file of the user's, not a folder.
+    std::fs::create_dir_all(folder.join("node")).unwrap();
+    std::fs::write(folder.join("node").join("bin"), b"in the way").unwrap();
+    let system = FakeSystem {
+        on_path: true,
+        ..FakeSystem::default()
+    };
+
+    let ran = run(&source.floti, &folder, &system);
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    assert_eq!(
+        std::fs::read(folder.join("node").join("bin")).unwrap(),
+        b"in the way"
+    );
+    assert_eq!(
+        std::fs::read(folder.join("node").join("LICENSE")).unwrap(),
+        b"Node's licence"
+    );
+    assert!(ran.out.contains("Left "), "{}", ran.out);
+    assert_eq!(system.setups.borrow().len(), 1);
 }

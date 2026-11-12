@@ -431,7 +431,7 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
     const { name, id, transport } = host
     if (check.kind === 'ready') {
       show(null)
-      done.current({ floti: undefined, system: hostSystem(check.system) })
+      done.current({ floti: check.floti, system: hostSystem(check.system) })
     } else if (check.kind === 'offer') {
       show({ step: 'offer', id: check.id, host: id, offer: check.offer })
     } else if (check.kind === 'newer') {

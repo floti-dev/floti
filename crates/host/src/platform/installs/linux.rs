@@ -37,10 +37,6 @@ impl Native {
 }
 
 impl Installs for Native {
-    fn replace_binary(&self, running: &Path, new: &Path) -> Result<()> {
-        posix::rename_over(running, new)
-    }
-
     fn bundles(&self, _desktop: &Desktop, running: &Path) -> bool {
         // A running AppImage's files are on its read-only mount, not at its
         // path, and the floti it carries runs from there.
@@ -51,10 +47,6 @@ impl Installs for Native {
                 .and_then(|name| name.strip_prefix(MOUNT_PREFIX))
                 .is_some_and(|rest| rest.starts_with(&short))
         })
-    }
-
-    fn standalone_binary(&self, env: &UserEnv) -> Option<PathBuf> {
-        posix::standalone_binary(env)
     }
 
     fn desktop(&self, env: &UserEnv) -> Option<Desktop> {
@@ -76,6 +68,11 @@ impl Installs for Native {
     fn installing_desktop_stops_host(&self) -> bool {
         // The host runs on from the old image's mount until it next stops.
         false
+    }
+
+    fn carried_floti(&self, _desktop: &Desktop) -> Option<PathBuf> {
+        // Inside the image; the app runs install-self when it starts.
+        None
     }
 
     fn is_desktop_process(&self, desktop: &Desktop, row: &ProcessRow) -> bool {

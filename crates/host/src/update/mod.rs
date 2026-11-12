@@ -2,10 +2,12 @@
 //! channel's newest release, and the desktop app where it is installed and
 //! older, once the app has quit.
 //!
-//! 1. It removes what an earlier update left beside the running floti
-//!    (`floti.old-<pid>.exe`, `.floti-<version>.<pid>[.exe]`) and beside
-//!    the desktop app (`.Helm.app.floti-old-<pid>` and the like) where the
-//!    process that left it is known to have ended.
+//! 1. It removes what an earlier update or install left beside the running
+//!    floti: copies put aside (`floti.old-<pid>-<n>.exe`), where nothing
+//!    runs them any more (`Standalone::remove_asides`), and downloads
+//!    (`.floti-<version>.<pid>[.exe]`) and what it left beside the desktop
+//!    app (`.Helm.app.floti-old-<pid>` and the like), where the process that
+//!    left it is known to have ended.
 //! 2. It downloads `https://floti.dev/update.json` and its signature
 //!    `update.json.minisig`, and checks the signature with the key built
 //!    into the binary and its trusted comment, `floti update.json`
@@ -29,8 +31,12 @@
 //!    folder, each checked against its signature and its SHA-256
 //!    ([`release_file`]).
 //! 5. Only when everything has passed does it replace anything: floti
-//!    first ([`Installs::replace_binary`]), then, once no process of the
-//!    app is left, the app ([`Installs::install_desktop`]). While the app
+//!    first ([`Standalone::replace`], as `floti install-self` puts it in
+//!    place), then, once no process of the app is left, the app
+//!    ([`Installs::install_desktop`]), and then, where the app's own
+//!    installer does not, `floti install-self` from the new app's floti
+//!    ([`Installs::carried_floti`]), so the Node beside floti is the new
+//!    app's. While the app
 //!    runs it says it is waiting for it to quit, and looks again every
 //!    second.
 //!
@@ -66,6 +72,7 @@ use crate::platform::installs::{self, Desktop, Installs};
 use crate::platform::links::{self, remove_tree};
 use crate::platform::process_table::{self, ProcessTable};
 use crate::platform::process_tree::{self, ProcessTree};
+use crate::platform::standalone::{self, Standalone};
 use crate::version::{FLOTI_VERSION, cpu_name, os_name};
 use manifest::{FileEntry, Release};
 use network::{Network, get_whole};
@@ -201,6 +208,12 @@ pub struct Updater<'a> {
     pub key: &'a PublicKey,
     pub network: &'a dyn Network,
     pub installs: &'a dyn Installs,
+    /// Where floti installed on its own is, and how a file there is put in
+    /// place.
+    pub standalone: &'a dyn Standalone,
+    /// Runs `<floti> install-self` and answers what it printed, or its
+    /// failure line.
+    pub install_self: &'a dyn Fn(&Path) -> Result<String, String>,
     pub processes: &'a dyn ProcessTable,
     /// Whether a process is alive, for what earlier updates left.
     pub is_alive: &'a dyn Fn(u32) -> Knowable<bool>,
@@ -301,7 +314,7 @@ impl Updater<'_> {
         }
 
         if let Some(new) = &new_binary {
-            if let Err(err) = self.installs.replace_binary(&self.running_binary, new) {
+            if let Err(err) = self.standalone.replace(&self.running_binary, new) {
                 discard(&new_binary);
                 return Err(UpdateError::Replace {
                     reason: err.to_string(),
@@ -352,8 +365,8 @@ impl Updater<'_> {
             app.name
         );
         if let Some(standalone) = self
-            .installs
-            .standalone_binary(&self.env)
+            .standalone
+            .binary(&self.env)
             .filter(|path| path.is_file() && *path != self.running_binary)
         {
             line.push_str(&format!(
@@ -377,25 +390,21 @@ impl Updater<'_> {
         matches!((self.is_alive)(pid), Knowable::Known(false))
     }
 
-    /// The binary moved aside and the downloads left beside floti.
+    /// The copies put aside and the downloads left beside floti.
     fn sweep_beside_binary(&self) {
+        self.standalone.remove_asides(&self.running_binary);
         let Some(folder) = self.running_binary.parent() else {
             return;
         };
         let Ok(entries) = std::fs::read_dir(folder) else {
             return;
         };
-        let stem = self
-            .running_binary
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .unwrap_or_default();
         let extension = self.extension();
         for entry in entries.flatten() {
             let name = entry.file_name();
             let Some(pid) = name
                 .to_str()
-                .and_then(|name| leftover_pid(name, &stem, &extension))
+                .and_then(|name| leftover_pid(name, &extension))
             else {
                 continue;
             };
@@ -600,19 +609,33 @@ impl Updater<'_> {
             .install_desktop(app, downloaded)
             .map_err(|err| failed(err.to_string()))?;
         self.say(&format!("{} is updated to {version}.", app.name));
+        if let Some(carried) = self
+            .installs
+            .carried_floti(app)
+            .filter(|carried| carried.is_file())
+        {
+            match (self.install_self)(&carried) {
+                Ok(printed) => {
+                    for line in printed.lines().filter(|line| !line.trim().is_empty()) {
+                        self.say(line.trim());
+                    }
+                }
+                // The app is updated; its own start puts its floti in place.
+                Err(line) => self.say(&format!(
+                    "{} could not put its floti and Node in place now ({line}); it does when it next starts.",
+                    app.name
+                )),
+            }
+        }
         Ok(())
     }
 }
 
-/// The process id in `name` when it is something an update leaves beside
-/// the running binary `<stem><extension>`: `<stem>.old-<pid><extension>`,
-/// the binary moved aside, or `.floti-<version>.<pid><extension>`, a
-/// download.
-fn leftover_pid(name: &str, stem: &str, extension: &str) -> Option<u32> {
+/// The process id in `name` when it is a download an update leaves beside
+/// the running binary: `.floti-<version>.<pid><extension>`. Copies put
+/// aside are [`Standalone::remove_asides`]'s.
+fn leftover_pid(name: &str, extension: &str) -> Option<u32> {
     let base = name.strip_suffix(extension)?;
-    if let Some(pid) = base.strip_prefix(&format!("{stem}.old-")) {
-        return pid.parse().ok();
-    }
     let (version, pid) = base.strip_prefix(".floti-")?.rsplit_once('.')?;
     Version::parse(version)?;
     pid.parse().ok()
@@ -667,6 +690,8 @@ fn run_native(
         key: &key,
         network: &network,
         installs: &installs::Native,
+        standalone: &standalone::Native,
+        install_self: &run_install_self,
         processes: &process_table::Native,
         is_alive: &is_alive,
         sessions_ending,
@@ -679,6 +704,28 @@ fn run_native(
         out: &mut stdout,
     };
     updater.run().map_err(|err| failure_line(&err))
+}
+
+/// Runs `<floti> install-self`, from a desktop app just installed, and
+/// answers what it printed, or the last line it wrote when it failed.
+fn run_install_self(floti: &Path) -> Result<String, String> {
+    let output = std::process::Command::new(floti)
+        .arg("install-self")
+        .output()
+        .map_err(|err| format!("could not run {} install-self: {err}", floti.display()))?;
+    let printed = String::from_utf8_lossy(&output.stdout).into_owned();
+    if output.status.success() {
+        return Ok(printed);
+    }
+    let said = String::from_utf8_lossy(&output.stderr);
+    let last = |text: &str| -> Option<String> {
+        text.lines()
+            .rfind(|line| !line.trim().is_empty())
+            .map(|line| line.trim().to_owned())
+    };
+    Err(last(&said)
+        .or_else(|| last(&printed))
+        .unwrap_or_else(|| "install-self failed and wrote nothing".to_owned()))
 }
 
 /// Asks `question` on the terminal, no by default; `None` when standard

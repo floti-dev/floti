@@ -12,7 +12,9 @@ import {
   parseSystemLine,
   parseVersionLine,
   releaseFileName,
+  parseStandaloneProbe,
   saysNotFound,
+  standaloneProbeLine,
   SETUP_AT_NEXT_SIGN_IN_EXIT,
   SYSTEM_LINE,
   systemOfBuild,
@@ -33,7 +35,10 @@ import { runsAsWritten, systemWsl, transportArgv, type TransportPrograms } from 
  *
  * - The check changes nothing on either computer. It runs `floti version`
  *   there (the floti path the host keeps, when it keeps one) and, only when
- *   that says floti is not there, `SYSTEM_LINE` for its OS and CPU; for a
+ *   that says floti is not there, `SYSTEM_LINE` for its OS and CPU, then
+ *   `standaloneProbeLine`, which finds a floti where the install scripts
+ *   put it on a login whose PATH lacks that folder (a non-interactive ssh
+ *   login on macOS) and keeps it by its full path; for a
  *   floti too old to talk to, also `floti update-stop --ask`, which counts the
  *   sessions an update would end. Compatibility is judged from the protocol
  *   `floti version` names, as the host judges a hello (P6).
@@ -307,6 +312,27 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
     }
   }
 
+  /**
+   * floti where the install scripts put it, on a login whose PATH does not
+   * have it: judged as a floti on PATH is, and kept by its full path. Null
+   * when there is none there.
+   */
+  const standaloneThere = async (
+    transport: HostTransport,
+    os: FlotiOs,
+    signal?: AbortSignal
+  ): Promise<HostCheck | null> => {
+    const probed = await runThere(transport, standaloneProbeLine(os), null, signal)
+    if (probed.error !== undefined || probed.code !== 0) return null
+    const there = parseStandaloneProbe(probed.stdout)
+    if (there === null || flotiPathProblem(there.path) !== null) return null
+    const { protocolNumbers, os: builtFor, cpu, ...named } = there.found
+    const verdict = judgeProtocol(protocolNumbers, deps.protocol)
+    if (verdict === 'ok') return { kind: 'ready', found: named, system: systemOfBuild(builtFor, cpu), floti: there.path }
+    if (verdict === 'newer') return { kind: 'newer', found: named, ours: formatProtocol(deps.protocol), helm: deps.version }
+    return offer(transport, there.path, systemOfBuild(builtFor, cpu), named)
+  }
+
   return {
     async check({ transport, floti }, signal) {
       const asked = await runThere(transport, flotiLine(floti, 'version'), null, signal)
@@ -331,7 +357,13 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
       if (!old && !saysNotFound(asked.code, said)) return failedCheck(asked)
       const system = await systemThere(transport, signal)
       if ('kind' in system) return system
-      if (!old) return offer(transport, floti, system, null)
+      if (!old) {
+        if (floti === undefined && system.os !== null) {
+          const there = await standaloneThere(transport, system.os, signal)
+          if (there !== null) return there
+        }
+        return offer(transport, floti, system, null)
+      }
       const short = await runThere(transport, flotiLine(floti, '--version'))
       const version = (short.code === 0 ? parseShortVersion(short.stdout) : null) ?? 'of unknown version'
       return offer(transport, floti, system, { version, protocol: null })

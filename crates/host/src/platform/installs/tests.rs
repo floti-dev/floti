@@ -77,17 +77,17 @@ fn windows_puts_a_new_install_where_it_updates_one() {
             path: local.join("Programs").join("Helm")
         })
     );
+    // The host runs from floti installed on its own, which the installer
+    // renames aside rather than stopping, and the installer runs
+    // install-self itself.
+    assert!(!windows::Native.installing_desktop_stops_host());
     assert_eq!(
-        windows::Native.standalone_binary(&user),
-        Some(
-            local
-                .join("Programs")
-                .join("Floti")
-                .join("bin")
-                .join("floti.exe")
-        )
+        windows::Native.carried_floti(&Desktop {
+            name: "Helm",
+            path: local.join("Programs").join("Helm")
+        }),
+        None
     );
-    assert!(windows::Native.installing_desktop_stops_host());
 }
 
 #[test]
@@ -172,35 +172,6 @@ fn windows_counts_only_the_installed_program_s_processes() {
     ));
     let host = r#""C:\Users\Some One\AppData\Local\Programs\Helm\resources\floti.exe" host"#;
     assert!(!windows::Native.is_desktop_process(&desktop, &row("floti.exe", Some(host))));
-}
-
-#[test]
-fn windows_moves_the_running_binary_aside_and_the_new_one_into_its_name() {
-    let dirs = TestDirs::new();
-    let bin = dirs.folder("bin dir");
-    let running = bin.join("floti.exe");
-    std::fs::write(&running, b"old").unwrap();
-    std::fs::write(bin.join("floti.old.exe"), b"from an earlier update").unwrap();
-    let new = bin.join(".floti-2.1.0.1.exe");
-    std::fs::write(&new, b"new").unwrap();
-    windows::Native.replace_binary(&running, &new).unwrap();
-    assert_eq!(std::fs::read(&running).unwrap(), b"new");
-    assert!(!new.exists());
-    // Nothing runs the old copy here, so it is removed as well.
-    assert!(!bin.join("floti.old.exe").exists());
-}
-
-#[test]
-fn windows_puts_the_old_binary_back_when_the_new_one_cannot_move_in() {
-    let dirs = TestDirs::new();
-    let bin = dirs.folder("bin dir");
-    let running = bin.join("floti.exe");
-    std::fs::write(&running, b"old").unwrap();
-    let err = windows::Native
-        .replace_binary(&running, &bin.join("not there.exe"))
-        .unwrap_err();
-    assert!(err.to_string().contains("replace"), "{err}");
-    assert_eq!(std::fs::read(&running).unwrap(), b"old");
 }
 
 #[test]
@@ -462,30 +433,18 @@ fn linux_counts_a_floti_on_the_app_image_s_mount_as_the_app_s() {
 }
 
 #[test]
-fn macos_and_linux_find_floti_on_its_own_where_the_install_script_puts_it() {
-    let dirs = TestDirs::new();
-    let user = env(&dirs.home, &[]);
+fn macos_hands_its_own_floti_to_install_self_and_the_appimage_none() {
+    let app = Desktop {
+        name: "Helm",
+        path: std::path::PathBuf::from("/Users/me/Applications/Helm.app"),
+    };
+    assert_eq!(
+        macos::Native.carried_floti(&app),
+        Some(app.path.join("Contents").join("Resources").join("floti"))
+    );
+    assert_eq!(linux::Native.carried_floti(&app), None);
     for installs in [&linux::Native as &dyn Installs, &macos::Native] {
-        assert_eq!(
-            installs.standalone_binary(&user),
-            Some(dirs.home.join(".local").join("bin").join("floti"))
-        );
         assert!(!installs.installing_desktop_stops_host());
-    }
-}
-
-#[test]
-fn macos_and_linux_rename_the_new_binary_over_the_running_one() {
-    for installs in [&linux::Native as &dyn Installs, &macos::Native] {
-        let dirs = TestDirs::new();
-        let bin = dirs.folder("bin dir");
-        let running = bin.join("floti");
-        std::fs::write(&running, b"old").unwrap();
-        let new = bin.join(".floti-2.1.0.1");
-        std::fs::write(&new, b"new").unwrap();
-        installs.replace_binary(&running, &new).unwrap();
-        assert_eq!(std::fs::read(&running).unwrap(), b"new");
-        assert!(!new.exists());
     }
 }
 

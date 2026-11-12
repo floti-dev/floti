@@ -17,14 +17,16 @@ const ASIDE: &str = ".old-";
 
 impl Standalone for Native {
     fn folder(&self, env: &UserEnv) -> Option<PathBuf> {
-        // `%LOCALAPPDATA%` is set in every interactive session; the
-        // profile's own `AppData\Local` is where it points when it is not.
-        let local = env.absolute_var("LOCALAPPDATA").or_else(|| {
-            env.home
-                .as_deref()
-                .map(|home| home.join("AppData").join("Local"))
-        })?;
-        Some(local.join("Programs").join("Floti").join("bin"))
+        // Where install.ps1 puts it, and nowhere else: a session with no
+        // `%LOCALAPPDATA%` names no folder rather than guessing one.
+        env.var_any_case("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .filter(|local| local.is_absolute())
+            .map(|local| local.join("Programs").join("Floti").join("bin"))
+    }
+
+    fn binary(&self, env: &UserEnv) -> Option<PathBuf> {
+        self.folder(env).map(|folder| folder.join("floti.exe"))
     }
 
     fn replace(&self, target: &Path, new: &Path) -> io::Result<()> {
@@ -40,6 +42,11 @@ impl Standalone for Native {
                 let _ = std::fs::rename(aside, target);
             }
             return Err(err);
+        }
+        if let Some(aside) = aside {
+            // Refused while a process runs from it; a later install or
+            // update removes it then (`remove_asides`).
+            let _ = std::fs::remove_file(aside);
         }
         Ok(())
     }

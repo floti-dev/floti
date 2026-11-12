@@ -81,6 +81,27 @@ async function checkAndInstall(env: NodeJS.ProcessEnv, deps: Partial<RemoteInsta
 
 describe('the install scripts, run where floti goes', () => {
   it(
+    'finds the floti the install scripts put there when the login’s PATH has no such folder, and keeps it by its full path',
+    { timeout: PATIENCE },
+    async () => {
+      const { env, installed } = await computer('standalone')
+      await mkdir(resolve(installed, '..'), { recursive: true })
+      await writeFile(installed, 'the floti there\n')
+      const each = installer(
+        {
+          ...env,
+          // The login finds no `floti`, as a non-interactive ssh login on macOS does not.
+          FAKE_SSH_MISSING_LINE: 'floti ',
+          FAKE_SSH_STANDALONE_VERSION: `floti ${VERSION} protocol 1.0 ${OS} ${process.arch}`
+        },
+        {}
+      )
+      const check = await each.check({ transport: TRANSPORT })
+      expect(check).toMatchObject({ kind: 'ready', floti: installed, found: { version: VERSION } })
+    }
+  )
+
+  it(
     'S10: copies this Helm’s own floti through the login, checks its SHA-256 there, puts it in the user’s own folder and runs setup there',
     { timeout: PATIENCE },
     async () => {

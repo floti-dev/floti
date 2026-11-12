@@ -201,6 +201,15 @@ describe('the add-a-host dialog', () => {
     expect(w.actions.cancelAdd).not.toHaveBeenCalled()
   })
 
+  it('connects to a floti found where the install script puts it by that full path', async () => {
+    const w = world()
+    await pick(w)
+    await userEvent.click(w.button('Connect'))
+    w.checks[0]?.answer.resolve({ ...READY, floti: '/home/me/.local/bin/floti' })
+    await vi.waitFor(() => expect(w.adds).toHaveLength(1))
+    expect(w.adds[0]?.request).toMatchObject({ floti: '/home/me/.local/bin/floti' })
+  })
+
   it('S7: Add another returns to an empty pick screen', async () => {
     const w = world()
     await pick(w)

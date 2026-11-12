@@ -65,10 +65,9 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   update` (`crates/host/src/update`) replaces the floti binary, then the
   desktop app where it is older once it has quit, each only after its
   download has passed its signature and SHA-256 checks
-  ([PACKAGING.md](PACKAGING.md#floti-update)), and asks first where
-  installing the app stops the host and ends sessions;
-  a host already running keeps the binary it started from until it next
-  starts. When the
+  ([PACKAGING.md](PACKAGING.md#floti-update)); installing the app stops
+  no host, so it asks nothing first, and a host already running keeps the
+  binary it started from until Restart host to update. When the
   connection ends without a stop or a quit, the window keeps each tab's
   screen, dimmed with input off, and Helm starts a new host if a desktop
   started the one that died, then reconnects. The new host's list decides
@@ -199,9 +198,9 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#helm-browser).
   (`createServices`), each only where every owning process is provably dead.
   `EPERM` counts as alive; unknown means keep.
 - Templates live in `templates` in the host's config folder: for the
-  installed app `~/.config/floti`, or `~/.config/helm` where only that one is
-  there; otherwise the folder holding `templatesDir` in `paths.ts`
-  (`helm-data/templates` when portable). The host reads and seeds them at
+  installed app `~/.config/helm` where that is there, else
+  `~/.config/floti`; otherwise the folder holding `templatesDir` in
+  `paths.ts` (`helm-data/templates` when portable). The host reads and seeds them at
   its start. The shipped README and example are written only when the
   directory is absent, and nothing there is ever overwritten. The in-app
   Templates manager makes templates (from a folder too, `template:fromFolder`),

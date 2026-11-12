@@ -5,9 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use super::{
-    Desktop, Installs, NEW_COPY, OLD_COPY, beside, desktop_dir_override, plist_string, posix,
-};
+use super::{Desktop, Installs, NEW_COPY, OLD_COPY, beside, desktop_dir_override, plist_string};
 use crate::platform::folders::UserEnv;
 use crate::platform::links::{self, remove_tree};
 use crate::platform::process_table::ProcessRow;
@@ -72,16 +70,8 @@ impl Native {
 }
 
 impl Installs for Native {
-    fn replace_binary(&self, running: &Path, new: &Path) -> Result<()> {
-        posix::rename_over(running, new)
-    }
-
     fn bundles(&self, desktop: &Desktop, running: &Path) -> bool {
         running != desktop.path && running.starts_with(&desktop.path)
-    }
-
-    fn standalone_binary(&self, env: &UserEnv) -> Option<PathBuf> {
-        posix::standalone_binary(env)
     }
 
     fn desktop(&self, env: &UserEnv) -> Option<Desktop> {
@@ -114,6 +104,16 @@ impl Installs for Native {
     fn installing_desktop_stops_host(&self) -> bool {
         // The host runs on from the old bundle's files until it next stops.
         false
+    }
+
+    fn carried_floti(&self, desktop: &Desktop) -> Option<PathBuf> {
+        Some(
+            desktop
+                .path
+                .join("Contents")
+                .join("Resources")
+                .join("floti"),
+        )
     }
 
     fn is_desktop_process(&self, desktop: &Desktop, row: &ProcessRow) -> bool {

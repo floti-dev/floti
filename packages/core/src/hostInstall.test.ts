@@ -5,6 +5,8 @@ import {
   describeInstallFailure,
   hostFlotiOlder,
   installFolderFor,
+  parseStandaloneProbe,
+  standaloneProbeLine,
   judgeProtocol,
   localHostVersions,
   localHostVersionsSentence,
@@ -131,6 +133,26 @@ describe('which floti goes to a computer', () => {
     expect(installFolderFor('linux')).toBe('~/.local/bin')
     expect(installFolderFor('macos')).toBe('~/.local/bin')
     expect(installFolderFor('windows')).toBe('%LOCALAPPDATA%\\Programs\\Floti\\bin')
+  })
+
+  it('looks for floti where the install scripts put it, for a login whose PATH has no such folder', () => {
+    expect(standaloneProbeLine('macos')).toBe('echo "$HOME/.local/bin/floti" && "$HOME/.local/bin/floti" version')
+    expect(standaloneProbeLine('linux')).toBe(standaloneProbeLine('macos'))
+    expect(standaloneProbeLine('windows')).toBe(
+      'echo %LOCALAPPDATA%\\Programs\\Floti\\bin\\floti.exe&& "%LOCALAPPDATA%\\Programs\\Floti\\bin\\floti.exe" version'
+    )
+    expect(parseStandaloneProbe('/Users/me/.local/bin/floti\nfloti 3.0.0 protocol 3.0 macos arm64\n')).toEqual({
+      path: '/Users/me/.local/bin/floti',
+      found: { version: '3.0.0', protocol: '3.0', protocolNumbers: { major: 3, minor: 0 }, os: 'macos', cpu: 'arm64' }
+    })
+    // cmd's echo ends its line with a space and a CR.
+    expect(
+      parseStandaloneProbe('C:\\Users\\me\\AppData\\Local\\Programs\\Floti\\bin\\floti.exe \r\nfloti 3.0.0 protocol 3.0 windows x64\r\n')
+        ?.path
+    ).toBe('C:\\Users\\me\\AppData\\Local\\Programs\\Floti\\bin\\floti.exe')
+    // Only the path, as when nothing is there; or a login's own line first.
+    expect(parseStandaloneProbe('/Users/me/.local/bin/floti\n')).toBeNull()
+    expect(parseStandaloneProbe('Welcome!\n/Users/me/.local/bin/floti\nfloti 3.0.0 protocol 3.0 macos arm64\n')).toBeNull()
   })
 
   it('S15: names the step that failed, and says a floti that was there still works', () => {

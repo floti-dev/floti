@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HostPlaces } from './launcher'
-import { ensureLocalFloti, type LocalFlotiDeps, type Ran } from './local-floti'
+import { createLocalFloti, ensureLocalFloti, type LocalFlotiDeps, type Ran } from './local-floti'
 
 const CARRIED = '/Applications/Helm.app/Contents/Resources/floti'
 const OWN = '/Users/me/.local/bin/floti'
@@ -97,5 +97,39 @@ describe('the installed app’s floti installed on its own', () => {
     const { deps, runs } = computer({ [CARRIED]: '3.1.0' })
     expect(await ensureLocalFloti(PLACES, { ...deps, env: {} })).toBe(false)
     expect(runs).toEqual([])
+  })
+})
+
+describe('the step settled once per run', () => {
+  it('starts nothing that runs floti until the step has settled, then with its answer', async () => {
+    let settle: (use: boolean) => void = () => undefined
+    let ensures = 0
+    const gate = createLocalFloti(() => {
+      ensures++
+      return new Promise((resolve) => (settle = resolve))
+    })
+    const seen: boolean[] = []
+    const started = gate.after(async () => {
+      seen.push(gate.useStandalone())
+      return 'bridge'
+    })
+    const doctor = gate.after(async () => {
+      seen.push(gate.useStandalone())
+    })
+    await Promise.resolve()
+    expect(seen).toEqual([])
+    expect(gate.useStandalone()).toBe(false)
+    settle(true)
+    expect(await started).toBe('bridge')
+    await doctor
+    expect(seen).toEqual([true, true])
+    await gate.ready()
+    expect(ensures).toBe(1)
+  })
+
+  it('uses the carried floti when the step itself fails', async () => {
+    const gate = createLocalFloti(() => Promise.reject(new Error('could not look')))
+    await gate.ready()
+    expect(gate.useStandalone()).toBe(false)
   })
 })

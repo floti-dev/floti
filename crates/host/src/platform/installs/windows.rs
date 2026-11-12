@@ -52,28 +52,6 @@ impl Native {
         })
     }
 
-    /// Where a running exe goes aside: `<stem>.old.exe` beside it, or, when
-    /// one from an earlier update is still running, a name of this
-    /// process's own.
-    fn aside(running: &Path) -> PathBuf {
-        let stem = running
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let extension = running
-            .extension()
-            .map(|extension| format!(".{}", extension.to_string_lossy()))
-            .unwrap_or_default();
-        let old = running.with_file_name(format!("{stem}.old{extension}"));
-        match std::fs::remove_file(&old) {
-            Ok(()) => old,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => old,
-            Err(_) => {
-                running.with_file_name(format!("{stem}.old-{}{extension}", std::process::id()))
-            }
-        }
-    }
-
     /// The version the uninstall entry of the install at `install` gives,
     /// among `entries`: the one whose uninstaller is that install's.
     pub fn uninstall_version(entries: &[UninstallEntry], install: &Path) -> Option<String> {
@@ -102,31 +80,8 @@ fn inside(path: &Path, folder: &Path) -> bool {
 }
 
 impl Installs for Native {
-    fn replace_binary(&self, running: &Path, new: &Path) -> Result<()> {
-        let old = Self::aside(running);
-        std::fs::rename(running, &old)
-            .map_err(|source| Error::path("move aside", running, source))?;
-        if let Err(source) = std::fs::rename(new, running) {
-            let _ = std::fs::rename(&old, running);
-            return Err(Error::path("replace", running, source));
-        }
-        // Refused while this process runs from it; the next update removes it.
-        let _ = std::fs::remove_file(&old);
-        Ok(())
-    }
-
     fn bundles(&self, desktop: &Desktop, running: &Path) -> bool {
         inside(running, &desktop.path)
-    }
-
-    fn standalone_binary(&self, env: &UserEnv) -> Option<PathBuf> {
-        env.var_any_case("LOCALAPPDATA").map(|local| {
-            PathBuf::from(local)
-                .join("Programs")
-                .join("Floti")
-                .join("bin")
-                .join("floti.exe")
-        })
     }
 
     fn desktop(&self, env: &UserEnv) -> Option<Desktop> {
@@ -153,9 +108,15 @@ impl Installs for Native {
     }
 
     fn installing_desktop_stops_host(&self) -> bool {
-        // installer.nsh stops this computer's host before it replaces
-        // the floti.exe the install holds.
-        true
+        // The host runs from floti installed on its own, outside the
+        // install, and installer.nsh renames a running copy aside rather
+        // than stopping it.
+        false
+    }
+
+    fn carried_floti(&self, _desktop: &Desktop) -> Option<PathBuf> {
+        // installer.nsh runs `floti install-self` itself.
+        None
     }
 
     fn is_desktop_process(&self, desktop: &Desktop, row: &ProcessRow) -> bool {

@@ -5,8 +5,8 @@
 //! `~/Library/Application Support/Floti` on macOS and `$XDG_DATA_HOME/floti`
 //! (default `~/.local/share/floti`) on Linux, with logs in
 //! `~/.local/state/floti` there. What the user writes lives in
-//! `~/.config/floti` on every OS, or `~/.config/helm` where only Helm's is
-//! there ([`config_folder`]).
+//! `~/.config/floti` on every OS, or `~/.config/helm` where Helm's is there
+//! ([`config_folder`]).
 //!
 //! Each OS's layout is plain path arithmetic over a [`UserEnv`], so all three
 //! are compiled and tested on every OS; the build picks one as [`Native`].
@@ -117,20 +117,21 @@ pub trait FolderLayout {
     fn resolve(&self, env: &UserEnv) -> Result<Folders>;
 }
 
-/// The user's own files, on every OS: `~/.config/floti`, or
-/// `~/.config/helm` on a computer where only that one is there, which Helm
-/// set up before the name changed and where its agents, templates and
-/// plugins still are. Whether a host was started by the desktop, at
-/// sign-in or by hand, it then reads one folder. This is the one look at
-/// the disk resolving makes, and it creates nothing.
+/// The user's own files, on every OS: `~/.config/helm` wherever it is
+/// there, which Helm set up before the name changed and where its agents,
+/// templates and plugins are, else `~/.config/floti`. The answer for a
+/// computer does not change while Floti runs on it, so a host started by the
+/// desktop, at sign-in or by hand reads one folder, even once one of them
+/// has written `~/.config/floti`. The one-time move of `~/.config/helm` to
+/// `~/.config/floti` (HELM-94) is what switches a computer over. This is the
+/// one look at the disk resolving makes, and it creates nothing.
 pub fn config_folder(home: &Path) -> PathBuf {
     let config = home.join(".config");
-    let floti = config.join("floti");
     let helm = config.join(HELM_CONFIG_FOLDER);
-    if !floti.is_dir() && helm.is_dir() {
+    if helm.is_dir() {
         helm
     } else {
-        floti
+        config.join("floti")
     }
 }
 

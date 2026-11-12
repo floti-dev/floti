@@ -19,6 +19,7 @@ use crate::Result;
 use crate::platform::folders::UserEnv;
 use crate::platform::installs::{Desktop, Installs};
 use crate::platform::process_table::{PortRow, ProcessRow, ProcessTable};
+use crate::platform::standalone::{self, Standalone};
 use crate::sha256::hex_digest;
 use crate::testkit::TestDirs;
 
@@ -124,6 +125,8 @@ struct FakeInstalls {
     /// Whether the running floti is the app's own.
     bundled: bool,
     standalone: Option<PathBuf>,
+    /// The floti the installed app carries, for install-self.
+    carried: Option<PathBuf>,
     desktop_installs: Mutex<Vec<Vec<u8>>>,
     binary_replaced_first: Mutex<bool>,
     running_binary: PathBuf,
@@ -145,19 +148,43 @@ impl FakeInstalls {
         self.standalone = standalone;
         self
     }
+
+    fn carrying_floti(mut self, carried: PathBuf) -> Self {
+        self.carried = Some(carried);
+        self
+    }
+}
+
+/// floti installed on its own at `binary`, put in place as on Windows:
+/// renamed aside, which works the same on every OS.
+struct FakeStandalone {
+    binary: Option<PathBuf>,
+}
+
+impl Standalone for FakeStandalone {
+    fn folder(&self, _env: &UserEnv) -> Option<PathBuf> {
+        self.binary
+            .as_deref()
+            .and_then(Path::parent)
+            .map(Path::to_path_buf)
+    }
+
+    fn binary(&self, _env: &UserEnv) -> Option<PathBuf> {
+        self.binary.clone()
+    }
+
+    fn replace(&self, target: &Path, new: &Path) -> io::Result<()> {
+        standalone::windows::Native.replace(target, new)
+    }
+
+    fn remove_asides(&self, target: &Path) -> Vec<PathBuf> {
+        standalone::windows::Native.remove_asides(target)
+    }
 }
 
 impl Installs for FakeInstalls {
-    fn replace_binary(&self, running: &Path, new: &Path) -> Result<()> {
-        std::fs::rename(new, running).map_err(|err| crate::Error::path("replace", running, err))
-    }
-
     fn bundles(&self, _desktop: &Desktop, _running: &Path) -> bool {
         self.bundled
-    }
-
-    fn standalone_binary(&self, _env: &UserEnv) -> Option<PathBuf> {
-        self.standalone.clone()
     }
 
     fn desktop(&self, _env: &UserEnv) -> Option<Desktop> {
@@ -174,6 +201,10 @@ impl Installs for FakeInstalls {
 
     fn installing_desktop_stops_host(&self) -> bool {
         self.stops_host
+    }
+
+    fn carried_floti(&self, _desktop: &Desktop) -> Option<PathBuf> {
+        self.carried.clone()
     }
 
     fn is_desktop_process(&self, _desktop: &Desktop, row: &ProcessRow) -> bool {
@@ -366,6 +397,7 @@ impl World {
             stops_host: false,
             bundled: false,
             standalone: None,
+            carried: None,
             desktop_installs: Mutex::new(Vec::new()),
             binary_replaced_first: Mutex::new(false),
             running_binary: self.running_binary.clone(),
@@ -396,6 +428,17 @@ impl World {
             self.questions.borrow_mut().push(question.to_owned());
             self.answer.get()
         };
+        let standalone = FakeStandalone {
+            binary: installs.standalone.clone(),
+        };
+        let installed_from = RefCell::new(Vec::new());
+        let install_self = |floti: &Path| {
+            installed_from.borrow_mut().push(floti.to_path_buf());
+            Ok(format!(
+                "floti is at {}.\nFloti host is running.\n",
+                floti.display()
+            ))
+        };
         let mut out = Vec::new();
         let result = Updater {
             running_version: self.running_version.get(),
@@ -404,6 +447,8 @@ impl World {
             key: &key,
             network: &self.network,
             installs,
+            standalone: &standalone,
+            install_self: &install_self,
             processes: &processes,
             is_alive: &is_alive,
             sessions_ending: &sessions_ending,
@@ -420,6 +465,7 @@ impl World {
             result,
             out: String::from_utf8(out).unwrap(),
             pauses: pauses.into_inner().unwrap(),
+            installed_from: installed_from.into_inner(),
         }
     }
 
@@ -446,6 +492,8 @@ struct Run {
     result: Result<Outcome, UpdateError>,
     out: String,
     pauses: Vec<Duration>,
+    /// The floti each `install-self` ran from.
+    installed_from: Vec<PathBuf>,
 }
 
 impl Run {
@@ -1117,6 +1165,44 @@ fn a_host_that_cannot_be_asked_still_gets_the_question() {
 }
 
 #[test]
+fn after_the_app_is_updated_its_own_floti_puts_itself_and_its_node_in_place() {
+    let world = World::new();
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    let carried = world.dirs.folder("new app resources").join("floti");
+    std::fs::write(&carried, b"the new app's floti").unwrap();
+    let installs = world
+        .installs(true)
+        .at_version("2.0.0")
+        .carrying_floti(carried.clone());
+    let run = world.update(&installs, 0, None);
+    assert!(run.result.is_ok(), "{}", run.out);
+    assert_eq!(run.installed_from, std::slice::from_ref(&carried));
+    let updated = run
+        .out
+        .find("Helm is updated to 2.1.0.")
+        .expect("the app updated");
+    let placed = run
+        .out
+        .find(&format!("floti is at {}.", carried.display()))
+        .expect("install-self's lines");
+    assert!(updated < placed, "{}", run.out);
+
+    // An app that carries none where it is looked for (the AppImage's is
+    // inside its image) runs nothing.
+    let world = World::new();
+    world.publish(&[("stable", &release)]);
+    let missing = world.dirs.root().join("nowhere").join("floti");
+    let installs = world
+        .installs(true)
+        .at_version("2.0.0")
+        .carrying_floti(missing);
+    let run = world.update(&installs, 0, None);
+    assert!(run.result.is_ok(), "{}", run.out);
+    assert!(run.installed_from.is_empty());
+}
+
+#[test]
 fn what_an_earlier_update_left_is_removed_once_its_process_has_ended() {
     let world = World::new();
     let bin = world.running_binary.parent().unwrap().to_path_buf();
@@ -1146,12 +1232,10 @@ fn what_an_earlier_update_left_is_removed_once_its_process_has_ended() {
         vec![
             ".floti-2.1.0-beta.1.12.exe",
             ".floti-not-a-version.11.exe",
-            "floti.old-12.exe",
-            "floti.old-13.exe",
             "floti.old.exe",
             "notes.txt",
         ],
-        "only what a process known to have ended left"
+        "downloads only where the process that left them ended, and copies put aside where nothing runs them"
     );
 }
 

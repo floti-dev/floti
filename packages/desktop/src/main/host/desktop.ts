@@ -42,7 +42,7 @@ import {
   type SpawnOptions
 } from './launcher'
 import { createHostLink, type HostLink } from './link'
-import { ensureLocalFloti, type Ran } from './local-floti'
+import { createLocalFloti, ensureLocalFloti, type Ran } from './local-floti'
 import { createOwnDataCopy, type OwnDataCopy } from './own-data'
 import { createPageLinks, type PageLinks } from './page-link'
 import { doctorHosts, recordDoctorHosts } from './doctor-hosts'
@@ -118,29 +118,21 @@ export interface DesktopHostDeps {
 const repoRoot = (): string => resolve(__dirname, '..', '..', '..', '..')
 
 /**
- * Whether this run uses floti installed on its own, which `readyLocalFloti`
- * settles once, before the local host is reached.
+ * The installed app's floti installed on its own, put in place once per run
+ * (`local-floti.ts`). Every link, bridge and doctor record that runs floti
+ * starts after it has settled (`localFloti.after`), so none runs the floti
+ * inside the install folder for its whole life.
  */
-let useStandalone = false
-let localFlotiReady: Promise<void> | null = null
-
-/**
- * Makes sure the installed app's floti installed on its own is in place
- * (`local-floti.ts`), once per run; every later call waits on the same.
- */
-function readyLocalFloti(log: (line: string) => void): Promise<void> {
-  localFlotiReady ??= ensureLocalFloti(places(), {
+const localFloti = createLocalFloti(() =>
+  ensureLocalFloti(places(), {
     platform: process.platform,
     env: process.env,
     exists: existsSync,
-    log,
+    log: (line) => console.log(line),
     appVersion: app.getVersion(),
     run: runProgram
-  }).then((use) => {
-    useStandalone = use
   })
-  return localFlotiReady
-}
+)
 
 /**
  * Runs a program windowless, without a shell, and answers how it ended;
@@ -163,13 +155,19 @@ function runProgram(command: string, args: string[]): Promise<Ran> {
   })
 }
 
-/** Where this run's data is and where its `floti` is found. */
+/**
+ * Where this run's data is and where its `floti` is found. Whether it uses
+ * floti installed on its own is read when a program is started, so places
+ * kept from before the step settled follow it too.
+ */
 const places = (): HostPlaces => ({
   appMode,
   dataDir,
   packaged: app.isPackaged,
   resourcesPath: process.resourcesPath,
-  useStandalone,
+  get useStandalone() {
+    return localFloti.useStandalone()
+  },
   repoRoot: repoRoot(),
   templatesDir,
   execPath: desktopProgram(process.execPath, app.isPackaged, { platform: process.platform, env: process.env }),
@@ -284,8 +282,10 @@ export function createDesktopRemoteHosts(options: {
   options.localLink.onConnected(() => wsl.localConnected())
   links = createRemoteHostLinks({
     wsl,
+    // A page bridge opens only once this link is connected, so after it too.
     start: (host) =>
-      startRemoteHost(
+      localFloti.after(() =>
+        startRemoteHost(
         places(),
         { ...programs, appVersion: app.getVersion(), log: options.log },
         {
@@ -294,6 +294,7 @@ export function createDesktopRemoteHosts(options: {
           floti: host.floti,
           deviceName: hostname()
         }
+      )
       ),
     openBridge: (host, data) =>
       openRemotePageBridge(
@@ -317,7 +318,7 @@ export function createDesktopRemoteHosts(options: {
     },
     // What `floti doctor` checks besides this PC's host, recorded where it looks.
     hostsChanged: (hosts) => {
-      recordDoctorHosts(places(), programs, doctorHosts(hosts, folderOf)).catch((error: unknown) => {
+      localFloti.after(() => recordDoctorHosts(places(), programs, doctorHosts(hosts, folderOf))).catch((error: unknown) => {
         options.log(`host: floti doctor was not told this device's hosts (${(error as Error).message})`)
       })
     },
@@ -425,7 +426,7 @@ export function createDesktopRemoteInstaller(log: (line: string) => void): Remot
 export function createLocalHostLink(settings: () => HostSettingsPatch, log: (line: string) => void): HostLink {
   return createHostLink({
     start: async ({ startHost }) => {
-      await readyLocalFloti(log)
+      await localFloti.ready()
       try {
         const host = await connectLocalHost(log, startHost)
         localRefusal = null

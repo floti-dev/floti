@@ -34,17 +34,18 @@ fn windows_puts_it_in_localappdata_programs_floti_bin() {
         Some(local.join("Programs").join("Floti").join("bin"))
     );
     assert_eq!(
-        windows::Native.folder(&env(Some(&dirs.home), &[])),
+        windows::Native.binary(&env(Some(&dirs.home), &[("LOCALAPPDATA", &local)])),
         Some(
-            dirs.home
-                .join("AppData")
-                .join("Local")
+            local
                 .join("Programs")
                 .join("Floti")
                 .join("bin")
+                .join("floti.exe")
         )
     );
-    assert_eq!(windows::Native.folder(&env(None, &[])), None);
+    // No guess from the profile folder where install.ps1 would find none.
+    assert_eq!(windows::Native.folder(&env(Some(&dirs.home), &[])), None);
+    assert_eq!(windows::Native.binary(&env(Some(&dirs.home), &[])), None);
 }
 
 #[test]
@@ -53,12 +54,16 @@ fn macos_and_linux_put_it_in_local_bin() {
     let wanted = Some(dirs.home.join(".local").join("bin"));
     for place in [&macos::Native as &dyn Standalone, &linux::Native] {
         assert_eq!(place.folder(&env(Some(&dirs.home), &[])), wanted);
+        assert_eq!(
+            place.binary(&env(Some(&dirs.home), &[])),
+            wanted.as_ref().map(|folder| folder.join("floti"))
+        );
         assert_eq!(place.folder(&env(None, &[])), None);
     }
 }
 
 #[test]
-fn windows_puts_the_old_copy_aside_and_a_later_install_removes_it() {
+fn windows_puts_the_old_copy_aside_and_removes_it_when_nothing_runs_it() {
     let dirs = TestDirs::new();
     let bin = dirs.folder("bin");
     let target = bin.join("floti.exe");
@@ -72,19 +77,14 @@ fn windows_puts_the_old_copy_aside_and_a_later_install_removes_it() {
     std::fs::write(&new, b"second").unwrap();
     windows::Native.replace(&target, &new).unwrap();
     assert_eq!(std::fs::read(&target).unwrap(), b"second");
-    let aside: Vec<String> = names(&bin)
-        .into_iter()
-        .filter(|name| name != "floti.exe")
-        .collect();
-    assert_eq!(aside.len(), 1, "{aside:?}");
-    assert!(
-        aside[0].starts_with("floti.old-") && aside[0].ends_with(".exe"),
-        "{aside:?}"
-    );
-    assert_eq!(std::fs::read(bin.join(&aside[0])).unwrap(), b"first");
+    // Nothing ran the old copy, so it is gone already.
+    assert_eq!(names(&bin), ["floti.exe"]);
 
-    // Nothing runs it, so it goes; another program's file stays.
-    std::fs::write(bin.join("node.old-1-0.exe"), b"node").unwrap();
+    // Copies an earlier install or update left, under either name, go once
+    // nothing runs them; another program's copy stays.
+    for name in ["floti.old-11-0.exe", "floti.old-12.exe", "node.old-1-0.exe"] {
+        std::fs::write(bin.join(name), b"left").unwrap();
+    }
     assert_eq!(
         windows::Native.remove_asides(&target),
         Vec::<PathBuf>::new()
@@ -118,6 +118,64 @@ fn macos_and_linux_rename_the_new_file_over_the_old_and_put_nothing_aside() {
         assert_eq!(names(&bin), ["floti"]);
         assert!(place.remove_asides(&target).is_empty());
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn macos_and_linux_make_the_new_file_executable() {
+    use std::os::unix::fs::PermissionsExt;
+    for place in [&macos::Native as &dyn Standalone, &linux::Native] {
+        let dirs = TestDirs::new();
+        let bin = dirs.folder("bin");
+        let target = bin.join("floti");
+        let new = bin.join(".floti-install.1.floti");
+        std::fs::write(&new, b"new").unwrap();
+        std::fs::set_permissions(&new, std::fs::Permissions::from_mode(0o600)).unwrap();
+        place.replace(&target, &new).unwrap();
+        let mode = std::fs::metadata(&target).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o755);
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_puts_floti_in_place_without_the_dmgs_quarantine() {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let dirs = TestDirs::new();
+    let bin = dirs.folder("bin");
+    let target = bin.join("floti");
+    let new = bin.join(".floti-install.1.floti");
+    std::fs::write(&new, b"new").unwrap();
+    let file = CString::new(new.as_os_str().as_bytes()).unwrap();
+    let name = CString::new(macos::QUARANTINE).unwrap();
+    let value = b"0083;00000000;Safari;";
+    // SAFETY: NUL-terminated names and a value buffer of the length given.
+    let set = unsafe {
+        libc::setxattr(
+            file.as_ptr(),
+            name.as_ptr(),
+            value.as_ptr().cast(),
+            value.len(),
+            0,
+            0,
+        )
+    };
+    assert_eq!(set, 0, "{}", std::io::Error::last_os_error());
+    macos::Native.replace(&target, &new).unwrap();
+    let placed = CString::new(target.as_os_str().as_bytes()).unwrap();
+    // SAFETY: NUL-terminated names; a null buffer asks only for the size.
+    let size = unsafe {
+        libc::getxattr(
+            placed.as_ptr(),
+            name.as_ptr(),
+            std::ptr::null_mut(),
+            0,
+            0,
+            0,
+        )
+    };
+    assert_eq!(size, -1, "the quarantine flag is gone");
 }
 
 /// Ends the process it holds when the test ends, however it ends.
@@ -162,6 +220,7 @@ fn windows_puts_a_running_copy_aside_and_keeps_it_until_nothing_runs_it() {
     windows::Native.replace(&target, &new).unwrap();
     assert_eq!(std::fs::read(&target).unwrap(), b"new");
     assert!(running.0.try_wait().unwrap().is_none(), "it still runs");
+    assert_eq!(names(&bin).len(), 2, "the running copy is kept aside");
     let left = windows::Native.remove_asides(&target);
     assert_eq!(left.len(), 1, "the running copy is kept: {left:?}");
 

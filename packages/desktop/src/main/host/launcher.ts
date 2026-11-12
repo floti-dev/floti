@@ -258,14 +258,13 @@ export function carriedFloti(places: HostPlaces, deps: Pick<LauncherDeps, 'platf
  * Where floti installed on its own is for this user, as the install scripts
  * and `floti install-self` put it (`platform/standalone` in the host):
  * `%LOCALAPPDATA%\Programs\Floti\bin\floti.exe`, or `~/.local/bin/floti`. Null
- * when the environment names no folder for it.
+ * when the environment names no folder for it: no `LOCALAPPDATA`, or no
+ * `HOME`, as the host's own answer is.
  */
 export function standaloneFloti(deps: Pick<LauncherDeps, 'platform' | 'env'>): string | null {
   const paths = pathsFor(deps.platform)
   if (deps.platform === 'win32') {
-    const profile = deps.env['USERPROFILE']
-    const local =
-      deps.env['LOCALAPPDATA'] || (profile ? paths.join(profile, 'AppData', 'Local') : undefined)
+    const local = deps.env['LOCALAPPDATA']
     return local ? paths.join(local, 'Programs', 'Floti', 'bin', 'floti.exe') : null
   }
   const home = deps.env['HOME']
@@ -283,8 +282,8 @@ const CONFIG_READ_ONLY = 'FLOTI_CONFIG_READ_ONLY'
 /**
  * The environment both programs run with. The installed app uses the host's
  * own folders, so it passes its environment as it is, its config folder
- * included: the host's own rule (`~/.config/floti`, or `~/.config/helm` where
- * only Helm's is there) picks the same folder for the host Helm starts as for
+ * included: the host's own rule (`~/.config/helm` where Helm's is there, else
+ * `~/.config/floti`) picks the same folder for the host Helm starts as for
  * the one started at sign-in. Every other run moves the host's folders inside
  * Helm's data directory, so a dev or check run never meets the user's real
  * host, except the config folder: the folder holding Helm's templates folder.
@@ -294,9 +293,11 @@ const CONFIG_READ_ONLY = 'FLOTI_CONFIG_READ_ONLY'
  * host's own (`dev:live` shares `~/.config/helm`), and a host built from a
  * checkout must never move, seed or write what the installed one reads: it
  * reads `agents`, else `roles` where it is, else the shipped agents from
- * memory, and seeds no templates. The installed and the portable app write
- * their own config folders, which nothing else uses, and are never handed
- * it, whatever this process inherited.
+ * memory, and seeds no templates. The installed and the portable app are
+ * never handed it, whatever this process inherited: the portable app's
+ * config folder is its own, and the installed app's host writes the
+ * folder its own rule picks, as the host started at sign-in does, and is
+ * the one host that does.
  *
  * A build that is not packaged carries no Node beside `floti`, so it hands the
  * host the `node` on PATH (`FLOTI_NODE`, an absolute path) for plugin

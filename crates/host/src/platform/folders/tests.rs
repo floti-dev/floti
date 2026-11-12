@@ -36,7 +36,7 @@ fn windows_data_and_logs_are_in_localappdata_floti() {
 }
 
 #[test]
-fn the_config_folder_is_helms_only_where_helms_alone_is_there() {
+fn the_config_folder_is_helms_wherever_helms_is_there_and_stays_so() {
     let dirs = TestDirs::new();
     let config = dirs.home.join(".config");
     assert_eq!(config_folder(&dirs.home), config.join("floti"));
@@ -52,9 +52,14 @@ fn the_config_folder_is_helms_only_where_helms_alone_is_there() {
             config.join("helm")
         );
     }
-    std::fs::create_dir_all(config.join("floti")).unwrap();
-    assert_eq!(config_folder(&dirs.home), config.join("floti"));
-    assert!(is_empty(&config.join("floti")), "resolving made nothing");
+    // A ~/.config/floti written meanwhile switches nothing: only the move
+    // of Helm's folder does.
+    std::fs::create_dir_all(config.join("floti").join("templates")).unwrap();
+    assert_eq!(config_folder(&dirs.home), config.join("helm"));
+    assert!(
+        is_empty(&config.join("floti").join("templates")),
+        "resolving made nothing"
+    );
 }
 
 #[test]
