@@ -43,6 +43,19 @@ fn windows_puts_it_in_localappdata_programs_floti_bin() {
                 .join("floti.exe")
         )
     );
+    // A Windows folder reads as Windows reads it, on every OS.
+    let windows_local = Path::new(r"C:\Users\Some One\AppData\Local");
+    assert_eq!(
+        windows::Native.binary(&env(None, &[("LOCALAPPDATA", windows_local)])),
+        Some(PathBuf::from(
+            r"C:\Users\Some One\AppData\Local\Programs\Floti\bin\floti.exe"
+        ))
+    );
+    assert_eq!(
+        windows::Native.folder(&env(None, &[("LOCALAPPDATA", Path::new(r"AppData\Local"))])),
+        None,
+        "not a full path"
+    );
     // No guess from the profile folder where install.ps1 would find none.
     assert_eq!(windows::Native.folder(&env(Some(&dirs.home), &[])), None);
     assert_eq!(windows::Native.binary(&env(Some(&dirs.home), &[])), None);

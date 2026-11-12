@@ -4,6 +4,7 @@ use std::path::Path;
 
 use super::UserPath;
 use crate::platform::folders::UserEnv;
+use crate::platform::windows_path::{comparable, split};
 
 /// The Windows user `PATH`.
 #[derive(Debug, Clone, Copy, Default)]
@@ -62,7 +63,7 @@ pub fn with_folder(written: Option<&str>, folder: &str) -> String {
 /// one by another name.
 pub fn names<'a>(values: impl IntoIterator<Item = &'a str>, env: &UserEnv, floti: &Path) -> bool {
     let written = floti.to_string_lossy();
-    let (folder, name) = split_windows_path(&written);
+    let (folder, name) = split(&written);
     let wanted = folder.map(comparable);
     let this = std::fs::canonicalize(floti).ok();
     values
@@ -79,25 +80,6 @@ pub fn names<'a>(values: impl IntoIterator<Item = &'a str>, env: &UserEnv, floti
                         == Some(this)
                 })
         })
-}
-
-/// A Windows path's folder and last part, split as Windows splits it, on
-/// its last `\` or `/`, on whichever OS this runs: [`Path::parent`] on
-/// macOS or Linux takes the whole of `C:\...\floti.exe` for one part. A
-/// drive's root keeps its separator (`C:\`), as [`comparable`] keeps it.
-pub(super) fn split_windows_path(path: &str) -> (Option<&str>, String) {
-    match path.rfind(['\\', '/']) {
-        Some(at) => {
-            let folder = &path[..at];
-            let folder = if folder.ends_with(':') {
-                &path[..=at]
-            } else {
-                folder
-            };
-            (Some(folder), path[at + 1..].to_owned())
-        }
-        None => (None, path.to_owned()),
-    }
 }
 
 /// `entry` with each `%NAME%` replaced by that variable of `env`, and left
@@ -129,20 +111,6 @@ fn expand(entry: &str, env: &UserEnv) -> String {
     }
     out.push_str(rest);
     out
-}
-
-/// `path` as Windows compares folders: forward slashes as backslashes, no
-/// trailing separator, any case.
-fn comparable(path: &str) -> String {
-    let path = path.replace('/', "\\");
-    let trimmed = path.trim_end_matches('\\');
-    // A drive's root keeps its separator: `C:\` and `C:` are not one folder.
-    let trimmed = if trimmed.ends_with(':') {
-        path.as_str()
-    } else {
-        trimmed
-    };
-    trimmed.to_lowercase()
 }
 
 #[cfg(windows)]

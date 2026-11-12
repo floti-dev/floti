@@ -31,4 +31,5 @@ pub mod startup;
 pub mod terminal_size;
 pub mod tray;
 pub mod user_path;
+pub mod windows_path;
 pub mod wsl;

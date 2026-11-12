@@ -300,25 +300,6 @@ fn a_quoted_folder_with_spaces_is_one_folder_in_a_path_line_and_in_brew_shellenv
     assert_eq!(unix.has_with(&macos::SYSTEM, "/bin/zsh", brewed), Ok(true));
 }
 
-#[test]
-fn a_windows_path_splits_into_its_folder_and_name_on_every_os() {
-    assert_eq!(
-        windows::split_windows_path(FLOTI_EXE),
-        (
-            Some(r"C:\Users\me\AppData\Local\Programs\Floti\bin"),
-            "floti.exe".to_owned()
-        )
-    );
-    assert_eq!(
-        windows::split_windows_path("C:/floti.exe"),
-        (Some("C:/"), "floti.exe".to_owned())
-    );
-    assert_eq!(
-        windows::split_windows_path("floti.exe"),
-        (None, "floti.exe".to_owned())
-    );
-}
-
 #[cfg(unix)]
 #[test]
 fn a_floti_linked_from_a_path_folder_is_this_one() {

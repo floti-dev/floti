@@ -15,6 +15,7 @@ use std::process::{Command, Stdio};
 use super::{Desktop, Installs, desktop_dir_override, file_name};
 use crate::platform::folders::UserEnv;
 use crate::platform::process_table::ProcessRow;
+use crate::platform::windows_path::{self, comparable, inside};
 use crate::{Error, Result};
 
 /// What the desktop app is called, and so its install folder, its program
@@ -34,25 +35,30 @@ pub struct UninstallEntry {
 
 impl Native {
     fn program(install: &Path) -> PathBuf {
-        install.join(format!("{DESKTOP_NAME}.exe"))
+        windows_path::join(install, &[&Self::program_name()])
+    }
+
+    /// The app's program's file name: `Helm.exe`.
+    fn program_name() -> String {
+        format!("{DESKTOP_NAME}.exe")
     }
 
     fn uninstaller(install: &Path) -> PathBuf {
-        install.join(format!("Uninstall {DESKTOP_NAME}.exe"))
+        windows_path::join(install, &[&format!("Uninstall {DESKTOP_NAME}.exe")])
     }
 
     /// The folder per-user programs are installed in for `env`.
     fn programs(env: &UserEnv) -> Option<PathBuf> {
         desktop_dir_override(env).or_else(|| {
             env.var_any_case("LOCALAPPDATA")
-                .map(|local| PathBuf::from(local).join("Programs"))
+                .map(|local| windows_path::join(Path::new(&local), &["Programs"]))
         })
     }
 
     /// The version the uninstall entry of the install at `install` gives,
     /// among `entries`: the one whose uninstaller is that install's.
     pub fn uninstall_version(entries: &[UninstallEntry], install: &Path) -> Option<String> {
-        let uninstaller = Self::uninstaller(install).to_string_lossy().to_lowercase();
+        let uninstaller = comparable(&Self::uninstaller(install).to_string_lossy());
         entries
             .iter()
             .find(|entry| {
@@ -61,19 +67,11 @@ impl Native {
                     Some(quoted) => quoted.split('"').next().unwrap_or_default(),
                     None => program.split(" /").next().unwrap_or_default().trim_end(),
                 };
-                program.to_lowercase() == uninstaller
+                comparable(program) == uninstaller
             })
             .map(|entry| entry.display_version.trim().to_owned())
             .filter(|version| !version.is_empty())
     }
-}
-
-/// Whether `path` is inside `folder`, letter case aside, as Windows names
-/// files.
-fn inside(path: &Path, folder: &Path) -> bool {
-    let lower = |path: &Path| PathBuf::from(path.to_string_lossy().to_lowercase());
-    let (path, folder) = (lower(path), lower(folder));
-    path != folder && path.starts_with(&folder)
 }
 
 impl Installs for Native {
@@ -82,7 +80,7 @@ impl Installs for Native {
     }
 
     fn desktop(&self, env: &UserEnv) -> Option<Desktop> {
-        let install = Self::programs(env)?.join(DESKTOP_NAME);
+        let install = windows_path::join(&Self::programs(env)?, &[DESKTOP_NAME]);
         // A portable copy has no uninstaller and is not an install.
         (Self::program(&install).is_file() && Self::uninstaller(&install).is_file()).then_some(
             Desktop {
@@ -96,7 +94,7 @@ impl Installs for Native {
         // The installer puts a new install where it updates one.
         Self::programs(env).map(|programs| Desktop {
             name: DESKTOP_NAME,
-            path: programs.join(DESKTOP_NAME),
+            path: windows_path::join(&programs, &[DESKTOP_NAME]),
         })
     }
 
@@ -117,17 +115,14 @@ impl Installs for Native {
     }
 
     fn is_desktop_process(&self, desktop: &Desktop, row: &ProcessRow) -> bool {
-        let program = file_name(&Self::program(&desktop.path));
-        if !row.name.eq_ignore_ascii_case(&program) {
+        if !row.name.eq_ignore_ascii_case(&Self::program_name()) {
             return false;
         }
         let Some(command_line) = &row.command_line else {
             return true;
         };
-        let wanted = Self::program(&desktop.path)
-            .to_string_lossy()
-            .to_lowercase();
-        command_line.to_lowercase().contains(&wanted)
+        let wanted = comparable(&Self::program(&desktop.path).to_string_lossy());
+        comparable(command_line).contains(&wanted)
     }
 
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
@@ -302,7 +297,7 @@ mod system {
 #[cfg(any(test, feature = "testkit"))]
 impl super::FakeDesktop for Native {
     fn fake_install(&self, apps: &Path, _version: &str) {
-        let install = apps.join(DESKTOP_NAME);
+        let install = windows_path::join(apps, &[DESKTOP_NAME]);
         std::fs::create_dir_all(&install).expect("make the fake install folder");
         std::fs::write(Self::program(&install), b"fake app").expect("write the fake app");
         std::fs::write(Self::uninstaller(&install), b"fake uninstaller")

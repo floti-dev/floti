@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use super::Standalone;
 use crate::platform::folders::UserEnv;
+use crate::platform::windows_path;
 
 /// The Windows place.
 #[derive(Debug, Clone, Copy, Default)]
@@ -21,12 +22,13 @@ impl Standalone for Native {
         // `%LOCALAPPDATA%` names no folder rather than guessing one.
         env.var_any_case("LOCALAPPDATA")
             .map(PathBuf::from)
-            .filter(|local| local.is_absolute())
-            .map(|local| local.join("Programs").join("Floti").join("bin"))
+            .filter(|local| windows_path::is_absolute(local))
+            .map(|local| windows_path::join(&local, &["Programs", "Floti", "bin"]))
     }
 
     fn binary(&self, env: &UserEnv) -> Option<PathBuf> {
-        self.folder(env).map(|folder| folder.join("floti.exe"))
+        self.folder(env)
+            .map(|folder| windows_path::join(&folder, &["floti.exe"]))
     }
 
     fn replace(&self, target: &Path, new: &Path) -> io::Result<()> {
