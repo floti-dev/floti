@@ -67,7 +67,8 @@ export function releaseFiles(sumsText, version, repo, targets) {
 
 /**
  * The Homebrew formula for floti `version`, one binary per OS and CPU it
- * installs on. The release's file is the whole download, so `install` takes it
+ * installs on, each URL in an `on_arm` or `on_intel` block inside `on_macos`
+ * or `on_linux`: Homebrew's style allows no `url` directly in an OS block. The release's file is the whole download, so `install` takes it
  * by its own name, the last part of the URL Homebrew fetched it from.
  */
 export function homebrewFormula({ sums, version, repo }) {
@@ -84,7 +85,10 @@ class Floti < Formula
   license "${LICENSE}"
 
   on_macos do
-${source('macos-arm64', '    ')}    depends_on arch: :arm64
+    depends_on arch: :arm64
+
+    on_arm do
+${source('macos-arm64', '      ')}    end
   end
 
   on_linux do

@@ -112,7 +112,15 @@ describe('the Homebrew formula', () => {
 
   it('downloads the macOS arm64 build on a Mac, and refuses an Intel Mac', () => {
     const mac = block(formula, 'on_macos', 2)
-    expect(mac).toBe(`    url "${url('macos-arm64')}"\n    sha256 "${SHA['macos-arm64']!}"\n    depends_on arch: :arm64\n`)
+    expect(mac).toBe(
+      `    depends_on arch: :arm64\n\n    on_arm do\n      url "${url('macos-arm64')}"\n      sha256 "${SHA['macos-arm64']!}"\n    end\n`
+    )
+  })
+
+  it('puts every url and sha256 in a CPU block inside an OS block, as brew style requires', () => {
+    for (const line of formula.split('\n').filter((each) => /^\s*(url|sha256) "/.test(each))) {
+      expect(line, line).toMatch(/^ {6}\S/)
+    }
   })
 
   it('downloads the static Linux build for the CPU on Linux', () => {
