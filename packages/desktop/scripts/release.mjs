@@ -10,10 +10,12 @@
 //     already tagged. A version already tagged is not built, except in a dry
 //     run, which builds everything and publishes nothing.
 //
-//   node release.mjs names <version>
-//     prints every file a release of <version> carries, one per line, sorted.
+//   node release.mjs names <version> [--unsigned]
+//     prints every file a release of <version> carries, one per line, sorted:
+//     each signed file and its `.minisig` signature beside it. With
+//     --unsigned, only the signed files.
 //
-//   node release.mjs check <folder> <version>
+//   node release.mjs check <folder> <version> [--unsigned]
 //     refuses a folder that does not hold exactly those files, and prints a
 //     Markdown table of each with its size and SHA-256 for the step summary.
 
@@ -135,14 +137,33 @@ export function protocolFileName(version) {
   return `floti-protocol-${version}.tar.gz`
 }
 
-/** Every file a release of `version` carries, sorted as jq and `LC_ALL=C sort` sort them. */
-export function releaseAssetNames(version) {
+/** A file's minisign signature, beside it. */
+export function signatureName(name) {
+  return `${name}.minisig`
+}
+
+/**
+ * The files of a release of `version` that are signed, sorted as jq and
+ * `LC_ALL=C sort` sort them: the desktop files, the protocol types, the floti
+ * files and their SHA-256 list.
+ */
+export function signedFileNames(version) {
   return [...desktopFileNames(version), protocolFileName(version), ...releaseFileNames(version)].sort()
 }
 
+/**
+ * Every file a release of `version` carries, sorted as jq and `LC_ALL=C sort`
+ * sort them: each signed file and its signature. With `signed: false`, the
+ * signed files alone, as they are before signing.
+ */
+export function releaseAssetNames(version, { signed = true } = {}) {
+  const names = signedFileNames(version)
+  return signed ? names.flatMap((name) => [name, signatureName(name)]).sort() : names
+}
+
 /** Why a folder's file names are not exactly a release's files, or null when they are. */
-export function assetsProblem(names, version) {
-  const expected = releaseAssetNames(version)
+export function assetsProblem(names, version, { signed = true } = {}) {
+  const expected = releaseAssetNames(version, { signed })
   const have = new Set(names)
   const missing = expected.filter((name) => !have.has(name))
   const extra = [...have].filter((name) => !expected.includes(name)).sort()
@@ -165,12 +186,14 @@ async function sha256Of(file) {
   return hash.digest('hex')
 }
 
-async function check(folder, version) {
+async function check(folder, version, { signed }) {
   const names = readdirSync(folder)
-  const problem = assetsProblem(names, version)
-  if (problem !== null) throw new Error(`${folder} is not the files a release of ${version} carries: ${problem}`)
+  const problem = assetsProblem(names, version, { signed })
+  if (problem !== null) {
+    throw new Error(`${folder} is not the files a release of ${version} carries${signed ? '' : ' before signing'}: ${problem}`)
+  }
   const rows = []
-  for (const name of releaseAssetNames(version)) {
+  for (const name of releaseAssetNames(version, { signed })) {
     const file = join(folder, name)
     rows.push({ name, size: statSync(file).size, sha256: await sha256Of(file) })
   }
@@ -178,16 +201,20 @@ async function check(folder, version) {
 }
 
 async function main(args) {
-  const [command, ...rest] = args
+  const [command, ...given] = args
+  // `--unsigned` is a flag of `names` and `check` only; `gate` sees its arguments as given.
+  const unsigned = (command === 'names' || command === 'check') && given.at(-1) === '--unsigned'
+  const rest = unsigned ? given.slice(0, -1) : given
+  const signed = !unsigned
   if (command === 'gate' && (rest.length === 1 || (rest.length === 2 && rest[1] === '--dry-run'))) {
     const decision = gate({ version: rest[0], lsRemote: readFileSync(0, 'utf8'), dryRun: rest[1] === '--dry-run' })
     console.log(JSON.stringify(decision))
   } else if (command === 'names' && rest.length === 1) {
-    for (const name of releaseAssetNames(rest[0])) console.log(name)
+    for (const name of releaseAssetNames(rest[0], { signed })) console.log(name)
   } else if (command === 'check' && rest.length === 2) {
-    process.stdout.write(await check(rest[0], rest[1]))
+    process.stdout.write(await check(rest[0], rest[1], { signed }))
   } else {
-    console.error('usage: node release.mjs gate <version> [--dry-run] < tags | names <version> | check <folder> <version>')
+    console.error('usage: node release.mjs gate <version> [--dry-run] < tags | names <version> [--unsigned] | check <folder> <version> [--unsigned]')
     return 2
   }
   return 0

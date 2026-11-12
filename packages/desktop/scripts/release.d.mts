@@ -29,6 +29,8 @@ export function highestVersion(versions: string[]): string | null
 export function gate(options: { version: string; lsRemote: string; dryRun: boolean }): GateDecision
 export function desktopFileNames(version: string): string[]
 export function protocolFileName(version: string): string
-export function releaseAssetNames(version: string): string[]
-export function assetsProblem(names: string[], version: string): string | null
+export function signatureName(name: string): string
+export function signedFileNames(version: string): string[]
+export function releaseAssetNames(version: string, options?: { signed?: boolean }): string[]
+export function assetsProblem(names: string[], version: string, options?: { signed?: boolean }): string | null
 export function summaryTable(rows: { name: string; size: number; sha256: string }[]): string

@@ -40,9 +40,12 @@ column its migrations never create.
 
 Run `pnpm check` and `pnpm test:e2e` locally first; CI does not run the
 end-to-end tests. To see the whole release run first, push the branch to
-`release-dry-run/<name>`: it builds and checks everything, publishes nothing,
-and leaves the files as the run's `release-files` artifact
-(docs/PACKAGING.md, "A dry run"). Then merge and push. CI runs `pnpm check`
+`release-dry-run/<name>`: it builds, signs with a key made for the run and
+checks everything, publishes nothing, and leaves the files and their
+signatures as the run's `release-files` artifact (docs/PACKAGING.md, "A dry
+run"). A real release is signed by the `sign` job with `MINISIGN_SECRET_KEY`
+from the `release` environment, and fails there unless every signature
+verifies against `crates/host/src/update/minisign.pub`. Then merge and push. CI runs `pnpm check`
 and the build on Windows, macOS and Linux - a failure on any of them blocks
 the release - and verifies the exes, the dmg and zip, and the AppImage from
 the inside before publishing. `packaging-check` and `verify:installer` are not part of a

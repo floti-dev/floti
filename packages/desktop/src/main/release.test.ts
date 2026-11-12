@@ -6,6 +6,8 @@ import {
   highestVersion,
   parseVersion,
   releaseAssetNames,
+  signatureName,
+  signedFileNames,
   summaryTable,
   taggedVersions
 } from '../../scripts/release.mjs'
@@ -98,8 +100,8 @@ describe('the version gate', () => {
 })
 
 describe('the files a release carries', () => {
-  it('is the five desktop files, the protocol types and the six floti files, sorted as jq sorts them', () => {
-    expect(releaseAssetNames('3.0.0')).toEqual([
+  it('signs the five desktop files, the protocol types and the six floti files, sorted as jq sorts them', () => {
+    expect(signedFileNames('3.0.0')).toEqual([
       'Helm-3.0.0-arm64-mac.zip',
       'Helm-3.0.0-arm64.dmg',
       'Helm-3.0.0-linux-x64.AppImage',
@@ -115,6 +117,22 @@ describe('the files a release carries', () => {
     ])
   })
 
+  it('carries each signed file with its minisign signature beside it, sorted as jq and LC_ALL=C sort sort them', () => {
+    const names = releaseAssetNames('3.0.0')
+    expect(names).toHaveLength(24)
+    expect(names.slice(0, 4)).toEqual([
+      'Helm-3.0.0-arm64-mac.zip',
+      'Helm-3.0.0-arm64-mac.zip.minisig',
+      'Helm-3.0.0-arm64.dmg',
+      'Helm-3.0.0-arm64.dmg.minisig'
+    ])
+    expect(names.slice(-2)).toEqual(['floti-protocol-3.0.0.tar.gz', 'floti-protocol-3.0.0.tar.gz.minisig'])
+    expect(names.filter((name) => !name.endsWith('.minisig'))).toEqual(signedFileNames('3.0.0'))
+    expect(names.filter((name) => name.endsWith('.minisig'))).toEqual(signedFileNames('3.0.0').map(signatureName))
+    expect(names).toEqual([...names].sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b))))
+    expect(releaseAssetNames('3.0.0', { signed: false })).toEqual(signedFileNames('3.0.0'))
+  })
+
   it('refuses a folder missing one or holding another, naming each', () => {
     const names = releaseAssetNames('3.0.0')
     expect(assetsProblem(names, '3.0.0')).toBeNull()
@@ -122,6 +140,13 @@ describe('the files a release carries', () => {
       'missing Helm-3.0.0-linux-x64.AppImage; not a release file: notes.md'
     )
     expect(assetsProblem(releaseAssetNames('2.9.9'), '3.0.0')).toMatch(/^missing Helm-3\.0\.0-arm64-mac\.zip, .*; not a release file: Helm-2\.9\.9-arm64-mac\.zip/)
+  })
+
+  it('refuses a signed folder missing a signature, and an unsigned one holding one', () => {
+    const names = releaseAssetNames('3.0.0')
+    expect(assetsProblem(names.filter((name) => name !== 'floti-3.0.0-SHA256SUMS.minisig'), '3.0.0')).toBe('missing floti-3.0.0-SHA256SUMS.minisig')
+    expect(assetsProblem(signedFileNames('3.0.0'), '3.0.0', { signed: false })).toBeNull()
+    expect(assetsProblem(names, '3.0.0', { signed: false })).toMatch(/^not a release file: Helm-3\.0\.0-arm64-mac\.zip\.minisig, /)
   })
 
   it('lists each file with its size and SHA-256 for the step summary', () => {

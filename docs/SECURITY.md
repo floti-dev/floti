@@ -57,6 +57,27 @@ together. The agent tools listener's token and origin rules are in
   refused when it cannot be; a value is filled in by the host, for an origin
   and a plugin the user allowed, and never sent to any client. Helm never reads a Claude or GitHub credential to put there.
 
+## The release signing key
+
+- Every file a release carries is signed with the project's minisign key
+  (PACKAGING.md, "Signatures and attestations"). Its public half is
+  `crates/host/src/update/minisign.pub`, built into floti, and is the only key
+  `floti update` trusts. A file is checked by hand with
+  `minisign -Vm <file> -P <public key>`, which must print the trusted comment
+  `floti <version> <file>`.
+- The secret half is kept only in the `release` environment of the
+  repository, as `MINISIGN_SECRET_KEY`, which only `main` may use. The `sign`
+  job in `release.yml` is the one job that names it, and two of its steps read
+  it: one to confirm it is set, one to sign. `scripts/minisign.mjs` writes it
+  to an owner-only file in a folder of its own under `$RUNNER_TEMP` and removes
+  that folder before the step ends, whether signing worked or not. It never
+  reaches a file in the workspace, a log, an artifact, minisign's environment
+  or a command line.
+- A dry run signs with a key pair made in that run, whose secret half is
+  removed in the step that made it, and never reads the `release` environment.
+- Each release's files also carry a GitHub build attestation, made in
+  `publish`, the only job with `id-token: write`.
+
 ## Access, keys and devices
 
 - The user's login is the access to Floti. The host serves whatever reaches

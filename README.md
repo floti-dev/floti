@@ -357,7 +357,8 @@ Bump `version` in `packages/desktop/package.json` and merge it to `main`. That
 is the whole procedure. `.github/workflows/release.yml` runs the checks, builds
 floti for every host and the desktop app for Windows, macOS and Linux on clean
 runners, and publishes a GitHub release tagged `v<version>` with every file
-attached and that version's section of CHANGELOG.md as its notes. A version
+attached, each with its minisign signature and a build attestation, and that
+version's section of CHANGELOG.md as its notes. A version
 with a pre-release part publishes as a public pre-release, never `latest`. A
 push to `release-dry-run/<name>` runs all of it and publishes nothing
 ([docs/PACKAGING.md](docs/PACKAGING.md#releasing)).

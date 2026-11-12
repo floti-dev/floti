@@ -19,14 +19,23 @@ name: Release
 # actually matters. A version that is not tagged must also be greater, by
 # semver, than every version that is: releases only move forward.
 #
+# Every file a release carries has a minisign signature beside it,
+# `<file>.minisig`, with the trusted comment `floti <version> <file>`, and a
+# GitHub build attestation. `sign` is the one job that reads the signing key,
+# `MINISIGN_SECRET_KEY` in the `release` environment, which only main may use,
+# and it checks every signature against the public key floti update trusts,
+# crates/host/src/update/minisign.pub, before anything is published.
+#
 # A push to a branch named `release-dry-run/<name>` runs all of it - the
 # checks, floti, the Windows, macOS and Linux builds, the protocol types, the
-# notes and every check of the files that needs no published release - and
-# publishes nothing: no tag, no release, no npm. It uploads exactly the files a
-# release would carry as the `release-files` workflow artifact and lists each
-# with its SHA-256 in the run's summary. The version job's `dry_run` output is
-# what every publishing job and step gates on; `publish`, the one job with
-# write access to the repository, does not run in a dry run at all.
+# notes, the signatures and every check of the files that needs no published
+# release - and publishes nothing: no tag, no release, no attestation, no npm.
+# It signs with a key made for that run (`sign-dry-run`), never reads the
+# `release` environment, uploads exactly the files a release would carry as
+# the `release-files` workflow artifact and lists each with its SHA-256 in the
+# run's summary. The version job's `dry_run` output is what every publishing
+# job and step gates on; `sign` and `publish`, the jobs that read the key and
+# write to the repository, do not run in a dry run at all.
 
 on:
   push:
@@ -385,10 +394,10 @@ jobs:
           compression-level: 0
           retention-days: 1
 
-  # Every file the release carries, in one folder, checked to be exactly the
-  # release's (scripts/release.mjs), and the notes. It publishes nothing: in a
-  # release it hands both to `publish`, and in a dry run `release-files` is
-  # what the run leaves behind.
+  # Every file the release signs, in one folder, checked to be exactly the
+  # release's (scripts/release.mjs), and the notes. It publishes nothing and
+  # signs nothing: it hands the files to `sign`, or in a dry run to
+  # `sign-dry-run`, and the notes to `publish`.
   assemble:
     needs: [version, check, floti, protocol, release-windows, release-mac, release-linux]
     # No always()/!cancelled() here, deliberately: a failed check or build
@@ -400,7 +409,6 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
       TAG: ${{ needs.version.outputs.tag }}
-      DRY_RUN: ${{ needs.version.outputs.dry_run }}
 
     steps:
       - uses: actions/checkout@v5
@@ -525,9 +533,110 @@ jobs:
         working-directory: ${{ runner.temp }}/release
         run: sha256sum --check --strict "floti-$VERSION-SHA256SUMS"
 
-      # Exactly the release's files - the five desktop files, the protocol
-      # types, the five floti files and their list - and nothing else, each
-      # listed with its SHA-256 in the summary.
+      # Exactly the files the release signs - the five desktop files, the
+      # protocol types, the five floti files and their list - and nothing
+      # else. The signing job lists them, signatures and all, in the summary.
+      - name: Confirm the release's files
+        shell: bash
+        run: |
+          set -euo pipefail
+          node packages/desktop/scripts/release.mjs check "$RUNNER_TEMP/release" "$VERSION" --unsigned
+          {
+            echo
+            echo "<details><summary>Release notes for \`$TAG\`</summary>"
+            echo
+            cat "$RUNNER_TEMP/notes/notes.md"
+            echo
+            echo "</details>"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-unsigned
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/notes/notes.md
+          if-no-files-found: error
+          retention-days: 1
+
+  # Signs every file with the project's minisign key and checks every
+  # signature against the public key committed at
+  # crates/host/src/update/minisign.pub, the one floti update trusts, before
+  # anything is published. The only job that reads the key: the `release`
+  # environment holds it, and only main may use that environment. A dry run
+  # never reaches this job; `sign-dry-run` signs that run's files instead.
+  #
+  # The key reaches one step, as a variable that minisign.mjs writes to an
+  # owner-only file under $RUNNER_TEMP and removes before the step ends,
+  # whether signing worked or not. Never echo it, never put it in a file of the
+  # workspace and never pass it on a command line.
+  #
+  # Until the public key is committed this job fails a real release by design:
+  # without it nothing shows the signatures are ones floti update accepts.
+  sign:
+    needs: [version, assemble]
+    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
+      PUBLIC_KEY: crates/host/src/update/minisign.pub
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Fetch the release's files
+        uses: actions/download-artifact@v4
+        with:
+          name: release-unsigned
+          path: ${{ runner.temp }}/release
+
+      - uses: ./.github/actions/minisign
+
+      - name: Confirm the public key and the signing key are there
+        shell: bash
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ ! -s $PUBLIC_KEY ]]; then
+            echo "::error file=$PUBLIC_KEY::$PUBLIC_KEY is not on this commit, so no signature can be checked against the key floti update trusts. A release cannot be published until the project's public key is committed."
+            exit 1
+          fi
+          if [[ -z ${MINISIGN_SECRET_KEY:-} ]]; then
+            echo "::error::MINISIGN_SECRET_KEY is not set in the release environment, so nothing can be signed."
+            exit 1
+          fi
+
+      - name: Sign every file
+        shell: bash
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(node packages/desktop/scripts/release.mjs names "$VERSION" --unsigned | sed "s|^|$RUNNER_TEMP/release/|")
+          node packages/desktop/scripts/minisign.mjs sign --comment "floti $VERSION {name}" "${files[@]}"
+
+      - name: Check every signature against the committed public key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(node packages/desktop/scripts/release.mjs names "$VERSION" --unsigned | sed "s|^|$RUNNER_TEMP/release/|")
+          node packages/desktop/scripts/minisign.mjs verify --public-key "$PUBLIC_KEY" --comment "floti $VERSION {name}" "${files[@]}"
+
+      # Exactly the release's files and a signature beside each, and nothing
+      # else, each listed with its SHA-256 in the summary.
       - name: Confirm the release's files
         shell: bash
         run: |
@@ -535,19 +644,11 @@ jobs:
           table=$(node packages/desktop/scripts/release.mjs check "$RUNNER_TEMP/release" "$VERSION")
           {
             echo
-            if [[ $DRY_RUN == true ]]; then
-              echo "### The files \`$TAG\` would carry, in the \`release-files\` artifact"
-            else
-              echo "### The files \`$TAG\` carries"
-            fi
+            echo "### The files \`$TAG\` carries"
+            echo
+            echo "Each \`.minisig\` is signed with the key whose public half is \`$PUBLIC_KEY\`."
             echo
             echo "$table"
-            echo
-            echo "<details><summary>Release notes</summary>"
-            echo
-            cat "$RUNNER_TEMP/notes/notes.md"
-            echo
-            echo "</details>"
           } >>"$GITHUB_STEP_SUMMARY"
           echo "$table"
 
@@ -557,24 +658,96 @@ jobs:
           path: ${{ runner.temp }}/release/
           if-no-files-found: error
           compression-level: 0
-          # What a dry run is for, so it stays a week; a release's copy is
-          # read once, by `publish`.
-          retention-days: ${{ needs.version.outputs.dry_run == 'true' && 7 || 1 }}
+          retention-days: 1
+
+  # A dry run's signatures, made as `sign` makes a release's but with a key
+  # pair made in this run and checked against that pair's public key. It
+  # reads no secret and no environment. Its files, signatures included, are
+  # what the dry run leaves behind as `release-files`.
+  sign-dry-run:
+    needs: [version, assemble]
+    if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Fetch the release's files
+        uses: actions/download-artifact@v4
+        with:
+          name: release-unsigned
+          path: ${{ runner.temp }}/release
+
+      - uses: ./.github/actions/minisign
+
+      # The secret half lives for this step alone. It reaches minisign.mjs the
+      # way the release's does, as MINISIGN_SECRET_KEY, so the dry run signs
+      # through the same code.
+      - name: Sign every file with a key made for this run
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          keys="$RUNNER_TEMP/dry-run-key"
+          mkdir "$keys"
+          trap 'rm -f "$keys/minisign.key"' EXIT
+          minisign -G -W -p "$keys/minisign.pub" -s "$keys/minisign.key" >/dev/null
+          mapfile -t files < <(node packages/desktop/scripts/release.mjs names "$VERSION" --unsigned | sed "s|^|$RUNNER_TEMP/release/|")
+          MINISIGN_SECRET_KEY=$(<"$keys/minisign.key") node packages/desktop/scripts/minisign.mjs sign --comment "floti $VERSION {name}" "${files[@]}"
+
+      - name: Check every signature against this run's public key
+        shell: bash
+        run: |
+          set -euo pipefail
+          keys="$RUNNER_TEMP/dry-run-key"
+          [[ ! -e $keys/minisign.key ]] || { echo "::error::the dry run's secret key outlived the step that made it"; exit 1; }
+          mapfile -t files < <(node packages/desktop/scripts/release.mjs names "$VERSION" --unsigned | sed "s|^|$RUNNER_TEMP/release/|")
+          node packages/desktop/scripts/minisign.mjs verify --public-key "$keys/minisign.pub" --comment "floti $VERSION {name}" "${files[@]}"
+
+      - name: Confirm the release's files
+        shell: bash
+        run: |
+          set -euo pipefail
+          table=$(node packages/desktop/scripts/release.mjs check "$RUNNER_TEMP/release" "$VERSION")
+          public=$(tail -n1 "$RUNNER_TEMP/dry-run-key/minisign.pub")
+          {
+            echo
+            echo "### The files \`$TAG\` would carry, in the \`release-files\` artifact"
+            echo
+            echo "Each \`.minisig\` is signed with a key made for this run, not the project's, and checked against its public key, \`$public\`. A dry run makes no attestation."
+            echo
+            echo "$table"
+          } >>"$GITHUB_STEP_SUMMARY"
+          echo "$table"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: release-notes
-          path: ${{ runner.temp }}/notes/notes.md
+          name: release-files
+          path: ${{ runner.temp }}/release/
           if-no-files-found: error
-          retention-days: 1
+          compression-level: 0
+          # What a dry run is for, so it stays a week.
+          retention-days: 7
 
-  # The only job that writes to the repository, and it never runs in a dry run.
+  # The only job that writes to the repository or makes an attestation, and it
+  # never runs in a dry run.
   publish:
-    needs: [version, assemble]
+    needs: [version, sign]
     if: needs.version.outputs.release == 'true' && needs.version.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # GitHub's build attestations: a token for Sigstore, and the right to
+      # store what it signs.
+      id-token: write
+      attestations: write
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.version.outputs.version }}
@@ -599,6 +772,18 @@ jobs:
         with:
           name: release-notes
           path: ${{ runner.temp }}/notes
+
+      # What is attested and uploaded is exactly what `sign` checked.
+      - name: Confirm the release's files
+        shell: bash
+        run: node packages/desktop/scripts/release.mjs check "$RUNNER_TEMP/release" "$VERSION" >/dev/null
+
+      # One attestation naming every file, signatures included, made before
+      # the release exists, so a failure here publishes nothing.
+      - name: Attest every file
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/release/*
 
       - name: Publish
         shell: bash
@@ -696,15 +881,16 @@ jobs:
 
       # Every version downloads without a GitHub sign-in, previews included:
       # the desktop app for a new user, and the floti a computer of another OS
-      # or CPU fetches when Settings > Hosts installs it there. One of each is
-      # fetched here with no token at all, as they would fetch it, and must
-      # answer 200 with the bytes this run built.
+      # or CPU fetches when Settings > Hosts installs it there, with the
+      # signature floti update checks it by. Each is fetched here with no
+      # token at all, as they would fetch it, and must answer 200 with the
+      # bytes this run built.
       - name: Confirm the files download without a sign-in
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/fetched"
-          for name in "Helm-$VERSION-setup.exe" "floti-$VERSION-linux-x64"; do
+          for name in "Helm-$VERSION-setup.exe" "floti-$VERSION-linux-x64" "floti-$VERSION-linux-x64.minisig"; do
             url="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$name"
             code=$(env -u GH_TOKEN -u GITHUB_TOKEN curl --silent --show-error --location \
               --fail --retry 3 --retry-all-errors --output "$RUNNER_TEMP/fetched/$name" --write-out '%{http_code}' "$url" || true)

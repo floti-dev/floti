@@ -358,9 +358,10 @@ hand, no button to press, no artefact built on a developer's machine.
 `packages/desktop/package.json` and, if `v<version>` is not already a tag on the
 remote, runs the checks, builds floti for its five targets, builds the Windows
 artefacts on a clean `windows-latest` runner, the macOS ones on `macos-latest`
-and the Linux one on `ubuntu-latest`, packs the protocol types, and publishes
-one GitHub release with all twelve attached: the five desktop files, the
-protocol types, the five floti files and their SHA-256 list. A merge that does
+and the Linux one on `ubuntu-latest`, packs the protocol types, signs every
+file, and publishes one GitHub release with twenty-four files attached: the
+five desktop files, the protocol types, the five floti files and their SHA-256
+list, and a minisign signature beside each of those twelve. A merge that does
 not bump the version runs the checks and the floti builds, skips every build
 after them and finishes green.
 
@@ -370,8 +371,10 @@ after them and finishes green.
 | `check`, `floti` | `ci.yml` and `floti.yml`, called. |
 | `protocol` | The crate's `generated_files` test, then `floti-protocol-<version>.tar.gz`. |
 | `release-windows`, `release-mac`, `release-linux` | One desktop build each, verified from the inside and handed on as a workflow artifact. None publishes anything. |
-| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s and that the folder holds exactly the twelve files (`scripts/release.mjs check`), lists each with its SHA-256 in the run's summary, and uploads them as `release-files`. |
-| `publish` | The only job with write access. Creates the release from `release-files`, publishes it and confirms it. Never runs in a dry run. |
+| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s and that the folder holds exactly the twelve files to sign (`scripts/release.mjs check --unsigned`), and uploads them as `release-unsigned`. |
+| `sign` | The only job that reads the signing key, in the `release` environment. Signs every file, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-four files with their SHA-256s in the run's summary and uploads them as `release-files`. Never runs in a dry run. |
+| `sign-dry-run` | A dry run's `sign`: the same signing and checks, with a key pair made in the run. Runs only in a dry run. |
+| `publish` | The only job with write access. Attests every file in `release-files`, then creates the release from them, publishes it and confirms it. Never runs in a dry run. |
 | `sdk` | The plugin SDK's npm publish, on its own version. Never runs in a dry run. |
 
 - **floti is built once, by `floti.yml`.** Every desktop build needs it, so a
@@ -379,8 +382,9 @@ after them and finishes green.
 - **Each desktop build is its own job and publishes nothing.** A failed build
   on any OS skips `assemble` and `publish` with it: a version is never
   published with half its downloads. Every runner is a standard GitHub-hosted
-  one, and no secret, certificate or paid account is involved: the Mac build
-  is ad-hoc signed and the Windows build unsigned.
+  one, and no certificate or paid account is involved: the Mac build is
+  ad-hoc signed and the Windows build unsigned. The one secret is the minisign
+  key, which only `sign` reads.
 - **The gate is whether the tag exists**, asked with `git ls-remote --tags`, not
   whether the commit changed the version. Diffing against the parent gives a
   different answer after a squash, a rebase, a revert or a re-run.
@@ -400,7 +404,7 @@ after them and finishes green.
   publish: no tag, no release, no artefacts.
 - **The release is created as a draft and published in the same job**, which is
   not an approval gate. Publishing the draft is what creates the tag, so the
-  ref and all twelve assets appear together rather than leaving a window where
+  ref and all twenty-four assets appear together rather than leaving a window where
   the app announces a version whose download page is empty. A run cancelled
   mid-upload leaves an unpublished draft; the next run deletes it and starts
   over.
@@ -443,27 +447,84 @@ after them and finishes green.
   It runs on any exe: `pnpm verify:artifact -- path/to/Helm-x.y.z-setup.exe`.
   The Mac artefacts get `verify-mac-artifact.mjs` and the AppImage
   `verify-linux-artifact.mjs`, described above.
-- **The confirmation expects all twelve files.** After publishing a release,
-  `publish` asks `/releases/latest` - the endpoint the in-app check asks - and
-  fails unless it names this tag, is not a draft, and lists exactly the files
-  `scripts/release.mjs names` gives. A preview must be published, a
-  pre-release, carry the same twelve and not be what `/releases/latest`
-  answers.
+- **The confirmation expects all twenty-four files.** After publishing a
+  release, `publish` asks `/releases/latest` - the endpoint the in-app check
+  asks - and fails unless it names this tag, is not a draft, and lists exactly
+  the files `scripts/release.mjs names` gives, signatures included. A preview
+  must be published, a pre-release, carry the same twenty-four and not be what
+  `/releases/latest` answers.
 - **Every version downloads without a sign-in.** For a release and a preview
   alike, `publish` then fetches the setup exe and `floti-<version>-linux-x64`
   from `releases/download/<tag>/` with no token at all, and fails unless each
   answers 200 with the bytes the run built: the desktop app as a new user
   fetches it, and floti as Settings > Hosts has a computer of another OS or CPU
-  fetch it.
+  fetch it. `floti-<version>-linux-x64.minisig` is fetched the same way, as
+  `floti update` fetches a signature.
+
+### Signatures and attestations
+
+Every file a release carries - the five desktop files, the protocol types, the
+five floti files and their SHA-256 list - has a minisign signature beside it,
+`<file>.minisig`, and a GitHub build attestation.
+
+- **The trusted comment is exactly `floti <version> <file>`**, for example
+  `floti 3.0.0 floti-3.0.0-linux-x64`. minisign signs the comment along with
+  the file, so a genuine signature cannot be moved to another file or another
+  version. `floti update` refuses a signature with any other comment.
+- **Signatures are prehashed** (algorithm `ED`), minisign's default since
+  0.10. `floti update` accepts no other kind, and the workflow refuses a
+  signature of any other kind before publishing.
+- **The public key is `crates/host/src/update/minisign.pub`**, built into
+  floti. It is the only key `floti update` trusts.
+- **The secret key is kept only in the `release` environment**, as the secret
+  `MINISIGN_SECRET_KEY`: the whole minisign secret key file, made with
+  `minisign -G -W`, so it has no password. Only `main` may use that
+  environment, and `sign` is the only job that names it. SECURITY.md says how
+  the key is handled in the run.
+- **Every signature is checked before anything is published.** `sign` checks
+  each one with minisign itself against the committed public key, trusted
+  comment included (`scripts/minisign.mjs verify`). A release fails there,
+  with nothing tagged or published, when that file is missing, when the secret
+  is missing, or when any signature does not verify against it.
+  **Until the project's public key is committed at that path, every real
+  release fails at `sign`, by design**: with no key to check against, nothing
+  shows the signatures are ones `floti update` accepts. A dry run is not
+  affected.
+- **minisign is pinned**: version 0.12, its Linux x64 archive checked against
+  the SHA-256 written in `.github/actions/minisign/action.yml`.
+- **The signing is reusable.** `scripts/minisign.mjs sign --comment <comment>
+  <file>...` signs any file with the key in `MINISIGN_SECRET_KEY`, `{name}` in
+  the comment standing for each file's name; `verify` checks the same way. The
+  update manifest is signed through it with the comment `floti update.json`.
+- **Attestations** come from `actions/attest-build-provenance`, pinned to a
+  commit, in `publish` before the release is created: one attestation naming
+  every file, signatures included. `publish` is the only job with
+  `id-token: write` and `attestations: write`. A dry run makes none.
+
+To check a file by hand, with minisign and the public key's second line (the
+one starting `RW`):
+
+    minisign -Vm floti-3.0.0-linux-x64 -P <public key>
+
+or with the key file itself, `minisign -Vm <file> -p minisign.pub`. It prints
+the trusted comment, which must be `floti <version> <file>`. To check the
+attestation, with the GitHub CLI:
+
+    gh attestation verify floti-3.0.0-linux-x64 --repo floti-dev/floti
 
 ### A dry run
 
 A push to a branch named `release-dry-run/<name>` runs the whole workflow and
-publishes nothing: no tag, no release, no npm. Everything a release builds is
-built and checked, including the notes and every check of the files that needs
-no published release; then `assemble` uploads exactly the twelve files as the
-run's `release-files` artifact, kept for seven days, and the run's summary
-lists each with its SHA-256. The tag-exists gate does not stop a dry run, so
+publishes nothing: no tag, no release, no attestation, no npm. Everything a
+release builds is built and checked, including the notes, the signatures and
+every check of the files that needs no published release. `sign-dry-run` makes
+a minisign key pair in the run (`minisign -G -W` under `$RUNNER_TEMP`), signs
+every file with it through the same `scripts/minisign.mjs` a release uses,
+checks every signature against that pair's public key and uploads exactly the
+twenty-four files as the run's `release-files` artifact, kept for seven days.
+The run's summary lists each with its SHA-256 and gives the run's public key.
+A dry run never reads the `release` environment or its secret, and makes no
+attestation. The tag-exists gate does not stop a dry run, so
 the version on the branch may be one already released; one that is not tagged
 must still be greater than every tagged one. A run on any branch but `main` is
 a dry run, and the version job's `dry_run` output is what every publishing job
