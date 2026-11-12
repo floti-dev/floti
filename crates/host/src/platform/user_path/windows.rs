@@ -35,6 +35,24 @@ impl UserPath for Native {
             "$key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true); $path = $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames').TrimEnd(';'); $key.SetValue('Path', (($path, '{folder}') -join ';').TrimStart(';'), 'ExpandString')"
         )
     }
+
+    fn add(&self, _env: &UserEnv, folder: &Path) -> Result<bool, String> {
+        let written = registry::string_value(registry::Hive::CurrentUser, USER_KEY, "Path")?;
+        let value = with_folder(written.as_deref(), &folder.display().to_string());
+        registry::set_expandable_string(USER_KEY, "Path", &value)?;
+        registry::announce_environment();
+        Ok(true)
+    }
+}
+
+/// The user's `Path` value `written`, as the registry keeps it (its
+/// `%VARIABLE%`s unexpanded), with `folder` appended, as [`UserPath::fix`]'s
+/// line appends it: no empty entry at either end.
+pub fn with_folder(written: Option<&str>, folder: &str) -> String {
+    let written = written.unwrap_or_default().trim_end_matches(';');
+    format!("{written};{folder}")
+        .trim_start_matches(';')
+        .to_owned()
 }
 
 /// Whether one of `values`, each a `Path` value as the registry keeps it,
@@ -131,8 +149,11 @@ fn comparable(path: &str) -> String {
 pub(super) mod registry {
     use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_MORE_DATA, ERROR_SUCCESS};
     use windows_sys::Win32::System::Registry::{
-        HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_NOEXPAND, RRF_RT_REG_EXPAND_SZ,
-        RRF_RT_REG_SZ, RegGetValueW,
+        HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, REG_EXPAND_SZ, RRF_NOEXPAND,
+        RRF_RT_REG_EXPAND_SZ, RRF_RT_REG_SZ, RegGetValueW, RegSetKeyValueW,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
     };
 
     /// The hive a key is read from.
@@ -204,6 +225,60 @@ pub(super) mod registry {
             }
         }
     }
+
+    /// Writes `text` as the expandable string value `value` of `subkey` in
+    /// `HKEY_CURRENT_USER`, making the key when it is not there, so each
+    /// `%VARIABLE%` in it is expanded when a process's environment is built
+    /// from it rather than frozen now.
+    pub fn set_expandable_string(subkey: &str, value: &str, text: &str) -> Result<(), String> {
+        let subkey_w = wide(subkey);
+        let value_w = wide(value);
+        let data = wide(text);
+        let bytes =
+            u32::try_from(data.len() * 2).map_err(|_| format!("{value} is too long to write"))?;
+        // SAFETY: both names and the data are NUL-terminated UTF-16, and
+        // `bytes` is the data's size in bytes, its NUL included.
+        let status = unsafe {
+            RegSetKeyValueW(
+                HKEY_CURRENT_USER,
+                subkey_w.as_ptr(),
+                value_w.as_ptr(),
+                REG_EXPAND_SZ,
+                data.as_ptr().cast(),
+                bytes,
+            )
+        };
+        if status == ERROR_SUCCESS {
+            Ok(())
+        } else {
+            Err(format!(
+                "could not write {value} in HKEY_CURRENT_USER\\{subkey}: {}",
+                std::io::Error::from_raw_os_error(status as i32)
+            ))
+        }
+    }
+
+    /// Tells the programs that build environments for new processes, such
+    /// as Explorer, that the user's environment changed, so a terminal
+    /// opened from them now has it. A program that does not answer within
+    /// five seconds is not waited for.
+    pub fn announce_environment() {
+        let environment = wide("Environment");
+        let mut result: usize = 0;
+        // SAFETY: the message's text is a NUL-terminated UTF-16 string that
+        // outlives the call, and `result` is a valid place to write.
+        unsafe {
+            SendMessageTimeoutW(
+                HWND_BROADCAST,
+                WM_SETTINGCHANGE,
+                0,
+                environment.as_ptr() as isize,
+                SMTO_ABORTIFHUNG,
+                5000,
+                &raw mut result,
+            );
+        }
+    }
 }
 
 #[cfg(not(windows))]
@@ -223,4 +298,12 @@ pub(super) mod registry {
     ) -> Result<Option<String>, String> {
         Err("there is no Windows registry on this computer".to_owned())
     }
+
+    /// There is no registry off Windows.
+    pub fn set_expandable_string(_subkey: &str, _value: &str, _text: &str) -> Result<(), String> {
+        Err("there is no Windows registry on this computer".to_owned())
+    }
+
+    /// There is nobody to tell off Windows.
+    pub fn announce_environment() {}
 }

@@ -418,8 +418,9 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
 
 - Agents (a lead, a worker, a reviewer: the named definitions a session
   starts its children as) live in `agents` in the host's config folder
-  (`~/.config/floti`; for the host Helm starts, the folder that holds
-  `templatesDir`, `~/.config/helm` when installed), one
+  (`~/.config/floti`, or `~/.config/helm` where only that one is there;
+  for the host a development or portable Helm starts, the folder that holds
+  `templatesDir`), one
   `<name>.md` each (front matter, then the body), parsed as an
   `AgentDefinition` (`agent_definitions/`). The one a start naming none gets
   is `default`; a child's row naming `agent` is the default's, and an `agent.md` is the default where there is no

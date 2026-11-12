@@ -36,6 +36,28 @@ fn windows_data_and_logs_are_in_localappdata_floti() {
 }
 
 #[test]
+fn the_config_folder_is_helms_only_where_helms_alone_is_there() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    assert_eq!(config_folder(&dirs.home), config.join("floti"));
+    std::fs::create_dir_all(config.join("helm").join("templates")).unwrap();
+    assert_eq!(config_folder(&dirs.home), config.join("helm"));
+    for layout in [
+        &windows::Native as &dyn FolderLayout,
+        &macos::Native,
+        &linux::Native,
+    ] {
+        assert_eq!(
+            layout.resolve(&dirs.user_env()).unwrap().config,
+            config.join("helm")
+        );
+    }
+    std::fs::create_dir_all(config.join("floti")).unwrap();
+    assert_eq!(config_folder(&dirs.home), config.join("floti"));
+    assert!(is_empty(&config.join("floti")), "resolving made nothing");
+}
+
+#[test]
 fn windows_without_localappdata_uses_the_profiles_appdata_local() {
     let dirs = TestDirs::new();
     let folders = windows::Native.resolve(&dirs.user_env()).unwrap();

@@ -58,4 +58,10 @@ pub trait UserPath {
     /// The one line, typed in the user's own shell, that puts `folder` on
     /// that `PATH` for every terminal opened after it.
     fn fix(&self, env: &UserEnv, folder: &Path) -> String;
+
+    /// Puts `folder` on that `PATH` for every terminal and login started
+    /// after it, as [`UserPath::fix`] does, and answers whether it changed
+    /// anything: on Windows, the desktop installer's step; on macOS and
+    /// Linux nothing is changed, and `floti doctor` gives the line.
+    fn add(&self, env: &UserEnv, folder: &Path) -> Result<bool, String>;
 }

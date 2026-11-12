@@ -1,5 +1,5 @@
 import { app, type BrowserWindow } from 'electron'
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream, existsSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
@@ -24,8 +24,9 @@ import { withBrowserAvailability } from '../browser-sandbox'
 import type { BrowserAvailability } from '../../shared/ipc'
 import {
   LocalHostRefusedError,
+  carriedFloti,
   desktopProgram,
-  flotiBinary,
+  withoutAppImage,
   fromBeforeRestart,
   localHostRestartFrame,
   oldHostOffer,
@@ -41,6 +42,7 @@ import {
   type SpawnOptions
 } from './launcher'
 import { createHostLink, type HostLink } from './link'
+import { ensureLocalFloti, type Ran } from './local-floti'
 import { createOwnDataCopy, type OwnDataCopy } from './own-data'
 import { createPageLinks, type PageLinks } from './page-link'
 import { doctorHosts, recordDoctorHosts } from './doctor-hosts'
@@ -115,12 +117,59 @@ export interface DesktopHostDeps {
 /** The checkout an unpackaged build runs from: `out/main` is three folders inside it. */
 const repoRoot = (): string => resolve(__dirname, '..', '..', '..', '..')
 
+/**
+ * Whether this run uses floti installed on its own, which `readyLocalFloti`
+ * settles once, before the local host is reached.
+ */
+let useStandalone = false
+let localFlotiReady: Promise<void> | null = null
+
+/**
+ * Makes sure the installed app's floti installed on its own is in place
+ * (`local-floti.ts`), once per run; every later call waits on the same.
+ */
+function readyLocalFloti(log: (line: string) => void): Promise<void> {
+  localFlotiReady ??= ensureLocalFloti(places(), {
+    platform: process.platform,
+    env: process.env,
+    exists: existsSync,
+    log,
+    appVersion: app.getVersion(),
+    run: runProgram
+  }).then((use) => {
+    useStandalone = use
+  })
+  return localFlotiReady
+}
+
+/**
+ * Runs a program windowless, without a shell, and answers how it ended;
+ * rejects only when it could not be run at all.
+ */
+function runProgram(command: string, args: string[]): Promise<Ran> {
+  return new Promise((resolveRun, rejectRun) => {
+    execFile(
+      command,
+      args,
+      { windowsHide: true, env: withoutAppImage(process.env), maxBuffer: 4 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error !== null && typeof error.code !== 'number') {
+          rejectRun(error)
+          return
+        }
+        resolveRun({ code: error === null ? 0 : (error.code as number), stdout, stderr })
+      }
+    )
+  })
+}
+
 /** Where this run's data is and where its `floti` is found. */
 const places = (): HostPlaces => ({
   appMode,
   dataDir,
   packaged: app.isPackaged,
   resourcesPath: process.resourcesPath,
+  useStandalone,
   repoRoot: repoRoot(),
   templatesDir,
   execPath: desktopProgram(process.execPath, app.isPackaged, { platform: process.platform, env: process.env }),
@@ -351,7 +400,7 @@ export function createDesktopRemoteInstaller(log: (line: string) => void): Remot
     version: app.getVersion(),
     protocol: PROTOCOL_VERSION,
     ownBuild: async () => {
-      const path = flotiBinary(at, programs)
+      const path = carriedFloti(at, programs)
       return existsSync(path) ? { path, sha256: await sha256OfFile(path) } : null
     },
     sums: async () => {
@@ -376,6 +425,7 @@ export function createDesktopRemoteInstaller(log: (line: string) => void): Remot
 export function createLocalHostLink(settings: () => HostSettingsPatch, log: (line: string) => void): HostLink {
   return createHostLink({
     start: async ({ startHost }) => {
+      await readyLocalFloti(log)
       try {
         const host = await connectLocalHost(log, startHost)
         localRefusal = null

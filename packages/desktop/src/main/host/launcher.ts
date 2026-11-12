@@ -90,13 +90,20 @@ export interface HostPlaces {
   packaged: boolean
   /** `process.resourcesPath`: where a packaged build carries `floti`. */
   resourcesPath: string
+  /**
+   * Whether this run uses floti installed on its own (`standaloneFloti`):
+   * set for the installed app once `ensureLocalFloti` has found it there,
+   * or put it there, no older than the floti the app carries.
+   */
+  useStandalone?: boolean
   /** The checkout an unpackaged build runs from, whose `target/debug` holds `floti`. */
   repoRoot: string
   /**
    * Helm's templates folder (`paths.ts`). The host keeps its templates in
    * `templates` inside its config folder, so the folder holding this one is
-   * the host's config folder in every run: one templates folder, whichever of
-   * the two serves it.
+   * the host's config folder in every run but the installed app's, whose
+   * host keeps its own (`hostEnvironment`): one templates folder, whichever
+   * of the two serves it.
    */
   templatesDir: string
   /** `process.execPath`: the program that is this Helm. */
@@ -221,13 +228,48 @@ export function desktopProgram(
   return packaged && deps.platform === 'linux' && appImage ? appImage : execPath
 }
 
-/** Where `floti` is looked for: beside a packaged build's resources, or in the checkout's debug build. */
+/**
+ * The `floti` every program Helm runs on this computer is: the host it
+ * starts, its bridges, doctor and the restart. The installed app's is floti
+ * installed on its own, once `ensureLocalFloti` has found or put it there
+ * (`useStandalone`); every other run's, and the installed app's until then,
+ * is the one this build carries.
+ */
 export function flotiBinary(places: HostPlaces, deps: Pick<LauncherDeps, 'platform' | 'env'>): string {
+  const standalone = places.useStandalone === true ? standaloneFloti(deps) : null
+  return standalone ?? carriedFloti(places, deps)
+}
+
+/**
+ * The `floti` this build carries: beside a packaged build's resources, or in
+ * the checkout's debug build. In the installed app it is only what is put in
+ * place of floti installed on its own (`floti install-self`), and the file
+ * Settings > Hosts sends a host of this computer's OS and CPU.
+ */
+export function carriedFloti(places: HostPlaces, deps: Pick<LauncherDeps, 'platform' | 'env'>): string {
   const paths = pathsFor(deps.platform)
   const name = deps.platform === 'win32' ? 'floti.exe' : 'floti'
   if (places.packaged) return paths.join(places.resourcesPath, name)
   const target = deps.env['CARGO_TARGET_DIR'] || paths.join(places.repoRoot, 'target')
   return paths.join(target, 'debug', name)
+}
+
+/**
+ * Where floti installed on its own is for this user, as the install scripts
+ * and `floti install-self` put it (`platform/standalone` in the host):
+ * `%LOCALAPPDATA%\Programs\Floti\bin\floti.exe`, or `~/.local/bin/floti`. Null
+ * when the environment names no folder for it.
+ */
+export function standaloneFloti(deps: Pick<LauncherDeps, 'platform' | 'env'>): string | null {
+  const paths = pathsFor(deps.platform)
+  if (deps.platform === 'win32') {
+    const profile = deps.env['USERPROFILE']
+    const local =
+      deps.env['LOCALAPPDATA'] || (profile ? paths.join(profile, 'AppData', 'Local') : undefined)
+    return local ? paths.join(local, 'Programs', 'Floti', 'bin', 'floti.exe') : null
+  }
+  const home = deps.env['HOME']
+  return home ? paths.join(home, '.local', 'bin', 'floti') : null
 }
 
 /** The folder Helm's device key and pinned host key live in. */
@@ -240,11 +282,12 @@ const CONFIG_READ_ONLY = 'FLOTI_CONFIG_READ_ONLY'
 
 /**
  * The environment both programs run with. The installed app uses the host's
- * own folders, so it passes its environment as it is; every other run moves
- * the host's folders inside Helm's data directory, so a dev or check run never
- * meets the user's real host. The config folder is the one exception, in every
- * run: it is the folder holding Helm's templates folder, which is all the
- * host keeps there.
+ * own folders, so it passes its environment as it is, its config folder
+ * included: the host's own rule (`~/.config/floti`, or `~/.config/helm` where
+ * only Helm's is there) picks the same folder for the host Helm starts as for
+ * the one started at sign-in. Every other run moves the host's folders inside
+ * Helm's data directory, so a dev or check run never meets the user's real
+ * host, except the config folder: the folder holding Helm's templates folder.
  *
  * A development run (`pnpm dev`, `dev:live`, every check) sets
  * `FLOTI_CONFIG_READ_ONLY`, because its config folder can be the installed
@@ -271,7 +314,8 @@ export function hostEnvironment(
   const inherited = withoutAppImage(deps.env)
   const { [CONFIG_READ_ONLY]: _inherited, ...env } =
     node === null ? inherited : { ...inherited, FLOTI_NODE: node }
-  if (places.appMode === 'installed') return { ...env, FLOTI_CONFIG_DIR: config }
+  // The host's own rule decides, as it does for the host started at sign-in.
+  if (places.appMode === 'installed') return env
   const root = paths.join(places.dataDir, 'host')
   return {
     ...env,

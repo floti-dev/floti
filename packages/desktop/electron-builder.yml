@@ -73,8 +73,10 @@ publish: null
 
 win:
   # The local host, built and staged by scripts/stage-floti.mjs. Lands at
-  # `process.resourcesPath/floti.exe`, where `flotiBinary` looks for it.
-  # electron-builder adds these to the
+  # `process.resourcesPath/floti.exe` (`carriedFloti`), which is only what
+  # the installer lays down: `floti install-self` copies it, with the Node
+  # beside it, to %LOCALAPPDATA%\Programs\Floti\bin, and Helm runs floti
+  # from there (`flotiBinary`). electron-builder adds these to the
   # top-level extraResources rather than replacing them. Beside it, the pinned
   # Node runtime it runs plugin services on (`node/node.exe`) and Node's LICENSE.
   # In a release, also the SHA-256 list of every floti the release carries
@@ -132,11 +134,12 @@ nsis:
   runAfterFinish: true
   createStartMenuShortcut: true
   createDesktopShortcut: false
-  # Before replacing anything, asks this PC's local host, through the floti.exe
-  # the installer carries (dist-host/floti.exe), how many sessions it runs and,
-  # when it runs any, says that installing ends them; OK stops the host for an
-  # update, Cancel quits. A running floti.exe
-  # cannot be replaced. Named rather than left to the `build/installer.nsh`
+  # Once the files are in place, runs `floti install-self` from the installed
+  # resources\floti.exe: floti and its Node go to
+  # %LOCALAPPDATA%\Programs\Floti\bin, that folder onto the user's PATH, and
+  # `floti setup` runs from there. Stops no host: only a host still running
+  # from inside the install folder, from a Helm before this, is asked about
+  # and stopped first. Named rather than left to the `build/installer.nsh`
   # default, so a moved file fails the build. docs/PACKAGING.md has the rest.
   include: build/installer.nsh
 

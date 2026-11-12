@@ -10,6 +10,7 @@ import {
   LocalHostError,
   LocalHostRefusedError,
   SOCKET_PATH_MAX,
+  carriedFloti,
   clientFolder,
   desktopArgs,
   desktopProgram,
@@ -20,6 +21,7 @@ import {
   localHostRestartFrame,
   restartLocalHost,
   restartOffer,
+  standaloneFloti,
   startLocalHost,
   withoutAppImage,
   type HostPlaces,
@@ -158,6 +160,33 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       expect(flotiBinary(mac, { platform: 'linux', env: {} })).toBe('/src/helm/target/debug/floti')
     })
 
+    it('runs floti installed on its own once the installed app uses it, and the carried one until then', () => {
+      const installed: HostPlaces = { ...WIN_PLACES, appMode: 'installed', packaged: true }
+      const env = { LOCALAPPDATA: 'C:\\Users\\Me Too\\AppData\\Local' }
+      const carried = 'C:\\Program Files\\Helm\\resources\\floti.exe'
+      expect(flotiBinary(installed, { platform: 'win32', env })).toBe(carried)
+      expect(flotiBinary({ ...installed, useStandalone: true }, { platform: 'win32', env })).toBe(
+        'C:\\Users\\Me Too\\AppData\\Local\\Programs\\Floti\\bin\\floti.exe'
+      )
+      // The carried one stays what Settings > Hosts sends and install-self copies.
+      expect(carriedFloti({ ...installed, useStandalone: true }, { platform: 'win32', env })).toBe(carried)
+      // With no folder of the user's to name, the carried one.
+      expect(flotiBinary({ ...installed, useStandalone: true }, { platform: 'win32', env: {} })).toBe(carried)
+    })
+
+    it('finds floti installed on its own where the install scripts put it', () => {
+      expect(standaloneFloti({ platform: 'win32', env: { LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local' } })).toBe(
+        'C:\\Users\\me\\AppData\\Local\\Programs\\Floti\\bin\\floti.exe'
+      )
+      expect(standaloneFloti({ platform: 'win32', env: { USERPROFILE: 'C:\\Users\\me' } })).toBe(
+        'C:\\Users\\me\\AppData\\Local\\Programs\\Floti\\bin\\floti.exe'
+      )
+      expect(standaloneFloti({ platform: 'win32', env: {} })).toBeNull()
+      expect(standaloneFloti({ platform: 'darwin', env: { HOME: '/Users/me' } })).toBe('/Users/me/.local/bin/floti')
+      expect(standaloneFloti({ platform: 'linux', env: { HOME: '/home/me' } })).toBe('/home/me/.local/bin/floti')
+      expect(standaloneFloti({ platform: 'linux', env: {} })).toBeNull()
+    })
+
     it('keeps the client’s keys in host-client inside Helm’s data directory', () => {
       expect(clientFolder(WIN_PLACES, 'win32')).toBe(`${WIN_PLACES.dataDir}\\host-client`)
       expect(clientFolder({ ...WIN_PLACES, dataDir: '/home/me/.config/Helm' }, 'linux')).toBe(
@@ -199,7 +228,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
         { ...shared, appMode: 'installed' },
         { platform: 'win32', env: inherited, tmpdir: () => 'C:\\Temp' }
       )
-      expect(installed).toEqual({ PATH: 'x', FLOTI_CONFIG_DIR: 'C:\\Users\\me\\.config\\helm' })
+      expect(installed).toEqual({ PATH: 'x' })
       const portable = hostEnvironment(
         { ...WIN_PLACES, appMode: 'portable' },
         { platform: 'win32', env: inherited, tmpdir: () => 'C:\\Temp' }
@@ -207,16 +236,16 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       expect(portable).not.toHaveProperty('FLOTI_CONFIG_READ_ONLY')
     })
 
-    it('leaves the installed app on the host’s own folders but the config folder, which holds Helm’s templates', () => {
+    it('leaves the installed app on the host’s own folders, its config folder included, as the host started at sign-in is', () => {
       const env = hostEnvironment(
         { ...WIN_PLACES, appMode: 'installed', templatesDir: 'C:\\Users\\me\\.config\\helm\\templates' },
         { platform: 'win32', env: { PATH: 'x' }, tmpdir: () => 'C:\\Temp' }
       )
-      expect(env).toEqual({ PATH: 'x', FLOTI_CONFIG_DIR: 'C:\\Users\\me\\.config\\helm' })
+      expect(env).toEqual({ PATH: 'x' })
     })
 
-    it('points the host’s config folder at the folder holding Helm’s templates folder in every run', () => {
-      for (const appMode of ['installed', 'portable', 'dev', 'dev-live'] as const) {
+    it('points the host’s config folder at the folder holding Helm’s templates folder in every other run', () => {
+      for (const appMode of ['portable', 'dev', 'dev-live'] as const) {
         const env = hostEnvironment(
           { ...WIN_PLACES, dataDir: '/home/me/.config/Helm', appMode, templatesDir: '/home/me/.config/helm/templates' },
           { platform: 'linux', env: {}, tmpdir: () => '/tmp' }
@@ -333,8 +362,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
         PATH: '/home/me/.local/bin:/usr/bin',
         XDG_DATA_DIRS: '/usr/local/share:/usr/share:/usr/share/gnome:/usr/local/share/:/usr/share/',
         MANPATH: `${mount}/usr/share/man`,
-        HOME: '/home/me',
-        FLOTI_CONFIG_DIR: '/home/me/.config/helm'
+        HOME: '/home/me'
       })
 
       // A folder whose name only starts like the mount's is not inside it.

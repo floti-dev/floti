@@ -89,6 +89,7 @@ pub mod doctor;
 pub mod error;
 pub mod history;
 pub mod host_log;
+pub mod install_self;
 pub mod keep_awake;
 pub mod keeper;
 pub mod keys;

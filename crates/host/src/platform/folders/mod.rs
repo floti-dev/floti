@@ -5,11 +5,12 @@
 //! `~/Library/Application Support/Floti` on macOS and `$XDG_DATA_HOME/floti`
 //! (default `~/.local/share/floti`) on Linux, with logs in
 //! `~/.local/state/floti` there. What the user writes lives in
-//! `~/.config/floti` on every OS.
+//! `~/.config/floti` on every OS, or `~/.config/helm` where only Helm's is
+//! there ([`config_folder`]).
 //!
 //! Each OS's layout is plain path arithmetic over a [`UserEnv`], so all three
 //! are compiled and tested on every OS; the build picks one as [`Native`].
-//! Resolving touches nothing on disk: whoever uses a folder creates it.
+//! Resolving creates nothing on disk: whoever uses a folder creates it.
 //!
 //! [`resolve`] applies the overrides first. `FLOTI_DATA_DIR`,
 //! `FLOTI_LOG_DIR`, `FLOTI_CONFIG_DIR` and `FLOTI_RUNTIME_DIR` each move one
@@ -116,11 +117,25 @@ pub trait FolderLayout {
     fn resolve(&self, env: &UserEnv) -> Result<Folders>;
 }
 
-/// The user's own files, on every OS: `~/.config/floti`, beside today's
-/// `~/.config/helm`.
+/// The user's own files, on every OS: `~/.config/floti`, or
+/// `~/.config/helm` on a computer where only that one is there, which Helm
+/// set up before the name changed and where its agents, templates and
+/// plugins still are. Whether a host was started by the desktop, at
+/// sign-in or by hand, it then reads one folder. This is the one look at
+/// the disk resolving makes, and it creates nothing.
 pub fn config_folder(home: &Path) -> PathBuf {
-    home.join(".config").join("floti")
+    let config = home.join(".config");
+    let floti = config.join("floti");
+    let helm = config.join(HELM_CONFIG_FOLDER);
+    if !floti.is_dir() && helm.is_dir() {
+        helm
+    } else {
+        floti
+    }
 }
+
+/// The folder in `~/.config` Helm kept the user's own files in.
+pub const HELM_CONFIG_FOLDER: &str = "helm";
 
 /// The variables that move one folder each.
 pub const DATA_DIR_VAR: &str = "FLOTI_DATA_DIR";

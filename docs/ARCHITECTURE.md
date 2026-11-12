@@ -52,8 +52,14 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   one has exited (`main/reopen.ts`). Helm never stops the host on its own: its deliberate quit sends `host:quit`
   and lets go, only Settings' Stop host (after saying how many sessions it
   ends) sends `host:stop`, and a host Helm started (`floti host --desktop`)
-  exits by itself once it runs nothing and no client is attached. An update
-  stops a host through `floti update-stop --stop`
+  exits by itself once it runs nothing and no client is attached. Installing
+  the desktop app stops no host: the installed app runs floti from the user's
+  own folder, outside its install (`floti install-self`, PACKAGING.md's
+  "floti in your own folder"), and a running copy there is renamed aside, so
+  the old host runs on until Restart host to update hands its sessions to the
+  new one through the keeper. An update that replaces floti on another host,
+  and the one install over a Helm whose host ran from inside its install
+  folder, stop the host through `floti update-stop --stop`
   (`crates/host/src/update_stop.rs`), asked first when it would end sessions,
   and their rows stay running, so the next host offers them back. `floti
   update` (`crates/host/src/update`) replaces the floti binary, then the
@@ -192,8 +198,10 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#helm-browser).
   Helm's data folder only at Helm's start
   (`createServices`), each only where every owning process is provably dead.
   `EPERM` counts as alive; unknown means keep.
-- Templates live in `~/.config/helm/templates` (`helm-data/templates` when
-  portable; `templatesDir` in `paths.ts`), which the host reads and seeds at
+- Templates live in `templates` in the host's config folder: for the
+  installed app `~/.config/floti`, or `~/.config/helm` where only that one is
+  there; otherwise the folder holding `templatesDir` in `paths.ts`
+  (`helm-data/templates` when portable). The host reads and seeds them at
   its start. The shipped README and example are written only when the
   directory is absent, and nothing there is ever overwritten. The in-app
   Templates manager makes templates (from a folder too, `template:fromFolder`),

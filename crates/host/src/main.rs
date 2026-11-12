@@ -37,7 +37,12 @@
 //! to run when it is not, registers the host to start at this user's sign-in
 //! and starts it in the signed-in session; on a Linux server it first turns lingering on, so the
 //! host runs with nobody signed in, and `--linger` or `--no-linger` chooses
-//! either way on any Linux computer. A host started by the OS's mechanism
+//! either way on any Linux computer. `floti install-self` puts the floti
+//! that runs it, with the Node beside it, where the install scripts put
+//! floti, renaming aside a running copy there rather than ending it, puts
+//! that folder on the user's PATH on Windows, and runs `floti setup` from
+//! there: the desktop's installer and the desktop run it from the floti they
+//! carry. A host started by the OS's mechanism
 //! exits with status 0 whenever it is stopped on purpose, so the systemd
 //! unit's restart on failure starts again only a host that crashed or was
 //! killed. In WSL, where systemd's user manager does not answer, setup
@@ -80,7 +85,7 @@ use floti_host::keep_awake::run_keep_awake;
 use floti_host::version;
 use floti_host::{ALREADY_RUNNING_EXIT, DesktopCommand, Error, HostOptions, log_line};
 
-const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger]\n       floti update [--channel <name>]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop [--keep] [--json] <name>\n       floti session title <text>";
+const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger]\n       floti install-self\n       floti update [--channel <name>]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop [--keep] [--json] <name>\n       floti session title <text>";
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
@@ -145,6 +150,7 @@ fn main() -> ExitCode {
             println!("{}", version::version_line());
             ExitCode::SUCCESS
         }
+        ["install-self"] => ExitCode::from(floti_host::install_self::run()),
         ["setup", flags @ ..] => match floti_host::setup::parse_linger(flags) {
             Some(linger) => ExitCode::from(floti_host::setup::run_setup(linger)),
             None => usage(),

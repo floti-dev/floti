@@ -63,6 +63,22 @@ gets skipped.
   opens without it.
 - Helm and its host speak Floti protocol 3.0. A desktop or host on an earlier
   release is refused at connect with a sentence saying which side to update.
+- Installing Helm on Windows puts floti where the install script does,
+  `%LOCALAPPDATA%\Programs\Floti\bin`, adds that folder to your PATH and sets
+  the host up to start when you sign in, so another computer that reaches
+  this one over ssh finds `floti` and the host already running. On macOS and
+  Linux Helm puts floti in `~/.local/bin` and sets the host up the first time
+  it starts, and again whenever it carries a newer floti. Helm runs that floti
+  from then on.
+- Installing an update no longer stops the host or ends a session: the host
+  keeps running until you choose Restart host to update, which hands every
+  session to the new host. The one exception is the first install over a
+  Helm whose host runs from inside its own install folder: that host is asked
+  about and stopped first, as before, and its sessions are offered back.
+- The portable exe installs nothing and runs the floti inside it.
+- A host started at sign-in reads the same agents, templates and plugins as
+  the one Helm starts: `~/.config/floti`, or `~/.config/helm` where only that
+  one is there.
 
 ## 2.4.1-preview.11
 

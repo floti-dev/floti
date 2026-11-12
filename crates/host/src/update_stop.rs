@@ -1,7 +1,9 @@
 //! `floti update-stop <client folder> --ask | --stop`: what Helm's Windows
-//! installer runs, from the copy of `floti` already installed, before it
-//! replaces anything. A running `floti.exe` cannot be replaced, and stopping
-//! the host ends every session it runs, so the installer asks first.
+//! installer runs, from the copy of `floti` it carries, before it replaces
+//! anything, when a host from inside the old install folder still runs: the
+//! old version's uninstaller would force-stop it, ending every session it
+//! runs, so the installer asks first. A host running from floti installed on
+//! its own (`floti install-self`) is never asked or stopped by an install.
 //!
 //! It connects as `floti bridge` does, with the keys in Helm's client folder,
 //! so the device key never leaves this process. Unlike the bridge it never

@@ -129,6 +129,8 @@ function installerChecks(setupExe) {
   const installDir = installedAppDir()
   const installedExe = join(installDir, 'Helm.exe')
   const uninstaller = join(installDir, 'Uninstall Helm.exe')
+  // Where `floti install-self` puts floti, as the install script does.
+  const ownFloti = join(localAppData, 'Programs', 'Floti', 'bin', 'floti.exe')
   const startMenu = join(
     process.env.APPDATA ?? '',
     'Microsoft',
@@ -200,6 +202,7 @@ function installerChecks(setupExe) {
   endInstalledApp(installDir)
 
   const installed = existsSync(installedExe)
+  const flotiInPlace = existsSync(ownFloti)
   const shortcutCreated = existsSync(startMenu)
   const desktopShortcutCreated = !desktopShortcutBefore && existsSync(desktopShortcut)
   const registry = readUninstallRegistry()
@@ -258,6 +261,7 @@ function installerChecks(setupExe) {
       title: `Installed to ${installDir}, ran, and uninstalled`,
       ok:
         installed &&
+        flotiInPlace &&
         !elevated &&
         installDir.toLowerCase().startsWith(localAppData.toLowerCase()) &&
         selftest !== null &&
@@ -278,6 +282,7 @@ function installerChecks(setupExe) {
         installDir,
         installedExe,
         installed,
+        ownFloti: { path: ownFloti, putThereByInstall: flotiInPlace },
         replacedExistingInstall: alreadyInstalled,
         installedMode: selftest?.mode ?? null,
         installedDataDir: selftest?.dataDir ?? null,
@@ -301,6 +306,7 @@ function installerChecks(setupExe) {
         'Installed silently as the ordinary user. This shell is not elevated, and a per-machine installer would fail here rather than prompt, so "no elevation" is the reason it worked rather than an assumption.',
         'The installed app is asked for the same selftest the portable exe ran, and it reports its own mode and data directory, which are compared against %APPDATA%\\Helm.',
         'Nothing landed beside the exe: the install directory holds no helm-data, no .db and no WAL.',
+        'The install put floti in %LOCALAPPDATA%\\Programs\\Floti\\bin and ran floti setup from there, which also put that folder on the user\'s PATH and registered the logon task "Floti host". The uninstaller leaves all three for now; docs/PACKAGING.md lists them.',
         'A start-menu entry is created and a desktop icon deliberately is not. Both are checked, and the uninstall has to take back the one it made.',
         'An empty install directory counts as removed: NSIS deletes every file it installed but cannot remove the folder its own uninstaller is running out of, so an empty shell is the ordinary successful outcome.',
         '%APPDATA%\\Helm is deliberately NOT removed by the uninstaller. deleteAppDataOnUninstall stays false: the database holds the user\'s profiles, session index and config snapshots, and an uninstall is not a request to destroy them.',

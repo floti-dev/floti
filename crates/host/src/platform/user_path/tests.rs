@@ -89,6 +89,27 @@ fn windows_fix_appends_the_folder_to_the_users_value_as_written_and_keeps_it_exp
     assert!(!fix.contains("SetEnvironmentVariable"));
 }
 
+#[test]
+fn windows_add_appends_the_folder_to_the_value_as_written_with_no_empty_entry() {
+    let folder = r"C:\Users\me\AppData\Local\Programs\Floti\bin";
+    assert_eq!(
+        windows::with_folder(Some(r"%USERPROFILE%\.local\bin;C:\tools;"), folder),
+        format!(r"%USERPROFILE%\.local\bin;C:\tools;{folder}")
+    );
+    assert_eq!(windows::with_folder(Some(""), folder), folder);
+    assert_eq!(windows::with_folder(None, folder), folder);
+}
+
+#[test]
+fn macos_and_linux_add_changes_no_startup_file() {
+    let dirs = TestDirs::new();
+    let user = env(Some(&dirs.home), &[("SHELL", "/bin/bash")]);
+    let folder = dirs.home.join(".local").join("bin");
+    assert_eq!(linux::Native.add(&user, &folder), Ok(false));
+    assert_eq!(macos::Native.add(&user, &folder), Ok(false));
+    assert!(std::fs::read_dir(&dirs.home).unwrap().next().is_none());
+}
+
 #[cfg(windows)]
 #[test]
 fn windows_reads_a_string_value_and_says_none_for_one_that_is_not_there() {

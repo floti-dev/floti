@@ -100,8 +100,12 @@ ubuntu-latest runner has them). The one thing compiled on purpose is the
 `scripts/stage-floti.mjs`, which builds it in release with the Rust toolchain
 `rust-toolchain.toml` names and copies it to `packages/desktop/dist-host/`.
 electron-builder carries it beside the app, at `resources\floti.exe` on
-Windows, `Contents/Resources/floti` on macOS and `resources/floti` on Linux,
-where the app looks for it. A release build carries the release's own floti
+Windows, `Contents/Resources/floti` on macOS and `resources/floti` on Linux.
+The installed app runs none of it there: that copy is only what is put in
+place as floti installed on its own (see
+[floti in your own folder](#floti-in-your-own-folder)), and the file
+Settings > Hosts sends a host of this computer's OS and CPU. The portable exe
+runs the copy inside it. A release build carries the release's own floti
 instead of building it again (see [floti for every host](#floti-for-every-host)),
 with the release's SHA-256 list beside it as `floti-SHA256SUMS`; a local build
 carries no list.
@@ -280,7 +284,10 @@ variable: set, they live in `<exe dir>\helm-data\templates`, so **a portable
 install keeps its templates on the stick and leaves nothing on a machine it is
 plugged into**; unset, they live in `~/.config/helm/templates` rather than under
 `%APPDATA%`, because a template is a directory somebody authors by hand and
-likely keeps in git. One rule, four run modes, and no second override
+likely keeps in git. The installed app is the exception: its host keeps its
+own config folder, `~/.config/floti`, or `~/.config/helm` where only that one
+is there, so its templates are in `templates` there, as a host started at
+sign-in reads them. One rule, four run modes, and no second override
 mechanism - `pnpm dev` and every check get a templates directory of their own
 for free, because both already set that variable for the database.
 
@@ -298,7 +305,7 @@ Where each run keeps its data, on each OS (`appMode` in `paths.ts` decides):
 | `pnpm dev` | `%LOCALAPPDATA%\Helm\dev\helm-data` | `~/Library/Application Support/Helm Dev/dev/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/Helm/dev/helm-data` |
 | checks | `%LOCALAPPDATA%\Helm\checks\<name>\helm-data` | `~/Library/Application Support/Helm Dev/checks/<name>/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/Helm/checks/<name>/helm-data` |
 | `pnpm dev:live` | the installed app's own | the installed app's own | the installed app's own |
-| templates | `~/.config/helm/templates`; `helm-data/templates` when portable | `~/.config/helm/templates` | `~/.config/helm/templates` |
+| templates | `~/.config/floti/templates`, or `~/.config/helm/templates` where only Helm's folder is there; `helm-data/templates` when portable | the same, without portable | the same, without portable |
 
 Templates are `helm-data/templates` in the run's own folder for `pnpm dev` and
 every check, on every OS.
@@ -318,17 +325,32 @@ every check, on every OS.
   the start-menu shortcut and the uninstall registry entry are gone and that the
   data directory is not.
 - **No desktop shortcut.** A start-menu entry is enough.
-- **It stops this PC's local host first, after saying what that ends.**
-  `floti.exe` runs the sessions and can outlive Helm, and a running
-  `floti.exe` cannot be replaced. electron-builder's
-  own check would force-stop every process under the install folder, the host
-  included, ending its sessions without a word. So `build/installer.nsh`
-  (`nsis.include`) defines `customCheckAppRunning`, which, when a Helm with a
-  `resources\floti.exe` is installed, runs the floti.exe **this installer
-  carries** before anything is replaced. The installer embeds
-  `dist-host\floti.exe`, the same file it installs, and writes it to its own
-  temporary folder, so the first update over a Helm whose floti.exe predates
-  `update-stop` asks too.
+- **It puts floti where the install script does, and runs the same setup.**
+  Once the app's files are in place, `build/installer.nsh` (`nsis.include`)
+  runs `floti install-self` from the installed `resources\floti.exe`: floti
+  and its Node go to `%LOCALAPPDATA%\Programs\Floti\bin`, that folder goes on
+  the user's PATH, and `floti setup` runs from there
+  ([floti in your own folder](#floti-in-your-own-folder) has each step). A
+  failure there does not fail the install; it is in the details log, and
+  Helm tries again when it starts.
+- **It stops no host, and ends no session.** The host and its session keeper
+  run from `%LOCALAPPDATA%\Programs\Floti\bin`, outside the install folder,
+  so neither electron-builder's own check, which force-stops every process
+  run from inside the install folder, nor the previous version's
+  uninstaller, which does the same, reaches them. A running `floti.exe`
+  there is renamed aside rather than replaced, and keeps running until
+  Helm's Restart host to update hands its sessions to the new host through
+  the keeper.
+- **Once, it stops a host from inside the old install, after saying what
+  that ends.** A Helm from before this ran its host from
+  `resources\floti.exe` inside the install folder, and the previous
+  version's uninstaller, which runs before any of this version's files are
+  written, force-stops it and its keeper whatever this installer does. So
+  `customCheckAppRunning` first checks whether that file is in use (it cannot
+  be opened for writing while any process runs it), and only then runs the
+  floti.exe **this installer carries**: it embeds `dist-host\floti.exe`, the
+  same file it installs, and writes it to its own temporary folder, so an
+  installed floti.exe that predates `update-stop` is asked too.
   `floti update-stop "%APPDATA%\Helm\host-client" --ask` connects with Helm's
   client folder keys, as `floti bridge` does, so the device key never leaves
   that process, and it never pins a host. When the host runs sessions it
@@ -340,14 +362,73 @@ every check, on every OS.
   so Helm's next start offers them back once) and returns once the host has
   exited. A host running no session (status 7) is stopped the same way with
   no question. Anything else asks nothing and leaves the host to the default
-  check: no `floti.exe` installed yet, no host answering (status 3), a client
-  folder that has pinned no host yet (status 4) or a host it cannot talk to. Then electron-builder's own check runs, which the macro
-  still inserts, with the `getProcessInfo.nsh` include and `Var pid` that
-  defining the macro drops. A silent install (`/S`) answers OK, as that check
-  does. The uninstaller runs the default check alone. On macOS and Linux files
-  are replaced under a running host and nothing stops it. The decision is
-  tested in `crates/host` (`update_stop.rs` and `tests/update_stop.rs`);
+  check: no host answering (status 3), a client folder that has pinned no
+  host yet (status 4) or a host it cannot talk to. Then electron-builder's
+  own check runs, which the macro still inserts, with the `getProcessInfo.nsh`
+  include and `Var pid` that defining the macro drops. A silent install
+  (`/S`) answers OK, as that check does. The uninstaller runs the default
+  check alone. The decision is tested in `crates/host` (`update_stop.rs` and
+  `tests/update_stop.rs`), `install-self` in `tests/install_self.rs`;
   nothing in the suite runs an installer.
+
+### floti in your own folder
+
+The installed app's floti is floti installed on its own, where the install
+scripts put it: `%LOCALAPPDATA%\Programs\Floti\bin\floti.exe` on Windows,
+`~/.local/bin/floti` on macOS and Linux. So a computer has one floti however
+Floti came to it, the host started at sign-in is that one, and
+`ssh <computer> floti version` finds it. `floti install-self`
+(`crates/host/src/install_self.rs`), run from the floti the app carries,
+puts it there:
+
+1. floti is copied beside the one there under a name of its own, then put in
+   its place. On Windows a running `floti.exe` there is renamed aside
+   (`floti.old-<pid>-<n>.exe`) and keeps running; on macOS and Linux the new
+   file is renamed over the old, which leaves a running process its own
+   copy. A copy there that is this one byte for byte is left as it is, and
+   copies put aside earlier are removed once nothing runs them.
+2. The Node runtime beside the carried floti goes, file by file the same
+   way, into `node` beside the installed one, where the host looks for it. A
+   `node` there that is not a folder (a file or a link of the user's own) is
+   left as it is, and said so; plugin services of a host started from there
+   then have no Node.
+3. On Windows, when the folder is not on the user's PATH, it is appended to
+   their `Path` value as written, kept an expandable string, and Explorer is
+   told the environment changed, so a terminal or an ssh login started after
+   it finds `floti`. On macOS and Linux no startup file is changed, as after
+   the install script; `floti doctor` gives the line.
+4. `floti setup` runs from the installed floti, which registers it to start
+   the host at sign-in and starts it. A host already running keeps running.
+
+Who runs it:
+
+- **Windows:** the NSIS installer, after the app's files are in place.
+- **Every OS:** the installed app when it starts, before it reaches the local
+  host (`src/main/host/local-floti.ts`), when the floti there is missing,
+  does not say its version, or is older than the app. The dmg and the
+  AppImage have no installer, so on macOS and Linux this is how it gets
+  there; on Windows it puts back one that was removed. A floti there that is
+  as new as the app or newer, such as one `floti update` replaced, is left as
+  it is. When it cannot be put there the app runs the floti it carries, and
+  its log says why.
+- **The portable exe** installs nothing and runs the floti inside it, with
+  its data beside it, as before.
+
+The host's config folder is `~/.config/floti`, or `~/.config/helm` on a
+computer where only that one is there, which Helm set up before the rename
+and where its agents, templates and plugins are. The installed app gives its
+host no config folder of its own, so the host it starts and the host started
+at sign-in read the same one.
+
+What it adds outside the install folder, which uninstalling the app leaves
+for now (`floti uninstall` removes it, in a later piece):
+
+| What | Where |
+|---|---|
+| floti, copies of it put aside, and its Node | `%LOCALAPPDATA%\Programs\Floti\bin\` (`floti.exe`, `floti.old-*.exe`, `node\`); `~/.local/bin/floti` and `~/.local/bin/node/` |
+| The PATH entry (Windows) | that folder, appended to `Path` in `HKEY_CURRENT_USER\Environment` |
+| The start-at-sign-in entry | the logon task "Floti host" and its XML under the data folder's `startup\`; the LaunchAgent `~/Library/LaunchAgents/dev.floti.host.plist`; the user unit `~/.config/systemd/user/floti.service` |
+| The host's data | `%LOCALAPPDATA%\Floti`, `~/Library/Application Support/Floti`, `~/.local/share/floti` and `~/.local/state/floti`, kept as Helm's data is |
 
 ## Releasing
 

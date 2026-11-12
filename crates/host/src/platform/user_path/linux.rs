@@ -35,4 +35,9 @@ impl UserPath for Native {
     fn fix(&self, env: &UserEnv, folder: &Path) -> String {
         posix::fix(env, folder)
     }
+
+    fn add(&self, _env: &UserEnv, _folder: &Path) -> Result<bool, String> {
+        // A startup file is the user's own: doctor gives the line to add.
+        Ok(false)
+    }
 }

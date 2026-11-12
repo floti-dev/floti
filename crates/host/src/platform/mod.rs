@@ -25,6 +25,7 @@ pub mod process_tree;
 pub mod secret_seal;
 pub mod shell_folders;
 pub mod socket;
+pub mod standalone;
 pub mod standard_error;
 pub mod startup;
 pub mod terminal_size;

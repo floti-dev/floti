@@ -396,6 +396,10 @@ impl UserPath for FakePath {
     fn fix(&self, _env: &UserEnv, folder: &Path) -> String {
         format!("add {}", folder.display())
     }
+
+    fn add(&self, _env: &UserEnv, _folder: &Path) -> Result<bool, String> {
+        unreachable!("doctor only looks")
+    }
 }
 
 #[test]
