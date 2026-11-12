@@ -1345,7 +1345,12 @@ half-working, and the next run carries on where it stopped:
    place so the wait is for the uninstall itself (without `_?=` NSIS copies
    itself to `%TEMP%` and returns at once); it removes the app, its Start menu
    entry and its uninstall registry entry, and what it leaves of its folder
-   goes after it. A run whose `Helm.exe` is still there afterwards fails.
+   goes after it. A file there that Windows or an antivirus still holds just
+   after the uninstaller exits (refused with access denied or a sharing
+   violation) is tried again for up to five seconds, with a pause that
+   doubles, before the run fails on it (`platform/held_files`, which
+   `floti install-self` and `floti update` rename through too). A run whose
+   `Helm.exe` is still there afterwards fails.
    On macOS the `.app`; on Linux the AppImage, `applications/helm.desktop`
    and the icon. **The desktop app's own settings stay**: they are the app's,
    where the app keeps them, which the host never learns, and its uninstaller

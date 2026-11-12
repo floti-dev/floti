@@ -13,7 +13,8 @@
 //! distros (`wsl`), the folders a shell hides in (`shell_folders`), the
 //! shell that runs a command line (`command_shell`), the user's own `PATH`
 //! (`user_path`), putting an update in place (`installs`) and floti
-//! installed on its own (`standalone`). A compile-time OS
+//! installed on its own (`standalone`) and a file something holds for a
+//! moment (`held_files`). A compile-time OS
 //! conditional (`cfg`, `cfg!` or `cfg_attr` naming `windows`, `unix`, `target_os`,
 //! `target_family`, `target_vendor` or `target_env`) may appear only in
 //! those folders, and in `src/platform/mod.rs`, which refuses any other OS.
@@ -43,6 +44,7 @@ const CONCERNS: &[&str] = &[
     "command_shell",
     "installs",
     "standalone",
+    "held_files",
 ];
 
 /// The words that make a `cfg` depend on the OS.

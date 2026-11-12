@@ -22,7 +22,9 @@
 //!    makes `floti connect` start the host. Lingering on Linux is a per-user
 //!    setting other services may rely on, so it is left on, and said so.
 //! 4. The desktop app ([`Installs::removal`]): on Windows by its own NSIS
-//!    uninstaller, run silently and waited for; the `.app` on macOS; the
+//!    uninstaller, run silently and waited for, then what it leaves of its
+//!    folder, waiting out a file still held for a moment after it exits
+//!    ([`held_files::remove_tree`]); the `.app` on macOS; the
 //!    AppImage, its menu entry and icon on Linux. The app's own settings are
 //!    the app's, kept where the app alone knows, and are left, which one line
 //!    says.
@@ -81,6 +83,7 @@ use crate::connect::START_ON_CONNECT_FILE;
 use crate::host_log::LOG_FILE;
 use crate::install_self::remove_copies;
 use crate::platform::folders::{self, DATA_DIR_VAR, FolderLayout, Folders, UserEnv};
+use crate::platform::held_files;
 use crate::platform::installs::{self, Desktop, Installs};
 use crate::platform::launcher::{self, ProgramLauncher};
 use crate::platform::links::{self, remove_tree};
@@ -502,8 +505,11 @@ fn desktop_app(
             gone.display()
         ));
     }
+    // The uninstaller has exited (`run_uninstaller` waits for it), but its
+    // own exe can stay held for a moment after, by Windows or an antivirus
+    // scan, so a held file is waited out before the removal fails.
     for path in &removal.remove {
-        remove_tree(&links::Native, path)
+        held_files::remove_tree(&links::Native, path)
             .map_err(|why| format!("desktop app: could not remove {}: {why}", path.display()))?;
     }
     say(format!(
