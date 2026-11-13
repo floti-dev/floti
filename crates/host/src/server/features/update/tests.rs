@@ -30,7 +30,7 @@ fn at(second: i64) -> Timestamp {
 
 const T0: i64 = 1_800_000_000;
 const UPDATE: u32 = 7001;
-const WAITING: &str = "Waiting for Helm to quit; it is updated once it has.";
+const WAITING: &str = "Waiting for Floti to quit; it is updated once it has.";
 
 /// What a start does to the data folder, as `floti update` would.
 type OnStart = Box<dyn FnMut(&Path) + Send>;

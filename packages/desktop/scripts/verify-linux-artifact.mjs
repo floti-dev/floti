@@ -20,7 +20,7 @@
 //   module compiled on a newer system than that is one the app cannot load
 //   on an older one, and Helm then dies at start; the release builds it in an
 //   old enough container, and this is what proves it did;
-// - its menu entry (`helm.desktop`) starts it without `--no-sandbox`, so
+// - its menu entry (`floti-desktop.desktop`) starts it without `--no-sandbox`, so
 //   launching it from a desktop integration keeps Chromium's sandbox.
 //
 //   node scripts/verify-linux-artifact.mjs <AppImage> [--floti <file>] [--sums <file>]
@@ -170,11 +170,11 @@ export function appProblems(root, { floti, sums, origin, modes = process.platfor
     }
   }
 
-  const program = join(root, 'helm')
+  const program = join(root, 'floti-desktop')
   if (!existsSync(program)) fail("helm, the app's executable, is missing")
   else {
-    x64Linux(program, 'helm')
-    executable(program, 'helm')
+    x64Linux(program, 'floti-desktop')
+    executable(program, 'floti-desktop')
   }
 
   const resources = join(root, 'resources')
@@ -205,12 +205,12 @@ export function appProblems(root, { floti, sums, origin, modes = process.platfor
     }
   }
 
-  const entry = join(root, 'helm.desktop')
-  if (!existsSync(entry)) fail('helm.desktop, the menu entry, is missing')
+  const entry = join(root, 'floti-desktop.desktop')
+  if (!existsSync(entry)) fail('floti-desktop.desktop, the menu entry, is missing')
   else {
     const exec = /^Exec=(.*)$/m.exec(readFileSync(entry, 'utf8'))
-    if (exec === null) fail('helm.desktop has no Exec line')
-    else if (/(^|\s)--no-sandbox(\s|$)/.test(exec[1])) fail(`helm.desktop starts Helm with --no-sandbox (Exec=${exec[1]})`)
+    if (exec === null) fail('floti-desktop.desktop has no Exec line')
+    else if (/(^|\s)--no-sandbox(\s|$)/.test(exec[1])) fail(`floti-desktop.desktop starts Floti with --no-sandbox (Exec=${exec[1]})`)
   }
 
   const node = join(resources, 'node', 'bin', 'node')

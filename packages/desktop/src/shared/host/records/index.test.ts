@@ -255,7 +255,7 @@ describe('a host profile, as the window reads it', () => {
   })
 })
 
-describe('a window settings patch, split between the host and Helm', () => {
+describe('a window settings patch, split between the host and Floti', () => {
   it('keeps what quitting does on this device, never in the host', () => {
     const split = splitSettingsPatch({ quitSessions: { local: 'keep' }, scanRoots: ['/work'] })
 
@@ -264,7 +264,7 @@ describe('a window settings patch, split between the host and Helm', () => {
     expect(split.host).not.toHaveProperty('quitSessions')
   })
 
-  it('sends whether to look for updates to the host, which keeps it, and lays the host\'s value over Helm\'s', () => {
+  it('sends whether to look for updates to the host, which keeps it, and lays the host\'s value over Floti\'s', () => {
     const split = splitSettingsPatch({ updateCheck: false, theme: 'dark' })
 
     expect(split.host).toEqual({ updateCheck: false })

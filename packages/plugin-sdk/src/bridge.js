@@ -14,7 +14,7 @@ export function bridge() {
   )
   const found = page.floti ?? page.helm
   if (found === undefined) {
-    throw new Error('window.floti and window.helm are both missing: this page is not being served by Helm')
+    throw new Error('window.floti and window.helm are both missing: this page is not being served by Floti')
   }
   return found
 }

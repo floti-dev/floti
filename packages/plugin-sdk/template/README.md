@@ -48,5 +48,5 @@ starting Helm. `npm install` also puts the SDK where the manifest's `$schema`
 points, so your editor completes and checks `helm-plugin.json`. Helm itself
 needs neither: it runs the plugin from this folder as it is.
 
-The authoring guide is the README of `@coledtaylor/helm-plugin-sdk`, in
-`node_modules/@coledtaylor/helm-plugin-sdk/README.md` once it is installed.
+The authoring guide is the README of `@floti-dev/plugin-sdk`, in
+`node_modules/@floti-dev/plugin-sdk/README.md` once it is installed.

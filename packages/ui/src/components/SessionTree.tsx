@@ -632,10 +632,10 @@ function HostFlotiLabel({
     floti.verdict === 'tooOld' ? 'floti too old' : floti.verdict === 'older' ? 'older floti' : 'newer floti'
   const said =
     floti.verdict === 'tooOld'
-      ? `Its floti speaks protocol ${floti.host}; this Helm speaks ${floti.client}.`
+      ? `Its floti speaks protocol ${floti.host}; this Floti speaks ${floti.client}.`
       : floti.verdict === 'older'
-        ? `It runs floti ${floti.host}; this Helm carries ${floti.client}.`
-        : `It speaks protocol ${floti.host}; this Helm speaks ${floti.client}. Update Helm on this PC.`
+        ? `It runs floti ${floti.host}; this Floti carries ${floti.client}.`
+        : `It speaks protocol ${floti.host}; this Floti speaks ${floti.client}. Update Floti on this PC.`
   if (onUpdate === undefined) {
     return (
       <span data-host-floti={floti.verdict} className="shrink-0 font-normal text-warn" title={said}>
@@ -711,7 +711,7 @@ function RemoteEmpty({
           </button>
         }
       >
-        {`Helm could not read the folders on ${host.name}. ${host.scanError}`}
+        {`Floti could not read the folders on ${host.name}. ${host.scanError}`}
       </EmptyWell>
     )
   }

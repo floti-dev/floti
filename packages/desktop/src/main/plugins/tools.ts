@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { ToolSession } from '@coledtaylor/helm-plugin-sdk'
-import type { NormalizedAgentTool } from '@coledtaylor/helm-plugin-sdk/manifest'
+import type { ToolSession } from '@floti-dev/plugin-sdk'
+import type { NormalizedAgentTool } from '@floti-dev/plugin-sdk/manifest'
 import { PLUGIN_TOOL_ANSWER_MAX_CHARS, type PluginToolCall, type PluginToolOutcome } from '../../shared/ipc'
 
 /**
@@ -21,7 +21,7 @@ export interface ToolServer {
   plugin: string
   /** The plugin's name, for the instructions a session reads. */
   name: string
-  /** `helm-plugin-<id>`. */
+  /** `floti-plugin-<id>`. */
   server: string
   instructions: string | null
   tools: NormalizedAgentTool[]
@@ -132,7 +132,7 @@ export function createToolCalls(options: {
     },
 
     shutdown() {
-      for (const id of [...inFlight.keys()]) abandon(id, 'Helm is shutting down.')
+      for (const id of [...inFlight.keys()]) abandon(id, 'Floti is shutting down.')
     },
 
     pending: () => inFlight.size

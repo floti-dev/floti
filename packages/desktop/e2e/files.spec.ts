@@ -19,7 +19,7 @@ const test = base.extend({
     mkdirSync(join(alpha, 'src'))
     writeFileSync(join(alpha, 'src', 'app.ts'), text(LINES))
     const git = (...args: string[]): void => {
-      execFileSync('git', ['-c', 'user.name=Helm Tests', '-c', 'user.email=tests@helm.invalid', ...args], {
+      execFileSync('git', ['-c', 'user.name=Floti Tests', '-c', 'user.email=tests@helm.invalid', ...args], {
         cwd: alpha,
         stdio: 'ignore'
       })

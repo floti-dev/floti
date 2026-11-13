@@ -140,7 +140,7 @@ describe('PluginFrame', () => {
 
 describe('PluginsUnavailable', () => {
   it('says in the surface’s own place that the local host could not be reached, and why', () => {
-    const why = 'Helm could not reach the local host (it is not running); turn it off.'
+    const why = 'Floti could not reach the local host (it is not running); turn it off.'
     render(<PluginsUnavailable reason={why} />)
     expect(screen.getByText('The local host could not be reached')).toBeTruthy()
     expect(screen.getByText(why)).toBeTruthy()

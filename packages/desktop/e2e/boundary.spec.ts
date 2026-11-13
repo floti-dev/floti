@@ -185,8 +185,8 @@ test('plugin pages of both versions, a version 1 background page, a tool called 
 
   const run = await claudeRunIn(world, world.projects.alpha)
   const config = readMcpConfig(run.argv[run.argv.indexOf('--mcp-config') + 1] ?? '')
-  const plugin = config.mcpServers['helm-plugin-sample']
-  if (plugin === undefined) throw new Error(`no helm-plugin-sample in ${JSON.stringify(config)}`)
+  const plugin = config.mcpServers['floti-plugin-sample']
+  if (plugin === undefined) throw new Error(`no floti-plugin-sample in ${JSON.stringify(config)}`)
   // The sample's background module answers the session's call.
   const answered = await callTool(plugin.url, bearerOf(plugin), 'list_items', { unreadOnly: true })
   expect(answered.isError).toBe(false)

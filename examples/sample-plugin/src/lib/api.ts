@@ -1,4 +1,4 @@
-import type { SettingValue } from '@coledtaylor/helm-plugin-sdk'
+import type { SettingValue } from '@floti-dev/plugin-sdk'
 
 /**
  * The sample server's API, through `floti.fetch`: the pages' and the

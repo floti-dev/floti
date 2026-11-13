@@ -301,7 +301,7 @@ mod tests {
                 && id
                     .bytes()
                     .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')),
-            "32 lowercase hex digits, as Helm's own plugin host mints: {id}"
+            "32 lowercase hex digits, as Floti's own plugin host mints: {id}"
         );
         assert_eq!(started[0].name, "alpha");
         assert_eq!(started[0].cwd, "/work/alpha");

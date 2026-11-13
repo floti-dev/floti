@@ -16,7 +16,7 @@ describe('BrowserOff', () => {
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeTruthy()
   })
 
-  it('says how to turn it on without a command where Helm could not write one', async () => {
+  it('says how to turn it on without a command where Floti could not write one', async () => {
     const onReadMore = vi.fn()
     const { container } = render(<BrowserOff command={null} onCopy={() => Promise.resolve(true)} onReadMore={onReadMore} />)
 

@@ -41,7 +41,7 @@ together. The agent tools listener's token and origin rules are in
   and those only to a page in the Browser tab that has the keyboard. Only the
   address bar searches, on Enter, with the engine in `browserSearch` (`off`
   refuses); nothing is sent while typing.
-- No web page runs without Chromium's OS sandbox. A Linux Helm started with
+- No web page runs without Chromium's OS sandbox. A Linux Floti started with
   `--no-sandbox` (an AppImage's AppRun adds it where user namespaces are
   refused) opens no browser view and gives no session the browser tools, and
   the Browser tab shows the AppArmor profile that turns the sandbox on
@@ -51,11 +51,11 @@ together. The agent tools listener's token and origin rules are in
 ## The plugin secret store
 
 - The plugin secret store (`crates/host/src/plugins/secrets`) is the one
-  place Helm keeps a secret of the user's, and only one the user typed into
+  place Floti keeps a secret of the user's, and only one the user typed into
   it; Floti's own keys are below. Each value
   is sealed by this OS's store for the user (`platform/secret_seal`) and
   refused when it cannot be; a value is filled in by the host, for an origin
-  and a plugin the user allowed, and never sent to any client. Helm never reads a Claude or GitHub credential to put there.
+  and a plugin the user allowed, and never sent to any client. Floti never reads a Claude or GitHub credential to put there.
 
 ## The release signing key
 

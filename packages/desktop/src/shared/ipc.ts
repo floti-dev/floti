@@ -64,7 +64,7 @@ import type {
   SettingValue,
   SurfaceKind,
   ToolSession
-} from '@coledtaylor/helm-plugin-sdk'
+} from '@floti-dev/plugin-sdk'
 import type {
   PluginInfo,
   PluginLogLine,
@@ -1063,7 +1063,7 @@ export interface IpcRequests {
    * check it names is the host's (`update:check` in `crates/floti-protocol`).
    *
    * **The host's update check, at most once a day to floti.dev and to the
-   * GitHub release it names, is the only request Helm makes on its own
+   * GitHub release it names, is the only request Floti makes on its own
    * initiative; the app itself contacts nothing.
    * Everything else on the network happens because you asked for it: Check
    * now and Update ask the host to check or to update, the browser pane
@@ -1071,11 +1071,11 @@ export interface IpcRequests {
    * its manifest names, and a host you added on another computer is reached
    * through your own ssh, or the command you gave.**
    *
-   * **Helm listens only on this machine.** Its windows reach the local host
+   * **Floti listens only on this machine.** Its windows reach the local host
    * over the host's local socket, which only your OS account can open. The
    * local host listens on `127.0.0.1` for its sessions' agent tools, behind a
    * token minted for each session and revoked when it ends, and holds no port
-   * while no tool family is on. Helm's own process listens on `127.0.0.1` only
+   * while no tool family is on. Floti's own process listens on `127.0.0.1` only
    * for a port you forwarded from a session on another computer, and closes it
    * when that session ends.
    *

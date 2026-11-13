@@ -5,7 +5,7 @@ secrets, programs, services and their pages' `fetch`. Main keeps the
 `floti-plugin://` and `helm-plugin://` schemes (`main/plugins/protocol.ts`),
 the hidden plugin host window (`main/plugins/background.ts`) and the tool
 relay (`main/host/plugin-tools.ts`); the window draws their pages.
-`packages/plugin-sdk` holds the manifest validator Helm loads with, so a
+`packages/plugin-sdk` holds the manifest validator Floti loads with, so a
 manifest change starts there. `apiVersion` is 1 or 2, and both load side by
 side; anything else is an error in Settings, never a crash.
 
@@ -32,8 +32,8 @@ Floti runs one. A plugin's agent tools are served by the host's listener, in
 
 ## The SDK
 
-The SDK is published to npm as `@coledtaylor/helm-plugin-sdk`, and authors
-start with `npx @coledtaylor/helm-plugin-sdk create`. It ships what `files` in
+The SDK is published to npm as `@floti-dev/plugin-sdk`, and authors
+start with `npx @floti-dev/plugin-sdk create`. It ships what `files` in
 its `package.json` lists, and nothing it ships may reach outside its own
 folder: run through npx, that folder is a cache.
 
@@ -64,8 +64,8 @@ folder: run through npx, that folder is a cache.
 - Frames live outside React (`app/pluginFrames.ts`) and move between slots
   with `moveBefore`; `appendChild` would reload them. One relay
   (`renderer/src/plugins/relay.ts`) per page owns every frame's port.
-- A plugin's failure shows in its own surface (`PluginFrame`), never in Helm's
-  chrome, and never takes Helm down.
+- A plugin's failure shows in its own surface (`PluginFrame`), never in Floti's
+  chrome, and never takes Floti down.
 - A plugin with `pageStrip` has one `plugin-pages` tab whose ref holds its
   pages (`core/layout/pluginPages.ts`), never a tab per page. A page's frame
   key is its `pluginPageId`, never shaped like a plugin tab's, and a page's
@@ -98,19 +98,19 @@ folder: run through npx, that folder is a cache.
   never sends a running session anything: a session calls it, not the other
   way round.
 - A tool its manifest marks `readOnly` is listed with `readOnlyHint` and
-  passed as `--allowedTools mcp__helm-plugin-<id>__<tool>` to the sessions
-  Helm starts, fixed at launch; Settings marks it. Every other tool asks, and
+  passed as `--allowedTools mcp__floti-plugin-<id>__<tool>` to the sessions
+  Floti starts, fixed at launch; Settings marks it. Every other tool asks, and
   a deny rule of the user's still wins.
 
 ## Sessions and links
 
 - A plugin whose `sessions` lists `start` may ask to start one (`sessions.start`): only from
   a click in its page (the relay checks the window's user activation), and
-  only once the user agrees in Helm's dialog, which shows the folder, name,
+  only once the user agrees in Floti's dialog, which shows the folder, name,
   first message and command. The host composes the launch from what it
   checked and holds; the window answers
   yes or no, on the connection it was asked on, and never says what to run.
-- A plugin whose `sessions` lists `list` sees Helm's sessions since it opened
+- A plugin whose `sessions` lists `list` sees Floti's sessions since it opened
   (`sessions.list`, the `sessions` event), shaped by the host
   (`server/features/plugins/sessions.rs`), whose shape has no field for
   anything of a conversation: no argv, conversation id or `waitingFor`. A
@@ -123,4 +123,4 @@ folder: run through npx, that folder is a cache.
 
 ## Development
 
-- `HELM_PLUGINS` registers folders in a dev build only.
+- `FLOTI_PLUGINS` registers folders in a dev build only.

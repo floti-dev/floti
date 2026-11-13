@@ -1,4 +1,4 @@
-//! helm-sessions: what the other sessions on this machine are doing, and the
+//! floti-sessions: what the other sessions on this machine are doing, and the
 //! caller's own title, served to the host's sessions on the agent tools
 //! listener at `/mcp/sessions`, under today's name and with today's tools and
 //! instructions (`session_tools.json`).
@@ -60,7 +60,7 @@ use crate::session::describe::{
 /// instructions and each tool's name, description and input schema, from
 /// `session_tools.json`, the one table the desktop's own listener reads too,
 /// so a session is told the same thing by either and the user's
-/// `mcp__helm-sessions__*` permission rules apply unchanged.
+/// `mcp__floti-sessions__*` permission rules apply unchanged.
 #[derive(Debug, Deserialize)]
 struct Table {
     name: String,
@@ -87,7 +87,7 @@ const SESSION_DETAIL: &str = "session_detail";
 const SESSION_TITLE: &str = "session_title";
 
 /// The family's name, as `session_tools.json` gives it.
-pub(crate) const SESSIONS_FAMILY: &str = "helm-sessions";
+pub(crate) const SESSIONS_FAMILY: &str = "floti-sessions";
 
 /// The command that runs `session_title` from a session's shell.
 pub(crate) const TITLE_COMMAND: &str = "floti session title";
@@ -96,11 +96,11 @@ pub(crate) const TITLE_COMMAND: &str = "floti session title";
 /// sentence rather than a failure that sticks: the session's tools work once
 /// the listing is ready.
 const STILL_STARTING: &str =
-    "Helm cannot answer that right now - it is still starting up. Try again in a moment.";
+    "Floti cannot answer that right now - it is still starting up. Try again in a moment.";
 
 /// The answer to `session_detail` with no pid from a token with no live
 /// session behind it.
-const NO_LIVE_SESSION: &str = "Helm has no live session for this token, which should not happen while your session is running. Call sessions_list to see what it does have.";
+const NO_LIVE_SESSION: &str = "Floti has no live session for this token, which should not happen while your session is running. Call sessions_list to see what it does have.";
 
 /// What one processes-and-ports pass answers, as a future the world can box.
 pub(crate) type PassFuture<'a> = Pin<Box<dyn Future<Output = Vec<SessionResources>> + Send + 'a>>;

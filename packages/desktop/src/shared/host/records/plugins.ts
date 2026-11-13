@@ -1,4 +1,4 @@
-import type { SettingSpec } from '@coledtaylor/helm-plugin-sdk'
+import type { SettingSpec } from '@floti-dev/plugin-sdk'
 import type { PluginBackgroundReport, PluginDelivery, PluginInfo, PluginLogLine, PluginUiRequest } from '../../ipc'
 import { LOCAL_HOST_KEY } from '@helm/core/types'
 import { onHostOrigin } from '../../plugins/origin'

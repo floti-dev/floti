@@ -3,6 +3,7 @@
 type Env = Readonly<Record<string, string | undefined>>
 
 export function realDataDirFor(platform: NodeJS.Platform, env: Env, home: string): string
+export function helmDataDirFor(platform: NodeJS.Platform, env: Env, home: string): string
 export function isolatedBaseFor(platform: NodeJS.Platform, env: Env, home: string): string
 export function realDataDir(): string
 export const UI_STATE_KEYS: string[]

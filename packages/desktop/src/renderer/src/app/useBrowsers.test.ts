@@ -230,7 +230,7 @@ describe('useBrowsers - the mirror of what main holds', () => {
     })
     act(() => result.current.navigate(5, 'localhost:3000'))
     await waitFor(() =>
-      expect(result.current.views.get(5)?.problem).toBe('Helm could not navigate this tab: the main process said no')
+      expect(result.current.views.get(5)?.problem).toBe('Floti could not navigate this tab: the main process said no')
     )
   })
 })

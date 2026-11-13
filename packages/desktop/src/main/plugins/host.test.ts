@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, WebContents } from 'electron'
-import type { HelmTheme } from '@coledtaylor/helm-plugin-sdk'
+import type { HelmTheme } from '@floti-dev/plugin-sdk'
 import type { PluginToolCall } from '../../shared/ipc'
 import type { PluginHost } from './host'
 import type { BackgroundHost } from './background'
@@ -110,8 +110,8 @@ describe("a session's call to a plugin's tool", () => {
     const waiting = runTool()
     await vi.waitFor(() => expect(toolCalls()).toHaveLength(2), { timeout: PATIENCE })
     host.shutdown()
-    await expect(waiting).resolves.toEqual({ ok: false, message: 'Helm is shutting down.' })
-    expect(await runTool()).toEqual({ ok: false, message: 'Helm is shutting down.' })
+    await expect(waiting).resolves.toEqual({ ok: false, message: 'Floti is shutting down.' })
+    expect(await runTool()).toEqual({ ok: false, message: 'Floti is shutting down.' })
     expect(closed).toBeGreaterThan(0)
   })
 })

@@ -17,7 +17,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('the xterm Helm builds on', () => {
+describe('the xterm Floti builds on', () => {
   it('keeps its viewport and its renderer’s screen size where the scrollbar is kept in step through them', () => {
     // jsdom has no media queries; xterm asks one for the pixel ratio.
     vi.stubGlobal('matchMedia', (query: string) => ({

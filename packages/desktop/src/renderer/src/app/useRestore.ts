@@ -86,7 +86,7 @@ export function restoreReport(
     const reopened = `Reopened ${plural(result.restored.length, 'session', 'sessions')}`
     parts.push(
       lostWith === undefined
-        ? `${reopened} Helm was running when it closed.`
+        ? `${reopened} Floti was running when it closed.`
         : `${reopened} ${lostWith} was running when it stopped.`
     )
   }

@@ -488,7 +488,7 @@ describe('sessions over the window’s own connection', () => {
     const quitQuestion = (id: number): SessionConfirmRequest => ({
       id,
       kind: 'quit',
-      message: 'Quitting Helm ends 2 sessions on this PC’s host.',
+      message: 'Quitting Floti ends 2 sessions on this PC’s host.',
       detail: 'End and quit stops them.',
       confirmLabel: 'End and quit',
       keepLabel: 'Keep running and quit',

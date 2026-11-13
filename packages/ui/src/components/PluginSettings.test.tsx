@@ -59,7 +59,7 @@ describe('PluginsPage', () => {
   })
 
   it('says the local host could not be reached and why, rather than that there are no plugins', () => {
-    const why = 'Helm could not reach the local host (it is not running); turn it off.'
+    const why = 'Floti could not reach the local host (it is not running); turn it off.'
     render(<PluginsPage plugins={null} unavailable={why} addError={null} onAdd={vi.fn()} onOpen={vi.fn()} />)
     expect(screen.getByText('The local host could not be reached')).toBeTruthy()
     expect(screen.getByText(why)).toBeTruthy()
@@ -191,7 +191,7 @@ describe('PluginPage: what it may reach', () => {
     expect(document.querySelector('[data-plugin-sees-sessions]')).toBeNull()
     cleanup()
     renderPage({ plugin: plugin({ seesSessions: true }) })
-    expect(group('plugin-sessions').textContent).toContain('Sees the sessions Helm starts')
+    expect(group('plugin-sessions').textContent).toContain('Sees the sessions Floti starts')
     expect(document.querySelector('[data-plugin-starts-sessions]')).toBeNull()
   })
 
@@ -233,7 +233,7 @@ describe('PluginPage: what it may reach', () => {
 describe('PluginPage: its tools for sessions', () => {
   const agent: NonNullable<PluginInfo['agent']> = {
     enabled: true,
-    server: 'helm-plugin-sample',
+    server: 'floti-plugin-sample',
     instructions: 'Use these for items.',
     tools: [
       { name: 'list_items', description: 'Lists the items.', readOnly: true },
@@ -249,7 +249,7 @@ describe('PluginPage: its tools for sessions', () => {
       'create_itemAdds an item.'
     ])
     expect(tools.querySelector('[data-plugin-tools-state]')?.textContent).toBe(
-      'Sessions Helm starts get them as helm-plugin-sample. Turning this off takes them from sessions already running.'
+      'Sessions Floti starts get them as floti-plugin-sample. Turning this off takes them from sessions already running.'
     )
     expect(within(tools).getByRole<HTMLInputElement>('checkbox', { name: 'Offer to sessions' }).checked).toBe(true)
   })

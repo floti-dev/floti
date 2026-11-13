@@ -1,6 +1,6 @@
 //! The instructions Floti writes itself into the sessions it hosts, beside a
 //! profile's and an agent's: what a child is told about the session that started
-//! it, the ask to title itself for every session given helm-sessions, and a
+//! it, the ask to title itself for every session given floti-sessions, and a
 //! short guide to `floti agent` for every session given the agents family.
 //!
 //! The text is the host's, so every adapter composes the same words; what
@@ -46,7 +46,7 @@ pub const ANSWERS_AT_ONCE: &str = "`floti agent wait` answers at once with your 
 /// the same sentence.
 pub const PACING: &str = "Keep only as many children working at once as their work and the machine can carry, and when the machine is short of memory, run work that builds or tests one at a time.";
 
-/// What a session given helm-sessions is asked about its title.
+/// What a session given floti-sessions is asked about its title.
 const TITLE_SECTION: &str = "# This session's title\n\nOnce you know what this session is for, give it a title: call session_title, or run `floti session title \"<title>\"` from your shell. Give it a new one whenever the work changes. The user sees it beside the session's name in the sessions list and in History, so say what is being done, such as \"Agents page: edit and delete agents\", and never the folder's name. One line, at most 60 characters.\n";
 
 /// The most characters of a parent's name put into a child's instructions.
@@ -54,7 +54,7 @@ const NAME_CHARS: usize = 80;
 
 /// The sections Floti adds to the instructions `composition` is launched with,
 /// or `None` when it adds none: the child instructions for a child, the ask
-/// to keep a title for a session given helm-sessions, then the guide for a
+/// to keep a title for a session given floti-sessions, then the guide for a
 /// session given the agents family. `waiting` is the adapter's sentence on
 /// waiting, and `messaging` its sentence on messaging a child its own way,
 /// when it has one.

@@ -31,7 +31,7 @@ describe('the README', () => {
     const moving = section('### Moving a version 1 plugin to version 2')
     expect(moving).toContain('"apiVersion": 2')
     expect(moving).toContain('`floti.fetch(...)`')
-    expect(moving).toContain('`@coledtaylor/helm-plugin-sdk/background`')
+    expect(moving).toContain('`@floti-dev/plugin-sdk/background`')
   })
 
   it("S6: documents the background as a module in the host's isolate, with what it can and cannot reach", () => {
@@ -50,7 +50,7 @@ describe('the README', () => {
     const types = section('## TypeScript')
     expect(types).toContain('FlotiBridge')
     expect(types).toContain('FlotiBackground')
-    expect(types).toContain('/// <reference types="@coledtaylor/helm-plugin-sdk/background" />')
+    expect(types).toContain('/// <reference types="@floti-dev/plugin-sdk/background" />')
     // The manifest table names both versions.
     expect(section('## The manifest')).toContain('Required. `2`, or `1`')
   })

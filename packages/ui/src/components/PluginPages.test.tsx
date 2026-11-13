@@ -48,7 +48,7 @@ describe('PluginPages', () => {
     const props = renderPages()
     await userEvent.click(screen.getByRole('tab', { name: /^HELM-13/ }))
     expect(props.onActivate).toHaveBeenCalledWith(PAGES[2]!.id)
-    await userEvent.click(screen.getByRole('button', { name: 'Close Helm' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Close Floti' }))
     expect(props.onClose).toHaveBeenCalledWith(PAGES[0]!.id)
   })
 

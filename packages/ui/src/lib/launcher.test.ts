@@ -206,7 +206,7 @@ describe('launchSentence for a session started as an agent', () => {
           resume: null,
           model: null,
           effort: null,
-          agent: { name: 'worker', allowedTools: [], disallowedTools: ['mcp__helm-plugin-trackr__create'], canStart: false },
+          agent: { name: 'worker', allowedTools: [], disallowedTools: ['mcp__floti-plugin-trackr__create'], canStart: false },
           worktree: {
             folder: `${repo('orbit-api')}\\.floti\\worktrees\\orbit-api`,
             branch: 'agent/orbit-api',
@@ -215,7 +215,7 @@ describe('launchSentence for a session started as an agent', () => {
         })
       )
     ).toBe(
-      "Runs `claude` in a new worktree, `~\\.harness\\dev\\repos\\orbit-api\\.floti\\worktrees\\orbit-api` on branch `agent/orbit-api` cut from `main`, as the worker agent, and `--permission-mode acceptEdits --disallowedTools mcp__helm-plugin-trackr__create`. Its instructions go in after the project's; nothing is typed into the terminal. It gets no floti-agents tools."
+      "Runs `claude` in a new worktree, `~\\.harness\\dev\\repos\\orbit-api\\.floti\\worktrees\\orbit-api` on branch `agent/orbit-api` cut from `main`, as the worker agent, and `--permission-mode acceptEdits --disallowedTools mcp__floti-plugin-trackr__create`. Its instructions go in after the project's; nothing is typed into the terminal. It gets no floti-agents tools."
     )
   })
 

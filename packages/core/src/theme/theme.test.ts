@@ -193,7 +193,7 @@ describe('parseThemeFile', () => {
     expect(parsed.theme.problems.join('\n')).toMatch(/colours.*not a theme field/)
     expect(parsed.theme.problems.join('\n')).toMatch(/bg: "midnight" is not a colour/)
     expect(parsed.theme.problems.join('\n')).toMatch(/surface must be opaque/)
-    expect(parsed.theme.problems.join('\n')).toMatch(/sidebar.*not a colour Helm uses/)
+    expect(parsed.theme.problems.join('\n')).toMatch(/sidebar.*not a colour Floti uses/)
   })
 
   it('inherits every palette hue it does not set, and shows the one it does', () => {

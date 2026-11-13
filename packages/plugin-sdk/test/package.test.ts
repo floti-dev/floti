@@ -16,7 +16,7 @@ import { SDK_DIR } from './fixtures'
  * test reads nothing from the registry and leaves nothing in the user's cache.
  */
 
-const NAME = '@coledtaylor/helm-plugin-sdk'
+const NAME = '@floti-dev/plugin-sdk'
 
 /** npm's own script, beside the node running this. Spawning `npm.cmd` would need a shell. */
 // npm ships beside node: next to node.exe on Windows, and in
@@ -115,7 +115,7 @@ describe(`${NAME} as published`, () => {
 
     const validated = npm(['run', 'validate'], folder)
     expect(validated.status, validated.stderr).toBe(0)
-    expect(validated.stdout).toContain('Issue tracker (issue-tracker): Helm would load it.')
+    expect(validated.stdout).toContain('Issue tracker (issue-tracker): Floti would load it.')
 
     // Every export resolves from an installed copy, not just inside this repository.
     const exports = spawnSync(

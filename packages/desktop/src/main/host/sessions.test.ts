@@ -52,7 +52,7 @@ function world(
 ): World {
   const connection = options.connection === undefined ? new FakeConnection() : options.connection
   connection?.answer('session:list', () => options.listed ?? [])
-  const link = fakeLink(connection, 'Helm could not find the local host program at /nowhere/floti; turn it off.')
+  const link = fakeLink(connection, 'Floti could not find the local host program at /nowhere/floti; turn it off.')
   const emitted: World['emitted'] = []
   const asked: ConfirmRequest[] = []
   const notified: SessionRecord[] = []
@@ -300,7 +300,7 @@ describe('sessions through the local host', () => {
     expect(w.connection.streams).toEqual([])
   })
 
-  it('starts a plugin’s session in the host with the folder, name and first message the dialog showed, recorded as the project Helm knows there', async () => {
+  it('starts a plugin’s session in the host with the folder, name and first message the dialog showed, recorded as the project Floti knows there', async () => {
     const w = world()
     w.connection.answer('session:start', (request) => row({ id: 14, name: `${request.name ?? ''}-2`, cwd: request.cwd }))
     const record = await w.host.sessions.startWithPrompt({
@@ -349,7 +349,7 @@ describe('sessions through the local host', () => {
     const hostless = world({ connection: null })
     await expect(
       hostless.host.sessions.startWithPrompt({ cwd: '/work/app', name: 'x', prompt: 'hi', cols: 80, rows: 24 })
-    ).rejects.toThrow('Helm could not find the local host program at /nowhere/floti; turn it off.')
+    ).rejects.toThrow('Floti could not find the local host program at /nowhere/floti; turn it off.')
     expect(hostless.host.sessions.list()).toEqual([])
   })
 
@@ -384,7 +384,7 @@ describe('sessions through the local host', () => {
     expect(w.host.sessions.runningCount()).toBe(1)
   })
 
-  it('counts nothing as running once Helm is quitting, so closing the window asks nothing more', async () => {
+  it('counts nothing as running once Floti is quitting, so closing the window asks nothing more', async () => {
     const w = world()
     w.connection.answer('session:start', () => row())
     await w.connect()
@@ -510,13 +510,13 @@ describe('sessions through the local host', () => {
     expect(quitQuestion(w.host.sessions.list())).toEqual(
       expect.objectContaining({
         kind: 'quit',
-        message: 'Quitting Helm ends 2 sessions on this PC’s host.',
+        message: 'Quitting Floti ends 2 sessions on this PC’s host.',
         confirmLabel: 'End and quit',
         keepLabel: 'Keep running and quit'
       })
     )
     expect(quitQuestion(w.host.sessions.list().slice(0, 1)).message).toBe(
-      'Quitting Helm ends 1 session on this PC’s host.'
+      'Quitting Floti ends 1 session on this PC’s host.'
     )
     // Without a three-way question, a yes is End and a no is Cancel.
     await expect(w.host.askQuit()).resolves.toBe('end')
@@ -545,7 +545,7 @@ describe('sessions through the local host', () => {
     expect(quitQuestion([], [buildBox])).toEqual(
       expect.objectContaining({
         kind: 'quit',
-        message: 'Quitting Helm ends 2 sessions on build-box.',
+        message: 'Quitting Floti ends 2 sessions on build-box.',
         detail: expect.stringContaining('Keep running and quit leaves them running where they are, this once.'),
         confirmLabel: 'End and quit',
         keepLabel: 'Keep running and quit',
@@ -555,14 +555,14 @@ describe('sessions through the local host', () => {
     )
     expect(quitQuestion([], [lab])).toEqual(
       expect.objectContaining({
-        message: 'Quitting Helm ends 1 session on lab.',
+        message: 'Quitting Floti ends 1 session on lab.',
         detail: expect.stringContaining('leaves it running where it is, this once.'),
         otherNames: ['notes on lab']
       })
     )
     // A host with nothing running that this device started is not named.
     expect(quitQuestion([], [buildBox, { id: 'h-idle', name: 'idle-box', sessions: [] }]).message).toBe(
-      'Quitting Helm ends 2 sessions on build-box.'
+      'Quitting Floti ends 2 sessions on build-box.'
     )
 
     // This PC and two remote hosts: the total, then each host with its own count, this PC first.
@@ -571,7 +571,7 @@ describe('sessions through the local host', () => {
     const live = w.host.sessions.list()
     expect(quitQuestion(live, [buildBox, lab])).toEqual(
       expect.objectContaining({
-        message: 'Quitting Helm ends 4 sessions: 1 on this PC’s host, 2 on build-box and 1 on lab.',
+        message: 'Quitting Floti ends 4 sessions: 1 on this PC’s host, 2 on build-box and 1 on lab.',
         keepLabel: 'Keep running and quit',
         sessions: [expect.objectContaining({ id: live[0]?.id })],
         otherNames: ['tests on build-box', 'deploy on build-box', 'notes on lab']
@@ -582,10 +582,10 @@ describe('sessions through the local host', () => {
     await expect(w.host.askQuit({ local: false, remote: [buildBox] })).resolves.toBe('end')
     await expect(w.host.askQuit({ local: true, remote: [buildBox, lab] })).resolves.toBe('end')
     expect(w.asked).toEqual([
-      expect.objectContaining({ kind: 'quit', message: 'Quitting Helm ends 2 sessions on build-box.' }),
+      expect.objectContaining({ kind: 'quit', message: 'Quitting Floti ends 2 sessions on build-box.' }),
       expect.objectContaining({
         kind: 'quit',
-        message: 'Quitting Helm ends 4 sessions: 1 on this PC’s host, 2 on build-box and 1 on lab.'
+        message: 'Quitting Floti ends 4 sessions: 1 on this PC’s host, 2 on build-box and 1 on lab.'
       })
     ])
   })
@@ -688,7 +688,7 @@ describe('sessions through the local host', () => {
     const w = world({ connection: null })
 
     await expect(w.host.sessions.start({ cwd: '/work/app', cols: 80, rows: 24 })).rejects.toThrow(
-      'Helm could not find the local host program at /nowhere/floti'
+      'Floti could not find the local host program at /nowhere/floti'
     )
     expect(w.host.sessions.list()).toEqual([])
     expect(w.host.sessions.runningCount()).toBe(0)
@@ -737,7 +737,7 @@ describe('sessions through the local host', () => {
       expect(w.host.sessions.browserSessions()).toEqual([{ session: 7, name: 'app' }])
     })
 
-    it('ends a session’s identity, and so its shares, when it exits, when its tab is closed and when Helm quits', async () => {
+    it('ends a session’s identity, and so its shares, when it exits, when its tab is closed and when Floti quits', async () => {
       const w = world({
         listed: [row(), row({ id: 8, name: 'api' }), row({ id: 9, name: 'docs' })]
       })

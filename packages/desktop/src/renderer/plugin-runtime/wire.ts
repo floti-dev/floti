@@ -1,4 +1,4 @@
-import type { HelmContext, HelmErrorCode, HelmTheme, ToolSession } from '@coledtaylor/helm-plugin-sdk'
+import type { HelmContext, HelmErrorCode, HelmTheme, ToolSession } from '@floti-dev/plugin-sdk'
 
 /**
  * The messages between a plugin page's bridge and the Helm page framing it.

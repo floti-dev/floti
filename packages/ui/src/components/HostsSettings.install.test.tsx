@@ -84,7 +84,7 @@ describe('installing floti from a host’s row in Settings > Hosts', () => {
 
     const newer = screen.getByRole('group', { name: 'c' })
     expect(newer.querySelector('[data-settings-host-newer]')?.textContent).toContain(
-      'it speaks protocol 2.0, and this Helm speaks 1.0. Update Helm on this PC, then it connects.'
+      'it speaks protocol 2.0, and this Floti speaks 1.0. Update Floti on this PC, then it connects.'
     )
     expect(within(newer).queryByRole('button', { name: 'Update floti' })).toBeNull()
 
@@ -134,7 +134,7 @@ describe('updating an older floti from a connected host’s row in Settings > Ho
     const row = screen.getByRole('group', { name: 'build-box' })
     expect(within(row).getByText('Older floti')).toBeTruthy()
     expect(row.querySelector('[data-settings-host-older]')?.textContent).toBe(
-      'build-box runs floti 2.5.0, older than the floti 2.6.0 this Helm carries.'
+      'build-box runs floti 2.5.0, older than the floti 2.6.0 this Floti carries.'
     )
     await userEvent.click(within(row).getByRole('button', { name: 'Update floti' }))
     expect(install.check).toHaveBeenCalledWith({ host: 'h-build' })
@@ -212,7 +212,7 @@ describe('updating an older floti from a connected host’s row in Settings > Ho
     )
   })
 
-  it('a connected host on this Helm’s floti, or one that names no version, offers nothing', () => {
+  it('a connected host on this Floti’s floti, or one that names no version, offers nothing', () => {
     renderHosts(actions({ kind: 'ready', found: { version: '2.6.0', protocol: '3.1' }, system: NOT_FOUND_OFFER.system }), {
       hosts: [host({ state: 'connected', version: '2.6.0' })]
     })
@@ -297,13 +297,13 @@ describe('a floti update running from a host’s row, and how it ends', () => {
     expect(r.install.cancel).toHaveBeenCalledWith('offer-7')
     act(() => r.finish({ ok: null, ended: 'stoppedWaiting', lastLine: 'Downloading floti-2.6.0-linux-x64.' }))
     const notice = await screen.findByRole('status')
-    expect(notice.textContent).toContain('Helm stopped waiting for floti update on build-box')
+    expect(notice.textContent).toContain('Floti stopped waiting for floti update on build-box')
     expect(notice.textContent).toContain('It may still be running there.')
-    expect(within(notice).queryByRole('button', { name: 'Update from this Helm’s floti' })).toBeNull()
+    expect(within(notice).queryByRole('button', { name: 'Update from this Floti’s floti' })).toBeNull()
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('an update that found nothing newer is no failure, and an install from this Helm’s floti instead says first what it does', async () => {
+  it('an update that found nothing newer is no failure, and an install from this Floti’s floti instead says first what it does', async () => {
     const r = await startUpdate(UPDATE_OFFER)
     act(() => r.finish({ ok: null, ended: 'upToDate', lastLine: 'floti 2.5.0 is up to date on stable (its newest is 2.5.0).' }))
     const notice = await screen.findByRole('status')
@@ -312,7 +312,7 @@ describe('a floti update running from a host’s row, and how it ends', () => {
       'floti 2.5.0 is up to date on stable (its newest is 2.5.0).'
     )
     expect(screen.queryByRole('alert')).toBeNull()
-    await userEvent.click(within(notice).getByRole('button', { name: 'Update from this Helm’s floti' }))
+    await userEvent.click(within(notice).getByRole('button', { name: 'Update from this Floti’s floti' }))
     expect(r.install.check).toHaveBeenLastCalledWith({ host: 'h-build', install: true })
     const panel = (await screen.findByText('Update floti on build-box?')).closest('[data-settings-host-offer]') as HTMLElement
     expect(panel).toBeTruthy()

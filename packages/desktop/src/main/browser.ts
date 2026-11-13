@@ -774,7 +774,7 @@ function contentsOf(entry: View): WebContents | null {
 
 /** What opening a page answers while the pane is off. */
 export const BROWSER_OFF_PROBLEM =
-  "Helm is running without Chromium's sandbox, so it opens no web page. The Browser tab says how to turn the sandbox on."
+  "Floti is running without Chromium's sandbox, so it opens no web page. The Browser tab says how to turn the sandbox on."
 
 export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
   const views = new Map<number, View>()
@@ -906,7 +906,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     const until = entry.retry?.until ?? now + RETRY_FOR_MS
     if (now >= until) {
       stopRetry(entry)
-      entry.problem = `Nothing is listening at ${url}. Helm retried for ${String(
+      entry.problem = `Nothing is listening at ${url}. Floti retried for ${String(
         RETRY_FOR_MS / 1000
       )} seconds; press reload once the server is up.`
       announce(entry)
@@ -1225,7 +1225,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       if (typeof event.level !== 'string' || typeof event.message !== 'string') {
         log(entry, {
           level: 'error',
-          message: `console-message arrived in a shape Helm does not recognise: ${JSON.stringify(
+          message: `console-message arrived in a shape Floti does not recognise: ${JSON.stringify(
             Object.keys(event)
           )}`,
           source: 'helm',
@@ -1504,7 +1504,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
 
   /** The cap, said on the page that tried to open one more. */
   const refuseOverCap = (entry: View, url: string): WindowOpenHandlerResponse => {
-    entry.problem = `A page tried to open another tab and Helm is already holding ${String(
+    entry.problem = `A page tried to open another tab and Floti is already holding ${String(
       BROWSER_TABS_MAX
     )} browser tabs. Close one, or open the address in your own browser.`
     log(entry, {
@@ -1637,7 +1637,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       if (popupsOf(entry.id) >= BROWSER_POPUPS_MAX) {
         entry.problem = `This page has ${String(
           BROWSER_POPUPS_MAX
-        )} popup windows open already, which is the most Helm allows one tab. Close one, or open the address in your own browser.`
+        )} popup windows open already, which is the most Floti allows one tab. Close one, or open the address in your own browser.`
         log(entry, {
           level: 'warning',
           message: `window.open(${url}) refused: ${String(BROWSER_POPUPS_MAX)} popups is the cap`,
@@ -1673,7 +1673,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
 
     noteDownload(url: string) {
       for (const entry of views.values()) {
-        entry.problem = `Helm's browser does not download files. ${url} was handed to your own browser instead.`
+        entry.problem = `Floti's browser does not download files. ${url} was handed to your own browser instead.`
         log(entry, {
           level: 'warning',
           message: `download refused and handed to the system browser: ${url}`,
@@ -1691,7 +1691,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       if (views.size >= BROWSER_TABS_MAX) {
         return {
           state: null,
-          problem: `Helm holds at most ${String(BROWSER_TABS_MAX)} browser tabs. Close one first.`
+          problem: `Floti holds at most ${String(BROWSER_TABS_MAX)} browser tabs. Close one first.`
         }
       }
       const entry = create(project ?? null)
@@ -1957,7 +1957,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       if (views.size >= BROWSER_TABS_MAX) {
         return {
           state: null,
-          problem: `Helm is already holding ${String(
+          problem: `Floti is already holding ${String(
             BROWSER_TABS_MAX
           )} browser tabs, which is the cap. Close one of yours with browser_close, or ask the user to close one of theirs.`
         }
@@ -2163,14 +2163,14 @@ const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve,
 
 /** The two refusals a tool makes about a tab, as whole sentences. */
 const unknownTab = (id: number): string =>
-  `There is no browser tab ${String(id)} in Helm. Call browser_tabs to see what is open.`
+  `There is no browser tab ${String(id)} in Floti. Call browser_tabs to see what is open.`
 
 const notYours = (id: number, entry: View, asking: BrowserOpener): string =>
   entry.openedBy !== null
     ? `Browser tab ${String(id)} belongs to the session "${entry.openedBy.name}". A session may only drive the tabs it opened itself and the ones the user shares with it.`
     : entry.sharedWith?.opener.key === asking.key
       ? `Browser tab ${String(id)} is the user's. They shared it with this session to read and drive, and closing it is theirs.`
-      : `Browser tab ${String(id)} was opened by the user and is not shared with this session. Open your own with browser_open, or ask the user to share it from the Share button in Helm's browser bar.`
+      : `Browser tab ${String(id)} was opened by the user and is not shared with this session. Open your own with browser_open, or ask the user to share it from the Share button in Floti's browser bar.`
 
 /**
  * What a value evaluated to, as a string the panel can print.
@@ -2201,7 +2201,7 @@ function describeValue(value: unknown): string {
  */
 function certificateSentence(description: string, url: string): string {
   if (description.startsWith('ERR_CERT') || description.includes('CERT_')) {
-    return `${url} presented a certificate Helm will not accept (${description}). Self-signed certificates are accepted for localhost only, and there is no way past this - open the page in your own browser if you trust it.`
+    return `${url} presented a certificate Floti will not accept (${description}). Self-signed certificates are accepted for localhost only, and there is no way past this - open the page in your own browser if you trust it.`
   }
   return `${url} could not be loaded: ${description}.`
 }

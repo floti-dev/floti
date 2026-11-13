@@ -1,6 +1,6 @@
 # Architecture
 
-How Floti and Helm are put together: what each process owns, how sessions live
+How Floti and Floti are put together: what each process owns, how sessions live
 and end, what a window shows of them, and how the browser pane, overlays,
 templates, the Files view and the other surfaces behave. CLAUDE.md lists the
 rules an agent must not break; this is the behaviour behind them. The agent
@@ -10,11 +10,11 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
 
 ## Processes and what each owns
 
-- Every channel a Helm page uses is declared in `shared/ipc.ts`. The preload
+- Every channel a Floti page uses is declared in `shared/ipc.ts`. The preload
   exposes three generic functions; a feature adds a channel, not a bridge
   method. `term:*` (the spike page's single pty) and `session:*` (the host's
   sessions) never mix.
-- Each Helm page (the window, and the hidden plugin host window) reaches the
+- Each Floti page (the window, and the hidden plugin host window) reaches the
   host over its own protocol connection, which main pipes to a bridge unread
   (`hostLink:*`); the bridge holds the device key, never a window. Electron
   IPC carries only what `channels/boundary.rs` lists as client-only, and its
@@ -23,7 +23,7 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   any other channel at once. `e2e/boundary.spec.ts` fails naming any channel
   that crossed. Main runs no session, terminal, config reader, content,
   template or scan service of its own; those are the host's.
-- The host never opens `helm.db` or learns Helm's data folder. What only
+- The host never opens `helm.db` or learns Floti's data folder. What only
   `helm.db` holds (archived conversations whose transcript is gone, their
   usage, History's names) main reads through core's
   read-only pages (`store/copy.ts`) and sends on `carry:*`, in batches, until
@@ -42,16 +42,16 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   stop ends the keeper. Quitting a client ends the sessions it started only
   where its setting for that host says so; a crash ends nothing; stopping the
   host ends every session. The plain terminals a client opened end when it
-  quits. Helm's setting is `quitSessions`, kept in `helm.db` keyed by host
+  quits. Floti's setting is `quitSessions`, kept in `helm.db` keyed by host
   (this PC's is `local`, End when absent; a remote host's is its id, Keep when
   absent). Quitting with sessions it would end asks first: End and quit, Keep
   running and quit (this quit only, never written to the setting), or Cancel.
   A quit is held until every host has been told, so a reopen in that wait
-  (macOS's `activate`) opens no window in the quitting process; Helm calls
-  `app.relaunch()` as the quit finishes and a fresh Helm starts once the old
-  one has exited (`main/reopen.ts`). Helm never stops the host on its own: its deliberate quit sends `host:quit`
+  (macOS's `activate`) opens no window in the quitting process; Floti calls
+  `app.relaunch()` as the quit finishes and a fresh Floti starts once the old
+  one has exited (`main/reopen.ts`). Floti never stops the host on its own: its deliberate quit sends `host:quit`
   and lets go, only Settings' Stop host (after saying how many sessions it
-  ends) sends `host:stop`, and a host Helm started (`floti host --desktop`)
+  ends) sends `host:stop`, and a host Floti started (`floti host --desktop`)
   exits by itself once it runs nothing and no client is attached. Installing
   the desktop app stops no host: the installed app runs floti from the user's
   own folder, outside its install (`floti install-self`, PACKAGING.md's
@@ -63,7 +63,7 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   through the keeper, so it ends no session the new host takes back
   ([PACKAGING.md](PACKAGING.md#installing-floti-on-a-hosts-computer)). An
   update that installs over an older floti on another host,
-  and the one install over a Helm whose host ran from inside its install
+  and the one install over a Floti whose host ran from inside its install
   folder, stop the host through `floti update-stop --stop`
   (`crates/host/src/update_stop.rs`), asked first when it would end sessions,
   and their rows stay running, so the next host offers them back. `floti
@@ -80,7 +80,7 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   does not speak the keeper's link version, ends it and offers its sessions
   back in their tabs ([PACKAGING.md](PACKAGING.md#the-handover)). When the
   connection ends without a stop or a quit, the window keeps each tab's
-  screen, dimmed with input off, and Helm starts a new host if a desktop
+  screen, dimmed with input off, and Floti starts a new host if a desktop
   started the one that died, then reconnects. The new host's list decides
   each: a session or shell it still runs is carried again from its redraw, and
   nothing is resumed. One it lists lost, or that is lost while it stays (its
@@ -144,7 +144,7 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
 
 ## Live sessions
 
-- Helm renders nothing for a live session and answers no permission
+- Floti renders nothing for a live session and answers no permission
   prompt. The host reads one thing in a session's output, OSC 7501 status
   reports, kept as the program said them (a message cut to 200 characters),
   and draws no conclusion from
@@ -163,7 +163,7 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
 
 The browser's permissions and reach rule are in
 [SECURITY.md](SECURITY.md#browser-pane), and the browser tools agents drive it
-with in [AGENT-TOOLS.md](AGENT-TOOLS.md#helm-browser).
+with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
 
 - `will-navigate` and `setWindowOpenHandler` are denied on every web-contents
   in `main/index.ts`. Browser views are exempted by a `webContents.id` registry
@@ -191,7 +191,7 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#helm-browser).
   the whole window and there is no title bar.
 - The browser's keys are one table (`shared/browserKeys.ts`): main reads it in
   `before-input-event` for a key pressed in a page, the window for a key in
-  Helm's chrome, and both run the window's one dispatch. A key an agent sends
+  Floti's chrome, and both run the window's one dispatch. A key an agent sends
   (`agentInput`) is always the page's.
 - Hide a view with `setVisible(false)`, which keeps the page capturable,
   scriptable and clickable.
@@ -205,12 +205,12 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#helm-browser).
   one. `fs.rm` with `recursive: true` has been seen to go through a junction
   and empty the repository folder it points to.
 - Launch folders are swept only at host start, and overlay shims left in
-  Helm's data folder only at Helm's start
+  Floti's data folder only at Floti's start
   (`createServices`), each only where every owning process is provably dead.
   `EPERM` counts as alive; unknown means keep.
 - Templates live in `templates` in the host's config folder: for the
-  installed app `~/.config/helm` where that is there, else
-  `~/.config/floti`; otherwise the folder holding `templatesDir` in
+  installed app `~/.config/floti` (`~/.config/helm` until the host has moved Helm's folder
+  there, once, at its first start as Floti); otherwise the folder holding `templatesDir` in
   `paths.ts` (`helm-data/templates` when portable). The host reads and seeds them at
   its start. The shipped README and example are written only when the
   directory is absent, and nothing there is ever overwritten. The in-app
@@ -285,7 +285,7 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#helm-browser).
 - The Files view writes through `content:write`, and puts back a snapshot
   through `content:restore`. The host saves any file the view reads as text
   (the view offers Edit for a markdown note): snapshotted first, refused on a
-  hash conflict, scoped to the deepest folder Helm knows that holds the file.
+  hash conflict, scoped to the deepest folder Floti knows that holds the file.
   `ContentGuard` (`workspace/content/guard.rs`) refuses a relative path, a
   binary file, an agent's config and anything under `repos`, `.git`,
   `node_modules`, build output and the rest of its list. Everything else in

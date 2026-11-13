@@ -185,7 +185,7 @@ describe('the links to hosts on other computers', () => {
     expect(w.bridges[0]?.written).toEqual([new Uint8Array([1, 2, 3])])
   })
 
-  it('a connected host whose floti is older than this Helm’s says so, with this Helm’s version, and its connection is main’s', async () => {
+  it('a connected host whose floti is older than this Floti’s says so, with this Floti’s version, and its connection is main’s', async () => {
     const w = world()
     w.links.sync([BUILD, LAB])
     const older = hostWith()
@@ -416,7 +416,7 @@ describe('the links to hosts on other computers', () => {
     w.startFor(BUILD).reject(
       new RemoteHostError('update floti there', { host: '0.9', client: '1.0', update: 'host' })
     )
-    w.startFor(LAB).reject(new RemoteHostError('update Helm here', { host: '2.0', client: '1.0', update: 'client' }))
+    w.startFor(LAB).reject(new RemoteHostError('update Floti here', { host: '2.0', client: '1.0', update: 'client' }))
     w.startFor(FAR).reject(new RemoteHostError('bash: line 1: floti: command not found'))
     await settle()
     expect(w.links.states()).toEqual({

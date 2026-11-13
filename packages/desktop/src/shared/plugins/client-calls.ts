@@ -1,5 +1,5 @@
 import { PLUGIN_TITLE_MAX, pluginParamsProblem } from '@helm/core/types'
-import type { SurfaceKind } from '@coledtaylor/helm-plugin-sdk'
+import type { SurfaceKind } from '@floti-dev/plugin-sdk'
 import type { PluginUiRequest } from '../ipc'
 import { PluginCallError } from './errors'
 

@@ -108,7 +108,7 @@ test('quitting asks first, and End and quit ends every session, everything a ses
 
   // The sessions pane shows the session's process tree and listening ports as the host read them.
   await window.locator('[data-open-sessions]').click()
-  await window.getByRole('region', { name: 'In Helm' }).locator('[data-session-hosted="true"]').click()
+  await window.getByRole('region', { name: 'In Floti' }).locator('[data-session-hosted="true"]').click()
   const tree = window.getByRole('region', { name: 'Process tree' })
   await expect(tree.locator(`[data-tree-pid="${String(run.pid)}"]`)).toBeVisible()
   await expect(tree.locator(`[data-tree-pid="${String(child)}"]`)).toBeVisible()
@@ -128,7 +128,7 @@ test('quitting asks first, and End and quit ends every session, everything a ses
   await closeWindow(helm.app)
   await answer(
     window
-      .getByRole('alertdialog', { name: 'Quitting Helm ends 2 sessions on this PC’s host.' })
+      .getByRole('alertdialog', { name: 'Quitting Floti ends 2 sessions on this PC’s host.' })
       .getByRole('button', { name: 'End and quit' })
   )
   await expect.poll(() => [main, ...pids, ...floti].filter(processAlive)).toEqual([])

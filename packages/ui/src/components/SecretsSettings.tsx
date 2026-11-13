@@ -167,7 +167,7 @@ export function SecretDialog({
         </p>
 
         {!available && (
-          <DialogProblem>Helm cannot encrypt on this computer, so it will not store a secret.</DialogProblem>
+          <DialogProblem>Floti cannot encrypt on this computer, so it will not store a secret.</DialogProblem>
         )}
 
         <label className="mt-4 block">
@@ -355,7 +355,7 @@ export function SecretsPage({ state, plugins, onSave, onRemove }: SecretsPagePro
           <div className="pb-3">
             <Verdict
               tone="warn"
-              text="This computer cannot encrypt, so Helm stores no secrets."
+              text="This computer cannot encrypt, so Floti stores no secrets."
               data-secrets-unavailable
             />
           </div>

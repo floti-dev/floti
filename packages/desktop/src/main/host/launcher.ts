@@ -430,13 +430,13 @@ function bridgeFailure(exit: Exit, binary: string, hostStarted: boolean): LocalH
     case BRIDGE_EXIT.unreachable:
       return failure(
         hostStarted
-          ? 'The local host Helm started did not answer on its socket'
+          ? 'The local host Floti started did not answer on its socket'
           : 'No local host answered on its socket'
       )
     case BRIDGE_EXIT.notPinned:
-      return failure('Helm has no key pinned for the local host, and no local host has started on this computer yet')
+      return failure('Floti has no key pinned for the local host, and no local host has started on this computer yet')
     case BRIDGE_EXIT.hostNotProven:
-      return failure('The local host did not prove the key Helm expected, so Helm did not connect to it')
+      return failure('The local host did not prove the key Floti expected, so Floti did not connect to it')
     case BRIDGE_EXIT.hostClosed:
       return failure('The local host closed the connection')
     default:
@@ -450,7 +450,7 @@ function bridgeFailure(exit: Exit, binary: string, hostStarted: boolean): LocalH
 
 function couldNotRun(binary: string, error: Error): LocalHostError {
   const code = (error as NodeJS.ErrnoException).code
-  return failure(`Helm could not run the local host program at ${binary} (${code ?? error.message})`)
+  return failure(`Floti could not run the local host program at ${binary} (${code ?? error.message})`)
 }
 
 /** Ends a sentence's full stop, so a clause can follow it. */
@@ -478,7 +478,7 @@ export async function startLocalHost(
 ): Promise<LocalHost> {
   const binary = flotiBinary(places, deps)
   if (!deps.exists(binary)) {
-    throw failure(`Helm could not find the local host program at ${binary}`)
+    throw failure(`Floti could not find the local host program at ${binary}`)
   }
   const env = hostEnvironment(places, deps)
   const folder = clientFolder(places, deps.platform)
@@ -598,7 +598,7 @@ export async function localHostRestartFrame(
   restart: boolean
 ): Promise<RestartState | null> {
   const binary = flotiBinary(places, deps)
-  if (!deps.exists(binary)) throw failure(`Helm could not find the local host program at ${binary}`)
+  if (!deps.exists(binary)) throw failure(`Floti could not find the local host program at ${binary}`)
   const child = deps.spawn(binary, ['bridge', clientFolder(places, deps.platform)], {
     env: hostEnvironment(places, deps),
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -680,7 +680,7 @@ export async function endOldLocalHost(
   deps: Omit<LauncherDeps, 'setTimeout' | 'clearTimeout'>
 ): Promise<void> {
   const binary = flotiBinary(places, deps)
-  if (!deps.exists(binary)) throw failure(`Helm could not find the local host program at ${binary}`)
+  if (!deps.exists(binary)) throw failure(`Floti could not find the local host program at ${binary}`)
   deps.log('host: ending the local host on protocol 1.x for an update, leaving its session keeper running')
   const child = deps.spawn(binary, ['end-old-host', clientFolder(places, deps.platform)], {
     env: hostEnvironment(places, deps),
@@ -773,7 +773,7 @@ export function openPageBridge(
 ): PageBridge {
   const binary = flotiBinary(places, deps)
   if (!deps.exists(binary)) {
-    const missing = failure(`Helm could not find the local host program at ${binary}`).message
+    const missing = failure(`Floti could not find the local host program at ${binary}`).message
     return { write: () => undefined, end: () => undefined, ended: Promise.resolve(missing) }
   }
   const child = deps.spawn(binary, ['bridge', clientFolder(places, deps.platform)], {
@@ -844,7 +844,7 @@ async function startHost(
       if (!(error instanceof HostFoldersHeld) || !waitOut) throw error
       if (tries <= 0) {
         throw failure(
-          `Another local host still had Helm's host folders after ${HOST_START_DEADLINE_MS / 1000} seconds`
+          `Another local host still had Floti's host folders after ${HOST_START_DEADLINE_MS / 1000} seconds`
         )
       }
       if (tries === Math.ceil(HOST_START_DEADLINE_MS / HOST_RETRY_MS)) {
@@ -928,7 +928,7 @@ async function startHostOnce(
   const outcome = await Promise.race([listening, deadline, exited])
   if (outcome === 'listening') {
     deps.clearTimeout(timer)
-    deps.log('host: the local host Helm started is listening')
+    deps.log('host: the local host Floti started is listening')
     return { release, abandon }
   }
   if (outcome === 'late') {
@@ -941,7 +941,7 @@ async function startHostOnce(
   deps.clearTimeout(timer)
   if (outcome.error !== undefined) throw couldNotRun(binary, outcome.error)
   if (outcome.code === HOST_ALREADY_RUNNING_EXIT) throw new HostFoldersHeld()
-  deps.log(`host: the local host Helm started stopped before it was ready (${describeExit(outcome)})`)
+  deps.log(`host: the local host Floti started stopped before it was ready (${describeExit(outcome)})`)
   const why = reason as string | null
   if (why !== null) throw new HostEndedEarly(unreachable(`The local host did not start: ${clause(why)}`))
   throw new HostEndedEarly(
@@ -990,6 +990,6 @@ class HostEndedEarly extends LocalHostError {}
 /** A host Helm started that found another host still holding its folders or socket. */
 class HostFoldersHeld extends HostEndedEarly {
   constructor() {
-    super("Another local host is running on Helm's host folders.")
+    super("Another local host is running on Floti's host folders.")
   }
 }

@@ -194,7 +194,7 @@ export function ProjectShellPane({
           </span>
         )}
         {/* `appearance-none` plus the app's own caret, the same shape every
-            other picker in Helm takes (DESIGN.md par. 4): the platform arrow is
+            other picker in Floti takes (DESIGN.md par. 4): the platform arrow is
             a chunky white chevron that reads as a control from a different
             program, which is precisely wrong on a foreign-ground island.
 

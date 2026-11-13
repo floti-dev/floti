@@ -20,7 +20,7 @@ describe('hostOs', () => {
 })
 
 describe('hasPrimaryModifier', () => {
-  it('on macOS a Helm shortcut is Cmd, and the same chord with Ctrl is not Helm’s', () => {
+  it('on macOS a Floti shortcut is Cmd, and the same chord with Ctrl is not Floti’s', () => {
     expect(hasPrimaryModifier({ metaKey: true, ctrlKey: false }, true)).toBe(true)
     expect(hasPrimaryModifier({ metaKey: false, ctrlKey: true }, true)).toBe(false)
     expect(hasPrimaryModifier({ metaKey: true, ctrlKey: true }, true)).toBe(false)

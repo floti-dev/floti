@@ -495,13 +495,13 @@ describe('reconcile', () => {
     expect(sizes(reconciled.root)).toEqual([[0.5, 0.5]])
   })
 
-  it('gives every session Helm’s own process hosts a tab, placed or not', () => {
+  it('gives every session Floti’s own process hosts a tab, placed or not', () => {
     const layout = layoutOf(g(HISTORY), 0)
     const reconciled = reconcile(layout, () => true, unplacedSessionTabs([{ id: 1 }, { id: 2 }], false))
     expect(shape(reconciled)).toEqual(['>*agent:history session:1 session:2'])
   })
 
-  it('gives a child no tab by itself, in Helm’s own process or in a host, though its parent has one', () => {
+  it('gives a child no tab by itself, in Floti’s own process or in a host, though its parent has one', () => {
     const hosted = [{ id: 1 }, { id: 2, parentId: 1 }, { id: 3, parentId: null }]
     expect(unplacedSessionTabs(hosted, false)).toEqual([session(1), session(3)])
     expect(unplacedSessionTabs(hosted, true)).toEqual([])

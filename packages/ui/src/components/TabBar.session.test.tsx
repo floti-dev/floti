@@ -120,7 +120,7 @@ describe('TabBar session tabs', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
-  it('offers no menu on a session tab when the strip is given none, as with sessions in Helm itself', () => {
+  it('offers no menu on a session tab when the strip is given none, as with sessions in Floti itself', () => {
     renderBar([{ id: 'session:7', title: 'alpha', indicator: 'idle' }])
     fireEvent.contextMenu(screen.getByRole('tab', { name: 'alpha, ready' }), { clientX: 40, clientY: 12 })
     expect(screen.queryByRole('menu')).toBeNull()

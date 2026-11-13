@@ -1,6 +1,6 @@
 import { extname } from 'node:path'
 import { protocol } from 'electron'
-import { RESERVED_PREFIX } from '@coledtaylor/helm-plugin-sdk/manifest'
+import { RESERVED_PREFIX } from '@floti-dev/plugin-sdk/manifest'
 import { PLUGIN_SCHEMES } from '../../shared/ipc'
 import { apiVersionOfScheme, parsePluginOrigin } from '../../shared/plugins/origin'
 import { MIME } from '../content'

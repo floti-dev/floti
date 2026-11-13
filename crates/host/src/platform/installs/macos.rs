@@ -1,6 +1,7 @@
-//! macOS: the binary is renamed over; the desktop app is `Helm.app`,
+//! macOS: the binary is renamed over; the desktop app is `Floti.app`,
 //! replaced by, or installed fresh in `~/Applications` as, the one in the
-//! release's zip.
+//! release's zip. A `Helm.app` from before the rename is found too, and an
+//! update puts `Floti.app` beside it and removes it.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -16,7 +17,10 @@ use crate::platform::startup::register::{NativeSystem, SignInSystem, gui_domain}
 use crate::{Error, Result};
 
 /// What the desktop app is called: `productName` in `electron-builder.yml`.
-pub const DESKTOP_NAME: &str = "Helm";
+pub const DESKTOP_NAME: &str = "Floti";
+
+/// What the app was called before it was Floti, and so its bundle's name.
+pub const HELM_NAME: &str = "Helm";
 
 /// macOS's own archive tool, which keeps a bundle's links, modes and
 /// signature intact where a plain unzip would not.
@@ -28,8 +32,8 @@ const SYSTEM_APPLICATIONS: &str = "/Applications";
 pub struct Native;
 
 impl Native {
-    fn bundle_name() -> String {
-        format!("{DESKTOP_NAME}.app")
+    fn bundle_name(name: &str) -> String {
+        format!("{name}.app")
     }
 
     /// The folders looked in, in order: the user's own Applications folder,
@@ -79,14 +83,15 @@ impl Installs for Native {
     }
 
     fn desktop(&self, env: &UserEnv) -> Option<Desktop> {
-        Self::folders(env)
-            .into_iter()
-            .map(|folder| folder.join(Self::bundle_name()))
-            .find(|app| Self::info_plist(app).is_file())
-            .map(|path| Desktop {
-                name: DESKTOP_NAME,
-                path,
-            })
+        // Floti's in any of the folders first, then one from before the
+        // rename.
+        [DESKTOP_NAME, HELM_NAME].into_iter().find_map(|name| {
+            Self::folders(env)
+                .into_iter()
+                .map(|folder| folder.join(Self::bundle_name(name)))
+                .find(|app| Self::info_plist(app).is_file())
+                .map(|path| Desktop { name, path })
+        })
     }
 
     fn desktop_target(&self, env: &UserEnv) -> Option<Desktop> {
@@ -95,7 +100,7 @@ impl Installs for Native {
         self.desktop(env).or_else(|| {
             Self::folders(env).into_iter().next().map(|folder| Desktop {
                 name: DESKTOP_NAME,
-                path: folder.join(Self::bundle_name()),
+                path: folder.join(Self::bundle_name(DESKTOP_NAME)),
             })
         })
     }
@@ -124,7 +129,7 @@ impl Installs for Native {
                 let inside = format!("{}/Contents/{folder}/", desktop.path.to_string_lossy());
                 command_line.starts_with(&inside)
             }),
-            None => row.name == DESKTOP_NAME,
+            None => row.name == desktop.name,
         }
     }
 
@@ -144,16 +149,24 @@ impl Installs for Native {
         )
     }
 
-    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
-        let unpacked = beside(&desktop.path, NEW_COPY);
-        let old = beside(&desktop.path, OLD_COPY);
-        if let Some(folder) = desktop.path.parent() {
+    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<Desktop> {
+        // In the folder the app is in, under its own name: `Floti.app` beside
+        // a `Helm.app` from before the rename, which goes once it is in.
+        let installed = Desktop {
+            name: DESKTOP_NAME,
+            path: desktop
+                .path
+                .with_file_name(Self::bundle_name(DESKTOP_NAME)),
+        };
+        let unpacked = beside(&installed.path, NEW_COPY);
+        let old = beside(&installed.path, OLD_COPY);
+        if let Some(folder) = installed.path.parent() {
             std::fs::create_dir_all(folder)
                 .map_err(|source| Error::path("make", folder, source))?;
         }
         Self::remove(&unpacked)?;
         Self::remove(&old)?;
-        let installed = (|| {
+        let swapped = (|| {
             let status = Command::new(DITTO)
                 .args(["-x", "-k", "--noqtn"])
                 .arg(release)
@@ -168,18 +181,22 @@ impl Installs for Native {
                     "ditto could not unpack the {DESKTOP_NAME} release ({status})."
                 )));
             }
-            let new = unpacked.join(Self::bundle_name());
+            let new = unpacked.join(Self::bundle_name(DESKTOP_NAME));
             if !Self::info_plist(&new).is_file() {
                 return Err(Error::Refused(format!(
                     "The {DESKTOP_NAME} release holds no {}.",
-                    Self::bundle_name()
+                    Self::bundle_name(DESKTOP_NAME)
                 )));
             }
-            Self::swap_in(&new, &desktop.path, &old)
+            Self::swap_in(&new, &installed.path, &old)
         })();
         let _ = Self::remove(&unpacked);
         let _ = Self::remove(&old);
-        installed
+        swapped?;
+        if desktop.path != installed.path {
+            Self::remove(&desktop.path)?;
+        }
+        Ok(installed)
     }
 
     fn no_display(&self, _env: &UserEnv) -> Option<String> {
@@ -203,13 +220,13 @@ pub const NO_GUI_DOMAIN: &str =
 #[cfg(any(test, feature = "testkit"))]
 impl super::FakeDesktop for Native {
     fn fake_install(&self, apps: &Path, version: &str) {
-        let app = apps.join(Self::bundle_name());
+        let app = apps.join(Self::bundle_name(DESKTOP_NAME));
         std::fs::create_dir_all(app.join("Contents")).expect("make the fake app");
         std::fs::write(Self::info_plist(&app), fake_plist(version)).expect("write the fake app");
     }
 
     fn fake_release(&self, work: &Path, version: &str, installer: &Path) -> (String, Vec<u8>) {
-        let app = work.join(Self::bundle_name());
+        let app = work.join(Self::bundle_name(DESKTOP_NAME));
         let resources = app.join("Contents").join("Resources");
         std::fs::create_dir_all(&resources).expect("make the fake release's app");
         std::fs::write(Self::info_plist(&app), fake_plist(version))
@@ -221,7 +238,7 @@ impl super::FakeDesktop for Native {
         let zip = work.join("release.zip");
         let status = Command::new(DITTO)
             .args(["-c", "-k", "--keepParent"])
-            .arg(work.join(Self::bundle_name()))
+            .arg(work.join(Self::bundle_name(DESKTOP_NAME)))
             .arg(&zip)
             .status()
             .expect("run ditto");
@@ -233,7 +250,7 @@ impl super::FakeDesktop for Native {
     fn was_updated(&self, apps: &Path, version: &str, _record: &Path) -> bool {
         let desktop = Desktop {
             name: DESKTOP_NAME,
-            path: apps.join(Self::bundle_name()),
+            path: apps.join(Self::bundle_name(DESKTOP_NAME)),
         };
         self.desktop_version(&desktop).as_deref() == Some(version)
     }

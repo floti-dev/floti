@@ -707,7 +707,7 @@ mod tests {
         agents.allowed_commands = vec!["floti agent start".into(), "floti agent stop".into()];
         let (launch, folder) = world.launch(&LaunchRequest {
             composition: Composition {
-                agent_tools: vec![server("helm-sessions"), agents],
+                agent_tools: vec![server("floti-sessions"), agents],
                 ..Composition::default()
             },
             prompt: Some("go".into()),
@@ -824,7 +824,7 @@ mod tests {
                 allowed_tools: vec![
                     "Read".into(),
                     "Bash(git status:*)".into(),
-                    "mcp__helm-sessions__sessions_list".into(),
+                    "mcp__floti-sessions__sessions_list".into(),
                 ],
                 ..Composition::default()
             },
@@ -841,7 +841,7 @@ mod tests {
                 "--allow-shell",
                 "git status",
                 "--allow-tool",
-                "helm-sessions.sessions_list",
+                "floti-sessions.sessions_list",
             ]
         );
 
@@ -926,7 +926,7 @@ mod tests {
                 &LaunchRequest {
                     composition: Composition {
                         disallowed_tools: vec!["Bash(rm:*)".into()],
-                        agent_tools: vec![server("helm-sessions")],
+                        agent_tools: vec![server("floti-sessions")],
                         ..Composition::default()
                     },
                     ..request(world.dirs.folder("work"))

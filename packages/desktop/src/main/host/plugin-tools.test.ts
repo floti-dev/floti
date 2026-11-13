@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ToolSession } from '@coledtaylor/helm-plugin-sdk'
+import type { ToolSession } from '@floti-dev/plugin-sdk'
 import { FakeConnection, fakeLink } from '../../../test/host-connection'
 import { pluginInstructions, pluginToolResult } from '../browser-mcp'
 import type { ToolAnswer, ToolCallRequest, ToolServer } from '../plugins/tools'
@@ -16,7 +16,7 @@ import { createPluginToolRelay, NOT_A_PLUGIN_SESSION, PLUGIN_ANSWER_TOO_LARGE } 
 const NOTES: ToolServer = {
   plugin: 'notes',
   name: 'Notes',
-  server: 'helm-plugin-notes',
+  server: 'floti-plugin-notes',
   instructions: 'Search the notes before writing one.',
   tools: [
     {
@@ -80,7 +80,7 @@ function world() {
 }
 
 describe('the plugins’ tools through the local host', () => {
-  it('listens for calls, then offers the host every plugin tool server as Helm’s own listener serves it', async () => {
+  it('listens for calls, then offers the host every plugin tool server as Floti’s own listener serves it', async () => {
     const w = world()
     await w.link.connect()
 
@@ -89,7 +89,7 @@ describe('the plugins’ tools through the local host', () => {
       {
         servers: [
           {
-            name: 'helm-plugin-notes',
+            name: 'floti-plugin-notes',
             plugin: 'notes',
             instructions: pluginInstructions(NOTES),
             tools: [
@@ -106,19 +106,19 @@ describe('the plugins’ tools through the local host', () => {
       }
     ])
     // The provenance line, then the plugin's own words.
-    expect(pluginInstructions(NOTES)).toMatch(/^These tools come from "Notes", a plugin the user added to Helm/)
+    expect(pluginInstructions(NOTES)).toMatch(/^These tools come from "Notes", a plugin the user added to Floti/)
     expect(pluginInstructions(NOTES)).toMatch(/\n\nSearch the notes before writing one\.$/)
   })
 
-  it('offers the host only plugins’ servers, each under its plugin’s own name, and never an agents server of Helm’s', async () => {
+  it('offers the host only plugins’ servers, each under its plugin’s own name, and never an agents server of Floti’s', async () => {
     const w = world()
-    w.servers.value = [NOTES, { ...NOTES, plugin: 'trackr', name: 'Trackr', server: 'helm-plugin-trackr' }]
+    w.servers.value = [NOTES, { ...NOTES, plugin: 'trackr', name: 'Trackr', server: 'floti-plugin-trackr' }]
     await w.link.connect()
 
     const offered = w.connection.payloads('agentPlugin:offer')
     expect(offered).toHaveLength(1)
     const names = (offered[0] as P.AgentPluginServers).servers.map((server) => server.name)
-    expect(names).toEqual(['helm-plugin-notes', 'helm-plugin-trackr'])
+    expect(names).toEqual(['floti-plugin-notes', 'floti-plugin-trackr'])
     expect(names).not.toContain('floti-agents')
     // And that is everything this side tells the host about tool servers: the
     // host serves the agents family from its own table.
@@ -139,7 +139,7 @@ describe('the plugins’ tools through the local host', () => {
     ])
   })
 
-  it('runs a call as the plugins answer one from Helm’s own listener, naming the session by the id the host minted for it', async () => {
+  it('runs a call as the plugins answer one from Floti’s own listener, naming the session by the id the host minted for it', async () => {
     const w = world()
     await w.link.connect()
 
@@ -191,7 +191,7 @@ describe('the plugins’ tools through the local host', () => {
     expect(w.connection.payloads('agentPlugin:answer')).toEqual([])
   })
 
-  it('withdraws every call in flight when Helm stops answering', async () => {
+  it('withdraws every call in flight when Floti stops answering', async () => {
     const w = world()
     await w.link.connect()
     const made = w.nextCall()

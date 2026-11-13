@@ -3,7 +3,7 @@ import { FakeConnection, reconnectingReach } from '../../../../../test/fake-conn
 import { createHostState } from './hostState'
 
 describe('whether the window has its host', () => {
-  it('says the host is lost, and whether Helm starts another, until the window is connected again', async () => {
+  it('says the host is lost, and whether Floti starts another, until the window is connected again', async () => {
     const first = new FakeConnection()
     const link = reconnectingReach(first)
     const state = createHostState(link)

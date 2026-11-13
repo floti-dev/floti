@@ -190,7 +190,7 @@ describe("SessionsPane", () => {
       sessions: [failing, asking],
       selectedPid: failing.pid,
     });
-    const inHelm = screen.getByRole("region", { name: "In Helm" });
+    const inHelm = screen.getByRole("region", { name: "In Floti" });
     const [shop, docs] = within(inHelm).getAllByRole("button");
     expect(shop?.textContent).toContain("build failed: 3 errors");
     expect(
@@ -206,9 +206,9 @@ describe("SessionsPane", () => {
     expect(chip?.getAttribute("title")).toBe("Error: build failed: 3 errors");
   });
 
-  it("lists Helm’s sessions and everything else on the machine apart, each with its own folder", async () => {
+  it("lists Floti’s sessions and everything else on the machine apart, each with its own folder", async () => {
     const props = renderPane();
-    const inHelm = screen.getByRole("region", { name: "In Helm" });
+    const inHelm = screen.getByRole("region", { name: "In Floti" });
     const elsewhere = screen.getByRole("region", {
       name: "Elsewhere on this machine",
     });
@@ -309,15 +309,15 @@ describe("SessionsPane", () => {
     expect(items(ports)).toEqual([]);
   });
 
-  it("says what is knowable about a session Helm did not start, and no more", () => {
+  it("says what is knowable about a session Floti did not start, and no more", () => {
     renderPane({ selectedPid: OUTSIDE.pid });
     expect(
       screen.getByRole("heading", { level: 2, name: "terminal session" }),
     ).toBeDefined();
     expect(screen.getByRole("button", { name: "C:\\work\\api" })).toBeDefined();
     expect(
-      screen.getByRole("region", { name: "What Helm knows" }).textContent,
-    ).toContain("Helm did not start this session");
+      screen.getByRole("region", { name: "What Floti knows" }).textContent,
+    ).toContain("Floti did not start this session");
     expect(screen.queryByRole("region", { name: "Process tree" })).toBeNull();
     expect(
       screen.queryByRole("region", { name: "Listening ports" }),
@@ -343,7 +343,7 @@ describe("SessionsPane: what a session's agent says it is doing", () => {
         [3, row(3, "quiet", "C:\\work\\quiet")],
       ]),
     });
-    const inHelm = screen.getByRole("region", { name: "In Helm" });
+    const inHelm = screen.getByRole("region", { name: "In Floti" });
     const [shop, docs] = within(inHelm).getAllByRole("button");
     expect(shop?.querySelector("[data-session-title]")?.textContent).toBe(
       TITLE,
@@ -418,7 +418,7 @@ describe("SessionsPane: the agent tag (A23, M15)", () => {
 
   it("draws the agent tag after the name on its row, and none for a session started as no agent", () => {
     renderPane({ records });
-    const inHelm = screen.getByRole("region", { name: "In Helm" });
+    const inHelm = screen.getByRole("region", { name: "In Floti" });
     const [shop, docs] = within(inHelm).getAllByRole("button");
     const tag = shop?.querySelector<HTMLElement>("[data-agent-tag]");
     expect(tag?.textContent).toBe("lead");
@@ -536,7 +536,7 @@ describe("SessionsPane sessions not open here", () => {
       "bg-accent",
     );
 
-    const inHelm = screen.getByRole("region", { name: "In Helm" });
+    const inHelm = screen.getByRole("region", { name: "In Floti" });
     expect(
       within(inHelm)
         .getAllByRole("button")
@@ -569,7 +569,7 @@ describe("SessionsPane sessions not open here", () => {
     expect(screen.getByText("No session is open here.")).toBeDefined();
   });
 
-  it("draws no not-open-here heading when every session has a tab here, as with sessions in Helm itself", () => {
+  it("draws no not-open-here heading when every session has a tab here, as with sessions in Floti itself", () => {
     renderPane();
     expect(screen.queryByRole("region", { name: "Not open here" })).toBeNull();
   });
@@ -612,7 +612,7 @@ describe("SessionsPane: every host under its name", () => {
     expect(hosts).toEqual(["This PC", "build-box", "lab"]);
 
     const local = screen.getByRole("region", { name: "This PC" });
-    expect(within(local).getByRole("region", { name: "In Helm" })).toBeTruthy();
+    expect(within(local).getByRole("region", { name: "In Floti" })).toBeTruthy();
     expect(
       within(local).getByRole("region", { name: "Elsewhere on this machine" }),
     ).toBeTruthy();
@@ -639,7 +639,7 @@ describe("SessionsPane: every host under its name", () => {
     ).not.toContain("opacity-50");
   });
 
-  it("S18, S19: says a host’s floti is too old with Update floti, or newer with Update Helm on this PC, naming both protocols", async () => {
+  it("S18, S19: says a host’s floti is too old with Update floti, or newer with Update Floti on this PC, naming both protocols", async () => {
     const onUpdateFloti = vi.fn();
     renderPane({
       remoteHosts: [
@@ -662,7 +662,7 @@ describe("SessionsPane: every host under its name", () => {
       "floti too old",
     );
     expect(lab.textContent).toContain(
-      "Its floti speaks protocol 0.9; this Helm speaks 1.0.",
+      "Its floti speaks protocol 0.9; this Floti speaks 1.0.",
     );
     await userEvent.click(
       within(lab).getByRole("button", { name: "Update floti" }),
@@ -674,7 +674,7 @@ describe("SessionsPane: every host under its name", () => {
       "newer floti",
     );
     expect(far.textContent).toContain(
-      "It speaks protocol 2.0; this Helm speaks 1.0. Update Helm on this PC.",
+      "It speaks protocol 2.0; this Floti speaks 1.0. Update Floti on this PC.",
     );
     expect(
       within(far).queryByRole("button", { name: "Update floti" }),
@@ -697,7 +697,7 @@ describe("SessionsPane: every host under its name", () => {
       "older floti",
     );
     expect(build.textContent).toContain(
-      "It runs floti 2.5.0; this Helm carries 2.6.0.",
+      "It runs floti 2.5.0; this Floti carries 2.6.0.",
     );
     expect(build.textContent).not.toContain("not connected");
     expect(
@@ -856,6 +856,6 @@ describe("SessionsPane: every host under its name", () => {
   it("draws the list as it was while this PC is the only host", () => {
     renderPane({ remoteHosts: [] });
     expect(document.querySelectorAll("[data-sessions-host]")).toHaveLength(0);
-    expect(screen.getByRole("region", { name: "In Helm" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "In Floti" })).toBeTruthy();
   });
 });

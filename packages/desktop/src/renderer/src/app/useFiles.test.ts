@@ -217,10 +217,10 @@ describe('useFiles: file tabs', () => {
   it('keeps what it had and says why when a read fails', async () => {
     const path = joinRoot(A, 'src/a.ts')
     bridge.answer('files:read', () => {
-      throw new Error(`Error invoking remote method 'files:read': Error: ${A} is not a folder Helm knows`)
+      throw new Error(`Error invoking remote method 'files:read': Error: ${A} is not a folder Floti knows`)
     })
     const { result } = renderHook(() => useFiles({ active: false, follow: null, shown: [{ root: A, path }] }))
-    await waitFor(() => expect(result.current.tabs.get(path.toLowerCase())?.error).toBe(`${A} is not a folder Helm knows`))
+    await waitFor(() => expect(result.current.tabs.get(path.toLowerCase())?.error).toBe(`${A} is not a folder Floti knows`))
   })
 })
 

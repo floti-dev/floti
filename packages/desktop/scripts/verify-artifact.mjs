@@ -161,7 +161,7 @@ function verify(sevenZip, exe, scratch) {
     return [
       `${label}: no ${PAYLOAD} inside it. electron-builder's NSIS targets wrap the app tree in one; ` +
         `this artefact carries ${String(outer.length)} entries and none of them is it, so either the ` +
-        'packaging changed shape or this is not a Helm artefact.'
+        'packaging changed shape or this is not a Floti artefact.'
     ]
   }
 

@@ -57,7 +57,7 @@ function connect(env: NodeJS.ProcessEnv, folder: string, transport: HostTranspor
 
 describe.runIf(flotiAvailable)('reaching a host in a WSL distro through floti', () => {
   it(
-    'S4, S5: Helm reaches a distro with wsl.exe -d <distro> -- floti connect, and one on win-box through ssh and win-box’s wsl.exe, pinning its key with nothing asked',
+    'S4, S5: Floti reaches a distro with wsl.exe -d <distro> -- floti connect, and one on win-box through ssh and win-box’s wsl.exe, pinning its key with nothing asked',
     { timeout: PATIENCE * 4 },
     async () => {
       const root = await mkdtemp(join(inject(RUN_ROOT), 'wsl host '))

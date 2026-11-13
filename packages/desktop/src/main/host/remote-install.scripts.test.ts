@@ -105,7 +105,7 @@ describe('the install scripts, run where floti goes', () => {
   )
 
   it(
-    'S10: copies this Helm’s own floti through the login, checks its SHA-256 there, puts it in the user’s own folder and runs setup there',
+    'S10: copies this Floti’s own floti through the login, checks its SHA-256 there, puts it in the user’s own folder and runs setup there',
     { timeout: PATIENCE },
     async () => {
       const { root, env, installed } = await computer('copy')
@@ -171,7 +171,7 @@ describe('the install scripts, run where floti goes', () => {
   )
 
   it(
-    'S11: a computer of another CPU fetches the release’s file itself, from the address Helm sends, and checks it against the published SHA-256',
+    'S11: a computer of another CPU fetches the release’s file itself, from the address Floti sends, and checks it against the published SHA-256',
     { timeout: PATIENCE },
     async () => {
       const { root, env, installed } = await computer('download')

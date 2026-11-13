@@ -46,8 +46,8 @@ fn config(dirs: &TestDirs, agent: &FakeAgent) -> HostConfig {
 /// Helm's client folder, with a device key of its own. The host key is
 /// pinned once the host has made one ([`pin_host`]).
 fn helm_client(dirs: &TestDirs) -> PathBuf {
-    let folder = dirs.root().join("Helm data").join("host-client");
-    ClientKeys::open(&folder).expect("set up Helm's client keys");
+    let folder = dirs.root().join("Floti data").join("host-client");
+    ClientKeys::open(&folder).expect("set up Floti's client keys");
     folder
 }
 
@@ -56,7 +56,7 @@ fn pin_host(dirs: &TestDirs, folder: &Path) {
         .expect("read the host's key")
         .expect("the host has a key");
     ClientKeys::open(folder)
-        .expect("open Helm's client keys")
+        .expect("open Floti's client keys")
         .pin_host(host)
         .expect("pin the host key");
 }
@@ -142,7 +142,7 @@ async fn with_sessions_running_it_says_how_many_end_and_its_stop_ends_them_for_a
     assert_eq!(
         printed(&asked),
         "Installing this update stops the local host on this PC, ending 2 sessions. \
-         Helm offers them back when it next starts."
+         Floti offers them back when it next starts."
     );
     // Asking ends nothing: an installer that is declined leaves every session
     // running.
@@ -186,9 +186,9 @@ async fn with_no_session_running_it_asks_nothing() {
 #[tokio::test(flavor = "multi_thread")]
 async fn with_no_host_running_it_asks_nothing_and_says_none_answered() {
     let dirs = TestDirs::new();
-    let folder = dirs.root().join("Helm data").join("host-client");
+    let folder = dirs.root().join("Floti data").join("host-client");
     ClientKeys::open(&folder)
-        .expect("set up Helm's client keys")
+        .expect("set up Floti's client keys")
         .pin_host(KeyPair::generate().unwrap().public())
         .expect("pin a host key");
 
@@ -214,7 +214,7 @@ async fn with_no_client_folder_it_asks_nothing_and_makes_no_client_folder() {
     let dirs = TestDirs::new();
     let agent = fake_agent!(&dirs);
     let host = RunningHost::start(config(&dirs, &agent));
-    let folder = dirs.root().join("Helm data").join("host-client");
+    let folder = dirs.root().join("Floti data").join("host-client");
 
     let asked = update_stop(&dirs, &folder, "--ask").await;
     assert_eq!(asked.status.code(), Some(NOT_PAIRED), "{}", said(&asked));

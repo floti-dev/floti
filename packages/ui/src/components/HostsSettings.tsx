@@ -142,7 +142,7 @@ export function HostsSettings({
       {hosts.length === 0 && (
         <div data-settings-hosts-empty className="flex flex-col items-start gap-2 py-1.5">
           <p className="text-[12px] text-fg-muted">
-            No other hosts yet. A host is Helm on another computer, such as a server or your other PC, reached with
+            No other hosts yet. A host is Floti on another computer, such as a server or your other PC, reached with
             your own ssh.
           </p>
           <Action data-settings-hosts-empty-add onClick={onAdd}>
@@ -248,7 +248,7 @@ function HostRow({
       >
         {reached}
       </p>
-      {/* The offer says again which floti is there and which this Helm carries. */}
+      {/* The offer says again which floti is there and which this Floti carries. */}
       {connection !== null && !(older && flow.panel !== null) && (
         <ConnectionDetail connection={connection} host={host} />
       )}
@@ -296,7 +296,7 @@ function LocalHostNotice({
     <div data-settings-local-host={versions.older} aria-label="This PC" role="group" className="py-2">
       <div className="flex min-w-0 items-center gap-2.5">
         <span className="min-w-0 truncate text-[12.5px] text-fg">This PC</span>
-        <Chip tone="warn">{versions.older === 'host' ? 'Older host' : 'Update Helm'}</Chip>
+        <Chip tone="warn">{versions.older === 'host' ? 'Older host' : 'Update Floti'}</Chip>
       </div>
       <p data-settings-local-host-versions className="mt-2 text-[11.5px] leading-[1.5] text-fg-muted">
         {localHostVersionsSentence(versions)}
@@ -325,7 +325,7 @@ function ConnectionDetail({ connection, host }: { connection: RemoteHostConnecti
   if (connection.state === 'keyChanged') {
     return (
       <p data-settings-host-key-changed className="mt-2 text-[11.5px] leading-[1.5] text-fg-muted">
-        {host.name}’s key changed: the host reached there proved another key than the one this PC pinned for it, so Helm
+        {host.name}’s key changed: the host reached there proved another key than the one this PC pinned for it, so Floti
         connects to nothing there. If floti was reinstalled there on purpose, remove {host.name} and add it again.
       </p>
     )
@@ -367,8 +367,8 @@ function ConnectionDetail({ connection, host }: { connection: RemoteHostConnecti
   if (connection.state === 'tooOld') {
     return (
       <p data-settings-host-too-old className="mt-2 text-[11.5px] leading-[1.5] text-fg-muted">
-        {host.name}’s floti is too old for this Helm: it speaks protocol{' '}
-        <span className="font-mono text-fg">{connection.host}</span>, and this Helm speaks{' '}
+        {host.name}’s floti is too old for this Floti: it speaks protocol{' '}
+        <span className="font-mono text-fg">{connection.host}</span>, and this Floti speaks{' '}
         <span className="font-mono text-fg">{connection.client}</span>. Update floti there.
       </p>
     )
@@ -376,16 +376,16 @@ function ConnectionDetail({ connection, host }: { connection: RemoteHostConnecti
   if (connection.state === 'newer') {
     return (
       <p data-settings-host-newer className="mt-2 text-[11.5px] leading-[1.5] text-fg-muted">
-        {host.name} runs a newer floti than this Helm: it speaks protocol{' '}
-        <span className="font-mono text-fg">{connection.host}</span>, and this Helm speaks{' '}
-        <span className="font-mono text-fg">{connection.client}</span>. Update Helm on this PC, then it connects.
+        {host.name} runs a newer floti than this Floti: it speaks protocol{' '}
+        <span className="font-mono text-fg">{connection.host}</span>, and this Floti speaks{' '}
+        <span className="font-mono text-fg">{connection.client}</span>. Update Floti on this PC, then it connects.
       </p>
     )
   }
   if (connection.state === 'startsAtSignIn') {
     return (
       <p data-settings-host-starts-at-sign-in className="mt-2 text-[11.5px] leading-[1.5] text-fg-muted">
-        floti is installed on {host.name}. Nobody is signed in there, so its host starts at the next sign-in, and Helm
+        floti is installed on {host.name}. Nobody is signed in there, so its host starts at the next sign-in, and Floti
         connects then.
       </p>
     )
@@ -484,21 +484,21 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
     } else if (check.kind === 'newer') {
       show({
         step: 'problem',
-        title: `${name}’s floti is newer than this Helm`,
-        line: `${name} runs floti ${check.found.version}, which speaks protocol ${check.found.protocol ?? 'unknown'}; this Helm speaks ${check.ours}.`,
-        fix: 'Update Helm on this PC, then try again. Nothing was added.'
+        title: `${name}’s floti is newer than this Floti`,
+        line: `${name} runs floti ${check.found.version}, which speaks protocol ${check.found.protocol ?? 'unknown'}; this Floti speaks ${check.ours}.`,
+        fix: 'Update Floti on this PC, then try again. Nothing was added.'
       })
     } else if (check.kind === 'noBuild') {
       show({
         step: 'problem',
-        title: `There is no floti Helm can install on ${name}`,
+        title: `There is no floti Floti can install on ${name}`,
         line: check.reason,
         fix: `Nothing was installed or added: that computer (${check.system.label}) can’t be a host yet.`
       })
     } else {
       show({
         step: 'problem',
-        title: `Helm could not check ${name}`,
+        title: `Floti could not check ${name}`,
         line: check.lastLine,
         fix: transportFix(transport)
       })
@@ -514,7 +514,7 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
       (error: unknown) =>
         show({
           step: 'problem',
-          title: `Helm could not check ${host.name}`,
+          title: `Floti could not check ${host.name}`,
           line: (error as Error).message,
           fix: 'Try again.'
         })
@@ -623,7 +623,7 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
               data-settings-host-install-instead
               onClick={() => start({ host: who.id, install: true }, who, done.current)}
             >
-              Update from this Helm’s floti
+              Update from this Floti’s floti
             </Action>
           )}
         </div>
@@ -679,8 +679,8 @@ export function OfferDetails({ name, offer }: { name: string; offer: InstallOffe
   const { system, found, action, how, version, folder, sessions } = offer
   const update = action === 'update'
   const behind = offer.talks
-    ? `${name} has floti ${found?.version ?? ''}, older than the floti ${version} this Helm carries.`
-    : `${name} has floti ${found?.version ?? ''}, too old for this Helm to talk to.`
+    ? `${name} has floti ${found?.version ?? ''}, older than the floti ${version} this Floti carries.`
+    : `${name} has floti ${found?.version ?? ''}, too old for this Floti to talk to.`
   const to =
     offer.updatesTo !== undefined && offer.updatesTo !== null
       ? `, which updates it to ${offer.updatesTo}, the newest floti on its channel`
@@ -689,10 +689,10 @@ export function OfferDetails({ name, offer }: { name: string; offer: InstallOffe
     <>
       <p className="text-[11.5px] leading-[1.5] text-fg-muted">
         {how === 'flotiUpdate'
-          ? `${behind} Helm can run floti update there now${to}, as you, with no admin rights.`
+          ? `${behind} Floti can run floti update there now${to}, as you, with no admin rights.`
           : update
-            ? `${behind} Helm can update it to ${version} now, as you, with no admin rights.`
-            : `${name} answers, but floti is not installed there. Helm can install it now, as you, with no admin rights.`}
+            ? `${behind} Floti can update it to ${version} now, as you, with no admin rights.`
+            : `${name} answers, but floti is not installed there. Floti can install it now, as you, with no admin rights.`}
       </p>
       <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-fg-muted">
         <span className="text-fg">{name}</span>
@@ -766,14 +766,14 @@ function FlotiUpdateSteps({
       </li>
       <li data-settings-host-offer-sessions>
         {sessions === null
-          ? 'The host there restarts on it and takes its sessions back from its session keeper. Helm cannot tell beforehand whether the new floti takes every one back; any it cannot are ended and offered back when it starts'
+          ? 'The host there restarts on it and takes its sessions back from its session keeper. Floti cannot tell beforehand whether the new floti takes every one back; any it cannot are ended and offered back when it starts'
           : sessions === 0
             ? 'The host there restarts on it and takes every session back from its session keeper: no session ends'
             : `The host there restarts on it, ending ${sessionsWord(sessions)}, whose session keeper the new floti cannot take back; they are offered back when it starts`}
       </li>
       <li data-settings-host-offer-app>
         {via === 'connection'
-          ? 'Where the desktop app is installed there and older, replaces it too: Helm there is closed for it, its sessions kept running, and opened again once it is replaced'
+          ? 'Where the desktop app is installed there and older, replaces it too: Floti there is closed for it, its sessions kept running, and opened again once it is replaced'
           : 'Leaves the desktop app there as it is: its own host offers it the update'}
       </li>
     </ul>

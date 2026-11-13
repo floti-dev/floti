@@ -10,10 +10,10 @@
  * `apiVersion` in the manifest is what ties a plugin to the Helm it was built
  * against.
  *
- * `import type { FlotiBridge } from '@coledtaylor/helm-plugin-sdk'`, and add
- * `/// <reference types="@coledtaylor/helm-plugin-sdk/global" />` once to have
+ * `import type { FlotiBridge } from '@floti-dev/plugin-sdk'`, and add
+ * `/// <reference types="@floti-dev/plugin-sdk/global" />` once to have
  * `window.floti` and `window.helm` typed in every page. A version 2 background
- * module references `@coledtaylor/helm-plugin-sdk/background` instead, for
+ * module references `@floti-dev/plugin-sdk/background` instead, for
  * the `floti` it runs with.
  */
 
@@ -36,7 +36,7 @@ export type ApiVersion = 1 | 2
  * may not leave it.
  */
 export interface PluginManifest {
-  /** For editors: `"./node_modules/@coledtaylor/helm-plugin-sdk/helm-plugin.schema.json"`. Ignored by Helm. */
+  /** For editors: `"./node_modules/@floti-dev/plugin-sdk/helm-plugin.schema.json"`. Ignored by Helm. */
   $schema?: string
   apiVersion: ApiVersion
   /** Lower-case letters, digits and dashes. The plugin's origin is `helm-plugin://<id>` at version 1 and `floti-plugin://<id>` at 2. */
@@ -202,7 +202,7 @@ export interface ServiceSpec {
 
 /**
  * What a Claude Code session is offered: an MCP server of the plugin's own,
- * `helm-plugin-<id>`, in every session Helm starts while the plugin is on and
+ * `floti-plugin-<id>`, in every session Helm starts while the plugin is on and
  * the user has not turned its tools off in Settings.
  */
 export interface AgentSpec {
@@ -214,7 +214,7 @@ export interface AgentSpec {
   instructions?: string
   /**
    * By name: lower-case letters, digits, `_` and `-`, starting with a letter.
-   * A session calls `list_items` as `mcp__helm-plugin-<id>__list_items`, and
+   * A session calls `list_items` as `mcp__floti-plugin-<id>__list_items`, and
    * that whole name may be 64 characters at most.
    */
   tools: Record<string, AgentToolSpec>

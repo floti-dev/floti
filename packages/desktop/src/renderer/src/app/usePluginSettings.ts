@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { SettingValue } from '@coledtaylor/helm-plugin-sdk'
+import type { SettingValue } from '@floti-dev/plugin-sdk'
 import { LOCAL_HOST_KEY } from '@helm/core/types'
 import type { PluginLogLine, PluginMetrics, SecretInput, SecretsState } from '../../../shared/ipc'
 import { bridgeFor } from './bridge'

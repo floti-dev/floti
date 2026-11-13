@@ -53,7 +53,7 @@ describe('pluginTabId', () => {
 })
 
 describe('plugin rail ids', () => {
-  it('are prefixed, so no plugin can take one of the ids Helm uses for its own destinations', () => {
+  it('are prefixed, so no plugin can take one of the ids Floti uses for its own destinations', () => {
     expect(pluginRailId('history')).toBe('plugin:history')
     expect(isPluginRailId('plugin:history')).toBe(true)
     expect(isPluginRailId('history')).toBe(false)

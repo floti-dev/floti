@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Helm plugin manifest",
-  "description": "helm-plugin.json, at the root of a Helm plugin folder. Helm validates it with @coledtaylor/helm-plugin-sdk/manifest when it loads the plugin; this schema says the same for an editor. Checks that span fields - rail.panel naming a panel, a command tab naming a tab, {{key}} naming a declared secret - are made by Helm and `helm-plugin validate`, not here.",
+  "title": "Floti plugin manifest",
+  "description": "helm-plugin.json, at the root of a Floti plugin folder. Floti validates it with @floti-dev/plugin-sdk/manifest when it loads the plugin; this schema says the same for an editor. Checks that span fields - rail.panel naming a panel, a command tab naming a tab, {{key}} naming a declared secret - are made by Floti and `helm-plugin validate`, not here.",
   "type": "object",
   "required": [
     "apiVersion",
@@ -52,7 +52,7 @@
   "properties": {
     "$schema": {
       "type": "string",
-      "description": "For editors. Ignored by Helm."
+      "description": "For editors. Ignored by Floti."
     },
     "apiVersion": {
       "enum": [
@@ -71,7 +71,7 @@
       "minLength": 1,
       "maxLength": 60,
       "pattern": "\\S",
-      "description": "What Helm calls the plugin."
+      "description": "What Floti calls the plugin."
     },
     "version": {
       "type": "string",
@@ -241,7 +241,7 @@
     "settings": {
       "type": "array",
       "maxItems": 100,
-      "description": "A settings page Helm draws for the plugin.",
+      "description": "A settings page Floti draws for the plugin.",
       "items": {
         "$ref": "#/$defs/setting"
       }
@@ -299,7 +299,7 @@
       }
     },
     "service": {
-      "description": "A long-running process Helm starts, supervises and stops, reached as floti.fetch(\"service:/path\"), or helm.fetch at apiVersion 1.",
+      "description": "A long-running process Floti starts, supervises and stops, reached as floti.fetch(\"service:/path\"), or helm.fetch at apiVersion 1.",
       "oneOf": [
         {
           "type": "null"
@@ -345,14 +345,14 @@
     "sessions": {
       "type": "array",
       "uniqueItems": true,
-      "description": "What the plugin's pages may do with the Claude Code sessions Helm hosts. start: ask to start one in a folder with a first message, with helm.sessions.start; Helm shows each one to the user, who starts it or not. list: see them, with helm.sessions.list and the sessions event.",
+      "description": "What the plugin's pages may do with the Claude Code sessions Floti hosts. start: ask to start one in a folder with a first message, with helm.sessions.start; Floti shows each one to the user, who starts it or not. list: see them, with helm.sessions.list and the sessions event.",
       "items": {
         "enum": ["start", "list"]
       }
     },
     "agent": {
       "type": "object",
-      "description": "Tools Helm offers the Claude Code sessions it starts, as an MCP server named helm-plugin-<id>. The background answers them with tools.handle (floti.tools.handle, or helm.tools.handle at apiVersion 1), so the manifest needs a background.",
+      "description": "Tools Floti offers the Claude Code sessions it starts, as an MCP server named floti-plugin-<id>. The background answers them with tools.handle (floti.tools.handle, or helm.tools.handle at apiVersion 1), so the manifest needs a background.",
       "required": [
         "tools"
       ],
@@ -367,7 +367,7 @@
         "tools": {
           "type": "object",
           "maxProperties": 50,
-          "description": "By name. A session calls list_items as mcp__helm-plugin-<id>__list_items, and that whole name may be 64 characters at most.",
+          "description": "By name. A session calls list_items as mcp__floti-plugin-<id>__list_items, and that whole name may be 64 characters at most.",
           "propertyNames": {
             "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
@@ -394,11 +394,11 @@
                     "const": "object"
                   }
                 },
-                "description": "The arguments, as JSON Schema. Passed to the session as written; Helm does not check a call's arguments against it."
+                "description": "The arguments, as JSON Schema. Passed to the session as written; Floti does not check a call's arguments against it."
               },
               "readOnly": {
                 "type": "boolean",
-                "description": "It only reads and changes nothing. The sessions Helm starts call it without asking the user first. False when left out."
+                "description": "It only reads and changes nothing. The sessions Floti starts call it without asking the user first. False when left out."
               }
             }
           }
@@ -428,7 +428,7 @@
     "scriptEntry": {
       "type": "string",
       "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__helm[\\\\/])[^\\u0000]*\\.(?:[Jj][Ss]|[Mm][Jj][Ss]|[Cc][Jj][Ss])(?:[\\\\/]\\.?)*$",
-      "description": "A script in the plugin folder, run by the Node inside Helm."
+      "description": "A script in the plugin folder, run by the Node inside Floti."
     },
     "program": {
       "type": "string",

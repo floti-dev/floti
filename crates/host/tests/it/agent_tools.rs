@@ -199,7 +199,7 @@ impl World {
         }
     }
 
-    /// Switches helm-sessions, as the settings pane does.
+    /// Switches floti-sessions, as the settings pane does.
     async fn session_tools(&self, client: &mut TestClient, on: bool) {
         client
             .request::<WriteSettings>(&HostSettingsPatch {
@@ -240,11 +240,11 @@ struct Tooled {
     argv: Vec<String>,
     /// Its tool configuration file.
     config: PathBuf,
-    /// helm-sessions' URL, from the file.
+    /// floti-sessions' URL, from the file.
     url: String,
     /// Its bearer token, from the file.
     token: String,
-    /// helm-browser's URL and token, when the file names it.
+    /// floti-browser's URL and token, when the file names it.
     browser: Option<(String, String)>,
 }
 
@@ -253,8 +253,8 @@ impl Tooled {
         let document: Value =
             serde_json::from_slice(&std::fs::read(&config).expect("read the tool file"))
                 .expect("the tool file is JSON");
-        let (url, token) = server_in(&document, "helm-sessions").expect("a helm-sessions entry");
-        let browser = server_in(&document, "helm-browser");
+        let (url, token) = server_in(&document, "floti-sessions").expect("a floti-sessions entry");
+        let browser = server_in(&document, "floti-browser");
         Self {
             record,
             pid,
@@ -281,9 +281,9 @@ impl Tooled {
         names
     }
 
-    /// helm-browser's URL and token.
+    /// floti-browser's URL and token.
     fn browser(&self) -> (&str, &str) {
-        let (url, token) = self.browser.as_ref().expect("a helm-browser entry");
+        let (url, token) = self.browser.as_ref().expect("a floti-browser entry");
         (url, token)
     }
 
@@ -611,13 +611,13 @@ async fn s10_a_launch_carries_one_mcp_config_in_its_own_launch_folder_naming_hel
         let document: Value =
             serde_json::from_slice(&std::fs::read(&session.config).unwrap()).unwrap();
         let servers = document["mcpServers"].as_object().unwrap();
-        assert_eq!(servers.keys().collect::<Vec<_>>(), ["helm-sessions"]);
+        assert_eq!(servers.keys().collect::<Vec<_>>(), ["floti-sessions"]);
         let (address, path) = split_url(&session.url);
         assert_eq!(address.ip().to_string(), "127.0.0.1");
         assert_ne!(address.port(), 0);
         assert_eq!(path, "/mcp/sessions");
         assert_eq!(
-            servers["helm-sessions"],
+            servers["floti-sessions"],
             json!({
                 "type": "http",
                 "url": session.url,
@@ -891,7 +891,7 @@ async fn s9_switching_helm_sessions_off_takes_its_route_away_at_once_and_on_give
         401
     );
 
-    // A session launched now is given no helm-sessions entry, and with no
+    // A session launched now is given no floti-sessions entry, and with no
     // family left, no --mcp-config at all.
     let folder = world.folder("beta");
     let beta = start(&mut client, &folder, "beta", None, None).await;
@@ -967,7 +967,7 @@ fn ended_process() -> (std::process::Child, u32) {
 }
 
 // ---------------------------------------------------------------------------
-// helm-sessions
+// floti-sessions
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
@@ -994,7 +994,7 @@ async fn s13_s2_the_server_names_itself_helm_sessions_negotiates_and_lists_today
         .await
         .result();
         assert_eq!(result["protocolVersion"], version, "{result}");
-        assert_eq!(result["serverInfo"]["name"], "helm-sessions", "{result}");
+        assert_eq!(result["serverInfo"]["name"], "floti-sessions", "{result}");
         let instructions = result["instructions"].as_str().unwrap();
         assert!(instructions.contains("read-only"), "{instructions}");
         assert!(instructions.contains("sessions_list"), "{instructions}");
@@ -1046,7 +1046,7 @@ async fn s13_s2_the_server_names_itself_helm_sessions_negotiates_and_lists_today
     assert!(notified.body.is_empty(), "{notified:?}");
 
     // Exactly today's tools and instructions, from the table the desktop's
-    // own listener reads: so `mcp__helm-sessions__*` rules apply unchanged.
+    // own listener reads: so `mcp__floti-sessions__*` rules apply unchanged.
     // Titling itself is the one thing a launch does without asking.
     let table = session_table();
     let initialized = rpc(
@@ -1149,7 +1149,7 @@ async fn s14_s16_s19_s22_s23_sessions_see_every_live_session_and_nothing_of_anot
     // started outside the host said so; only the caller marked.
     assert!(
         listing.starts_with(
-            "3 Claude Code sessions running on this machine, 2 of them hosted by Helm."
+            "3 Claude Code sessions running on this machine, 2 of them hosted by Floti."
         ),
         "{listing}"
     );
@@ -1162,7 +1162,7 @@ async fn s14_s16_s19_s22_s23_sessions_see_every_live_session_and_nothing_of_anot
         assert!(block.contains("\n    status       "), "{block}");
         assert!(
             block.contains(&format!(
-                "hosted       yes, in Helm tab {}",
+                "hosted       yes, in Floti tab {}",
                 session.record.id
             )),
             "{block}"
@@ -1299,7 +1299,7 @@ async fn s14_s16_s19_s22_s23_sessions_see_every_live_session_and_nothing_of_anot
     .await;
     assert!(
         listing.starts_with(
-            "2 Claude Code sessions running on this machine, 1 of them hosted by Helm."
+            "2 Claude Code sessions running on this machine, 1 of them hosted by Floti."
         ),
         "{listing}"
     );
@@ -1370,7 +1370,7 @@ async fn s17_another_hosted_session_is_detailed_as_itself_with_its_children_and_
     );
     assert!(!detail.contains(&alpha.record.cwd), "{detail}");
     assert!(
-        detail.contains(&format!("Helm tab     {}", beta_record.id)),
+        detail.contains(&format!("Floti tab     {}", beta_record.id)),
         "{detail}"
     );
     assert!(
@@ -1422,7 +1422,7 @@ fn profile(world: &World, name: &str, root: &Path, overlay: &Path) -> u64 {
 }
 
 // ---------------------------------------------------------------------------
-// helm-browser: carried to the attached window with a browser pane
+// floti-browser: carried to the attached window with a browser pane
 // ---------------------------------------------------------------------------
 
 /// What Helm's window declares: a terminal and a browser pane.
@@ -1449,7 +1449,7 @@ impl World {
         client
     }
 
-    /// Switches helm-browser, as the settings pane does.
+    /// Switches floti-browser, as the settings pane does.
     async fn browser_tools(&self, client: &mut TestClient, on: bool) {
         client
             .request::<WriteSettings>(&HostSettingsPatch {
@@ -1503,7 +1503,7 @@ fn says_no_browser_is_attached(result: &Value) {
     assert_eq!(result["isError"], true, "{result}");
     let text = result["content"][0]["text"].as_str().unwrap_or_default();
     assert!(text.contains("No browser is attached"), "{text}");
-    assert!(text.contains("Helm"), "{text}");
+    assert!(text.contains("Floti"), "{text}");
 }
 
 /// The status a request with `method`, `token` and `origin` is answered
@@ -1548,7 +1548,7 @@ async fn s2_s3_a_session_started_with_helms_window_attached_lists_todays_browser
 
     // Named as today, at today's route, with the session's one token on the
     // one port.
-    assert_eq!(alpha.servers(), ["helm-browser", "helm-sessions"]);
+    assert_eq!(alpha.servers(), ["floti-browser", "floti-sessions"]);
     let (url, token) = alpha.browser();
     let (address, path) = split_url(url);
     assert_eq!(path, "/mcp");
@@ -1569,7 +1569,7 @@ async fn s2_s3_a_session_started_with_helms_window_attached_lists_todays_browser
     )
     .await
     .result();
-    assert_eq!(initialized["serverInfo"]["name"], "helm-browser");
+    assert_eq!(initialized["serverInfo"]["name"], "floti-browser");
     assert_eq!(initialized["instructions"], table["instructions"]);
     let listed = rpc(url, Some(token), "tools/list", json!({}))
         .await
@@ -1628,7 +1628,7 @@ async fn s9_a_session_started_with_no_browser_attached_has_no_helm_browser_entry
     let alpha = world
         .fake_session(&mut client, &world.folder("alpha"), "alpha")
         .await;
-    assert_eq!(alpha.servers(), ["helm-sessions"]);
+    assert_eq!(alpha.servers(), ["floti-sessions"]);
     let (address, _) = split_url(&alpha.url);
     let route = format!("http://{address}/mcp");
     let reply = rpc(&route, Some(&alpha.token), "tools/list", json!({})).await;
@@ -1655,7 +1655,7 @@ async fn s9_a_session_started_with_no_browser_attached_has_no_helm_browser_entry
     let beta = world
         .fake_session(&mut client, &world.folder("beta"), "beta")
         .await;
-    assert_eq!(beta.servers(), ["helm-browser", "helm-sessions"]);
+    assert_eq!(beta.servers(), ["floti-browser", "floti-sessions"]);
     let (url, token) = beta.browser();
     assert_eq!(
         rpc(url, Some(token), "tools/list", json!({})).await.status,
@@ -1773,14 +1773,14 @@ async fn s13_the_browser_tools_route_refuses_as_helms_listener_does_and_only_the
     assert_eq!(calling.await.unwrap(), tabs);
 
     // Switched off in the host's settings: 404 at once, and a launch now has
-    // no helm-browser entry. Switched on, the running session's route answers
+    // no floti-browser entry. Switched on, the running session's route answers
     // again.
     world.browser_tools(&mut client, false).await;
     assert_eq!(status_of(url, "POST", Some(token), None).await, 404);
     let beta = world
         .fake_session(&mut client, &world.folder("beta"), "beta")
         .await;
-    assert_eq!(beta.servers(), ["helm-sessions"]);
+    assert_eq!(beta.servers(), ["floti-sessions"]);
     world.browser_tools(&mut client, true).await;
     assert_eq!(
         rpc(url, Some(token), "tools/list", json!({})).await.status,
@@ -1799,7 +1799,7 @@ async fn s13_the_browser_tools_route_refuses_as_helms_listener_does_and_only_the
 }
 
 // ---------------------------------------------------------------------------
-// helm-plugin-<id>: each plugin tool server a client offers
+// floti-plugin-<id>: each plugin tool server a client offers
 // ---------------------------------------------------------------------------
 
 /// The subscriptions a client offering plugin tools hears calls and cancels
@@ -1878,9 +1878,9 @@ fn notes_server() -> AgentPluginServer {
         read_only,
     };
     AgentPluginServer {
-        name: "helm-plugin-notes".into(),
+        name: "floti-plugin-notes".into(),
         plugin: "notes".into(),
-        instructions: "These tools come from \"Notes\", a plugin the user added to Helm.".into(),
+        instructions: "These tools come from \"Notes\", a plugin the user added to Floti.".into(),
         tools: vec![tool("find", true), tool("write", false)],
     }
 }
@@ -1891,12 +1891,12 @@ impl Tooled {
         let document: Value =
             serde_json::from_slice(&std::fs::read(&self.config).expect("read the tool file"))
                 .expect("the tool file is JSON");
-        server_in(&document, "helm-plugin-notes")
+        server_in(&document, "floti-plugin-notes")
     }
 
     /// One notes tool call, made while the test answers it elsewhere.
     fn call_notes(&self, tool: &'static str, arguments: Value) -> tokio::task::JoinHandle<Reply> {
-        let (url, token) = self.notes().expect("a helm-plugin-notes entry");
+        let (url, token) = self.notes().expect("a floti-plugin-notes entry");
         tokio::spawn(async move {
             rpc(
                 &url,
@@ -1925,7 +1925,7 @@ async fn next_on<T: serde::de::DeserializeOwned>(client: &mut TestClient, subscr
 fn says_helm_is_not_connected(result: &Value) {
     assert_eq!(result["isError"], true, "{result}");
     let text = result["content"][0]["text"].as_str().unwrap_or_default();
-    assert!(text.contains("Helm's window is not connected"), "{text}");
+    assert!(text.contains("Floti's window is not connected"), "{text}");
     assert!(text.contains("notes"), "{text}");
 }
 
@@ -1942,8 +1942,8 @@ async fn s3_s4_a_plugin_server_offered_by_helms_window_is_listed_as_offered_allo
 
     // Named as today, at today's route, with the session's one token on the
     // one port.
-    assert_eq!(alpha.servers(), ["helm-plugin-notes", "helm-sessions"]);
-    let (url, token) = alpha.notes().expect("a helm-plugin-notes entry");
+    assert_eq!(alpha.servers(), ["floti-plugin-notes", "floti-sessions"]);
+    let (url, token) = alpha.notes().expect("a floti-plugin-notes entry");
     let (address, path) = split_url(&url);
     assert_eq!(path, "/mcp/plugin/notes");
     assert_eq!(address, split_url(&alpha.url).0);
@@ -1952,7 +1952,7 @@ async fn s3_s4_a_plugin_server_offered_by_helms_window_is_listed_as_offered_allo
     // Its read-only tool is allowed at launch; the other asks.
     assert_eq!(
         plugin_rules(&alpha.argv),
-        ["mcp__helm-plugin-notes__find"],
+        ["mcp__floti-plugin-notes__find"],
         "{:?}",
         alpha.argv
     );
@@ -1970,10 +1970,10 @@ async fn s3_s4_a_plugin_server_offered_by_helms_window_is_listed_as_offered_allo
     )
     .await
     .result();
-    assert_eq!(initialized["serverInfo"]["name"], "helm-plugin-notes");
+    assert_eq!(initialized["serverInfo"]["name"], "floti-plugin-notes");
     assert_eq!(
         initialized["instructions"],
-        "These tools come from \"Notes\", a plugin the user added to Helm."
+        "These tools come from \"Notes\", a plugin the user added to Floti."
     );
     let listed = rpc(&url, Some(&token), "tools/list", json!({}))
         .await
@@ -2057,7 +2057,7 @@ async fn s5_a_plugin_server_left_out_of_the_next_offer_is_refused_to_running_ses
     let alpha = world
         .fake_session(&mut client, &world.folder("alpha"), "alpha")
         .await;
-    let (url, token) = alpha.notes().expect("a helm-plugin-notes entry");
+    let (url, token) = alpha.notes().expect("a floti-plugin-notes entry");
     assert_eq!(
         rpc(&url, Some(&token), "tools/list", json!({}))
             .await
@@ -2071,7 +2071,7 @@ async fn s5_a_plugin_server_left_out_of_the_next_offer_is_refused_to_running_ses
     let beta = world
         .fake_session(&mut client, &world.folder("beta"), "beta")
         .await;
-    assert_eq!(beta.servers(), ["helm-sessions"]);
+    assert_eq!(beta.servers(), ["floti-sessions"]);
     assert_eq!(allowed_in(&beta.argv), TITLE_RULES);
 
     // Switched on again, it is served again.
@@ -2116,7 +2116,7 @@ async fn s6_when_the_offering_client_leaves_plugin_calls_fail_at_once_naming_hel
     let beta = world
         .fake_session(&mut client, &world.folder("beta"), "beta")
         .await;
-    assert_eq!(beta.servers(), ["helm-sessions"]);
+    assert_eq!(beta.servers(), ["floti-sessions"]);
 
     close(&mut client, &alpha.record).await;
     close(&mut client, &beta.record).await;
@@ -2132,7 +2132,7 @@ async fn s6_a_plugin_call_the_session_cancels_or_ends_while_waiting_is_withdrawn
     let alpha = world
         .fake_session(&mut client, &world.folder("alpha"), "alpha")
         .await;
-    let (url, token) = alpha.notes().expect("a helm-plugin-notes entry");
+    let (url, token) = alpha.notes().expect("a floti-plugin-notes entry");
 
     // The agent interrupts the call: MCP's cancel reaches the window.
     let waiting = alpha.call_notes("write", json!({ "query": "draft" }));
@@ -2187,10 +2187,10 @@ fn notes_server_none_read_only() -> AgentPluginServer {
     server
 }
 
-/// What helm-sessions lets a launch do without asking: title itself, by its
+/// What floti-sessions lets a launch do without asking: title itself, by its
 /// tool and from its shell.
 const TITLE_RULES: [&str; 2] = [
-    "mcp__helm-sessions__session_title",
+    "mcp__floti-sessions__session_title",
     "Bash(floti session title:*)",
 ];
 
@@ -2198,7 +2198,7 @@ const TITLE_RULES: [&str; 2] = [
 fn plugin_rules(argv: &[String]) -> Vec<String> {
     allowed_in(argv)
         .into_iter()
-        .filter(|rule| rule.starts_with("mcp__helm-plugin-"))
+        .filter(|rule| rule.starts_with("mcp__floti-plugin-"))
         .collect()
 }
 
@@ -2258,7 +2258,7 @@ async fn s2_the_tool_file_names_no_allowed_tool_and_a_plugin_with_none_marked_is
         .await;
 
     // The rule rides on the argv; the file holds servers, not permissions.
-    assert_eq!(plugin_rules(&alpha.argv), ["mcp__helm-plugin-notes__find"]);
+    assert_eq!(plugin_rules(&alpha.argv), ["mcp__floti-plugin-notes__find"]);
     let file = std::fs::read_to_string(&alpha.config).expect("read the tool file");
     for allowed in ["allowedTools", "mcp__", "find"] {
         assert!(!file.contains(allowed), "{allowed} in {file}");
@@ -2269,7 +2269,7 @@ async fn s2_the_tool_file_names_no_allowed_tool_and_a_plugin_with_none_marked_is
     let beta = world
         .fake_session(&mut client, &world.folder("beta"), "beta")
         .await;
-    assert_eq!(beta.servers(), ["helm-plugin-notes", "helm-sessions"]);
+    assert_eq!(beta.servers(), ["floti-plugin-notes", "floti-sessions"]);
     assert_eq!(allowed_in(&beta.argv), TITLE_RULES, "{:?}", beta.argv);
 
     close(&mut client, &alpha.record).await;
@@ -2370,7 +2370,7 @@ async fn s4_an_offer_that_changes_nothing_leaves_every_sessions_token_working() 
     let alpha = world
         .fake_session(&mut client, &world.folder("alpha"), "alpha")
         .await;
-    let (url, token) = alpha.notes().expect("a helm-plugin-notes entry");
+    let (url, token) = alpha.notes().expect("a floti-plugin-notes entry");
 
     offer_plugins(&mut desktop, vec![notes_server()]).await;
     assert_eq!(
@@ -2406,9 +2406,9 @@ async fn s5_with_helm_sessions_off_and_no_browser_a_launch_gets_only_the_plugin_
     let document: Value =
         serde_json::from_slice(&std::fs::read(&config).expect("read the tool file")).unwrap();
     let servers: Vec<&String> = document["mcpServers"].as_object().unwrap().keys().collect();
-    assert_eq!(servers, ["helm-plugin-notes"]);
-    assert_eq!(allowed_in(&run.argv), ["mcp__helm-plugin-notes__find"]);
-    let (url, token) = server_in(&document, "helm-plugin-notes").unwrap();
+    assert_eq!(servers, ["floti-plugin-notes"]);
+    assert_eq!(allowed_in(&run.argv), ["mcp__floti-plugin-notes__find"]);
+    let (url, token) = server_in(&document, "floti-plugin-notes").unwrap();
     let address = split_url(&url).0;
     let calling = {
         let (url, token) = (url.clone(), token.clone());
@@ -2453,7 +2453,7 @@ async fn s5_with_helm_sessions_off_and_no_browser_a_launch_gets_only_the_plugin_
     let run = world.agent_run_in(&again);
     let document: Value =
         serde_json::from_slice(&std::fs::read(mcp_config_of(&run.argv)).unwrap()).unwrap();
-    let (url, token) = server_in(&document, "helm-plugin-notes").unwrap();
+    let (url, token) = server_in(&document, "floti-plugin-notes").unwrap();
     let address = split_url(&url).0;
     close(&mut client, &gamma).await;
     eventually("gamma's token revoked", async || {
@@ -2480,8 +2480,8 @@ async fn s6_a_hang_up_withdraws_the_call_and_a_cancel_from_another_session_or_fo
     let beta = world
         .fake_session(&mut client, &world.folder("beta"), "beta")
         .await;
-    let (url, alpha_token) = alpha.notes().expect("a helm-plugin-notes entry");
-    let (_, beta_token) = beta.notes().expect("a helm-plugin-notes entry");
+    let (url, alpha_token) = alpha.notes().expect("a floti-plugin-notes entry");
+    let (_, beta_token) = beta.notes().expect("a floti-plugin-notes entry");
     let cancel = |token: String, request: u64| {
         let url = url.clone();
         async move {
@@ -2590,7 +2590,7 @@ async fn s6_a_session_that_outlived_a_crashed_host_is_answered_by_the_next_at_it
     assert!(alive(alpha.pid), "the session ended with the crashed host");
 
     let second = world.host();
-    // The same address and token reach helm-sessions, which knows the
+    // The same address and token reach floti-sessions, which knows the
     // caller as the session it is.
     let (failed, again) = alpha.detail(json!({})).await;
     assert!(!failed, "{again}");
@@ -2626,10 +2626,10 @@ async fn s6_a_session_that_outlived_a_crashed_host_has_its_browser_and_plugin_to
         .await;
     assert_eq!(
         alpha.servers(),
-        ["helm-browser", "helm-plugin-notes", "helm-sessions"]
+        ["floti-browser", "floti-plugin-notes", "floti-sessions"]
     );
     let (browser_url, browser_token) = alpha.browser();
-    let (notes_url, notes_token) = alpha.notes().expect("a helm-plugin-notes entry");
+    let (notes_url, notes_token) = alpha.notes().expect("a floti-plugin-notes entry");
     assert_eq!(browser_token, alpha.token);
     assert_eq!(notes_token, alpha.token);
     drop((browser, plugins, client));
@@ -2638,7 +2638,7 @@ async fn s6_a_session_that_outlived_a_crashed_host_has_its_browser_and_plugin_to
     // hash, never the token.
     let kept = kept_tools_of(&world, alpha.record.id);
     assert!(!kept.contains(&alpha.token), "{kept}");
-    for family in ["helm-browser", "helm-plugin-notes", "helm-sessions"] {
+    for family in ["floti-browser", "floti-plugin-notes", "floti-sessions"] {
         assert!(kept.contains(family), "{family} is not kept: {kept}");
     }
 
@@ -2651,7 +2651,7 @@ async fn s6_a_session_that_outlived_a_crashed_host_has_its_browser_and_plugin_to
     let mut browser = world.browser_client().await;
     let mut plugins = world.plugin_client(vec![notes_server()]).await;
 
-    // helm-browser at the address and with the token the session was
+    // floti-browser at the address and with the token the session was
     // launched with, answered by the window that is attached now.
     let calling = alpha.call_browser("browser_tabs", json!({}));
     let call = next_call(&mut browser).await;
@@ -2730,7 +2730,7 @@ async fn s6_a_session_whose_port_is_taken_runs_on_without_tools_and_the_log_says
         [alpha.record.id],
         "the session was taken back"
     );
-    let said = "1 session(s) that outlived the last host run on without Helm's agent tools";
+    let said = "1 session(s) that outlived the last host run on without Floti's agent tools";
     eventually("the log to say the session has no tools", async || {
         world.dirs.host_log().contains(said).then_some(())
     })
@@ -2763,7 +2763,7 @@ async fn s21_a_plugin_only_another_host_has_is_offered_to_no_session_here_and_it
     // This PC has.
     let mut desktop = world.plugin_client(vec![notes_server()]).await;
     let mut trackr = notes_server();
-    trackr.name = "helm-plugin-trackr".into();
+    trackr.name = "floti-plugin-trackr".into();
     trackr.plugin = "trackr".into();
     offer_plugins(&mut desktop, vec![notes_server(), trackr]).await;
     let mut client = world.client().await;
@@ -2772,16 +2772,16 @@ async fn s21_a_plugin_only_another_host_has_is_offered_to_no_session_here_and_it
         .await;
 
     // Given only the plugin this host has.
-    assert_eq!(alpha.servers(), ["helm-plugin-notes", "helm-sessions"]);
+    assert_eq!(alpha.servers(), ["floti-plugin-notes", "floti-sessions"]);
     assert_eq!(
         plugin_rules(&alpha.argv),
-        ["mcp__helm-plugin-notes__find"],
+        ["mcp__floti-plugin-notes__find"],
         "{:?}",
         alpha.argv
     );
 
     // trackr's route, with a token that holds notes', is refused.
-    let (url, token) = alpha.notes().expect("a helm-plugin-notes entry");
+    let (url, token) = alpha.notes().expect("a floti-plugin-notes entry");
     let trackr_url = url.replace("/mcp/plugin/notes", "/mcp/plugin/trackr");
     assert_eq!(
         status_of(&trackr_url, "POST", Some(&token), None).await,

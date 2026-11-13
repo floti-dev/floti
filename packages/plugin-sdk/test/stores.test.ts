@@ -184,7 +184,7 @@ describe('secret', () => {
   })
 })
 
-describe('outside Helm', () => {
+describe('outside Floti', () => {
   it('imports without a bridge, says what is wrong on subscribe, and recovers once there is one', () => {
     removeBridge()
     expect(() => settings.subscribe(() => undefined)).toThrow('window.floti and window.helm are both missing')

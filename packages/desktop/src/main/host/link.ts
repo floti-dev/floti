@@ -200,7 +200,7 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
     try {
       await connection.request('settings:write', deps.settings())
     } catch (error) {
-      deps.log(`host: could not write Helm's settings to ${name} (${(error as Error).message})`)
+      deps.log(`host: could not write Floti's settings to ${name} (${(error as Error).message})`)
     }
   }
 
@@ -208,7 +208,7 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
     const started = await deps.start({ startHost: mayStart })
     if (stopping !== null) {
       await started.close()
-      throw new Error('Helm is quitting.')
+      throw new Error('Floti is quitting.')
     }
     local = started
     stoppingHost = false
@@ -254,7 +254,7 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
 
   const link: HostLink = {
     connection() {
-      if (stopping !== null) return Promise.reject(new Error('Helm is quitting.'))
+      if (stopping !== null) return Promise.reject(new Error('Floti is quitting.'))
       if (restartGate !== null) return restartGate.then(() => link.connection())
       attempt ??= connect().catch((error: unknown) => {
         attempt = null
@@ -301,8 +301,8 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
 
     async restartHost() {
       const { restart } = deps
-      if (restart === undefined) throw new Error(`Helm does not restart ${name}.`)
-      if (stopping !== null) throw new Error('Helm is quitting.')
+      if (restart === undefined) throw new Error(`Floti does not restart ${name}.`)
+      if (stopping !== null) throw new Error('Floti is quitting.')
       if (restartGate !== null) return restartGate
       let opened: () => void = () => undefined
       restartGate = new Promise<void>((resolve) => {

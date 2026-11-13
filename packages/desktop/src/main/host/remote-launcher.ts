@@ -73,7 +73,7 @@ export class RemoteHostError extends Error {
 
 /** Said for a host that proved another key than the one pinned, when the bridge wrote nothing itself. */
 export const KEY_CHANGED_LINE =
-  'The host proved another key than the one this PC pinned for it, so Helm did not connect.'
+  'The host proved another key than the one this PC pinned for it, so Floti did not connect.'
 
 /**
  * The folder a remote host's device key and pinned host key live in, inside
@@ -216,7 +216,7 @@ function readStandardError(child: HostChild): StandardError {
 function remoteFailure(exit: Exit, lastLine: string | null, binary: string): RemoteHostError {
   if (exit.error !== undefined) {
     const code = (exit.error as NodeJS.ErrnoException).code
-    return new RemoteHostError(`Helm could not run floti at ${binary} (${code ?? exit.error.message}).`)
+    return new RemoteHostError(`Floti could not run floti at ${binary} (${code ?? exit.error.message}).`)
   }
   if (exit.code === BRIDGE_EXIT.hostNotProven) return new RemoteHostError(lastLine ?? KEY_CHANGED_LINE, null, true)
   if (lastLine !== null) return new RemoteHostError(lastLine)
@@ -269,7 +269,7 @@ export async function startRemoteHost(
   const stopped = (): boolean => target.signal?.aborted === true
   if (stopped()) throw new RemoteHostError(STOPPED_LINE)
   const spawned = spawnBridge(places, deps, target)
-  if ('missing' in spawned) throw new RemoteHostError(`Helm could not find floti at ${spawned.binary}.`)
+  if ('missing' in spawned) throw new RemoteHostError(`Floti could not find floti at ${spawned.binary}.`)
   const { binary, child } = spawned
   const exited = exitOf(child)
   const said = readStandardError(child)
@@ -361,7 +361,7 @@ export async function askRemoteHostRestart(
   target: RemoteTarget & { deviceName: string }
 ): Promise<RestartState> {
   const spawned = spawnBridge(places, deps, target)
-  if ('missing' in spawned) throw new RemoteHostError(`Helm could not find floti at ${spawned.binary}.`)
+  if ('missing' in spawned) throw new RemoteHostError(`Floti could not find floti at ${spawned.binary}.`)
   const { binary, child } = spawned
   const exited = exitOf(child)
   const said = readStandardError(child)
@@ -404,7 +404,7 @@ export function openRemotePageBridge(
 ): PageBridge {
   const spawned = spawnBridge(places, deps, target)
   if ('missing' in spawned) {
-    const missing = `Helm could not find floti at ${spawned.binary}.`
+    const missing = `Floti could not find floti at ${spawned.binary}.`
     return {
       write: () => undefined,
       end: () => undefined,

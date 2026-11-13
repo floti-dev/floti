@@ -24,9 +24,9 @@ let root: string
 
 beforeAll(() => {
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'helm sdk types-')))
-  mkdirSync(join(root, 'node_modules', '@coledtaylor'), { recursive: true })
+  mkdirSync(join(root, 'node_modules', '@floti-dev'), { recursive: true })
   // The SDK as installed: a junction on Windows, which needs no elevation, and a symlink elsewhere.
-  symlinkSync(SDK_DIR, join(root, 'node_modules', '@coledtaylor', 'helm-plugin-sdk'), 'junction')
+  symlinkSync(SDK_DIR, join(root, 'node_modules', '@floti-dev', 'helm-plugin-sdk'), 'junction')
 })
 
 afterAll(() => {
@@ -58,8 +58,8 @@ function check(name: string, lib: string[], source: string): { status: number | 
   return { status: result.status, output: `${result.stdout}${result.stderr}` }
 }
 
-const PAGE = `/// <reference types="@coledtaylor/helm-plugin-sdk/global" />
-import type { ApiVersion, FlotiBridge, HelmBridge, PluginManifest, PluginSession } from '@coledtaylor/helm-plugin-sdk'
+const PAGE = `/// <reference types="@floti-dev/plugin-sdk/global" />
+import type { ApiVersion, FlotiBridge, HelmBridge, PluginManifest, PluginSession } from '@floti-dev/plugin-sdk'
 
 // A version 2 page's floti, and a version 1 page's helm: the same calls, each at its version.
 export const two: 2 = floti.apiVersion
@@ -81,8 +81,8 @@ export const manifest: PluginManifest = { apiVersion: 2, id: 'x', name: 'X', bac
 export const crossed: HelmBridge = floti
 `
 
-const BACKGROUND = `/// <reference types="@coledtaylor/helm-plugin-sdk/background" />
-import type { FlotiBackground, SecretState, SettingValue } from '@coledtaylor/helm-plugin-sdk'
+const BACKGROUND = `/// <reference types="@floti-dev/plugin-sdk/background" />
+import type { FlotiBackground, SecretState, SettingValue } from '@floti-dev/plugin-sdk'
 
 export const bridge: FlotiBackground = floti
 export const two: 2 = floti.apiVersion

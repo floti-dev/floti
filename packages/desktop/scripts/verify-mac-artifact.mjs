@@ -124,7 +124,7 @@ function tool(cmd, args) {
  * null when it is one. codesign writes the report to stderr, as lines like
  *
  *   Executable=/Volumes/Helm/Helm.app/Contents/MacOS/Helm
- *   Identifier=dev.coletaylor.helm
+ *   Identifier=dev.floti.desktop
  *   Format=app bundle with Mach-O thin (arm64)
  *   CodeDirectory v=20400 size=1234 flags=0x2(adhoc) hashes=28+7 location=embedded
  *   Signature=adhoc
@@ -155,11 +155,11 @@ function plistValue(plist, key) {
 function appProblems(app, origin) {
   const problems = []
   const fail = (message) => problems.push(`${origin}: ${message}`)
-  if (!existsSync(app)) return [`${origin}: no Helm.app inside`]
+  if (!existsSync(app)) return [`${origin}: no Floti.app inside`]
 
   const contents = join(app, 'Contents')
-  const executable = join(contents, 'MacOS', 'Helm')
-  if (!existsSync(executable)) fail('Contents/MacOS/Helm is missing')
+  const executable = join(contents, 'MacOS', 'Floti')
+  if (!existsSync(executable)) fail('Contents/MacOS/Floti is missing')
   else {
     const lipo = tool('lipo', ['-archs', executable])
     const archs = lipo.stdout.trim()
@@ -242,7 +242,7 @@ function dmgProblems(dmg) {
     return [`${basename(dmg)}: hdiutil could not attach it: ${attach.said}`]
   }
   try {
-    const problems = appProblems(join(mount, 'Helm.app'), basename(dmg))
+    const problems = appProblems(join(mount, 'Floti.app'), basename(dmg))
     // The window a dmg opens to is the app beside an Applications link to drag
     // it onto; without the link, installing is a Finder chore.
     if (!existsSync(join(mount, 'Applications'))) problems.push(`${basename(dmg)}: no Applications link beside the app`)
@@ -261,7 +261,7 @@ function zipProblems(zip) {
     // extended attributes a framework's signature covers.
     const extract = tool('ditto', ['-x', '-k', zip, out])
     if (!extract.ok) return [`${basename(zip)}: ditto could not extract it: ${extract.said}`]
-    return appProblems(join(out, 'Helm.app'), basename(zip))
+    return appProblems(join(out, 'Floti.app'), basename(zip))
   } finally {
     rmSync(out, { recursive: true, force: true })
   }

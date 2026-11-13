@@ -92,7 +92,7 @@ describe('ConsolePanel', () => {
       <Panel
         name="artifact"
         entries={[LOG]}
-        note="Read-only. Helm can watch what it logs and cannot run anything inside it."
+        note="Read-only. Floti can watch what it logs and cannot run anything inside it."
         startOpen
       />
     )

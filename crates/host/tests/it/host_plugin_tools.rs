@@ -120,7 +120,7 @@ fn ledger_manifest() -> Value {
 }
 
 const LEDGER_INSTRUCTIONS: &str = "These tools come from \"Ledger\", a plugin the user added to \
-     Helm, the app hosting this session. The plugin answers every call; Helm passes it \
+     Floti, the app hosting this session. The plugin answers every call; Floti passes it \
      on.\n\nThe user's ledger.";
 
 // ---------------------------------------------------------------------------
@@ -344,7 +344,7 @@ impl Tooled {
     }
 
     fn ledger(&self) -> (String, String) {
-        self.server("helm-plugin-ledger")
+        self.server("floti-plugin-ledger")
     }
 
     /// One call of the ledger's `tool`: whether it failed, and its text.
@@ -375,7 +375,7 @@ fn mcp_config_of(argv: &[String]) -> PathBuf {
 fn plugin_rules(argv: &[String]) -> Vec<String> {
     allowed_in(argv)
         .into_iter()
-        .filter(|rule| rule.starts_with("mcp__helm-plugin-"))
+        .filter(|rule| rule.starts_with("mcp__floti-plugin-"))
         .collect()
 }
 
@@ -590,20 +590,20 @@ async fn s1_s2_s5_a_version_2_plugins_tools_are_given_to_a_launch_as_declared_an
     let before = listed(&mut client, "ledger").await;
     drop(client);
 
-    // S2: given helm-plugin-ledger, at its route on the session's one port,
+    // S2: given floti-plugin-ledger, at its route on the session's one port,
     // its read-only tool allowed without asking.
-    assert_eq!(alpha.servers(), ["helm-plugin-ledger", "helm-sessions"]);
+    assert_eq!(alpha.servers(), ["floti-plugin-ledger", "floti-sessions"]);
     let (url, token) = alpha.ledger();
     assert!(url.ends_with("/mcp/plugin/ledger"), "{url}");
-    assert_eq!(token, alpha.server("helm-sessions").1);
+    assert_eq!(token, alpha.server("floti-sessions").1);
     assert_eq!(
         plugin_rules(&alpha.argv),
-        ["mcp__helm-plugin-ledger__whoami"],
+        ["mcp__floti-plugin-ledger__whoami"],
         "{:?}",
         alpha.argv
     );
     let (name, instructions, tools) = server_as_listed(&url, &token).await;
-    assert_eq!(name, "helm-plugin-ledger");
+    assert_eq!(name, "floti-plugin-ledger");
     assert_eq!(instructions, LEDGER_INSTRUCTIONS);
     assert_eq!(
         tools,
@@ -686,24 +686,24 @@ async fn s3_a_version_2_plugin_turned_off_removed_or_with_its_tools_off_is_refus
     switch::<PluginsSetTools>(&mut client, &folder, false).await;
     assert_eq!(alpha.ledger_status().await, 404);
     let bravo = world.session(&mut client, "bravo").await;
-    assert_eq!(bravo.servers(), ["helm-sessions"]);
+    assert_eq!(bravo.servers(), ["floti-sessions"]);
 
     // Back on: launches after are given them again.
     switch::<PluginsSetTools>(&mut client, &folder, true).await;
     let charlie = world.session(&mut client, "charlie").await;
-    assert_eq!(charlie.servers(), ["helm-plugin-ledger", "helm-sessions"]);
+    assert_eq!(charlie.servers(), ["floti-plugin-ledger", "floti-sessions"]);
     assert!(!charlie.call_ledger("whoami", json!({})).await.0);
 
     // The plugin turned off.
     switch::<PluginsSetEnabled>(&mut client, &folder, false).await;
     assert_eq!(charlie.ledger_status().await, 404);
     let delta = world.session(&mut client, "delta").await;
-    assert_eq!(delta.servers(), ["helm-sessions"]);
+    assert_eq!(delta.servers(), ["floti-sessions"]);
 
     // Turned on again: given, and its module answers once more.
     switch::<PluginsSetEnabled>(&mut client, &folder, true).await;
     let echo = world.session(&mut client, "echo").await;
-    assert_eq!(echo.servers(), ["helm-plugin-ledger", "helm-sessions"]);
+    assert_eq!(echo.servers(), ["floti-plugin-ledger", "floti-sessions"]);
     let (failed, text) = echo.call_ledger("whoami", json!({})).await;
     assert!(!failed, "{text}");
 
@@ -717,7 +717,7 @@ async fn s3_a_version_2_plugin_turned_off_removed_or_with_its_tools_off_is_refus
         .expect("the plugin is removed");
     assert_eq!(echo.ledger_status().await, 404);
     let foxtrot = world.session(&mut client, "foxtrot").await;
-    assert_eq!(foxtrot.servers(), ["helm-sessions"]);
+    assert_eq!(foxtrot.servers(), ["floti-sessions"]);
 
     drop(client);
     host.stop(HostStopReason::Stop).await;
@@ -822,7 +822,7 @@ async fn s6_a_client_offering_a_server_under_a_version_2_plugins_name_is_sent_no
     desktop
         .request::<AgentPluginOffer>(&AgentPluginServers {
             servers: vec![AgentPluginServer {
-                name: "helm-plugin-ledger".into(),
+                name: "floti-plugin-ledger".into(),
                 plugin: "ledger".into(),
                 instructions: "Offered by the window.".into(),
                 tools: vec![whoami],
@@ -832,7 +832,7 @@ async fn s6_a_client_offering_a_server_under_a_version_2_plugins_name_is_sent_no
         .expect("the offer is taken");
 
     let alpha = world.session(&mut desktop, "alpha").await;
-    assert_eq!(alpha.servers(), ["helm-plugin-ledger", "helm-sessions"]);
+    assert_eq!(alpha.servers(), ["floti-plugin-ledger", "floti-sessions"]);
     let (url, token) = alpha.ledger();
     let (_, instructions, tools) = server_as_listed(&url, &token).await;
     assert_eq!(
@@ -842,7 +842,7 @@ async fn s6_a_client_offering_a_server_under_a_version_2_plugins_name_is_sent_no
     assert_eq!(tools.len(), 2);
     assert_eq!(
         plugin_rules(&alpha.argv),
-        ["mcp__helm-plugin-ledger__whoami"]
+        ["mcp__floti-plugin-ledger__whoami"]
     );
 
     let (failed, text) = alpha.call_ledger("whoami", json!({ "note": "hi" })).await;
@@ -882,7 +882,7 @@ async fn s8_a_version_1_plugins_tool_is_answered_by_the_window_that_offers_it_an
     desktop
         .request::<AgentPluginOffer>(&AgentPluginServers {
             servers: vec![AgentPluginServer {
-                name: "helm-plugin-notes".into(),
+                name: "floti-plugin-notes".into(),
                 plugin: "notes".into(),
                 instructions: "Offered by the window.".into(),
                 tools: vec![AgentPluginTool {
@@ -897,8 +897,8 @@ async fn s8_a_version_1_plugins_tool_is_answered_by_the_window_that_offers_it_an
         .expect("the offer is taken");
     let mut client = world.client().await;
     let alpha = world.session(&mut client, "alpha").await;
-    assert_eq!(alpha.servers(), ["helm-plugin-notes", "helm-sessions"]);
-    let (url, token) = alpha.server("helm-plugin-notes");
+    assert_eq!(alpha.servers(), ["floti-plugin-notes", "floti-sessions"]);
+    let (url, token) = alpha.server("floti-plugin-notes");
     let (_, instructions, _) = server_as_listed(&url, &token).await;
     assert_eq!(instructions, "Offered by the window.");
 

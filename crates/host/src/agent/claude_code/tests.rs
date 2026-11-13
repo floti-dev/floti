@@ -487,7 +487,7 @@ fn the_prompt_arrives_as_the_prompt_after_every_variadic_list() {
         composition: Composition {
             extra_folders: vec![access.clone()],
             overlays: vec![overlay],
-            agent_tools: vec![server("helm-browser", "token-1")],
+            agent_tools: vec![server("floti-browser", "token-1")],
             ..Composition::default()
         },
     });
@@ -504,7 +504,7 @@ fn the_prompt_arrives_as_the_prompt_after_every_variadic_list() {
             .unwrap()
             .keys()
             .collect::<Vec<_>>(),
-        ["helm-browser"]
+        ["floti-browser"]
     );
 }
 
@@ -647,7 +647,7 @@ fn an_agents_tool_rules_reach_its_flags_in_one_allow_list_and_one_deny_list() {
         folder: world.folder("work"),
         name: "child".into(),
         composition: Composition {
-            agent_tools: vec![server("helm-sessions", "t"), agents],
+            agent_tools: vec![server("floti-sessions", "t"), agents],
             permission_mode: Some(PermissionMode::Plan),
             allowed_tools: vec!["Read".into(), "Bash(git status:*)".into()],
             disallowed_tools: vec!["Bash(rm:*)".into(), "WebFetch".into()],
@@ -800,7 +800,7 @@ fn a_tool_rule_the_command_line_cannot_carry_is_refused_naming_the_rule_and_clau
                 folder: world.folder("work"),
                 name: "refused".into(),
                 composition: Composition {
-                    agent_tools: vec![server("helm-sessions", "t")],
+                    agent_tools: vec![server("floti-sessions", "t")],
                     allowed_tools: vec!["-x".into()],
                     ..Composition::default()
                 },
@@ -858,7 +858,7 @@ fn a_conversation_resumes_in_the_folder_its_transcript_recorded() {
         folder: folder.clone(),
         prompt: None,
         composition: Composition {
-            agent_tools: vec![server("helm-browser", "resume-token")],
+            agent_tools: vec![server("floti-browser", "resume-token")],
             permission_mode: Some(PermissionMode::Plan),
             ..Composition::default()
         },
@@ -883,7 +883,7 @@ fn a_conversation_resumes_in_the_folder_its_transcript_recorded() {
     succeeded(&output);
     assert_eq!(log["resumed"], true);
     assert_eq!(log["sessionId"], id);
-    assert!(log["mcpServers"]["helm-browser"].is_object());
+    assert!(log["mcpServers"]["floti-browser"].is_object());
 
     // The CLI finds no conversation anywhere else, which is why the folder
     // matters.
@@ -1137,8 +1137,8 @@ fn agent_tools_are_one_file_per_launch_with_the_sessions_token_and_never_on_a_co
         name: "tools".into(),
         composition: Composition {
             agent_tools: vec![
-                server("helm-browser", "secret-token-123"),
-                server("helm-sessions", "secret-token-123"),
+                server("floti-browser", "secret-token-123"),
+                server("floti-sessions", "secret-token-123"),
             ],
             ..Composition::default()
         },
@@ -1155,7 +1155,7 @@ fn agent_tools_are_one_file_per_launch_with_the_sessions_token_and_never_on_a_co
     assert_eq!(args.iter().filter(|arg| *arg == "--mcp-config").count(), 1);
 
     let document: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
-    for name in ["helm-browser", "helm-sessions"] {
+    for name in ["floti-browser", "floti-sessions"] {
         assert_eq!(
             document["mcpServers"][name],
             json!({
@@ -1179,7 +1179,7 @@ fn agent_tools_are_one_file_per_launch_with_the_sessions_token_and_never_on_a_co
     let (output, log) = world.run(&launch, "/exit\n");
     succeeded(&output);
     assert_eq!(
-        log["mcpServers"]["helm-sessions"]["headers"]["Authorization"],
+        log["mcpServers"]["floti-sessions"]["headers"]["Authorization"],
         "Bearer secret-token-123"
     );
     // No `claude mcp add-json`: the user's config files hold no token.
@@ -1274,15 +1274,15 @@ fn a_child_whose_agent_names_no_mode_runs_in_claude_codes_auto() {
 #[test]
 fn a_familys_read_only_tools_are_allowed_after_the_tool_file_and_before_the_next_flag() {
     let world = World::new();
-    let mut notes = server("helm-plugin-notes", "t");
+    let mut notes = server("floti-plugin-notes", "t");
     notes.allowed_tools = vec!["find".into(), "get".into()];
-    let mut tasks = server("helm-plugin-tasks", "t");
+    let mut tasks = server("floti-plugin-tasks", "t");
     tasks.allowed_tools = vec!["list".into()];
     let (launch, folder) = world.launch(&LaunchRequest {
         folder: world.folder("work"),
         name: "allowed".into(),
         composition: Composition {
-            agent_tools: vec![server("helm-browser", "t"), notes, tasks],
+            agent_tools: vec![server("floti-browser", "t"), notes, tasks],
             model: Some("opus".into()),
             ..Composition::default()
         },
@@ -1295,9 +1295,9 @@ fn a_familys_read_only_tools_are_allowed_after_the_tool_file_and_before_the_next
         args[at + 2..at + 6],
         [
             "--allowedTools",
-            "mcp__helm-plugin-notes__find",
-            "mcp__helm-plugin-notes__get",
-            "mcp__helm-plugin-tasks__list",
+            "mcp__floti-plugin-notes__find",
+            "mcp__floti-plugin-notes__get",
+            "mcp__floti-plugin-tasks__list",
         ]
     );
     // The next argument is a flag, and the prompt is still last behind `--`.
@@ -1318,7 +1318,7 @@ fn a_familys_read_only_tools_are_allowed_after_the_tool_file_and_before_the_next
         folder: world.folder("work"),
         name: "none allowed".into(),
         composition: Composition {
-            agent_tools: vec![server("helm-sessions", "t")],
+            agent_tools: vec![server("floti-sessions", "t")],
             ..Composition::default()
         },
         ..LaunchRequest::default()
@@ -1354,7 +1354,7 @@ fn a_leftover_launch_folder_with_its_tool_file_goes_only_when_its_owner_is_prova
         folder: world.folder("work"),
         name: "left over".into(),
         composition: Composition {
-            agent_tools: vec![server("helm-browser", "t")],
+            agent_tools: vec![server("floti-browser", "t")],
             ..Composition::default()
         },
         ..LaunchRequest::default()

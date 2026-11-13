@@ -107,7 +107,7 @@ export function createOwnDataCopy(deps: OwnDataCopyDeps): OwnDataCopy {
     set({ state: 'copying' })
     const counts = countCopyableData(store)
     log(
-      `host: copying Helm's own data into the local host: ${counts.archivedConversations + counts.evictedConversations} ` +
+      `host: copying Floti's own data into the local host: ${counts.archivedConversations + counts.evictedConversations} ` +
         `conversations (${counts.messages} messages), ${counts.usageMessages} usage rows ` +
         `and ${counts.sessionNames} session names to offer`
     )
@@ -164,12 +164,12 @@ export function createOwnDataCopy(deps: OwnDataCopyDeps): OwnDataCopy {
       // Not recorded as finished, so the next connect sends it all again
       // and the host adds only what it lacks.
       log(
-        `host: copying Helm's own data into the local host did not finish after ${tally(copied)}${tooLongSaid()} (${reason})`
+        `host: copying Floti's own data into the local host did not finish after ${tally(copied)}${tooLongSaid()} (${reason})`
       )
       set({ state: 'unfinished', copied, reason })
       return
     }
-    log(`host: copied Helm's own data into the local host: ${tally(copied)}${tooLongSaid()}`)
+    log(`host: copied Floti's own data into the local host: ${tally(copied)}${tooLongSaid()}`)
     set({ state: 'finished' })
   }
 
@@ -183,7 +183,7 @@ export function createOwnDataCopy(deps: OwnDataCopyDeps): OwnDataCopy {
       .catch((error: unknown) => {
         // `carry:status` itself failed; nothing was sent.
         const reason = stoppedBecause(error, 'the question whether it was copied')
-        log(`host: could not ask the local host whether Helm's own data was copied into it (${reason})`)
+        log(`host: could not ask the local host whether Floti's own data was copied into it (${reason})`)
         set({ state: 'unfinished', copied: { ...NOTHING_COPIED }, reason })
       })
       .finally(() => {

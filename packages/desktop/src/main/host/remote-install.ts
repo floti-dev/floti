@@ -683,7 +683,7 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
       let stdinFile: string | null = null
       if (plan.source.how === 'copy') {
         const own = await deps.ownBuild()
-        if (own === null) return { ok: false, step: 'install', lastLine: 'This Helm no longer has its own floti to send.' }
+        if (own === null) return { ok: false, step: 'install', lastLine: 'This Floti no longer has its own floti to send.' }
         args = [deps.version, releaseFileName(deps.version, plan.os, plan.cpu), own.sha256, '-']
         stdinFile = own.path
       } else {
@@ -973,5 +973,5 @@ export function spawnTransportRun(
 
 function couldNotRun(program: string, error: unknown): string {
   const code = (error as NodeJS.ErrnoException).code
-  return `Helm could not run ${program} on this PC (${code ?? (error as Error).message}).`
+  return `Floti could not run ${program} on this PC (${code ?? (error as Error).message}).`
 }

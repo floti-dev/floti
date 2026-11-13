@@ -42,10 +42,10 @@ describe('quitting for an update this PC’s host runs', () => {
     host.push('update:state', step('Starting floti update.', false))
     host.push('update:state', step('Downloading Helm-3.2.0-setup.exe.', false))
     expect(quits()).toBe(0)
-    host.push('update:state', step('Waiting for Helm to quit; it is updated once it has.', true))
+    host.push('update:state', step('Waiting for Floti to quit; it is updated once it has.', true))
     expect(quits()).toBe(1)
     // Told again, it asks nothing more of the app.
-    host.push('update:state', step('Waiting for Helm to quit; it is updated once it has.', true))
+    host.push('update:state', step('Waiting for Floti to quit; it is updated once it has.', true))
     expect(quits()).toBe(1)
     stop()
     expect(host.subscriptions.has('update:state')).toBe(false)
@@ -54,7 +54,7 @@ describe('quitting for an update this PC’s host runs', () => {
   it('quits at once on a connection whose host already waits for the app', () => {
     const host = new FakeConnection()
     const { quits } = follow(host)
-    host.snapshot('update:state', step('Waiting for Helm to quit; it is updated once it has.', true))
+    host.snapshot('update:state', step('Waiting for Floti to quit; it is updated once it has.', true))
     expect(quits()).toBe(1)
   })
 

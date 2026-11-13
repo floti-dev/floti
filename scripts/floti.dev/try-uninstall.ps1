@@ -9,8 +9,8 @@
 # 1. `floti uninstall` from %LOCALAPPDATA%\Programs\Floti\bin\floti.exe. It
 #    must say it stopped the host, and no process may run from floti's
 #    folder after it; floti.exe, the logon task "Floti host",
-#    the desktop app where it was installed (Helm.exe and the Start menu's
-#    Helm.lnk) and floti's folder on the user's Path must be gone, and the
+#    the desktop app where it was installed (Floti.exe and the Start menu's
+#    Floti.lnk) and floti's folder on the user's Path must be gone, and the
 #    data folder, %LOCALAPPDATA%\Floti, must stay. The floti.exe uninstall
 #    runs from is renamed aside and deleted by a detached Windows PowerShell
 #    once it exits, then Programs\Floti goes; that is waited for, up to a
@@ -51,8 +51,8 @@ $programs = Join-Path $env:LOCALAPPDATA 'Programs\Floti'
 $folder = Join-Path $programs 'bin'
 $floti = Join-Path $folder 'floti.exe'
 $data = Join-Path $env:LOCALAPPDATA 'Floti'
-$app = Join-Path $env:LOCALAPPDATA 'Programs\Helm\Helm.exe'
-$menu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Helm.lnk'
+$app = Join-Path $env:LOCALAPPDATA 'Programs\Floti\desktop\Floti.exe'
+$menu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Floti.lnk'
 
 if (-not (Test-Path -LiteralPath $floti -PathType Leaf)) { Fail "there is no $floti to uninstall." }
 if (-not (Test-Path -LiteralPath $data -PathType Container)) { Fail "setup made no data folder at $data." }

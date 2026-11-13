@@ -1,7 +1,7 @@
 # Packaging and updates
 
 What `pnpm dist:win`, `pnpm dist:mac` and `pnpm dist:linux` produce, where
-their data goes, how a release is cut, and why Helm has no auto-updater.
+their data goes, how a release is cut, and why Floti has no auto-updater.
 
 ## Artefacts
 
@@ -10,45 +10,47 @@ their data goes, how a release is cut, and why Helm has no auto-updater.
 | File | What it is |
 |---|---|
 | `Helm-<version>-portable.exe` | One file, ~95 MB. No install. Keeps its data in `helm-data\` beside itself. |
-| `Helm-<version>-setup.exe` | NSIS one-click installer. Per-user, no elevation. Data in `%APPDATA%\Helm`. |
+| `Helm-<version>-setup.exe` | NSIS one-click installer. Per-user, no elevation, in `%LOCALAPPDATA%\Programs\Floti\desktop`. Data in `%LOCALAPPDATA%\Floti\desktop`. |
 
 `pnpm dist:mac` writes two more, and runs only on macOS, because
 electron-builder makes a dmg only there:
 
 | File | What it is |
 |---|---|
-| `Helm-<version>-arm64.dmg` | Disk image: Helm.app beside an Applications link to drag it onto. Apple Silicon only. |
-| `Helm-<version>-arm64-mac.zip` | The same Helm.app, zipped, for anyone who would rather not mount an image. |
+| `Helm-<version>-arm64.dmg` | Disk image: Floti.app beside an Applications link to drag it onto. Apple Silicon only. |
+| `Helm-<version>-arm64-mac.zip` | The same Floti.app, zipped, for anyone who would rather not mount an image. |
 
 `pnpm dist:linux` writes one, on Linux:
 
 | File | What it is |
 |---|---|
-| `Helm-<version>-linux-x64.AppImage` | One file that runs with no install and no root on x64 Linux with glibc 2.34 or later: Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 and anything newer. Data in `~/.config/Helm`. |
+| `Helm-<version>-linux-x64.AppImage` | One file that runs with no install and no root on x64 Linux with glibc 2.34 or later: Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 and anything newer. Data in `${XDG_DATA_HOME:-~/.local/share}/floti/desktop`. |
 
 Linux is x64 only. There is no arm64 Linux desktop build; floti itself does
 ship for arm64 Linux, so such a computer can still be a host (see
 [floti for every host](#floti-for-every-host)). The AppImage's executable is
-`helm` (`executableName`), its icon the 256px `build/icon.png`, its menu entry
-`helm.desktop`, which is also the package's `desktopName`, so a Linux desktop
-ties the running window to the entry's name and icon.
+`floti-desktop` (`executableName`; `floti` is the binary in `resources/`), its
+icon the 256px `build/icon.png`, its own menu entry `floti-desktop.desktop`.
+The menu entry `floti add desktop` writes is `dev.floti.desktop.desktop`, named
+by the app ID (design I11), which is also the package's `desktopName`, so a
+Linux desktop ties the running window to the entry's name and icon.
 
 **glibc 2.34 is the floor.** better-sqlite3's Linux prebuild needs it, and
 node-pty's addon, compiled at install, needs whatever glibc it was compiled
 against. The release therefore builds the AppImage in an `ubuntu:22.04`
 container (glibc 2.35), not on the runner's newer system, and
 `verify-linux-artifact.mjs` refuses an AppImage in which any ELF file needs a
-glibc newer than 2.34. A file that did would stop Helm at start on every
+glibc newer than 2.34. A file that did would stop Floti at start on every
 older distribution.
 
 **The AppImage's mount stays out of the host.** An AppImage runs from a mount
 that goes away when it quits, and its AppRun puts that mount at the front of
 `PATH`, `LD_LIBRARY_PATH`, `XDG_DATA_DIRS` and `GSETTINGS_SCHEMA_DIR`. The host
-and its sessions outlive Helm, so Helm takes the mount's entries out of those
+and its sessions outlive Floti, so Floti takes the mount's entries out of those
 lists, and drops `APPDIR`, `APPIMAGE`, `ARGV0` and `OWD`, before starting
 them (`withoutAppImage` in `main/host/launcher.ts`): a session never searches
 a folder that is gone, which anybody who saw its name could make again. The
-host is told to open Helm again by the AppImage's own path, `APPIMAGE`,
+host is told to open Floti again by the AppImage's own path, `APPIMAGE`,
 rather than `process.execPath`, which is inside the mount (`desktopProgram`).
 
 ### The browser pane needs the sandbox
@@ -62,7 +64,7 @@ the AppRun electron-builder writes probes them (`unshare -Ur true`) and adds
 program without an AppArmor profile allowing it, so there every AppImage
 starts that way.
 
-Helm never runs a web page that way. The menu entry carries no `--no-sandbox`
+Floti never runs a web page that way. The menu entry carries no `--no-sandbox`
 (`executableArgs: []` under `appImage`; electron-builder's default adds it,
 and `verify-linux-artifact.mjs` refuses an entry with it), and when main sees
 the switch on Linux the browser pane stays off for that run: no view is
@@ -84,7 +86,7 @@ folder filled in, as one `sudo`; with the AppImage in `~/Apps` it is
 
     printf '%s\n' 'abi <abi/4.0>,' 'include <tunables/global>' 'profile helm-appimage "/home/<you>/Apps/Helm-*.AppImage" flags=(unconfined) {' '  userns,' '}' | sudo sh -c 'cat > /etc/apparmor.d/helm-appimage && apparmor_parser -r /etc/apparmor.d/helm-appimage'
 
-Then start Helm again. Where the namespaces are refused some other way (for
+Then start Floti again. Where the namespaces are refused some other way (for
 example `kernel.unprivileged_userns_clone=0` on an older Debian), the tab says
 the sandbox is off without a command, since the fix is the system's
 setting.
@@ -266,7 +268,7 @@ together.
 
 ### The Mac build is ad-hoc signed
 
-Apple Silicon runs no arm64 binary without a code signature, and Helm has no
+Apple Silicon runs no arm64 binary without a code signature, and Floti has no
 Apple Developer ID to sign with, so `identity: '-'` in `electron-builder.yml`
 signs it ad-hoc: a valid signature with no certificate behind it. A copy
 downloaded in a browser is quarantined, so macOS refuses it the first time it
@@ -295,7 +297,7 @@ artwork in the middle 824px of 1024) so the wheel stands the size of the icons
 around it in the Dock.
 
 `pnpm verify:mac-artifact` opens the dmg and the zip a person downloads and
-checks the Helm.app in each: an arm64 executable, a signature that verifies and
+checks the Floti.app in each: an arm64 executable, a signature that verifies and
 is ad-hoc, `CFBundleIconFile` naming a file identical to `build/icon.icns`, no
 `NSRequiresAquaSystemAppearance`, better-sqlite3, node-pty (with an
 executable `spawn-helper`) and koffi unpacked beside the asar, and a `floti`
@@ -311,7 +313,7 @@ the asar; a `floti` and `floti-SHA256SUMS` byte for byte the ones it is given
 (`--floti`, `--sums`; by default `dist-host/`'s), floti executable; the pinned
 Node, executable, with its LICENSE; the install scripts and the icon; no ELF
 file anywhere in the image needing a glibc newer than 2.34, read from each
-file's `.gnu.version_r`; and a `helm.desktop` whose `Exec` has no
+file's `.gnu.version_r`; and a `floti-desktop.desktop` whose `Exec` has no
 `--no-sandbox`. It needs Linux.
 
 ## Where the data goes
@@ -320,7 +322,7 @@ file's `.gnu.version_r`; and a `helm.desktop` whose `Exec` has no
 launcher extracts the app to `%TEMP%\<random>\` and sets
 `PORTABLE_EXECUTABLE_DIR` to the directory the exe was double-clicked from. If
 that variable is set, `userData` is redirected to `<exe dir>\helm-data\`;
-otherwise it is `app.getPath('userData')`, which is `%APPDATA%\Helm`.
+otherwise it is `app.getPath('userData')`, which is `%APPDATA%\Floti`.
 
 `process.execPath` in portable mode points at the temp extraction, so **never
 derive an app path from execPath.** Use `PORTABLE_EXECUTABLE_DIR` or
@@ -329,10 +331,10 @@ derive an app path from execPath.** Use `PORTABLE_EXECUTABLE_DIR` or
 The check drivers use the same mechanism for isolation: they start the app with
 `PORTABLE_EXECUTABLE_DIR` pointed at a directory of their own, so a check runs
 against a real profile layout without touching the one somebody is using.
-`pnpm dev` does too, at `%LOCALAPPDATA%\Helm\dev` - `productName` is `Helm`, so
-an unpackaged run with no such directory resolves `userData` to `%APPDATA%\Helm`
-and shares the installed app's database, shims and Chromium profile. That is
-`pnpm dev:live`, which is the one mode that does it on purpose.
+`pnpm dev` does too, at `%LOCALAPPDATA%\Floti Dev\dev` - an unpackaged run with
+no such directory uses the installed app's data directory and shares its
+database, shims and Chromium profile. That is `pnpm dev:live`, which is the one
+mode that does it on purpose.
 
 `appMode` therefore reads **two** signals, not one: `app.isPackaged` says build
 or checkout, and `PORTABLE_EXECUTABLE_DIR` says whether the data is its own -
@@ -341,17 +343,16 @@ or checkout, and `PORTABLE_EXECUTABLE_DIR` says whether the data is its own -
 **Workspace templates take the same branch.** `templatesDir` reads the same
 variable: set, they live in `<exe dir>\helm-data\templates`, so **a portable
 install keeps its templates on the stick and leaves nothing on a machine it is
-plugged into**; unset, they live in `~/.config/helm/templates` rather than under
-`%APPDATA%`, because a template is a directory somebody authors by hand and
-likely keeps in git. The installed app is the exception: its host keeps its
-own config folder, `~/.config/helm` where that is there, else
-`~/.config/floti`, so its templates are in `templates` there, as a host started at
-sign-in reads them. One rule, four run modes, and no second override
+plugged into**; unset, they live in `~/.config/floti/templates` rather than
+under the data directory, because a template is a directory somebody authors by
+hand and likely keeps in git. That is the host's own config folder
+(`~/.config/helm` until the host has moved Helm's folder, below), so the
+installed app's templates are where a host started at sign-in reads them. One rule, four run modes, and no second override
 mechanism - `pnpm dev` and every check get a templates directory of their own
 for free, because both already set that variable for the database.
 
 The shipped `README.md` and example template are written on a start that finds
-the directory **absent**, and nothing there is ever overwritten. Helm records no
+the directory **absent**, and nothing there is ever overwritten. Floti records no
 hashes of what it seeded, so it cannot distinguish an edited file from an
 untouched one; deleting the directory is what puts the originals back.
 
@@ -359,26 +360,42 @@ Where each run keeps its data, on each OS (`appMode` in `paths.ts` decides):
 
 | run | Windows | macOS | Linux |
 |---|---|---|---|
-| installed | `%APPDATA%\Helm` | `~/Library/Application Support/Helm` | `${XDG_CONFIG_HOME:-~/.config}/Helm` |
+| installed | `%LOCALAPPDATA%\Floti\desktop` | `~/Library/Application Support/Floti/desktop` | `${XDG_DATA_HOME:-~/.local/share}/floti/desktop` |
 | portable | `helm-data` beside the exe | none | none |
-| `pnpm dev` | `%LOCALAPPDATA%\Helm\dev\helm-data` | `~/Library/Application Support/Helm Dev/dev/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/Helm/dev/helm-data` |
-| checks | `%LOCALAPPDATA%\Helm\checks\<name>\helm-data` | `~/Library/Application Support/Helm Dev/checks/<name>/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/Helm/checks/<name>/helm-data` |
+| `pnpm dev` | `%LOCALAPPDATA%\Floti Dev\dev\helm-data` | `~/Library/Application Support/Floti Dev/dev/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/floti-dev/dev/helm-data` |
+| checks | `%LOCALAPPDATA%\Floti Dev\checks\<name>\helm-data` | `~/Library/Application Support/Floti Dev/checks/<name>/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/floti-dev/checks/<name>/helm-data` |
 | `pnpm dev:live` | the installed app's own | the installed app's own | the installed app's own |
-| templates | `~/.config/helm/templates` where Helm's folder is there, else `~/.config/floti/templates`; `helm-data/templates` when portable | the same, without portable | the same, without portable |
+| templates | `~/.config/floti/templates` (`~/.config/helm/templates` until the host has moved it); `helm-data/templates` when portable | the same, without portable | the same, without portable |
 
 Templates are `helm-data/templates` in the run's own folder for `pnpm dev` and
 every check, on every OS.
 
+The installed desktop's data is the `desktop` folder of Floti's own data
+folder (design I12, `src/main/dataFolder.ts`), so its Chromium profile and
+`helm.db` sit beside, not among, the host's files. While the app was called
+Helm it kept them in Electron's `userData` for that name: `%APPDATA%\Helm`,
+`~/Library/Application Support/Helm` and `${XDG_CONFIG_HOME:-~/.config}/Helm`.
+The installed app's first start as Floti copies that folder to its new place,
+file by file into a folder beside it that is renamed into place, so a copy cut
+off halfway is never taken for the data; links are not copied (the overlay
+shims are made again as sessions need them), and the browser's partition,
+`persist:helm-browser`, moves with the rest under its own name. Helm's folder
+is removed only once the store has opened in the copy, never walking into a
+link, and a removal that fails is tried again at the next start. A copy that
+fails changes nothing: the app says why, quits, and tries again at its next
+start. `pnpm dev:live` moves nothing and reads Helm's folder where it is until
+the installed app has moved it.
+
 ## What the installer does, and what it deliberately does not
 
-- **Per-user**, into `%LOCALAPPDATA%\Programs\Helm`. Nothing Helm does needs
+- **Per-user**, into `%LOCALAPPDATA%\Programs\Floti`. Nothing Floti does needs
   administrator rights, and an installer that asks for them cannot be run on a
   machine the user does not own. `allowElevation: false` is set explicitly, so a
   config change that *would* need elevation fails the install rather than
   quietly putting a UAC prompt in front of everyone.
 - **Uninstall removes the program and leaves the data.**
-  `deleteAppDataOnUninstall` stays false: `%APPDATA%\Helm\helm.db` holds the
-  user's profiles, their session index and every config snapshot Helm has taken
+  `deleteAppDataOnUninstall` stays false: `%APPDATA%\Floti\helm.db` holds the
+  user's profiles, their session index and every config snapshot Floti has taken
   on their behalf, and uninstalling the program is not a request to destroy
   those. `pnpm verify:installer --yes` asserts the install directory,
   the start-menu shortcut and the uninstall registry entry are gone and that the
@@ -391,14 +408,14 @@ every check, on every OS.
   the user's PATH, and `floti setup --no-desktop` runs from there
   ([floti in your own folder](#floti-in-your-own-folder) has each step). A
   failure there does not fail the install; it is in the details log, and
-  Helm tries again when it starts.
+  Floti tries again when it starts.
 - **It stops no host, and ends no session.** The host and its session keeper
   run from `%LOCALAPPDATA%\Programs\Floti\bin`, outside the install folder,
   so neither electron-builder's own check, which force-stops every process
   run from inside the install folder, nor the previous version's
   uninstaller, which does the same, reaches them. A running `floti.exe`
   there is renamed aside rather than replaced, and keeps running until
-  Helm's Restart host to update hands its sessions to the new host through
+  Floti's Restart host to update hands its sessions to the new host through
   the keeper.
 - **Once, it stops a host from inside the old install, after saying what
   that ends.** A Helm from before this ran its host from
@@ -410,15 +427,15 @@ every check, on every OS.
   floti.exe **this installer carries**: it embeds `dist-host\floti.exe`, the
   same file it installs, and writes it to its own temporary folder, so an
   installed floti.exe that predates `update-stop` is asked too.
-  `floti update-stop "%APPDATA%\Helm\host-client" --ask` connects with Helm's
+  `floti update-stop "%APPDATA%\Floti\host-client" --ask` connects with Floti's
   client folder keys, as `floti bridge` does, so the device key never leaves
   that process, and it never pins a host. When the host runs sessions it
   prints the question ("Installing this update stops the local host on this
-  PC, ending 2 sessions. Helm offers them back when it next starts.") and the
+  PC, ending 2 sessions. Floti offers them back when it next starts.") and the
   installer shows it with OK and Cancel. Cancel quits the installer and every
   session keeps running; OK runs `--stop`, which stops the host for an update
   (`HostStopReason::Update`: the sessions end with their rows left running,
-  so Helm's next start offers them back once) and returns once the host has
+  so Floti's next start offers them back once) and returns once the host has
   exited. A host running no session (status 7) is stopped the same way with
   no question. Anything else asks nothing and leaves the host to the default
   check: no host answering (status 3), a client folder that has pinned no
@@ -485,11 +502,17 @@ Who runs it:
 - **The portable exe** installs nothing and runs the floti inside it, with
   its data beside it, as before.
 
-The host's config folder is `~/.config/helm` on a computer where that is
-there, which Helm set up before the rename and where its agents, templates
-and plugins are, and `~/.config/floti` elsewhere; it does not change while
-Floti runs there, and the one-time move to `~/.config/floti`, which the rename makes, is
-what switches a computer over. The installed app gives its
+The host's config folder is `~/.config/floti`, where the user's own files
+are: templates, themes, agents and the plugins they are writing. Helm kept
+them in `~/.config/helm`, and the first host to start as Floti, the one that
+owns the data folder, moves that folder there once
+(`platform/folders/mod.rs`, `move_helm_config`): renamed whole where there is
+no `~/.config/floti`, else each entry moved into it when none is in both, so no
+file is replaced; otherwise nothing moves and the log names the entries in
+both. Until it has moved, `~/.config/helm` is the folder read, by every host
+and the desktop alike, so the answer does not change while Floti runs. A host
+started with `FLOTI_CONFIG_READ_ONLY` (a development or check run) moves
+nothing. The installed app gives its
 host no config folder of its own, so the host it starts and the host started
 at sign-in read the same one.
 
@@ -502,7 +525,7 @@ only with `--purge`:
 | floti, copies of it put aside, its Node, and copies an install stopped part way left | `%LOCALAPPDATA%\Programs\Floti\bin\` (`floti.exe`, `floti.old-*.exe`, `node\` with any `node.old-*.exe`, `.floti.exe.floti-install-*`); `~/.local/bin/floti`, `~/.local/bin/node/` and `.floti.floti-install-*` there |
 | The PATH entry | on Windows that folder, appended to `Path` in `HKEY_CURRENT_USER\Environment`; on macOS and Linux floti's line, ending `# added by floti`, at the end of the startup file the user's shell reads ([floti setup](#floti-setup)) |
 | The start-at-sign-in entry | the logon task "Floti host" and its XML under the data folder's `startup\`; the LaunchAgent `~/Library/LaunchAgents/dev.floti.host.plist`; the user unit `~/.config/systemd/user/floti.service` |
-| The host's data | `%LOCALAPPDATA%\Floti`, `~/Library/Application Support/Floti`, `~/.local/share/floti` and `~/.local/state/floti`, kept as Helm's data is |
+| The host's data | `%LOCALAPPDATA%\Floti`, `~/Library/Application Support/Floti`, `~/.local/share/floti` and `~/.local/state/floti`, kept as Floti's data is |
 
 The host and its session keeper run from that folder, so they outlive the
 app's uninstaller, which stops only what runs from inside the app's own
@@ -581,7 +604,7 @@ after them and finishes green.
 - **A preview is a public pre-release.** A version with a pre-release part
   (`2.4.1-preview.12`) is built, published and tagged exactly like a release,
   so anybody can download it without a GitHub sign-in, but as a pre-release and
-  never `latest`. `/releases/latest` ignores pre-releases, so no installed Helm
+  never `latest`. `/releases/latest` ignores pre-releases, so no installed Floti
   is offered it. The in-app check reads only the `<major>.<minor>.<patch>`
   part, so a preview of 2.4.1 is newer than 2.4.0 and older than the next
   release after it.
@@ -598,7 +621,7 @@ after them and finishes green.
   fifty-nine lines, most of them naming a probe id, a fixture or a refactor, and
   three identical lines from one cherry-pick onto three branches. Filtering by
   path removes some and cannot remove the rest: the same file is touched for a
-  reason somebody using Helm sees and for a reason they never will, and only the
+  reason somebody using Floti sees and for a reason they never will, and only the
   person who wrote the commit knows which. The changelog is for them; the
   commits are one click away under "Full changelog".
 - **A release page is a changelog and nothing else.** Install notes, the
@@ -988,7 +1011,7 @@ Last in each of those jobs, on every runner and in both container runs,
 1. `floti uninstall`, from the installed floti. floti and its `node`, the
    sign-in entry (the unit, the LaunchAgent and what launchd has loaded, the
    logon task, or the start-on-connect marker), the desktop app where an
-   installer put it there (`Helm.exe` and the Start menu's `Helm.lnk`) and,
+   installer put it there (`Floti.exe` and the Start menu's `Floti.lnk`) and,
    on Windows, floti's folder on the user's `Path` must be gone, with the
    lines that say so; on macOS and Linux no startup file may hold floti's
    line, and where the install added one, uninstall must say it removed
@@ -1024,9 +1047,9 @@ stable, on `windows-latest`, `macos-latest` and `ubuntu-latest`
 (`scripts/floti.dev/try-add-desktop.sh`): it downloads the release's floti
 for the runner without a token, checks it against the run's SHA-256 list,
 runs `floti add desktop` and checks that it exited 0 and the app is where
-add puts it with its launcher entry (the Start menu's `Helm.lnk` and the
-uninstaller; `~/Applications/Helm.app`; `~/Applications/Helm.AppImage`, its
-`helm.desktop` and icon). On Windows and macOS the app's install ran
+add puts it with its launcher entry (the Start menu's `Floti.lnk` and the
+uninstaller; `~/Applications/Floti.app`; `~/Applications/Floti.AppImage`, its
+`dev.floti.desktop.desktop` and icon). On Windows and macOS the app's install ran
 `floti install-self`, so `check-setup` runs there too. The Linux runner has
 no display, and add asks only whether `DISPLAY` is set, so the job sets one
 that is not there; the AppImage is never started. It publishes and pushes
@@ -1044,7 +1067,7 @@ and step gates on. `ci.yml` and `floti.yml` skip those branches, as they skip
 
 ## Looking at the Mac build
 
-Nobody working on Helm has a Mac in front of them, so the
+Nobody working on Floti has a Mac in front of them, so the
 **macOS build and screenshots** workflow
 (`.github/workflows/macos-screenshots.yml`) builds and photographs it on
 `macos-latest`. It runs on a push to any branch but `main` that changes how the
@@ -1130,7 +1153,7 @@ changes setup's exit status, which stays the host's.
 | Neither, the app installed | Says where it is, in `floti add desktop`'s line, and asks nothing. |
 | Neither, the app not offered | Asks nothing and says nothing. The app is not offered with no display (a server; an ssh login to Windows, which is session 0; a Mac nobody is signed in to at its screen, where launchd has no GUI domain for the user), after setup itself found nobody signed in (the host starts at the next sign-in, on any OS), or in a WSL distro, whose desktop is Windows' own. |
 | Neither, nowhere to ask | Asks nothing and installs nothing; one line names `floti add desktop`. Setup asks only when standard input and standard output are both terminals and it runs in the terminal's foreground, so `floti setup > log`, the desktop's own ssh and `curl ... \| sh &` get the line. |
-| Neither, a terminal and a display | Asks once, `Install the Helm desktop app as well? [Y/n]`: Enter or `y` runs `floti add desktop`, `n` or the end of the input says one line naming it, anything else is asked again. |
+| Neither, a terminal and a display | Asks once, `Install the Floti desktop app as well? [Y/n]`: Enter or `y` runs `floti add desktop`, `n` or the end of the input says one line naming it, anything else is asked again. |
 
 `--desktop` and `--no-desktop` together are a usage error, and either goes
 with `--linger` or `--no-linger`. A desktop install that fails says
@@ -1161,9 +1184,9 @@ it:
 
 | | Where | Its launcher entry |
 |---|---|---|
-| Windows | `%LOCALAPPDATA%\Programs\Helm`, by running the release's `Helm-<version>-setup.exe` with `/S`, which runs `floti install-self` itself. | The Start menu entry the installer makes. |
-| macOS | `~/Applications/Helm.app`, unpacked from `Helm-<version>-arm64-mac.zip` with `ditto -x -k --noqtn` beside it and renamed into place; then `floti install-self` runs from the floti inside it. | `~/Applications` is the Applications entry. |
-| Linux | `~/Applications/Helm.AppImage`, from `Helm-<version>-linux-x64.AppImage`, written beside, made executable and renamed into place. | `applications/helm.desktop` and `icons/hicolor/256x256/apps/helm.png` under `$XDG_DATA_HOME` (`~/.local/share`); the icon is the AppImage's own, built into floti. |
+| Windows | `%LOCALAPPDATA%\Programs\Floti\desktop`, beside floti's own `Programs\Floti\bin`, by running the release's `Helm-<version>-setup.exe` with `/S`, which runs `floti install-self` itself. | The Start menu entry the installer makes. |
+| macOS | `~/Applications/Floti.app`, unpacked from `Helm-<version>-arm64-mac.zip` with `ditto -x -k --noqtn` beside it and renamed into place; then `floti install-self` runs from the floti inside it. | `~/Applications` is the Applications entry. |
+| Linux | `~/Applications/Floti.AppImage`, from `Helm-<version>-linux-x64.AppImage`, written beside, made executable and renamed into place. | `applications/dev.floti.desktop.desktop` and `icons/hicolor/256x256/apps/dev.floti.desktop.png` under `$XDG_DATA_HOME` (`~/.local/share`); the icon is the AppImage's own, built into floti. |
 
 **Which release.** The release that is floti's own version, preview or
 stable, at `https://github.com/floti-dev/floti/releases/download/v<version>/`;
@@ -1203,8 +1226,8 @@ writes no ended record, since a host follows updates by it. Where the app is
 already installed it says where, with its version where that can be told,
 and changes nothing but a menu entry floti makes that is missing (Linux).
 Where something that is not an install is at the install's place (a
-`Helm.app` with no `Info.plist`, a `Programs\Helm` with no uninstaller, a
-folder named `Helm.AppImage`) it refuses in one line and leaves it as it
+`Floti.app` with no `Info.plist`, a `Programs\Floti` with no uninstaller, a
+folder named `Floti.AppImage`) it refuses in one line and leaves it as it
 is. In a session with
 no display it refuses in one sentence saying why: on Linux when neither
 `DISPLAY` nor `WAYLAND_DISPLAY` is set, on Windows in session 0, where ssh
@@ -1228,7 +1251,7 @@ release, has this computer's host start it in its place, and updates the
 desktop app where it is installed and older, once the app has quit
 (`crates/host/src/update`). The host runs the same checks by itself for
 floti alone (**The host's own update**, below), and runs `floti update
---from-desktop` when the desktop's Update asks it to (**Updates in Helm**).
+--from-desktop` when the desktop's Update asks it to (**Updates in Floti**).
 `floti update --floti-only` replaces floti alone and never waits for the
 app, which this computer's host then offers its own update; it exits 4
 rather than 0 when floti is up to date. Another computer's desktop runs it
@@ -1277,7 +1300,7 @@ marker in its data folder.
 **What it replaces.** floti, when the channel's version is newer than the
 running one; a version older than or equal to it is never installed, and a
 floti whose own version is not a version updates nothing. A floti inside the
-desktop app's install (`resources\floti.exe` on Windows, inside `Helm.app`
+desktop app's install (`resources\floti.exe` on Windows, inside `Floti.app`
 on macOS, on the AppImage's mount on Linux) is never replaced on its own:
 the app's installer brings its own, and `floti update` says so and names
 floti installed on its own where it is there. The desktop app, when it is
@@ -1310,7 +1333,7 @@ itself, and the AppImage's floti is inside its image, so its app runs it
 when it next starts. What an earlier update or install left beside floti
 (copies put aside, `floti.old-<pid>-<n>.exe`, removed once nothing runs
 them; downloads, `.floti-<version>.<pid>`) or beside the app (a new or old
-copy, `.Helm.app.floti-update-<pid>` or `.Helm.app.floti-old-<pid>`) is
+copy, `.Floti.app.floti-update-<pid>` or `.Floti.app.floti-old-<pid>`) is
 removed at the start of the next, the downloads and copies of the app once
 the process that left them is known to have ended.
 
@@ -1318,9 +1341,23 @@ the process that left them is known to have ended.
 
 | | floti | the desktop app | its version |
 |---|---|---|---|
-| Windows | The running `floti.exe` is renamed aside (`floti.old-<pid>-<n>.exe`) and the new one moved into its name, as `install.ps1` and `floti install-self` do (`platform/standalone`); the old copy is removed at once when nothing runs it, else by the next update or install. | The per-user NSIS install, `%LOCALAPPDATA%\Programs\Helm` (`Helm.exe` beside `Uninstall Helm.exe`), updated by running the release's setup.exe with `/S`. | `DisplayVersion` of the per-user uninstall entry whose `UninstallString` is that install's uninstaller. |
-| macOS | Written beside, made executable, stripped of any quarantine flag, renamed over. | `Helm.app` in `~/Applications`, else `/Applications`: the release's zip is unpacked beside it with `ditto -x -k --noqtn` and swapped in by rename. | `CFBundleShortVersionString` in its `Info.plist`. |
-| Linux | Written beside, made executable, renamed over. | The AppImage at `~/Applications/Helm.AppImage` (AppImage's own tools look there, and it is outside the data folder `floti uninstall` keeps), where `floti add desktop` puts it: written beside, made executable, renamed over. | Unknown, so it is always updated. |
+| Windows | The running `floti.exe` is renamed aside (`floti.old-<pid>-<n>.exe`) and the new one moved into its name, as `install.ps1` and `floti install-self` do (`platform/standalone`); the old copy is removed at once when nothing runs it, else by the next update or install. | The per-user NSIS install, `%LOCALAPPDATA%\Programs\Floti\desktop` (`Floti.exe` beside `Uninstall Floti.exe`), updated by running the release's setup.exe with `/S`. | `DisplayVersion` of the per-user uninstall entry whose `UninstallString` is that install's uninstaller. |
+| macOS | Written beside, made executable, stripped of any quarantine flag, renamed over. | `Floti.app` in `~/Applications`, else `/Applications`: the release's zip is unpacked beside it with `ditto -x -k --noqtn` and swapped in by rename. | `CFBundleShortVersionString` in its `Info.plist`. |
+| Linux | Written beside, made executable, renamed over. | The AppImage at `~/Applications/Floti.AppImage` (AppImage's own tools look there, and it is outside the data folder `floti uninstall` keeps), where `floti add desktop` puts it: written beside, made executable, renamed over. | Unknown, so it is always updated. |
+
+An install from when the app was called Helm is found too (`Programs\Helm`
+with `Helm.exe`, `Helm.app`, `Helm.AppImage`) and updated into the new place:
+on Windows the release's installer finds it by the uninstall entry Helm's app
+ID gave it, runs its uninstaller silently, which takes that entry, its Start
+menu shortcut and its app ID's registration with it and keeps the data, and
+installs in `Programs\Floti\desktop` (`build/installer.nsh`); on macOS
+`Floti.app` is swapped in beside `Helm.app`, which is then removed; on Linux
+`Floti.AppImage` is written beside `Helm.AppImage`, which is then removed,
+and the `helm.desktop` entry and icon floti wrote for it are replaced by the
+new ones. The app opens again from its new place. A floti from before the
+rename that runs the update itself opens nothing afterwards, because it looks
+for the app where it was; the app is in the Start menu, Applications or the
+menu under its new name.
 
 A release with no desktop file for this computer updates floti alone and
 says so. No downloaded file carries a quarantine flag or a
@@ -1409,7 +1446,7 @@ half-working, and the next run carries on where it stopped:
    on, so a Linux computer with it on gets one line saying so and that
    `loginctl disable-linger` turns it off.
 4. **The desktop app** (`platform/installs`, `removal`): on Windows by its own
-   NSIS uninstaller, `"Uninstall Helm.exe" /S _?=<install folder>`, run in
+   NSIS uninstaller, `"Uninstall Floti.exe" /S _?=<install folder>`, run in
    place so the wait is for the uninstall itself (without `_?=` NSIS copies
    itself to `%TEMP%` and returns at once); it removes the app, its Start menu
    entry and its uninstall registry entry, and what it leaves of its folder
@@ -1418,8 +1455,9 @@ half-working, and the next run carries on where it stopped:
    violation) is tried again for up to five seconds, with a pause that
    doubles, before the run fails on it (`platform/held_files`, which
    `floti install-self` and `floti update` rename through too). A run whose
-   `Helm.exe` is still there afterwards fails.
-   On macOS the `.app`; on Linux the AppImage, `applications/helm.desktop`
+   `Floti.exe` is still there afterwards fails.
+   On macOS the `.app`; on Linux the AppImage, `applications/dev.floti.desktop.desktop`
+   (and `helm.desktop`, which floti wrote before the rename)
    and the icon. **The desktop app's own settings stay**: they are the app's,
    where the app keeps them, which the host never learns, and its uninstaller
    leaves them too. One line says so, with `--purge` as well.
@@ -1517,9 +1555,9 @@ Its tests use fake folders and a fake system, never the computer's own
 concern). The install and uninstall run for real only on CI runners, in the
 release's dry run ([A dry run](#a-dry-run)).
 
-## Updates in Helm
+## Updates in Floti
 
-Helm's own process contacts nothing about updates. It learns of a newer
+Floti's own process contacts nothing about updates. It learns of a newer
 release from this PC's host, over the window's own connection
 (`renderer/src/app/host/updates.ts`):
 
@@ -1548,7 +1586,7 @@ release from this PC's host, over the window's own connection
   `update:state`, and a host that starts while an update runs (relaunched,
   or after a crash) follows it too, so an Update pressed meanwhile starts
   nothing and Check now rests. When the run file says the update waits for
-  the app, Helm's main process quits, asking nothing and keeping every
+  the app, Floti's main process quits, asking nothing and keeping every
   session on every host running (`followHostUpdate`, `quitKeeping`). The
   update asks the host to relaunch only once the app is replaced, then opens
   the app again (replaced, or as it was when replacing it failed); on Linux
@@ -1572,7 +1610,7 @@ updater, and its signature check is the one to get right.
 ## Network posture
 
 **The host's update check, at most once a day to floti.dev and to the
-GitHub release it names, is the only request Helm makes on its own
+GitHub release it names, is the only request Floti makes on its own
 initiative; the app itself contacts nothing.
 Everything else on the network happens because you asked for it: Check
 now and Update ask the host to check or to update, the browser pane
@@ -1585,23 +1623,23 @@ There is no telemetry, no crash reporting, no fonts and no CDN. With
 a person pressing Check now or Update, or running `floti update` or
 `floti add desktop`, so nothing leaves the machine unasked for.
 
-**Helm listens only on this machine.** Its windows reach the local host over
+**Floti listens only on this machine.** Its windows reach the local host over
 the host's local socket, which only your OS account can open. The local host
 listens on `127.0.0.1` for its sessions' agent tools, behind a token minted
 for each session and revoked when it ends, and holds no port while no tool
-family is on. Helm's own process listens on `127.0.0.1` only for a port you
+family is on. Floti's own process listens on `127.0.0.1` only for a port you
 forwarded from a session on another computer, and closes it when that session
 ends.
 
-The tools are the browser pane's (`helm-browser`), the session-awareness tools
-(`helm-sessions`), the child-session tools (`floti-agents`) and each
+The tools are the browser pane's (`floti-browser`), the session-awareness tools
+(`floti-sessions`), the child-session tools (`floti-agents`) and each
 plugin's that offers them, served as named MCP
 servers on routes of one endpoint (`crates/host/src/agent_tools`). Every
 request carries a bearer token minted for one session and revoked when that
 session ends; a request with a non-loopback `Origin` is refused before its
 token is compared; and each built-in set has its own setting (`browserMcp`,
 `sessionMcp`, `sessionAgents`) that removes it from every launch. The host has no browser, so
-it hands each browser call to the attached Helm window, whose main process
+it hands each browser call to the attached Floti window, whose main process
 answers it in the pane. A forwarded port is opened only when the user chooses
 Open in browser on a port a session on a host on another computer listens on:
 main binds `127.0.0.1`, on the same number when it is free and another free
@@ -1616,7 +1654,7 @@ of its own (`connect-src 'none'`); `helm.fetch` sends its requests from the
 local host, only to an origin the manifest lists, following redirects one
 hop at a time so that every hop is checked against the same list. A plugin's
 background page may fetch on its own schedule, which is the plugin's doing
-rather than Helm's - the user added it - and is why the sentence above says
+rather than Floti's - the user added it - and is why the sentence above says
 so. A plugin never holds a secret: it writes `{{key}}`, and the host fills in
 a value the user typed into Settings > Secrets, only for an origin and a
 plugin the user allowed. Each value is sealed by this OS's store for the user
@@ -1625,8 +1663,8 @@ where none answers it refuses to store anything rather than fall back to
 plaintext. The programs (`exec`) and the service a plugin declares are
 ordinary processes with the user's rights, and their network is not confined;
 Settings > Plugins names them per plugin, and turning the plugin off ends
-them. A service listens on `127.0.0.1` on a port Helm gives it and is reached
-with a token minted for the run - a listener of the plugin's, not Helm's, so
+them. A service listens on `127.0.0.1` on a port Floti gives it and is reached
+with a token minted for the run - a listener of the plugin's, not Floti's, so
 the inbound paragraph above still describes the app.
 
 ## Updates need the repository to be public
@@ -1655,28 +1693,28 @@ and no `--only=` reaches it.
 
 ```bash
 pnpm packaging-check --only=package   # the artefacts and the portable exe
-pnpm verify:installer --yes           # installs and UNINSTALLS Helm here
+pnpm verify:installer --yes           # installs and UNINSTALLS Floti here
 ```
 
 `package` is in the default `pnpm packaging-check`. It builds the artefacts if
 they are missing, checks the two native modules are unpacked beside the asar,
 then copies the portable exe into a path with spaces, runs `--selftest` out of
 it as the ordinary user, and checks the data landed beside the exe and that
-`%APPDATA%\Helm` gained nothing. (That last read is dropped, and says so in the
-report, when an installed Helm is running - it writes to `%APPDATA%\Helm` too,
+`%APPDATA%\Floti` gained nothing. (That last read is dropped, and says so in the
+report, when an installed Floti is running - it writes to `%APPDATA%\Floti` too,
 so the comparison would be about two processes.)
 
 **`installer` is opt-in and is the only destructive thing in this repository.**
 It installs the NSIS package silently, runs `--selftest` out of the installed
-app, checks it reports `installed` mode with `%APPDATA%\Helm` as its data
+app, checks it reports `installed` mode with `%APPDATA%\Floti` as its data
 directory and that nothing landed beside the exe, then uninstalls and checks
 what is gone and what is kept - and **puts nothing back**. It cannot be
 isolated into its own data directory, because it is *about* where an installer
 puts things.
 
-It refuses outright if Helm is running from the install directory
+It refuses outright if Floti is running from the install directory
 (`--replace-running` overrides that, which is what a release machine says on
-purpose). Helm hosts Claude Code sessions, so terminating it is not like
+purpose). Floti hosts Claude Code sessions, so terminating it is not like
 terminating an editor with everything saved - it ends the work inside them, and
 it has done exactly that once, from a sweep of "every check".
 

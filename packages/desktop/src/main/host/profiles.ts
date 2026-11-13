@@ -85,7 +85,7 @@ export function createHostProfiles(deps: HostProfilesDeps): HostProfiles {
     } catch (error) {
       // Not recorded as done, so the next start tries again; a name copied
       // this time is skipped then.
-      deps.log(`host: Helm's profiles were not copied into the local host (${(error as Error).message})`)
+      deps.log(`host: Floti's profiles were not copied into the local host (${(error as Error).message})`)
     }
   })
 

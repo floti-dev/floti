@@ -178,7 +178,7 @@ describe('processes and ports through the local host', () => {
     expect(watches(connection)).toEqual([])
   })
 
-  it('keeps the sets arriving after Helm reaches the host again while the pane is open', async () => {
+  it('keeps the sets arriving after Floti reaches the host again while the pane is open', async () => {
     const first = new FakeConnection()
     const link = reconnectingLink(first)
     const w = world(link)

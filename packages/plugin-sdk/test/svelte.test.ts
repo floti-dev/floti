@@ -28,7 +28,7 @@ afterEach(() => {
 })
 
 describe('the stores in Svelte', () => {
-  it('render in a component through $, follow Helm, and let go when it unmounts', async () => {
+  it('render in a component through $, follow Floti, and let go when it unmounts', async () => {
     const panel = mount(Panel, { target })
     expect(text('settings')).toBe('reading')
     expect(text('visible')).toBe('hidden')

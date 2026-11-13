@@ -164,7 +164,7 @@ describe('SessionTree with hosts on other computers', () => {
     const header = group(view.container, 'h1').querySelector('[data-host-header]') as HTMLElement
     const older = within(header).getByRole('button', { name: 'older floti: update floti on build-box' })
     expect(older.textContent).toBe('older floti')
-    expect(older.getAttribute('title')).toBe('It runs floti 2.4.0; this Helm carries 2.5.0. Press to update floti on build-box.')
+    expect(older.getAttribute('title')).toBe('It runs floti 2.4.0; this Floti carries 2.5.0. Press to update floti on build-box.')
     expect(header.getAttribute('data-host-state')).toBe('connected')
     await userEvent.click(older)
     expect(hostActions.onUpdateFloti).toHaveBeenCalledWith('h1')
@@ -183,7 +183,7 @@ describe('SessionTree with hosts on other computers', () => {
     rerender({ hosts: [buildBox({ connected: false, floti: { verdict: 'newer', host: '4.0', client: '3.2' } })] })
     const newer = within(header()).getByText('newer floti')
     expect(newer.tagName).toBe('SPAN')
-    expect(newer.getAttribute('title')).toBe('It speaks protocol 4.0; this Helm speaks 3.2. Update Helm on this PC.')
+    expect(newer.getAttribute('title')).toBe('It speaks protocol 4.0; this Floti speaks 3.2. Update Floti on this PC.')
     expect(within(header()).queryByText('retrying')).toBeNull()
   })
 

@@ -612,10 +612,10 @@ mod tests {
 
     #[test]
     fn a_tooltip_is_cut_to_what_the_shell_takes_and_ends_in_nul() {
-        let short = tooltip("Helm: 2 sessions running on this PC's host");
+        let short = tooltip("Floti: 2 sessions running on this PC's host");
         assert_eq!(
             String::from_utf16(&short[..short.iter().position(|&u| u == 0).unwrap()]).unwrap(),
-            "Helm: 2 sessions running on this PC's host"
+            "Floti: 2 sessions running on this PC's host"
         );
         let long = tooltip(&"x".repeat(300));
         assert_eq!(long[TOOLTIP_MAX], 0);

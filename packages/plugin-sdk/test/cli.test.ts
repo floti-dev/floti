@@ -37,7 +37,7 @@ afterEach(() => {
 })
 
 describe('helm-plugin create', () => {
-  it('S3: writes a version 2 plugin Helm would load, named after its folder, and validate agrees', () => {
+  it('S3: writes a version 2 plugin Floti would load, named after its folder, and validate agrees', () => {
     const created = run(['create', 'Issue Tracker'], root)
     expect(created.stderr).toBe('')
     expect(created.status).toBe(0)
@@ -80,7 +80,7 @@ describe('helm-plugin create', () => {
 
     const validated = run(['validate'], folder)
     expect(validated.status).toBe(0)
-    expect(validated.stdout).toContain('Issue tracker (issue-tracker): Helm would load it.')
+    expect(validated.stdout).toContain('Issue tracker (issue-tracker): Floti would load it.')
     expect(checkPluginFolder(folder)).toMatchObject({ ok: true, errors: [], warnings: [] })
   })
 
@@ -110,7 +110,7 @@ describe('helm-plugin create', () => {
     expect(existsSync(join(folder, 'helm-plugin.json'))).toBe(false)
   })
 
-  it('refuses an id Helm would refuse, before writing anything', () => {
+  it('refuses an id Floti would refuse, before writing anything', () => {
     const refused = run(['create', 'x', '--id', 'Not_An_Id'], root)
     expect(refused.status).toBe(1)
     expect(refused.stderr).toContain('"Not_An_Id" cannot be a plugin id')
@@ -136,16 +136,16 @@ describe('helm-plugin validate', () => {
     }
   }
 
-  it('refuses a manifest Helm would refuse, says why, and exits 1', () => {
+  it('refuses a manifest Floti would refuse, says why, and exits 1', () => {
     const folder = join(root, 'broken')
     write(folder, { apiVersion: 7, id: 'broken', name: 'Broken' })
     const result = run(['validate', folder], root)
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain('error: apiVersion 7 is not supported by this Helm, which supports 1 and 2')
-    expect(result.stderr).toContain('1 error: Helm would not load this plugin.')
+    expect(result.stderr).toContain('error: apiVersion 7 is not supported by this Floti, which supports 1 and 2')
+    expect(result.stderr).toContain('1 error: Floti would not load this plugin.')
   })
 
-  it('refuses a page that is not there, the way Helm does', () => {
+  it('refuses a page that is not there, the way Floti does', () => {
     const folder = join(root, 'unbuilt')
     write(folder, { apiVersion: 1, id: 'unbuilt', name: 'Unbuilt', tabs: { a: { title: 'A', entry: 'dist/a.html' } } })
     const result = run(['validate'], folder)
@@ -177,7 +177,7 @@ describe('helm-plugin validate', () => {
     const result = run(['validate', folder], root)
     expect(result.status).toBe(0)
     expect(result.stderr).toContain('warning: "colour" is not a manifest field and is ignored')
-    expect(result.stdout).toContain('Warned (warned): Helm would load it (1 warning).')
+    expect(result.stdout).toContain('Warned (warned): Floti would load it (1 warning).')
   })
 
   it('S2: passes a version 2 plugin whose background is a module, and refuses a version 2 background page', () => {
@@ -185,7 +185,7 @@ describe('helm-plugin validate', () => {
     write(folder, { apiVersion: 2, id: 'two', name: 'Two', background: 'bg.mjs' }, { 'bg.mjs': 'floti.badge.set(1)\n' })
     const passed = run(['validate', folder], root)
     expect(passed.status, passed.stderr).toBe(0)
-    expect(passed.stdout).toContain('Two (two): Helm would load it.')
+    expect(passed.stdout).toContain('Two (two): Floti would load it.')
 
     const page = join(root, 'page')
     write(page, { apiVersion: 2, id: 'page', name: 'Page', background: 'bg.html' }, { 'bg.html': '<!doctype html>' })

@@ -59,7 +59,7 @@ afterEach(endStartedProcesses)
 
 describe.runIf(flotiAvailable)('the hosts floti doctor checks', () => {
   it(
-    'S6: Helm records the hosts this device added, and floti doctor checks each with this PC\'s host, one line each, failing when one does not answer',
+    'S6: Floti records the hosts this device added, and floti doctor checks each with this PC\'s host, one line each, failing when one does not answer',
     { timeout: PATIENCE * 4 },
     async () => {
       const root = await mkdtemp(join(inject(RUN_ROOT), 'doctor hosts '))

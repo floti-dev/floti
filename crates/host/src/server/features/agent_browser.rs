@@ -1,7 +1,7 @@
 //! The agent browser tools' relay: `agentBrowser:call` and
 //! `agentBrowser:answer`.
 //!
-//! The host serves helm-browser to its sessions, but the browser pane is a
+//! The host serves floti-browser to its sessions, but the browser pane is a
 //! client's. So each call is carried to one attached client that declared
 //! `browser` and listens on `agentBrowser:call` ([`browser_client`]), and the
 //! tool answers with what that client answers. The call names the session
@@ -231,7 +231,7 @@ mod tests {
             unreachable!()
         };
         assert!(message.contains("No browser is attached"), "{message}");
-        assert!(message.contains("Helm"), "{message}");
+        assert!(message.contains("Floti"), "{message}");
     }
 
     #[tokio::test]

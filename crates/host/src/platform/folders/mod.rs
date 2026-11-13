@@ -123,8 +123,9 @@ pub trait FolderLayout {
 /// computer does not change while Floti runs on it, so a host started by the
 /// desktop, at sign-in or by hand reads one folder, even once one of them
 /// has written `~/.config/floti`. The one-time move of `~/.config/helm` to
-/// `~/.config/floti`, which the rename makes once, is what switches a computer over. This is the
-/// one look at the disk resolving makes, and it creates nothing.
+/// `~/.config/floti` ([`move_helm_config`]), which the first host to start
+/// as Floti makes, is what switches a computer over. This is the one look at
+/// the disk resolving makes, and it creates nothing.
 pub fn config_folder(home: &Path) -> PathBuf {
     let config = home.join(".config");
     let helm = config.join(HELM_CONFIG_FOLDER);
@@ -137,6 +138,146 @@ pub fn config_folder(home: &Path) -> PathBuf {
 
 /// The folder in `~/.config` Helm kept the user's own files in.
 pub const HELM_CONFIG_FOLDER: &str = "helm";
+
+/// The folder in `~/.config` the user's own files are kept in.
+pub const FLOTI_CONFIG_FOLDER: &str = "floti";
+
+/// What [`move_helm_config`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConfigMove {
+    /// There is no `~/.config/helm` to move.
+    Nothing,
+    /// `~/.config/helm` is now `~/.config/floti`, every file in it as it was.
+    Moved { from: PathBuf, to: PathBuf },
+    /// `~/.config/helm` stays where it is and is still the folder read, for
+    /// the reason given, and the move is tried again at the next start.
+    Kept {
+        from: PathBuf,
+        to: PathBuf,
+        reason: String,
+    },
+}
+
+impl ConfigMove {
+    /// The host's log line for it, or `None` when there is nothing to say.
+    pub fn log_line(&self) -> Option<String> {
+        match self {
+            Self::Nothing => None,
+            Self::Moved { from, to } => Some(format!(
+                "floti host: moved your files from {} to {}",
+                from.display(),
+                to.display()
+            )),
+            Self::Kept { from, to, reason } => Some(format!(
+                "floti host: your files stay in {} and are read from there, because {reason}; moving them to {} is tried again at the next start",
+                from.display(),
+                to.display()
+            )),
+        }
+    }
+
+    /// The config folder to read once this move is done: Floti's when the
+    /// files are there, else Helm's.
+    pub fn config(&self) -> Option<&Path> {
+        match self {
+            Self::Nothing => None,
+            Self::Moved { to, .. } => Some(to),
+            Self::Kept { from, .. } => Some(from),
+        }
+    }
+}
+
+/// Moves the user's own files, once, from `~/.config/helm`, where Helm kept
+/// them, to `~/.config/floti` in `home`: templates, themes, agents and the
+/// plugins they are writing.
+///
+/// - No `~/.config/helm`: nothing.
+/// - No `~/.config/floti`: the folder is renamed whole, every file and link
+///   in it as it was.
+/// - Both: each entry of Helm's is renamed into Floti's, and Helm's empty
+///   folder removed, but only when no entry is in both, so no file of the
+///   user's is ever replaced. Otherwise nothing moves and the reason names
+///   the entries in both. A rename that fails partway is undone.
+///
+/// Only a host that may write its config folder calls this: one started
+/// with [`CONFIG_READ_ONLY_VAR`] moves nothing.
+pub fn move_helm_config(home: &Path) -> ConfigMove {
+    move_helm_config_with(home, |from, to| std::fs::rename(from, to))
+}
+
+/// [`move_helm_config`], renaming with `rename`.
+pub(crate) fn move_helm_config_with(
+    home: &Path,
+    rename: impl Fn(&Path, &Path) -> std::io::Result<()>,
+) -> ConfigMove {
+    let config = home.join(".config");
+    let from = config.join(HELM_CONFIG_FOLDER);
+    let to = config.join(FLOTI_CONFIG_FOLDER);
+    if !from.is_dir() {
+        return ConfigMove::Nothing;
+    }
+    let kept = |reason: String| ConfigMove::Kept {
+        from: from.clone(),
+        to: to.clone(),
+        reason,
+    };
+    if std::fs::symlink_metadata(&to).is_err() {
+        return match rename(&from, &to) {
+            Ok(()) => ConfigMove::Moved {
+                from: from.clone(),
+                to: to.clone(),
+            },
+            Err(err) => kept(format!("it could not be renamed: {err}")),
+        };
+    }
+    if !to.is_dir() {
+        return kept(format!("{} is not a folder", to.display()));
+    }
+    let names = match std::fs::read_dir(&from) {
+        Ok(entries) => {
+            let mut names: Vec<_> = entries.flatten().map(|entry| entry.file_name()).collect();
+            names.sort();
+            names
+        }
+        Err(err) => return kept(format!("it could not be read: {err}")),
+    };
+    let in_both: Vec<String> = names
+        .iter()
+        .filter(|name| std::fs::symlink_metadata(to.join(name)).is_ok())
+        .map(|name| name.to_string_lossy().into_owned())
+        .collect();
+    if !in_both.is_empty() {
+        return kept(format!(
+            "both folders hold {}; with one of each left, the rest move",
+            in_both.join(", ")
+        ));
+    }
+    let mut moved = Vec::new();
+    for name in &names {
+        if let Err(err) = rename(&from.join(name), &to.join(name)) {
+            for back in moved.iter().rev() {
+                let _ = rename(&to.join(back), &from.join(back));
+            }
+            return kept(format!(
+                "{} could not be moved: {err}",
+                from.join(name).display()
+            ));
+        }
+        moved.push(name.clone());
+    }
+    match std::fs::remove_dir(&from) {
+        Ok(()) => ConfigMove::Moved {
+            from: from.clone(),
+            to: to.clone(),
+        },
+        Err(err) => {
+            for back in moved.iter().rev() {
+                let _ = rename(&to.join(back), &from.join(back));
+            }
+            kept(format!("it could not be removed once empty: {err}"))
+        }
+    }
+}
 
 /// The variables that move one folder each.
 pub const DATA_DIR_VAR: &str = "FLOTI_DATA_DIR";

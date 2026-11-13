@@ -30,7 +30,7 @@ use crate::update::run_file::{self, Look, RunLock, RunRecord};
 const RUNNING: &str = "2.0.0";
 const TARGET: &str = "linux-x64";
 const MANIFEST: &str = "https://floti.test/update.json";
-const APP: &str = "Helm";
+const APP: &str = "Floti";
 
 /// Installs that rename as the real ones do and record the desktop's.
 struct FakeInstalls {
@@ -49,6 +49,9 @@ struct FakeInstalls {
     install_fails: bool,
     /// The variables the running app's process has, as `display_env` reads them.
     display: Vec<(String, String)>,
+    /// Where installing puts the app, when that is not where it was: an app
+    /// from before the rename, moved to its new place.
+    installed_as: Option<Desktop>,
 }
 
 impl FakeInstalls {
@@ -70,6 +73,11 @@ impl FakeInstalls {
 
     fn failing_to_install(mut self) -> Self {
         self.install_fails = true;
+        self
+    }
+
+    fn moving_to(mut self, installed: Desktop) -> Self {
+        self.installed_as = Some(installed);
         self
     }
 
@@ -152,11 +160,12 @@ impl Installs for FakeInstalls {
     }
 
     fn is_desktop_process(&self, _desktop: &Desktop, row: &ProcessRow) -> bool {
-        row.name == "Helm.exe"
+        // The one process the fake table lists for the app.
+        row.pid == 2
     }
 
     fn opener(&self, desktop: &Desktop) -> (PathBuf, Vec<String>) {
-        (desktop.path.join("Helm.exe"), Vec::new())
+        (desktop.path.join(format!("{}.exe", desktop.name)), Vec::new())
     }
 
     fn display_env(&self, pid: u32) -> Vec<(String, String)> {
@@ -164,10 +173,10 @@ impl Installs for FakeInstalls {
         self.display.clone()
     }
 
-    fn install_desktop(&self, _desktop: &Desktop, release: &Path) -> Result<()> {
+    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<Desktop> {
         if self.install_fails {
             return Err(crate::Error::Refused(
-                "The Helm installer Helm-2.1.0-setup.exe ended with exit code: 2.".into(),
+                "The Floti installer Floti-2.1.0-setup.exe ended with exit code: 2.".into(),
             ));
         }
         *self.binary_replaced_first.lock().unwrap() =
@@ -176,7 +185,7 @@ impl Installs for FakeInstalls {
             .lock()
             .unwrap()
             .push(std::fs::read(release).unwrap());
-        Ok(())
+        Ok(self.installed_as.clone().unwrap_or_else(|| desktop.clone()))
     }
 }
 
@@ -207,7 +216,7 @@ impl ProcessTable for FakeProcesses {
             rows.push(ProcessRow {
                 pid: 2,
                 parent_pid: 1,
-                name: "Helm.exe".into(),
+                name: "Floti.exe".into(),
                 command_line: None,
             });
         }
@@ -236,7 +245,7 @@ impl Published {
     }
 
     fn with_desktop(mut self) -> Self {
-        self.desktop = Some(format!("Helm installer {}", self.version).into_bytes());
+        self.desktop = Some(format!("Floti installer {}", self.version).into_bytes());
         self
     }
 
@@ -372,6 +381,7 @@ impl World {
             running_binary: self.running_binary.clone(),
             install_fails: false,
             display: Vec::new(),
+            installed_as: None,
         }
     }
 
@@ -751,13 +761,13 @@ fn a_running_app_is_waited_for_and_replaced_once_it_has_quit() {
     assert_eq!(run.pauses, vec![APP_POLL; 3]);
     assert_eq!(
         run.out
-            .matches("Waiting for Helm to quit; it is updated once it has.")
+            .matches("Waiting for Floti to quit; it is updated once it has.")
             .count(),
         1,
         "{}",
         run.out
     );
-    assert!(run.out.contains("Helm is updated to 2.1.0."), "{}", run.out);
+    assert!(run.out.contains("Floti is updated to 2.1.0."), "{}", run.out);
     assert_eq!(
         *installs.desktop_installs.lock().unwrap(),
         vec![release.desktop.clone().unwrap()]
@@ -790,7 +800,7 @@ fn a_release_with_no_desktop_for_this_computer_still_updates_floti() {
     let run = world.update(&installs, 0, None);
     assert!(
         run.out
-            .contains("floti 2.1.0 has no Helm for linux-x64, so Helm stays as it is."),
+            .contains("floti 2.1.0 has no Floti for linux-x64, so Floti stays as it is."),
         "{}",
         run.out
     );
@@ -1083,7 +1093,7 @@ fn a_floti_inside_the_app_is_never_replaced_and_the_app_brings_its_own() {
     let standalone = standalone.display().to_string();
     assert!(
         run.out.contains(&format!(
-            "This floti is part of Helm ({app}), so it is updated with Helm, never on its own. floti installed on its own is {standalone}; `{standalone} update` updates it."
+            "This floti is part of Floti ({app}), so it is updated with Floti, never on its own. floti installed on its own is {standalone}; `{standalone} update` updates it."
         )),
         "{}",
         run.out
@@ -1136,7 +1146,7 @@ fn once_floti_is_replaced_this_computer_s_host_is_asked_to_start_it_in_its_place
             "This computer's host is starting floti 2.1.0 in its place; its sessions keep running.",
         )
         .unwrap_or_else(|| panic!("{}", run.out));
-    let app = run.out.find("Helm is updated to 2.1.0.").unwrap();
+    let app = run.out.find("Floti is updated to 2.1.0.").unwrap();
     assert!(replaced < relaunched && relaunched < app, "{}", run.out);
 }
 
@@ -1225,7 +1235,7 @@ fn after_the_app_is_updated_its_own_floti_puts_itself_and_its_node_in_place() {
     assert_eq!(run.installed_from, std::slice::from_ref(&carried));
     let updated = run
         .out
-        .find("Helm is updated to 2.1.0.")
+        .find("Floti is updated to 2.1.0.")
         .expect("the app updated");
     let placed = run
         .out
@@ -1296,20 +1306,20 @@ fn a_failure_line_says_nothing_was_updated_unless_floti_was() {
     let alone = UpdateError::DesktopAlone {
         version: "2.1.0".into(),
         app: APP.into(),
-        reason: "The Helm installer ended with 2.".into(),
+        reason: "The Floti installer ended with 2.".into(),
     };
     assert_eq!(
         failure_line(&alone),
-        "Helm could not be updated to 2.1.0: The Helm installer ended with 2. Nothing was updated."
+        "Floti could not be updated to 2.1.0: The Floti installer ended with 2. Nothing was updated."
     );
     let after_floti = UpdateError::Desktop {
         version: "2.1.0".into(),
         app: APP.into(),
-        reason: "The Helm installer ended with 2.".into(),
+        reason: "The Floti installer ended with 2.".into(),
     };
     assert_eq!(
         failure_line(&after_floti),
-        "floti is updated to 2.1.0, but Helm is not: The Helm installer ended with 2."
+        "floti is updated to 2.1.0, but Floti is not: The Floti installer ended with 2."
     );
 }
 
@@ -1320,12 +1330,12 @@ fn what_an_earlier_install_left_beside_the_app_is_removed_once_its_process_has_e
     let app = installs.desktop.clone().unwrap().path;
     let apps = app.parent().unwrap().to_path_buf();
     // An unpacked app is a folder; a written AppImage is a file.
-    let old = apps.join(".Helm.floti-old-21");
+    let old = apps.join(".Floti.floti-old-21");
     std::fs::create_dir_all(old.join("Contents")).unwrap();
     std::fs::write(old.join("Contents").join("Info.plist"), b"old").unwrap();
-    std::fs::write(apps.join(".Helm.floti-update-22"), b"new").unwrap();
-    std::fs::create_dir_all(apps.join(".Helm.floti-old-23")).unwrap();
-    std::fs::write(apps.join(".Helm.floti-update-24"), b"new").unwrap();
+    std::fs::write(apps.join(".Floti.floti-update-22"), b"new").unwrap();
+    std::fs::create_dir_all(apps.join(".Floti.floti-old-23")).unwrap();
+    std::fs::write(apps.join(".Floti.floti-update-24"), b"new").unwrap();
     world.alive.borrow_mut().extend([
         (21, Knowable::Known(false)),
         (22, Knowable::Known(false)),
@@ -1345,12 +1355,12 @@ fn what_an_earlier_install_left_beside_the_app_is_removed_once_its_process_has_e
     left.sort();
     assert_eq!(
         left,
-        vec![".Helm.floti-old-23", ".Helm.floti-update-24"],
+        vec![".Floti.floti-old-23", ".Floti.floti-update-24"],
         "only what a process known to have ended left"
     );
 }
 
-const WAITING: &str = "Waiting for Helm to quit; it is updated once it has.";
+const WAITING: &str = "Waiting for Floti to quit; it is updated once it has.";
 
 #[test]
 fn the_run_file_says_the_update_waits_for_the_app_while_it_does() {
@@ -1494,14 +1504,53 @@ fn from_the_desktop_the_host_relaunches_once_the_app_is_replaced_and_before_it_o
             desktop: Some(APP.into())
         }
     );
-    let app = world.dirs.folder("apps").join(APP).join("Helm.exe");
+    let app = world.dirs.folder("apps").join(APP).join("Floti.exe");
     assert_eq!(
         *world.done.borrow(),
         vec!["relaunch".to_owned(), format!("open {}", app.display())]
     );
-    let updated = run.out.find("Helm is updated to 2.1.0.").unwrap();
-    let opening = run.out.find("Opening Helm again.").unwrap();
+    let updated = run.out.find("Floti is updated to 2.1.0.").unwrap();
+    let opening = run.out.find("Opening Floti again.").unwrap();
     assert!(updated < opening, "{}", run.out);
+}
+
+#[test]
+fn an_app_from_before_the_rename_is_updated_into_its_new_place_and_opens_again_there() {
+    let world = World::new();
+    world.from_desktop.set(true);
+    let release = Published::new("2.1.0").with_desktop();
+    world.publish(&[("stable", &release)]);
+    let moved = world.dirs.folder("apps").join("Floti").join("desktop");
+    let mut installs = world.installs(true).moving_to(Desktop {
+        name: "Floti",
+        path: moved.clone(),
+    });
+    installs.desktop = Some(Desktop {
+        name: "Helm",
+        path: world.dirs.folder("apps").join("Helm"),
+    });
+    let run = world.update(&installs, 1, None);
+    assert_eq!(
+        run.result.unwrap(),
+        Outcome::Updated {
+            version: "2.1.0".into(),
+            floti: true,
+            desktop: Some("Floti".into())
+        }
+    );
+    assert!(
+        run.out.contains(&format!(
+            "Helm is updated to Floti 2.1.0, at {}.",
+            moved.display()
+        )),
+        "{}",
+        run.out
+    );
+    assert_eq!(
+        world.done.borrow().last().cloned(),
+        Some(format!("open {}", moved.join("Floti.exe").display()))
+    );
+    assert!(run.out.contains("Opening Floti again."), "{}", run.out);
 }
 
 #[test]
@@ -1515,7 +1564,7 @@ fn from_the_desktop_the_app_opens_again_with_the_display_variables_it_ran_with()
         .with_display(&[("WAYLAND_DISPLAY", "wayland-0"), ("DISPLAY", ":0")]);
     let run = world.update(&installs, 1, None);
     assert!(run.result.is_ok(), "{}", run.out);
-    let app = world.dirs.folder("apps").join(APP).join("Helm.exe");
+    let app = world.dirs.folder("apps").join(APP).join("Floti.exe");
     assert_eq!(
         world.done.borrow().last().cloned(),
         Some(format!(
@@ -1542,7 +1591,7 @@ fn from_the_desktop_an_app_that_failed_to_install_opens_again_as_it_was() {
         "{}",
         run.out
     );
-    let app = world.dirs.folder("apps").join(APP).join("Helm.exe");
+    let app = world.dirs.folder("apps").join(APP).join("Floti.exe");
     // floti was not replaced, so the host is not asked to relaunch.
     assert_eq!(
         *world.done.borrow(),

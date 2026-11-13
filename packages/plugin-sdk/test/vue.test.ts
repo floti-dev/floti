@@ -24,7 +24,7 @@ afterEach(() => {
 })
 
 describe('the Vue composables', () => {
-  it('render in a component, follow Helm, and let go when it unmounts', async () => {
+  it('render in a component, follow Floti, and let go when it unmounts', async () => {
     const actions: string[] = []
     const Panel = defineComponent({
       setup() {

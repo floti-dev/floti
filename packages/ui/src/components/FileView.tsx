@@ -107,7 +107,7 @@ export function FileView({
   }
   if (view.error !== null) {
     return (
-      <Notice icon={<WarnIcon width={18} height={18} className="text-warn" />} title="Helm will not show this">
+      <Notice icon={<WarnIcon width={18} height={18} className="text-warn" />} title="Floti will not show this">
         {view.error}
       </Notice>
     )

@@ -17,12 +17,12 @@ use crate::platform::folders::UserEnv;
 use crate::platform::installs::{DISPLAY_TEST_VAR, Desktop, Installs};
 use crate::platform::process_table::ProcessRow;
 
-const APP: &str = "the Helm desktop app";
+const APP: &str = "the Floti desktop app";
 
 fn helm() -> Desktop {
     Desktop {
-        name: "Helm",
-        path: PathBuf::from("/home/me/Applications/Helm.AppImage"),
+        name: "Floti",
+        path: PathBuf::from("/home/me/Applications/Floti.AppImage"),
     }
 }
 
@@ -94,7 +94,7 @@ impl Installs for FakeInstalls {
         false
     }
 
-    fn install_desktop(&self, _target: &Desktop, _release: &Path) -> Result<()> {
+    fn install_desktop(&self, _target: &Desktop, _release: &Path) -> Result<Desktop> {
         unreachable!("setup installs only through floti add desktop")
     }
 
@@ -213,7 +213,7 @@ fn answer(typed: &str) -> (bool, String) {
 
 #[test]
 fn the_question_is_yes_on_enter_and_takes_y_or_n_in_any_case() {
-    let asked = "Install the Helm desktop app as well? [Y/n] ";
+    let asked = "Install the Floti desktop app as well? [Y/n] ";
     for typed in ["\n", "\r\n", "y\n", "Yes\n", "  YES  \n"] {
         assert_eq!(answer(typed), (true, asked.to_owned()), "{typed:?}");
     }
@@ -328,7 +328,7 @@ fn no_installs_nothing_and_names_floti_add_desktop() {
     assert_eq!(
         ran.out,
         format!(
-            "{}The Helm desktop app was not installed; floti add desktop installs it.\n",
+            "{}The Floti desktop app was not installed; floti add desktop installs it.\n",
             question(APP)
         )
     );
@@ -348,7 +348,7 @@ fn with_no_terminal_nothing_is_asked_or_installed_and_one_line_names_floti_add_d
     assert_eq!(ran.adds, 0);
     assert_eq!(
         ran.out,
-        "To install the Helm desktop app as well, run floti add desktop.\n"
+        "To install the Floti desktop app as well, run floti add desktop.\n"
     );
     assert_eq!(ran.out, format!("{}\n", no_terminal_line(APP)));
 }
@@ -379,7 +379,7 @@ fn an_installed_app_gets_floti_add_desktop_s_one_line_and_no_question() {
     assert_eq!(ran.adds, 0);
     assert_eq!(
         ran.out,
-        "Helm 3.0.0 is already installed at /home/me/Applications/Helm.AppImage; floti update keeps it up to date. Nothing was changed.\n"
+        "Floti 3.0.0 is already installed at /home/me/Applications/Floti.AppImage; floti update keeps it up to date. Nothing was changed.\n"
     );
 }
 
@@ -396,7 +396,7 @@ fn desktop_runs_floti_add_desktop_without_asking_even_with_no_terminal_or_displa
 
 #[test]
 fn a_failed_install_says_add_s_line_and_that_the_host_is_set_up() {
-    let refused = "This session has no display, so Helm is not installed here.";
+    let refused = "This session has no display, so Floti is not installed here.";
     let ran = run(
         DesktopChoice::Install,
         &FakeInstalls::with_no_display(),
@@ -407,7 +407,7 @@ fn a_failed_install_says_add_s_line_and_that_the_host_is_set_up() {
     assert_eq!(ran.outcome, DesktopOutcome::Failed(refused.into()));
     assert_eq!(
         ran.err,
-        "floti add desktop: This session has no display, so Helm is not installed here. The Floti host is set up all the same.\n"
+        "floti add desktop: This session has no display, so Floti is not installed here. The Floti host is set up all the same.\n"
     );
     assert_eq!(ran.err, format!("{}\n", failed_line(refused)));
 }

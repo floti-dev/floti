@@ -454,7 +454,7 @@ impl Hosted {
             Err(err) => (
                 None,
                 Some(format!(
-                    "This session has none of Helm's agent tools: {err}."
+                    "This session has none of Floti's agent tools: {err}."
                 )),
             ),
         }
@@ -1002,7 +1002,7 @@ impl Hosted {
             .agent_tools
             .iter()
             .any(|server| server.name == FAMILY);
-        // A session given helm-sessions is asked to title itself.
+        // A session given floti-sessions is asked to title itself.
         composition.title_guide = composition
             .agent_tools
             .iter()

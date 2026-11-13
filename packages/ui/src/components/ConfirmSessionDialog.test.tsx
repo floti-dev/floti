@@ -60,17 +60,17 @@ describe('ConfirmSessionDialog', () => {
   })
 
   it('reads the detail as written when it names no folder, or not the one given', () => {
-    renderDialog({ detail: 'Quitting Helm ends them.', folder: 'C:\\elsewhere' })
+    renderDialog({ detail: 'Quitting Floti ends them.', folder: 'C:\\elsewhere' })
     const dialog = screen.getByRole('alertdialog', { name: '“review” is still running.' })
     expect(dialog.querySelector('[data-confirm-folder]')).toBeNull()
-    expect(dialog.textContent).toContain('Quitting Helm ends them.')
+    expect(dialog.textContent).toContain('Quitting Floti ends them.')
   })
 
   it('lists the sessions a quit would end, and summarises past six', () => {
     renderDialog({
       kind: 'quit',
       message: '8 Claude Code sessions are still running.',
-      detail: 'Quitting Helm ends them.',
+      detail: 'Quitting Floti ends them.',
       confirmLabel: 'End 8 sessions',
       sessionNames: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
     })
@@ -95,14 +95,14 @@ describe('ConfirmSessionDialog', () => {
   it('asks a quit with sessions in the host with End and quit, Keep running and quit, and Cancel, Cancel in focus', async () => {
     const props = renderDialog({
       kind: 'quit',
-      message: 'Quitting Helm ends 1 session on this PC’s host.',
+      message: 'Quitting Floti ends 1 session on this PC’s host.',
       detail: 'End and quit stops it.',
       confirmLabel: 'End and quit',
       keepLabel: 'Keep running and quit',
       sessionNames: ['review'],
       onKeep: vi.fn()
     })
-    const dialog = screen.getByRole('alertdialog', { name: 'Quitting Helm ends 1 session on this PC’s host.' })
+    const dialog = screen.getByRole('alertdialog', { name: 'Quitting Floti ends 1 session on this PC’s host.' })
     expect(within(dialog).getAllByRole('button').map((button) => button.textContent)).toEqual([
       'Cancel',
       'Keep running and quit',

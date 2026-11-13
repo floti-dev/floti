@@ -3,7 +3,7 @@ import { openStore, readArchiveStats, readHistorySessions } from '@helm/core'
 import { fakeClaudeLogs, type FakeClaudeLog } from '../test/world'
 import { claudeRunIn, expect, openHistory, sessionIdOf, startSession, terminalText, test, typeLine } from './helm'
 
-test('a session ended in Helm is in History without a refresh, its archive opens, it is found by what was said, and it resumes in the folder it ran in', async ({
+test('a session ended in Floti is in History without a refresh, its archive opens, it is found by what was said, and it resumes in the folder it ran in', async ({
   helm,
   world
 }) => {

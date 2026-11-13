@@ -46,7 +46,7 @@ type HelmWindow = Window & { __helmRouted: { invoke: (channel: string, payload?:
 async function frontWindow(helm: Helm): Promise<{ x: number; y: number; width: number; height: number }> {
   return helm.app.evaluate(({ BrowserWindow, screen }, size) => {
     const win = BrowserWindow.getAllWindows().find((w) => w.isVisible())
-    if (win === undefined) throw new Error('Helm has no visible window')
+    if (win === undefined) throw new Error('Floti has no visible window')
     const area = screen.getPrimaryDisplay().workArea
     win.setBounds({
       x: area.x,

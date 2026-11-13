@@ -151,8 +151,8 @@ function gitProject(dir: string, branch: string): string {
     execFileSync('git', args, { cwd: dir, stdio: 'ignore' })
   }
   git('init', '-q', '-b', branch)
-  git('-c', 'user.name=Helm Tests', '-c', 'user.email=tests@helm.invalid', 'add', '.')
-  git('-c', 'user.name=Helm Tests', '-c', 'user.email=tests@helm.invalid', 'commit', '-q', '-m', 'init')
+  git('-c', 'user.name=Floti Tests', '-c', 'user.email=tests@helm.invalid', 'add', '.')
+  git('-c', 'user.name=Floti Tests', '-c', 'user.email=tests@helm.invalid', 'commit', '-q', '-m', 'init')
   return dir
 }
 

@@ -125,7 +125,7 @@ describe('what the window draws of the host’s state', () => {
         ...STATE,
         failed: 'could not download update.json.',
         checking: true,
-        installing: { line: 'Waiting for Helm to quit; it is updated once it has.', waitingForApp: true }
+        installing: { line: 'Waiting for Floti to quit; it is updated once it has.', waitingForApp: true }
       },
       '3.2.0'
     )
@@ -136,7 +136,7 @@ describe('what the window draws of the host’s state', () => {
       failed: 'could not download update.json.',
       checking: true,
       unavailable: null,
-      installing: { line: 'Waiting for Helm to quit; it is updated once it has.', waitingForApp: true },
+      installing: { line: 'Waiting for Floti to quit; it is updated once it has.', waitingForApp: true },
       installFailed: null
     })
   })

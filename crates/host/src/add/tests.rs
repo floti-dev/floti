@@ -48,8 +48,8 @@ impl FakeInstalls {
     fn new(apps: &Path) -> Self {
         Self {
             target: Desktop {
-                name: "Helm",
-                path: apps.join("Helm.AppImage"),
+                name: "Floti",
+                path: apps.join("Floti.AppImage"),
             },
             installed: false,
             version: None,
@@ -110,17 +110,17 @@ impl Installs for FakeInstalls {
         self.launcher.clone().map_err(crate::Error::Refused)
     }
 
-    fn install_desktop(&self, _desktop: &Desktop, release: &Path) -> Result<()> {
+    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<Desktop> {
         if self.install_fails {
             return Err(crate::Error::Refused(
-                "The Helm installer ended with exit code: 2.".into(),
+                "The Floti installer ended with exit code: 2.".into(),
             ));
         }
         self.installs
             .lock()
             .unwrap()
             .push(std::fs::read(release).unwrap());
-        Ok(())
+        Ok(desktop.clone())
     }
 }
 
@@ -135,7 +135,7 @@ impl Published {
     fn new(version: &str) -> Self {
         Self {
             version: version.into(),
-            desktop: format!("Helm AppImage {version}").into_bytes(),
+            desktop: format!("Floti AppImage {version}").into_bytes(),
         }
     }
 
@@ -344,7 +344,7 @@ fn installs_the_app_from_its_own_release_after_the_list_s_signature_then_the_fil
     );
     assert!(
         run.out.contains(&format!(
-            "Helm {RUNNING} is installed at {}.",
+            "Floti {RUNNING} is installed at {}.",
             world.installs.target.path.display()
         )),
         "{}",
@@ -499,7 +499,7 @@ fn a_published_release_without_the_list_installs_nothing_and_says_so() {
     assert_eq!(
         run.failure(),
         format!(
-            "floti {RUNNING}'s release has no {}, the signed list of its desktop files' SHA-256s, so floti cannot check Helm for it. Nothing was installed.",
+            "floti {RUNNING}'s release has no {}, the signed list of its desktop files' SHA-256s, so floti cannot check Floti for it. Nothing was installed.",
             own.list_file()
         )
     );
@@ -518,7 +518,7 @@ fn a_version_with_no_published_release_is_a_development_build_and_installs_nothi
     let run = world.run();
     assert_eq!(
         run.failure(),
-        "floti 3.0.0 has no published release, so there is no Helm for it (this is a development build). Nothing was installed."
+        "floti 3.0.0 has no published release, so there is no Floti for it (this is a development build). Nothing was installed."
     );
     assert!(world.installs.installed().is_empty());
 }
@@ -536,7 +536,7 @@ fn an_app_already_installed_is_named_and_nothing_is_changed() {
     assert_eq!(
         run.out.trim_end(),
         format!(
-            "Helm 2.9.0 is already installed at {}; floti update keeps it up to date. Nothing was changed.",
+            "Floti 2.9.0 is already installed at {}; floti update keeps it up to date. Nothing was changed.",
             world.installs.target.path.display()
         )
     );
@@ -547,7 +547,7 @@ fn an_app_already_installed_is_named_and_nothing_is_changed() {
     world.installs.version = None;
     let run = world.run();
     assert!(
-        run.out.starts_with("Helm is already installed at "),
+        run.out.starts_with("Floti is already installed at "),
         "a version that cannot be told is left out: {}",
         run.out
     );
@@ -641,7 +641,7 @@ fn something_at_the_install_s_place_that_is_not_an_install_is_left_and_refused()
     assert_eq!(
         run.failure(),
         format!(
-            "{0} is there but is not an install of Helm, so nothing was installed; move it away to install Helm there.",
+            "{0} is there but is not an install of Floti, so nothing was installed; move it away to install Floti there.",
             world.installs.target.path.display()
         )
     );
@@ -669,7 +669,7 @@ fn an_installed_app_missing_its_menu_entry_gets_it_and_is_still_already_installe
     assert_eq!(
         run.out,
         format!(
-            "Helm is already installed at {}; floti update keeps it up to date. Its menu entry was missing, so floti added it at {}.\n",
+            "Floti is already installed at {}; floti update keeps it up to date. Its menu entry was missing, so floti added it at {}.\n",
             world.installs.target.path.display(),
             Path::new("/home/me/.local/share/applications/helm.desktop").display()
         )
@@ -681,7 +681,7 @@ fn an_installed_app_missing_its_menu_entry_gets_it_and_is_still_already_installe
     assert_eq!(
         run.failure(),
         format!(
-            "Helm is installed at {}, but its menu entry could not be written: No HOME or XDG_DATA_HOME names where menu entries go.",
+            "Floti is installed at {}, but its menu entry could not be written: No HOME or XDG_DATA_HOME names where menu entries go.",
             world.installs.target.path.display()
         )
     );
@@ -696,7 +696,7 @@ fn a_session_with_no_display_is_refused_in_one_sentence_before_anything_is_downl
     let run = world.run();
     assert_eq!(
         run.failure(),
-        "This session has no display (neither DISPLAY nor WAYLAND_DISPLAY is set), so Helm is not installed here."
+        "This session has no display (neither DISPLAY nor WAYLAND_DISPLAY is set), so Floti is not installed here."
     );
     assert!(world.network.asked().is_empty());
 }
@@ -731,7 +731,7 @@ fn a_computer_the_release_has_no_app_for_installs_nothing() {
     let run = world.run();
     assert_eq!(
         run.failure(),
-        "floti 3.0.0 has no Helm for windows-arm64. Nothing was installed."
+        "floti 3.0.0 has no Floti for windows-arm64. Nothing was installed."
     );
     assert!(world.network.asked().is_empty());
 }
@@ -744,7 +744,7 @@ fn an_installer_that_fails_installs_nothing_and_says_so() {
     let run = world.run();
     assert_eq!(
         run.failure(),
-        "Helm could not be installed: The Helm installer ended with exit code: 2. Nothing was installed."
+        "Floti could not be installed: The Floti installer ended with exit code: 2. Nothing was installed."
     );
     assert!(world.staging_is_gone());
 }
@@ -769,7 +769,7 @@ fn the_menu_entry_is_named_and_a_failure_to_write_it_says_the_app_is_installed()
     assert_eq!(
         run.failure(),
         format!(
-            "Helm is installed at {}, but its menu entry could not be written: No HOME or XDG_DATA_HOME names where menu entries go.",
+            "Floti is installed at {}, but its menu entry could not be written: No HOME or XDG_DATA_HOME names where menu entries go.",
             world.installs.target.path.display()
         )
     );
@@ -791,7 +791,7 @@ fn the_new_app_s_own_floti_runs_install_self_where_its_installer_does_not() {
     let run = world.run();
     assert!(run.result.is_ok(), "a failed install-self stops nothing");
     assert!(
-        run.out.contains("Helm could not put its floti and Node in place now (floti install-self: no room); it does when it next starts."),
+        run.out.contains("Floti could not put its floti and Node in place now (floti install-self: no room); it does when it next starts."),
         "{}",
         run.out
     );

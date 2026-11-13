@@ -117,7 +117,7 @@ function ownBridge(patch: Partial<AppSettings> = {}) {
         case 'path:chooseFile':
           return Promise.resolve({ path: picks.shift() ?? null })
         default:
-          return Promise.reject(new Error(`${channel} is not Helm's own`))
+          return Promise.reject(new Error(`${channel} is not Floti's own`))
       }
     },
     on: (channel: string, listener: (settings: AppSettings) => void) => {
@@ -194,7 +194,7 @@ const settle = async (): Promise<void> => {
 }
 
 describe('the window’s workspace over its own connection', () => {
-  it('keeps the host’s settings in the host and Helm’s own with Helm, and shows both laid together', async () => {
+  it('keeps the host’s settings in the host and Floti’s own with Floti, and shows both laid together', async () => {
     const { adapter, own, connection, host } = world(new FakeConnection(), ownBridge({ theme: 'light' }))
     const next = await ask(adapter, 'settings:write', {
       scanRoots: [HUB],
@@ -212,7 +212,7 @@ describe('the window’s workspace over its own connection', () => {
     await expect(ask(adapter, 'settings:read')).resolves.toMatchObject({ scanRoots: [HUB], theme: 'dark' })
   })
 
-  it('a write of only Helm’s own settings asks the host nothing', async () => {
+  it('a write of only Floti’s own settings asks the host nothing', async () => {
     const { adapter, own, connection } = world()
     await ask(adapter, 'settings:write', { windowBounds: { width: 900, height: 700, x: 1, y: 2 } })
     expect(own.writes).toEqual([{ windowBounds: { width: 900, height: 700, x: 1, y: 2 } }])
@@ -239,7 +239,7 @@ describe('the window’s workspace over its own connection', () => {
     expect(told.at(-1)).toMatchObject({ pinnedProjects: [ALPHA], theme: 'dark' })
   })
 
-  it('a change to Helm’s own settings before the host’s are known tells the window both halves, never Helm’s alone', async () => {
+  it('a change to Floti’s own settings before the host’s are known tells the window both halves, never Floti’s alone', async () => {
     const connection = new FakeConnection()
     const { adapter, own, emitted, listen, link } = world(connection)
     connection.answer('settings:read', () => hostSettings({ scanRoots: [HUB] }))
@@ -267,7 +267,7 @@ describe('the window’s workspace over its own connection', () => {
     expect(heard.map((settings) => settings.scanRoots)).toEqual([[HUB]])
   })
 
-  it('with the host out of reach, a change to Helm’s own settings is still told', async () => {
+  it('with the host out of reach, a change to Floti’s own settings is still told', async () => {
     const { own, emitted, listen } = world(null)
     listen()
     own.change({ theme: 'dark' })
@@ -341,7 +341,7 @@ describe('the window’s workspace over its own connection', () => {
     expect(connection.payloads('git:refresh')).toEqual([null])
   })
 
-  it('locates claude with the window’s picker, and Helm keeps it only once the host checked and kept it', async () => {
+  it('locates claude with the window’s picker, and Floti keeps it only once the host checked and kept it', async () => {
     const { adapter, own, connection } = world()
     own.picks.push(null)
     await ask(adapter, 'setup:locateClaude')
@@ -366,7 +366,7 @@ describe('the window’s workspace over its own connection', () => {
     expect(host().scanRoots).toEqual([HUB])
   })
 
-  it('answers app:info with Helm’s own build, the host’s claude version and the host’s log file', async () => {
+  it('answers app:info with Floti’s own build, the host’s claude version and the host’s log file', async () => {
     await expect(ask(world().adapter, 'app:info')).resolves.toEqual({
       ...BUILD,
       claudeVersion: '2.1.5 (Claude Code)',

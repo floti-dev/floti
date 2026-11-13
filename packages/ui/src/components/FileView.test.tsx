@@ -89,7 +89,7 @@ describe('FileView', () => {
   it('says a read that failed, and is reading until the first answer', () => {
     const { rerender, props } = renderView({ view: null })
     expect(screen.getByText('Reading…')).toBeTruthy()
-    rerender(<FileView {...props} view={null} error="C:\\x is not a folder Helm knows" />)
+    rerender(<FileView {...props} view={null} error="C:\\x is not a folder Floti knows" />)
     expect(screen.getByText('This file could not be read')).toBeTruthy()
   })
 })

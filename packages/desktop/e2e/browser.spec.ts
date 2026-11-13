@@ -156,7 +156,7 @@ test('browsing: a page loads in a browser tab, and back and forward move through
     .toBe(0)
 })
 
-test('posture: a page has no Node and no Helm, _blank and window.open make pages that keep their opener, a sign-in popup is a real window, and the app window stays put', async ({
+test('posture: a page has no Node and no Floti, _blank and window.open make pages that keep their opener, a sign-in popup is a real window, and the app window stays put', async ({
   helm
 }) => {
   const ui = helm.window

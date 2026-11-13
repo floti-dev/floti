@@ -287,7 +287,7 @@ fn helm_db(world: &World) -> (Vec<Helms>, CarriedSessionNames, CarriedUsageRows)
         names: vec![
             CarriedSessionName {
                 session_id: ONE.to_owned(),
-                name: "named in Helm".to_owned(),
+                name: "named in Floti".to_owned(),
                 renamed_at: "2026-09-03T10:00:00.000Z".to_owned(),
             },
             CarriedSessionName {

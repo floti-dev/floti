@@ -148,7 +148,7 @@ describe('useRestore', () => {
   it('says why main refused, without the channel Electron puts on it', async () => {
     bridge.answer('session:restore', () => {
       throw new Error(
-        "Error invoking remote method 'session:restore': Error: The sessions from before Helm closed have already been answered for."
+        "Error invoking remote method 'session:restore': Error: The sessions from before Floti closed have already been answered for."
       )
     })
     const { result: hook } = renderHook(() => useRestore())
@@ -157,7 +157,7 @@ describe('useRestore', () => {
       expect(await hook.current.restore([{ id: 4, cols: 80, rows: 24 }])).toBeNull()
     })
     expect(hook.current.report).toEqual({
-      text: 'The sessions from before Helm closed have already been answered for.',
+      text: 'The sessions from before Floti closed have already been answered for.',
       failed: true
     })
     expect(hook.current.offer).toBeNull()
@@ -188,7 +188,7 @@ describe('restoreReport', () => {
         { restored: [{ from: 1, launched: launched(5) }, { from: 2, launched: launched(6) }], failed: [] },
         true
       )
-    ).toEqual({ text: 'Reopened 2 sessions Helm was running when it closed.', failed: false })
+    ).toEqual({ text: 'Reopened 2 sessions Floti was running when it closed.', failed: false })
     expect(restoreReport({ restored: [], failed: [] }, true)).toBeNull()
   })
 

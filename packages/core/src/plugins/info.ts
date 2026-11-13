@@ -1,4 +1,4 @@
-import type { PanelActionSpec, SettingSpec, SettingValue, StatusItem } from '@coledtaylor/helm-plugin-sdk'
+import type { PanelActionSpec, SettingSpec, SettingValue, StatusItem } from '@floti-dev/plugin-sdk'
 
 /**
  * A plugin, as the window draws it: what main read from its folder and what
@@ -101,7 +101,7 @@ export interface PluginInfo {
 export interface PluginAgentInfo {
   /** The user's switch: whether new sessions are offered these tools. */
   enabled: boolean
-  /** The MCP server they appear under in a session: `helm-plugin-<id>`. */
+  /** The MCP server they appear under in a session: `floti-plugin-<id>`. */
   server: string
   instructions: string | null
   /** `readOnly`: the manifest marks it so, and sessions call it without asking. */

@@ -35,7 +35,7 @@
 //! not end it.
 //!
 //! `floti session title <text>` titles the session it runs in, as its
-//! `session_title` tool does: the helm-sessions family at
+//! `session_title` tool does: the floti-sessions family at
 //! `FLOTI_AGENT_SESSIONS_URL`, with the same token. Several words are one
 //! title, so an unquoted title works as a quoted one does.
 //!
@@ -58,7 +58,7 @@ pub const URL_VAR: &str = "FLOTI_AGENT_URL";
 /// The variable that carries the session's token.
 pub const TOKEN_VAR: &str = "FLOTI_AGENT_TOKEN";
 
-/// The variable that carries the address of the session's helm-sessions
+/// The variable that carries the address of the session's floti-sessions
 /// family, which `floti session title` calls. Its name starts as the agents
 /// family's do, so what the host strips from an inherited environment strips
 /// it too.

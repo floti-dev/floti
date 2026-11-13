@@ -29,7 +29,7 @@ pub const PLUGIN_SCHEME: &str = "floti-plugin";
 
 /// What a plugin's MCP server is called in a session, before its id: the
 /// SDK's `AGENT_SERVER_PREFIX`, which its tool-name limits are counted with.
-pub const AGENT_SERVER_PREFIX: &str = "helm-plugin-";
+pub const AGENT_SERVER_PREFIX: &str = "floti-plugin-";
 
 /// What is happening to one registered folder now.
 pub struct Live<'a> {

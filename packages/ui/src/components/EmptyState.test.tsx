@@ -18,13 +18,13 @@ describe('EmptyState', () => {
           </button>
         }
       >
-        Nothing is running in the 3 folders Helm scans.
+        Nothing is running in the 3 folders Floti scans.
       </EmptyState>
     )
 
     expect(container.querySelector('[data-empty-state="sessions"]')).not.toBeNull()
     expect(screen.getByText('No sessions running')).toBeTruthy()
-    expect(screen.getByText('Nothing is running in the 3 folders Helm scans.')).toBeTruthy()
+    expect(screen.getByText('Nothing is running in the 3 folders Floti scans.')).toBeTruthy()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Check again' }))
     expect(onRefresh).toHaveBeenCalledOnce()
   })

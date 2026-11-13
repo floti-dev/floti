@@ -263,7 +263,7 @@ export function parseUsage(root: unknown, file: string): UsageSnapshot {
     return usageProblem(
       file,
       'unrecognised',
-      `utilization.limits held ${String(rawLimits.length)} entr${rawLimits.length === 1 ? 'y' : 'ies'} and none had the shape Helm reads.`
+      `utilization.limits held ${String(rawLimits.length)} entr${rawLimits.length === 1 ? 'y' : 'ies'} and none had the shape Floti reads.`
     )
   }
 
@@ -439,7 +439,7 @@ export function usageView(snapshot: UsageSnapshot | null, nowMs: number): UsageV
   if (buckets.length === 0) {
     return {
       buckets: [],
-      problem: problem('unrecognised', 'No limit in this reading belongs to a window Helm shows.'),
+      problem: problem('unrecognised', 'No limit in this reading belongs to a window Floti shows.'),
       ageMs,
       atLeast: false
     }

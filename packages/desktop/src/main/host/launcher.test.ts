@@ -186,7 +186,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       expect(standaloneFloti({ platform: 'linux', env: {} })).toBeNull()
     })
 
-    it('keeps the client’s keys in host-client inside Helm’s data directory', () => {
+    it('keeps the client’s keys in host-client inside Floti’s data directory', () => {
       expect(clientFolder(WIN_PLACES, 'win32')).toBe(`${WIN_PLACES.dataDir}\\host-client`)
       expect(clientFolder({ ...WIN_PLACES, dataDir: '/home/me/.config/Helm' }, 'linux')).toBe(
         '/home/me/.config/Helm/host-client'
@@ -195,7 +195,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
   })
 
   describe('which folders the host uses', () => {
-    it('moves every host folder inside Helm’s data directory for every run but the installed app', () => {
+    it('moves every host folder inside Floti’s data directory for every run but the installed app', () => {
       for (const appMode of ['dev', 'portable', 'dev-live'] as const) {
         expect(
           hostEnvironment(
@@ -243,7 +243,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       expect(env).toEqual({ PATH: 'x' })
     })
 
-    it('points the host’s config folder at the folder holding Helm’s templates folder in every other run', () => {
+    it('points the host’s config folder at the folder holding Floti’s templates folder in every other run', () => {
       for (const appMode of ['portable', 'dev', 'dev-live'] as const) {
         const env = hostEnvironment(
           { ...WIN_PLACES, dataDir: '/home/me/.config/Helm', appMode, templatesDir: '/home/me/.config/helm/templates' },
@@ -428,7 +428,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     expect(host.killed).toBe(false)
   })
 
-  it('keeps what the host it started writes to standard error in Helm’s log, until it lets go of the host', async () => {
+  it('keeps what the host it started writes to standard error in Floti’s log, until it lets go of the host', async () => {
     const complains: Program = (child) => {
       child.stderr.write('floti host: could not open its log file in C:\\data\\logs (Access is denied.)\r\n')
       child.stderr.write('floti host: a second line, in two ')
@@ -462,7 +462,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     expect(world.programs()).toEqual([`bridge ${WIN_PLACES.dataDir}\\host-client`])
   })
 
-  it('starts the host apart from Helm on macOS and Linux too', async () => {
+  it('starts the host apart from Floti on macOS and Linux too', async () => {
     const world = new World({ bridges: [exits(3), connects] })
     const local = await startLocalHost(
       { ...WIN_PLACES, dataDir: '/home/me/.config/Helm', repoRoot: '/src/my helm' },
@@ -473,7 +473,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     expect(world.spawned[1]!.running).toBe(true)
   })
 
-  it('tells the host the command that opens this Helm again: its program, and the app an unpackaged one runs', () => {
+  it('tells the host the command that opens this Floti again: its program, and the app an unpackaged one runs', () => {
     expect(desktopArgs(WIN_PLACES)).toEqual(['--desktop', WIN_PLACES.execPath, '--desktop-arg', WIN_PLACES.appPath])
     expect(desktopArgs({ ...WIN_PLACES, packaged: true, execPath: 'C:\\Program Files\\Helm\\Helm.exe' })).toEqual([
       '--desktop',
@@ -527,12 +527,12 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       world.timers[waited * 2 - 1]!()
     }
     expect(await starting).toBe(
-      `Another local host still had Helm's host folders after ${HOST_START_DEADLINE_MS / 1000} seconds${END}`
+      `Another local host still had Floti's host folders after ${HOST_START_DEADLINE_MS / 1000} seconds${END}`
     )
     expect(world.programs()).toHaveLength(1 + tries)
   })
 
-  it('S6: starts the host when Helm has pinned no host key and none has started, then pins the key of the one it started at its first connection', async () => {
+  it('S6: starts the host when Floti has pinned no host key and none has started, then pins the key of the one it started at its first connection', async () => {
     const world = new World({ bridges: [exits(4), connects] })
     const local = await startLocalHost(WIN_PLACES, world.deps())
 
@@ -565,7 +565,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       expect.objectContaining({
         type: 'hello',
         client: {
-          name: 'Helm 2.4.0',
+          name: 'Floti 2.4.0',
           kind: 'desktop',
           deviceName: 'my-desktop'
         }
@@ -574,28 +574,28 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     expect(world.programs()).toEqual([`bridge ${WIN_PLACES.dataDir}\\host-client`])
   })
 
-  it('says Helm has nothing pinned when the host it would start is already running, and does not wait for it', async () => {
+  it('says Floti has nothing pinned when the host it would start is already running, and does not wait for it', async () => {
     const world = new World({
       bridges: [exits(4)],
       // A second host on the same folders refuses to start.
       hosts: [foldersHeld]
     })
     expect(await refusal(startLocalHost(WIN_PLACES, world.deps()))).toBe(
-      `Helm has no key pinned for the local host, and no local host has started on this computer yet${END}`
+      `Floti has no key pinned for the local host, and no local host has started on this computer yet${END}`
     )
     expect(world.programs()).toEqual([`bridge ${WIN_PLACES.dataDir}\\host-client`, HOST_PROGRAM])
   })
 
-  it('says Helm has nothing pinned when the host it started still has no key to learn, and ends that host', async () => {
+  it('says Floti has nothing pinned when the host it started still has no key to learn, and ends that host', async () => {
     const world = new World({ bridges: [exits(4), exits(4)] })
     expect(await refusal(startLocalHost(WIN_PLACES, world.deps()))).toBe(
-      `Helm has no key pinned for the local host, and no local host has started on this computer yet${END}`
+      `Floti has no key pinned for the local host, and no local host has started on this computer yet${END}`
     )
     expect(world.spawned[1]!.killed).toBe(true)
   })
 
   it.each([
-    [5, 'The local host did not prove the key Helm expected, so Helm did not connect to it'],
+    [5, 'The local host did not prove the key Floti expected, so Floti did not connect to it'],
     [6, 'The local host closed the connection'],
     [1, 'The connection to the local host failed: floti bridge exited with status 1']
   ])(
@@ -610,7 +610,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
   it('says the local host program could not be found, and runs nothing', async () => {
     const world = new World({}, false)
     expect(await refusal(startLocalHost(WIN_PLACES, world.deps()))).toBe(
-      `Helm could not find the local host program at C:\\src\\my helm\\target\\debug\\floti.exe${END}`
+      `Floti could not find the local host program at C:\\src\\my helm\\target\\debug\\floti.exe${END}`
     )
     expect(world.spawned).toEqual([])
   })
@@ -627,14 +627,14 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       ]
     })
     expect(await refusal(startLocalHost(WIN_PLACES, world.deps()))).toBe(
-      `Helm could not run the local host program at C:\\src\\my helm\\target\\debug\\floti.exe (EACCES)${END}`
+      `Floti could not run the local host program at C:\\src\\my helm\\target\\debug\\floti.exe (EACCES)${END}`
     )
   })
 
   it('says the host it started did not answer, and stops it, when the bridge still finds no host', async () => {
     const world = new World({ bridges: [exits(3), exits(3)] })
     expect(await refusal(startLocalHost(WIN_PLACES, world.deps()))).toBe(
-      `The local host Helm started did not answer on its socket${END}`
+      `The local host Floti started did not answer on its socket${END}`
     )
     expect(world.spawned[1]!.killed).toBe(true)
     expect(world.spawned[1]!.running).toBe(false)
@@ -658,7 +658,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     )
   })
 
-  it('says the host’s own reason, not that Helm has nothing pinned, when the host it started for it did not start', async () => {
+  it('says the host’s own reason, not that Floti has nothing pinned, when the host it started for it did not start', async () => {
     const world = new World({
       bridges: [exits(4)],
       hosts: [saysWhyItDidNotStart(FROM_SSH)]
@@ -699,7 +699,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
             host: { major: 2, minor: 0 },
             client: { major: 1, minor: 0 },
             update: 'client',
-            message: 'This host speaks protocol 2.0 and Helm speaks 1.0: update Helm.'
+            message: 'This host speaks protocol 2.0 and Floti speaks 1.0: update Floti.'
           })
         )
       })
@@ -707,7 +707,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     }
     const world = new World({ bridges: [refuses] })
     expect(await refusal(startLocalHost(WIN_PLACES, world.deps()))).toBe(
-      `This host speaks protocol 2.0 and Helm speaks 1.0: update Helm${END}`
+      `This host speaks protocol 2.0 and Floti speaks 1.0: update Floti${END}`
     )
   })
 

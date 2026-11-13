@@ -1,4 +1,4 @@
-//! `helm-plugin-<id>`: each plugin's tool server, served to the host's
+//! `floti-plugin-<id>`: each plugin's tool server, served to the host's
 //! sessions at `/mcp/plugin/<id>`, from one of two places.
 //!
 //! **A version 2 plugin's, the host's own** ([`HostPluginTools`]). A plugin
@@ -49,7 +49,7 @@ use crate::plugins::background::{ToolAnswer, ToolCall, ToolCaller};
 use crate::plugins::call::CancelToken;
 
 /// The answer to a call from a token whose session has not started yet.
-const NO_SESSION_YET: &str = "Helm cannot tell which session this call is from yet - it is still starting. Try again in a moment.";
+const NO_SESSION_YET: &str = "Floti cannot tell which session this call is from yet - it is still starting. Try again in a moment.";
 
 /// Every plugin tool server the relay has now, as families.
 pub(crate) struct PluginFamilies {
@@ -121,7 +121,7 @@ impl ToolFamily for PluginTools {
             };
             let arguments = match to_payload(&arguments) {
                 Ok(arguments) => arguments,
-                Err(err) => return problem(&format!("Helm could not pass that call on: {err}.")),
+                Err(err) => return problem(&format!("Floti could not pass that call on: {err}.")),
             };
             tool_result(
                 self.relay
@@ -144,7 +144,7 @@ fn tool_result(outcome: AgentPluginOutcome) -> CallToolResult {
 fn answered(value: &Payload) -> CallToolResult {
     from_payload::<CallToolResult>(value).unwrap_or_else(|err| {
         problem(&format!(
-            "Helm's plugin answered with something that is not a tool result: {err}."
+            "Floti's plugin answered with something that is not a tool result: {err}."
         ))
     })
 }
@@ -368,7 +368,7 @@ mod tests {
         let value: Value = serde_json::to_value(&answered).unwrap();
         assert_eq!(value["isError"], true);
         let text = value["content"][0]["text"].as_str().unwrap();
-        assert!(text.contains("Helm's window is not connected"), "{text}");
+        assert!(text.contains("Floti's window is not connected"), "{text}");
     }
 
     #[test]

@@ -337,7 +337,7 @@ impl HostWorld {
     /// ends once its sessions have.
     fn start_host(&mut self) {
         record_test_host(&self.endpoint, &self.dirs.data);
-        let app = self.dirs.folder("Helm app");
+        let app = self.dirs.folder("Floti app");
         let (log_var, log_dir) = self.agent.log_env();
         let mut command = self.dirs.floti_command(&self.standalone);
         command

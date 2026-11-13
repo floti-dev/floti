@@ -199,7 +199,7 @@ describe('SecretsPage', () => {
 
   it('says this computer cannot encrypt, and offers no add', () => {
     page({ available: false, secrets: [] })
-    expect(screen.getByText('This computer cannot encrypt, so Helm stores no secrets.')).toBeTruthy()
+    expect(screen.getByText('This computer cannot encrypt, so Floti stores no secrets.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Add secret' })).toHaveProperty('disabled', true)
   })
 

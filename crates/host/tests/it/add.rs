@@ -162,7 +162,7 @@ impl World {
     /// can tell it.
     fn named(&self) -> String {
         match Native.desktop_version(&self.app()) {
-            Some(version) => format!("Helm {version}"),
+            Some(version) => format!("Floti {version}"),
             None => "Helm".to_owned(),
         }
     }
@@ -277,7 +277,7 @@ async fn an_installed_app_and_a_session_with_no_display_each_change_nothing() {
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert_eq!(
         stderr.trim_end(),
-        "floti add desktop: This test's session has no display, so Helm is not installed here."
+        "floti add desktop: This test's session has no display, so Floti is not installed here."
     );
     assert!(!world.installed());
 
@@ -374,7 +374,7 @@ async fn a_release_without_the_desktop_list_installs_nothing_and_says_so_in_one_
     assert_eq!(
         stderr.trim_end(),
         format!(
-            "floti add desktop: floti {FLOTI_VERSION}'s release has no {}, the signed list of its desktop files' SHA-256s, so floti cannot check Helm for it. Nothing was installed.",
+            "floti add desktop: floti {FLOTI_VERSION}'s release has no {}, the signed list of its desktop files' SHA-256s, so floti cannot check Floti for it. Nothing was installed.",
             world.list_file
         )
     );

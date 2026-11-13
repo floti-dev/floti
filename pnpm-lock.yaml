@@ -59,7 +59,7 @@ importers:
 
   examples/sample-plugin:
     devDependencies:
-      '@coledtaylor/helm-plugin-sdk':
+      '@floti-dev/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
       '@types/react':
@@ -83,7 +83,7 @@ importers:
 
   packages/core:
     dependencies:
-      '@coledtaylor/helm-plugin-sdk':
+      '@floti-dev/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk
       better-sqlite3:
@@ -102,7 +102,7 @@ importers:
 
   packages/desktop:
     dependencies:
-      '@coledtaylor/helm-plugin-sdk':
+      '@floti-dev/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk
       '@helm/core':

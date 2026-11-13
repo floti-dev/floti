@@ -51,7 +51,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: 'agents', label: 'Agents' },
   { id: 'hosts', label: 'Hosts' },
   { id: 'devices', label: 'Devices' },
-  { id: 'workspace', label: 'Workspace', hint: 'The folders Helm scans, and what a new workspace is written from.' },
+  { id: 'workspace', label: 'Workspace', hint: 'The folders Floti scans, and what a new workspace is written from.' },
   { id: 'files', label: 'Files' },
   { id: 'browser', label: 'Browser' },
   { id: 'plugins', label: 'Plugins' },

@@ -1,5 +1,5 @@
 import type { BrowserWindow, WebContents } from 'electron'
-import type { HelmTheme } from '@coledtaylor/helm-plugin-sdk'
+import type { HelmTheme } from '@floti-dev/plugin-sdk'
 import type { EventChannel, EventPayload, PluginToolOutcome } from '../../shared/ipc'
 import type { BackgroundHost } from './background'
 import type { PluginRuntime } from './protocol'
@@ -74,7 +74,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
 
   return {
     runTool(request, signal) {
-      if (stopped) return Promise.resolve({ ok: false, message: 'Helm is shutting down.' })
+      if (stopped) return Promise.resolve({ ok: false, message: 'Floti is shutting down.' })
       return tools.call(
         {
           plugin: request.plugin,

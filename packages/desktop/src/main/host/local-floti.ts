@@ -47,16 +47,16 @@ export async function ensureLocalFloti(places: HostPlaces, deps: LocalFlotiDeps)
   if (places.appMode !== 'installed') return false
   const standalone = standaloneFloti(deps)
   if (standalone === null) {
-    deps.log('floti: no folder of the user names where floti installed on its own goes; using the floti Helm carries')
+    deps.log('floti: no folder of the user names where floti installed on its own goes; using the floti Floti carries')
     return false
   }
   if (await current(standalone, deps)) return true
   const carried = carriedFloti(places, deps)
   if (!deps.exists(carried)) {
-    deps.log(`floti: Helm carries no floti at ${carried}, so none was put at ${standalone}`)
+    deps.log(`floti: Floti carries no floti at ${carried}, so none was put at ${standalone}`)
     return false
   }
-  deps.log(`floti: putting this Helm's floti at ${standalone}`)
+  deps.log(`floti: putting this Floti's floti at ${standalone}`)
   try {
     const ran = await deps.run(carried, ['install-self'])
     for (const line of `${ran.stdout}\n${ran.stderr}`.split(/\r?\n/)) {
@@ -66,7 +66,7 @@ export async function ensureLocalFloti(places: HostPlaces, deps: LocalFlotiDeps)
     deps.log(`floti: could not run ${carried} install-self: ${error instanceof Error ? error.message : String(error)}`)
   }
   if (await current(standalone, deps)) return true
-  deps.log(`floti: ${standalone} is not this Helm's floti or newer; using the floti Helm carries`)
+  deps.log(`floti: ${standalone} is not this Floti's floti or newer; using the floti Floti carries`)
   return false
 }
 

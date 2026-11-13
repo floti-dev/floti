@@ -1,7 +1,7 @@
 # Agent tools
 
 The host serves its sessions' agent tools as MCP over HTTP
-(`crates/host/src/agent_tools`): `helm-browser` at `/mcp`, `helm-sessions` at
+(`crates/host/src/agent_tools`): `floti-browser` at `/mcp`, `floti-sessions` at
 `/mcp/sessions`, `floti-agents` at `/mcp/agents` and each plugin's tools at
 `/mcp/plugin/<id>`, on one port. It is the one inbound listener the host has
 besides its local socket and the relay socket beside it. Main binds no
@@ -10,6 +10,13 @@ serves `floti-agents`: only the host does.
 
 [SECURITY.md](SECURITY.md) has the credential rules these tools sit beside,
 and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
+
+The families were called `helm-browser`, `helm-sessions` and
+`helm-plugin-<id>` while the app was Helm. Nothing rewrites the user's Claude
+settings for the new names (the agent's config folder is read-only to
+Floti), so an allow rule naming an old tool, such as
+`mcp__helm-browser__browser_open`, matches nothing and that tool asks again
+until the user updates the rule.
 
 ## The listener
 
@@ -23,7 +30,7 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
 - A tool family switched off has no route (404), no entry in `--mcp-config` and
   no tool. With no session holding a token and nothing a launch could be
   given, the host holds no port.
-- `helm-browser`, `helm-sessions` and `floti-agents` take name, route,
+- `floti-browser`, `floti-sessions` and `floti-agents` take name, route,
   instructions and tools from `crates/host/src/server/browser_tools.json`,
   `session_tools.json` and `floti_agents.json`. Main reads the browser table
   too, for the tools it answers.
@@ -50,15 +57,15 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   started a session or opened a plain terminal goes in its keeper label by
   fingerprint, so its `host:quit` ends it after a crash as before one.
 
-## helm-browser
+## floti-browser
 
 - An agent navigation must pass both `browserReach` and `browserMcpLocalOnly`.
 - The host has no browser, so each browser call goes over `agentBrowser:call`
   to the attached client that declared `browser`, naming the caller's
-  session, and that client's answer is the tool's. In Helm, main runs it
+  session, and that client's answer is the tool's. In Floti, main runs it
   against the browser pane (`runBrowserTool` in `main/browser-mcp.ts`,
   reached through `main/host/browser-tools.ts`). A launch is given
-  `helm-browser` only while such a client is attached, and each token reaches
+  `floti-browser` only while such a client is attached, and each token reaches
   only the families its launch was given (404 otherwise). A call made with
   none attached, or waiting on a client that leaves, fails at once saying no
   browser is attached. Nothing there waits on a timer.
@@ -69,7 +76,7 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   the session ends. `browser_tabs` lists all; `browser_close` closes only the
   session's own.
 
-## helm-sessions
+## floti-sessions
 
 - `sessions_list` and `session_detail` (`crates/host/src/server/session_tools.rs`,
   shaped by `crates/host/src/session/describe.rs`) never return any part of
@@ -77,19 +84,19 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   conversation id or child command line. The shaping types have no field for
   them. The sessions pane may show command lines to the user.
 - Listing is machine-wide. Detail of a session the host did not spawn gives
-  its pid, name, folder, status and version and says so; its Helm tab, start
+  its pid, name, folder, status and version and says so; its Floti tab, start
   time, branch, profile, overlays, process tree and ports are only for
   sessions it spawned.
   A status it could not read is "unknown", never omitted. No tool takes a
   session id.
-- `helm-sessions` is awareness plus the caller's own title: it sends a
+- `floti-sessions` is awareness plus the caller's own title: it sends a
   session nothing, waits on none, hands none work, and returns no part of any
   session's conversation. Its one write is `session_title`, which titles the
   caller's own row (resolved from its token, never from an argument) with one
   line of at most 60 characters, and refuses anything else; from a session's
   shell it is `floti session title <text>`, which reaches the family at
   `FLOTI_AGENT_SESSIONS_URL` with the session's token. Both are allowed at
-  launch (`mcp__helm-sessions__session_title`, `Bash(floti session title:*)`),
+  launch (`mcp__floti-sessions__session_title`, `Bash(floti session title:*)`),
   and each backend's guidance asks the agent to set a title saying what is
   being done, never the folder's name, and to change it when the work changes.
   The title is kept on the row in `floti.db`, inherited by a new row of the
@@ -287,7 +294,7 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   more work, reach only your own), a child's section (Floti's own, naming
   its parent and the agent it was started as, beside the profile's and the
   agent's, with the `agents_report` sentence only where the child has the tool),
-  the title section for a session given `helm-sessions`, and the guide
+  the title section for a session given `floti-sessions`, and the guide
   to `floti agent` with its backend's lines on waiting (`waiting_guidance`:
   wait in a task or a background command where the backend can, and every
   line that runs `floti agent wait` as a background command passes
@@ -371,7 +378,7 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
 
 ## Plugin tools
 
-- Each plugin offering tools is a family, `helm-plugin-<id>`, on while the
+- Each plugin offering tools is a family, `floti-plugin-<id>`, on while the
   plugin is on and its tools are not switched off in Settings. The host checks
   the token, then hands the call on with its caller: an id it mints the first
   time it meets the session (random, never the browser key or the host's row
@@ -382,8 +389,8 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
 - The host serves a version 2 plugin's tools itself
   (`server/plugin_tools.rs` `HostPluginTools`): for each plugin whose
   background module runs in its engine, on, error-free and with its tools
-  on, `helm-plugin-<id>` at `/mcp/plugin/<id>`, worded from the manifest as
-  Helm words an offer, is given to every launch with its read-only tools in
+  on, `floti-plugin-<id>` at `/mcp/plugin/<id>`, worded from the manifest as
+  Floti words an offer, is given to every launch with its read-only tools in
   `--allowedTools`, with no client attached. Each call goes to the module's
   handler (`Registry::call_tool`), naming the session as the relay does, and
   is cancelled there when the session drops it. The plugin turned off,
@@ -395,12 +402,12 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
 - For a version 1 plugin a client offers its servers (`agentPlugin:offer`,
   replacing its last offer) and answers their calls (`agentPlugin:call`,
   `agentPlugin:answer`). Each is
-  served as `helm-plugin-<id>` at `/mcp/plugin/<id>`, given to launches only
+  served as `floti-plugin-<id>` at `/mcp/plugin/<id>`, given to launches only
   while that client listens, its read-only tools passed as `--allowedTools`.
   A server left out of an offer answers 404 at once; a call is withdrawn
   (`agentPlugin:cancel`) when the session cancels it, its request goes away
   or the session ends; with its client gone, a call fails at once saying
-  Helm's window is not connected. Main offers the host the servers of the
+  Floti's window is not connected. Main offers the host the servers of the
   plugins it lists as offering tools, on each connect and each change
   (`main/host/plugin-tools.ts`), hands each call to the plugin's background
   page in the hidden plugin host window (`main/host/plugins.ts` `callTool`)
@@ -418,8 +425,9 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
 
 - Agents (a lead, a worker, a reviewer: the named definitions a session
   starts its children as) live in `agents` in the host's config folder
-  (`~/.config/helm` where that is there, else `~/.config/floti`;
-  for the host a development or portable Helm starts, the folder that holds
+  (`~/.config/floti` (`~/.config/helm` until the host has moved Helm's folder
+  there, once, at its first start as Floti);
+  for the host a development or portable Floti starts, the folder that holds
   `templatesDir`), one
   `<name>.md` each (front matter, then the body), parsed as an
   `AgentDefinition` (`agent_definitions/`). The one a start naming none gets
@@ -433,7 +441,7 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   shipped `lead.md`, `researcher.md`, `reviewer.md` and `worker.md` only
   when neither folder exists: nothing there is ever rewritten, an edit or a
   deletion stays, and an empty folder stays empty. A host started with `FLOTI_CONFIG_READ_ONLY`
-  (Helm sets it for `pnpm dev`, `dev:live` and every check, whose config
+  (Floti sets it for `pnpm dev`, `dev:live` and every check, whose config
   folder can be the installed host's) moves, seeds and writes nothing in its
   config folder, templates included: it reads `agents`, else `roles` where it
   is, else serves the shipped agents from memory (`read_agents_folder`). `agents_roles`, `role` on `agents_start` and `floti agent start --role`

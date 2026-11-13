@@ -39,7 +39,7 @@ export function electronFake(): Record<string, unknown> {
       },
       setPath: noop,
       getVersion: () => '0.0.0-test',
-      getName: () => 'Helm',
+      getName: () => 'Floti',
       on: noop,
       once: noop,
       quit: noop

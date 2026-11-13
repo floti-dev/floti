@@ -54,7 +54,7 @@ import type { TerminalStreams } from './streams'
  * dialog showed it - the folder, the name, the first message - with nothing
  * composed here.
  *
- * The browser tools: the host serves `helm-browser` to its sessions and relays
+ * The browser tools: the host serves `floti-browser` to its sessions and relays
  * each call here (`browser-tools.ts`), where Helm's own tools answer it. A
  * running session's identity at those tools is a random key minted here, held
  * only in main and dropped when the session ends, which also ends every page
@@ -189,8 +189,8 @@ export function quitQuestion(live: readonly SessionRecord[], remote: readonly Ho
     const total = where.reduce((sum, part) => sum + part.count, 0)
     const message =
       where.length === 1
-        ? `Quitting Helm ends ${sessionsWord(total)} on ${where[0]?.host ?? ''}.`
-        : `Quitting Helm ends ${sessionsWord(total)}: ${listed(where.map((part) => `${String(part.count)} on ${part.host}`))}.`
+        ? `Quitting Floti ends ${sessionsWord(total)} on ${where[0]?.host ?? ''}.`
+        : `Quitting Floti ends ${sessionsWord(total)}: ${listed(where.map((part) => `${String(part.count)} on ${part.host}`))}.`
     const them = total === 1 ? 'it' : 'them'
     return {
       kind: 'quit',
@@ -207,7 +207,7 @@ export function quitQuestion(live: readonly SessionRecord[], remote: readonly Ho
   const count = live.length
   return {
     kind: 'quit',
-    message: `Quitting Helm ends ${String(count)} session${count === 1 ? '' : 's'} on this PC’s host.`,
+    message: `Quitting Floti ends ${String(count)} session${count === 1 ? '' : 's'} on this PC’s host.`,
     detail:
       'End and quit stops ' +
       (count === 1 ? 'it' : 'them') +
@@ -215,7 +215,7 @@ export function quitQuestion(live: readonly SessionRecord[], remote: readonly Ho
       (count === 1 ? 'it' : 'them') +
       ' running in the host, back in ' +
       (count === 1 ? 'its tab' : 'their tabs') +
-      ' when Helm opens again. Settings › Sessions sets what quitting does.',
+      ' when Floti opens again. Settings › Sessions sets what quitting does.',
     confirmLabel: 'End and quit',
     keepLabel: 'Keep running and quit',
     sessions: [...live]

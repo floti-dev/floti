@@ -1,4 +1,4 @@
-//! helm-browser: the agent browser tools, served to the host's sessions on
+//! floti-browser: the agent browser tools, served to the host's sessions on
 //! the agent tools listener at `/mcp`, and carried out in the browser pane of
 //! an attached client.
 //!
@@ -6,7 +6,7 @@
 //! every tool's description and input schema come from `browser_tools.json`,
 //! the one table the desktop's own listener reads too, so a session lists
 //! exactly what it lists with the host out of the way and the user's
-//! `mcp__helm-browser__*` permission rules apply unchanged.
+//! `mcp__floti-browser__*` permission rules apply unchanged.
 //!
 //! **The host has no browser.** Each call is relayed ([`BrowserRelay`]) to the
 //! attached client that declared `browser`, naming the session whose token
@@ -17,7 +17,7 @@
 //!
 //! **No browser, no family.** It is on while the `browserMcp` setting is, and
 //! a launch is given it only while a browser client is attached: a session
-//! started with none has no `helm-browser` entry in its tool configuration
+//! started with none has no `floti-browser` entry in its tool configuration
 //! and its token is answered 404 on this route. A session that was given it
 //! keeps the route; while no browser is attached its calls fail, saying so.
 
@@ -57,7 +57,7 @@ static TABLE: LazyLock<Table> = LazyLock::new(|| {
 });
 
 /// The answer to a call from a token whose session has not started yet.
-const NO_SESSION_YET: &str = "Helm cannot tell which session this call is from yet - it is still starting. Try again in a moment.";
+const NO_SESSION_YET: &str = "Floti cannot tell which session this call is from yet - it is still starting. Try again in a moment.";
 
 /// The family: its switch, the `browserMcp` setting as last written, and the
 /// relay its calls go through.
@@ -126,7 +126,7 @@ impl ToolFamily for BrowserTools {
             };
             let arguments = match to_payload(&arguments) {
                 Ok(arguments) => arguments,
-                Err(err) => return problem(&format!("Helm could not pass that call on: {err}.")),
+                Err(err) => return problem(&format!("Floti could not pass that call on: {err}.")),
             };
             tool_result(self.relay.call(session, name, arguments).await)
         })
@@ -145,7 +145,7 @@ fn tool_result(outcome: AgentBrowserOutcome) -> CallToolResult {
 fn answered(value: &Payload) -> CallToolResult {
     from_payload::<CallToolResult>(value).unwrap_or_else(|err| {
         problem(&format!(
-            "Helm's browser answered with something that is not a tool result: {err}."
+            "Floti's browser answered with something that is not a tool result: {err}."
         ))
     })
 }
@@ -162,9 +162,9 @@ mod tests {
 
     #[test]
     fn the_table_is_todays_helm_browser_at_mcp_with_its_sixteen_tools() {
-        assert_eq!(TABLE.name, "helm-browser");
+        assert_eq!(TABLE.name, "floti-browser");
         assert_eq!(TABLE.path, "/mcp");
-        assert!(TABLE.instructions.contains("browser pane inside Helm"));
+        assert!(TABLE.instructions.contains("browser pane inside Floti"));
         let names: Vec<&str> = TABLE.tools.iter().map(|tool| tool.name.as_str()).collect();
         assert_eq!(names.len(), 16, "{names:?}");
         assert!(names.contains(&"browser_open") && names.contains(&"browser_wait_for"));

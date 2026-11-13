@@ -43,7 +43,7 @@ describe('Remove root on the project pane', () => {
     const onRemoveRoot = renderPane(root)
 
     expect(screen.getByRole('heading', { name: 'Scanned folder' })).toBeTruthy()
-    await userEvent.click(screen.getByRole('button', { name: 'Remove My Repos from Helm' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Remove My Repos from Floti' }))
     expect(onRemoveRoot).toHaveBeenCalledWith(root)
   })
 
@@ -51,7 +51,7 @@ describe('Remove root on the project pane', () => {
     renderPane(folder('C:\\Work\\My Repos\\api', 'repo'))
 
     expect(screen.getByRole('heading', { level: 1, name: 'api' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /from Helm$/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /from Floti$/ })).toBeNull()
     expect(screen.queryByRole('heading', { name: 'Scanned folder' })).toBeNull()
   })
 })

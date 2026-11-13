@@ -25,7 +25,7 @@ export function selfSignedCertificate(): { key: string; cert: string } {
     // the top bit clear, so these four bytes are the whole of it.
     der(0x02, Buffer.from([0x4c, 0x9a, 0x11, 0x07])),
     ALGORITHM,
-    name('Helm test fixture'),
+    name('Floti test fixture'),
     der(0x30, [utcTime(Date.now() - 60 * 60 * 1000), utcTime(Date.now() + 365 * 24 * 60 * 60 * 1000)]),
     name('localhost'),
     spki,

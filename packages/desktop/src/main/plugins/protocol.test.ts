@@ -164,7 +164,7 @@ describe('servePluginRequestFrom: pages from the local host’s files', () => {
   })
 
   it('says why when the host cannot be reached, in the page’s own place', async () => {
-    const sentence = 'Helm could not reach the local host; turn it off.'
+    const sentence = 'Floti could not reach the local host; turn it off.'
     const source: PluginPageSource = {
       onHostComputer: true,
       serves: () => Promise.reject(new Error(sentence)),

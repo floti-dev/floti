@@ -573,7 +573,7 @@ function ArtifactFrame({
 
         `onEvaluate` is absent and that is the design rather than an omission:
         the frame's origin is opaque and `postMessage` is deliberately the only
-        channel into it (see the wikilink handler above). Helm cannot execute in
+        channel into it (see the wikilink handler above). Floti cannot execute in
         there and should not gain the ability to, so the half of the panel that
         would need that is simply not passed.
       */}
@@ -582,7 +582,7 @@ function ArtifactFrame({
         entries={entries}
         open={consoleOpen}
         onToggle={() => setConsoleOpen((current) => !current)}
-        note="Read-only. The frame has an opaque origin, so Helm can watch what it logs and cannot run anything inside it."
+        note="Read-only. The frame has an opaque origin, so Floti can watch what it logs and cannot run anything inside it."
       />
     </div>
   )

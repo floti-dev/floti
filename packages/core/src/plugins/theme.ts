@@ -1,4 +1,4 @@
-import type { HelmTheme, PaletteHue as SdkPaletteHue, ThemeTokenName } from '@coledtaylor/helm-plugin-sdk'
+import type { HelmTheme, PaletteHue as SdkPaletteHue, ThemeTokenName } from '@floti-dev/plugin-sdk'
 import type { AppSettings } from '../types'
 import { THEME_TOKENS, type AppliedTheme, type PaletteHue, type ThemeToken } from '../theme/themes'
 

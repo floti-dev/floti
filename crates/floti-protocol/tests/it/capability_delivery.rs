@@ -182,7 +182,7 @@ fn a_browser_tool_call_goes_to_a_client_with_a_browser_and_says_so_when_none_is_
         panic!()
     };
     assert!(message.contains("No browser is attached"));
-    assert!(message.contains("Helm"));
+    assert!(message.contains("Floti"));
 
     // A client that declared browser but is not listening is not attached
     // for this purpose either.

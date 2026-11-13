@@ -141,14 +141,14 @@ describe('validateManifest - apiVersion', () => {
   it('says an unsupported version first and alone, naming 1 and 2: a newer plugin fails everything else for reasons not its own', () => {
     const result = validateManifest({ apiVersion: 3, id: 'NOT VALID', name: '', panels: 'nope' })
     expect(result.ok).toBe(false)
-    expect(result.ok ? [] : result.errors).toEqual(['apiVersion 3 is not supported by this Helm, which supports 1 and 2'])
+    expect(result.ok ? [] : result.errors).toEqual(['apiVersion 3 is not supported by this Floti, which supports 1 and 2'])
   })
 
   it('says a missing version, and a version that is not a number', () => {
-    expect(validateManifest({ id: 'x', name: 'X' })).toMatchObject({ ok: false, errors: ['apiVersion is missing; this Helm supports 1 and 2'] })
+    expect(validateManifest({ id: 'x', name: 'X' })).toMatchObject({ ok: false, errors: ['apiVersion is missing; this Floti supports 1 and 2'] })
     expect(validateManifest({ apiVersion: '1', id: 'x', name: 'X' })).toMatchObject({
       ok: false,
-      errors: ['apiVersion "1" is not supported by this Helm, which supports 1 and 2']
+      errors: ['apiVersion "1" is not supported by this Floti, which supports 1 and 2']
     })
   })
 
@@ -221,11 +221,11 @@ describe('validateManifest - every problem, in one pass', () => {
     ['an icon that is not svg or png', { icon: 'icon.gif' }, 'icon must be a .svg or .png file'],
     ['a page outside the folder', { tabs: { a: { title: 'A', entry: '../a.html' } } }, 'must be a relative path that stays inside'],
     ['a page by absolute path', { tabs: { a: { title: 'A', entry: 'C:\\a.html' } } }, 'must be a relative path that stays inside'],
-    ['a page under Helm runtime prefix', { tabs: { a: { title: 'A', entry: './__helm/a.html' } } }, 'may not be under __helm/'],
+    ['a page under Floti runtime prefix', { tabs: { a: { title: 'A', entry: './__helm/a.html' } } }, 'may not be under __helm/'],
     ['a page that is not html', { tabs: { a: { title: 'A', entry: 'a.js' } } }, 'must be a .html file'],
     ['a surface key that is not a name', { panels: { Main: { title: 'M', entry: 'm.html' } } }, 'panels key "Main"'],
     [
-      'an action icon Helm does not have',
+      'an action icon Floti does not have',
       { panels: { main: { title: 'M', entry: 'm.html', actions: [{ id: 'go', title: 'Go', icon: 'rocket' }] } } },
       'icon must be one of refresh'
     ],
@@ -280,7 +280,7 @@ describe('validateManifest - every problem, in one pass', () => {
     ['a service with both command and node', { service: { command: 'srv', node: 'srv.mjs' } }, 'service must have exactly one of command and node'],
     ['a service with neither', { service: {} }, 'service must have exactly one of command and node'],
     ['a node service that is not a script', { service: { node: 'srv.py' } }, 'service.node must be a .js or .mjs or .cjs file'],
-    ['a service start Helm does not know', { service: { node: 'srv.mjs', start: 'boot' } }, 'service.start must be "enable" or "demand"']
+    ['a service start Floti does not know', { service: { node: 'srv.mjs', start: 'boot' } }, 'service.start must be "enable" or "demand"']
   ])('refuses %s', (_what, patch, message) => {
     const errors = errorsFor(patch)
     expect(errors.length).toBeGreaterThan(0)
@@ -334,8 +334,8 @@ describe('validateManifest - tools for sessions', () => {
   })
 
   it('names the server and every tool the way a session sees them', () => {
-    expect(agentServerName('sample')).toBe('helm-plugin-sample')
-    expect(agentToolName('sample', 'list_items')).toBe('mcp__helm-plugin-sample__list_items')
+    expect(agentServerName('sample')).toBe('floti-plugin-sample')
+    expect(agentToolName('sample', 'list_items')).toBe('mcp__floti-plugin-sample__list_items')
   })
 
   it('takes no instructions as none', () => {
@@ -384,7 +384,7 @@ describe('validateManifest - tools for sessions', () => {
     [
       'a name a session would be handed past 64 characters',
       { id: 'a-plugin-with-a-rather-long-id', background: 'bg.html', agent: { tools: { list_every_single_thing: tool } } },
-      'a session sees it as mcp__helm-plugin-a-plugin-with-a-rather-long-id__list_every_single_thing, which is 72 characters'
+      'a session sees it as mcp__floti-plugin-a-plugin-with-a-rather-long-id__list_every_single_thing, which is 72 characters'
     ]
   ])('refuses %s', (_what, patch, message) => {
     const errors = errorsFor(patch)
@@ -393,7 +393,7 @@ describe('validateManifest - tools for sessions', () => {
   })
 })
 
-describe('the helpers Helm uses on what the validator accepted', () => {
+describe('the helpers Floti uses on what the validator accepted', () => {
   it('finds every placeholder, repeats kept', () => {
     expect(placeholders('Bearer {{token}} and {{token}} {{a.b-c_d}} {{ not }} {{}}')).toEqual(['token', 'token', 'a.b-c_d'])
   })

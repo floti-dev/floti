@@ -422,7 +422,7 @@ export function SessionRow({
         aria-current={shown === 'focused' ? 'true' : undefined}
         aria-haspopup={peekable ? 'dialog' : undefined}
         aria-expanded={peekable ? peeking : undefined}
-        aria-label={`${label}, ${state === null ? 'state unknown' : command && note !== '' ? note : SESSION_STATE_LABEL[state]}${agent === undefined ? '' : `, started as the ${agent} agent`}${outside ? ', outside Helm' : ''}${parentName === undefined ? '' : `, started by ${parentName}`}${needs === 0 ? '' : `, ${String(needs)} of its sessions waiting for you`}`}
+        aria-label={`${label}, ${state === null ? 'state unknown' : command && note !== '' ? note : SESSION_STATE_LABEL[state]}${agent === undefined ? '' : `, started as the ${agent} agent`}${outside ? ', outside Floti' : ''}${parentName === undefined ? '' : `, started by ${parentName}`}${needs === 0 ? '' : `, ${String(needs)} of its sessions waiting for you`}`}
         onClick={() => onOpen(id)}
         onContextMenu={openMenu}
         style={{ paddingLeft: indent }}

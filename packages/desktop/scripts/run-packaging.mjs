@@ -44,8 +44,8 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-const appData = process.env.APPDATA ?? process.env.HOME ?? '.'
-const realDataDir = join(appData, 'Helm')
+const localAppData = process.env.LOCALAPPDATA ?? process.env.HOME ?? '.'
+const realDataDir = join(localAppData, 'Floti', 'desktop')
 const machineReport = join(realDataDir, 'packaging-report.json')
 const desktopDir = resolve(import.meta.dirname, '..')
 const distDir = join(desktopDir, 'dist-app')
@@ -239,7 +239,7 @@ if (FIRSTRUN_GROUPS.some(wants)) {
   checks.push({
     id: 'PKG-F1',
     criterion: 'setup: the first-run phase left the real profile alone',
-    title: 'A whole first run happened and %APPDATA%\\Helm did not change',
+    title: 'A whole first run happened and %LOCALAPPDATA%\\Floti\\desktop did not change',
     ok: added.length === 0 && dbBefore === dbAfter && existsSync(join(portableDir, 'helm-data')),
     detail: {
       realDataDir,
@@ -403,9 +403,9 @@ function portableChecks(exe) {
 
   const sandbox = mkdtempSync(join(tmpdir(), 'helm-portable-'))
   // A path with spaces, no install, nowhere near the build directory.
-  const runDir = join(sandbox, 'Helm Test With Spaces')
+  const runDir = join(sandbox, 'Floti Test With Spaces')
   mkdirSync(runDir, { recursive: true })
-  const copied = join(runDir, 'Helm.exe')
+  const copied = join(runDir, 'Floti.exe')
   cpSync(exe, copied)
 
   /*
@@ -463,8 +463,8 @@ function portableChecks(exe) {
       notes: [
         'Run as the ordinary user this script is running as - no elevation is requested anywhere, and the exe writes only inside its own directory.',
         'The selftest is Spike B\'s: a SQLite WAL roundtrip, an interactive pwsh through ConPTY, renderer-synthesized keystrokes, a resize verified inside the shell, and the real claude TUI reaching its version banner.',
-        '"Beside the exe" is checked twice: helm.db exists in the run directory, and %APPDATA%\\Helm gained no files while it ran.',
-        'The second of those is dropped when an installed Helm is running, because that app writes to %APPDATA%\\Helm itself and the read would then be about two processes. appDataReadIsEvidence says which run this was; the first half - helm.db beside the exe - holds either way.'
+        '"Beside the exe" is checked twice: helm.db exists in the run directory, and %LOCALAPPDATA%\\Floti\\desktop gained no files while it ran.',
+        'The second of those is dropped when an installed Helm is running, because that app writes to %LOCALAPPDATA%\\Floti\\desktop itself and the read would then be about two processes. appDataReadIsEvidence says which run this was; the first half - helm.db beside the exe - holds either way.'
       ]
     }
   ]
@@ -507,12 +507,12 @@ function installerNotVerifiedHere(setupExe) {
       builtAndReadable: existsSync(setupExe),
       howToRun: 'pnpm verify:installer --yes',
       whyItIsNotHere:
-        'It installs over the Helm on this machine and uninstalls it, putting nothing back. Helm hosts Claude Code sessions, so that ends whatever is running in them. A step like that is a tool somebody asks for, never a group a suite can reach.'
+        'It installs over the Floti on this machine and uninstalls it, putting nothing back. Floti hosts Claude Code sessions, so that ends whatever is running in them. A step like that is a tool somebody asks for, never a group a suite can reach.'
     },
     notes: [
       'This is a placeholder, not a pass. The installer was neither run nor verified.',
       'Run `pnpm verify:installer --yes` on a machine where nobody is working - a spare',
-      'machine, or before a release that changes packaging. It leaves no Helm installed.',
+      'machine, or before a release that changes packaging. It leaves no Floti installed.',
       'A release that does not touch electron-builder, the NSIS configuration, the native',
       'modules or `dist-win.mjs` is not a release that tool would have new information',
       'about; CI already runs `verify-artifact.mjs` over both exes on every publish.'

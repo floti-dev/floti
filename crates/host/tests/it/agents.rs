@@ -5776,7 +5776,7 @@ async fn agents_list_shows_a_command_child_with_its_command_and_how_many_command
 // ---------------------------------------------------------------------------
 
 /// The family a session titles itself through.
-const SESSIONS: &str = "helm-sessions";
+const SESSIONS: &str = "floti-sessions";
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_session_titles_itself_by_its_tool_and_from_its_shell_and_reaches_no_other_session() {
@@ -5799,11 +5799,11 @@ async fn a_session_titles_itself_by_its_tool_and_from_its_shell_and_reaches_no_o
         );
         let rules = if backend == CLAUDE {
             [
-                "mcp__helm-sessions__session_title",
+                "mcp__floti-sessions__session_title",
                 "Bash(floti session title:*)",
             ]
         } else {
-            ["helm-sessions.session_title", "floti session title"]
+            ["floti-sessions.session_title", "floti session title"]
         };
         let allowed = alpha.run.allowed();
         for rule in rules {

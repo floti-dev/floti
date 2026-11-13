@@ -81,9 +81,9 @@ export function readUserThemes(dir: string): UserThemes {
 }
 
 /** The README written into a new themes directory. Never rewritten. */
-export const THEMES_README = `# Helm themes
+export const THEMES_README = `# Floti themes
 
-One theme per \`.json\` file in this folder. Helm watches it: save a file and
+One theme per \`.json\` file in this folder. Floti watches it: save a file and
 the window repaints, no restart. Pick a theme in Settings, Appearance.
 
 The quickest start is **Duplicate** in that pane, which writes a complete copy
@@ -102,7 +102,7 @@ of the theme on screen here. A theme can also say only what it changes:
 
 - \`kind\` is \`"dark"\` or \`"light"\`, and is needed unless \`extends\` names a
   built-in (\`nocturne\`, \`graphite\` or \`daylight\`). It decides which slot
-  the theme can fill when Helm follows Windows.
+  the theme can fill when Floti follows Windows.
 - Every colour left out comes from the theme extended, or the built-in of the
   same kind.
 - Colours are \`#rrggbb\`, \`#rrggbbaa\` or \`rgb()\`. Only \`border\`,
@@ -118,7 +118,7 @@ of the theme on screen here. A theme can also say only what it changes:
 The terminal's colours are not part of a theme. They are fixed so that Claude
 Code renders the same under every one.
 
-Helm wrote this file once, when it created the folder, and will not write it
+Floti wrote this file once, when it created the folder, and will not write it
 again. Delete it if you like.
 `
 

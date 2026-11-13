@@ -46,22 +46,22 @@ function renderPane(liveHere?: readonly LiveSession[]): { onLaunch: ReturnType<t
 }
 
 describe('ProjectPane, with sessions already running in the folder', () => {
-  it('warns before the launch, naming each session and saying which one Helm did not start', () => {
+  it('warns before the launch, naming each session and saying which one Floti did not start', () => {
     const { onLaunch } = renderPane([HOSTED, OUTSIDE])
     expect(screen.getByRole('button', { name: 'Start session here' })).toBeDefined()
     expect(screen.getByRole('note').textContent).toBe(
       '2 sessions are already running in this folder: shop, terminal session. ' +
-        'One of them was not started by Helm, so it has no tab here. ' +
+        'One of them was not started by Floti, so it has no tab here. ' +
         'Starting another one here means two sessions in one working tree.'
     )
     expect(onLaunch).not.toHaveBeenCalled()
   })
 
-  it('says so of a single session Helm did not start', () => {
+  it('says so of a single session Floti did not start', () => {
     renderPane([OUTSIDE])
     expect(screen.getByRole('note').textContent).toBe(
       'A session is already running in this folder: terminal session. ' +
-        'It was not started by Helm, so it has no tab here. ' +
+        'It was not started by Floti, so it has no tab here. ' +
         'Starting another one here means two sessions in one working tree.'
     )
   })

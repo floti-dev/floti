@@ -46,7 +46,7 @@ describe('frames', () => {
     expect(only(frames['hello']!)).toEqual({
       type: 'hello',
       protocol: { major: PROTOCOL_VERSION.major, minor: PROTOCOL_VERSION.minor },
-      client: { name: 'Helm 2.4.0', kind: 'desktop' },
+      client: { name: 'Floti 2.4.0', kind: 'desktop' },
       capabilities: ['terminal']
     })
     const response = only(frames['response']!)
@@ -92,7 +92,7 @@ describe('frames', () => {
         major: PROTOCOL_VERSION.major,
         minor: PROTOCOL_VERSION.minor
       },
-      client: { name: 'Helm 2.4.0', kind: 'desktop' },
+      client: { name: 'Floti 2.4.0', kind: 'desktop' },
       capabilities: ['terminal']
     }
     expect(Buffer.from(encodeFrame(hello)).toString('hex')).toBe(Buffer.from(fixtures()['hello']!).toString('hex'))

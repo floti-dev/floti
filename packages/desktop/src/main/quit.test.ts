@@ -92,7 +92,7 @@ describe('quitEnds', () => {
 })
 
 describe('the quit gate', () => {
-  it('Quit with sessions running asks first, and a cancel ends nothing and leaves Helm open', async () => {
+  it('Quit with sessions running asks first, and a cancel ends nothing and leaves Floti open', async () => {
     const { confirm, answer } = question()
     const helm = helmWith(2, confirm)
 

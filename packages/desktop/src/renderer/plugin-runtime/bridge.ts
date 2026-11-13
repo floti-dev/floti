@@ -17,7 +17,7 @@ import type {
   SettingValue,
   StatusItem,
   ToolHandler
-} from '@coledtaylor/helm-plugin-sdk'
+} from '@floti-dev/plugin-sdk'
 import { PLUGIN_TOOL_ANSWER_MAX_CHARS as TOOL_ANSWER_MAX_CHARS, type PluginFetchRequest, type PluginFetchResponse } from '../../shared/ipc'
 import {
   CONNECT,

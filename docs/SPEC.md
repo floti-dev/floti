@@ -1141,7 +1141,7 @@ option open and is what makes the app genuinely portable.
 ### Network posture
 
 **The host's update check, at most once a day to floti.dev and to the
-GitHub release it names, is the only request Helm makes on its own
+GitHub release it names, is the only request Floti makes on its own
 initiative; the app itself contacts nothing.
 Everything else on the network happens because you asked for it: Check
 now and Update ask the host to check or to update, the browser pane

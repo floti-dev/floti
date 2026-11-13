@@ -227,7 +227,7 @@ describe('SettingsPane', () => {
       Sessions: [
         ['checkbox', 'Let Claude see the other sessions'],
         ['checkbox', 'Resume after a crash without asking'],
-        ['combobox', 'When you quit Helm'],
+        ['combobox', 'When you quit Floti'],
         ['button', 'Stop host']
       ],
       Agents: [
@@ -287,7 +287,7 @@ describe('SettingsPane', () => {
     expect(props.onBrowserSearchChange).toHaveBeenCalledWith('off')
   })
 
-  it('never shows the state Helm keeps for itself, in any section', () => {
+  it('never shows the state Floti keeps for itself, in any section', () => {
     const { rerender } = renderPane()
     for (const { id } of SETTINGS_SECTIONS) {
       rerender({ section: id })
@@ -665,21 +665,21 @@ describe('SettingsPane', () => {
     expect(within(group('Sessions')).queryByRole('checkbox', { name: 'Run sessions in the local host' })).toBeNull()
     expect(group('Sessions').textContent).not.toContain('Run sessions in the local host')
     expect(within(group('Sessions')).getByRole('button', { name: 'Stop host' })).toHaveProperty('disabled', false)
-    const quit = within(group('Sessions')).getByRole<HTMLSelectElement>('combobox', { name: 'When you quit Helm' })
+    const quit = within(group('Sessions')).getByRole<HTMLSelectElement>('combobox', { name: 'When you quit Floti' })
     expect(quit.value).toBe('end')
     expect([...quit.options].map((option) => option.textContent)).toEqual([
       'End the sessions it started',
       'Keep them running'
     ])
-    expect(group('Sessions').textContent).toContain('For this PC’s host. Quitting ends the sessions Helm started there')
+    expect(group('Sessions').textContent).toContain('For this PC’s host. Quitting ends the sessions Floti started there')
 
     await userEvent.selectOptions(quit, 'keep')
     expect(props.onQuitSessionsChange).toHaveBeenLastCalledWith('keep')
     rerender({ section: 'sessions', quitSessions: 'keep' })
-    expect(within(group('Sessions')).getByRole<HTMLSelectElement>('combobox', { name: 'When you quit Helm' }).value).toBe(
+    expect(within(group('Sessions')).getByRole<HTMLSelectElement>('combobox', { name: 'When you quit Floti' }).value).toBe(
       'keep'
     )
-    expect(group('Sessions').textContent).toContain('Quitting leaves the sessions Helm started running there')
+    expect(group('Sessions').textContent).toContain('Quitting leaves the sessions Floti started running there')
   })
 
   it('S11: lists each remote host with its own When you quit choice, Keep them running when never set, and changes only that host’s', async () => {

@@ -24,7 +24,7 @@ pub fn frame_fixture_messages() -> Vec<(&'static str, Message)> {
             Message::Hello(Hello {
                 protocol: PROTOCOL_VERSION,
                 client: ClientInfo {
-                    name: "Helm 2.4.0".to_owned(),
+                    name: "Floti 2.4.0".to_owned(),
                     kind: ClientKind::Desktop,
                     device_name: None,
                 },

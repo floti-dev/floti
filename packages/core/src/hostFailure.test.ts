@@ -11,11 +11,11 @@ const classify = (lastLine: string, more: Partial<HostFailureInput> = {}) =>
 
 describe('what went wrong reaching a host, one row of the design’s table each', () => {
   it('S10: this PC has no ssh', () => {
-    const failure = classify('Helm could not run ssh on this PC (ENOENT).', { cause: { kind: 'transportMissing' } })
+    const failure = classify('Floti could not run ssh on this PC (ENOENT).', { cause: { kind: 'transportMissing' } })
     expect(failure).toMatchObject({
       kind: 'noTransport',
-      title: 'Helm could not find ssh on this PC',
-      line: 'Helm could not run ssh on this PC (ENOENT).'
+      title: 'Floti could not find ssh on this PC',
+      line: 'Floti could not run ssh on this PC (ENOENT).'
     })
     expect(failure.fix).toContain('Install the OpenSSH client (on Windows, Settings > System > Optional features)')
   })
@@ -24,10 +24,10 @@ describe('what went wrong reaching a host, one row of the design’s table each'
     const failure = classifyHostFailure({
       name: 'lab',
       transport: COMMAND,
-      lastLine: 'Helm could not run wsl.exe on this PC (ENOENT).',
+      lastLine: 'Floti could not run wsl.exe on this PC (ENOENT).',
       cause: { kind: 'transportMissing' }
     })
-    expect(failure.title).toBe('Helm could not find wsl.exe on this PC')
+    expect(failure.title).toBe('Floti could not find wsl.exe on this PC')
   })
 
   it('S11: the name does not resolve', () => {
@@ -60,7 +60,7 @@ describe('what went wrong reaching a host, one row of the design’s table each'
     const said = 'No ED25519 host key is known for build-box and you have requested strict checking.\nHost key verification failed.'
     const failure = classify('Host key verification failed.', { said })
     expect(failure).toMatchObject({ kind: 'unknownKey', title: 'ssh does not trust build-box yet', line: 'Host key verification failed.' })
-    expect(failure.fix).toBe('Run ssh build-box once in a terminal and check the fingerprint it shows. Helm never accepts a host key for you.')
+    expect(failure.fix).toBe('Run ssh build-box once in a terminal and check the fingerprint it shows. Floti never accepts a host key for you.')
   })
 
   it('S14: the host’s key changed, told from the lines before the last', () => {
@@ -104,12 +104,12 @@ describe('what went wrong reaching a host, one row of the design’s table each'
     expect(failure.fix).toBe('Run the install command in a terminal there to see all of its output, then try again.')
   })
 
-  it('S18: its floti is newer than this Helm, naming both versions', () => {
+  it('S18: its floti is newer than this Floti, naming both versions', () => {
     const failure = classify('floti 3.2.0 protocol 2.0 linux x64', {
       cause: { kind: 'newer', host: '3.2.0', ours: '3.0.0', by: 'version' }
     })
-    expect(failure).toMatchObject({ kind: 'newer', title: 'build-box runs floti 3.2.0, newer than this Helm 3.0.0' })
-    expect(failure.fix).toBe('Update Helm on this PC, then try again.')
+    expect(failure).toMatchObject({ kind: 'newer', title: 'build-box runs floti 3.2.0, newer than this Floti 3.0.0' })
+    expect(failure.fix).toBe('Update Floti on this PC, then try again.')
   })
 
   it('S19: a connection that fails after the check shows floti’s line with its fix, never a pairing code', () => {
@@ -121,7 +121,7 @@ describe('what went wrong reaching a host, one row of the design’s table each'
   it('a line it does not know falls back to the transport’s own fix', () => {
     expect(classify('kex_exchange_identification: read: Connection reset by peer', { step: 'check' })).toMatchObject({
       kind: 'other',
-      title: 'Helm could not check build-box',
+      title: 'Floti could not check build-box',
       fix: 'Sign in with ssh build-box in a terminal, then try again.'
     })
   })
@@ -175,7 +175,7 @@ describe('what went wrong reaching a WSL distro', () => {
     const missing = classifyHostFailure({
       name: 'Debian',
       transport: HERE,
-      lastLine: 'Helm could not run C:\\Windows\\System32\\wsl.exe on this PC (ENOENT).',
+      lastLine: 'Floti could not run C:\\Windows\\System32\\wsl.exe on this PC (ENOENT).',
       cause: { kind: 'transportMissing' }
     })
     expect(missing).toMatchObject({
@@ -206,7 +206,7 @@ describe('what went wrong reaching a WSL distro', () => {
     const noSsh = classifyHostFailure({
       name: 'Ubuntu on win-box',
       transport: THERE,
-      lastLine: 'Helm could not run ssh on this PC (ENOENT).',
+      lastLine: 'Floti could not run ssh on this PC (ENOENT).',
       cause: { kind: 'transportMissing' }
     })
     expect(noSsh.kind).toBe('noTransport')

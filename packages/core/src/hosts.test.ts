@@ -321,7 +321,7 @@ describe('a WSL distro as a host', () => {
   })
 })
 
-describe('hostFlotiVerdict: what the sidebar and the Sessions page say beside a host whose floti is not this Helm’s', () => {
+describe('hostFlotiVerdict: what the sidebar and the Sessions page say beside a host whose floti is not this Floti’s', () => {
   it('names both protocols for a floti too old or newer, both versions for a connected older one, and nothing otherwise', () => {
     expect(hostFlotiVerdict({ state: 'tooOld', host: '0.9', client: '1.0' })).toEqual({ verdict: 'tooOld', host: '0.9', client: '1.0' })
     expect(hostFlotiVerdict({ state: 'newer', host: '2.0', client: '1.0' })).toEqual({ verdict: 'newer', host: '2.0', client: '1.0' })

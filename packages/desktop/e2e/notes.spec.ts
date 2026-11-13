@@ -22,7 +22,7 @@ const LESSON = [
 ].join('\n')
 
 const FIRST = '# First note\n\nGo on to [[second]].\n'
-const EDITED = `${FIRST}Written in Helm.`
+const EDITED = `${FIRST}Written in Floti.`
 
 const test = base.extend({
   world: async ({ world }, use) => {
@@ -85,10 +85,10 @@ test('a note is edited beside its preview, keeps its draft behind another tab, a
   const editor = window.getByRole('textbox', { name: 'Edit notes/first.md' })
   await editor.click()
   await editor.press('Control+End')
-  await window.keyboard.type('Written in Helm.')
+  await window.keyboard.type('Written in Floti.')
   await expect(window.getByText('Unsaved changes')).toBeVisible()
   // The preview is drawn from the draft.
-  await expect(window.locator('[data-content-body]').getByText('Written in Helm.')).toBeVisible()
+  await expect(window.locator('[data-content-body]').getByText('Written in Floti.')).toBeVisible()
   // The tab says there is something unsaved where its close button sits.
   await expect(pane(window).getByRole('button', { name: 'Close first.md, unsaved changes' })).toBeVisible()
 

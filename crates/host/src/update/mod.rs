@@ -436,10 +436,12 @@ impl Updater<'_> {
                     self.relaunch_host(&version);
                 }
                 if let Some(display) = waited {
-                    self.open_desktop(&app, &display);
+                    // Where it is now: an app from before the rename has
+                    // moved to its new place.
+                    let opened = result.as_ref().unwrap_or(&app).clone();
+                    self.open_desktop(&opened, &display);
                 }
-                result?;
-                Some(app.name.to_owned())
+                Some(result?.name.to_owned())
             }
             None => {
                 let _ = clear(&staging);
@@ -669,9 +671,11 @@ impl Updater<'_> {
         Ok(())
     }
 
-    /// Waits until `app` has quit, then installs `downloaded` over it.
-    /// `waited` is set once it has found the app running and waited for it,
-    /// to the display and session-bus variables the app ran with.
+    /// Waits until `app` has quit, then installs `downloaded` over it, and
+    /// answers the app as it is installed then (in its new place, for an
+    /// app from before the rename). `waited` is set once it has found the
+    /// app running and waited for it, to the display and session-bus
+    /// variables the app ran with.
     fn install_desktop(
         &mut self,
         app: &Desktop,
@@ -679,7 +683,7 @@ impl Updater<'_> {
         version: &Version,
         floti_updated: bool,
         waited: &mut Option<Vec<(String, String)>>,
-    ) -> Result<(), UpdateError> {
+    ) -> Result<Desktop, UpdateError> {
         let failed = |reason: String| {
             let (version, app) = (version.to_string(), app.name.to_owned());
             if floti_updated {
@@ -722,13 +726,33 @@ impl Updater<'_> {
             }
             (self.pause)(APP_POLL);
         }
-        self.installs
+        let installed = self
+            .installs
             .install_desktop(app, downloaded)
             .map_err(|err| failed(err.to_string()))?;
-        self.say(&format!("{} is updated to {version}.", app.name));
+        if installed.path == app.path {
+            self.say(&format!("{} is updated to {version}.", installed.name));
+        } else {
+            self.say(&format!(
+                "{} is updated to {} {version}, at {}.",
+                app.name,
+                installed.name,
+                installed.path.display()
+            ));
+            match self
+                .installs
+                .carry_launcher(&self.env, app, &installed)
+            {
+                Ok(Some(entry)) => self.say(&format!("Its menu entry is {}.", entry.display())),
+                Ok(None) => {}
+                Err(err) => self.say(&format!(
+                    "Its menu entry was not moved ({err}); floti add desktop writes it."
+                )),
+            }
+        }
         if let Some(carried) = self
             .installs
-            .carried_floti(app)
+            .carried_floti(&installed)
             .filter(|carried| carried.is_file())
         {
             match (self.install_self)(&carried) {
@@ -740,11 +764,11 @@ impl Updater<'_> {
                 // The app is updated; its own start puts its floti in place.
                 Err(line) => self.say(&format!(
                     "{} could not put its floti and Node in place now ({line}); it does when it next starts.",
-                    app.name
+                    installed.name
                 )),
             }
         }
-        Ok(())
+        Ok(installed)
     }
 }
 

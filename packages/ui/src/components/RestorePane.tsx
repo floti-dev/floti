@@ -132,9 +132,9 @@ export function RestorePane({
     })
 
   const count = offer.sessions.length
-  // What stopped: Helm, which closes, or the host the sessions ran in, which stops.
-  const stopped = lostWith === undefined ? 'Helm closed' : `${lostWith} stopped`
-  const who = lostWith === undefined ? 'Helm' : lostWith.charAt(0).toUpperCase() + lostWith.slice(1)
+  // What stopped: Floti, which closes, or the host the sessions ran in, which stops.
+  const stopped = lostWith === undefined ? 'Floti closed' : `${lostWith} stopped`
+  const who = lostWith === undefined ? 'Floti' : lostWith.charAt(0).toUpperCase() + lostWith.slice(1)
   const elsewhere =
     offer.elsewhere === 0
       ? null
@@ -243,7 +243,7 @@ export function RestoreUnreadPane({
   lostWith
 }: RestoreUnreadPaneProps): JSX.Element {
   const headingId = useId()
-  const stopped = lostWith === undefined ? 'Helm closed' : `${lostWith} stopped`
+  const stopped = lostWith === undefined ? 'Floti closed' : `${lostWith} stopped`
   return (
     <div
       data-restore-pane

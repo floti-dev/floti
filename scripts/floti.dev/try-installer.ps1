@@ -13,7 +13,7 @@
 #
 # - floti.exe in %LOCALAPPDATA%\Programs\Floti\bin is, byte for byte, the
 #   release's floti-<version>-<target>.exe, the floti for this CPU;
-# - no process runs from the app's own folder, %LOCALAPPDATA%\Programs\Helm,
+# - no process runs from the app's own folder, %LOCALAPPDATA%\Programs\Floti\desktop,
 #   so the floti the app carries is not the running host;
 # - check-setup.ps1 passes: that floti says <Version>, its folder is on the
 #   user's Path, and the logon task "Floti host" runs it and is running.
@@ -43,7 +43,7 @@ function Fail([string]$Why) {
 
 $folder = Join-Path $env:LOCALAPPDATA 'Programs\Floti\bin'
 $floti = Join-Path $folder 'floti.exe'
-$app = Join-Path $env:LOCALAPPDATA 'Programs\Helm'
+$app = Join-Path $env:LOCALAPPDATA 'Programs\Floti\desktop'
 $expected = Join-Path $Served "floti-$Version-$Target.exe"
 if (-not (Test-Path -LiteralPath $Installer -PathType Leaf)) { Fail "there is no installer at $Installer." }
 if (-not (Test-Path -LiteralPath $expected -PathType Leaf)) { Fail "the run has no $expected to compare with." }
@@ -62,7 +62,7 @@ $run = Start-Process -FilePath $Installer -ArgumentList '/S' -Wait -PassThru
 if ($run.ExitCode -ne 0) { Fail "$Installer /S exited $($run.ExitCode)." }
 
 $failures = New-Object System.Collections.Generic.List[string]
-if (-not (Test-Path -LiteralPath (Join-Path $app 'Helm.exe') -PathType Leaf)) { $failures.Add("the app is not at $app\Helm.exe.") }
+if (-not (Test-Path -LiteralPath (Join-Path $app 'Floti.exe') -PathType Leaf)) { $failures.Add("the app is not at $app\Floti.exe.") }
 # A release's installer carries both Windows flotis; an install that left
 # one out unpacked its payload short (scripts/dist-win.mjs says how).
 foreach ($carried in 'floti.exe', 'floti-arm64.exe') {

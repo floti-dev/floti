@@ -41,7 +41,7 @@ const listed = (id: string, patch: Partial<P.PluginInfo> = {}): P.PluginInfo => 
   exec: [],
   service: null,
   runsPrograms: false,
-  agent: TOOLS(`helm-plugin-${id}`),
+  agent: TOOLS(`floti-plugin-${id}`),
   startsSessions: false,
   seesSessions: false,
   status: null,
@@ -140,7 +140,7 @@ describe('each remote host’s plugins and tool relay', () => {
 
     // build-box switching its tools off is offered to build-box alone.
     const localOffers = offered(w.local).length
-    w.remote.push('plugins:changed', [listed('trackr', { agent: { ...TOOLS('helm-plugin-trackr'), enabled: false } })])
+    w.remote.push('plugins:changed', [listed('trackr', { agent: { ...TOOLS('floti-plugin-trackr'), enabled: false } })])
     expect(offered(w.remote).at(-1)).toEqual([])
     expect(offered(w.local)).toHaveLength(localOffers)
   })

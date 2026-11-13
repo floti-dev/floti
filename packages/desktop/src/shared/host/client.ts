@@ -227,12 +227,12 @@ export function restartFrame(options: RestartFrameOptions): Promise<RestartState
         try {
           next = decoder.next()
         } catch (error) {
-          settle({ why: `The local host sent a frame Helm cannot read: ${(error as FrameError).message}` })
+          settle({ why: `The local host sent a frame Floti cannot read: ${(error as FrameError).message}` })
           return
         }
         if (next === null) return
         if ('malformed' in next) {
-          settle({ why: `The local host sent a frame Helm cannot read: ${next.malformed.message}` })
+          settle({ why: `The local host sent a frame Floti cannot read: ${next.malformed.message}` })
         } else if (next.message.type === 'restartState') {
           const { type: _type, ...state } = next.message
           settle({ state })
@@ -245,7 +245,7 @@ export function restartFrame(options: RestartFrameOptions): Promise<RestartState
       }
     })
     const client = {
-      name: `Helm ${options.appVersion}`,
+      name: `Floti ${options.appVersion}`,
       kind: 'desktop' as const,
       ...(options.deviceName !== undefined && options.deviceName !== '' ? { deviceName: options.deviceName } : {})
     }
@@ -325,7 +325,7 @@ class Connection implements HostConnection {
         minor: (this.options.protocol ?? PROTOCOL_VERSION).minor
       },
       client: {
-        name: `Helm ${this.options.appVersion}`,
+        name: `Floti ${this.options.appVersion}`,
         kind: 'desktop',
         ...(this.options.deviceName !== undefined && this.options.deviceName !== ''
           ? { deviceName: this.options.deviceName }
@@ -442,7 +442,7 @@ class Connection implements HostConnection {
       try {
         next = this.decoder.next()
       } catch (error) {
-        this.end(`The local host sent a frame Helm cannot read: ${(error as FrameError).message}`)
+        this.end(`The local host sent a frame Floti cannot read: ${(error as FrameError).message}`)
         return
       }
       if (next === null) return
@@ -467,7 +467,7 @@ class Connection implements HostConnection {
         )
         this.end(message.message)
       } else {
-        const why = `The local host answered Helm's hello with ${message.type} rather than a welcome.`
+        const why = `The local host answered Floti's hello with ${message.type} rather than a welcome.`
         greeting.reject(new HostConnectionEnded(why))
         this.end(why)
       }

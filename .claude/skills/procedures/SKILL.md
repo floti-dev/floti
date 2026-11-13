@@ -68,7 +68,7 @@ and then uninstalls the Helm on this machine, leaving none behind.
 
 ## Publishing the plugin SDK
 
-`@coledtaylor/helm-plugin-sdk` goes to npm on its own version, separate from
+`@floti-dev/plugin-sdk` goes to npm on its own version, separate from
 the app's.
 
 1. Bump the version in `packages/plugin-sdk/package.json`: patch for a fix,

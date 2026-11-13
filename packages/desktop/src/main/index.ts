@@ -23,7 +23,7 @@ import { homedir } from 'node:os'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { emit, emitToContents, pushTheme, registerIpc } from './ipc'
 import { createClipboardText } from './clipboard'
-import { appMode, dataDir, initDataDir, mcpConfigDir, themesDir } from './paths'
+import { appMode, dataDir, finishDataMove, initDataDir, mcpConfigDir, themesDir } from './paths'
 import { createThemeService } from './themes'
 import { activePty, killPty, spawnPty, windowsBuildNumber } from './pty'
 import { adoptExistingProfile, createServices, updateSettings, type Services } from './services'
@@ -326,7 +326,7 @@ function announceLiveMode(): void {
       '  DEV, LIVE - this run shares the installed app\'s data directory.',
       `    ${dataDir}`,
       '  Its database, overlay shims and Chromium profile are the ones the',
-      '  installed Helm uses. Running both at once will fight over the',
+      '  installed Floti uses. Running both at once will fight over the',
       '  Chromium profile, and anything written here is written there.',
       '',
       '  `pnpm dev` is the isolated one. This is `pnpm dev:live`.',
@@ -339,6 +339,8 @@ function announceLiveMode(): void {
 function startApp(options: AppOptions = {}): void {
   announceLiveMode()
   const services: Services = createServices()
+  // The store opened in the moved copy, so the folder it came from can go.
+  finishDataMove()
   // Before anything can spawn: a `claude` the user picked by hand has to win
   // over discovery in every caller, and the session host does not read
   // settings.
@@ -373,11 +375,11 @@ function startApp(options: AppOptions = {}): void {
    */
   let win: BrowserWindow | null = null
   // `pnpm dev` starts from a fresh copy of the database every launch, so a
-  // plugin being worked on is registered from HELM_PLUGINS instead of being
+  // plugin being worked on is registered from FLOTI_PLUGINS instead of being
   // added again in Settings each time. Dev builds only: an installed Helm
   // registers a folder when the user adds one, and at no other time.
   if (appMode === 'dev') {
-    for (const folder of (process.env['HELM_PLUGINS'] ?? '').split(delimiter)) {
+    for (const folder of (process.env['FLOTI_PLUGINS'] ?? '').split(delimiter)) {
       if (folder.trim() !== '' && isAbsolute(folder.trim())) addPluginFolder(services.store, folder.trim())
     }
   }
@@ -439,7 +441,7 @@ function startApp(options: AppOptions = {}): void {
     env: process.env,
     appArmorRestricts: process.platform === 'linux' ? readAppArmorRestricts() : null
   })
-  if (!browserPane.available) console.log("browser: off - Helm is running without Chromium's sandbox (--no-sandbox)")
+  if (!browserPane.available) console.log("browser: off - Floti is running without Chromium's sandbox (--no-sandbox)")
   const browserSettings = (): AppSettings => withBrowserAvailability(services.settings, browserPane)
   const desktopHost: DesktopHost = createDesktopHost({
     services,
@@ -953,14 +955,21 @@ function claimDevShortcut(): void {
       const target = shell.readShortcutLink(stale).target.toLowerCase()
       if (target === process.execPath.toLowerCase()) rmSync(stale, { force: true })
     }
+    // The shortcut a checkout wrote while the app was called Helm, declaring
+    // the id it had then. Only this checkout's own, by the same rule.
+    const renamed = join(programs, 'Helm (dev).lnk')
+    if (existsSync(renamed)) {
+      const target = shell.readShortcutLink(renamed).target.toLowerCase()
+      if (target === process.execPath.toLowerCase()) rmSync(renamed, { force: true })
+    }
 
     // `create`, not `update`: `update` only edits a shortcut that is already
     // there and fails on the first run, which is the only run that matters.
-    shell.writeShortcutLink(join(programs, 'Helm (dev).lnk'), 'create', {
+    shell.writeShortcutLink(join(programs, 'Floti (dev).lnk'), 'create', {
       target: process.execPath,
       args: `"${app.getAppPath()}"`,
-      appUserModelId: 'dev.coletaylor.helm.dev',
-      description: 'Helm, run from source',
+      appUserModelId: 'dev.floti.desktop.dev',
+      description: 'Floti, run from source',
       icon,
       iconIndex: 0
     })
@@ -995,7 +1004,7 @@ app.whenReady().then(() => {
   // Measured 2026-08-10. Neither rebuilding, reinstalling, running from an
   // uncached path, nor purging the icon cache touched it - the stale
   // `Electron.lnk` had to go. Keeping the ids apart is what stops it returning.
-  app.setAppUserModelId(app.isPackaged ? 'dev.coletaylor.helm' : 'dev.coletaylor.helm.dev')
+  app.setAppUserModelId(app.isPackaged ? 'dev.floti.desktop' : 'dev.floti.desktop.dev')
   claimDevShortcut()
 
   // The artifact scheme's handler. Registered for every mode that opens a
