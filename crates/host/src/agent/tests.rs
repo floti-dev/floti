@@ -1,10 +1,12 @@
 //! The trait's own rules: what a backend declares follows from the parts it
 //! has, an undeclared part answers Unknown, versions are checked without
-//! blocking, and a launch names the parts of a harness it could not take.
+//! blocking, and a launch names the parts of a workspace it could not take.
 
 use std::path::PathBuf;
 
-use floti_protocol::{BackendFeature, BackendId, HarnessPart, HarnessSupport, Knowable, Support};
+use floti_protocol::{
+    BackendFeature, BackendId, Knowable, Support, WorkspacePart, WorkspaceSupport,
+};
 
 use super::*;
 use crate::testkit::TestDirs;
@@ -59,16 +61,16 @@ impl AgentBackend for SkillsOnly {
         "Skills only"
     }
 
-    fn harness(&self) -> HarnessSupport {
-        HarnessSupport::taking(
+    fn workspace(&self) -> WorkspaceSupport {
+        WorkspaceSupport::taking(
             ["AGENTS.md"],
-            [HarnessPart::Instructions, HarnessPart::Skills],
+            [WorkspacePart::Instructions, WorkspacePart::Skills],
         )
     }
 
     fn launch(&self, request: &LaunchRequest, folder: &LaunchFolder) -> Result<Launch> {
         let mut launch = RunOnly::new().launch(request, folder)?;
-        launch.not_taken = parts_not_taken(&self.harness(), &request.composition.overlays);
+        launch.not_taken = parts_not_taken(&self.workspace(), &request.composition.overlays);
         Ok(launch)
     }
 }
@@ -129,41 +131,44 @@ fn a_backend_declares_exactly_the_parts_it_has() {
         };
         assert_eq!(descriptor.support(feature), expected, "{feature:?}");
     }
-    // A plain tab takes the folder of a harness and nothing in it.
-    assert_eq!(descriptor.harness, HarnessSupport::default());
-    assert_eq!(descriptor.harness.cannot_take, HarnessPart::ALL.to_vec());
+    // A plain tab takes the folder of a workspace and nothing in it.
+    assert_eq!(descriptor.workspace, WorkspaceSupport::default());
+    assert_eq!(
+        descriptor.workspace.cannot_take,
+        WorkspacePart::ALL.to_vec()
+    );
 }
 
 #[test]
 fn a_backend_without_commands_or_subagents_names_them_and_its_launch_lists_what_it_could_not_take()
 {
     let dirs = TestDirs::new();
-    let harness = dirs.folder("harness");
-    std::fs::write(harness.join("AGENTS.md"), "rules").unwrap();
+    let workspace = dirs.folder("workspace");
+    std::fs::write(workspace.join("AGENTS.md"), "rules").unwrap();
     for part in ["skills/think", "commands", "agents"] {
-        std::fs::create_dir_all(harness.join(".claude").join(part)).unwrap();
+        std::fs::create_dir_all(workspace.join(".claude").join(part)).unwrap();
     }
     let backend = SkillsOnly {
         id: BackendId::new("skills-only"),
     };
 
     let descriptor = backend.capabilities();
-    assert_eq!(descriptor.harness.instruction_files, vec!["AGENTS.md"]);
+    assert_eq!(descriptor.workspace.instruction_files, vec!["AGENTS.md"]);
     assert_eq!(
-        descriptor.harness.cannot_take,
+        descriptor.workspace.cannot_take,
         vec![
-            HarnessPart::Commands,
-            HarnessPart::Subagents,
-            HarnessPart::Workflows
+            WorkspacePart::Commands,
+            WorkspacePart::Subagents,
+            WorkspacePart::Workflows
         ]
     );
 
     let launch = backend
         .launch(
             &LaunchRequest {
-                folder: harness.clone(),
+                folder: workspace.clone(),
                 composition: Composition {
-                    overlays: vec![harness],
+                    overlays: vec![workspace],
                     ..Composition::default()
                 },
                 ..LaunchRequest::default()
@@ -171,10 +176,10 @@ fn a_backend_without_commands_or_subagents_names_them_and_its_launch_lists_what_
             &LaunchFolder::create(&dirs.data).unwrap(),
         )
         .unwrap();
-    // The harness holds no workflows, so only what it holds is named.
+    // The workspace holds no workflows, so only what it holds is named.
     assert_eq!(
         launch.not_taken,
-        vec![HarnessPart::Commands, HarnessPart::Subagents]
+        vec![WorkspacePart::Commands, WorkspacePart::Subagents]
     );
 }
 
@@ -249,10 +254,10 @@ fn parts_not_taken_reads_every_overlay_and_names_each_part_once() {
     std::fs::create_dir_all(one.join(".claude").join("commands")).unwrap();
     std::fs::create_dir_all(two.join(".claude").join("commands")).unwrap();
     std::fs::create_dir_all(two.join(".claude").join("workflows")).unwrap();
-    let support = HarnessSupport::taking(["AGENTS.md"], [HarnessPart::Instructions]);
+    let support = WorkspaceSupport::taking(["AGENTS.md"], [WorkspacePart::Instructions]);
     assert_eq!(
         parts_not_taken(&support, &[one, two, PathBuf::from("not there")]),
-        vec![HarnessPart::Commands, HarnessPart::Workflows]
+        vec![WorkspacePart::Commands, WorkspacePart::Workflows]
     );
 }
 

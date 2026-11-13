@@ -1197,11 +1197,11 @@ overrides the gate; keep it.
 
   **Sessions** is the tree, and the window is sessions first because the day
   is. A filter field ("Filter projects and sessions") over **Pinned**, then the
-  harness groups, then **Elsewhere**. Every project is one line; a project with
+  workspace groups, then **Elsewhere**. Every project is one line; a project with
   sessions in it opens out to show them beneath it, and folds to one line with
   the most pressing session's dot beside its name. A filter matches a project
   by its name, its path or the name of anything running in it, and opens every
-  group it matched. The header's actions are rescan, new harness and add a
+  group it matched. The header's actions are rescan, new workspace and add a
   folder; the foot of the island is one line naming how many sessions are on
   this machine and how many are not Helm's, which opens the sessions pane.
 
@@ -1224,20 +1224,20 @@ overrides the gate; keep it.
   **Profiles** is the profile list, with Import and New in the header. It is
   only mounted while it is the view.
 
-  A harness group's header is a caret, the name in the caps label style but at
+  A workspace group's header is a caret, the name in the caps label style but at
   `fg`, the project count, the template it was built from in mono where the
   manifest names one, and a running-session count at the right in
   `accent-text`. Groups are separated by an `.island-rule`, never a border.
 
   **Pinned** sits above the first group and holds the projects somebody lifted
-  out of their harnesses. It folds away like a group - the same caret in the
+  out of their workspaces. It folds away like a group - the same caret in the
   same column, its projects indented as a group's are - and is otherwise
   deliberately *not* shaped like one: its label is the 10px caption with a pin
   before it, at `fg-subtle` where a group header sits at `fg`.
-  **Only projects are pinnable** - a pinned harness would be very nearly the
-  collapse state the group already has. Pins are flat and cross-harness, so a
+  **Only projects are pinnable** - a pinned workspace would be very nearly the
+  collapse state the group already has. Pins are flat and cross-workspace, so a
   pinned project appears **once**, in the section and never also in its group,
-  and the section sorts by name, since path order is harness order and that is
+  and the section sorts by name, since path order is workspace order and that is
   the arrangement being escaped.
 
   **Elsewhere** holds Helm's sessions whose folder is no project the scan
@@ -1245,7 +1245,7 @@ overrides the gate; keep it.
 
   **Files and the rest are destinations on the rail, not rows here.** Each
   of those views owns its own picker, so its way in carries none. They were
-  per-harness links once, which made a pane reachable only through a harness
+  per-workspace links once, which made a pane reachable only through a workspace
   that happened to be expanded; a destination a collapsed group can hide is a
   destination that can be lost. A **project page may still link to Files,
   scoped to itself**: what a link from a project adds is the scope, and it is
@@ -1255,7 +1255,7 @@ overrides the gate; keep it.
   to show), kind icon, name, and the branch in mono `fg-subtle` at the right,
   where it gives way first. Under the pointer the branch's slot shows a terminal button
   (start a session here, no page in between) and the star, by the rules in §5.
-  The row's own click opens the project's page. The icon stays because harness
+  The row's own click opens the project's page. The icon stays because workspace
   / repo / plain folder is the one thing a name and a branch cannot say; the
   rest of what git knows is on the page.
 

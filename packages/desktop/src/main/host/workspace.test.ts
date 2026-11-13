@@ -47,7 +47,7 @@ const project = (path: string, state: P.GitState | null): P.Project => ({
   path,
   name: 'alpha',
   kind: 'repo',
-  harnessPath: HUB,
+  workspacePath: HUB,
   hasClaudeDir: true,
   inventory: {
     skills: 0,
@@ -63,7 +63,7 @@ const project = (path: string, state: P.GitState | null): P.Project => ({
 
 const scanResult = (dirty: number): P.DiscoveryResult => ({
   roots: [HUB],
-  harnesses: [],
+  workspaces: [],
   projects: [project(ALPHA, git(dirty))],
   errors: [],
   scannedAt: '2026-10-30T10:00:00.000Z',
@@ -138,9 +138,9 @@ function world(
     .answer('setup:status', () => ({ backends: { 'claude-code': backend() } }))
     .answer('setup:locateBackend', () => backend())
     .answer('setup:complete', () => (host = { ...host, firstRunCompletedAt: '2026-10-30T11:00:00.000Z' }))
-    .answer('harness:create', ({ dir }) => ({
+    .answer('workspace:create', ({ dir }) => ({
       path: resolve(dir, 'hub'),
-      created: ['harness.yaml'],
+      created: ['workspace.yaml'],
       problems: [],
       roots: [HUB]
     }))
@@ -198,12 +198,12 @@ describe('the workspace through the local host', () => {
     await ws.setupStatus()
     await ws.locateClaude(PICKED)
     await ws.completeSetup()
-    await ws.createHarness({
+    await ws.createWorkspace({
       mode: 'new',
       dir: ELSEWHERE,
       template: 'minimal'
     })
-    await ws.createHarness({
+    await ws.createWorkspace({
       mode: 'convert',
       dir: HUB,
       name: 'Hub',
@@ -224,8 +224,8 @@ describe('the workspace through the local host', () => {
     expect(p('setup:status')).toEqual([null])
     expect(p('setup:locateBackend')).toEqual([{ backend: 'claude-code', path: PICKED }])
     expect(p('setup:complete')).toEqual([null])
-    // Every field the window left out is said; a template is for a new harness only.
-    expect(p('harness:create')).toEqual([
+    // Every field the window left out is said; a template is for a new workspace only.
+    expect(p('workspace:create')).toEqual([
       { mode: 'new', dir: ELSEWHERE, name: null, template: 'minimal' },
       { mode: 'convert', dir: HUB, name: 'Hub', template: null }
     ])
@@ -491,5 +491,21 @@ describe('the workspace through the local host', () => {
     const after = await w.workspace.completeSetup()
     expect(after.firstRunCompletedAt).toBe('2026-10-30T11:00:00.000Z')
     expect(w.own.own().firstRunCompletedAt).toBeNull()
+  })
+
+  it('counts the upgrade note seen when setup finishes, so a new install never shows it', async () => {
+    const w = world()
+    const after = await w.workspace.completeSetup()
+    expect(after.upgradeNoteSeenAt).not.toBeNull()
+    expect(w.own.own().upgradeNoteSeenAt).toBe(after.upgradeNoteSeenAt)
+    expect(w.own.writes).toEqual([{ upgradeNoteSeenAt: after.upgradeNoteSeenAt }])
+  })
+
+  it('leaves a seen upgrade note as it was when setup finishes again', async () => {
+    const seen = '2026-11-13T09:00:00.000Z'
+    const own = ownSettings({ upgradeNoteSeenAt: seen })
+    const w = world(undefined, own)
+    expect((await w.workspace.completeSetup()).upgradeNoteSeenAt).toBe(seen)
+    expect(own.writes).toEqual([])
   })
 })

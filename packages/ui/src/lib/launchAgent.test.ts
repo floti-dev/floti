@@ -143,7 +143,7 @@ describe('worktreePlan', () => {
     path: 'C:\\work\\orbit-api',
     name: 'orbit-api',
     kind: 'repo',
-    harnessPath: null,
+    workspacePath: null,
     hasClaudeDir: false,
     inventory: EMPTY_INVENTORY,
     git: { branch: 'main', detached: false, dirty: 0, ahead: 0, behind: 0 }

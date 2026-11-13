@@ -11,7 +11,7 @@ export interface InventoryChipsProps {
 
 /**
  * What a project would contribute to a session. These counts are the whole
- * argument of SPEC 1 - the ~43 skills and ~96 agents a harness-root launch
+ * argument of SPEC 1 - the ~43 skills and ~96 agents a workspace-root launch
  * silently drops - so a project with none shows nothing rather than three zeros.
  */
 export function InventoryChips({

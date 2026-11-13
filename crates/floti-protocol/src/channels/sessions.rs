@@ -37,7 +37,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::backend::{BackendId, HarnessPart};
+use crate::backend::{BackendId, WorkspacePart};
 use crate::channel::Catalogue;
 use crate::channels::common::{PermissionMode, SessionRecord};
 
@@ -359,10 +359,10 @@ pub struct LaunchedSession {
     pub composed_instructions: bool,
     /// Problems that did not stop the launch.
     pub warnings: Vec<String>,
-    /// Parts of the harness the session's backend has no equivalent for, and
+    /// Parts of the workspace the session's backend has no equivalent for, and
     /// so did not get, such as commands for an agent without slash commands.
     #[serde(default)]
-    pub not_taken: Vec<HarnessPart>,
+    pub not_taken: Vec<WorkspacePart>,
 }
 
 /// A session the host's last run was hosting when it stopped without shutting

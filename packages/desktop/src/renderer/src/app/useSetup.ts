@@ -18,7 +18,7 @@ import { bridgeFor, helm } from './bridge'
  * cannot disagree about what version is installed.
  */
 
-export type HarnessDialogMode = 'new' | 'convert'
+export type WorkspaceDialogMode = 'new' | 'convert'
 
 /**
  * The built-in scaffold's id, written out rather than imported.
@@ -68,12 +68,12 @@ export interface SetupState {
   acceptSuggestion: (path: string) => void
   finish: () => void
 
-  /** The create-a-harness dialog, which is reachable long after first run. */
-  dialog: HarnessDialogMode | null
+  /** The create-a-workspace dialog, which is reachable long after first run. */
+  dialog: WorkspaceDialogMode | null
   /**
    * The host the dialog creates on: this PC's (`LOCAL_HOST_KEY`), or a host on
    * another computer by its id. Its templates, its suggested folder, the
-   * preview and the harness itself all go through that host's bridge only.
+   * preview and the workspace itself all go through that host's bridge only.
    */
   dialogHost: string
   dialogDir: string
@@ -82,13 +82,13 @@ export interface SetupState {
   dialogProblems: string[]
   creating: boolean
   /** Opens the dialog on `host`, this PC's by default. */
-  openDialog: (mode: HarnessDialogMode, host?: string) => void
+  openDialog: (mode: WorkspaceDialogMode, host?: string) => void
   closeDialog: () => void
   chooseDialogDir: () => void
   /** The dialog owns its mode once open; the preview has to follow it. */
-  setDialogMode: (mode: HarnessDialogMode) => void
-  createHarness: (request: {
-    mode: HarnessDialogMode
+  setDialogMode: (mode: WorkspaceDialogMode) => void
+  createWorkspace: (request: {
+    mode: WorkspaceDialogMode
     dir: string
     name: string
     template: string
@@ -116,22 +116,22 @@ export function useSetup(
   /** Called when a host's roots have changed and its tree should be rebuilt. */
   onRootsChanged: (host: string) => void,
   /**
-   * Called with a harness that was created whole. Creating one is a step on
+   * Called with a workspace that was created whole. Creating one is a step on
    * the way to working in it, so the caller starts a session there rather
    * than leaving somebody on a page.
    */
-  onHarnessCreated?: (path: string, host: string) => void
+  onWorkspaceCreated?: (path: string, host: string) => void
 ): SetupState {
   const [status, setStatus] = useState<ClaudeStatus | null>(null)
   const [checking, setChecking] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null)
-  const [dialog, setDialog] = useState<HarnessDialogMode | null>(null)
+  const [dialog, setDialog] = useState<WorkspaceDialogMode | null>(null)
   const [dialogHost, setDialogHost] = useState<string>(LOCAL_HOST_KEY)
   /** The dialog's host as the last opening left it, for callbacks that outlive a render. */
   const dialogHostRef = useRef<string>(LOCAL_HOST_KEY)
   const [dialogDir, setDialogDir] = useState('')
-  const [dialogMode, setDialogMode] = useState<HarnessDialogMode>('new')
+  const [dialogMode, setDialogMode] = useState<WorkspaceDialogMode>('new')
   const [dialogProblems, setDialogProblems] = useState<string[]>([])
   const [creating, setCreating] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
@@ -236,13 +236,13 @@ export function useSetup(
   }, [])
 
   const openDialog = useCallback(
-    (mode: HarnessDialogMode, host: string = LOCAL_HOST_KEY) => {
+    (mode: WorkspaceDialogMode, host: string = LOCAL_HOST_KEY) => {
       setDialogProblems([])
       dialogHostRef.current = host
       setDialogHost(host)
       if (host === LOCAL_HOST_KEY) {
         // Seeded with somewhere plausible so the common case is two clicks: the
-        // parent of an existing root for a new harness, and nothing at all for a
+        // parent of an existing root for a new workspace, and nothing at all for a
         // conversion, which has to be pointed at a specific folder.
         setDialogDir(mode === 'new' ? (settings?.scanRoots[0] ?? '') : '')
       } else {
@@ -264,7 +264,7 @@ export function useSetup(
       }
       setDialogMode(mode)
       // Back to `minimal` every time, deliberately. The picker is not a
-      // preference: someone who used a template once has a harness from it, and
+      // preference: someone who used a template once has a workspace from it, and
       // the next one is a fresh decision rather than a repeat of the last.
       setTemplate(MINIMAL)
       // Nothing from the last open: the effect below fills this in, and until
@@ -313,20 +313,20 @@ export function useSetup(
     if (dialogHostRef.current !== LOCAL_HOST_KEY) return
     void helm
       .invoke('path:chooseDirectory', {
-        title: dialog === 'convert' ? 'Choose the folder to convert' : 'Create the harness inside'
+        title: dialog === 'convert' ? 'Choose the folder to convert' : 'Create the workspace inside'
       })
       .then(({ path }) => {
         if (path !== null) setDialogDir(path)
       })
   }, [dialog])
 
-  const createHarness = useCallback(
-    (request: { mode: HarnessDialogMode; dir: string; name: string; template: string }) => {
+  const createWorkspace = useCallback(
+    (request: { mode: WorkspaceDialogMode; dir: string; name: string; template: string }) => {
       const host = dialogHostRef.current
       setCreating(true)
       setDialogProblems([])
       void bridgeFor(host)
-        .invoke('harness:create', {
+        .invoke('workspace:create', {
           mode: request.mode,
           dir: request.dir,
           ...(request.name !== '' ? { name: request.name } : {}),
@@ -342,7 +342,7 @@ export function useSetup(
           onRootsChanged(host)
           if (result.problems.length > 0) {
             /*
-             * A template that applied only partly. The harness exists and is in
+             * A template that applied only partly. The workspace exists and is in
              * the tree behind this dialog, so closing would take the only
              * account of what did *not* get written off the screen with it -
              * there is no second place that list is kept. It stays up, saying
@@ -350,7 +350,7 @@ export function useSetup(
              *
              * The first line names what *did* happen, and it is not decoration:
              * this box is the same red one a refusal uses, and a list of
-             * problems with no preamble over a harness that was in fact created
+             * problems with no preamble over a workspace that was in fact created
              * reads as "nothing happened". Honest about the partial write means
              * honest about both halves of it.
              */
@@ -361,14 +361,14 @@ export function useSetup(
             return
           }
           setDialog(null)
-          onHarnessCreated?.(result.path, host)
+          onWorkspaceCreated?.(result.path, host)
         })
         .catch((err: unknown) => {
           setDialogProblems([err instanceof Error ? err.message : String(err)])
         })
         .finally(() => setCreating(false))
     },
-    [onRootsChanged, onHarnessCreated]
+    [onRootsChanged, onWorkspaceCreated]
   )
 
   // One question: has this profile been through setup. Deliberately not "does
@@ -396,7 +396,7 @@ export function useSetup(
     closeDialog,
     chooseDialogDir,
     setDialogMode,
-    createHarness,
+    createWorkspace,
     templates,
     templatesDir,
     templateProblems,

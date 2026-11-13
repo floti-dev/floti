@@ -17,7 +17,7 @@ function descriptor(id: string, name: string, features: P.BackendFeature[]): P.B
     id,
     name,
     features,
-    harness: { instructionFiles: [], parts: [] } as unknown as P.HarnessSupport
+    workspace: { instructionFiles: [], parts: [] } as unknown as P.WorkspaceSupport
   }
 }
 

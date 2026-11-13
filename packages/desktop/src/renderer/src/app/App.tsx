@@ -8,7 +8,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { Harness } from "@helm/core";
+import type { Workspace } from "@helm/core";
 import {
   activateTab,
   activeRef,
@@ -159,10 +159,10 @@ import {
   FolderPlusIcon,
   GearIcon,
   GlobeIcon,
-  HarnessIcon,
+  WorkspaceIcon,
   HistoryIcon,
   ImportIcon,
-  NewHarnessDialog,
+  NewWorkspaceDialog,
   NewSessionDialog,
   NewTabMenu,
   hasPrimaryModifier,
@@ -228,8 +228,10 @@ import {
   type HostInstallActions,
   AddHostDialog,
   type AddHostActions,
+  UpgradeNoteDialog,
 } from "@helm/ui";
 import { sidebarFor, type SidebarView } from "./sidebarFor";
+import { upgradeNoteDue } from "./upgradeNote";
 import { viewRailItems } from "./railViews";
 import { AgentTab } from "./agents/AgentTab";
 import { forgetAgentDraft } from "./agents/useAgentDraft";
@@ -370,7 +372,7 @@ import { usePluginSettings } from "./usePluginSettings";
 import type { SurfaceSpec } from "../plugins/relay";
 
 const KIND_ICON = {
-  harness: HarnessIcon,
+  workspace: WorkspaceIcon,
   repo: RepoIcon,
   folder: FolderIcon,
 } as const;
@@ -474,7 +476,7 @@ const truncate = (text: string, max: number): string =>
 /**
  * The folder a tab is about, for a launcher to open on: a project tab's, a
  * file's root, or a session's project - or its folder, for a session no project
- * was recorded against, such as a profile's at a harness root.
+ * was recorded against, such as a profile's at a workspace root.
  */
 function folderOf(
   ref: PaneRef | null,
@@ -955,11 +957,11 @@ export function App(): JSX.Element {
       : null;
   /** Late-bound for the reason `focusSessionRef` is: starting a session needs
    * the panes, and setup is read before they exist. */
-  const harnessCreatedRef = useRef<(path: string, host: string) => void>(
+  const workspaceCreatedRef = useRef<(path: string, host: string) => void>(
     () => undefined,
   );
-  const onHarnessCreated = useCallback(
-    (path: string, host: string) => harnessCreatedRef.current(path, host),
+  const onWorkspaceCreated = useCallback(
+    (path: string, host: string) => workspaceCreatedRef.current(path, host),
     [],
   );
   const { rescan: rescanHere } = launcher;
@@ -970,10 +972,10 @@ export function App(): JSX.Element {
       host === LOCAL_HOST_KEY ? rescanHere() : rescanThere(host),
     [rescanHere, rescanThere],
   );
-  const setup = useSetup(settings, rescanOn, onHarnessCreated);
+  const setup = useSetup(settings, rescanOn, onWorkspaceCreated);
   /**
    * Template authoring, held at app level because both of its entry points are:
-   * the New Harness dialog and Settings reach the manager, and a harness's page
+   * the New Workspace dialog and Settings reach the manager, and a workspace's page
    * reaches "Save as template".
    */
   const templates = useTemplates();
@@ -1014,6 +1016,11 @@ export function App(): JSX.Element {
   );
 
   const { writeSettings } = launcher;
+  const [upgradeNoteClosed, setUpgradeNoteClosed] = useState(false);
+  const closeUpgradeNote = useCallback(() => {
+    setUpgradeNoteClosed(true);
+    writeSettings({ upgradeNoteSeenAt: new Date().toISOString() });
+  }, [writeSettings]);
   const locateShell = useCallback(() => {
     void helm
       .invoke("path:chooseFile", { title: "Choose a shell" })
@@ -2352,13 +2359,13 @@ export function App(): JSX.Element {
   );
 
   /*
-   * A harness created whole ends in a session in it, not on a page: creating
+   * A workspace created whole ends in a session in it, not on a page: creating
    * one is a step on the way to working there. Not during first run, which
    * owns the window until it is finished.
    */
   const setupNeeded = setup.needed;
   useEffect(() => {
-    harnessCreatedRef.current = (path: string, host: string) => {
+    workspaceCreatedRef.current = (path: string, host: string) => {
       if (setupNeeded) return;
       void newSession
         .launch(
@@ -3104,8 +3111,8 @@ export function App(): JSX.Element {
 
   /**
    * The folder a note is saved, snapshotted and wikilinked as part of: the
-   * deepest one Helm knows that holds it. A README under a harness's
-   * `repos/helm` belongs to `helm` - the harness's own write guard refuses
+   * deepest one Helm knows that holds it. A README under a workspace's
+   * `repos/helm` belongs to `helm` - the workspace's own write guard refuses
    * `repos/` outright, for exactly that reason.
    */
   const scopeOf = useCallback(
@@ -3940,7 +3947,7 @@ export function App(): JSX.Element {
         : hostWork.togglePin(host, path),
     onNewSession: (host: string) =>
       showLauncher(host === LOCAL_HOST_KEY ? frontFolder : null, host),
-    onNewHarness: (host: string) => setup.openDialog("new", host),
+    onNewWorkspace: (host: string) => setup.openDialog("new", host),
     onRescan: rescanOn,
     onAddHost: () => setAddingHost(true),
     onUpdateFloti: (host: string) => updateFlotiOn(host),
@@ -4629,11 +4636,29 @@ export function App(): JSX.Element {
       />
     );
 
-  /** Rendered by both branches: creating a harness is a first-run action and
+  /**
+   * The note someone coming from an earlier Helm sees once, over their own
+   * sessions: never during first run, and never again once closed in any way.
+   * A first run that finishes counts it seen (`completeSetup` in main), so a
+   * new install never shows it. Closed here at once, whatever the write does,
+   * so a slow or failed write cannot leave it on screen.
+   */
+  const upgradeNote =
+    upgradeNoteClosed || !upgradeNoteDue(settings, setup.needed) ? null : (
+      <UpgradeNoteDialog
+        onClose={closeUpgradeNote}
+        onWhatsNew={() => {
+          closeUpgradeNote();
+          if (info !== null) openBrowser({ url: info.releasesUrl });
+        }}
+      />
+    );
+
+  /** Rendered by both branches: creating a workspace is a first-run action and
    * an every-day one, and two copies of the dialog would drift apart. */
-  const harnessDialog =
+  const workspaceDialog =
     setup.dialog === null || templates.managerOpen ? null : (
-      <NewHarnessDialog
+      <NewWorkspaceDialog
         {...(setup.dialogHost === LOCAL_HOST_KEY
           ? {}
           : { host: hostName(setup.dialogHost) })}
@@ -4653,14 +4678,14 @@ export function App(): JSX.Element {
           : {})}
         templateProblems={setup.templateProblems}
         preview={setup.templatePreview}
-        onCreate={setup.createHarness}
+        onCreate={setup.createWorkspace}
         onCancel={setup.closeDialog}
       />
     );
 
   /**
    * The template manager, and the dialog that freezes a folder into one. The
-   * harness dialog is **withheld while this is up** - two `Overlay`s is two
+   * workspace dialog is **withheld while this is up** - two `Overlay`s is two
    * scrims - and withholding rather than closing keeps what was typed into it.
    */
   const templateDialogs =
@@ -4701,7 +4726,7 @@ export function App(): JSX.Element {
         onImportFolder={templates.openImportFolder}
         onClose={() => {
           templates.closeManager();
-          // The harness dialog behind this may be showing a picker built before
+          // The workspace dialog behind this may be showing a picker built before
           // a template was created, renamed or deleted.
           setup.refreshTemplates();
         }}
@@ -4730,12 +4755,12 @@ export function App(): JSX.Element {
             onLocateClaude={setup.locateClaude}
             onAddFolder={launcher.addRoot}
             onAcceptSuggestion={setup.acceptSuggestion}
-            onCreateHarness={() => setup.openDialog("new")}
+            onCreateWorkspace={() => setup.openDialog("new")}
             onConvertFolder={() => setup.openDialog("convert")}
             onFinish={setup.finish}
           />
         </div>
-        {harnessDialog}
+        {workspaceDialog}
         {templateDialogs}
         {confirmDialog}
         {restartDialog}
@@ -4751,14 +4776,14 @@ export function App(): JSX.Element {
   const isRoot = (path: string): boolean =>
     isScanRoot(settings?.scanRoots ?? [], path);
 
-  /** The harness a project *is*, when it is one - for its `template:`. */
-  const harnessAt = (path: string): Harness | null =>
-    discovery?.harnesses.find(
-      (harness) => harness.path.toLowerCase() === path.toLowerCase(),
+  /** The workspace a project *is*, when it is one - for its `template:`. */
+  const workspaceAt = (path: string): Workspace | null =>
+    discovery?.workspaces.find(
+      (workspace) => workspace.path.toLowerCase() === path.toLowerCase(),
     ) ?? null;
 
   const renderProject = (project: Project): JSX.Element => {
-    const harness = harnessAt(project.path);
+    const workspace = workspaceAt(project.path);
     const here = liveSessionsIn(machineSessions.sessions, project.path);
     return (
       <ProjectColumn
@@ -4772,7 +4797,7 @@ export function App(): JSX.Element {
           key={project.path}
           project={project}
           activity={sessionActivityIn(sessionState.sessions, project.path)}
-          harness={harness}
+          workspace={workspace}
           onReveal={launcher.reveal}
           onLaunch={(p) => void launch(p)}
           launching={launchingPath === project.path}
@@ -4789,10 +4814,10 @@ export function App(): JSX.Element {
             });
           }}
           onOpenFiles={openFilesAt}
-          // A harness only: it is the one kind of project with a layout to
-          // freeze. Decided here because whether a project is a harness root is
+          // A workspace only: it is the one kind of project with a layout to
+          // freeze. Decided here because whether a project is a workspace root is
           // discovery's answer, not the page's.
-          {...(harness !== null
+          {...(workspace !== null
             ? { onSaveAsTemplate: (p: Project) => templates.openSaveAs(p.path) }
             : {})}
           // Only where this project *is* a scan root, which is the whole of what
@@ -6055,11 +6080,11 @@ export function App(): JSX.Element {
                 />
               </SidebarAction>
               <SidebarAction
-                label="Create a new harness"
+                label="Create a new workspace"
                 onClick={() => setup.openDialog("new")}
-                data-create-harness
+                data-create-workspace
               >
-                <HarnessIcon width={13} height={13} />
+                <WorkspaceIcon width={13} height={13} />
               </SidebarAction>
               <SidebarAction
                 label="Add a folder to scan"
@@ -6299,7 +6324,7 @@ export function App(): JSX.Element {
         >
           <ProfileList
             profiles={profileState.profiles}
-            harnesses={discovery?.harnesses ?? []}
+            workspaces={discovery?.workspaces ?? []}
             launchingIds={profileState.launching}
             onLaunch={(profile) => void launchProfile(profile)}
             onEdit={(profile) => {
@@ -6337,7 +6362,7 @@ export function App(): JSX.Element {
                 }
                 connected={connectedHostIds.includes(host.id)}
                 projects={scanned?.projects ?? EMPTY_PROJECTS}
-                harnesses={scanned?.harnesses ?? []}
+                workspaces={scanned?.workspaces ?? []}
                 blank={blankProfile}
                 paneSize={() => bodyRefs.current.get(open.focused) ?? null}
                 onLaunched={(record) => {
@@ -6404,7 +6429,7 @@ export function App(): JSX.Element {
    * One line over the panes, for what a launch composed and anything that went
    * wrong doing it, first failure first. A launcher error is said in the
    * launcher while it is open; this is for a launch with nowhere else to say it
-   * - a new harness's first session, a profile from the sidebar.
+   * - a new workspace's first session, a profile from the sidebar.
    */
   const treeLaunch: TreeLaunchFailure | null =
     remoteLaunchError ??
@@ -6529,7 +6554,7 @@ export function App(): JSX.Element {
               roots={settings?.scanRoots ?? []}
               projectCount={discovery?.projects.length ?? 0}
               onAddRoot={launcher.addRoot}
-              onCreateHarness={() => setup.openDialog("new")}
+              onCreateWorkspace={() => setup.openDialog("new")}
               onNewSession={openLauncher}
             />
           </div>
@@ -6548,11 +6573,12 @@ export function App(): JSX.Element {
 
         {childPeek}
         {attentionStack}
-        {harnessDialog}
+        {workspaceDialog}
         {templateDialogs}
         {confirmDialog}
         {restartDialog}
         {profileDialog}
+        {upgradeNote}
         {addingHost && (
           <AddHostDialog
             actions={addHostActions}

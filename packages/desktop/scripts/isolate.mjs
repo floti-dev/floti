@@ -252,6 +252,11 @@ export function seedDatabase(dataDir, { keepUiState = false } = {}) {
   // quietly reverting to inheriting somebody's tabs is precisely the failure
   // this is here to end.
   //
+  // A check's copy also counts the upgrade note seen, as completing first-run
+  // is: a driver decides what is on screen, and a dialog over every surface
+  // it drives is not somewhere anybody left the app. `pnpm dev` keeps the
+  // real app's row, so the note shows there until the real app has shown it.
+  //
   // And the rows still claiming to be running are the real app's sessions,
   // live in it right now, not a crash of this one: left as they are, the copy
   // would reconcile them to lost and offer to reopen conversations somebody is
@@ -278,11 +283,16 @@ export function seedDatabase(dataDir, { keepUiState = false } = {}) {
     '    .map((row) => row.key)',
     '  copy.close()',
     '  if (left.length > 0) throw new Error(`still in the copy after the strip: ${left.join(", ")}`)',
+    '}',
+    'if (JSON.parse(process.argv[4])) {',
+    '  const copy = new Database(process.argv[2], { fileMustExist: true })',
+    "  copy.prepare(\"INSERT OR IGNORE INTO app_settings (key, value) VALUES ('upgradeNoteSeenAt', ?)\").run(JSON.stringify(new Date().toISOString()))",
+    '  copy.close()',
     '}'
   ].join('\n')
   const { status, stderr } = spawnSync(
     electronBinary(),
-    ['-e', script, source, dest, JSON.stringify(keepUiState ? [] : UI_STATE_KEYS)],
+    ['-e', script, source, dest, JSON.stringify(keepUiState ? [] : UI_STATE_KEYS), JSON.stringify(!keepUiState)],
     {
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
       encoding: 'utf8'

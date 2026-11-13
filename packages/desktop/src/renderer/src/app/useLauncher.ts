@@ -47,19 +47,19 @@ function discoveryFromCache(cached: CachedProject[], roots: string[]): Discovery
   if (cached.length === 0) return null
   return {
     roots,
-    harnesses: cached
-      .filter((p) => p.kind === 'harness')
+    workspaces: cached
+      .filter((p) => p.kind === 'workspace')
       .map((p) => ({
         path: p.path,
         name: p.name,
-        // Carried by the cache since M13, so the template a harness was built
+        // Carried by the cache since M13, so the template a workspace was built
         // from is on its row in the first painted frame rather than appearing
         // when the scan lands. `version` is still null here: nothing reads it
         // back and nothing shows it, so there is nothing for a column to be
         // worth yet.
         template: p.template,
         version: null,
-        repoPaths: cached.filter((c) => c.harnessPath === p.path).map((c) => c.path)
+        repoPaths: cached.filter((c) => c.workspacePath === p.path).map((c) => c.path)
       })),
     projects: cached,
     errors: [],
@@ -105,7 +105,7 @@ export function useLauncher(): LauncherState {
     ]
 
     // Apart from the settings: the app info waits on the host's reading of the CLI, and nothing that needs the
-    // settings (the scan roots a new harness is offered) should wait on it.
+    // settings (the scan roots a new workspace is offered) should wait on it.
     void helm.invoke('app:info').then(setInfo, () => undefined)
 
     void (async () => {

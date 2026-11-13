@@ -1,18 +1,18 @@
-//! Reading templates: the picker's listing, what a harness made from one
-//! would receive, and writing one into a harness.
+//! Reading templates: the picker's listing, what a workspace made from one
+//! would receive, and writing one into a workspace.
 
 use std::fs::OpenOptions;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use floti_protocol::channels::workspace::{
-    HarnessMode, TemplateChoice, TemplateListing, TemplatePreview,
+    TemplateChoice, TemplateListing, TemplatePreview, WorkspaceMode,
 };
 use serde_yaml_ng::Value;
 
 use super::{
-    DOT_CLAUDE_ALIAS, HARNESS_MANIFEST, KEEP_FILE, MINIMAL_TEMPLATE, TEMPLATE_MANIFEST, TPL_SUFFIX,
-    below, collate, entries_of, is_real_dir,
+    DOT_CLAUDE_ALIAS, KEEP_FILE, MINIMAL_TEMPLATE, TEMPLATE_MANIFEST, TPL_SUFFIX,
+    WORKSPACE_MANIFEST, WORKSPACE_MANIFESTS, below, collate, entries_of, is_real_dir,
 };
 use crate::platform::links;
 
@@ -183,7 +183,7 @@ pub fn list_templates(dir: &Path) -> TemplateListing {
 pub(crate) struct Planned {
     /// The file in the template.
     pub source: PathBuf,
-    /// Relative to the harness, forward-slashed.
+    /// Relative to the workspace, forward-slashed.
     pub target: String,
     pub kind: PlannedKind,
 }
@@ -299,11 +299,12 @@ fn walk(template_dir: &Path, relative: &str, plan: &mut Plan) {
         if written.is_empty() || !guard(written, plan) {
             continue;
         }
-        if written == HARNESS_MANIFEST {
+        if WORKSPACE_MANIFESTS.contains(&written) {
             // The host writes the manifest, last and always, because its
-            // `template:` is the provenance the launcher reads back.
+            // `template:` is the provenance the launcher reads back. A
+            // `harness.yaml` would make a second one, so it is refused too.
             plan.problems.push(format!(
-                "\"{source_rel}\" was skipped: {HARNESS_MANIFEST} is written by Floti, so a template cannot supply one."
+                "\"{source_rel}\" was skipped: Floti writes {WORKSPACE_MANIFEST}, so a template cannot supply a manifest."
             ));
             continue;
         }
@@ -319,7 +320,7 @@ fn walk(template_dir: &Path, relative: &str, plan: &mut Plan) {
     }
 }
 
-/// Refuses a target that leaves the harness, by its shape, and says which.
+/// Refuses a target that leaves the workspace, by its shape, and says which.
 fn guard(target: &str, plan: &mut Plan) -> bool {
     if looks_absolute(target) {
         plan.problems.push(format!(
@@ -332,7 +333,7 @@ fn guard(target: &str, plan: &mut Plan) -> bool {
         .any(|segment| segment.is_empty() || segment == "." || segment == "..")
     {
         plan.problems.push(format!(
-            "\"{target}\" points outside the new harness and was not written."
+            "\"{target}\" points outside the new workspace and was not written."
         ));
         return false;
     }
@@ -345,11 +346,11 @@ pub struct TemplateValues {
     pub name: String,
     pub created_at: String,
     pub template: String,
-    /// The harness folder, forward-slashed: see [`template_path_value`].
+    /// The workspace folder, forward-slashed: see [`template_path_value`].
     pub path: String,
 }
 
-/// What `{{PATH}}` is filled in with: the harness's absolute folder with the
+/// What `{{PATH}}` is filled in with: the workspace's absolute folder with the
 /// OS's separator written as `/`. The value lands in JSON more often than
 /// anywhere else, where a Windows backslash is an escape; every tool that
 /// reads those files accepts forward slashes. Only the OS's separator is
@@ -387,27 +388,27 @@ pub(crate) fn template_dir(templates_dir: &Path, id: &str) -> Result<PathBuf, Ve
     }
 }
 
-/// What a new harness's "What gets written" lists: the manifest first, then
+/// What a new workspace's "What gets written" lists: the manifest first, then
 /// everything else by path, from the same walk that writes it.
 pub fn preview_template(
     templates_dir: &Path,
     template: &str,
-    mode: Option<HarnessMode>,
+    mode: Option<WorkspaceMode>,
 ) -> TemplatePreview {
-    let mode = mode.unwrap_or(HarnessMode::New);
-    if mode == HarnessMode::Convert || template == MINIMAL_TEMPLATE {
+    let mode = mode.unwrap_or(WorkspaceMode::New);
+    if mode == WorkspaceMode::Convert || template == MINIMAL_TEMPLATE {
         let (entries, note): (&[&str], &str) = match mode {
-            HarnessMode::New => (
-                &[HARNESS_MANIFEST, "repos/", ".claude/"],
-                "Nothing else. No starter skills, notes or rules - what belongs in a harness is yours to decide.",
+            WorkspaceMode::New => (
+                &[WORKSPACE_MANIFEST, "repos/", ".claude/"],
+                "Nothing else. No starter skills, notes or rules - what belongs in a workspace is yours to decide.",
             ),
-            HarnessMode::Convert => (
-                &[HARNESS_MANIFEST, ".claude/"],
+            WorkspaceMode::Convert => (
+                &[WORKSPACE_MANIFEST, ".claude/"],
                 "The manifest records repos: \".\" so the repositories already in this folder stay visible.",
             ),
         };
         return TemplatePreview {
-            template: if mode == HarnessMode::Convert {
+            template: if mode == WorkspaceMode::Convert {
                 MINIMAL_TEMPLATE.to_owned()
             } else {
                 template.to_owned()
@@ -444,7 +445,7 @@ pub fn preview_template(
         })
         .collect();
     entries.sort_by(|a, b| collate(a, b));
-    entries.insert(0, HARNESS_MANIFEST.to_owned());
+    entries.insert(0, WORKSPACE_MANIFEST.to_owned());
     TemplatePreview {
         template: template.to_owned(),
         entries,
@@ -456,7 +457,7 @@ pub fn preview_template(
 /// What applying a template wrote.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Applied {
-    /// Relative to the harness, in the order written.
+    /// Relative to the workspace, in the order written.
     pub created: Vec<String>,
     /// What could not be written, as sentences. Never a claim of a rollback.
     pub problems: Vec<String>,
@@ -464,7 +465,7 @@ pub struct Applied {
     pub applied: bool,
 }
 
-/// Writes a template's tree into `target`, a harness folder that exists.
+/// Writes a template's tree into `target`, a workspace folder that exists.
 ///
 /// Partial failure is reported, not rolled back: `created` is what landed
 /// and `problems` names the rest. No entry overwrites another, so two
@@ -498,7 +499,7 @@ pub fn apply_template(
         // template asked for.
         if below(target, &destination).is_none() {
             applied.problems.push(format!(
-                "\"{}\" points outside the new harness and was not written.",
+                "\"{}\" points outside the new workspace and was not written.",
                 entry.target
             ));
             continue;

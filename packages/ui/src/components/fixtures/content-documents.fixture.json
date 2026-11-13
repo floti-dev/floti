@@ -1,7 +1,7 @@
 {
   "tree": {
     "scope": {
-      "kind": "harness",
+      "kind": "workspace",
       "path": "<root>",
       "label": "vault"
     },

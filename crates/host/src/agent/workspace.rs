@@ -1,4 +1,4 @@
-//! Reading a harness project, in either shape a harness is written in.
+//! Reading a workspace project, in either shape a workspace is written in.
 //!
 //! Claude's shape is `CLAUDE.md` and `.claude/` (`skills`, `commands`,
 //! `agents`, `workflows`); the shared one is `AGENTS.md` and
@@ -10,11 +10,11 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use floti_protocol::HarnessPart;
+use floti_protocol::WorkspacePart;
 
-/// What one harness project holds.
+/// What one workspace project holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HarnessProject {
+pub struct WorkspaceProject {
     pub path: PathBuf,
     pub claude_md: Option<PathBuf>,
     pub agents_md: Option<PathBuf>,
@@ -40,7 +40,7 @@ pub enum Skills {
     Each(BTreeMap<String, PathBuf>),
 }
 
-impl HarnessProject {
+impl WorkspaceProject {
     /// Reads the project at `path`. A part that is not there is `None`.
     pub fn read(path: &Path) -> Self {
         let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
@@ -78,16 +78,16 @@ impl HarnessProject {
     }
 
     /// The parts this project holds.
-    pub fn parts(&self) -> Vec<HarnessPart> {
+    pub fn parts(&self) -> Vec<WorkspacePart> {
         [
             (
-                HarnessPart::Instructions,
+                WorkspacePart::Instructions,
                 self.claude_md.is_some() || self.agents_md.is_some(),
             ),
-            (HarnessPart::Skills, self.skills != Skills::None),
-            (HarnessPart::Commands, self.commands.is_some()),
-            (HarnessPart::Subagents, self.subagents.is_some()),
-            (HarnessPart::Workflows, self.workflows.is_some()),
+            (WorkspacePart::Skills, self.skills != Skills::None),
+            (WorkspacePart::Commands, self.commands.is_some()),
+            (WorkspacePart::Subagents, self.subagents.is_some()),
+            (WorkspacePart::Workflows, self.workflows.is_some()),
         ]
         .into_iter()
         .filter_map(|(part, held)| held.then_some(part))
@@ -138,33 +138,33 @@ mod tests {
     }
 
     #[test]
-    fn reads_a_harness_in_claudes_shape() {
+    fn reads_a_workspace_in_claudes_shape() {
         let dirs = TestDirs::new();
-        let root = dirs.folder("harness");
+        let root = dirs.folder("workspace");
         fs::write(root.join("CLAUDE.md"), "claude").unwrap();
         skill(&root, ".claude", "think", "think");
         for part in ["commands", "agents", "workflows"] {
             fs::create_dir_all(root.join(".claude").join(part)).unwrap();
         }
 
-        let project = HarnessProject::read(&root);
+        let project = WorkspaceProject::read(&root);
         assert_eq!(project.claude_md, Some(root.join("CLAUDE.md")));
         assert_eq!(project.agents_md, None);
         assert_eq!(
             project.skills,
             Skills::Folder(root.join(".claude").join("skills"))
         );
-        assert_eq!(project.parts(), HarnessPart::ALL.to_vec());
+        assert_eq!(project.parts(), WorkspacePart::ALL.to_vec());
     }
 
     #[test]
-    fn reads_a_harness_in_the_shared_shape() {
+    fn reads_a_workspace_in_the_shared_shape() {
         let dirs = TestDirs::new();
-        let root = dirs.folder("harness");
+        let root = dirs.folder("workspace");
         fs::write(root.join("AGENTS.md"), "agents").unwrap();
         skill(&root, ".agents", "plan", "plan");
 
-        let project = HarnessProject::read(&root);
+        let project = WorkspaceProject::read(&root);
         assert_eq!(project.agents_md, Some(root.join("AGENTS.md")));
         assert_eq!(
             project.skills,
@@ -172,19 +172,19 @@ mod tests {
         );
         assert_eq!(
             project.parts(),
-            vec![HarnessPart::Instructions, HarnessPart::Skills]
+            vec![WorkspacePart::Instructions, WorkspacePart::Skills]
         );
     }
 
     #[test]
     fn with_both_shapes_each_skill_is_taken_once_and_claudes_wins() {
         let dirs = TestDirs::new();
-        let root = dirs.folder("harness");
+        let root = dirs.folder("workspace");
         skill(&root, ".claude", "think", "claude's think");
         skill(&root, ".agents", "think", "shared think");
         skill(&root, ".agents", "plan", "plan");
 
-        let project = HarnessProject::read(&root);
+        let project = WorkspaceProject::read(&root);
         let Skills::Each(each) = &project.skills else {
             panic!("expected each skill by name: {:?}", project.skills);
         };

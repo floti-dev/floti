@@ -1,5 +1,5 @@
 //! Project discovery: `discovery:*`, `scan:status`, `git:updated`,
-//! `git:refresh` and `roots:*`. `harness:create` is served with templates.
+//! `git:refresh` and `roots:*`. `workspace:create` is served with templates.
 //!
 //! Scans happen when today's app has them: one when the host starts, as the
 //! desktop's main process scans once its window is up, and one whenever a

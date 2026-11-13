@@ -25,7 +25,7 @@ use super::tree::{project_scope, scope_files, user_scope};
 use super::{AgentConfig, compare_names};
 use crate::agent::AgentBackend;
 use crate::agent::claude_code::overlay_plugin_names;
-use crate::agent::harness::is_same_or_ancestor;
+use crate::agent::workspace::is_same_or_ancestor;
 
 /// What the view is computed for.
 #[derive(Debug, Clone, Default)]

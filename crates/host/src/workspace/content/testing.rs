@@ -67,7 +67,7 @@ pub(super) fn fixture(root: &Path) {
 pub(super) fn tree_of(root: &Path) -> ContentTree {
     read_content_tree(&content_scope(
         root,
-        ConfigScopeKind::Harness,
+        ConfigScopeKind::Workspace,
         Some("fixture"),
     ))
 }

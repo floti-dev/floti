@@ -5,7 +5,7 @@
 //!   `core/store/profiles.ts` does. Names are unique, compared without case.
 //! - [`document`]: a profile as YAML (`core/launch/profile.ts`), with paths
 //!   under the profile's root written relative to it and the root written
-//!   against home, so an export travels with its harness; and validation.
+//!   against home, so an export travels with its workspace; and validation.
 //! - [`save`], [`import`] and [`export`]: what a client's `profile:save`,
 //!   `profile:import` and `profile:export` do, as `desktop/main/profiles.ts`
 //!   does them. The save and open dialogs stay in the client: an export is

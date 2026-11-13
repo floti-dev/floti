@@ -21,7 +21,7 @@ const GROUPS = [
 const FOOTER = [item('settings', { hideable: false })]
 
 /** The rail as `App` holds it: the hidden set is state the menu's ticks change. */
-function Harness({ initial = [] }: { initial?: string[] }): React.JSX.Element {
+function Workspace({ initial = [] }: { initial?: string[] }): React.JSX.Element {
   const [hidden, setHidden] = useState(() => new Set(initial))
   return (
     <Rail
@@ -48,13 +48,13 @@ const rules = (): number => screen.getByRole('navigation', { name: 'Destinations
 
 describe('Rail', () => {
   it('draws the destinations in the order given, with a rule between groups and Settings at the foot', () => {
-    render(<Harness />)
+    render(<Workspace />)
     expect(buttons()).toEqual(['sessions', 'profiles', 'files', 'agents', 'browser', 'settings'])
     expect(rules()).toBe(1)
   })
 
   it('lists every destination with a tick on right-click, and an untick hides it until it is ticked again', () => {
-    render(<Harness />)
+    render(<Workspace />)
     fireEvent.contextMenu(screen.getByRole('navigation', { name: 'Destinations' }), { clientX: 20, clientY: 40 })
     const menu = screen.getByRole('menu', { name: 'Show on the rail' })
     const ticks = within(menu).getAllByRole('menuitemcheckbox')
@@ -104,7 +104,7 @@ describe('Rail', () => {
   })
 
   it('keeps Settings: ticked, disabled, and a click on it changes nothing', () => {
-    render(<Harness />)
+    render(<Workspace />)
     fireEvent.contextMenu(screen.getByRole('navigation', { name: 'Destinations' }))
     const settings = screen.getByRole('menuitemcheckbox', { name: 'Settings' })
     expect(settings.getAttribute('aria-disabled')).toBe('true')
@@ -113,13 +113,13 @@ describe('Rail', () => {
   })
 
   it('drops a group’s rule along with its last destination, so two rules never touch', () => {
-    render(<Harness initial={['browser']} />)
+    render(<Workspace initial={['browser']} />)
     expect(buttons()).toEqual(['sessions', 'profiles', 'files', 'agents', 'settings'])
     expect(rules()).toBe(0)
   })
 
   it('closes on a press anywhere else', () => {
-    render(<Harness />)
+    render(<Workspace />)
     fireEvent.contextMenu(screen.getByRole('navigation', { name: 'Destinations' }))
     expect(screen.getByRole('menu')).toBeTruthy()
     fireEvent.pointerDown(document.body)

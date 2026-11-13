@@ -446,7 +446,7 @@ Helpers for the desktop project live in `packages/desktop/test/`:
 | `browser-electron.ts` | WebContentsView, its web contents and the browser partition, whose events the test raises |
 | `hosted.ts` | a session host running in a world |
 | `history-fixture.ts` | `history.jsonl` and transcripts written as the CLI writes them |
-| `overlay-world.ts` | a harness with overlays, and shims held by live or exited processes |
+| `overlay-world.ts` | a workspace with overlays, and shims held by live or exited processes |
 | `mcp-client.ts` | a minimal MCP client for the agent endpoint |
 | `self-signed.ts` | a self-signed certificate minted at run time |
 
@@ -484,7 +484,7 @@ over the window, or Electron's own guards on a page.
 | `newtab` | a pane's `+` opening a session, a profile session or a browser tab in that pane |
 | `sidebar` | clicking a tab brings its sidebar back, opened and pointed at it |
 | `settings` | the gear opens Settings as a tab with its sections, Ctrl+Tab walks every tab from inside a terminal, and a setting changed there survives a restart |
-| `launcher` | Ctrl+N, a folder typed, a profile and mode picked there; a conversation reopened in the pane beside; a new harness ending in a session |
+| `launcher` | Ctrl+N, a folder typed, a profile and mode picked there; a conversation reopened in the pane beside; a new workspace ending in a session |
 | `profiles` | a profile made in the form, saved in the host, starting with its overlay, name and opening prompt |
 | `history` | an ended session in History without a refresh, its archive read in a tab with nothing of it in `helm.db`, found by what was said, and resumed where it ran |
 | `own-data` | what only `helm.db` held copied into the host, and History and the archived conversation showing it |

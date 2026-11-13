@@ -1,7 +1,7 @@
 // Generated from the floti-protocol crate by `cargo run -p floti-protocol --bin generate`. Do not edit.
 
 /** The protocol version these declarations describe. */
-export const PROTOCOL_VERSION = { major: 3, minor: 1 } as const;
+export const PROTOCOL_VERSION = { major: 4, minor: 0 } as const;
 
 /** The link version of the session keeper a host of this build takes back. */
 export const KEEPER_LINK_VERSION = 1;
@@ -666,10 +666,10 @@ name: string,
  */
 features: Array<BackendFeature>, 
 /**
- * How it takes a harness: which instruction files it reads, and which
- * parts of a harness reach it and which it has no equivalent for.
+ * How it takes a workspace: which instruction files it reads, and which
+ * parts of a workspace reach it and which it has no equivalent for.
  */
-harness: HarnessSupport, };
+workspace: WorkspaceSupport, };
 
 /**
  * Something Floti can do or show for a backend's sessions.
@@ -754,13 +754,13 @@ problems: Array<AgentProblem>, };
 /**
  * A project as the last scan left it.
  */
-export type CachedProject = { path: string, name: string, kind: ProjectKind, harnessPath: string | null, hasClaudeDir: boolean, inventory: ClaudeInventory, git: GitState | null, 
+export type CachedProject = { path: string, name: string, kind: ProjectKind, workspacePath: string | null, hasClaudeDir: boolean, inventory: ClaudeInventory, git: GitState | null, 
 /**
  * ISO 8601.
  */
 lastSeenAt: string, 
 /**
- * The harness manifest's `template:`, for a harness row; null otherwise.
+ * The workspace manifest's `template:`, for a workspace row; null otherwise.
  */
 template: string | null, };
 
@@ -993,7 +993,7 @@ claudeDir: string, label: string, exists: boolean, };
 /**
  * Where a config tree sits in the precedence chain.
  */
-export type ConfigScopeKind = "user" | "harness" | "project";
+export type ConfigScopeKind = "user" | "workspace" | "project";
 
 /**
  * A config scope, by its base folder.
@@ -1160,9 +1160,11 @@ target: string, label: string, heading: string | null,
  */
 resolved: string | null, };
 
-export type CreateHarnessOutcome = { 
+export type CreateTemplateRequest = { name: string, label: string | null, description: string | null, };
+
+export type CreateWorkspaceOutcome = { 
 /**
- * The harness folder, or null when nothing was written.
+ * The workspace folder, or null when nothing was written.
  */
 path: string | null, 
 /**
@@ -1175,18 +1177,16 @@ created: Array<string>,
  */
 problems: Array<string>, 
 /**
- * The scan roots after the new harness was added to them.
+ * The scan roots after the new workspace was added to them.
  */
 roots: Array<string>, };
 
-export type CreateHarnessRequest = { mode: HarnessMode, dir: string, name: string | null, 
+export type CreateWorkspaceRequest = { mode: WorkspaceMode, dir: string, name: string | null, 
 /**
  * For `new` only: `minimal` or absent writes the built-in scaffold, and
  * anything else names a template.
  */
 template: string | null, };
-
-export type CreateTemplateRequest = { name: string, label: string | null, description: string | null, };
 
 /**
  * An agent's file to remove.
@@ -1248,7 +1248,7 @@ export type DiscoveryResult = {
 /**
  * The roots that were scanned.
  */
-roots: Array<string>, harnesses: Array<Harness>, projects: Array<Project>, errors: Array<DiscoveryError>, 
+roots: Array<string>, workspaces: Array<Workspace>, projects: Array<Project>, errors: Array<DiscoveryError>, 
 /**
  * ISO 8601.
  */
@@ -1524,7 +1524,7 @@ link: boolean, };
  * Which kind of folder becomes a template. The defaults and the wording
  * differ; nothing else.
  */
-export type FolderTemplateKind = "harness" | "folder";
+export type FolderTemplateKind = "workspace" | "folder";
 
 export type FolderTemplatePreview = { dir: string, kind: FolderTemplateKind, entries: Array<FolderEntry>, 
 /**
@@ -1558,51 +1558,6 @@ dirty: number, ahead: number, behind: number,
  * Set when the folder is a repository but git could not answer.
  */
 error: string | null, };
-
-export type Harness = { path: string, name: string, 
-/**
- * From `harness.yaml` when present.
- */
-template: string | null, version: string | null, 
-/**
- * The projects found under `repos/`.
- */
-repoPaths: Array<string>, };
-
-/**
- * A new harness, or a folder of repositories turned into one.
- */
-export type HarnessMode = "new" | "convert";
-
-/**
- * A part of a harness: what a profile's harness can give a session besides
- * its folder.
- */
-export type HarnessPart = "instructions" | "skills" | "commands" | "subagents" | "workflows";
-
-/**
- * How a backend takes a harness, declared before a launch so a client can
- * say what an agent will and will not get.
- *
- * The default is a plain tab's: the folder and nothing else, because Floti
- * cannot know where an unknown CLI reads. Every part in [`HarnessPart::ALL`]
- * is in exactly one of `takes` and `cannot_take`.
- */
-export type HarnessSupport = { 
-/**
- * The instruction file names it reads, such as `CLAUDE.md` and
- * `AGENTS.md`, in the order it reads them.
- */
-instructionFiles: Array<string>, 
-/**
- * The parts that reach it.
- */
-takes: Array<HarnessPart>, 
-/**
- * The parts it has no equivalent for. A launch names each one of these a
- * harness holds.
- */
-cannotTake: Array<HarnessPart>, };
 
 /**
  * The client's first message. Frozen across majors.
@@ -1903,7 +1858,7 @@ export type HostSettings = {
  */
 scanRoots: Array<string>, 
 /**
- * Projects lifted out of their harness group into Pinned, by path.
+ * Projects lifted out of their workspace group into Pinned, by path.
  */
 pinnedProjects: Array<string>, 
 /**
@@ -2152,10 +2107,10 @@ composedInstructions: boolean,
  */
 warnings: Array<string>, 
 /**
- * Parts of the harness the session's backend has no equivalent for, and
+ * Parts of the workspace the session's backend has no equivalent for, and
  * so did not get, such as commands for an agent without slash commands.
  */
-notTaken: Array<HarnessPart>, };
+notTaken: Array<WorkspacePart>, };
 
 /**
  * The lines of a file that differ from the last commit, numbered in the file
@@ -2836,14 +2791,14 @@ export type Project = {
  */
 path: string, name: string, kind: ProjectKind, 
 /**
- * The harness this project belongs to, if any.
+ * The workspace this project belongs to, if any.
  */
-harnessPath: string | null, hasClaudeDir: boolean, inventory: ClaudeInventory, git: GitState | null, };
+workspacePath: string | null, hasClaudeDir: boolean, inventory: ClaudeInventory, git: GitState | null, };
 
 /**
  * What a discovered folder turned out to be.
  */
-export type ProjectKind = "harness" | "repo" | "folder";
+export type ProjectKind = "workspace" | "repo" | "folder";
 
 /**
  * A protocol version: `major.minor`.
@@ -3820,7 +3775,7 @@ channel: string, code: ErrorCode, message: string, };
  */
 export type TemplateChoice = { 
 /**
- * The folder name, and what a harness records. `minimal` for the
+ * The folder name, and what a workspace records. `minimal` for the
  * built-in scaffold.
  */
 id: string, label: string, description: string | null, 
@@ -3854,7 +3809,7 @@ files: Array<TemplateFile>, fileCount: number, totalBytes: number,
 modifiedAtMs: Millis, problems: Array<string>, };
 
 /**
- * One file in a template, and what a harness would receive it as.
+ * One file in a template, and what a workspace would receive it as.
  */
 export type TemplateFile = { 
 /**
@@ -3862,7 +3817,7 @@ export type TemplateFile = {
  */
 relPath: string, 
 /**
- * The path a new harness gets; empty when the file is not written.
+ * The path a new workspace gets; empty when the file is not written.
  */
 target: string, size: number, mtimeMs: Millis, 
 /**
@@ -3902,7 +3857,7 @@ problems: Array<string>, };
 export type TemplateMetadataRequest = { template: string, label: string, description: string, };
 
 /**
- * What a new harness's "What gets written" lists.
+ * What a new workspace's "What gets written" lists.
  */
 export type TemplatePreview = { template: string, 
 /**
@@ -3914,7 +3869,7 @@ entries: Array<string>,
  */
 note: string, problems: Array<string>, };
 
-export type TemplatePreviewRequest = { template: string, mode: HarnessMode | null, };
+export type TemplatePreviewRequest = { template: string, mode: WorkspaceMode | null, };
 
 /**
  * A template, by id.
@@ -4174,6 +4129,51 @@ export type WikilinkTarget = {
  */
 path: string | null, };
 
+export type Workspace = { path: string, name: string, 
+/**
+ * From its manifest when present: `workspace.yaml`, else `harness.yaml`.
+ */
+template: string | null, version: string | null, 
+/**
+ * The projects found under `repos/`.
+ */
+repoPaths: Array<string>, };
+
+/**
+ * A new workspace, or a folder of repositories turned into one.
+ */
+export type WorkspaceMode = "new" | "convert";
+
+/**
+ * A part of a workspace: what a profile's workspace can give a session besides
+ * its folder.
+ */
+export type WorkspacePart = "instructions" | "skills" | "commands" | "subagents" | "workflows";
+
+/**
+ * How a backend takes a workspace, declared before a launch so a client can
+ * say what an agent will and will not get.
+ *
+ * The default is a plain tab's: the folder and nothing else, because Floti
+ * cannot know where an unknown CLI reads. Every part in [`WorkspacePart::ALL`]
+ * is in exactly one of `takes` and `cannot_take`.
+ */
+export type WorkspaceSupport = { 
+/**
+ * The instruction file names it reads, such as `CLAUDE.md` and
+ * `AGENTS.md`, in the order it reads them.
+ */
+instructionFiles: Array<string>, 
+/**
+ * The parts that reach it.
+ */
+takes: Array<WorkspacePart>, 
+/**
+ * The parts it has no equivalent for. A launch names each one of these a
+ * workspace holds.
+ */
+cannotTake: Array<WorkspacePart>, };
+
 /**
  * The session that worked in a worktree.
  */
@@ -4320,7 +4320,6 @@ export interface RequestChannels {
   "files:status": { request: FilesRoot; response: FilesStatus; capability: "files" };
   "files:watch": { request: FilesWatchRequest; response: null; capability: "files" };
   "git:refresh": { request: null; response: { [key in string]?: GitState | null }; capability: null };
-  "harness:create": { request: CreateHarnessRequest; response: CreateHarnessOutcome; capability: null };
   "history:projects": { request: null; response: Array<HistoryProject>; capability: null };
   "history:prompts": { request: HistorySessionRef; response: Array<HistoryPrompt>; capability: null };
   "history:refresh": { request: null; response: HistorySummary; capability: null };
@@ -4400,6 +4399,7 @@ export interface RequestChannels {
   "update:check": { request: null; response: UpdateState; capability: null };
   "update:install": { request: null; response: null; capability: null };
   "usage:read": { request: null; response: Array<UsageSnapshot>; capability: null };
+  "workspace:create": { request: CreateWorkspaceRequest; response: CreateWorkspaceOutcome; capability: null };
   "worktrees:list": { request: WorktreesProject; response: AgentWorktrees; capability: null };
   "worktrees:remove": { request: RemoveWorktreeRequest; response: WorktreeRemoval; capability: null };
   "wsl:keepAwake": { request: WslKeepAwakeRequest; response: null; capability: null };
@@ -4497,7 +4497,6 @@ export const CHANNELS = [
   { name: "files:watch", kind: "request", capability: "files" },
   { name: "git:refresh", kind: "request", capability: null },
   { name: "git:updated", kind: "event", capability: null },
-  { name: "harness:create", kind: "request", capability: null },
   { name: "history:changed", kind: "event", capability: null },
   { name: "history:projects", kind: "request", capability: null },
   { name: "history:prompts", kind: "request", capability: null },
@@ -4599,6 +4598,7 @@ export const CHANNELS = [
   { name: "update:state", kind: "event", capability: null },
   { name: "usage:changed", kind: "event", capability: null },
   { name: "usage:read", kind: "request", capability: null },
+  { name: "workspace:create", kind: "request", capability: null },
   { name: "worktrees:list", kind: "request", capability: null },
   { name: "worktrees:remove", kind: "request", capability: null },
   { name: "wsl:keepAwake", kind: "request", capability: null },

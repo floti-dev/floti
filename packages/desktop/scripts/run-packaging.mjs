@@ -5,7 +5,7 @@
 // the CLI Helm would launch is the one that is actually installed here.
 //
 // Phase 2 is about a machine that does not exist yet. "A fresh ~/.claude and no
-// harness at all" is not a state the developer's own profile can enter, and
+// workspace at all" is not a state the developer's own profile can enter, and
 // faking it by deleting things would be the worst possible way to find out. So
 // this starts a *second* app with PORTABLE_EXECUTABLE_DIR pointed at a
 // temporary directory - the app's own portable-mode mechanism, not a test hook,
@@ -182,10 +182,10 @@ if (wants('audit') || wants('cli')) {
 // Phase 2: a machine with nothing on it
 // ---------------------------------------------------------------------------
 
-const FIRSTRUN_GROUPS = ['firstrun', 'harness', 'scan', 'version']
+const FIRSTRUN_GROUPS = ['firstrun', 'workspace', 'scan', 'version']
 
 if (FIRSTRUN_GROUPS.some(wants)) {
-  say('\n--- phase 2: a fresh profile, a fresh .claude, and no harness ---')
+  say('\n--- phase 2: a fresh profile, a fresh .claude, and no workspace ---')
   // `--sandbox=` puts the throwaway profile somewhere chosen rather than in the
   // temp directory. The one reason to use it is screenshots: everything this
   // phase paints shows the paths it was given, and a temp path carries the

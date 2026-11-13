@@ -1,18 +1,18 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { harnessIn, plantHarness } from '../test/overlay-world'
+import { workspaceIn, plantWorkspace } from '../test/overlay-world'
 import type { Page } from '@playwright/test'
 import { claudeRunIn, expect, sessionIdOf, shimFolderOf, terminalText, test as base } from './helm'
 
 /**
- * The world gets a harness before the app starts, so the first scan finds it:
+ * The world gets a workspace before the app starts, so the first scan finds it:
  * `hub`, whose `repos/tools` has a skill to compose. The shims a launch builds
  * hold junctions into it, so they are unlinked before the world is removed,
  * by `test` in `helm.ts`.
  */
 const test = base.extend({
   world: async ({ world }, use) => {
-    plantHarness(world)
+    plantWorkspace(world)
     await use(world)
   }
 })
@@ -27,10 +27,10 @@ test('a profile made in the New profile dialog is saved in the host and starts i
   world
 }) => {
   const { window } = helm
-  const hub = harnessIn(world)
+  const hub = workspaceIn(world)
   const after = (argv: readonly string[], flag: string): string | undefined => argv[argv.indexOf(flag) + 1]
 
-  // The first scan has found the harness and its repository.
+  // The first scan has found the workspace and its repository.
   await expect(window.getByRole('button', { name: 'hub, 2 projects' })).toBeVisible()
 
   await window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name: 'Profiles' }).click()

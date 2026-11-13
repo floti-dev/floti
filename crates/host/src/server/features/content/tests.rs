@@ -91,7 +91,7 @@ impl World {
             path: path.display().to_string(),
             name: name.to_owned(),
             kind: ProjectKind::Folder,
-            harness_path: None,
+            workspace_path: None,
             has_claude_dir: false,
             inventory: EMPTY_INVENTORY,
             git: None,

@@ -38,7 +38,7 @@ export const shimFolderOf = (world: World): string => join(world.dataDir, 'host'
 
 /**
  * Unlinks the overlay shims the local host's launches built in a world: they
- * hold links into the world's harness, and a link is never walked when the
+ * hold links into the world's workspace, and a link is never walked when the
  * world is removed.
  */
 export function removeHostShims(world: World): void {

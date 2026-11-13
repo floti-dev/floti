@@ -23,7 +23,7 @@ import {
 import { Overlay } from './Overlay'
 
 /**
- * Managing harness templates: everything about authoring one that Explorer
+ * Managing workspace templates: everything about authoring one that Explorer
  * cannot do.
  *
  * **There is no file editor here, and that is the design.** A template is a
@@ -43,8 +43,8 @@ import { Overlay } from './Overlay'
  *   because a text box full of YAML is a text box in which `label:` can be
  *   misspelled and the template silently drops out of the picker.
  *
- * Reachable from the New Harness dialog *and* from Settings. Templates are
- * app-level, and having to start creating a harness in order to tidy up the
+ * Reachable from the New Workspace dialog *and* from Settings. Templates are
+ * app-level, and having to start creating a workspace in order to tidy up the
  * templates would be the same mistake as putting "stop scanning this folder"
  * only in Settings - which is a bug this repository has already fixed once.
  */
@@ -138,7 +138,7 @@ export function TemplateManager({
       </header>
 
       <p className="shrink-0 px-[22px] pt-2 text-[11px] leading-[1.55] text-fg-muted">
-        A template is a folder. Creating a harness from it copies the folder in, and that is the
+        A template is a folder. Creating a workspace from it copies the folder in, and that is the
         whole mechanism - so editing one is a job for your own editor.
       </p>
       <button
@@ -161,7 +161,7 @@ export function TemplateManager({
           >
             {authored.length === 0 && !creating && (
               <p className="px-2 py-3 text-[11.5px] leading-[1.55] text-fg-subtle">
-                No templates yet. Every new harness gets the built-in Minimal scaffold until there
+                No templates yet. Every new workspace gets the built-in Minimal scaffold until there
                 is one.
               </p>
             )}
@@ -405,7 +405,7 @@ function TemplateDetailPane({
         <div className="space-y-2.5">
           <Field
             label="Folder name"
-            hint="The folder this template is, and what a harness records as its provenance."
+            hint="The folder this template is, and what a workspace records as its provenance."
           >
             <input
               value={name}
@@ -416,7 +416,7 @@ function TemplateDetailPane({
               className={cn(INPUT, 'font-mono text-[11.5px]')}
             />
           </Field>
-          <Field label="Label" hint="What the New Harness picker shows.">
+          <Field label="Label" hint="What the New Workspace picker shows.">
             <input
               value={label}
               onChange={(event) => setLabel(event.target.value)}
@@ -505,7 +505,7 @@ function TemplateDetailPane({
  *
  * The `target` column is the whole point of listing them here rather than
  * sending the user to Explorer: a folder listing shows `CLAUDE.md.tpl` and
- * `dot-claude/`, and neither of those is what arrives in the harness. The
+ * `dot-claude/`, and neither of those is what arrives in the workspace. The
  * badge, the arrow and the help line under the list are three ways of saying
  * the same convention, because it is the one thing about this format nobody
  * can infer.
@@ -605,7 +605,7 @@ function FileList({
         <code className="font-mono text-[10.5px] text-accent-text">{'{{CREATED_AT}}'}</code>,{' '}
         <code className="font-mono text-[10.5px] text-accent-text">{'{{TEMPLATE}}'}</code> and{' '}
         <code className="font-mono text-[10.5px] text-accent-text">{'{{PATH}}'}</code> - the
-        new harness’s folder, with forward slashes - filled in. Every other file is copied
+        new workspace’s folder, with forward slashes - filled in. Every other file is copied
         byte for byte, so a workflow full of{' '}
         <code className="font-mono text-[10.5px] text-fg-muted">{'${{ … }}'}</code> arrives as you
         wrote it.

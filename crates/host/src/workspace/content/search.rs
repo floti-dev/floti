@@ -34,7 +34,7 @@ const MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
 const WINDOW: usize = 160;
 
 /// The kinds whose bytes are searched. Source, data and text are in: "where
-/// did the agent define X" is a question about a harness's scripts as much as
+/// did the agent define X" is a question about a workspace's scripts as much as
 /// its notes. HTML is out, because a generated artifact is markup with its
 /// stylesheet inside it, and binary is never text. Every file is matched on
 /// its name whatever its kind, and the result carries this list so a client
@@ -290,7 +290,7 @@ mod tests {
     #[test]
     fn search_matches_inside_a_word_and_reports_the_line() {
         let dirs = TestDirs::new();
-        let root = dirs.folder("my harness");
+        let root = dirs.folder("my workspace");
         fixture(&root);
         let tree = tree_of(&root);
         let result = search_corpus(
@@ -306,7 +306,7 @@ mod tests {
     #[test]
     fn search_finds_an_html_file_by_name_without_reading_its_contents() {
         let dirs = TestDirs::new();
-        let root = dirs.folder("my harness");
+        let root = dirs.folder("my workspace");
         fixture(&root);
         put(
             &root.join("notes").join("dashboard.html"),

@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use floti_protocol::channels::workspace::ProjectKind;
 use rusqlite::Connection;
 use serde_json::Value;
 
@@ -559,6 +560,82 @@ fn a_database_holding_every_earlier_migration_is_migrated_forward_keeping_its_ro
         })
         .unwrap();
     assert_eq!(profile, ("work".to_owned(), None));
+}
+
+#[test]
+fn a_harness_cached_before_workspaces_is_read_back_as_a_workspace_with_its_repos() {
+    const LAST_EARLIER: &str = "0031_launched_as";
+    let dirs = TestDirs::new();
+    let upto = MIGRATIONS
+        .iter()
+        .position(|migration| migration.tag == LAST_EARLIER)
+        .expect("the host carries the migration before workspaces")
+        + 1;
+    Store::open_with(&dirs.data, &MIGRATIONS[..upto])
+        .unwrap()
+        .close()
+        .unwrap();
+    {
+        let conn = Connection::open(dirs.data.join(DB_FILE)).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (path, name, kind, harness_path, template, inventory)
+               VALUES ('C:/work/dev', 'dev', 'harness', NULL, 'minimal', '{}'),
+                      ('C:/work/dev/repos/app', 'app', 'repo', 'C:/work/dev', NULL, '{}'),
+                      ('C:/work/loose', 'loose', 'folder', NULL, NULL, '{}');",
+        )
+        .unwrap();
+    }
+
+    let store = Store::open(&dirs.data).unwrap();
+
+    assert_eq!(store.migrations().applied, carried()[upto..]);
+    let conn = store.connection();
+    let columns = column_names(conn, "projects");
+    assert!(
+        columns.contains(&"workspace_path".to_owned()),
+        "{columns:?}"
+    );
+    assert!(!columns.contains(&"harness_path".to_owned()), "{columns:?}");
+    let indexes: Vec<String> = conn
+        .prepare("SELECT name FROM pragma_index_list('projects') WHERE origin = 'c'")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert_eq!(indexes, ["projects_workspace_idx"]);
+
+    let rows: Vec<(String, ProjectKind, Option<String>, Option<String>)> =
+        projects::read_cached_projects(conn)
+            .unwrap()
+            .into_iter()
+            .map(|cached| {
+                (
+                    cached.path,
+                    cached.kind,
+                    cached.workspace_path,
+                    cached.template,
+                )
+            })
+            .collect();
+    assert_eq!(
+        rows,
+        [
+            (
+                "C:/work/dev".to_owned(),
+                ProjectKind::Workspace,
+                None,
+                Some("minimal".to_owned())
+            ),
+            (
+                "C:/work/dev/repos/app".to_owned(),
+                ProjectKind::Repo,
+                Some("C:/work/dev".to_owned()),
+                None
+            ),
+            ("C:/work/loose".to_owned(), ProjectKind::Folder, None, None),
+        ]
+    );
 }
 
 #[test]

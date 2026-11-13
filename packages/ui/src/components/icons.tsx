@@ -42,7 +42,7 @@ export function BranchIcon(props: IconProps): JSX.Element {
   )
 }
 
-export function HarnessIcon(props: IconProps): JSX.Element {
+export function WorkspaceIcon(props: IconProps): JSX.Element {
   return (
     <Icon {...props}>
       <path d="M2.5 5.5 8 2.5l5.5 3v5L8 13.5l-5.5-3z" />

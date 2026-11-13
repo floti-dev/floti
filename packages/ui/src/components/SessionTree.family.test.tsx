@@ -18,7 +18,7 @@ const project = (path: string): Project => ({
   path,
   name: path.split('\\').pop() ?? path,
   kind: 'repo',
-  harnessPath: 'C:\\work\\north',
+  workspacePath: 'C:\\work\\north',
   hasClaudeDir: false,
   inventory: EMPTY_INVENTORY,
   git: null
@@ -26,7 +26,7 @@ const project = (path: string): Project => ({
 
 const DISCOVERY: DiscoveryResult = {
   roots: ['C:\\work'],
-  harnesses: [{ path: 'C:\\work\\north', name: 'north', template: null, version: null, repoPaths: [HELM, TRACKR] }],
+  workspaces: [{ path: 'C:\\work\\north', name: 'north', template: null, version: null, repoPaths: [HELM, TRACKR] }],
   projects: [project(HELM), project(TRACKR)],
   errors: [],
   scannedAt: '2026-10-03T00:00:00.000Z',

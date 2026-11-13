@@ -33,13 +33,13 @@ vi.mock('electron', async () => ({
  * the socket open itself; here nothing but Helm can ask for the page again.
  */
 
-/** The sessions a harness can share a page with, by id: what `sessions.browserOpener` would answer. */
+/** The sessions a workspace can share a page with, by id: what `sessions.browserOpener` would answer. */
 const SESSIONS = new Map<number, BrowserOpener>([
   [7, { key: 'token-alpha', name: 'alpha' }],
   [8, { key: 'token-beta', name: 'beta' }]
 ])
 
-interface Harness {
+interface Workspace {
   host: BrowserHost
   window: FakeBrowserWindow
   settings: () => AppSettings
@@ -49,14 +49,14 @@ interface Harness {
   commands: BrowserCommandEvent[]
 }
 
-let current: Harness | null = null
+let current: Workspace | null = null
 
 /**
  * A host over a fake Electron. It reads a page's keys as the OS named here
  * does - Windows' table unless a test asks for the Mac's - never as the OS the
  * tests happen to run on.
  */
-function harness(patch: Partial<AppSettings> = {}, platform: NodeJS.Platform = 'win32'): Harness {
+function workspace(patch: Partial<AppSettings> = {}, platform: NodeJS.Platform = 'win32'): Workspace {
   let settings: AppSettings = { ...DEFAULT_SETTINGS, browserRecentUrls: [], browserProjectUrls: {}, ...patch }
   const window = new FakeBrowserWindow()
   const opened: BrowserOpened[] = []
@@ -98,20 +98,20 @@ afterEach(() => {
 })
 
 /** A tab opened from the strip, and the fake view and page behind it. */
-function openTab(h: Harness, url?: string): { id: number; view: FakeWebContentsView; wc: FakeWebContents } {
+function openTab(h: Workspace, url?: string): { id: number; view: FakeWebContentsView; wc: FakeWebContents } {
   const { state, problem } = h.host.open(url === undefined ? {} : { url })
   if (state === null) throw new Error(`open refused: ${String(problem)}`)
   const view = FakeWebContentsView.created.at(-1)!
   return { id: state.id, view, wc: view.webContents! }
 }
 
-const stateOf = (h: Harness, id: number): BrowserState => {
+const stateOf = (h: Workspace, id: number): BrowserState => {
   const found = h.host.states(id)[0]
   if (found === undefined) throw new Error(`no browser tab ${String(id)}`)
   return found
 }
 
-const messages = (h: Harness, id: number): string[] => h.host.entries(id).map((entry) => entry.message)
+const messages = (h: Workspace, id: number): string[] => h.host.entries(id).map((entry) => entry.message)
 
 /**
  * What Electron hands `createWindow`: the window options, with the web contents
@@ -128,7 +128,7 @@ const partition = (): FakeSession => {
 
 describe('browser host - navigation and the address bar', () => {
   it('remembers an address only once a page has arrived there, newest first, ten at most', () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h)
     expect(wc.loads).toEqual([])
 
@@ -156,7 +156,7 @@ describe('browser host - navigation and the address bar', () => {
   })
 
   it("opens a tab beside a project on that project's last address, and one beside none empty", () => {
-    const h = harness()
+    const h = workspace()
     const project = 'C:\\Projects\\A Project'
     const first = h.host.open({ url: 'http://localhost:5173/', project })
     const firstPage = FakeWebContentsView.created.at(-1)!.webContents!
@@ -176,7 +176,7 @@ describe('browser host - navigation and the address bar', () => {
   })
 
   it('searches a phrase with the engine in Settings, and with searching off says so and loads nothing', () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h)
     h.host.navigate(id, 'what is a webcontentsview')
     expect(wc.loads).toEqual(['https://www.google.com/search?q=what%20is%20a%20webcontentsview'])
@@ -196,7 +196,7 @@ describe('browser host - navigation and the address bar', () => {
   })
 
   it('holds a search to the reach rule: on "This machine only" the results page is refused', () => {
-    const h = harness({ browserReach: 'local' })
+    const h = workspace({ browserReach: 'local' })
     const { id, wc } = openTab(h)
     const state = h.host.navigate(id, 'helm desktop')
     expect(state?.problem).toContain('This machine only')
@@ -204,7 +204,7 @@ describe('browser host - navigation and the address bar', () => {
   })
 
   it('takes a picture of the page for the window to show while the view stands down', async () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     expect(await h.host.snapshot(id)).toBe('data:image/png;base64,cGFnZQ==')
     wc.picture = ''
@@ -213,7 +213,7 @@ describe('browser host - navigation and the address bar', () => {
   })
 
   it('reloads ignoring the cache when asked to, and ordinarily otherwise', () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     wc.commit('http://localhost:3000/')
     h.host.reload(id, true)
@@ -222,7 +222,7 @@ describe('browser host - navigation and the address bar', () => {
   })
 
   it('zooms the page, three steps either way at most', () => {
-    const h = harness()
+    const h = workspace()
     const { id } = openTab(h, 'http://localhost:3000/')
     expect(h.host.zoom(id, 0.5)?.zoomLevel).toBe(0.5)
     expect(h.host.zoom(id, 9)?.zoomLevel).toBe(3)
@@ -231,7 +231,7 @@ describe('browser host - navigation and the address bar', () => {
   })
 
   it('clears the shared browser profile and says so in the console', async () => {
-    const h = harness()
+    const h = workspace()
     const { id } = openTab(h, 'http://localhost:3000/')
     const before = partition().cleared
     await h.host.clearStorage(id)
@@ -240,7 +240,7 @@ describe('browser host - navigation and the address bar', () => {
   })
 
   it('finds in the page: a new query starts a search, the same query steps, and stopping clears the find state', () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     wc.commit('http://localhost:3000/')
 
@@ -280,7 +280,7 @@ describe('browser host - navigation and the address bar', () => {
 })
 
 /** A tab opened beside a project: `project: null` is "beside nothing". */
-function openTabFor(h: Harness, project: string | null): { id: number; wc: FakeWebContents } {
+function openTabFor(h: Workspace, project: string | null): { id: number; wc: FakeWebContents } {
   const { state } = h.host.open({ project })
   if (state === null) throw new Error('open refused')
   return { id: state.id, wc: FakeWebContentsView.created.at(-1)!.webContents! }
@@ -289,7 +289,7 @@ function openTabFor(h: Harness, project: string | null): { id: number; wc: FakeW
 describe('browser host - a dev server that is not up yet', () => {
   it('retries a refused connection on its own and connects once the server answers', () => {
     vi.useFakeTimers()
-    const h = harness()
+    const h = workspace()
     const url = 'http://localhost:5173/'
     const { id, wc } = openTab(h, url)
     expect(wc.loads).toEqual([url])
@@ -328,7 +328,7 @@ describe('browser host - a dev server that is not up yet', () => {
 
   it('gives up after thirty seconds and says to reload', () => {
     vi.useFakeTimers()
-    const h = harness()
+    const h = workspace()
     const url = 'http://localhost:5173/'
     const { id, wc } = openTab(h, url)
     const start = Date.now()
@@ -352,7 +352,7 @@ describe('browser host - a dev server that is not up yet', () => {
 
   it('retries nothing but a refused connection: a name or a certificate is an answer', () => {
     vi.useFakeTimers()
-    const h = harness()
+    const h = workspace()
 
     const name = openTab(h, 'http://nowhere.invalid/')
     name.wc.failLoad(-105, 'ERR_NAME_NOT_RESOLVED', 'http://nowhere.invalid/')
@@ -372,7 +372,7 @@ describe('browser host - a dev server that is not up yet', () => {
   })
 
   it('says nothing about a load a newer one replaced', () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     wc.failLoad(-3, 'ERR_ABORTED', 'http://localhost:3000/', { errorPage: false })
     expect(stateOf(h, id).problem).toBeNull()
@@ -381,7 +381,7 @@ describe('browser host - a dev server that is not up yet', () => {
 
   it('stops retrying when the tab is reloaded or sent somewhere else', () => {
     vi.useFakeTimers()
-    const h = harness()
+    const h = workspace()
     const url = 'http://localhost:5173/'
     const { id, wc } = openTab(h, url)
     wc.failLoad(-102, 'ERR_CONNECTION_REFUSED', url)
@@ -394,7 +394,7 @@ describe('browser host - a dev server that is not up yet', () => {
 
 describe('browser host - where the view is', () => {
   it('paints nothing until placed, then sits on the placeholder in DIPs at the window zoom', () => {
-    const h = harness()
+    const h = workspace()
     h.window.webContents.zoomFactor = 1.5
     const { id, view } = openTab(h, 'http://localhost:3000/')
     expect(h.window.children).toContain(view)
@@ -408,7 +408,7 @@ describe('browser host - where the view is', () => {
   })
 
   it("is clear while empty and white from the first page on, the ground a browser gives a page that sets none", () => {
-    const h = harness()
+    const h = workspace()
     const { id, view, wc } = openTab(h)
     expect(view.background).toBe('#00000000')
     h.host.navigate(id, 'localhost:3000')
@@ -418,7 +418,7 @@ describe('browser host - where the view is', () => {
   })
 
   it('never lets the view into the top 36px, whatever the window reports', () => {
-    const h = harness()
+    const h = workspace()
     const { id, view } = openTab(h, 'http://localhost:3000/')
     h.host.bounds({ id, x: 0, y: 0, width: 800, height: 500, visible: true })
     expect(view.getBounds()).toEqual({ x: 0, y: 36, width: 800, height: 464 })
@@ -427,7 +427,7 @@ describe('browser host - where the view is', () => {
   })
 
   it('hides a view by not painting it, and keeps its page and its history', () => {
-    const h = harness()
+    const h = workspace()
     const { id, view, wc } = openTab(h, 'http://localhost:3000/')
     wc.commit('http://localhost:3000/')
     wc.commit('http://localhost:3000/two')
@@ -444,7 +444,7 @@ describe('browser host - where the view is', () => {
   })
 
   it('goes back and forward through the history the page made', () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     wc.commit('http://localhost:3000/')
     wc.commit('http://localhost:3000/two')
@@ -456,7 +456,7 @@ describe('browser host - where the view is', () => {
 
 describe('browser host - the console', () => {
   it("keeps what the page logs, counts errors and warnings, and holds the last thousand lines", () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     wc.log('info', 'hello', 'http://localhost:3000/app.js', 4)
     wc.log('warning', 'careful')
@@ -479,7 +479,7 @@ describe('browser host - the console', () => {
   })
 
   it('evaluates in the page as a user gesture and prints what came back', async () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     wc.answer = (source) => {
       if (source === 'thing') return { a: 1 }
@@ -502,7 +502,7 @@ describe('browser host - the console', () => {
 
 describe('browser host - security posture', () => {
   it('on "This machine only", refuses a remote address with a sentence and fetches nothing; loopback still loads', () => {
-    const h = harness({ browserReach: 'local' })
+    const h = workspace({ browserReach: 'local' })
     const { id, wc } = openTab(h)
 
     h.host.navigate(id, 'http://example.com/docs')
@@ -529,7 +529,7 @@ describe('browser host - security posture', () => {
   })
 
   it('runs every page sandboxed, isolated, with no preload, on the persistent browser partition', () => {
-    const h = harness()
+    const h = workspace()
     const { view } = openTab(h, 'http://localhost:3000/')
     const prefs = view.webPreferences
     expect(prefs['session']).toBe(partition())
@@ -546,7 +546,7 @@ describe('browser host - security posture', () => {
   })
 
   it('refuses a file URL with a sentence and stays where it was', () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     wc.commit('http://localhost:3000/')
     h.host.navigate(id, 'file:///C:/Windows/win.ini')
@@ -558,7 +558,7 @@ describe('browser host - security posture', () => {
 
   describe('a tab refused its first address', () => {
     it('opened at a link out of reach says that address and is named after its host, with no page claimed', () => {
-      const h = harness({ browserReach: 'local' })
+      const h = workspace({ browserReach: 'local' })
       // `browser:open` with an address: how a plugin's link and the user's own arrive.
       const { state, problem } = h.host.open({ url: 'https://example.com/docs' })
       const wc = FakeWebContentsView.created.at(-1)!.webContents!
@@ -576,7 +576,7 @@ describe('browser host - security posture', () => {
     })
 
     it("opened beside a project whose remembered address is out of reach says that address", () => {
-      const h = harness({
+      const h = workspace({
         browserReach: 'local',
         browserProjectUrls: { 'c:\\projects\\site': 'https://example.com/app' }
       })
@@ -591,7 +591,7 @@ describe('browser host - security posture', () => {
     })
 
     it("opened for a session at an address out of reach says that address", async () => {
-      const h = harness({ browserReach: 'local' })
+      const h = workspace({ browserReach: 'local' })
       vi.useFakeTimers()
       const pending = h.host.openFor(SESSIONS.get(7)!, 'https://example.com/')
       const wc = FakeWebContentsView.created.at(-1)!.webContents!
@@ -609,7 +609,7 @@ describe('browser host - security posture', () => {
     })
 
     it('names an address with no host by the address itself', () => {
-      const h = harness()
+      const h = workspace()
       const { id } = openTab(h, 'file:///C:/Windows/win.ini')
       expect(stateOf(h, id)).toMatchObject({
         url: '',
@@ -620,7 +620,7 @@ describe('browser host - security posture', () => {
     })
 
     it('says the page once one loads, and a later refusal leaves the page that is there', () => {
-      const h = harness({ browserReach: 'local' })
+      const h = workspace({ browserReach: 'local' })
       const { id, wc } = openTab(h, 'https://example.com/')
       expect(stateOf(h, id).refusedUrl).toBe('https://example.com/')
 
@@ -635,7 +635,7 @@ describe('browser host - security posture', () => {
   })
 
   it('holds ten tabs at most, from the strip and from a page', () => {
-    const h = harness()
+    const h = workspace()
     const tabs = Array.from({ length: 10 }, () => openTab(h, 'http://localhost:3000/'))
     const made = FakeWebContentsView.created.length
 
@@ -653,7 +653,7 @@ describe('browser host - security posture', () => {
   })
 
   it("exempts exactly the live browser views from the app's navigation lock, never the window", () => {
-    const h = harness()
+    const h = workspace()
     expect(exemptedWebContents()).toEqual([])
     const a = openTab(h, 'http://localhost:3000/')
     const b = openTab(h, 'http://localhost:3001/')
@@ -674,7 +674,7 @@ describe('browser host - security posture', () => {
   })
 
   it('accepts a self-signed certificate on loopback and hands every other verdict back to Chromium', () => {
-    const h = harness()
+    const h = workspace()
     openTab(h)
     const verify = partition().certificateVerify!
     const verdict = (hostname: string): number | null => {
@@ -693,7 +693,7 @@ describe('browser host - security posture', () => {
   })
 
   it('refuses a download, hands a web address to the system browser, and says so on every tab', () => {
-    const h = harness()
+    const h = workspace()
     const a = openTab(h, 'http://127.0.0.1:8080/download')
     a.wc.commit('http://127.0.0.1:8080/download')
     const b = openTab(h, 'http://127.0.0.1:8080/')
@@ -726,7 +726,7 @@ describe('browser host - security posture', () => {
   })
 
   it('grants clipboard writing and fullscreen to the page that has the keyboard, and nothing else to anything', () => {
-    const h = harness()
+    const h = workspace()
     const { wc } = openTab(h, 'http://127.0.0.1:8080/')
     const ask = (contents: unknown, permission: string): boolean => {
       let answer: boolean | null = null
@@ -762,7 +762,7 @@ describe('browser host - security posture', () => {
 
 describe('browser host - the keyboard inside a page', () => {
   it("takes the Browser tab's keys before the page sees them, and leaves the page every other key", () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
 
     expect(wc.press({ key: 'w', control: true })).toBe(true)
@@ -791,7 +791,7 @@ describe('browser host - the keyboard inside a page', () => {
   })
 
   it("takes the Mac's Cmd chords on macOS, and leaves the page its Ctrl chords and Option's characters", () => {
-    const h = harness({}, 'darwin')
+    const h = workspace({}, 'darwin')
     const { id, wc } = openTab(h, 'http://localhost:3000/')
 
     expect(wc.press({ key: 'w', meta: true })).toBe(true)
@@ -822,7 +822,7 @@ describe('browser host - the keyboard inside a page', () => {
 
   it("leaves an agent's key presses to the page, even the Browser tab's own", async () => {
     vi.useFakeTimers()
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     const pressed = h.host.press(id, 'w', ['control'])
     const typed = h.host.typeInto(id, 'T')
@@ -836,7 +836,7 @@ describe('browser host - the keyboard inside a page', () => {
 
   it("leaves an agent's Cmd+W to the page on macOS too", async () => {
     vi.useFakeTimers()
-    const h = harness({}, 'darwin')
+    const h = workspace({}, 'darwin')
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     const pressed = h.host.press(id, 'w', ['meta'])
     await vi.advanceTimersByTimeAsync(1000)
@@ -849,7 +849,7 @@ describe('browser host - the keyboard inside a page', () => {
 
 /** A tab a session opened, loaded: what `browser_open` leaves behind. */
 async function openAgentTab(
-  h: Harness,
+  h: Workspace,
   opener: BrowserOpener,
   url: string
 ): Promise<{ id: number; wc: FakeWebContents }> {
@@ -868,7 +868,7 @@ describe('browser host - a page shared with a session', () => {
   const beta = SESSIONS.get(8)!
 
   it('shares a page the user opened with one session at a time, by its id, and takes it back', () => {
-    const h = harness()
+    const h = workspace()
     const { id } = openTab(h, 'http://localhost:3000/')
     expect(stateOf(h, id).sharedWith).toBeNull()
     expect(h.host.shareTargets()).toEqual([
@@ -888,14 +888,14 @@ describe('browser host - a page shared with a session', () => {
   })
 
   it("never shares a page an agent opened: it is that session's already", async () => {
-    const h = harness()
+    const h = workspace()
     const { id } = await openAgentTab(h, alpha, 'http://127.0.0.1:8080/')
     expect(h.host.share(id, 8)?.sharedWith).toBeNull()
     expect(h.host.sharedWith(id)).toBeNull()
   })
 
   it('lets the session it is shared with send it somewhere, and leaves closing it to the user', () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     h.host.share(id, 7)
 
@@ -914,7 +914,7 @@ describe('browser host - a page shared with a session', () => {
   })
 
   it('takes back what was shared with a session when it ends, and its own pages stop saying it can drive them', async () => {
-    const h = harness()
+    const h = workspace()
     const user = openTab(h, 'http://localhost:3000/')
     h.host.share(user.id, 7)
     const own = await openAgentTab(h, alpha, 'http://127.0.0.1:8080/')
@@ -930,7 +930,7 @@ describe('browser host - a page shared with a session', () => {
   })
 
   it('shares only the page it was given: a page that one opens is the user\'s alone', () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     h.host.share(id, 7)
     const answer = browserWindowOpen(wc.id, {
@@ -949,7 +949,7 @@ describe('browser host - a page shared with a session', () => {
 describe('browser host - the pointer and the wheel an agent uses', () => {
   it('hovers with a pointer move and nothing pressed, at whole pixels', async () => {
     vi.useFakeTimers()
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     const moved = h.host.hover(id, 40.6, 12.2)
     await vi.advanceTimersByTimeAsync(200)
@@ -959,7 +959,7 @@ describe('browser host - the pointer and the wheel an agent uses', () => {
 
   it('scrolls with a precise wheel turn at the point, its delta the wheel\'s way round', async () => {
     vi.useFakeTimers()
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     const turned = h.host.scroll(id, 640, 400, 0, 300)
     await vi.advanceTimersByTimeAsync(200)
@@ -981,7 +981,7 @@ describe('browser host - the pointer and the wheel an agent uses', () => {
 
 describe('browser host - a page with the whole screen', () => {
   it('fills the window while the page has the screen, ignores the pane meanwhile, and goes back where it was', () => {
-    const h = harness()
+    const h = workspace()
     const { id, view, wc } = openTab(h, 'http://localhost:3000/')
     const other = openTab(h, 'http://localhost:3000/two')
     h.host.bounds({ id, x: 100, y: 80, width: 800, height: 500, visible: true })
@@ -1018,7 +1018,7 @@ describe('browser host - a page with the whole screen', () => {
   })
 
   it('gives the screen back when a page closes while it has it', () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://localhost:3000/')
     h.host.bounds({ id, x: 100, y: 80, width: 800, height: 500, visible: true })
     h.window.fullScreen = true
@@ -1030,7 +1030,7 @@ describe('browser host - a page with the whole screen', () => {
 
 describe('browser host - popups and pages that close themselves', () => {
   it('retires the tab of a page that closed itself, and nothing touching that id throws afterwards', async () => {
-    const h = harness()
+    const h = workspace()
     const { id, view, wc } = openTab(h, 'http://127.0.0.1:8080/selfclose')
     wc.commit('http://127.0.0.1:8080/selfclose')
 
@@ -1050,7 +1050,7 @@ describe('browser host - popups and pages that close themselves', () => {
   })
 
   it('answers rather than throws in the moment between a page closing and Electron saying so', () => {
-    const h = harness()
+    const h = workspace()
     const { id, view, wc } = openTab(h, 'http://127.0.0.1:8080/selfclose')
     wc.commit('http://127.0.0.1:8080/selfclose')
     view.closeItself({ announce: false })
@@ -1065,7 +1065,7 @@ describe('browser host - popups and pages that close themselves', () => {
   })
 
   it('opens target=_blank, a plain window.open and a middle click as pages that keep their opener, never windows', () => {
-    const h = harness()
+    const h = workspace()
     const opener = openTab(h, 'http://127.0.0.1:8080/opener')
     opener.wc.commit('http://127.0.0.1:8080/opener')
     const made = FakeWebContentsView.created.length
@@ -1124,7 +1124,7 @@ describe('browser host - popups and pages that close themselves', () => {
   })
 
   it('gives window.open with features a real popup, held to the posture and the reach of the tab that opened it', () => {
-    const h = harness()
+    const h = workspace()
     const { id, wc } = openTab(h, 'http://127.0.0.1:8080/signin')
     wc.commit('http://127.0.0.1:8080/signin')
     const made = FakeWebContentsView.created.length
@@ -1170,7 +1170,7 @@ describe('browser host - popups and pages that close themselves', () => {
   })
 
   it('refuses a popup to an address out of reach, on the tab that asked', () => {
-    const h = harness({ browserReach: 'local' })
+    const h = workspace({ browserReach: 'local' })
     const { id, wc } = openTab(h, 'http://127.0.0.1:8080/signin')
     wc.commit('http://127.0.0.1:8080/signin')
     const made = FakeWebContentsView.created.length
@@ -1184,7 +1184,7 @@ describe('browser host - popups and pages that close themselves', () => {
 
   it("gives window.open from a session's tab another of that session's pages, never a window", async () => {
     vi.useFakeTimers()
-    const h = harness()
+    const h = workspace()
     const opener = { key: 'token-alpha', name: 'agent alpha' }
     const pending = h.host.openFor(opener, 'http://127.0.0.1:8080/signin')
     const agentPage = FakeWebContentsView.created.at(-1)!.webContents!

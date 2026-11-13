@@ -103,7 +103,7 @@ interface Doing {
   since: number | null
 }
 
-interface HarnessProps {
+interface WorkspaceProps {
   /** The sessions the host lists, the parent among them. */
   sessions: SessionRecord[]
   /** What each is doing, by id; a running child with none is just running. */
@@ -118,7 +118,7 @@ interface HarnessProps {
   onStop?: (id: number) => Promise<boolean> | void
 }
 
-function Harness({
+function Workspace({
   sessions,
   doing = {},
   front = true,
@@ -126,7 +126,7 @@ function Harness({
   commands = [],
   now = NOW,
   onStop = vi.fn()
-}: HarnessProps): JSX.Element {
+}: WorkspaceProps): JSX.Element {
   const [panes, setPanes] = useState(START)
   const parent = sessions.find((each) => each.id === 1)!
   const kids = enabled
@@ -170,11 +170,11 @@ function Harness({
 }
 
 /** A pane of `box` with the tab in it. */
-function mount(box: Box, sessions: SessionRecord[], props: Omit<HarnessProps, 'sessions'> = {}) {
+function mount(box: Box, sessions: SessionRecord[], props: Omit<WorkspaceProps, 'sessions'> = {}) {
   const host = document.createElement('div')
   document.body.appendChild(host)
   layout.set(host, box)
-  const view = render(<Harness sessions={sessions} {...props} />, { container: host })
+  const view = render(<Workspace sessions={sessions} {...props} />, { container: host })
   return {
     ...view,
     host,
@@ -184,8 +184,8 @@ function mount(box: Box, sessions: SessionRecord[], props: Omit<HarnessProps, 's
       act(() => FakeResizeObserver.notifyAll())
     },
     /** The host lists these sessions now. */
-    list(next: SessionRecord[], more: Omit<HarnessProps, 'sessions'> = props): void {
-      view.rerender(<Harness sessions={next} {...more} />)
+    list(next: SessionRecord[], more: Omit<WorkspaceProps, 'sessions'> = props): void {
+      view.rerender(<Workspace sessions={next} {...more} />)
     }
   }
 }

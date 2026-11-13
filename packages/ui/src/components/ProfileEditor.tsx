@@ -391,9 +391,9 @@ export function ProfileEditor({
                         <span className="min-w-0 truncate text-[12px] text-fg">
                           {project.name}
                         </span>
-                        {project.kind === 'harness' && (
+                        {project.kind === 'workspace' && (
                           <span className="shrink-0 rounded-full bg-accent-soft px-[7px] py-px text-[8.5px] tracking-[.05em] text-accent-text uppercase">
-                            harness root
+                            workspace root
                           </span>
                         )}
                       </span>

@@ -15,7 +15,7 @@ const project = (path: string): Project => ({
   path,
   name: path.split('\\').pop() ?? path,
   kind: 'repo',
-  harnessPath: 'C:\\work\\north',
+  workspacePath: 'C:\\work\\north',
   hasClaudeDir: false,
   inventory: EMPTY_INVENTORY,
   git: null
@@ -23,7 +23,7 @@ const project = (path: string): Project => ({
 
 const DISCOVERY: DiscoveryResult = {
   roots: ['C:\\work'],
-  harnesses: [{ path: 'C:\\work\\north', name: 'north', template: null, version: null, repoPaths: [ZETA] }],
+  workspaces: [{ path: 'C:\\work\\north', name: 'north', template: null, version: null, repoPaths: [ZETA] }],
   projects: [project(ZETA)],
   errors: [],
   scannedAt: '2026-10-03T00:00:00.000Z',
@@ -75,7 +75,7 @@ function renderTree(shown: TreeSession['shown'], reveal: TreeReveal | null) {
 const sessionRow = () => screen.queryByRole('button', { name: 'review, ready' })
 
 describe('SessionTree: revealing a row', () => {
-  it('opens the harness and the project folded over a session, and scrolls to it', async () => {
+  it('opens the workspace and the project folded over a session, and scrolls to it', async () => {
     const rerender = renderTree(null, null)
     await userEvent.click(screen.getByRole('button', { name: 'Fold the sessions in zeta' }))
     await userEvent.click(screen.getByRole('button', { name: 'north, 1 project' }))
@@ -115,7 +115,7 @@ describe('SessionTree: revealing a row', () => {
     expect(sessionRow()?.getAttribute('aria-current')).toBe('true')
   })
 
-  it('opens the harness a project page belongs to', async () => {
+  it('opens the workspace a project page belongs to', async () => {
     const rerender = renderTree(null, null)
     await userEvent.click(screen.getByRole('button', { name: 'north, 1 project' }))
     expect(screen.queryAllByTitle(ZETA)).toHaveLength(0)

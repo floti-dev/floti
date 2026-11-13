@@ -495,7 +495,7 @@ mod tests {
     #[test]
     fn the_tree_finds_the_named_roots_the_scope_root_and_nothing_inside_repos() {
         let dirs = TestDirs::new();
-        let root = dirs.folder("my harness");
+        let root = dirs.folder("my workspace");
         fixture(&root);
         let tree = tree_of(&root);
         let roots: Vec<&str> = tree
@@ -527,7 +527,7 @@ mod tests {
     #[test]
     fn the_tree_offers_a_folder_of_scripts_and_not_one_of_bytes() {
         let dirs = TestDirs::new();
-        let root = dirs.folder("my harness");
+        let root = dirs.folder("my workspace");
         fixture(&root);
         let tree = tree_of(&root);
         let rels: Vec<&str> = tree
@@ -554,7 +554,7 @@ mod tests {
     #[test]
     fn the_tree_lists_every_file_inside_a_root_it_offers_binary_included() {
         let dirs = TestDirs::new();
-        let root = dirs.folder("my harness");
+        let root = dirs.folder("my workspace");
         fixture(&root);
         let tree = tree_of(&root);
         let find = |rel: &str| tree.files.iter().find(|file| file.rel_path == rel).unwrap();
@@ -576,7 +576,7 @@ mod tests {
     #[test]
     fn the_tree_gives_a_dotfile_a_name_rather_than_an_empty_one() {
         let dirs = TestDirs::new();
-        let root = dirs.folder("my harness");
+        let root = dirs.folder("my workspace");
         fixture(&root);
         put(&root.join("tools").join(".gitignore"), "out/\n");
         let tree = tree_of(&root);
@@ -593,7 +593,7 @@ mod tests {
     #[test]
     fn the_tree_keeps_an_empty_named_root_badged_named() {
         let dirs = TestDirs::new();
-        let root = dirs.folder("my harness");
+        let root = dirs.folder("my workspace");
         fixture(&root);
         let tree = tree_of(&root);
         let context = tree

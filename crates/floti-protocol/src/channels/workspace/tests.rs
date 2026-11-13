@@ -1,4 +1,4 @@
-//! Every settings, setup, discovery, roots, harness, template, config
+//! Every settings, setup, discovery, roots, workspace, template, config
 //! console, content and Files channel from `shared/ipc.ts` is declared with
 //! typed payloads, setup speaks of agent backends rather than of Claude, and
 //! each payload survives a trip through a CBOR frame.
@@ -45,7 +45,7 @@ const DECLARED: &[(&str, ChannelKind, Option<Capability>)] = &[
     ("roots:suggest", REQUEST, None),
     ("roots:accept", REQUEST, None),
     ("roots:remove", REQUEST, None),
-    ("harness:create", REQUEST, None),
+    ("workspace:create", REQUEST, None),
     ("template:list", REQUEST, None),
     ("template:preview", REQUEST, None),
     ("template:detail", REQUEST, None),
@@ -270,7 +270,7 @@ fn project() -> Project {
         path: "C:\\work\\hub\\repos\\api".into(),
         name: "api".into(),
         kind: ProjectKind::Repo,
-        harness_path: Some("C:\\work\\hub".into()),
+        workspace_path: Some("C:\\work\\hub".into()),
         has_claude_dir: true,
         inventory: inventory(),
         git: Some(git_state()),
@@ -280,7 +280,7 @@ fn project() -> Project {
 fn discovery() -> DiscoveryResult {
     DiscoveryResult {
         roots: vec!["C:\\work".into()],
-        harnesses: vec![Harness {
+        workspaces: vec![Workspace {
             path: "C:\\work\\hub".into(),
             name: "hub".into(),
             template: Some("minimal".into()),
@@ -673,7 +673,7 @@ fn a_settings_write_carries_only_the_fields_it_changes_and_null_clears_one() {
 }
 
 // ---------------------------------------------------------------------------
-// Discovery, roots and harnesses
+// Discovery, roots and workspaces
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -683,8 +683,8 @@ fn discovery_payloads_survive_the_wire() {
         vec![CachedProject {
             path: "C:\\work\\hub".into(),
             name: "hub".into(),
-            kind: ProjectKind::Harness,
-            harness_path: None,
+            kind: ProjectKind::Workspace,
+            workspace_path: None,
             has_claude_dir: true,
             inventory: inventory(),
             git: None,
@@ -725,7 +725,7 @@ fn a_scan_request_may_leave_out_include_git() {
 }
 
 #[test]
-fn roots_and_harness_payloads_survive_the_wire_and_adding_a_root_takes_a_path() {
+fn roots_and_workspace_payloads_survive_the_wire_and_adding_a_root_takes_a_path() {
     let roots = vec!["C:\\work".to_owned(), "D:\\a folder".to_owned()];
     exchange::<SuggestRoots>((), roots.clone());
     // The folder the client's picker chose arrives on `roots:accept`.
@@ -741,16 +741,16 @@ fn roots_and_harness_payloads_survive_the_wire_and_adding_a_root_takes_a_path() 
         },
         vec![],
     );
-    exchange::<CreateHarness>(
-        CreateHarnessRequest {
-            mode: HarnessMode::New,
+    exchange::<CreateWorkspace>(
+        CreateWorkspaceRequest {
+            mode: WorkspaceMode::New,
             dir: "C:\\work\\new hub".into(),
             name: Some("new hub".into()),
             template: Some("team".into()),
         },
-        CreateHarnessOutcome {
+        CreateWorkspaceOutcome {
             path: Some("C:\\work\\new hub".into()),
-            created: vec!["harness.yaml".into(), "repos/".into()],
+            created: vec!["workspace.yaml".into(), "repos/".into()],
             problems: vec!["notes/a.md could not be written.".into()],
             roots,
         },
@@ -794,11 +794,11 @@ fn template_payloads_survive_the_wire() {
     exchange::<PreviewTemplate>(
         TemplatePreviewRequest {
             template: "team".into(),
-            mode: Some(HarnessMode::Convert),
+            mode: Some(WorkspaceMode::Convert),
         },
         TemplatePreview {
             template: "team".into(),
-            entries: vec!["harness.yaml".into(), ".claude/".into()],
+            entries: vec!["workspace.yaml".into(), ".claude/".into()],
             note: "Nothing else is written.".into(),
             problems: vec![],
         },
@@ -883,11 +883,11 @@ fn template_payloads_survive_the_wire() {
     exchange::<PreviewFolderTemplate>(
         FolderTemplateRequest {
             dir: "C:\\work\\hub".into(),
-            kind: FolderTemplateKind::Harness,
+            kind: FolderTemplateKind::Workspace,
         },
         FolderTemplatePreview {
             dir: "C:\\work\\hub".into(),
-            kind: FolderTemplateKind::Harness,
+            kind: FolderTemplateKind::Workspace,
             entries: vec![FolderEntry {
                 name: "repos".into(),
                 directory: true,
@@ -931,7 +931,7 @@ fn template_payloads_survive_the_wire() {
 #[test]
 fn config_scope_and_tree_payloads_survive_the_wire() {
     let scope = ConfigScope {
-        kind: ConfigScopeKind::Harness,
+        kind: ConfigScopeKind::Workspace,
         path: "C:\\work\\hub".into(),
         claude_dir: "C:\\work\\hub\\.claude".into(),
         label: "hub".into(),

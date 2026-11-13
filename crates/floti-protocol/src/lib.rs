@@ -47,7 +47,8 @@ pub mod subscription;
 pub mod version;
 
 pub use backend::{
-    BackendDescriptor, BackendFeature, BackendId, HarnessPart, HarnessSupport, Knowable, Support,
+    BackendDescriptor, BackendFeature, BackendId, Knowable, Support, WorkspacePart,
+    WorkspaceSupport,
 };
 pub use bytes::Bytes;
 pub use capability::{Capability, CapabilitySet};

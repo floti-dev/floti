@@ -5,11 +5,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use floti_protocol::channels::workspace::{
-    CreateHarnessRequest, CreateTemplateRequest, HarnessMode,
+    CreateWorkspaceRequest, CreateTemplateRequest, WorkspaceMode,
 };
 
 use super::authoring::create_template;
-use super::harness::{HarnessCreated, create_harness};
+use super::workspace::{WorkspaceCreated, create_workspace};
 use super::reader::list_templates;
 use crate::platform::links;
 use crate::store::Store;
@@ -65,19 +65,19 @@ impl World {
         .ok
     }
 
-    pub(super) fn harness(&self, name: &str, template: Option<&str>) -> HarnessCreated {
+    pub(super) fn workspace(&self, name: &str, template: Option<&str>) -> WorkspaceCreated {
         self.harness_in(&self.root, name, template)
     }
 
-    pub(super) fn harness_in(
+    pub(super) fn workspace_in(
         &self,
         dir: &Path,
         name: &str,
         template: Option<&str>,
-    ) -> HarnessCreated {
-        create_harness(
-            &CreateHarnessRequest {
-                mode: HarnessMode::New,
+    ) -> WorkspaceCreated {
+        create_workspace(
+            &CreateWorkspaceRequest {
+                mode: WorkspaceMode::New,
                 dir: dir.display().to_string(),
                 name: Some(name.into()),
                 template: template.map(str::to_owned),

@@ -7,20 +7,20 @@ import {
   sessionTreeHostProps,
   type SessionTreeProps, type TreeHost, type TreeHostActions, type TreeSession } from './SessionTree'
 
-const project = (path: string, harnessPath: string | null, kind: Project['kind'] = 'repo'): Project => ({
+const project = (path: string, workspacePath: string | null, kind: Project['kind'] = 'repo'): Project => ({
   path,
   name: path.split(/[\\/]/).pop() ?? path,
   kind,
-  harnessPath,
+  workspacePath,
   hasClaudeDir: false,
   inventory: EMPTY_INVENTORY,
   git: null
 })
 
-const discovery = (roots: string[], harness: string, repos: string[]): DiscoveryResult => ({
+const discovery = (roots: string[], workspace: string, repos: string[]): DiscoveryResult => ({
   roots,
-  harnesses: [{ path: harness, name: harness.split(/[\\/]/).pop() ?? harness, template: null, version: null, repoPaths: repos }],
-  projects: [project(harness, harness, 'harness'), ...repos.map((repo) => project(repo, harness))],
+  workspaces: [{ path: workspace, name: workspace.split(/[\\/]/).pop() ?? workspace, template: null, version: null, repoPaths: repos }],
+  projects: [project(workspace, workspace, 'workspace'), ...repos.map((repo) => project(repo, workspace))],
   errors: [],
   scannedAt: '2026-11-03T00:00:00.000Z',
   durationMs: 1
@@ -59,7 +59,7 @@ const actions = (): TreeHostActions => ({
   onOpenSession: vi.fn(),
   onTogglePin: vi.fn(),
   onNewSession: vi.fn(),
-  onNewHarness: vi.fn(),
+  onNewWorkspace: vi.fn(),
   onRescan: vi.fn(),
   onAddHost: vi.fn()
 })
@@ -187,7 +187,7 @@ describe('SessionTree with hosts on other computers', () => {
     expect(within(header()).queryByText('retrying')).toBeNull()
   })
 
-  it('offers New session, New harness and Rescan on each host header, under the pointer and in its right-click menu', async () => {
+  it('offers New session, New workspace and Rescan on each host header, under the pointer and in its right-click menu', async () => {
     const hostActions = actions()
     const { view } = renderTree({ hosts: [buildBox()], hostActions })
     const header = group(view.container, 'h1').querySelector<HTMLElement>('[data-host-header]')!
@@ -198,27 +198,27 @@ describe('SessionTree with hosts on other computers', () => {
     expect(hostActions.onRescan).toHaveBeenCalledWith('h1')
 
     fireEvent.contextMenu(header, { clientX: 20, clientY: 30 })
-    await userEvent.click(screen.getByRole('menuitem', { name: 'New harness' }))
-    expect(hostActions.onNewHarness).toHaveBeenCalledWith('h1')
+    await userEvent.click(screen.getByRole('menuitem', { name: 'New workspace' }))
+    expect(hostActions.onNewWorkspace).toHaveBeenCalledWith('h1')
 
     const localHeader = group(view.container, 'local').querySelector<HTMLElement>('[data-host-header]')!
-    await userEvent.click(within(localHeader).getByRole('button', { name: 'New harness on This PC' }))
-    expect(hostActions.onNewHarness).toHaveBeenLastCalledWith('local')
+    await userEvent.click(within(localHeader).getByRole('button', { name: 'New workspace on This PC' }))
+    expect(hostActions.onNewWorkspace).toHaveBeenLastCalledWith('local')
   })
 
-  it('shows the empty state under a host whose scan found nothing, offering New harness there', async () => {
+  it('shows the empty state under a host whose scan found nothing, offering New workspace there', async () => {
     const hostActions = actions()
-    const empty: DiscoveryResult = { ...BUILD_BOX, harnesses: [], projects: [] }
+    const empty: DiscoveryResult = { ...BUILD_BOX, workspaces: [], projects: [] }
     const { view } = renderTree({
       hosts: [buildBox({ discovery: empty, sessionsByPath: new Map() })],
       hostActions
     })
     const remote = group(view.container, 'h1')
     expect(remote.querySelector('[data-empty-state="host-empty:h1"]')).not.toBeNull()
-    expect(within(remote).getByText('No harnesses on build-box yet')).toBeTruthy()
-    expect(within(remote).getByText('A harness there is a folder on build-box, and its sessions run there.')).toBeTruthy()
-    await userEvent.click(within(remote).getByRole('button', { name: 'New harness' }))
-    expect(hostActions.onNewHarness).toHaveBeenCalledWith('h1')
+    expect(within(remote).getByText('No workspaces on build-box yet')).toBeTruthy()
+    expect(within(remote).getByText('A workspace there is a folder on build-box, and its sessions run there.')).toBeTruthy()
+    await userEvent.click(within(remote).getByRole('button', { name: 'New workspace' }))
+    expect(hostActions.onNewWorkspace).toHaveBeenCalledWith('h1')
   })
 
   it('says Unknown and why, never the empty state, while the host’s folders cannot be read', async () => {

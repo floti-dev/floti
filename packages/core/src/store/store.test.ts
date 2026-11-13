@@ -201,6 +201,7 @@ describe('settings', () => {
         focused: 1
       },
       firstRunCompletedAt: '2026-08-09T12:00:00.000Z',
+      upgradeNoteSeenAt: '2026-11-13T09:00:00.000Z',
       claudePath: join(dir, 'claude.exe'),
       usageDisplay: 'cost',
       terminalFontFamily: 'Consolas',
@@ -801,6 +802,11 @@ describe('settings validation', () => {
       bad: ['soon', '', 1786353684315, {}]
     },
     {
+      key: 'upgradeNoteSeenAt',
+      good: [null, '2026-11-13T09:00:00.000Z'],
+      bad: ['soon', '', 1794560000000, {}]
+    },
+    {
       key: 'terminalFontFamily',
       good: [null, 'Consolas', 'Cascadia Mono', 'MesloLGS NF'],
       bad: [
@@ -1275,7 +1281,7 @@ describe('pinned projects', () => {
 
   it('matches a path however it was spelled', () => {
     // Windows paths are case-insensitive, and the two places this list meets
-    // the tree - the Pinned section and the harness group a pinned project is
+    // the tree - the Pinned section and the workspace group a pinned project is
     // *left out* of - both compare with `toLowerCase`. If this did not, a pin
     // written in one casing would print the project twice.
     expect(isProjectPinned([a], 'c:\\repos\\api')).toBe(true)

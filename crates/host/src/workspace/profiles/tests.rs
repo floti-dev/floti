@@ -43,12 +43,12 @@ impl World {
     /// A draft rooted in the test folder, with one overlay and one access
     /// path under the root.
     fn draft(&self) -> ProfileDraft {
-        let harness = self.dirs.root().join("harness");
+        let workspace = self.dirs.root().join("workspace");
         ProfileDraft {
             name: "Acme cloud sync".into(),
-            root: text(&harness),
-            overlays: vec![text(&harness.join("repos").join("acme"))],
-            access: vec![text(&harness.join("repos").join("other-repo"))],
+            root: text(&workspace),
+            overlays: vec![text(&workspace.join("repos").join("acme"))],
+            access: vec![text(&workspace.join("repos").join("other-repo"))],
             model: Some("opus".into()),
             effort: Some(EffortLevel::High),
             permission_mode: Some(PermissionMode::Auto),

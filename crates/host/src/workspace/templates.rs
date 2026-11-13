@@ -1,9 +1,9 @@
-//! Harness templates: a folder the user wrote that becomes a new harness,
+//! Workspace templates: a folder the user wrote that becomes a new workspace,
 //! as `core/discovery/templates.ts`, `template-authoring.ts` and
-//! `harness.ts` make them today.
+//! `workspace.ts` make them today.
 //!
 //! The whole mechanism is "copy a folder, fill in four placeholders": a
-//! template makes a harness, and from then on the harness is the user's. The
+//! template makes a workspace, and from then on the workspace is the user's. The
 //! format's rules:
 //!
 //! - Substitution is `.tpl`-only: `x.yml.tpl` is filled in and written as
@@ -11,7 +11,7 @@
 //! - `dot-claude/` is written as `.claude/`, for tools that drop dot folders.
 //! - An empty folder is declared with a `.gitkeep`, which is not itself
 //!   written.
-//! - Anything that leaves the harness is refused: absolute targets, `..`,
+//! - Anything that leaves the workspace is refused: absolute targets, `..`,
 //!   and links.
 //!
 //! Templates live in the templates folder, `templates` in the host's config
@@ -29,15 +29,15 @@
 //! - [`reader`]: listing, previewing and applying templates.
 //! - [`authoring`]: creating, renaming, deleting, describing and filling
 //!   templates, and saving a folder as one.
-//! - [`harness`]: making a harness, from the built-in scaffold or a template.
+//! - [`workspace`]: making a workspace, from the built-in scaffold or a template.
 //! - [`import`]: what a config scope's entries become inside a template.
 //! - [`seed`]: the shipped README and example.
 
 pub mod authoring;
-pub mod harness;
 pub mod import;
 pub mod reader;
 pub mod seed;
+pub mod workspace;
 #[cfg(test)]
 mod testing;
 
@@ -54,8 +54,11 @@ pub use reader::template_id_problems;
 /// The metadata file at the root of a template.
 pub const TEMPLATE_MANIFEST: &str = "template.yaml";
 
-/// The manifest the host writes into every harness, template or not.
-pub const HARNESS_MANIFEST: &str = "harness.yaml";
+/// The manifest the host writes into every workspace, template or not, and
+/// every name a manifest has had, none of which a template may supply.
+pub use super::discovery::scan::{
+    LEGACY_WORKSPACE_MANIFEST, WORKSPACE_MANIFEST, WORKSPACE_MANIFESTS,
+};
 
 /// Written as `.claude`.
 pub const DOT_CLAUDE_ALIAS: &str = "dot-claude";
@@ -66,7 +69,7 @@ pub const KEEP_FILE: &str = ".gitkeep";
 /// The one extension that opts a file in to substitution. Dropped on write.
 pub const TPL_SUFFIX: &str = ".tpl";
 
-/// The built-in scaffold's id, and what a harness records when no template
+/// The built-in scaffold's id, and what a workspace records when no template
 /// was named. It is code, not a folder: nothing in the templates folder can
 /// change or break it.
 pub const MINIMAL_TEMPLATE: &str = "minimal";

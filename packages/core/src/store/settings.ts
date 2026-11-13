@@ -86,6 +86,15 @@ function describe(value: unknown): string {
   return `${typeof value} ${String(value)}`
 }
 
+/** An ISO timestamp, or null for "has not happened". Parsed, not pattern-matched. */
+function timestampProblem(value: unknown): string | null {
+  if (value === null) return null
+  if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
+    return `expected an ISO timestamp or null, got ${describe(value)}`
+  }
+  return null
+}
+
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value)
 
@@ -386,7 +395,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
    * **Keyed by path, and a moved or re-cloned checkout therefore loses its
    * pin.** That is the decision, not an oversight found later: a project has
    * nothing steadier than its path to key by.
-   * It is not a repository - a plain folder and a harness root are both
+   * It is not a repository - a plain folder and a workspace root are both
    * pinnable and neither has a remote - and it is not a database row, because
    * this list has to be readable and writable before the first scan finishes.
    * Its path is the only identity it has; `Project.path` says so, and the
@@ -489,13 +498,10 @@ export const SETTING_VALIDATORS: SettingValidators = {
   },
 
   /** A timestamp, or null for "has not happened". Parsed, not pattern-matched. */
-  firstRunCompletedAt: (value) => {
-    if (value === null) return null
-    if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
-      return `expected an ISO timestamp or null, got ${describe(value)}`
-    }
-    return null
-  },
+  firstRunCompletedAt: (value) => timestampProblem(value),
+
+  /** The same: when the upgrade note was closed, or null. */
+  upgradeNoteSeenAt: (value) => timestampProblem(value),
 
   /**
    * One family name, or null for the built-in stack.

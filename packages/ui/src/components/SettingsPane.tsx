@@ -86,8 +86,9 @@ import { DevicesSettings, type DevicesSettingsProps } from './DevicesSettings'
  * it. Both write through `settings:write` and this pane renders whatever
  * `settings:changed` carries back, so the two cannot disagree.
  *
- * Internal state is not shown. `windowBounds` and `firstRunCompletedAt` live in
- * the same table but they are things Helm remembers, not things anyone chose.
+ * Internal state is not shown. `windowBounds`, `firstRunCompletedAt` and
+ * `upgradeNoteSeenAt` live in the same table but they are things Helm
+ * remembers, not things anyone chose.
  */
 
 /** What Settings › Agents says of the host's agents, and where Open Agents goes. */
@@ -204,12 +205,12 @@ export interface SettingsPaneProps {
   onTranscriptArchiveMaxBytesChange: (bytes: number) => void
 
   /**
-   * Harness templates: how many there are, where they live, and the way in to
+   * Workspace templates: how many there are, where they live, and the way in to
    * managing them.
    *
-   * A group here as well as a link in the New Harness dialog, because
+   * A group here as well as a link in the New Workspace dialog, because
    * templates are **app-level**: they belong to this Helm rather than to any
-   * one harness, and having to start creating a harness in order to rename or
+   * one workspace, and having to start creating a workspace in order to rename or
    * delete one would be the same mistake as putting "stop scanning this
    * folder" only in Settings - which is a bug this pane has already been on the
    * wrong end of once.
@@ -642,7 +643,7 @@ export function SettingsPane({
                   )}
 
                   <p className="mt-2.5 text-[11px] leading-[1.55] text-fg-subtle">
-                    A <em>harness</em> is a folder with a <code className="font-mono">harness.yaml</code>,
+                    A <em>workspace</em> is a folder with a <code className="font-mono">workspace.yaml</code>,
                     and lets one session compose several repos&rsquo; skills. Removing a folder only stops
                     Helm scanning it.
                   </p>
@@ -685,7 +686,7 @@ export function SettingsPane({
                           {/* The roots list above wears the same shape with a danger
                               hover on its ×, and this one deliberately does not:
                               un-scanning a folder takes projects out of the tree, and
-                              un-pinning one moves a row back into its harness. */}
+                              un-pinning one moves a row back into its workspace. */}
                           <button
                             type="button"
                             data-settings-unpin={path}
@@ -1210,7 +1211,7 @@ function ThemeSwatch({ tokens }: { tokens: ThemeTokens }): JSX.Element {
 }
 
 // ---------------------------------------------------------------------------
-// Harness templates
+// Workspace templates
 // ---------------------------------------------------------------------------
 
 /**
@@ -1240,11 +1241,11 @@ function TemplatesGroup({
   return (
     <Group
       name="templates"
-      title="Harness templates"
+      title="Workspace templates"
       hint={total === 0 ? 'none yet' : count(total, 'template')}
     >
       <p className="pb-1 text-[12px] leading-[1.55] text-fg-muted">
-        A template is a folder here; creating a harness from one copies it in. The New Harness
+        A template is a folder here; creating a workspace from one copies it in. The New Workspace
         dialog picks between them, and the built-in <em>Minimal</em> scaffold is always the first
         row whatever is in this folder.
       </p>

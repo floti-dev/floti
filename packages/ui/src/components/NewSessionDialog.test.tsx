@@ -13,23 +13,23 @@ import {
 import { NewSessionDialog, type NewSessionDialogProps } from './NewSessionDialog'
 
 const HOME = 'C:\\Users\\someone'
-const HARNESS = `${HOME}\\.harness\\dev`
+const WORKSPACE = `${HOME}\\.harness\\dev`
 const NOW = Date.UTC(2026, 9, 2, 12, 0, 0)
 const HOUR = 3_600_000
 
-function project(name: string, path = `${HARNESS}\\repos\\${name}`): Project {
+function project(name: string, path = `${WORKSPACE}\\repos\\${name}`): Project {
   return {
     path,
     name,
     kind: 'repo',
-    harnessPath: HARNESS,
+    workspacePath: WORKSPACE,
     hasClaudeDir: true,
     inventory: EMPTY_INVENTORY,
     git: null
   }
 }
 
-const dev: Project = { ...project('dev', HARNESS), kind: 'harness' }
+const dev: Project = { ...project('dev', WORKSPACE), kind: 'workspace' }
 const timeclick = project('timeclick')
 const builder = project('TimeClick-Builder')
 const helm = project('helm')
@@ -39,7 +39,7 @@ function profile(id: number, name: string, overlays: string[], patch: Partial<Pr
   return {
     id,
     name,
-    root: HARNESS,
+    root: WORKSPACE,
     overlays,
     access: overlays,
     model: 'opus',
@@ -55,8 +55,8 @@ function profile(id: number, name: string, overlays: string[], patch: Partial<Pr
   }
 }
 
-const devProfile = profile(1, 'dev', [HARNESS], { permissionMode: 'auto' })
-const timeclickProfile = profile(2, 'Timeclick', [HARNESS, timeclick.path], {
+const devProfile = profile(1, 'dev', [WORKSPACE], { permissionMode: 'auto' })
+const timeclickProfile = profile(2, 'Timeclick', [WORKSPACE, timeclick.path], {
   permissionMode: 'bypassPermissions'
 })
 const PROFILES = [timeclickProfile, devProfile]

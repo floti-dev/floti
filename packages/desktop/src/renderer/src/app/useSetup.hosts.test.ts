@@ -23,17 +23,17 @@ beforeEach(() => {
     dir: '/home/you/.config/helm/templates',
     problems: []
   }))
-  box.answer('template:preview', ({ template }) => ({ template, entries: ['harness.yaml'], note: '', problems: [] }))
-  box.answer('harness:create', ({ dir, name }) => ({
+  box.answer('template:preview', ({ template }) => ({ template, entries: ['workspace.yaml'], note: '', problems: [] }))
+  box.answer('workspace:create', ({ dir, name }) => ({
     path: `${dir}/${name ?? ''}`,
-    created: ['harness.yaml'],
+    created: ['workspace.yaml'],
     problems: [],
     roots: [`${dir}/${name ?? ''}`]
   }))
 })
 
 describe('useSetup on a host on another computer', () => {
-  it('opens New harness on build-box with its suggested folder and templates, and creates it there only', async () => {
+  it('opens New workspace on build-box with its suggested folder and templates, and creates it there only', async () => {
     const rootsChanged = vi.fn()
     const created = vi.fn()
     const { result } = renderHook(() => useSetup(DEFAULT_SETTINGS, rootsChanged, created))
@@ -47,17 +47,17 @@ describe('useSetup on a host on another computer', () => {
     await vi.waitFor(() => expect(result.current.templates.map((each) => each.id)).toEqual(['minimal', 'infra']), {
       timeout: PATIENCE
     })
-    await vi.waitFor(() => expect(result.current.templatePreview?.entries).toEqual(['harness.yaml']), {
+    await vi.waitFor(() => expect(result.current.templatePreview?.entries).toEqual(['workspace.yaml']), {
       timeout: PATIENCE
     })
 
     // The picker browses this PC: it is not asked for a path on build-box.
     act(() => result.current.chooseDialogDir())
     act(() => result.current.typeDialogDir('/srv/work'))
-    act(() => result.current.createHarness({ mode: 'new', dir: '/srv/work', name: 'ops', template: 'infra' }))
+    act(() => result.current.createWorkspace({ mode: 'new', dir: '/srv/work', name: 'ops', template: 'infra' }))
     await vi.waitFor(() => expect(created).toHaveBeenCalledWith('/srv/work/ops', BOX), { timeout: PATIENCE })
 
-    expect(box.invoked('harness:create')).toEqual([{ mode: 'new', dir: '/srv/work', name: 'ops', template: 'infra' }])
+    expect(box.invoked('workspace:create')).toEqual([{ mode: 'new', dir: '/srv/work', name: 'ops', template: 'infra' }])
     expect(rootsChanged).toHaveBeenCalledWith(BOX)
     // Nothing read from or written on this PC for it.
     expect(bridge.invocations).toEqual([])

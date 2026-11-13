@@ -1,33 +1,35 @@
-//! Making a harness, as opposed to finding one.
+//! Making a workspace, as opposed to finding one.
 //!
-//! A harness is a folder with a `harness.yaml` in it. Two shapes:
+//! A workspace is a folder with a `workspace.yaml` in it, or the
+//! `harness.yaml` it had before; a new one always gets `workspace.yaml`, and
+//! neither shape is made over a folder that has either. Two shapes:
 //!
-//! - `new`: a folder that does not exist yet. It gets `harness.yaml`,
+//! - `new`: a folder that does not exist yet. It gets `workspace.yaml`,
 //!   `repos/` and `.claude/` and nothing else, or, given a template, that
 //!   template's tree and a manifest.
 //! - `convert`: a folder that already holds repositories. It gets a
-//!   `harness.yaml`, with `repos: "."` when it has no `repos/` so the
+//!   `workspace.yaml`, with `repos: "."` when it has no `repos/` so the
 //!   repositories at its top level stay visible, and a `.claude/`.
 //!   Templates do not apply: converting is about a folder somebody already
 //!   has, and writing a layout into it would be writing into their work.
 
 use std::path::{Path, PathBuf};
 
-use floti_protocol::channels::workspace::{CreateHarnessRequest, HarnessMode};
+use floti_protocol::channels::workspace::{CreateWorkspaceRequest, WorkspaceMode};
 
 use super::reader::{TemplateValues, apply_template, template_id_problems, template_path_value};
-use super::{HARNESS_MANIFEST, MINIMAL_TEMPLATE, exists, is_real_dir};
+use super::{MINIMAL_TEMPLATE, WORKSPACE_MANIFEST, WORKSPACE_MANIFESTS, exists, is_real_dir};
 use crate::agent_config::normalize;
 use crate::agent_config::time::now_iso;
 
 /// The manifest format this writer produces; not the host's version, nor
-/// the harness's.
-pub const HARNESS_FORMAT_VERSION: &str = "1";
+/// the workspace's.
+pub const WORKSPACE_FORMAT_VERSION: &str = "1";
 
-/// What making a harness did.
+/// What making a workspace did.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct HarnessCreated {
-    /// The harness folder, or `None` when nothing was written.
+pub struct WorkspaceCreated {
+    /// The workspace folder, or `None` when nothing was written.
     pub path: Option<PathBuf>,
     /// Written, relative to `path`, in the order written.
     pub created: Vec<String>,
@@ -36,7 +38,7 @@ pub struct HarnessCreated {
     pub problems: Vec<String>,
 }
 
-impl HarnessCreated {
+impl WorkspaceCreated {
     fn refused(problems: Vec<String>) -> Self {
         Self {
             problems,
@@ -46,7 +48,7 @@ impl HarnessCreated {
 }
 
 /// Reserved on Windows whatever the extension; refused on every OS, since a
-/// harness is a folder people copy between machines.
+/// workspace is a folder people copy between machines.
 fn is_reserved(name: &str) -> bool {
     let stem = name.split('.').next().unwrap_or_default().to_lowercase();
     matches!(stem.as_str(), "con" | "prn" | "aux" | "nul")
@@ -58,7 +60,7 @@ fn is_reserved(name: &str) -> bool {
 
 /// Problems with a proposed folder name, as sentences. Spaces and dashes
 /// are ordinary in a folder name; these are the ones Windows refuses.
-pub fn harness_name_problems(name: &str) -> Vec<String> {
+pub fn workspace_name_problems(name: &str) -> Vec<String> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return vec!["A name is required.".to_owned()];
@@ -91,7 +93,7 @@ fn manifest(name: &str, template: &str, created: &str, repos: Option<&str>) -> S
     let mut lines = vec![
         format!("name: {}", quoted(name)),
         format!("template: {}", quoted(template)),
-        format!("version: {}", quoted(HARNESS_FORMAT_VERSION)),
+        format!("version: {}", quoted(WORKSPACE_FORMAT_VERSION)),
         format!("created: {}", quoted(created)),
     ];
     if let Some(repos) = repos {
@@ -100,25 +102,25 @@ fn manifest(name: &str, template: &str, created: &str, repos: Option<&str>) -> S
     format!("{}\n", lines.join("\n"))
 }
 
-/// Makes a harness as `request` asks, from `templates_dir` when it names a
+/// Makes a workspace as `request` asks, from `templates_dir` when it names a
 /// template. A refusal writes nothing; a failure to write once the folder is
 /// made is the `Err` sentence.
-pub fn create_harness(
-    request: &CreateHarnessRequest,
+pub fn create_workspace(
+    request: &CreateWorkspaceRequest,
     templates_dir: Option<&Path>,
-) -> Result<HarnessCreated, String> {
+) -> Result<WorkspaceCreated, String> {
     let dir = normalize(Path::new(&request.dir));
     match request.mode {
-        HarnessMode::New => create_new(request, &dir, templates_dir),
-        HarnessMode::Convert => convert(request, &dir),
+        WorkspaceMode::New => create_new(request, &dir, templates_dir),
+        WorkspaceMode::Convert => convert(request, &dir),
     }
 }
 
 fn create_new(
-    request: &CreateHarnessRequest,
+    request: &CreateWorkspaceRequest,
     dir: &Path,
     templates_dir: Option<&Path>,
-) -> Result<HarnessCreated, String> {
+) -> Result<WorkspaceCreated, String> {
     let name = request
         .name
         .as_deref()
@@ -132,7 +134,7 @@ fn create_new(
         .filter(|template| !template.is_empty())
         .unwrap_or(MINIMAL_TEMPLATE)
         .to_owned();
-    let mut problems = harness_name_problems(&name);
+    let mut problems = workspace_name_problems(&name);
     if !is_real_dir(dir) {
         problems.push(format!("{} is not a folder.", dir.display()));
     }
@@ -151,18 +153,18 @@ fn create_new(
         }
     }
     if !problems.is_empty() {
-        return Ok(HarnessCreated::refused(problems));
+        return Ok(WorkspaceCreated::refused(problems));
     }
 
     let target = dir.join(&name);
     if exists(&target) {
         // Neither an overwrite nor a merge: the caller asked to create one.
-        let why = if exists(&target.join(HARNESS_MANIFEST)) {
-            format!("{} is already a harness.", target.display())
+        let why = if has_manifest(&target) {
+            format!("{} is already a workspace.", target.display())
         } else {
             format!("{} already exists.", target.display())
         };
-        return Ok(HarnessCreated::refused(vec![why]));
+        return Ok(WorkspaceCreated::refused(vec![why]));
     }
 
     let created_at = now_iso();
@@ -176,7 +178,7 @@ fn create_new(
         }
     } else {
         // The template's tree first and the manifest last, so `template:`
-        // is what the host wrote and a partial apply still leaves a harness
+        // is what the host wrote and a partial apply still leaves a workspace
         // the launcher sees.
         let applied = apply_template(
             templates_dir.unwrap_or(dir),
@@ -193,27 +195,34 @@ fn create_new(
         problems.extend(applied.problems);
     }
     write(
-        &target.join(HARNESS_MANIFEST),
+        &target.join(WORKSPACE_MANIFEST),
         &manifest(&name, &template, &created_at, None),
     )?;
-    created.push(HARNESS_MANIFEST.to_owned());
-    Ok(HarnessCreated {
+    created.push(WORKSPACE_MANIFEST.to_owned());
+    Ok(WorkspaceCreated {
         path: Some(target),
         created,
         problems,
     })
 }
 
-fn convert(request: &CreateHarnessRequest, dir: &Path) -> Result<HarnessCreated, String> {
+/// Whether `dir` is a workspace already, by either name its manifest has had.
+fn has_manifest(dir: &Path) -> bool {
+    WORKSPACE_MANIFESTS
+        .iter()
+        .any(|manifest| exists(&dir.join(manifest)))
+}
+
+fn convert(request: &CreateWorkspaceRequest, dir: &Path) -> Result<WorkspaceCreated, String> {
     if !is_real_dir(dir) {
-        return Ok(HarnessCreated::refused(vec![format!(
+        return Ok(WorkspaceCreated::refused(vec![format!(
             "{} is not a folder.",
             dir.display()
         )]));
     }
-    if exists(&dir.join(HARNESS_MANIFEST)) {
-        return Ok(HarnessCreated::refused(vec![format!(
-            "{} is already a harness.",
+    if has_manifest(dir) {
+        return Ok(WorkspaceCreated::refused(vec![format!(
+            "{} is already a workspace.",
             dir.display()
         )]));
     }
@@ -233,16 +242,16 @@ fn convert(request: &CreateHarnessRequest, dir: &Path) -> Result<HarnessCreated,
     // Always `minimal`: a converted folder was never built from a template,
     // whatever the caller passed.
     write(
-        &dir.join(HARNESS_MANIFEST),
+        &dir.join(WORKSPACE_MANIFEST),
         &manifest(&name, MINIMAL_TEMPLATE, &now_iso(), repos),
     )?;
-    let mut created = vec![HARNESS_MANIFEST.to_owned()];
+    let mut created = vec![WORKSPACE_MANIFEST.to_owned()];
     let claude = dir.join(".claude");
     if !is_real_dir(&claude) {
         make_dir(&claude)?;
         created.push(".claude".to_owned());
     }
-    Ok(HarnessCreated {
+    Ok(WorkspaceCreated {
         path: Some(dir.to_path_buf()),
         created,
         problems: Vec::new(),

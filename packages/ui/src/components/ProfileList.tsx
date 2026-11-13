@@ -15,10 +15,10 @@ import {
 export interface ProfileListProps {
   profiles: Profile[]
   /**
-   * Discovered harnesses, only so a row can name the one its root sits inside.
+   * Discovered workspaces, only so a row can name the one its root sits inside.
    * Omitted, the pill is simply absent - the list never blocks on discovery.
    */
-  harnesses?: readonly { name: string; path: string }[] | undefined
+  workspaces?: readonly { name: string; path: string }[] | undefined
   /** Profiles with a session starting right now. */
   launchingIds?: readonly number[] | undefined
   onLaunch: (profile: Profile) => void
@@ -58,7 +58,7 @@ export interface ProfileListHost {
  */
 export function ProfileList({
   profiles,
-  harnesses = [],
+  workspaces = [],
   launchingIds = [],
   onLaunch,
   onEdit,
@@ -243,12 +243,12 @@ export function ProfileList({
                         className="shrink-0 text-fg-subtle group-hover:opacity-0"
                       />
                     )}
-                    {/* The harness the root sits in, as a neutral outline pill.
+                    {/* The workspace the root sits in, as a neutral outline pill.
                         It answers "which workspace does this launch into" -
                         the question a row of otherwise similar names raises. */}
-                    {harnessOf(profile, harnesses) !== null && (
+                    {workspaceOf(profile, workspaces) !== null && (
                       <span className="shrink-0 truncate rounded-full border border-border-strong px-[7px] py-px text-[8.5px] tracking-[.04em] text-fg-muted group-hover:opacity-0">
-                        {harnessOf(profile, harnesses)}
+                        {workspaceOf(profile, workspaces)}
                       </span>
                     )}
                   </button>
@@ -306,20 +306,20 @@ function summarise(profile: Profile): string {
 }
 
 /**
- * The harness a profile's root sits inside, by longest matching path. Longest
- * rather than first: a harness nested inside another would otherwise be
+ * The workspace a profile's root sits inside, by longest matching path. Longest
+ * rather than first: a workspace nested inside another would otherwise be
  * reported as its parent.
  */
-function harnessOf(
+function workspaceOf(
   profile: Profile,
-  harnesses: readonly { name: string; path: string }[]
+  workspaces: readonly { name: string; path: string }[]
 ): string | null {
   const root = profile.root.toLowerCase().replace(/[\\/]+$/, '')
   let best: { name: string; path: string } | null = null
-  for (const harness of harnesses) {
-    const path = harness.path.toLowerCase().replace(/[\\/]+$/, '')
+  for (const workspace of workspaces) {
+    const path = workspace.path.toLowerCase().replace(/[\\/]+$/, '')
     if (root !== path && !root.startsWith(`${path}\\`) && !root.startsWith(`${path}/`)) continue
-    if (best === null || path.length > best.path.length) best = harness
+    if (best === null || path.length > best.path.length) best = workspace
   }
   return best?.name ?? null
 }

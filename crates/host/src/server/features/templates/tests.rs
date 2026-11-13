@@ -1,4 +1,4 @@
-//! `template:*` and `harness:create` as a client's requests reach them:
+//! `template:*` and `workspace:create` as a client's requests reach them:
 //! through the router of a host's features, over a store and a config
 //! folder of their own, with Claude Code (the fake claude) as the agent whose
 //! config a template imports from. No agent is ever run.
@@ -8,12 +8,12 @@ use std::sync::{Arc, Mutex};
 
 use floti_protocol::channel::{RequestChannel, Router, from_payload, to_payload};
 use floti_protocol::channels::workspace::{
-    AppMode, CreateHarness, CreateHarnessOutcome, CreateHarnessRequest, CreateTemplate,
-    CreateTemplateRequest, DeleteTemplate, HarnessMode, HostSettings, HostSettingsPatch,
-    ImportIntoTemplate, ImportIntoTemplateRequest, ListTemplates, ReadTemplateDetail,
-    RenameTemplate, RenameTemplateRequest, TemplateDeleteResult, TemplateDetail,
-    TemplateImportResult, TemplateListing, TemplateMetadataRequest, TemplateRef,
-    TemplateWriteResult, WriteSettings, WriteTemplateMetadata,
+    AppMode, CreateTemplate, CreateTemplateRequest, CreateWorkspace, CreateWorkspaceOutcome,
+    CreateWorkspaceRequest, DeleteTemplate, HostSettings, HostSettingsPatch, ImportIntoTemplate,
+    ImportIntoTemplateRequest, ListTemplates, ReadTemplateDetail, RenameTemplate,
+    RenameTemplateRequest, TemplateDeleteResult, TemplateDetail, TemplateImportResult,
+    TemplateListing, TemplateMetadataRequest, TemplateRef, TemplateWriteResult, WorkspaceMode,
+    WriteSettings, WriteTemplateMetadata,
 };
 use floti_protocol::message::Request;
 use floti_protocol::{CapabilitySet, Message};
@@ -132,9 +132,9 @@ impl World {
             .unwrap();
     }
 
-    fn create_harness(&self, dir: &Path, name: &str) -> CreateHarnessOutcome {
-        self.ask::<CreateHarness>(&CreateHarnessRequest {
-            mode: HarnessMode::New,
+    fn create_workspace(&self, dir: &Path, name: &str) -> CreateWorkspaceOutcome {
+        self.ask::<CreateWorkspace>(&CreateWorkspaceRequest {
+            mode: WorkspaceMode::New,
             dir: text(dir),
             name: Some(name.into()),
             template: None,
@@ -436,33 +436,33 @@ async fn an_import_of_a_file_the_scope_no_longer_lists_says_so_and_copies_nothin
 }
 
 #[tokio::test]
-async fn a_new_harness_joins_the_scan_roots_and_every_settings_subscriber_hears_it() {
+async fn a_new_workspace_joins_the_scan_roots_and_every_settings_subscriber_hears_it() {
     let world = World::new();
     let elsewhere = world.dirs.folder("projects");
     world.set_roots(&[&elsewhere]);
-    let parent = world.dirs.folder("harnesses");
+    let parent = world.dirs.folder("workspaces");
     let mut listener = world.features.events().listen(ClientId(2));
 
-    let outcome = world.create_harness(&parent, "work");
+    let outcome = world.create_workspace(&parent, "work");
 
-    let harness = text(&parent.join("work"));
-    assert_eq!(outcome.path.as_deref(), Some(harness.as_str()));
+    let workspace = text(&parent.join("work"));
+    assert_eq!(outcome.path.as_deref(), Some(workspace.as_str()));
     assert!(outcome.problems.is_empty(), "{:?}", outcome.problems);
-    assert_eq!(outcome.roots, [text(&elsewhere), harness.clone()]);
+    assert_eq!(outcome.roots, [text(&elsewhere), workspace.clone()]);
     assert_eq!(
         roots_heard(&mut listener),
-        [vec![text(&elsewhere), harness]]
+        [vec![text(&elsewhere), workspace]]
     );
 }
 
 #[tokio::test]
-async fn a_new_harness_under_a_scan_root_is_not_added_a_second_time() {
+async fn a_new_workspace_under_a_scan_root_is_not_added_a_second_time() {
     let world = World::new();
-    let parent = world.dirs.folder("harnesses");
+    let parent = world.dirs.folder("workspaces");
     world.set_roots(&[&parent]);
     let mut listener = world.features.events().listen(ClientId(2));
 
-    let outcome = world.create_harness(&parent, "work");
+    let outcome = world.create_workspace(&parent, "work");
 
     assert!(outcome.path.is_some(), "{:?}", outcome.problems);
     assert_eq!(outcome.roots, [text(&parent)]);
@@ -470,15 +470,15 @@ async fn a_new_harness_under_a_scan_root_is_not_added_a_second_time() {
 }
 
 #[tokio::test]
-async fn a_refused_harness_changes_no_roots_and_answers_the_roots_as_they_are() {
+async fn a_refused_workspace_changes_no_roots_and_answers_the_roots_as_they_are() {
     let world = World::new();
-    let parent = world.dirs.folder("harnesses");
+    let parent = world.dirs.folder("workspaces");
     std::fs::create_dir(parent.join("work")).unwrap();
     let elsewhere = world.dirs.folder("projects");
     world.set_roots(&[&elsewhere]);
     let mut listener = world.features.events().listen(ClientId(2));
 
-    let outcome = world.create_harness(&parent, "work");
+    let outcome = world.create_workspace(&parent, "work");
 
     assert_eq!(outcome.path, None);
     assert_eq!(
@@ -490,13 +490,13 @@ async fn a_refused_harness_changes_no_roots_and_answers_the_roots_as_they_are() 
 }
 
 #[tokio::test]
-async fn a_harness_made_from_a_template_in_the_hosts_folder_carries_its_tree() {
+async fn a_workspace_made_from_a_template_in_the_hosts_folder_carries_its_tree() {
     let world = World::new();
-    let parent = world.dirs.folder("harnesses");
+    let parent = world.dirs.folder("workspaces");
 
-    let outcome: CreateHarnessOutcome = world
-        .ask::<CreateHarness>(&CreateHarnessRequest {
-            mode: HarnessMode::New,
+    let outcome: CreateWorkspaceOutcome = world
+        .ask::<CreateWorkspace>(&CreateWorkspaceRequest {
+            mode: WorkspaceMode::New,
             dir: text(&parent),
             name: Some("work".into()),
             template: Some("example".into()),

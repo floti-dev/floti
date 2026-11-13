@@ -324,7 +324,7 @@ fn refuses_to_delete_a_template_that_is_itself_a_link_and_leaves_its_target() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn lists_every_file_with_what_a_harness_would_receive_it_as() {
+fn lists_every_file_with_what_a_workspace_would_receive_it_as() {
     let world = World::new();
     world.create("shaped", Some("Shaped"));
     let dir = world.templates.join("shaped");
@@ -584,16 +584,16 @@ fn refuses_a_target_that_would_write_through_a_link_inside_the_template() {
 // A folder becomes a template
 // ---------------------------------------------------------------------------
 
-/// A harness with the things somebody would want to leave behind.
-fn plant_harness(world: &World) -> PathBuf {
-    plant_harness_in(&world.root)
+/// A workspace with the things somebody would want to leave behind.
+fn plant_workspace(world: &World) -> PathBuf {
+    plant_workspace_in(&world.root)
 }
 
-/// [`plant_harness`] under `parent`.
-fn plant_harness_in(parent: &Path) -> PathBuf {
-    let dir = parent.join("my-harness");
-    write(&dir.join("harness.yaml"), "name: my-harness\n");
-    write(&dir.join("CLAUDE.md"), "# my-harness\n");
+/// [`plant_workspace`] under `parent`.
+fn plant_workspace_in(parent: &Path) -> PathBuf {
+    let dir = parent.join("my-workspace");
+    write(&dir.join("workspace.yaml"), "name: my-workspace\n");
+    write(&dir.join("CLAUDE.md"), "# my-workspace\n");
     write(&dir.join(".claude/skills/think/SKILL.md"), "skill\n");
     write(&dir.join("notes/journal.md"), "a private journal\n");
     write(&dir.join("repos/thing/README.md"), "a checkout\n");
@@ -625,7 +625,7 @@ fn save(
         &world.templates,
         &SaveFolderAsTemplateRequest {
             dir: dir.display().to_string(),
-            kind: FolderTemplateKind::Harness,
+            kind: FolderTemplateKind::Workspace,
             name: name.into(),
             label: label.into(),
             description: String::new(),
@@ -646,9 +646,9 @@ fn ticked(preview: &floti_protocol::channels::workspace::FolderTemplatePreview) 
 #[test]
 fn lists_the_top_level_unticks_the_instance_data_and_counts_what_is_ticked() {
     let world = World::new();
-    let dir = plant_harness(&world);
+    let dir = plant_workspace(&world);
 
-    let preview = preview(&dir, FolderTemplateKind::Harness);
+    let preview = preview(&dir, FolderTemplateKind::Workspace);
     let entry = |name: &str| {
         preview
             .entries
@@ -669,23 +669,23 @@ fn lists_the_top_level_unticks_the_instance_data_and_counts_what_is_ticked() {
             ".claude",
             ".git",
             "CLAUDE.md",
-            "harness.yaml",
+            "workspace.yaml",
             "notes",
             "repos",
             "tools"
         ]
     );
     // The defaults, and each is listed rather than pruned.
-    assert!(!entry("harness.yaml").included);
+    assert!(!entry("workspace.yaml").included);
     assert!(!entry(".git").included);
     assert!(!entry("repos").included);
     assert!(entry(".claude").included);
     assert!(entry("notes").included);
     assert!(entry("tools").included);
 
-    // `harness.yaml` and `.git` are refused whatever the user ticks; `repos` is
+    // `workspace.yaml` and `.git` are refused whatever the user ticks; `repos` is
     // merely unticked, because a repos/ scaffold is a defensible thing to want.
-    assert!(entry("harness.yaml").refused.is_some());
+    assert!(entry("workspace.yaml").refused.is_some());
     assert!(entry(".git").refused.is_some());
     assert!(entry("repos").refused.is_none());
 
@@ -702,11 +702,11 @@ fn names_a_link_at_the_top_level_and_never_follows_one_below_it() {
     let world = World::new();
     let canary = world.root.join("canary");
     write(&canary.join("do-not-touch.txt"), "untouched");
-    let dir = plant_harness(&world);
+    let dir = plant_workspace(&world);
     link_folder(&canary, &dir.join("escape"));
     link_folder(&canary, &dir.join("tools").join("deep-escape"));
 
-    let preview = preview(&dir, FolderTemplateKind::Harness);
+    let preview = preview(&dir, FolderTemplateKind::Workspace);
     let escape = preview
         .entries
         .iter()
@@ -730,18 +730,18 @@ fn names_a_link_at_the_top_level_and_never_follows_one_below_it() {
 #[test]
 fn copies_what_was_ticked_leaves_out_what_was_not_and_writes_a_manifest() {
     let world = World::new();
-    let dir = plant_harness(&world);
-    let include = ticked(&preview(&dir, FolderTemplateKind::Harness));
+    let dir = plant_workspace(&world);
+    let include = ticked(&preview(&dir, FolderTemplateKind::Workspace));
 
     let result = save_folder_as_template(
         world.conn(),
         &world.templates,
         &SaveFolderAsTemplateRequest {
             dir: dir.display().to_string(),
-            kind: FolderTemplateKind::Harness,
+            kind: FolderTemplateKind::Workspace,
             name: "frozen".into(),
             label: "Frozen".into(),
-            description: "A harness, frozen.".into(),
+            description: "A workspace, frozen.".into(),
             include,
         },
     );
@@ -762,8 +762,8 @@ fn copies_what_was_ticked_leaves_out_what_was_not_and_writes_a_manifest() {
             "tools/run.mjs"
         ]
     );
-    // The manifest a harness gets is the host's to write, so it is not carried in.
-    assert!(!world.templates.join("frozen").join("harness.yaml").exists());
+    // The manifest a workspace gets is the host's to write, so it is not carried in.
+    assert!(!world.templates.join("frozen").join("workspace.yaml").exists());
     assert_eq!(result.file_count, 4);
 
     let listing = list_templates(&world.templates);
@@ -772,9 +772,33 @@ fn copies_what_was_ticked_leaves_out_what_was_not_and_writes_a_manifest() {
 }
 
 #[test]
-fn refuses_harness_yaml_even_when_it_is_ticked_rather_than_authoring_a_broken_template() {
+fn refuses_workspace_yaml_even_when_it_is_ticked_rather_than_authoring_a_broken_template() {
     let world = World::new();
-    let dir = plant_harness(&world);
+    let dir = plant_workspace(&world);
+
+    let result = save(
+        &world,
+        &dir,
+        "frozen",
+        "",
+        vec!["workspace.yaml".into(), "CLAUDE.md".into()],
+    );
+
+    assert!(!world.templates.join("frozen").join("workspace.yaml").exists());
+    assert!(world.templates.join("frozen").join("CLAUDE.md").exists());
+    assert!(
+        result.problems.join(" ").contains("workspace.yaml"),
+        "{:?}",
+        result.problems
+    );
+}
+
+#[test]
+fn refuses_an_older_workspaces_harness_yaml_even_when_it_is_ticked() {
+    let world = World::new();
+    let dir = world.root.join("older");
+    write(&dir.join("harness.yaml"), "name: older\n");
+    write(&dir.join("CLAUDE.md"), "# older\n");
 
     let result = save(
         &world,
@@ -791,6 +815,7 @@ fn refuses_harness_yaml_even_when_it_is_ticked_rather_than_authoring_a_broken_te
         "{:?}",
         result.problems
     );
+    assert_eq!(read(&dir.join("harness.yaml")), "name: older\n");
 }
 
 #[test]
@@ -798,7 +823,7 @@ fn does_not_recurse_into_a_link_and_what_it_pointed_at_is_untouched() {
     let world = World::new();
     let canary = world.root.join("canary");
     write(&canary.join("do-not-touch.txt"), "untouched");
-    let dir = plant_harness(&world);
+    let dir = plant_workspace(&world);
     link_folder(&canary, &dir.join("tools").join("deep-escape"));
 
     let result = save(&world, &dir, "frozen", "", vec!["tools".into()]);
@@ -822,7 +847,7 @@ fn does_not_recurse_into_a_link_and_what_it_pointed_at_is_untouched() {
 }
 
 #[test]
-fn keeps_dot_claude_verbatim_and_a_harness_made_from_it_receives_claude() {
+fn keeps_dot_claude_verbatim_and_a_workspace_made_from_it_receives_claude() {
     let world = World::new();
     let folder = world.root.join("authored-elsewhere");
     write(&folder.join("dot-claude/skills/think/SKILL.md"), "skill\n");
@@ -866,7 +891,7 @@ fn keeps_dot_claude_verbatim_and_a_harness_made_from_it_receives_claude() {
 fn refuses_a_name_that_is_taken_and_leaves_the_existing_template_alone() {
     let world = World::new();
     world.create("taken", Some("Taken"));
-    let dir = plant_harness(&world);
+    let dir = plant_workspace(&world);
 
     let result = save(&world, &dir, "taken", "", vec!["CLAUDE.md".into()]);
 

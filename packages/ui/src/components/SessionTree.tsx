@@ -1,6 +1,6 @@
 import type { JSX, MouseEvent, ReactNode } from 'react'
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import type { DiscoveryResult, Harness, HostFlotiVerdict, Project } from '@helm/core'
+import type { DiscoveryResult, Workspace, HostFlotiVerdict, Project } from '@helm/core'
 import { isProjectPinned, mostPressingState } from '@helm/core/types'
 import { cn } from '../lib/cn'
 import type { SessionState } from '../lib/sessionstate'
@@ -62,7 +62,7 @@ export interface TreeSession {
 
 /**
  * A host on another computer, as the tree lists it under its own header after
- * this PC's group: its own harnesses, projects and running sessions, read from
+ * this PC's group: its own workspaces, projects and running sessions, read from
  * its own bridge. Its rows stay listed while it is not connected, dimmed, and
  * come back live by themselves once it is.
  */
@@ -96,8 +96,8 @@ export interface TreeHostActions {
   onTogglePin: (host: string, path: string) => void
   /** A host header's New session: the launcher, on that host. */
   onNewSession: (host: string) => void
-  /** A host header's New harness, and the empty state's: the dialog, creating on that host. */
-  onNewHarness: (host: string) => void
+  /** A host header's New workspace, and the empty state's: the dialog, creating on that host. */
+  onNewWorkspace: (host: string) => void
   /** A host header's Rescan, and Unknown's Try again. */
   onRescan: (host: string) => void
   /** The Add a host line at the end of the list: Settings > Hosts. */
@@ -117,7 +117,7 @@ export interface SessionTreeProps {
   /**
    * `pinnedProjects`, straight off the settings. Required, because it is a
    * rule about where every project row is drawn: a caller that forgot it would
-   * silently print pinned projects back inside their harness groups.
+   * silently print pinned projects back inside their workspace groups.
    */
   pinnedPaths: readonly string[]
   onTogglePin: (path: string) => void
@@ -200,7 +200,7 @@ export type TreeReveal =
 
 interface Group {
   key: string
-  harness: Harness | null
+  workspace: Workspace | null
   root: Project | null
   members: Project[]
 }
@@ -215,9 +215,9 @@ interface Pin {
 /**
  * The pinned paths, resolved against the current scan.
  *
- * Flat and cross-harness on purpose: escaping the grouping is the whole point.
+ * Flat and cross-workspace on purpose: escaping the grouping is the whole point.
  * Sorted by **name** rather than by path - a list ordered by path is a list
- * ordered by harness, which is the arrangement the section exists to get out of.
+ * ordered by workspace, which is the arrangement the section exists to get out of.
  * A path with nothing behind it keeps its place; an unplugged drive is not a
  * decision to un-pin.
  */
@@ -237,29 +237,29 @@ function resolvePins(discovery: DiscoveryResult | null, pinned: readonly string[
 }
 
 /**
- * The harness tree, with the pinned projects taken out of it rather than
+ * The workspace tree, with the pinned projects taken out of it rather than
  * marked: a pinned project printed in both places is two rows for one project.
  */
 function groupProjects(discovery: DiscoveryResult | null, pinned: readonly string[]): Group[] {
   if (!discovery) return []
-  const byHarness = new Map<string, Group>()
+  const byWorkspace = new Map<string, Group>()
   const loose: Project[] = []
-  for (const harness of discovery.harnesses) {
-    byHarness.set(harness.path.toLowerCase(), { key: harness.path, harness, root: null, members: [] })
+  for (const workspace of discovery.workspaces) {
+    byWorkspace.set(workspace.path.toLowerCase(), { key: workspace.path, workspace, root: null, members: [] })
   }
   for (const project of discovery.projects) {
     if (isProjectPinned(pinned, project.path)) continue
     const group =
-      project.harnessPath === null ? undefined : byHarness.get(project.harnessPath.toLowerCase())
+      project.workspacePath === null ? undefined : byWorkspace.get(project.workspacePath.toLowerCase())
     if (!group) {
       loose.push(project)
       continue
     }
-    if (project.kind === 'harness') group.root = project
+    if (project.kind === 'workspace') group.root = project
     else group.members.push(project)
   }
-  const groups = [...byHarness.values()]
-  if (loose.length > 0) groups.push({ key: '__loose__', harness: null, root: null, members: loose })
+  const groups = [...byWorkspace.values()]
+  if (loose.length > 0) groups.push({ key: '__loose__', workspace: null, root: null, members: loose })
   return groups
 }
 
@@ -316,16 +316,16 @@ function ancestorsOf(levels: Iterable<readonly TreeSession[]>, id: string): stri
  *
  * Sessions first, which is the order of the whole window now: a project with
  * something running in it opens out to show it, and one without is a single
- * line with a terminal button under the pointer. Pinned projects sit above the harness
+ * line with a terminal button under the pointer. Pinned projects sit above the workspace
  * groups, as they always have, and a session whose folder is no project the
  * scan found is listed at the bottom rather than not at all - every session
  * Helm hosts has a row somewhere.
  *
- * What is folded is local and absent-means-open, for the reason the harness
+ * What is folded is local and absent-means-open, for the reason the workspace
  * groups always were: a project that gains a session after this render should
  * show it, not hide it behind a key nothing has written yet.
  *
- * With hosts on other computers, each host's harnesses, projects and sessions
+ * With hosts on other computers, each host's workspaces, projects and sessions
  * are listed under its own header, this PC first, and the list ends with an
  * Add a host line. The filter matches rows in every group.
  */
@@ -466,7 +466,7 @@ export function SessionTree({
                       query !== '' && (host.discovery?.projects.length ?? 0) > 0 ? (
                         <p className="px-2 py-3 text-center text-[12px] text-fg-subtle">No match.</p>
                       ) : (
-                        <RemoteEmpty host={host} onNewHarness={hostActions.onNewHarness} onRescan={hostActions.onRescan} />
+                        <RemoteEmpty host={host} onNewWorkspace={hostActions.onNewWorkspace} onRescan={hostActions.onRescan} />
                       )
                     }
                   />
@@ -527,7 +527,7 @@ export function sessionTreeHostProps(options: {
  * its name - a remote host's in mono, as the machine data it is - and
  * "retrying" at the right while the window is not connected to it, or, for a
  * floti that is not this Helm's, what it is (`HostFlotiLabel`). Under the
- * pointer it offers New session, New harness and Rescan, which its right-click
+ * pointer it offers New session, New workspace and Rescan, which its right-click
  * menu offers too.
  */
 function HostHeader({
@@ -548,13 +548,13 @@ function HostHeader({
   const [menu, setMenu] = useState<MenuAnchor | null>(null)
   const entries: readonly MenuEntry[] = [
     { kind: 'item', id: 'new-session', label: 'New session', icon: <TerminalIcon width={13} height={13} /> },
-    { kind: 'item', id: 'new-harness', label: 'New harness', icon: <FolderPlusIcon width={13} height={13} /> },
+    { kind: 'item', id: 'new-workspace', label: 'New workspace', icon: <FolderPlusIcon width={13} height={13} /> },
     { kind: 'item', id: 'rescan', label: 'Rescan', icon: <RefreshIcon width={13} height={13} /> }
   ]
   const choose = (id: string): void => {
     setMenu(null)
     if (id === 'new-session') actions.onNewSession(host)
-    else if (id === 'new-harness') actions.onNewHarness(host)
+    else if (id === 'new-workspace') actions.onNewWorkspace(host)
     else if (id === 'rescan') actions.onRescan(host)
   }
   const openMenu = (event: MouseEvent<HTMLDivElement>): void => {
@@ -599,7 +599,7 @@ function HostHeader({
         <HeaderAction label={`New session on ${name}`} onClick={() => actions.onNewSession(host)}>
           <PlusIcon width={12} height={12} />
         </HeaderAction>
-        <HeaderAction label={`New harness on ${name}`} onClick={() => actions.onNewHarness(host)}>
+        <HeaderAction label={`New workspace on ${name}`} onClick={() => actions.onNewWorkspace(host)}>
           <FolderPlusIcon width={12} height={12} />
         </HeaderAction>
         <HeaderAction label={`Rescan ${name}`} onClick={() => actions.onRescan(host)}>
@@ -681,16 +681,16 @@ function HeaderAction({
 
 /**
  * Under a host on another computer whose scan found nothing: the empty-state
- * pattern, offering New harness there. While its folders cannot be read it
+ * pattern, offering New workspace there. While its folders cannot be read it
  * says Unknown and why instead, never that it has none.
  */
 function RemoteEmpty({
   host,
-  onNewHarness,
+  onNewWorkspace,
   onRescan
 }: {
   host: TreeHost
-  onNewHarness: (host: string) => void
+  onNewWorkspace: (host: string) => void
   onRescan: (host: string) => void
 }): JSX.Element {
   if (host.scanError !== undefined) {
@@ -723,23 +723,23 @@ function RemoteEmpty({
       name={`host-empty:${host.id}`}
       size="list"
       icon={<ServerIcon width={18} height={18} />}
-      title={`No harnesses on ${host.name} yet`}
+      title={`No workspaces on ${host.name} yet`}
       actions={
         <button
           type="button"
-          onClick={() => onNewHarness(host.id)}
+          onClick={() => onNewWorkspace(host.id)}
           className="flex h-7 items-center rounded-well border border-accent px-3 text-[12px] font-medium text-accent-text transition-colors hover:bg-accent-soft"
         >
-          New harness
+          New workspace
         </button>
       }
     >
-      {`A harness there is a folder on ${host.name}, and its sessions run there.`}
+      {`A workspace there is a folder on ${host.name}, and its sessions run there.`}
     </EmptyWell>
   )
 }
 
-/** One host's pinned projects, harness groups and Elsewhere, under the shared filter. */
+/** One host's pinned projects, workspace groups and Elsewhere, under the shared filter. */
 function HostTree({
   discovery,
   scanError,
@@ -840,7 +840,7 @@ function HostTree({
   const filtered = groups
     .map((group) => ({
       ...group,
-      // A harness root that does not match itself is kept as long as one of
+      // A workspace root that does not match itself is kept as long as one of
       // its repos does, so filtering never orphans a visible child.
       root: group.root && matches(group.root) ? group.root : null,
       members: group.members.filter(matches)
@@ -1017,7 +1017,7 @@ function HostTree({
             const projects = group.root ? [group.root, ...group.members] : group.members
             const running = projects.reduce((n, p) => n + withNested(sessionsOf(p.path)).length, 0)
             const open = groupOpen(group.key)
-            const name = group.harness?.name ?? 'Folders'
+            const name = group.workspace?.name ?? 'Folders'
             return (
               <section key={group.key} className="mb-1">
                 {(index > 0 || shownPins.length > 0) && (
@@ -1041,15 +1041,15 @@ function HostTree({
                     {name}
                   </span>
                   <span className="text-[11px] tabular-nums text-fg-subtle">{projects.length}</span>
-                  {/* What the harness was built from, which the manifest records
-                      as provenance - on the harness's own line, the one place in
-                      the tree that is about the harness rather than a project. */}
-                  {group.harness?.template ? (
+                  {/* What the workspace was built from, which the manifest records
+                      as provenance - on the workspace's own line, the one place in
+                      the tree that is about the workspace rather than a project. */}
+                  {group.workspace?.template ? (
                     <span
-                      data-project-meta={group.harness.template}
+                      data-project-meta={group.workspace.template}
                       className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-fg-subtle"
                     >
-                      {group.harness.template}
+                      {group.workspace.template}
                     </span>
                   ) : (
                     <span className="flex-1" />
@@ -1083,11 +1083,11 @@ function HostTree({
 }
 
 /**
- * A section label that is not a group: `fg-subtle` where a harness header sits
- * at `fg`, at the caption's smaller size. A section that looked like a harness
- * would read as a pinnable harness, and harnesses are not pinnable.
+ * A section label that is not a group: `fg-subtle` where a workspace header sits
+ * at `fg`, at the caption's smaller size. A section that looked like a workspace
+ * would read as a pinnable workspace, and workspaces are not pinnable.
  *
- * Given `fold`, it folds its section away as a harness header does - the same
+ * Given `fold`, it folds its section away as a workspace header does - the same
  * caret in the same column, so every caret in the tree's top level lines up -
  * and stays a caption in every other respect.
  */

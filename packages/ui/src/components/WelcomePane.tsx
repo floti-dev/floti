@@ -7,8 +7,8 @@ export interface WelcomePaneProps {
   roots: string[]
   projectCount: number
   onAddRoot: () => void
-  /** Scaffold a harness. The same action first run offers, still reachable. */
-  onCreateHarness?: (() => void) | undefined
+  /** Scaffold a workspace. The same action first run offers, still reachable. */
+  onCreateWorkspace?: (() => void) | undefined
   /** Open the new-session launcher - what an empty workspace is usually for. */
   onNewSession?: (() => void) | undefined
 }
@@ -19,7 +19,7 @@ export function WelcomePane({
   roots,
   projectCount,
   onAddRoot,
-  onCreateHarness,
+  onCreateWorkspace,
   onNewSession
 }: WelcomePaneProps): JSX.Element {
   return (
@@ -124,14 +124,14 @@ export function WelcomePane({
           >
             Add a folder
           </button>
-          {onCreateHarness && (
+          {onCreateWorkspace && (
             <button
               type="button"
-              data-welcome-create-harness
-              onClick={onCreateHarness}
+              data-welcome-create-workspace
+              onClick={onCreateWorkspace}
               className="rounded-well border border-border-strong px-3 py-1.5 text-[12px] text-fg transition-colors hover:bg-hover"
             >
-              Create a harness
+              Create a workspace
             </button>
           )}
         </div>

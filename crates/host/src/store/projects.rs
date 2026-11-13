@@ -6,7 +6,7 @@
 //! The same rows and JSON as `packages/core/src/store/projects.ts`.
 
 use floti_protocol::channels::workspace::{
-    CachedProject, ClaudeInventory, GitState, Harness, Project, ProjectKind,
+    CachedProject, ClaudeInventory, GitState, Project, ProjectKind, Workspace,
 };
 use rusqlite::{Connection, params};
 
@@ -26,24 +26,24 @@ pub const EMPTY_INVENTORY: ClaudeInventory = ClaudeInventory {
 
 /// Writes the rows a scan found, as of `seen_at` (ISO 8601).
 ///
-/// `harnesses` is required because the one thing a row carries that a
-/// [`Project`] does not is its harness's `template:`: a caller passing the
+/// `workspaces` is required because the one thing a row carries that a
+/// [`Project`] does not is its workspace's `template:`: a caller passing the
 /// projects alone would write null over it.
 pub fn cache_projects(
     conn: &mut Connection,
     found: &[Project],
-    harnesses: &[Harness],
+    workspaces: &[Workspace],
     seen_at: &str,
 ) -> Result<()> {
     let template_of = |project: &Project| -> Option<String> {
-        if project.kind != ProjectKind::Harness {
+        if project.kind != ProjectKind::Workspace {
             return None;
         }
         let key = project.path.to_lowercase();
-        harnesses
+        workspaces
             .iter()
-            .find(|harness| harness.path.to_lowercase() == key)
-            .and_then(|harness| harness.template.clone())
+            .find(|workspace| workspace.path.to_lowercase() == key)
+            .and_then(|workspace| workspace.template.clone())
     };
     let write = conn
         .transaction()
@@ -52,10 +52,10 @@ pub fn cache_projects(
         let mut upsert = write
             .prepare(
                 "INSERT INTO projects \
-                 (path, name, kind, harness_path, template, has_claude_dir, inventory, git, last_seen_at) \
+                 (path, name, kind, workspace_path, template, has_claude_dir, inventory, git, last_seen_at) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
                  ON CONFLICT(path) DO UPDATE SET \
-                 name = excluded.name, kind = excluded.kind, harness_path = excluded.harness_path, \
+                 name = excluded.name, kind = excluded.kind, workspace_path = excluded.workspace_path, \
                  template = excluded.template, has_claude_dir = excluded.has_claude_dir, \
                  inventory = excluded.inventory, git = excluded.git, last_seen_at = excluded.last_seen_at",
             )
@@ -70,7 +70,7 @@ pub fn cache_projects(
                     project.path,
                     project.name,
                     kind_name(project.kind),
-                    project.harness_path,
+                    project.workspace_path,
                     template_of(project),
                     project.has_claude_dir,
                     serde_json::to_string(&project.inventory).expect("an inventory is JSON"),
@@ -143,7 +143,7 @@ fn all_paths(conn: &Connection) -> Result<Vec<String>> {
 pub fn read_cached_projects(conn: &Connection) -> Result<Vec<CachedProject>> {
     let mut select = conn
         .prepare(
-            "SELECT path, name, kind, harness_path, template, has_claude_dir, inventory, git, last_seen_at \
+            "SELECT path, name, kind, workspace_path, template, has_claude_dir, inventory, git, last_seen_at \
              FROM projects ORDER BY path COLLATE NOCASE",
         )
         .map_err(sql_error("read the cached projects"))?;
@@ -159,7 +159,7 @@ pub fn read_cached_projects(conn: &Connection) -> Result<Vec<CachedProject>> {
                 path: row.get(0)?,
                 name: row.get(1)?,
                 kind,
-                harness_path: row.get(3)?,
+                workspace_path: row.get(3)?,
                 template: row.get(4)?,
                 has_claude_dir: row.get(5)?,
                 inventory: inventory
@@ -185,7 +185,7 @@ pub fn read_cached_projects(conn: &Connection) -> Result<Vec<CachedProject>> {
 
 fn kind_name(kind: ProjectKind) -> &'static str {
     match kind {
-        ProjectKind::Harness => "harness",
+        ProjectKind::Workspace => "workspace",
         ProjectKind::Repo => "repo",
         ProjectKind::Folder => "folder",
     }
@@ -193,7 +193,7 @@ fn kind_name(kind: ProjectKind) -> &'static str {
 
 fn parse_kind(name: &str) -> Option<ProjectKind> {
     match name {
-        "harness" => Some(ProjectKind::Harness),
+        "workspace" => Some(ProjectKind::Workspace),
         "repo" => Some(ProjectKind::Repo),
         "folder" => Some(ProjectKind::Folder),
         _ => None,
@@ -211,7 +211,7 @@ mod tests {
             path: path.to_owned(),
             name: path.rsplit('/').next().unwrap().to_owned(),
             kind,
-            harness_path: None,
+            workspace_path: None,
             has_claude_dir: true,
             inventory: ClaudeInventory {
                 skills: 2,
@@ -229,24 +229,24 @@ mod tests {
     }
 
     #[test]
-    fn a_scan_is_cached_with_its_harness_template_and_read_back_in_path_order() {
+    fn a_scan_is_cached_with_its_workspace_template_and_read_back_in_path_order() {
         let dirs = TestDirs::new();
         let mut store = Store::open(&dirs.data).unwrap();
-        let harness = project("/work/Harness", ProjectKind::Harness);
-        let mut repo = project("/work/Harness/repos/alpha", ProjectKind::Repo);
-        repo.harness_path = Some(harness.path.clone());
+        let workspace = project("/work/Workspace", ProjectKind::Workspace);
+        let mut repo = project("/work/Workspace/repos/alpha", ProjectKind::Repo);
+        repo.workspace_path = Some(workspace.path.clone());
         repo.git = None;
-        let harnesses = [Harness {
-            path: "/work/harness".into(),
-            name: "Harness".into(),
+        let workspaces = [Workspace {
+            path: "/work/workspace".into(),
+            name: "Workspace".into(),
             template: Some("starter".into()),
             version: None,
             repo_paths: vec![repo.path.clone()],
         }];
         cache_projects(
             store.connection_mut(),
-            &[repo.clone(), harness.clone()],
-            &harnesses,
+            &[repo.clone(), workspace.clone()],
+            &workspaces,
             "2026-10-28T10:00:00.000Z",
         )
         .unwrap();
@@ -257,17 +257,17 @@ mod tests {
                 .iter()
                 .map(|row| row.path.as_str())
                 .collect::<Vec<_>>(),
-            ["/work/Harness", "/work/Harness/repos/alpha"]
+            ["/work/Workspace", "/work/Workspace/repos/alpha"]
         );
         assert_eq!(cached[0].template.as_deref(), Some("starter"));
-        assert_eq!(cached[0].git, harness.git);
-        assert_eq!(cached[0].inventory, harness.inventory);
+        assert_eq!(cached[0].git, workspace.git);
+        assert_eq!(cached[0].inventory, workspace.inventory);
         assert_eq!(
             cached[1].template, None,
-            "only a harness row has a template"
+            "only a workspace row has a template"
         );
         assert_eq!(cached[1].git, None, "not a repository is null, not a guess");
-        assert_eq!(cached[1].harness_path.as_deref(), Some("/work/Harness"));
+        assert_eq!(cached[1].workspace_path.as_deref(), Some("/work/Workspace"));
         assert_eq!(cached[1].last_seen_at, "2026-10-28T10:00:00.000Z");
     }
 

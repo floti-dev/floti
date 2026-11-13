@@ -10,7 +10,7 @@ const project = (path: string, name: string, kind: Project['kind']): Project => 
   path,
   name,
   kind,
-  harnessPath: HUB,
+  workspacePath: HUB,
   hasClaudeDir: true,
   inventory: EMPTY_INVENTORY,
   git: null
@@ -18,8 +18,8 @@ const project = (path: string, name: string, kind: Project['kind']): Project => 
 
 const discovery = (template: string | null): DiscoveryResult => ({
   roots: ['C:\\work'],
-  harnesses: [{ path: HUB, name: 'hub', template, version: null, repoPaths: [TOOLS] }],
-  projects: [project(HUB, 'hub', 'harness'), project(TOOLS, 'tools', 'repo')],
+  workspaces: [{ path: HUB, name: 'hub', template, version: null, repoPaths: [TOOLS] }],
+  projects: [project(HUB, 'hub', 'workspace'), project(TOOLS, 'tools', 'repo')],
   errors: [],
   scannedAt: '2026-10-02T00:00:00.000Z',
   durationMs: 0
@@ -43,13 +43,13 @@ function renderTree(result: DiscoveryResult): void {
   render(<SessionTree {...props} />)
 }
 
-describe('SessionTree - harness provenance', () => {
-  it('names the template on the harness’s own row', () => {
+describe('SessionTree - workspace provenance', () => {
+  it('names the template on the workspace’s own row', () => {
     renderTree(discovery('client'))
     expect(within(screen.getByRole('button', { name: 'hub, 2 projects' })).getByText('client')).toBeTruthy()
   })
 
-  it('names none for a harness whose manifest records none', () => {
+  it('names none for a workspace whose manifest records none', () => {
     renderTree(discovery(null))
     expect(screen.getByRole('button', { name: 'hub, 2 projects' }).textContent).toBe('hub2')
   })

@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import type { World } from './world'
 
 /**
- * Profiles and overlay shims in a test world: a harness with a repository worth
+ * Profiles and overlay shims in a test world: a workspace with a repository worth
  * composing, and the two things a shim test needs that `world.ts` does not
  * have - a process that has exited and one that is still running.
  *
@@ -12,8 +12,8 @@ import type { World } from './world'
  * makes one removes it with `removeShims` before the world is disposed.
  */
 
-export interface PlantedHarness {
-  /** The harness root, inside the world's projects folder so its scan finds it. */
+export interface PlantedWorkspace {
+  /** The workspace root, inside the world's projects folder so its scan finds it. */
   root: string
   /** `repos/tools`, carrying a skill, an agent and a CLAUDE.md to compose. */
   overlay: string
@@ -28,16 +28,16 @@ function write(file: string, text: string): void {
   writeFileSync(file, text)
 }
 
-/** Where `plantHarness` puts its harness, without writing anything. */
-export function harnessIn(world: World, name = 'hub'): PlantedHarness {
+/** Where `plantWorkspace` puts its workspace, without writing anything. */
+export function workspaceIn(world: World, name = 'hub'): PlantedWorkspace {
   const root = join(world.projectsDir, name)
   return { root, overlay: join(root, 'repos', 'tools'), skill: 'think', agent: 'reviewer' }
 }
 
-export function plantHarness(world: World, name = 'hub'): PlantedHarness {
-  const planted = harnessIn(world, name)
+export function plantWorkspace(world: World, name = 'hub'): PlantedWorkspace {
+  const planted = workspaceIn(world, name)
   const { root, overlay } = planted
-  write(join(root, 'harness.yaml'), `name: "${name}"\nversion: 1\n`)
+  write(join(root, 'workspace.yaml'), `name: "${name}"\nversion: 1\n`)
   mkdirSync(join(root, '.claude'), { recursive: true })
   write(join(overlay, '.claude', 'skills', 'think', 'SKILL.md'), '---\nname: think\ndescription: Think it through.\n---\n# think\n')
   write(join(overlay, '.claude', 'agents', 'reviewer.md'), '---\nname: reviewer\ndescription: Reviews a change.\n---\nReview it.\n')

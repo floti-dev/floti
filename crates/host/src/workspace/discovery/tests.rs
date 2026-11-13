@@ -17,7 +17,7 @@ use floti_protocol::channels::workspace::{
 use super::git::parse_git_status;
 use super::inventory::read_claude_inventory;
 use super::scan::{disproved_project_paths, orphaned_project_paths, scan};
-use super::suggest::{find_enclosing_harness, suggest_roots};
+use super::suggest::{find_enclosing_workspace, suggest_roots};
 use super::*;
 use crate::store::Store;
 use crate::store::projects::EMPTY_INVENTORY;
@@ -121,14 +121,14 @@ fn join(base: &Path, parts: &[&str]) -> String {
 fn scanned(roots: &[String], projects: &[String], errors: &[(String, &str)]) -> DiscoveryResult {
     DiscoveryResult {
         roots: roots.to_vec(),
-        harnesses: Vec::new(),
+        workspaces: Vec::new(),
         projects: projects
             .iter()
             .map(|path| Project {
                 path: path.clone(),
                 name: path.clone(),
                 kind: ProjectKind::Folder,
-                harness_path: None,
+                workspace_path: None,
                 has_claude_dir: false,
                 inventory: EMPTY_INVENTORY,
                 git: None,
@@ -269,20 +269,20 @@ fn keeps_an_orphan_that_another_root_still_covers() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn suggests_the_folder_around_an_enclosing_harness_first_then_the_home_harness_folder() {
+fn suggests_the_folder_around_an_enclosing_workspace_first_then_the_home_workspace_folder() {
     let dirs = TestDirs::new();
-    let harnesses = dirs.folder("harnesses");
-    let dev = harnesses.join("dev");
+    let workspaces = dirs.folder("workspaces");
+    let dev = workspaces.join("dev");
     std::fs::create_dir_all(dev.join("repos").join("alpha")).unwrap();
-    std::fs::write(dev.join("harness.yaml"), "name: dev\n").unwrap();
+    std::fs::write(dev.join("workspace.yaml"), "name: dev\n").unwrap();
     std::fs::create_dir_all(dirs.home.join(".harness")).unwrap();
     let inside = dev.join("repos").join("alpha");
 
-    assert_eq!(find_enclosing_harness(&inside), Some(dev.clone()));
+    assert_eq!(find_enclosing_workspace(&inside), Some(dev.clone()));
     assert_eq!(
         suggest_roots(&inside, Some(&dirs.home)),
         [
-            harnesses.to_string_lossy().into_owned(),
+            workspaces.to_string_lossy().into_owned(),
             dirs.home.join(".harness").to_string_lossy().into_owned()
         ]
     );
@@ -292,13 +292,119 @@ fn suggests_the_folder_around_an_enclosing_harness_first_then_the_home_harness_f
     assert!(suggest_roots(&elsewhere, Some(&dirs.home)).is_empty());
 }
 
+/// A workspace folder `dev` under `root` with `alpha` in `repos/` and `beta`
+/// in `projects/`, so which manifest was read shows in its repos.
+fn workspace_folder(root: &Path) -> PathBuf {
+    let dev = root.join("dev");
+    std::fs::create_dir_all(dev.join("repos").join("alpha")).unwrap();
+    std::fs::create_dir_all(dev.join("projects").join("beta")).unwrap();
+    dev
+}
+
+/// What the scan made of `dev`: its name, template and the names of its repos.
+fn read_back(dev: &Path) -> (String, Option<String>, Vec<String>) {
+    let result = scan(&[dev.to_string_lossy().into_owned()], false);
+    assert_eq!(result.workspaces.len(), 1, "{result:?}");
+    let workspace = &result.workspaces[0];
+    let dev_row = result
+        .projects
+        .iter()
+        .find(|project| project.path == workspace.path)
+        .expect("the workspace is a project too");
+    assert_eq!(dev_row.kind, ProjectKind::Workspace);
+    let repos = workspace
+        .repo_paths
+        .iter()
+        .map(|path| {
+            Path::new(path)
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    (workspace.name.clone(), workspace.template.clone(), repos)
+}
+
+#[test]
+fn a_folder_with_workspace_yaml_is_a_workspace_read_from_it() {
+    let dirs = TestDirs::new();
+    let dev = workspace_folder(&dirs.folder("all"));
+    std::fs::write(
+        dev.join("workspace.yaml"),
+        "name: \"new\"\ntemplate: \"minimal\"\nrepos: \"projects\"\n",
+    )
+    .unwrap();
+
+    assert_eq!(
+        read_back(&dev),
+        (
+            "new".to_owned(),
+            Some("minimal".to_owned()),
+            vec!["beta".to_owned()]
+        )
+    );
+}
+
+#[test]
+fn a_folder_with_harness_yaml_is_a_workspace_read_as_before_and_left_as_it_is() {
+    let dirs = TestDirs::new();
+    let dev = workspace_folder(&dirs.folder("all"));
+    let manifest = "name: \"old\"\ntemplate: \"dev\"\nrepos: \"projects\"\n";
+    std::fs::write(dev.join("harness.yaml"), manifest).unwrap();
+
+    assert_eq!(
+        read_back(&dev),
+        (
+            "old".to_owned(),
+            Some("dev".to_owned()),
+            vec!["beta".to_owned()]
+        )
+    );
+    assert!(super::scan::is_workspace(&dev));
+    assert_eq!(
+        std::fs::read_to_string(dev.join("harness.yaml")).unwrap(),
+        manifest
+    );
+    assert!(
+        !dev.join("workspace.yaml").exists(),
+        "a scan writes no manifest"
+    );
+}
+
+#[test]
+fn a_folder_with_both_manifests_is_read_from_workspace_yaml() {
+    let dirs = TestDirs::new();
+    let dev = workspace_folder(&dirs.folder("all"));
+    std::fs::write(dev.join("workspace.yaml"), "name: \"new\"\n").unwrap();
+    std::fs::write(
+        dev.join("harness.yaml"),
+        "name: \"old\"\ntemplate: \"dev\"\nrepos: \"projects\"\n",
+    )
+    .unwrap();
+
+    assert_eq!(
+        read_back(&dev),
+        ("new".to_owned(), None, vec!["alpha".to_owned()])
+    );
+}
+
+#[test]
+fn a_harness_yaml_encloses_a_repo_for_suggestions_as_a_workspace_yaml_does() {
+    let dirs = TestDirs::new();
+    let dev = workspace_folder(&dirs.folder("all"));
+    std::fs::write(dev.join("harness.yaml"), "").unwrap();
+    let inside = dev.join("repos").join("alpha");
+    assert_eq!(find_enclosing_workspace(&inside), Some(dev));
+}
+
 #[test]
 fn a_suggestion_named_twice_is_offered_once() {
     let dirs = TestDirs::new();
-    // The home folder's .harness is itself the folder around the harness.
+    // The home folder's .harness is itself the folder around the workspace.
     let dev = dirs.home.join(".harness").join("dev");
     std::fs::create_dir_all(&dev).unwrap();
-    std::fs::write(dev.join("harness.yaml"), "").unwrap();
+    std::fs::write(dev.join("workspace.yaml"), "").unwrap();
     assert_eq!(
         suggest_roots(&dev, Some(&dirs.home)),
         [dirs.home.join(".harness").to_string_lossy().into_owned()]
@@ -514,10 +620,10 @@ fn reports_a_root_that_does_not_exist_as_an_error_rather_than_failing() {
 }
 
 #[test]
-fn finds_a_harness_pointed_at_directly_and_its_repos() {
+fn finds_a_workspace_pointed_at_directly_and_its_repos() {
     let world = Fixtures::new();
     world.file(
-        "dev/harness.yaml",
+        "dev/workspace.yaml",
         "name: \"dev\"\ntemplate: \"dev\"\nversion: \"0.1.0\"\n",
     );
     world.dir("dev/repos/alpha");
@@ -529,12 +635,12 @@ fn finds_a_harness_pointed_at_directly_and_its_repos() {
     let result = world.scan_of(&["dev"]);
 
     assert_eq!(result.harnesses.len(), 1);
-    let harness = &result.harnesses[0];
+    let workspace = &result.harnesses[0];
     assert_eq!(
         (
-            harness.name.as_str(),
-            harness.template.as_deref(),
-            harness.version.as_deref()
+            workspace.name.as_str(),
+            workspace.template.as_deref(),
+            workspace.version.as_deref()
         ),
         ("dev", Some("dev"), Some("0.1.0"))
     );
@@ -544,7 +650,7 @@ fn finds_a_harness_pointed_at_directly_and_its_repos() {
         .iter()
         .map(|p| (p.name.as_str(), p))
         .collect();
-    assert_eq!(by_name["dev"].kind, ProjectKind::Harness);
+    assert_eq!(by_name["dev"].kind, ProjectKind::Workspace);
     assert_eq!(by_name["alpha"].kind, ProjectKind::Repo);
     assert_eq!(
         by_name["alpha"].harness_path.as_deref(),
@@ -557,26 +663,26 @@ fn finds_a_harness_pointed_at_directly_and_its_repos() {
 }
 
 #[test]
-fn finds_harnesses_one_level_below_the_root() {
+fn finds_workspaces_one_level_below_the_root() {
     let world = Fixtures::new();
-    world.file("all/dev/harness.yaml", "name: \"dev\"\n");
+    world.file("all/dev/workspace.yaml", "name: \"dev\"\n");
     world.dir("all/dev/repos/alpha");
-    world.file("all/work/harness.yaml", "name: \"work\"\n");
+    world.file("all/work/workspace.yaml", "name: \"work\"\n");
     world.dir("all/work/repos/gamma");
-    // A sibling that is not a harness is not a project here: the root
-    // turned out to be a folder of harnesses.
+    // A sibling that is not a workspace is not a project here: the root
+    // turned out to be a folder of workspaces.
     world.dir("all/downloads");
 
     let result = world.scan_of(&["all"]);
 
-    let mut harnesses: Vec<&str> = result.harnesses.iter().map(|h| h.name.as_str()).collect();
-    harnesses.sort_unstable();
-    assert_eq!(harnesses, ["dev", "work"]);
+    let mut workspaces: Vec<&str> = result.harnesses.iter().map(|h| h.name.as_str()).collect();
+    workspaces.sort_unstable();
+    assert_eq!(workspaces, ["dev", "work"]);
     assert_eq!(names(&result), sorted(&["alpha", "dev", "gamma", "work"]));
 }
 
 #[test]
-fn degrades_to_plain_folders_when_there_is_no_harness_anywhere() {
+fn degrades_to_plain_folders_when_there_is_no_workspace_anywhere() {
     let world = Fixtures::new();
     world.dir("all/one");
     world.dir("all/two");
@@ -661,9 +767,9 @@ fn lists_an_empty_root_as_itself_rather_than_as_nothing_at_all() {
 }
 
 #[test]
-fn handles_a_harness_whose_manifest_is_malformed() {
+fn handles_a_workspace_whose_manifest_is_malformed() {
     let world = Fixtures::new();
-    world.file("dev/harness.yaml", ":\n  - this is not: valid: yaml\n");
+    world.file("dev/workspace.yaml", ":\n  - this is not: valid: yaml\n");
     world.dir("dev/repos/alpha");
 
     let result = world.scan_of(&["dev"]);
@@ -675,9 +781,9 @@ fn handles_a_harness_whose_manifest_is_malformed() {
 }
 
 #[test]
-fn handles_a_harness_with_no_repos_directory() {
+fn handles_a_workspace_with_no_repos_directory() {
     let world = Fixtures::new();
-    world.file("dev/harness.yaml", "name: \"dev\"\n");
+    world.file("dev/workspace.yaml", "name: \"dev\"\n");
     let result = world.scan_of(&["dev"]);
     assert!(result.harnesses[0].repo_paths.is_empty());
     assert_eq!(names(&result), ["dev"]);
@@ -686,7 +792,7 @@ fn handles_a_harness_with_no_repos_directory() {
 #[test]
 fn honours_a_repos_key_naming_a_different_directory() {
     let world = Fixtures::new();
-    world.file("dev/harness.yaml", "name: \"dev\"\nrepos: \"projects\"\n");
+    world.file("dev/workspace.yaml", "name: \"dev\"\nrepos: \"projects\"\n");
     world.dir("dev/projects/alpha");
     world.dir("dev/projects/beta");
     // The default folder exists too and is ignored: `repos:` names the
@@ -710,11 +816,11 @@ fn honours_a_repos_key_naming_a_different_directory() {
 #[test]
 fn falls_back_to_repos_when_the_key_is_absent_empty_or_not_a_string() {
     let world = Fixtures::new();
-    world.file("a/harness.yaml", "name: \"a\"\n");
+    world.file("a/workspace.yaml", "name: \"a\"\n");
     world.dir("a/repos/one");
-    world.file("b/harness.yaml", "name: \"b\"\nrepos: \"\"\n");
+    world.file("b/workspace.yaml", "name: \"b\"\nrepos: \"\"\n");
     world.dir("b/repos/two");
-    world.file("c/harness.yaml", "name: \"c\"\nrepos: 3\n");
+    world.file("c/workspace.yaml", "name: \"c\"\nrepos: 3\n");
     world.dir("c/repos/three");
 
     for (name, repo) in [("a", "one"), ("b", "two"), ("c", "three")] {
@@ -733,7 +839,7 @@ fn does_not_hide_the_repos_of_a_folder_converted_in_place_with_repos_dot() {
     let before = world.scan_of(&["work"]);
     assert_eq!(names(&before), sorted(&["alpha", "beta"]));
 
-    world.file("work/harness.yaml", "name: \"work\"\nrepos: \".\"\n");
+    world.file("work/workspace.yaml", "name: \"work\"\nrepos: \".\"\n");
     let after = world.scan_of(&["work"]);
     assert_eq!(
         after
@@ -753,10 +859,10 @@ fn does_not_hide_the_repos_of_a_folder_converted_in_place_with_repos_dot() {
 }
 
 #[test]
-fn refuses_a_repos_key_that_leaves_the_harness_rather_than_scanning_it() {
+fn refuses_a_repos_key_that_leaves_the_workspace_rather_than_scanning_it() {
     let world = Fixtures::new();
     world.dir("outside/secret");
-    world.file("dev/harness.yaml", "name: \"dev\"\nrepos: \"../outside\"\n");
+    world.file("dev/workspace.yaml", "name: \"dev\"\nrepos: \"../outside\"\n");
     world.dir("dev/repos/alpha");
 
     let escaped = world.scan_of(&["dev"]);
@@ -764,7 +870,7 @@ fn refuses_a_repos_key_that_leaves_the_harness_rather_than_scanning_it() {
 
     let absolute = serde_json::to_string(&world.text("outside")).unwrap();
     world.file(
-        "dev/harness.yaml",
+        "dev/workspace.yaml",
         &format!("name: \"dev\"\nrepos: {absolute}\n"),
     );
     let absolute = world.scan_of(&["dev"]);
@@ -774,7 +880,7 @@ fn refuses_a_repos_key_that_leaves_the_harness_rather_than_scanning_it() {
 #[test]
 fn handles_repo_directories_whose_names_contain_spaces() {
     let world = Fixtures::new();
-    world.file("dev/harness.yaml", "name: \"dev\"\n");
+    world.file("dev/workspace.yaml", "name: \"dev\"\n");
     world.file("dev/repos/Acme Project/.claude/skills/one/SKILL.md", "");
 
     let result = world.scan_of(&["dev"]);
@@ -802,7 +908,7 @@ fn skips_node_modules_and_dotted_directories() {
 #[test]
 fn does_not_report_the_same_project_twice_when_two_roots_overlap() {
     let world = Fixtures::new();
-    world.file("all/dev/harness.yaml", "name: \"dev\"\n");
+    world.file("all/dev/workspace.yaml", "name: \"dev\"\n");
     world.dir("all/dev/repos/alpha");
 
     let result = world.scan_of(&["all", "all/dev"]);
@@ -813,7 +919,7 @@ fn does_not_report_the_same_project_twice_when_two_roots_overlap() {
 #[test]
 fn leaves_git_null_unless_asked_for_it() {
     let world = Fixtures::new();
-    world.file("dev/harness.yaml", "name: \"dev\"\n");
+    world.file("dev/workspace.yaml", "name: \"dev\"\n");
     GitRepo::init(world.path("dev/repos/alpha"));
     let result = world.scan_of(&["dev"]);
     assert!(result.projects.iter().all(|p| p.git.is_none()));

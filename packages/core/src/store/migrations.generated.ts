@@ -246,5 +246,14 @@ export const MIGRATIONS: readonly EmbeddedMigration[] = [
     "statements": [
       "ALTER TABLE `sessions` ADD `launched_as` text;"
     ]
+  },
+  {
+    "tag": "0032_workspaces_were_harnesses",
+    "statements": [
+      "-- Harnesses are called workspaces: a project's `harness_path` is its `workspace_path`, its index is renamed with it, and a workspace's row says `workspace`. Nothing in the user's folders is touched.\nALTER TABLE `projects` RENAME COLUMN `harness_path` TO `workspace_path`;",
+      "DROP INDEX IF EXISTS `projects_harness_idx`;",
+      "CREATE INDEX `projects_workspace_idx` ON `projects` (`workspace_path`);",
+      "UPDATE `projects` SET `kind` = 'workspace' WHERE `kind` = 'harness';"
+    ]
   }
 ]

@@ -225,6 +225,13 @@
       "when": 1794274578697,
       "tag": "0031_launched_as",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1794594151232,
+      "tag": "0032_workspaces_were_harnesses",
+      "breakpoints": true
     }
   ]
 }

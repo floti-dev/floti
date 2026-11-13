@@ -1,7 +1,7 @@
 //! The agent worktrees of a project: `worktrees:list` and `worktrees:remove`.
 //!
 //! Every request names a project, which the host checks is one it knows (a
-//! scanned project, a harness root or a saved profile's folder) before git is
+//! scanned project, a workspace root or a saved profile's folder) before git is
 //! asked anything; a folder a hosted session merely runs in is not one. git
 //! runs as a program, off the runtime's workers, so other clients are never
 //! kept waiting on it.

@@ -12,23 +12,23 @@ import {
 import { NewTabMenu, type NewTabMenuProps } from './NewTabMenu'
 
 const HOME = 'C:\\Users\\someone'
-const HARNESS = `${HOME}\\.harness\\dev`
+const WORKSPACE = `${HOME}\\.harness\\dev`
 const NOW = Date.UTC(2026, 9, 3, 12, 0, 0)
 const HOUR = 3_600_000
 
-function project(name: string, path = `${HARNESS}\\repos\\${name}`): Project {
+function project(name: string, path = `${WORKSPACE}\\repos\\${name}`): Project {
   return {
     path,
     name,
     kind: 'repo',
-    harnessPath: HARNESS,
+    workspacePath: WORKSPACE,
     hasClaudeDir: true,
     inventory: EMPTY_INVENTORY,
     git: null
   }
 }
 
-const dev: Project = { ...project('dev', HARNESS), kind: 'harness' }
+const dev: Project = { ...project('dev', WORKSPACE), kind: 'workspace' }
 const helm = project('helm')
 const timeclick = project('timeclick')
 const notes = project('notes')
@@ -38,7 +38,7 @@ function profile(id: number, name: string, overlays: string[], patch: Partial<Pr
   return {
     id,
     name,
-    root: HARNESS,
+    root: WORKSPACE,
     overlays,
     access: overlays,
     model: null,
@@ -54,8 +54,8 @@ function profile(id: number, name: string, overlays: string[], patch: Partial<Pr
   }
 }
 
-const devProfile = profile(1, 'dev', [HARNESS], { permissionMode: 'auto' })
-const timeclickProfile = profile(2, 'Timeclick', [HARNESS, timeclick.path], { pinnedOrder: 0 })
+const devProfile = profile(1, 'dev', [WORKSPACE], { permissionMode: 'auto' })
+const timeclickProfile = profile(2, 'Timeclick', [WORKSPACE, timeclick.path], { pinnedOrder: 0 })
 const PROFILES = [devProfile, timeclickProfile]
 
 function conversation(sessionId: string, title: string, lastAt: number): HistorySession {

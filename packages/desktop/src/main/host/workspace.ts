@@ -24,10 +24,10 @@ import {
 import { CLAUDE_CODE_BACKEND, type Emit } from './sessions'
 
 /**
- * Discovery, scan roots, harnesses, setup, templates and the host's half of
+ * Discovery, scan roots, workspaces, setup, templates and the host's half of
  * the settings, the update check among them. The local host scans its own
  * machine's folders, keeps the scan roots, the pinned projects and whether
- * setup was finished, checks Claude Code for setup, makes harnesses and keeps
+ * setup was finished, checks Claude Code for setup, makes workspaces and keeps
  * the templates; Helm's main process does none of it.
  *
  * The settings are split by who owns them. The workspace keys
@@ -79,7 +79,7 @@ export interface WorkspaceService {
   /** Checks a picked executable, keeps it when it answers, and says what setup finds after. */
   locateClaude(path: string): Promise<ClaudeStatus>
   completeSetup(): Promise<AppSettings>
-  createHarness(request: Request<'harness:create'>): Promise<Response<'harness:create'>>
+  createWorkspace(request: Request<'workspace:create'>): Promise<Response<'workspace:create'>>
   templates: WorkspaceTemplates
 }
 
@@ -309,11 +309,15 @@ export function createHostWorkspace({
     },
 
     async completeSetup() {
-      return adoptSettings(await (await host()).request('setup:complete', null))
+      const settings = adoptSettings(await (await host()).request('setup:complete', null))
+      // A first run that finishes is a new install, or one that was never set
+      // up: there was nothing before it to say was renamed.
+      if (settings.upgradeNoteSeenAt !== null) return settings
+      return overlay(writeOwn({ upgradeNoteSeenAt: new Date().toISOString() }))
     },
 
-    async createHarness(request) {
-      return (await host()).request('harness:create', {
+    async createWorkspace(request) {
+      return (await host()).request('workspace:create', {
         mode: request.mode,
         dir: request.dir,
         name: request.name ?? null,

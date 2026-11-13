@@ -12,9 +12,9 @@ const API = '/home/you/work/infra/repos/api'
 
 const SCANNED: DiscoveryResult = {
   roots: ['/home/you/work'],
-  harnesses: [],
+  workspaces: [],
   projects: [
-    { path: API, name: 'api', kind: 'repo', harnessPath: null, hasClaudeDir: false, inventory: EMPTY_INVENTORY, git: null }
+    { path: API, name: 'api', kind: 'repo', workspacePath: null, hasClaudeDir: false, inventory: EMPTY_INVENTORY, git: null }
   ],
   errors: [],
   scannedAt: '2026-11-03T00:00:00.000Z',

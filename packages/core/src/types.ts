@@ -178,9 +178,9 @@ export {
 
 /** What a discovered directory turned out to be. */
 export type ProjectKind =
-  /** Has a `harness.yaml`. Its `repos/*` children are projects in their own right. */
-  | 'harness'
-  /** A repo inside a harness's `repos/` directory. */
+  /** Has a `workspace.yaml`, or the `harness.yaml` it had before. Its `repos/*` children are projects in their own right. */
+  | 'workspace'
+  /** A repo inside a workspace's `repos/` directory. */
   | 'repo'
   /** A directory that is neither, scanned because a root path pointed at it. */
   | 'folder'
@@ -231,17 +231,17 @@ export interface Project {
   path: string
   name: string
   kind: ProjectKind
-  /** Path of the harness this project belongs to, if any. */
-  harnessPath: string | null
+  /** Path of the workspace this project belongs to, if any. */
+  workspacePath: string | null
   hasClaudeDir: boolean
   inventory: ClaudeInventory
   git: GitState | null
 }
 
-export interface Harness {
+export interface Workspace {
   path: string
   name: string
-  /** Parsed from `harness.yaml` when present. */
+  /** Parsed from its manifest when present: `workspace.yaml`, else `harness.yaml`. */
   template: string | null
   version: string | null
   /** Absolute paths of the projects found under `repos/`. */
@@ -251,7 +251,7 @@ export interface Harness {
 export interface DiscoveryResult {
   /** The root paths that were scanned. */
   roots: string[]
-  harnesses: Harness[]
+  workspaces: Workspace[]
   projects: Project[]
   /** Roots that could not be read, with the reason. */
   errors: Array<{ path: string; message: string }>
@@ -1520,7 +1520,7 @@ export const PINNED_PROJECTS_MAX = 200
  * How two project paths are compared, everywhere this list is read or written.
  *
  * Case folding and nothing else. The sidebar's own grouping already keys its
- * harness map with a bare `path.toLowerCase()`, and a second normalisation here
+ * workspace map with a bare `path.toLowerCase()`, and a second normalisation here
  * - trailing separators, `resolve`, short-name expansion - would be a way for
  * the pinned section and the group it lifts a project out of to disagree about
  * whether they are looking at the same project, which is how the same row ends
@@ -1616,7 +1616,7 @@ export interface AppSettings {
   /** Directories the launcher scans. Empty means "not set up yet". */
   scanRoots: string[]
   /**
-   * Projects lifted out of their harness group into the sidebar's Pinned
+   * Projects lifted out of their workspace group into the sidebar's Pinned
    * section, as absolute paths.
    *
    * Keyed by **path**, and that is a decision rather than the only option that
@@ -1624,10 +1624,10 @@ export interface AppSettings {
    * where the consequence is written down. Matching is case-insensitive, the
    * same comparison the sidebar's own grouping already makes on these paths.
    *
-   * Projects only. A harness is not pinnable: the tree already gives every
-   * harness a collapse state, which is most of what pinning one would be, and
+   * Projects only. A workspace is not pinnable: the tree already gives every
+   * workspace a collapse state, which is most of what pinning one would be, and
    * one pin kind means there is no rule to invent for a pinned project inside a
-   * pinned harness.
+   * pinned workspace.
    *
    * A path that no longer resolves keeps its entry. Discovery will not return
    * it, so the sidebar paints it as gone rather than dropping it - pinning is a
@@ -1673,6 +1673,16 @@ export interface AppSettings {
    * what puts the setup pane on screen instead of the launcher.
    */
   firstRunCompletedAt: string | null
+  /**
+   * When the upgrade note was closed: the dialog that tells someone coming
+   * from an earlier Helm, once, that harnesses are now called workspaces and
+   * nothing in their folders changed. Null means it has not been, and it shows
+   * over the sessions once setup is finished. A first run that completes
+   * stamps it as well, so a new install never sees it. Kept on this device in
+   * `helm.db`, never on the host: each window that was used before says it
+   * once.
+   */
+  upgradeNoteSeenAt: string | null
   /**
    * A `claude` executable the user picked by hand, for the machine where it is
    * not on PATH and not in the usual install directory. Null means "find it".
@@ -2032,6 +2042,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   windowBounds: null,
   paneLayout: null,
   firstRunCompletedAt: null,
+  upgradeNoteSeenAt: null,
   claudePath: null,
   usageDisplay: 'percent',
   // The four defaults below are the values Spike C measured and `terminal.ts`
@@ -2105,7 +2116,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
  * `.claude`, which is why `path` is the base rather than the config directory -
  * `CLAUDE.md` and `.mcp.json` live beside `.claude/`, not inside it.
  */
-export type ConfigScopeKind = 'user' | 'harness' | 'project'
+export type ConfigScopeKind = 'user' | 'workspace' | 'project'
 
 export interface ConfigScope {
   kind: ConfigScopeKind
@@ -2806,7 +2817,7 @@ export interface ContentSearchResult {
 // ---------------------------------------------------------------------------
 
 /*
- * The templates folder as the local host answers for it: the New Harness
+ * The templates folder as the local host answers for it: the New Workspace
  * picker and preview, the template manager, and Save as template. The host
  * reads and writes the folder; the window only shows these.
  */
@@ -2832,7 +2843,7 @@ export interface TemplateListing {
   problems: string[]
 }
 
-/** What the New Harness dialog lists under "What gets written". */
+/** What the New Workspace dialog lists under "What gets written". */
 export interface TemplatePreview {
   template: string
   /** Display order - the manifest first, then everything else by path. */
@@ -2842,12 +2853,12 @@ export interface TemplatePreview {
   problems: string[]
 }
 
-/** One file in a template, and what a harness would receive it as. */
+/** One file in a template, and what a workspace would receive it as. */
 export interface TemplateFile {
   /** Relative to the template directory, forward-slashed. */
   relPath: string
   /**
-   * The path a new harness gets: `.tpl` dropped, `dot-claude` rewritten, and -
+   * The path a new workspace gets: `.tpl` dropped, `dot-claude` rewritten, and -
    * for a `.gitkeep` - the empty folder it declares, with a trailing slash.
    * Empty when the file is not written at all.
    */
@@ -2903,7 +2914,7 @@ export interface TemplateImportResult {
 }
 
 /** Which of the two this is. The defaults and the wording differ; nothing else. */
-export type FolderTemplateKind = 'harness' | 'folder'
+export type FolderTemplateKind = 'workspace' | 'folder'
 
 /** One thing at the top of the folder, and whether it would be copied. */
 export interface FolderEntry {

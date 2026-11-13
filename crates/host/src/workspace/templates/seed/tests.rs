@@ -1,9 +1,9 @@
 use std::fs;
 
-use floti_protocol::channels::workspace::{CreateHarnessRequest, HarnessMode};
+use floti_protocol::channels::workspace::{CreateWorkspaceRequest, WorkspaceMode};
 
 use super::{SHIPPED_TEMPLATES, seed_templates};
-use crate::workspace::templates::harness::create_harness;
+use crate::workspace::templates::workspace::create_workspace;
 use crate::workspace::templates::reader::list_templates;
 use crate::workspace::templates::testing::{World, ids, line_matches, read, tree};
 
@@ -82,14 +82,14 @@ fn re_seeds_once_the_folder_is_gone_which_is_the_whole_of_reset() {
 }
 
 #[test]
-fn produces_a_harness_from_the_shipped_example() {
+fn produces_a_workspace_from_the_shipped_example() {
     let world = World::new();
     let dir = world.root.join("seeded");
     seed_templates(&dir);
 
-    let result = create_harness(
-        &CreateHarnessRequest {
-            mode: HarnessMode::New,
+    let result = create_workspace(
+        &CreateWorkspaceRequest {
+            mode: WorkspaceMode::New,
             dir: world.root.display().to_string(),
             name: Some("work".into()),
             template: Some("example".into()),
@@ -105,7 +105,7 @@ fn produces_a_harness_from_the_shipped_example() {
             ".claude",
             ".claude/skills",
             "CLAUDE.md",
-            "harness.yaml",
+            "workspace.yaml",
             "repos"
         ]
     );

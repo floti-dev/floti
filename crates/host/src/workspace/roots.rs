@@ -3,7 +3,7 @@
 //!
 //! A folder is known while one of these holds it, read afresh on every call
 //! so it is known as soon as a scan, a profile save or a session start makes
-//! it so and stops being known once that goes: a harness or project the
+//! it so and stops being known once that goes: a workspace or project the
 //! discovery cache holds, a saved profile's root or overlay folder, or a
 //! hosted session's working directory. Folders are compared as today's app
 //! compares them, made absolute, `.` and `..` folded away, and ignoring
@@ -23,9 +23,9 @@ use crate::{Error, Result};
 /// Why a folder is known.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RootKind {
-    /// A harness discovery found.
-    Harness,
-    /// A project discovery found that is not a harness.
+    /// A workspace discovery found.
+    Workspace,
+    /// A project discovery found that is not a workspace.
     Project,
     /// A saved profile's root or one of its overlay folders.
     Profile,
@@ -39,7 +39,7 @@ pub struct KnownRoot {
     /// The folder as its source spells it, made absolute and folded.
     pub path: PathBuf,
     pub kind: RootKind,
-    /// The name discovery gave it, for a harness or project.
+    /// The name discovery gave it, for a workspace or project.
     pub name: Option<String>,
 }
 
@@ -65,7 +65,7 @@ impl KnownRoots {
         }
     }
 
-    /// Every known folder, each once: harnesses first, then projects, then
+    /// Every known folder, each once: workspaces first, then projects, then
     /// each profile's root and overlays, then the sessions' folders.
     pub fn all(&self) -> Result<Vec<KnownRoot>> {
         let mut out: Vec<KnownRoot> = Vec::new();
@@ -90,10 +90,10 @@ impl KnownRoots {
                 profile_folders(store.connection())?,
             )
         };
-        for project in projects.iter().filter(|p| p.kind == ProjectKind::Harness) {
-            add(&project.path, RootKind::Harness, Some(&project.name));
+        for project in projects.iter().filter(|p| p.kind == ProjectKind::Workspace) {
+            add(&project.path, RootKind::Workspace, Some(&project.name));
         }
-        for project in projects.iter().filter(|p| p.kind != ProjectKind::Harness) {
+        for project in projects.iter().filter(|p| p.kind != ProjectKind::Workspace) {
             add(&project.path, RootKind::Project, Some(&project.name));
         }
         for folder in &profiles {
@@ -181,7 +181,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 mod tests {
     use std::sync::RwLock;
 
-    use floti_protocol::channels::workspace::{Harness, Project};
+    use floti_protocol::channels::workspace::{Project, Workspace};
 
     use super::*;
     use crate::store::projects::{EMPTY_INVENTORY, cache_projects, forget_projects};
@@ -214,16 +214,16 @@ mod tests {
                 path: path.display().to_string(),
                 name: path.file_name().unwrap().to_string_lossy().into_owned(),
                 kind,
-                harness_path: None,
+                workspace_path: None,
                 has_claude_dir: false,
                 inventory: EMPTY_INVENTORY,
                 git: None,
             };
-            let harnesses: Vec<Harness> = Vec::new();
+            let workspaces: Vec<Workspace> = Vec::new();
             cache_projects(
                 lock(&self.store).connection_mut(),
                 &[project],
-                &harnesses,
+                &workspaces,
                 "2026-10-28T10:00:00.000Z",
             )
             .unwrap();
@@ -253,11 +253,11 @@ mod tests {
     fn a_folder_is_known_once_a_scan_a_profile_or_a_session_makes_it_so() {
         let world = World::new();
         let project = world.dirs.folder("projects/alpha");
-        let harness = world.dirs.folder("work harness");
+        let workspace = world.dirs.folder("work workspace");
         let profile_root = world.dirs.folder("profile root");
         let overlay = world.dirs.folder("an overlay");
         let session = world.dirs.folder("session folder");
-        for folder in [&project, &harness, &profile_root, &overlay, &session] {
+        for folder in [&project, &workspace, &profile_root, &overlay, &session] {
             assert_eq!(
                 world.known(folder),
                 Err(refusal(&folder.display().to_string()))
@@ -265,7 +265,7 @@ mod tests {
         }
 
         world.scan(&project, ProjectKind::Folder);
-        world.scan(&harness, ProjectKind::Harness);
+        world.scan(&workspace, ProjectKind::Workspace);
         world.save_profile(&profile_root, &[&overlay]);
         world
             .sessions
@@ -274,7 +274,7 @@ mod tests {
             .push(session.display().to_string());
 
         assert_eq!(world.known(&project).unwrap().kind, RootKind::Project);
-        assert_eq!(world.known(&harness).unwrap().kind, RootKind::Harness);
+        assert_eq!(world.known(&workspace).unwrap().kind, RootKind::Workspace);
         assert_eq!(world.known(&profile_root).unwrap().kind, RootKind::Profile);
         assert_eq!(world.known(&overlay).unwrap().kind, RootKind::Profile);
         assert_eq!(world.known(&session).unwrap().kind, RootKind::Session);
@@ -282,7 +282,7 @@ mod tests {
         assert_eq!(
             kinds,
             [
-                RootKind::Harness,
+                RootKind::Workspace,
                 RootKind::Project,
                 RootKind::Profile,
                 RootKind::Profile,

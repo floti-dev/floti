@@ -254,7 +254,7 @@ fn launched() -> LaunchedSession {
         overlays: vec!["dev".into(), "api".into()],
         composed_instructions: true,
         warnings: vec!["The overlay folder C:\\gone is not there.".into()],
-        not_taken: vec![crate::HarnessPart::Workflows],
+        not_taken: vec![crate::WorkspacePart::Workflows],
     }
 }
 

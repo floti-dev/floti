@@ -41,7 +41,7 @@ const DETAIL: TemplateDetail = {
 }
 
 const USER: ConfigScope = { kind: 'user', path: 'C:\\Users\\me\\.claude', claudeDir: 'C:\\Users\\me\\.claude', label: 'User', exists: true }
-const HUB: ConfigScope = { kind: 'harness', path: 'C:\\work\\hub', claudeDir: 'C:\\work\\hub\\.claude', label: 'hub', exists: true }
+const HUB: ConfigScope = { kind: 'workspace', path: 'C:\\work\\hub', claudeDir: 'C:\\work\\hub\\.claude', label: 'hub', exists: true }
 
 const configFile = (relPath: string, kind: ConfigFile['kind'], name: string): ConfigFile => ({
   path: `${USER.path}\\${relPath.split('/').join('\\')}`,

@@ -8,7 +8,7 @@ import { CloseIcon, FolderIcon, SparkIcon } from './icons'
 import { Overlay } from './Overlay'
 
 /**
- * Freezing a folder into a template: a harness you have been living in, or a
+ * Freezing a folder into a template: a workspace you have been living in, or a
  * tree somebody authored elsewhere.
  *
  * One dialog for both, because they are one operation - a folder, some of its
@@ -17,21 +17,21 @@ import { Overlay } from './Overlay'
  * paints.
  *
  * **Nothing is copied until it is shown**, which is the same discipline the New
- * Harness dialog's "What gets written" follows, pointed the other way. Three
+ * Workspace dialog's "What gets written" follows, pointed the other way. Three
  * things follow from it and each is load-bearing:
  *
  * - **The file count and the total size are stated before the button works.** A
- *   harness with repositories in it is gigabytes; the number is what stops that
+ *   workspace with repositories in it is gigabytes; the number is what stops that
  *   being a surprise, and it moves as entries are ticked rather than describing
  *   some other selection.
  * - **A refused entry is listed, not hidden.** `.git`, `node_modules` and
- *   `harness.yaml` are never copied, and a preview that silently omitted them
+ *   `workspace.yaml` are never copied, and a preview that silently omitted them
  *   would be a preview that is not the list of what is in the folder. They are
  *   shown with the reason, unticked and untickable.
  * - **Everything else is ticked and the user unticks.** Helm cannot know that
  *   `notes/` is a journal rather than a scaffold, so it asks rather than
  *   guesses. `repos/` is the one directory whose purpose is to hold this
- *   harness's things rather than the layout's, so it starts unticked - and it
+ *   workspace's things rather than the layout's, so it starts unticked - and it
  *   can be ticked, because an empty `repos/` in a template is reasonable.
  */
 
@@ -39,7 +39,7 @@ export interface SaveAsTemplateDialogProps {
   kind: FolderTemplateKind
   /** The folder being frozen. Empty in folder mode until one is chosen. */
   dir: string
-  /** Offered in folder mode only; a harness's pane already chose the folder. */
+  /** Offered in folder mode only; a workspace's pane already chose the folder. */
   onChooseDir?: (() => void) | undefined
   /** What would be copied. Null while the walk is running. */
   preview: FolderTemplatePreview | null
@@ -108,7 +108,7 @@ export function SaveAsTemplateDialog({
 
   return (
     <Overlay
-      aria-label={kind === 'harness' ? 'Save this harness as a template' : 'Import a folder as a template'}
+      aria-label={kind === 'workspace' ? 'Save this workspace as a template' : 'Import a folder as a template'}
       data-save-template={kind}
       className="max-w-[560px]"
       onDismiss={onCancel}
@@ -116,7 +116,7 @@ export function SaveAsTemplateDialog({
       <header className="flex shrink-0 items-center gap-[9px] px-[22px] pt-[18px]">
         <SparkIcon width={13} height={13} className="shrink-0 text-accent" />
         <h2 className="text-[15px] font-medium tracking-tight text-fg">
-          {kind === 'harness' ? 'Save as template' : 'Import a folder as a template'}
+          {kind === 'workspace' ? 'Save as template' : 'Import a folder as a template'}
         </h2>
         <span className="flex-1" />
         <button
@@ -132,13 +132,13 @@ export function SaveAsTemplateDialog({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-[22px] pt-2 pb-1">
         <p className="text-[11px] leading-[1.55] text-fg-muted">
-          {kind === 'harness'
-            ? 'The layout is copied into a new template; this harness is not touched. Nothing here re-applies afterwards - a template makes a harness and the harness is then its own.'
+          {kind === 'workspace'
+            ? 'The layout is copied into a new template; this workspace is not touched. Nothing here re-applies afterwards - a template makes a workspace and the workspace is then its own.'
             : 'The folder is copied into a new template; the folder is not touched.'}
         </p>
 
         <label className="mt-4 block">
-          <span className={cn(LABEL, 'mb-1.5')}>{kind === 'harness' ? 'From' : 'The folder'}</span>
+          <span className={cn(LABEL, 'mb-1.5')}>{kind === 'workspace' ? 'From' : 'The folder'}</span>
           <span className="flex gap-2">
             <input
               readOnly

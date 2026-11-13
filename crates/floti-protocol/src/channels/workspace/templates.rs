@@ -1,4 +1,4 @@
-//! Harness templates: `template:*`.
+//! Workspace templates: `template:*`.
 //!
 //! Every write lands inside the templates folder and nowhere else, and
 //! `template:import` reads its sources without writing a byte back.
@@ -7,7 +7,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::{HarnessMode, Millis};
+use super::{Millis, WorkspaceMode};
 
 request_channel!(
     /// The picker's rows: `minimal` first and always, then the templates
@@ -15,11 +15,11 @@ request_channel!(
     ListTemplates = "template:list", () => TemplateListing
 );
 request_channel!(
-    /// What a harness made from a template would receive.
+    /// What a workspace made from a template would receive.
     PreviewTemplate = "template:preview", TemplatePreviewRequest => TemplatePreview
 );
 request_channel!(
-    /// One template's files, with what a harness would receive each as.
+    /// One template's files, with what a workspace would receive each as.
     ReadTemplateDetail = "template:detail", TemplateRef => TemplateDetail
 );
 request_channel!(
@@ -59,7 +59,7 @@ request_channel!(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TemplateChoice {
-    /// The folder name, and what a harness records. `minimal` for the
+    /// The folder name, and what a workspace records. `minimal` for the
     /// built-in scaffold.
     pub id: String,
     pub label: String,
@@ -85,10 +85,10 @@ pub struct TemplateListing {
 pub struct TemplatePreviewRequest {
     pub template: String,
     #[serde(default)]
-    pub mode: Option<HarnessMode>,
+    pub mode: Option<WorkspaceMode>,
 }
 
-/// What a new harness's "What gets written" lists.
+/// What a new workspace's "What gets written" lists.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TemplatePreview {
@@ -107,13 +107,13 @@ pub struct TemplateRef {
     pub template: String,
 }
 
-/// One file in a template, and what a harness would receive it as.
+/// One file in a template, and what a workspace would receive it as.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TemplateFile {
     /// Relative to the template folder, forward-slashed.
     pub rel_path: String,
-    /// The path a new harness gets; empty when the file is not written.
+    /// The path a new workspace gets; empty when the file is not written.
     pub target: String,
     #[ts(type = "number")]
     pub size: u64,
@@ -221,7 +221,7 @@ pub struct TemplateImportResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum FolderTemplateKind {
-    Harness,
+    Workspace,
     Folder,
 }
 

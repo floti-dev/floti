@@ -217,6 +217,18 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#helm-browser).
   Templates manager makes templates (from a folder too, `template:fromFolder`),
   renames, imports, fills (`template:substitute`) and deletes them and edits
   their label and description; it has no file editor.
+- A workspace is a folder with a `workspace.yaml`, or the `harness.yaml`
+  workspaces had while they were called harnesses
+  (`discovery/scan.rs`, `WORKSPACE_MANIFESTS`). Discovery, launches and
+  overlays read either the same way, `workspace.yaml` first when both are
+  there. `workspace:create` writes `workspace.yaml` only, refuses a folder
+  that has either, and a template cannot supply either. Nothing renames or
+  rewrites a `harness.yaml`.
+- Someone upgrading sees once, over their sessions, that harnesses are now
+  called workspaces and nothing in their folders changed
+  (`UpgradeNoteDialog`). Whether it was seen is `upgradeNoteSeenAt` in
+  `helm.db`; a first run that completes stamps it too, so a new install never
+  shows it.
 
 ## Terminals and session state
 
@@ -289,7 +301,7 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#helm-browser).
   `server/features/worktrees.rs` over `workspace/worktrees.rs`) are the folders
   `git worktree list` gives under `<repo>/.floti/worktrees` and no other
   worktree of the repository. The project must be one the host knows (a
-  scanned project, a harness or a profile's folder; a hosted session's working
+  scanned project, a workspace or a profile's folder; a hosted session's working
   directory does not make one). A removal is `git worktree remove` without
   `--force`, never a recursive delete, and keeps the `agent/<name>` branch. It
   is refused, in the answer and with the worktree left as it is, for a folder

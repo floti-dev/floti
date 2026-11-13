@@ -13,8 +13,8 @@ import { helm } from './bridge'
  * Template authoring, in one hook.
  *
  * Two surfaces share it and neither owns it: the manager is reachable from the
- * New Harness dialog *and* from Settings, and "Save as template" is reachable
- * from a harness's project pane. Templates are app-level, so their state is
+ * New Workspace dialog *and* from Settings, and "Save as template" is reachable
+ * from a workspace's project pane. Templates are app-level, so their state is
  * app-level too - a copy per entry point is a copy that goes stale the moment
  * the other one writes.
  *
@@ -65,7 +65,7 @@ export interface TemplatesState {
   savePreview: FolderTemplatePreview | null
   saveBusy: boolean
   saveProblems: string[]
-  /** "Save as template" on a harness's project pane. */
+  /** "Save as template" on a workspace's project pane. */
   openSaveAs: (dir: string) => void
   /** "Import folder as template…" in the manager. Opens the folder picker. */
   openImportFolder: () => void
@@ -138,7 +138,7 @@ export function useTemplates(): TemplatesState {
    * the selection, because "there are no files to show yet" is something that
    * function knows rather than something for an effect to synchronise - which
    * is the shape `react-hooks/set-state-in-effect` is an error about, and the
-   * same call `useSetup` makes for the harness preview.
+   * same call `useSetup` makes for the workspace preview.
    */
   useEffect(() => {
     if (selected === null) return
@@ -320,7 +320,7 @@ export function useTemplates(): TemplatesState {
   const openSaveAs = useCallback((dir: string) => {
     setSaveProblems([])
     setSavePreview(null)
-    setSaveDialog({ kind: 'harness', dir })
+    setSaveDialog({ kind: 'workspace', dir })
   }, [])
 
   const chooseSaveDir = useCallback(() => {

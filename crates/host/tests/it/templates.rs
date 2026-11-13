@@ -1,8 +1,8 @@
-//! Every `template:*` channel and `harness:create`, driven as a client of
+//! Every `template:*` channel and `workspace:create`, driven as a client of
 //! the host drives them, over its socket. A client lists, previews and reads
 //! templates, creates, describes, renames, fills and deletes one, imports a
-//! skill into one, saves a folder as one, and makes a harness from one; it
-//! scans over the socket for the harness it made and reads its scan root from
+//! skill into one, saves a folder as one, and makes a workspace from one; it
+//! scans over the socket for the workspace it made and reads its scan root from
 //! the settings, which a `settings:changed` subscriber on another connection
 //! hears. The rules behind each channel are unit tests in
 //! `workspace/templates`, and the seeding at host start is tested through the
@@ -22,9 +22,9 @@ use floti_protocol::Message;
 use floti_protocol::channel::{EventChannel, RequestChannel, from_payload};
 use floti_protocol::channels::host::HostStopReason;
 use floti_protocol::channels::workspace::{
-    AppMode, CreateHarness, CreateHarnessOutcome, CreateHarnessRequest, CreateTemplate,
+    AppMode, CreateWorkspace, CreateWorkspaceOutcome, CreateWorkspaceRequest, CreateTemplate,
     CreateTemplateRequest, DeleteTemplate, FolderTemplateKind, FolderTemplatePreview,
-    FolderTemplateRequest, HarnessMode, HostSettings, ImportIntoTemplate,
+    FolderTemplateRequest, WorkspaceMode, HostSettings, ImportIntoTemplate,
     ImportIntoTemplateRequest, ListTemplates, PreviewFolderTemplate, PreviewTemplate, ReadSettings,
     ReadTemplateDetail, RenameTemplate, RenameTemplateRequest, SaveFolderAsTemplate,
     SaveFolderAsTemplateRequest, SaveFolderAsTemplateResult, ScanForProjects, ScanRequest,
@@ -95,12 +95,12 @@ fn looks_like_iso(text: &str) -> bool {
         && bytes[10] == b'T'
 }
 
-/// A harness with the things somebody would want to leave behind, under
+/// A workspace with the things somebody would want to leave behind, under
 /// `parent`.
-fn plant_harness_in(parent: &Path) -> PathBuf {
-    let dir = parent.join("my-harness");
-    write(&dir.join("harness.yaml"), "name: my-harness\n");
-    write(&dir.join("CLAUDE.md"), "# my-harness\n");
+fn plant_workspace_in(parent: &Path) -> PathBuf {
+    let dir = parent.join("my-workspace");
+    write(&dir.join("workspace.yaml"), "name: my-workspace\n");
+    write(&dir.join("CLAUDE.md"), "# my-workspace\n");
     write(&dir.join(".claude/skills/think/SKILL.md"), "skill\n");
     write(&dir.join("notes/journal.md"), "a private journal\n");
     write(&dir.join("repos/thing/README.md"), "a checkout\n");
@@ -135,7 +135,7 @@ struct Wire {
     client: TestClient,
     endpoint: Endpoint,
     templates: PathBuf,
-    /// Where a test's harnesses, folders and link targets go, outside the
+    /// Where a test's workspaces, folders and link targets go, outside the
     /// templates folder.
     root: PathBuf,
     /// Last: fields drop in order.
@@ -243,7 +243,7 @@ impl Wire {
     async fn preview(&mut self, template: &str) -> TemplatePreview {
         self.ask::<PreviewTemplate>(&TemplatePreviewRequest {
             template: template.into(),
-            mode: Some(HarnessMode::New),
+            mode: Some(WorkspaceMode::New),
         })
         .await
     }
@@ -264,9 +264,9 @@ impl Wire {
         result.ok
     }
 
-    async fn harness(&mut self, dir: &Path, name: &str, template: &str) -> CreateHarnessOutcome {
-        self.ask::<CreateHarness>(&CreateHarnessRequest {
-            mode: HarnessMode::New,
+    async fn workspace(&mut self, dir: &Path, name: &str, template: &str) -> CreateWorkspaceOutcome {
+        self.ask::<CreateWorkspace>(&CreateWorkspaceRequest {
+            mode: WorkspaceMode::New,
             dir: dir.display().to_string(),
             name: Some(name.into()),
             template: Some(template.into()),
@@ -277,7 +277,7 @@ impl Wire {
     async fn folder_preview(&mut self, dir: &Path) -> FolderTemplatePreview {
         self.ask::<PreviewFolderTemplate>(&FolderTemplateRequest {
             dir: dir.display().to_string(),
-            kind: FolderTemplateKind::Harness,
+            kind: FolderTemplateKind::Workspace,
         })
         .await
     }
@@ -290,10 +290,10 @@ impl Wire {
     ) -> SaveFolderAsTemplateResult {
         self.ask::<SaveFolderAsTemplate>(&SaveFolderAsTemplateRequest {
             dir: dir.display().to_string(),
-            kind: FolderTemplateKind::Harness,
+            kind: FolderTemplateKind::Workspace,
             name: name.into(),
             label: "Frozen".into(),
-            description: "A harness, frozen.".into(),
+            description: "A workspace, frozen.".into(),
             include,
         })
         .await
@@ -337,7 +337,7 @@ async fn heard_roots(watcher: &mut TestClient, wait: Duration) -> Option<Vec<Str
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_client_makes_a_harness_from_a_template_with_its_values_filled_in_and_a_scan_lists_it() {
+async fn a_client_makes_a_workspace_from_a_template_with_its_values_filled_in_and_a_scan_lists_it() {
     let mut wire = Wire::start().await;
     let literal = "runs-on: ${{ matrix.os }}\nname: {{NAME}}\n";
     for (relative, content) in [
@@ -352,43 +352,43 @@ async fn a_client_makes_a_harness_from_a_template_with_its_values_filled_in_and_
     ] {
         write(&wire.templates.join("demo").join(relative), content);
     }
-    let parent = wire.root.join("harnesses");
+    let parent = wire.root.join("workspaces");
     fs::create_dir_all(&parent).unwrap();
     let (mut watcher, roots_before) = wire.settings_watcher().await;
 
     let outcome = wire.harness(&parent, "work", "demo").await;
 
-    let harness = parent.join("work");
-    let path = harness.display().to_string();
+    let workspace = parent.join("work");
+    let path = workspace.display().to_string();
     assert!(outcome.problems.is_empty(), "{:?}", outcome.problems);
     assert_eq!(outcome.path.as_deref(), Some(path.as_str()));
     assert!(outcome.roots.contains(&path), "{:?}", outcome.roots);
     assert!(!roots_before.contains(&path), "{roots_before:?}");
-    // The new harness joined the scan roots: a subscriber hears the whole
+    // The new workspace joined the scan roots: a subscriber hears the whole
     // settings with it, and a read finds it there.
     let heard = heard_roots(&mut watcher, PATIENCE).await;
     assert_eq!(heard.as_ref(), Some(&outcome.roots));
     assert_eq!(wire.roots().await, outcome.roots);
     assert_eq!(
-        tree(&harness),
+        tree(&workspace),
         [
             ".claude",
             ".claude/settings.json",
             "CLAUDE.md",
-            "harness.yaml",
+            "workspace.yaml",
             "notes",
             "workflow.yml"
         ]
     );
-    let claude_md = read(&harness.join("CLAUDE.md"));
+    let claude_md = read(&workspace.join("CLAUDE.md"));
     assert!(line_matches(&claude_md, "# work"), "{claude_md}");
     let from = claude_md
         .lines()
         .find_map(|line| line.strip_prefix("from demo at "))
         .unwrap();
     assert!(looks_like_iso(from), "{from}");
-    assert_eq!(read(&harness.join("workflow.yml")), literal);
-    let manifest = read(&harness.join("harness.yaml"));
+    assert_eq!(read(&workspace.join("workflow.yml")), literal);
+    let manifest = read(&workspace.join("workspace.yaml"));
     assert!(line_matches(&manifest, "name: \"work\""), "{manifest}");
     assert!(line_matches(&manifest, "template: \"demo\""), "{manifest}");
     assert!(claude_md.contains(manifest_value(&manifest, "created").unwrap()));
@@ -402,13 +402,13 @@ async fn a_client_makes_a_harness_from_a_template_with_its_values_filled_in_and_
     let found: Vec<(&str, &str)> = scanned
         .harnesses
         .iter()
-        .map(|harness| (harness.name.as_str(), harness.path.as_str()))
+        .map(|workspace| (workspace.name.as_str(), workspace.path.as_str()))
         .collect();
     assert!(found.contains(&("work", path.as_str())), "{found:?}");
     let made = scanned
         .harnesses
         .iter()
-        .find(|harness| harness.name == "work")
+        .find(|workspace| workspace.name == "work")
         .unwrap();
     assert_eq!(made.template.as_deref(), Some("demo"));
 
@@ -457,7 +457,7 @@ async fn a_client_lists_previews_and_reads_templates_and_a_broken_manifest_does_
     assert_eq!(
         preview.entries,
         [
-            "harness.yaml",
+            "workspace.yaml",
             ".claude/settings.json",
             "CLAUDE.md",
             "notes/",
@@ -643,7 +643,7 @@ async fn a_client_imports_a_skill_from_the_user_scope_as_its_whole_folder() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_client_previews_a_folder_as_a_template_and_saves_what_was_ticked() {
     let mut wire = Wire::start().await;
-    let dir = plant_harness_in(&wire.root);
+    let dir = plant_workspace_in(&wire.root);
 
     let preview = wire.folder_preview(&dir).await;
     let mut names: Vec<&str> = preview.entries.iter().map(|e| e.name.as_str()).collect();
@@ -654,7 +654,7 @@ async fn a_client_previews_a_folder_as_a_template_and_saves_what_was_ticked() {
             ".claude",
             ".git",
             "CLAUDE.md",
-            "harness.yaml",
+            "workspace.yaml",
             "notes",
             "repos",
             "tools"

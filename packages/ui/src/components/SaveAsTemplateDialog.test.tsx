@@ -18,15 +18,15 @@ const entry = (name: string, fileCount: number, bytes: number, patch: Partial<En
   ...patch
 })
 
-/** A harness's top level as the engine previews it: instance data unticked, two entries refused. */
+/** A workspace's top level as the engine previews it: instance data unticked, two entries refused. */
 const PREVIEW: FolderTemplatePreview = {
   dir: 'C:\\work\\hub',
-  kind: 'harness',
+  kind: 'workspace',
   entries: [
     entry('.claude', 3, 3072),
     entry('.git', 40, 90_000, { included: false, refused: 'version control is never copied' }),
     entry('CLAUDE.md', 1, 1024, { directory: false }),
-    entry('harness.yaml', 1, 40, { directory: false, included: false, refused: 'a template must not carry one' }),
+    entry('workspace.yaml', 1, 40, { directory: false, included: false, refused: 'a template must not carry one' }),
     entry('notes', 2, 2048),
     entry('repos', 0, 0, { included: false }),
     entry('tools', 1, 512)
@@ -39,7 +39,7 @@ const PREVIEW: FolderTemplatePreview = {
 
 function renderDialog(overrides: Partial<SaveAsTemplateDialogProps> = {}) {
   const props: SaveAsTemplateDialogProps = {
-    kind: 'harness',
+    kind: 'workspace',
     dir: 'C:\\work\\hub',
     preview: PREVIEW,
     onSave: vi.fn(),

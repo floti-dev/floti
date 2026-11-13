@@ -6,11 +6,11 @@ import {
   claimShimFor,
   exitedPid,
   isLink,
-  plantHarness,
+  plantWorkspace,
   removeShims,
   runningProcess,
   shimOwners,
-  type PlantedHarness
+  type PlantedWorkspace
 } from '../../test/overlay-world'
 import { createWorld, disposeWorld, type World } from '../../test/world'
 import type { Services } from './services'
@@ -24,7 +24,7 @@ vi.mock('electron', async () => (await import('../../test/electron')).electronFa
  */
 describe('app start', () => {
   let world: World
-  let harness: PlantedHarness
+  let workspace: PlantedWorkspace
   let shimRoot: string
   let createServices: () => Services
 
@@ -32,7 +32,7 @@ describe('app start', () => {
     world = createWorld()
     Object.assign(process.env, { PORTABLE_EXECUTABLE_DIR: world.portableDir, USERPROFILE: world.home, HOME: world.home })
     ;({ createServices } = await import('./services'))
-    harness = plantHarness(world)
+    workspace = plantWorkspace(world)
     // Where the app keeps these, by its own rule: under its data directory.
     shimRoot = join(world.dataDir, 'overlays')
   })
@@ -51,15 +51,15 @@ describe('app start', () => {
     return services
   }
 
-  /** The shim an earlier version of Helm built for a session composing the harness's overlay. */
+  /** The shim an earlier version of Helm built for a session composing the workspace's overlay. */
   const buildShim = (): PlantedShim => {
-    const shim = plantShim(harness.overlay, shimRoot)
+    const shim = plantShim(workspace.overlay, shimRoot)
     expect(isLink(join(shim.dir, 'skills'))).toBe(true)
     return shim
   }
 
   const skillThroughShim = (shim: PlantedShim): string =>
-    readFileSync(join(shim.dir, 'skills', harness.skill, 'SKILL.md'), 'utf8')
+    readFileSync(join(shim.dir, 'skills', workspace.skill, 'SKILL.md'), 'utf8')
 
   it('sweeps a shim whose owner has exited, and leaves the repository it linked', () => {
     const shim = buildShim()
@@ -71,10 +71,10 @@ describe('app start', () => {
 
     expect(services.staleShims).toBe(1)
     expect(readdirSync(shimRoot).filter((name) => name.startsWith('overlay-'))).toEqual([])
-    expect(readFileSync(join(harness.overlay, '.claude', 'skills', harness.skill, 'SKILL.md'), 'utf8')).toContain(
+    expect(readFileSync(join(workspace.overlay, '.claude', 'skills', workspace.skill, 'SKILL.md'), 'utf8')).toContain(
       '# think'
     )
-    expect(existsSync(join(harness.overlay, '.claude', 'agents', `${harness.agent}.md`))).toBe(true)
+    expect(existsSync(join(workspace.overlay, '.claude', 'agents', `${workspace.agent}.md`))).toBe(true)
   })
 
   it('leaves the live shim of another Helm on the same data directory, junctions and all', () => {

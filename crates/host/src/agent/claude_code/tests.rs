@@ -19,7 +19,7 @@ use floti_protocol::channels::sessions::{
     EffortLevel, SessionActivity, UsageGroup, UsageProblemKind,
 };
 use floti_protocol::channels::workspace::ConfigFileKind;
-use floti_protocol::{BackendFeature, HarnessPart, Knowable};
+use floti_protocol::{BackendFeature, Knowable, WorkspacePart};
 use serde_json::{Value, json};
 
 use super::*;
@@ -348,9 +348,9 @@ fn transcript_row(kind: &str, uuid: &str, cwd: &Path, at_ms: u64, content: Value
     format!("{row}\n")
 }
 
-/// A harness in Claude's shape: a `CLAUDE.md` and `.claude` with a skill,
+/// A workspace in Claude's shape: a `CLAUDE.md` and `.claude` with a skill,
 /// a command, a subagent and a workflow.
-fn claude_shaped_harness(world: &World, name: &str, rules: &str) -> PathBuf {
+fn claude_shaped_workspace(world: &World, name: &str, rules: &str) -> PathBuf {
     let root = world.folder(name);
     write(&root.join("CLAUDE.md"), rules);
     write(
@@ -471,7 +471,7 @@ fn the_prompt_arrives_as_the_prompt_after_every_variadic_list() {
     let world = World::new();
     let project = world.folder("work");
     let access = world.folder("repos/access");
-    let overlay = world.folder("harness only skills");
+    let overlay = world.folder("workspace only skills");
     write(
         &overlay
             .join(".claude")
@@ -898,7 +898,7 @@ fn a_conversation_resumes_in_the_folder_its_transcript_recorded() {
 fn a_resume_drops_what_belongs_to_a_new_conversation_and_keeps_its_overlays() {
     let world = World::new();
     let project = world.folder("work");
-    let overlay = claude_shaped_harness(&world, "harness a", "# a rules\n");
+    let overlay = claude_shaped_workspace(&world, "workspace a", "# a rules\n");
     let id = "0f6c2a8e-91d4-4b7a-8e33-5d2f1c9a7b40";
     let (launch, _) = world.resume(&ResumeRequest {
         conversation_id: id.into(),
@@ -1387,22 +1387,23 @@ fn a_leftover_launch_folder_with_its_tool_file_goes_only_when_its_owner_is_prova
 // ---------------------------------------------------------------------------
 
 #[test]
-fn a_claude_shaped_harness_becomes_a_linked_overlay_and_only_non_ancestor_claude_md_is_composed() {
+fn a_claude_shaped_workspace_becomes_a_linked_overlay_and_only_non_ancestor_claude_md_is_composed()
+{
     let world = World::new();
-    let harness = claude_shaped_harness(&world, "harness", "# harness rules\n");
-    let repo = world.folder("harness/repos/acme");
-    let other = claude_shaped_harness(&world, "other project", "# other rules\n");
+    let workspace = claude_shaped_workspace(&world, "workspace", "# workspace rules\n");
+    let repo = world.folder("workspace/repos/acme");
+    let other = claude_shaped_workspace(&world, "other project", "# other rules\n");
 
     let (launch, folder) = world.launch(&LaunchRequest {
         folder: repo.clone(),
         name: "overlaid".into(),
         composition: Composition {
-            overlays: vec![harness.clone(), other.clone()],
+            overlays: vec![workspace.clone(), other.clone()],
             ..Composition::default()
         },
         ..LaunchRequest::default()
     });
-    assert_eq!(launch.overlays, ["harness", "other-project"]);
+    assert_eq!(launch.overlays, ["workspace", "other-project"]);
     assert!(launch.composed_instructions);
     assert!(launch.not_taken.is_empty());
 
@@ -1414,7 +1415,7 @@ fn a_claude_shaped_harness_becomes_a_linked_overlay_and_only_non_ancestor_claude
         .collect();
     assert_eq!(plugin_dirs.len(), 2);
     for (dir, source, name) in [
-        (plugin_dirs[0], &harness, "harness"),
+        (plugin_dirs[0], &workspace, "workspace"),
         (plugin_dirs[1], &other, "other-project"),
     ] {
         let dir = PathBuf::from(dir);
@@ -1442,12 +1443,12 @@ fn a_claude_shaped_harness_becomes_a_linked_overlay_and_only_non_ancestor_claude
     assert!(composed.contains("# other rules"));
     assert!(composed.contains(&text(&other)));
     // The ancestor's arrives once, through the CLI's own walk.
-    assert!(!composed.contains("# harness rules"));
+    assert!(!composed.contains("# workspace rules"));
     let loaded = loaded_instructions(&log);
     assert_eq!(
         loaded
             .iter()
-            .filter(|file| **file == harness.join("CLAUDE.md"))
+            .filter(|file| **file == workspace.join("CLAUDE.md"))
             .count(),
         1
     );
@@ -1456,49 +1457,49 @@ fn a_claude_shaped_harness_becomes_a_linked_overlay_and_only_non_ancestor_claude
 #[test]
 fn removing_an_overlay_unlinks_it_and_leaves_the_repository_untouched() {
     let world = World::new();
-    let harness = claude_shaped_harness(&world, "harness", "# rules\n");
-    let before = tree_state(&harness);
+    let workspace = claude_shaped_workspace(&world, "workspace", "# rules\n");
+    let before = tree_state(&workspace);
     let (_launch, folder) = world.launch(&LaunchRequest {
         folder: world.folder("work"),
         name: "removed".into(),
         composition: Composition {
-            overlays: vec![harness.clone()],
+            overlays: vec![workspace.clone()],
             ..Composition::default()
         },
         ..LaunchRequest::default()
     });
     folder.remove().unwrap();
     assert!(!folder.path().exists());
-    assert_eq!(tree_state(&harness), before);
+    assert_eq!(tree_state(&workspace), before);
 }
 
 #[test]
-fn a_harness_in_the_shared_shape_reaches_the_session_with_nothing_written_into_it() {
+fn a_workspace_in_the_shared_shape_reaches_the_session_with_nothing_written_into_it() {
     let world = World::new();
-    let harness = world.folder("shared harness");
-    write(&harness.join("AGENTS.md"), "# shared rules\n");
+    let workspace = world.folder("shared workspace");
+    write(&workspace.join("AGENTS.md"), "# shared rules\n");
     write(
-        &harness
+        &workspace
             .join(".agents")
             .join("skills")
             .join("plan")
             .join("SKILL.md"),
         "plan",
     );
-    let repo = world.folder("shared harness/repo");
-    let harness_before = tree_state(&harness);
+    let repo = world.folder("shared workspace/repo");
+    let workspace_before = tree_state(&workspace);
     let config_before = tree_state(&world.config);
 
     let (launch, folder) = world.launch(&LaunchRequest {
         folder: repo.clone(),
         name: "shared".into(),
         composition: Composition {
-            overlays: vec![harness.clone()],
+            overlays: vec![workspace.clone()],
             ..Composition::default()
         },
         ..LaunchRequest::default()
     });
-    assert_eq!(tree_state(&harness), harness_before);
+    assert_eq!(tree_state(&workspace), workspace_before);
     assert_eq!(tree_state(&world.config), config_before);
     assert!(
         launch
@@ -1510,11 +1511,11 @@ fn a_harness_in_the_shared_shape_reaches_the_session_with_nothing_written_into_i
     let skills = folder
         .path()
         .join("overlays")
-        .join("shared-harness")
+        .join("shared-workspace")
         .join("skills");
     assert!(is_link(&skills));
-    assert_eq!(real(&skills), harness.join(".agents").join("skills"));
-    // The harness is above the repo, so the CLI's walk brings its AGENTS.md.
+    assert_eq!(real(&skills), workspace.join(".agents").join("skills"));
+    // The workspace is above the repo, so the CLI's walk brings its AGENTS.md.
     assert!(!launch.composed_instructions);
 
     let (output, log) = world.run(&launch, "/exit\n");
@@ -1522,7 +1523,7 @@ fn a_harness_in_the_shared_shape_reaches_the_session_with_nothing_written_into_i
     assert_eq!(
         loaded_instructions(&log)
             .iter()
-            .filter(|file| **file == harness.join("AGENTS.md"))
+            .filter(|file| **file == workspace.join("AGENTS.md"))
             .count(),
         1
     );
@@ -1531,9 +1532,9 @@ fn a_harness_in_the_shared_shape_reaches_the_session_with_nothing_written_into_i
 #[test]
 fn with_both_shapes_the_claude_skill_wins_a_name_clash_and_the_launch_says_so() {
     let world = World::new();
-    let harness = world.folder("both");
+    let workspace = world.folder("both");
     write(
-        &harness
+        &workspace
             .join(".claude")
             .join("skills")
             .join("think")
@@ -1541,7 +1542,7 @@ fn with_both_shapes_the_claude_skill_wins_a_name_clash_and_the_launch_says_so() 
         "claude think",
     );
     write(
-        &harness
+        &workspace
             .join(".agents")
             .join("skills")
             .join("think")
@@ -1549,7 +1550,7 @@ fn with_both_shapes_the_claude_skill_wins_a_name_clash_and_the_launch_says_so() 
         "shared think",
     );
     write(
-        &harness
+        &workspace
             .join(".agents")
             .join("skills")
             .join("plan")
@@ -1560,7 +1561,7 @@ fn with_both_shapes_the_claude_skill_wins_a_name_clash_and_the_launch_says_so() 
         folder: world.folder("work"),
         name: "both".into(),
         composition: Composition {
-            overlays: vec![harness.clone()],
+            overlays: vec![workspace.clone()],
             ..Composition::default()
         },
         ..LaunchRequest::default()
@@ -1811,14 +1812,14 @@ fn overlay_names_are_the_repo_name_made_safe_and_distinct() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn a_harness_and_repo_in_different_shapes_both_load_once_through_the_launchs_own_settings() {
+fn a_workspace_and_repo_in_different_shapes_both_load_once_through_the_launchs_own_settings() {
     for (outer, inner) in [("CLAUDE.md", "AGENTS.md"), ("AGENTS.md", "CLAUDE.md")] {
         let world = World::new();
         let user_settings = world.config.join("settings.json");
         write(&user_settings, r#"{"model":"sonnet"}"#);
-        let harness = world.folder("harness");
-        write(&harness.join(outer), "# outer\n");
-        let repo = world.folder("harness/repo");
+        let workspace = world.folder("workspace");
+        write(&workspace.join(outer), "# outer\n");
+        let repo = world.folder("workspace/repo");
         write(&repo.join(inner), "# inner\n");
 
         let (launch, folder) = world.launch(&LaunchRequest {
@@ -1836,7 +1837,7 @@ fn a_harness_and_repo_in_different_shapes_both_load_once_through_the_launchs_own
         let (output, log) = world.run(&launch, "/exit\n");
         succeeded(&output);
         let loaded = loaded_instructions(&log);
-        for file in [harness.join(outer), repo.join(inner)] {
+        for file in [workspace.join(outer), repo.join(inner)] {
             assert_eq!(
                 loaded.iter().filter(|seen| **seen == file).count(),
                 1,
@@ -2799,17 +2800,17 @@ fn claude_code_declares_all_eight_features_and_answers_each() {
 }
 
 #[test]
-fn claude_code_takes_every_part_of_a_harness_and_its_launch_names_nothing_it_could_not_take() {
+fn claude_code_takes_every_part_of_a_workspace_and_its_launch_names_nothing_it_could_not_take() {
     let world = World::new();
-    let harness = world.backend.capabilities().harness;
-    assert_eq!(harness.instruction_files, ["CLAUDE.md", "AGENTS.md"]);
-    assert_eq!(harness.takes, HarnessPart::ALL.to_vec());
-    assert!(harness.cannot_take.is_empty());
+    let workspace = world.backend.capabilities().workspace;
+    assert_eq!(workspace.instruction_files, ["CLAUDE.md", "AGENTS.md"]);
+    assert_eq!(workspace.takes, WorkspacePart::ALL.to_vec());
+    assert!(workspace.cannot_take.is_empty());
 
-    let overlay = claude_shaped_harness(&world, "harness", "# rules\n");
+    let overlay = claude_shaped_workspace(&world, "workspace", "# rules\n");
     let (launch, _) = world.launch(&LaunchRequest {
         folder: world.folder("work"),
-        name: "harness".into(),
+        name: "workspace".into(),
         composition: Composition {
             overlays: vec![overlay],
             ..Composition::default()

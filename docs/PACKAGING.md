@@ -338,7 +338,7 @@ and shares the installed app's database, shims and Chromium profile. That is
 or checkout, and `PORTABLE_EXECUTABLE_DIR` says whether the data is its own -
 `installed`, `portable`, `dev`, `dev-live`.
 
-**Harness templates take the same branch.** `templatesDir` reads the same
+**Workspace templates take the same branch.** `templatesDir` reads the same
 variable: set, they live in `<exe dir>\helm-data\templates`, so **a portable
 install keeps its templates on the stick and leaves nothing on a machine it is
 plugged into**; unset, they live in `~/.config/helm/templates` rather than under

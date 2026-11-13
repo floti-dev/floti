@@ -8,7 +8,7 @@ const API: Project = {
   path: '/home/you/work/infra/repos/api',
   name: 'api',
   kind: 'repo',
-  harnessPath: null,
+  workspacePath: null,
   hasClaudeDir: false,
   inventory: EMPTY_INVENTORY,
   git: null

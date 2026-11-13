@@ -10,9 +10,9 @@ export interface HostProfilesProps {
   host: string
   name: string
   connected: boolean
-  /** That host's projects and harnesses, as its scan found them. */
+  /** That host's projects and workspaces, as its scan found them. */
   projects: readonly Project[]
-  harnesses: readonly { name: string; path: string }[]
+  workspaces: readonly { name: string; path: string }[]
   /** A draft with nothing chosen, rooted at `root`. */
   blank: (root: string, name: string) => ProfileDraft
   /** A session one of its profiles started there, for the window to give a tab. */
@@ -37,7 +37,7 @@ export function HostProfiles({
   name,
   connected,
   projects,
-  harnesses,
+  workspaces,
   blank,
   onLaunched,
   paneSize,
@@ -90,7 +90,7 @@ export function HostProfiles({
     <>
       <ProfileList
         profiles={state.profiles}
-        harnesses={harnesses}
+        workspaces={workspaces}
         launchingIds={state.launching}
         onLaunch={(profile) => void launch(profile)}
         onEdit={(profile) => {

@@ -86,7 +86,7 @@ export interface DesktopHost extends HostSessions {
   /** What the hidden window has reported of every host's background pages, each remote one naming its host. */
   pluginReports(): PluginBackgroundReport[]
   /**
-   * Discovery, scan roots, harnesses, setup, templates and the host's half of
+   * Discovery, scan roots, workspaces, setup, templates and the host's half of
    * the settings, which the host keeps while sessions run there.
    */
   workspace: HostWorkspace

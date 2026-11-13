@@ -11,7 +11,7 @@ relative to the working directory. That forces a bad choice at launch time:
 
 | Launch from | You get | You lose |
 |---|---|---|
-| Harness/workspace root | cross-repo access, workspace tooling | every project-local skill and agent |
+| The workspace root | cross-repo access, workspace tooling | every project-local skill and agent |
 | A single repo | that repo's skills and agents | cross-repo access |
 
 Helm dissolves the tradeoff. This is the one idea the whole app is built around,
@@ -91,17 +91,17 @@ repository. The desktop app's own settings are the app's and stay, as its
 uninstaller leaves them. On Linux it leaves lingering as it is, since other
 services may rely on it. Run it from a terminal Floti did not start.
 
-Harness templates are the one thing outside that: they live in
+Workspace templates are the one thing outside that: they live in
 `~/.config/helm/templates`, because they are folders you write and edit by hand.
 A portable install keeps them in its own `helm-data\templates`, so it still
 leaves nothing behind on a machine you plug it into.
 
 Helm manages them without trying to replace your editor. **Settings ->
-Harness templates**, or **Manage templates…** in the New Harness dialog, will
+Workspace templates**, or **Manage templates…** in the New Workspace dialog, will
 create, rename, describe and delete one, copy a skill you have already written
 into it out of any `.claude` tree Helm can see, and open the folder in
-Explorer - which is where you edit the files. You can also **save a harness you
-have been working in as a template**, ticking off what belongs to that harness
+Explorer - which is where you edit the files. You can also **save a workspace you
+have been working in as a template**, ticking off what belongs to that workspace
 rather than to the layout, or **import a folder** somebody sent you.
 
 Expect **"Windows protected your PC"** either way. These builds are not
@@ -129,16 +129,19 @@ Three things, in the order they matter:
    range and say what to run when Claude Code is missing or outside it.
 2. **Signed in.** Detected from the presence of a login, never by reading one.
    The remedy is to run `claude` yourself.
-3. **Where your work is.** Add a folder, or create a harness. Nothing is scanned
+3. **Where your work is.** Add a folder, or create a workspace. Nothing is scanned
    until you say what to scan.
 
 A folder of ordinary repositories is enough - there is no required layout, and
-Helm is useful pointed at a directory with no harness anywhere in sight.
+Helm is useful pointed at a directory with no workspace anywhere in sight.
 
-### Harnesses
+### Workspaces
 
-A *harness* is any folder with a `harness.yaml` in it. That is the whole
-definition. Helm reads four optional keys:
+A *workspace* is any folder with a `workspace.yaml` in it. That is the whole
+definition. A workspace made while they were called harnesses has a
+`harness.yaml` instead, and is read exactly the same way; with both, Helm reads
+`workspace.yaml`. Helm never renames or rewrites either. It reads four optional
+keys:
 
 ```yaml
 name: "work"        # what the sidebar calls it
@@ -147,15 +150,15 @@ version: "1"        # manifest format
 repos: "projects"   # where the repositories are; omit for `repos/`
 ```
 
-`repos:` is the one that matters for an existing folder. Without it a harness
+`repos:` is the one that matters for an existing folder. Without it a workspace
 lists `repos/*` and nothing else, so dropping a manifest into a folder whose
 repositories sit at its **top level** would hide all of them. `repos: "."` says
-they are right here. The "turn a folder into a harness" action writes that for
+they are right here. The "turn a folder into a workspace" action writes that for
 you.
 
-Creating a harness scaffolds the minimum and nothing else - `harness.yaml`,
+Creating a workspace scaffolds the minimum and nothing else - `workspace.yaml`,
 `repos/`, an empty `.claude/`. No starter skills, notes or rules: what belongs
-in a harness is yours to decide.
+in a workspace is yours to decide.
 
 ## What it does
 

@@ -4,20 +4,20 @@ import { describe, expect, it, vi } from 'vitest'
 import { EMPTY_INVENTORY, type DiscoveryResult, type Project } from '@helm/core/types'
 import { SessionTree, type SessionTreeProps } from './SessionTree'
 
-const project = (path: string, harnessPath: string | null, kind: Project['kind'] = 'repo'): Project => ({
+const project = (path: string, workspacePath: string | null, kind: Project['kind'] = 'repo'): Project => ({
   path,
   name: path.split('\\').pop() ?? path,
   kind,
-  harnessPath,
+  workspacePath,
   hasClaudeDir: false,
   inventory: EMPTY_INVENTORY,
   git: null
 })
 
-/** Two harnesses, a repo in each that will be pinned, and one that stays put. */
+/** Two workspaces, a repo in each that will be pinned, and one that stays put. */
 const DISCOVERY: DiscoveryResult = {
   roots: ['C:\\work'],
-  harnesses: [
+  workspaces: [
     { path: 'C:\\work\\north', name: 'north', template: null, version: null, repoPaths: ['C:\\work\\north\\repos\\zeta', 'C:\\work\\north\\repos\\stay'] },
     { path: 'C:\\work\\south', name: 'south', template: null, version: null, repoPaths: ['C:\\work\\south\\repos\\alpha'] }
   ],
@@ -70,7 +70,7 @@ describe('SessionTree pins', () => {
     expect(props.onTogglePin).toHaveBeenCalledWith('C:\\work\\north\\repos\\zeta')
   })
 
-  it('lifts pins from different harnesses into one flat section, by name, each drawn once', () => {
+  it('lifts pins from different workspaces into one flat section, by name, each drawn once', () => {
     renderTree({ pinnedPaths: ['C:\\work\\north\\repos\\zeta', 'c:\\WORK\\south\\repos\\alpha'] })
 
     expect(rowsIn(pinned())).toEqual(['C:\\work\\south\\repos\\alpha', 'C:\\work\\north\\repos\\zeta'])
@@ -105,7 +105,7 @@ describe('SessionTree pins', () => {
     expect(within(pinned()).getByText('folder gone')).toBeTruthy()
   })
 
-  it('folds away like a harness, and a filter opens it again for as long as it is typed', async () => {
+  it('folds away like a workspace, and a filter opens it again for as long as it is typed', async () => {
     const user = userEvent.setup()
     renderTree({ pinnedPaths: ['C:\\work\\north\\repos\\zeta', GONE] })
     const header = screen.getByRole('button', { name: 'Pinned, 2 projects' })

@@ -31,10 +31,10 @@
 
 pub mod claude_code;
 pub mod guidance;
-pub mod harness;
 pub mod input;
 pub mod launch_folder;
 mod plain;
+pub mod workspace;
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -43,7 +43,7 @@ use floti_protocol::channels::common::PermissionMode;
 use floti_protocol::channels::sessions::{EffortLevel, SessionActivity, UsageSnapshot};
 use floti_protocol::channels::workspace::ConfigFile;
 use floti_protocol::{
-    BackendDescriptor, BackendFeature, BackendId, HarnessPart, HarnessSupport, Knowable,
+    BackendDescriptor, BackendFeature, BackendId, Knowable, WorkspacePart, WorkspaceSupport,
 };
 
 use crate::{Error, Result};
@@ -131,10 +131,10 @@ pub trait AgentBackend: Send + Sync {
         None
     }
 
-    /// How it takes a harness. A plain tab's answer, the default, is the
+    /// How it takes a workspace. A plain tab's answer, the default, is the
     /// folder and nothing else.
-    fn harness(&self) -> HarnessSupport {
-        HarnessSupport::default()
+    fn workspace(&self) -> WorkspaceSupport {
+        WorkspaceSupport::default()
     }
 
     /// The keys a parent presses to give this agent a turn: the paste markers,
@@ -262,7 +262,7 @@ pub trait AgentBackend: Send + Sync {
                 .into_iter()
                 .filter_map(|(feature, has)| has.then_some(feature)),
         )
-        .with_harness(self.harness())
+        .with_workspace(self.workspace())
     }
 }
 
@@ -543,7 +543,7 @@ pub struct ResumeRequest {
 /// An empty choice passes nothing.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Composition {
-    /// Harness projects composed in as overlays.
+    /// Workspace projects composed in as overlays.
     pub overlays: Vec<PathBuf>,
     /// Further folders the session may work in.
     pub extra_folders: Vec<PathBuf>,
@@ -669,9 +669,9 @@ pub struct Launch {
     pub composed_instructions: bool,
     /// Problems that did not stop it.
     pub warnings: Vec<String>,
-    /// Parts of the harness the backend has no equivalent for, which the
+    /// Parts of the workspace the backend has no equivalent for, which the
     /// overlays held and the session did not get.
-    pub not_taken: Vec<HarnessPart>,
+    pub not_taken: Vec<WorkspacePart>,
 }
 
 impl Launch {
@@ -997,13 +997,13 @@ impl<B: AgentBackend + ?Sized> BackendAnswers for B {
     }
 }
 
-/// The parts of a harness the `overlays` hold that a backend taking a harness
+/// The parts of a workspace the `overlays` hold that a backend taking a workspace
 /// as `support` says has no equivalent for, each named once, for the launch
 /// answer.
-pub fn parts_not_taken(support: &HarnessSupport, overlays: &[PathBuf]) -> Vec<HarnessPart> {
-    let mut not_taken: Vec<HarnessPart> = overlays
+pub fn parts_not_taken(support: &WorkspaceSupport, overlays: &[PathBuf]) -> Vec<WorkspacePart> {
+    let mut not_taken: Vec<WorkspacePart> = overlays
         .iter()
-        .flat_map(|overlay| harness::HarnessProject::read(overlay).parts())
+        .flat_map(|overlay| workspace::WorkspaceProject::read(overlay).parts())
         .filter(|part| !support.takes(*part))
         .collect();
     not_taken.sort();

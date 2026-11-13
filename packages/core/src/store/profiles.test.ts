@@ -31,9 +31,9 @@ afterEach(() => {
 
 const draft = (overrides: Partial<ProfileDraft> = {}): ProfileDraft => ({
   name: 'Acme cloud sync',
-  root: join(dir, 'harness'),
-  overlays: [join(dir, 'harness', 'repos', 'acme')],
-  access: [join(dir, 'harness', 'repos', 'other-repo')],
+  root: join(dir, 'workspace'),
+  overlays: [join(dir, 'workspace', 'repos', 'acme')],
+  access: [join(dir, 'workspace', 'repos', 'other-repo')],
   model: 'opus',
   effort: 'high',
   permissionMode: 'auto',

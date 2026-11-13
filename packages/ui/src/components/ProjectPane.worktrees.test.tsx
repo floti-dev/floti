@@ -8,7 +8,7 @@ const repo: Project = {
   path: 'C:\\Work\\My Repos\\ledger',
   name: 'ledger',
   kind: 'repo',
-  harnessPath: null,
+  workspacePath: null,
   hasClaudeDir: false,
   inventory: EMPTY_INVENTORY,
   git: null

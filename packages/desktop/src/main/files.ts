@@ -31,7 +31,7 @@ const keyOf = (path: string): string => resolve(path).toLowerCase()
 
 /** What the local host has said of this run's folders. */
 export interface KnownFolders {
-  /** The last scan, harnesses and projects alike; null before the first. */
+  /** The last scan, workspaces and projects alike; null before the first. */
   scan: DiscoveryResult | null
   profiles: readonly Profile[]
   sessions: ReadonlyArray<{ cwd: string }>
@@ -39,7 +39,7 @@ export interface KnownFolders {
 
 /**
  * Every folder the Files view may be pointed at, and the only ones a file may
- * be handed on from: each scanned harness and project, each folder a saved
+ * be handed on from: each scanned workspace and project, each folder a saved
  * profile names (its root and its overlays, which a session reads and no scan
  * may have reached), and the folder each hosted session is working in. Each
  * folder once, in that order.

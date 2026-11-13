@@ -1,6 +1,6 @@
 use std::path::{MAIN_SEPARATOR, Path, PathBuf};
 
-use floti_protocol::channels::workspace::HarnessMode;
+use floti_protocol::channels::workspace::WorkspaceMode;
 
 use super::{
     TemplateValues, list_templates, preview_template, substitute_template, template_id_problems,
@@ -142,11 +142,11 @@ fn does_not_offer_a_link_as_a_template() {
 #[test]
 fn describes_the_minimal_scaffold_per_mode() {
     let world = World::new();
-    let for_new = preview_template(&world.templates, "minimal", Some(HarnessMode::New));
-    assert_eq!(for_new.entries, ["harness.yaml", "repos/", ".claude/"]);
+    let for_new = preview_template(&world.templates, "minimal", Some(WorkspaceMode::New));
+    assert_eq!(for_new.entries, ["workspace.yaml", "repos/", ".claude/"]);
 
-    let for_convert = preview_template(&world.templates, "anything", Some(HarnessMode::Convert));
-    assert_eq!(for_convert.entries, ["harness.yaml", ".claude/"]);
+    let for_convert = preview_template(&world.templates, "anything", Some(WorkspaceMode::Convert));
+    assert_eq!(for_convert.entries, ["workspace.yaml", ".claude/"]);
     assert_eq!(for_convert.template, "minimal");
 }
 
@@ -167,7 +167,7 @@ fn lists_a_template_as_the_writer_would_write_it_manifest_first() {
     assert_eq!(
         preview.entries,
         [
-            "harness.yaml",
+            "workspace.yaml",
             ".claude/settings.json",
             "CLAUDE.md",
             "notes/"
@@ -192,7 +192,7 @@ fn names_exactly_what_the_writer_then_writes_for_the_built_in_and_for_a_template
     );
 
     for template in ["minimal", "demo"] {
-        let preview = preview_template(&world.templates, template, Some(HarnessMode::New));
+        let preview = preview_template(&world.templates, template, Some(WorkspaceMode::New));
         let name = format!("from-{template}");
         let result = world.harness(&name, Some(template));
         assert!(
@@ -212,7 +212,7 @@ fn names_exactly_what_the_writer_then_writes_for_the_built_in_and_for_a_template
             })
             .cloned()
             .collect();
-        assert_eq!(preview.entries[0], "harness.yaml", "{template}");
+        assert_eq!(preview.entries[0], "workspace.yaml", "{template}");
         let mut previewed: Vec<String> = preview
             .entries
             .iter()
@@ -320,9 +320,9 @@ fn names_a_link_in_a_template_and_previews_nothing_behind_it() {
     );
     link_folder(&canary, &world.templates.join("hostile").join("escape"));
 
-    let preview = preview_template(&world.templates, "hostile", Some(HarnessMode::New));
+    let preview = preview_template(&world.templates, "hostile", Some(WorkspaceMode::New));
 
-    assert_eq!(preview.entries, ["harness.yaml", "ok.txt"]);
+    assert_eq!(preview.entries, ["workspace.yaml", "ok.txt"]);
     assert!(
         preview.problems.join(" ").contains("escape"),
         "{:?}",

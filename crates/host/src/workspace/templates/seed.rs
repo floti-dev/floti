@@ -18,7 +18,7 @@ pub const SHIPPED_TEMPLATES: &[(&str, &str)] = &[
     ("README.md", README),
     (
         "example/template.yaml",
-        "label: \"Example\"\ndescription: \"A CLAUDE.md naming the harness, an empty repos/ and an empty .claude/skills/.\"\norder: 10\n",
+        "label: \"Example\"\ndescription: \"A CLAUDE.md naming the workspace, an empty repos/ and an empty .claude/skills/.\"\norder: 10\n",
     ),
     (
         "example/CLAUDE.md.tpl",
@@ -28,10 +28,10 @@ pub const SHIPPED_TEMPLATES: &[(&str, &str)] = &[
     ("example/repos/.gitkeep", ""),
 ];
 
-const README: &str = r#"# Harness templates
+const README: &str = r#"# Workspace templates
 
-A template is a folder in this directory. Creating a harness from it copies the
-folder's contents into the new harness, and that is the whole mechanism.
+A template is a folder in this directory. Creating a workspace from it copies the
+folder's contents into the new workspace, and that is the whole mechanism.
 
     templates/
       README.md          <- this file
@@ -52,15 +52,15 @@ rest of the picker working.
 
 ## The rest of the folder
 
-Copied verbatim into the new harness, with five rules:
+Copied verbatim into the new workspace, with five rules:
 
 - **`.tpl` files are filled in and the extension is dropped.**
   `CLAUDE.md.tpl` is written as `CLAUDE.md` with `{{NAME}}`,
   `{{CREATED_AT}}`, `{{TEMPLATE}}` and `{{PATH}}` substituted. There
   are no other placeholders, and no conditionals or loops.
-- **`{{PATH}}` is the new harness's folder, with forward slashes** -
-  `C:/Users/you/.harness/work`. Use it wherever a file has to name something
-  inside the harness: a hook command in `settings.json.tpl`, an MCP server in
+- **`{{PATH}}` is the new workspace's folder, with forward slashes** -
+  `C:/Users/you/workspaces/work`. Use it wherever a file has to name something
+  inside the workspace: a hook command in `settings.json.tpl`, an MCP server in
   `.mcp.json.tpl`. Forward slashes keep it valid JSON, and every tool that
   reads those files accepts them.
 - **Every other file is copied byte for byte.** A workflow file full of
@@ -75,9 +75,9 @@ Copied verbatim into the new harness, with five rules:
 
 ## What is refused
 
-Absolute paths, anything that climbs out of the harness with `..`, and
-junctions or symlinks. `harness.yaml` too - Floti writes that one, because
-`template:` in it records which template a harness came from.
+Absolute paths, anything that climbs out of the workspace with `..`, and
+junctions or symlinks. `workspace.yaml` too - Floti writes that one, because
+`template:` in it records which template a workspace came from.
 
 ## Minimal
 

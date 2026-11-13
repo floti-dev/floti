@@ -98,14 +98,14 @@ pub struct BackendDescriptor {
     #[serde(deserialize_with = "known_features")]
     #[schemars(with = "Vec<BackendFeature>")]
     pub features: Vec<BackendFeature>,
-    /// How it takes a harness: which instruction files it reads, and which
-    /// parts of a harness reach it and which it has no equivalent for.
+    /// How it takes a workspace: which instruction files it reads, and which
+    /// parts of a workspace reach it and which it has no equivalent for.
     #[serde(default)]
-    pub harness: HarnessSupport,
+    pub workspace: WorkspaceSupport,
 }
 
 impl BackendDescriptor {
-    /// A backend that takes the folder of a harness and nothing else in it.
+    /// A backend that takes the folder of a workspace and nothing else in it.
     pub fn new(
         id: BackendId,
         name: impl Into<String>,
@@ -118,13 +118,13 @@ impl BackendDescriptor {
             id,
             name: name.into(),
             features,
-            harness: HarnessSupport::default(),
+            workspace: WorkspaceSupport::default(),
         }
     }
 
-    /// The same backend, taking a harness as `harness` says.
-    pub fn with_harness(mut self, harness: HarnessSupport) -> Self {
-        self.harness = harness;
+    /// The same backend, taking a workspace as `workspace` says.
+    pub fn with_workspace(mut self, workspace: WorkspaceSupport) -> Self {
+        self.workspace = workspace;
         self
     }
 
@@ -146,13 +146,13 @@ impl BackendDescriptor {
     }
 }
 
-/// A part of a harness: what a profile's harness can give a session besides
+/// A part of a workspace: what a profile's workspace can give a session besides
 /// its folder.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, JsonSchema, TS,
 )]
 #[serde(rename_all = "camelCase")]
-pub enum HarnessPart {
+pub enum WorkspacePart {
     /// Project instructions, such as `CLAUDE.md` or `AGENTS.md`.
     Instructions,
     /// `SKILL.md` folders, the same in every agent under the Agent Skills
@@ -166,46 +166,46 @@ pub enum HarnessPart {
     Workflows,
 }
 
-impl HarnessPart {
-    pub const ALL: [HarnessPart; 5] = [
-        HarnessPart::Instructions,
-        HarnessPart::Skills,
-        HarnessPart::Commands,
-        HarnessPart::Subagents,
-        HarnessPart::Workflows,
+impl WorkspacePart {
+    pub const ALL: [WorkspacePart; 5] = [
+        WorkspacePart::Instructions,
+        WorkspacePart::Skills,
+        WorkspacePart::Commands,
+        WorkspacePart::Subagents,
+        WorkspacePart::Workflows,
     ];
 }
 
-/// How a backend takes a harness, declared before a launch so a client can
+/// How a backend takes a workspace, declared before a launch so a client can
 /// say what an agent will and will not get.
 ///
 /// The default is a plain tab's: the folder and nothing else, because Floti
-/// cannot know where an unknown CLI reads. Every part in [`HarnessPart::ALL`]
+/// cannot know where an unknown CLI reads. Every part in [`WorkspacePart::ALL`]
 /// is in exactly one of `takes` and `cannot_take`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct HarnessSupport {
+pub struct WorkspaceSupport {
     /// The instruction file names it reads, such as `CLAUDE.md` and
     /// `AGENTS.md`, in the order it reads them.
     pub instruction_files: Vec<String>,
     /// The parts that reach it.
-    pub takes: Vec<HarnessPart>,
+    pub takes: Vec<WorkspacePart>,
     /// The parts it has no equivalent for. A launch names each one of these a
-    /// harness holds.
-    pub cannot_take: Vec<HarnessPart>,
+    /// workspace holds.
+    pub cannot_take: Vec<WorkspacePart>,
 }
 
-impl HarnessSupport {
+impl WorkspaceSupport {
     /// A backend that takes `takes`, reading `instruction_files`, and has no
     /// equivalent for any other part.
     pub fn taking(
         instruction_files: impl IntoIterator<Item = impl Into<String>>,
-        takes: impl IntoIterator<Item = HarnessPart>,
+        takes: impl IntoIterator<Item = WorkspacePart>,
     ) -> Self {
-        let mut takes: Vec<HarnessPart> = takes.into_iter().collect();
+        let mut takes: Vec<WorkspacePart> = takes.into_iter().collect();
         takes.sort();
         takes.dedup();
-        let cannot_take = HarnessPart::ALL
+        let cannot_take = WorkspacePart::ALL
             .into_iter()
             .filter(|part| !takes.contains(part))
             .collect();
@@ -216,12 +216,12 @@ impl HarnessSupport {
         }
     }
 
-    pub fn takes(&self, part: HarnessPart) -> bool {
+    pub fn takes(&self, part: WorkspacePart) -> bool {
         self.takes.contains(&part)
     }
 }
 
-impl Default for HarnessSupport {
+impl Default for WorkspaceSupport {
     fn default() -> Self {
         Self::taking(Vec::<String>::new(), [])
     }

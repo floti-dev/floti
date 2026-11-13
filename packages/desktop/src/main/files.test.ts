@@ -67,7 +67,7 @@ describe('the editor hand-off', () => {
 describe('filesRoots', () => {
   const scanOf = (...paths: string[]): DiscoveryResult => ({
     roots: [],
-    harnesses: [],
+    workspaces: [],
     projects: paths.map((path) => ({ path }) as Project),
     errors: [],
     scannedAt: '2026-01-01T00:00:00.000Z',

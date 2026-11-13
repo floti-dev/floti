@@ -262,7 +262,7 @@ export function offerFromHost(offer: P.RestoreOffer, layout: SavedPaneLayout | n
 
 /**
  * The settings the host keeps for every client: the folders it scans, the
- * projects pinned out of their harness, whether setup was finished, and
+ * projects pinned out of their workspace, whether setup was finished, and
  * whether it looks for updates by itself. Every other setting is Helm's own,
  * the window's, or one Helm tells the host on every connect
  * (`hostSettingsFor`).

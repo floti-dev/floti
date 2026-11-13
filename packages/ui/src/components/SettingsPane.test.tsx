@@ -179,7 +179,7 @@ describe('SettingsPane', () => {
       ['agents', 'Agents', ['Agents', 'Limits']],
       ['hosts', 'Hosts', ['Hosts']],
       ['devices', 'Devices', ['Devices']],
-      ['workspace', 'Workspace', ['Workspace', 'Harness templates']],
+      ['workspace', 'Workspace', ['Workspace', 'Workspace templates']],
       ['files', 'Files', ['Files']],
       ['browser', 'Browser', ['Browser']],
       ['archive', 'Archive', ['Transcript archive']],
@@ -202,7 +202,7 @@ describe('SettingsPane', () => {
         ['button', 'Stop scanning C:\\work\\my repos'],
         ['button', 'Add a folder']
       ],
-      'Harness templates': [
+      'Workspace templates': [
         ['button', 'C:\\helm data\\templates'],
         ['button', 'Manage templates']
       ],
@@ -300,7 +300,7 @@ describe('SettingsPane', () => {
 
   it('opens the template manager', async () => {
     const { props } = renderPane({ section: 'workspace' })
-    await userEvent.click(within(group('Harness templates')).getByRole('button', { name: 'Manage templates' }))
+    await userEvent.click(within(group('Workspace templates')).getByRole('button', { name: 'Manage templates' }))
     expect(props.onManageTemplates).toHaveBeenCalledTimes(1)
   })
 

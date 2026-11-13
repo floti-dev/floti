@@ -7,10 +7,10 @@
 //! - [`setup`]: each backend's executable, version and sign-in.
 //! - [`roots`]: the folders the host knows, which every Files and content
 //!   request must name.
-//! - [`discovery`]: scanning roots for projects and harnesses, and their git
+//! - [`discovery`]: scanning roots for projects and workspaces, and their git
 //!   state.
 //! - [`profiles`]: saved launch profiles.
-//! - [`templates`]: harness templates in the user's templates folder.
+//! - [`templates`]: workspace templates in the user's templates folder.
 //! - [`content`]: notes and documents in a known scope, and the note write.
 //! - [`render`]: markdown and code rendered to sanitised HTML.
 //! - [`files`]: the Files view's listing, reading, git status and watching.

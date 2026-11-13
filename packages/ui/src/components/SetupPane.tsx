@@ -38,7 +38,7 @@ export interface SetupPaneProps {
   onLocateClaude: () => void
   onAddFolder: () => void
   onAcceptSuggestion: (path: string) => void
-  onCreateHarness: () => void
+  onCreateWorkspace: () => void
   onConvertFolder: () => void
   onFinish: () => void
 }
@@ -69,7 +69,7 @@ export function SetupPane({
   onLocateClaude,
   onAddFolder,
   onAcceptSuggestion,
-  onCreateHarness,
+  onCreateWorkspace,
   onConvertFolder,
   onFinish
 }: SetupPaneProps): JSX.Element {
@@ -167,16 +167,16 @@ export function SetupPane({
             <Action data-setup-add-folder onClick={onAddFolder} primary={roots.length === 0}>
               Add an existing folder
             </Action>
-            <Action data-setup-create-harness onClick={onCreateHarness}>
-              Create a new harness
+            <Action data-setup-create-workspace onClick={onCreateWorkspace}>
+              Create a new workspace
             </Action>
             <Action data-setup-convert-folder onClick={onConvertFolder}>
-              Turn a folder into a harness
+              Turn a folder into a workspace
             </Action>
           </div>
           <p className="mt-2 text-[11px] text-fg-subtle">
-            A folder of repositories works on its own. A <em>harness</em> is any folder with a{' '}
-            <code className="font-mono">harness.yaml</code> in it - that is the whole definition, and
+            A folder of repositories works on its own. A <em>workspace</em> is any folder with a{' '}
+            <code className="font-mono">workspace.yaml</code> in it - that is the whole definition, and
             it is what lets one session compose several repos&rsquo; skills at once.
           </p>
         </Step>

@@ -558,7 +558,7 @@ function startApp(options: AppOptions = {}): void {
 
   /**
    * The Files view's hand-off to an editor; the host reads the files. Its
-   * roots are every project, harness and profile folder, and the folder each
+   * roots are every project, workspace and profile folder, and the folder each
    * hosted session is working in, because "the files of the session in front
    * of me" is the question it answers and a profile's session can run
    * somewhere no scan reached. The scan, the profiles and the sessions are all
@@ -1015,7 +1015,7 @@ app.whenReady().then(() => {
    * `claude` here actually is.
    *
    * `--packaging-firstrun` is the other half, and it is a separate process because
-   * "a machine with a fresh `~/.claude` and no harness at all" is not a state
+   * "a machine with a fresh `~/.claude` and no workspace at all" is not a state
    * this one can enter. The driver starts it with `PORTABLE_EXECUTABLE_DIR`
    * pointed at a temporary directory - the app's own portable-mode mechanism,
    * used as the isolation - so it opens an empty database beside that directory

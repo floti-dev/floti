@@ -10,7 +10,7 @@
 //!   from.
 //!
 //! Every request names a scope, and a scope is a folder the host knows
-//! ([`KnownRoots`]): a harness, a project, a profile's root or overlay, or a
+//! ([`KnownRoots`]): a workspace, a project, a profile's root or overlay, or a
 //! hosted session's working directory. Anything else is refused with the
 //! sentence the Files view uses, and every path a request names must lie
 //! inside its scope. The scopes offered are the same folders but the
@@ -71,7 +71,7 @@ pub struct ContentService {
 
 fn scope_of(root: &KnownRoot) -> ContentScope {
     let kind = match root.kind {
-        RootKind::Harness => ConfigScopeKind::Harness,
+        RootKind::Workspace => ConfigScopeKind::Workspace,
         RootKind::Project | RootKind::Profile | RootKind::Session => ConfigScopeKind::Project,
     };
     content_scope(&root.path, kind, root.name.as_deref())
@@ -112,7 +112,7 @@ impl ContentService {
         }
     }
 
-    /// Every scope a client can open: harnesses, then projects, then each
+    /// Every scope a client can open: workspaces, then projects, then each
     /// profile's root and overlays. The agent's own config folder is not one:
     /// nobody keeps notes there, and walking it means walking transcripts.
     pub fn scopes(&self) -> Result<Vec<ContentScope>, String> {
