@@ -6,15 +6,13 @@ import {
   withBody,
   type AgentProblem,
   type EditorHighlight,
-  type InstalledBackend,
-  type RenderedMarkdown
+  type InstalledBackend
 } from '@helm/core/types'
 import { cn } from '../lib/cn'
 import { SEGMENT_ON } from '../lib/segmented'
 import { AgentForm, FORM_FIELDS } from './AgentForm'
 import { CodeEditor } from './CodeEditor'
 import { CopyIcon, SaveIcon, TrashIcon } from './icons'
-import { MarkdownBody } from './MarkdownBody'
 
 /** The file as it is on disk now, when it changed after the page read it. */
 export interface AgentExternalChange {
@@ -60,12 +58,6 @@ export interface AgentPageProps {
   /** The host's profiles, by name; null when the window cannot list them. */
   profiles: readonly string[] | null
   onHighlight: ((path: string, source: string) => Promise<EditorHighlight>) | null
-  /** The instructions as the host renders them, for the live preview; null until the first render. */
-  preview: RenderedMarkdown | null
-  /** Whether the preview is behind the instructions as they are now. */
-  previewPending: boolean
-  /** Opens a link in the preview outside Floti. */
-  onOpenExternal: (url: string) => void
   /** Saves the draft: the Save button, and Ctrl+S anywhere in the page while Save is on. */
   onSave: () => void
   onRevert: () => void
@@ -144,33 +136,20 @@ export function AgentPage(props: AgentPageProps): JSX.Element {
   const facts = [file, `${(bytes / 1024).toFixed(1)} KB`, draft.includes('\r\n') ? 'CRLF' : 'LF']
   if (props.remote) facts.push(`on ${props.hostName}`)
 
-  // The Files view's editor beside its live preview (the design's A7).
+  // The instructions as their markdown source, in the Files view's editor (the design's A7).
   const instructions = (
-    <div data-agent-instructions className="flex h-[300px] min-h-0 overflow-hidden rounded-well border border-border">
-      <div className="flex w-1/2 min-w-0 shrink-0 flex-col">
-        <CodeEditor
-          surface="content"
-          path={file}
-          ariaLabel="Instructions"
-          value={fields.body}
-          onChange={(body) => props.onDraftChange(withBody(draft, body))}
-          onHighlight={props.onHighlight}
-          wrap
-          bare
-          readOnly={readOnly !== null}
-        />
-      </div>
-      <div data-agent-preview className="flex w-1/2 min-w-0 border-l border-border bg-surface">
-        <MarkdownBody
-          path={file}
-          rendered={props.preview}
-          stale={props.previewPending}
-          compact
-          toc={false}
-          gutter="px-[18px]"
-          onOpenExternal={props.onOpenExternal}
-        />
-      </div>
+    <div data-agent-instructions className="flex h-[300px] min-h-0 flex-col overflow-hidden rounded-well border border-border">
+      <CodeEditor
+        surface="content"
+        path={file}
+        ariaLabel="Instructions"
+        value={fields.body}
+        onChange={(body) => props.onDraftChange(withBody(draft, body))}
+        onHighlight={props.onHighlight}
+        wrap
+        bare
+        readOnly={readOnly !== null}
+      />
     </div>
   )
 

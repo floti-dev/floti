@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState, type JSX } from 'react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type { LaunchAgents, RenderedMarkdown } from '@helm/core/types'
+import type { LaunchAgents } from '@helm/core/types'
 import { AgentList } from './AgentList'
 import { AgentPage, type AgentPageProps } from './AgentPage'
 import { UndoToast } from './UndoToast'
@@ -31,8 +31,6 @@ beforeAll(() => {
       disconnect(): void {}
     }
   )
-  // The preview puts a new render at its top; the test DOM does not scroll.
-  Element.prototype.scrollTo = () => undefined
 })
 
 function props(overrides: Partial<AgentPageProps> = {}): AgentPageProps {
@@ -59,9 +57,6 @@ function props(overrides: Partial<AgentPageProps> = {}): AgentPageProps {
     backends: [CLAUDE],
     profiles: ['studio-docs'],
     onHighlight: null,
-    preview: null,
-    previewPending: false,
-    onOpenExternal: vi.fn(),
     onSave: vi.fn(),
     onRevert: vi.fn(),
     onDiscard: vi.fn(),
@@ -238,14 +233,14 @@ describe('AgentPage', () => {
     expect([marked('model', 'codex'), marked('model', 'claude-code'), marked('effort', 'codex')]).toEqual([true, true, false])
   })
 
-  it('draws the instructions beside their live preview, dimmed while it is behind', () => {
-    const preview = { html: '<p>You research, <em>rendered</em>.</p>', headings: [], frontmatter: { fields: [], error: null } } as unknown as RenderedMarkdown
-    const { rerender } = render(<AgentPage {...props({ preview })} />)
-    const pane = document.querySelector('[data-agent-preview]')
-    expect(pane?.querySelector('em')?.textContent).toBe('rendered')
-    expect(pane?.querySelector('.markdown')?.className).not.toContain('opacity-70')
-    rerender(<AgentPage {...props({ preview, previewPending: true })} />)
-    expect(pane?.querySelector('.markdown')?.className).toContain('opacity-70')
+  it('draws the instructions as their markdown source alone, with no rendered preview beside them', () => {
+    render(<AgentPage {...props({ draft: TEXT.replace('You research.', 'You *research*.') })} />)
+    const box = document.querySelector('[data-agent-instructions]')
+    expect(box?.children).toHaveLength(1)
+    expect(within(box as HTMLElement).getByRole('textbox', { name: 'Instructions' })).toHaveProperty('value', 'You *research*.\n')
+    expect(document.querySelector('[data-agent-preview]')).toBeNull()
+    expect(document.querySelector('.markdown')).toBeNull()
+    expect(box?.querySelector('em')).toBeNull()
   })
 
   it('greys the retired line in Source with the words that say it changes nothing', async () => {

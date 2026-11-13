@@ -1498,8 +1498,6 @@ export interface IpcRequests {
   'agents:restore': { request: { name: string }; response: AgentChangeResult }
   /** Writes a shipped agent the folder lacks. */
   'agents:addShipped': { request: { name: string }; response: AgentChangeResult }
-  /** An agent's instructions as edited, rendered as `content:render` renders a note's draft: the live preview. */
-  'agents:render': { request: { text: string }; response: RenderedMarkdown }
   /**
    * Removes one agent worktree with git, keeping its `agent/<name>` branch and
    * the work on it. One a running session works in, one with uncommitted
@@ -2352,7 +2350,6 @@ export const REQUEST_CHANNELS = Object.keys({
   'agents:delete': true,
   'agents:restore': true,
   'agents:addShipped': true,
-  'agents:render': true,
   'notices:dismiss': true,
   'notices:allowMore': true,
   'files:editor': true,

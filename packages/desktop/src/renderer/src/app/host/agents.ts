@@ -57,8 +57,7 @@ export function createAgentsAdapter(link: HostReach, log: (line: string) => void
       'agents:restore': async ({ name }) =>
         agentChangeFromHost(await (await host()).request('agents:restore', { name })),
       'agents:addShipped': async ({ name }) =>
-        agentChangeFromHost(await (await host()).request('agents:addShipped', { name })),
-      'agents:render': async ({ text }) => (await host()).request('agents:render', { text })
+        agentChangeFromHost(await (await host()).request('agents:addShipped', { name }))
     },
     events: {
       'agents:changed': (listener) => {

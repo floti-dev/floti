@@ -32,8 +32,8 @@ gets skipped.
 - Agents is a page of its own, after Profiles in the rail: each host's
   agents, the files in its agents folder that are not agents with what is
   wrong with them, and the shipped agents the folder lacks, each with Add.
-  Open an agent to edit its fields and instructions, with a live preview, or
-  its whole file in Source; save, rename, copy or delete it, and Undo a
+  Open an agent to edit its fields and instructions, or its whole file in
+  Source; save, rename, copy or delete it, and Undo a
   delete. A save the host refuses keeps the edit and says what is wrong, and
   a file changed outside while you edit is shown beside your edit to compare,
   reload or save over. Settings > Agents says how many agents the host has.

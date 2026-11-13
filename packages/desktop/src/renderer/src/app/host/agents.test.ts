@@ -76,15 +76,6 @@ describe('the agents adapter', () => {
     expect(connection.payloads('agents:addShipped')).toEqual([{ name: 'reviewer' }])
   })
 
-  it('renders instructions on the host it reaches, as the host renders them', async () => {
-    const rendered = { html: '<h1>Review</h1>', words: 1 } as unknown as P.RenderedMarkdown
-    const connection = new FakeConnection().answer('agents:render', () => rendered)
-    const adapter = createAgentsAdapter(reconnectingReach(connection))
-
-    expect(await call(adapter, 'agents:render', { text: '# Review' })).toBe(rendered)
-    expect(connection.payloads('agents:render')).toEqual([{ text: '# Review' }])
-  })
-
   it('subscribes to agents:changed only while the window listens, and again on a new connection', async () => {
     const first = new FakeConnection()
     const reach = reconnectingReach(first)

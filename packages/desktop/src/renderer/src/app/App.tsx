@@ -4028,7 +4028,6 @@ export function App(): JSX.Element {
         }
         onDirtyChange={(dirty) => markDocDirty(id, dirty)}
         onBadChange={(bad) => markAgentBad(id, bad)}
-        onOpenExternal={openLink}
         onOutcome={agentOutcome(id, on)}
         onCopy={(name) => newAgent(name, on)}
         onDiscard={() => {

@@ -120,8 +120,7 @@ describe("one bridge per host", () => {
     )
       .answer("agents:write", () => change as never)
       .answer("agents:delete", () => change as never)
-      .answer("agents:restore", () => change as never)
-      .answer("agents:render", () => ({ html: "<p>x</p>" }) as never);
+      .answer("agents:restore", () => change as never);
     const there = w.bridges.bridgeFor("h-build");
     const listed = await there.invoke("agents:list");
     expect(listed.folder).toBe("/home/me/.config/floti/agents");
@@ -133,7 +132,6 @@ describe("one bridge per host", () => {
     });
     await there.invoke("agents:delete", { name: "triage", expectedHash: "h" });
     await there.invoke("agents:restore", { name: "triage" });
-    await there.invoke("agents:render", { text: "x" });
     const agents = (id: string): string[] =>
       w.asked(id).filter((channel) => channel.startsWith("agents:"));
     expect(agents("h-build")).toEqual([
@@ -141,7 +139,6 @@ describe("one bridge per host", () => {
       "agents:write",
       "agents:delete",
       "agents:restore",
-      "agents:render",
     ]);
     expect(agents("h-lab")).toEqual([]);
     expect(agents(LOCAL_HOST_KEY)).toEqual([]);

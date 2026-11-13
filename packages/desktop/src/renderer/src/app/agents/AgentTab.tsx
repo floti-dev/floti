@@ -1,10 +1,9 @@
 import { useEffect, type JSX } from 'react'
-import { listedAgentNames, readAgentDraft, type EditorHighlight } from '@helm/core/types'
+import { listedAgentNames, type EditorHighlight } from '@helm/core/types'
 import { AgentPage } from '@helm/ui'
 import { bridgeFor } from '../bridge'
 import { useAgentDraft, type AgentDraftTarget, type AgentOutcome } from './useAgentDraft'
 import { useAgentList } from './useAgentList'
-import { useInstructionsPreview } from './useInstructionsPreview'
 
 export interface AgentTabProps {
   host: string
@@ -23,8 +22,6 @@ export interface AgentTabProps {
   onOutcome: (outcome: AgentOutcome) => void
   onCopy: (name: string) => void
   onDiscard: () => void
-  /** Opens a link the instructions' preview holds. */
-  onOpenExternal: (url: string) => void
   /** Opens the New session dialog with the agent picked; null where the window cannot. */
   onStartSession: ((name: string) => void) | null
 }
@@ -44,7 +41,6 @@ export function AgentTab(props: AgentTabProps): JSX.Element {
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange])
   const bad = (state.base?.problems.length ?? 0) > 0
   useEffect(() => onBadChange(bad), [bad, onBadChange])
-  const preview = useInstructionsPreview(host, readAgentDraft(state.draft).body)
 
   const taken = listing === null ? new Set<string>() : listedAgentNames(listing)
   const savedName = state.base?.name ?? null
@@ -86,9 +82,6 @@ export function AgentTab(props: AgentTabProps): JSX.Element {
         backends={listing?.backends ?? []}
         profiles={props.profiles}
         onHighlight={highlight}
-        preview={preview.rendered}
-        previewPending={preview.pending}
-        onOpenExternal={props.onOpenExternal}
         onSave={() => void agent.save()}
         onRevert={agent.revert}
         onDiscard={props.onDiscard}
