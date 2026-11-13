@@ -281,10 +281,10 @@ function main(args) {
         ? named
         : existsSync(distDir)
           ? readdirSync(distDir)
-              .filter((name) => /^Helm-.+-arm64(-mac\.zip|\.dmg)$/.test(name))
+              .filter((name) => /^Floti-.+-arm64(-mac\.zip|\.dmg)$/.test(name))
               .map((name) => join(distDir, name))
           : []
-    if (artefacts.length === 0) problems.push(`no Helm-*-arm64.dmg or Helm-*-arm64-mac.zip in ${distDir}; run pnpm dist:mac`)
+    if (artefacts.length === 0) problems.push(`no Floti-*-arm64.dmg or Floti-*-arm64-mac.zip in ${distDir}; run pnpm dist:mac`)
     for (const artefact of artefacts) {
       if (!existsSync(artefact) || !statSync(artefact).isFile()) problems.push(`${artefact} does not exist`)
       else if (artefact.endsWith('.dmg')) problems.push(...dmgProblems(artefact))

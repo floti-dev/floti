@@ -20,7 +20,7 @@
 //     Markdown table of each with its size and SHA-256 for the step summary.
 //
 //   node release.mjs desktop-sums <folder> <version>
-//     writes `Helm-<version>-SHA256SUMS` into <folder>: the SHA-256 of each of
+//     writes `Floti-<version>-SHA256SUMS` into <folder>: the SHA-256 of each of
 //     the five desktop files there, in sha256sum's format, which `floti add
 //     desktop` checks a download against. The app carries floti's own list,
 //     so that list cannot hold the app; this one is the desktop files'.
@@ -130,21 +130,21 @@ export function gate({ version, lsRemote, dryRun }) {
 /** The desktop files a release of `version` carries. */
 export function desktopFileNames(version) {
   return [
-    `Helm-${version}-portable.exe`,
-    `Helm-${version}-setup.exe`,
-    `Helm-${version}-arm64.dmg`,
-    `Helm-${version}-arm64-mac.zip`,
-    `Helm-${version}-linux-x64.AppImage`
+    `Floti-${version}-portable.exe`,
+    `Floti-${version}-setup.exe`,
+    `Floti-${version}-arm64.dmg`,
+    `Floti-${version}-arm64-mac.zip`,
+    `Floti-${version}-linux-x64.AppImage`
   ]
 }
 
-/** `Helm-<version>-SHA256SUMS`: the SHA-256 of each desktop file, signed like every file. */
+/** `Floti-<version>-SHA256SUMS`: the SHA-256 of each desktop file, signed like every file. */
 export function desktopSumsName(version) {
-  return `Helm-${version}-SHA256SUMS`
+  return `Floti-${version}-SHA256SUMS`
 }
 
 /**
- * Writes `Helm-<version>-SHA256SUMS` into `folder`, listing each of the five
+ * Writes `Floti-<version>-SHA256SUMS` into `folder`, listing each of the five
  * desktop files there, sorted, and returns its path. A desktop file missing
  * from `folder` is an error.
  */

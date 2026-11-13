@@ -9,22 +9,22 @@ their data goes, how a release is cut, and why Floti has no auto-updater.
 
 | File | What it is |
 |---|---|
-| `Helm-<version>-portable.exe` | One file, ~95 MB. No install. Keeps its data in `helm-data\` beside itself. |
-| `Helm-<version>-setup.exe` | NSIS one-click installer. Per-user, no elevation, in `%LOCALAPPDATA%\Programs\Floti\desktop`. Data in `%LOCALAPPDATA%\Floti\desktop`. |
+| `Floti-<version>-portable.exe` | One file, ~95 MB. No install. Keeps its data in `helm-data\` beside itself. |
+| `Floti-<version>-setup.exe` | NSIS one-click installer. Per-user, no elevation, in `%LOCALAPPDATA%\Programs\Floti\desktop`. Data in `%LOCALAPPDATA%\Floti\desktop`. |
 
 `pnpm dist:mac` writes two more, and runs only on macOS, because
 electron-builder makes a dmg only there:
 
 | File | What it is |
 |---|---|
-| `Helm-<version>-arm64.dmg` | Disk image: Floti.app beside an Applications link to drag it onto. Apple Silicon only. |
-| `Helm-<version>-arm64-mac.zip` | The same Floti.app, zipped, for anyone who would rather not mount an image. |
+| `Floti-<version>-arm64.dmg` | Disk image: Floti.app beside an Applications link to drag it onto. Apple Silicon only. |
+| `Floti-<version>-arm64-mac.zip` | The same Floti.app, zipped, for anyone who would rather not mount an image. |
 
 `pnpm dist:linux` writes one, on Linux:
 
 | File | What it is |
 |---|---|
-| `Helm-<version>-linux-x64.AppImage` | One file that runs with no install and no root on x64 Linux with glibc 2.34 or later: Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 and anything newer. Data in `${XDG_DATA_HOME:-~/.local/share}/floti/desktop`. |
+| `Floti-<version>-linux-x64.AppImage` | One file that runs with no install and no root on x64 Linux with glibc 2.34 or later: Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 and anything newer. Data in `${XDG_DATA_HOME:-~/.local/share}/floti/desktop`. |
 
 Linux is x64 only. There is no arm64 Linux desktop build; floti itself does
 ship for arm64 Linux, so such a computer can still be a host (see
@@ -72,19 +72,19 @@ opened, no session is given the browser tools, and the Browser tab shows
 the fix where a page would be (`main/browser-sandbox.ts`). Everything else
 works as usual. The fix on Ubuntu is a profile letting the AppImage make user
 namespaces, the way Ubuntu's own profiles let browsers make them. It covers
-every `Helm-*.AppImage` in the AppImage's folder, so the next version keeps
+every `Floti-*.AppImage` in the AppImage's folder, so the next version keeps
 it:
 
     abi <abi/4.0>,
     include <tunables/global>
-    profile helm-appimage "/home/<you>/Apps/Helm-*.AppImage" flags=(unconfined) {
+    profile floti-appimage "/home/<you>/Apps/Floti-*.AppImage" flags=(unconfined) {
       userns,
     }
 
 The Browser tab writes the command that installs it with this AppImage's own
 folder filled in, as one `sudo`; with the AppImage in `~/Apps` it is
 
-    printf '%s\n' 'abi <abi/4.0>,' 'include <tunables/global>' 'profile helm-appimage "/home/<you>/Apps/Helm-*.AppImage" flags=(unconfined) {' '  userns,' '}' | sudo sh -c 'cat > /etc/apparmor.d/helm-appimage && apparmor_parser -r /etc/apparmor.d/helm-appimage'
+    printf '%s\n' 'abi <abi/4.0>,' 'include <tunables/global>' 'profile floti-appimage "/home/<you>/Apps/Floti-*.AppImage" flags=(unconfined) {' '  userns,' '}' | sudo sh -c 'cat > /etc/apparmor.d/floti-appimage && apparmor_parser -r /etc/apparmor.d/floti-appimage'
 
 Then start Floti again. Where the namespaces are refused some other way (for
 example `kernel.unprivileged_userns_clone=0` on an older Debian), the tab says
@@ -542,10 +542,23 @@ remote, runs the checks, builds floti for its five targets, builds the Windows
 artefacts on a clean `windows-latest` runner, the macOS ones on `macos-latest`
 and the Linux one on `ubuntu-latest`, packs the protocol types, signs every
 file, and publishes one GitHub release with twenty-six files attached: the
-five desktop files and their SHA-256 list (`Helm-<version>-SHA256SUMS`, which
+five desktop files and their SHA-256 list (`Floti-<version>-SHA256SUMS`, which
 `floti add desktop` checks a download against), the protocol types, the five
 floti files and their SHA-256 list, and a minisign signature beside each of
-those thirteen. A stable release
+those thirteen.
+
+The desktop files are named `Floti-<version>-*` from 3.0; releases before
+that named them `Helm-<version>-*`, and keep those names. None is published
+under both, because no released floti derives a later release's desktop file
+name: `floti update` takes each file's name from the manifest (it checks only
+that it is a plain file name) and its signature's as that name with
+`.minisig` after it, and `floti add desktop` derives the names
+(`desktop_file`, `desktop_sums_name` in `crates/host/src/add.rs`) only for
+the release of the floti running it. So a 2.4 floti updates to 3.0 by the
+names the 3.0 manifest gives, and adds the desktop from its own 2.4
+release's `Helm-*` files.
+
+A stable release
 then updates the Homebrew formula and opens the winget pull request ("Homebrew
 and winget"), and copies the install scripts and the update manifest to
 floti.dev ("floti.dev"). A merge that does
@@ -637,7 +650,7 @@ after them and finishes green.
   wrong package-manager collector, which carries no `app.asar.unpacked` and dies
   on its first `dlopen`. Checking `dist-app/win-unpacked/` instead would check
   electron-builder's scratch directory rather than the file a person downloads.
-  It runs on any exe: `pnpm verify:artifact -- path/to/Helm-x.y.z-setup.exe`.
+  It runs on any exe: `pnpm verify:artifact -- path/to/Floti-x.y.z-setup.exe`.
   The Mac artefacts get `verify-mac-artifact.mjs` and the AppImage
   `verify-linux-artifact.mjs`, described above.
 - **The confirmation expects all twenty-six files.** After publishing a
@@ -990,7 +1003,7 @@ setup left, each missing thing failing the job with one line naming it:
 | `debian` as root | nothing: no unit and no start-on-connect marker, as a refused setup leaves |
 | `debian` as an ordinary user, with `WSL_DISTRO_NAME` set | the start-on-connect marker in the data folder and no unit, as in a WSL distro where no systemd runs |
 
-On both Windows runners the run's `Helm-<version>-setup.exe` then runs with
+On both Windows runners the run's `Floti-<version>-setup.exe` then runs with
 `/S`, per user, as `floti add desktop` runs it: in `install-dry-run` over the
 install script's floti, and in `installer-dry-run` alone on a clean runner,
 where nothing of Floti's may be there first
@@ -1184,14 +1197,14 @@ it:
 
 | | Where | Its launcher entry |
 |---|---|---|
-| Windows | `%LOCALAPPDATA%\Programs\Floti\desktop`, beside floti's own `Programs\Floti\bin`, by running the release's `Helm-<version>-setup.exe` with `/S`, which runs `floti install-self` itself. | The Start menu entry the installer makes. |
-| macOS | `~/Applications/Floti.app`, unpacked from `Helm-<version>-arm64-mac.zip` with `ditto -x -k --noqtn` beside it and renamed into place; then `floti install-self` runs from the floti inside it. | `~/Applications` is the Applications entry. |
-| Linux | `~/Applications/Floti.AppImage`, from `Helm-<version>-linux-x64.AppImage`, written beside, made executable and renamed into place. | `applications/dev.floti.desktop.desktop` and `icons/hicolor/256x256/apps/dev.floti.desktop.png` under `$XDG_DATA_HOME` (`~/.local/share`); the icon is the AppImage's own, built into floti. |
+| Windows | `%LOCALAPPDATA%\Programs\Floti\desktop`, beside floti's own `Programs\Floti\bin`, by running the release's `Floti-<version>-setup.exe` with `/S`, which runs `floti install-self` itself. | The Start menu entry the installer makes. |
+| macOS | `~/Applications/Floti.app`, unpacked from `Floti-<version>-arm64-mac.zip` with `ditto -x -k --noqtn` beside it and renamed into place; then `floti install-self` runs from the floti inside it. | `~/Applications` is the Applications entry. |
+| Linux | `~/Applications/Floti.AppImage`, from `Floti-<version>-linux-x64.AppImage`, written beside, made executable and renamed into place. | `applications/dev.floti.desktop.desktop` and `icons/hicolor/256x256/apps/dev.floti.desktop.png` under `$XDG_DATA_HOME` (`~/.local/share`); the icon is the AppImage's own, built into floti. |
 
 **Which release.** The release that is floti's own version, preview or
 stable, at `https://github.com/floti-dev/floti/releases/download/v<version>/`;
 `update.json` plays no part. Its desktop files are listed with their
-SHA-256s in `Helm-<version>-SHA256SUMS` ("Releasing"): floti's own list
+SHA-256s in `Floti-<version>-SHA256SUMS` ("Releasing"): floti's own list
 cannot hold the app, because the app carries it. A version with no published
 release (a development build), and a release made before the list existed,
 each says so in one line and installs nothing. A release with no desktop file
@@ -1199,7 +1212,7 @@ for this computer (Windows on Arm, Linux on Arm) says so too.
 
 **The checks.** The list's signature is fetched first and must verify with
 the key built into floti, with the trusted comment `floti <version>
-Helm-<version>-SHA256SUMS`; a signature by another key is refused before the
+Floti-<version>-SHA256SUMS`; a signature by another key is refused before the
 list is fetched. Then the desktop file downloads into `add` in Floti's data
 folder and is checked against its own signature and its SHA-256 in the list
 before anything runs, as `floti update` checks a file ("floti update", "The

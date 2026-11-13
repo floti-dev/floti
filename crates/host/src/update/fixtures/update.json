@@ -28,15 +28,15 @@
       },
       "desktop": {
         "windows-x64": {
-          "file": "Helm-3.0.0-setup.exe",
+          "file": "Floti-3.0.0-setup.exe",
           "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         "macos-arm64": {
-          "file": "Helm-3.0.0-arm64-mac.zip",
+          "file": "Floti-3.0.0-arm64-mac.zip",
           "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         },
         "linux-x64": {
-          "file": "Helm-3.0.0-linux-x64.AppImage",
+          "file": "Floti-3.0.0-linux-x64.AppImage",
           "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
         }
       }

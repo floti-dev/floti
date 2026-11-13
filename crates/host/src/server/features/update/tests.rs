@@ -358,11 +358,11 @@ async fn an_update_s_steps_are_told_in_order_with_the_wait_for_the_app_marked() 
     write_run(
         fx.data(),
         UPDATE,
-        "Downloading Helm-9.1.0-setup.exe.",
+        "Downloading Floti-9.1.0-setup.exe.",
         false,
     );
     fx.until(PATIENCE, |state| {
-        progress(state) == step("Downloading Helm-9.1.0-setup.exe.", false)
+        progress(state) == step("Downloading Floti-9.1.0-setup.exe.", false)
     })
     .await;
     write_run(fx.data(), UPDATE, WAITING, true);
@@ -383,12 +383,12 @@ async fn an_update_that_stopped_says_its_last_line_until_the_next_one_starts() {
         fx.data(),
         UPDATE,
         false,
-        "Helm-9.1.0-setup.exe does not match its signature. Nothing was updated.",
+        "Floti-9.1.0-setup.exe does not match its signature. Nothing was updated.",
     );
     let last = fx.until_ended().await;
     assert_eq!(
         last.install_failed,
-        Some("Helm-9.1.0-setup.exe does not match its signature. Nothing was updated.".into())
+        Some("Floti-9.1.0-setup.exe does not match its signature. Nothing was updated.".into())
     );
     // The next one starts with no failure standing.
     fx.updates.shared.install().unwrap();

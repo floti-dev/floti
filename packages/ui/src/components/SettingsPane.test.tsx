@@ -565,10 +565,10 @@ describe('SettingsPane', () => {
         update: view({
           newest: '1.3.0',
           newer: true,
-          installing: { line: 'Downloading Helm-1.3.0-setup.exe.', waitingForApp: false }
+          installing: { line: 'Downloading Floti-1.3.0-setup.exe.', waitingForApp: false }
         })
       })
-      expect(within(updates).getByText('Downloading Helm-1.3.0-setup.exe.')).toBeTruthy()
+      expect(within(updates).getByText('Downloading Floti-1.3.0-setup.exe.')).toBeTruthy()
       expect(install()).toHaveProperty('disabled', true)
       // A check now would find what the update is putting in place.
       expect(within(updates).getByRole('button', { name: 'Check now' })).toHaveProperty('disabled', true)
@@ -577,11 +577,11 @@ describe('SettingsPane', () => {
         update: view({
           newest: '1.3.0',
           newer: true,
-          installFailed: 'Helm-1.3.0-setup.exe does not match its signature. Nothing was updated.'
+          installFailed: 'Floti-1.3.0-setup.exe does not match its signature. Nothing was updated.'
         })
       })
       const failed = within(updates).getByText(
-        'The update did not finish - Helm-1.3.0-setup.exe does not match its signature. Nothing was updated.'
+        'The update did not finish - Floti-1.3.0-setup.exe does not match its signature. Nothing was updated.'
       )
       expect(failed.getAttribute('data-settings-verdict')).toBe('warn')
       expect(install()).toHaveProperty('disabled', false)

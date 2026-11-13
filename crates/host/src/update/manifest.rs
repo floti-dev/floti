@@ -6,7 +6,7 @@
 //!  "channels": {"stable": {"version": "2.6.0",
 //!                          "url": "https://github.com/floti-dev/floti/releases/download/v2.6.0/",
 //!                          "floti": {"windows-x64": {"file": "floti-2.6.0-windows-x64.exe", "sha256": "..."}},
-//!                          "desktop": {"windows-x64": {"file": "Helm-2.6.0-setup.exe", "sha256": "..."}}}}}
+//!                          "desktop": {"windows-x64": {"file": "Floti-2.6.0-setup.exe", "sha256": "..."}}}}}
 //! ```
 //!
 //! Targets are named as floti's release files name them: `windows-x64`,
@@ -168,7 +168,7 @@ mod tests {
             "url": "https://example.com/download/v2.6.0/",
             "notes": "ignored",
             "floti": {"linux-x64": {"file": "floti-2.6.0-linux-x64", "sha256": SHA, "size": 1}},
-            "desktop": {"windows-x64": {"file": "Helm-2.6.0-setup.exe", "sha256": SHA}}
+            "desktop": {"windows-x64": {"file": "Floti-2.6.0-setup.exe", "sha256": SHA}}
         })
     }
 
@@ -257,10 +257,10 @@ mod tests {
     fn the_manifest_a_release_writes_is_read_for_every_target() {
         let folder = "https://github.com/floti-dev/floti/releases/download/v3.0.0/";
         let targets = [
-            ("windows-x64", ".exe", Some("Helm-3.0.0-setup.exe")),
+            ("windows-x64", ".exe", Some("Floti-3.0.0-setup.exe")),
             ("windows-arm64", ".exe", None),
-            ("macos-arm64", "", Some("Helm-3.0.0-arm64-mac.zip")),
-            ("linux-x64", "", Some("Helm-3.0.0-linux-x64.AppImage")),
+            ("macos-arm64", "", Some("Floti-3.0.0-arm64-mac.zip")),
+            ("linux-x64", "", Some("Floti-3.0.0-linux-x64.AppImage")),
             ("linux-arm64", "", None),
         ];
         for (target, extension, desktop) in targets {

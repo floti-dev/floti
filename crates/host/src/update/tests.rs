@@ -258,7 +258,7 @@ impl Published {
     }
 
     fn desktop_file(&self) -> String {
-        format!("Helm-{}-setup.exe", self.version)
+        format!("Floti-{}-setup.exe", self.version)
     }
 
     fn floti_url(&self) -> String {
@@ -816,7 +816,7 @@ fn a_bad_desktop_signature_replaces_nothing() {
     world.serve_signed(
         &release.desktop_url(),
         b"something else",
-        "floti 2.1.0 Helm-2.1.0-setup.exe",
+        "floti 2.1.0 Floti-2.1.0-setup.exe",
     );
     world.network.serve(
         &release.desktop_url(),

@@ -64,7 +64,7 @@ describe('a signature file', () => {
   })
 
   it('goes beside the file it signs', () => {
-    expect(signatureFile('/r/Helm-3.0.0-setup.exe')).toBe('/r/Helm-3.0.0-setup.exe.minisig')
+    expect(signatureFile('/r/Floti-3.0.0-setup.exe')).toBe('/r/Floti-3.0.0-setup.exe.minisig')
   })
 })
 
@@ -114,11 +114,11 @@ describe('the secret key file', () => {
 
 describe('signing', () => {
   it('signs each file beside it with its own trusted comment, with the key file minisign is given', async () => {
-    const folder = await folderWith(['floti-3.0.0-linux-x64', 'Helm-3.0.0-setup.exe'])
+    const folder = await folderWith(['floti-3.0.0-linux-x64', 'Floti-3.0.0-setup.exe'])
     const root = await mkdtemp(join(inject(RUN_ROOT), 'minisign temp '))
     const calls: string[][] = []
     const keys: string[] = []
-    const files = [join(folder, 'floti-3.0.0-linux-x64'), join(folder, 'Helm-3.0.0-setup.exe')]
+    const files = [join(folder, 'floti-3.0.0-linux-x64'), join(folder, 'Floti-3.0.0-setup.exe')]
 
     const signed = signFiles({
       files,
@@ -135,10 +135,10 @@ describe('signing', () => {
     const keyFile = calls[0]![2]!
     expect(calls).toEqual([
       ['-S', '-s', keyFile, '-m', files[0], '-x', `${files[0]!}.minisig`, '-t', 'floti 3.0.0 floti-3.0.0-linux-x64'],
-      ['-S', '-s', keyFile, '-m', files[1], '-x', `${files[1]!}.minisig`, '-t', 'floti 3.0.0 Helm-3.0.0-setup.exe']
+      ['-S', '-s', keyFile, '-m', files[1], '-x', `${files[1]!}.minisig`, '-t', 'floti 3.0.0 Floti-3.0.0-setup.exe']
     ])
     expect(keys).toEqual([SECRET, SECRET])
-    expect(signed.map((each) => each.comment)).toEqual(['floti 3.0.0 floti-3.0.0-linux-x64', 'floti 3.0.0 Helm-3.0.0-setup.exe'])
+    expect(signed.map((each) => each.comment)).toEqual(['floti 3.0.0 floti-3.0.0-linux-x64', 'floti 3.0.0 Floti-3.0.0-setup.exe'])
     expect(existsSync(keyFile)).toBe(false)
     expect(readdirSync(root)).toEqual([])
   })
@@ -175,16 +175,16 @@ describe('verifying', () => {
   }
 
   it('passes when minisign verifies each file with the public key and says its trusted comment is the expected one', async () => {
-    const { folder, publicKey } = await signedFolder({ 'floti-3.0.0-linux-x64': signatureText('ED'), 'Helm-3.0.0-setup.exe': signatureText('ED') })
+    const { folder, publicKey } = await signedFolder({ 'floti-3.0.0-linux-x64': signatureText('ED'), 'Floti-3.0.0-setup.exe': signatureText('ED') })
     const calls: string[][] = []
-    const files = [join(folder, 'floti-3.0.0-linux-x64'), join(folder, 'Helm-3.0.0-setup.exe')]
+    const files = [join(folder, 'floti-3.0.0-linux-x64'), join(folder, 'Floti-3.0.0-setup.exe')]
     const problems = verifyProblems({
       files,
       comment: 'floti 3.0.0 {name}',
       publicKey,
       run: (args) => {
         calls.push(args)
-        return ok(`floti 3.0.0 ${args[5] === files[0] ? 'floti-3.0.0-linux-x64' : 'Helm-3.0.0-setup.exe'}\n`)
+        return ok(`floti 3.0.0 ${args[5] === files[0] ? 'floti-3.0.0-linux-x64' : 'Floti-3.0.0-setup.exe'}\n`)
       }
     })
     expect(problems).toEqual([])
@@ -202,7 +202,7 @@ describe('verifying', () => {
     const run = vi.fn((args: string[]): MinisignResult =>
       args[5]!.endsWith('forged')
         ? { status: 1, stdout: '', stderr: 'Signature verification failed\n' }
-        : ok('floti 3.0.0 Helm-3.0.0-setup.exe\n')
+        : ok('floti 3.0.0 Floti-3.0.0-setup.exe\n')
     )
     const problems = verifyProblems({
       files: ['unsigned', 'legacy', 'garbage', 'forged', 'moved'].map((name) => join(folder, name)),
@@ -215,7 +215,7 @@ describe('verifying', () => {
       'legacy.minisig is not prehashed (it names "Ed", not ED)',
       'garbage.minisig is not a minisign signature',
       `forged does not verify with ${publicKey}: Signature verification failed`,
-      'moved.minisig carries the trusted comment "floti 3.0.0 Helm-3.0.0-setup.exe", not "floti 3.0.0 moved"'
+      'moved.minisig carries the trusted comment "floti 3.0.0 Floti-3.0.0-setup.exe", not "floti 3.0.0 moved"'
     ])
     // Only the two prehashed signatures reach minisign.
     expect(run).toHaveBeenCalledTimes(2)

@@ -18,7 +18,7 @@
 //!    refuses in one line and leaves it as it is.
 //! 2. In a session with no display ([`installs::missing_display`]) it
 //!    refuses in one sentence saying why.
-//! 3. It reads `Helm-<version>-SHA256SUMS` from the release that is floti's
+//! 3. It reads `Floti-<version>-SHA256SUMS` from the release that is floti's
 //!    own version, preview or stable, under the project's GitHub releases
 //!    ([`release_file::releases_url`]): its signature first, made with the
 //!    key built into floti and the trusted comment `floti <version> <file>`,
@@ -100,9 +100,9 @@ const SIGNATURE_LIMIT: u64 = 16 * 1024;
 /// desktop app.
 pub fn desktop_file(version: &Version, target: &str) -> Option<String> {
     match target {
-        "windows-x64" => Some(format!("Helm-{version}-setup.exe")),
-        "macos-arm64" => Some(format!("Helm-{version}-arm64-mac.zip")),
-        "linux-x64" => Some(format!("Helm-{version}-linux-x64.AppImage")),
+        "windows-x64" => Some(format!("Floti-{version}-setup.exe")),
+        "macos-arm64" => Some(format!("Floti-{version}-arm64-mac.zip")),
+        "linux-x64" => Some(format!("Floti-{version}-linux-x64.AppImage")),
         _ => None,
     }
 }
@@ -110,7 +110,7 @@ pub fn desktop_file(version: &Version, target: &str) -> Option<String> {
 /// The signed SHA-256 list of a release's desktop files
 /// (`desktopSumsName` in `packages/desktop/scripts/release.mjs`).
 pub fn desktop_sums_name(version: &Version) -> String {
-    format!("Helm-{version}-SHA256SUMS")
+    format!("Floti-{version}-SHA256SUMS")
 }
 
 /// The SHA-256 `list`, in sha256sum's format (`<hex>  <name>` or

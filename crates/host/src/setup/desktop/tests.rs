@@ -263,7 +263,7 @@ fn run_signed_in(
     let mut adds = 0;
     let mut add = |out: &mut dyn Write| {
         adds += 1;
-        writeln!(out, "Downloading Helm-3.0.0-linux-x64.AppImage.").unwrap();
+        writeln!(out, "Downloading Floti-3.0.0-linux-x64.AppImage.").unwrap();
         added.clone()
     };
     let outcome = DesktopStep {
@@ -307,7 +307,7 @@ fn yes_runs_floti_add_desktop_with_its_progress_after_the_question() {
     assert_eq!(
         ran.out,
         format!(
-            "{}Downloading Helm-3.0.0-linux-x64.AppImage.\n",
+            "{}Downloading Floti-3.0.0-linux-x64.AppImage.\n",
             question(APP)
         )
     );

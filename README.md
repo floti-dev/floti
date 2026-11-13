@@ -54,11 +54,11 @@ YAML so it travels with the workspace.
 
 Windows 10/11, x64. No admin rights are needed for any of these.
 
-**Portable** - download `Helm-<version>-portable.exe`, put it wherever you like
+**Portable** - download `Floti-<version>-portable.exe`, put it wherever you like
 and run it. It keeps everything in a `helm-data\` folder beside itself, so the
 whole install travels on a stick and removing it is deleting two things.
 
-**Installed** - download `Helm-<version>-setup.exe` and run it. It installs for
+**Installed** - download `Floti-<version>-setup.exe` and run it. It installs for
 your user only, into `%LOCALAPPDATA%\Programs\Floti\desktop`, and keeps its data in
 `%LOCALAPPDATA%\Floti\desktop`. An installed Helm moves there: the installer
 replaces it, and the app copies Helm's data from `%APPDATA%\Helm` at its first

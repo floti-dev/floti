@@ -1,5 +1,5 @@
 # The release dry run's test of the desktop's Windows installer, run for real
-# in a CI runner and nowhere else: it runs the run's Helm-<version>-setup.exe
+# in a CI runner and nowhere else: it runs the run's Floti-<version>-setup.exe
 # silently and per user, as `floti add desktop` and a person's double click
 # do, and checks that it put floti where install.ps1 puts it and ran the same
 # setup.
@@ -96,4 +96,4 @@ $setup = $LASTEXITCODE
 if ($failures.Count -gt 0 -or $setup -ne 0) { exit 1 }
 
 Write-Output "${by}: the app is at $app, floti.exe in $folder is the release's floti-$Version-$Target.exe, and nothing runs from the app's folder."
-Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY "- ${by}: ``Helm-$Version-setup.exe /S`` put the app at ``$app`` and, in ``$folder``, the release's ``floti-$Version-$Target.exe`` byte for byte; nothing runs from the app's folder"
+Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY "- ${by}: ``Floti-$Version-setup.exe /S`` put the app at ``$app`` and, in ``$folder``, the release's ``floti-$Version-$Target.exe`` byte for byte; nothing runs from the app's folder"

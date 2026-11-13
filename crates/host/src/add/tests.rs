@@ -144,7 +144,7 @@ impl Published {
     }
 
     fn file(&self) -> String {
-        format!("Helm-{}-linux-x64.AppImage", self.version)
+        format!("Floti-{}-linux-x64.AppImage", self.version)
     }
 
     fn url(&self) -> String {
@@ -152,7 +152,7 @@ impl Published {
     }
 
     fn list_file(&self) -> String {
-        format!("Helm-{}-SHA256SUMS", self.version)
+        format!("Floti-{}-SHA256SUMS", self.version)
     }
 
     fn list_url(&self) -> String {
@@ -164,11 +164,11 @@ impl Published {
     fn list(&self) -> Vec<u8> {
         let v = &self.version;
         let mut lines = [
-            (format!("Helm-{v}-arm64-mac.zip"), "a".repeat(64)),
-            (format!("Helm-{v}-arm64.dmg"), "b".repeat(64)),
+            (format!("Floti-{v}-arm64-mac.zip"), "a".repeat(64)),
+            (format!("Floti-{v}-arm64.dmg"), "b".repeat(64)),
             (self.file(), hex_digest(&self.desktop)),
-            (format!("Helm-{v}-portable.exe"), "c".repeat(64)),
-            (format!("Helm-{v}-setup.exe"), "d".repeat(64)),
+            (format!("Floti-{v}-portable.exe"), "c".repeat(64)),
+            (format!("Floti-{v}-setup.exe"), "d".repeat(64)),
         ];
         lines.sort();
         lines
@@ -809,12 +809,12 @@ fn the_new_app_s_own_floti_runs_install_self_where_its_installer_does_not() {
 fn a_sha256_list_line_gives_its_file_s_digest_in_either_of_sha256sum_s_modes() {
     let sha = "AB".repeat(32);
     let list = format!(
-        "{}  other\r\n{sha} *Helm-3.0.0-setup.exe\n{}  Helm-3.0.0-setup.exe.minisig\n",
+        "{}  other\r\n{sha} *Floti-3.0.0-setup.exe\n{}  Floti-3.0.0-setup.exe.minisig\n",
         "c".repeat(64),
         "d".repeat(64)
     );
     assert_eq!(
-        listed_sha256(&list, "Helm-3.0.0-setup.exe"),
+        listed_sha256(&list, "Floti-3.0.0-setup.exe"),
         Some(sha.to_ascii_lowercase())
     );
     assert_eq!(
@@ -822,9 +822,9 @@ fn a_sha256_list_line_gives_its_file_s_digest_in_either_of_sha256sum_s_modes() {
         Some("c".repeat(64)),
         "a CRLF line"
     );
-    assert_eq!(listed_sha256(&list, "Helm-3.0.0"), None);
+    assert_eq!(listed_sha256(&list, "Floti-3.0.0"), None);
     assert_eq!(
-        listed_sha256("zz  Helm-3.0.0-setup.exe\n", "Helm-3.0.0-setup.exe"),
+        listed_sha256("zz  Floti-3.0.0-setup.exe\n", "Floti-3.0.0-setup.exe"),
         None
     );
     let not_hex = format!("{}  f\n", "g".repeat(64));
@@ -839,9 +839,9 @@ fn the_desktop_files_are_named_as_the_release_workflow_names_them() {
     )
     .unwrap();
     for (target, file) in [
-        ("windows-x64", "Helm-${version}-setup.exe"),
-        ("macos-arm64", "Helm-${version}-arm64-mac.zip"),
-        ("linux-x64", "Helm-${version}-linux-x64.AppImage"),
+        ("windows-x64", "Floti-${version}-setup.exe"),
+        ("macos-arm64", "Floti-${version}-arm64-mac.zip"),
+        ("linux-x64", "Floti-${version}-linux-x64.AppImage"),
     ] {
         assert!(
             workflow.contains(&format!("`{file}`")),
@@ -852,8 +852,8 @@ fn the_desktop_files_are_named_as_the_release_workflow_names_them() {
             Some(file.replace("${version}", "3.0.0").as_str())
         );
     }
-    assert!(workflow.contains("`Helm-${version}-SHA256SUMS`"));
-    assert_eq!(desktop_sums_name(&version), "Helm-3.0.0-SHA256SUMS");
+    assert!(workflow.contains("`Floti-${version}-SHA256SUMS`"));
+    assert_eq!(desktop_sums_name(&version), "Floti-3.0.0-SHA256SUMS");
     for target in ["windows-arm64", "linux-arm64", "freebsd-x64"] {
         assert_eq!(desktop_file(&version, target), None, "{target}");
     }

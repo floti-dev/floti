@@ -105,9 +105,9 @@ win:
     - portable
     - nsis
 portable:
-  artifactName: Helm-${version}-portable.exe
+  artifactName: Floti-${version}-portable.exe
 nsis:
-  artifactName: Helm-${version}-setup.exe
+  artifactName: Floti-${version}-setup.exe
   # Per-user, in %LOCALAPPDATA%\Programs\Floti\desktop. Nothing Floti does needs
   # administrator rights, and an installer that asks for them is one a person
   # cannot run on a machine they do not own.
@@ -175,7 +175,7 @@ mac:
     - target: zip
       arch: [arm64]
   # The zip's name. The dmg names itself below.
-  artifactName: Helm-${version}-${arch}-mac.${ext}
+  artifactName: Floti-${version}-${arch}-mac.${ext}
   # Ad-hoc signed: a code signature with no certificate behind it. Apple Silicon
   # will not run an unsigned arm64 binary at all, and there is no Developer ID
   # to sign with, so this is the signature the app can have. A downloaded copy
@@ -201,7 +201,7 @@ mac:
   # macOS into dark mode.
   darkModeSupport: true
 dmg:
-  artifactName: Helm-${version}-${arch}.${ext}
+  artifactName: Floti-${version}-${arch}.${ext}
 
 # Built by `pnpm dist:linux`, on Linux or the ubuntu-latest runner. One
 # AppImage, x64 only: an arm64 Linux desktop is not built, though floti itself
@@ -240,4 +240,4 @@ appImage:
   executableArgs: []
   # Written out rather than `${arch}`, which an AppImage spells `x86_64`: the
   # release names every file's CPU as floti's files do, and Linux is x64 only.
-  artifactName: Helm-${version}-linux-x64.${ext}
+  artifactName: Floti-${version}-linux-x64.${ext}

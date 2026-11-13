@@ -130,7 +130,7 @@ describe('the Homebrew formula', () => {
 
   it('carries nothing for Windows and nothing but the binary', () => {
     expect(formula).not.toContain('windows')
-    expect(formula).not.toContain('Helm-')
+    expect(formula).not.toContain('Floti-')
     expect(formula).not.toContain('cask')
     expect(formula.match(/^\s*url "/gm)).toHaveLength(3)
   })
