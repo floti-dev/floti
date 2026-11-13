@@ -8,6 +8,7 @@ use subtle::ConstantTimeEq;
 use super::{Caller, GrantId, KeptGrant};
 use crate::agent::{fill_random, hex};
 use crate::agent_config::sha256_hex;
+use crate::plugins::info::AGENT_SERVER_PREFIX;
 use crate::session::SessionId;
 
 /// Bytes of randomness in a token. Written as hex, so a token is twice as
@@ -70,7 +71,10 @@ impl Tokens {
     }
 
     /// Accepts again, for `session`, the token whose hash and families
-    /// `kept` holds: a session that outlived the host that minted it.
+    /// `kept` holds: a session that outlived the host that minted it. A
+    /// family kept under the name it had while the app was called Helm is
+    /// held under its name now ([`current_family`]), so a session that ran
+    /// across the update keeps every tool it was given.
     pub(super) fn take_back(&mut self, kept: &KeptGrant, session: SessionId) -> GrantId {
         let grant = GrantId(self.next_grant);
         self.next_grant += 1;
@@ -78,7 +82,11 @@ impl Tokens {
             token: Proof::Hashed(kept.token_sha256.to_ascii_lowercase()),
             grant,
             session: Some(session),
-            families: kept.families.clone().into(),
+            families: kept
+                .families
+                .iter()
+                .map(|family| current_family(family))
+                .collect(),
         });
         grant
     }
@@ -152,6 +160,24 @@ impl Tokens {
     }
 }
 
+/// What the family a grant kept as `name` is called now: `helm-browser`,
+/// `helm-sessions` and `helm-plugin-<id>` were the names of `floti-browser`,
+/// `floti-sessions` and `floti-plugin-<id>` while the app was called Helm.
+/// Any other name is as it was.
+pub(super) fn current_family(name: &str) -> String {
+    const RENAMED: [(&str, &str); 2] = [
+        ("helm-browser", "floti-browser"),
+        ("helm-sessions", "floti-sessions"),
+    ];
+    if let Some((_, now)) = RENAMED.iter().find(|(then, _)| *then == name) {
+        return (*now).to_owned();
+    }
+    match name.strip_prefix("helm-plugin-") {
+        Some(id) if !id.is_empty() => format!("{AGENT_SERVER_PREFIX}{id}"),
+        _ => name.to_owned(),
+    }
+}
+
 /// The credential in `Bearer <credential>`, the scheme in any case.
 fn bearer(authorization: &[u8]) -> Option<&[u8]> {
     let value = authorization.trim_ascii();
@@ -163,4 +189,50 @@ fn bearer(authorization: &[u8]) -> Option<&[u8]> {
     let credential = rest.trim_ascii_start();
     // A space or tab must separate them: `Bearerabc` is not a bearer token.
     (credential.len() < rest.len() && !credential.is_empty()).then_some(credential)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn kept(families: &[&str]) -> KeptGrant {
+        KeptGrant {
+            port: 1,
+            token_sha256: sha256_hex(b"a kept token").to_ascii_uppercase(),
+            families: families.iter().map(|family| (*family).to_owned()).collect(),
+        }
+    }
+
+    #[test]
+    fn a_grant_kept_under_the_names_from_before_the_rename_holds_the_families_now() {
+        let mut tokens = Tokens::default();
+        let grant = tokens.take_back(
+            &kept(&["helm-browser", "helm-sessions", "helm-plugin-notes", "floti-agents"]),
+            SessionId(7),
+        );
+
+        let holder = tokens.resolve(b"Bearer a kept token").expect("the kept token");
+        for family in ["floti-browser", "floti-sessions", "floti-plugin-notes", "floti-agents"] {
+            assert!(holder.holds(family), "{family}");
+        }
+        for old in ["helm-browser", "helm-sessions", "helm-plugin-notes"] {
+            assert!(!holder.holds(old), "{old}");
+        }
+        assert_eq!(holder.caller.session, Some(SessionId(7)));
+        // What the host keeps for the next one is the names now.
+        assert_eq!(
+            tokens.kept(grant, 2).unwrap().families,
+            ["floti-browser", "floti-sessions", "floti-plugin-notes", "floti-agents"]
+        );
+    }
+
+    #[test]
+    fn a_family_named_as_it_is_now_or_by_nothing_known_stays_as_it_was() {
+        assert_eq!(current_family("floti-browser"), "floti-browser");
+        assert_eq!(current_family("floti-plugin-trackr"), "floti-plugin-trackr");
+        assert_eq!(current_family("floti-agents"), "floti-agents");
+        assert_eq!(current_family("helm-plugin-"), "helm-plugin-");
+        assert_eq!(current_family("something-else"), "something-else");
+        assert_eq!(current_family("helm-plugin-a-b"), "floti-plugin-a-b");
+    }
 }

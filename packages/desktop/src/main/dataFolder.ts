@@ -1,4 +1,6 @@
+import { spawnSync } from 'node:child_process'
 import {
+  chmodSync,
   copyFileSync,
   constants as fsConstants,
   existsSync,
@@ -96,6 +98,35 @@ const STORE_FILE = 'helm.db'
 /** What a copy in progress is called beside the folder it becomes. */
 const COPYING = '.copying-'
 
+/**
+ * Chromium's caches, which the copy leaves out at any depth: each is made
+ * again as it is needed, and a large one would hold up the first start as
+ * Floti before any window opens. Compared ignoring case.
+ */
+export const CACHE_FOLDERS: ReadonlySet<string> = new Set(
+  [
+    'Cache',
+    'Code Cache',
+    'GPUCache',
+    'DawnCache',
+    'DawnGraphiteCache',
+    'DawnWebGPUCache',
+    'GrShaderCache',
+    'GraphiteDawnCache',
+    'ShaderCache'
+  ].map((name) => name.toLowerCase())
+)
+
+/**
+ * The folders whose files are keys: this PC's host's client folder
+ * (`host-client`) and each remote host's (`remote-hosts/<id>`), each holding
+ * a device key and the host key it pinned. The host writes them owner-only
+ * (`platform/private_files`); a copy carries no access list on Windows, so
+ * each copied file there is made owner-only again before the copy is in
+ * place.
+ */
+export const KEY_FOLDERS: readonly string[] = ['host-client', 'remote-hosts']
+
 /** What starting found, and did, about Helm's data. */
 export type DataMove =
   /** The data is in Floti's folder already, or there was none to move. */
@@ -111,9 +142,55 @@ export interface MoveWorld {
   probe: (pid: number) => OwnerLiveness
   /** This process's id, which names its copy in progress. */
   pid: number
+  /** Makes the file at a path readable and writable by the current user alone. */
+  ownerOnly: (path: string) => void
 }
 
-const REAL_WORLD: MoveWorld = { probe: probeProcess, pid: process.pid }
+const REAL_WORLD: MoveWorld = { probe: probeProcess, pid: process.pid, ownerOnly: makeOwnerOnly }
+
+/**
+ * Makes the file at `path` the current user's alone, as the host's
+ * `platform/private_files` makes a key: `0600` on macOS and Linux; on
+ * Windows a protected access list with one entry, full access for the
+ * current user, set by `icacls` (inheritance removed, the user's grant
+ * replacing any other). Throws when it could not.
+ */
+export function makeOwnerOnly(path: string): void {
+  if (process.platform !== 'win32') {
+    chmodSync(path, 0o600)
+    return
+  }
+  const icacls = spawnSync(
+    systemProgram('icacls.exe'),
+    [path, '/inheritance:r', '/grant:r', `*${currentUserSid()}:F`],
+    { windowsHide: true, encoding: 'utf8' }
+  )
+  if (icacls.status !== 0) {
+    throw new Error(`icacls could not make ${path} owner-only: ${(icacls.stderr || icacls.stdout || String(icacls.error)).trim()}`)
+  }
+}
+
+/** A program in Windows' System32, never one found on `PATH`. */
+function systemProgram(name: string): string {
+  return win32.join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', name)
+}
+
+let userSid: string | undefined
+
+/** The SID of the user this process runs as, from `whoami /user`. */
+function currentUserSid(): string {
+  if (userSid !== undefined) return userSid
+  const whoami = spawnSync(systemProgram('whoami.exe'), ['/user', '/fo', 'csv', '/nh'], {
+    windowsHide: true,
+    encoding: 'utf8'
+  })
+  const sid = /"(S-1-[0-9-]+)"\s*$/m.exec(whoami.stdout ?? '')?.[1]
+  if (whoami.status !== 0 || sid === undefined) {
+    throw new Error(`whoami did not say who this user is: ${(whoami.stderr || String(whoami.error)).trim()}`)
+  }
+  userSid = sid
+  return sid
+}
 
 /**
  * Copies Helm's data folder `from` to Floti's `to`, once, before anything
@@ -125,8 +202,10 @@ const REAL_WORLD: MoveWorld = { probe: probeProcess, pid: process.pid }
  * halfway is never taken for the data. Links are not copied and never walked
  * into: Helm's folder holds junctions (symlinks on macOS and Linux) into the
  * user's repositories under `overlays/`, which the start-up sweep makes again
- * as sessions need them. The copy records where it came from
- * ([`MOVED_FROM_FILE`]); `from` itself is left exactly as it was.
+ * as sessions need them. Chromium's caches ([`CACHE_FOLDERS`]) are left out,
+ * and the keys in [`KEY_FOLDERS`] are made owner-only again. The copy records
+ * where it came from ([`MOVED_FROM_FILE`]); `from` itself is left exactly as
+ * it was.
  *
  * A copy left beside `to` by a start that ended before renaming it is removed
  * first, when the process that made it is gone.
@@ -138,7 +217,7 @@ export function moveHelmData(from: string, to: string, world: MoveWorld = REAL_W
   const copy = join(dirname(to), `.${basename(to)}${COPYING}${String(world.pid)}`)
   try {
     mkdirSync(dirname(to), { recursive: true })
-    copyTree(from, copy)
+    copyTree(from, copy, '', world)
     writeFileSync(join(copy, MOVED_FROM_FILE), `${JSON.stringify({ from }, null, 2)}\n`)
     renameSync(copy, to)
     return { kind: 'moved', from, to }
@@ -218,17 +297,25 @@ function sweepCopies(to: string, world: MoveWorld): void {
 
 /**
  * Copies the folder `from` to `to`, which must not exist: folders and files,
- * no links, nothing else (sockets and the like).
+ * no links, no caches ([`CACHE_FOLDERS`]) and nothing else (sockets and the
+ * like). `top` is the first folder under the data folder this one is in, or
+ * `''` for the data folder itself; a file under one of [`KEY_FOLDERS`] is
+ * made owner-only once copied.
  */
-function copyTree(from: string, to: string): void {
+function copyTree(from: string, to: string, top: string, world: MoveWorld): void {
   mkdirSync(to)
   for (const name of readdirSync(from)) {
     const source = join(from, name)
     const target = join(to, name)
     const stat = lstatSync(source)
     if (stat.isSymbolicLink()) continue
-    if (stat.isDirectory()) copyTree(source, target)
-    else if (stat.isFile()) copyFileSync(source, target, fsConstants.COPYFILE_EXCL)
+    if (stat.isDirectory()) {
+      if (CACHE_FOLDERS.has(name.toLowerCase())) continue
+      copyTree(source, target, top === '' ? name : top, world)
+    } else if (stat.isFile()) {
+      copyFileSync(source, target, fsConstants.COPYFILE_EXCL)
+      if (KEY_FOLDERS.includes(top)) world.ownerOnly(target)
+    }
   }
 }
 

@@ -43,6 +43,17 @@ describe('the Windows installer', () => {
     expect(nsh).toContain('"$PLUGINSDIR\\helm-uninstaller.exe" /S /currentuser _?=$helmInstall')
   })
 
+  it('finds a running app by its path alone, never by an image name the host shares but for case', () => {
+    const code = nsh
+      .split('\n')
+      .filter((line) => !line.trim().startsWith(';'))
+      .join('\n')
+    expect(code).toContain('!insertmacro FLOTI_CHECK_APP_RUNNING')
+    expect(code).not.toMatch(/!insertmacro _CHECK_APP_RUNNING\b/)
+    expect(code).not.toMatch(/\b(taskkill|tasklist)\b|IMAGENAME|\/IM /)
+    expect(code).toContain("$$_.Path.StartsWith('$INSTDIR\\', 'CurrentCultureIgnoreCase')")
+  })
+
   it("installs beside floti's own folder, as the host looks for it", () => {
     expect(nsh).toContain('!define FLOTI_INSTALL_FOLDER "Floti\\desktop"')
     expect(nsh).toContain('StrCpy $INSTDIR "$LOCALAPPDATA\\Programs\\${FLOTI_INSTALL_FOLDER}"')

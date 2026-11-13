@@ -32,6 +32,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+use crate::platform::links;
 use crate::{Error, Result};
 
 #[cfg(test)]
@@ -193,16 +194,48 @@ impl ConfigMove {
 ///
 /// - No `~/.config/helm`: nothing.
 /// - No `~/.config/floti`: the folder is renamed whole, every file and link
-///   in it as it was.
+///   in it as it was. A `~/.config/helm` that is itself a link (a symlink,
+///   or a junction on Windows) is renamed as the link, and what it points
+///   to stays where it is.
 /// - Both: each entry of Helm's is renamed into Floti's, and Helm's empty
 ///   folder removed, but only when no entry is in both, so no file of the
 ///   user's is ever replaced. Otherwise nothing moves and the reason names
-///   the entries in both. A rename that fails partway is undone.
+///   the entries in both. A rename that fails partway is undone. A
+///   `~/.config/helm` that is a link is never emptied this way: nothing
+///   moves, and the reason says so.
 ///
 /// Only a host that may write its config folder calls this: one started
 /// with [`CONFIG_READ_ONLY_VAR`] moves nothing.
 pub fn move_helm_config(home: &Path) -> ConfigMove {
     move_helm_config_with(home, |from, to| std::fs::rename(from, to))
+}
+
+/// The folders a host starting with `folders` reads once Helm's config
+/// folder has been moved ([`move_helm_config`]), and what the move did. It
+/// moves only for a host that may write its config folder (`read_only` is
+/// [`CONFIG_READ_ONLY_VAR`] being set) whose config folder is Helm's own in
+/// `home`, not one `FLOTI_CONFIG_DIR` moved: otherwise nothing moves and
+/// `folders` is as it was.
+pub fn after_helm_config_move(
+    folders: Folders,
+    home: Option<&Path>,
+    read_only: bool,
+) -> (Folders, ConfigMove) {
+    let Some(home) = home else {
+        return (folders, ConfigMove::Nothing);
+    };
+    if read_only || folders.config != home.join(".config").join(HELM_CONFIG_FOLDER) {
+        return (folders, ConfigMove::Nothing);
+    }
+    let moved = move_helm_config(home);
+    let folders = match moved.config() {
+        Some(config) => Folders {
+            config: config.to_path_buf(),
+            ..folders
+        },
+        None => folders,
+    };
+    (folders, moved)
 }
 
 /// [`move_helm_config`], renaming with `rename`.
@@ -232,6 +265,12 @@ pub(crate) fn move_helm_config_with(
     }
     if !to.is_dir() {
         return kept(format!("{} is not a folder", to.display()));
+    }
+    if links::is_link(&from) {
+        return kept(format!(
+            "it is a link and {} is there too, and moving what it points to would empty that folder",
+            to.display()
+        ));
     }
     let names = match std::fs::read_dir(&from) {
         Ok(entries) => {

@@ -26,7 +26,7 @@ beforeAll(() => {
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'helm sdk types-')))
   mkdirSync(join(root, 'node_modules', '@floti-dev'), { recursive: true })
   // The SDK as installed: a junction on Windows, which needs no elevation, and a symlink elsewhere.
-  symlinkSync(SDK_DIR, join(root, 'node_modules', '@floti-dev', 'helm-plugin-sdk'), 'junction')
+  symlinkSync(SDK_DIR, join(root, 'node_modules', '@floti-dev', 'plugin-sdk'), 'junction')
 })
 
 afterAll(() => {

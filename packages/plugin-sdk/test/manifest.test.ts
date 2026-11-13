@@ -384,12 +384,31 @@ describe('validateManifest - tools for sessions', () => {
     [
       'a name a session would be handed past 64 characters',
       { id: 'a-plugin-with-a-rather-long-id', background: 'bg.html', agent: { tools: { list_every_single_thing: tool } } },
-      'a session sees it as mcp__floti-plugin-a-plugin-with-a-rather-long-id__list_every_single_thing, which is 72 characters'
+      'a session sees it as mcp__floti-plugin-a-plugin-with-a-rather-long-id__list_every_single_thing, which is 73 characters; Claude takes at most 64'
     ]
   ])('refuses %s', (_what, patch, message) => {
     const errors = errorsFor(patch)
     expect(errors.length).toBeGreaterThan(0)
     expect(errors.join('\n')).toContain(message)
+  })
+})
+
+describe("the name a session sees for a plugin's tool", () => {
+  const tool = { description: 'Lists the things.' }
+  // mcp__ (5) + floti-plugin- (13) + the id + __ (2) + the tool: 20 characters and the two names.
+  const id = 'abcdefghijklmnopqrst'
+
+  it('is accepted at 64 characters, the most Claude takes', () => {
+    const name = `list_${'x'.repeat(64 - 20 - id.length - 5)}`
+    expect(`mcp__floti-plugin-${id}__${name}`).toHaveLength(64)
+    expect(errorsFor({ id, background: 'bg.html', agent: { tools: { [name]: tool } } })).toEqual([])
+  })
+
+  it('is refused one character past it, naming the limit', () => {
+    const name = `list_${'x'.repeat(64 - 20 - id.length - 4)}`
+    expect(errorsFor({ id, background: 'bg.html', agent: { tools: { [name]: tool } } }).join('\n')).toContain(
+      `which is 65 characters; Claude takes at most 64. Shorten the tool's name or the plugin's id`
+    )
   })
 })
 

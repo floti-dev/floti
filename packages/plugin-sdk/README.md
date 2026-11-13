@@ -691,7 +691,11 @@ floti.tools.handle('create_item', async (args, { session, signal }) => {
   together. 2000 characters at most, as is each `description`.
 - Tool names are lower-case letters, digits, `_` and `-`, starting with a
   letter. A session calls `list_items` as `mcp__floti-plugin-<id>__list_items`,
-  and that whole name may be 64 characters at most.
+  and that whole name may be 64 characters at most. The prefix was
+  `helm-plugin-` before 1.6.0, one character shorter, so a name that was
+  exactly 64 characters then is 65 now and is refused until the tool's name
+  or the plugin's id is one character shorter; `helm-plugin validate` names
+  the length and the limit.
 - `inputSchema` is JSON Schema with `type: "object"`; without one a tool takes
   no arguments. Floti passes it to the session as written and does **not** check
   a call's arguments against it, so a handler treats them as untrusted input.

@@ -314,8 +314,8 @@ impl Installs for Native {
 
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<Desktop> {
         // In the folder the app is in, under its own name: `Floti.AppImage`
-        // beside a `Helm.AppImage` from before the rename, which goes once
-        // it is in.
+        // beside a `Helm.AppImage` from before the rename, which
+        // `remove_replaced` takes away once it is in.
         let installed = Desktop {
             name: DESKTOP_NAME,
             path: desktop
@@ -331,11 +331,15 @@ impl Installs for Native {
         posix::rename_over(&installed.path, &new).inspect_err(|_| {
             let _ = std::fs::remove_file(&new);
         })?;
-        if desktop.path != installed.path {
-            std::fs::remove_file(&desktop.path)
-                .map_err(|source| Error::path("remove", &desktop.path, source))?;
-        }
         Ok(installed)
+    }
+
+    fn remove_replaced(&self, replaced: &Desktop, installed: &Desktop) -> Result<()> {
+        if replaced.path == installed.path {
+            return Ok(());
+        }
+        std::fs::remove_file(&replaced.path)
+            .map_err(|source| Error::path("remove", &replaced.path, source))
     }
 }
 

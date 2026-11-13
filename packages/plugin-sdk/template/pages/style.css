@@ -1,7 +1,7 @@
 /*
- * Layout only. Colours, type, buttons and rows are Helm's: its primitives
+ * Layout only. Colours, type, buttons and rows are Floti's: its primitives
  * stylesheet is on the page before this one, and the theme is on <html> as
- * --helm-* variables that Helm keeps current.
+ * --helm-* variables that Floti keeps current.
  */
 
 .page {
