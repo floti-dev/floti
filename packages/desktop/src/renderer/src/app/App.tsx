@@ -228,10 +228,9 @@ import {
   type HostInstallActions,
   AddHostDialog,
   type AddHostActions,
-  UpgradeNoteDialog,
 } from "@helm/ui";
 import { sidebarFor, type SidebarView } from "./sidebarFor";
-import { upgradeNoteDue } from "./upgradeNote";
+import { UpgradeNote } from "./UpgradeNote";
 import { viewRailItems } from "./railViews";
 import { AgentTab } from "./agents/AgentTab";
 import { forgetAgentDraft } from "./agents/useAgentDraft";
@@ -1016,11 +1015,6 @@ export function App(): JSX.Element {
   );
 
   const { writeSettings } = launcher;
-  const [upgradeNoteClosed, setUpgradeNoteClosed] = useState(false);
-  const closeUpgradeNote = useCallback(() => {
-    setUpgradeNoteClosed(true);
-    writeSettings({ upgradeNoteSeenAt: new Date().toISOString() });
-  }, [writeSettings]);
   const locateShell = useCallback(() => {
     void helm
       .invoke("path:chooseFile", { title: "Choose a shell" })
@@ -4636,23 +4630,17 @@ export function App(): JSX.Element {
       />
     );
 
-  /**
-   * The note someone coming from an earlier Helm sees once, over their own
-   * sessions: never during first run, and never again once closed in any way.
-   * A first run that finishes counts it seen (`completeSetup` in main), so a
-   * new install never shows it. Closed here at once, whatever the write does,
-   * so a slow or failed write cannot leave it on screen.
-   */
-  const upgradeNote =
-    upgradeNoteClosed || !upgradeNoteDue(settings, setup.needed) ? null : (
-      <UpgradeNoteDialog
-        onClose={closeUpgradeNote}
-        onWhatsNew={() => {
-          closeUpgradeNote();
-          if (info !== null) openBrowser({ url: info.releasesUrl });
-        }}
-      />
-    );
+  /** The note someone coming from an earlier Helm sees once (`UpgradeNote`). */
+  const upgradeNote = (
+    <UpgradeNote
+      settings={settings}
+      setupNeeded={setup.needed}
+      writeSettings={writeSettings}
+      onWhatsNew={() => {
+        if (info !== null) openBrowser({ url: info.releasesUrl });
+      }}
+    />
+  );
 
   /** Rendered by both branches: creating a workspace is a first-run action and
    * an every-day one, and two copies of the dialog would drift apart. */

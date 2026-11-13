@@ -309,11 +309,7 @@ export function createHostWorkspace({
     },
 
     async completeSetup() {
-      const settings = adoptSettings(await (await host()).request('setup:complete', null))
-      // A first run that finishes is a new install, or one that was never set
-      // up: there was nothing before it to say was renamed.
-      if (settings.upgradeNoteSeenAt !== null) return settings
-      return overlay(writeOwn({ upgradeNoteSeenAt: new Date().toISOString() }))
+      return adoptSettings(await (await host()).request('setup:complete', null))
     },
 
     async createWorkspace(request) {

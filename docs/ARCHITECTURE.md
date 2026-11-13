@@ -227,8 +227,10 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#helm-browser).
 - Someone upgrading sees once, over their sessions, that harnesses are now
   called workspaces and nothing in their folders changed
   (`UpgradeNoteDialog`). Whether it was seen is `upgradeNoteSeenAt` in
-  `helm.db`; a first run that completes stamps it too, so a new install never
-  shows it.
+  `helm.db`. Only a `helm.db` from before migration 0032 leaves it unseen: one
+  created on this release is stamped as main opens it (`settleUpgradeNote`),
+  so a new device, or one whose data was reset, never sees it whatever its
+  host says. Every isolated copy (`pnpm dev`, the checks) is stamped too.
 
 ## Terminals and session state
 

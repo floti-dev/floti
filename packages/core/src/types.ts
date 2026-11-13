@@ -1677,10 +1677,10 @@ export interface AppSettings {
    * When the upgrade note was closed: the dialog that tells someone coming
    * from an earlier Helm, once, that harnesses are now called workspaces and
    * nothing in their folders changed. Null means it has not been, and it shows
-   * over the sessions once setup is finished. A first run that completes
-   * stamps it as well, so a new install never sees it. Kept on this device in
-   * `helm.db`, never on the host: each window that was used before says it
-   * once.
+   * over the sessions once setup is not on screen. Only a `helm.db` from before
+   * the rename is left null: one created on this release is stamped as it
+   * opens (`settleUpgradeNote`), so a new or reset device never sees it,
+   * whatever its host says. Kept on this device, never on the host.
    */
   upgradeNoteSeenAt: string | null
   /**

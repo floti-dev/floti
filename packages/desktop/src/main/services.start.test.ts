@@ -61,6 +61,11 @@ describe('app start', () => {
   const skillThroughShim = (shim: PlantedShim): string =>
     readFileSync(join(shim.dir, 'skills', workspace.skill, 'SKILL.md'), 'utf8')
 
+  it('counts the upgrade note seen in a data folder this start made, so a new device never shows it', () => {
+    // Whichever test starts first makes the database; the stamp it gets then is kept.
+    expect(start().settings.upgradeNoteSeenAt).not.toBeNull()
+  })
+
   it('sweeps a shim whose owner has exited, and leaves the repository it linked', () => {
     const shim = buildShim()
     const gone = exitedPid()

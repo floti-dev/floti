@@ -3,6 +3,7 @@ import {
   openStore,
   readSettings,
   reconcileRunningSessions,
+  settleUpgradeNote,
   writeSettings,
   type AppSettings,
   type LostSession,
@@ -40,6 +41,7 @@ export interface Services {
 
 export function createServices(): Services {
   const store = openStore({ file: dbFile })
+  settleUpgradeNote(store)
   const settings = readSettings(store)
   return {
     store,

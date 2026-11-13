@@ -492,20 +492,4 @@ describe('the workspace through the local host', () => {
     expect(after.firstRunCompletedAt).toBe('2026-10-30T11:00:00.000Z')
     expect(w.own.own().firstRunCompletedAt).toBeNull()
   })
-
-  it('counts the upgrade note seen when setup finishes, so a new install never shows it', async () => {
-    const w = world()
-    const after = await w.workspace.completeSetup()
-    expect(after.upgradeNoteSeenAt).not.toBeNull()
-    expect(w.own.own().upgradeNoteSeenAt).toBe(after.upgradeNoteSeenAt)
-    expect(w.own.writes).toEqual([{ upgradeNoteSeenAt: after.upgradeNoteSeenAt }])
-  })
-
-  it('leaves a seen upgrade note as it was when setup finishes again', async () => {
-    const seen = '2026-11-13T09:00:00.000Z'
-    const own = ownSettings({ upgradeNoteSeenAt: seen })
-    const w = world(undefined, own)
-    expect((await w.workspace.completeSetup()).upgradeNoteSeenAt).toBe(seen)
-    expect(own.writes).toEqual([])
-  })
 })

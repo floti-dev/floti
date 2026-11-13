@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
@@ -21,6 +21,7 @@ import { sessions } from './schema'
 import { reconcileRunningSessions } from './sessions'
 import {
   readSettings,
+  settleUpgradeNote,
   validateSetting,
   writeSetting,
   writeSettings,
@@ -152,6 +153,89 @@ describe('openStore', () => {
     } finally {
       raw.close()
     }
+  })
+})
+
+describe('the upgrade note as the database opens', () => {
+  const RENAME = '0032_workspaces_were_harnesses'
+
+  /** A database file holding every migration before the rename, as an earlier Helm left it. */
+  function earlierHelmDatabase(file: string): void {
+    const raw = new Database(file)
+    try {
+      raw.exec('CREATE TABLE __helm_migrations (tag TEXT PRIMARY KEY, applied_at TEXT NOT NULL)')
+      const upTo = MIGRATIONS.findIndex((migration) => migration.tag === RENAME)
+      expect(upTo).toBeGreaterThan(0)
+      for (const migration of MIGRATIONS.slice(0, upTo)) {
+        for (const statement of migration.statements) raw.exec(statement)
+        raw.prepare('INSERT INTO __helm_migrations (tag, applied_at) VALUES (?, ?)').run(migration.tag, '2026-11-01T00:00:00.000Z')
+      }
+    } finally {
+      raw.close()
+    }
+  }
+
+  /** Opens `file` as main does: migrated, then the note settled. */
+  function openAsMain(file: string): Store {
+    const opened = openStore({ file })
+    settleUpgradeNote(opened)
+    return opened
+  }
+
+  it('counts the note seen on a database this open created, so a new or reset device never sees it', async () => {
+    await withFile((file, created) => {
+      created.close()
+      const folder = dirname(file)
+      const fresh = openAsMain(join(folder, 'fresh.db'))
+      try {
+        expect(fresh.migrations.alreadyApplied).toEqual([])
+        expect(readSettings(fresh).upgradeNoteSeenAt).not.toBeNull()
+      } finally {
+        fresh.close()
+      }
+    })
+  })
+
+  it('leaves the note due on a database an earlier Helm used, on this open and every one after until it is closed', async () => {
+    await withFile((file, created) => {
+      created.close()
+      const earlier = join(dirname(file), 'earlier.db')
+      earlierHelmDatabase(earlier)
+
+      const first = openAsMain(earlier)
+      expect(first.migrations.applied).toEqual([RENAME])
+      expect(readSettings(first).upgradeNoteSeenAt).toBeNull()
+      first.close()
+
+      const again = openAsMain(earlier)
+      expect(again.migrations.applied).toEqual([])
+      expect(readSettings(again).upgradeNoteSeenAt).toBeNull()
+      writeSettings(again, { upgradeNoteSeenAt: '2026-11-13T09:00:00.000Z' })
+      again.close()
+
+      const closed = openAsMain(earlier)
+      try {
+        expect(readSettings(closed).upgradeNoteSeenAt).toBe('2026-11-13T09:00:00.000Z')
+      } finally {
+        closed.close()
+      }
+    })
+  })
+
+  it('keeps the stamp a new database got when it is opened again', async () => {
+    await withFile((file, created) => {
+      created.close()
+      const fresh = join(dirname(file), 'fresh.db')
+      const first = openAsMain(fresh)
+      const stamped = readSettings(first).upgradeNoteSeenAt
+      first.close()
+      const again = openAsMain(fresh)
+      try {
+        expect(readSettings(again).upgradeNoteSeenAt).toBe(stamped)
+      } finally {
+        again.close()
+      }
+    })
   })
 })
 

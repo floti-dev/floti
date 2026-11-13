@@ -252,10 +252,11 @@ export function seedDatabase(dataDir, { keepUiState = false } = {}) {
   // quietly reverting to inheriting somebody's tabs is precisely the failure
   // this is here to end.
   //
-  // A check's copy also counts the upgrade note seen, as completing first-run
-  // is: a driver decides what is on screen, and a dialog over every surface
-  // it drives is not somewhere anybody left the app. `pnpm dev` keeps the
-  // real app's row, so the note shows there until the real app has shown it.
+  // Every copy also counts the upgrade note seen where the real app's row
+  // lacks it. The copy is made again on every start, so a note left due there
+  // would cover every dev window and every check's screen, and closing it
+  // would never stick; a driver decides what is on screen, and the note is
+  // not somewhere anybody left the app.
   //
   // And the rows still claiming to be running are the real app's sessions,
   // live in it right now, not a crash of this one: left as they are, the copy
@@ -284,15 +285,13 @@ export function seedDatabase(dataDir, { keepUiState = false } = {}) {
     '  copy.close()',
     '  if (left.length > 0) throw new Error(`still in the copy after the strip: ${left.join(", ")}`)',
     '}',
-    'if (JSON.parse(process.argv[4])) {',
-    '  const copy = new Database(process.argv[2], { fileMustExist: true })',
-    "  copy.prepare(\"INSERT OR IGNORE INTO app_settings (key, value) VALUES ('upgradeNoteSeenAt', ?)\").run(JSON.stringify(new Date().toISOString()))",
-    '  copy.close()',
-    '}'
+    'const stamped = new Database(process.argv[2], { fileMustExist: true })',
+    "stamped.prepare(\"INSERT OR IGNORE INTO app_settings (key, value) VALUES ('upgradeNoteSeenAt', ?)\").run(JSON.stringify(new Date().toISOString()))",
+    'stamped.close()'
   ].join('\n')
   const { status, stderr } = spawnSync(
     electronBinary(),
-    ['-e', script, source, dest, JSON.stringify(keepUiState ? [] : UI_STATE_KEYS), JSON.stringify(!keepUiState)],
+    ['-e', script, source, dest, JSON.stringify(keepUiState ? [] : UI_STATE_KEYS)],
     {
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
       encoding: 'utf8'
