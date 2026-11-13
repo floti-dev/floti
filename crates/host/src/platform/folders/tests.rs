@@ -4,6 +4,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use super::*;
+use crate::platform::links::{self, FolderLinks};
 use crate::platform::socket::{LocalSocket, Native as NativeSocket};
 use crate::testkit::TestDirs;
 
@@ -364,4 +365,98 @@ fn there_is_nothing_to_move_without_helms_folder() {
     assert_eq!(move_helm_config(&dirs.home), ConfigMove::Nothing);
     assert_eq!(move_helm_config(&dirs.home).config(), None);
     assert!(!dirs.home.join(".config").join("floti").exists());
+}
+
+fn folders_with_config(dirs: &TestDirs, config: PathBuf) -> Folders {
+    Folders {
+        data: dirs.root().join("data"),
+        logs: dirs.root().join("logs"),
+        config,
+        runtime: dirs.root().join("run"),
+    }
+}
+
+#[test]
+fn a_host_that_may_not_write_its_config_folder_moves_nothing() {
+    let dirs = TestDirs::new();
+    let helm = dirs.home.join(".config").join("helm");
+    write(&helm.join("themes").join("mine.json"), "theme");
+
+    let (folders, moved) =
+        after_helm_config_move(folders_with_config(&dirs, helm.clone()), Some(&dirs.home), true);
+
+    assert_eq!(moved, ConfigMove::Nothing);
+    assert_eq!(folders.config, helm);
+    assert!(helm.join("themes").join("mine.json").is_file());
+    assert!(!dirs.home.join(".config").join("floti").exists());
+}
+
+#[test]
+fn a_host_whose_config_folder_was_moved_elsewhere_moves_nothing() {
+    let dirs = TestDirs::new();
+    let helm = dirs.home.join(".config").join("helm");
+    write(&helm.join("themes").join("mine.json"), "theme");
+    let elsewhere = dirs.folder("a config folder of its own");
+
+    let (folders, moved) =
+        after_helm_config_move(folders_with_config(&dirs, elsewhere.clone()), Some(&dirs.home), false);
+
+    assert_eq!(moved, ConfigMove::Nothing);
+    assert_eq!(folders.config, elsewhere);
+    assert!(helm.join("themes").join("mine.json").is_file());
+    assert!(!dirs.home.join(".config").join("floti").exists());
+}
+
+#[test]
+fn the_host_that_may_write_helms_config_folder_moves_it_and_reads_flotis() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    write(&config.join("helm").join("themes").join("mine.json"), "theme");
+
+    let (folders, moved) =
+        after_helm_config_move(folders_with_config(&dirs, config.join("helm")), Some(&dirs.home), false);
+
+    assert!(matches!(moved, ConfigMove::Moved { .. }), "{moved:?}");
+    assert_eq!(folders.config, config.join("floti"));
+    assert_eq!(folders.data, dirs.root().join("data"));
+    assert_eq!(read(&config.join("floti").join("themes").join("mine.json")), "theme");
+    let (_, none) = after_helm_config_move(folders_with_config(&dirs, config.join("floti")), None, false);
+    assert_eq!(none, ConfigMove::Nothing);
+}
+
+#[test]
+fn a_helm_config_folder_that_is_a_link_moves_as_the_link_and_its_target_keeps_everything() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    std::fs::create_dir_all(&config).unwrap();
+    let target = dirs.folder("dotfiles helm");
+    write(&target.join("themes").join("mine.json"), "theme");
+    links::Native.link_folder(&target, &config.join("helm")).unwrap();
+
+    let moved = move_helm_config(&dirs.home);
+
+    assert!(matches!(moved, ConfigMove::Moved { .. }), "{moved:?}");
+    assert!(links::is_link(&config.join("floti")), "renamed as the link");
+    assert!(!config.join("helm").exists());
+    assert_eq!(read(&target.join("themes").join("mine.json")), "theme");
+}
+
+#[test]
+fn a_helm_config_folder_that_is_a_link_is_never_emptied_into_flotis() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    write(&config.join("floti").join("agents").join("default.md"), "agent");
+    let target = dirs.folder("dotfiles helm");
+    write(&target.join("themes").join("mine.json"), "theme");
+    links::Native.link_folder(&target, &config.join("helm")).unwrap();
+
+    let moved = move_helm_config(&dirs.home);
+
+    let ConfigMove::Kept { reason, .. } = &moved else {
+        panic!("{moved:?}");
+    };
+    assert!(reason.contains("is a link"), "{reason}");
+    assert!(links::is_link(&config.join("helm")));
+    assert_eq!(read(&target.join("themes").join("mine.json")), "theme");
+    assert!(!config.join("floti").join("themes").exists());
 }

@@ -149,17 +149,32 @@ pub trait Installs {
     /// is not mounted (the AppImage, whose app runs it when it starts).
     fn carried_floti(&self, desktop: &Desktop) -> Option<PathBuf>;
 
-    /// Whether `row` is one of `desktop`'s processes. A row the OS gave no
-    /// command line for is judged by its name alone, so an app whose
-    /// command line could not be read counts as running.
+    /// Whether `row` is one of `desktop`'s processes. On macOS and Linux a
+    /// row the OS gave no command line for is judged by its name alone, so
+    /// an app whose command line could not be read counts as running. On
+    /// Windows, where the app's `Floti.exe` and the host's `floti.exe` differ
+    /// only by case, it is judged by its program's full path alone, and a row
+    /// with no command line is never the app.
     fn is_desktop_process(&self, desktop: &Desktop, row: &ProcessRow) -> bool;
 
     /// Installs the release's file `release` at `target`, over the app
     /// there or fresh, once the app has quit, and answers the app as it is
     /// installed then: `target`, or, where `target` was installed under the
-    /// name it had before Floti, the app in its new place, the old one
-    /// removed. When it fails before the swap, an installed app is as it was.
+    /// name it had before Floti, the app in its new place, beside the old
+    /// one ([`Installs::remove_replaced`] takes that away). When it fails
+    /// before the swap, an installed app is as it was.
     fn install_desktop(&self, target: &Desktop, release: &Path) -> Result<Desktop>;
+
+    /// Removes `replaced`, an install from before the rename, once
+    /// `installed`, the app an update put in its place, is there: the old
+    /// `.app` on macOS, the old AppImage on Linux. Nothing when they are one
+    /// install, and nothing on Windows, where the release's installer runs
+    /// the old app's own uninstaller. A failure here leaves the update done
+    /// and the old copy where it was.
+    fn remove_replaced(&self, replaced: &Desktop, installed: &Desktop) -> Result<()> {
+        let _ = (replaced, installed);
+        Ok(())
+    }
 
     /// Carries the launcher entry floti wrote for `replaced`, an install from
     /// before the rename, over to `installed`, the app an update put in its

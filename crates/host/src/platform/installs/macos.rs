@@ -151,7 +151,8 @@ impl Installs for Native {
 
     fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<Desktop> {
         // In the folder the app is in, under its own name: `Floti.app` beside
-        // a `Helm.app` from before the rename, which goes once it is in.
+        // a `Helm.app` from before the rename, which `remove_replaced` takes
+        // away once it is in.
         let installed = Desktop {
             name: DESKTOP_NAME,
             path: desktop
@@ -193,10 +194,14 @@ impl Installs for Native {
         let _ = Self::remove(&unpacked);
         let _ = Self::remove(&old);
         swapped?;
-        if desktop.path != installed.path {
-            Self::remove(&desktop.path)?;
-        }
         Ok(installed)
+    }
+
+    fn remove_replaced(&self, replaced: &Desktop, installed: &Desktop) -> Result<()> {
+        if replaced.path == installed.path {
+            return Ok(());
+        }
+        Self::remove(&replaced.path)
     }
 
     fn no_display(&self, _env: &UserEnv) -> Option<String> {

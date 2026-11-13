@@ -739,6 +739,16 @@ impl Updater<'_> {
                 installed.name,
                 installed.path.display()
             ));
+            // The update is done once the new app is in place: what is left of
+            // the old one is said, and fails nothing.
+            if let Err(err) = self.installs.remove_replaced(app, &installed) {
+                self.say(&format!(
+                    "Warning: {} at {} was not removed ({err}); remove it yourself once {} has opened.",
+                    app.name,
+                    app.path.display(),
+                    installed.name
+                ));
+            }
             match self
                 .installs
                 .carry_launcher(&self.env, app, &installed)

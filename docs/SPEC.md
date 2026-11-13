@@ -1180,11 +1180,11 @@ about the user's own `gh`: Helm no longer runs it.
   user may, so with it off nothing leaves the machine unasked for.
 - **No Claude or GitHub credential is stored, read or handled.** Claude's sign-in is
   detected from the *existence* of an artefact, and nothing opens it. The one
-  secret store Helm has is the plugins' (below), and it holds only what the user
+  secret store Floti has is the plugins' (below), and it holds only what the user
   typed into it.
 - **A plugin you added reaches the hosts its manifest names**, and its pages
   reach nothing else. A plugin page has no network of its own
-  (`connect-src 'none'`); `helm.fetch` sends its requests from the local
+  (`connect-src 'none'`); `floti.fetch` (`helm.fetch` at version 1) sends its requests from the local
   host, only to an origin the manifest lists, taking redirects one hop at a
   time so each hop is checked against the same list, and a URL a server
   supplied is never searched for placeholders. A plugin never holds a secret:
@@ -1195,23 +1195,23 @@ about the user's own `gh`: Helm no longer runs it.
   anything where none answers rather than fall back to plaintext. The programs (`exec`) and
   service a plugin declares run with the user's rights and their network is
   not confined - Settings > Plugins names them per plugin, and turning a plugin
-  off ends them. A service listens on `127.0.0.1`, on a port Helm hands it,
+  off ends them. A service listens on `127.0.0.1`, on a port Floti hands it,
   behind a token minted for the run; that is the plugin's listener, and the
-  bullet below is still the whole of Helm's own.
+  bullet below is still the whole of Floti's own.
 - **The browser pane fetches the page you navigate to**, and nothing else. It
   is a dev-server viewport rather than a browser (M16): a `WebContentsView` in
   a partition of its own, `persist:helm-browser`, whose cookies and storage live
   under the app's data directory and which the renderer's session never shares.
   Every request behind it is a page somebody typed the address of or clicked a
-  link to - Helm opens nothing there on its own initiative, the address bar
+  link to - Floti opens nothing there on its own initiative, the address bar
   never hands anything to a search engine, downloads are refused and handed to
   the system browser, and every permission the partition is asked for is denied.
   `browserReach` can confine the whole pane to `localhost`.
-- **Helm listens only on this machine.** Its windows reach the local host over
+- **Floti listens only on this machine.** Its windows reach the local host over
   the host's local socket, which only your OS account can open. The local host
   listens on `127.0.0.1` for its sessions' agent tools, behind a token minted
   for each session and revoked when it ends, and holds no port while no tool
-  family is on. Helm's own process listens on `127.0.0.1` only for a port you
+  family is on. Floti's own process listens on `127.0.0.1` only for a port you
   forwarded from a session on another computer, and closes it when that session
   ends.
   A Claude session the host runs can drive the browser pane - open a page,
@@ -1219,9 +1219,9 @@ about the user's own `gh`: Helm no longer runs it.
   other Claude Code sessions on this machine are doing, and can start and
   talk to its own child sessions. All reach it through
   **one** MCP endpoint the host binds to `127.0.0.1` on a port the kernel
-  picks, serving named servers (`helm-browser`, `helm-sessions`, `floti-agents`
+  picks, serving named servers (`floti-browser`, `floti-sessions`, `floti-agents`
   and each plugin's tools) on their own routes; the host hands each browser call to
-  Helm's window to answer in the pane. Every request needs a bearer token
+  Floti's window to answer in the pane. Every request needs a bearer token
   minted for one session and revoked when that session ends; there is no
   unauthenticated route; and each family has its own tick - `browserMcp`,
   `sessionMcp` and `sessionAgents` - each of which means no route, no name in the launch's
@@ -1236,7 +1236,7 @@ about the user's own `gh`: Helm no longer runs it.
   another free one when not, each connection carried over main's own link to
   that host, which connects only to its own loopback and only for a port that
   session's process tree listens on. See 4.7 and CLAUDE.md's rules.
-- **The browser partition holds credentials, and Helm reads none of them.**
+- **The browser partition holds credentials, and Floti reads none of them.**
   It holds whatever cookies the sites you visit set, exactly as a browser
   profile does: nothing in the app opens that cookie jar, and the only thing
   it ever does to the partition is `clearStorageData` from the button in the

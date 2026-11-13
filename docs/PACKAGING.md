@@ -378,8 +378,20 @@ Helm it kept them in Electron's `userData` for that name: `%APPDATA%\Helm`,
 The installed app's first start as Floti copies that folder to its new place,
 file by file into a folder beside it that is renamed into place, so a copy cut
 off halfway is never taken for the data; links are not copied (the overlay
-shims are made again as sessions need them), and the browser's partition,
-`persist:helm-browser`, moves with the rest under its own name. Helm's folder
+shims are made again as sessions need them), Chromium's caches (`Cache`,
+`Code Cache`, `GPUCache`, `DawnCache` and the like) are left out and made again,
+the device keys in `host-client` and `remote-hosts` are made owner-only again
+once copied (a copy carries no access list on Windows), and the browser's
+partition, `persist:helm-browser`, moves with the rest under its own name.
+
+**Browser-pane sign-ins on macOS and Linux need signing in once more.** Chromium
+encrypts the cookies it keeps with a key the OS holds under the app's name: the
+Keychain entry "Helm Safe Storage" on macOS, the Secret Service entry for Helm
+on Linux. Under the name Floti it asks for a key of its own, so the cookies
+copied from Helm's partition cannot be read and the sites in the browser pane
+ask you to sign in again. Floti does not read or move Helm's key: nothing reads
+what the partition stores. On Windows the key is in the copied `Local State`,
+and sign-ins carry over. Helm's folder
 is removed only once the store has opened in the copy, never walking into a
 link, and a removal that fails is tried again at the next start. A copy that
 fails changes nothing: the app says why, quits, and tries again at its next
@@ -1367,10 +1379,27 @@ installs in `Programs\Floti\desktop` (`build/installer.nsh`); on macOS
 `Floti.app` is swapped in beside `Helm.app`, which is then removed; on Linux
 `Floti.AppImage` is written beside `Helm.AppImage`, which is then removed,
 and the `helm.desktop` entry and icon floti wrote for it are replaced by the
-new ones. The app opens again from its new place. A floti from before the
-rename that runs the update itself opens nothing afterwards, because it looks
-for the app where it was; the app is in the Start menu, Applications or the
-menu under its new name.
+new ones (`Installs::remove_replaced`, `carry_launcher`). An old copy that
+cannot be removed leaves the update done: one line warns and names it. The
+app opens again from its new place.
+
+**Updating from Helm, the first time.** The floti that runs an update replaces
+itself first and installs the desktop app with its own code, so an update from
+a floti before the rename installs the app as that floti knew it:
+
+- **Windows** works: the old floti runs the release's installer, which moves
+  the app. Afterwards it opens nothing, because it looks for
+  `Programs\Helm\Helm.exe`; Floti is in the Start menu.
+- **macOS** fails the desktop step with "The Helm release holds no Helm.app",
+  after floti itself is updated, and `Helm.app` stays as it was. **Run `floti
+  update` again** in a terminal: the floti now installed is this one, which
+  installs `Floti.app` and removes `Helm.app`.
+- **Linux** writes the new AppImage over `~/Applications/Helm.AppImage`, which
+  runs as Floti under its old name. Running `floti update` again, or the next
+  update, moves it to `~/Applications/Floti.AppImage` with its menu entry.
+
+From then on the floti running an update is one that knows both names, so no
+second run is needed.
 
 A release with no desktop file for this computer updates floti alone and
 says so. No downloaded file carries a quarantine flag or a

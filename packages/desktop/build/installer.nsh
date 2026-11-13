@@ -61,12 +61,16 @@
 ; extraResource) and writes it to its own temporary folder ($PLUGINSDIR),
 ; which it removes when it ends.
 ;
-; Then electron-builder's own check runs, which asks the user to close Helm if
-; it is still running. A silent install (/S) answers OK, as that check does.
-;
-; Defining customCheckAppRunning replaces the default check, and drops the
-; include and variable allowOnlyOneInstallerInstance.nsh brings for it; the
-; default check is still the one that runs, so both are brought here.
+; Then the check that the app is not running (FLOTI_CHECK_APP_RUNNING), which
+; asks the user to close Floti if it is still running; a silent install (/S)
+; answers OK. It is electron-builder's check with one difference: it finds the
+; app only by its path, a process whose program is inside $INSTDIR, and never
+; by its image name. Floti.exe and the host's floti.exe differ only by case,
+; and electron-builder's fallback for a computer without PowerShell
+; (`tasklist` and `taskkill /IM Floti.exe`) would match the host, its keeper
+; and its bridges, and end every session. Without PowerShell it looks whether
+; the app's program can be opened for writing, which a running program
+; cannot, and asks the user to close the app rather than ending anything.
 ;
 ; The client folder is `host-client` in the data directory of the Helm whose
 ; host that is, %APPDATA%\Helm (`clientFolder` in src/main/host/launcher.ts):
@@ -81,8 +85,6 @@
 ; itself, silently and in place (`/S _?=$INSTDIR`).
 
 !include "LogicLib.nsh"
-!include "getProcessInfo.nsh"
-Var pid
 ; The installer alone uses it, and makensis is run with warnings as errors.
 !ifndef BUILD_UNINSTALLER
   Var helmInstall
@@ -119,10 +121,75 @@ Var pid
     ${EndIf}
   !endif
   !insertmacro IS_POWERSHELL_AVAILABLE
-  !insertmacro _CHECK_APP_RUNNING
+  !insertmacro FLOTI_CHECK_APP_RUNNING
   !ifndef BUILD_UNINSTALLER
     !insertmacro FLOTI_MOVE_HELM_INSTALL
   !endif
+!macroend
+
+; Sets _RETURN to 0 when the app runs from $INSTDIR, else 1: by the path of
+; each process through PowerShell, else by whether the app's program can be
+; opened for writing. Never by image name (see the top of this file).
+!macro FLOTI_APP_RUNNING _RETURN
+  ${If} $IsPowerShellAvailable == 0
+    nsExec::Exec `"$PowerShellPath" -C "if ((Get-CimInstance -ClassName Win32_Process | ? {$$_.Path -and $$_.Path.StartsWith('$INSTDIR\', 'CurrentCultureIgnoreCase')}).Count -gt 0) { exit 0 } else { exit 1 }"`
+    Pop ${_RETURN}
+  ${Else}
+    StrCpy ${_RETURN} 1
+    ${If} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+      ClearErrors
+      FileOpen $R9 "$INSTDIR\${APP_EXECUTABLE_FILENAME}" a
+      ${If} ${Errors}
+        StrCpy ${_RETURN} 0
+      ${Else}
+        FileClose $R9
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+!macroend
+
+; Ends every process whose program is inside $INSTDIR, by path, through
+; PowerShell; FORCE is "-Force" or "". Without PowerShell it ends nothing.
+!macro FLOTI_STOP_APP FORCE
+  ${If} $IsPowerShellAvailable == 0
+    nsExec::Exec `"$PowerShellPath" -C "Get-CimInstance -ClassName Win32_Process | ? {$$_.Path -and $$_.Path.StartsWith('$INSTDIR\', 'CurrentCultureIgnoreCase')} | % { Stop-Process -Id $$_.ProcessId ${FORCE} }"`
+    Pop $R8
+  ${EndIf}
+!macroend
+
+; electron-builder's _CHECK_APP_RUNNING, finding the app by path alone: asks
+; to close the app (a silent run answers OK), ends it by path, and asks to
+; retry or cancel while it is still running.
+!macro FLOTI_CHECK_APP_RUNNING
+  ; electron-builder declares $CmdPath for its own check, which this replaces;
+  ; reading it keeps makensis, run with warnings as errors, from refusing an
+  ; unused variable.
+  StrCpy $R7 $CmdPath
+  !insertmacro FLOTI_APP_RUNNING $R0
+  ${If} $R0 == 0
+    ${If} ${Cmd} `MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDCANCEL`
+      Quit
+    ${EndIf}
+    DetailPrint "$(appClosing)"
+    StrCpy $R1 0
+    ${Do}
+      ${If} $R1 < 2
+        !insertmacro FLOTI_STOP_APP ""
+      ${Else}
+        !insertmacro FLOTI_STOP_APP "-Force"
+      ${EndIf}
+      Sleep 1000
+      !insertmacro FLOTI_APP_RUNNING $R0
+      ${IfThen} $R0 != 0 ${|} ${Break} ${|}
+      IntOp $R1 $R1 + 1
+      ${If} $R1 > 4
+        ${If} ${Cmd} `MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDCANCEL IDCANCEL`
+          Quit
+        ${EndIf}
+        StrCpy $R1 0
+      ${EndIf}
+    ${Loop}
+  ${EndIf}
 !macroend
 
 ; Sets $helmInstall to the folder of an install from when the app was called

@@ -168,16 +168,46 @@ fn windows_counts_only_the_installed_program_s_processes() {
         windows::Native
             .is_desktop_process(&desktop, &row("floti.EXE", Some(&installed.to_uppercase())))
     );
-    assert!(
-        windows::Native.is_desktop_process(&desktop, &row("Floti.exe", None)),
-        "unreadable counts"
-    );
+    let unquoted = r"C:\Users\Some One\AppData\Local\Programs\Floti\desktop\Floti.exe --type=gpu-process";
+    assert!(windows::Native.is_desktop_process(&desktop, &row("Floti.exe", Some(unquoted))));
     assert!(!windows::Native.is_desktop_process(
         &desktop,
         &row("Floti.exe", Some(r"C:\Temp\portable\Floti.exe"))
     ));
     let host = r#""C:\Users\Some One\AppData\Local\Programs\Floti\desktop\resources\floti.exe" host"#;
     assert!(!windows::Native.is_desktop_process(&desktop, &row("floti.exe", Some(host))));
+}
+
+#[test]
+fn windows_never_takes_the_host_for_the_app_though_their_names_differ_only_by_case() {
+    let desktop = Desktop {
+        name: "Floti",
+        path: r"C:\Users\Some One\AppData\Local\Programs\Floti\desktop".into(),
+    };
+    // The host, its keeper and a bridge, from floti's own folder.
+    for command_line in [
+        r#""C:\Users\Some One\AppData\Local\Programs\Floti\bin\floti.exe" host"#,
+        r#"C:\Users\Some One\AppData\Local\Programs\Floti\bin\floti.exe keeper"#,
+        r#""C:\Users\Some One\AppData\Local\Programs\Floti\bin\floti.exe" bridge"#,
+    ] {
+        assert!(
+            !windows::Native.is_desktop_process(&desktop, &row("floti.exe", Some(command_line))),
+            "{command_line}"
+        );
+    }
+    // Whose command line could not be read: never the app, whatever its
+    // image name says.
+    for name in ["floti.exe", "Floti.exe", "FLOTI.EXE"] {
+        assert!(!windows::Native.is_desktop_process(&desktop, &row(name, None)), "{name}");
+    }
+    // A program whose path only starts like the app's is another program.
+    assert!(!windows::Native.is_desktop_process(
+        &desktop,
+        &row(
+            "Floti.exe",
+            Some(r"C:\Users\Some One\AppData\Local\Programs\Floti\desktop\Floti.exe.old --x")
+        )
+    ));
 }
 
 #[test]
@@ -1109,7 +1139,11 @@ fn linux_updates_a_helm_app_image_into_floti_s_and_carries_its_menu_entry_over()
         }
     );
     assert_eq!(std::fs::read(&installed.path).unwrap(), b"new app");
+    assert!(helm.exists(), "the old AppImage stays until it is removed apart");
+    linux::Native.remove_replaced(&old, &installed).unwrap();
     assert!(!helm.exists(), "the old AppImage is removed");
+    linux::Native.remove_replaced(&installed, &installed).unwrap();
+    assert!(installed.path.is_file(), "the app is never removed as its own old copy");
     let entry = linux::Native
         .carry_launcher(&user, &old, &installed)
         .unwrap()

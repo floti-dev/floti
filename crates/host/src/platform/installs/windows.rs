@@ -134,6 +134,24 @@ impl Native {
             .filter(|version| !version.is_empty())
     }
 
+    /// Whether `command_line` runs `program`: its first argument, quoted or
+    /// not, is that path, compared as Windows compares paths.
+    pub fn runs_program(command_line: &str, program: &Path) -> bool {
+        let wanted = comparable(&program.to_string_lossy());
+        let line = command_line.trim_start();
+        match line.strip_prefix('"') {
+            Some(quoted) => quoted
+                .split('"')
+                .next()
+                .is_some_and(|first| comparable(first) == wanted),
+            None => {
+                let first = line.get(..wanted.len()).unwrap_or_default();
+                let rest = &line[first.len()..];
+                comparable(first) == wanted && (rest.is_empty() || rest.starts_with(' '))
+            }
+        }
+    }
+
     /// Why a process in the session `session` has no display: session 0
     /// has none. A session that cannot be told counts as having one.
     pub fn no_display_in(session: Option<u32>) -> Option<String> {
@@ -172,14 +190,14 @@ impl Installs for Native {
     }
 
     fn is_desktop_process(&self, desktop: &Desktop, row: &ProcessRow) -> bool {
-        if !row.name.eq_ignore_ascii_case(&Self::program_name(desktop)) {
-            return false;
-        }
+        // By the program's full path alone, never by image name: the app's
+        // Floti.exe and the host's floti.exe differ only by case, and the
+        // host, its keeper and its bridges hold every session. A process
+        // whose command line cannot be read is not taken for the app.
         let Some(command_line) = &row.command_line else {
-            return true;
+            return false;
         };
-        let wanted = comparable(&Self::program(desktop).to_string_lossy());
-        comparable(command_line).contains(&wanted)
+        Self::runs_program(command_line, &Self::program(desktop))
     }
 
     fn opener(&self, desktop: &Desktop) -> (PathBuf, Vec<String>) {
