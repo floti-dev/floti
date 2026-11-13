@@ -227,14 +227,14 @@ describe('reaching a host on another computer', () => {
     expect(
       first !== null && 'message' in first && first.message.type === 'hello' ? first.message.client : null
     ).toEqual({
-      name: 'Helm 2.4.0',
+      name: 'Floti 2.4.0',
       kind: 'desktop',
       deviceName: 'my-laptop'
     })
     expect(w.spawned[0]?.args.join(' ')).not.toMatch(/--pair|--approve|devices/)
   })
 
-  it('keeps each host’s keys in a folder of its own inside Helm’s data, whatever its id', () => {
+  it('keeps each host’s keys in a folder of its own inside Floti’s data, whatever its id', () => {
     const one = remoteClientFolder(PLACES, 'win32', 'h-build')
     const other = remoteClientFolder(PLACES, 'win32', '..\\..\\escape')
     expect(one).toMatch(/^C:\\Users\\me\\AppData\\Local\\Helm\\dev\\helm-data\\remote-hosts\\[0-9a-f]{16}$/)
@@ -244,8 +244,8 @@ describe('reaching a host on another computer', () => {
   })
 })
 
-describe('the floti a host keeps, and a host that refuses this Helm', () => {
-  it('S16: gives the bridge the full path of the floti Helm installed there, before the transport', async () => {
+describe('the floti a host keeps, and a host that refuses this Floti', () => {
+  it('S16: gives the bridge the full path of the floti Floti installed there, before the transport', async () => {
     const w = world([connects])
     const host = await startRemoteHost(PLACES, w.deps, {
       folder: FOLDER,
@@ -280,7 +280,7 @@ describe('the floti a host keeps, and a host that refuses this Helm', () => {
                 host: { major: 0, minor: 9 },
                 client: { major: 1, minor: 0 },
                 update: 'host',
-                message: 'This host speaks protocol 0.9 and Helm speaks 1.0: update floti there.'
+                message: 'This host speaks protocol 0.9 and Floti speaks 1.0: update floti there.'
               })
             )
           }

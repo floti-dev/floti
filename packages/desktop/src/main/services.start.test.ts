@@ -82,7 +82,7 @@ describe('app start', () => {
     expect(existsSync(join(workspace.overlay, '.claude', 'agents', `${workspace.agent}.md`))).toBe(true)
   })
 
-  it('leaves the live shim of another Helm on the same data directory, junctions and all', () => {
+  it('leaves the live shim of another Floti on the same data directory, junctions and all', () => {
     const shim = buildShim()
     const other = runningProcess()
     try {

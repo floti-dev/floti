@@ -1,1 +1,1 @@
-/// <reference types="@coledtaylor/helm-plugin-sdk/background" />
+/// <reference types="@floti-dev/plugin-sdk/background" />

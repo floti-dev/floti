@@ -639,7 +639,7 @@ describe('the browser tools', () => {
         browsers.share(user, null)
         const unshared = await alpha.call('browser_text', { tab: user })
         expect(unshared.isError).toBe(true)
-        expect(unshared.text).toContain("ask the user to share this one from the Share button in Helm's browser bar")
+        expect(unshared.text).toContain("ask the user to share this one from the Share button in Floti's browser bar")
 
         // The key is the identity a share is made to, so ending the session revokes it.
         browsers.share(user, opener(alpha, 'alpha'))
@@ -656,7 +656,7 @@ describe('the browser tools', () => {
         const refused = await alpha.call('browser_screenshot', { tab: away })
         expect(refused.isError).toBe(true)
         expect(refused.text).toBe(
-          `Browser tab ${String(away)} is at https://example.com/account. Helm's browser tools are held to this machine in Settings > Browser, so this session may not read or drive a page anywhere else.`
+          `Browser tab ${String(away)} is at https://example.com/account. Floti's browser tools are held to this machine in Settings > Browser, so this session may not read or drive a page anywhere else.`
         )
         expect(browsers.calls.filter((call) => call.id === away)).toEqual([])
 
@@ -843,7 +843,7 @@ describe('the browser tools', () => {
       settings = { ...settings, browserMcp: false }
       const off = await alpha.call('browser_open', { url: 'http://127.0.0.1:5173/' })
       expect(off).toEqual({
-        text: "Helm's browser tools are switched off in Settings > Browser, so this session has none to call.",
+        text: "Floti's browser tools are switched off in Settings > Browser, so this session has none to call.",
         isError: true,
         images: []
       })

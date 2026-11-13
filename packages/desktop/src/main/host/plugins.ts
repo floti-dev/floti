@@ -1,6 +1,6 @@
 import type { PluginFolder } from '@helm/core'
 import { LOCAL_HOST_KEY } from '@helm/core/types'
-import type { SettingValue } from '@coledtaylor/helm-plugin-sdk'
+import type { SettingValue } from '@floti-dev/plugin-sdk'
 import type { PluginBackgroundReport, PluginInfo } from '../../shared/ipc'
 import type { ToolAnswer, ToolCallRequest, ToolServer } from '../plugins/tools'
 import { HostRequestError, type HostConnection, type HostSubscription } from './client'
@@ -117,7 +117,7 @@ const isDocument = (path: string): boolean => /\.html?$/i.test(path)
 export const BACKGROUND_START_WAIT_MS = 15_000
 /** What a session reads when a plugin stops offering the tool it called. */
 export const NOT_OFFERING =
-  'The plugin is not offering tools any more: it was turned off, removed, or had its tools turned off in Helm.'
+  'The plugin is not offering tools any more: it was turned off, removed, or had its tools turned off in Floti.'
 
 export function createHostPlugins(deps: HostPluginsDeps): HostPlugins {
   const { link } = deps
@@ -282,7 +282,7 @@ export function createHostPlugins(deps: HostPluginsDeps): HostPlugins {
       })
     }
     if (signal.aborted) return 'The call was cancelled.'
-    if (stopped) return 'Helm is shutting down.'
+    if (stopped) return 'Floti is shutting down.'
     const background = backgroundOf(plugin)
     switch (background?.state) {
       case 'running':
@@ -290,7 +290,7 @@ export function createHostPlugins(deps: HostPluginsDeps): HostPlugins {
       case 'starting':
         return `The plugin's background page did not start within ${String(BACKGROUND_START_WAIT_MS / 1000)} seconds.`
       case 'crashed':
-        return `The plugin's background page stopped${background.error === null ? '' : ` (${background.error})`}. Reloading the plugin in Helm's Settings > Plugins starts it again.`
+        return `The plugin's background page stopped${background.error === null ? '' : ` (${background.error})`}. Reloading the plugin in Floti's Settings > Plugins starts it again.`
       default:
         return "The plugin's background page is not running."
     }
@@ -358,7 +358,7 @@ export function createHostPlugins(deps: HostPluginsDeps): HostPlugins {
     } catch (error) {
       // Not recorded as done, so the next start tries again; a folder copied
       // this time is skipped then.
-      deps.log(`host: Helm's plugins were not copied into the local host (${(error as Error).message})`)
+      deps.log(`host: Floti's plugins were not copied into the local host (${(error as Error).message})`)
     }
   })
 
@@ -390,7 +390,7 @@ export function createHostPlugins(deps: HostPluginsDeps): HostPlugins {
     toolServers,
 
     async callTool(request, signal) {
-      if (stopped) return { ok: false, message: 'Helm is shutting down.' }
+      if (stopped) return { ok: false, message: 'Floti is shutting down.' }
       const first = offeredTool(request)
       if (first !== null) return { ok: false, message: first }
       const problem = await backgroundReady(request.plugin, signal)

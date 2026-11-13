@@ -250,3 +250,118 @@ fn an_empty_override_is_no_override() {
     let folders = resolve(&env_with(&dirs, &[(DATA_DIR_VAR, &PathBuf::new())])).unwrap();
     assert_eq!(folders, Native.resolve(&dirs.user_env()).unwrap());
 }
+
+fn write(path: &Path, text: &str) {
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, text).unwrap();
+}
+
+fn read(path: &Path) -> String {
+    std::fs::read_to_string(path).unwrap()
+}
+
+#[test]
+fn helms_config_folder_moves_whole_to_flotis_and_is_read_from_there() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    write(&config.join("helm").join("templates").join("a template").join("template.json"), "{}");
+    write(&config.join("helm").join("themes").join("mine.json"), "theme");
+    write(&config.join("helm").join("agents").join("default.md"), "agent");
+
+    let moved = move_helm_config(&dirs.home);
+
+    assert_eq!(
+        moved,
+        ConfigMove::Moved {
+            from: config.join("helm"),
+            to: config.join("floti")
+        }
+    );
+    assert_eq!(moved.config(), Some(config.join("floti").as_path()));
+    assert!(!config.join("helm").exists());
+    assert_eq!(read(&config.join("floti").join("themes").join("mine.json")), "theme");
+    assert_eq!(read(&config.join("floti").join("agents").join("default.md")), "agent");
+    assert_eq!(config_folder(&dirs.home), config.join("floti"));
+    assert_eq!(move_helm_config(&dirs.home), ConfigMove::Nothing);
+    assert!(moved.log_line().unwrap().contains("moved your files"));
+}
+
+#[test]
+fn helms_files_join_flotis_folder_when_both_are_there_and_none_is_in_both() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    write(&config.join("helm").join("templates").join("t").join("template.json"), "{}");
+    write(&config.join("floti").join("agents").join("default.md"), "agent");
+
+    let moved = move_helm_config(&dirs.home);
+
+    assert!(matches!(moved, ConfigMove::Moved { .. }), "{moved:?}");
+    assert!(!config.join("helm").exists());
+    assert_eq!(read(&config.join("floti").join("templates").join("t").join("template.json")), "{}");
+    assert_eq!(read(&config.join("floti").join("agents").join("default.md")), "agent");
+}
+
+#[test]
+fn nothing_moves_and_nothing_is_replaced_when_an_entry_is_in_both() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    write(&config.join("helm").join("agents").join("default.md"), "helm's");
+    write(&config.join("helm").join("themes").join("mine.json"), "theme");
+    write(&config.join("floti").join("agents").join("default.md"), "floti's");
+
+    let moved = move_helm_config(&dirs.home);
+
+    let ConfigMove::Kept { reason, .. } = &moved else {
+        panic!("{moved:?}");
+    };
+    assert!(reason.contains("agents"), "{reason}");
+    assert_eq!(moved.config(), Some(config.join("helm").as_path()));
+    assert_eq!(read(&config.join("helm").join("agents").join("default.md")), "helm's");
+    assert_eq!(read(&config.join("floti").join("agents").join("default.md")), "floti's");
+    assert!(config.join("helm").join("themes").join("mine.json").is_file());
+    assert!(!config.join("floti").join("themes").exists());
+}
+
+#[test]
+fn a_move_that_fails_partway_puts_back_what_it_moved() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    write(&config.join("helm").join("agents").join("default.md"), "agent");
+    write(&config.join("helm").join("themes").join("mine.json"), "theme");
+    std::fs::create_dir_all(config.join("floti")).unwrap();
+
+    let moved = move_helm_config_with(&dirs.home, |from, to| {
+        if from.ends_with("themes") {
+            Err(std::io::Error::other("refused"))
+        } else {
+            std::fs::rename(from, to)
+        }
+    });
+
+    assert!(matches!(moved, ConfigMove::Kept { .. }), "{moved:?}");
+    assert_eq!(read(&config.join("helm").join("agents").join("default.md")), "agent");
+    assert!(config.join("helm").join("themes").join("mine.json").is_file());
+    assert!(is_empty(&config.join("floti")));
+}
+
+#[test]
+fn a_rename_that_fails_leaves_helms_folder_read_where_it_is() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    write(&config.join("helm").join("themes").join("mine.json"), "theme");
+
+    let moved = move_helm_config_with(&dirs.home, |_, _| Err(std::io::Error::other("in use")));
+
+    assert!(matches!(&moved, ConfigMove::Kept { reason, .. } if reason.contains("in use")));
+    assert_eq!(moved.config(), Some(config.join("helm").as_path()));
+    assert!(config.join("helm").join("themes").join("mine.json").is_file());
+    assert!(!config.join("floti").exists());
+}
+
+#[test]
+fn there_is_nothing_to_move_without_helms_folder() {
+    let dirs = TestDirs::new();
+    assert_eq!(move_helm_config(&dirs.home), ConfigMove::Nothing);
+    assert_eq!(move_helm_config(&dirs.home).config(), None);
+    assert!(!dirs.home.join(".config").join("floti").exists());
+}

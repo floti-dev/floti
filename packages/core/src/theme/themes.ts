@@ -455,7 +455,7 @@ export function parseThemeFile(fileName: string, text: string): ParsedTheme {
     } else {
       for (const [key, value] of Object.entries(colors as Record<string, unknown>)) {
         if (!(THEME_TOKENS as readonly string[]).includes(key)) {
-          problems.push(`"${key}" is not a colour Helm uses and was ignored`)
+          problems.push(`"${key}" is not a colour Floti uses and was ignored`)
           continue
         }
         const token = key as ThemeToken

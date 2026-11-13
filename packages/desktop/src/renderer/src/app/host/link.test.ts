@@ -133,7 +133,7 @@ function world() {
   return { main, link, timers }
 }
 
-describe('a Helm page’s own connection to the local host', () => {
+describe('a Floti page’s own connection to the local host', () => {
   it('connects on its first open, saying what the window can do', async () => {
     const w = world()
     await w.link.connection()
@@ -142,7 +142,7 @@ describe('a Helm page’s own connection to the local host', () => {
       {
         type: 'hello',
         protocol: { major: PROTOCOL_VERSION.major, minor: PROTOCOL_VERSION.minor },
-        client: { name: 'Helm 2.9.0', kind: 'desktop' },
+        client: { name: 'Floti 2.9.0', kind: 'desktop' },
         capabilities: ['terminal', 'files', 'pluginPages']
       }
     ])
@@ -175,7 +175,7 @@ describe('a Helm page’s own connection to the local host', () => {
 
   it('rejects with the bridge’s sentence when it ends before the host welcomed the page', async () => {
     const w = world()
-    const why = 'The local host did not prove the key Helm expected, so Helm did not connect to it.'
+    const why = 'The local host did not prove the key Floti expected, so Floti did not connect to it.'
     w.main.welcome = { why }
     await expect(w.link.connection()).rejects.toThrow(why)
   })
@@ -188,14 +188,14 @@ describe('a Helm page’s own connection to the local host', () => {
         host: { major: 2, minor: 0 },
         client: { major: 1, minor: 0 },
         update: 'client',
-        message: 'This host speaks protocol 2.0 and Helm speaks 1.0: update Helm.'
+        message: 'This host speaks protocol 2.0 and Floti speaks 1.0: update Floti.'
       }
     }
     const error = await w.link.connection().then(
       () => null,
       (e: unknown) => e as Error
     )
-    expect(error?.message).toBe('This host speaks protocol 2.0 and Helm speaks 1.0: update Helm.')
+    expect(error?.message).toBe('This host speaks protocol 2.0 and Floti speaks 1.0: update Floti.')
     expect(error?.message).not.toMatch(/Settings|own sessions/)
   })
 

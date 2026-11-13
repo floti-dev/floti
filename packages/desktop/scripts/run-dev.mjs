@@ -1,11 +1,11 @@
 // `pnpm dev`, against a data directory of its own.
 //
-// Why this exists at all: `package.json` sets `productName: Helm`, so an
-// unpackaged Electron run resolves `app.getPath('userData')` to
-// **the installed app's own directory** (`%APPDATA%\Helm`, `~/Library/Application
-// Support/Helm`, `~/.config/Helm`). Before this
-// script, `pnpm dev` shared `helm.db`, `overlays/` and the Chromium profile with
-// whichever Helm the developer had open. The visible half of that was two
+// Why this exists at all: an unpackaged Electron run with no directory of its
+// own uses **the installed app's own directory** (`paths.ts`:
+// `%LOCALAPPDATA%\Floti\desktop`, `~/Library/Application Support/Floti/desktop`,
+// `~/.local/share/floti/desktop`). Before this script, `pnpm dev` shared
+// `helm.db`, `overlays/` and the Chromium profile with whichever copy of the
+// app the developer had open. The visible half of that was two
 // processes fighting over one Chromium profile ("Unable to move the cache:
 // Access is denied"). The invisible half was worse: the app sweeps overlay shims
 // at start, and starting dev beside a live installed session unlinked that
@@ -15,9 +15,9 @@
 // sharing safe.
 //
 // Every check already gets a directory of its own through `isolate.mjs`. This is
-// the same mechanism, pointed at `dev` under the isolated base (`%LOCALAPPDATA%\Helm`
-// on Windows, `~/Library/Application Support/Helm Dev` on macOS,
-// `${XDG_DATA_HOME:-~/.local/share}/Helm` on Linux; see `isolatedBaseFor`), with `concurrent`
+// the same mechanism, pointed at `dev` under the isolated base (`%LOCALAPPDATA%\Floti Dev`
+// on Windows, `~/Library/Application Support/Floti Dev` on macOS,
+// `${XDG_DATA_HOME:-~/.local/share}/floti-dev` on Linux; see `isolatedBaseFor`), with `concurrent`
 // on - because unlike a check, this is a window somebody leaves open, and a
 // second `pnpm dev` is a second window rather than a mistake.
 //
@@ -86,7 +86,7 @@ const drive = drivePort === null ? null : await prepareDriveAgents()
 if (drive !== null) Object.assign(env, drive.env)
 
 console.log('')
-console.log(`Helm dev is isolated: ${dataDir}`)
+console.log(`Floti dev is isolated: ${dataDir}`)
 console.log(`  database   ${fresh ? 'none - this is the first-run state' : 'a copy of the real one, taken just now'}`)
 console.log(`  templates  ${templates}`)
 if (drive === null) {
@@ -146,8 +146,9 @@ async function prepareDriveAgents() {
 /**
  * The real templates directory, and where dev's copy of it goes.
  *
- * `~/.config/helm/templates` is the installed app's, resolved here the same way
- * `paths.ts` resolves it for the run that is not portable. Dev gets a **copy**
+ * `templates` in the user's config folder is the installed app's, resolved here
+ * the same way `paths.ts` resolves it for the run that is not portable:
+ * `~/.config/helm` while Helm's folder is there, else `~/.config/floti`. Dev gets a **copy**
  * rather than a share, because the dev app can now write templates and a shared
  * directory would be somebody's real one.
  *
@@ -212,7 +213,17 @@ function countTemplates(dir) {
 }
 
 function realTemplatesDir() {
-  return join(homedir(), '.config', 'helm', 'templates')
+  const helm = join(homedir(), '.config', 'helm')
+  return join(isFolder(helm) ? helm : join(homedir(), '.config', 'floti'), 'templates')
+}
+
+/** Whether `path` is a folder. */
+function isFolder(path) {
+  try {
+    return statSync(path).isDirectory()
+  } catch {
+    return false
+  }
 }
 
 /** Every file under the real templates directory, with size and mtime. */
@@ -243,7 +254,7 @@ function templatesSnapshot(dir = realTemplatesDir(), base = dir, into = []) {
  * Says whether the real templates directory moved while dev was up.
  *
  * The same shape as `report` above and for a stronger reason: "the dev app
- * never writes to `~/.config/helm`" is a criterion, and the installed Helm
+ * never writes to the user's config folder" is a criterion, and the installed app
  * writes there only once ever - at its own first start - so unlike the
  * database, a change here is almost certainly this run's. Printed rather than
  * thrown all the same; the installed app is allowed to be running.
@@ -304,6 +315,6 @@ function report(start, end) {
   if (added.length > 0) console.log(`  added    ${added.join(', ')}`)
   if (removed.length > 0) console.log(`  removed  ${removed.join(', ')}`)
   if (dbMoved) console.log(`  helm.db  ${String(start.db)} -> ${String(end.db)}`)
-  console.log('  If the installed Helm was open, this is its own writing. If it was')
+  console.log('  If the installed app was open, this is its own writing. If it was')
   console.log('  not, something in the dev run is still resolving the real userData.')
 }

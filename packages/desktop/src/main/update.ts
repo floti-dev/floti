@@ -44,7 +44,7 @@ export function followHostUpdate(
   const hear = (state: P.UpdateState): void => {
     if (quitAsked || state.installing?.waitingForApp !== true) return
     quitAsked = true
-    log('update: floti update is waiting for Helm to quit; quitting, with every session left running')
+    log('update: floti update is waiting for Floti to quit; quitting, with every session left running')
     quit()
   }
   const subscription = connection.subscribe('update:state', {

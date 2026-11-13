@@ -1213,10 +1213,10 @@ impl Installs for RecordedInstalls {
         false
     }
 
-    fn install_desktop(&self, _target: &Desktop, release: &Path) -> floti_host::Result<()> {
+    fn install_desktop(&self, target: &Desktop, release: &Path) -> floti_host::Result<Desktop> {
         let bytes = std::fs::read(release).expect("read the release file");
         self.installed.lock().unwrap().push(bytes);
-        Ok(())
+        Ok(target.clone())
     }
 
     fn opener(&self, desktop: &Desktop) -> (PathBuf, Vec<String>) {
@@ -1328,7 +1328,7 @@ fn with_a_terminal_and_a_display_setup_asks_once_and_enter_installs_this_release
     let (outcome, out, err) = world.step(DesktopChoice::Ask, true, "\n", "present");
     assert_eq!(outcome, DesktopOutcome::Installed, "{out}\n{err}");
     assert_eq!(world.installs.installed(), vec![world.desktop.clone()]);
-    assert!(out.starts_with(&question("the Helm desktop app")), "{out}");
+    assert!(out.starts_with(&question("the Floti desktop app")), "{out}");
     assert_eq!(out.matches("[Y/n]").count(), 1, "{out}");
     assert!(
         out.contains(&format!("Downloading {}.", world.desktop_file)),
@@ -1350,8 +1350,8 @@ fn no_a_missing_terminal_and_a_missing_display_install_nothing() {
     assert_eq!(
         out,
         format!(
-            "{}The Helm desktop app was not installed; floti add desktop installs it.\n",
-            question("the Helm desktop app")
+            "{}The Floti desktop app was not installed; floti add desktop installs it.\n",
+            question("the Floti desktop app")
         )
     );
 
@@ -1359,7 +1359,7 @@ fn no_a_missing_terminal_and_a_missing_display_install_nothing() {
     assert_eq!(outcome, DesktopOutcome::NoTerminal);
     assert_eq!(
         out,
-        "To install the Helm desktop app as well, run floti add desktop.\n"
+        "To install the Floti desktop app as well, run floti add desktop.\n"
     );
     assert_eq!(err, "");
 
@@ -1376,12 +1376,12 @@ fn desktop_installs_without_asking_and_is_refused_with_no_display_as_floti_add_d
     assert_eq!(
         outcome,
         DesktopOutcome::Failed(
-            "This test's session has no display, so Helm is not installed here.".into()
+            "This test's session has no display, so Floti is not installed here.".into()
         )
     );
     assert_eq!(
         err,
-        "floti add desktop: This test's session has no display, so Helm is not installed here. The Floti host is set up all the same.\n"
+        "floti add desktop: This test's session has no display, so Floti is not installed here. The Floti host is set up all the same.\n"
     );
     assert_eq!(out, "");
     assert_eq!(world.installs.installed(), Vec::<Vec<u8>>::new());
@@ -1400,7 +1400,7 @@ fn an_installed_app_is_said_in_floti_add_desktop_s_one_line_and_never_asked_abou
         let (outcome, out, err) = world.step(choice, true, "n\n", "present");
         assert_eq!(outcome, DesktopOutcome::AlreadyInstalled, "{out}\n{err}");
         assert_eq!(out.lines().count(), 1, "{out}");
-        assert!(out.starts_with("Helm"), "{out}");
+        assert!(out.starts_with("Floti"), "{out}");
         assert!(
             out.contains(&format!("is already installed at {}", world.apps.display())),
             "{out}"

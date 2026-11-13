@@ -1,4 +1,4 @@
-import type { ToolSession } from '@coledtaylor/helm-plugin-sdk'
+import type { ToolSession } from '@floti-dev/plugin-sdk'
 import { pluginInstructions, pluginToolResult } from '../browser-mcp'
 import type { ToolAnswer, ToolCallRequest, ToolServer } from '../plugins/tools'
 import { fitsOneFrame } from './browser-tools'
@@ -47,11 +47,11 @@ export interface PluginToolRelay {
 
 /** The answer to a call for a session that is not running in the host. */
 export const NOT_A_PLUGIN_SESSION =
-  "This session is not one Helm's plugins answer for: it is not running in Helm's local host."
+  "This session is not one Floti's plugins answer for: it is not running in Floti's local host."
 
 /** The answer in place of one too large for a single protocol frame. */
 export const PLUGIN_ANSWER_TOO_LARGE =
-  "That answer was too large for Helm to send back to this session. Ask the plugin's tool for less at once."
+  "That answer was too large for Floti to send back to this session. Ask the plugin's tool for less at once."
 
 const failed = (message: string): P.AgentPluginOutcome => ({ status: 'failed', message })
 
@@ -122,7 +122,7 @@ export function createPluginToolRelay(deps: PluginToolRelayDeps): PluginToolRela
         )
         outcome = pluginOutcomeFor(call.callId, answered)
       } catch (error) {
-        outcome = failed(`${call.tool} failed inside Helm: ${(error as Error).message}`)
+        outcome = failed(`${call.tool} failed inside Floti: ${(error as Error).message}`)
       }
     }
     calls.delete(call.callId)

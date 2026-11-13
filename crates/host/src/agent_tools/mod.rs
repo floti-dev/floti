@@ -75,7 +75,7 @@
 //! does not have.
 //!
 //! **Named families, one listener.** Each family is a name (such as
-//! `helm-browser`, the name the agent's permission rules use), a route, an
+//! `floti-browser`, the name the agent's permission rules use), a route, an
 //! instructions block, a tool table, an on/off check read on every request,
 //! and whether a launch now may be given it ([`ToolFamily`]). One port and one token per session serve
 //! them all, and each family's "off" is three separate facts rather than a
@@ -122,7 +122,7 @@ pub type ToolFuture<'a> = Pin<Box<dyn Future<Output = CallToolResult> + Send + '
 
 /// One family of agent tools on the listener.
 pub trait ToolFamily: Send + Sync + 'static {
-    /// Its name as a session lists it, such as `helm-browser`.
+    /// Its name as a session lists it, such as `floti-browser`.
     fn name(&self) -> &str;
 
     /// The path it is served at, such as `/mcp/sessions`. Exact: no other
@@ -469,7 +469,7 @@ impl AgentToolsListener {
 
     /// Lets go of its socket when no session holds a token and no family on
     /// can be given to a launch; binds nothing. A family on that no launch
-    /// can be given (helm-browser with no browser client, a plugin's server
+    /// can be given (floti-browser with no browser client, a plugin's server
     /// whose client left) is reachable only through a token, so with none
     /// held it keeps no port. Called when what is offered changes.
     pub fn let_go_if_idle(&self) {

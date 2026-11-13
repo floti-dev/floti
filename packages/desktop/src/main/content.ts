@@ -183,7 +183,7 @@ export function attachArtifactConsole(
     if (typeof event.sourceId !== 'string' || typeof event.level !== 'string') {
       const broken: ArtifactConsoleEntry = {
         level: 'error',
-        message: `console-message arrived in a shape Helm does not recognise: ${JSON.stringify(Object.keys(event))}`,
+        message: `console-message arrived in a shape Floti does not recognise: ${JSON.stringify(Object.keys(event))}`,
         source: `${CONTENT_SCHEME}://unknown`,
         line: 0
       }

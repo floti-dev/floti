@@ -29,14 +29,14 @@ function segments(): string[] {
   );
 }
 
-describe("StatusBar: which Helm and which claude", () => {
+describe("StatusBar: which Floti and which claude", () => {
   it("leads with the version, the build and a newer release, then claude, then the sessions", () => {
     renderBar({
       mode: "dev",
       update: { latest: "0.5.0" },
     });
     expect(segments().slice(0, 7)).toEqual([
-      "Helm 0.4.2",
+      "Floti 0.4.2",
       "dev",
       "0.5.0 available",
       "|",
@@ -49,7 +49,7 @@ describe("StatusBar: which Helm and which claude", () => {
   it("says so in place of the version when claude cannot be found", () => {
     renderBar({ claudeVersion: null, claudeMissing: true });
     expect(segments().slice(0, 3)).toEqual([
-      "Helm 0.4.2",
+      "Floti 0.4.2",
       "|",
       "claude CLI not found",
     ]);
@@ -183,7 +183,7 @@ describe("StatusBar: the hosts sessions run in", () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
-  it("S8: a Helm behind its host says to update Helm", () => {
+  it("S8: a Floti behind its host says to update Floti", () => {
     renderBar({
       hosts: [
         {
@@ -195,8 +195,8 @@ describe("StatusBar: the hosts sessions run in", () => {
         },
       ],
     });
-    const item = screen.getByRole("button", { name: "This PC · update Helm" });
-    expect(item.getAttribute("title")).toContain("Update Helm on this PC.");
+    const item = screen.getByRole("button", { name: "This PC · update Floti" });
+    expect(item.getAttribute("title")).toContain("Update Floti on this PC.");
   });
 
   it("S10: with the same floti there is no offer", () => {
@@ -374,7 +374,7 @@ describe("StatusBar: the hosts sessions run in", () => {
     ).not.toMatch(/keystroke/);
   });
 
-  it("shows no host item while sessions run in Helm itself", () => {
+  it("shows no host item while sessions run in Floti itself", () => {
     renderBar({ hosts: [] });
     expect(document.querySelectorAll("[data-status-host]")).toHaveLength(0);
     expect(segments().filter((segment) => segment === "|")).toHaveLength(2);

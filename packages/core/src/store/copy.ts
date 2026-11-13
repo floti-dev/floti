@@ -82,7 +82,7 @@ const MIB = 1024 * 1024
  * was cut and how long it was; the text itself is never described.
  */
 function cutShort(text: string, size: number, limit: number): string {
-  const note = `\n\n[Cut short when Helm copied it into the local host: the message held ${(size / MIB).toFixed(1)} MiB, more than one batch carries.]`
+  const note = `\n\n[Cut short when Floti copied it into the local host: the message held ${(size / MIB).toFixed(1)} MiB, more than one batch carries.]`
   return utf8Prefix(text, limit - Buffer.byteLength(note, 'utf8')) + note
 }
 

@@ -556,9 +556,9 @@ function GhostButton({
 // ---------------------------------------------------------------------------
 
 const VIA_HINT: Record<HostTransport['kind'], string> = {
-  ssh: 'Helm reads only the Host names in ~/.ssh/config. ssh works out the address, user and key when it connects.',
+  ssh: 'Floti reads only the Host names in ~/.ssh/config. ssh works out the address, user and key when it connects.',
   command: `Run without a shell, with ${REMOTE_CONNECT_LINE} added as its last argument. It must carry input and output unchanged and ask nothing.`,
-  wsl: `Helm runs floti in the distro with wsl.exe -d <distro> -- ${REMOTE_CONNECT_LINE}, through ssh for another PC’s. Nothing is approved in the distro.`
+  wsl: `Floti runs floti in the distro with wsl.exe -d <distro> -- ${REMOTE_CONNECT_LINE}, through ssh for another PC’s. Nothing is approved in the distro.`
 }
 
 function PickScreen({
@@ -591,7 +591,7 @@ function PickScreen({
       }}
     >
       <p className="text-[11.5px] leading-[1.55] text-fg-muted">
-        A host is Helm on another computer, such as a server or your other PC. Helm reaches it with your own{' '}
+        A host is Floti on another computer, such as a server or your other PC. Floti reaches it with your own{' '}
         {ssh ? (
           <>
             ssh, the way <span className="font-mono">ssh {targetOf(draft) === '' ? 'build-box' : targetOf(draft)}</span>{' '}
@@ -674,11 +674,11 @@ function PickScreen({
 function NameField({ draft, onEdit }: { draft: Draft; onEdit: (patch: Partial<Draft>) => void }): JSX.Element {
   return (
     <label className="flex w-[160px] shrink-0 flex-col gap-1.5">
-      <span className={dialogLabel}>Name in Helm</span>
+      <span className={dialogLabel}>Name in Floti</span>
       <input
         type="text"
         data-add-host-name
-        aria-label="Name in Helm"
+        aria-label="Name in Floti"
         placeholder={draft.via === 'command' ? 'wsl-ubuntu' : draft.via === 'wsl' ? 'Ubuntu' : 'build-box'}
         spellCheck={false}
         value={nameOf(draft)}
@@ -879,7 +879,7 @@ function CheckingScreen({
   return (
     <div className="flex flex-col gap-3.5">
       <p className="text-[11.5px] leading-[1.55] text-fg-muted">
-        Helm asks {name}, through {through}, whether floti is there and which version, then connects to it. Nothing is
+        Floti asks {name}, through {through}, whether floti is there and which version, then connects to it. Nothing is
         changed there without your yes.
       </p>
       <ol data-add-host-steps className="flex flex-col gap-2.5">
@@ -901,8 +901,8 @@ function CheckingScreen({
       </ol>
       <p className="text-[11px] leading-[1.5] text-fg-subtle">
         {ssh
-          ? 'ssh runs without a terminal, so it never stops here to ask for a password. If it needs one, Helm says so and what to do.'
-          : `${transport.kind === 'wsl' ? 'wsl.exe' : 'The command'} runs without a terminal, so it never stops here to ask for anything. If it needs something, Helm shows what it said.`}
+          ? 'ssh runs without a terminal, so it never stops here to ask for a password. If it needs one, Floti says so and what to do.'
+          : `${transport.kind === 'wsl' ? 'wsl.exe' : 'The command'} runs without a terminal, so it never stops here to ask for anything. If it needs something, Floti shows what it said.`}
       </p>
     </div>
   )
@@ -977,7 +977,7 @@ const QUIT_OPTIONS: readonly { value: QuitSessions; title: string; detail: (name
   {
     value: 'keep',
     title: 'Keep them running',
-    detail: (name) => `Sessions you start on ${name} keep running there. Open Helm again to pick them up.`
+    detail: (name) => `Sessions you start on ${name} keep running there. Open Floti again to pick them up.`
   },
   {
     value: 'end',
@@ -999,7 +999,7 @@ function AddedScreen({
     <div data-add-host-added={host.id} className="flex flex-col gap-3.5">
       <p className="text-[11.5px] leading-[1.55] text-fg-muted">
         Its workspaces and sessions appear in the sidebar beside this PC’s. Its key is pinned on this PC: from now on
-        Helm connects only to the host that proves it.
+        Floti connects only to the host that proves it.
       </p>
       <HostLine
         name={host.name}
@@ -1009,8 +1009,8 @@ function AddedScreen({
       />
       <Agents name={host.name} rows={agents} error={agentsError} />
       <div className="flex flex-col gap-1.5">
-        <span className={dialogLabel}>When you quit Helm, on {host.name}</span>
-        <div role="radiogroup" aria-label={`When you quit Helm, on ${host.name}`} className="flex flex-col gap-1">
+        <span className={dialogLabel}>When you quit Floti, on {host.name}</span>
+        <div role="radiogroup" aria-label={`When you quit Floti, on ${host.name}`} className="flex flex-col gap-1">
           {QUIT_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -1065,7 +1065,7 @@ function Agents({ name, rows, error }: { name: string; rows: AgentRow[] | null; 
       {rows === null || rows.length === 0 ? (
         <p data-add-host-agents-unknown className="text-[11.5px] leading-[1.5] text-fg-muted">
           {rows === null
-            ? `Helm can’t tell which agents are on ${name}${error === null ? '.' : `: ${error}`}`
+            ? `Floti can’t tell which agents are on ${name}${error === null ? '.' : `: ${error}`}`
             : `${name} named no agents.`}
         </p>
       ) : (

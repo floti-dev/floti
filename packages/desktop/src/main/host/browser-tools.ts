@@ -8,7 +8,7 @@ import type * as P from './protocol'
 /**
  * The browser tools for sessions in the local host, answered in Helm's window.
  *
- * The host serves `helm-browser` to the sessions it runs, but the browser
+ * The host serves `floti-browser` to the sessions it runs, but the browser
  * pane is here, so each call a session's agent makes reaches this side as an
  * event on `agentBrowser:call`, naming the host session it came from, and goes
  * back as the tool's answer on `agentBrowser:answer`. The tools that run are
@@ -39,14 +39,14 @@ export interface BrowserToolRelay {
 
 /** The answer to a call for a session that is not running in the host with the browser tools. */
 export const NOT_A_BROWSER_SESSION =
-  "This session is not one Helm's browser tools answer for: it is not running in Helm's local host, or the browser tools are switched off in Settings > Browser."
+  "This session is not one Floti's browser tools answer for: it is not running in Floti's local host, or the browser tools are switched off in Settings > Browser."
 
 /** The answer while Helm is still starting and its browser tools are not ready. */
-export const BROWSER_TOOLS_STARTING = "Helm's browser tools are still starting. Try again in a moment."
+export const BROWSER_TOOLS_STARTING = "Floti's browser tools are still starting. Try again in a moment."
 
 /** The answer in place of one too large for a single protocol frame. */
 export const ANSWER_TOO_LARGE =
-  "That answer was too large for Helm to send back to this session. Ask for less of the page: a smaller part of its text, a snapshot with fewer nodes, or a screenshot of a smaller window."
+  "That answer was too large for Floti to send back to this session. Ask for less of the page: a smaller part of its text, a snapshot with fewer nodes, or a screenshot of a smaller window."
 
 const failed = (message: string): P.AgentBrowserOutcome => ({ status: 'failed', message })
 
@@ -86,7 +86,7 @@ export function createBrowserToolRelay(deps: BrowserToolRelayDeps): BrowserToolR
     try {
       return outcomeFor(call.callId, await running)
     } catch (error) {
-      return failed(`${call.tool} failed inside Helm: ${(error as Error).message}`)
+      return failed(`${call.tool} failed inside Floti: ${(error as Error).message}`)
     }
   }
 

@@ -111,7 +111,7 @@ describe('profiles in the local host', () => {
   })
 
   it('says why when the host cannot be reached, rather than listing no profiles as if there were none', async () => {
-    const sentence = 'Helm could not find the local host program at /nowhere/floti; turn it off.'
+    const sentence = 'Floti could not find the local host program at /nowhere/floti; turn it off.'
     const profiles = createHostProfiles({
       link: fakeLink(null, sentence),
       dialogs: {
@@ -163,7 +163,7 @@ describe('profiles in the local host', () => {
     expect(w.connection.payloads('profile:pin')).toEqual([{ ids: [2] }])
   })
 
-  it('exports the host’s document where Helm’s save dialog says, and writes nothing when it is cancelled', async () => {
+  it('exports the host’s document where Floti’s save dialog says, and writes nothing when it is cancelled', async () => {
     const w = world({ copied: true })
     w.connection.answer('profile:export', () => ({ fileName: 'api.helm-profile.yaml', yaml: 'name: api\n' }))
     expect(await w.profiles.exportProfile(1)).toEqual({ file: '/out/api.helm-profile.yaml' })
@@ -183,7 +183,7 @@ describe('profiles in the local host', () => {
     await expect(w.profiles.exportProfile(1)).rejects.toThrow('That profile no longer exists.')
   })
 
-  it('imports the file Helm’s open dialog chose, by its name and text, and says what the host renamed it to', async () => {
+  it('imports the file Floti’s open dialog chose, by its name and text, and says what the host renamed it to', async () => {
     const w = world({ copied: true, importFrom: '/in/api.helm-profile.yaml', files: { '/in/api.helm-profile.yaml': 'name: api\n' } })
     w.connection.answer('profile:import', () => ({ profile: profile(5, 'api (2)'), error: null, renamedTo: 'api (2)' }))
     expect(await w.profiles.importProfile()).toEqual({
@@ -215,7 +215,7 @@ describe('profiles in the local host', () => {
     expect(unreadable.connection.payloads('profile:import')).toEqual([])
   })
 
-  describe('Helm’s own profiles, copied in on the first connect', () => {
+  describe('Floti’s own profiles, copied in on the first connect', () => {
     it('copies each in its pin order, skipping a name the host has, logging one it refuses, and records that it ran', async () => {
       const w = world({
         hosted: [profile(1, 'API')],
@@ -271,7 +271,7 @@ describe('profiles in the local host', () => {
       await w.link.connect()
       expect(w.marks).toEqual([])
       expect(w.logged).toEqual([
-        "host: Helm's profiles were not copied into the local host (The connection to the local host was closed.)"
+        "host: Floti's profiles were not copied into the local host (The connection to the local host was closed.)"
       ])
     })
   })

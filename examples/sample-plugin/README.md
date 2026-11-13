@@ -1,7 +1,7 @@
 # Sample plugin
 
 Items from a small API, in a panel, a tab and the status bar. It uses every
-part a Helm plugin can have, and it is the plugin Helm's end-to-end tests drive
+part a Floti plugin can have, and it is the plugin Floti's end-to-end tests drive
 (`packages/desktop/e2e/plugins.spec.ts`). To write a plugin of your own, start
 from `helm-plugin create` and the authoring guide in
 [packages/plugin-sdk](../../packages/plugin-sdk/README.md); this folder is the
@@ -18,7 +18,7 @@ sample-plugin/
 ├── icon.svg                  drawn as a mask, so it takes the rail's colours
 ├── src/
 │   ├── panels/main.*         the rail panel: the items, a token prompt, the service's hello,
-│   │                         and Helm's sessions (`floti.sessions.list`, the `sessions` event)
+│   │                         and Floti's sessions (`floti.sessions.list`, the `sessions` event)
 │   ├── tabs/item.*           one item, or a form for a new one; runs the `echo` program
 │   │                         and asks to start a session about the item (`floti.sessions.start`);
 │   │                         opens an address in the Browser tab (`floti.open`)
@@ -32,7 +32,7 @@ sample-plugin/
 ├── vite.config.ts            one HTML page per surface, and the background module, built into dist/
 ├── tsconfig.json             the pages, checked with the DOM and window.floti
 ├── tsconfig.background.json  the background module, checked with no DOM and the background's floti
-└── dist/                     what Helm loads
+└── dist/                     what Floti loads
 ```
 
 The background is built to `dist/background/main.js`, and what it shares with
@@ -47,20 +47,20 @@ window, so `floti.tabs.open`, `floti.open`, `floti.secrets.request` and
 ```powershell
 pnpm --filter @helm/sample-plugin build
 pnpm --filter @helm/sample-plugin serve      # the API, in a terminal of its own
-$env:HELM_PLUGINS = "$PWD\examples\sample-plugin"; pnpm dev
+$env:FLOTI_PLUGINS = "$PWD\examples\sample-plugin"; pnpm dev
 ```
 
-`HELM_PLUGINS` registers folders in a dev build only (separate several with
-`;`). In an installed Helm, add the folder in Settings > Plugins.
+`FLOTI_PLUGINS` registers folders in a dev build only (separate several with
+`;`). In an installed Floti, add the folder in Settings > Plugins.
 
 The server wants a bearer token: `sample`, or whatever `node server.mjs <token>`
 was given. The panel asks for it the first time (`floti.secrets.request`); the
 tests start the server with a token of their own.
 
-A session started while the plugin is on has its tools as `helm-plugin-sample`:
+A session started while the plugin is on has its tools as `floti-plugin-sample`:
 ask it to list the Sample items, or to add one, and the panel shows the new
 item at once.
 
-`pnpm --filter @helm/sample-plugin watch` rebuilds on every save. Helm watches
+`pnpm --filter @helm/sample-plugin watch` rebuilds on every save. Floti watches
 the folder and reloads the plugin when what it loads changes, so there is no
 need to reload the window.

@@ -185,17 +185,17 @@ export function describeUnsettledUpdate(ended: UnsettledUpdate, host: string): {
   if (ended === 'upToDate') {
     return {
       title: `floti on ${host} is up to date on its channel`,
-      fix: `Nothing was replaced and no session ended: its channel has nothing newer. Update it from this Helm’s own floti instead.`
+      fix: `Nothing was replaced and no session ended: its channel has nothing newer. Update it from this Floti’s own floti instead.`
     }
   }
   if (ended === 'stoppedWaiting') {
     return {
-      title: `Helm stopped waiting for floti update on ${host}`,
+      title: `Floti stopped waiting for floti update on ${host}`,
       fix: `It may still be running there. ${host}’s row says which floti its host runs once it is back.`
     }
   }
   return {
-    title: `Helm did not see floti update replace floti on ${host}`,
+    title: `Floti did not see floti update replace floti on ${host}`,
     fix: `${host}’s row says which floti its host runs now. Run floti update in a terminal there to see all of its output.`
   }
 }
@@ -226,7 +226,7 @@ export function parseProtocol(text: string): ProtocolVersionNumbers | null {
  * computer whose floti is older than this Helm's, naming both versions.
  */
 export function olderHostSentence(name: string, hostVersion: string, helmVersion: string): string {
-  return `${name} runs floti ${hostVersion}, older than the floti ${helmVersion} this Helm carries.`
+  return `${name} runs floti ${hostVersion}, older than the floti ${helmVersion} this Floti carries.`
 }
 
 /**
@@ -396,12 +396,12 @@ export function localHostVersionsSentence(versions: LocalHostVersions): string {
   const host = sideName(versions.host)
   const helm = sideName(versions.helm)
   if (versions.older === 'helm') {
-    return `This PC’s host runs ${host}, newer than the ${helm} this Helm speaks, so Helm cannot connect to it. Update Helm on this PC.`
+    return `This PC’s host runs ${host}, newer than the ${helm} this Floti speaks, so Floti cannot connect to it. Update Floti on this PC.`
   }
   if (versions.beforeRestart) {
-    return `This PC’s host runs ${host}, older than the ${helm} this Helm carries. Restart host to update keeps every session and terminal running in its tab.`
+    return `This PC’s host runs ${host}, older than the ${helm} this Floti carries. Restart host to update keeps every session and terminal running in its tab.`
   }
-  return `This PC’s host runs ${host}, older than the ${helm} this Helm carries. Restart host to update says first what it ends.`
+  return `This PC’s host runs ${host}, older than the ${helm} this Floti carries. Restart host to update says first what it ends.`
 }
 
 /** What restarting this PC's host on the floti this Helm carries does, asked before anything happens. */
@@ -440,11 +440,11 @@ export function restartHostConfirmTone(offer: LocalHostRestartOffer): 'danger' |
 /** What the restart question says beneath it. */
 export function restartHostDetail(offer: LocalHostRestartOffer): string {
   if (offer.sessions === null) {
-    return `The host runs Floti ${offer.hostVersion}, from before Restart host to update, so Helm ends its process as a crash would. Every session and terminal keeps running in its tab, and the new host takes them over; any it cannot take over come back in their own tabs to resume.`
+    return `The host runs Floti ${offer.hostVersion}, from before Restart host to update, so Floti ends its process as a crash would. Every session and terminal keeps running in its tab, and the new host takes them over; any it cannot take over come back in their own tabs to resume.`
   }
   if (offer.ends === 0) {
     return offer.sessions === 0
-      ? 'No session is running in it. Helm starts the new host and connects to it.'
+      ? 'No session is running in it. Floti starts the new host and connects to it.'
       : 'Every session and terminal keeps running, with its screen, and the new host takes them over.'
   }
   return `The host runs floti ${offer.hostVersion}, whose sessions the new floti cannot take over, so they end. The new host offers them back once, to resume.`
@@ -629,7 +629,7 @@ export function chooseSource(options: {
   if (sha256 === undefined) {
     return {
       how: 'none',
-      reason: `This Helm ${options.version} has no published floti to send, and its own floti is not for ${system.label}.`
+      reason: `This Floti ${options.version} has no published floti to send, and its own floti is not for ${system.label}.`
     }
   }
   return { how: 'download', file, sha256 }
@@ -649,7 +649,7 @@ export function describeInstallFailure(
   }
   if (step === 'stop') {
     return {
-      title: `Helm could not stop the floti host on ${host} for the update`,
+      title: `Floti could not stop the floti host on ${host} for the update`,
       fix: `Nothing was replaced, and its sessions are still running. Try again, or run floti update-stop --stop there.`
     }
   }

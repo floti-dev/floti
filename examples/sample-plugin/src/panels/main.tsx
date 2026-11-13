@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useMemo, useState, type JSX } from 'react'
 import { createRoot } from 'react-dom/client'
-import type { PluginSession } from '@coledtaylor/helm-plugin-sdk'
-import { useHelmEvent, useHelmSettings, useSecret } from '@coledtaylor/helm-plugin-sdk/react'
+import type { PluginSession } from '@floti-dev/plugin-sdk'
+import { useHelmEvent, useHelmSettings, useSecret } from '@floti-dev/plugin-sdk/react'
 import { CHANNEL, listItems, messageOf, optionsOf, type ItemList } from '../lib/api'
 import '../styles.css'
 
@@ -67,7 +67,7 @@ function Panel(): JSX.Element {
       <main className="panel">
         <div className="helm-empty" data-sample-empty="token">
           <p className="helm-empty-title">Add the token</p>
-          <p className="helm-empty-text">The server wants a bearer token. Helm keeps it; this page never sees it.</p>
+          <p className="helm-empty-text">The server wants a bearer token. Floti keeps it; this page never sees it.</p>
           <div className="helm-empty-actions">
             <button type="button" className="helm-button" data-variant="primary" onClick={() => void requestToken()}>
               Add token

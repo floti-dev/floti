@@ -197,7 +197,7 @@ describe('the window’s plugins over its own connection', () => {
     }
   })
 
-  it('sends Settings’ actions and secrets to the host, adds a folder the window’s own picker chose, and names the host’s log lines as Helm’s', async () => {
+  it('sends Settings’ actions and secrets to the host, adds a folder the window’s own picker chose, and names the host’s log lines as Floti’s', async () => {
     const { adapter, connection, bridge } = windowWorld({ chosen: '/plugins/added one' })
     connection.answer('plugins:setEnabled', () => [hostPlugin({ enabled: false })])
     connection.answer('plugins:log', () => [
@@ -364,7 +364,7 @@ describe('the hidden plugin window’s background pages over its own connection'
     expect(delivered.map((each) => each.event)).toEqual(['command', 'channel'])
   })
 
-  it('sends a background page’s calls to the host on its own connection, and answers the relay’s first theme from Helm’s own settings', async () => {
+  it('sends a background page’s calls to the host on its own connection, and answers the relay’s first theme from Floti’s own settings', async () => {
     const { adapter, connection } = backgroundWorld()
     connection.answer('plugins:call', () => ({ ok: true, value: 'answered' }))
     expect(await ask(adapter, 'plugins:call', pageCall('channel.post', ['n', 1], { surface: 'background' }))).toEqual({

@@ -90,7 +90,7 @@ async function pageTarget() {
     // "the window is not there" into "here are some answers about a web page",
     // and a wrong answer is worse than none.
     console.error(
-      `no Helm window among: ${listed.map((t) => `${t.type} ${t.url}`).join(', ')}\n` +
+      `no Floti window among: ${listed.map((t) => `${t.type} ${t.url}`).join(', ')}\n` +
         'Browser tabs are page targets too; this looks for the renderer itself.'
     )
     process.exit(1)

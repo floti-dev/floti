@@ -2,6 +2,21 @@
 ; electron-builder.yml), ahead of its own includes, in both the installer and
 ; the uninstaller.
 ;
+; Where the app goes: %LOCALAPPDATA%\Programs\Floti\desktop, beside floti's
+; own Programs\Floti\bin (customInit), unless an earlier install of Floti
+; was put elsewhere or /D names a folder.
+;
+; Once, an install of the app from when it was called Helm moves there: the
+; installer finds it by the uninstall entry its app ID (dev.coletaylor.helm)
+; gave it, or in %LOCALAPPDATA%\Programs\Helm, and runs its own uninstaller
+; silently before this version's files go in (FLOTI_MOVE_HELM_INSTALL). That
+; uninstaller removes its files, its Start menu shortcut, its app ID's
+; registration and its uninstall entry, and keeps the user's data, which Floti
+; moves itself at its first start (src/main/dataFolder.ts). Windows'
+; notification settings for the old app ID go too. The uninstall entry this
+; installer writes is the new one, under the key electron-builder derives from
+; dev.floti.desktop.
+;
 ; After the app's files are in place (customInstall), the installer runs
 ; `floti install-self` from the floti.exe it just put at
 ; `$INSTDIR\resources\floti.exe`. That copies floti.exe, and the Node runtime
@@ -53,11 +68,11 @@
 ; include and variable allowOnlyOneInstallerInstance.nsh brings for it; the
 ; default check is still the one that runs, so both are brought here.
 ;
-; The client folder is `host-client` in Helm's data directory, which for the
-; installed app is %APPDATA%\<productName> (`clientFolder` in
-; src/main/host/launcher.ts, `appMode` in src/main/paths.ts). It and the
-; floti.exe carried are defines, which a script including this one may set
-; first to point them elsewhere.
+; The client folder is `host-client` in the data directory of the Helm whose
+; host that is, %APPDATA%\Helm (`clientFolder` in src/main/host/launcher.ts):
+; only a Helm from before update-stop ran its host from inside its install.
+; It and the floti.exe carried are defines, which a script including this one
+; may set first to point them elsewhere.
 ;
 ; What the install adds outside $INSTDIR, which this uninstaller leaves and
 ; `floti uninstall` removes (docs/PACKAGING.md lists it):
@@ -68,13 +83,81 @@
 !include "LogicLib.nsh"
 !include "getProcessInfo.nsh"
 Var pid
+; The installer alone uses it, and makensis is run with warnings as errors.
+!ifndef BUILD_UNINSTALLER
+  Var helmInstall
+!endif
+
+; The folder under the per-user Programs folder the app is installed in
+; (`INSTALL_FOLDER` in the host's platform/installs/windows.rs).
+!define FLOTI_INSTALL_FOLDER "Floti\desktop"
+
+; What electron-builder derives from the app ID Helm had, dev.coletaylor.helm:
+; the key of its uninstall entry and of the install's own registry key.
+; `installer.test.ts` holds this to the UUID v5 electron-builder computes.
+!define HELM_APP_GUID "3faefc2b-fc42-5861-891b-1eda657b27a9"
+!define HELM_UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${HELM_APP_GUID}"
+!define HELM_INSTALL_KEY "Software\${HELM_APP_GUID}"
+
+!macro customInit
+  ; Beside floti's own folder, unless this app was installed elsewhere before
+  ; (electron-builder has read that from its registry key) or /D says where.
+  ReadRegStr $0 HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
+  !insertmacro GetDParameter $1
+  ${If} $0 == ""
+  ${AndIf} $1 == ""
+    StrCpy $INSTDIR "$LOCALAPPDATA\Programs\${FLOTI_INSTALL_FOLDER}"
+  ${EndIf}
+!macroend
 
 !macro customCheckAppRunning
   !ifndef BUILD_UNINSTALLER
-    !insertmacro HELM_STOP_OLD_LOCAL_HOST
+    !insertmacro FLOTI_FIND_HELM_INSTALL
+    !insertmacro HELM_STOP_OLD_LOCAL_HOST "$INSTDIR"
+    ${If} $helmInstall != ""
+      !insertmacro HELM_STOP_OLD_LOCAL_HOST "$helmInstall"
+    ${EndIf}
   !endif
   !insertmacro IS_POWERSHELL_AVAILABLE
   !insertmacro _CHECK_APP_RUNNING
+  !ifndef BUILD_UNINSTALLER
+    !insertmacro FLOTI_MOVE_HELM_INSTALL
+  !endif
+!macroend
+
+; Sets $helmInstall to the folder of an install from when the app was called
+; Helm, or to "" when there is none: the folder its registry key names, else
+; %LOCALAPPDATA%\Programs\Helm, holding its uninstaller.
+!macro FLOTI_FIND_HELM_INSTALL
+  ReadRegStr $helmInstall HKCU "${HELM_INSTALL_KEY}" InstallLocation
+  ${If} $helmInstall == ""
+    StrCpy $helmInstall "$LOCALAPPDATA\Programs\Helm"
+  ${EndIf}
+  ${IfNot} ${FileExists} "$helmInstall\Uninstall Helm.exe"
+    StrCpy $helmInstall ""
+  ${EndIf}
+!macroend
+
+; Removes the install $helmInstall names by its own uninstaller, run silently
+; in place from a copy, which takes its uninstall entry, its Start menu
+; shortcut and its app ID's registration and keeps the user's data. A
+; failure is in the details log and stops nothing: this version installs in
+; its own folder either way.
+!macro FLOTI_MOVE_HELM_INSTALL
+  ${If} $helmInstall != ""
+    DetailPrint "Moving Helm from $helmInstall to $INSTDIR."
+    InitPluginsDir
+    CopyFiles /SILENT "$helmInstall\Uninstall Helm.exe" "$PLUGINSDIR\helm-uninstaller.exe"
+    ExecWait '"$PLUGINSDIR\helm-uninstaller.exe" /S /currentuser _?=$helmInstall' $0
+    Delete "$PLUGINSDIR\helm-uninstaller.exe"
+    ${If} $0 == 0
+      Delete "$helmInstall\Uninstall Helm.exe"
+      RMDir "$helmInstall"
+    ${Else}
+      DetailPrint "Helm's uninstaller ended with $0; $helmInstall is left as it is."
+    ${EndIf}
+  ${EndIf}
+  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\dev.coletaylor.helm"
 !macroend
 
 !macro customInstall
@@ -87,15 +170,17 @@ Var pid
   !define HELM_UPDATE_STOP_FLOTI "${PROJECT_DIR}\dist-host\floti.exe"
 !endif
 !ifndef HELM_CLIENT_FOLDER
-  !define HELM_CLIENT_FOLDER "$APPDATA\${PRODUCT_NAME}\host-client"
+  !define HELM_CLIENT_FOLDER "$APPDATA\Helm\host-client"
 !endif
 
-!macro HELM_STOP_OLD_LOCAL_HOST
-  ${If} ${FileExists} "$INSTDIR\resources\floti.exe"
+; Asks a host still running from inside the install FOLDER, from a Helm before
+; update-stop, to stop before that install's files are removed.
+!macro HELM_STOP_OLD_LOCAL_HOST FOLDER
+  ${If} ${FileExists} "${FOLDER}\resources\floti.exe"
     ClearErrors
-    FileOpen $3 "$INSTDIR\resources\floti.exe" a
+    FileOpen $3 "${FOLDER}\resources\floti.exe" a
     ${If} ${Errors}
-      ; In use: a host, keeper or bridge of this Helm runs from inside it.
+      ; In use: a host, keeper or bridge of that Helm runs from inside it.
       !insertmacro HELM_UPDATE_STOP
     ${Else}
       FileClose $3

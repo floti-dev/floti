@@ -52,8 +52,8 @@ import {
 
 const desktopDir = resolve(import.meta.dirname, '..')
 const distDir = join(desktopDir, 'dist-app')
-const appData = process.env.APPDATA ?? process.env.HOME ?? '.'
-const realDataDir = join(appData, 'Helm')
+const localAppData = process.env.LOCALAPPDATA ?? process.env.HOME ?? '.'
+const realDataDir = join(localAppData, 'Floti', 'desktop')
 const version = JSON.parse(readFileSync(join(desktopDir, 'package.json'), 'utf8')).version
 
 const args = process.argv.slice(2)
@@ -70,9 +70,9 @@ const say = (line) => console.log(line)
 if (!args.includes('--yes')) {
   say('verify-installer: this is a destructive tool and it did nothing.')
   say('')
-  say('It installs the built NSIS package over the Helm on this machine, runs the')
+  say('It installs the built NSIS package over the Floti on this machine, runs the')
   say('installed app, and uninstalls it. It does not put your install back.')
-  say('Helm hosts Claude Code sessions, so it also ends whatever is running in them.')
+  say('Floti hosts Claude Code sessions, so it also ends whatever is running in them.')
   say('')
   say(`  install directory : ${installedAppDir()}`)
   say(`  running now       : ${String(countInstalledProcesses(installedAppDir()))} process(es)`)
@@ -80,7 +80,7 @@ if (!args.includes('--yes')) {
   say('')
   say('Run it deliberately, on a machine where nobody is working:')
   say('  pnpm verify:installer --yes')
-  say('  pnpm verify:installer --yes --replace-running   # if Helm is open and that is intended')
+  say('  pnpm verify:installer --yes --replace-running   # if Floti is open and that is intended')
   process.exit(2)
 }
 
@@ -127,8 +127,8 @@ function installerChecks(setupExe) {
   // than silently succeeding.
   const localAppData = process.env.LOCALAPPDATA ?? ''
   const installDir = installedAppDir()
-  const installedExe = join(installDir, 'Helm.exe')
-  const uninstaller = join(installDir, 'Uninstall Helm.exe')
+  const installedExe = join(installDir, 'Floti.exe')
+  const uninstaller = join(installDir, 'Uninstall Floti.exe')
   // Where `floti install-self` puts floti, as the install script does.
   const ownFloti = join(localAppData, 'Programs', 'Floti', 'bin', 'floti.exe')
   const startMenu = join(
@@ -137,11 +137,11 @@ function installerChecks(setupExe) {
     'Windows',
     'Start Menu',
     'Programs',
-    'Helm.lnk'
+    'Floti.lnk'
   )
   // Deliberately not created (`createDesktopShortcut: false`), so its absence is
   // checked at both ends rather than only after the uninstall.
-  const desktopShortcut = join(process.env.USERPROFILE ?? '', 'Desktop', 'Helm.lnk')
+  const desktopShortcut = join(process.env.USERPROFILE ?? '', 'Desktop', 'Floti.lnk')
   const desktopShortcutBefore = existsSync(desktopShortcut)
 
   const alreadyInstalled = existsSync(installedExe)
@@ -160,9 +160,9 @@ function installerChecks(setupExe) {
   const running = countInstalledProcesses(installDir)
   if (running > 0 && !args.includes('--replace-running')) {
     say('')
-    say(`FAIL  PKG-2  ${String(running)} Helm process(es) are running from ${installDir}.`)
+    say(`FAIL  PKG-2  ${String(running)} Floti process(es) are running from ${installDir}.`)
     say('This tool terminates the installed app, uninstalls it, and does not put it back.')
-    say('Helm hosts Claude Code sessions, so that ends whatever is running in them.')
+    say('Floti hosts Claude Code sessions, so that ends whatever is running in them.')
     say('Close it and run this again, or pass --replace-running if that is what you want.')
     return [
       {
@@ -173,7 +173,7 @@ function installerChecks(setupExe) {
         detail: {
           installDir,
           running,
-          remedy: 'close the installed Helm, or pass --replace-running'
+          remedy: 'close the installed Floti, or pass --replace-running'
         },
         notes: [
           'Not a failure of the installer. This tool would have uninstalled an app somebody',
@@ -251,7 +251,7 @@ function installerChecks(setupExe) {
   const appDataKept = existsSync(realDataDir)
 
   say('')
-  say('The installed Helm has been REMOVED. If you were using it, reinstall it:')
+  say('The installed Floti has been REMOVED. If you were using it, reinstall it:')
   say(`  ${setupExe}`)
 
   return [
@@ -304,13 +304,13 @@ function installerChecks(setupExe) {
       },
       notes: [
         'Installed silently as the ordinary user. This shell is not elevated, and a per-machine installer would fail here rather than prompt, so "no elevation" is the reason it worked rather than an assumption.',
-        'The installed app is asked for the same selftest the portable exe ran, and it reports its own mode and data directory, which are compared against %APPDATA%\\Helm.',
+        'The installed app is asked for the same selftest the portable exe ran, and it reports its own mode and data directory, which are compared against %LOCALAPPDATA%\\Floti\\desktop.',
         'Nothing landed beside the exe: the install directory holds no helm-data, no .db and no WAL.',
         'The install put floti in %LOCALAPPDATA%\\Programs\\Floti\\bin and ran floti setup from there, which also put that folder on the user\'s PATH and registered the logon task "Floti host". The uninstaller leaves all three for now; docs/PACKAGING.md lists them.',
         'A start-menu entry is created and a desktop icon deliberately is not. Both are checked, and the uninstall has to take back the one it made.',
         'An empty install directory counts as removed: NSIS deletes every file it installed but cannot remove the folder its own uninstaller is running out of, so an empty shell is the ordinary successful outcome.',
-        '%APPDATA%\\Helm is deliberately NOT removed by the uninstaller. deleteAppDataOnUninstall stays false: the database holds the user\'s profiles, session index and config snapshots, and an uninstall is not a request to destroy them.',
-        'This tool leaves the machine with NO installed Helm. That is the honest end state of verifying an uninstall, and it is why this is not part of any suite.'
+        '%LOCALAPPDATA%\\Floti\\desktop is deliberately NOT removed by the uninstaller. deleteAppDataOnUninstall stays false: the database holds the user\'s profiles, session index and config snapshots, and an uninstall is not a request to destroy them.',
+        'This tool leaves the machine with NO installed Floti. That is the honest end state of verifying an uninstall, and it is why this is not part of any suite.'
       ]
     }
   ]

@@ -54,8 +54,8 @@ export function BrowserOff({ command, onCopy, onReadMore }: BrowserOffProps): JS
       }
     >
       {command === null
-        ? "Helm is running without Chromium's sandbox, so it opens no web page and gives sessions no browser tools. Start it with the sandbox to turn the browser on."
-        : "Helm is running without Chromium's sandbox, so it opens no web page and gives sessions no browser tools. Run this once in a terminal, then start Helm again:"}
+        ? "Floti is running without Chromium's sandbox, so it opens no web page and gives sessions no browser tools. Start it with the sandbox to turn the browser on."
+        : "Floti is running without Chromium's sandbox, so it opens no web page and gives sessions no browser tools. Run this once in a terminal, then start Floti again:"}
     </EmptyState>
   )
 }

@@ -70,7 +70,7 @@ interface Open {
   bridge: PageBridge
 }
 
-export const FOREIGN_PAGE = 'Only Helm’s own pages may connect to the local host.'
+export const FOREIGN_PAGE = 'Only Floti’s own pages may connect to the local host.'
 
 export function createPageLinks(deps: PageLinksDeps): PageLinks {
   const open = new Map<number, Open>()
@@ -115,7 +115,7 @@ export function createPageLinks(deps: PageLinksDeps): PageLinks {
         const refused = (error as { refused?: RefusedVersions }).refused
         return { unreachable: (error as Error).message, ...(refused !== undefined ? { refused } : {}) }
       }
-      if (stopped) return { unreachable: 'Helm is quitting.' }
+      if (stopped) return { unreachable: 'Floti is quitting.' }
       // The page went, or opened again, while main's link connected.
       if (byPage.get(page.id) !== connection) {
         return { unreachable: 'The page that asked for this connection has gone.' }

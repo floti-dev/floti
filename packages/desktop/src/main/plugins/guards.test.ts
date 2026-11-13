@@ -65,12 +65,12 @@ describe('pluginNavigationAllowed', () => {
     ['a plugin frame to plain http on this machine', { target: 'http://127.0.0.1:4790/' }, false],
     ['a plugin frame to about:blank', { target: 'about:blank' }, false],
     [
-      'Helm putting a fresh frame on a plugin page',
+      'Floti putting a fresh frame on a plugin page',
       { frameOrigin: 'http://localhost:5173', initiatorOrigin: 'http://localhost:5173', initiatorIsHelm: true },
       true
     ],
     [
-      'Helm reloading a plugin frame onto another plugin it made it for',
+      'Floti reloading a plugin frame onto another plugin it made it for',
       { target: 'helm-plugin://other/x.html', initiatorIsHelm: true },
       true
     ],
@@ -196,7 +196,7 @@ describe('guardPluginFrames', () => {
     }
   }
 
-  it('lets Helm frame a plugin page in a page that frames plugins, and stops a plugin frame leaving its origin', () => {
+  it('lets Floti frame a plugin page in a page that frames plugins, and stops a plugin frame leaving its origin', () => {
     const page = contents(7)
     guardPluginFrames(page.contents, (id) => id === 7)
     expect(
@@ -256,7 +256,7 @@ describe('installPluginPermissions', () => {
     }
   })
 
-  it("answers as before for Helm's own pages", () => {
+  it("answers as before for Floti's own pages", () => {
     expect(request('notifications', 'http://localhost:5173/')).toBe(true)
   })
 

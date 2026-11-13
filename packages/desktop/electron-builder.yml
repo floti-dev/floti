@@ -11,20 +11,23 @@
 # asarUnpack is required for both: native .node binaries and node-pty's
 # conpty/winpty helper binaries (conpty.dll, OpenConsole.exe, winpty-agent.exe)
 # cannot be loaded from inside the asar archive.
-appId: dev.coletaylor.helm
-productName: Helm
+# The app ID every OS remembers the app by (design I11): the macOS bundle ID,
+# the Windows AppUserModelID (main/index.ts sets the same) and the uninstall
+# entry's key, which electron-builder derives from it. It was
+# dev.coletaylor.helm while the app was Helm; build/installer.nsh removes what
+# an install under that ID left.
+appId: dev.floti.desktop
+productName: Floti
 copyright: MIT licensed - see LICENSE
 
-# The install directory's name comes from the *package* name, not productName.
-# `getWindowsInstallationDirName` only prefers productName when the installer
-# lets the user choose a directory - a one-click per-user install always uses
-# `sanitizeFileName(metadata.name)`. With the workspace name that is
-# `@helm/desktop` -> `%LOCALAPPDATA%\Programs\@helmdesktop`, which leaks an
-# internal package name into a path the user sees. Overriding the metadata for
-# the packaged copy fixes the directory and changes nothing else: `app.getName()`
-# still resolves through productName, so the data directory stays %APPDATA%\Helm.
+# The package name the packaged copy carries, which electron-builder names the
+# default install directory after (`sanitizeFileName(metadata.name)` for a
+# one-click per-user install): the workspace name `@helm/desktop` would leak an
+# internal package name into a path the user sees. build/installer.nsh then
+# puts the install in %LOCALAPPDATA%\Programs\Floti\desktop, beside floti's
+# own Programs\Floti\bin. `app.getName()` still resolves through productName.
 extraMetadata:
-  name: Helm
+  name: Floti
 
 directories:
   output: dist-app
@@ -105,7 +108,7 @@ portable:
   artifactName: Helm-${version}-portable.exe
 nsis:
   artifactName: Helm-${version}-setup.exe
-  # Per-user, in %LOCALAPPDATA%\Programs\Helm. Nothing Helm does needs
+  # Per-user, in %LOCALAPPDATA%\Programs\Floti\desktop. Nothing Floti does needs
   # administrator rights, and an installer that asks for them is one a person
   # cannot run on a machine they do not own.
   oneClick: true
@@ -122,8 +125,8 @@ nsis:
   # would need elevation fails the silent install outright instead of quietly
   # putting a UAC prompt in front of every user.
   allowElevation: false
-  # Load-bearing. The database under %APPDATA%\Helm holds the user's profiles,
-  # their session index and every config snapshot Helm has taken on their
+  # Load-bearing. The database under %LOCALAPPDATA%\Floti\desktop holds the
+  # user's profiles, their session index and every config snapshot Floti has taken on their
   # behalf. Uninstalling the program is not a request to destroy those, and
   # `pnpm packaging-check --only=package` asserts they survive.
   deleteAppDataOnUninstall: false
@@ -223,8 +226,8 @@ linux:
   # description, which is written for this repository.
   description: A desktop for Claude Code sessions, with history, files and a browser pane.
   # Named rather than derived, so verify-linux-artifact.mjs knows where the
-  # executable is.
-  executableName: helm
+  # executable is. Not `floti`, which is the floti binary in resources/.
+  executableName: floti-desktop
   target:
     - target: AppImage
       arch: [x64]

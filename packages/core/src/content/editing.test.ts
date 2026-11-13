@@ -204,7 +204,7 @@ describe('editorKeyAction', () => {
 describe('findMatchesIn', () => {
   it('finds every occurrence, case-insensitively and without overlaps', () => {
     expect(findMatchesIn('aAaA', 'aa')).toEqual([0, 2])
-    expect(findMatchesIn('Helm helm HELM', 'helm')).toEqual([0, 5, 10])
+    expect(findMatchesIn('Floti helm HELM', 'helm')).toEqual([0, 5, 10])
     expect(findMatchesIn('abc', '')).toEqual([])
   })
 

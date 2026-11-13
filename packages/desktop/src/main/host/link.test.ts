@@ -39,7 +39,7 @@ function steppedTimers() {
 }
 
 describe('the link to the local host', () => {
-  it('writes Helm’s claude and shell on connect, before anything else uses the connection', async () => {
+  it('writes Floti’s claude and shell on connect, before anything else uses the connection', async () => {
     const connection = new FakeConnection()
     const order: string[] = []
     const link = createHostLink({
@@ -131,7 +131,7 @@ describe('the link to the local host', () => {
     expect(connection.payloads('host:quit')).toEqual([{ end: true }])
     expect(connection.payloads('host:stop')).toEqual([])
     expect(local.closed).toBe(true)
-    await expect(link.connection()).rejects.toThrow('Helm is quitting.')
+    await expect(link.connection()).rejects.toThrow('Floti is quitting.')
   })
 
   it('says the same to a host it did not start, and only lets go of the connection', async () => {
@@ -277,7 +277,7 @@ describe('the link to the local host', () => {
           return oldHostRunning
             ? Promise.reject(
                 new LocalHostRefusedError(
-                  'This PC’s host speaks Floti protocol 1.4, older than this Helm’s 2.0.',
+                  'This PC’s host speaks Floti protocol 1.4, older than this Floti’s 2.0.',
                   { host: { major: 1, minor: 4 }, client: { major: 2, minor: 0 }, update: 'host' }
                 )
               )
@@ -326,7 +326,7 @@ describe('the link to the local host', () => {
         log: () => undefined,
         ...steppedTimers()
       })
-      await expect(link.restartHost()).rejects.toThrow('Helm does not restart the local host.')
+      await expect(link.restartHost()).rejects.toThrow('Floti does not restart the local host.')
     })
   })
 
@@ -520,7 +520,7 @@ describe('the link to the local host', () => {
       ])
     })
 
-    it('stops trying once Helm quits while it waits to try again', async () => {
+    it('stops trying once Floti quits while it waits to try again', async () => {
       const w = crashWorld({ startedHost: true })
       await w.link.connection()
       w.firstConnection.close()
@@ -533,7 +533,7 @@ describe('the link to the local host', () => {
     })
   })
 
-  it('sends the claude chosen in Settings, or the one Helm finds, and the terminal shell', () => {
+  it('sends the claude chosen in Settings, or the one Floti finds, and the terminal shell', () => {
     const base = { claudePath: null, terminalShell: null } as Parameters<typeof hostSettingsFor>[0]
     expect(hostSettingsFor({ ...base, claudePath: '/chosen/claude' }, '/found/claude')).toEqual({
       backendPaths: { 'claude-code': '/chosen/claude' },

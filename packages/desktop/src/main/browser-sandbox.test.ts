@@ -25,11 +25,11 @@ describe('whether the browser pane runs', () => {
     expect(browserAvailability({ ...LINUX, platform: 'win32', noSandbox: false })).toEqual({ available: true })
   })
 
-  it('is off in a Linux Helm started with --no-sandbox, with the command for its AppImage', () => {
+  it('is off in a Linux Floti started with --no-sandbox, with the command for its AppImage', () => {
     expect(browserAvailability({ ...LINUX, noSandbox: true })).toEqual({ available: false, command: appArmorCommand(APPIMAGE) })
   })
 
-  it('is off with no command where AppArmor is not what refused the sandbox, or Helm is not an AppImage', () => {
+  it('is off with no command where AppArmor is not what refused the sandbox, or Floti is not an AppImage', () => {
     expect(browserAvailability({ ...LINUX, noSandbox: true, appArmorRestricts: false })).toEqual({ available: false, command: null })
     expect(browserAvailability({ ...LINUX, noSandbox: true, appArmorRestricts: null })).toEqual({ available: false, command: null })
     expect(browserAvailability({ ...LINUX, noSandbox: true, env: {} })).toEqual({ available: false, command: null })
@@ -55,7 +55,7 @@ describe('whether the browser pane runs', () => {
 })
 
 describe('the command that gives an AppImage the sandbox', () => {
-  it('writes a profile letting every Helm AppImage in its folder make user namespaces, with one sudo', () => {
+  it('writes a profile letting every Floti AppImage in its folder make user namespaces, with one sudo', () => {
     expect(appArmorProfile('/home/me/Apps/Helm-*.AppImage')).toEqual([
       'abi <abi/4.0>,',
       'include <tunables/global>',

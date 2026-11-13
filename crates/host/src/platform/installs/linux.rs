@@ -1,6 +1,8 @@
 //! Linux: the binary is renamed over; the desktop app is the AppImage at
-//! `~/Applications/Helm.AppImage`, written beside and renamed into place in
-//! the same way.
+//! `~/Applications/Floti.AppImage`, written beside and renamed into place in
+//! the same way. A `Helm.AppImage` from before the rename is found too, and
+//! an update writes `Floti.AppImage` beside it and removes it, carrying the
+//! menu entry floti wrote for it over to the new one.
 //!
 //! `~/Applications` is where AppImage's own integration tools look for
 //! AppImages. It is outside Floti's data folder, which `floti uninstall`
@@ -8,8 +10,9 @@
 //! it, so its version is unknown and an update always installs it.
 //!
 //! A first install adds the app to the desktop's menus the freedesktop way:
-//! `applications/helm.desktop` and the 256px icon at
-//! `icons/hicolor/256x256/apps/helm.png`, both under `$XDG_DATA_HOME`
+//! `applications/dev.floti.desktop.desktop`, named by the app ID (design
+//! I11), and the 256px icon at
+//! `icons/hicolor/256x256/apps/dev.floti.desktop.png`, both under `$XDG_DATA_HOME`
 //! (`~/.local/share` when it is unset or not absolute). The icon is the one
 //! the AppImage's own entry has (`build/icon.png`), built into floti, so
 //! nothing is read out of the image. Each is written beside and renamed into
@@ -26,11 +29,17 @@ use crate::platform::wsl::{INTEROP_FILE, linux::inside_with};
 use crate::{Error, Result};
 
 /// What the desktop app is called: `productName` in `electron-builder.yml`.
-pub const DESKTOP_NAME: &str = "Helm";
+pub const DESKTOP_NAME: &str = "Floti";
 
-/// What the menu entry and its icon are called: `executableName` in
-/// `electron-builder.yml`.
-const ENTRY_NAME: &str = "helm";
+/// What the menu entry and its icon are called: the app ID, which
+/// `desktopName` in the desktop's `package.json` names the window after.
+const ENTRY_NAME: &str = "dev.floti.desktop";
+
+/// What the app was called before it was Floti, and so its AppImage's name.
+pub const HELM_NAME: &str = "Helm";
+
+/// What floti called the menu entry and its icon before the rename.
+const HELM_ENTRY_NAME: &str = "helm";
 
 /// The menu entry's comment: `linux.description` in `electron-builder.yml`.
 const ENTRY_COMMENT: &str =
@@ -43,21 +52,35 @@ const ICON: &[u8] = include_bytes!("../../../../../packages/desktop/build/icon.p
 const ICON_SIZE: &str = "256x256";
 
 /// What an AppImage's runtime names the folder it mounts the image on,
-/// followed by part of the image's name: `$TMPDIR/.mount_HelmXXXXXX`.
+/// followed by part of the image's name: `$TMPDIR/.mount_FlotiXXXXXX`.
 const MOUNT_PREFIX: &str = ".mount_";
 
 pub struct Native;
 
 impl Native {
-    fn app_image_name() -> String {
-        format!("{DESKTOP_NAME}.AppImage")
+    fn app_image_name(name: &str) -> String {
+        format!("{name}.AppImage")
+    }
+
+    /// The folder the AppImage is in for `env`.
+    fn applications(env: &UserEnv) -> Option<PathBuf> {
+        desktop_dir_override(env)
+            .or_else(|| env.home.as_ref().map(|home| home.join("Applications")))
     }
 
     /// The installed AppImage's path for `env`, whether it is there or not.
     pub fn app_image(env: &UserEnv) -> Option<PathBuf> {
-        desktop_dir_override(env)
-            .or_else(|| env.home.as_ref().map(|home| home.join("Applications")))
-            .map(|folder| folder.join(Self::app_image_name()))
+        Self::applications(env).map(|folder| folder.join(Self::app_image_name(DESKTOP_NAME)))
+    }
+
+    /// What the menu entry and icon for `desktop` are called: the app ID,
+    /// or the name floti gave them for an AppImage from before the rename.
+    fn entry_name(desktop: &Desktop) -> &'static str {
+        if desktop.name == HELM_NAME {
+            HELM_ENTRY_NAME
+        } else {
+            ENTRY_NAME
+        }
     }
 
     /// The folder menu entries and icons go under for `env`:
@@ -77,27 +100,27 @@ impl Native {
         })
     }
 
-    /// Where the menu entry is under `share`.
-    fn entry_path(share: &Path) -> PathBuf {
-        share
-            .join("applications")
-            .join(format!("{ENTRY_NAME}.desktop"))
+    /// Where the menu entry named `entry` is under `share`.
+    fn entry_path(share: &Path, entry: &str) -> PathBuf {
+        share.join("applications").join(format!("{entry}.desktop"))
     }
 
-    /// Where the menu entry's icon is under `share`.
-    fn icon_path(share: &Path) -> PathBuf {
+    /// Where the icon named `entry` is under `share`.
+    fn icon_path(share: &Path, entry: &str) -> PathBuf {
         share
             .join("icons")
             .join("hicolor")
             .join(ICON_SIZE)
             .join("apps")
-            .join(format!("{ENTRY_NAME}.png"))
+            .join(format!("{entry}.png"))
     }
 
-    /// The menu entry for the AppImage at `app_image`.
+    /// The menu entry for the AppImage at `app_image`. Its window is
+    /// `dev.floti.desktop`, which the entry is named after, so the desktop
+    /// ties the two together.
     pub fn entry_text(app_image: &Path) -> String {
         format!(
-            "[Desktop Entry]\nType=Application\nName={DESKTOP_NAME}\nComment={ENTRY_COMMENT}\nExec={}\nIcon={ENTRY_NAME}\nTerminal=false\nCategories=Development;\nStartupWMClass={DESKTOP_NAME}\n",
+            "[Desktop Entry]\nType=Application\nName={DESKTOP_NAME}\nComment={ENTRY_COMMENT}\nExec={}\nIcon={ENTRY_NAME}\nTerminal=false\nCategories=Development;\nStartupWMClass={ENTRY_NAME}\n",
             exec_argument(app_image)
         )
     }
@@ -138,10 +161,10 @@ fn write_into_place(path: &Path, bytes: &[u8]) -> Result<()> {
 }
 
 impl Installs for Native {
-    fn bundles(&self, _desktop: &Desktop, running: &Path) -> bool {
+    fn bundles(&self, desktop: &Desktop, running: &Path) -> bool {
         // A running AppImage's files are on its read-only mount, not at its
         // path, and the floti it carries runs from there.
-        let short: String = DESKTOP_NAME.chars().take(6).collect();
+        let short: String = desktop.name.chars().take(6).collect();
         running.components().any(|part| {
             part.as_os_str()
                 .to_str()
@@ -151,14 +174,20 @@ impl Installs for Native {
     }
 
     fn desktop(&self, env: &UserEnv) -> Option<Desktop> {
-        self.desktop_target(env)
-            .filter(|desktop| desktop.path.is_file())
+        // Floti's, then one from before the rename.
+        let folder = Self::applications(env)?;
+        [DESKTOP_NAME, HELM_NAME].into_iter().find_map(|name| {
+            let path = folder.join(Self::app_image_name(name));
+            path.is_file().then_some(Desktop { name, path })
+        })
     }
 
     fn desktop_target(&self, env: &UserEnv) -> Option<Desktop> {
-        Self::app_image(env).map(|path| Desktop {
-            name: DESKTOP_NAME,
-            path,
+        self.desktop(env).or_else(|| {
+            Self::app_image(env).map(|path| Desktop {
+                name: DESKTOP_NAME,
+                path,
+            })
         })
     }
 
@@ -208,23 +237,67 @@ impl Installs for Native {
 
     fn add_launcher(&self, env: &UserEnv, desktop: &Desktop) -> Result<Option<PathBuf>> {
         let share = Self::share(env)?;
-        write_into_place(&Self::icon_path(&share), ICON)?;
-        let entry = Self::entry_path(&share);
-        write_into_place(&entry, Self::entry_text(&desktop.path).as_bytes())?;
+        let name = Self::entry_name(desktop);
+        write_into_place(&Self::icon_path(&share, name), ICON)?;
+        let entry = Self::entry_path(&share, name);
+        let text = Self::entry_text(&desktop.path);
+        let text = if name == ENTRY_NAME {
+            text
+        } else {
+            // An AppImage from before the rename keeps the entry it had.
+            text.replace(&format!("={ENTRY_NAME}\n"), &format!("={name}\n"))
+                .replace(&format!("Name={DESKTOP_NAME}\n"), &format!("Name={}\n", desktop.name))
+        };
+        write_into_place(&entry, text.as_bytes())?;
         Ok(Some(entry))
     }
 
     fn repair_launcher(&self, env: &UserEnv, desktop: &Desktop) -> Result<Option<PathBuf>> {
-        if Self::entry_path(&Self::share(env)?).is_file() {
+        if Self::entry_path(&Self::share(env)?, Self::entry_name(desktop)).is_file() {
             return Ok(None);
         }
         self.add_launcher(env, desktop)
     }
 
+    fn carry_launcher(
+        &self,
+        env: &UserEnv,
+        replaced: &Desktop,
+        installed: &Desktop,
+    ) -> Result<Option<PathBuf>> {
+        let old = Self::entry_name(replaced);
+        if old == Self::entry_name(installed) {
+            return Ok(None);
+        }
+        let share = Self::share(env)?;
+        let old_entry = Self::entry_path(&share, old);
+        if std::fs::symlink_metadata(&old_entry).is_err() {
+            // floti wrote no entry for the old AppImage, so it writes none
+            // for the new one.
+            return Ok(None);
+        }
+        let written = self.add_launcher(env, installed)?;
+        for path in [old_entry, Self::icon_path(&share, old)] {
+            match std::fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(source) => return Err(Error::path("remove", &path, source)),
+            }
+        }
+        Ok(written)
+    }
+
     fn removal(&self, env: &UserEnv) -> Option<DesktopRemoval> {
-        let app_image = Self::app_image(env)?;
+        let app_image = self.desktop(env).map_or(Self::app_image(env)?, |app| app.path);
+        // Both entries floti may have written: the app ID's, and the one it
+        // wrote for an AppImage from before the rename.
         let launcher = Self::data_home(env)
-            .map(|share| [Self::icon_path(&share), Self::entry_path(&share)])
+            .map(|share| {
+                [ENTRY_NAME, HELM_ENTRY_NAME]
+                    .into_iter()
+                    .flat_map(|name| [Self::icon_path(&share, name), Self::entry_path(&share, name)])
+                    .collect::<Vec<_>>()
+            })
             .into_iter()
             .flatten();
         let remove: Vec<PathBuf> = std::iter::once(app_image.clone())
@@ -239,16 +312,30 @@ impl Installs for Native {
         })
     }
 
-    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
-        if let Some(folder) = desktop.path.parent() {
+    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<Desktop> {
+        // In the folder the app is in, under its own name: `Floti.AppImage`
+        // beside a `Helm.AppImage` from before the rename, which goes once
+        // it is in.
+        let installed = Desktop {
+            name: DESKTOP_NAME,
+            path: desktop
+                .path
+                .with_file_name(Self::app_image_name(DESKTOP_NAME)),
+        };
+        if let Some(folder) = installed.path.parent() {
             std::fs::create_dir_all(folder)
                 .map_err(|source| Error::path("make", folder, source))?;
         }
-        let new = beside(&desktop.path, NEW_COPY);
+        let new = beside(&installed.path, NEW_COPY);
         std::fs::copy(release, &new).map_err(|source| Error::path("write", &new, source))?;
-        posix::rename_over(&desktop.path, &new).inspect_err(|_| {
+        posix::rename_over(&installed.path, &new).inspect_err(|_| {
             let _ = std::fs::remove_file(&new);
-        })
+        })?;
+        if desktop.path != installed.path {
+            std::fs::remove_file(&desktop.path)
+                .map_err(|source| Error::path("remove", &desktop.path, source))?;
+        }
+        Ok(installed)
     }
 }
 
@@ -268,7 +355,7 @@ impl super::FakeDesktop for Native {
     fn fake_install(&self, apps: &Path, version: &str) {
         std::fs::create_dir_all(apps).expect("make the fake Applications folder");
         std::fs::write(
-            apps.join(Self::app_image_name()),
+            apps.join(Self::app_image_name(DESKTOP_NAME)),
             format!("installed {version}"),
         )
         .expect("write the fake AppImage");
@@ -282,7 +369,7 @@ impl super::FakeDesktop for Native {
     }
 
     fn was_updated(&self, apps: &Path, version: &str, _record: &Path) -> bool {
-        std::fs::read(apps.join(Self::app_image_name()))
+        std::fs::read(apps.join(Self::app_image_name(DESKTOP_NAME)))
             .is_ok_and(|bytes| bytes == version.as_bytes())
     }
 }

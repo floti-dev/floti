@@ -122,7 +122,7 @@ describe('sessionTitleFrom', () => {
     })
   })
 
-  it('falls back to Helm’s own words when every prompt is empty', () => {
+  it('falls back to Floti’s own words when every prompt is empty', () => {
     expect(sessionTitleFrom(['', '   '])).toEqual({ text: 'No prompt recorded', fallback: true })
     expect(sessionTitleFrom([])).toEqual({ text: 'No prompt recorded', fallback: true })
     expect(sessionTitleFrom(['[Image #1]', '[Image #2]'])).toEqual({

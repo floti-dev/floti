@@ -70,8 +70,8 @@ test('a session drives a browser tab of its own through its tools, and loses the
     // What the session was told: where its tools are, and the token that is its identity.
     const run = await claudeRunIn(world, world.projects.alpha)
     const config = readMcpConfig(run.argv[run.argv.indexOf('--mcp-config') + 1] ?? '')
-    const browser = config.mcpServers['helm-browser']
-    const sessions = config.mcpServers['helm-sessions']
+    const browser = config.mcpServers['floti-browser']
+    const sessions = config.mcpServers['floti-sessions']
     if (browser === undefined || sessions === undefined) throw new Error(`incomplete config: ${JSON.stringify(config)}`)
     const token = bearerOf(browser)
 
@@ -168,7 +168,7 @@ test('the user shares a page with a session, which reads and drives it until the
     await startSession(window, 'alpha')
     const pane = window.getByRole('region', { name: 'First pane' })
     const run = await claudeRunIn(world, world.projects.alpha)
-    const browser = readMcpConfig(run.argv[run.argv.indexOf('--mcp-config') + 1] ?? '').mcpServers['helm-browser']
+    const browser = readMcpConfig(run.argv[run.argv.indexOf('--mcp-config') + 1] ?? '').mcpServers['floti-browser']
     if (browser === undefined) throw new Error('the session was given no browser tools')
     const token = bearerOf(browser)
     const tool = (name: string, args: Record<string, unknown> = {}) => callTool(browser.url, token, name, args)

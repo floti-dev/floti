@@ -8,7 +8,7 @@ afterEach(() => {
 })
 
 describe('ptyEnv', () => {
-  it('tells a hosted program the terminal shows hyperlinks, whatever Helm inherited', () => {
+  it('tells a hosted program the terminal shows hyperlinks, whatever Floti inherited', () => {
     expect(ptyEnv().FORCE_HYPERLINK).toBe('1')
 
     // The pane opens them either way; a program told otherwise would only

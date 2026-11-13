@@ -40,7 +40,7 @@ describe('the agents on a host being added', () => {
   it('S23: not signed in names its login command', () => {
     expect(describeAgents({ 'claude-code': installed({ state: 'known', value: false }) }, 'linux')[0]).toMatchObject({
       signIn: 'notSignedIn',
-      fix: 'Sign in by running claude there once, in a terminal. Helm never handles its sign-in.'
+      fix: 'Sign in by running claude there once, in a terminal. Floti never handles its sign-in.'
     })
   })
 
@@ -53,7 +53,7 @@ describe('the agents on a host being added', () => {
     expect(row?.fix).toContain('no sign-in check')
   })
 
-  it('an agent Helm has no table entry for is listed by its id, with no command named', () => {
+  it('an agent Floti has no table entry for is listed by its id, with no command named', () => {
     expect(describeAgents({ other: { ...missing } }, 'linux')).toEqual([
       { id: 'other', name: 'other', version: null, installed: false, signIn: 'unknown', fix: 'other is not installed there.' }
     ])

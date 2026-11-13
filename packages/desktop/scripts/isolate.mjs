@@ -1,8 +1,8 @@
 // A data directory of the check's own, so a run cannot disturb the Helm the
 // user is sitting in front of.
 //
-// The drivers used to point the app they launch at `%APPDATA%\Helm` - the real
-// one - and one of them went further and said so on purpose: it parked
+// The drivers used to point the app they launch at the real data directory -
+// the installed app's own - and one of them went further and said so on purpose: it parked
 // settings on fixture values and put them back at the end. That is defensible
 // for a claim about persistence and indefensible in practice, because Helm is a
 // desktop app somebody is using while its checks run. Observed: a check run
@@ -50,14 +50,34 @@ import { join, posix, win32 } from 'node:path'
 const electronBinary = () => createRequire(import.meta.url)('electron')
 
 /**
- * The installed Helm's data directory on each OS: Electron's `userData` for an
- * app whose `productName` is `Helm`.
+ * The installed Floti's data directory on each OS: the desktop's folder in
+ * Floti's own data folder (`flotiDataDirFor` in `src/main/dataFolder.ts`,
+ * which `datadirs.test.ts` holds this to).
+ *
+ *   Windows  `%LOCALAPPDATA%\Floti\desktop`
+ *   macOS    `~/Library/Application Support/Floti/desktop`
+ *   Linux    `${XDG_DATA_HOME:-~/.local/share}/floti/desktop`
+ */
+export function realDataDirFor(platform, env, home) {
+  if (platform === 'win32') {
+    const local = env.LOCALAPPDATA && win32.isAbsolute(env.LOCALAPPDATA) ? env.LOCALAPPDATA : win32.join(home, 'AppData', 'Local')
+    return win32.join(local, 'Floti', 'desktop')
+  }
+  if (platform === 'darwin') return posix.join(home, 'Library', 'Application Support', 'Floti', 'desktop')
+  const share = env.XDG_DATA_HOME && posix.isAbsolute(env.XDG_DATA_HOME) ? env.XDG_DATA_HOME : posix.join(home, '.local', 'share')
+  return posix.join(share, 'floti', 'desktop')
+}
+
+/**
+ * Where the app kept its data while it was called Helm, until the installed
+ * Floti copies it to `realDataDirFor` at its first start (`helmDataDirFor` in
+ * `src/main/dataFolder.ts`).
  *
  *   Windows  `%APPDATA%\Helm`
  *   macOS    `~/Library/Application Support/Helm`
  *   Linux    `${XDG_CONFIG_HOME:-~/.config}/Helm`
  */
-export function realDataDirFor(platform, env, home) {
+export function helmDataDirFor(platform, env, home) {
   if (platform === 'win32') return win32.join(env.APPDATA ?? win32.join(home, 'AppData', 'Roaming'), 'Helm')
   if (platform === 'darwin') return posix.join(home, 'Library', 'Application Support', 'Helm')
   return posix.join(env.XDG_CONFIG_HOME || posix.join(home, '.config'), 'Helm')
@@ -65,26 +85,27 @@ export function realDataDirFor(platform, env, home) {
 
 /**
  * Where `pnpm dev` and every check keep their data on each OS: a folder of
- * their own, outside the installed app's, the way `%LOCALAPPDATA%\Helm` sits
- * apart from `%APPDATA%\Helm` on Windows.
+ * their own, outside the installed app's and outside Floti's data folder.
  *
- *   Windows  `%LOCALAPPDATA%\Helm`
- *   macOS    `~/Library/Application Support/Helm Dev`
- *   Linux    `${XDG_DATA_HOME:-~/.local/share}/Helm`
- *
- * macOS has one application-support folder, so the separate folder is a
- * separate name. Linux's data home is already apart from Electron's config
- * home, so it keeps the name.
+ *   Windows  `%LOCALAPPDATA%\Floti Dev`
+ *   macOS    `~/Library/Application Support/Floti Dev`
+ *   Linux    `${XDG_DATA_HOME:-~/.local/share}/floti-dev`
  */
 export function isolatedBaseFor(platform, env, home) {
-  if (platform === 'win32') return win32.join(env.LOCALAPPDATA ?? win32.join(home, 'AppData', 'Local'), 'Helm')
-  if (platform === 'darwin') return posix.join(home, 'Library', 'Application Support', 'Helm Dev')
-  return posix.join(env.XDG_DATA_HOME || posix.join(home, '.local', 'share'), 'Helm')
+  if (platform === 'win32') return win32.join(env.LOCALAPPDATA ?? win32.join(home, 'AppData', 'Local'), 'Floti Dev')
+  if (platform === 'darwin') return posix.join(home, 'Library', 'Application Support', 'Floti Dev')
+  return posix.join(env.XDG_DATA_HOME || posix.join(home, '.local', 'share'), 'floti-dev')
 }
 
-/** The real Helm's data directory - read from, never written to. */
+/**
+ * The real Floti's data directory - read from, never written to. Until the
+ * installed app has copied Helm's folder there, Helm's, where the real data
+ * still is.
+ */
 export function realDataDir() {
-  return realDataDirFor(process.platform, process.env, homedir())
+  const floti = realDataDirFor(process.platform, process.env, homedir())
+  const helm = helmDataDirFor(process.platform, process.env, homedir())
+  return !existsSync(join(floti, 'helm.db')) && existsSync(join(helm, 'helm.db')) ? helm : floti
 }
 
 /**
@@ -128,7 +149,7 @@ export const UI_STATE_KEYS = ['paneLayout', 'windowBounds']
  *
  * `group` separates the two things that use this. Checks share `checks/`; `null`
  * puts the directory straight under the isolated base (`isolatedBaseFor`:
- * `%LOCALAPPDATA%\Helm` on Windows), which is where `pnpm dev` goes - beside
+ * `%LOCALAPPDATA%\Floti Dev` on Windows), which is where `pnpm dev` goes - beside
  * the checks rather than among them, so that "delete every check's leftovers"
  * stays something somebody can do without throwing away the projects and
  * settings their dev app has accumulated.

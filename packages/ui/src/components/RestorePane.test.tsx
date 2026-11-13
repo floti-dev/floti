@@ -61,7 +61,7 @@ const button = (name: string): HTMLElement => screen.getByRole('button', { name 
 describe('RestorePane', () => {
   it('lists every session the crash took, ticked, and the one that cannot come back with its reason', () => {
     renderPane()
-    screen.getByRole('region', { name: '3 sessions were running when Helm closed' })
+    screen.getByRole('region', { name: '3 sessions were running when Floti closed' })
 
     expect(within(row(4)).getByRole('checkbox', { name: 'tab baseline' })).toHaveProperty('checked', true)
     expect(text(4)).toContain('helm · feat/tab-baseline')
@@ -122,15 +122,15 @@ describe('RestorePane', () => {
 
   it('says how many more are still running elsewhere, and reads one session in the singular', () => {
     renderPane({ offer: { ...OFFER, sessions: [OFFER.sessions[0]!], elsewhere: 2 } })
-    screen.getByRole('heading', { name: '1 session was running when Helm closed' })
+    screen.getByRole('heading', { name: '1 session was running when Floti closed' })
     expect(document.body.textContent).toContain('2 more are still running somewhere else, and left alone.')
   })
 
-  it('names the host that stopped when the sessions went with it, not Helm', () => {
+  it('names the host that stopped when the sessions went with it, not Floti', () => {
     renderPane({ offer: { ...OFFER, sessions: [OFFER.sessions[0]!] }, lostWith: 'this PC’s host' })
     screen.getByRole('region', { name: '1 session was running when this PC’s host stopped' })
     expect(document.body.textContent).toContain('This PC’s host didn’t shut down cleanly. Pick up where they left off.')
-    expect(document.body.textContent).not.toContain('Helm')
+    expect(document.body.textContent).not.toContain('Floti')
   })
   it('offers a session whose agent cannot be composed again unticked but tickable, saying why, and restores it without its agent', async () => {
     const problem = 'research-lead is no longer among this PC’s agents.'
@@ -215,7 +215,7 @@ describe('when what was running could not be read', () => {
 
   it('holds Try again while the read it asked for is under way', () => {
     render(<RestoreUnreadPane message="Unreadable." retrying onTryAgain={vi.fn()} onNotNow={vi.fn()} />)
-    expect(screen.getByRole('heading').textContent).toBe('Could not read what was running when Helm closed')
+    expect(screen.getByRole('heading').textContent).toBe('Could not read what was running when Floti closed')
     expect(button('Reading…')).toHaveProperty('disabled', true)
   })
 })

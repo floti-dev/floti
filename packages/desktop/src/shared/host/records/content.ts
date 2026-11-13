@@ -60,6 +60,6 @@ export function hostArtifactUrl(windowUrl: string): string | null {
  */
 export function windowArtifactUrl(hostUrl: string): string {
   if (!hostUrl.startsWith(HOST_ARTIFACT))
-    throw new Error(`The local host answered an artifact address Helm cannot serve: ${hostUrl}`)
+    throw new Error(`The local host answered an artifact address Floti cannot serve: ${hostUrl}`)
   return WINDOW_ARTIFACT + hostUrl.slice(HOST_ARTIFACT.length)
 }

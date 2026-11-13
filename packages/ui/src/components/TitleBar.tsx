@@ -25,14 +25,14 @@ export function TitleBar(): JSX.Element {
     <div className={cn('app-drag flex h-9 shrink-0 items-center', !mac && 'pr-36')}>
       {mac && <span data-traffic-lights aria-hidden className="w-20 shrink-0 self-stretch" />}
       <span className="grid w-12 shrink-0 place-items-center">
-        {/* The mark alone - a wordmark beside it would say "Helm" to someone
-            already looking at Helm. The accessible name stays, because the
+        {/* The mark alone - a wordmark beside it would say "Floti" to someone
+            already looking at Floti. The accessible name stays, because the
             mark is the only thing identifying the window. */}
         <HelmMarkIcon
           width={RAIL_ICON.width}
           height={RAIL_ICON.height}
           role="img"
-          aria-label="Helm"
+          aria-label="Floti"
           // The icons default to `aria-hidden`, which is right when a label sits
           // beside them. Nothing does here, so this one has to be announced.
           aria-hidden={false}

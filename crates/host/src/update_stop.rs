@@ -153,7 +153,7 @@ pub fn question(running: usize) -> String {
     };
     format!(
         "Installing this update stops the local host on this PC, ending {count}. \
-         Helm offers {them} back when it next starts."
+         Floti offers {them} back when it next starts."
     )
 }
 
@@ -385,7 +385,7 @@ async fn welcomed(connection: &mut Connection) -> Result<(), Outcome> {
         &Message::Hello(Hello {
             protocol: PROTOCOL_VERSION,
             client: ClientInfo {
-                name: "Helm installer".to_owned(),
+                name: "Floti installer".to_owned(),
                 kind: ClientKind::Desktop,
                 device_name: None,
             },
@@ -542,14 +542,14 @@ mod tests {
             outcome.printed().as_deref(),
             Some(
                 "Installing this update stops the local host on this PC, ending 3 sessions. \
-                 Helm offers them back when it next starts."
+                 Floti offers them back when it next starts."
             )
         );
         assert_eq!(
             asked(1).printed().as_deref(),
             Some(
                 "Installing this update stops the local host on this PC, ending 1 session. \
-                 Helm offers it back when it next starts."
+                 Floti offers it back when it next starts."
             )
         );
     }

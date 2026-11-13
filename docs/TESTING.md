@@ -1,6 +1,6 @@
-# Testing Helm
+# Testing Floti
 
-Helm's tests come with the repository so that anyone working on it can ship
+Floti's tests come with the repository so that anyone working on it can ship
 with confidence. There are three tiers of test, plus a set of diagnostic tools
 that are not tests. A test sits in the lowest tier that can show what it
 checks.
@@ -56,7 +56,7 @@ which costs minutes and a great deal of memory. `pnpm test:e2e` runs as a step
 of cutting a release (the `procedures` skill) and at no other time: never while
 building, to check a fix or to finish a task.
 
-Helm is a local app, so nearly everything can be shown by a unit or
+Floti is a local app, so nearly everything can be shown by a unit or
 integration test. When an end-to-end run catches something, the tiers below
 it had a gap: add the unit or integration test that fails for it, then fix
 it. An end-to-end run that keeps sending work back means those tiers are not
@@ -232,7 +232,7 @@ and the host does not highlight fails it.
 The agent tools listener is tested at three levels. `src/agent_tools/tests.rs`
 drives the listener with families made in the test: loopback only, 401 before
 the body is read, 404 for a family switched off, Origin refused, one token
-per session. `src/server/session_tools/tests.rs` calls helm-sessions on a
+per session. `src/server/session_tools/tests.rs` calls floti-sessions on a
 world made in the test, for what a real host cannot be put in on demand (a
 listing not ready yet, a token whose session is not live). And
 `crates/host/tests/it/agent_tools.rs` runs a `RunningHost` with sessions on the
@@ -242,12 +242,12 @@ and token out of the `--mcp-config` file it was launched with, and calls the
 listener over HTTP as a session would: registration and the launch folder,
 revocation at exit and at stop, the settings switch, the sweep at start, and
 what `sessions_list` and `session_detail` answer, with nothing of another
-session's conversation in any answer. Its helm-browser tests attach a
+session's conversation in any answer. Its floti-browser tests attach a
 `TestClient` that declares `browser` and listens on `agentBrowser:call`, in
-place of Helm's window, and answer each call it is sent: the tool table a
+place of Floti's window, and answer each call it is sent: the tool table a
 session lists, a call carried to that client and its answer handed back, no
 family for a launch with no browser attached, a call failing at once when
-the client leaves, and the refusals on the route. Its helm-sessions test
+the client leaves, and the refusals on the route. Its floti-sessions test
 compares what a session lists with `src/server/session_tools.json`, the table
 the desktop reads too. Its plugin tests attach a `TestClient` that listens on
 `agentPlugin:call` and `agentPlugin:cancel` and offers a plugin server: the
@@ -478,7 +478,7 @@ over the window, or Electron's own guards on a page.
 | spec | workflows |
 |---|---|
 | `sessions` | a session from start to end, taking input and the pane's size and drawn once after a reload; quitting asks first, and End and quit ends every session, what it started, the host and its bridges, with the sessions pane showing a session's process tree and ports as the host read them; a tab closed keeping its session, opened again from the sessions pane with its screen, renamed and ended with confirmation, and a session not open here ended from the sessions pane; a word copied from a session and pasted back into it once; a link Ctrl+clicked in a session that has the mouse |
-| `host-sessions` | closing the window asks first, and Keep running and quit leaves the sessions in the host, the next start bringing back this device's tabs, panes and split with their screens and input; Settings' Stop host; Helm killed outright, its sessions running on and reattached with nothing offered back; the host dying, a new one started and the tab taking its session back running |
+| `host-sessions` | closing the window asks first, and Keep running and quit leaves the sessions in the host, the next start bringing back this device's tabs, panes and split with their screens and input; Settings' Stop host; Floti killed outright, its sessions running on and reattached with nothing offered back; the host dying, a new one started and the tab taking its session back running |
 | `panes` | two sessions side by side, the waiting one marked; a tab dragged to a pane's side or middle; a divider dragged, the arrangement surviving a restart |
 | `terminal` | a terminal tab per shell, opened from Ctrl+N or a pane's `+` and ending with its tab; a project's own terminal drawn again after a reload |
 | `newtab` | a pane's `+` opening a session, a profile session or a browser tab in that pane |
@@ -492,7 +492,7 @@ over the window, or Electron's own guards on a page.
 | `notes` | a note rendered and its wikilink followed; a note edited beside its preview, its draft kept behind another tab, and saved; Ctrl+Shift+F finding a note; an HTML artifact framed with no reach |
 | `browser` | browsing; the security posture; a cookie surviving a restart; find in page; the browser's keys with the caret in the page; the page standing down for the address list and the menu; clipboard writing and fullscreen; the page standing down while a divider or the Browser tab is dragged |
 | `agent-tools` | a session drives a browser tab of its own through its own token, and loses its tools when it ends; a page the user shares with a session, read and driven until the share is taken back or the session ends |
-| `plugins` | the sample plugin, a version 2 plugin, against a server of its own: its background module, read through what it does (the badge, the status bar item, a command's effect, the tools' answers), a secret it asks for, its panel, badge, status and a tab with parameters, its pages on `floti-plugin://sample/` with `window.floti`, and `floti.fetch` held to the manifest's origins on every redirect; Helm's shortcuts from inside a plugin page and its commands from Ctrl+Shift+P; a crashed plugin page and Reload; a folder added in Settings, kept across a restart, and turned off and on; a session calling the plugin's tools through the host, answered by its background module, and losing them when they are turned off in Settings; a page strip; a plugin page starting a session and opening a link from a click |
+| `plugins` | the sample plugin, a version 2 plugin, against a server of its own: its background module, read through what it does (the badge, the status bar item, a command's effect, the tools' answers), a secret it asks for, its panel, badge, status and a tab with parameters, its pages on `floti-plugin://sample/` with `window.floti`, and `floti.fetch` held to the manifest's origins on every redirect; Floti's shortcuts from inside a plugin page and its commands from Ctrl+Shift+P; a crashed plugin page and Reload; a folder added in Settings, kept across a restart, and turned off and on; a session calling the plugin's tools through the host, answered by its background module, and losing them when they are turned off in Settings; a page strip; a plugin page starting a session and opening a link from a click |
 | `boundary` | every channel a workflow uses crosses only as `channels/boundary.rs` allows: the launcher, sessions and terminals; history and usage; the Files view, a note and the profile form; plugin pages of both versions, a version 1 background page, a tool called by a session, and the Browser tab |
 
 - **Each test gets a world** (`test/world.ts`): a temporary root with a space in
@@ -537,7 +537,7 @@ over the window, or Electron's own guards on a page.
 ## The fake agents
 
 Every agent backend has a fake CLI in `test/fake-agents/`, one file per backend
-named after its id, sharing `common.mjs`. A fake does what Helm and Floti can
+named after its id, sharing `common.mjs`. A fake does what Floti can
 observe of the real CLI and nothing more, and it is strict where the real one
 is: tests never launch a real agent. The pattern every fake follows:
 
@@ -563,7 +563,7 @@ is: tests never launch a real agent. The pattern every fake follows:
   long-lived child it starts does the same.
 - **Its version is overridable**: `FAKE_AGENT_VERSION` changes what
   `--version` answers, so a tested-range check can be driven to either side.
-- **It writes the artefacts the real CLI writes** that Helm or Floti read: its
+- **It writes the artefacts the real CLI writes** that Floti reads: its
   live-session record, history and transcripts, in the real formats.
 
 ### Claude Code (`claude-code.mjs`)
@@ -840,7 +840,7 @@ a slower one, so no test has one.
 ## Not covered by tests
 
 Deliberately left out, because a test of them would be fragile or would test
-something other than Helm:
+something other than Floti:
 
 - **Pixel geometry and computed styles** - gutters, radii, overflow at a window
   width, cursors and hover states, list bullets. The logic behind them (a CSS

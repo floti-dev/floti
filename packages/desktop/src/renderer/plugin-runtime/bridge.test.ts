@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { FlotiBridge, HelmBridge, HelmContext, HelmError, HelmTheme } from '@coledtaylor/helm-plugin-sdk'
+import type { FlotiBridge, HelmBridge, HelmContext, HelmError, HelmTheme } from '@floti-dev/plugin-sdk'
 import { BUILTIN_THEMES, PALETTE_HUES, pluginThemeOf, resolveTheme, type ThemeKind } from '@helm/core/types'
 import type { PluginFetchRequest, PluginFetchResponse } from '../../shared/ipc'
 import { installBridge } from './bridge'
@@ -135,7 +135,7 @@ async function flush(): Promise<void> {
 }
 
 describe('onHostComputer', () => {
-  it('is true on a page whose boot says so, from the first script, before Helm has connected, and stays true', () => {
+  it('is true on a page whose boot says so, from the first script, before Floti has connected, and stays true', () => {
     const { win, helm } = page(PANEL, JSON.stringify({ theme: THEME, onHostComputer: true }))
     expect(helm.onHostComputer).toBe(true)
     connect(win, { visible: true, context: { ...PANEL, params: { id: 2 } } })
@@ -284,7 +284,7 @@ describe('the port', () => {
 })
 
 describe('calls', () => {
-  it('resolve with what Helm answered', async () => {
+  it('resolve with what Floti answered', async () => {
     const { win, helm } = page()
     const port = connect(win)
     const settings = helm.settings.get()
@@ -304,7 +304,7 @@ describe('calls', () => {
     expect(error.message).toBe('"nope" is not one of the programs')
   })
 
-  it('reject as an AbortError when Helm says the call was aborted', async () => {
+  it('reject as an AbortError when Floti says the call was aborted', async () => {
     const { win, helm } = page()
     const port = connect(win)
     const opened = helm.tabs.open('item', { id: '2' }, { title: 'Two' })
@@ -451,7 +451,7 @@ describe('events', () => {
     ['command', { id: 'refresh' }],
     ['action', { id: 'add' }],
     ['sessions', [{ id: 'a1b2', name: 'HELM-3', state: 'running' }]]
-  ] as const)('pass Helm’s %s event to the page as it came', (name, data) => {
+  ] as const)('pass Floti’s %s event to the page as it came', (name, data) => {
     const { win, helm } = page()
     const port = connect(win)
     const heard = vi.fn()
@@ -522,7 +522,7 @@ describe('keys', () => {
 
   const keys = (port: FakePort): unknown[] => sent(port).filter((entry) => entry.t === 'key')
 
-  it('forwards a Helm shortcut the page did not take', async () => {
+  it('forwards a Floti shortcut the page did not take', async () => {
     const { win } = page()
     const port = connect(win)
     await press(win, { key: 'P', code: 'KeyP', ctrlKey: true, shiftKey: true })
@@ -685,7 +685,7 @@ describe('tools', () => {
     ])
   })
 
-  it("abort the handler's signal when Helm cancels the call, and send no answer for it", async () => {
+  it("abort the handler's signal when Floti cancels the call, and send no answer for it", async () => {
     const { helm, port } = background()
     let signal: AbortSignal | null = null
     let finish: (value: string) => void = () => undefined
@@ -735,7 +735,7 @@ describe('BroadcastChannel, relayed through the local host', () => {
   const posts = (port: FakePort): Array<Extract<FrameMessage, { t: 'call' }>> =>
     sent(port).filter((entry): entry is Extract<FrameMessage, { t: 'call' }> => entry.t === 'call' && entry.method === 'channel.post')
 
-  it('keeps the browser’s own on a page Helm serves from its own folders', () => {
+  it('keeps the browser’s own on a page Floti serves from its own folders', () => {
     const { win } = page()
     const own = (win as unknown as { BroadcastChannel: unknown }).BroadcastChannel
     expect(own === undefined || String(own).includes('[native code]')).toBe(true)

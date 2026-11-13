@@ -38,7 +38,7 @@ use crate::server::Occupancy;
 use crate::{DesktopCommand, Result};
 
 /// The item in the icon's menu that opens the desktop.
-pub const OPEN_LABEL: &str = "Open Helm";
+pub const OPEN_LABEL: &str = "Open Floti";
 /// The item in the icon's menu that stops the host.
 pub const STOP_LABEL: &str = "Stop host";
 
@@ -86,7 +86,7 @@ pub fn shown(desktop_started: bool, now: Occupancy) -> Option<TrayIcon> {
         return None;
     }
     Some(TrayIcon {
-        tooltip: format!("Helm: {} on this PC's host", running(now)),
+        tooltip: format!("Floti: {} on this PC's host", running(now)),
     })
 }
 

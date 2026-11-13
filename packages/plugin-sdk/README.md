@@ -1,26 +1,26 @@
-# Writing a Helm plugin
+# Writing a Floti plugin
 
-`@coledtaylor/helm-plugin-sdk` holds the types, the manifest validator and schema,
-helpers for any framework and the `helm-plugin` command for building Helm plugins. The runtime
+`@floti-dev/plugin-sdk` holds the types, the manifest validator and schema,
+helpers for any framework and the `helm-plugin` command for building Floti plugins. The runtime
 itself - the bridge (`window.floti`, or `window.helm` in a version 1 plugin),
-the theme and the primitives stylesheet - comes from the Helm that runs the
+the theme and the primitives stylesheet - comes from the Floti that runs the
 plugin, so a plugin never ships a copy of it.
 
 ## What a plugin is
 
 A plugin is a folder on your computer with a `helm-plugin.json` at its root.
-You register the folder in Helm, and Helm reads the manifest and serves the
+You register the folder in Floti, and Floti reads the manifest and serves the
 folder to its pages.
 
 - Every page the plugin has is an ordinary HTML page, served at
   `floti-plugin://<id>/<path>` (`helm-plugin://<id>/<path>` for a version 1
   plugin). That origin is the plugin's identity: its
   storage, its messages and its permissions are its own, and no other plugin
-  or Helm page shares them.
+  or Floti page shares them.
 - Its pages run in a process of their own, separate from Helm's window. A
   plugin that loops forever or crashes takes down its own pages and nothing
   else.
-- A page has no network access and no access to the computer. It asks Helm,
+- A page has no network access and no access to the computer. It asks Floti,
   through `window.floti`, for what the manifest says it may have: requests to
   the hosts it lists, the programs it names, the secrets it declares.
 - Its background, the code that runs with no page open, is a module the host
@@ -29,7 +29,7 @@ folder to its pages.
 ## API versions
 
 `apiVersion` in the manifest says which bridge the plugin was written
-against. Helm loads both; `helm-plugin create` writes version 2.
+against. Floti loads both; `helm-plugin create` writes version 2.
 
 | | version 2 | version 1 |
 | --- | --- | --- |
@@ -55,36 +55,36 @@ plugin still loads and works as it did, beside version 2 ones.
    its pages. Its imports must be the plugin's own files by a relative path; a
    bundler builds it as one ES module, or as modules whose imports are
    relative.
-4. In TypeScript, reference `@coledtaylor/helm-plugin-sdk/background` for the
-   module and keep `@coledtaylor/helm-plugin-sdk/global` for the pages. See
+4. In TypeScript, reference `@floti-dev/plugin-sdk/background` for the
+   module and keep `@floti-dev/plugin-sdk/global` for the pages. See
    [TypeScript](#typescript).
 5. Run `npm run validate`, which checks the manifest at the version it names.
 
 Nothing else changes: the manifest's other fields, the tool server
-(`helm-plugin-<id>`), the service's `HELM_SERVICE_PORT`, `HELM_SERVICE_TOKEN`
+(`floti-plugin-<id>`), the service's `HELM_SERVICE_PORT`, `HELM_SERVICE_TOKEN`
 and `HELM_PLUGIN_ID`, settings and secrets all stay as they are.
 
 ## Quick start
 
 ```
-npx @coledtaylor/helm-plugin-sdk create my-plugin
+npx @floti-dev/plugin-sdk create my-plugin
 ```
 
 writes a working version 2 plugin into `my-plugin/`: a rail icon, a sidebar
 panel, a tab and a background module that counts the tabs the panel opens on
 the rail icon, in plain HTML and JavaScript with nothing to build. Then, in
-Helm:
+Floti:
 
 1. Open Settings > Plugins and press **Add folder**.
 2. Pick `my-plugin`. Its icon appears on the rail.
-3. Edit `pages/panel.html`, `pages/panel.js` or `background/main.js` and save. Helm
+3. Edit `pages/panel.html`, `pages/panel.js` or `background/main.js` and save. Floti
    reloads the plugin.
 
 The new plugin's `package.json` has this SDK as a development dependency.
 `npm install` puts it in the plugin's `node_modules`, where the manifest's
 `$schema` points, and `npm run validate` then runs `helm-plugin validate`. It
-checks a plugin the way Helm does when it loads it - the manifest, then every
-file the manifest names - and exits 1 when Helm would refuse it:
+checks a plugin the way Floti does when it loads it - the manifest, then every
+file the manifest names - and exits 1 when Floti would refuse it:
 
 ```
 cd my-plugin
@@ -92,19 +92,19 @@ npm install
 npm run validate
 ```
 
-Helm needs none of this to run the plugin; it is for your editor and for
+Floti needs none of this to run the plugin; it is for your editor and for
 checking. To add the SDK to a plugin you already have:
 
 ```
-npm install --save-dev @coledtaylor/helm-plugin-sdk
+npm install --save-dev @floti-dev/plugin-sdk
 ```
 
-Keep it current (`npm update @coledtaylor/helm-plugin-sdk`) so `validate`
-agrees with the Helm you run.
+Keep it current (`npm update @floti-dev/plugin-sdk`) so `validate`
+agrees with the Floti you run.
 
 ### Reloading
 
-Helm watches the manifest and the folders the pages named in it live in, and
+Floti watches the manifest and the folders the pages named in it live in, and
 reloads the plugin a moment after a burst of writes ends. A build that writes
 to `dist/` reloads it once. Keep pages in a folder (`pages/`, `dist/`) rather
 than at the plugin root: a page at the root is watched as a single file, so a
@@ -119,18 +119,18 @@ does nothing. For editor completion, `$schema` points at the SDK's schema in
 the plugin's `node_modules`, as `helm-plugin create` writes it:
 
 ```json
-{ "$schema": "./node_modules/@coledtaylor/helm-plugin-sdk/helm-plugin.schema.json" }
+{ "$schema": "./node_modules/@floti-dev/plugin-sdk/helm-plugin.schema.json" }
 ```
 
 Paths (`icon`, every `entry`, `background`, `service.node`) are relative to the
 plugin folder and may not leave it, through `..` or a link. Nothing may live
-under `__helm/`, where Helm serves its runtime.
+under `__helm/`, where Floti serves its runtime.
 
 | field | what it is |
 | --- | --- |
-| `apiVersion` | Required. `2`, or `1` for a plugin written against `window.helm`. See [API versions](#api-versions). A Helm that does not speak it refuses the plugin and says so in Settings. |
+| `apiVersion` | Required. `2`, or `1` for a plugin written against `window.helm`. See [API versions](#api-versions). A Floti that does not speak it refuses the plugin and says so in Settings. |
 | `id` | Required. 1-63 lower-case letters, digits and dashes, starting with a letter or digit. The plugin's origin is `floti-plugin://<id>`, or `helm-plugin://<id>` at version 1. Two loaded plugins cannot share an id. |
-| `name` | Required. What Helm calls the plugin, up to 60 characters. |
+| `name` | Required. What Floti calls the plugin, up to 60 characters. |
 | `version`, `description` | Shown in Settings. Up to 40 and 300 characters. |
 | `icon` | An `.svg` or `.png`, 64 KB at most. Drawn as a mask, so only its shape counts: it takes the rail's own colours. |
 | `rail` | `{ "title", "panel" }`: a rail button with that tooltip, opening that panel in the sidebar. |
@@ -139,13 +139,13 @@ under `__helm/`, where Helm serves its runtime.
 | `pageStrip` | `true` opens the tabs as pages in one tab of the plugin's own. See [Tabs](#tabs). |
 | `background` | Code that runs whenever the plugin is on: a `.js` or `.mjs` module at version 2, a `.html` page at version 1. See [Background](#background). |
 | `commands` | Entries in the command palette: `{ "id", "title", "tab"? }`. |
-| `settings` | A settings page Helm draws: see [Settings](#settings). |
+| `settings` | A settings page Floti draws: see [Settings](#settings). |
 | `network` | The origins `floti.fetch` may reach. |
 | `secrets` | The secret keys the plugin uses as `{{key}}`. |
 | `exec` | Programs `floti.exec` may run, by name. |
-| `service` | One long-running process Helm supervises. |
+| `service` | One long-running process Floti supervises. |
 | `agent` | Tools Claude Code sessions can call, answered by the background. See [Tools for sessions](#tools-for-sessions). |
-| `sessions` | What the plugin may do with the Claude Code sessions Helm hosts: `"start"` lets its pages ask to start one ([Starting a session](#starting-a-session)), `"list"` lets them see them ([Seeing sessions](#seeing-sessions)). |
+| `sessions` | What the plugin may do with the Claude Code sessions Floti hosts: `"start"` lets its pages ask to start one ([Starting a session](#starting-a-session)), `"list"` lets them see them ([Seeing sessions](#seeing-sessions)). |
 
 Names - panel and tab keys, action, command and program names - are 1-32
 lower-case letters, digits and dashes.
@@ -154,7 +154,7 @@ Limits: 20 panels, 50 tabs, 5 actions a panel, 100 commands, 100 settings, 50
 origins, 50 secrets, 50 programs, 64 arguments and 64 environment variables a
 program, 50 tools.
 
-Helm warns about a top-level field it does not know, and loads the plugin
+Floti warns about a top-level field it does not know, and loads the plugin
 anyway. Everything else it refuses, and lists every problem at once:
 
 ```
@@ -165,11 +165,11 @@ helm-plugin.json: rail.panel must name one of the panels - "main" is not one
 
 ### Rail and panels
 
-A `rail` entry puts a button on Helm's rail. Pressing it opens its panel in the
+A `rail` entry puts a button on Floti's rail. Pressing it opens its panel in the
 sidebar; pressing it again puts the sidebar away. The user can hide the button
-from the rail's right-click menu like any of Helm's own.
+from the rail's right-click menu like any of Floti's own.
 
-Helm draws the panel's header: its `title`, and an icon button for each of
+Floti draws the panel's header: its `title`, and an icon button for each of
 its `actions`. A press arrives at the panel as the `action` event:
 
 ```json
@@ -191,13 +191,13 @@ floti.on('action', ({ id }) => {
 })
 ```
 
-The icons are Helm's: `refresh`, `plus`, `search`, `list`, `settings`,
+The icons are Floti's: `refresh`, `plus`, `search`, `list`, `settings`,
 `external`, `pin`, `edit`, `trash`, `link`, `eye`.
 
 ### Tabs
 
-A tab is a page in one of Helm's panes. It splits, drags and maximises like
-Helm's own tabs, keeps its state while it does, and is reopened when Helm
+A tab is a page in one of Floti's panes. It splits, drags and maximises like
+Floti's own tabs, keeps its state while it does, and is reopened when Floti
 starts again.
 
 A plugin opens its tabs itself:
@@ -218,7 +218,7 @@ floti.surface.setTitle('Run 42 - passed') // null puts back the manifest's title
 A plugin that opens many tabs - a list, then an item, then another - can keep
 them out of the pane's strip with `"pageStrip": true`. Its tabs then open as
 pages in one tab of its own, named for the plugin, with a strip of pages inside
-it, the way Helm's Browser tab holds its pages. `floti.tabs.open` opens a page
+it, the way Floti's Browser tab holds its pages. `floti.tabs.open` opens a page
 there, or brings forward the page with the same parameters; `setTitle` names
 the page in that strip. Pages switch, close (Ctrl+W, or Cmd+W on macOS) and
 reorder (drag, or Ctrl+Shift+Left and Right, Cmd+Shift on macOS) as the
@@ -226,7 +226,7 @@ Browser tab's do, and closing the last one closes the tab. Without it, each
 tab is a tab of its own in the pane.
 
 A list that opens an item on a click can open it as a preview, the way a click
-on a file in Helm does: the next tab opened as a preview takes its place, so
+on a file in Floti does: the next tab opened as a preview takes its place, so
 clicking down a list does not leave a tab per item. It is drawn in italic, and
 stays once the user double-clicks it:
 
@@ -244,7 +244,7 @@ input.oninput = () => floti.surface.keep()
 
 With `pageStrip`, the preview is one of the plugin's pages and replaces only
 another of its pages. Without it, a tab shares the pane's one preview with
-Helm's files. Helm before 2.3.2 ignores `preview` and has no `surface.keep`, so a
+Floti's files. Floti before 2.3.2 ignores `preview` and has no `surface.keep`, so a
 plugin that runs on both checks `floti.surface.keep` before calling it.
 
 ### Background
@@ -318,7 +318,7 @@ await floti.badge.set(3) // a count on the rail button; null or 0 takes it away
 Settings when it has none. A badge over 99 is drawn as 99+.
 
 Both belong to the plugin, not to the page that set them: any of its pages can
-change them. When the background crashes, Helm takes both away rather than
+change them. When the background crashes, Floti takes both away rather than
 keep showing what stopped code said.
 
 ### Commands
@@ -333,7 +333,7 @@ keep showing what stopped code said.
 Each appears in the command palette (Ctrl+Shift+P, or Cmd+Shift+P on macOS)
 under the plugin's name. A command with a `tab` opens that tab. One without
 arrives as the `command` event: at the background when there is one, and
-otherwise at the rail panel, which Helm opens first. A command with neither a
+otherwise at the rail panel, which Floti opens first. A command with neither a
 tab nor a background or rail panel to receive it is refused.
 
 ```js
@@ -344,7 +344,7 @@ floti.on('command', ({ id }) => {
 
 ## Settings
 
-Helm draws a page for the plugin in Settings, from `settings`:
+Floti draws a page for the plugin in Settings, from `settings`:
 
 ```json
 "settings": [
@@ -371,10 +371,10 @@ one. `secret` settings are not among the values: a page asks
 
 ## The bridge: `window.floti`
 
-Helm puts `window.floti` on every page of a version 2 plugin it serves, before
+Floti puts `window.floti` on every page of a version 2 plugin it serves, before
 the page's own scripts run, and `window.helm` on every page of a version 1
 plugin: one or the other, with the same members. Calls made before it has
-connected to Helm wait for it rather than fail. It cannot be redefined, so in
+connected to Floti wait for it rather than fail. It cannot be redefined, so in
 a classic (non-module) script use the global `floti` as it is: a top-level
 `const floti` or `let floti` of your own is a SyntaxError and stops the whole
 file.
@@ -392,9 +392,9 @@ too, less what needs a window: see [Background](#background).
 | `theme` | The current theme. See [Theme and styling](#theme-and-styling). |
 | `visible` | Whether the surface is on screen. Always false for the background. |
 | `onHostComputer` | Whether this page is drawn on the computer the plugin runs on. See [Where a page runs](#where-a-page-runs). |
-| `fetch(input, init?)` | `fetch`, sent by Helm. See [Network](#network). |
+| `fetch(input, init?)` | `fetch`, sent by Floti. See [Network](#network). |
 | `exec(name, args?, options?)` | Runs a program from `exec`. See [Programs](#programs). |
-| `open(url)` | Opens an `https` address in Helm's Browser tab, from a click. See [Opening a link](#opening-a-link). |
+| `open(url)` | Opens an `https` address in Floti's Browser tab, from a click. See [Opening a link](#opening-a-link). |
 | `tabs.open(tab, params?, options?)` | Opens one of the plugin's tabs. `options`: `title`, and `preview` to open it as the preview the next one replaces. |
 | `surface.setTitle(title)` | Names a tab in the strip; null puts back the manifest's. No effect outside a tab. |
 | `surface.keep()` | Keeps a tab opened as a preview. No effect on a tab that stays, or outside a tab. |
@@ -402,9 +402,9 @@ too, less what needs a window: see [Background](#background).
 | `badge.set(count)` | The rail badge, or null. |
 | `settings.get()` | Every setting's value. |
 | `secrets.state(key)` | `ready` or `missing`. |
-| `secrets.request(key)` | Opens Helm's dialog for adding the key, scoped to this plugin. Resolves with the state once it closes. |
+| `secrets.request(key)` | Opens Floti's dialog for adding the key, scoped to this plugin. Resolves with the state once it closes. |
 | `sessions.start({ cwd, prompt, name? })` | Asks to start a Claude Code session, from a click. See [Starting a session](#starting-a-session). |
-| `sessions.list()` | The sessions Helm started since it opened. See [Seeing sessions](#seeing-sessions). |
+| `sessions.list()` | The sessions Floti started since it opened. See [Seeing sessions](#seeing-sessions). |
 | `tools.handle(name, handler)` | Answers one of the tools `agent` declares. In the background only. See [Tools for sessions](#tools-for-sessions). |
 | `on(event, listener)` | Subscribes; returns the function that unsubscribes. |
 
@@ -425,7 +425,7 @@ Events:
 A plugin runs on one computer: its [service](#services), its
 [programs](#programs) and its background run there, and its data lives
 there. Its panels and tabs can be drawn on another. `floti.onHostComputer` says
-whether this page is drawn on the plugin's computer. It is `true` in Helm on
+whether this page is drawn on the plugin's computer. It is `true` in Floti on
 that computer, is there from the page's first script, and never changes for
 the life of the page.
 
@@ -453,7 +453,7 @@ A call that fails rejects with an `Error` whose `code` says why:
 | `network` | The request could not be made or did not complete. |
 | `timeout` | No answer in time. |
 | `invalid` | The arguments were not what the method takes. |
-| `unavailable` | The plugin is turned off, or Helm is shutting down. |
+| `unavailable` | The plugin is turned off, or Floti is shutting down. |
 | `service` | The service is not running and could not be started. |
 | `not-found` | A program `exec` names is not on this computer. |
 | `not-allowed` | The call needs a click or key press the user just made in the page, and there was none. |
@@ -494,7 +494,7 @@ const user = await response.json()
 
 It takes what `fetch` takes and returns a `Response`. What differs:
 
-- **Redirects** are followed by Helm one hop at a time, and every hop is
+- **Redirects** are followed by Floti one hop at a time, and every hop is
   checked against `network` again. A redirect to an origin the manifest does
   not list fails with `not-declared`. A redirect to another origin drops
   `Authorization`, `Cookie` and `Proxy-Authorization`. `redirect: 'manual'`
@@ -509,7 +509,7 @@ It takes what `fetch` takes and returns a `Response`. What differs:
 ### The plugin's own service
 
 `service:/path` is a request to the plugin's [service](#services), on the port
-Helm gave it, with its token. It needs no `network` entry:
+Floti gave it, with its token. It needs no `network` entry:
 
 ```js
 const health = await (await floti.fetch('service:/health')).json()
@@ -530,9 +530,9 @@ search.addEventListener('input', () => {
 
 ## Secrets
 
-A secret is a value - a token, an API key - the user stores in Helm, encrypted
+A secret is a value - a token, an API key - the user stores in Floti, encrypted
 on their computer. A plugin declares the keys it uses and writes them as
-`{{key}}`; Helm puts the value in on the way out. **The page never sees the
+`{{key}}`; Floti puts the value in on the way out. **The page never sees the
 value**, so a page that renders untrusted content cannot leak it.
 
 ```json
@@ -560,13 +560,13 @@ When a secret is missing, ask for it:
 
 ```js
 if ((await floti.secrets.state('github-token')) === 'missing') {
-  await floti.secrets.request('github-token') // Helm's dialog, scoped to this plugin and its hosts
+  await floti.secrets.request('github-token') // Floti's dialog, scoped to this plugin and its hosts
 }
 ```
 
 `missing` also covers a secret that is stored but not permitted for this
 plugin: another plugin's secrets are not the page's business. If the computer
-cannot encrypt, Helm stores no secrets at all.
+cannot encrypt, Floti stores no secrets at all.
 
 ## Programs
 
@@ -588,7 +588,7 @@ const { exitCode, stdout, stderr, timedOut } = await floti.exec('git', ['log', '
   user typed is an argument, never a command. A `.cmd` or `.bat` file runs
   through `cmd.exe` with its arguments quoted for it.
 - The program runs in the plugin folder, with the user's environment (less
-  Helm's own internals) and the manifest's `env`.
+  Floti's own internals) and the manifest's `env`.
 - `options`: `stdin` (a string written and closed), `timeoutMs` (default 60
   seconds, at most 10 minutes). A program that times out is stopped with
   everything it started, and resolves with `timedOut: true`.
@@ -600,26 +600,26 @@ A plugin that declares programs or a service is marked in Settings as one that
 
 ## Services
 
-One long-running process, started and stopped by Helm:
+One long-running process, started and stopped by Floti:
 
 ```json
 "service": { "node": "service/main.mjs", "start": "demand" }
 ```
 
-- `node` is a script in the plugin folder, run by the Node inside Helm - the
+- `node` is a script in the plugin folder, run by the Node inside Floti - the
   user needs no Node install. `command` is any program instead. Each takes
   `args` and `env`.
 - It is given `HELM_SERVICE_PORT` to listen on, on `127.0.0.1`,
-  `HELM_SERVICE_TOKEN`, and `HELM_PLUGIN_ID`. Every request from Helm carries
+  `HELM_SERVICE_TOKEN`, and `HELM_PLUGIN_ID`. Every request from Floti carries
   the token as the `Helm-Service-Token` header; answer anything without it with
   401.
 - `start: "demand"` (the default) starts it on the first `service:` request;
   `"enable"` starts it with the plugin. It has 20 seconds to start listening.
 - It is restarted after a crash, after 1 second and then twice as long each
-  time up to 30 seconds. Five crashes inside a minute and Helm stops trying
+  time up to 30 seconds. Five crashes inside a minute and Floti stops trying
   until the plugin is reloaded.
 - It is stopped, with everything it started, when the plugin is turned off,
-  reloaded or removed, and when Helm quits.
+  reloaded or removed, and when Floti quits.
 - It runs on the plugin's computer, and a page drawn on another one pays a
   network round trip for each request to it: load data once and filter it in
   the page. See [The plugin's own service](#the-plugins-own-service).
@@ -641,9 +641,9 @@ Its output goes to the plugin's log in Settings.
 
 ## Tools for sessions
 
-A plugin can give the Claude Code sessions Helm starts tools to call: read its
-state, change it, start its work. Helm serves them to each session as an MCP
-server of the plugin's own, `helm-plugin-<id>`, the way it serves its own
+A plugin can give the Claude Code sessions Floti starts tools to call: read its
+state, change it, start its work. Floti serves them to each session as an MCP
+server of the plugin's own, `floti-plugin-<id>`, the way it serves its own
 browser tools. The background answers every call.
 
 ```json
@@ -690,16 +690,16 @@ floti.tools.handle('create_item', async (args, { session, signal }) => {
   tools come from this plugin. Say when to reach for them and how they fit
   together. 2000 characters at most, as is each `description`.
 - Tool names are lower-case letters, digits, `_` and `-`, starting with a
-  letter. A session calls `list_items` as `mcp__helm-plugin-<id>__list_items`,
+  letter. A session calls `list_items` as `mcp__floti-plugin-<id>__list_items`,
   and that whole name may be 64 characters at most.
 - `inputSchema` is JSON Schema with `type: "object"`; without one a tool takes
-  no arguments. Helm passes it to the session as written and does **not** check
+  no arguments. Floti passes it to the session as written and does **not** check
   a call's arguments against it, so a handler treats them as untrusted input.
 - What a handler returns is what the session reads: a string as it is,
   `undefined` as `Done.`, anything else as JSON. 1 MB at most. What it throws
   is a failed call, and the error's message is what the session reads.
 - The second argument says who is calling: `session.id` (the same for every
-  call one session makes, and meaningless outside Helm), `session.name` (as
+  call one session makes, and meaningless outside Floti), `session.name` (as
   its tab shows it) and `session.cwd` (its working directory). The session's
   conversation is never shared with a plugin.
 - `signal` aborts when nobody is waiting any more: the user interrupted the
@@ -709,7 +709,7 @@ floti.tools.handle('create_item', async (args, { session, signal }) => {
   for it. A call answers within 10 minutes or fails.
 - Claude Code asks the user before a session runs a tool, as it does for any
   MCP tool, unless the user has allowed it. Mark a tool `"readOnly": true` when
-  it only reads and changes nothing, and the sessions Helm starts call it
+  it only reads and changes nothing, and the sessions Floti starts call it
   without asking; the plugin's page in Settings marks it read-only. A rule the
   user wrote to deny it still wins. Mark nothing that writes: the user trusts
   the mark without seeing each call.
@@ -721,7 +721,7 @@ session that made it.
 
 ## Starting a session
 
-A plugin whose `sessions` lists `"start"` can ask Helm to start a Claude Code
+A plugin whose `sessions` lists `"start"` can ask Floti to start a Claude Code
 session in a folder, with a first message:
 
 ```js
@@ -734,7 +734,7 @@ button.addEventListener('click', async () => {
 - Only from a click or key press the user just made in a panel or tab: call it
   from the handler. Anything else rejects with `not-allowed`, and the
   background cannot ask at all.
-- Helm shows the folder, the message and the command it will run, and the user
+- Floti shows the folder, the message and the command it will run, and the user
   starts it or cancels. It resolves `started` once the session's tab is open,
   and `cancelled` when the user said no, or the page went away first. One
   request at a time: a second while the first is on screen rejects with `busy`.
@@ -748,7 +748,7 @@ button.addEventListener('click', async () => {
 
 ## Seeing sessions
 
-A plugin whose `sessions` lists `"list"` can see the Claude Code sessions Helm
+A plugin whose `sessions` lists `"list"` can see the Claude Code sessions Floti
 started since it opened, running and ended, from any of its pages:
 
 ```js
@@ -764,25 +764,25 @@ Each session is:
 
 | field | |
 | --- | --- |
-| `id` | The id a tool call from this session carries as `session.id`, so a plugin that offers tools can tell which session is working on what. It means nothing outside Helm and does not survive a restart. |
+| `id` | The id a tool call from this session carries as `session.id`, so a plugin that offers tools can tell which session is working on what. It means nothing outside Floti and does not survive a restart. |
 | `name` | What its tab is called now. |
 | `cwd` | The folder it is working in. |
 | `state` | `running` or `ended`. |
-| `activity` | What Claude Code says it is doing: `busy`, `idle` (finished, waiting for the user's next message), `waiting` (for the user to answer something) or `shell`. Null when it has ended, or when Helm cannot tell. |
+| `activity` | What Claude Code says it is doing: `busy`, `idle` (finished, waiting for the user's next message), `waiting` (for the user to answer something) or `shell`. Null when it has ended, or when Floti cannot tell. |
 | `activitySince` | Epoch ms that activity has held since, or null. For an idle session, when it last finished working. |
 | `startedAt`, `endedAt` | Epoch ms; `endedAt` is null while it runs. |
 
 - The list is oldest first. An ended session stays in it after its tab
-  closes, for the rest of the run; Helm keeps the last 100 that ended.
+  closes, for the rest of the run; Floti keeps the last 100 that ended.
 - The `sessions` event carries the whole list again whenever any of it
   changes.
 - Nothing of a session's conversation is in it: no prompts, no output, no
   transcript, and not what a waiting session is asking.
-- Only sessions Helm started. A `claude` run in another terminal is not listed.
+- Only sessions Floti started. A `claude` run in another terminal is not listed.
 
 ## Opening a link
 
-`floti.open(url)` opens a page in Helm's Browser tab, beside the user's own:
+`floti.open(url)` opens a page in Floti's Browser tab, beside the user's own:
 
 ```js
 link.addEventListener('click', (event) => {
@@ -797,7 +797,7 @@ link.addEventListener('click', (event) => {
   characters. Anything else rejects with `invalid`.
 - One link a second: a second call sooner, a double click's, rejects with
   `busy`.
-- It resolves once Helm has the address, not once the page has loaded. The
+- It resolves once Floti has the address, not once the page has loaded. The
   page goes where any address typed in the Browser tab may go: when the user
   has kept the Browser tab to this computer, it says so on the new tab instead
   of loading.
@@ -807,7 +807,7 @@ link.addEventListener('click', (event) => {
 
 ## Theme and styling
 
-Helm injects its primitives stylesheet at the top of every page's `<head>`,
+Floti injects its primitives stylesheet at the top of every page's `<head>`,
 before the plugin's own styles, and writes the theme onto `<html>`:
 
 - `--helm-<token>` for each of the theme's colours: `bg`, `surface`,
@@ -825,7 +825,7 @@ before the plugin's own styles, and writes the theme onto `<html>`:
   `color-scheme`, so native controls match.
 
 All of it changes in place when the user changes the theme, with no reload;
-the `theme` event follows. A page sits inside one of Helm's panels, and its
+the `theme` event follows. A page sits inside one of Floti's panels, and its
 `body` is already the panel's surface. `floti.theme.tokens` lists the same
 colours by the same names (`ThemeTokenName`).
 
@@ -843,13 +843,13 @@ differ in their names too.
 <span class="helm-dot" data-hue="orange"></span>
 ```
 
-The primitives, so a plugin looks like the rest of Helm without copying it:
+The primitives, so a plugin looks like the rest of Floti without copying it:
 
 | class | what it is |
 | --- | --- |
 | `helm-button` | A button. `data-variant="primary"` (outlined in the accent), `"ghost"`, `"danger"`. |
 | `helm-icon-button` | A 24px icon button. `aria-pressed="true"` for a toggled one. |
-| `helm-input`, `helm-select`, `helm-textarea` | Fields in Helm's sunken well. `aria-invalid="true"` marks one wrong. |
+| `helm-input`, `helm-select`, `helm-textarea` | Fields in Floti's sunken well. `aria-invalid="true"` marks one wrong. |
 | `helm-list`, `helm-row` | A list and its rows. `aria-selected="true"` or `aria-current` marks the chosen row. |
 | `helm-chip` | A borderless count or status, in a tone: `data-tone="accent|success|warn|danger"`. `data-hue="<name>"` draws it in a palette hue instead. |
 | `helm-state` | The one outlined pill: a single word that is a thing's whole status. Takes `data-tone`. |
@@ -871,19 +871,19 @@ reset does not undo the primitives, and its utilities override them, so
 ## Frameworks
 
 A plugin page is a web page, so any framework that builds one works, or none.
-The SDK has helpers that keep Helm's state current in a page: stores that work
+The SDK has helpers that keep Floti's state current in a page: stores that work
 anywhere, and React hooks and Vue composables built on them. Each is optional.
 
 ### Stores
 
-`@coledtaylor/helm-plugin-sdk/stores` has Helm's state as stores:
+`@floti-dev/plugin-sdk/stores` has Floti's state as stores:
 
 | store | value |
 | --- | --- |
 | `theme` | The current `HelmTheme`. |
 | `visible` | Whether the surface is on screen. |
 | `settings` | Every setting's value: null until read, then kept current. |
-| `secret(key)` | A declared key's state, `ready` or `missing`: null until read. `request()` opens Helm's dialog for adding the key and resolves with the state once it closes. The same key is always the same store. |
+| `secret(key)` | A declared key's state, `ready` or `missing`: null until read. `request()` opens Floti's dialog for adding the key and resolves with the state once it closes. The same key is always the same store. |
 
 A store's `subscribe(run)` calls `run` with the value at once and again on
 every change, and returns the function that unsubscribes. `current` is the
@@ -892,7 +892,7 @@ the last subscriber leaves it forgets the value, so the next one starts from
 null rather than from something nothing kept current.
 
 ```js
-import { settings } from '@coledtaylor/helm-plugin-sdk/stores'
+import { settings } from '@floti-dev/plugin-sdk/stores'
 
 const stop = settings.subscribe((values) => {
   if (values !== null) render(values)
@@ -910,7 +910,7 @@ The stores are Svelte stores, so there is no Svelte entry. Read them with `$`:
 ```svelte
 <script>
   import { onMount } from 'svelte'
-  import { secret, settings } from '@coledtaylor/helm-plugin-sdk/stores'
+  import { secret, settings } from '@floti-dev/plugin-sdk/stores'
 
   const token = secret('github-token')
   onMount(() =>
@@ -932,11 +932,11 @@ module `fromStore(settings).current` reads one as state.
 
 ### Vue
 
-`@coledtaylor/helm-plugin-sdk/vue` has composables that return refs:
+`@floti-dev/plugin-sdk/vue` has composables that return refs:
 
 ```vue
 <script setup>
-import { useHelmEvent, useHelmSettings, useHelmTheme, useHelmVisible, useSecret } from '@coledtaylor/helm-plugin-sdk/vue'
+import { useHelmEvent, useHelmSettings, useHelmTheme, useHelmVisible, useSecret } from '@floti-dev/plugin-sdk/vue'
 
 const settings = useHelmSettings() // null until read, then kept current
 const visible = useHelmVisible()
@@ -957,10 +957,10 @@ Each subscription ends with the `setup()` or `effectScope()` it was made in.
 
 ### React
 
-`@coledtaylor/helm-plugin-sdk/react` has hooks:
+`@floti-dev/plugin-sdk/react` has hooks:
 
 ```tsx
-import { useHelmEvent, useHelmSettings, useHelmTheme, useHelmVisible, useSecret } from '@coledtaylor/helm-plugin-sdk/react'
+import { useHelmEvent, useHelmSettings, useHelmTheme, useHelmVisible, useSecret } from '@floti-dev/plugin-sdk/react'
 
 function Panel() {
   const settings = useHelmSettings() // null until read, then kept current
@@ -981,7 +981,7 @@ stores need neither, and nothing else in the SDK needs them.
 ## TypeScript
 
 ```ts
-import type { FlotiBridge, FlotiBackground, HelmContext, PluginManifest } from '@coledtaylor/helm-plugin-sdk'
+import type { FlotiBridge, FlotiBackground, HelmContext, PluginManifest } from '@floti-dev/plugin-sdk'
 ```
 
 `FlotiBridge` is a version 2 page's bridge and `HelmBridge` a version 1
@@ -989,7 +989,7 @@ page's, with the same calls; `ApiVersion` is `1 | 2`. For the pages, once in
 the project (a `.d.ts`, or `types` in `tsconfig.json`):
 
 ```ts
-/// <reference types="@coledtaylor/helm-plugin-sdk/global" />
+/// <reference types="@floti-dev/plugin-sdk/global" />
 ```
 
 which types `window.floti` and the global `floti`, and `window.helm` and
@@ -1001,15 +1001,15 @@ apart from the pages, with a `tsconfig.json` of its own whose `lib` has no
 DOM (`["ES2023", "WebWorker"]` is the closest to what it has), and:
 
 ```ts
-/// <reference types="@coledtaylor/helm-plugin-sdk/background" />
+/// <reference types="@floti-dev/plugin-sdk/background" />
 ```
 
-`@coledtaylor/helm-plugin-sdk/manifest` is the validator itself, for a build
+`@floti-dev/plugin-sdk/manifest` is the validator itself, for a build
 that wants to check the manifest.
 
 ## Keyboard
 
-Keys pressed in a plugin page go to that page. So that Helm's shortcuts still
+Keys pressed in a plugin page go to that page. So that Floti's shortcuts still
 work from inside a plugin - Ctrl+N, Ctrl+P, Ctrl+Tab and the rest, which are
 Cmd+N, Cmd+P and Ctrl+Tab on macOS - the bridge passes on a key with Ctrl, Alt
 or the Windows key (Cmd on macOS) held **after the page's own handlers have
@@ -1024,19 +1024,19 @@ as Option+E for an accent, is the page's too.
 ## Errors and crashes
 
 - **The plugin will not load**: Settings > Plugins lists it with the reason -
-  a manifest problem, an `apiVersion` this Helm does not speak, a page or
+  a manifest problem, an `apiVersion` this Floti does not speak, a page or
   background module that is missing because the plugin is not built. Its
   surfaces do not appear.
-- **A page does not start** (it is missing, or is not a page Helm served):
+- **A page does not start** (it is missing, or is not a page Floti served):
   its panel or tab shows that, in its own place, with **Reload**.
 - **A page crashes**: every surface of the plugin that shared its process
   shows that it stopped, with **Reload** and a link to the plugin's Settings.
-  Helm and other plugins are unaffected.
+  Floti and other plugins are unaffected.
 - **The background module crashes** (it threw as it started, or ran out of
   memory): Settings says so, and **Reload** starts it again. Its pages keep
   working.
 - The plugin's page in Settings has its **log** - the last 500 lines its
-  programs and service printed, and what Helm noted about it - and the memory
+  programs and service printed, and what Floti noted about it - and the memory
   and CPU its processes are using.
 
 ## What a plugin cannot do
@@ -1050,7 +1050,7 @@ as Option+E for an accent, is the page's too.
   off its own origin.
 - **Open windows or dialogs.** No popups, no `alert`, `confirm` or `prompt`,
   no downloads. Writing text to the clipboard is the one browser permission a
-  page has. A link goes to Helm's Browser tab through `floti.open`, from a
+  page has. A link goes to Floti's Browser tab through `floti.open`, from a
   click.
 - **Post notifications**, or reach into a Claude Code session: a session can
   call a plugin's tools, but a plugin cannot send a running session anything

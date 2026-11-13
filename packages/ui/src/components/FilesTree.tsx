@@ -311,7 +311,7 @@ function Row({
     state === undefined ? null : GIT_STATE_LABEL[state],
     changedInside ? 'Holds changed files' : null,
     entry.ignored ? 'Ignored by git - listed, not read' : null,
-    entry.link ? 'A link. Helm lists it and does not follow it.' : null
+    entry.link ? 'A link. Floti lists it and does not follow it.' : null
   ]
     .filter((line) => line !== null)
     .join('\n')

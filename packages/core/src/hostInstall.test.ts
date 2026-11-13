@@ -73,17 +73,17 @@ describe('what a host’s computer answers', () => {
   })
 })
 
-describe('P6: whether this Helm can talk to the floti there', () => {
+describe('P6: whether this Floti can talk to the floti there', () => {
   const ours = { major: 1, minor: 2 }
   it('accepts its own protocol and a host one minor ahead', () => {
     expect(judgeProtocol({ major: 1, minor: 2 }, ours)).toBe('ok')
     expect(judgeProtocol({ major: 1, minor: 3 }, ours)).toBe('ok')
   })
-  it('S13: a host behind this Helm is too old, to be updated there', () => {
+  it('S13: a host behind this Floti is too old, to be updated there', () => {
     expect(judgeProtocol({ major: 1, minor: 1 }, ours)).toBe('tooOld')
     expect(judgeProtocol({ major: 0, minor: 9 }, ours)).toBe('tooOld')
   })
-  it('S19: a host further ahead is newer, and this Helm is the one to update', () => {
+  it('S19: a host further ahead is newer, and this Floti is the one to update', () => {
     expect(judgeProtocol({ major: 1, minor: 4 }, ours)).toBe('newer')
     expect(judgeProtocol({ major: 2, minor: 0 }, ours)).toBe('newer')
   })
@@ -106,13 +106,13 @@ describe('which floti goes to a computer', () => {
     ])
   })
 
-  it('S10: this Helm’s own floti when that computer’s OS and CPU are this PC’s', () => {
+  it('S10: this Floti’s own floti when that computer’s OS and CPU are this PC’s', () => {
     expect(
       chooseSource({ system: linux, desktop: { platform: 'linux', arch: 'x64' }, ownBuild: true, version: '2.6.0', sums: null })
     ).toEqual({ how: 'copy' })
   })
 
-  it('S11: the release’s build for that target, with the SHA-256 this Helm carries for it, when they differ', () => {
+  it('S11: the release’s build for that target, with the SHA-256 this Floti carries for it, when they differ', () => {
     expect(
       chooseSource({ system: linux, desktop: { platform: 'win32', arch: 'x64' }, ownBuild: true, version: '2.6.0', sums })
     ).toEqual({ how: 'download', file: 'floti-2.6.0-linux-x64', sha256: 'a'.repeat(64) })
@@ -133,7 +133,7 @@ describe('which floti goes to a computer', () => {
     const dev = chooseSource({ system: linux, desktop: { platform: 'win32', arch: 'x64' }, ownBuild: true, version: '2.6.0', sums: null })
     expect(dev).toEqual({
       how: 'none',
-      reason: 'This Helm 2.6.0 has no published floti to send, and its own floti is not for Linux · x86_64.'
+      reason: 'This Floti 2.6.0 has no published floti to send, and its own floti is not for Linux · x86_64.'
     })
   })
 
@@ -197,20 +197,20 @@ describe('an older floti on another computer, and floti update there', () => {
     expect(UPDATE_UP_TO_DATE_EXIT).toBe(4)
     expect(describeUnsettledUpdate('upToDate', 'build-box')).toEqual({
       title: 'floti on build-box is up to date on its channel',
-      fix: 'Nothing was replaced and no session ended: its channel has nothing newer. Update it from this Helm’s own floti instead.'
+      fix: 'Nothing was replaced and no session ended: its channel has nothing newer. Update it from this Floti’s own floti instead.'
     })
     expect(describeUnsettledUpdate('stoppedWaiting', 'build-box').title).toBe(
-      'Helm stopped waiting for floti update on build-box'
+      'Floti stopped waiting for floti update on build-box'
     )
     expect(describeUnsettledUpdate('stoppedWaiting', 'build-box').fix).toContain('It may still be running there.')
     expect(describeUnsettledUpdate('unconfirmed', 'build-box').title).toBe(
-      'Helm did not see floti update replace floti on build-box'
+      'Floti did not see floti update replace floti on build-box'
     )
   })
 
   it('names both versions for a connected host whose floti is older', () => {
     expect(olderHostSentence('build-box', '2.5.0', '2.6.0')).toBe(
-      'build-box runs floti 2.5.0, older than the floti 2.6.0 this Helm carries.'
+      'build-box runs floti 2.5.0, older than the floti 2.6.0 this Floti carries.'
     )
   })
 
@@ -259,7 +259,7 @@ describe('S16: the floti a host keeps by its full path', () => {
   })
 })
 
-describe('S9: whether this PC’s host runs an older floti than this Helm', () => {
+describe('S9: whether this PC’s host runs an older floti than this Floti', () => {
   it('orders releases by their numbers, and a prerelease before its release', () => {
     expect(compareVersions('2.4.0', '2.4.1')).toBe(-1)
     expect(compareVersions('2.10.0', '2.9.9')).toBe(1)
@@ -316,14 +316,14 @@ describe('S12 and S13: the restart question says first what ends', () => {
   })
 })
 
-describe('which of this PC’s host and this Helm is behind', () => {
+describe('which of this PC’s host and this Floti is behind', () => {
   it('S7: a refusal saying to update the host marks this PC’s host older, naming both protocols', () => {
     expect(
       localHostVersions({ refused: { host: { major: 2, minor: 0 }, client: { major: 2, minor: 1 }, update: 'host' } }, '2.5.0')
     ).toEqual({ older: 'host', host: 'protocol 2.0', helm: 'protocol 2.1', beforeRestart: false })
   })
 
-  it('S8: a refusal saying to update the client says this Helm is the one behind', () => {
+  it('S8: a refusal saying to update the client says this Floti is the one behind', () => {
     expect(
       localHostVersions({ refused: { host: { major: 2, minor: 2 }, client: { major: 2, minor: 0 }, update: 'client' } }, '2.4.1')
     ).toEqual({ older: 'helm', host: 'protocol 2.2', helm: 'protocol 2.0' })
@@ -349,13 +349,13 @@ describe('which of this PC’s host and this Helm is behind', () => {
 describe('what is said of this PC’s host’s version', () => {
   it('S9: an older host names both flotis and offers the restart', () => {
     expect(localHostVersionsSentence({ older: 'host', host: '2.4.0', helm: '2.4.1', beforeRestart: false })).toBe(
-      'This PC’s host runs floti 2.4.0, older than the floti 2.4.1 this Helm carries. Restart host to update says first what it ends.'
+      'This PC’s host runs floti 2.4.0, older than the floti 2.4.1 this Floti carries. Restart host to update says first what it ends.'
     )
   })
 
-  it('S8: a Helm behind its host is told to update Helm on this PC', () => {
+  it('S8: a Floti behind its host is told to update Floti on this PC', () => {
     expect(localHostVersionsSentence({ older: 'helm', host: 'protocol 2.2', helm: 'protocol 2.0' })).toContain(
-      'runs Floti protocol 2.2, newer than the Floti protocol 2.0 this Helm speaks, so Helm cannot connect to it. Update Helm on this PC.'
+      'runs Floti protocol 2.2, newer than the Floti protocol 2.0 this Floti speaks, so Floti cannot connect to it. Update Floti on this PC.'
     )
   })
 
@@ -367,7 +367,7 @@ describe('what is said of this PC’s host’s version', () => {
       beforeRestart: true
     })
     expect(sentence).toBe(
-      'This PC’s host runs Floti protocol 1.4, older than the Floti protocol 2.0 this Helm carries. Restart host to update keeps every session and terminal running in its tab.'
+      'This PC’s host runs Floti protocol 1.4, older than the Floti protocol 2.0 this Floti carries. Restart host to update keeps every session and terminal running in its tab.'
     )
     expect(sentence).not.toMatch(/History|notification-area|Stop host/)
   })

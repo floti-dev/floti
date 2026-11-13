@@ -68,13 +68,13 @@ export function WelcomePane({
           width={192}
           height={192}
           role="img"
-          aria-label="Helm"
+          aria-label="Floti"
           aria-hidden={false}
           className="mx-auto text-fg-subtle opacity-35"
         />
         <p className="mt-8 text-[13px] text-fg-muted">
           {projectCount === 0
-            ? 'Point Helm at a folder to get started.'
+            ? 'Point Floti at a folder to get started.'
             : onNewSession
               ? 'Start a session, or pick a project on the left.'
               : 'Pick a project on the left.'}

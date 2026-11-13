@@ -36,7 +36,7 @@ export type BrowserToolSpec = ToolSpec
  * and each tool's name, description and input schema. It lives once, in
  * `crates/host/src/server/browser_tools.json`, because the host serves the same
  * family to the sessions it runs and a session must be told the same thing by
- * either: the user's `mcp__helm-browser__*` permission rules name these tools.
+ * either: the user's `mcp__floti-browser__*` permission rules name these tools.
  */
 export const BROWSER_TOOL_TABLE: ToolTable = browserToolTable
 
@@ -105,7 +105,7 @@ export interface BrowserMcpOptions {
  * offered to the local host as it is.
  */
 export function pluginInstructions(server: ToolServer): string {
-  const provenance = `These tools come from "${server.name}", a plugin the user added to Helm, the app hosting this session. The plugin answers every call; Helm passes it on.`
+  const provenance = `These tools come from "${server.name}", a plugin the user added to Floti, the app hosting this session. The plugin answers every call; Floti passes it on.`
   return server.instructions === null ? provenance : `${provenance}\n\n${server.instructions}`
 }
 
@@ -167,7 +167,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
       return {
         problem: `There is no browser tab ${String(
           id
-        )} in Helm - it may have been closed. Call browser_tabs to see what is open.`
+        )} in Floti - it may have been closed. Call browser_tabs to see what is open.`
       }
     }
     const opener = browsers.openerOf(id)
@@ -187,7 +187,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
                 }", not this one.`
               : `Browser tab ${String(
                   id
-                )} was opened by the user and is not shared with this session. Open your own with browser_open, or ask the user to share this one from the Share button in Helm's browser bar.`
+                )} was opened by the user and is not shared with this session. Open your own with browser_open, or ask the user to share this one from the Share button in Floti's browser bar.`
       }
     }
     const reach = toolsReach(current.url)
@@ -218,8 +218,8 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
     // The rule's own sentence is about the pane and a fetch. When the pane may
     // be there and only the tools may not, the setting to name is the tools'.
     return settings.browserMcpLocalOnly && browserReachAllows(url, settings.browserReach).allowed
-      ? "Helm's browser tools are held to this machine in Settings > Browser, so this session may not read or drive a page anywhere else."
-      : (decision.problem ?? "That is outside what Helm's browser tools may reach.")
+      ? "Floti's browser tools are held to this machine in Settings > Browser, so this session may not read or drive a page anywhere else."
+      : (decision.problem ?? "That is outside what Floti's browser tools may reach.")
   }
 
   /**
@@ -240,7 +240,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
     // an agent as it does to a person typing into the pane.
     const resolved = resolveBrowserAddress(input)
     if (resolved.url === null) {
-      return { problem: resolved.problem ?? `${input} is not an address Helm can open.` }
+      return { problem: resolved.problem ?? `${input} is not an address Floti can open.` }
     }
     const settings = options.settings()
     const decision = browserReachAllows(
@@ -251,7 +251,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
       return {
         problem:
           decision.problem ??
-          `${resolved.url} is outside what Helm's browser is allowed to reach right now.`
+          `${resolved.url} is outside what Floti's browser is allowed to reach right now.`
       }
     }
     return { url: resolved.url }
@@ -283,7 +283,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
       }
 
       const answer = await browsers.openFor(session.opener, wanted.url)
-      if (answer.state === null) return fail(answer.problem ?? 'Helm could not open that tab.')
+      if (answer.state === null) return fail(answer.problem ?? 'Floti could not open that tab.')
       session.lastTab = answer.state.id
       const settled = await settleTab(answer.state.id)
       return ok(describeTab(settled ?? answer.state))
@@ -348,12 +348,12 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
       if ('problem' in tab) return fail(tab.problem)
       const max = Math.max(20, Math.min(4000, num(args.maxNodes) ?? SNAPSHOT_MAX_NODES))
       const answer = await browsers.evaluate(tab.id, snapshotScript(max))
-      if (!answer.ok) return fail(`Helm could not read that page: ${answer.error ?? 'unknown'}`)
+      if (!answer.ok) return fail(`Floti could not read that page: ${answer.error ?? 'unknown'}`)
       let parsed: SnapshotResult
       try {
         parsed = JSON.parse(answer.value) as SnapshotResult
       } catch {
-        return fail(`Helm could not read that page; it answered: ${answer.value.slice(0, 200)}`)
+        return fail(`Floti could not read that page; it answered: ${answer.value.slice(0, 200)}`)
       }
       return ok(renderSnapshot(tab.id, parsed))
     },
@@ -369,12 +369,12 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
            return JSON.stringify({ text: el.innerText ?? el.textContent ?? '', url: location.href })`
         )
       )
-      if (!answer.ok) return fail(`Helm could not read that page: ${answer.error ?? 'unknown'}`)
+      if (!answer.ok) return fail(`Floti could not read that page: ${answer.error ?? 'unknown'}`)
       let read: { missing?: boolean; text?: string; url?: string }
       try {
         read = JSON.parse(answer.value) as typeof read
       } catch {
-        return fail(`Helm could not read that page; it answered: ${answer.value.slice(0, 200)}`)
+        return fail(`Floti could not read that page; it answered: ${answer.value.slice(0, 200)}`)
       }
       if (read.missing === true) return fail(missingElement(args))
       const text = tidyText(read.text ?? '')
@@ -402,9 +402,9 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
       if (shot === null) return fail('That browser tab is gone.')
       if (shot.width < 2 || shot.height < 2) {
         return fail(
-          `Helm captured a ${String(shot.width)}x${String(
+          `Floti captured a ${String(shot.width)}x${String(
             shot.height
-          )} image, which means that tab has no rectangle to paint into. This is a bug in Helm rather than something to work around.`
+          )} image, which means that tab has no rectangle to paint into. This is a bug in Floti rather than something to work around.`
         )
       }
       return {
@@ -474,7 +474,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
              return document.activeElement === el ? 'focused' : 'not-focusable'`
           )
         )
-        if (!focused.ok) return fail(`Helm could not reach that element: ${focused.error ?? ''}`)
+        if (!focused.ok) return fail(`Floti could not reach that element: ${focused.error ?? ''}`)
         if (focused.value === 'missing') return fail(missingElement(args))
         if (focused.value === 'not-focusable') {
           return fail(
@@ -527,12 +527,12 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
         : []
       if (values.length === 0) return fail('browser_select needs at least one value.')
       const answer = await browsers.evaluate(tab.id, inPage(args, selectBody(values)))
-      if (!answer.ok) return fail(`Helm could not reach that element: ${answer.error ?? ''}`)
+      if (!answer.ok) return fail(`Floti could not reach that element: ${answer.error ?? ''}`)
       let picked: SelectResult
       try {
         picked = JSON.parse(answer.value) as SelectResult
       } catch {
-        return fail(`Helm could not read that select; the page answered: ${answer.value.slice(0, 200)}`)
+        return fail(`Floti could not read that select; the page answered: ${answer.value.slice(0, 200)}`)
       }
       return picked.chosen === undefined ? fail(selectRefusal(args, picked)) : ok(
         `Chose ${picked.chosen.map((label) => JSON.stringify(label)).join(', ')} in ${describeTarget(args)}.`
@@ -553,7 +553,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
              return JSON.stringify([Math.round(window.scrollX), Math.round(window.scrollY)])`
           )
         )
-        if (!answer.ok) return fail(`Helm could not reach that element: ${answer.error ?? ''}`)
+        if (!answer.ok) return fail(`Floti could not reach that element: ${answer.error ?? ''}`)
         if (answer.value === 'missing') return fail(missingElement(args))
         return ok(`Brought ${describeTarget(args)} into view; the page is scrolled to (${answer.value.slice(1, -1).replace(',', ', ')}).`)
       }
@@ -574,7 +574,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
       const before = await scrolled(tab.id, page)
       await browsers.scroll(tab.id, page.x * view.zoom, page.y * view.zoom, dx * view.zoom, dy * view.zoom)
       const after = await scrolled(tab.id, page)
-      if (before === null || after === null) return fail('Helm could not read where that page is scrolled to.')
+      if (before === null || after === null) return fail('Floti could not read where that page is scrolled to.')
       return ok(describeScroll(before, after, dx, dy, page))
     },
 
@@ -651,7 +651,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
   const runTool = async (session: AgentSession, name: string, input: unknown): Promise<ToolResult> => {
     const tool = TOOLS.find((entry) => entry.name === name)
     if (tool === undefined) {
-      return fail(`Helm's browser server has no tool called "${name}". It has: ${TOOLS.map((t) => t.name).join(', ')}.`)
+      return fail(`Floti's browser server has no tool called "${name}". It has: ${TOOLS.map((t) => t.name).join(', ')}.`)
     }
     const args = typeof input === 'object' && input !== null && !Array.isArray(input) ? (input as Args) : {}
     try {
@@ -659,7 +659,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
     } catch (err) {
       // A thrown tool is still an answer to the model, not a transport
       // failure: it can read the sentence and try something else.
-      return fail(`${name} failed inside Helm: ${err instanceof Error ? err.message : String(err)}`)
+      return fail(`${name} failed inside Floti: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -777,12 +777,12 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
            width: b.width, height: b.height })`
       )
     )
-    if (!answer.ok) return { problem: `Helm could not reach that element: ${answer.error ?? ''}` }
+    if (!answer.ok) return { problem: `Floti could not reach that element: ${answer.error ?? ''}` }
     let box: { missing?: boolean; x?: number; y?: number; width?: number; height?: number }
     try {
       box = JSON.parse(answer.value) as typeof box
     } catch {
-      return { problem: `Helm could not measure that element; the page answered: ${answer.value}` }
+      return { problem: `Floti could not measure that element; the page answered: ${answer.value}` }
     }
     if (box.missing === true) return { problem: missingElement(args) }
     if ((box.width ?? 0) <= 0 || (box.height ?? 0) <= 0) {
@@ -803,7 +803,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
     runBrowserTool(opener, tool, args) {
       if (!options.settings().browserMcp) {
         return Promise.resolve(
-          fail("Helm's browser tools are switched off in Settings > Browser, so this session has none to call.")
+          fail("Floti's browser tools are switched off in Settings > Browser, so this session has none to call.")
         )
       }
       let session = relayed.get(opener.key)

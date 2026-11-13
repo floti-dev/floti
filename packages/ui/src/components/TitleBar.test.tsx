@@ -25,7 +25,7 @@ describe('TitleBar', () => {
     expect(lights.childElementCount).toBe(0)
     expect(lights.querySelector('button, a, input, [tabindex]')).toBeNull()
 
-    const mark = strip.querySelector('[aria-label="Helm"]')
+    const mark = strip.querySelector('[aria-label="Floti"]')
     expect(mark).not.toBeNull()
     expect(lights.contains(mark)).toBe(false)
     expect(lights.compareDocumentPosition(mark!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -37,7 +37,7 @@ describe('TitleBar', () => {
     const strip = container.firstElementChild!
     expect(strip.classList.contains('pr-36')).toBe(true)
     expect(strip.querySelector('[data-traffic-lights]')).toBeNull()
-    expect(strip.firstElementChild!.querySelector('[aria-label="Helm"]')).not.toBeNull()
+    expect(strip.firstElementChild!.querySelector('[aria-label="Floti"]')).not.toBeNull()
   })
 
   it('on Linux is drawn as on Windows, under the native frame', () => {

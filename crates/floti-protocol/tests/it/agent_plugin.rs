@@ -87,7 +87,7 @@ fn a_terminal_only_client_may_offer_hear_calls_and_answer() {
 fn an_offer_carries_each_server_as_a_session_reads_it_in_camel_case() {
     let offer = AgentPluginServers {
         servers: vec![AgentPluginServer {
-            name: "helm-plugin-notes".into(),
+            name: "floti-plugin-notes".into(),
             plugin: "notes".into(),
             instructions: "These tools come from \"Notes\".".into(),
             tools: vec![AgentPluginTool {
@@ -103,7 +103,7 @@ fn an_offer_carries_each_server_as_a_session_reads_it_in_camel_case() {
         wire,
         json!({
             "servers": [{
-                "name": "helm-plugin-notes",
+                "name": "floti-plugin-notes",
                 "plugin": "notes",
                 "instructions": "These tools come from \"Notes\".",
                 "tools": [{
@@ -175,7 +175,7 @@ fn a_call_names_the_call_the_session_the_plugin_and_the_tool_and_an_answer_is_do
     assert_eq!(failed["status"], "failed");
     let message = failed["message"].as_str().unwrap();
     assert!(
-        message.contains("Helm") && message.contains("Notes"),
+        message.contains("Floti") && message.contains("Notes"),
         "{message}"
     );
 

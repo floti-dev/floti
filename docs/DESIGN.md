@@ -1,6 +1,6 @@
-# Helm design system - "Nocturne Islands" (v2)
+# Floti design system - "Nocturne Islands" (v2)
 
-Every surface in Helm follows this system. It was chosen from three explored
+Every surface in Floti follows this system. It was chosen from three explored
 directions (direction 1a, "Nocturne Islands") and specified in the design
 package the redesign was built from; this file is the in-repo authority. If a
 change cannot be expressed in these tokens and rules, the change is wrong or
@@ -95,7 +95,8 @@ accent, and `deriveAccent` fits it to the theme: the nearest value that holds
 tints at the theme's own alphas. One swatch is therefore a different hex on
 Nocturne and on Daylight, by design.
 
-**User themes** are `*.json` in `~/.config/helm/themes` (beside the exe for a
+**User themes** are `*.json` in `~/.config/floti/themes` (`~/.config/helm/themes`
+until the host has moved Helm's folder; beside the exe for a
 portable build), watched while the app runs - a save repaints the window. A
 file names its `kind` (or `extends` a built-in) and only the colours it
 changes; the rest come from the built-in it extends. Grounds and text must be
@@ -129,7 +130,7 @@ plugin's project colour is one of them; a note's tag is one of them.
   screenshot and a theme where two hues sit near each other.
 
 One shade per hue per theme serves as a mark and as text, like the status
-colours. Where Helm assigns a hue itself it is from the thing's own text
+colours. Where Floti assigns a hue itself it is from the thing's own text
 (`hueForText` in core), so the same tag is the same colour in every note, pane
 and run, and different tags spread across all eight.
 
@@ -212,7 +213,7 @@ to be told:
   is not used.
 
   The window's own corner is Windows 11's to draw, and DWM offers square, 4px
-  and 8px and nothing between. Helm asks for 4px (`main/corners.ts`), which is
+  and 8px and nothing between. Floti asks for 4px (`main/corners.ts`), which is
   the default `rounded-well`, and it does not follow the setting. The window's
   1px edge is the theme's `border` composited over `bg` (`main/chrome.ts`), so
   it is a hairline like every other rather than the OS accent colour.
@@ -248,12 +249,12 @@ remembered to tell.
 A toast is not a modal. The launch toast has no scrim and does not acquire one
 to satisfy this mechanism.
 
-**Helm draws its own dialogs, including the ones the main process asks for.**
+**Floti draws its own dialogs, including the ones the main process asks for.**
 A `dialog.showMessageBox` is a Win32 window - system typeface, system ground,
 a blue circled "i" - and nothing in this document can reach it. Where main owns
 the question but the user owns the answer, main pushes the question to the
 renderer and waits (`session:confirm`). The native box stays as the fallback
-for when there is no window to ask, because a Helm that cannot be quit is worse
+for when there is no window to ask, because a Floti that cannot be quit is worse
 than an unbranded dialog. A destructive confirmation focuses **Cancel**, and
 its accepting button carries `border-danger/50 text-danger` with a
 `bg-danger/10` hover - never a solid fill, same rule the accent follows. A
@@ -490,7 +491,7 @@ overrides the gate; keep it.
   children as chips here (below, "A parent shown alone has its children in its
   crumb").
 - **The session tab's state dot.** A session tab carries a 6px dot in place of
-  a kind icon, and it says two different kinds of thing: what Helm knows about
+  a kind icon, and it says two different kinds of thing: what Floti knows about
   the process, and what the session says about itself. Claude Code publishes its
   own status for every live session, and putting it on the tab is the difference
   between a strip of six tabs and a strip that says which one is waiting on you.
@@ -541,7 +542,7 @@ overrides the gate; keep it.
   **`running` and `idle` paint identically, on purpose.** `running` is the state
   for a session that is alive and is saying nothing - the first second of every
   session, a status this build does not recognise, a registry that could not be
-  read. All three are "Helm has nothing to add", and the honest paint for that
+  read. All three are "Floti has nothing to add", and the honest paint for that
   is what the tab painted before any of this existed. A renamed status in a
   future CLI therefore degrades to the old behaviour rather than to a guess -
   the same rule as the usage figures: paint nothing rather than a wrong
@@ -567,20 +568,20 @@ overrides the gate; keep it.
   left, what one of them is holding on the right - the narrow-pane shape §5's
   "Narrow panes" already governs, collapsing to one at a time beside another
   pane. It is reached from the line at the foot of the sidebar's tree, which
-  says how many sessions are on the machine and how many are not Helm's.
+  says how many sessions are on the machine and how many are not Floti's.
 
   Three things about it are decisions rather than layout.
 
-  **The list is machine-wide and the detail is Helm's own**, and the pane says
+  **The list is machine-wide and the detail is Floti's own**, and the pane says
   so with a *heading* rather than a badge. Everything under "Elsewhere on this
   machine" has a different set of knowable facts - no branch, no argv, no
-  process tree, no ports, because Helm did not spawn it - and a heading is how a
+  process tree, no ports, because Floti did not spawn it - and a heading is how a
   list states that once instead of on every row. The degradation needs no
   special case: it is simply what is knowable.
 
   **Machine data is mono and the sentences are not.** A process name, a pid, a
   port, a path and an argv are all mono at 10.5-11.5px (§2). What a session is
-  *called* is a name and is Inter, and the sentences about what Helm could and
+  *called* is a name and is Inter, and the sentences about what Floti could and
   could not see are prose.
 
   **What a session's agent says it is doing sits beside its name, muted.** A
@@ -595,7 +596,7 @@ overrides the gate; keep it.
   usage figures' rule at a third surface - paint nothing rather than a wrong
   number - and here it has an edge the others do not: the wrong answer is not a
   wrong figure but a *reassuring* one. "This session is holding nothing" and
-  "Helm failed to look" render identically as an empty list, and only one of
+  "Floti failed to look" render identically as an empty list, and only one of
   them means it is safe to start another agent. So the pane carries a separate
   unknown for the tree and for the ports, because the two queries fail
   independently.
@@ -611,7 +612,7 @@ overrides the gate; keep it.
   the row is about.
 - **The launch warning.** A folder that already has a live session in it says so
   on the launch row, in `warn`, naming the sessions and saying which of them are
-  not Helm's.
+  not Floti's.
 
   It is a **sentence beside the button, not a dialog in front of it**, and that
   is the launch-disclosure rule (below) rather than a softer version of a
@@ -654,7 +655,7 @@ overrides the gate; keep it.
   label.
 - **Status bar**: plain 11px subtle text directly on the canvas, 26px tall. No
   border and no fill; gaps separate within a group, and a 10px `border-strong`
-  hairline separates the groups. On the left, which Helm this is and which
+  hairline separates the groups. On the left, which Floti this is and which
   `claude` it runs: "Helm 1.2.0", then a build that is not an ordinary install
   (a hairline chip: `dev`, `dev · live`, `portable`) and a newer release (an
   offer in `accent` text), a hairline, "claude 2.1.288" - or "claude CLI not
@@ -664,12 +665,12 @@ overrides the gate; keep it.
   `danger` for a session whose program reports an error, "1 running" with a
   filled `success` dot for a command child whose command still runs, "2 idle"
   with the idle ring), or "No sessions running". On the right, the plan's usage. The scan
-  time is in Settings: it is a fact about Helm nobody acts on.
+  time is in Settings: it is a fact about Floti nobody acts on.
 - **Section labels**: the 10px/600 caps label style, everywhere a section
   needs a name.
 - **Launch disclosure**: a control that starts a process gets a sentence
   beside it naming what will run, in 11px `fg-subtle` with the machine parts
-  in mono - the program, the working directory, and the argv Helm supplies
+  in mono - the program, the working directory, and the argv Floti supplies
   that the user did not type. `ProjectPane`'s "Runs `claude` with this folder
   as the working directory" is the short case. The sentence is not a tooltip
   and not a confirmation: it is on screen *before* the button is pressed, which
@@ -750,7 +751,7 @@ overrides the gate; keep it.
     into the Session popover with that agent picked, in the pane's folder. It
     is disabled, saying why, while the host has no agents.
   - **Browser tab** opens an empty page with the caret in its address bar.
-- **The restore offer** (after Helm stops without shutting down): a page in a
+- **The restore offer** (after Floti stops without shutting down): a page in a
   tab, not a dialog, opened in front of the focused pane. It is the first thing
   a start after a crash has to say, and somebody may want to look at the rest
   of the window before answering; closing its tab is "not now". One list on
@@ -758,7 +759,7 @@ overrides the gate; keep it.
   folder and branch in mono, its profile, when it was last spoken to - all
   ticked. A session that cannot come back is still listed, unticked and greyed
   with the reason in place of its folder: one missing from the list would read
-  as Helm having forgotten it. The disclosure is one line under the list
+  as Floti having forgotten it. The disclosure is one line under the list
   (`claude --resume`, in its own folder and profile, in the tab it had), and the
   primary button counts what it will do.
 
@@ -826,7 +827,7 @@ overrides the gate; keep it.
 - **The frame**, left to right: the **rail** on the canvas, 2px, the
   **sidebar** island (256px), a gutter, then the **panes**, and a gutter
   to the window's edge. The title strip above it all, the status bar below.
-- **Title bar**: Helm draws its own 36px strip - the accent mark alone, at the
+- **Title bar**: Floti draws its own 36px strip - the accent mark alone, at the
   rail's icon size, and the drag region. Nothing else lives in it: the theme
   toggle went to Appearance, and Settings to the rail. Each OS puts its window
   controls into it its own way (`main/chrome.ts`):
@@ -847,7 +848,7 @@ overrides the gate; keep it.
   reached for rather than by feature - Sessions,
   Profiles, a hairline, then Files and the browser, and
   Settings pinned to the foot. The order is a fact
-  about how Helm is used, so it is fixed rather than learned: a rail that
+  about how Floti is used, so it is fixed rather than learned: a rail that
   reordered itself would move under muscle memory.
 
   **A right-click lists every destination with a tick** (a `Menu`), as VS
@@ -1154,7 +1155,7 @@ overrides the gate; keep it.
   pointer over time is only a drag while a button is held, and a handler that
   does not check `buttons` will follow a pointer that is merely passing over it.
   That is not hypothetical: the session divider did exactly that, and because it
-  did, no drag in Helm had ever been exercised by a check - the drivers were
+  did, no drag in Floti had ever been exercised by a check - the drivers were
   sending `sendInputEvent` moves with no `leftbuttondown`, Chromium was
   delivering them as `buttons: 0`, and the divider was answering them. The
   arrangement looked correct from both ends for as long as it existed. The
@@ -1166,7 +1167,7 @@ overrides the gate; keep it.
   | project shell handle | `setPointerCapture` | yes - capture, and `hasPointerCapture` gates each move |
   | tab reorder, and a tab onto another pane or a pane's side | HTML5 `dragstart`/`drop` | n/a - the platform owns the gesture; the drag ends at the window's `drop`, because the tab's own `dragend` is lost when its strip goes with it |
   | profile list reorder | HTML5 `dragstart`/`drop` | n/a |
-  | terminal text selection | xterm's own handlers | n/a - not Helm's code |
+  | terminal text selection | xterm's own handlers | n/a - not Floti's code |
 
   The pointer-capture form is the better one and the divider is the older one;
   capture also fixes the case a `buttons` check only mitigates, which is a
@@ -1203,7 +1204,7 @@ overrides the gate; keep it.
   by its name, its path or the name of anything running in it, and opens every
   group it matched. The header's actions are rescan, new workspace and add a
   folder; the foot of the island is one line naming how many sessions are on
-  this machine and how many are not Helm's, which opens the sessions pane.
+  this machine and how many are not Floti's, which opens the sessions pane.
 
   **Files** is one project's tree. The header carries the project beside its
   title - a 22px outlined pill naming it, over the platform's own list - and
@@ -1240,8 +1241,8 @@ overrides the gate; keep it.
   and the section sorts by name, since path order is workspace order and that is
   the arrangement being escaped.
 
-  **Elsewhere** holds Helm's sessions whose folder is no project the scan
-  found, so every session Helm hosts has a row somewhere.
+  **Elsewhere** holds Floti's sessions whose folder is no project the scan
+  found, so every session Floti hosts has a row somewhere.
 
   **Files and the rest are destinations on the rail, not rows here.** Each
   of those views owns its own picker, so its way in carries none. They were
@@ -1279,9 +1280,9 @@ overrides the gate; keep it.
   panes agree about what you are looking at. Pressing one brings its tab
   forward wherever it is.
 
-  A session somebody started outside Helm is listed under its folder too, its
-  dot dimmed and its word "outside Helm", because it holds a working tree
-  exactly as hard as one of Helm's does - the reason the listing is
+  A session somebody started outside Floti is listed under its folder too, its
+  dot dimmed and its word "outside Floti", because it holds a working tree
+  exactly as hard as one of Floti's does - the reason the listing is
   machine-wide. It has no tab, so it opens the sessions pane on itself.
 
   **A session another session started sits under that one**, one step in
@@ -1325,15 +1326,15 @@ overrides the gate; keep it.
 
 ## 5c. Plugin surfaces
 
-A plugin draws inside places Helm already has and never brings chrome of its
-own. **Helm draws the frame, the plugin draws the page**: the rail icon, the
+A plugin draws inside places Floti already has and never brings chrome of its
+own. **Floti draws the frame, the plugin draws the page**: the rail icon, the
 panel's header, the tab, the status bar item, the palette row and every error
-state are Helm's components, and the plugin's page fills the body of one of
+state are Floti's components, and the plugin's page fills the body of one of
 them. That is what keeps a plugin looking like part of the window rather than
 a website inside it.
 
 - **The rail**: a plugin with a rail icon gets a group of its own under a
-  hairline, after Helm's destinations and above Settings. Its icon is a mask,
+  hairline, after Floti's destinations and above Settings. Its icon is a mask,
   so it takes the rail's colours, at the rail's 20px, and it hides from the
   rail's menu like any other item. It is a **view**: it opens the plugin's
   panel in the sidebar.
@@ -1343,16 +1344,16 @@ a website inside it.
   is part of the button's accessible name ("Sample, 2"). Never filled - the
   accent does not flood for a plugin either.
 - **A panel** is the sidebar island with the plugin's page as its body. The
-  38px header is Helm's: the panel's title and up to five actions as the
+  38px header is Floti's: the panel's title and up to five actions as the
   standard 26px icon buttons. An action's glyph is named in the manifest from
-  Helm's own set (refresh, plus, search, list, settings, external, pin, edit,
+  Floti's own set (refresh, plus, search, list, settings, external, pin, edit,
   trash, link, eye), so a plugin cannot draw a header that looks unlike every
   other one.
 - **A tab** is a tab like any other: one line, the plugin's icon, the title the
   page sets. The page fills the pane's body edge to edge, as a page does.
 - **A status bar item** is one plugin's single line of caption, in one of five
   tones (`neutral` in `fg-subtle`, `accent` in `accent-text`, `success`,
-  `warn`, `danger`), at most 220px and truncated past it, before Helm's own
+  `warn`, `danger`), at most 220px and truncated past it, before Floti's own
   items with a divider after the last. Pressing it opens the plugin's panel.
 - **Ctrl+Shift+P** runs a plugin's commands, drawn as Quick Open is so the two
   read as one family: a 560px raised palette, the field across the top with the
@@ -1362,7 +1363,7 @@ a website inside it.
 - **A failure says so in the plugin's own place**, never as a toast or a
   dialog. The surface becomes an `EmptyState` on `surface`: the warn glyph,
   "*Plugin* stopped" (its process ended) or "*Plugin* did not load" (it never
-  answered), Helm's sentence under it, and **Reload** and **Plugin settings**.
+  answered), Floti's sentence under it, and **Reload** and **Plugin settings**.
   Every surface of one plugin shares a process, so a crash shows on all of
   them at once. The rest of the window is untouched.
 - **Settings > Plugins** lists every folder added: name, version in mono, the
@@ -1375,7 +1376,7 @@ a website inside it.
   is being told exactly what this plugin can do - the tools it offers
   sessions, each name in mono with its description, under one "Offer to
   sessions" checkbox, memory and CPU, its log
-  (Helm's own notes in `fg-subtle`, the plugin's lines in `fg`), and turn off,
+  (Floti's own notes in `fg-subtle`, the plugin's lines in `fg`), and turn off,
   reload and remove. **Settings > Secrets** lists every secret by key, with its
   hosts and plugins, and never its value.
 - **The secret dialog** is a modal (`Overlay`): the key glyph, "*Plugin* needs
@@ -1389,7 +1390,7 @@ twenty-seven roles as `--helm-<role>` (`--helm-surface`, `--helm-fg-muted`,
 `--helm-accent-soft`, ..., and the palette as `--helm-hue-blue` to
 `--helm-hue-violet`), `--helm-radius`, `data-density` and `data-theme`
 for light and dark - and is rewritten in place when the theme changes, so a
-page never reloads for it. The classes are Helm's controls by another name:
+page never reloads for it. The classes are Floti's controls by another name:
 
 | class | is |
 |---|---|
@@ -1406,18 +1407,18 @@ page never reloads for it. The classes are Helm's controls by another name:
 They live in the CSS layer `helm`, ordered `theme, base, helm, components,
 utilities`, so a plugin's own unlayered CSS beats them and a Tailwind page's
 utilities do too. A plugin may style itself however it likes; the primitives
-are how it looks like Helm without trying, and every rule in this file -
+are how it looks like Floti without trying, and every rule in this file -
 no solid accent fills, no shadows, no weight past 500, mono for machine data -
 is already in them.
 
-**Keys.** A Helm shortcut pressed inside a plugin page is forwarded to Helm if
+**Keys.** A Floti shortcut pressed inside a plugin page is forwarded to Floti if
 the page did not handle it: Ctrl, Alt or Meta with a key, except the editing
 keys (copy, paste, select all, undo) and AltGr. Ctrl+N and Ctrl+Shift+P work
 with focus anywhere.
 
 ## 6. Foreign-ground islands
 
-Two islands host content Helm does not own: the terminal and the embedded
+Two islands host content Floti does not own: the terminal and the embedded
 document/artifact viewer. The rule: **the island's chrome is themed; the
 content's ground is its own, fixed in every theme.** A plugin page is not
 foreign ground: it is drawn in the theme's tokens and follows them live (§5c).

@@ -69,17 +69,17 @@ fn each_step_is_kept_and_the_end_says_how_it_went() {
     let dirs = TestDirs::new();
     let mut lock =
         RunLock::take(&dirs.data, ME, "Starting.", &alive(Knowable::Known(true))).unwrap();
-    lock.step("Waiting for Helm to quit; it is updated once it has.", true);
+    lock.step("Waiting for Floti to quit; it is updated once it has.", true);
     assert_eq!(
         look(&dirs.data),
         Look::Running(RunRecord {
             pid: ME,
-            line: "Waiting for Helm to quit; it is updated once it has.".into(),
+            line: "Waiting for Floti to quit; it is updated once it has.".into(),
             waiting_for_app: true
         })
     );
     let at = Timestamp::from_second(1_800_000_000).unwrap();
-    lock.end(at, Err("Helm could not be updated. Nothing was updated."));
+    lock.end(at, Err("Floti could not be updated. Nothing was updated."));
     assert_eq!(look(&dirs.data), Look::Absent);
     let ended = ended(&dirs.data).unwrap();
     assert_eq!(
@@ -88,7 +88,7 @@ fn each_step_is_kept_and_the_end_says_how_it_went() {
             pid: ME,
             at: at.to_string(),
             ok: false,
-            line: "Helm could not be updated. Nothing was updated.".into()
+            line: "Floti could not be updated. Nothing was updated.".into()
         }
     );
     assert_eq!(ended.ended_at(), Some(at));

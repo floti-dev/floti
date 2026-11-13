@@ -56,11 +56,12 @@ export function psLiteral(value) {
 }
 
 /**
- * Where electron-builder's one-click, per-user NSIS target installs, and the
- * only Helm that writes to `%APPDATA%\Helm`.
+ * Where the one-click, per-user NSIS installer puts the app
+ * (`build/installer.nsh`), and the only copy of it that writes to
+ * `%LOCALAPPDATA%\Floti\desktop`.
  */
 export function installedAppDir() {
-  return join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Helm')
+  return join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Floti', 'desktop')
 }
 
 /**
@@ -77,7 +78,7 @@ export function countInstalledProcesses(installDir) {
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      `@(Get-CimInstance Win32_Process -Filter "Name = 'Helm.exe'" | ` +
+      `@(Get-CimInstance Win32_Process -Filter "Name = 'Floti.exe'" | ` +
         `Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith(${psLiteral(installDir)}) }).Count`
     ],
     { encoding: 'utf8', timeout: 60_000 }
@@ -99,7 +100,7 @@ export function countInstalledProcesses(installDir) {
  */
 export function endInstalledApp(installDir) {
   const script =
-    `Get-CimInstance Win32_Process -Filter "Name = 'Helm.exe'" | ` +
+    `Get-CimInstance Win32_Process -Filter "Name = 'Floti.exe'" | ` +
     `Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith(${psLiteral(installDir)}) } | ` +
     `ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`
   spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
@@ -141,7 +142,7 @@ export function readUninstallRegistry() {
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        "Get-ChildItem 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall' -ErrorAction SilentlyContinue | ForEach-Object { $_.PSChildName } | Where-Object { $_ -like '*Helm*' }"
+        "Get-ChildItem 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall' -ErrorAction SilentlyContinue | ForEach-Object { $_.PSChildName } | Where-Object { $_ -like '*Floti*' }"
       ],
       { encoding: 'utf8', windowsHide: true, timeout: 30_000 }
     )

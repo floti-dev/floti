@@ -427,7 +427,7 @@ impl World {
         let (url, token) = asker
             .run
             .servers
-            .get("helm-sessions")
+            .get("floti-sessions")
             .expect("the session was given the sessions family");
         let listed = Call::open(url, token, false, "sessions_list", json!({}))
             .await

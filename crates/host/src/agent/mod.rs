@@ -572,7 +572,7 @@ pub struct Composition {
     /// Whether the session is given Floti's agents family, and so the guide to
     /// `floti agent`, composed into its instructions the same way.
     pub agent_guide: bool,
-    /// Whether the session is given the helm-sessions family, and so is asked
+    /// Whether the session is given the floti-sessions family, and so is asked
     /// to title itself (`session_title`, `floti session title`), composed
     /// into its instructions the same way.
     pub title_guide: bool,
@@ -622,7 +622,7 @@ impl Composition {
 /// bearer token for it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AgentToolServer {
-    /// Its name as the agent lists it, such as `helm-browser`.
+    /// Its name as the agent lists it, such as `floti-browser`.
     pub name: String,
     pub url: String,
     pub token: String,

@@ -1,7 +1,7 @@
 /**
  * The tables Helm's own tool families are listed from.
  *
- * Each family Helm serves itself (`helm-browser`, `helm-sessions`) is told to a
+ * Each family Helm serves itself (`floti-browser`, `floti-sessions`) is told to a
  * session from one JSON table in `crates/host/src/server/`, because the local
  * host serves the same family to the sessions it runs, and a session must be
  * told the same thing by either: the user's `mcp__helm-*` permission rules name

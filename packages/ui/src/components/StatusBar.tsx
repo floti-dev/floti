@@ -161,7 +161,7 @@ export function StatusBar({
     <footer className="flex h-[26px] shrink-0 items-center gap-3 px-3.5 text-[11px] text-fg-subtle tabular-nums">
       {version !== null && (
         <span data-status-version className="shrink-0">
-          Helm {version}
+          Floti {version}
         </span>
       )}
 
@@ -183,7 +183,7 @@ export function StatusBar({
         <button
           type="button"
           data-update-available={update.latest}
-          title={`Helm ${update.latest} was released. Opens Settings > Updates, where Update installs it.`}
+          title={`Floti ${update.latest} was released. Opens Settings > Updates, where Update installs it.`}
           onClick={() => onOpenUpdate()}
           className={cn(
             "-mx-1 shrink-0 rounded px-1 text-accent underline decoration-dotted",
@@ -319,7 +319,7 @@ export function StatusBar({
                 />
                 {host.name} ·{" "}
                 {versions.older === "helm"
-                  ? "update Helm"
+                  ? "update Floti"
                   : restart !== null
                     ? "older host · Restart host to update"
                     : "older host"}
@@ -346,7 +346,7 @@ export function StatusBar({
               onClick={host.onOpen}
               title={
                 unreachable !== null
-                  ? `Helm cannot reach ${host.name}. It said:
+                  ? `Floti cannot reach ${host.name}. It said:
 ${unreachable.lastLine}
 
 ` +
@@ -354,14 +354,14 @@ ${unreachable.lastLine}
 ${unreachable.tryLine}
 
 ` +
-                    "Nothing running there ended, and Helm keeps trying. Opens Settings."
+                    "Nothing running there ended, and Floti keeps trying. Opens Settings."
                   : (away
-                      ? `Helm lost its connection to ${host.name} and is trying again. Nothing running there ended. `
+                      ? `Floti lost its connection to ${host.name} and is trying again. Nothing running there ended. `
                       : `Sessions run in the host on ${host.name}. ` +
                         (roundTrip === null
                           ? ""
                           : `A keystroke typed into a session on ${host.name} takes ${String(roundTrip)} ms to come back. `)) +
-                    `Quitting Helm ${host.quitEnds ? "ends" : "keeps running"} the ones it started there. Opens Settings.`
+                    `Quitting Floti ${host.quitEnds ? "ends" : "keeps running"} the ones it started there. Opens Settings.`
               }
               className={cn(
                 "-mx-1 flex shrink-0 items-center gap-1.5 rounded px-1 transition-colors hover:bg-hover hover:text-fg",
