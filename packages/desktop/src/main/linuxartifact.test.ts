@@ -108,10 +108,10 @@ describe('the Linux AppImage check', () => {
   })
 
   it('names the AppImage file as the release does', () => {
-    expect(APPIMAGE_NAME.test('Helm-3.0.0-linux-x64.AppImage')).toBe(true)
-    expect(APPIMAGE_NAME.test('Helm-3.0.0-preview.1-linux-x64.AppImage')).toBe(true)
-    expect(APPIMAGE_NAME.test('Helm-3.0.0-x86_64.AppImage')).toBe(false)
-    expect(APPIMAGE_NAME.test('Helm-3.0.0-linux-arm64.AppImage')).toBe(false)
+    expect(APPIMAGE_NAME.test('Floti-3.0.0-linux-x64.AppImage')).toBe(true)
+    expect(APPIMAGE_NAME.test('Floti-3.0.0-preview.1-linux-x64.AppImage')).toBe(true)
+    expect(APPIMAGE_NAME.test('Floti-3.0.0-x86_64.AppImage')).toBe(false)
+    expect(APPIMAGE_NAME.test('Floti-3.0.0-linux-arm64.AppImage')).toBe(false)
   })
 
   it('refuses a floti or a SHA-256 list that is not the one it was given', async () => {

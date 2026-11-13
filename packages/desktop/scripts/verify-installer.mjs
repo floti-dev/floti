@@ -84,7 +84,7 @@ if (!args.includes('--yes')) {
   process.exit(2)
 }
 
-const setupExe = join(distDir, `Helm-${version}-setup.exe`)
+const setupExe = join(distDir, `Floti-${version}-setup.exe`)
 if (!existsSync(setupExe)) {
   console.error(`FAIL  no installer at ${setupExe}`)
   console.error('Build it first: pnpm dist:win')

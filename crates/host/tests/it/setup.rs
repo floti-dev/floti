@@ -1247,7 +1247,7 @@ impl DesktopWorld {
             FLOTI_VERSION,
             Path::new(env!("CARGO_BIN_EXE_floti-fake-program")),
         );
-        let list_file = format!("Helm-{FLOTI_VERSION}-SHA256SUMS");
+        let list_file = format!("Floti-{FLOTI_VERSION}-SHA256SUMS");
         let list = format!(
             "{}  {desktop_file}\n",
             floti_host::sha256::hex_digest(&desktop)

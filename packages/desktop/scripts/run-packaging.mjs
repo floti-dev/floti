@@ -268,14 +268,14 @@ if (FIRSTRUN_GROUPS.some(wants)) {
 
 if (wants('package')) {
   say('\n--- phase 3: the portable exe ---')
-  const portableExe = join(distDir, `Helm-${version}-portable.exe`)
-  const setupExe = join(distDir, `Helm-${version}-setup.exe`)
+  const portableExe = join(distDir, `Floti-${version}-portable.exe`)
+  const setupExe = join(distDir, `Floti-${version}-setup.exe`)
 
   /**
    * Build if the artefacts are missing **or older than the source**.
    *
    * Existence alone was the test, and it is not one. The artefact is named for
-   * the version - `Helm-0.2.3-setup.exe` - and the version does not move
+   * the version - `Floti-0.2.3-setup.exe` - and the version does not move
    * between commits, so once a package exists any number of commits can land
    * behind it while this phase goes on installing the old one and reporting
    * green. Measured: a run of this phase installed a package built 22 minutes

@@ -62,7 +62,7 @@ impl World {
             FLOTI_VERSION,
             Path::new(env!("CARGO_BIN_EXE_floti-fake-program")),
         );
-        let list_file = format!("Helm-{FLOTI_VERSION}-SHA256SUMS");
+        let list_file = format!("Floti-{FLOTI_VERSION}-SHA256SUMS");
         let list = format!("{}  {desktop_file}\n", hex_digest(&desktop));
 
         let world = Self {

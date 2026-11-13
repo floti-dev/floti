@@ -225,9 +225,9 @@ describe('update.json', () => {
     expect(Object.keys(stable.floti)).toEqual(RELEASE_TARGETS.map((target) => target.name))
     expect(stable.floti['windows-arm64']).toEqual({ file: 'floti-3.0.0-windows-arm64.exe', sha256: SHA['windows-arm64'] })
     expect(stable.desktop).toEqual({
-      'windows-x64': { file: 'Helm-3.0.0-setup.exe', sha256: 'a'.repeat(64) },
-      'macos-arm64': { file: 'Helm-3.0.0-arm64-mac.zip', sha256: 'b'.repeat(64) },
-      'linux-x64': { file: 'Helm-3.0.0-linux-x64.AppImage', sha256: 'c'.repeat(64) }
+      'windows-x64': { file: 'Floti-3.0.0-setup.exe', sha256: 'a'.repeat(64) },
+      'macos-arm64': { file: 'Floti-3.0.0-arm64-mac.zip', sha256: 'b'.repeat(64) },
+      'linux-x64': { file: 'Floti-3.0.0-linux-x64.AppImage', sha256: 'c'.repeat(64) }
     })
   })
 
@@ -279,7 +279,7 @@ describe('update.json', () => {
     expect(stable.version).toBe(VERSION)
     expect(stable.url).toBe(`${FOLDER}/`)
     expect(stable.floti['macos-arm64']).toEqual({ file: 'floti-3.0.0-macos-arm64', sha256: SHA['macos-arm64'] })
-    expect(stable.desktop['linux-x64']).toEqual({ file: 'Helm-3.0.0-linux-x64.AppImage', sha256: hashes['linux-x64'] })
-    expect(stable.desktop['windows-x64']).toEqual({ file: 'Helm-3.0.0-setup.exe', sha256: hashes['windows-x64'] })
+    expect(stable.desktop['linux-x64']).toEqual({ file: 'Floti-3.0.0-linux-x64.AppImage', sha256: hashes['linux-x64'] })
+    expect(stable.desktop['windows-x64']).toEqual({ file: 'Floti-3.0.0-setup.exe', sha256: hashes['windows-x64'] })
   })
 })

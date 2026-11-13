@@ -39,8 +39,8 @@ import { binaryFacts } from './floti-release.mjs'
 
 const desktopDir = resolve(import.meta.dirname, '..')
 
-/** The AppImage's name: `Helm-<version>-linux-x64.AppImage`. */
-export const APPIMAGE_NAME = /^Helm-.+-linux-x64\.AppImage$/
+/** The AppImage's name: `Floti-<version>-linux-x64.AppImage`. */
+export const APPIMAGE_NAME = /^Floti-.+-linux-x64\.AppImage$/
 
 /** Native files that must exist under `resources/app.asar.unpacked`, and which of them are x64 Linux code. */
 export const UNPACKED = [
@@ -263,7 +263,7 @@ function main(args) {
   const sums = option(args, '--sums', join(desktopDir, 'dist-host', 'floti-SHA256SUMS'))
   const problems = []
   let newest = null
-  if (!APPIMAGE_NAME.test(basename(file))) problems.push(`${basename(file)} is not named Helm-<version>-linux-x64.AppImage`)
+  if (!APPIMAGE_NAME.test(basename(file))) problems.push(`${basename(file)} is not named Floti-<version>-linux-x64.AppImage`)
   for (const [what, path] of [['the AppImage', file], ['--floti', floti], ['--sums', sums]]) {
     if (!existsSync(path)) problems.push(`${what} ${path} does not exist`)
   }

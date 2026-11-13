@@ -341,9 +341,9 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     it('leaves out what running from an AppImage put in the environment, since the host outlives the mount', () => {
       const mount = '/tmp/.mount_HelmAb12'
       const appRun = {
-        APPIMAGE: '/home/me/Apps/Helm-3.0.0-linux-x64.AppImage',
+        APPIMAGE: '/home/me/Apps/Floti-3.0.0-linux-x64.AppImage',
         APPDIR: mount,
-        ARGV0: './Helm-3.0.0-linux-x64.AppImage',
+        ARGV0: './Floti-3.0.0-linux-x64.AppImage',
         OWD: '/home/me',
         PATH: `${mount}:${mount}/usr/sbin:/home/me/.local/bin:/usr/bin`,
         LD_LIBRARY_PATH: `${mount}/usr/lib`,
@@ -484,7 +484,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
   it('names a packaged Linux build by its AppImage, not by the mount it runs from', () => {
     const WIN_EXE = 'C:\\Program Files\\Helm\\Helm.exe'
     const mounted = '/tmp/.mount_HelmAb12/helm'
-    const appImage = '/home/me/Apps/Helm-3.0.0-linux-x64.AppImage'
+    const appImage = '/home/me/Apps/Floti-3.0.0-linux-x64.AppImage'
     expect(desktopProgram(mounted, true, { platform: 'linux', env: { APPIMAGE: appImage } })).toBe(appImage)
     expect(desktopProgram(mounted, true, { platform: 'linux', env: {} })).toBe(mounted)
     expect(desktopProgram('/src/helm/node_modules/electron/dist/electron', false, { platform: 'linux', env: { APPIMAGE: appImage } })).toBe(

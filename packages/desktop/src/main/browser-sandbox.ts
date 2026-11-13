@@ -20,7 +20,7 @@ import type { BrowserAvailability } from '../shared/ipc'
  */
 
 /** The file the profile is written to, and the profile's name. */
-export const APPARMOR_PROFILE = 'helm-appimage'
+export const APPARMOR_PROFILE = 'floti-appimage'
 export const APPARMOR_PROFILE_FILE = `/etc/apparmor.d/${APPARMOR_PROFILE}`
 
 /** Where the kernel says whether AppArmor restricts unprivileged user namespaces. */
@@ -76,7 +76,7 @@ const UNSAFE_IN_PROFILE = /["*?[\]{}^\\\n\r]/
 /**
  * The one command that installs the profile for this AppImage and loads it:
  * a single `sudo`. It covers every Helm AppImage in the same folder
- * (`Helm-*.AppImage`), so the next version keeps the sandbox; a renamed file
+ * (`Floti-*.AppImage`), so the next version keeps the sandbox; a renamed file
  * is covered by its own name. Null when the path cannot be written into a
  * profile safely.
  */
@@ -85,7 +85,7 @@ export function appArmorCommand(appImage: string): string | null {
   const folder = posix.dirname(appImage)
   const name = posix.basename(appImage)
   if (UNSAFE_IN_PROFILE.test(folder) || UNSAFE_IN_PROFILE.test(name)) return null
-  const pattern = /^Helm-.+\.AppImage$/.test(name) ? posix.join(folder, 'Helm-*.AppImage') : appImage
+  const pattern = /^Floti-.+\.AppImage$/.test(name) ? posix.join(folder, 'Floti-*.AppImage') : appImage
   const lines = appArmorProfile(pattern).map(shellWord).join(' ')
   const install = `cat > ${APPARMOR_PROFILE_FILE} && apparmor_parser -r ${APPARMOR_PROFILE_FILE}`
   return `printf '%s\\n' ${lines} | sudo sh -c ${shellWord(install)}`
