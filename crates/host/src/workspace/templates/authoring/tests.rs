@@ -428,7 +428,7 @@ fn renames_a_file_to_tpl_and_the_engine_then_substitutes_it() {
 
     assert!(ok, "{problems:?}");
     assert!(!world.templates.join("sub").join("CLAUDE.md").exists());
-    let created = world.harness("made", Some("sub"));
+    let created = world.workspace("made", Some("sub"));
     assert!(created.problems.is_empty(), "{:?}", created.problems);
     assert_eq!(read(&world.root.join("made").join("CLAUDE.md")), "# made\n");
 }
@@ -884,7 +884,7 @@ fn keeps_dot_claude_verbatim_and_a_workspace_made_from_it_receives_claude() {
     assert!(world.templates.join("imported").join("dot-claude").exists());
     assert!(world.listed_ids().contains(&"imported".to_owned()));
 
-    world.harness("from-imported", Some("imported"));
+    world.workspace("from-imported", Some("imported"));
     assert_eq!(
         read(
             &world

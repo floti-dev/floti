@@ -66,7 +66,7 @@ impl World {
     }
 
     pub(super) fn workspace(&self, name: &str, template: Option<&str>) -> WorkspaceCreated {
-        self.harness_in(&self.root, name, template)
+        self.workspace_in(&self.root, name, template)
     }
 
     pub(super) fn workspace_in(

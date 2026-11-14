@@ -362,7 +362,7 @@ async fn a_client_makes_a_workspace_from_a_template_with_its_values_filled_in_an
     fs::create_dir_all(&parent).unwrap();
     let (mut watcher, roots_before) = wire.settings_watcher().await;
 
-    let outcome = wire.harness(&parent, "work", "demo").await;
+    let outcome = wire.workspace(&parent, "work", "demo").await;
 
     let workspace = parent.join("work");
     let path = workspace.display().to_string();
@@ -406,13 +406,13 @@ async fn a_client_makes_a_workspace_from_a_template_with_its_values_filled_in_an
         })
         .await;
     let found: Vec<(&str, &str)> = scanned
-        .harnesses
+        .workspaces
         .iter()
         .map(|workspace| (workspace.name.as_str(), workspace.path.as_str()))
         .collect();
     assert!(found.contains(&("work", path.as_str())), "{found:?}");
     let made = scanned
-        .harnesses
+        .workspaces
         .iter()
         .find(|workspace| workspace.name == "work")
         .unwrap();
@@ -575,7 +575,7 @@ async fn a_client_creates_describes_renames_fills_and_deletes_a_template_in_the_
     assert!(!templates.join("final").join("CLAUDE.md").exists());
     assert!(templates.join("final").join("CLAUDE.md.tpl").exists());
     let parent = wire.root.clone();
-    let made = wire.harness(&parent, "made", "final").await;
+    let made = wire.workspace(&parent, "made", "final").await;
     assert!(made.problems.is_empty(), "{:?}", made.problems);
     assert_eq!(read(&parent.join("made").join("CLAUDE.md")), "# made\n");
 

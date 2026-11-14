@@ -634,8 +634,8 @@ fn finds_a_workspace_pointed_at_directly_and_its_repos() {
 
     let result = world.scan_of(&["dev"]);
 
-    assert_eq!(result.harnesses.len(), 1);
-    let workspace = &result.harnesses[0];
+    assert_eq!(result.workspaces.len(), 1);
+    let workspace = &result.workspaces[0];
     assert_eq!(
         (
             workspace.name.as_str(),
@@ -653,7 +653,7 @@ fn finds_a_workspace_pointed_at_directly_and_its_repos() {
     assert_eq!(by_name["dev"].kind, ProjectKind::Workspace);
     assert_eq!(by_name["alpha"].kind, ProjectKind::Repo);
     assert_eq!(
-        by_name["alpha"].harness_path.as_deref(),
+        by_name["alpha"].workspace_path.as_deref(),
         Some(world.text("dev").as_str())
     );
     assert_eq!(by_name["dev"].inventory.skills, 1);
@@ -675,7 +675,7 @@ fn finds_workspaces_one_level_below_the_root() {
 
     let result = world.scan_of(&["all"]);
 
-    let mut workspaces: Vec<&str> = result.harnesses.iter().map(|h| h.name.as_str()).collect();
+    let mut workspaces: Vec<&str> = result.workspaces.iter().map(|h| h.name.as_str()).collect();
     workspaces.sort_unstable();
     assert_eq!(workspaces, ["dev", "work"]);
     assert_eq!(names(&result), sorted(&["alpha", "dev", "gamma", "work"]));
@@ -690,7 +690,7 @@ fn degrades_to_plain_folders_when_there_is_no_workspace_anywhere() {
 
     let result = world.scan_of(&["all"]);
 
-    assert!(result.harnesses.is_empty());
+    assert!(result.workspaces.is_empty());
     assert_eq!(names(&result), sorted(&["one", "two"]));
     assert!(
         result
@@ -775,8 +775,8 @@ fn handles_a_workspace_whose_manifest_is_malformed() {
     let result = world.scan_of(&["dev"]);
 
     // The file's presence is the signal; its contents are decoration.
-    assert_eq!(result.harnesses.len(), 1);
-    assert_eq!(result.harnesses[0].name, "dev");
+    assert_eq!(result.workspaces.len(), 1);
+    assert_eq!(result.workspaces[0].name, "dev");
     assert_eq!(names(&result), sorted(&["alpha", "dev"]));
 }
 
@@ -785,7 +785,7 @@ fn handles_a_workspace_with_no_repos_directory() {
     let world = Fixtures::new();
     world.file("dev/workspace.yaml", "name: \"dev\"\n");
     let result = world.scan_of(&["dev"]);
-    assert!(result.harnesses[0].repo_paths.is_empty());
+    assert!(result.workspaces[0].repo_paths.is_empty());
     assert_eq!(names(&result), ["dev"]);
 }
 
@@ -802,7 +802,7 @@ fn honours_a_repos_key_naming_a_different_directory() {
     let result = world.scan_of(&["dev"]);
 
     assert_eq!(names(&result), sorted(&["alpha", "beta", "dev"]));
-    let mut repos = result.harnesses[0].repo_paths.clone();
+    let mut repos = result.workspaces[0].repo_paths.clone();
     repos.sort();
     assert_eq!(
         repos,
@@ -843,7 +843,7 @@ fn does_not_hide_the_repos_of_a_folder_converted_in_place_with_repos_dot() {
     let after = world.scan_of(&["work"]);
     assert_eq!(
         after
-            .harnesses
+            .workspaces
             .iter()
             .map(|h| h.name.as_str())
             .collect::<Vec<_>>(),
@@ -852,7 +852,7 @@ fn does_not_hide_the_repos_of_a_folder_converted_in_place_with_repos_dot() {
     assert_eq!(names(&after), sorted(&["alpha", "beta", "work"]));
     let alpha = after.projects.iter().find(|p| p.name == "alpha").unwrap();
     assert_eq!(
-        alpha.harness_path.as_deref(),
+        alpha.workspace_path.as_deref(),
         Some(world.text("work").as_str())
     );
     assert_eq!(alpha.inventory.skills, 1);

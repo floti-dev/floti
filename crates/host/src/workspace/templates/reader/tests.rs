@@ -194,7 +194,7 @@ fn names_exactly_what_the_writer_then_writes_for_the_built_in_and_for_a_template
     for template in ["minimal", "demo"] {
         let preview = preview_template(&world.templates, template, Some(WorkspaceMode::New));
         let name = format!("from-{template}");
-        let result = world.harness(&name, Some(template));
+        let result = world.workspace(&name, Some(template));
         assert!(
             result.problems.is_empty(),
             "{template}: {:?}",

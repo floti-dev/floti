@@ -32,7 +32,7 @@ fn writes_the_tree_substitutes_only_tpl_and_records_the_provenance() {
         ],
     );
 
-    let result = world.harness("work", Some("demo"));
+    let result = world.workspace("work", Some("demo"));
     let workspace = world.root.join("work");
 
     assert!(result.problems.is_empty(), "{:?}", result.problems);
@@ -86,7 +86,7 @@ fn fills_path_with_the_workspace_folder_forward_slashed_so_a_json_tpl_stays_json
         ],
     );
 
-    let result = world.harness_in(&parent, "my work", Some("wired"));
+    let result = world.workspace_in(&parent, "my work", Some("wired"));
     let workspace = parent.join("my work");
     let expected = workspace.display().to_string().replace(MAIN_SEPARATOR, "/");
 
@@ -113,7 +113,7 @@ fn fills_path_with_the_workspace_folder_forward_slashed_so_a_json_tpl_stays_json
 fn does_not_write_the_gitkeep_it_made_the_folder_for() {
     let world = World::new();
     world.plant("demo", &[("notes/.gitkeep", "")]);
-    world.harness("work", Some("demo"));
+    world.workspace("work", Some("demo"));
 
     assert_eq!(tree(&world.root.join("work")), ["workspace.yaml", "notes"]);
 }
@@ -122,7 +122,7 @@ fn does_not_write_the_gitkeep_it_made_the_folder_for() {
 fn refuses_a_template_name_that_is_a_path_and_writes_nothing() {
     let world = World::new();
     for template in ["../escape", "..\\escape", "C:\\Windows\\System32"] {
-        let result = world.harness("work", Some(template));
+        let result = world.workspace("work", Some(template));
         assert_eq!(result.path, None, "{template}");
         assert!(!result.problems.is_empty(), "{template}");
         assert_eq!(tree(&world.root), ["templates"], "{template}");
@@ -132,7 +132,7 @@ fn refuses_a_template_name_that_is_a_path_and_writes_nothing() {
 #[test]
 fn refuses_a_template_that_is_not_there_and_leaves_no_folder_behind() {
     let world = World::new();
-    let result = world.harness("work", Some("absent"));
+    let result = world.workspace("work", Some("absent"));
     assert_eq!(result.path, None);
     assert_eq!(result.problems, ["There is no template called \"absent\"."]);
     assert_eq!(tree(&world.root), ["templates"]);
@@ -152,7 +152,7 @@ fn will_not_follow_a_link_out_of_the_template() {
     );
     link_folder(&outside, &world.templates.join("hostile").join("escape"));
 
-    let result = world.harness("work", Some("hostile"));
+    let result = world.workspace("work", Some("hostile"));
 
     assert_eq!(
         result.path.as_deref(),
@@ -179,7 +179,7 @@ fn will_not_let_a_template_supply_the_manifest() {
         ],
     );
 
-    let result = world.harness("work", Some("demo"));
+    let result = world.workspace("work", Some("demo"));
 
     assert!(
         result.problems.join(" ").contains("workspace.yaml"),
@@ -224,7 +224,7 @@ fn reports_what_it_actually_wrote_when_one_entry_fails_halfway() {
         ],
     );
 
-    let result = world.harness("work", Some("demo"));
+    let result = world.workspace("work", Some("demo"));
 
     assert_eq!(
         result.path.as_deref(),
@@ -306,7 +306,7 @@ fn project_names(roots: &[&Path]) -> (Vec<String>, Vec<String>) {
     let mut projects: Vec<String> = result.projects.into_iter().map(|p| p.name).collect();
     projects.sort();
     (
-        result.harnesses.into_iter().map(|h| h.name).collect(),
+        result.workspaces.into_iter().map(|h| h.name).collect(),
         projects,
     )
 }
