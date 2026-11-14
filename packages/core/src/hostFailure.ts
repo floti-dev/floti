@@ -145,17 +145,17 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
       return ssh || transport.kind !== 'command'
         ? failure(
             'noTransport',
-            'Helm could not find ssh on this PC',
+            'Floti could not find ssh on this PC',
             'No ssh',
-            'Install the OpenSSH client (on Windows, Settings > System > Optional features). Helm has no ssh of its own. Then try again.',
-            'Helm said'
+            'Install the OpenSSH client (on Windows, Settings > System > Optional features). Floti has no ssh of its own. Then try again.',
+            'Floti said'
           )
         : failure(
             'noTransport',
-            `Helm could not find ${transport.program} on this PC`,
+            `Floti could not find ${transport.program} on this PC`,
             'Not found',
             `Check that ${transport.program} is installed and the command names it as it is, then try again.`,
-            'Helm said'
+            'Floti said'
           )
     case 'loginOutput':
       return failure(
@@ -177,18 +177,18 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
       return failure(
         'newer',
         cause.by === 'version'
-          ? `${name} runs floti ${cause.host}, newer than this Helm ${cause.ours}`
-          : `${name}’s floti speaks protocol ${cause.host}, newer than this Helm’s ${cause.ours}`,
+          ? `${name} runs floti ${cause.host}, newer than this Floti ${cause.ours}`
+          : `${name}’s floti speaks protocol ${cause.host}, newer than this Floti’s ${cause.ours}`,
         'Newer floti',
-        'Update Helm on this PC, then try again.',
+        'Update Floti on this PC, then try again.',
         'floti said'
       )
     case 'tooOld':
       return failure(
         'tooOld',
-        `${name}’s floti is too old for this Helm`,
+        `${name}’s floti is too old for this Floti`,
         'floti too old',
-        `It speaks protocol ${cause.host}, and this Helm speaks ${cause.ours}. Update floti there, then try again.`,
+        `It speaks protocol ${cause.host}, and this Floti speaks ${cause.ours}. Update floti there, then try again.`,
         'floti said'
       )
     case 'noBuild':
@@ -196,8 +196,8 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
         'noBuild',
         `There is no floti for ${cause.system} yet`,
         'No build',
-        'None from Helm’s side: that computer can’t be a host yet.',
-        'Helm said'
+        'None from Floti’s side: that computer can’t be a host yet.',
+        'Floti said'
       )
     case 'install': {
       if (cause.step === 'install') {
@@ -234,7 +234,7 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
       'hostKeyChanged',
       `${name}’s host key changed`,
       'Host key',
-      `Run ${reach} once in a terminal and check the fingerprint it shows. Helm never accepts a host key for you.`
+      `Run ${reach} once in a terminal and check the fingerprint it shows. Floti never accepts a host key for you.`
     )
   }
   if (KEY_UNKNOWN.test(said)) {
@@ -242,7 +242,7 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
       'unknownKey',
       `ssh does not trust ${name} yet`,
       'Host key',
-      `Run ${reach} once in a terminal and check the fingerprint it shows. Helm never accepts a host key for you.`
+      `Run ${reach} once in a terminal and check the fingerprint it shows. Floti never accepts a host key for you.`
     )
   }
   if (UNRESOLVED.test(said)) {
@@ -283,12 +283,12 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
       'missing',
       `${name}’s login has no floti to run`,
       'floti not found',
-      'Try again: Helm checks it and offers to install floti there.'
+      'Try again: Floti checks it and offers to install floti there.'
     )
   }
   return failure(
     'other',
-    input.step === 'check' ? `Helm could not check ${name}` : `Helm could not connect to ${name}`,
+    input.step === 'check' ? `Floti could not check ${name}` : `Floti could not connect to ${name}`,
     'Cannot connect',
     transportFix(transport)
   )

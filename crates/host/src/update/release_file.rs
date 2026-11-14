@@ -217,8 +217,8 @@ mod tests {
             ReleaseFolder::of_version(&releases, Version::parse("3.1.0-preview.2").unwrap())
                 .unwrap();
         assert_eq!(
-            folder.file_url("Helm-3.1.0-preview.2-SHA256SUMS").as_str(),
-            "https://github.com/floti-dev/floti/releases/download/v3.1.0-preview.2/Helm-3.1.0-preview.2-SHA256SUMS"
+            folder.file_url("Floti-3.1.0-preview.2-SHA256SUMS").as_str(),
+            "https://github.com/floti-dev/floti/releases/download/v3.1.0-preview.2/Floti-3.1.0-preview.2-SHA256SUMS"
         );
     }
 

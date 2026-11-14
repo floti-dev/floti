@@ -428,7 +428,7 @@ export function PluginPage({
             {plugin.seesSessions && (
               <Verdict
                 tone="warn"
-                text="Sees the sessions Helm starts: names, folders and whether each is working. Never what is said in them."
+                text="Sees the sessions Floti starts: names, folders and whether each is working. Never what is said in them."
                 data-plugin-sees-sessions
               />
             )}
@@ -447,12 +447,12 @@ export function PluginPage({
         <SessionTools agent={plugin.agent} pluginOn={plugin.enabled} onSetTools={onSetTools} />
       )}
 
-      <Group name="plugin-log" title="Log" hint="What its programs and service printed, and what Helm noted. The last 500 lines.">
+      <Group name="plugin-log" title="Log" hint="What its programs and service printed, and what Floti noted. The last 500 lines.">
         <PluginLog log={log} />
       </Group>
 
       <Group name="plugin-remove" title="Remove">
-        <Row label="Remove this plugin" hint="Helm forgets the folder. Nothing in it is deleted.">
+        <Row label="Remove this plugin" hint="Floti forgets the folder. Nothing in it is deleted.">
           <button type="button" data-plugin-remove onClick={openRemove} className={cn(secondaryButton, 'border-danger/45 text-danger hover:bg-danger/10')}>
             <span className="flex items-center gap-1.5">
               <TrashIcon width={11} height={11} />
@@ -507,7 +507,7 @@ function SessionTools({
   const state = !pluginOn
     ? 'The plugin is turned off, so no session has them.'
     : agent.enabled
-      ? `Sessions Helm starts get them as ${agent.server}. Turning this off takes them from sessions already running.`
+      ? `Sessions Floti starts get them as ${agent.server}. Turning this off takes them from sessions already running.`
       : 'No session gets them.'
   const hint = agent.tools.some((tool) => tool.readOnly)
     ? "Claude Code sessions can call these. Its background page answers, and the answer goes into the session's conversation. Read-only ones run without asking; the others ask first."
@@ -849,7 +849,7 @@ function RemovePluginDialog({
       <DialogHeader icon={<TrashIcon width={13} height={13} />} title={`Remove ${name}?`} onClose={onCancel} />
       <div className="px-[22px] pt-2 pb-1">
         <p className="text-[12px] leading-[1.55] text-fg-muted">
-          Helm forgets the folder and closes the plugin&rsquo;s tabs. Nothing in the folder is deleted, and adding it
+          Floti forgets the folder and closes the plugin&rsquo;s tabs. Nothing in the folder is deleted, and adding it
           again brings it back.
         </p>
         {ownSecrets.length > 0 && (

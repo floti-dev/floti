@@ -61,14 +61,14 @@ function world(overrides: Partial<PageLinksDeps> = {}) {
   return { links, bridges }
 }
 
-describe('each Helm page’s own connection to the local host', () => {
-  it('refuses a page that is not one of Helm’s own, and starts no bridge for it', async () => {
+describe('each Floti page’s own connection to the local host', () => {
+  it('refuses a page that is not one of Floti’s own, and starts no bridge for it', async () => {
     const w = world()
     await expect(w.links.open(new FakePage(77))).rejects.toThrow(FOREIGN_PAGE)
     expect(w.bridges).toEqual([])
   })
 
-  it('drops bytes a foreign page sends on a Helm page’s connection', async () => {
+  it('drops bytes a foreign page sends on a Floti page’s connection', async () => {
     const w = world()
     const opened = await w.links.open(new FakePage(WINDOW))
     if (!('connection' in opened)) throw new Error('not opened')
@@ -145,7 +145,7 @@ describe('each Helm page’s own connection to the local host', () => {
     expect(w.bridges[0]?.written).toEqual([])
   })
 
-  it('tells the page a bridge that ended with a host Helm stopped on purpose was no crash, and whether Helm starts another', async () => {
+  it('tells the page a bridge that ended with a host Floti stopped on purpose was no crash, and whether Floti starts another', async () => {
     let how = { planned: true, restarts: false }
     const w = world({ howEnded: () => how })
     const page = new FakePage(WINDOW)
@@ -176,7 +176,7 @@ describe('each Helm page’s own connection to the local host', () => {
     await w.links.open(new FakePage(BACKGROUND))
     await w.links.stop()
     expect(w.bridges.map((b) => b.endedByHelm)).toEqual([true, true])
-    expect(await w.links.open(new FakePage(WINDOW))).toEqual({ unreachable: 'Helm is quitting.' })
+    expect(await w.links.open(new FakePage(WINDOW))).toEqual({ unreachable: 'Floti is quitting.' })
     expect(w.bridges).toHaveLength(2)
   })
 })

@@ -56,7 +56,7 @@ impl KillableHost {
     /// `floti host --desktop`: a host a desktop started, here one that is
     /// never run, which exits by itself once idle.
     fn start_desktop(dirs: &TestDirs, agent: &FakeAgent) -> Self {
-        let app = dirs.folder("Helm app");
+        let app = dirs.folder("Floti app");
         Self::start_with(dirs, agent, |command| {
             command
                 .arg("--desktop")
@@ -849,8 +849,8 @@ async fn after_a_restart_a_host_that_does_not_speak_the_keepers_link_version_end
 /// Helm's client folder, with a device key of its own and the host on
 /// `dirs`' data folder pinned, as Helm's is once it has connected.
 async fn helm_client(dirs: &TestDirs) -> PathBuf {
-    let folder = dirs.root().join("Helm data").join("host-client");
-    let mut keys = ClientKeys::open(&folder).expect("set up Helm's client keys");
+    let folder = dirs.root().join("Floti data").join("host-client");
+    let mut keys = ClientKeys::open(&folder).expect("set up Floti's client keys");
     let mut host = None;
     until("the host made its key", || {
         host = host_public_key(&dirs.data).ok().flatten();

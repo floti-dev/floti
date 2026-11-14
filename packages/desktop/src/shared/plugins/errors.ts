@@ -1,4 +1,4 @@
-import type { HelmErrorCode } from '@coledtaylor/helm-plugin-sdk'
+import type { HelmErrorCode } from '@floti-dev/plugin-sdk'
 
 /**
  * A bridge call that failed for a reason the plugin should be told.
@@ -25,6 +25,6 @@ export type CallOutcome = { ok: true; value: unknown } | { ok: false; code: Helm
 export function failure(error: unknown): CallOutcome {
   if (error instanceof PluginCallError) return { ok: false, code: error.code, message: error.message }
   if (error instanceof Error && error.name === 'AbortError') return { ok: false, code: 'aborted', message: 'the call was cancelled' }
-  console.error('[plugins] a bridge call failed inside Helm:', error)
-  return { ok: false, code: 'unavailable', message: `Helm could not complete the call: ${error instanceof Error ? error.message : String(error)}` }
+  console.error('[plugins] a bridge call failed inside Floti:', error)
+  return { ok: false, code: 'unavailable', message: `Floti could not complete the call: ${error instanceof Error ? error.message : String(error)}` }
 }

@@ -168,7 +168,7 @@ export function ProjectPane({
 
         {/* The template this workspace was built from, and nothing more is made
             of it: it is a record of where the directory came from, not a
-            relationship Helm maintains. Nothing re-applies a template and
+            relationship Floti maintains. Nothing re-applies a template and
             nothing compares against one - the workspace belongs to whoever works
             in it from the moment it exists. */}
         {workspace?.template && (
@@ -508,11 +508,11 @@ function AlreadyRunning({ sessions }: { sessions: readonly LiveSession[] }): JSX
             {' '}
             {outside === sessions.length
               ? outside === 1
-                ? 'It was not started by Helm, so it has no tab here.'
-                : 'None of them was started by Helm, so they have no tabs here.'
+                ? 'It was not started by Floti, so it has no tab here.'
+                : 'None of them was started by Floti, so they have no tabs here.'
               : outside === 1
-                ? 'One of them was not started by Helm, so it has no tab here.'
-                : `${String(outside)} of them were not started by Helm, so they have no tabs here.`}
+                ? 'One of them was not started by Floti, so it has no tab here.'
+                : `${String(outside)} of them were not started by Floti, so they have no tabs here.`}
           </>
         )}{' '}
         <span className="text-fg-muted">
@@ -587,7 +587,7 @@ function ScannedFolder({
           type="button"
           data-project-remove-root={project.path}
           onClick={() => onRemove(project)}
-          aria-label={`Remove ${project.name} from Helm`}
+          aria-label={`Remove ${project.name} from Floti`}
           className={cn(
             // A secondary button that finds the danger tone under the pointer,
             // rather than a Danger button (DESIGN.md 4) resting in it. The tone
@@ -600,14 +600,14 @@ function ScannedFolder({
           )}
         >
           <CloseIcon width={12} height={12} />
-          Remove from Helm
+          Remove from Floti
         </button>
         {/* `basis-80` rather than `flex-1`, so the sentence takes its own line
             the moment the row cannot hold both. Left to flex-1 it kept its
             place beside the button and turned into a six-line column 180px
             wide - which is what a docked pane at 370px does to it. */}
         <p className="min-w-0 grow basis-80 text-[11px] leading-[1.55] text-fg-subtle">
-          Helm scans this folder. Removing it takes this folder - and anything Helm found inside
+          Floti scans this folder. Removing it takes this folder - and anything Floti found inside
           it - out of the launcher. <span className="text-fg-muted">Nothing on disk is deleted</span>
           , and adding it again brings it all back.
         </p>

@@ -136,7 +136,7 @@ describe('installing floti on a host’s computer, from the desktop', () => {
     expect(w.lines()).toEqual(['floti version', SYSTEM_LINE, standaloneProbeLine('linux')])
   })
 
-  it('S10: copies this Helm’s own floti over the same login, with its SHA-256 for the script to check there, then runs setup there', async () => {
+  it('S10: copies this Floti’s own floti over the same login, with its SHA-256 for the script to check there, then runs setup there', async () => {
     const w = world([SET_UP, NO_FLOTI, [SYSTEM_LINE, { stdout: 'Linux x86_64\n' }], INSTALLED])
     await w.installer.check({ transport: SSH })
     const outcome = await w.installer.install('offer-1')
@@ -214,7 +214,7 @@ describe('installing floti on a host’s computer, from the desktop', () => {
     expect(kept.lines()).not.toContain(probe)
   })
 
-  it('a floti this Helm can talk to is ready: nothing is offered', async () => {
+  it('a floti this Floti can talk to is ready: nothing is offered', async () => {
     const w = world([['floti version', { stdout: 'floti 2.5.0 protocol 1.2 linux x64\n' }]])
     expect(await w.installer.check({ transport: SSH })).toEqual({
       kind: 'ready',
@@ -257,7 +257,7 @@ describe('installing floti on a host’s computer, from the desktop', () => {
     })
   })
 
-  it('S19: a newer floti says to update this Helm and offers nothing', async () => {
+  it('S19: a newer floti says to update this Floti and offers nothing', async () => {
     const w = world([['floti version', { stdout: 'floti 3.0.0 protocol 2.0 linux x64\n' }]])
     expect(await w.installer.check({ transport: SSH })).toEqual({
       kind: 'newer',
@@ -387,10 +387,10 @@ describe('installing floti on a host’s computer, from the desktop', () => {
   })
 
   it('S10: a transport whose program is not on this PC fails the check as missing, and runs nothing more', async () => {
-    const w = world([['floti version', { code: null, error: 'Helm could not run ssh on this PC (ENOENT).', notFound: true }]])
+    const w = world([['floti version', { code: null, error: 'Floti could not run ssh on this PC (ENOENT).', notFound: true }]])
     expect(await w.installer.check({ transport: SSH })).toEqual({
       kind: 'failed',
-      lastLine: 'Helm could not run ssh on this PC (ENOENT).',
+      lastLine: 'Floti could not run ssh on this PC (ENOENT).',
       cause: 'transportMissing'
     })
     expect(w.lines()).toEqual(['floti version'])
@@ -686,7 +686,7 @@ describe('updating an added host’s floti from the desktop', () => {
 
   const OLDER = ['floti version', { stdout: 'floti 2.5.0 protocol 3.1 linux x64\n' }] as [string, Answer]
 
-  it('offers a floti older than this Helm’s, which it can talk to, floti update over its login, for floti alone, saying it cannot tell the sessions', async () => {
+  it('offers a floti older than this Floti’s, which it can talk to, floti update over its login, for floti alone, saying it cannot tell the sessions', async () => {
     const w = world([OLDER], { protocol: PROTOCOL_3_1, restartState: restart(3, 1) })
     const check = await w.installer.checkUpdate(HOST, null)
     expect(check).toEqual({
@@ -715,7 +715,7 @@ describe('updating an added host’s floti from the desktop', () => {
     expect(await w.installer.check({ transport: SSH })).toMatchObject({ kind: 'ready' })
   })
 
-  it('a floti as new as this Helm’s is ready, and nothing is offered', async () => {
+  it('a floti as new as this Floti’s is ready, and nothing is offered', async () => {
     const w = world([['floti version', { stdout: 'floti 2.6.0 protocol 3.1 linux x64\n' }]], { protocol: PROTOCOL_3_1 })
     expect(await w.installer.checkUpdate(HOST, null)).toMatchObject({ kind: 'ready' })
   })
@@ -825,7 +825,7 @@ describe('updating an added host’s floti from the desktop', () => {
     })
   })
 
-  it('a floti older than this Helm’s without floti update is updated by an install, saying the sessions it ends', async () => {
+  it('a floti older than this Floti’s without floti update is updated by an install, saying the sessions it ends', async () => {
     const w = world(
       [
         ['floti version', { stdout: 'floti 2.5.0 protocol 3.0 linux x64\n' }],
@@ -839,7 +839,7 @@ describe('updating an added host’s floti from the desktop', () => {
     expect(w.lines()).toEqual(['floti version', 'floti update-stop --ask'])
   })
 
-  it('a connected host whose channel has this Helm’s version is asked over its connection, naming that version and the sessions its keeper hands over', async () => {
+  it('a connected host whose channel has this Floti’s version is asked over its connection, naming that version and the sessions its keeper hands over', async () => {
     const host = new UpdatingHost(IDLE)
     const w = world([OLDER], { protocol: PROTOCOL_3_1, restartState: restart(4, 1) })
     expect(await w.installer.checkUpdate(HOST, host.asConnection())).toMatchObject({
@@ -856,7 +856,7 @@ describe('updating an added host’s floti from the desktop', () => {
     })
   })
 
-  it('S13: an update to any other version than this Helm’s says it cannot tell the sessions, and asks nothing', async () => {
+  it('S13: an update to any other version than this Floti’s says it cannot tell the sessions, and asks nothing', async () => {
     let asked = 0
     const w = world([OLDER], {
       protocol: PROTOCOL_3_1,

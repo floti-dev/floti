@@ -147,7 +147,7 @@ describe('cleanStaleShims', () => {
     expect(filesUnder(join(project, '.claude'))).toEqual(before)
   })
 
-  it('leaves directories that are not Helm shims alone', () => {
+  it('leaves directories that are not Floti shims alone', () => {
     mkdirSync(join(shimRoot, 'overlay-not-ours'), { recursive: true })
     writeFileSync(join(shimRoot, 'overlay-not-ours', 'keep.txt'), 'x')
     mkdirSync(join(shimRoot, 'unrelated'), { recursive: true })

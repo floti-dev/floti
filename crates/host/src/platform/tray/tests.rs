@@ -26,19 +26,19 @@ fn tooltip_of(now: Occupancy) -> Option<String> {
 fn a_host_a_desktop_started_shows_its_session_count_while_no_client_is_attached() {
     assert_eq!(
         tooltip_of(occupied(1, 0, 0)).as_deref(),
-        Some("Helm: 1 session running on this PC's host")
+        Some("Floti: 1 session running on this PC's host")
     );
     assert_eq!(
         tooltip_of(occupied(3, 0, 0)).as_deref(),
-        Some("Helm: 3 sessions running on this PC's host")
+        Some("Floti: 3 sessions running on this PC's host")
     );
     assert_eq!(
         tooltip_of(occupied(2, 1, 0)).as_deref(),
-        Some("Helm: 2 sessions and 1 terminal running on this PC's host")
+        Some("Floti: 2 sessions and 1 terminal running on this PC's host")
     );
     assert_eq!(
         tooltip_of(occupied(0, 2, 0)).as_deref(),
-        Some("Helm: 2 terminals running on this PC's host")
+        Some("Floti: 2 terminals running on this PC's host")
     );
     for icon in [occupied(1, 0, 0), occupied(9, 9, 0)].map(|now| shown(true, now)) {
         assert!(icon.unwrap().tooltip.encode_utf16().count() <= TOOLTIP_MAX);
@@ -212,14 +212,14 @@ async fn the_icon_follows_the_session_count_and_goes_when_a_client_attaches() {
     let mut tray = drive(occupied(2, 0, 0), &[]);
     assert_eq!(
         tray.next().await,
-        Call::Show("Helm: 2 sessions running on this PC's host".to_owned())
+        Call::Show("Floti: 2 sessions running on this PC's host".to_owned())
     );
 
     // The count is kept current.
     tray.occupancy.send_replace(occupied(1, 0, 0));
     assert_eq!(
         tray.next().await,
-        Call::Show("Helm: 1 session running on this PC's host".to_owned())
+        Call::Show("Floti: 1 session running on this PC's host".to_owned())
     );
 
     // Helm attaches again: the icon goes.
@@ -232,7 +232,7 @@ async fn the_icon_follows_the_session_count_and_goes_when_a_client_attaches() {
     tray.occupancy.send_replace(occupied(3, 0, 0));
     assert_eq!(
         tray.next().await,
-        Call::Show("Helm: 3 sessions running on this PC's host".to_owned())
+        Call::Show("Floti: 3 sessions running on this PC's host".to_owned())
     );
 }
 
@@ -242,7 +242,7 @@ async fn a_host_with_a_client_attached_from_the_start_shows_nothing_until_it_lea
     tray.occupancy.send_replace(occupied(1, 0, 0));
     assert_eq!(
         tray.next().await,
-        Call::Show("Helm: 1 session running on this PC's host".to_owned())
+        Call::Show("Floti: 1 session running on this PC's host".to_owned())
     );
     assert_eq!(tray.calls().len(), 1, "{:?}", tray.calls());
 }
@@ -276,7 +276,7 @@ async fn stop_host_asks_with_the_count_and_stops_only_on_agreement() {
     tray.occupancy.send_replace(occupied(1, 0, 0));
     assert_eq!(
         tray.next().await,
-        Call::Show("Helm: 1 session running on this PC's host".to_owned())
+        Call::Show("Floti: 1 session running on this PC's host".to_owned())
     );
     tray.picks.send(TrayItem::StopHost).unwrap();
     assert_eq!(

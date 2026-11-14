@@ -93,7 +93,7 @@ export function describeAgents(backends: Readonly<Record<string, AgentStatus | u
     const version = number === null ? null : known === undefined ? number : `${known.command} ${number}`
     if (status.signedIn.state === 'unknown') {
       const why = status.error ?? status.signInSignal
-      rows.push({ id, name, version, installed: true, signIn: 'unknown', fix: `Helm can’t tell whether it is signed in there: ${why}` })
+      rows.push({ id, name, version, installed: true, signIn: 'unknown', fix: `Floti can’t tell whether it is signed in there: ${why}` })
     } else if (!status.signedIn.value) {
       const login = known?.login
       rows.push({
@@ -105,7 +105,7 @@ export function describeAgents(backends: Readonly<Record<string, AgentStatus | u
         fix:
           login === undefined
             ? `${name} is not signed in there.`
-            : `Sign in by running ${login} there once, in a terminal. Helm never handles its sign-in.`
+            : `Sign in by running ${login} there once, in a terminal. Floti never handles its sign-in.`
       })
     } else {
       rows.push({ id, name, version, installed: true, signIn: 'signedIn', fix: null })

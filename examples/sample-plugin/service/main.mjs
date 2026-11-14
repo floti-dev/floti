@@ -17,7 +17,7 @@ const started = Date.now()
 const server = createServer((req, res) => {
   if (req.headers['helm-service-token'] !== token) {
     res.writeHead(401, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ error: 'not Helm' }))
+    res.end(JSON.stringify({ error: 'not Floti' }))
     return
   }
   if (req.url === '/hello') {

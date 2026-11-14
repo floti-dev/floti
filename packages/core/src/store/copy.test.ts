@@ -202,7 +202,7 @@ describe('reading conversations to copy', () => {
     expect(Buffer.byteLength(cut, 'utf8')).toBeLessThanOrEqual(maxTextBytes)
     expect(cut).not.toContain('�')
     expect(cut.startsWith('é'.repeat(100))).toBe(true)
-    expect(cut).toMatch(/\[Cut short when Helm copied it into the local host: the message held 0\.0 MiB, more than one batch carries\.\]$/)
+    expect(cut).toMatch(/\[Cut short when Floti copied it into the local host: the message held 0\.0 MiB, more than one batch carries\.\]$/)
     expect(pages.reduce((n, page) => n + page.cut, 0)).toBe(1)
     // What Helm keeps is untouched.
     expect(readArchivedConversation(store, 'long')?.messages[1]?.text).toBe(long)

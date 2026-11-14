@@ -44,7 +44,7 @@ export interface ProfileDialogs {
 export type EmitToWindow = <K extends EventChannel>(channel: K, payload: EventPayload<K>) => void
 
 const PROFILE_FILE_FILTERS = [
-  { name: 'Helm profile', extensions: ['yaml', 'yml'] },
+  { name: 'Floti profile', extensions: ['yaml', 'yml'] },
   { name: 'All files', extensions: ['*'] }
 ]
 

@@ -137,7 +137,7 @@ afterEach(() => {
   store.close()
 })
 
-describe('copying Helm’s own data into the local host', () => {
+describe('copying Floti’s own data into the local host', () => {
   it('sends names, usage and the conversations the host lacks in batches, and no config version, then finishes, logging only counts', async () => {
     const { connection } = host()
     const link = fakeLink(connection)
@@ -170,7 +170,7 @@ describe('copying Helm’s own data into the local host', () => {
     expect(states.map((state) => state.state)).toEqual(['copying', 'finished'])
     expect(copy.state()).toEqual({ state: 'finished' })
     expect(logged.at(-1)).toBe(
-      "host: copied Helm's own data into the local host: 3 conversations (10 messages), 5 usage rows and 2 session names"
+      "host: copied Floti's own data into the local host: 3 conversations (10 messages), 5 usage rows and 2 session names"
     )
     expect(logged.join('\n')).not.toContain(PRIVATE)
   })
@@ -215,7 +215,7 @@ describe('copying Helm’s own data into the local host', () => {
       reason: 'the connection to the local host ended'
     })
     expect(logged.at(-1)).toBe(
-      "host: copying Helm's own data into the local host did not finish after 1 conversations (3 messages), 5 usage rows " +
+      "host: copying Floti's own data into the local host did not finish after 1 conversations (3 messages), 5 usage rows " +
         'and 2 session names (the connection to the local host ended)'
     )
     expect(logged.join('\n')).not.toContain(PRIVATE)
@@ -294,14 +294,14 @@ describe('copying Helm’s own data into the local host', () => {
     const cut =
       parts.filter((part) => part.conversation.sessionId === 'dddd').flatMap((part) => part.messages)[0]?.text ?? ''
     expect(Buffer.byteLength(cut, 'utf8')).toBeLessThanOrEqual(MAX_COPIED_TEXT_BYTES)
-    expect(cut).toMatch(/\[Cut short when Helm copied it into the local host: .*\]$/)
+    expect(cut).toMatch(/\[Cut short when Floti copied it into the local host: .*\]$/)
     expect(logged.at(-1)).toBe(
-      "host: copied Helm's own data into the local host: 4 conversations (11 messages), 5 usage rows and 2 session names" +
+      "host: copied Floti's own data into the local host: 4 conversations (11 messages), 5 usage rows and 2 session names" +
         '; 1 messages too long for one batch were sent cut short'
     )
   })
 
-  it('leaves Helm’s database exactly as it was, whether the copy finished or stopped', async () => {
+  it('leaves Floti’s database exactly as it was, whether the copy finished or stopped', async () => {
     const before = image()
 
     const stopped = host({ failConversations: { at: 1, error: () => new HostConnectionEnded('closed') } })

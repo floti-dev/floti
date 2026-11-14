@@ -104,13 +104,13 @@ export function browserReachAllows(
   try {
     parsed = new URL(url)
   } catch {
-    return { allowed: false, problem: `${url} is not an address Helm can open.` }
+    return { allowed: false, problem: `${url} is not an address Floti can open.` }
   }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return {
       allowed: false,
-      problem: `Helm's browser opens http and https pages only, and this is ${parsed.protocol.replace(
+      problem: `Floti's browser opens http and https pages only, and this is ${parsed.protocol.replace(
         ':',
         ''
       )}. Nothing was fetched.`
@@ -216,10 +216,10 @@ export function resolveBrowserAddress(
       if (phrase) return notAddress()
       return {
         url: null,
-        problem: `Helm's browser opens http and https pages only, and this is ${parsed.protocol.replace(':', '')}.`
+        problem: `Floti's browser opens http and https pages only, and this is ${parsed.protocol.replace(':', '')}.`
       }
     } catch {
-      return phrase ? notAddress() : { url: null, problem: `${typed} is not an address Helm can open.` }
+      return phrase ? notAddress() : { url: null, problem: `${typed} is not an address Floti can open.` }
     }
   }
   if (phrase) return notAddress()

@@ -78,9 +78,9 @@ export function SetupPane({
   return (
     <div className="h-full overflow-y-auto bg-bg" data-setup-pane>
       <div className="mx-auto w-full max-w-2xl px-8 py-12">
-        <h1 className="text-[20px] font-medium tracking-tight text-fg">Set up Helm</h1>
+        <h1 className="text-[20px] font-medium tracking-tight text-fg">Set up Floti</h1>
         <p className="mt-1.5 text-[13px] text-fg-muted">
-          Helm hosts the real <code className="font-mono text-[12px]">claude</code> CLI and points it
+          Floti hosts the real <code className="font-mono text-[12px]">claude</code> CLI and points it
           at your own folders. Two things to check and one to choose.
         </p>
 
@@ -102,7 +102,7 @@ export function SetupPane({
               ? `${String(roots.length)} folder${roots.length === 1 ? '' : 's'} · ${
                   scanning ? 'scanning…' : `${String(projectCount)} projects`
                 }`
-              : 'Helm scans nothing until you say what to scan.'
+              : 'Floti scans nothing until you say what to scan.'
           }
         >
           {roots.length > 0 && (
@@ -242,7 +242,7 @@ function ClaudeStep({
           data-setup-version-warning
           className="mb-3 rounded-raised border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-warn"
         >
-          Helm was tested against {status.testedRange.min} up to (not including){' '}
+          Floti was tested against {status.testedRange.min} up to (not including){' '}
           {status.testedRange.max}. {status.semver ?? status.version} is outside that, so a flag may
           have moved. Nothing is blocked - if a launch misbehaves, this is the first thing to
           suspect.
@@ -252,7 +252,7 @@ function ClaudeStep({
         <p className="mb-3 text-[12px] text-fg-muted">
           Install it from{' '}
           <span className="font-mono text-[11px]">https://claude.com/claude-code</span>, then check
-          again. If it is installed somewhere unusual, point Helm at it.
+          again. If it is installed somewhere unusual, point Floti at it.
         </p>
       )}
       <div className="flex flex-wrap gap-2">
@@ -288,11 +288,11 @@ function AuthStep({ status }: { status: SetupClaudeStatus | null }): JSX.Element
       {auth !== 'authenticated' && (
         <div data-setup-auth-guidance>
           <p className="text-[12px] text-fg-muted">
-            Helm never handles your credentials - it has no login screen and stores no token. Open a
+            Floti never handles your credentials - it has no login screen and stores no token. Open a
             terminal and run <code className="font-mono text-[11px] text-fg">claude</code> once; it
             will walk you through signing in, and the session it writes to{' '}
             <code className="font-mono text-[11px]">{status?.configDir ?? '~/.claude'}</code> is the
-            one Helm&rsquo;s sessions use.
+            one Floti&rsquo;s sessions use.
           </p>
           <pre className="mt-2 overflow-x-auto rounded-well border border-border bg-surface-sunken px-3 py-2 font-mono text-[12px] text-fg select-text">
             claude

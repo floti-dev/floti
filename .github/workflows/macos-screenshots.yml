@@ -1,11 +1,11 @@
 name: macOS build and screenshots
 
-# For a person to look at Helm on a Mac nobody has in front of them. It is not
+# For a person to look at Floti on a Mac nobody has in front of them. It is not
 # a check in the gate, and nothing waits on it.
 #
 # It builds the real macOS artefacts with `pnpm dist:mac` on a macOS runner and
 # checks them as the release does (verify-mac-artifact.mjs: an arm64 dmg and
-# zip, ad-hoc signed, with Helm's icon and their native modules). Then it
+# zip, ad-hoc signed, with Floti's icon and their native modules). Then it
 # launches the built app through the E2E tests' Playwright launch into a world
 # with the fake claude (packages/desktop/test/world.ts), and photographs every
 # destination on the rail and a session terminal, in the light and the dark
@@ -94,11 +94,11 @@ jobs:
       - name: Build artefacts
         run: pnpm dist:mac
 
-      - name: Verify the artefacts are arm64, ad-hoc signed, with Helm's icon and their native modules
+      - name: Verify the artefacts are arm64, ad-hoc signed, with Floti's icon and their native modules
         run: |
           node packages/desktop/scripts/verify-mac-artifact.mjs \
-            "packages/desktop/dist-app/Helm-$VERSION-arm64.dmg" \
-            "packages/desktop/dist-app/Helm-$VERSION-arm64-mac.zip"
+            "packages/desktop/dist-app/Floti-$VERSION-arm64.dmg" \
+            "packages/desktop/dist-app/Floti-$VERSION-arm64-mac.zip"
 
       # The app built in packages/desktop/out runs every session in the local
       # host, and outside a package it starts the debug `floti` in
@@ -107,7 +107,7 @@ jobs:
       - name: Build the local host the capture starts
         run: cargo build -p floti-host --bin floti --features testkit
 
-      - name: Launch Helm with the fake claude and capture each view
+      - name: Launch Floti with the fake claude and capture each view
         id: capture
         run: pnpm --filter @helm/desktop exec node scripts/playwright.mjs test -c scripts/screenshots
 

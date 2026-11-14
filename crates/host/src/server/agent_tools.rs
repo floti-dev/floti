@@ -14,11 +14,11 @@
 //! outlived the one before it serves them again at the same address and with
 //! the same token ([`HostAgentTools::take_back`]).
 //!
-//! Today that is helm-browser ([`BrowserTools`]), on the `browserMcp`
+//! Today that is floti-browser ([`BrowserTools`]), on the `browserMcp`
 //! setting and given to a launch only while a client with a browser pane is
-//! attached; helm-sessions ([`SessionTools`]), on the `sessionMcp` setting;
+//! attached; floti-sessions ([`SessionTools`]), on the `sessionMcp` setting;
 //! floti-agents ([`FlotiAgents`]), on the `sessionAgents` setting, given to
-//! every launch whoever is attached unless its profile turns it off; and `helm-plugin-<id>` for each plugin with its tools on: for a version 2
+//! every launch whoever is attached unless its profile turns it off; and `floti-plugin-<id>` for each plugin with its tools on: for a version 2
 //! plugin, whose background module runs in the host's engine, served by the
 //! host itself from its manifest with no client attached
 //! ([`HostPluginFamilies`]), given to every launch while the plugin is on;
@@ -106,7 +106,7 @@ impl HostAgentTools {
         }
     }
 
-    /// What helm-sessions answers from.
+    /// What floti-sessions answers from.
     pub fn answer_from(&self, world: Arc<dyn SessionsWorld>) {
         self.sessions.answer_from(world);
     }
@@ -136,7 +136,7 @@ impl HostAgentTools {
     }
 
     /// A token for a launch about to be composed, with an entry for each
-    /// family on that can be given now (helm-browser only while a browser
+    /// family on that can be given now (floti-browser only while a browser
     /// client is attached) except those in `excluded`, each allowing the tools
     /// a launch of `scope` is given; `None`, with nothing bound and no token
     /// minted, when there is none or the host is stopping.
@@ -192,7 +192,7 @@ impl HostAgentTools {
             match self.listener.take_back(port, &group) {
                 Ok(grants) => held.by_session.extend(grants),
                 Err(err) => log_line!(
-                    "floti host: {} session(s) that outlived the last host run on without Helm's agent tools: {err}",
+                    "floti host: {} session(s) that outlived the last host run on without Floti's agent tools: {err}",
                     group.len()
                 ),
             }

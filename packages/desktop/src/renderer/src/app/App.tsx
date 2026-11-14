@@ -263,7 +263,7 @@ import {
 } from "./attentionView";
 import { useHostNotices } from "./useNotices";
 import type { NoticesView } from "./host/notices";
-import type { PanelActionIcon } from "@coledtaylor/helm-plugin-sdk";
+import type { PanelActionIcon } from "@floti-dev/plugin-sdk";
 import type {
   AppMode,
   PluginInfo,
@@ -3509,9 +3509,9 @@ export function App(): JSX.Element {
           id: `pid:${String(live.pid)}`,
           label: live.name ?? "claude",
           state: live.activity,
-          note: "outside Helm",
+          note: "outside Floti",
           hint:
-            `Started outside Helm, in ${live.cwd ?? project.path}` +
+            `Started outside Floti, in ${live.cwd ?? project.path}` +
             (statusHint(live) === null ? "" : `\n${statusHint(live)}`),
           outside: true,
           shown: null,
@@ -3976,8 +3976,8 @@ export function App(): JSX.Element {
     ).length;
     const count = `${String(all.length)} on this machine`;
     return outside === 0
-      ? `${count} · all in Helm`
-      : `${count} · ${String(outside)} outside Helm`;
+      ? `${count} · all in Floti`
+      : `${count} · ${String(outside)} outside Floti`;
   })();
 
   /*
@@ -4177,7 +4177,7 @@ export function App(): JSX.Element {
           {
             id: paneId(ref),
             title: "Settings",
-            hint: "Helm's own settings",
+            hint: "Floti's own settings",
             icon: <GearIcon width={13} height={13} />,
           },
         ];
@@ -4609,7 +4609,7 @@ export function App(): JSX.Element {
             ? "No session is running in this PC’s host."
             : `Stopping this PC’s host ends ${String(stopHostAsk)} session${stopHostAsk === 1 ? "" : "s"}.`
         }
-        detail="Every session running in it ends, whichever device started it, and none is offered back. Helm starts the host again when it next needs it."
+        detail="Every session running in it ends, whichever device started it, and none is offered back. Floti starts the host again when it next needs it."
         confirmLabel="Stop host"
         sessionNames={[]}
         onConfirm={stopHost}

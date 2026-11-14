@@ -147,7 +147,7 @@ function Bucket({
         {bucketLabel(bucket)}{' '}
         <span className={cn('font-medium', SEVERITY_TEXT[bucket.severity])}>
           {/* The `≥` is not decoration and does not drop at narrow widths. It
-              is the difference between what Helm knows and what it would be
+              is the difference between what Floti knows and what it would be
               claiming without it, and a floor printed as an exact figure is
               the stale number this whole file exists to refuse. */}
           {atLeast && <span title="at least">&ge;</span>}
@@ -350,7 +350,7 @@ function tooltip(
       lines.push(COST_MODE_UNAVAILABLE)
     } else {
       lines.push(
-        'Estimated, not billed. This plan is not charged per token, so these are Helm’s own',
+        'Estimated, not billed. This plan is not charged per token, so these are Floti’s own',
         `sums over your transcripts at ${spend.pricedAt} list prices.`,
         ''
       )
@@ -386,9 +386,9 @@ function tooltip(
       // the entire claim the `≥` on the segment is making.
       lines.push(
         '',
-        'Older than Helm stands behind exactly, so these are lower bounds: a',
+        'Older than Floti stands behind exactly, so these are lower bounds: a',
         'window only accumulates until it resets, so the real figures are these',
-        'or higher. Helm only reads Claude Code’s cache and never asks for usage',
+        'or higher. Floti only reads Claude Code’s cache and never asks for usage',
         'itself, so they sharpen when Claude Code next writes a newer reading.'
       )
     }

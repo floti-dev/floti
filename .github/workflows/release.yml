@@ -283,15 +283,15 @@ jobs:
         shell: bash
         run: |
           node packages/desktop/scripts/verify-artifact.mjs \
-            "packages/desktop/dist-app/Helm-$VERSION-portable.exe" \
-            "packages/desktop/dist-app/Helm-$VERSION-setup.exe"
+            "packages/desktop/dist-app/Floti-$VERSION-portable.exe" \
+            "packages/desktop/dist-app/Floti-$VERSION-setup.exe"
 
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows
           path: |
-            packages/desktop/dist-app/Helm-${{ env.VERSION }}-portable.exe
-            packages/desktop/dist-app/Helm-${{ env.VERSION }}-setup.exe
+            packages/desktop/dist-app/Floti-${{ env.VERSION }}-portable.exe
+            packages/desktop/dist-app/Floti-${{ env.VERSION }}-setup.exe
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
@@ -337,22 +337,22 @@ jobs:
       - name: Verify the app carries the release's floti and its SHA-256 list
         run: |
           set -euo pipefail
-          resources=packages/desktop/dist-app/mac-arm64/Helm.app/Contents/Resources
+          resources=packages/desktop/dist-app/mac-arm64/Floti.app/Contents/Resources
           cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-macos-arm64" "$resources/floti"
           cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-SHA256SUMS" "$resources/floti-SHA256SUMS"
 
-      - name: Verify the artefacts are arm64, ad-hoc signed, with Helm's icon and their native modules
+      - name: Verify the artefacts are arm64, ad-hoc signed, with Floti's icon and their native modules
         run: |
           node packages/desktop/scripts/verify-mac-artifact.mjs \
-            "packages/desktop/dist-app/Helm-$VERSION-arm64.dmg" \
-            "packages/desktop/dist-app/Helm-$VERSION-arm64-mac.zip"
+            "packages/desktop/dist-app/Floti-$VERSION-arm64.dmg" \
+            "packages/desktop/dist-app/Floti-$VERSION-arm64-mac.zip"
 
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-mac
           path: |
-            packages/desktop/dist-app/Helm-${{ env.VERSION }}-arm64.dmg
-            packages/desktop/dist-app/Helm-${{ env.VERSION }}-arm64-mac.zip
+            packages/desktop/dist-app/Floti-${{ env.VERSION }}-arm64.dmg
+            packages/desktop/dist-app/Floti-${{ env.VERSION }}-arm64-mac.zip
           if-no-files-found: error
           # Already compressed, and only `assemble` reads them.
           compression-level: 0
@@ -418,14 +418,14 @@ jobs:
       - name: Verify the AppImage is x64 and carries the release's floti, its SHA-256 list and its native modules
         run: |
           node packages/desktop/scripts/verify-linux-artifact.mjs \
-            "packages/desktop/dist-app/Helm-$VERSION-linux-x64.AppImage" \
+            "packages/desktop/dist-app/Floti-$VERSION-linux-x64.AppImage" \
             --floti "$RUNNER_TEMP/floti-release/floti-$VERSION-linux-x64" \
             --sums "$RUNNER_TEMP/floti-release/floti-$VERSION-SHA256SUMS"
 
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-linux
-          path: packages/desktop/dist-app/Helm-${{ env.VERSION }}-linux-x64.AppImage
+          path: packages/desktop/dist-app/Floti-${{ env.VERSION }}-linux-x64.AppImage
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
@@ -503,7 +503,7 @@ jobs:
           previous=$(git tag --list 'v*' --sort=-v:refname | grep -v -- - | head -n1 || true)
 
           # The note at the top of release-body.md is addressed to whoever edits
-          # that file, not to somebody downloading Helm. An HTML comment does not
+          # that file, not to somebody downloading Floti. An HTML comment does not
           # render on the release page, but it is still in the body the API
           # returns and the one the edit box shows - and substitution would
           # rewrite the very placeholder the note is explaining. Strip comments
@@ -571,7 +571,7 @@ jobs:
         working-directory: ${{ runner.temp }}/release
         run: sha256sum --check --strict "floti-$VERSION-SHA256SUMS"
 
-      # The desktop files' SHA-256 list, `Helm-<version>-SHA256SUMS`, which
+      # The desktop files' SHA-256 list, `Floti-<version>-SHA256SUMS`, which
       # `floti add desktop` checks a download against. The app carries
       # floti's own list, so that list cannot hold the app; this one is signed
       # with the comment `floti <version> <file>` as every file is.
@@ -581,7 +581,7 @@ jobs:
           set -euo pipefail
           node packages/desktop/scripts/release.mjs desktop-sums "$RUNNER_TEMP/release" "$VERSION"
           cd "$RUNNER_TEMP/release"
-          sha256sum --check --strict "Helm-$VERSION-SHA256SUMS"
+          sha256sum --check --strict "Floti-$VERSION-SHA256SUMS"
 
       # Exactly the files the release signs - the five desktop files and
       # their list, the protocol types, the five floti files and their list -
@@ -1252,7 +1252,7 @@ jobs:
       - name: Run the desktop installer over that install
         if: runner.os == 'Windows'
         shell: powershell
-        run: ./scripts/floti.dev/try-installer.ps1 -Installer (Join-Path $env:RUNNER_TEMP "desktop\Helm-$env:VERSION-setup.exe") -Served (Join-Path $env:RUNNER_TEMP 'served') -Version $env:VERSION -Target '${{ matrix.target }}' -Order after-script
+        run: ./scripts/floti.dev/try-installer.ps1 -Installer (Join-Path $env:RUNNER_TEMP "desktop\Floti-$env:VERSION-setup.exe") -Served (Join-Path $env:RUNNER_TEMP 'served') -Version $env:VERSION -Target '${{ matrix.target }}' -Order after-script
 
       - name: Uninstall floti, then purge, then uninstall again
         if: runner.os != 'Windows'
@@ -1308,7 +1308,7 @@ jobs:
 
       - name: Run the desktop installer on a clean runner
         shell: powershell
-        run: ./scripts/floti.dev/try-installer.ps1 -Installer (Join-Path $env:RUNNER_TEMP "desktop\Helm-$env:VERSION-setup.exe") -Served (Join-Path $env:RUNNER_TEMP 'served') -Version $env:VERSION -Target '${{ matrix.target }}' -Order alone
+        run: ./scripts/floti.dev/try-installer.ps1 -Installer (Join-Path $env:RUNNER_TEMP "desktop\Floti-$env:VERSION-setup.exe") -Served (Join-Path $env:RUNNER_TEMP 'served') -Version $env:VERSION -Target '${{ matrix.target }}' -Order alone
 
       - name: Uninstall floti and the desktop app, then purge, then uninstall again
         shell: powershell
@@ -1523,14 +1523,14 @@ jobs:
           gh release create "$TAG" \
             --draft "${prerelease[@]}" \
             --target "$GITHUB_SHA" \
-            --title "Helm $VERSION" \
+            --title "Floti $VERSION" \
             --notes-file "$RUNNER_TEMP/notes/notes.md" \
             "$RUNNER_TEMP/release/"*
 
           # A preview is published like a release, so anybody can download it
           # without a GitHub sign-in and its tag is made the same way, but as a
           # pre-release and never `latest`: /releases/latest ignores
-          # pre-releases, so no installed Helm is offered it. The in-app check
+          # pre-releases, so no installed Floti is offered it. The in-app check
           # reads only the <major>.<minor>.<patch> part, so a preview of 2.4.1
           # is newer than 2.4.0 and older than the next release after it.
           if [[ $PREVIEW == true ]]; then
@@ -1600,7 +1600,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/fetched"
-          for name in "Helm-$VERSION-setup.exe" "floti-$VERSION-linux-x64" "floti-$VERSION-linux-x64.minisig"; do
+          for name in "Floti-$VERSION-setup.exe" "floti-$VERSION-linux-x64" "floti-$VERSION-linux-x64.minisig"; do
             url="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$name"
             code=$(env -u GH_TOKEN -u GITHUB_TOKEN curl --silent --show-error --location \
               --fail --retry 3 --retry-all-errors --output "$RUNNER_TEMP/fetched/$name" --write-out '%{http_code}' "$url" || true)

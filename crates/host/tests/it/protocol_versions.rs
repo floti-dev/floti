@@ -113,7 +113,7 @@ async fn greet(host: &Host, client: ProtocolVersion) -> Message {
         .send(&Message::Hello(Hello {
             protocol: client,
             client: ClientInfo {
-                name: "Helm (protocol version tests)".to_owned(),
+                name: "Floti (protocol version tests)".to_owned(),
                 kind: ClientKind::Desktop,
                 device_name: None,
             },
@@ -216,7 +216,7 @@ async fn s8_a_desktop_more_than_one_minor_behind_or_on_an_older_major_is_refused
 async fn s15_a_test_host_on_protocol_1_closes_a_connection_that_starts_with_a_restart_frame() {
     let host = start_host(ProtocolVersion::new(1, 4));
     let client = ClientInfo {
-        name: "Helm (protocol version tests)".to_owned(),
+        name: "Floti (protocol version tests)".to_owned(),
         kind: ClientKind::Desktop,
         device_name: None,
     };

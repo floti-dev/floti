@@ -48,7 +48,7 @@ impl TestFamily {
     }
 
     /// Whether a launch now may be given it, as an attached browser decides
-    /// for helm-browser.
+    /// for floti-browser.
     fn grantable_now(&self, grantable: bool) {
         self.grantable.store(grantable, Ordering::SeqCst);
     }

@@ -51,7 +51,7 @@ fn installed(id: &str, tools_on: bool) -> PluginInfo {
         runs_programs: false,
         agent: Some(PluginAgentInfo {
             enabled: tools_on,
-            server: format!("helm-plugin-{id}"),
+            server: format!("floti-plugin-{id}"),
             instructions: None,
             tools: Vec::new(),
         }),
@@ -73,7 +73,7 @@ fn tool(name: &str, read_only: bool) -> AgentPluginTool {
 
 fn server(plugin: &str) -> AgentPluginServer {
     AgentPluginServer {
-        name: format!("helm-plugin-{plugin}"),
+        name: format!("floti-plugin-{plugin}"),
         plugin: plugin.into(),
         instructions: format!("These tools come from \"{plugin}\"."),
         tools: vec![tool("find", true), tool("write", false)],
@@ -120,7 +120,7 @@ async fn s6_a_call_with_no_client_offering_the_plugin_fails_at_once_naming_helm(
         panic!("a call with nobody to answer it was answered");
     };
     assert!(
-        message.contains("Helm's window is not connected"),
+        message.contains("Floti's window is not connected"),
         "{message}"
     );
     assert!(message.contains("notes"), "{message}");
@@ -140,7 +140,7 @@ fn an_offer_is_served_only_while_its_client_listens_and_a_new_offer_replaces_the
         [("notes".to_owned(), true), ("tasks".to_owned(), true)]
     );
     let notes = relay.offered().remove(0).server;
-    assert_eq!(notes.name, "helm-plugin-notes");
+    assert_eq!(notes.name, "floti-plugin-notes");
     assert_eq!(notes.route, "/mcp/plugin/notes");
     // The read-only tool is marked, the other is not.
     let marks: Vec<(String, Option<bool>)> = notes

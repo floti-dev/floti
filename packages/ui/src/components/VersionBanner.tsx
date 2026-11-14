@@ -49,7 +49,7 @@ export function VersionBanner({
       <span className="min-w-0 flex-1 truncate">
         {version === null
           ? (error ?? 'The claude CLI was not found. Sessions cannot launch until it is.')
-          : `claude ${version} is outside the range Helm was tested against (${range.min} up to ${range.max}). Nothing is blocked; if a launch misbehaves, suspect this first.`}
+          : `claude ${version} is outside the range Floti was tested against (${range.min} up to ${range.max}). Nothing is blocked; if a launch misbehaves, suspect this first.`}
       </span>
       <button
         type="button"

@@ -8,7 +8,7 @@ import { signatureProblem } from '../../scripts/verify-mac-artifact.mjs'
  */
 
 const ADHOC = `Executable=/Volumes/Helm 2.3.3-arm64/Helm.app/Contents/MacOS/Helm
-Identifier=dev.coletaylor.helm
+Identifier=dev.floti.desktop
 Format=app bundle with Mach-O thin (arm64)
 CodeDirectory v=20400 size=1234 flags=0x2(adhoc) hashes=28+7 location=embedded
 Signature=adhoc
@@ -19,7 +19,7 @@ Internal requirements count=0 size=12
 `
 
 const DEVELOPER_ID = `Executable=/Applications/Helm.app/Contents/MacOS/Helm
-Identifier=dev.coletaylor.helm
+Identifier=dev.floti.desktop
 Format=app bundle with Mach-O thin (arm64)
 CodeDirectory v=20500 size=1234 flags=0x10000(runtime) hashes=28+7 location=embedded
 Signature size=9041

@@ -27,7 +27,7 @@ const TEMPLATE_ID = 'my-plugin'
 const TEMPLATE_NAME = 'My plugin'
 const NAME_MAX = 60
 
-const USAGE = `helm-plugin - make a Helm plugin, and check one
+const USAGE = `helm-plugin - make a Floti plugin, and check one
 
 Usage:
   helm-plugin create <folder> [--id <id>] [--name <name>]
@@ -36,10 +36,10 @@ Usage:
       plain HTML and JavaScript.
       --id    the plugin's id: lower-case letters, digits and dashes
               (default: made from the folder's name)
-      --name  what Helm calls it (default: made from the id)
+      --name  what Floti calls it (default: made from the id)
 
   helm-plugin validate [folder]
-      Checks the plugin in [folder] (default: this folder) as Helm does when
+      Checks the plugin in [folder] (default: this folder) as Floti does when
       it loads it: the manifest, at apiVersion 1 or 2, and every file it
       names. Exits 1 on errors.
 
@@ -224,10 +224,10 @@ function create(argv) {
   out(`Created "${name}" (${id}) in ${target}`)
   out('')
   out('Next:')
-  out(`  1. In Helm, open Settings > Plugins > Add folder and pick ${target}`)
-  out('  2. Edit pages/panel.html, pages/panel.js and background/main.js. Helm reloads the plugin when you save.')
+  out(`  1. In Floti, open Settings > Plugins > Add folder and pick ${target}`)
+  out('  2. Edit pages/panel.html, pages/panel.js and background/main.js. Floti reloads the plugin when you save.')
   out('  3. Run npm install there, for the manifest schema in your editor. Then')
-  out('     npm run validate checks the plugin as Helm will.')
+  out('     npm run validate checks the plugin as Floti will.')
   return 0
 }
 
@@ -250,12 +250,12 @@ function validate(argv) {
   for (const message of check.errors) err(`error: ${message}`)
   for (const message of check.warnings) err(`warning: ${message}`)
   if (!check.ok) {
-    err(`${String(check.errors.length)} ${check.errors.length === 1 ? 'error' : 'errors'}: Helm would not load this plugin.`)
+    err(`${String(check.errors.length)} ${check.errors.length === 1 ? 'error' : 'errors'}: Floti would not load this plugin.`)
     return 1
   }
   const manifest = /** @type {import('../src/manifest').NormalizedManifest} */ (check.manifest)
   const warned = check.warnings.length === 0 ? '' : ` (${String(check.warnings.length)} ${check.warnings.length === 1 ? 'warning' : 'warnings'})`
-  out(`${manifest.name} (${manifest.id}): Helm would load it${warned}.`)
+  out(`${manifest.name} (${manifest.id}): Floti would load it${warned}.`)
   return 0
 }
 

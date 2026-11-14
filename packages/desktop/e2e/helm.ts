@@ -196,7 +196,7 @@ export async function typeLine(pane: Locator, text: string): Promise<void> {
 export async function keepClearOfCursor(helm: Helm): Promise<void> {
   await helm.app.evaluate(({ BrowserWindow, screen }) => {
     const win = BrowserWindow.getAllWindows().find((candidate) => candidate.isVisible())
-    if (win === undefined) throw new Error('no visible Helm window')
+    if (win === undefined) throw new Error('no visible Floti window')
     const cursor = screen.getCursorScreenPoint()
     const under = (b: Electron.Rectangle): boolean =>
       cursor.x >= b.x && cursor.x < b.x + b.width && cursor.y >= b.y && cursor.y < b.y + b.height

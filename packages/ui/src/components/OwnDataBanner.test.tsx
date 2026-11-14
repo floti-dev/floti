@@ -9,7 +9,7 @@ describe('OwnDataBanner', () => {
 
     const banner = screen.getByRole('status')
     expect(banner.textContent).toContain(
-      'Copying Helm’s history, usage and config versions into the local host did not finish. It will be tried again when Helm next starts.'
+      'Copying Floti’s history, usage and config versions into the local host did not finish. It will be tried again when Floti next starts.'
     )
     // The reason follows in brackets, without its own full stop.
     expect(banner.textContent).toContain('(the local host refused a batch of conversations (failed))')

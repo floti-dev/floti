@@ -14,7 +14,7 @@ import { createFilesService, filesRoots, vscodeUrl, type FilesService, type Know
 function git(cwd: string, ...args: string[]): void {
   const run = spawnSync(
     'git',
-    ['-c', 'core.autocrlf=false', '-c', 'user.name=Helm', '-c', 'user.email=helm@example.invalid', ...args],
+    ['-c', 'core.autocrlf=false', '-c', 'user.name=Floti', '-c', 'user.email=helm@example.invalid', ...args],
     { cwd, windowsHide: true, encoding: 'utf8' }
   )
   if (run.status !== 0) throw new Error(`git ${args.join(' ')}: ${run.stderr}`)
@@ -51,7 +51,7 @@ afterEach(() => {
 })
 
 describe('the editor hand-off', () => {
-  it('opens a file in VS Code at a line through its URL handler, and only a file Helm knows', async () => {
+  it('opens a file in VS Code at a line through its URL handler, and only a file Floti knows', async () => {
     expect(service.editor()).toBe('Visual Studio Code')
     expect(await service.openInEditor(join(root, 'src', 'a.ts'), 2)).toEqual({ opened: true })
     expect(opened).toEqual([vscodeUrl(join(root, 'src', 'a.ts'), 2)])

@@ -372,7 +372,7 @@ const workerAgent = launchAgent('worker', {
   description: 'Does one piece of work in its own worktree.',
   permission: 'acceptEdits',
   worktree: true,
-  disallowedTools: ['mcp__helm-plugin-trackr__create']
+  disallowedTools: ['mcp__floti-plugin-trackr__create']
 })
 const docsWriter = launchAgent('docs-writer', { backends: [], listedBackends: ['codex'] })
 const CLAUDE_BACKEND = { id: 'claude-code', name: 'Claude Code' }
@@ -491,7 +491,7 @@ describe('NewSessionDialog: the Agent picker', () => {
     const props = renderDialog({ agents: AGENTS, projects: [repoFolder, helm], initialPath: repoFolder.path })
     await userEvent.selectOptions(picker('Agent'), 'worker')
     expect(sentence()).toBe(
-      "Runs claude in a new worktree, ~\\.harness\\dev\\repos\\timeclick\\.floti\\worktrees\\timeclick on branch agent/timeclick cut from main, as the worker agent with the Timeclick profile, composing dev and timeclick, and --model opus --permission-mode acceptEdits --disallowedTools mcp__helm-plugin-trackr__create. Its instructions go in after the project's; nothing is typed into the terminal. It gets no floti-agents tools."
+      "Runs claude in a new worktree, ~\\.harness\\dev\\repos\\timeclick\\.floti\\worktrees\\timeclick on branch agent/timeclick cut from main, as the worker agent with the Timeclick profile, composing dev and timeclick, and --model opus --permission-mode acceptEdits --disallowedTools mcp__floti-plugin-trackr__create. Its instructions go in after the project's; nothing is typed into the terminal. It gets no floti-agents tools."
     )
 
     await userEvent.click(within(list()).getByRole('option', { name: 'helm' }))

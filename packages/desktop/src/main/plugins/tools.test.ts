@@ -99,7 +99,7 @@ describe('a tool call', () => {
     expect(cancelled).toEqual([sent[0]!.id])
     expect(calls.pending()).toBe(1)
     calls.shutdown()
-    await expect(theirs).resolves.toEqual({ ok: false, message: 'Helm is shutting down.' })
+    await expect(theirs).resolves.toEqual({ ok: false, message: 'Floti is shutting down.' })
     expect(calls.pending()).toBe(0)
   })
 })

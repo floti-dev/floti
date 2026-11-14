@@ -320,7 +320,7 @@ export function BrowserPane({
       kind: 'item',
       id: 'clear-storage',
       label: 'Clear cookies and site data',
-      title: "Every site's, in Helm's browser: you will be signed out of all of them"
+      title: "Every site's, in Floti's browser: you will be signed out of all of them"
     }
   ]
 
@@ -356,7 +356,7 @@ export function BrowserPane({
                   id: 'share-none',
                   label: 'No session to share with',
                   disabled: true,
-                  title: 'A Claude session Helm started while its browser tools were on can be given this page.'
+                  title: 'A Claude session Floti started while its browser tools were on can be given this page.'
                 }
               ]
             : shareMenu.targets.map(
@@ -705,7 +705,7 @@ export function BrowserPane({
 
       {/*
         The hole. No ground, no border, no radius: the page paints here and
-        Helm has no business tinting foreign ground. `min-h-0` so the console
+        Floti has no business tinting foreign ground. `min-h-0` so the console
         below can take its own height rather than pushing this off the pane.
       */}
       <div className="flex min-h-0 flex-1 justify-center">

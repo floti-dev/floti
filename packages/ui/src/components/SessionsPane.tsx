@@ -307,7 +307,7 @@ export function SessionsPane({
           icon={<TerminalIcon width={18} height={18} />}
           title="Nothing running"
         >
-          A session started anywhere on this machine is listed here, in Helm or
+          A session started anywhere on this machine is listed here, in Floti or
           not.
         </EmptyState>
       ) : (
@@ -330,7 +330,7 @@ export function SessionsPane({
             </Section>
           )}
 
-          <Section label="In Helm" count={hostedHere.length}>
+          <Section label="In Floti" count={hostedHere.length}>
             {hostedHere.map((session) => (
               <Row
                 key={session.pid}
@@ -360,7 +360,7 @@ export function SessionsPane({
             {hostedHere.length === 0 && (
               <p className="px-2.5 py-2 text-[11px] text-fg-subtle">
                 {notOpenHere.length === 0
-                  ? "Helm is hosting no sessions."
+                  ? "Floti is hosting no sessions."
                   : "No session is open here."}
               </p>
             )}
@@ -407,7 +407,7 @@ export function SessionsPane({
         <p className="hidden min-w-0 truncate text-[11px] text-fg-subtle @[300px]/head:block">
           {sessions.length === 0
             ? "No Claude Code session is running on this machine"
-            : `${describeCount(hosted.length, "in Helm")} · ${describeCount(foreign.length, "outside Helm")}`}
+            : `${describeCount(hosted.length, "in Floti")} · ${describeCount(foreign.length, "outside Floti")}`}
         </p>
         <span className="flex-1" />
         {readAtMs !== null && (
@@ -487,7 +487,7 @@ export function SessionsPane({
         )}
 
         {/* ------------------------------------------------------------- */}
-        {/* The detail - Helm's own, for the sessions Helm has one for      */}
+        {/* The detail - Floti's own, for the sessions Floti has one for      */}
         {/* ------------------------------------------------------------- */}
         {showDetail && (
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -590,10 +590,10 @@ function HostSection({
         <div className="flex min-w-0 items-center gap-2 px-2.5 pb-1.5 pl-[22px]">
           <span className="min-w-0 flex-1 text-[11px] leading-[1.4] text-fg-muted">
             {floti.verdict === "tooOld"
-              ? `Its floti speaks protocol ${floti.host}; this Helm speaks ${floti.client}.`
+              ? `Its floti speaks protocol ${floti.host}; this Floti speaks ${floti.client}.`
               : floti.verdict === "older"
-                ? `It runs floti ${floti.host}; this Helm carries ${floti.client}.`
-                : `It speaks protocol ${floti.host}; this Helm speaks ${floti.client}. Update Helm on this PC.`}
+                ? `It runs floti ${floti.host}; this Floti carries ${floti.client}.`
+                : `It speaks protocol ${floti.host}; this Floti speaks ${floti.client}. Update Floti on this PC.`}
           </span>
           {floti.verdict !== "newer" && onUpdateFloti !== undefined && (
             <button
@@ -897,7 +897,7 @@ function Row({
           <Chip
             tone="neutral"
             dense
-            title="Helm holds this process; Claude Code has not written its record yet"
+            title="Floti holds this process; Claude Code has not written its record yet"
           >
             starting
           </Chip>
@@ -988,7 +988,7 @@ function NothingSelected({ count }: { count: number }): JSX.Element {
     >
       {count === 0
         ? "Nothing is running on this machine."
-        : "See what it is working in, and for Helm's own, the processes and ports it holds."}
+        : "See what it is working in, and for Floti's own, the processes and ports it holds."}
     </EmptyState>
   );
 }
@@ -1042,7 +1042,7 @@ function Detail({
         />
         {helmSessionId === null && (
           <span className="shrink-0 rounded-full border border-border-strong px-2.5 py-0.5 text-[10px] text-fg-muted">
-            outside Helm
+            outside Floti
           </span>
         )}
         <span className="flex-1" />
@@ -1165,9 +1165,9 @@ function Detail({
       )}
 
       {helmSessionId === null ? (
-        <Group label="What Helm knows">
+        <Group label="What Floti knows">
           <p className="text-[11.5px] leading-[1.6] text-fg-subtle">
-            Helm did not start this session, so it has no branch, no profile, no
+            Floti did not start this session, so it has no branch, no profile, no
             argv, no process tree and no ports for it. Everything above is what
             Claude Code recorded about it, and that is the whole of what is
             knowable from here.
@@ -1412,7 +1412,7 @@ function Ports({
         // is listening on nothing" are different claims, and only one of them
         // is something to act on.
         <p data-ports-unknown className="text-[11.5px] text-fg-subtle">
-          <Unknown>Unknown</Unknown> - Helm could not read the machine&rsquo;s
+          <Unknown>Unknown</Unknown> - Floti could not read the machine&rsquo;s
           listening sockets on the last pass.
         </p>
       ) : resources.ports.length === 0 ? (
@@ -1469,7 +1469,7 @@ function Tree({
           data-tree-unknown
           className="text-[11.5px] leading-[1.6] text-fg-subtle"
         >
-          <Unknown>Unknown</Unknown> - Helm could not enumerate the
+          <Unknown>Unknown</Unknown> - Floti could not enumerate the
           machine&rsquo;s processes on the last pass. This is not the same as
           the session having no children.
         </p>
@@ -1482,7 +1482,7 @@ function Tree({
       <Group label="Process tree">
         <p className="text-[11.5px] leading-[1.6] text-fg-subtle">
           The session&rsquo;s own process was not in the last pass, so it has
-          exited since Helm last looked.
+          exited since Floti last looked.
         </p>
       </Group>
     );
@@ -1494,7 +1494,7 @@ function Tree({
     <Group label="Process tree">
       {children.length === 0 ? (
         <p className="text-[11.5px] text-fg-subtle">
-          Nothing but the session itself was running when Helm last looked.
+          Nothing but the session itself was running when Floti last looked.
         </p>
       ) : (
         <ul data-session-tree className="flex flex-col">
@@ -1511,7 +1511,7 @@ function Tree({
             {" "}
             {resources.opaque} of {resources.processes.length}{" "}
             {resources.opaque === 1 ? "process" : "processes"} would not give up
-            a command line; Helm assumes no elevation and reports that as
+            a command line; Floti assumes no elevation and reports that as
             unknown rather than as nothing.
           </>
         )}

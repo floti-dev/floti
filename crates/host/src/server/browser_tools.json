@@ -1,11 +1,11 @@
 {
-  "name": "helm-browser",
+  "name": "floti-browser",
   "path": "/mcp",
-  "instructions": "These tools drive the browser pane inside Helm, the app hosting this session. Tabs you open appear in the user's Browser tab, behind the page they are looking at, labelled with this session's name, and stay there when the session ends. The user can also share one of their own tabs with this session: browser_tabs lists it as shared with you, and you may read and drive it but not close it. Read a page with browser_snapshot or browser_text before clicking anything.",
+  "instructions": "These tools drive the browser pane inside Floti, the app hosting this session. Tabs you open appear in the user's Browser tab, behind the page they are looking at, labelled with this session's name, and stay there when the session ends. The user can also share one of their own tabs with this session: browser_tabs lists it as shared with you, and you may read and drive it but not close it. Read a page with browser_snapshot or browser_text before clicking anything.",
   "tools": [
     {
       "name": "browser_open",
-      "description": "Open a URL in a new tab of Helm's browser. Returns the tab id, the URL it landed on and the page title. A bare port number means a dev server on this machine. To move a tab you already have, use browser_navigate.",
+      "description": "Open a URL in a new tab of Floti's browser. Returns the tab id, the URL it landed on and the page title. A bare port number means a dev server on this machine. To move a tab you already have, use browser_navigate.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -53,7 +53,7 @@
     },
     {
       "name": "browser_tabs",
-      "description": "Every tab open in Helm's browser: id, URL, title, whether it is loading, and whose it is. You may drive your own tabs and the ones the user shares with you; the rest are listed so you can see them, not drive them.",
+      "description": "Every tab open in Floti's browser: id, URL, title, whether it is loading, and whose it is. You may drive your own tabs and the ones the user shares with you; the rest are listed so you can see them, not drive them.",
       "inputSchema": {
         "type": "object",
         "properties": {},
@@ -134,7 +134,7 @@
           },
           "cursor": {
             "type": "number",
-            "description": "The cursor from a previous call. Omit for everything Helm still holds."
+            "description": "The cursor from a previous call. Omit for everything Floti still holds."
           }
         },
         "additionalProperties": false

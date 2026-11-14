@@ -1,4 +1,4 @@
-import type { HelmContext, HelmTheme, PluginParams, SurfaceKind } from '@coledtaylor/helm-plugin-sdk'
+import type { HelmContext, HelmTheme, PluginParams, SurfaceKind } from '@floti-dev/plugin-sdk'
 import { pluginThemeOf } from '@helm/core/types'
 import { isMac } from '@helm/ui'
 import { LOCAL_HOST_KEY } from '@helm/core/types'

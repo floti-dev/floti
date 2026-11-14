@@ -107,7 +107,7 @@ describe('the host client', { timeout: PATIENCE }, () => {
     expect(await host.next()).toEqual({
       type: 'hello',
       protocol: { major: PROTOCOL_VERSION.major, minor: PROTOCOL_VERSION.minor },
-      client: { name: 'Helm 2.4.0', kind: 'desktop' },
+      client: { name: 'Floti 2.4.0', kind: 'desktop' },
       capabilities: ['terminal', 'files', 'browser', 'pluginPages']
     })
     host.send({ type: 'welcome', ...WELCOME })
@@ -125,7 +125,7 @@ describe('the host client', { timeout: PATIENCE }, () => {
       appVersion: '2.4.0'
     })
     await host.expect('hello')
-    const sentence = 'This host speaks protocol 2.0 and Helm speaks 1.0: update Helm.'
+    const sentence = 'This host speaks protocol 2.0 and Floti speaks 1.0: update Floti.'
     host.send({
       type: 'refused',
       host: { major: 2, minor: 0 },
@@ -519,7 +519,7 @@ describe('the host client', { timeout: PATIENCE }, () => {
     const { host, connection } = await connected()
     host.toClient.write(Uint8Array.from([0xff, 0xff, 0xff, 0xff]))
     await expect(connection.ended).resolves.toMatch(
-      /^The local host sent a frame Helm cannot read: A frame of \d+ bytes is over the/
+      /^The local host sent a frame Floti cannot read: A frame of \d+ bytes is over the/
     )
   })
 

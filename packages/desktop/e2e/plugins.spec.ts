@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Frame, Locator, Page } from '@playwright/test'
-import type { FlotiBridge } from '@coledtaylor/helm-plugin-sdk'
+import type { FlotiBridge } from '@floti-dev/plugin-sdk'
 import { bearerOf, callTool, readMcpConfig, rpc, rpcResult, toolNames } from '../test/mcp-client'
 import { HOST_TEST_SEAL_MARKER, hostDataOf } from '../test/world'
 import { claudeRunIn, expect, startSession, test as base, type Helm } from './helm'
@@ -212,7 +212,7 @@ test('a plugin: its background module, a secret it asks for, its panel, badge, s
   expect(await log.textContent()).not.toMatch(/[0-9a-f]{32}/)
 })
 
-test("Helm's shortcuts work from inside a plugin page, and its commands run from Ctrl+Shift+P", async ({
+test("Floti's shortcuts work from inside a plugin page, and its commands run from Ctrl+Shift+P", async ({
   helm,
   sample
 }) => {
@@ -273,7 +273,7 @@ function inHelm<T>(helm: Helm, script: string, frameUrl?: string): Promise<T> {
   return helm.app.evaluate(
     async ({ BrowserWindow }, { script, frameUrl }) => {
       const win = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().endsWith('/plugin-host.html'))
-      if (win === undefined) throw new Error('no Helm window')
+      if (win === undefined) throw new Error('no Floti window')
       if (frameUrl === undefined) return (await win.webContents.executeJavaScript(script)) as T
       const frame = win.webContents.mainFrame.framesInSubtree.find((f) => f.url.startsWith(frameUrl))
       return (frame === undefined ? null : await frame.executeJavaScript(script)) as T
@@ -434,15 +434,15 @@ test("a session calls the plugin's tools, its background module answers, and tur
   const config = readMcpConfig(file)
   expect(Object.keys(config.mcpServers).sort()).toEqual([
     'floti-agents',
-    'helm-browser',
-    'helm-plugin-sample',
-    'helm-sessions'
+    'floti-browser',
+    'floti-plugin-sample',
+    'floti-sessions'
   ])
-  const tools = config.mcpServers['helm-plugin-sample']
+  const tools = config.mcpServers['floti-plugin-sample']
   if (tools === undefined) throw new Error(`no plugin server among ${Object.keys(config.mcpServers).join(', ')}`)
   // The one tool the manifest marks read-only is allowed without asking; the other asks.
-  expect(run.allowedTools.filter((tool) => tool.startsWith('mcp__helm-plugin-sample__'))).toEqual([
-    'mcp__helm-plugin-sample__list_items'
+  expect(run.allowedTools.filter((tool) => tool.startsWith('mcp__floti-plugin-sample__'))).toEqual([
+    'mcp__floti-plugin-sample__list_items'
   ])
   const token = bearerOf(tools)
   expect(await toolNames(tools.url, token)).toEqual(['list_items', 'create_item'])
@@ -452,7 +452,7 @@ test("a session calls the plugin's tools, its background module answers, and tur
     capabilities: {},
     clientInfo: { name: 'e2e', version: '1.0.0' }
   })
-  expect(init.instructions).toContain('"Sample", a plugin the user added to Helm')
+  expect(init.instructions).toContain('"Sample", a plugin the user added to Floti')
   expect(init.instructions).toContain('List them before adding one')
 
   // The background module answers, through the plugin's own network and secret.
@@ -484,7 +484,7 @@ test("a session calls the plugin's tools, its background module answers, and tur
   await expect(group.locator('[data-plugin-tools-state]')).toHaveText('No session gets them.')
   expect((await rpc(tools.url, token, 'tools/list')).status).toBe(404)
   // Helm's own tools are another family, and stay.
-  const browser = config.mcpServers['helm-browser']
+  const browser = config.mcpServers['floti-browser']
   if (browser === undefined) throw new Error('no browser server')
   expect((await rpc(browser.url, token, 'tools/list')).status).toBe(200)
 })
@@ -612,7 +612,7 @@ test('a plugin page starts a session from a click, once the user has seen what i
   expect(run.argv[run.argv.indexOf('-n') + 1]).toBe('Second item')
   expect(run.argv).toContain('--mcp-config')
   expect(run.openingPrompt).toBe('work on Second item')
-  expect(Object.keys(run.mcpServers)).toEqual(expect.arrayContaining(['helm-browser', 'helm-sessions', 'helm-plugin-sample']))
+  expect(Object.keys(run.mcpServers)).toEqual(expect.arrayContaining(['floti-browser', 'floti-sessions', 'floti-plugin-sample']))
   expect(run.exitCode).toBeNull()
   // The host runs it, in that folder.
   const sessions = await ui.evaluate(() => (window as unknown as HelmWindow).__helmRouted.invoke('session:list'))

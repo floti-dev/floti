@@ -151,8 +151,8 @@ pub(crate) fn tools_served(plugin: &PluginInfo) -> bool {
 /// come from, then the plugin's own instructions. As Helm words an offer.
 fn plugin_instructions(name: &str, instructions: Option<&str>) -> String {
     let provenance = format!(
-        "These tools come from \"{name}\", a plugin the user added to Helm, the app hosting \
-         this session. The plugin answers every call; Helm passes it on."
+        "These tools come from \"{name}\", a plugin the user added to Floti, the app hosting \
+         this session. The plugin answers every call; Floti passes it on."
     );
     match instructions {
         Some(own) => format!("{provenance}\n\n{own}"),

@@ -1,6 +1,6 @@
-# Helm - Agent Instructions
+# Floti - Agent Instructions
 
-Helm is a Windows desktop shell for the Claude Code CLI. It hosts `claude` in
+Floti is a Windows desktop shell for the Claude Code CLI. It hosts `claude` in
 terminal tabs and adds what the CLI does not have around it: project discovery,
 profiles, session history, a Files view that renders notes and artifacts, and
 a browser pane. Electron and React. It shells out to the
@@ -10,7 +10,7 @@ a browser pane. Electron and React. It shells out to the
   sessions live and end, tabs and families, the browser pane, overlays,
   templates, the Files view. Read the part you are changing first.
 - [docs/AGENT-TOOLS.md](docs/AGENT-TOOLS.md) - the host's agent tools listener
-  and its families: `helm-browser`, `helm-sessions`, `floti-agents` (children,
+  and its families: `floti-browser`, `floti-sessions`, `floti-agents` (children,
   news, the queue, waits, worktrees, resume, command children), plugin tools,
   and agent definitions.
 - [docs/PLUGINS.md](docs/PLUGINS.md) - how Floti runs plugins: API versions,
@@ -116,7 +116,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   it in.
 - A value import into the browser bundle comes from `@helm/core/types`, never
   the package root. This fails at rollup, not at typecheck.
-- Every channel a Helm page uses is declared in `shared/ipc.ts`. The preload
+- Every channel a Floti page uses is declared in `shared/ipc.ts`. The preload
   exposes three generic functions; a feature adds a channel, not a bridge
   method. `term:*` (the spike page's single pty) and `session:*` (the host's
   sessions) never mix.
@@ -131,14 +131,14 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   `e2e/boundary.spec.ts` fails naming any channel that crossed. Main runs no
   session, terminal, config reader, content, template or scan service of its
   own; those are the host's.
-- The host never opens `helm.db` or learns Helm's data folder; what only
+- The host never opens `helm.db` or learns Floti's data folder; what only
   `helm.db` holds, main sends it on `carry:*` (`main/host/own-data.ts`). Main
   owns the window's lifetime and `helm.db`: `will-quit` releases the database,
   and nothing else closes the store.
 - The host owns process lifetime. Every session's and plain terminal's pty and
   process tree is held by the session keeper (`floti keeper`,
   `crates/host/src/keeper`), so a host that crashes takes no session with it.
-  Helm never stops the host on its own. What quitting, stopping and
+  Floti never stops the host on its own. What quitting, stopping and
   reconnecting end is in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - Tabs, panes, splits and families are kept per device (`paneLayout` in
   `helm.db`) and never reach the host.
@@ -147,7 +147,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   adds no ssh option, never skips a host-key check, reads or writes nothing
   under `~/.ssh` and holds no SSH secret.
 - Do not use `@anthropic-ai/claude-agent-sdk`.
-- Helm renders nothing for a live session and answers no permission prompt.
+- Floti renders nothing for a live session and answers no permission prompt.
   The host reads one thing in a session's output, OSC 7501 status reports,
   draws no conclusion from screen text, passes every byte on untouched and
   puts nothing between the user and the TUI. No agent runs in an RPC or JSON
@@ -177,9 +177,9 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - Nothing reads the `persist:helm-browser` partition, which holds the user's
   cookies and logins; the only call on what it stores is `clearStorageData`.
 - The plugin secret store (`crates/host/src/plugins/secrets`) is the one place
-  Helm keeps a secret of the user's, and only one the user typed into it:
+  Floti keeps a secret of the user's, and only one the user typed into it:
   sealed by this OS's store, refused when it cannot be, never sent to any
-  client. Helm never puts a Claude or GitHub credential there.
+  client. Floti never puts a Claude or GitHub credential there.
 - The user's login is the access to Floti: it adds no approval, code, role or
   prompt and keeps no list of allowed devices. A private key is never logged,
   printed, sent to another client or put in a session's environment; logs
@@ -188,7 +188,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   `floti_protocol::noise`; never hand-rolled crypto.
 - The network posture is stated identically in README, docs/PACKAGING.md, the
   network posture comment in `shared/ipc.ts` and SPEC 5; change all four
-  together. The host's update check is the only request Helm makes on its own
+  together. The host's update check is the only request Floti makes on its own
   initiative; the app itself contacts nothing.
 
 ## Browser pane
@@ -242,7 +242,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 
 ## Plugins
 
-- A manifest change starts in `packages/plugin-sdk`, whose validator Helm loads
+- A manifest change starts in `packages/plugin-sdk`, whose validator Floti loads
   with. The SDK ships what `files` in its `package.json` lists, and nothing it
   ships may reach outside its own folder: run through npx, that folder is a
   cache.
@@ -252,11 +252,11 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   the manifest names, with an argument array and no shell.
 - Frames live outside React (`app/pluginFrames.ts`) and move between slots
   with `moveBefore`; `appendChild` would reload them.
-- A plugin's failure shows in its own surface (`PluginFrame`), never in Helm's
-  chrome, and never takes Helm down.
+- A plugin's failure shows in its own surface (`PluginFrame`), never in Floti's
+  chrome, and never takes Floti down.
 - A plugin starts a session or opens a link only from a click in its page (the
   relay checks the window's user activation), and starts a session only once
-  the user agrees in Helm's dialog.
+  the user agrees in Floti's dialog.
 
 ## Overlays and templates
 
@@ -271,7 +271,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   unknown means keep.
 - The shipped templates and agents are seeded only where their folder is
   absent, and nothing there is ever overwritten: an edit or a deletion stays.
-  A host started with `FLOTI_CONFIG_READ_ONLY` (Helm sets it for `pnpm dev`,
+  A host started with `FLOTI_CONFIG_READ_ONLY` (Floti sets it for `pnpm dev`,
   `dev:live` and every check) moves, seeds and writes nothing in its config
   folder.
 
@@ -310,7 +310,7 @@ writes the real `~/.claude`; the `dev` skill has the rest.
 ## Never touch the installed app
 
 `pnpm verify:installer --yes`, `pnpm dist:win` where it feeds that, and
-`pnpm dev:live` act on the installed Helm or its data. Run them only when the
+`pnpm dev:live` act on the installed Floti or its data. Run them only when the
 owner asks, never as part of a suite. `packaging-check` also runs only on
 request.
 

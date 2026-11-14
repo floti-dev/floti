@@ -67,7 +67,7 @@ test('closing the window asks first; Cancel changes nothing, and Keep running an
     .toBe(true)
   const before = await saved()
 
-  const question = window.getByRole('alertdialog', { name: 'Quitting Helm ends 2 sessions on this PC’s host.' })
+  const question = window.getByRole('alertdialog', { name: 'Quitting Floti ends 2 sessions on this PC’s host.' })
   await closeWindow(helm.app)
   await expect(question.getByRole('button')).toHaveText(['Cancel', 'Keep running and quit', 'End and quit'])
   await question.getByRole('button', { name: 'Cancel' }).click()
@@ -139,7 +139,7 @@ test('Settings’ Stop host says how many sessions end; Cancel changes nothing, 
   await expect.poll(() => [host!, ...pids].filter(processAlive)).toEqual([])
 })
 
-test('after Helm is killed outright, its sessions run on in the host, and the next start reattaches to that host and shows them, offering no restore', async ({
+test('after Floti is killed outright, its sessions run on in the host, and the next start reattaches to that host and shows them, offering no restore', async ({
   helm,
   world
 }) => {
@@ -182,11 +182,11 @@ test('after Helm is killed outright, its sessions run on in the host, and the ne
   expect(flotiHostsAmong(flotiChildren(await mainPid(helm)))).toEqual([])
   expect([host, run.pid].every(processAlive)).toBe(true)
   // Nothing ended, so there is nothing to offer back and nothing was resumed.
-  await expect(window.getByRole('region', { name: /when Helm closed/ })).toHaveCount(0)
+  await expect(window.getByRole('region', { name: /when Floti closed/ })).toHaveCount(0)
   expect(fakeClaudeLogs(world).filter((log) => log.resumed)).toEqual([])
 })
 
-test('when the host Helm started dies, Helm starts a new host and reconnects, and the tab takes its session back running, with nothing resumed', async ({
+test('when the host Floti started dies, Floti starts a new host and reconnects, and the tab takes its session back running, with nothing resumed', async ({
   helm,
   world
 }) => {

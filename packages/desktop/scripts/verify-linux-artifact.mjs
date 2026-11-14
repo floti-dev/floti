@@ -4,7 +4,7 @@
 //
 // For the app inside it:
 //
-// - its executable (`helm`) is an x64 Linux program, the only architecture the
+// - its executable (`floti-desktop`) is an x64 Linux program, the only architecture the
 //   release builds;
 // - its native modules are unpacked beside the asar: better-sqlite3's prebuild,
 //   node-pty's addon (compiled by `pnpm install`, since node-pty ships no Linux
@@ -20,7 +20,7 @@
 //   module compiled on a newer system than that is one the app cannot load
 //   on an older one, and Helm then dies at start; the release builds it in an
 //   old enough container, and this is what proves it did;
-// - its menu entry (`helm.desktop`) starts it without `--no-sandbox`, so
+// - its menu entry (`floti-desktop.desktop`) starts it without `--no-sandbox`, so
 //   launching it from a desktop integration keeps Chromium's sandbox.
 //
 //   node scripts/verify-linux-artifact.mjs <AppImage> [--floti <file>] [--sums <file>]
@@ -39,8 +39,8 @@ import { binaryFacts } from './floti-release.mjs'
 
 const desktopDir = resolve(import.meta.dirname, '..')
 
-/** The AppImage's name: `Helm-<version>-linux-x64.AppImage`. */
-export const APPIMAGE_NAME = /^Helm-.+-linux-x64\.AppImage$/
+/** The AppImage's name: `Floti-<version>-linux-x64.AppImage`. */
+export const APPIMAGE_NAME = /^Floti-.+-linux-x64\.AppImage$/
 
 /** Native files that must exist under `resources/app.asar.unpacked`, and which of them are x64 Linux code. */
 export const UNPACKED = [
@@ -170,11 +170,11 @@ export function appProblems(root, { floti, sums, origin, modes = process.platfor
     }
   }
 
-  const program = join(root, 'helm')
-  if (!existsSync(program)) fail("helm, the app's executable, is missing")
+  const program = join(root, 'floti-desktop')
+  if (!existsSync(program)) fail("floti-desktop, the app's executable, is missing")
   else {
-    x64Linux(program, 'helm')
-    executable(program, 'helm')
+    x64Linux(program, 'floti-desktop')
+    executable(program, 'floti-desktop')
   }
 
   const resources = join(root, 'resources')
@@ -205,12 +205,12 @@ export function appProblems(root, { floti, sums, origin, modes = process.platfor
     }
   }
 
-  const entry = join(root, 'helm.desktop')
-  if (!existsSync(entry)) fail('helm.desktop, the menu entry, is missing')
+  const entry = join(root, 'floti-desktop.desktop')
+  if (!existsSync(entry)) fail('floti-desktop.desktop, the menu entry, is missing')
   else {
     const exec = /^Exec=(.*)$/m.exec(readFileSync(entry, 'utf8'))
-    if (exec === null) fail('helm.desktop has no Exec line')
-    else if (/(^|\s)--no-sandbox(\s|$)/.test(exec[1])) fail(`helm.desktop starts Helm with --no-sandbox (Exec=${exec[1]})`)
+    if (exec === null) fail('floti-desktop.desktop has no Exec line')
+    else if (/(^|\s)--no-sandbox(\s|$)/.test(exec[1])) fail(`floti-desktop.desktop starts Floti with --no-sandbox (Exec=${exec[1]})`)
   }
 
   const node = join(resources, 'node', 'bin', 'node')
@@ -263,7 +263,7 @@ function main(args) {
   const sums = option(args, '--sums', join(desktopDir, 'dist-host', 'floti-SHA256SUMS'))
   const problems = []
   let newest = null
-  if (!APPIMAGE_NAME.test(basename(file))) problems.push(`${basename(file)} is not named Helm-<version>-linux-x64.AppImage`)
+  if (!APPIMAGE_NAME.test(basename(file))) problems.push(`${basename(file)} is not named Floti-<version>-linux-x64.AppImage`)
   for (const [what, path] of [['the AppImage', file], ['--floti', floti], ['--sums', sums]]) {
     if (!existsSync(path)) problems.push(`${what} ${path} does not exist`)
   }

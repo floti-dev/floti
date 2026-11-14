@@ -485,7 +485,7 @@ export function SettingsPane({
                 <Group
                   name="claude"
                   title="Claude CLI"
-                  hint="The claude executable Helm runs. Found on PATH unless you set one."
+                  hint="The claude executable Floti runs. Found on PATH unless you set one."
                 >
                   <div className="pb-1">
                     <Verdict
@@ -521,7 +521,7 @@ export function SettingsPane({
                         data-settings-version-warning
                         className="mt-3 rounded-well border border-warn/30 bg-warn/10 px-3 py-2 text-[11.5px] leading-[1.55] text-warn"
                       >
-                        Helm was tested against {status.testedRange.min} up to (not including){' '}
+                        Floti was tested against {status.testedRange.min} up to (not including){' '}
                         {status.testedRange.max}. {status.semver ?? status.version} is outside that, so a
                         flag may have moved. Nothing is blocked.
                       </p>
@@ -542,8 +542,8 @@ export function SettingsPane({
                       disabled={!overridden}
                       title={
                         overridden
-                          ? 'Forget the executable you picked and use whatever Helm finds'
-                          : 'Nothing to clear - Helm found this one itself'
+                          ? 'Forget the executable you picked and use whatever Floti finds'
+                          : 'Nothing to clear - Floti found this one itself'
                       }
                     >
                       Clear override
@@ -608,7 +608,7 @@ export function SettingsPane({
                 >
                   {roots.length === 0 ? (
                     <p className="pb-1 text-[12px] text-fg-subtle">
-                      Helm scans nothing until you say what to scan.
+                      Floti scans nothing until you say what to scan.
                     </p>
                   ) : (
                     <ul className="overflow-hidden rounded-well border border-border bg-surface-sunken">
@@ -645,7 +645,7 @@ export function SettingsPane({
                   <p className="mt-2.5 text-[11px] leading-[1.55] text-fg-subtle">
                     A <em>workspace</em> is a folder with a <code className="font-mono">workspace.yaml</code>,
                     and lets one session compose several repos&rsquo; skills. Removing a folder only stops
-                    Helm scanning it.
+                    Floti scanning it.
                   </p>
 
                   <Actions>
@@ -895,7 +895,7 @@ function AppearanceGroup({
     <Group
       name="appearance"
       title="Appearance"
-      hint="Themes change Helm's chrome. Terminals keep their own colours."
+      hint="Themes change Floti's chrome. Terminals keep their own colours."
     >
       <div
         role="radiogroup"
@@ -949,7 +949,7 @@ function AppearanceGroup({
         <div className="min-w-[220px] flex-1">
           <p className="text-[12.5px] text-fg">Your own themes</p>
           <p className="mt-0.5 text-[11px] leading-[1.5] text-fg-subtle">
-            One JSON file of colours per theme. Saving one repaints Helm.
+            One JSON file of colours per theme. Saving one repaints Floti.
           </p>
           {/* Its own line, truncated from the left of nothing: a path wrapped
               mid-sentence breaks at whichever backslash the width lands on. */}
@@ -1260,7 +1260,7 @@ function TemplatesGroup({
         {dir === '' ? NOTHING : dir}
       </button>
       <p className="mt-1.5 text-[11px] leading-[1.55] text-fg-subtle">
-        Edited in your own editor, not in Helm - these are plain files, and most people keep them
+        Edited in your own editor, not in Floti - these are plain files, and most people keep them
         in git. Deleting the folder puts the shipped README and example back at the next start,
         which is the whole of &ldquo;reset&rdquo;.
       </p>
@@ -1336,7 +1336,7 @@ function ArchiveGroup({
     <Group
       name="archive"
       title="Transcript archive"
-      hint="Claude Code deletes transcripts on its own schedule. Helm keeps a compressed copy of each one first, and never writes to Claude's files."
+      hint="Claude Code deletes transcripts on its own schedule. Floti keeps a compressed copy of each one first, and never writes to Claude's files."
     >
       <div className="pb-1">
         <Verdict
@@ -1560,7 +1560,7 @@ function BrowserGroup({
         hint={
           reach === 'local'
             ? 'This machine only. Anything that is not localhost, 127.0.0.1 or ::1 is refused with a sentence and nothing is fetched.'
-            : 'Anywhere. Helm still opens no page you did not ask for - the pane fetches the address you navigate to and nothing else.'
+            : 'Anywhere. Floti still opens no page you did not ask for - the pane fetches the address you navigate to and nothing else.'
         }
       >
         <Select
@@ -1600,8 +1600,8 @@ function BrowserGroup({
         label="Let Claude drive the browser"
         hint={
           mcp
-            ? 'Sessions Helm hosts can open pages of their own, read them, click and type, and drive a page of yours only once you share it from the browser bar. Helm serves the tools on a loopback port with a token unique to each session.'
-            : 'Off. Helm opens no port at all and sessions are started without the tools, exactly as they were before.'
+            ? 'Sessions Floti hosts can open pages of their own, read them, click and type, and drive a page of yours only once you share it from the browser bar. Floti serves the tools on a loopback port with a token unique to each session.'
+            : 'Off. Floti opens no port at all and sessions are started without the tools, exactly as they were before.'
         }
       >
         <span data-settings-browser-mcp={String(mcp)}>
@@ -1670,14 +1670,14 @@ function SessionsGroup({
     <Group
       name="sessions"
       title="Sessions"
-      hint="What a session Helm hosts may know about the others on this machine, so it can stay out of a working tree somebody else is in. Read-only, and never another session’s conversation."
+      hint="What a session Floti hosts may know about the others on this machine, so it can stay out of a working tree somebody else is in. Read-only, and never another session’s conversation."
     >
       <Row
         label="Let Claude see the other sessions"
         hint={
           mcp
-            ? 'Sessions Helm hosts can list every Claude Code session running here - its name, its directory, whether it is busy or waiting on you - and, for the ones Helm started, what they are holding: child processes and listening ports. Each can also give itself a title saying what it is doing, shown beside its name here and in History. Not their conversations, and not the arguments they were launched with.'
-            : 'Off. Helm serves the tools to nobody, sessions are started without them and give themselves no titles.'
+            ? 'Sessions Floti hosts can list every Claude Code session running here - its name, its directory, whether it is busy or waiting on you - and, for the ones Floti started, what they are holding: child processes and listening ports. Each can also give itself a title saying what it is doing, shown beside its name here and in History. Not their conversations, and not the arguments they were launched with.'
+            : 'Off. Floti serves the tools to nobody, sessions are started without them and give themselves no titles.'
         }
       >
         <span data-settings-session-mcp={String(mcp)}>
@@ -1692,8 +1692,8 @@ function SessionsGroup({
         label="Resume after a crash without asking"
         hint={
           restore
-            ? 'When Helm stops without shutting down, the next start reopens every session it was running, in the tab it had, and says what it could not.'
-            : 'When Helm stops without shutting down, the next start lists the sessions it was running and asks which to reopen.'
+            ? 'When Floti stops without shutting down, the next start reopens every session it was running, in the tab it had, and says what it could not.'
+            : 'When Floti stops without shutting down, the next start lists the sessions it was running and asks which to reopen.'
         }
       >
         <span data-settings-restore-without-asking={String(restore)}>
@@ -1706,16 +1706,16 @@ function SessionsGroup({
       </Row>
       {/* Only this PC's host: the one a desktop runs its sessions in. */}
       <Row
-        label="When you quit Helm"
+        label="When you quit Floti"
         hint={
           quit === 'end'
-            ? 'For this PC’s host. Quitting ends the sessions Helm started there, after asking when any are running. Kept on this device.'
-            : 'For this PC’s host. Quitting leaves the sessions Helm started running there, and they are back in their tabs when Helm opens again. Kept on this device.'
+            ? 'For this PC’s host. Quitting ends the sessions Floti started there, after asking when any are running. Kept on this device.'
+            : 'For this PC’s host. Quitting leaves the sessions Floti started running there, and they are back in their tabs when Floti opens again. Kept on this device.'
         }
       >
         <Select
           value={quit}
-          label="When you quit Helm"
+          label="When you quit Floti"
           data-settings-quit-sessions={quit}
           onChange={(value) => onQuitChange(value === 'keep' ? 'keep' : 'end')}
         >
@@ -1725,7 +1725,7 @@ function SessionsGroup({
       </Row>
       <Row
         label="This PC’s host"
-        hint="Stopping it ends every session running in it, whichever device started it, after asking. Helm starts it again when it next needs it."
+        hint="Stopping it ends every session running in it, whichever device started it, after asking. Floti starts it again when it next needs it."
       >
         <Action data-settings-stop-host onClick={onStopHost}>
           Stop host
@@ -1970,7 +1970,7 @@ function UpdatesGroup({
     <Group
       name="updates"
       title="Updates"
-      hint="This PC's host makes the only request Helm makes on its own: once a day it reads floti.dev's signed list of releases. Helm itself contacts nothing."
+      hint="This PC's host makes the only request Floti makes on its own: once a day it reads floti.dev's signed list of releases. Floti itself contacts nothing."
     >
       <div className="pb-1">
         <Verdict
@@ -2013,7 +2013,7 @@ function UpdatesGroup({
             primary
             onClick={onInstall}
             disabled={installing}
-            title="Replaces floti and Helm. Helm closes when the update is ready and opens again; every session keeps running."
+            title="Replaces floti and Floti. Floti closes when the update is ready and opens again; every session keeps running."
           >
             Update to {update.newest}
           </Action>

@@ -21,7 +21,7 @@
 // both levels with 7-Zip and asserts on the entries it finds there.
 //
 //   node scripts/verify-artifact.mjs                     # every exe in dist-app
-//   node scripts/verify-artifact.mjs path/to/Helm-x.exe  # named artefacts
+//   node scripts/verify-artifact.mjs path/to/Floti-x.exe  # named artefacts
 //
 // Every failure is reported, not just the first, because "which of these is
 // missing" is the question you have when this fails.
@@ -161,7 +161,7 @@ function verify(sevenZip, exe, scratch) {
     return [
       `${label}: no ${PAYLOAD} inside it. electron-builder's NSIS targets wrap the app tree in one; ` +
         `this artefact carries ${String(outer.length)} entries and none of them is it, so either the ` +
-        'packaging changed shape or this is not a Helm artefact.'
+        'packaging changed shape or this is not a Floti artefact.'
     ]
   }
 
@@ -228,10 +228,10 @@ if (named.length > 0) {
     process.exit(1)
   }
   artefacts = readdirSync(distDir)
-    .filter((name) => /^Helm-.*\.exe$/.test(name))
+    .filter((name) => /^Floti-.*\.exe$/.test(name))
     .map((name) => join(distDir, name))
   if (artefacts.length === 0) {
-    console.error(`No Helm-*.exe in ${distDir}. Run \`pnpm dist:win\` first.`)
+    console.error(`No Floti-*.exe in ${distDir}. Run \`pnpm dist:win\` first.`)
     process.exit(1)
   }
 }

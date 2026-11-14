@@ -48,7 +48,7 @@ export function plantShim(projectPath: string, shimRoot: string, owners: ShimOwn
   mkdirSync(join(dir, '.claude-plugin'), { recursive: true })
   writeFileSync(
     join(dir, '.claude-plugin', 'plugin.json'),
-    `${JSON.stringify({ name, version: '0.0.0', description: `Helm overlay for ${source}` }, null, 2)}\n`
+    `${JSON.stringify({ name, version: '0.0.0', description: `Floti overlay for ${source}` }, null, 2)}\n`
   )
 
   const kind = process.platform === 'win32' ? ({ type: 'junction', mode: 'junction' } as const) : ({ type: 'dir', mode: 'symlink' } as const)

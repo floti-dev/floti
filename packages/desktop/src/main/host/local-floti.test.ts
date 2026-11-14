@@ -63,7 +63,7 @@ describe('the installed app’s floti installed on its own', () => {
     }
   })
 
-  it('is used as it is when it is this Helm’s version or newer, running nothing more', async () => {
+  it('is used as it is when it is this Floti’s version or newer, running nothing more', async () => {
     for (const there of ['3.1.0', '3.2.0-preview.1']) {
       const { deps, runs } = computer({ [CARRIED]: '3.1.0', [OWN]: there })
       expect(await ensureLocalFloti(PLACES, deps)).toBe(true)

@@ -300,7 +300,7 @@ async function checkComposer(ctx: Ctx, h: PtyHandle): Promise<Check[]> {
     notes: [
       multiline
         ? 'Shift+Enter inserted a newline in the composer.'
-        : `Shift+Enter sends ${JSON.stringify(shiftEnterBytes)}, byte-identical to Enter, so the composer submits instead of adding a line. This is a terminal-level gap, not a Claude Code bug: xterm.js has no default encoding for the modifier. Claude Code's own answer is /terminal-setup, which teaches a terminal to emit a distinct sequence - Helm has to supply that binding itself.`
+        : `Shift+Enter sends ${JSON.stringify(shiftEnterBytes)}, byte-identical to Enter, so the composer submits instead of adding a line. This is a terminal-level gap, not a Claude Code bug: xterm.js has no default encoding for the modifier. Claude Code's own answer is /terminal-setup, which teaches a terminal to emit a distinct sequence - Floti has to supply that binding itself.`
     ]
   }
 

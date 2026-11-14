@@ -319,7 +319,7 @@ function personal(): Array<{ id: string; re: RegExp }> {
  * equally true on a stranger's machine.
  */
 const IDENTITY_ALLOWED: Array<{ needle: string; why: string }> = [
-  { needle: 'dev.coletaylor.helm', why: 'the Windows AppUserModelID / electron-builder appId' },
+  { needle: 'dev.coletaylor.helm', why: 'the app ID Helm had, whose entries the installer removes' },
   { needle: 'floti-dev/floti', why: "the project's release address" },
   { needle: '"author": "Cole Taylor"', why: 'the authorship field in package.json' }
 ]
@@ -973,7 +973,7 @@ async function cliChecks(ctx: CheckContext): Promise<Check[]> {
   return [
     {
       id: 'PKG-0',
-      criterion: 'setup: the CLI Helm would launch is the one this machine has',
+      criterion: 'setup: the CLI Floti would launch is the one this machine has',
       title: `claude ${status.version ?? 'not found'} located and agreed with an independent read`,
       ok:
         versionsAgree &&
@@ -990,7 +990,7 @@ async function cliChecks(ctx: CheckContext): Promise<Check[]> {
         handComputedInRange: handTested
       },
       notes: [
-        'Helm resolves the CLI by walking PATH itself; this asks `where.exe` and runs whatever it names, so the two answers come from different code.',
+        'Floti resolves the CLI by walking PATH itself; this asks `where.exe` and runs whatever it names, so the two answers come from different code.',
         'The tested range is re-decided here with a hand-written triple comparison rather than by calling the guard.',
         'Authentication is confirmed only by the *existence* of .credentials.json. Neither this check nor the app opens it.'
       ]
@@ -1040,7 +1040,7 @@ async function firstRunChecks(
   // the parent of the fixtures, not the fixtures themselves - and must not be
   // the real one.
   const sandbox = resolve(options.fixtures, '..')
-  const realAppData = join(process.env['APPDATA'] ?? '', 'Helm')
+  const realAppData = join(process.env['LOCALAPPDATA'] ?? '', 'Floti', 'desktop')
   const isolationOk =
     settings.scanRoots.length === 0 &&
     settings.firstRunCompletedAt === null &&
@@ -1066,7 +1066,7 @@ async function firstRunChecks(
     },
     notes: [
       'PORTABLE_EXECUTABLE_DIR is the isolation, and it is the app\'s own portable-mode mechanism rather than a test hook.',
-      'The user\'s %APPDATA%\\Helm and ~/.claude are never opened by this process, so nothing needed backing up.'
+      'The user\'s %LOCALAPPDATA%\\Floti\\desktop and ~/.claude are never opened by this process, so nothing needed backing up.'
     ]
   })
   if (!isolationOk) return checks
@@ -1202,9 +1202,9 @@ async function reachLauncher(
       screenshot: authShot.file
     },
     notes: [
-      `Helm's answer is "${status.auth}" because ${status.authSignal}.`,
+      `Floti's answer is "${status.auth}" because ${status.authSignal}.`,
       'The independent read is the absence of the file, checked here without opening it.',
-      `The guidance is the whole of the remedy: a sentence telling the user to run \`claude\` once. There is no login form and no token field, none of the ${String(helmWrote.length)} entries Helm wrote is named like a credential, and none of the ${String(settingsKeys.length)} persisted settings is a field one could live in.`,
+      `The guidance is the whole of the remedy: a sentence telling the user to run \`claude\` once. There is no login form and no token field, none of the ${String(helmWrote.length)} entries Floti wrote is named like a credential, and none of the ${String(settingsKeys.length)} persisted settings is a field one could live in.`,
       "Chromium's own profile directories are excluded from that count and listed in the source: one of its stores is called \"Trust Tokens\", which is a browser feature and would be a false positive in both directions."
     ]
   })
@@ -1704,8 +1704,8 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
         screenshot: shot.file
       },
       notes: [
-        'The mismatch is real rather than simulated: a stub program that answers `--version` with 9.9.9 is written to disk, and Helm is pointed at it through the same settings channel the picker writes.',
-        'What the stub reports is read twice - once by Helm, once by running it here - and whether that is outside the range is decided twice, once by the guard and once by a hand-written comparison in this file.',
+        'The mismatch is real rather than simulated: a stub program that answers `--version` with 9.9.9 is written to disk, and Floti is pointed at it through the same settings channel the picker writes.',
+        'What the stub reports is read twice - once by Floti, once by running it here - and whether that is outside the range is decided twice, once by the guard and once by a hand-written comparison in this file.',
         '"Does not block" is checked while the banner is on screen: a project pane opens, its launch button is enabled, and no modal is covering the window.'
       ]
     }

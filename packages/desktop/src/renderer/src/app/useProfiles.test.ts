@@ -108,12 +108,12 @@ describe('useProfiles', () => {
   it('says why the list could not be read, rather than showing no profiles as if there were none', async () => {
     bridge.answer('profile:list', () => {
       throw new Error(
-        "Error invoking remote method 'profile:list': Error: Helm could not find the local host program at /nowhere/floti."
+        "Error invoking remote method 'profile:list': Error: Floti could not find the local host program at /nowhere/floti."
       )
     })
     const { result } = renderHook(() => useProfiles())
     await waitFor(() =>
-      expect(result.current.error).toBe('Helm could not find the local host program at /nowhere/floti.')
+      expect(result.current.error).toBe('Floti could not find the local host program at /nowhere/floti.')
     )
     expect(result.current.profiles).toEqual([])
   })

@@ -47,12 +47,12 @@ case "$(uname -s)" in
   Darwin)
     data="$HOME/Library/Application Support/Floti"
     entry="$HOME/Library/LaunchAgents/dev.floti.host.plist"
-    app="$HOME/Applications/Helm.app"
+    app="$HOME/Applications/Floti.app"
     ;;
   *)
     data="${XDG_DATA_HOME:-$HOME/.local/share}/floti"
     entry="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/floti.service"
-    app="$HOME/Applications/Helm.AppImage"
+    app="$HOME/Applications/Floti.AppImage"
     ;;
 esac
 marker="$data/start-on-connect"

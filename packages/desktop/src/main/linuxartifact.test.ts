@@ -76,8 +76,8 @@ const SUMS = new TextEncoder().encode(`${'a'.repeat(64)}  floti-3.0.0-linux-x64\
 async function extracted(change: Record<string, Uint8Array | null> = {}): Promise<string> {
   const root = await mkdtemp(join(inject(RUN_ROOT), 'appimage root '))
   const files: Record<string, Uint8Array | null> = {
-    helm: X64,
-    'helm.desktop': new TextEncoder().encode('[Desktop Entry]\nName=Helm\nExec=AppRun %U\nType=Application\n'),
+    'floti-desktop': X64,
+    'floti-desktop.desktop': new TextEncoder().encode('[Desktop Entry]\nName=Floti\nExec=AppRun %U\nType=Application\n'),
     'resources/app.asar': new Uint8Array([0]),
     'resources/icon.png': new Uint8Array([0]),
     'resources/install/install.sh': new Uint8Array([0]),
@@ -108,10 +108,10 @@ describe('the Linux AppImage check', () => {
   })
 
   it('names the AppImage file as the release does', () => {
-    expect(APPIMAGE_NAME.test('Helm-3.0.0-linux-x64.AppImage')).toBe(true)
-    expect(APPIMAGE_NAME.test('Helm-3.0.0-preview.1-linux-x64.AppImage')).toBe(true)
-    expect(APPIMAGE_NAME.test('Helm-3.0.0-x86_64.AppImage')).toBe(false)
-    expect(APPIMAGE_NAME.test('Helm-3.0.0-linux-arm64.AppImage')).toBe(false)
+    expect(APPIMAGE_NAME.test('Floti-3.0.0-linux-x64.AppImage')).toBe(true)
+    expect(APPIMAGE_NAME.test('Floti-3.0.0-preview.1-linux-x64.AppImage')).toBe(true)
+    expect(APPIMAGE_NAME.test('Floti-3.0.0-x86_64.AppImage')).toBe(false)
+    expect(APPIMAGE_NAME.test('Floti-3.0.0-linux-arm64.AppImage')).toBe(false)
   })
 
   it('refuses a floti or a SHA-256 list that is not the one it was given', async () => {
@@ -137,14 +137,14 @@ describe('the Linux AppImage check', () => {
 
   it('refuses an app missing its executable, floti, Node or the files beside them', async () => {
     const root = await extracted({
-      helm: null,
+      'floti-desktop': null,
       'resources/floti': null,
       'resources/floti-SHA256SUMS': null,
       'resources/node/bin/node': new Uint8Array([1, 2, 3]),
       'resources/install/install.sh': null
     })
     expect(check(root)).toEqual([
-      "Helm.AppImage: helm, the app's executable, is missing",
+      "Helm.AppImage: floti-desktop, the app's executable, is missing",
       'Helm.AppImage: resources/install/install.sh is missing',
       'Helm.AppImage: resources/floti is missing, so sessions cannot run in the local host',
       "Helm.AppImage: resources/floti-SHA256SUMS is missing, so Settings > Hosts can check no host's floti",
@@ -179,17 +179,17 @@ describe('the Linux AppImage check', () => {
     ])
   })
 
-  it('refuses a menu entry that starts Helm without the sandbox, or none at all', async () => {
-    const unsandboxed = await extracted({ 'helm.desktop': new TextEncoder().encode('[Desktop Entry]\nExec=AppRun --no-sandbox %U\n') })
-    expect(check(unsandboxed)).toEqual(['Helm.AppImage: helm.desktop starts Helm with --no-sandbox (Exec=AppRun --no-sandbox %U)'])
-    expect(check(await extracted({ 'helm.desktop': null }))).toEqual(['Helm.AppImage: helm.desktop, the menu entry, is missing'])
+  it('refuses a menu entry that starts Floti without the sandbox, or none at all', async () => {
+    const unsandboxed = await extracted({ 'floti-desktop.desktop': new TextEncoder().encode('[Desktop Entry]\nExec=AppRun --no-sandbox %U\n') })
+    expect(check(unsandboxed)).toEqual(['Helm.AppImage: floti-desktop.desktop starts Floti with --no-sandbox (Exec=AppRun --no-sandbox %U)'])
+    expect(check(await extracted({ 'floti-desktop.desktop': null }))).toEqual(['Helm.AppImage: floti-desktop.desktop, the menu entry, is missing'])
   })
 
   it.skipIf(process.platform === 'win32')('refuses a floti, Node or executable without its execute bit', async () => {
     const root = await extracted()
-    for (const path of ['helm', 'resources/floti', 'resources/node/bin/node']) chmodSync(join(root, path), 0o644)
+    for (const path of ['floti-desktop', 'resources/floti', 'resources/node/bin/node']) chmodSync(join(root, path), 0o644)
     expect(check(root, true)).toEqual([
-      'Helm.AppImage: helm is not executable',
+      'Helm.AppImage: floti-desktop is not executable',
       'Helm.AppImage: resources/floti is not executable',
       'Helm.AppImage: resources/node/bin/node is not executable'
     ])

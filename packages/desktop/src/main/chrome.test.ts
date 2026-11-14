@@ -42,31 +42,31 @@ const noQuit = (): void => undefined
 
 /** The app menu's Quit Helm item. */
 function quitItem(template: MenuItemConstructorOptions[]): MenuItemConstructorOptions {
-  const found = items(template).find((item) => item.label === 'Quit Helm')
-  if (found === undefined) throw new Error('no Quit Helm item')
+  const found = items(template).find((item) => item.label === 'Quit Floti')
+  if (found === undefined) throw new Error('no Quit Floti item')
   return found
 }
 
 describe('applicationMenuTemplate', () => {
   it('is none on Windows and Linux, so Ctrl+C reaches the terminal', () => {
-    expect(applicationMenuTemplate('win32', 'Helm', noQuit)).toBeNull()
-    expect(applicationMenuTemplate('linux', 'Helm', noQuit)).toBeNull()
+    expect(applicationMenuTemplate('win32', 'Floti', noQuit)).toBeNull()
+    expect(applicationMenuTemplate('linux', 'Floti', noQuit)).toBeNull()
   })
 
   it('on macOS is the app menu, the Edit menu and a Window menu with Minimize and Zoom', () => {
-    const template = applicationMenuTemplate('darwin', 'Helm', noQuit)!
-    expect(template.map((menu) => menu.label)).toEqual(['Helm', 'Edit', 'Window'])
+    const template = applicationMenuTemplate('darwin', 'Floti', noQuit)!
+    expect(template.map((menu) => menu.label)).toEqual(['Floti', 'Edit', 'Window'])
     const entries = (index: number): unknown[] =>
       (template[index]!.submenu as MenuItemConstructorOptions[])
         .filter((item) => item.type !== 'separator')
         .map((item) => item.role ?? item.label)
-    expect(entries(0)).toEqual(['about', 'hide', 'hideOthers', 'unhide', 'Quit Helm'])
+    expect(entries(0)).toEqual(['about', 'hide', 'hideOthers', 'unhide', 'Quit Floti'])
     expect(entries(1)).toEqual(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'])
     expect(entries(2)).toEqual(['minimize', 'zoom'])
   })
 
   it('on macOS gives Cmd+C, Cmd+V, Cmd+Z, Cmd+A and Cmd+Q to the menu', () => {
-    const template = applicationMenuTemplate('darwin', 'Helm', noQuit)!
+    const template = applicationMenuTemplate('darwin', 'Floti', noQuit)!
     const byRole = new Map(items(template).map((item) => [item.role, item.accelerator]))
     expect(byRole.get('copy')).toBe('Command+C')
     expect(byRole.get('paste')).toBe('Command+V')
@@ -75,9 +75,9 @@ describe('applicationMenuTemplate', () => {
     expect(quitItem(template).accelerator).toBe('Command+Q')
   })
 
-  it('on macOS, Cmd+Q and Quit Helm go through the quit handler, which asks first, never straight to app.quit()', () => {
+  it('on macOS, Cmd+Q and Quit Floti go through the quit handler, which asks first, never straight to app.quit()', () => {
     const quit = vi.fn()
-    const item = quitItem(applicationMenuTemplate('darwin', 'Helm', quit)!)
+    const item = quitItem(applicationMenuTemplate('darwin', 'Floti', quit)!)
     // The `quit` role is app.quit(), whose `before-quit` ends every session
     // before the window could ask.
     expect(item.role).toBeUndefined()
@@ -86,8 +86,8 @@ describe('applicationMenuTemplate', () => {
     expect(quit).toHaveBeenCalledTimes(1)
   })
 
-  it('on macOS has no Close, Reload or Developer Tools, and takes no key one of Helm’s own shortcuts uses', () => {
-    const all = items(applicationMenuTemplate('darwin', 'Helm', noQuit)!)
+  it('on macOS has no Close, Reload or Developer Tools, and takes no key one of Floti’s own shortcuts uses', () => {
+    const all = items(applicationMenuTemplate('darwin', 'Floti', noQuit)!)
     const roles = all.map((item) => String(item.role ?? ''))
     for (const role of ['close', 'reload', 'forceReload', 'toggleDevTools', 'togglefullscreen', 'resetZoom', 'zoomIn', 'zoomOut']) {
       expect(roles).not.toContain(role)

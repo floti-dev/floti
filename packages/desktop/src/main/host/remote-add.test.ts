@@ -89,7 +89,7 @@ describe('adding a host by connecting to it', () => {
     expect(w.forgotten).toEqual(['h-new'])
   })
 
-  it('S18: a host whose floti refused this Helm’s hello as newer says so with both versions', async () => {
+  it('S18: a host whose floti refused this Floti’s hello as newer says so with both versions', async () => {
     const w = world()
     const adding = w.adder.add(REQUEST, w.keep)
     ;(await w.connecting()).reject(

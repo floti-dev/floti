@@ -36,7 +36,7 @@ function helmWith(start: { phase?: QuitPhase; windows?: number } = {}) {
   }
 }
 
-describe('reopen while Helm quits', () => {
+describe('reopen while Floti quits', () => {
   it('opens no window in the quitting process', () => {
     const helm = helmWith()
     helm.startQuit()
@@ -47,7 +47,7 @@ describe('reopen while Helm quits', () => {
     expect(helm.relaunch).not.toHaveBeenCalled()
   })
 
-  it('starts a fresh Helm once the quit has finished', () => {
+  it('starts a fresh Floti once the quit has finished', () => {
     const helm = helmWith()
     helm.startQuit()
     helm.reopen.activate()
@@ -58,7 +58,7 @@ describe('reopen while Helm quits', () => {
     expect(helm.openWindow).not.toHaveBeenCalled()
   })
 
-  it('starts one fresh Helm however many times it was reopened', () => {
+  it('starts one fresh Floti however many times it was reopened', () => {
     const helm = helmWith()
     helm.startQuit()
     helm.reopen.activate()

@@ -93,8 +93,8 @@ export const PLACEHOLDER_PATTERN = /\{\{([A-Za-z0-9][A-Za-z0-9_.-]{0,63})\}\}/g
  */
 export const TOOL_NAME_PATTERN = /^[a-z][a-z0-9_-]{0,47}$/
 
-/** The MCP server a plugin's tools are served under: `helm-plugin-<id>`. */
-export const AGENT_SERVER_PREFIX = 'helm-plugin-'
+/** The MCP server a plugin's tools are served under: `floti-plugin-<id>`. */
+export const AGENT_SERVER_PREFIX = 'floti-plugin-'
 
 /**
  * The longest name a session can be given for a tool. Claude Code calls an
@@ -348,8 +348,8 @@ export function validateManifest(value, options = {}) {
     const message =
       options.apiVersions === undefined
         ? apiVersion === undefined
-          ? `${said}; this Helm supports ${versionList(versions)}`
-          : `${said} by this Helm, which supports ${versionList(versions)}`
+          ? `${said}; this Floti supports ${versionList(versions)}`
+          : `${said} by this Floti, which supports ${versionList(versions)}`
         : `${said}: this host runs apiVersion ${versions.join(', ')} plugins`
     return { ok: false, errors: [message], warnings }
   }
@@ -726,7 +726,7 @@ function requiredEntry(value, field, extensions, fail, wrongKind) {
     return null
   }
   if (path.startsWith(RESERVED_PREFIX)) {
-    fail(`${field} may not be under ${RESERVED_PREFIX}, which Helm serves its runtime from`)
+    fail(`${field} may not be under ${RESERVED_PREFIX}, which Floti serves its runtime from`)
     return null
   }
   if (!extensions.some((extension) => path.toLowerCase().endsWith(extension))) {

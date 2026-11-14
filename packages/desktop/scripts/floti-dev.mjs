@@ -56,9 +56,9 @@ export const STABLE_CHANNEL = 'stable'
 
 /** The desktop file `floti update` installs on each target that has one. */
 export const DESKTOP_FILES = Object.freeze({
-  'windows-x64': (version) => `Helm-${version}-setup.exe`,
-  'macos-arm64': (version) => `Helm-${version}-arm64-mac.zip`,
-  'linux-x64': (version) => `Helm-${version}-linux-x64.AppImage`
+  'windows-x64': (version) => `Floti-${version}-setup.exe`,
+  'macos-arm64': (version) => `Floti-${version}-arm64-mac.zip`,
+  'linux-x64': (version) => `Floti-${version}-linux-x64.AppImage`
 })
 
 /** Each install script: its template, the install script it carries, and the targets it installs. */

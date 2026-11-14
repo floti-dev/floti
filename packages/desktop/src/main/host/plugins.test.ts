@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SettingValue } from '@coledtaylor/helm-plugin-sdk'
+import type { SettingValue } from '@floti-dev/plugin-sdk'
 import type { PluginFolder } from '@helm/core'
 import type { PluginBackgroundReport } from '../../shared/ipc'
 import type { ToolAnswer, ToolCallRequest } from '../plugins/tools'
@@ -77,7 +77,7 @@ function world(options: Options = {}) {
   })
   connection.answer('plugins:setTools', ({ path, enabled }) => {
     const plugin = at(path)
-    plugin.agent = { enabled, server: `helm-plugin-${plugin.id ?? ''}`, instructions: null, tools: [] }
+    plugin.agent = { enabled, server: `floti-plugin-${plugin.id ?? ''}`, instructions: null, tools: [] }
     return [...hosted]
   })
   connection.answer('plugins:setSetting', ({ plugin, key, value }) => {
@@ -148,7 +148,7 @@ function quietDeps(link: HostPluginsDeps['link']): HostPluginsDeps {
 
 describe('plugins in the local host', () => {
   it('says why when the host cannot be reached, for a page’s files', async () => {
-    const sentence = 'Helm could not find the local host program at /nowhere/floti; turn it off.'
+    const sentence = 'Floti could not find the local host program at /nowhere/floti; turn it off.'
     const plugins = createHostPlugins(quietDeps(fakeLink(null, sentence)))
     await expect(plugins.serves('sample')).rejects.toThrow(sentence)
     await expect(plugins.file('sample', 'dist/panel.html')).rejects.toThrow(sentence)
@@ -197,7 +197,7 @@ describe('plugins in the local host', () => {
   describe('a page’s calls', () => {
     const TOOLS: P.PluginAgentInfo = {
       enabled: true,
-      server: 'helm-plugin-sample',
+      server: 'floti-plugin-sample',
       instructions: 'Find before you write.',
       tools: [
         { name: 'find', description: 'Finds things.', inputSchema: { type: 'object', properties: { q: { type: 'string' } } }, readOnly: true },
@@ -213,7 +213,7 @@ describe('plugins in the local host', () => {
         {
           plugin: 'sample',
           name: 'Sample',
-          server: 'helm-plugin-sample',
+          server: 'floti-plugin-sample',
           instructions: 'Find before you write.',
           tools: [
             { name: 'find', description: 'Finds things.', inputSchema: { type: 'object', properties: { q: { type: 'string' } } }, readOnly: true },
@@ -235,7 +235,7 @@ describe('plugins in the local host', () => {
       id,
       name: id,
       background: { url: `floti-plugin://${id}/dist/background.js`, state: 'running', error: null },
-      agent: { ...TOOLS, server: `helm-plugin-${id}` }
+      agent: { ...TOOLS, server: `floti-plugin-${id}` }
     })
 
     it('S9: given only version 2 plugins with backgrounds, opens no hidden plugin host window and offers the host no tool server', async () => {
@@ -405,7 +405,7 @@ describe('plugins in the local host', () => {
     })
   })
 
-  describe('Helm’s own plugins, copied in on the first connect', () => {
+  describe('Floti’s own plugins, copied in on the first connect', () => {
     it('copies each folder with its switches and setting values, skipping one the host has and never a secret', async () => {
       const w = world({
         copied: false,
@@ -463,7 +463,7 @@ describe('plugins in the local host', () => {
       await w.link.connect()
       expect(w.marks).toEqual([])
       expect(w.logged).toEqual([
-        "host: Helm's plugins were not copied into the local host (The connection to the local host was closed.)"
+        "host: Floti's plugins were not copied into the local host (The connection to the local host was closed.)"
       ])
     })
   })

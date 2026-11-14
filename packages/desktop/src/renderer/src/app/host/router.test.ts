@@ -108,7 +108,7 @@ describe('where the window’s calls go', () => {
   })
 })
 
-describe('every channel a Helm page uses', () => {
+describe('every channel a Floti page uses', () => {
   /** The window's and the hidden plugin window's adapters, as their bridges build them, on a preload that answers nothing. */
   async function pages() {
     Object.defineProperty(window, 'helm', { value: bridge, configurable: true })

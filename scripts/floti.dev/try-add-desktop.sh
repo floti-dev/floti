@@ -12,11 +12,11 @@
 # checks that it exited 0 and the app is where add puts it, with its launcher
 # entry:
 #
-#   windows  %LOCALAPPDATA%\Programs\Helm\Helm.exe and its uninstaller, and
-#            the Start menu's Helm.lnk
-#   macos    ~/Applications/Helm.app, whose folder is the Applications entry
-#   linux    ~/Applications/Helm.AppImage, executable, its menu entry
-#            applications/helm.desktop running it and its icon under
+#   windows  %LOCALAPPDATA%\Programs\Floti\desktop\Floti.exe and its uninstaller, and
+#            the Start menu's Floti.lnk
+#   macos    ~/Applications/Floti.app, whose folder is the Applications entry
+#   linux    ~/Applications/Floti.AppImage, executable, its menu entry
+#            applications/dev.floti.desktop.desktop running it and its icon under
 #            $XDG_DATA_HOME (~/.local/share)
 #
 # Each missing thing fails with one line naming it. Publishes nothing.
@@ -71,24 +71,24 @@ cat "$work/add.out"
 
 case "$target" in
   windows-*)
-    programs=$(cygpath -u "$LOCALAPPDATA")/Programs/Helm
-    menu="$(cygpath -u "$APPDATA")/Microsoft/Windows/Start Menu/Programs/Helm.lnk"
-    [ -f "$programs/Helm.exe" ] || fail "the app is not at $programs/Helm.exe."
-    [ -f "$programs/Uninstall Helm.exe" ] || fail "the app has no uninstaller at $programs/Uninstall Helm.exe."
+    programs=$(cygpath -u "$LOCALAPPDATA")/Programs/Floti/desktop
+    menu="$(cygpath -u "$APPDATA")/Microsoft/Windows/Start Menu/Programs/Floti.lnk"
+    [ -f "$programs/Floti.exe" ] || fail "the app is not at $programs/Floti.exe."
+    [ -f "$programs/Uninstall Floti.exe" ] || fail "the app has no uninstaller at $programs/Uninstall Floti.exe."
     [ -f "$menu" ] || fail "the Start menu has no entry at $menu."
-    found="the app at \`$programs\`, its uninstaller, and the Start menu's \`Helm.lnk\`"
+    found="the app at \`$programs\`, its uninstaller, and the Start menu's \`Floti.lnk\`"
     ;;
   macos-*)
-    app="$HOME/Applications/Helm.app"
+    app="$HOME/Applications/Floti.app"
     [ -f "$app/Contents/Info.plist" ] || fail "the app is not at $app (no Contents/Info.plist)."
-    [ -x "$app/Contents/MacOS/Helm" ] || fail "$app has no executable Contents/MacOS/Helm."
+    [ -x "$app/Contents/MacOS/Floti" ] || fail "$app has no executable Contents/MacOS/Floti."
     found="\`$app\`, in the Applications entry \`~/Applications\`"
     ;;
   linux-*)
-    image="$HOME/Applications/Helm.AppImage"
+    image="$HOME/Applications/Floti.AppImage"
     share="${XDG_DATA_HOME:-$HOME/.local/share}"
-    entry="$share/applications/helm.desktop"
-    icon="$share/icons/hicolor/256x256/apps/helm.png"
+    entry="$share/applications/dev.floti.desktop.desktop"
+    icon="$share/icons/hicolor/256x256/apps/dev.floti.desktop.png"
     [ -f "$image" ] && [ -x "$image" ] || fail "the app is not at $image, or not executable."
     [ -f "$entry" ] || fail "there is no menu entry at $entry."
     grep -qxF "Exec=\"$image\"" "$entry" || fail "the menu entry at $entry does not run $image."

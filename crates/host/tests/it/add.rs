@@ -62,7 +62,7 @@ impl World {
             FLOTI_VERSION,
             Path::new(env!("CARGO_BIN_EXE_floti-fake-program")),
         );
-        let list_file = format!("Helm-{FLOTI_VERSION}-SHA256SUMS");
+        let list_file = format!("Floti-{FLOTI_VERSION}-SHA256SUMS");
         let list = format!("{}  {desktop_file}\n", hex_digest(&desktop));
 
         let world = Self {
@@ -162,8 +162,8 @@ impl World {
     /// can tell it.
     fn named(&self) -> String {
         match Native.desktop_version(&self.app()) {
-            Some(version) => format!("Helm {version}"),
-            None => "Helm".to_owned(),
+            Some(version) => format!("Floti {version}"),
+            None => "Floti".to_owned(),
         }
     }
 
@@ -232,11 +232,14 @@ async fn floti_add_desktop_installs_the_app_of_its_own_release_and_no_second_flo
         vars: [(OsString::from("XDG_DATA_HOME"), probe.into_os_string())].into(),
     };
     let app = Desktop {
-        name: "Helm",
+        name: "Floti",
         path: world.apps.join("probe"),
     };
     let writes_one = Native.add_launcher(&user, &app).unwrap().is_some();
-    let entry = world.data_home.join("applications").join("helm.desktop");
+    let entry = world
+        .data_home
+        .join("applications")
+        .join("dev.floti.desktop.desktop");
     assert_eq!(entry.is_file(), writes_one, "{stdout}");
     assert_eq!(
         stdout.contains(&format!("Its menu entry is {}.", entry.display())),
@@ -277,7 +280,7 @@ async fn an_installed_app_and_a_session_with_no_display_each_change_nothing() {
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert_eq!(
         stderr.trim_end(),
-        "floti add desktop: This test's session has no display, so Helm is not installed here."
+        "floti add desktop: This test's session has no display, so Floti is not installed here."
     );
     assert!(!world.installed());
 
@@ -313,7 +316,10 @@ async fn an_installed_app_missing_its_menu_entry_gets_it_in_one_line_that_says_s
     // Whether this OS's install leaves floti a menu entry to make (Linux),
     // asked of the OS's own code in a folder of the probe's own.
     let probe = world.dirs.folder("probe data home");
-    let entry = world.data_home.join("applications").join("helm.desktop");
+    let entry = world
+        .data_home
+        .join("applications")
+        .join("dev.floti.desktop.desktop");
     let makes_one = Native
         .add_launcher(&world.launcher_user(&probe), &world.app())
         .unwrap()
@@ -374,7 +380,7 @@ async fn a_release_without_the_desktop_list_installs_nothing_and_says_so_in_one_
     assert_eq!(
         stderr.trim_end(),
         format!(
-            "floti add desktop: floti {FLOTI_VERSION}'s release has no {}, the signed list of its desktop files' SHA-256s, so floti cannot check Helm for it. Nothing was installed.",
+            "floti add desktop: floti {FLOTI_VERSION}'s release has no {}, the signed list of its desktop files' SHA-256s, so floti cannot check Floti for it. Nothing was installed.",
             world.list_file
         )
     );

@@ -118,7 +118,7 @@ describe('the add-a-host dialog', () => {
     const w = world()
     const list = await within(w.dialog()).findByRole('radiogroup', { name: 'From your SSH config' })
     expect(within(list).getAllByRole('radio').map((radio) => radio.textContent)).toEqual(['build-box', 'studio-mac', 'homelab'])
-    const name = within(w.dialog()).getByRole<HTMLInputElement>('textbox', { name: 'Name in Helm' })
+    const name = within(w.dialog()).getByRole<HTMLInputElement>('textbox', { name: 'Name in Floti' })
     const target = within(w.dialog()).getByRole<HTMLInputElement>('textbox', { name: 'ssh target' })
 
     await pick(w, 'studio-mac')
@@ -221,7 +221,7 @@ describe('the add-a-host dialog', () => {
     await vi.waitFor(() => expect(w.step()).toBe('added'))
     await userEvent.click(w.button('Add another'))
     expect(w.step()).toBe('pick')
-    expect(within(w.dialog()).getByRole<HTMLInputElement>('textbox', { name: 'Name in Helm' }).value).toBe('')
+    expect(within(w.dialog()).getByRole<HTMLInputElement>('textbox', { name: 'Name in Floti' }).value).toBe('')
     expect(w.onClose).not.toHaveBeenCalled()
   })
 
@@ -254,7 +254,7 @@ describe('the add-a-host dialog', () => {
     await userEvent.click(w.button('Back'))
     expect(w.actions.cancelInstall).toHaveBeenCalledWith('offer-1')
     expect(w.step()).toBe('pick')
-    expect(within(w.dialog()).getByRole<HTMLInputElement>('textbox', { name: 'Name in Helm' }).value).toBe('build-box')
+    expect(within(w.dialog()).getByRole<HTMLInputElement>('textbox', { name: 'Name in Floti' }).value).toBe('build-box')
 
     await userEvent.click(w.button('Connect'))
     w.checks[1]?.answer.resolve({ kind: 'offer', id: 'offer-2', offer: OFFER })
@@ -294,7 +294,7 @@ describe('the add-a-host dialog', () => {
     const w = world()
     await userEvent.click(w.button('Reach it with a command instead'))
     await userEvent.type(within(w.dialog()).getByRole('textbox', { name: 'Command' }), 'wsl.exe -d Ubuntu --')
-    await userEvent.type(within(w.dialog()).getByRole('textbox', { name: 'Name in Helm' }), 'wsl')
+    await userEvent.type(within(w.dialog()).getByRole('textbox', { name: 'Name in Floti' }), 'wsl')
     await userEvent.click(w.button('Connect'))
     expect(w.checks[0]?.target).toEqual({
       transport: { kind: 'command', program: 'wsl.exe', args: ['-d', 'Ubuntu', '--'] },
@@ -331,7 +331,7 @@ describe('the add-a-host dialog', () => {
     await vi.waitFor(() => expect(w.step()).toBe('failed'))
     await userEvent.click(w.button('Back'))
     expect(w.step()).toBe('pick')
-    expect(within(w.dialog()).getByRole<HTMLInputElement>('textbox', { name: 'Name in Helm' }).value).toBe('build-box')
+    expect(within(w.dialog()).getByRole<HTMLInputElement>('textbox', { name: 'Name in Floti' }).value).toBe('build-box')
   })
 
   it('S19: a connection that fails shows floti’s last line and Try again reruns the connection, not the check', async () => {
@@ -351,13 +351,13 @@ describe('the add-a-host dialog', () => {
   })
 
   it.each([
-    ['S10', { kind: 'failed', lastLine: 'spawn ssh ENOENT', cause: 'transportMissing' }, 'noTransport', 'Helm could not find ssh on this PC'],
+    ['S10', { kind: 'failed', lastLine: 'spawn ssh ENOENT', cause: 'transportMissing' }, 'noTransport', 'Floti could not find ssh on this PC'],
     ['S11', { kind: 'failed', lastLine: 'ssh: Could not resolve hostname build-box: Name or service not known' }, 'unresolved', 'ssh does not know build-box'],
     ['S12', { kind: 'failed', lastLine: 'ssh: connect to host 10.0.0.7 port 22: Connection timed out' }, 'unreachable', 'Can’t reach build-box'],
     ['S14', { kind: 'failed', lastLine: 'Host key verification failed.', said: 'No ED25519 host key is known for build-box and you have requested strict checking.\nHost key verification failed.' }, 'unknownKey', 'ssh does not trust build-box yet'],
     ['S15', { kind: 'failed', lastLine: 'Welcome to build-box!', cause: 'loginOutput' }, 'loginOutput', 'build-box’s login printed text where floti’s connection goes'],
     ['S16', { kind: 'noBuild', system: { os: null, cpu: 'arm64', label: 'FreeBSD · arm64' }, reason: 'There is no floti for FreeBSD · arm64 yet.' }, 'noBuild', 'There is no floti for FreeBSD · arm64 yet'],
-    ['S18', { kind: 'newer', found: { version: '3.2.0', protocol: '2.0' }, ours: '1.0', helm: '3.0.0' }, 'newer', 'build-box runs floti 3.2.0, newer than this Helm 3.0.0']
+    ['S18', { kind: 'newer', found: { version: '3.2.0', protocol: '2.0' }, ours: '1.0', helm: '3.0.0' }, 'newer', 'build-box runs floti 3.2.0, newer than this Floti 3.0.0']
   ] as const)('%s: a check that fails as %s says what went wrong, with the line and the fix', async (_scenario, check, kind, title) => {
     const w = world()
     await pick(w)
@@ -427,7 +427,7 @@ describe('the add-a-host dialog', () => {
     })
     await vi.waitFor(() => expect(w.step()).toBe('failed'))
     expect(w.dialog().querySelector('[data-add-host-failed]')?.getAttribute('data-add-host-failed')).toBe('hostKeyChanged')
-    expect(w.dialog().querySelector('[data-add-host-fix]')?.textContent).toContain('Helm never accepts a host key for you')
+    expect(w.dialog().querySelector('[data-add-host-fix]')?.textContent).toContain('Floti never accepts a host key for you')
   })
 
   it('S23: Not installed names the install command, Not signed in names claude, Unknown says why; the host is added either way', async () => {
@@ -525,7 +525,7 @@ describe('the add-a-host dialog’s WSL distros', () => {
     await pick(w)
     expect(
       within(w.dialog()).getByRole<HTMLInputElement>('textbox', {
-        name: 'Name in Helm'
+        name: 'Name in Floti'
       }).value
     ).toBe('build-box')
   })
@@ -535,7 +535,7 @@ describe('the add-a-host dialog’s WSL distros', () => {
     await userEvent.click(await within(w.dialog()).findByRole('radio', { name: 'Debian' }))
     expect(
       within(w.dialog()).getByRole<HTMLInputElement>('textbox', {
-        name: 'Name in Helm'
+        name: 'Name in Floti'
       }).value
     ).toBe('Debian')
     await userEvent.click(w.button('Connect'))
@@ -558,7 +558,7 @@ describe('the add-a-host dialog’s WSL distros', () => {
     await userEvent.click(await within(w.dialog()).findByRole('radio', { name: 'Ubuntu' }))
     expect(
       within(w.dialog()).getByRole<HTMLInputElement>('textbox', {
-        name: 'Name in Helm'
+        name: 'Name in Floti'
       }).value
     ).toBe('Ubuntu on win-box')
     await userEvent.click(w.button('Connect'))

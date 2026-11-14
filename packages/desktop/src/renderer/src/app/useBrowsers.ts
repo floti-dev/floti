@@ -363,7 +363,7 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
         // No tab was made, so there is no problem line to write on: this is the
         // one browser failure that has to go somewhere else, and `error` is
         // where the cap's refusal already goes.
-        setError(`Helm could not open a browser tab: ${err instanceof Error ? err.message : String(err)}`)
+        setError(`Floti could not open a browser tab: ${err instanceof Error ? err.message : String(err)}`)
         return null
       }
       if (answer.state !== null) {
@@ -422,7 +422,7 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
           if (view === undefined) return current
           return new Map(current).set(id, {
             ...view,
-            problem: `Helm could not ${doing} this tab: ${detail}`
+            problem: `Floti could not ${doing} this tab: ${detail}`
           })
         })
       },

@@ -65,7 +65,7 @@ pub struct AgentPluginServers {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPluginServer {
-    /// Its name as a session lists it, such as `helm-plugin-trackr`: the
+    /// Its name as a session lists it, such as `floti-plugin-trackr`: the
     /// name the user's permission rules use.
     pub name: String,
     /// The plugin's id: lower-case letters, digits and dashes. The server is
@@ -167,8 +167,8 @@ impl AgentPluginOutcome {
     pub fn not_connected(plugin: &str) -> Self {
         Self::Failed {
             message: format!(
-                "Helm's window is not connected to the host this session runs in, so the plugin \
-                 \"{plugin}\" cannot answer. Open Helm, then try again."
+                "Floti's window is not connected to the host this session runs in, so the plugin \
+                 \"{plugin}\" cannot answer. Open Floti, then try again."
             ),
         }
     }

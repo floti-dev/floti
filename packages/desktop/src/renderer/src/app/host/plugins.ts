@@ -1,4 +1,4 @@
-import type { SurfaceKind } from '@coledtaylor/helm-plugin-sdk'
+import type { SurfaceKind } from '@floti-dev/plugin-sdk'
 import { LOCAL_HOST_KEY, type SessionRecord } from '@helm/core/types'
 import type { HostConnection, HostSubscription } from '../../../../shared/host/client'
 import type * as P from '../../../../shared/host/protocol'

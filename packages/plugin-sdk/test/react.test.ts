@@ -24,7 +24,7 @@ afterEach(() => {
 })
 
 describe('the React hooks', () => {
-  it('read settings and a secret once for every component, follow Helm, and let go on unmount', async () => {
+  it('read settings and a secret once for every component, follow Floti, and let go on unmount', async () => {
     const { result, unmount } = renderHook(
       () => ({ panel: useHelmSettings(), list: useHelmSettings(), token: useSecret('github-token') }),
       { wrapper: strict }

@@ -1091,7 +1091,7 @@ async fn s11_sigterm_ends_every_tree_and_records_rows_exited() {
 /// `floti host --desktop <program> --desktop-arg <arg>` with every folder in
 /// `dirs`: a host started by a desktop, here one that is never run.
 fn host_a_desktop_started(dirs: &TestDirs) -> HostProcess {
-    let app = dirs.folder("Helm app");
+    let app = dirs.folder("Floti app");
     HostProcess::spawn(
         floti_host_command(dirs)
             .arg("--desktop")

@@ -16,7 +16,7 @@ import {
  * AppImage the sandbox back.
  */
 
-const APPIMAGE = '/home/me/Apps/Helm-3.0.0-linux-x64.AppImage'
+const APPIMAGE = '/home/me/Apps/Floti-3.0.0-linux-x64.AppImage'
 const LINUX = { platform: 'linux' as const, env: { APPIMAGE }, appArmorRestricts: true }
 
 describe('whether the browser pane runs', () => {
@@ -25,11 +25,11 @@ describe('whether the browser pane runs', () => {
     expect(browserAvailability({ ...LINUX, platform: 'win32', noSandbox: false })).toEqual({ available: true })
   })
 
-  it('is off in a Linux Helm started with --no-sandbox, with the command for its AppImage', () => {
+  it('is off in a Linux Floti started with --no-sandbox, with the command for its AppImage', () => {
     expect(browserAvailability({ ...LINUX, noSandbox: true })).toEqual({ available: false, command: appArmorCommand(APPIMAGE) })
   })
 
-  it('is off with no command where AppArmor is not what refused the sandbox, or Helm is not an AppImage', () => {
+  it('is off with no command where AppArmor is not what refused the sandbox, or Floti is not an AppImage', () => {
     expect(browserAvailability({ ...LINUX, noSandbox: true, appArmorRestricts: false })).toEqual({ available: false, command: null })
     expect(browserAvailability({ ...LINUX, noSandbox: true, appArmorRestricts: null })).toEqual({ available: false, command: null })
     expect(browserAvailability({ ...LINUX, noSandbox: true, env: {} })).toEqual({ available: false, command: null })
@@ -55,24 +55,24 @@ describe('whether the browser pane runs', () => {
 })
 
 describe('the command that gives an AppImage the sandbox', () => {
-  it('writes a profile letting every Helm AppImage in its folder make user namespaces, with one sudo', () => {
-    expect(appArmorProfile('/home/me/Apps/Helm-*.AppImage')).toEqual([
+  it('writes a profile letting every Floti AppImage in its folder make user namespaces, with one sudo', () => {
+    expect(appArmorProfile('/home/me/Apps/Floti-*.AppImage')).toEqual([
       'abi <abi/4.0>,',
       'include <tunables/global>',
-      'profile helm-appimage "/home/me/Apps/Helm-*.AppImage" flags=(unconfined) {',
+      'profile floti-appimage "/home/me/Apps/Floti-*.AppImage" flags=(unconfined) {',
       '  userns,',
       '}'
     ])
     expect(appArmorCommand(APPIMAGE)).toBe(
-      `printf '%s\\n' 'abi <abi/4.0>,' 'include <tunables/global>' 'profile helm-appimage "/home/me/Apps/Helm-*.AppImage" flags=(unconfined) {' '  userns,' '}' | sudo sh -c 'cat > ${APPARMOR_PROFILE_FILE} && apparmor_parser -r ${APPARMOR_PROFILE_FILE}'`
+      `printf '%s\\n' 'abi <abi/4.0>,' 'include <tunables/global>' 'profile floti-appimage "/home/me/Apps/Floti-*.AppImage" flags=(unconfined) {' '  userns,' '}' | sudo sh -c 'cat > ${APPARMOR_PROFILE_FILE} && apparmor_parser -r ${APPARMOR_PROFILE_FILE}'`
     )
     expect(appArmorCommand(APPIMAGE)!.match(/sudo/g)).toHaveLength(1)
   })
 
   it('names a renamed AppImage by its own path, and quotes a folder with a quote in it', () => {
-    expect(appArmorCommand('/opt/apps/helm.AppImage')).toContain(`'profile helm-appimage "/opt/apps/helm.AppImage" flags=(unconfined) {'`)
-    expect(appArmorCommand("/home/o'neil/Helm-3.0.0-linux-x64.AppImage")).toContain(
-      `'profile helm-appimage "/home/o'\\''neil/Helm-*.AppImage" flags=(unconfined) {'`
+    expect(appArmorCommand('/opt/apps/helm.AppImage')).toContain(`'profile floti-appimage "/opt/apps/helm.AppImage" flags=(unconfined) {'`)
+    expect(appArmorCommand("/home/o'neil/Floti-3.0.0-linux-x64.AppImage")).toContain(
+      `'profile floti-appimage "/home/o'\\''neil/Floti-*.AppImage" flags=(unconfined) {'`
     )
   })
 

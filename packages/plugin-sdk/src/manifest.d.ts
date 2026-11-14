@@ -40,7 +40,7 @@ export const PLACEHOLDER_PATTERN: RegExp
 export const ICON_MAX_BYTES: number
 /** A key of `agent.tools`. */
 export const TOOL_NAME_PATTERN: RegExp
-/** `helm-plugin-`: what a plugin's MCP server is called, before its id. */
+/** `floti-plugin-`: what a plugin's MCP server is called, before its id. */
 export const AGENT_SERVER_PREFIX: string
 /** The longest `mcp__<server>__<tool>` a session can be given. */
 export const AGENT_TOOL_NAME_MAX: number
@@ -149,10 +149,10 @@ export function originMatches(pattern: OriginPattern, url: URL): boolean
 /** A path inside the plugin folder in one spelling, or null when it is not one. */
 export function normalizeEntry(path: string): string | null
 
-/** The MCP server name a plugin's tools appear under in a session: `helm-plugin-<id>`. */
+/** The MCP server name a plugin's tools appear under in a session: `floti-plugin-<id>`. */
 export function agentServerName(id: string): string
 
-/** What a session calls one of a plugin's tools: `mcp__helm-plugin-<id>__<tool>`. */
+/** What a session calls one of a plugin's tools: `mcp__floti-plugin-<id>__<tool>`. */
 export function agentToolName(id: string, tool: string): string
 
 /** Every file the manifest names, for the caller to check exists. */

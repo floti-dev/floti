@@ -73,7 +73,7 @@ function world(options: Options = {}, connection: FakeConnection | null = new Fa
         case 'profileDialog:import':
           return Promise.resolve(options.chosen ?? { cancelled: true })
         default:
-          return Promise.reject(new Error(`${channel} is not Helm's own`))
+          return Promise.reject(new Error(`${channel} is not Floti's own`))
       }
     }
   } as unknown as Pick<HelmBridge, 'invoke'>
@@ -145,13 +145,13 @@ describe('the window’s profiles over its own connection', () => {
     expect(asked).toEqual([])
   })
 
-  it('exports the host’s document through Helm’s save dialog', async () => {
+  it('exports the host’s document through Floti’s save dialog', async () => {
     const { adapter, asked } = world({ hosted: [profile(1, 'review')] })
     await expect(ask(adapter, 'profile:export', { id: 1 })).resolves.toEqual({ file: '/out dir/x.yaml' })
     expect(asked).toEqual([{ channel: 'profileDialog:export', payload: { fileName: 'review.yaml', yaml: 'name: x\n' } }])
   })
 
-  it('imports the file Helm’s open dialog read, sends nothing when cancelled, and names a file it could not read', async () => {
+  it('imports the file Floti’s open dialog read, sends nothing when cancelled, and names a file it could not read', async () => {
     const cancelled = world()
     await expect(ask(cancelled.adapter, 'profile:import')).resolves.toEqual({ profile: null, cancelled: true })
     expect(cancelled.connection.payloads('profile:import')).toEqual([])

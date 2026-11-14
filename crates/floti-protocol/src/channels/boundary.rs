@@ -82,7 +82,7 @@ pub const CLIENT_ONLY: &[Outside] = &[
     ),
     outside(
         "hostLink:*",
-        "a Helm page's own connection to the host, whose protocol frames the desktop's main process pipes to a bridge and never reads",
+        "a Floti page's own connection to the host, whose protocol frames the desktop's main process pipes to a bridge and never reads",
     ),
     outside(
         "remoteHosts:*",

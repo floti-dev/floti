@@ -297,7 +297,7 @@ describe('the workspace through the local host', () => {
     expect(await w.workspace.settings()).toEqual(own.own())
   })
 
-  it('copies Helm’s scan roots, pins and finished setup to a host that was never set up, once, before answering', async () => {
+  it('copies Floti’s scan roots, pins and finished setup to a host that was never set up, once, before answering', async () => {
     const own = ownSettings({
       scanRoots: [HUB],
       pinnedProjects: [ALPHA],
@@ -329,13 +329,13 @@ describe('the workspace through the local host', () => {
     expect((await w.workspace.settings()).scanRoots).toEqual([ELSEWHERE])
   })
 
-  it('copies nothing when Helm itself was never set up', async () => {
+  it('copies nothing when Floti itself was never set up', async () => {
     const w = world()
     await w.workspace.settings()
     expect(w.connection.payloads('settings:write')).toEqual([])
   })
 
-  it('tells the host once that Helm had the update check off, and leaves the setting to the host after', async () => {
+  it('tells the host once that Floti had the update check off, and leaves the setting to the host after', async () => {
     const own = ownSettings({ updateCheck: false })
     const first = new FakeConnection()
     const link = reconnectingLink(first)
@@ -354,7 +354,7 @@ describe('the workspace through the local host', () => {
     expect((await w.workspace.settings()).updateCheck).toBe(true)
   })
 
-  it('writes the workspace keys to the host and every other key to Helm, and lays the host’s over Helm’s', async () => {
+  it('writes the workspace keys to the host and every other key to Floti, and lays the host’s over Floti’s', async () => {
     const w = world()
     const after = await w.workspace.writeSettings({
       theme: 'light',
@@ -465,7 +465,7 @@ describe('the workspace through the local host', () => {
     expect(unknown.error).toMatch(/no Claude Code backend/)
   })
 
-  it('keeps a picked executable in Helm’s Settings only once the host checked and kept it', async () => {
+  it('keeps a picked executable in Floti’s Settings only once the host checked and kept it', async () => {
     const w = world()
     w.connection.answer('setup:locateBackend', () =>
       backend({
