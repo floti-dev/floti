@@ -232,11 +232,14 @@ async fn floti_add_desktop_installs_the_app_of_its_own_release_and_no_second_flo
         vars: [(OsString::from("XDG_DATA_HOME"), probe.into_os_string())].into(),
     };
     let app = Desktop {
-        name: "Helm",
+        name: "Floti",
         path: world.apps.join("probe"),
     };
     let writes_one = Native.add_launcher(&user, &app).unwrap().is_some();
-    let entry = world.data_home.join("applications").join("helm.desktop");
+    let entry = world
+        .data_home
+        .join("applications")
+        .join("dev.floti.desktop.desktop");
     assert_eq!(entry.is_file(), writes_one, "{stdout}");
     assert_eq!(
         stdout.contains(&format!("Its menu entry is {}.", entry.display())),
@@ -313,7 +316,10 @@ async fn an_installed_app_missing_its_menu_entry_gets_it_in_one_line_that_says_s
     // Whether this OS's install leaves floti a menu entry to make (Linux),
     // asked of the OS's own code in a folder of the probe's own.
     let probe = world.dirs.folder("probe data home");
-    let entry = world.data_home.join("applications").join("helm.desktop");
+    let entry = world
+        .data_home
+        .join("applications")
+        .join("dev.floti.desktop.desktop");
     let makes_one = Native
         .add_launcher(&world.launcher_user(&probe), &world.app())
         .unwrap()
