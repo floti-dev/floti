@@ -191,7 +191,7 @@ jobs:
           key: protocol
 
       - name: Check the generated files are this protocol's
-        run: cargo test --locked -p floti-protocol --test it generated_files::
+        run: cargo test --locked -p floti-protocol --test it generated_files
 
       # The same commit packs to the same bytes: sorted, owned by nobody,
       # dated by the commit, and gzipped with no name or time of its own.
