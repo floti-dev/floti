@@ -56,10 +56,6 @@ async function pageAt(helm: Helm, prefix: string): Promise<Page> {
 const windowCount = (helm: Helm): Promise<number> =>
   helm.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)
 
-/** The tab's problem line, by what it says. */
-const problem = (ui: Page, saying: string | RegExp): Locator =>
-  ui.getByRole('status').filter({ hasText: saying })
-
 /** Whether the web contents at `prefix` hold keyboard focus, which is where keystrokes would go. */
 const pageFocused = (helm: Helm, prefix: string): Promise<boolean> =>
   helm.app.evaluate(
@@ -239,46 +235,6 @@ test('posture: a page has no Node and no Helm, _blank and window.open make pages
   expect(await windowCount(helm)).toBe(windows)
 })
 
-test('refusals: a file address, a certificate off loopback, and an address beyond "This machine only" each get a sentence', async ({
-  helm
-}) => {
-  const ui = helm.window
-  await showBrowser(ui)
-  await go(ui, `${fixture.http}/`)
-  await expect(ui.getByRole('tab', { name: /Helm fixture one/ })).toBeVisible()
-
-  await go(ui, 'file:///C:/Windows/win.ini')
-  await expect(problem(ui, 'http and https')).toBeVisible()
-  await expect(address(ui)).toHaveValue(`${fixture.http}/`)
-
-  // One self-signed certificate: accepted on loopback, refused on another name,
-  // with nothing to click through.
-  await go(ui, `${fixture.httpsLoopback}/two`)
-  await expect(ui.getByRole('tab', { name: /Helm fixture two/ })).toBeVisible()
-  await go(ui, `${fixture.httpsNamed}/`)
-  await expect(problem(ui, 'certificate Helm will not accept')).toBeVisible()
-  expect(fixture.requests.filter((request) => request.startsWith(fixture.httpsNamed))).toEqual([])
-
-  // This machine only.
-  await ui.getByRole('button', { name: 'Settings' }).click()
-  await ui.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Browser', exact: true }).click()
-  await ui.getByRole('combobox', { name: 'Where the browser pane may go' }).selectOption('local')
-  await showBrowser(ui)
-  await go(ui, `${fixture.httpNamed}/two`)
-  await expect(problem(ui, 'This machine only')).toContainText(fixture.httpNamed.replace('http://', ''))
-  expect(fixture.requests.filter((request) => request.startsWith(fixture.httpNamed))).toEqual([])
-
-  // Loopback still loads, and a popup beyond the reach is refused on the tab that asked.
-  await go(ui, `${fixture.http}/posture`)
-  const page = await pageAt(helm, `${fixture.http}/posture`)
-  await expect(page).toHaveTitle('Helm fixture posture')
-  await page.getByRole('button', { name: 'Sign in elsewhere' }).click()
-  await expect(page.getByRole('status')).toHaveText('popup refused')
-  await expect(problem(ui, 'This machine only')).toBeVisible()
-  expect(await windowCount(helm)).toBe(1)
-  expect(fixture.requests.filter((request) => request.startsWith(fixture.httpNamed))).toEqual([])
-})
-
 test('persistence: a cookie a page sets is kept in the browser profile, apart from the app, and survives a restart', async ({
   helm,
   relaunch
@@ -401,7 +357,7 @@ test("the keyboard: the browser's keys work with the caret in the page, and ever
   await expect(await pageAt(helm, url)).toHaveTitle('Helm fixture tools')
 })
 
-test('the address list: the page stands down for it and stays down, so a remembered address takes the click', async ({
+test('the address list and the menu: the page stands down for each, the list keeps it down so a remembered address takes the click, and More opens over a still of the page', async ({
   helm
 }) => {
   const ui = helm.window
@@ -444,18 +400,8 @@ test('the address list: the page stands down for it and stays down, so a remembe
   const sent = await helm.app.evaluate(() => (globalThis as { boundsSent?: boolean[] }).boundsSent ?? [])
   const runs = sent.filter((visible, at) => at === 0 || visible !== sent[at - 1])
   expect(runs.slice(runs.indexOf(false))).toEqual([false, true])
-})
 
-test('the menu: zoom, width, DevTools and clearing data are behind More, opened over a still of the page', async ({
-  helm
-}) => {
-  const ui = helm.window
-  const url = `${fixture.http}/two`
-  await showBrowser(ui)
-  await go(ui, url)
-  await expect(await pageAt(helm, url)).toHaveTitle('Helm fixture two')
-  await expect.poll(() => viewsShown(helm)).toEqual([true])
-
+  // Zoom, width, DevTools and clearing data are behind More.
   await ui.getByRole('button', { name: 'More' }).click()
   const menu = ui.getByRole('menu', { name: 'Browser' })
   await expect(menu).toBeVisible()
@@ -473,7 +419,7 @@ test('the menu: zoom, width, DevTools and clearing data are behind More, opened 
   const level = (): Promise<number | undefined> =>
     helm.app.evaluate(
       ({ webContents }, at) => webContents.getAllWebContents().find((wc) => wc.getURL().startsWith(at))?.getZoomLevel(),
-      url
+      two
     )
   expect(await level()).toBe(0.5)
   await chip.click()

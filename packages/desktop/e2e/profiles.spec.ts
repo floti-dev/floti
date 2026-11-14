@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { harnessIn, plantHarness } from '../test/overlay-world'
+import type { Page } from '@playwright/test'
 import { claudeRunIn, expect, sessionIdOf, shimFolderOf, terminalText, test as base } from './helm'
 
 /**
@@ -16,7 +17,12 @@ const test = base.extend({
   }
 })
 
-test('a profile made in the New profile dialog starts its composition when it is saved', async ({
+/** The window's routed bridge (`inspect.ts`): host features over the window's own connection. */
+type Bridge = { __helmRouted: { invoke: (channel: string, payload?: unknown) => Promise<unknown> } }
+const invoke = <T>(window: Page, channel: string): Promise<T> =>
+  window.evaluate((name) => (window as unknown as Bridge).__helmRouted.invoke(name), channel) as Promise<T>
+
+test('a profile made in the New profile dialog is saved in the host and starts its composition, name and opening prompt when it is saved', async ({
   helm,
   world
 }) => {
@@ -35,9 +41,13 @@ test('a profile made in the New profile dialog starts its composition when it is
   await dialog.getByRole('checkbox', { name: 'Compose tools' }).check()
   await expect(dialog.getByRole('checkbox', { name: 'Grant access to tools' })).toBeChecked()
   await dialog.getByRole('combobox', { name: 'Model' }).selectOption('sonnet')
+  await dialog.getByRole('textbox', { name: 'Opening prompt' }).fill('/recap')
   await dialog.getByRole('button', { name: 'Save and start' }).click()
   await expect(dialog).toBeHidden()
   await expect(window.getByRole('list', { name: 'Saved profiles' }).getByRole('button', { name: /^hub dev/ })).toBeVisible()
+  // Saved in the host, not in Helm's own database.
+  const listed = await invoke<Array<{ name: string }>>(window, 'profile:list')
+  expect(listed.map((profile) => profile.name)).toEqual(['hub dev'])
 
   await expect(window.getByRole('tab', { name: 'hub dev, ready' })).toBeVisible()
   await expect(window.getByRole('tab', { name: /^hub dev/ })).toHaveCount(1)
@@ -45,7 +55,8 @@ test('a profile made in the New profile dialog starts its composition when it is
   await expect.poll(() => terminalText(window, id)).toContain('Claude Code v2.1.999 (fake)')
 
   // What the fake claude was started with: at the root, the overlay as a plugin
-  // directory the app built under its own data directory, and the form's flags.
+  // directory the host built in its own launch folder, and the form's flags,
+  // its opening prompt first.
   const run = await claudeRunIn(world, hub.root)
   const pluginDir = after(run.argv, '--plugin-dir') ?? ''
   expect(pluginDir.toLowerCase().startsWith(shimFolderOf(world).toLowerCase())).toBe(true)
@@ -53,4 +64,5 @@ test('a profile made in the New profile dialog starts its composition when it is
   expect(after(run.argv, '--add-dir')).toBe(hub.overlay)
   expect(after(run.argv, '--model')).toBe('sonnet')
   expect(after(run.argv, '-n')).toBe('hub dev')
+  expect(run.openingPrompt).toBe('/recap')
 })

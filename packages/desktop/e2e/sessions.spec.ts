@@ -1,18 +1,30 @@
 import type { Locator, Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { fakeClaudeLogs } from '../test/world'
+import { fakeClaudeLogs, type FakeClaudeLog } from '../test/world'
 import {
+  answer,
   claudeRunIn,
+  closeKeepRunning,
+  closeWindow,
   expect,
+  flotiChildren,
+  mainPid,
   processAlive,
+  sessionIdOf,
   startSession,
   terminalText,
   test,
   typeLine
 } from './helm'
 
-test('a session starts in a project, takes input and ends', async ({ helm, world }) => {
+/** How many times `text` is on a session's screen. */
+const count = (screen: string, text: string): number => screen.split(text).length - 1
+
+test('a session starts in a project, takes input and the pane’s size, is drawn again after a reload, and ends', async ({
+  helm,
+  world
+}) => {
   const { window } = helm
   const id = await startSession(window, 'alpha')
   const pane = window.getByRole('region', { name: 'First pane' })
@@ -24,10 +36,50 @@ test('a session starts in a project, takes input and ends', async ({ helm, world
   await typeLine(pane, 'hello there')
   await expect.poll(() => terminalText(window, id)).toContain('You said: hello there')
 
+  // The `claude` chosen in Settings, run by the host in the project.
   const run = await claudeRunIn(world, world.projects.alpha)
+  const log = (): FakeClaudeLog | undefined => fakeClaudeLogs(world).find((entry) => entry.pid === run.pid)
+  expect(log()?.received).toEqual(['hello there'])
+  expect(run.cwd.toLowerCase()).toBe(world.projects.alpha.toLowerCase())
   expect(run.argv[run.argv.indexOf('--session-id') + 1]).toMatch(/^[0-9a-f-]{36}$/)
   const history = readFileSync(join(world.claudeDir, 'history.jsonl'), 'utf8')
   expect(history).toContain('"display":"hello there"')
+
+  // The pane's size reaches the agent's terminal.
+  await helm.app.evaluate(({ BrowserWindow }) => {
+    const [win] = BrowserWindow.getAllWindows()
+    const [width, height] = win?.getSize() ?? [1200, 800]
+    win?.setSize((width ?? 1200) + 160, (height ?? 800) + 80)
+  })
+  const grid = async (): Promise<{ cols: number; rows: number } | undefined> => {
+    const sessions = await window.evaluate(
+      () =>
+        (
+          window as unknown as { __helmTerminals: () => { sessions: { key: string; cols: number; rows: number }[] } }
+        ).__helmTerminals().sessions
+    )
+    const terminal = sessions.find((session) => session.key === String(id))
+    return terminal === undefined ? undefined : { cols: terminal.cols, rows: terminal.rows }
+  }
+  await expect
+    .poll(async () => {
+      const shown = await grid()
+      return (
+        shown !== undefined &&
+        (log()?.resized ?? []).some((size) => size.cols === shown.cols && size.rows === shown.rows)
+      )
+    })
+    .toBe(true)
+
+  // A reload draws the screen as it was, then streams, with nothing repeated.
+  await window.reload()
+  await expect(window.getByRole('tab', { name: 'alpha, ready' })).toBeVisible()
+  await expect.poll(() => terminalText(window, id)).toContain('You said: hello there')
+  expect(count(await terminalText(window, id), 'You said: hello there')).toBe(1)
+  await typeLine(pane, 'after the reload')
+  await expect.poll(() => terminalText(window, id)).toContain('You said: after the reload')
+  expect(count(await terminalText(window, id), 'You said: hello there')).toBe(1)
+  expect(log()?.received).toEqual(['hello there', 'after the reload'])
 
   await typeLine(pane, '/exit')
   await expect(window.getByRole('tab', { name: 'alpha, ended' })).toBeVisible()
@@ -38,40 +90,90 @@ test('a session starts in a project, takes input and ends', async ({ helm, world
   await expect(window.getByRole('contentinfo')).toContainText('No sessions running')
 })
 
-test('quitting Helm ends every session and everything a session started', async ({ helm, world }) => {
+test('quitting asks first, and End and quit ends every session, everything a session started, and the host and its bridges', async ({
+  helm,
+  world
+}) => {
   const { window } = helm
-  await startSession(window, 'alpha')
-  const beta = await startSession(window, 'beta')
-
+  const alpha = await startSession(window, 'alpha')
   await typeLine(window.getByRole('region', { name: 'First pane' }), '/child')
   let child = 0
   await expect
     .poll(async () => {
-      child = Number(/child (\d+)/.exec(await terminalText(window, beta))?.[1] ?? 0)
+      child = Number(/child (\d+)/.exec(await terminalText(window, alpha))?.[1] ?? 0)
       return child
     })
     .toBeGreaterThan(0)
+  const run = await claudeRunIn(world, world.projects.alpha)
 
-  const pids = [
-    (await claudeRunIn(world, world.projects.alpha)).pid,
-    (await claudeRunIn(world, world.projects.beta)).pid,
-    child
-  ]
-  expect(pids.every(processAlive)).toBe(true)
+  // The sessions pane shows the session's process tree and listening ports as the host read them.
+  await window.locator('[data-open-sessions]').click()
+  await window.getByRole('region', { name: 'In Helm' }).locator('[data-session-hosted="true"]').click()
+  const tree = window.getByRole('region', { name: 'Process tree' })
+  await expect(tree.locator(`[data-tree-pid="${String(run.pid)}"]`)).toBeVisible()
+  await expect(tree.locator(`[data-tree-pid="${String(child)}"]`)).toBeVisible()
+  // The host looked and the child listens on nothing: said so, not Unknown.
+  await expect(window.getByRole('region', { name: 'Listening ports' })).toContainText(
+    'Nothing in this session’s process tree is listening.'
+  )
 
-  await helm.app.close()
-  await expect.poll(() => pids.filter(processAlive)).toEqual([])
+  await startSession(window, 'beta')
+  const pids = [run.pid, child, (await claudeRunIn(world, world.projects.beta)).pid]
+  // The host Helm started, the bridge main reaches it through and the window's own.
+  await expect.poll(async () => flotiChildren(await mainPid(helm)).length).toBe(3)
+  const floti = flotiChildren(await mainPid(helm))
+  expect([...pids, ...floti].every(processAlive)).toBe(true)
+
+  const main = await mainPid(helm)
+  await closeWindow(helm.app)
+  await answer(
+    window
+      .getByRole('alertdialog', { name: 'Quitting Helm ends 2 sessions on this PC’s host.' })
+      .getByRole('button', { name: 'End and quit' })
+  )
+  await expect.poll(() => [main, ...pids, ...floti].filter(processAlive)).toEqual([])
 })
 
-test('a session tab is renamed, then closed with confirmation', async ({ helm, world }) => {
+test('a session tab closed keeping its session opens again with its screen, is renamed and ended with confirmation, and one not open here is ended from the sessions pane', async ({
+  helm,
+  world
+}) => {
   const { window } = helm
-  await startSession(window, 'alpha')
+  const id = await startSession(window, 'alpha')
   const pane = window.getByRole('region', { name: 'First pane' })
   const run = await claudeRunIn(world, world.projects.alpha)
   const received = (): string[] => fakeClaudeLogs(world).find((log) => log.pid === run.pid)?.received ?? []
+  const ask = (name: string): Locator =>
+    window.getByRole('alertdialog', { name: `“${name}” is still running on this PC’s host.` })
 
   await typeLine(pane, 'before')
   await expect.poll(received).toEqual(['before'])
+  await expect.poll(() => terminalText(window, id)).toContain('You said: before')
+
+  // Closing the live tab asks first, naming the session and the host it runs
+  // on; Cancel keeps the tab and the process.
+  await pane.getByRole('button', { name: 'Close alpha' }).click()
+  await expect(ask('alpha')).toBeVisible()
+  await ask('alpha').getByRole('button', { name: 'Cancel' }).click()
+  await expect(ask('alpha')).toHaveCount(0)
+  await expect(pane.getByRole('tab', { name: 'alpha, ready' })).toBeVisible()
+  expect(processAlive(run.pid)).toBe(true)
+
+  // Close tab, keep running: no question, and the session runs on, not open here.
+  await closeKeepRunning(window, pane.getByRole('tab', { name: 'alpha, ready' }), 'alpha')
+  await expect(window.getByRole('tab', { name: /^alpha/ })).toHaveCount(0)
+  await expect(window.getByRole('alertdialog')).toHaveCount(0)
+  expect(processAlive(run.pid)).toBe(true)
+  await window.locator('[data-open-sessions]').click()
+  const notHere = window.getByRole('region', { name: 'Not open here' })
+  await expect(notHere.locator(`[data-not-open-here="${String(id)}"]`)).toContainText('alpha')
+
+  // Open: a tab again, drawing its screen as it is, then streaming and taking input.
+  await notHere.getByRole('button', { name: 'Open alpha' }).click()
+  await expect(pane.getByRole('tab', { name: 'alpha, ready' })).toBeVisible()
+  expect(await sessionIdOf(window, 'alpha, ready')).toBe(id)
+  await expect.poll(() => terminalText(window, id)).toContain('You said: before')
+  expect(count(await terminalText(window, id), 'You said: before')).toBe(1)
 
   // The rename field takes the keyboard while it is open.
   await pane.getByRole('tab', { name: 'alpha, ready' }).dblclick()
@@ -89,21 +191,25 @@ test('a session tab is renamed, then closed with confirmation', async ({ helm, w
   await typeLine(pane, 'after')
   await expect.poll(received).toEqual(['before', 'after'])
 
-  // Closing the live tab asks first, by its new name, and names the host it
-  // runs on; Cancel keeps the tab and the process.
-  const dialog = window.getByRole('alertdialog', { name: '“review” is still running on this PC’s host.' })
+  // Closing asks again, by the new name; agreeing ends the session and takes its tab away.
   await pane.getByRole('button', { name: 'Close review' }).click()
-  await expect(dialog).toBeVisible()
-  await dialog.getByRole('button', { name: 'Cancel' }).click()
-  await expect(dialog).toHaveCount(0)
-  await expect(pane.getByRole('tab', { name: 'review, ready' })).toBeVisible()
-  expect(processAlive(run.pid)).toBe(true)
-
-  // Agreeing ends the session and takes its tab away.
-  await pane.getByRole('button', { name: 'Close review' }).click()
-  await dialog.getByRole('button', { name: 'End session' }).click()
+  await ask('review').getByRole('button', { name: 'End session' }).click()
   await expect(window.getByRole('tab', { name: /^review/ })).toHaveCount(0)
   await expect.poll(() => processAlive(run.pid)).toBe(false)
+
+  // A session not open here is ended from the sessions pane, after the same question.
+  const beta = await startSession(window, 'beta')
+  const betaRun = await claudeRunIn(world, world.projects.beta)
+  await closeKeepRunning(window, pane.getByRole('tab', { name: 'beta, ready' }), 'beta')
+  await pane.getByRole('tab', { name: 'Sessions' }).click()
+  await notHere.getByRole('button', { name: 'End beta' }).click()
+  await ask('beta').getByRole('button', { name: 'Cancel' }).click()
+  await expect(notHere.locator(`[data-not-open-here="${String(beta)}"]`)).toBeVisible()
+  expect(processAlive(betaRun.pid)).toBe(true)
+  await notHere.getByRole('button', { name: 'End beta' }).click()
+  await ask('beta').getByRole('button', { name: 'End session' }).click()
+  await expect.poll(() => processAlive(betaRun.pid)).toBe(false)
+  await expect(notHere).toHaveCount(0)
   await expect(window.getByRole('contentinfo')).toContainText('No sessions running')
 })
 
