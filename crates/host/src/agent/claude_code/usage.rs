@@ -770,7 +770,10 @@ fn parse_usage_line(line: &str) -> Option<UsageRow> {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
+    use crate::testkit::TestDirs;
 
     #[test]
     fn a_dated_snapshot_is_priced_as_its_family_and_an_intro_rate_ends_on_its_day() {
@@ -801,5 +804,428 @@ mod tests {
         .unwrap();
         assert_eq!((split.cache_write_5m, split.cache_write_1h), (20, 10));
         assert_eq!(parse_usage_line(r#"{"type":"user","uuid":"u3"}"#), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // Reading the cached limits
+    // -----------------------------------------------------------------------
+
+    /// 2026-08-10T09:00:00Z, core's `NOW`.
+    const NOW: u64 = 1_786_352_400_000;
+    /// 2026-08-10T08:55:00Z, core's `FETCHED`.
+    const FETCHED: u64 = NOW - 5 * 60_000;
+
+    /// The three limits a 2.1.225 reading carries.
+    fn limits() -> Value {
+        json!([
+            { "kind": "session", "group": "session", "percent": 51, "severity": "normal",
+              "resets_at": "2026-08-10T13:10:00.721285+00:00", "scope": null, "is_active": true },
+            { "kind": "weekly_all", "group": "weekly", "percent": 38, "severity": "warning",
+              "resets_at": "2026-08-11T19:00:00.721310+00:00", "scope": null, "is_active": false },
+            { "kind": "weekly_scoped", "group": "weekly", "percent": 21, "severity": "normal",
+              "resets_at": "2026-08-11T18:59:59.721602+00:00",
+              "scope": { "model": { "id": null, "display_name": "Fable" }, "surface": null },
+              "is_active": false },
+        ])
+    }
+
+    /// The 2.1.225 shape of `.claude.json`, with the fields that vary made
+    /// arguments.
+    fn claude_json(fetched_at_ms: Value, limits: Value) -> Value {
+        json!({
+            "numStartups": 42,
+            "projects": {},
+            "cachedUsageUtilization": {
+                "fetchedAtMs": fetched_at_ms,
+                "accountUuid": "a5438327-5c7d-4ecd-97cd-47307ff36d81",
+                "utilization": {
+                    "five_hour": { "utilization": 51, "resets_at": "2026-08-10T13:10:00.721285+00:00" },
+                    "seven_day": { "utilization": 38, "resets_at": "2026-08-11T19:00:00.721310+00:00" },
+                    "tangelo": null,
+                    "nimbus_quill": { "utilization": 0, "resets_at": null },
+                    "limits": limits,
+                    "spend": { "used": { "amount_minor": 0, "currency": "USD" }, "enabled": false, "percent": 0 },
+                    "extra_usage": { "is_enabled": false, "daily": null, "weekly": null },
+                },
+            },
+        })
+    }
+
+    fn usual() -> Value {
+        claude_json(json!(FETCHED), limits())
+    }
+
+    fn with_cached(cached: Value) -> Value {
+        json!({ "numStartups": 42, "projects": {}, "cachedUsageUtilization": cached })
+    }
+
+    /// `root` read as the CLI's `.claude.json`, without a file.
+    fn parsed(root: &Value) -> UsageSnapshot {
+        parse_usage(root, Path::new("claude config/.claude.json"))
+    }
+
+    /// `ms` as an RFC 3339 instant, as the CLI writes a reset time.
+    fn iso(ms: u64) -> String {
+        jiff::Timestamp::from_millisecond(ms as i64)
+            .unwrap()
+            .to_string()
+    }
+
+    fn problem_kind(snapshot: &UsageSnapshot) -> Option<UsageProblemKind> {
+        snapshot.problem.as_ref().map(|problem| problem.kind)
+    }
+
+    #[test]
+    fn the_limits_a_current_reading_carries_are_read() {
+        let snapshot = parsed(&usual());
+        assert_eq!(snapshot.problem, None);
+        assert_eq!(snapshot.backend, BackendId::claude_code());
+        assert_eq!(snapshot.fetched_at_ms, Some(FETCHED));
+        assert_eq!(
+            snapshot
+                .limits
+                .iter()
+                .map(|limit| (limit.kind.as_str(), limit.percent))
+                .collect::<Vec<_>>(),
+            [
+                ("session", 51.0),
+                ("weekly_all", 38.0),
+                ("weekly_scoped", 21.0)
+            ]
+        );
+        assert_eq!(snapshot.limits[2].scope.as_deref(), Some("Fable"));
+        assert_eq!(snapshot.limits[1].severity, UsageSeverity::Warning);
+        assert!(snapshot.limits[0].is_active);
+    }
+
+    #[test]
+    fn the_six_digit_offset_timestamps_the_cli_writes_are_parsed() {
+        let snapshot = parsed(&usual());
+        // 2026-08-10T13:10:00.721Z
+        assert_eq!(
+            snapshot.limits[0].resets_at_ms,
+            Some(NOW + 4 * 3_600_000 + 600_721)
+        );
+    }
+
+    #[test]
+    fn a_missing_key_is_reported_rather_than_a_zero_invented() {
+        let snapshot = parsed(&json!({ "numStartups": 42, "projects": {} }));
+        assert_eq!(problem_kind(&snapshot), Some(UsageProblemKind::MissingKey));
+        assert!(snapshot.limits.is_empty());
+    }
+
+    #[test]
+    fn an_unusable_fetched_at_is_reported_because_an_age_cannot_be_judged_without_one() {
+        for value in [json!(null), json!("yesterday"), json!(0)] {
+            let snapshot = parsed(&claude_json(value.clone(), limits()));
+            assert_eq!(
+                problem_kind(&snapshot),
+                Some(UsageProblemKind::Unrecognised),
+                "fetchedAtMs {value}"
+            );
+            assert!(snapshot.limits.is_empty());
+        }
+    }
+
+    #[test]
+    fn a_reshaped_limits_array_is_reported_rather_than_what_was_recognised_shown() {
+        let snapshot = parsed(&claude_json(
+            json!(FETCHED),
+            json!([
+                { "kind": "session", "group": "session", "utilizationPercent": 51 },
+                { "kind": "weekly_all", "bucket": "weekly", "percent": 38 },
+            ]),
+        ));
+        assert_eq!(
+            problem_kind(&snapshot),
+            Some(UsageProblemKind::Unrecognised)
+        );
+        assert!(snapshot.limits.is_empty());
+    }
+
+    #[test]
+    fn the_limits_recognised_are_kept_when_a_new_kind_appears_beside_them() {
+        let snapshot = parsed(&claude_json(
+            json!(FETCHED),
+            json!([
+                { "kind": "session", "group": "session", "percent": 12, "resets_at": null },
+                { "kind": "weekly_cowork", "group": "weekly", "percent": 4, "resets_at": null },
+                { "kind": "something_new", "group": "monthly", "percent": 90 },
+            ]),
+        ));
+        // The unknown kind declares a group that is shown; the unknown group
+        // has nowhere honest to go.
+        assert_eq!(
+            snapshot
+                .limits
+                .iter()
+                .map(|limit| limit.kind.as_str())
+                .collect::<Vec<_>>(),
+            ["session", "weekly_cowork"]
+        );
+    }
+
+    #[test]
+    fn a_percent_that_is_not_one_is_refused() {
+        let snapshot = parsed(&claude_json(
+            json!(FETCHED),
+            json!([{ "kind": "session", "group": "session", "percent": "51%", "resets_at": null }]),
+        ));
+        assert_eq!(
+            problem_kind(&snapshot),
+            Some(UsageProblemKind::Unrecognised)
+        );
+    }
+
+    #[test]
+    fn a_null_cached_reading_is_missing_and_a_string_one_is_reshaped() {
+        assert_eq!(
+            problem_kind(&parsed(&with_cached(json!(null)))),
+            Some(UsageProblemKind::MissingKey)
+        );
+        assert_eq!(
+            problem_kind(&parsed(&with_cached(json!("nope")))),
+            Some(UsageProblemKind::Unrecognised)
+        );
+    }
+
+    /// A home with Claude Code's config folder in it.
+    struct Home {
+        config: PathBuf,
+        /// Last: fields drop in order.
+        dirs: TestDirs,
+    }
+
+    impl Home {
+        fn new() -> Self {
+            let dirs = TestDirs::new();
+            let config = dirs.home.join(".claude");
+            std::fs::create_dir_all(&config).unwrap();
+            Self { config, dirs }
+        }
+
+        /// Where the CLI keeps `.claude.json` for the default config
+        /// folder: beside it.
+        fn beside(&self) -> PathBuf {
+            self.dirs.home.join(".claude.json")
+        }
+
+        fn reading(&self) -> UsageSnapshot {
+            read_limits(&claude_config_file(&self.config))
+        }
+    }
+
+    #[test]
+    fn the_file_beside_the_config_folder_is_read() {
+        let home = Home::new();
+        std::fs::write(home.beside(), usual().to_string()).unwrap();
+        let snapshot = home.reading();
+        assert_eq!(snapshot.file, home.beside().display().to_string());
+        assert_eq!(snapshot.limits.len(), 3);
+    }
+
+    #[test]
+    fn one_inside_the_config_folder_is_preferred_when_that_is_where_it_is() {
+        let home = Home::new();
+        std::fs::write(home.beside(), json!({ "numStartups": 1 }).to_string()).unwrap();
+        let inside = home.config.join(".claude.json");
+        std::fs::write(&inside, usual().to_string()).unwrap();
+        let snapshot = home.reading();
+        assert_eq!(snapshot.file, inside.display().to_string());
+        assert_eq!(snapshot.problem, None);
+    }
+
+    #[test]
+    fn a_file_that_is_not_there_is_reported() {
+        let snapshot = Home::new().reading();
+        assert_eq!(problem_kind(&snapshot), Some(UsageProblemKind::NoFile));
+        assert!(snapshot.limits.is_empty());
+        assert_eq!(snapshot.fetched_at_ms, None);
+    }
+
+    #[test]
+    fn a_half_written_file_is_reported_rather_than_failing() {
+        let home = Home::new();
+        std::fs::write(home.beside(), "{\"cachedUsageUtilization\": {\"fetched").unwrap();
+        assert_eq!(
+            problem_kind(&home.reading()),
+            Some(UsageProblemKind::NotJson)
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // What a reading may paint
+    // -----------------------------------------------------------------------
+
+    fn labels(snapshot: &UsageSnapshot, now: u64) -> Vec<(&'static str, f64, Option<String>)> {
+        usage_view(snapshot, now)
+            .buckets
+            .into_iter()
+            .map(|bucket| (bucket.label, bucket.percent, bucket.scope))
+            .collect()
+    }
+
+    #[test]
+    fn the_session_limit_and_the_binding_weekly_one_are_shown() {
+        let snapshot = parsed(&usual());
+        assert_eq!(usage_view(&snapshot, NOW).problem, None);
+        assert_eq!(
+            labels(&snapshot, NOW),
+            [("Session", 51.0, None), ("Week", 38.0, None)]
+        );
+    }
+
+    #[test]
+    fn the_per_model_weekly_limit_is_shown_when_it_is_the_binding_one() {
+        let snapshot = parsed(&claude_json(
+            json!(FETCHED),
+            json!([
+                { "kind": "session", "group": "session", "percent": 10, "resets_at": "2026-08-10T13:10:00Z" },
+                { "kind": "weekly_all", "group": "weekly", "percent": 38, "resets_at": "2026-08-11T19:00:00Z" },
+                { "kind": "weekly_scoped", "group": "weekly", "percent": 77, "resets_at": "2026-08-11T19:00:00Z",
+                  "scope": { "model": { "display_name": "Fable" } } },
+            ]),
+        ));
+        let view = usage_view(&snapshot, NOW);
+        assert_eq!(view.buckets[1].percent, 77.0);
+        assert_eq!(view.buckets[1].scope.as_deref(), Some("Fable"));
+        assert_eq!(view.buckets[1].kind, "weekly_scoped");
+    }
+
+    #[test]
+    fn the_binding_limit_is_not_chosen_by_is_active_which_was_seen_on_the_lower_one() {
+        let snapshot = parsed(&claude_json(
+            json!(FETCHED),
+            json!([
+                { "kind": "weekly_all", "group": "weekly", "percent": 38,
+                  "resets_at": "2026-08-11T19:00:00Z", "is_active": false },
+                { "kind": "weekly_scoped", "group": "weekly", "percent": 90,
+                  "resets_at": "2026-08-11T19:00:00Z", "is_active": true,
+                  "scope": { "model": { "display_name": "Fable" } } },
+            ]),
+        ));
+        assert_eq!(
+            usage_view(&snapshot, NOW)
+                .buckets
+                .iter()
+                .map(|bucket| bucket.percent)
+                .collect::<Vec<_>>(),
+            [90.0]
+        );
+    }
+
+    #[test]
+    fn past_the_staleness_horizon_the_figures_are_lower_bounds() {
+        let snapshot = parsed(&usual());
+        let inside = usage_view(&snapshot, FETCHED + USAGE_STALE_AFTER_MS - 1000);
+        let outside = usage_view(&snapshot, FETCHED + USAGE_STALE_AFTER_MS + 1000);
+        assert_eq!(inside.buckets.len(), 2);
+        assert!(!inside.at_least);
+        // The same numbers, now floors rather than withheld.
+        assert_eq!(
+            outside
+                .buckets
+                .iter()
+                .map(|bucket| bucket.percent)
+                .collect::<Vec<_>>(),
+            inside
+                .buckets
+                .iter()
+                .map(|bucket| bucket.percent)
+                .collect::<Vec<_>>()
+        );
+        assert!(outside.at_least);
+        assert_eq!(outside.problem, None);
+        assert_eq!(outside.age_ms, Some((USAGE_STALE_AFTER_MS + 1000) as i64));
+    }
+
+    #[test]
+    fn a_stale_reading_that_has_also_rolled_over_shows_nothing() {
+        let snapshot = parsed(&claude_json(
+            json!(NOW - 6 * 3_600_000),
+            json!([{ "kind": "session", "group": "session", "percent": 59,
+                     "resets_at": iso(NOW - 3_600_000) }]),
+        ));
+        let view = usage_view(&snapshot, NOW);
+        assert!(view.buckets.is_empty());
+        assert!(!view.at_least);
+        assert_eq!(
+            view.problem.map(|problem| problem.kind),
+            Some(UsageProblemKind::RolledOver)
+        );
+    }
+
+    #[test]
+    fn a_window_that_has_reset_is_dropped_and_one_that_has_not_is_kept() {
+        let snapshot = parsed(&claude_json(
+            json!(NOW - 60_000),
+            json!([
+                { "kind": "session", "group": "session", "percent": 51, "resets_at": iso(NOW - 4 * 60_000) },
+                { "kind": "weekly_all", "group": "weekly", "percent": 38, "resets_at": "2026-08-11T19:00:00Z" },
+            ]),
+        ));
+        assert_eq!(
+            labels(&snapshot, NOW)
+                .into_iter()
+                .map(|(label, _, _)| label)
+                .collect::<Vec<_>>(),
+            ["Week"]
+        );
+    }
+
+    #[test]
+    fn nothing_is_shown_when_every_window_in_the_reading_has_reset() {
+        let snapshot = parsed(&claude_json(
+            json!(NOW - 60_000),
+            json!([
+                { "kind": "session", "group": "session", "percent": 51, "resets_at": iso(NOW - 1000) },
+                { "kind": "weekly_all", "group": "weekly", "percent": 38, "resets_at": iso(NOW - 1000) },
+            ]),
+        ));
+        assert_eq!(
+            usage_view(&snapshot, NOW)
+                .problem
+                .map(|problem| problem.kind),
+            Some(UsageProblemKind::RolledOver)
+        );
+    }
+
+    #[test]
+    fn a_limit_the_server_sent_no_reset_time_for_is_kept() {
+        let snapshot = parsed(&claude_json(
+            json!(NOW),
+            json!([{ "kind": "session", "group": "session", "percent": 7, "resets_at": null }]),
+        ));
+        assert_eq!(
+            usage_view(&snapshot, NOW)
+                .buckets
+                .iter()
+                .map(|bucket| (bucket.percent, bucket.resets_at_ms))
+                .collect::<Vec<_>>(),
+            [(7.0, None)]
+        );
+    }
+
+    #[test]
+    fn a_reading_dated_in_the_future_shows_nothing() {
+        let snapshot = parsed(&claude_json(json!(NOW + 10 * 60_000), limits()));
+        let view = usage_view(&snapshot, NOW);
+        assert!(view.buckets.is_empty());
+        assert_eq!(
+            view.problem.map(|problem| problem.kind),
+            Some(UsageProblemKind::Unrecognised)
+        );
+    }
+
+    #[test]
+    fn a_read_problem_is_passed_straight_through() {
+        let snapshot = parsed(&json!({ "numStartups": 42 }));
+        let view = usage_view(&snapshot, NOW);
+        assert!(view.buckets.is_empty());
+        assert_eq!(
+            view.problem.map(|problem| problem.kind),
+            Some(UsageProblemKind::MissingKey)
+        );
     }
 }

@@ -586,4 +586,12 @@ mod tests {
         assert_eq!(editor_extension("C:\\notes\\big.TS"), "ts");
         assert_eq!(editor_extension("/repo/Makefile"), "makefile");
     }
+
+    #[test]
+    fn an_editor_source_under_the_ceiling_is_highlighted() {
+        let out = editor_highlight("notes/small.ts", "const value = 1\n");
+        assert!(!out.too_large);
+        assert!(out.highlighted);
+        assert!(!out.lines.is_empty());
+    }
 }

@@ -618,3 +618,200 @@ fn count_words(body: &str) -> u32 {
     }
     words
 }
+
+#[cfg(test)]
+mod tests {
+    use super::render_markdown;
+    use crate::workspace::render::wikilinks::{IndexedFile, WikiIndex};
+
+    fn index_of(files: &[(&'static str, &'static str, &'static str)]) -> WikiIndex {
+        WikiIndex::build(files.iter().map(|(path, rel_path, slug)| IndexedFile {
+            path,
+            rel_path,
+            slug,
+        }))
+    }
+
+    #[test]
+    fn rendering_never_emits_the_frontmatter_as_text() {
+        let out = render_markdown("---\ntype: journal\n---\n\n# Hello\n", None, None);
+        assert!(!out.html.contains("type: journal"), "{}", out.html);
+        assert!(out.html.contains("<h1"));
+        assert!(out.frontmatter.present);
+        let first = &out.frontmatter.fields[0];
+        assert_eq!(
+            (
+                first.key.as_str(),
+                first.value.as_str(),
+                first.values.clone()
+            ),
+            ("type", "journal", vec!["journal".to_owned()])
+        );
+    }
+
+    #[test]
+    fn rendering_keeps_gfm_tables_and_task_list_state() {
+        let out = render_markdown(
+            "| a | b |\n| --- | --- |\n| 1 | 2 |\n\n- [x] done\n- [ ] not done\n",
+            None,
+            None,
+        );
+        assert_eq!(out.counts.tables, 1);
+        assert_eq!(out.counts.task_items, 2);
+        assert_eq!(out.counts.task_items_checked, 1);
+        assert!(out.html.contains("checked"));
+    }
+
+    #[test]
+    fn a_fenced_block_is_highlighted_in_both_themes_and_labelled_with_its_language() {
+        let out = render_markdown("```ts\nconst a: number = 1\n```\n", None, None);
+        assert_eq!(out.counts.code_blocks, 1);
+        assert_eq!(out.counts.highlighted_blocks, 1);
+        assert!(
+            out.html.contains("data-language=\"typescript\""),
+            "{}",
+            out.html
+        );
+        assert!(out.html.contains("--shiki-light"));
+        assert!(out.html.contains("--shiki-dark"));
+    }
+
+    #[test]
+    fn an_unknown_language_is_plain_text_and_listed() {
+        let out = render_markdown("```notalanguage\nhello\n```\n", None, None);
+        assert_eq!(out.counts.code_blocks, 1);
+        assert_eq!(out.counts.highlighted_blocks, 0);
+        assert_eq!(out.unknown_languages, ["notalanguage"]);
+    }
+
+    #[test]
+    fn a_broken_wikilink_is_marked_and_a_live_one_resolved() {
+        let index = index_of(&[("C:/v/notes/beta.md", "notes/beta.md", "beta")]);
+        let out = render_markdown("See [[beta]] and [[missing]].\n", Some(&index), None);
+        assert_eq!(out.counts.wikilinks, 2);
+        assert_eq!(out.counts.broken_wikilinks, 1);
+        assert!(
+            out.html
+                .contains("data-wikilink-path=\"C:/v/notes/beta.md\"")
+        );
+        assert!(out.html.contains("wikilink-broken"));
+    }
+
+    #[test]
+    fn a_bracket_inside_code_is_not_a_wikilink() {
+        let out = render_markdown("Inline `[[not a link]]` stays.\n", None, None);
+        assert_eq!(out.counts.wikilinks, 0);
+        assert!(out.html.contains("[[not a link]]"));
+    }
+
+    #[test]
+    fn a_wikilink_whose_alias_is_markup_is_still_one_link() {
+        let index = index_of(&[("C:/v/notes/beta.md", "notes/beta.md", "beta")]);
+        for alias in ["`code`", "**bold**", "_thin_"] {
+            let out = render_markdown(&format!("See [[beta|{alias}]] now.\n"), Some(&index), None);
+            assert_eq!(out.counts.wikilinks, 1, "{alias}");
+            assert_eq!(out.counts.broken_wikilinks, 0, "{alias}");
+            assert!(
+                out.html
+                    .contains("data-wikilink-path=\"C:/v/notes/beta.md\""),
+                "{alias}"
+            );
+            assert!(!out.html.contains("[["), "{alias}: {}", out.html);
+        }
+    }
+
+    #[test]
+    fn an_ordinary_wikilink_after_a_spanned_one_is_still_found() {
+        let index = index_of(&[
+            ("C:/v/notes/beta.md", "notes/beta.md", "beta"),
+            ("C:/v/notes/gamma.md", "notes/gamma.md", "gamma"),
+        ]);
+        let out = render_markdown(
+            "Off [[beta|`alias`]], then see [[gamma]] after.\n",
+            Some(&index),
+            None,
+        );
+        assert_eq!(out.counts.wikilinks, 2);
+        assert_eq!(out.counts.broken_wikilinks, 0);
+        let targets: Vec<&str> = out.links.iter().map(|link| link.target.as_str()).collect();
+        assert_eq!(targets, ["beta", "gamma"]);
+        assert!(
+            out.html
+                .contains("data-wikilink-path=\"C:/v/notes/gamma.md\"")
+        );
+    }
+
+    #[test]
+    fn a_spanned_link_is_labelled_with_its_alias_text_and_no_markup() {
+        let index = index_of(&[("C:/v/notes/beta.md", "notes/beta.md", "beta")]);
+        let out = render_markdown("See [[beta|`project-pane-hub`]].\n", Some(&index), None);
+        assert_eq!(out.links[0].label, "project-pane-hub");
+        assert!(out.html.contains(">project-pane-hub</a>"), "{}", out.html);
+        assert!(!out.html.contains("<code>"));
+    }
+
+    #[test]
+    fn an_unclosed_or_block_spanning_bracket_pair_stays_the_text_it_is() {
+        for source in [
+            "A stray [[open `bracket` with no closer.\n",
+            "A pair [[across `code`\n\nand a paragraph]] break.\n",
+        ] {
+            let out = render_markdown(source, None, None);
+            assert_eq!(out.counts.wikilinks, 0, "{source}");
+            assert!(out.html.contains("[["), "{source}");
+        }
+    }
+
+    #[test]
+    fn a_callout_renders_as_an_admonition_not_a_quotation() {
+        let out = render_markdown(
+            "> [!warning] Supersedes the SDK draft\n> The body.\n",
+            None,
+            None,
+        );
+        assert_eq!(out.counts.callouts, 1);
+        assert!(
+            out.html.contains("data-callout=\"warning\""),
+            "{}",
+            out.html
+        );
+        assert!(out.html.contains("Supersedes the SDK draft"));
+        assert!(!out.html.contains("[!warning]"));
+    }
+
+    #[test]
+    fn tags_are_shown_and_hashes_that_are_not_tags_ignored() {
+        let out = render_markdown(
+            "A #helm tag, see https://x.test/#frag and issue #12.\n",
+            None,
+            None,
+        );
+        assert_eq!(out.tags, ["helm"]);
+    }
+
+    #[test]
+    fn no_script_a_note_contains_survives_sanitising() {
+        let out = render_markdown(
+            "Hello\n\n<script>alert(1)</script>\n\n<img src=x onerror=alert(1)>\n\n\
+             <a href=\"javascript:alert(1)\">x</a> <iframe src=\"https://x.test\"></iframe>\n",
+            None,
+            None,
+        );
+        let lower = out.html.to_lowercase();
+        for banned in ["<script", "onerror", "javascript:", "<iframe"] {
+            assert!(!lower.contains(banned), "{banned} survived: {}", out.html);
+        }
+    }
+
+    #[test]
+    fn every_heading_gets_an_anchor_a_wikilink_can_aim_at() {
+        let out = render_markdown("# One\n\n## Two Words\n", None, None);
+        let slugs: Vec<&str> = out
+            .headings
+            .iter()
+            .map(|heading| heading.slug.as_str())
+            .collect();
+        assert_eq!(slugs, ["one", "two-words"]);
+        assert!(out.html.contains("data-heading=\"two-words\""));
+    }
+}

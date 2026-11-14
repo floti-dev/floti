@@ -547,3 +547,6 @@ fn write_entry(entry: &Planned, destination: &Path, values: &TemplateValues) -> 
         (None, None) => Ok(()),
     }
 }
+
+#[cfg(test)]
+mod tests;

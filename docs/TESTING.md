@@ -212,9 +212,15 @@ What a client browses around its sessions is tested through `TestClient`
 against a `RunningHost`, one file per feature in `crates/host/tests/it/`:
 `discovery.rs`, `settings.rs`, `profiles.rs`, `templates.rs`, `content.rs`,
 `files.rs` and `highlighting.rs`, with the processes-and-ports pass in
-`resources.rs`. They carry core's and main's cases for discovery, roots,
-harnesses, settings, profiles, templates, content and the Files view with the
-same inputs and expectations. A test that needs a repository makes one with
+`resources.rs`. For discovery, profiles, templates, content, history and
+usage those files hold only the wiring: each operation once through a real
+host, and each way an answer or an error crosses the protocol. The cases
+about a rule (what a scan finds, what a profile's YAML may say, what a
+template name may be, how a note renders, what a transcript indexes as, where
+a day's usage ends) are unit tests beside the code, in
+`src/workspace/{discovery,profiles,templates,content,render}`, `src/history`
+and `src/usage`, calling it directly on a folder the test made. A new case
+about a rule goes there. A test that needs a repository makes one with
 `GitRepo` (testkit), which commits with a fixed author and date and none of
 the machine's git configuration. One that needs a link makes it with
 `link_folder`, a junction on Windows and a symlink on macOS and Linux, and

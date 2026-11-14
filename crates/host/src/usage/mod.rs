@@ -28,6 +28,8 @@
 //! reuses the rows it has.
 
 mod day;
+#[cfg(test)]
+mod tests;
 
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};

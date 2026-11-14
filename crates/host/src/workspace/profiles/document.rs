@@ -251,3 +251,253 @@ fn named<T: DeserializeOwned>(value: Option<&Value>) -> Option<T> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    use floti_protocol::channels::common::PermissionMode;
+    use floti_protocol::channels::sessions::{EffortLevel, ProfileDraft};
+
+    use super::{profile_from_yaml, profile_to_yaml, validate_profile};
+    use crate::agent_config::normalize;
+
+    /// An absolute home folder on this OS, with a space in it. Nothing reads
+    /// or writes it: a document is written and read as text.
+    fn home() -> PathBuf {
+        std::env::temp_dir().join("floti profile home")
+    }
+
+    fn harness() -> PathBuf {
+        home().join(".harness").join("dev")
+    }
+
+    fn text(path: &Path) -> String {
+        path.display().to_string()
+    }
+
+    /// The spec's example profile, rooted at `~/.harness/dev`.
+    fn sample() -> ProfileDraft {
+        let harness = harness();
+        ProfileDraft {
+            name: "Acme cloud sync".into(),
+            root: text(&harness),
+            overlays: vec![
+                text(&harness.join("repos").join("acme")),
+                text(&harness.join("repos").join("acme-reporting")),
+            ],
+            access: vec![
+                text(&harness.join("repos").join("acme")),
+                text(&harness.join("repos").join("other-repo")),
+            ],
+            model: Some("opus".into()),
+            effort: Some(EffortLevel::High),
+            permission_mode: Some(PermissionMode::Auto),
+            agent: None,
+            mcp: vec!["clickup".into()],
+            opening_prompt: Some("/recap".into()),
+            pinned_order: None,
+            session_agents: None,
+            remote_control: None,
+        }
+    }
+
+    // profile_to_yaml
+
+    #[test]
+    fn a_profile_document_writes_the_shape_the_spec_prints() {
+        let yaml = profile_to_yaml(&sample(), Some(&home()));
+        assert!(yaml.contains("name: Acme cloud sync"), "{yaml}");
+        assert!(yaml.contains("permission_mode: auto"), "{yaml}");
+        assert!(yaml.contains("opening_prompt: /recap"), "{yaml}");
+        assert!(!yaml.contains("permissionMode"), "{yaml}");
+    }
+
+    #[test]
+    fn a_profile_document_writes_paths_under_the_root_relative_to_it_and_the_root_against_home() {
+        let yaml = profile_to_yaml(&sample(), Some(&home()));
+        assert!(yaml.contains("repos/acme"), "{yaml}");
+        assert!(yaml.contains("~/.harness/dev"), "{yaml}");
+        assert!(
+            !yaml.contains(&text(&harness().join("repos").join("acme"))),
+            "{yaml}"
+        );
+    }
+
+    #[test]
+    fn a_profile_document_keeps_a_path_outside_the_root_addressable() {
+        let yaml = profile_to_yaml(
+            &ProfileDraft {
+                access: vec!["C:/elsewhere/repo".into()],
+                ..sample()
+            },
+            Some(&home()),
+        );
+        assert!(yaml.contains("elsewhere"), "{yaml}");
+    }
+
+    #[test]
+    fn a_profile_document_lists_the_unset_keys_rather_than_dropping_them() {
+        let yaml = profile_to_yaml(
+            &ProfileDraft {
+                agent: None,
+                model: None,
+                ..sample()
+            },
+            Some(&home()),
+        );
+        assert!(yaml.contains("agent: null"), "{yaml}");
+        assert!(yaml.contains("model: null"), "{yaml}");
+    }
+
+    #[test]
+    fn a_profile_document_does_not_carry_the_pin_order_so_imports_arrive_unpinned() {
+        let home = home();
+        let home = Some(home.as_path());
+        let yaml = profile_to_yaml(
+            &ProfileDraft {
+                pinned_order: Some(3),
+                ..sample()
+            },
+            home,
+        );
+        assert!(!yaml.contains("pinned"), "{yaml}");
+        assert_eq!(profile_from_yaml(&yaml, home).unwrap().pinned_order, None);
+    }
+
+    // profile_from_yaml
+
+    #[test]
+    fn a_profile_round_trips_through_its_document_intact() {
+        let home = home();
+        let home = Some(home.as_path());
+        let profile = sample();
+        assert_eq!(
+            profile_from_yaml(&profile_to_yaml(&profile, home), home).unwrap(),
+            profile
+        );
+    }
+
+    #[test]
+    fn a_profile_with_everything_unset_round_trips_too() {
+        let home = home();
+        let home = Some(home.as_path());
+        let bare = ProfileDraft {
+            name: "bare".into(),
+            root: text(&harness()),
+            overlays: Vec::new(),
+            access: Vec::new(),
+            model: None,
+            effort: None,
+            permission_mode: None,
+            agent: None,
+            mcp: Vec::new(),
+            opening_prompt: None,
+            pinned_order: None,
+            session_agents: None,
+            remote_control: None,
+        };
+        assert_eq!(
+            profile_from_yaml(&profile_to_yaml(&bare, home), home).unwrap(),
+            bare
+        );
+    }
+
+    #[test]
+    fn a_profile_that_turns_the_agents_tools_off_says_so_in_its_document_and_keeps_it_through_an_import()
+     {
+        let home = home();
+        let home = Some(home.as_path());
+        let off = ProfileDraft {
+            session_agents: Some(false),
+            ..sample()
+        };
+        let yaml = profile_to_yaml(&off, home);
+        assert!(yaml.contains("session_agents: false"), "{yaml}");
+        assert_eq!(profile_from_yaml(&yaml, home).unwrap(), off);
+
+        // One that follows the setting lists the key unset, like the others.
+        let following = profile_to_yaml(&sample(), home);
+        assert!(following.contains("session_agents: null"), "{following}");
+
+        // A document written by hand that says true follows the setting too.
+        let yaml = yaml.replace("session_agents: false", "session_agents: true");
+        assert_eq!(profile_from_yaml(&yaml, home).unwrap().session_agents, None);
+    }
+
+    #[test]
+    fn a_profile_document_says_whether_remote_control_is_on() {
+        let home = home();
+        let home = Some(home.as_path());
+        let on = ProfileDraft {
+            remote_control: Some(true),
+            ..sample()
+        };
+        let yaml = profile_to_yaml(&on, home);
+        assert!(yaml.contains("remote_control: true"), "{yaml}");
+        assert_eq!(profile_from_yaml(&yaml, home).unwrap(), on);
+
+        // One without it lists the key unset, like the others, and reads as off.
+        let plain = profile_to_yaml(&sample(), home);
+        assert!(plain.contains("remote_control: null"), "{plain}");
+        assert_eq!(
+            profile_from_yaml(&plain, home).unwrap().remote_control,
+            None
+        );
+        let off = yaml.replace("remote_control: true", "remote_control: false");
+        assert_eq!(profile_from_yaml(&off, home).unwrap().remote_control, None);
+    }
+
+    #[test]
+    fn relative_paths_resolve_against_the_root_so_a_moved_harness_still_works() {
+        let imported = profile_from_yaml(
+            "name: moved\nroot: C:/somewhere/else\noverlays:\n  - repos/acme\n",
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            imported.overlays,
+            [text(&normalize(Path::new("C:/somewhere/else/repos/acme")))]
+        );
+    }
+
+    #[test]
+    fn a_value_the_agent_would_reject_is_dropped_rather_than_refusing_the_file() {
+        let imported = profile_from_yaml(
+            &format!(
+                "name: odd\nroot: {}\neffort: medium-high\npermission_mode: whatever\n",
+                text(&harness()).replace('\\', "/")
+            ),
+            None,
+        )
+        .unwrap();
+        assert_eq!(imported.effort, None);
+        assert_eq!(imported.permission_mode, None);
+    }
+
+    #[test]
+    fn a_document_that_is_not_a_profile_is_refused() {
+        let refusal = |yaml: &str| profile_from_yaml(yaml, None).unwrap_err();
+        assert!(refusal("- a\n- b").contains("mapping"));
+        assert!(refusal("root: /harness").contains("name"));
+        assert!(refusal("name: x").contains("root"));
+        assert!(refusal("name: [unclosed").contains("YAML"));
+    }
+
+    // validate_profile
+
+    #[test]
+    fn a_good_draft_validates() {
+        assert_eq!(validate_profile(&sample()), Vec::<String>::new());
+    }
+
+    #[test]
+    fn validation_reports_every_problem_at_once() {
+        let problems = validate_profile(&ProfileDraft {
+            name: "  ".into(),
+            root: " ".into(),
+            ..sample()
+        });
+        assert_eq!(problems.len(), 2, "{problems:?}");
+    }
+}

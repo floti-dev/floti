@@ -768,19 +768,4 @@ fn decode_body(body: &[u8], compressed: bool) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_search_is_quoted_so_fts_syntax_cannot_leak_out_of_the_box() {
-        assert_eq!(
-            search_query("hello world").as_deref(),
-            Some("\"hello\" AND \"world\"*")
-        );
-        assert_eq!(
-            search_query("-not \"a phrase\"").as_deref(),
-            Some("\"not\" AND \"a\" AND \"phrase\"*")
-        );
-        assert_eq!(search_query("   "), None);
-    }
-}
+mod tests;

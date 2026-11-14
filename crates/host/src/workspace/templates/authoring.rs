@@ -1019,3 +1019,6 @@ fn copy_top(entry: &Entry, dir: &Path, source: &Path, copied: &mut Copied) {
             .push(format!("\"{}\" could not be copied: {err}", entry.name)),
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -264,4 +264,43 @@ mod tests {
             Some("/v/docs/index.md")
         );
     }
+
+    fn index_of(files: &[(&'static str, &'static str, &'static str)]) -> WikiIndex {
+        WikiIndex::build(files.iter().map(|(path, rel_path, slug)| IndexedFile {
+            path,
+            rel_path,
+            slug,
+        }))
+    }
+
+    const VAULT: [(&str, &str, &str); 3] = [
+        ("C:/v/notes/beta.md", "notes/beta.md", "beta"),
+        ("C:/v/docs/beta.md", "docs/beta.md", "beta"),
+        ("C:/v/notes/gamma.md", "notes/gamma.md", "gamma"),
+    ];
+
+    #[test]
+    fn a_wikilink_splits_its_heading_before_its_alias() {
+        let link = parse_wikilink("note#Section|Read this", false);
+        assert_eq!(link.target, "note");
+        assert_eq!(link.heading.as_deref(), Some("Section"));
+        assert_eq!(link.label, "Read this");
+    }
+
+    #[test]
+    fn a_wikilink_resolves_by_bare_name_prefers_a_path_spelling_and_breaks_on_nothing() {
+        let index = index_of(&VAULT);
+        let resolve = |raw: &str| index.resolve(&parse_wikilink(raw, false), None);
+        assert_eq!(resolve("gamma").as_deref(), Some("C:/v/notes/gamma.md"));
+        assert_eq!(resolve("docs/beta").as_deref(), Some("C:/v/docs/beta.md"));
+        assert_eq!(resolve("nothing-here"), None);
+    }
+
+    #[test]
+    fn headings_slug_the_same_way_on_both_ends() {
+        assert_eq!(
+            heading_slug("The Mechanism: what it does"),
+            "the-mechanism-what-it-does"
+        );
+    }
 }

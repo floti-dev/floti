@@ -228,3 +228,6 @@ pub fn index_history<'s>(
         stats: archive::read_stats(conn, ceiling)?,
     })
 }
+
+#[cfg(test)]
+mod tests;

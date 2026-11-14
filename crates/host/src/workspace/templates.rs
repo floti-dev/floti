@@ -38,6 +38,8 @@ pub mod harness;
 pub mod import;
 pub mod reader;
 pub mod seed;
+#[cfg(test)]
+mod testing;
 
 use std::cmp::Ordering;
 use std::io;
