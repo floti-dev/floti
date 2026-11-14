@@ -163,7 +163,7 @@ impl World {
     fn named(&self) -> String {
         match Native.desktop_version(&self.app()) {
             Some(version) => format!("Floti {version}"),
-            None => "Helm".to_owned(),
+            None => "Floti".to_owned(),
         }
     }
 
