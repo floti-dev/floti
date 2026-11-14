@@ -288,16 +288,18 @@ pub trait ProcessTree {
     /// restarts nothing. A start that would end when this process does
     /// ([`Detached::outlives_this_process`]) is an error
     /// ([`ENDS_WITH_THIS_PROCESS`]), as a start that failed is: the new host
-    /// would be gone as soon as this one exits.
+    /// would be gone as soon as this one exits, so it is ended at once
+    /// ([`Started::end`]) rather than cut off partway through its start.
     fn replace_this_process(
         &self,
         program: &std::path::Path,
         args: &[&str],
     ) -> std::io::Result<()> {
-        let detached = self.start_detached(program, args, &[])?;
+        let mut detached = self.start_detached(program, args, &[])?;
         if detached.outlives_this_process() {
             Ok(())
         } else {
+            detached.process.end();
             Err(std::io::Error::other(ENDS_WITH_THIS_PROCESS))
         }
     }
@@ -309,6 +311,11 @@ pub trait Started: Send {
     /// Its exit code once it has exited (no code when a signal ended it),
     /// nothing while it runs or when that cannot be told.
     fn exited(&mut self) -> Option<Option<i32>>;
+
+    /// Ends it at once, if it still runs: a start that would not outlive
+    /// this process is ended before it gets far enough to start anything of
+    /// its own. One that has exited already is left as it is.
+    fn end(&mut self);
 }
 
 impl Started for std::process::Child {
@@ -316,6 +323,12 @@ impl Started for std::process::Child {
         match self.try_wait() {
             Ok(Some(status)) => Some(status.code()),
             _ => None,
+        }
+    }
+
+    fn end(&mut self) {
+        if self.kill().is_ok() {
+            let _ = self.wait();
         }
     }
 }

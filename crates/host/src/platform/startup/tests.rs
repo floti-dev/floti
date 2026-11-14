@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use super::{HostStart, HostStartup, StartupKind, linux, macos, windows};
+use super::{
+    Account, HostStart, HostStartup, OnConnect, START_ON_CONNECT_FILE, SaidLogin, StartupKind,
+    linux, macos, windows,
+};
 
 const WINDOWS_BINARY: &str = r"C:\Program Files\Floti App\floti.exe";
 const UNIX_BINARY: &str = "/opt/Floti App/bin/floti";
@@ -242,61 +245,234 @@ fn env_with(vars: &[(&str, &str)]) -> crate::platform::folders::UserEnv {
     }
 }
 
-/// One sentence, ending at the only full stop, that says where the host
-/// starts.
+/// One sentence, ending at its only full stop.
+fn assert_one_sentence(text: &str) {
+    assert_eq!(text.matches(". ").count(), 0, "{text}");
+    assert!(text.ends_with('.'), "{text}");
+}
+
+/// One sentence that says where the host starts.
 fn assert_one_sentence_about_sign_in(refusal: &str) {
     assert!(
         refusal.starts_with("The Floti host starts at your sign-in"),
         "{refusal}"
     );
-    assert_eq!(refusal.matches(". ").count(), 0, "{refusal}");
-    assert!(refusal.ends_with('.'), "{refusal}");
+    assert_one_sentence(refusal);
 }
 
+/// The OSes whose host starts at the user's sign-in.
+fn at_sign_in() -> [(&'static str, &'static dyn HostStartup); 2] {
+    [("macOS", &macos::Native), ("Linux", &linux::Native)]
+}
+
+/// Each SSH server's variables, set as one sets them.
+const SSH_LOGINS: [(&str, &str); 3] = [
+    ("SSH_CONNECTION", "203.0.113.9 50022 192.0.2.1 22"),
+    ("SSH_CLIENT", "203.0.113.9 50022 22"),
+    ("SSH_TTY", "/dev/pts/3"),
+];
+
 #[test]
-fn s5_a_start_from_an_ssh_session_is_refused_in_one_sentence() {
-    for name in ["SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"] {
-        let refusal = super::launch_refusal(
-            &env_with(&[(name, "203.0.113.9 50022 192.0.2.1 22")]),
-            super::Account::User,
-        )
-        .unwrap_or_else(|| panic!("{name} set, yet the host would start"));
-        assert_one_sentence_about_sign_in(&refusal);
-        assert!(refusal.contains("SSH"), "{refusal}");
+fn s5_on_macos_and_linux_a_start_from_an_ssh_session_is_refused_in_one_sentence() {
+    for (os, startup) in at_sign_in() {
+        for var in SSH_LOGINS {
+            let refusal = startup
+                .launch_refusal(&env_with(&[var]), Account::User)
+                .unwrap_or_else(|| panic!("{os}: {} set, yet the host would start", var.0));
+            assert_one_sentence_about_sign_in(&refusal);
+            assert!(refusal.contains("SSH"), "{refusal}");
+        }
+        assert_eq!(
+            startup.launch_refusal(&env_with(&[("SSH_CONNECTION", "")]), Account::User),
+            None,
+            "{os}: an empty variable is no SSH session"
+        );
     }
-    assert_eq!(
-        super::launch_refusal(&env_with(&[("SSH_CONNECTION", "")]), super::Account::User),
-        None,
-        "an empty variable is no SSH session"
-    );
 }
 
 #[test]
-fn s5_a_start_as_root_or_a_service_account_is_refused_in_one_sentence() {
-    for name in ["root", "the SYSTEM account"] {
-        let refusal = super::launch_refusal(&env_with(&[]), super::Account::Privileged(name))
-            .unwrap_or_else(|| panic!("running as {name}, yet the host would start"));
-        assert_one_sentence_about_sign_in(&refusal);
-        assert!(refusal.contains(name), "{refusal}");
+fn on_windows_a_start_from_an_ssh_session_is_not_refused() {
+    // `floti connect` over the user's own ssh is how another computer starts
+    // the host there.
+    for var in SSH_LOGINS {
+        assert_eq!(
+            windows::Native.launch_refusal(&env_with(&[var]), Account::User),
+            None,
+            "{} set",
+            var.0
+        );
     }
 }
 
 #[test]
-fn s5_a_start_at_the_users_sign_in_is_not_refused() {
-    assert_eq!(
-        super::launch_refusal(&env_with(&[]), super::Account::User),
-        None
-    );
-    assert_eq!(
-        super::launch_refusal(&env_with(&[]), super::Account::Unknown),
-        None
-    );
+fn s5_a_start_as_root_or_a_service_account_is_refused_in_one_sentence_on_every_os() {
+    for (os, startup) in at_sign_in() {
+        // From an SSH session or not.
+        for env in [env_with(&[]), env_with(&[SSH_LOGINS[0]])] {
+            let refusal = startup
+                .launch_refusal(&env, Account::Privileged("root"))
+                .unwrap_or_else(|| panic!("{os}: running as root, yet the host would start"));
+            assert_one_sentence_about_sign_in(&refusal);
+        }
+        let refusal = startup
+            .launch_refusal(&env_with(&[]), Account::Privileged("root"))
+            .unwrap();
+        assert!(refusal.contains("root"), "{os}: {refusal}");
+    }
+    for name in [
+        "the SYSTEM account",
+        "the LOCAL SERVICE account",
+        "the NETWORK SERVICE account",
+    ] {
+        for env in [env_with(&[]), env_with(&[SSH_LOGINS[0]])] {
+            let refusal = windows::Native
+                .launch_refusal(&env, Account::Privileged(name))
+                .unwrap_or_else(|| panic!("running as {name}, yet the host would start"));
+            assert_eq!(
+                refusal,
+                format!("The Floti host runs as you, not as {name}, so it was not started.")
+            );
+            assert_one_sentence(&refusal);
+        }
+    }
+}
+
+#[test]
+fn s5_a_start_as_the_user_is_not_refused() {
+    let every_os: [&dyn HostStartup; 3] = [&macos::Native, &linux::Native, &windows::Native];
+    for startup in every_os {
+        for account in [Account::User, Account::Unknown] {
+            assert_eq!(startup.launch_refusal(&env_with(&[]), account), None);
+        }
+    }
     // The tests run as an ordinary user, never root or a service account.
     assert!(
-        !matches!(super::account(), super::Account::Privileged(_)),
+        !matches!(super::account(), Account::Privileged(_)),
         "{:?}",
         super::account()
     );
+}
+
+// ---------------------------------------------------------------------------
+// Whether floti connect starts a host
+// ---------------------------------------------------------------------------
+
+/// A data folder with `floti setup`'s start-on-connect record in it, or
+/// without.
+fn data_folder(recorded: bool) -> crate::testkit::TestDirs {
+    let dirs = crate::testkit::TestDirs::new();
+    std::fs::create_dir_all(&dirs.data).unwrap();
+    if recorded {
+        std::fs::write(dirs.data.join(START_ON_CONNECT_FILE), "on connect").unwrap();
+    }
+    dirs
+}
+
+/// Every login a test can say: elevated or not or unknown, with a desktop
+/// session or not or unknown.
+fn every_login() -> Vec<SaidLogin> {
+    let mut logins = Vec::new();
+    for elevated in [Some(false), Some(true), None] {
+        for desktop_session in [Some(false), Some(true), None] {
+            logins.push(SaidLogin {
+                elevated,
+                desktop_session,
+            });
+        }
+    }
+    logins
+}
+
+#[test]
+fn s5_on_macos_and_linux_connect_starts_a_host_only_where_setup_recorded_it_whatever_the_login() {
+    for (os, startup) in at_sign_in() {
+        for login in every_login() {
+            assert_eq!(
+                startup.on_connect(&data_folder(false).data, &login),
+                OnConnect::NoHost,
+                "{os}, {login:?}"
+            );
+            // As it was: the host starts with the connection's environment.
+            assert_eq!(
+                startup.on_connect(&data_folder(true).data, &login),
+                OnConnect::Start { env_remove: &[] },
+                "{os}, {login:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn on_windows_connect_starts_a_host_without_the_ssh_variables_whether_setup_recorded_it_or_not() {
+    let start = OnConnect::Start {
+        env_remove: &["SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"],
+    };
+    for recorded in [false, true] {
+        let dirs = data_folder(recorded);
+        for login in [
+            // Nobody signed in at the desktop, elevated or not.
+            SaidLogin {
+                elevated: Some(false),
+                desktop_session: Some(false),
+            },
+            SaidLogin {
+                elevated: Some(true),
+                desktop_session: Some(false),
+            },
+            // Signed in at the desktop, not elevated.
+            SaidLogin {
+                elevated: Some(false),
+                desktop_session: Some(true),
+            },
+            // What Windows would not tell counts as none.
+            SaidLogin {
+                elevated: None,
+                desktop_session: Some(true),
+            },
+            SaidLogin {
+                elevated: Some(true),
+                desktop_session: None,
+            },
+        ] {
+            assert_eq!(
+                windows::Native.on_connect(&dirs.data, &login),
+                start,
+                "recorded: {recorded}, {login:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn on_windows_an_elevated_login_while_the_user_is_at_the_desktop_starts_nothing_and_says_to_open_floti_there()
+ {
+    let login = SaidLogin {
+        elevated: Some(true),
+        desktop_session: Some(true),
+    };
+    for recorded in [false, true] {
+        let OnConnect::Refuse(why) =
+            windows::Native.on_connect(&data_folder(recorded).data, &login)
+        else {
+            panic!("an elevated login at the desktop would start a host");
+        };
+        assert_eq!(why, windows::ELEVATED_AT_DESKTOP);
+        assert_one_sentence(why);
+        assert!(why.ends_with("so open Floti on that PC."), "{why}");
+    }
+}
+
+#[test]
+fn the_test_login_variable_says_the_login_connect_decides_by() {
+    for (said, elevated, desktop_session) in [
+        ("plain", false, false),
+        ("elevated", true, false),
+        ("elevated-at-desktop", true, true),
+    ] {
+        let login = super::this_login(&env_with(&[(super::LOGIN_TEST_VAR, said)]));
+        assert_eq!(login.elevated(), Some(elevated), "{said}");
+        assert_eq!(login.desktop_session().unwrap(), desktop_session, "{said}");
+    }
 }
 
 // ---------------------------------------------------------------------------

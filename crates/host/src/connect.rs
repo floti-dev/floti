@@ -18,12 +18,16 @@
 //!
 //! Standard output carries the host's bytes and nothing else. Every other
 //! word goes to standard error as one line, starting `floti connect: `. With
-//! no host running it says so, except where `floti setup` recorded that the
-//! host starts on connect ([`START_ON_CONNECT_FILE`], in a WSL distro with no
-//! systemd user manager): there it starts `floti host` outside its own tie,
-//! as the session keeper is started, so the host outlives this connection,
-//! waits for it to answer, then relays. The host still refuses to start as
-//! root or from an SSH session, as it does everywhere.
+//! no host running, this OS's startup rule says what it does
+//! ([`startup::on_connect`]). On Windows it starts the host, except from an
+//! elevated login while the user has a desktop session there, where it says
+//! to open Floti on that PC. On macOS and Linux it starts one only where
+//! `floti setup` recorded that the host starts on connect
+//! ([`START_ON_CONNECT_FILE`], in a WSL distro with no systemd user manager),
+//! and otherwise says no host is running. It starts `floti host` detached,
+//! outside its own tie, so the host outlives this connection, waits for it
+//! to answer, then relays. The host still refuses to start as root or a
+//! Windows service account, and on macOS and Linux from an SSH session.
 //!
 //! `floti connect --host-key` prints the host's public key, as 64 hex
 //! digits on one line, for a device that has pinned no host yet to hold the
@@ -42,6 +46,7 @@ use crate::client::is_closed;
 use crate::platform::folders::{self, UserEnv};
 use crate::platform::process_tree::{self, ProcessTree};
 use crate::platform::socket::{LocalSocket, Native as NativeSocket};
+use crate::platform::startup::{self, OnConnect};
 use crate::server::{host_public_key, relay_endpoint};
 
 /// How `floti connect` ended, which is its exit status.
@@ -56,7 +61,8 @@ pub enum ConnectExit {
     /// The command line was not `floti connect [--host-key]`.
     Usage,
     /// No Floti host is running for this user on this computer: nothing
-    /// answered on its socket, or, for `--host-key`, no host has made a key.
+    /// answered on its socket and none was started, or, for `--host-key`,
+    /// no host has made a key.
     NoHost,
 }
 
@@ -135,13 +141,16 @@ async fn relay(env: &UserEnv) -> ConnectExit {
     let endpoint = relay_endpoint(&folders);
     let socket = match NativeSocket.connect(&endpoint).await {
         Ok(socket) => socket,
-        Err(_) if folders.data.join(START_ON_CONNECT_FILE).is_file() => {
-            match start_host(&endpoint, START_DEADLINE).await {
-                Ok(socket) => socket,
-                Err(why) => return fail(ConnectExit::NoHost, &why),
+        Err(_) => match startup::on_connect(env, &folders.data) {
+            OnConnect::Start { env_remove } => {
+                match start_host(&endpoint, env_remove, START_DEADLINE).await {
+                    Ok(socket) => socket,
+                    Err(why) => return fail(ConnectExit::NoHost, &why),
+                }
             }
-        }
-        Err(_) => return no_host(),
+            OnConnect::NoHost => return no_host(),
+            OnConnect::Refuse(why) => return fail(ConnectExit::NoHost, why),
+        },
     };
     let (mut from_host, mut to_host) = tokio::io::split(socket);
     // Both directions run at once, so a reader that is slow on one side
@@ -212,10 +221,12 @@ async fn relay(env: &UserEnv) -> ConnectExit {
 
 const CHUNK: usize = 64 * 1024;
 
-/// The file in the data folder that says the host starts when a client
-/// connects: `floti setup` writes it in a WSL distro whose systemd user
-/// manager does not answer, where nothing else would start the host.
-pub const START_ON_CONNECT_FILE: &str = "start-on-connect";
+pub use crate::platform::startup::START_ON_CONNECT_FILE;
+
+/// Why `floti connect` started no host that outlives the connection: the job
+/// its login runs in would let the host start only inside that job, which
+/// ends what it holds when the connection closes.
+pub const ENDS_WITH_LOGIN: &str = "this login cannot start a Floti host that outlives it, because the job it runs in would end the host when the connection closes.";
 
 /// How long `floti connect` waits for a host it started to answer.
 pub const START_DEADLINE: Duration = Duration::from_secs(60);
@@ -227,26 +238,23 @@ const LOOK_AGAIN: Duration = Duration::from_millis(100);
 /// ([`ProcessTree::start_detached`](crate::platform::process_tree::ProcessTree::start_detached)):
 /// outside this process's tie, so it outlives the connection that started
 /// it, holding none of the connection's pipes, so the connection ends when
-/// its transport does, and with no console on Windows. A host that could
-/// start only in a job that ends it with this connection is a failure. Waits up to `within` for it to answer on
-/// `endpoint`. A host that cannot start says why in its own log; this says
-/// that it did not answer, with how it exited when it did.
+/// its transport does, and with no console on Windows, without the
+/// variables `env_remove` names. A host that could start only in a job that
+/// ends it with this connection is a failure ([`ENDS_WITH_LOGIN`]). Waits up
+/// to `within` for it to answer on `endpoint`. A host that cannot start says
+/// why in its own log; this says that it did not answer, with how it exited
+/// when it did.
 async fn start_host(
     endpoint: &crate::platform::socket::Endpoint,
+    env_remove: &[&str],
     within: Duration,
 ) -> Result<crate::platform::socket::LocalStream, String> {
     let exe = std::env::current_exe()
         .map_err(|err| format!("could not tell where this floti is: {err}"))?;
     let detached = process_tree::Native
-        .start_detached(&exe, &["host"], &[])
+        .start_detached(&exe, &["host"], env_remove)
         .map_err(|err| format!("could not start the Floti host: {err}"))?;
-    if !detached.outlives_this_process() {
-        return Err(format!(
-            "could not start the Floti host apart from this connection: {}.",
-            process_tree::ENDS_WITH_THIS_PROCESS
-        ));
-    }
-    let mut child = detached.process;
+    let mut child = outliving_or_ended(detached)?;
     let deadline = Instant::now() + within;
     loop {
         if let Ok(socket) = NativeSocket.connect(endpoint).await {
@@ -272,6 +280,21 @@ async fn start_host(
     }
 }
 
+/// The host `detached` started, when it outlives this connection. One that
+/// could start only inside a job that ends with this connection is ended at
+/// once, before it starts a session keeper of its own in that job, and the
+/// connection fails with [`ENDS_WITH_LOGIN`]: no host is left starting.
+fn outliving_or_ended(
+    mut detached: process_tree::Detached,
+) -> Result<Box<dyn process_tree::Started>, String> {
+    if detached.outlives_this_process() {
+        Ok(detached.process)
+    } else {
+        detached.process.end();
+        Err(ENDS_WITH_LOGIN.to_owned())
+    }
+}
+
 fn no_host() -> ConnectExit {
     say(NO_HOST_LINE);
     ConnectExit::NoHost
@@ -289,4 +312,63 @@ fn fail(exit: ConnectExit, why: &str) -> ConnectExit {
 fn say(line: &str) {
     let mut err = std::io::stderr().lock();
     let _ = writeln!(err, "{line}").and_then(|()| err.flush());
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use super::{ENDS_WITH_LOGIN, outliving_or_ended};
+    use crate::platform::process_tree::{Detached, Outliving, Started};
+
+    /// A host that runs until it is ended, which it records.
+    struct Running(Arc<AtomicBool>);
+
+    impl Started for Running {
+        fn exited(&mut self) -> Option<Option<i32>> {
+            None
+        }
+
+        fn end(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    fn started(outliving: Outliving) -> (Detached, Arc<AtomicBool>) {
+        let ended = Arc::new(AtomicBool::new(false));
+        let detached = Detached {
+            process: Box::new(Running(Arc::clone(&ended))),
+            outliving,
+        };
+        (detached, ended)
+    }
+
+    #[test]
+    fn a_host_that_could_start_only_in_a_job_ending_with_the_connection_is_ended_and_the_connection_says_so()
+     {
+        let (detached, ended) = started(Outliving::InJob {
+            ends_with_job: true,
+        });
+        let Err(why) = outliving_or_ended(detached) else {
+            panic!("a host in a job that ends with the connection was kept");
+        };
+        assert_eq!(why, ENDS_WITH_LOGIN);
+        assert!(ended.load(Ordering::SeqCst), "the host was left starting");
+        assert_eq!(why.matches(". ").count(), 0, "one sentence: {why}");
+    }
+
+    #[test]
+    fn a_host_that_outlives_the_connection_is_kept_running() {
+        for outliving in [
+            Outliving::Apart,
+            Outliving::InJob {
+                ends_with_job: false,
+            },
+        ] {
+            let (detached, ended) = started(outliving);
+            assert!(outliving_or_ended(detached).is_ok(), "{outliving:?}");
+            assert!(!ended.load(Ordering::SeqCst), "{outliving:?}: ended");
+        }
+    }
 }

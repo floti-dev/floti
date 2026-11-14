@@ -743,8 +743,23 @@ async fn the_executable_leaves_the_spend_out_when_it_cannot_tell_its_zone() {
 // S5: refused from SSH, before anything is opened
 // ---------------------------------------------------------------------------
 
+/// Where this OS refuses it, macOS and Linux, whose host starts at sign-in.
+/// On Windows an SSH login is how another computer starts the host
+/// (`floti connect`, in `remote.rs`), so there it says so and ends at once.
 #[test]
 fn s5_floti_host_started_from_ssh_refuses_in_one_sentence_and_opens_nothing() {
+    let from_ssh = floti_host::platform::folders::UserEnv {
+        home: None,
+        vars: [(
+            std::ffi::OsString::from("SSH_CONNECTION"),
+            std::ffi::OsString::from("203.0.113.9 50022 192.0.2.1 22"),
+        )]
+        .into(),
+    };
+    if startup::launch_refusal(&from_ssh, startup::Account::User).is_none() {
+        eprintln!("SKIPPED: this OS starts the host from an SSH session");
+        return;
+    }
     let dirs = TestDirs::new();
     // Folders that do not exist yet: the host must not make them.
     let untouched = dirs.root().join("never made");

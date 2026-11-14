@@ -4,7 +4,9 @@
 //! The pipe's security descriptor has a protected access list with a single
 //! entry, full access for the user the host runs as. No entry for Everyone,
 //! Authenticated Users, anonymous logons, administrators or SYSTEM, so no
-//! other account on the machine can open it. `PIPE_REJECT_REMOTE_CLIENTS`
+//! other account on the machine can open it. Its mandatory label is Medium,
+//! so a host running elevated still admits the same user's clients, which
+//! run at Medium (`UserOnlyDescriptor`). `PIPE_REJECT_REMOTE_CLIENTS`
 //! refuses a connection that arrives over the network (`\\server\pipe\...`),
 //! even from this user.
 //!
@@ -17,6 +19,7 @@
 use std::ffi::{OsString, c_void};
 use std::fmt;
 use std::io;
+use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
 use std::path::Path;
 use std::ptr;
@@ -26,7 +29,9 @@ use floti_protocol::Knowable;
 use tokio::net::windows::named_pipe::{
     ClientOptions, NamedPipeClient, NamedPipeServer, PipeMode, ServerOptions,
 };
-use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_PIPE_BUSY, HANDLE, LocalFree};
+use windows_sys::Win32::Foundation::{
+    ERROR_ACCESS_DENIED, ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY, HANDLE, LocalFree,
+};
 use windows_sys::Win32::Security::Authorization::{
     ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
@@ -34,7 +39,7 @@ use windows_sys::Win32::Security::{
     GetTokenInformation, PSECURITY_DESCRIPTOR, PSID, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER,
     TokenUser,
 };
-use windows_sys::Win32::System::Pipes::GetNamedPipeServerProcessId;
+use windows_sys::Win32::System::Pipes::{GetNamedPipeServerProcessId, WaitNamedPipeW};
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
 use super::{CONNECT_PATIENCE, Endpoint, LocalListener, LocalSocket, LocalStream, already_running};
@@ -94,11 +99,8 @@ impl LocalSocket for Native {
         let descriptor = UserOnlyDescriptor::for_current_user()
             .map_err(|e| Error::io("build the pipe's access list for this user", e))?;
         let waiting = create_instance(&name, &descriptor, true).map_err(|e| {
-            if e.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) {
-                already_running(endpoint)
-            } else {
-                Error::path("listen on", endpoint.as_path(), e)
-            }
+            let held = e.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) && pipe_exists(&name);
+            first_instance_refused(endpoint, e, held)
         })?;
         Ok(Listener {
             name,
@@ -130,6 +132,42 @@ impl LocalSocket for Native {
         };
         Ok((Box::pin(client), server))
     }
+}
+
+/// What a refused first instance means. `FILE_FLAG_FIRST_PIPE_INSTANCE`
+/// answers ACCESS_DENIED when a pipe of that name exists: another host, or a
+/// process squatting on the name, when `held`. With no pipe of that name,
+/// the denial is the descriptor's, its access list or its integrity label,
+/// and is said as that, never as a host already running.
+fn first_instance_refused(endpoint: &Endpoint, err: io::Error, held: bool) -> Error {
+    if err.raw_os_error() != Some(ERROR_ACCESS_DENIED as i32) {
+        return Error::path("listen on", endpoint.as_path(), err);
+    }
+    if held {
+        return already_running(endpoint);
+    }
+    Error::path(
+        "listen on",
+        endpoint.as_path(),
+        io::Error::new(
+            err.kind(),
+            format!(
+                "{err}: no other process holds the name, so Windows refused the pipe's access list or its integrity label"
+            ),
+        ),
+    )
+}
+
+/// Whether a pipe named `name` exists now, whoever holds it.
+/// `WaitNamedPipeW` tells without opening it, so it takes no instance a
+/// client is waiting for; only "not found" means there is none.
+fn pipe_exists(name: &OsString) -> bool {
+    let wide: Vec<u16> = name.encode_wide().chain(Some(0)).collect();
+    // SAFETY: `wide` is NUL-terminated; the call waits at most 1 ms.
+    if unsafe { WaitNamedPipeW(wide.as_ptr(), 1) } != 0 {
+        return true;
+    }
+    io::Error::last_os_error().raw_os_error() != Some(ERROR_FILE_NOT_FOUND as i32)
 }
 
 /// This user's client end of the pipe at `endpoint`, trying again while it is
@@ -190,8 +228,28 @@ fn create_instance(
 }
 
 /// A self-relative security descriptor whose protected access list has one
-/// entry: full access for the current user.
+/// entry, full access for the current user, and whose mandatory label is
+/// Medium integrity.
+///
+/// The label is what lets a host that runs elevated (an administrator's SSH
+/// login gets the full token, at High integrity) serve the same user's
+/// desktop client, which runs at Medium. Without an explicit one, whether an
+/// object a High process makes admits a Medium writer is the OS's default to
+/// decide; with it, the pipe, the keeper's pipe and every owner-only file
+/// admit the user's Medium processes by construction, and still refuse Low
+/// ones writing (`NW`, no write up). A label at or below the creator's own
+/// integrity may be set as the object is made, which needs no privilege
+/// (`SeSecurityPrivilege` is for reading or writing audit entries, which this
+/// has none of).
 pub(crate) struct UserOnlyDescriptor(PSECURITY_DESCRIPTOR);
+
+/// The descriptor's text for the user whose SID is `sid`: `D:P` is a
+/// protected access list, so nothing is inherited into it; `(A;;GA;;;sid)`
+/// allows generic all to the user, and nobody else; `S:(ML;;NW;;;ME)` is a
+/// Medium mandatory label that refuses a lower integrity writing.
+fn user_only_sddl(sid: &str) -> String {
+    format!("D:P(A;;GA;;;{sid})S:(ML;;NW;;;ME)")
+}
 
 // SAFETY: the descriptor is heap memory from LocalAlloc that nothing mutates
 // after it is built; it is only read, by CreateNamedPipe and CreateFileW.
@@ -202,12 +260,7 @@ unsafe impl Sync for UserOnlyDescriptor {}
 impl UserOnlyDescriptor {
     pub(crate) fn for_current_user() -> io::Result<Self> {
         let sid = CurrentUser::query()?.sid_string()?;
-        // D:P is a protected access list, so nothing is inherited into it;
-        // (A;;GA;;;sid) allows generic all to the user, and nobody else.
-        let sddl: Vec<u16> = format!("D:P(A;;GA;;;{sid})")
-            .encode_utf16()
-            .chain(Some(0))
-            .collect();
+        let sddl: Vec<u16> = user_only_sddl(&sid).encode_utf16().chain(Some(0)).collect();
         let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
         // SAFETY: `sddl` is NUL-terminated; on success the API allocates the
         // descriptor with LocalAlloc, freed in Drop.
@@ -506,6 +559,37 @@ mod tests {
         drop(server);
     }
 
+    #[tokio::test]
+    async fn a_pipe_exists_while_a_process_holds_its_name_and_not_before() {
+        let dirs = TestDirs::new();
+        let endpoint = dirs.endpoint();
+        let name = endpoint.as_path().as_os_str().to_owned();
+        assert!(!pipe_exists(&name), "nothing holds the name yet");
+        let listener = Native.bind(&endpoint).expect("bind");
+        assert!(pipe_exists(&name), "the host's pipe holds it");
+        drop(listener);
+        assert!(!pipe_exists(&name), "the name is free again");
+    }
+
+    #[test]
+    fn a_denied_first_instance_is_a_host_running_only_while_a_pipe_holds_the_name() {
+        let endpoint = Native.endpoint(Path::new("unused"), &unique_name());
+        let denied = || io::Error::from_raw_os_error(ERROR_ACCESS_DENIED as i32);
+        let held = first_instance_refused(&endpoint, denied(), true).to_string();
+        assert!(held.contains("already running"), "{held}");
+        let refused = first_instance_refused(&endpoint, denied(), false).to_string();
+        assert!(!refused.contains("already running"), "{refused}");
+        assert!(refused.contains("integrity label"), "{refused}");
+        // Any other failure is said as it is.
+        let other = first_instance_refused(
+            &endpoint,
+            io::Error::from_raw_os_error(ERROR_PIPE_BUSY as i32),
+            true,
+        )
+        .to_string();
+        assert!(!other.contains("already running"), "{other}");
+    }
+
     #[test]
     fn a_pipe_name_already_held_is_refused() {
         let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -521,5 +605,474 @@ mod tests {
         assert!(refused.to_string().contains("already running"), "{refused}");
         drop(squatter);
         Native.bind(&endpoint).expect("the name is free again");
+    }
+
+    /// The pipe's Medium label, and an elevated host's pipe taking the same
+    /// user's client at Medium integrity, as Floti at the desktop is.
+    mod integrity {
+        use std::io::Write;
+
+        use windows_sys::Win32::Security::Authorization::{
+            ConvertStringSidToSidW, GetNamedSecurityInfoW, SE_FILE_OBJECT,
+        };
+        use windows_sys::Win32::Security::{
+            CreateRestrictedToken, DuplicateTokenEx, GetLengthSid, ImpersonateLoggedOnUser,
+            LABEL_SECURITY_INFORMATION, RevertToSelf, SID_AND_ATTRIBUTES,
+            SYSTEM_MANDATORY_LABEL_ACE, SecurityImpersonation, SetTokenInformation,
+            TOKEN_ALL_ACCESS, TOKEN_DUPLICATE, TOKEN_MANDATORY_LABEL, TokenImpersonation,
+            TokenIntegrityLevel,
+        };
+        use windows_sys::Win32::System::Threading::{GetCurrentThread, OpenThreadToken};
+
+        // The pipe module's items and the tests' imports beside them.
+        use super::*;
+
+        /// SYSTEM_MANDATORY_LABEL_ACE_TYPE, from winnt.h.
+        const MANDATORY_LABEL: u8 = 0x11;
+        /// SYSTEM_MANDATORY_LABEL_NO_WRITE_UP, from winnt.h.
+        const NO_WRITE_UP: u32 = 0x1;
+        /// SE_GROUP_INTEGRITY, from winnt.h.
+        const GROUP_INTEGRITY: u32 = 0x20;
+        const MEDIUM: &str = "S-1-16-8192";
+        const HIGH: &str = "S-1-16-12288";
+
+        /// A SID made from its text, freed when dropped.
+        struct Sid(PSID);
+
+        impl Sid {
+            fn from_text(text: &str) -> Self {
+                let wide: Vec<u16> = text.encode_utf16().chain(Some(0)).collect();
+                let mut sid: PSID = ptr::null_mut();
+                // SAFETY: `wide` is NUL-terminated; on success `sid` is
+                // allocated with LocalAlloc, freed in Drop.
+                assert_ne!(
+                    unsafe { ConvertStringSidToSidW(wide.as_ptr(), &mut sid) },
+                    0,
+                    "make the SID {text}"
+                );
+                Self(sid)
+            }
+        }
+
+        impl Drop for Sid {
+            fn drop(&mut self) {
+                // SAFETY: allocated by ConvertStringSidToSidW.
+                unsafe { LocalFree(self.0) };
+            }
+        }
+
+        /// `sid` as text.
+        fn text_of(sid: PSID) -> String {
+            let mut text: *mut u16 = ptr::null_mut();
+            // SAFETY: `sid` is valid for the call; on success `text` is a
+            // NUL-terminated string from LocalAlloc, freed below.
+            assert_ne!(unsafe { ConvertSidToStringSidW(sid, &mut text) }, 0);
+            // SAFETY: `text` is NUL-terminated.
+            let len = (0..).take_while(|&i| unsafe { *text.add(i) } != 0).count();
+            // SAFETY: `len` u16s are readable at `text`.
+            let sid = String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(text, len) });
+            // SAFETY: allocated by ConvertSidToStringSidW.
+            unsafe { LocalFree(text.cast()) };
+            sid
+        }
+
+        /// The integrity level of `token`, as its SID's text.
+        fn integrity_of(token: HANDLE) -> String {
+            let mut needed = 0u32;
+            // SAFETY: a size query with no buffer; it fails and sets `needed`.
+            unsafe {
+                GetTokenInformation(token, TokenIntegrityLevel, ptr::null_mut(), 0, &mut needed)
+            };
+            assert_ne!(needed, 0, "{}", io::Error::last_os_error());
+            let mut buffer = vec![0u64; (needed as usize).div_ceil(size_of::<u64>())];
+            // SAFETY: `buffer` holds `needed` bytes, aligned for the label.
+            let ok = unsafe {
+                GetTokenInformation(
+                    token,
+                    TokenIntegrityLevel,
+                    buffer.as_mut_ptr().cast(),
+                    needed,
+                    &mut needed,
+                )
+            };
+            assert_ne!(ok, 0, "{}", io::Error::last_os_error());
+            // SAFETY: a TOKEN_MANDATORY_LABEL starts the buffer, its SID in it.
+            text_of(unsafe { (*buffer.as_ptr().cast::<TOKEN_MANDATORY_LABEL>()).Label.Sid })
+        }
+
+        /// The integrity level this test process runs at.
+        fn this_process_integrity() -> String {
+            let mut raw: HANDLE = ptr::null_mut();
+            // SAFETY: `raw` receives a token handle, owned below.
+            assert_ne!(
+                unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw) },
+                0
+            );
+            // SAFETY: OpenProcessToken succeeded.
+            let token = unsafe { OwnedHandle::from_raw_handle(raw as RawHandle) };
+            integrity_of(token.as_raw_handle() as HANDLE)
+        }
+
+        /// One mandatory label entry: (ACE type, mask, SID text).
+        type Label = (u8, u32, String);
+
+        /// The mandatory label entries on `handle`'s object.
+        fn labels(handle: HANDLE) -> Vec<Label> {
+            let mut sacl: *mut ACL = ptr::null_mut();
+            let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
+            // SAFETY: `handle` is a live pipe handle; the out pointers are
+            // valid. Reading the label needs READ_CONTROL only, no privilege.
+            let status = unsafe {
+                GetSecurityInfo(
+                    handle,
+                    SE_KERNEL_OBJECT,
+                    LABEL_SECURITY_INFORMATION,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    &mut sacl,
+                    &mut descriptor,
+                )
+            };
+            assert_eq!(status, ERROR_SUCCESS, "read the pipe's label");
+            label_entries(sacl, descriptor)
+        }
+
+        /// The mandatory label entries on the file at `path`.
+        fn file_labels(path: &Path) -> Vec<Label> {
+            let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+            let mut sacl: *mut ACL = ptr::null_mut();
+            let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
+            // SAFETY: `wide` is NUL-terminated; the out pointers are valid.
+            let status = unsafe {
+                GetNamedSecurityInfoW(
+                    wide.as_ptr(),
+                    SE_FILE_OBJECT,
+                    LABEL_SECURITY_INFORMATION,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    &mut sacl,
+                    &mut descriptor,
+                )
+            };
+            assert_eq!(status, ERROR_SUCCESS, "read the file's label");
+            label_entries(sacl, descriptor)
+        }
+
+        /// The entries of `sacl`, a label list in `descriptor`, which this
+        /// frees.
+        fn label_entries(sacl: *mut ACL, descriptor: PSECURITY_DESCRIPTOR) -> Vec<Label> {
+            let mut found = Vec::new();
+            if !sacl.is_null() {
+                let mut size = ACL_SIZE_INFORMATION::default();
+                // SAFETY: `sacl` points into `descriptor`.
+                let ok = unsafe {
+                    GetAclInformation(
+                        sacl,
+                        (&raw mut size).cast(),
+                        size_of::<ACL_SIZE_INFORMATION>() as u32,
+                        AclSizeInformation,
+                    )
+                };
+                assert_ne!(ok, 0);
+                for index in 0..size.AceCount {
+                    let mut ace: *mut c_void = ptr::null_mut();
+                    // SAFETY: `index` is below AceCount.
+                    assert_ne!(unsafe { GetAce(sacl, index, &mut ace) }, 0);
+                    let ace = ace.cast::<SYSTEM_MANDATORY_LABEL_ACE>();
+                    // SAFETY: every ACE starts with its header; a label ACE's
+                    // SID starts at SidStart.
+                    found.push(unsafe {
+                        (
+                            (*ace).Header.AceType,
+                            (*ace).Mask,
+                            text_of((&raw mut (*ace).SidStart).cast()),
+                        )
+                    });
+                }
+            }
+            // SAFETY: allocated by GetSecurityInfo.
+            unsafe { LocalFree(descriptor) };
+            found
+        }
+
+        /// This process's token made what a non-elevated desktop client's
+        /// is, as an impersonation token: the same user, Administrators for
+        /// deny only, at Medium integrity.
+        fn medium_client_token() -> OwnedHandle {
+            let own = |raw: HANDLE| {
+                // SAFETY: each caller passes a handle a call just opened.
+                unsafe { OwnedHandle::from_raw_handle(raw as RawHandle) }
+            };
+            let mut raw: HANDLE = ptr::null_mut();
+            // SAFETY: `raw` receives a token handle, owned below.
+            assert_ne!(
+                unsafe {
+                    OpenProcessToken(GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_QUERY, &mut raw)
+                },
+                0
+            );
+            let process = own(raw);
+            // SAFETY: plain call on an open token; `raw` receives the copy.
+            assert_ne!(
+                unsafe {
+                    DuplicateTokenEx(
+                        process.as_raw_handle() as HANDLE,
+                        TOKEN_ALL_ACCESS,
+                        ptr::null(),
+                        SecurityImpersonation,
+                        TokenImpersonation,
+                        &mut raw,
+                    )
+                },
+                0,
+                "{}",
+                io::Error::last_os_error()
+            );
+            let duplicate = own(raw);
+            let administrators = Sid::from_text("S-1-5-32-544");
+            let deny_only = SID_AND_ATTRIBUTES {
+                Sid: administrators.0,
+                Attributes: 0,
+            };
+            // SAFETY: one SID to disable, nothing else; `raw` receives the
+            // new token, of the same type and access as the one it is made
+            // from.
+            assert_ne!(
+                unsafe {
+                    CreateRestrictedToken(
+                        duplicate.as_raw_handle() as HANDLE,
+                        0,
+                        1,
+                        &deny_only,
+                        0,
+                        ptr::null(),
+                        0,
+                        ptr::null(),
+                        &mut raw,
+                    )
+                },
+                0,
+                "{}",
+                io::Error::last_os_error()
+            );
+            let client = own(raw);
+            let medium = Sid::from_text(MEDIUM);
+            let label = TOKEN_MANDATORY_LABEL {
+                Label: SID_AND_ATTRIBUTES {
+                    Sid: medium.0,
+                    Attributes: GROUP_INTEGRITY,
+                },
+            };
+            // SAFETY: a label and the SID it points at, sized together as
+            // the call requires. Lowering a token's integrity needs no
+            // privilege.
+            let size =
+                size_of::<TOKEN_MANDATORY_LABEL>() as u32 + unsafe { GetLengthSid(medium.0) };
+            assert_ne!(
+                unsafe {
+                    SetTokenInformation(
+                        client.as_raw_handle() as HANDLE,
+                        TokenIntegrityLevel,
+                        (&raw const label).cast(),
+                        size,
+                    )
+                },
+                0,
+                "{}",
+                io::Error::last_os_error()
+            );
+            client
+        }
+
+        /// Runs `work` on a thread of its own that impersonates `token`, as
+        /// a process running with it would, inside this test's runtime, and
+        /// says what the thread's integrity was, with what `work` gave.
+        fn as_token<T: Send + 'static>(
+            token: &OwnedHandle,
+            work: impl FnOnce() -> T + Send + 'static,
+        ) -> (String, T) {
+            let token = token.as_raw_handle() as usize;
+            let runtime = tokio::runtime::Handle::current();
+            std::thread::spawn(move || {
+                let _entered = runtime.enter();
+                // SAFETY: `token` is an impersonation token that outlives the
+                // thread; the thread reverts before it ends.
+                assert_ne!(unsafe { ImpersonateLoggedOnUser(token as HANDLE) }, 0);
+                let mut raw: HANDLE = ptr::null_mut();
+                // SAFETY: `raw` receives the thread's token, owned below.
+                assert_ne!(
+                    unsafe { OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, 1, &mut raw) },
+                    0
+                );
+                // SAFETY: OpenThreadToken succeeded.
+                let thread = unsafe { OwnedHandle::from_raw_handle(raw as RawHandle) };
+                let integrity = integrity_of(thread.as_raw_handle() as HANDLE);
+                let done = work();
+                // SAFETY: ends this thread's impersonation.
+                assert_ne!(unsafe { RevertToSelf() }, 0);
+                (integrity, done)
+            })
+            .join()
+            .expect("the impersonating thread")
+        }
+
+        /// Opens the pipe `name` for reading and writing as `token` and
+        /// writes `said` to it: its integrity, and the open or the error.
+        fn open_as(token: &OwnedHandle, name: &str, said: &[u8]) -> (String, io::Result<()>) {
+            let name = name.to_owned();
+            let said = said.to_vec();
+            as_token(token, move || {
+                std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(&name)
+                    .and_then(|mut pipe| pipe.write_all(&said))
+            })
+        }
+
+        /// Whether this test process runs elevated, failing on a GitHub
+        /// runner, whose tests run elevated, when it does not; anywhere else
+        /// a test that needs it says it was skipped.
+        fn elevated(test: &str) -> bool {
+            let integrity = this_process_integrity();
+            assert!(
+                integrity == HIGH || std::env::var_os("GITHUB_ACTIONS").is_none(),
+                "on a GitHub runner this test process runs at {integrity}, not High"
+            );
+            if integrity == HIGH {
+                eprintln!("{test}: this test process runs elevated, at High integrity");
+                true
+            } else {
+                eprintln!(
+                    "SKIPPED {test}: it needs a test process at High integrity (elevated), as on CI's Windows runners; this one runs at {integrity}"
+                );
+                false
+            }
+        }
+
+        #[test]
+        fn the_descriptor_grants_the_user_alone_and_labels_it_medium() {
+            assert_eq!(
+                user_only_sddl("S-1-5-21-1-2-3-1001"),
+                "D:P(A;;GA;;;S-1-5-21-1-2-3-1001)S:(ML;;NW;;;ME)"
+            );
+        }
+
+        /// A label at or below the creator's integrity is set as the pipe is
+        /// made, with no privilege, so binding works in an elevated process
+        /// and in one that is not.
+        #[tokio::test]
+        async fn the_pipe_binds_with_a_medium_label_needing_no_privilege() {
+            let integrity = this_process_integrity();
+            eprintln!("this test process runs at integrity {integrity}");
+            let dirs = TestDirs::new();
+            let listener = Native.bind(&dirs.endpoint()).expect("bind");
+            let handle = listener.waiting.as_raw_handle() as HANDLE;
+            assert_eq!(
+                labels(handle),
+                [(MANDATORY_LABEL, NO_WRITE_UP, MEDIUM.to_owned())],
+                "one Medium label that refuses a lower integrity writing"
+            );
+        }
+
+        /// What AC4 asks: a host started from an elevated SSH login serves
+        /// the same user's desktop client, which runs at Medium. It needs an
+        /// elevated test process, as on CI's Windows runners; anywhere else
+        /// it says so and checks nothing.
+        #[tokio::test]
+        async fn an_elevated_hosts_pipe_takes_the_same_users_medium_integrity_client() {
+            if !elevated("an elevated host's pipe") {
+                return;
+            }
+            let client = medium_client_token();
+
+            let dirs = TestDirs::new();
+            let endpoint = dirs.endpoint();
+            let name = endpoint.as_path().to_string_lossy().into_owned();
+            let mut listener = Native.bind(&endpoint).expect("bind");
+            let (as_client, opened) = open_as(&client, &name, b"medium");
+            assert_eq!(as_client, MEDIUM, "the client runs at Medium");
+            opened.expect("the Medium client opens the elevated host's pipe");
+            let mut served = listener.accept().await.expect("accept");
+            let mut buf = [0u8; 6];
+            served.read_exact(&mut buf).await.unwrap();
+            assert_eq!(&buf, b"medium");
+
+            // The control: a pipe the same user made with a High label
+            // refuses that client writing, so the client really is at Medium
+            // and the label is what lets it in.
+            let sid = CurrentUser::query().unwrap().sid_string().unwrap();
+            let sddl: Vec<u16> = format!("D:P(A;;GA;;;{sid})S:(ML;;NW;;;HI)")
+                .encode_utf16()
+                .chain(Some(0))
+                .collect();
+            let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
+            // SAFETY: as in UserOnlyDescriptor::for_current_user.
+            assert_ne!(
+                unsafe {
+                    ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                        sddl.as_ptr(),
+                        SDDL_REVISION_1,
+                        &mut descriptor,
+                        ptr::null_mut(),
+                    )
+                },
+                0
+            );
+            let high = UserOnlyDescriptor(descriptor);
+            let control = format!(r"\\.\pipe\{}", crate::testkit::unique_name());
+            let _server = create_instance(&OsString::from(&control), &high, true)
+                .expect("create the High-labelled control pipe");
+            let (_, refused) = open_as(&client, &control, b"medium");
+            let refused = refused.expect_err("a High label refuses a Medium writer");
+            assert_eq!(
+                refused.raw_os_error(),
+                Some(ERROR_ACCESS_DENIED as i32),
+                "{refused}"
+            );
+        }
+
+        /// A host or desktop that is not elevated, as every Floti is but one
+        /// started from an administrator's SSH login, makes its pipe and its
+        /// owner-only files with the same Medium label: a label at its own
+        /// integrity, set as each is made, which needs no privilege. Shown by
+        /// a thread impersonating a Medium, Administrators-deny-only token,
+        /// which needs an elevated process to make.
+        #[tokio::test]
+        async fn a_process_at_medium_integrity_binds_the_pipe_and_makes_owner_only_files_with_the_medium_label()
+         {
+            if !elevated("a Medium process's pipe and files") {
+                return;
+            }
+            let client = medium_client_token();
+            let dirs = TestDirs::new();
+            let endpoint = dirs.endpoint();
+            let (integrity, bound) = as_token(&client, move || {
+                Native
+                    .bind(&endpoint)
+                    .map(|listener| labels(listener.waiting.as_raw_handle() as HANDLE))
+                    .map_err(|err| err.to_string())
+            });
+            assert_eq!(integrity, MEDIUM, "the thread runs at Medium");
+            let medium_label = [(MANDATORY_LABEL, NO_WRITE_UP, MEDIUM.to_owned())];
+            assert_eq!(
+                bound.expect("a Medium process binds the pipe"),
+                medium_label
+            );
+
+            let file = dirs.root().join("owner only");
+            let made = file.clone();
+            let (_, created) = as_token(&client, move || {
+                use crate::platform::private_files::{Native as Files, PrivateFiles};
+                Files
+                    .create_new(&made)
+                    .and_then(|mut opened| opened.write_all(b"medium"))
+            });
+            created.expect("a Medium process makes an owner-only file");
+            assert_eq!(file_labels(&file), medium_label);
+            assert_eq!(std::fs::read(&file).unwrap(), b"medium");
+        }
     }
 }

@@ -115,6 +115,12 @@ gets skipped.
   restart. A task that cannot be deleted is a warning, never a failed
   install. macOS and Linux still start
   the host at sign-in.
+- Adding a Windows PC as a host from another computer works with nobody
+  signed in there: `ssh <target> floti connect` starts the host on that PC
+  when none is running, and closing the connection leaves the host and its
+  sessions running. Floti opened at that PC's desktop later connects to the
+  same host. From an administrator's SSH login while you are signed in at
+  that PC, it starts nothing and says to open Floti on that PC instead.
 - On macOS and Linux, installing floti now puts it on your PATH: when
   `~/.local/bin` is not on it already, one line marked `# added by floti`
   goes at the end of the startup file your shell reads (`~/.zshenv` for zsh,

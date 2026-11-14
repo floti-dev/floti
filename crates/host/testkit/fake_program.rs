@@ -21,6 +21,15 @@
 //! set, the report is also appended to the file it names, one line a run,
 //! for a test whose program is run by another (`floti update` running it as
 //! the desktop's installer).
+//!
+//! `--in-job <line>`, as its only arguments, is another program altogether:
+//! a transport that stands for Windows OpenSSH's server. It puts itself in a
+//! job that ends everything in it once its last handle closes and lets a
+//! program in it break away, as sshd's job for a login does, then runs
+//! `<line>` in it, split at spaces, `floti` being the binary
+//! `FAKE_SSH_FLOTI` names, with its own standard streams, and exits with its
+//! exit code. The job's handle closes as this process ends: the connection
+//! closing, which ends whatever is still in the job.
 
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
@@ -28,6 +37,11 @@ use std::time::Duration;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let [flag, line] = args.as_slice()
+        && flag == "--in-job"
+    {
+        std::process::exit(in_job(line));
+    }
     let value_after = |flag: &str| -> Vec<String> {
         args.windows(2)
             .filter(|pair| pair[0] == flag)
@@ -117,4 +131,32 @@ fn main() {
     }
     let code = number_after("--exit").unwrap_or(0);
     std::process::exit(i32::try_from(code).expect("an exit code"));
+}
+
+/// Runs `line` in a job that ends what it holds when this process ends and
+/// lets it break away, and says how it exited. The job is the one a host
+/// joins to tie what it starts to its own life
+/// ([`ProcessTree::end_tree_with_this_process`]): on Windows a job with
+/// `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and `JOB_OBJECT_LIMIT_BREAKAWAY_OK`,
+/// as sshd's for a login is. Elsewhere it ties only what is named to it,
+/// which nothing here is, so there the line runs as any child.
+fn in_job(line: &str) -> i32 {
+    use floti_host::platform::process_tree::{Native, ProcessTree};
+    use floti_protocol::Knowable;
+
+    if Native.end_tree_with_this_process() != Knowable::Known(true) {
+        eprintln!("floti-fake-program: could not put itself in a job that ends with it");
+        return 2;
+    }
+    let mut words = line.split(' ');
+    let program = match words.next() {
+        Some("floti") => std::env::var_os("FAKE_SSH_FLOTI").expect("FAKE_SSH_FLOTI names floti"),
+        Some(program) => program.into(),
+        None => panic!("no line to run"),
+    };
+    let status = Command::new(program)
+        .args(words)
+        .status()
+        .expect("run the line in the job");
+    status.code().unwrap_or(1)
 }

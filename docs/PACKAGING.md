@@ -1132,7 +1132,7 @@ range, makes the data folder and the host key, and then:
   systemd it marks the host to start when a client connects) and starts it.
 - **Windows**: registers nothing and starts nothing. The host starts when a
   client needs it: the desktop app when no host answers it, or `floti
-  connect`. Each starts it with no console (`DETACHED_PROCESS`, through
+  connect` (see [Start on connect](#start-on-connect)). Each starts it with no console (`DETACHED_PROCESS`, through
   `ProcessTree::start_detached`, or Node's `detached` and `windowsHide`), so
   no window opens for it and none can be closed to stop it. A host setup
   started would have no `--desktop`, and since every install runs setup
@@ -1240,6 +1240,50 @@ foreground and would be stopped reading it;
 session, whose console is its input. The desktop's install on another
 computer runs setup over `ssh -o BatchMode=yes` with no terminal, so it asks
 nothing there and installs no desktop app.
+
+### Start on connect
+
+`floti connect`, which every transport to another computer runs there
+(`ssh <target> floti connect`), starts the host when none answers, by the
+OS's startup rule (`HostStartup::on_connect`):
+
+| OS | Starts the host on connect |
+|---|---|
+| Windows | always, except from an elevated login while the user has a desktop session there |
+| WSL without systemd | when setup recorded `start-on-connect` in the data folder |
+| macOS, Linux | never: the host starts at sign-in |
+
+On Windows the host starts detached and out of the login's job, so closing
+the SSH connection ends neither the host nor its session keeper, and
+without `SSH_CONNECTION`, `SSH_CLIENT` and `SSH_TTY`, so it and its
+sessions do not look like an SSH login. The host serves until it exits on
+its own; Floti opened at that PC's desktop connects to the same host. A
+login whose job lets nothing break away starts no host and says that this
+login cannot start a Floti host that outlives it. Windows OpenSSH runs the
+login in session 0, which has no desktop, so nothing such a host runs can
+show a window on the desktop.
+
+OpenSSH gives an administrator's login the full, elevated token. While that
+user has a desktop session on the PC, `floti connect` from such a login
+starts nothing and says, on the line the desktop shows as the connection's
+error, `no Floti host is running there, and an administrator's SSH login
+does not start one while you are signed in at that PC, so open Floti on that
+PC.` With nobody signed in it starts the host elevated. The host's pipes,
+the keeper's pipe and its owner-only files carry a Medium mandatory label
+(`S:(ML;;NW;;;ME)`, set as each is made, which needs no privilege), so the
+same user's desktop client, which runs at Medium, is served by that host.
+
+A host itself refuses to start as root or a Windows service account on
+every OS, and from an SSH session on macOS and Linux, where it starts at
+sign-in; on Windows an SSH session is how another computer starts it.
+
+The rule is unit-tested with each login faked (`platform/startup/tests.rs`),
+and a test build alone reads `FLOTI_TEST_LOGIN` (`plain`, `elevated` or
+`elevated-at-desktop`) for the login `floti connect` decides by, since CI's
+Windows runners run tests elevated with a desktop session. The connection
+closing is tested with a job that ends what it holds when it closes and lets
+a program break away, as sshd's does (`floti-fake-program --in-job`, in
+`tests/it/remote.rs`).
 
 ## floti add desktop
 

@@ -402,15 +402,30 @@ fn every_program_the_host_starts_opens_no_console_window() {
 }
 
 /// A tree whose detached starts land where `outliving` says, as a job that
-/// refuses breakaway puts them, and start nothing real.
-struct StartsWhere(Outliving);
+/// refuses breakaway puts them, and start nothing real; `ended` says
+/// whether the last one started was ended.
+struct StartsWhere(Outliving, std::sync::Arc<std::sync::atomic::AtomicBool>);
 
-/// A program that has already exited.
-struct Exited;
+impl StartsWhere {
+    fn new(outliving: Outliving) -> Self {
+        Self(outliving, std::sync::Arc::default())
+    }
 
-impl Started for Exited {
+    fn ended(&self) -> bool {
+        self.1.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// A program that runs until it is ended, which it records in its flag.
+struct Running(std::sync::Arc<std::sync::atomic::AtomicBool>);
+
+impl Started for Running {
     fn exited(&mut self) -> Option<Option<i32>> {
-        Some(Some(0))
+        None
+    }
+
+    fn end(&mut self) {
+        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -438,7 +453,7 @@ impl ProcessTree for StartsWhere {
         _env_remove: &[&str],
     ) -> std::io::Result<Detached> {
         Ok(Detached {
-            process: Box::new(Exited),
+            process: Box::new(Running(std::sync::Arc::clone(&self.1))),
             outliving: self.0,
         })
     }
@@ -447,13 +462,16 @@ impl ProcessTree for StartsWhere {
 #[test]
 fn a_relaunch_that_could_start_only_in_a_job_ending_with_this_host_fails() {
     let program = std::path::Path::new("floti");
-    let ends = StartsWhere(Outliving::InJob {
+    let ends = StartsWhere::new(Outliving::InJob {
         ends_with_job: true,
     });
     let err = ends
         .replace_this_process(program, &["host"])
         .expect_err("the new host would end with this one");
     assert_eq!(err.to_string(), ENDS_WITH_THIS_PROCESS);
+    // Ended at once, not left to be cut off with the job partway through
+    // its start.
+    assert!(ends.ended(), "the new host was left running in the job");
 
     // Apart, or in a job that leaves what it holds running: the new host
     // outlives this one.
@@ -463,8 +481,10 @@ fn a_relaunch_that_could_start_only_in_a_job_ending_with_this_host_fails() {
             ends_with_job: false,
         },
     ] {
-        StartsWhere(outliving)
+        let apart = StartsWhere::new(outliving);
+        apart
             .replace_this_process(program, &["host"])
             .unwrap_or_else(|err| panic!("{outliving:?}: {err}"));
+        assert!(!apart.ended(), "{outliving:?}: the new host was ended");
     }
 }

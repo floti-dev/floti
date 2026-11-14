@@ -174,9 +174,14 @@ describe.runIf(existsSync(FLOTI))('adding a host on another computer by connecti
       expect(stopped.code, stopped.stderr).toBe(0)
       await host.exited
 
-      // S8: with no host running there, the add fails with floti's own last
-      // line, hands nothing on and leaves no client folder behind.
-      const failed = await adderFor(first).add({ attempt: 'a2', name: 'lab', transport: TRANSPORT }, keep)
+      // S8: a host that cannot be reached, a computer whose login cannot run
+      // `floti connect`, fails the add with the transport's own last line,
+      // hands nothing on and leaves no client folder behind. (One where no
+      // host runs is no failure on Windows, where floti connect starts it.)
+      const failed = await adderFor({ ...first, FAKE_SSH_MISSING_LINE: 'floti connect' }).add(
+        { attempt: 'a2', name: 'lab', transport: TRANSPORT },
+        keep
+      )
       expect(failed.kind).toBe('failed')
       if (failed.kind === 'failed') expect(failed.lastLine).not.toBe('')
       expect(kept).toHaveLength(1)

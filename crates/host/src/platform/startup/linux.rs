@@ -8,8 +8,12 @@
 
 use std::path::Path;
 
-use super::{HostStart, HostStartup, StartupDefinition, StartupKind, binary_text};
+use super::{
+    Account, HostStart, HostStartup, Login, OnConnect, StartupDefinition, StartupKind, binary_text,
+    on_connect_where_recorded, refused_outside_sign_in,
+};
 use crate::Result;
+use crate::platform::folders::UserEnv;
 
 /// The unit's name (design I11).
 pub const UNIT_NAME: &str = "floti.service";
@@ -24,6 +28,17 @@ pub struct Native;
 impl HostStartup for Native {
     fn host_start(&self, binary: &Path) -> Result<HostStart> {
         user_unit(binary).map(HostStart::AtSignIn)
+    }
+
+    /// It starts at the user's sign-in, so not from an SSH session, and
+    /// never as root.
+    fn launch_refusal(&self, env: &UserEnv, account: Account) -> Option<String> {
+        refused_outside_sign_in(env, account)
+    }
+
+    /// Only in a WSL distro whose setup recorded it.
+    fn on_connect(&self, data: &Path, _login: &dyn Login) -> OnConnect {
+        on_connect_where_recorded(data)
     }
 }
 

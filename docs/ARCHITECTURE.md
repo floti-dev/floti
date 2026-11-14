@@ -98,9 +98,28 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   secret: a transport that needs a password or a key accepted fails with its
   last line, and the fix is `ssh <target>` in a terminal. Adding a host is
   connecting to it: the first connection pins the key it proves, and
-  nothing is approved or typed on the host. The link never
-  starts that host and a drop ends nothing there; Remove ends the link and
-  removes the host's client folder, and ends nothing on the host.
+  nothing is approved or typed on the host. A drop ends nothing there;
+  Remove ends the link and removes the host's client folder, and ends
+  nothing on the host.
+- The link starts nothing itself. `floti connect`, which the transport runs
+  on the host's computer, starts the host there when none answers, as the
+  OS's startup rule says (`HostStartup::on_connect` in
+  `platform/startup`): on Windows always, since nothing starts a host there
+  at sign-in; in a WSL distro whose setup recorded it (`start-on-connect`),
+  where no systemd runs; on macOS and Linux otherwise never, since the host
+  starts at sign-in. On Windows the host it starts runs detached, out of the
+  login's job (`start_detached`), with `SSH_CONNECTION`, `SSH_CLIENT` and
+  `SSH_TTY` taken out of its environment, so OpenSSH closing the login ends
+  neither the host nor its keeper, and nothing the host starts looks like an
+  SSH login. A login whose job would not let it go starts none and says so.
+  OpenSSH runs a login in session 0, with no desktop, so nothing such a host
+  runs shows a window there; Floti opened at the desktop connects to it as
+  to any host. An administrator's login gets the full, elevated token:
+  `floti connect` there starts nothing while the user has a desktop session
+  (`TokenElevation`, then `desktop_session`), and says to open Floti on that
+  PC; with nobody signed in it starts the host, whose pipes and owner-only
+  files carry a Medium integrity label (`UserOnlyDescriptor`), so the same
+  user's desktop client, at Medium, is served by it.
 
 ## Tabs, panes and families
 

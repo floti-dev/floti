@@ -1,6 +1,7 @@
 //! The host's place in the user's sign-in on Windows: whether it runs as a
-//! service account, and the console events that stop it (Ctrl+C, Ctrl+Break,
-//! the console closing, signing out and shutting down).
+//! service account or elevated, whether the user has a desktop session, and
+//! the console events that stop it (Ctrl+C, Ctrl+Break, the console closing,
+//! signing out and shutting down).
 
 use std::ffi::c_void;
 use std::io;
@@ -10,7 +11,9 @@ use std::ptr;
 use tokio::signal::windows::{CtrlBreak, CtrlC, CtrlClose, CtrlLogoff, CtrlShutdown};
 use windows_sys::Win32::Foundation::{HANDLE, LocalFree};
 use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
-use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
+use windows_sys::Win32::Security::{
+    GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TOKEN_USER, TokenElevation, TokenUser,
+};
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
 use super::Account;
@@ -47,8 +50,30 @@ pub(super) fn account() -> Account {
     }
 }
 
-/// The SID of the user this process's token belongs to, as text.
-fn token_user_sid() -> io::Result<String> {
+/// Whether this process's token is elevated (`TokenElevation`): an
+/// administrator's full token, which OpenSSH gives an administrator's login
+/// and "Run as administrator" gives a program. `None` when Windows would not
+/// say.
+pub(super) fn elevated() -> Option<bool> {
+    let token = process_token().ok()?;
+    let mut elevation = TOKEN_ELEVATION::default();
+    let mut written = 0u32;
+    // SAFETY: `elevation` is a TOKEN_ELEVATION, the size passed is its own,
+    // and the token is open for querying while `token` lives.
+    let ok = unsafe {
+        GetTokenInformation(
+            token.as_raw_handle() as HANDLE,
+            TokenElevation,
+            (&raw mut elevation).cast(),
+            size_of::<TOKEN_ELEVATION>() as u32,
+            &mut written,
+        )
+    };
+    (ok != 0).then_some(elevation.TokenIsElevated != 0)
+}
+
+/// This process's token, open for querying.
+fn process_token() -> io::Result<OwnedHandle> {
     let mut raw: HANDLE = ptr::null_mut();
     // SAFETY: the pseudo handle needs no closing; `raw` receives a token
     // handle, owned below.
@@ -56,7 +81,12 @@ fn token_user_sid() -> io::Result<String> {
         return Err(io::Error::last_os_error());
     }
     // SAFETY: OpenProcessToken succeeded, so `raw` is a handle we own.
-    let token = unsafe { OwnedHandle::from_raw_handle(raw as RawHandle) };
+    Ok(unsafe { OwnedHandle::from_raw_handle(raw as RawHandle) })
+}
+
+/// The SID of the user this process's token belongs to, as text.
+fn token_user_sid() -> io::Result<String> {
+    let token = process_token()?;
     let token = token.as_raw_handle() as HANDLE;
 
     let mut needed = 0u32;

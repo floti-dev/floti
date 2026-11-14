@@ -36,7 +36,7 @@ use floti_host::platform::launcher::{Native as NativeLauncher, ProgramLauncher};
 use floti_host::platform::socket::{
     Endpoint, LocalListener, LocalSocket, LocalStream, Native as NativeSocket,
 };
-use floti_host::platform::startup;
+use floti_host::platform::startup::{self, HostStartup, LOGIN_TEST_VAR, OnConnect, SaidLogin};
 use floti_host::server::{
     HOST_KEY_FILE, HostConfig, LOCK_FILE, host_public_key, local_endpoint, relay_endpoint,
 };
@@ -55,7 +55,9 @@ use floti_protocol::channels::sessions::{
 };
 use floti_protocol::message::{ClientInfo, ClientKind, Hello, Request, StreamData, StreamOpen};
 use floti_protocol::noise::{KeyPair, PublicKey};
-use floti_protocol::{Bytes, FrameDecoder, Message, PROTOCOL_VERSION, StreamChannel, encode_frame};
+use floti_protocol::{
+    Bytes, FrameDecoder, Knowable, Message, PROTOCOL_VERSION, StreamChannel, encode_frame,
+};
 use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::sync::mpsc;
@@ -712,12 +714,36 @@ async fn s1_a_host_that_does_not_prove_the_pinned_key_across_floti_connect_gets_
     world.stop().await;
 }
 
+/// An elevated login while the user is signed in at the desktop, where
+/// `floti connect` starts no host on any OS.
+const AT_THE_DESKTOP: SaidLogin = SaidLogin {
+    elevated: Some(true),
+    desktop_session: Some(true),
+};
+
+/// What `floti connect` with no host running says in [`AT_THE_DESKTOP`],
+/// with the data folder `data`, by this OS's rule: that no host is running,
+/// on macOS and Linux; on Windows, to open Floti on that PC.
+fn no_host_at_the_desktop(data: &Path) -> String {
+    match startup::Native.on_connect(data, &AT_THE_DESKTOP) {
+        OnConnect::NoHost => NO_HOST_LINE.to_owned(),
+        OnConnect::Refuse(why) => format!("floti connect: {why}"),
+        OnConnect::Start { .. } => panic!("an elevated login at the desktop would start a host"),
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn s2_with_no_host_running_floti_connect_writes_nothing_and_exits_3_saying_none_is_running() {
     let dirs = TestDirs::new();
-    for args in [&["connect"][..], &["connect", "--host-key"][..]] {
+    for (args, says) in [
+        (&["connect"][..], no_host_at_the_desktop(&dirs.data)),
+        (&["connect", "--host-key"][..], NO_HOST_LINE.to_owned()),
+    ] {
         let mut command = floti_command(&dirs, &dirs.runtime);
-        command.args(args).stdin(Stdio::null());
+        command
+            .args(args)
+            .env(LOGIN_TEST_VAR, "elevated-at-desktop")
+            .stdin(Stdio::null());
         let output = run_floti(command).await;
         assert_eq!(output.status.code(), Some(3), "{args:?}: {output:?}");
         assert!(output.stdout.is_empty(), "{args:?}: {output:?}");
@@ -725,7 +751,7 @@ async fn s2_with_no_host_running_floti_connect_writes_nothing_and_exits_3_saying
             String::from_utf8_lossy(&output.stderr)
                 .lines()
                 .collect::<Vec<_>>(),
-            [NO_HOST_LINE],
+            [says],
             "{args:?}"
         );
     }
@@ -954,16 +980,16 @@ async fn with_no_host_running_there_the_bridge_exits_3_with_floti_connects_line(
         .pin_host(KeyPair::generate().unwrap().public())
         .unwrap();
     let unpinned = dirs.root().join("a new laptop");
-    for folder in [&folder, &unpinned] {
-        let ended = Bridge::spawn(bridge_through(
-            &dirs,
-            &dirs.runtime,
-            folder,
-            &ssh_transport(),
-        ))
-        .ended()
-        .await;
-        assert_ended_with_line(&ended, 3, NO_HOST_LINE);
+    // A pinned folder connects at once; a new one first asks for the key,
+    // which no host has made.
+    for (folder, says) in [
+        (&folder, no_host_at_the_desktop(&dirs.data)),
+        (&unpinned, NO_HOST_LINE.to_owned()),
+    ] {
+        let mut command = bridge_through(&dirs, &dirs.runtime, folder, &ssh_transport());
+        command.env(LOGIN_TEST_VAR, "elevated-at-desktop");
+        let ended = Bridge::spawn(command).ended().await;
+        assert_ended_with_line(&ended, 3, &says);
     }
 }
 
@@ -2254,6 +2280,9 @@ async fn s9_in_a_distro_set_to_start_on_connect_floti_connect_starts_the_host_an
             // is not set, as no SSH session's.
             .env("SHELL", "/bin/sh")
             .env(&log_var, &log_dir)
+            // On a Windows runner, the login the fake distro's floti
+            // connect runs in: not elevated, so it starts the host.
+            .env(LOGIN_TEST_VAR, "plain")
             .env_remove("CLAUDE_CONFIG_DIR")
             .env_remove("SSH_CONNECTION")
             .env_remove("SSH_CLIENT")
@@ -2295,6 +2324,128 @@ async fn s9_in_a_distro_set_to_start_on_connect_floti_connect_starts_the_host_an
     let mut again = Bridge::spawn(bridge());
     again.welcomed().await;
     assert_eq!(again.listed(1).await, [session.id]);
+    again.close_stdin();
+    assert_eq!(again.ended().await.code, Some(0));
+
+    host.stop().await;
+    drop(agent);
+}
+
+/// The process serving the host's socket at `endpoint`, as the OS names it.
+async fn serving_host(endpoint: &Endpoint) -> u32 {
+    let (stream, server) = NativeSocket
+        .connect_naming_server(endpoint)
+        .await
+        .expect("a host answers");
+    drop(stream);
+    match server {
+        Knowable::Known(pid) => pid,
+        Knowable::Unknown => panic!("the OS would not name the host's process"),
+    }
+}
+
+/// The transport Windows OpenSSH's server is, for a login: `floti connect`
+/// runs in a job that ends everything in it when the connection closes, and
+/// lets a program break away from it (`floti-fake-program --in-job`).
+fn in_a_login_job() -> Vec<String> {
+    vec![
+        env!("CARGO_BIN_EXE_floti-fake-program").to_owned(),
+        "--in-job".to_owned(),
+    ]
+}
+
+/// A Windows PC with nobody signed in, reached as `ssh <target> floti
+/// connect` from an administrator's login: no start-on-connect record and
+/// no host running. The connection starts the host and is served; closing it
+/// ends the job its login ran in, and the host, its keeper and the session
+/// it runs carry on. Where no host starts on connect without setup's record,
+/// macOS and Linux, it says so and ends at once: there is nothing to start.
+#[tokio::test(flavor = "multi_thread")]
+async fn on_windows_a_connection_starts_the_host_and_closing_it_leaves_the_host_its_keeper_and_sessions_running()
+ {
+    let dirs = TestDirs::new();
+    let plain = SaidLogin {
+        elevated: Some(false),
+        desktop_session: Some(false),
+    };
+    if startup::Native.on_connect(&dirs.data, &plain) == OnConnect::NoHost {
+        eprintln!("SKIPPED: this OS starts no host on connect without setup's record");
+        return;
+    }
+    let agent = fake_agent!(&dirs);
+    // The host's key, as an install leaves it, and no record that it starts
+    // on connect: Windows starts it without one.
+    std::fs::create_dir_all(&dirs.data).unwrap();
+    load_or_create_key_pair(&dirs.data.join(HOST_KEY_FILE)).unwrap();
+    let endpoint = local_endpoint(&dirs.folders());
+    record_test_host(&endpoint, &dirs.data);
+    let host = ConnectStartedHost {
+        endpoint: endpoint.clone(),
+        data: dirs.data.clone(),
+        stopped: false,
+    };
+    let folder = dirs.root().join("a mac");
+    let (log_var, log_dir) = agent.log_env();
+    let bridge = || {
+        let mut command = bridge_through(&dirs, &dirs.runtime, &folder, &in_a_login_job());
+        command
+            .env(&log_var, &log_dir)
+            // An SSH login, which the host it starts does not look like, of
+            // an administrator, with nobody signed in at the desktop.
+            .env("SSH_CONNECTION", "203.0.113.9 50022 192.0.2.1 22")
+            .env("SSH_CLIENT", "203.0.113.9 50022 22")
+            .env(LOGIN_TEST_VAR, "elevated")
+            .env_remove("CLAUDE_CONFIG_DIR");
+        command
+    };
+    let mut first = Bridge::spawn(bridge());
+    first.welcomed().await;
+    let session = work_in_a_session(
+        &mut first,
+        1,
+        1,
+        &agent,
+        &dirs.folder("a project"),
+        "over ssh",
+    )
+    .await;
+    let ran = agent.records().last().cloned().expect("the agent ran");
+    for name in ["SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"] {
+        assert!(
+            !ran.env_names
+                .iter()
+                .any(|var| var.eq_ignore_ascii_case(name)),
+            "the session's agent was given {name}: {:?}",
+            ran.env_names
+        );
+    }
+    let started = serving_host(&endpoint).await;
+    // The connection closes: floti connect ends, and so does the job its
+    // login ran in, ending whatever is still in it.
+    first.close_stdin();
+    assert_eq!(first.ended().await.code, Some(0));
+
+    // The host it started still runs: the same process answers, asked
+    // before any connection could start another.
+    assert_eq!(
+        serving_host(&endpoint).await,
+        started,
+        "{}",
+        dirs.host_log()
+    );
+    // And so does the session, which its keeper holds: a new connection
+    // types into it and is answered, by that host still.
+    let mut again = Bridge::spawn(bridge());
+    again.welcomed().await;
+    assert_eq!(again.listed(1).await, [session.id]);
+    assert_eq!(serving_host(&endpoint).await, started);
+    again
+        .screen_of(2, session.id, |text| !text.is_empty())
+        .await;
+    again.type_into(2, "still here\r");
+    again
+        .read_stream_until(2, |text| text.contains("echo: still here"))
+        .await;
     again.close_stdin();
     assert_eq!(again.ended().await.code, Some(0));
 
