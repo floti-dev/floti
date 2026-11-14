@@ -174,6 +174,31 @@ impl World {
         }
     }
 
+    /// Waits until a list the registry has published to its subscribers
+    /// passes `check`. The registry publishes once the turn that changed it is
+    /// over, so what [`Self::info`] reads can be ahead of the last list
+    /// published.
+    async fn until_published(&self, what: &str, check: impl Fn(&[PluginInfo]) -> bool) {
+        let deadline = Instant::now() + PATIENCE;
+        loop {
+            let seen = self
+                .published
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|list| check(list));
+            if seen {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "no list published {what} within {PATIENCE:?}; the last: {:#?}",
+                self.published.lock().unwrap().last()
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
     async fn running(&self, id: &str) -> PluginInfo {
         self.until(id, "running", |info| {
             state(info) == PluginBackgroundState::Running
@@ -1011,12 +1036,14 @@ throw new Error("on purpose");
     let error = crashed.background.as_ref().unwrap().error.clone().unwrap();
     assert!(error.contains("on purpose"), "{error}");
     assert_eq!((crashed.status, crashed.badge), (None, None));
-    assert!(world.published.lock().unwrap().iter().any(|list| {
-        list.iter().any(|plugin| {
-            plugin.id.as_deref() == Some("thrower")
-                && state(plugin) == PluginBackgroundState::Crashed
+    world
+        .until_published("with thrower crashed", |list| {
+            list.iter().any(|plugin| {
+                plugin.id.as_deref() == Some("thrower")
+                    && state(plugin) == PluginBackgroundState::Crashed
+            })
         })
-    }));
+        .await;
     assert!(
         world
             .runtime
