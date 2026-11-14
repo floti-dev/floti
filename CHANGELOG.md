@@ -110,8 +110,10 @@ gets skipped.
   registers nothing there and says the host starts when Floti or a
   connection needs it. The logon task "Floti host" an earlier preview
   registered, which opened a console window at every sign-in, is deleted
-  when Floti installs or updates and by `floti uninstall`; the host it
-  started keeps running until its next restart. macOS and Linux still start
+  when Floti installs or updates, when its host starts and by
+  `floti uninstall`; the host it started keeps running until its next
+  restart. A task that cannot be deleted is a warning, never a failed
+  install. macOS and Linux still start
   the host at sign-in.
 - On macOS and Linux, installing floti now puts it on your PATH: when
   `~/.local/bin` is not on it already, one line marked `# added by floti`

@@ -310,11 +310,12 @@ mod unregistering {
     use std::path::{Path, PathBuf};
 
     use super::super::register::{
-        OsCommand, Ran, SignInSystem, WANTS_FOLDER, lingering_on, remove_leftover_task,
-        remove_leftovers, unregister,
+        OsCommand, Ran, SignInSystem, WANTS_FOLDER, leftovers_at_start, leftovers_line,
+        lingering_on, remove_leftover_task, remove_leftovers, unregister,
     };
     use super::super::{HostStart, StartupDefinition, linux, macos, windows};
     use super::UNIX_BINARY;
+    use crate::platform::folders::{CONFIG_READ_ONLY_VAR, UserEnv};
     use crate::testkit::TestDirs;
 
     /// An OS that answers each command line it is given from `answers`,
@@ -441,6 +442,66 @@ mod unregistering {
             remove_leftover_task(&os, &TASK, &dirs.data),
             Err(format!("{QUERY} refused"))
         );
+    }
+
+    #[test]
+    fn deleting_the_leftover_task_is_said_in_one_line_and_a_refusal_is_a_warning_naming_the_fix() {
+        let dirs = TestDirs::new();
+        let when_needed = HostStart::WhenNeeded { leftover: TASK };
+        let os = FakeOs::answering(&[(QUERY, true, LISTED)]);
+        assert_eq!(
+            leftovers_line(&os, &when_needed, &dirs.data).as_deref(),
+            Some(
+                "Deleted the logon task \"Floti host\" an earlier floti registered; the Floti host starts when Floti or a connection needs it."
+            )
+        );
+        let nothing = FakeOs::answering(&[(QUERY, true, "")]);
+        assert_eq!(leftovers_line(&nothing, &when_needed, &dirs.data), None);
+        let refused = FakeOs::answering(&[(QUERY, true, LISTED), (DELETE, false, "")]);
+        assert_eq!(
+            leftovers_line(&refused, &when_needed, &dirs.data).as_deref(),
+            Some(
+                "Warning: the logon task \"Floti host\" an earlier floti registered was not deleted (schtasks /Delete /TN Floti host /F refused); schtasks /Delete /TN \"Floti host\" /F deletes it."
+            )
+        );
+        assert_only_query_and_delete(&refused);
+        let at_sign_in = FakeOs::answering(&[]);
+        assert_eq!(
+            leftovers_line(&at_sign_in, &HostStart::AtSignIn(unit()), &dirs.data),
+            None
+        );
+        assert!(at_sign_in.ran().is_empty());
+    }
+
+    #[test]
+    fn a_host_deletes_the_leftover_task_at_its_start_unless_it_runs_read_only() {
+        let dirs = TestDirs::new();
+        let when_needed = HostStart::WhenNeeded { leftover: TASK };
+        let user = |vars: &[(&str, &str)]| UserEnv {
+            home: None,
+            vars: vars
+                .iter()
+                .map(|(name, value)| ((*name).into(), (*value).into()))
+                .collect(),
+        };
+
+        // A development or check host beside the installed Floti asks nothing.
+        let read_only = FakeOs::answering(&[(QUERY, true, LISTED)]);
+        let env = user(&[(CONFIG_READ_ONLY_VAR, "1")]);
+        assert_eq!(
+            leftovers_at_start(&read_only, &when_needed, &dirs.data, &env),
+            None
+        );
+        assert!(read_only.ran().is_empty(), "{:?}", read_only.ran());
+
+        let os = FakeOs::answering(&[(QUERY, true, LISTED)]);
+        let line = leftovers_at_start(&os, &when_needed, &dirs.data, &user(&[])).unwrap();
+        assert!(
+            line.starts_with("Deleted the logon task \"Floti host\""),
+            "{line}"
+        );
+        assert_eq!(os.ran(), [QUERY, DELETE]);
+        assert_only_query_and_delete(&os);
     }
 
     #[test]

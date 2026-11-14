@@ -17,8 +17,11 @@
 //!   no `--desktop`, and since every install runs setup through
 //!   `floti install-self`, the desktop app would find it running and never
 //!   show its notification area icon. Setup deletes the logon task "Floti
-//!   host" an earlier floti registered, and its XML
-//!   ([`register::remove_leftovers`]); a host that task started runs on.
+//!   host" an earlier floti registered, and its XML, and says so in one
+//!   line ([`register::leftovers_line`]); a host that task started runs on.
+//!   A task Task Scheduler will not delete is a warning on that line, never
+//!   a failure: install-self, the installer and an install over ssh must
+//!   not fail on a cleanup.
 //!
 //! It never starts the host as its own child, so a setup run over ssh
 //! leaves no host under ssh, which
@@ -68,7 +71,9 @@
 //!   and nobody is signed in, so the host starts at the next sign-in (macOS
 //!   and Linux).
 //! - [`WHEN_NEEDED_LINE`], status 0: on Windows, nothing registered or
-//!   started; the host starts when Floti or a connection needs it.
+//!   started; the host starts when Floti or a connection needs it. What
+//!   setup said of the leftover task, if anything, comes on the line
+//!   before.
 //! - [`START_ON_CONNECT_LINE`], status 0: in a WSL distro whose systemd user
 //!   manager does not answer (`systemctl --user show-environment`), so no
 //!   unit would ever run. Nothing is registered or started; setup records
@@ -165,8 +170,9 @@ pub enum SetupOutcome {
     /// `floti connect` starts the host when a client connects.
     StartsOnConnect,
     /// Nothing is registered or started: on Windows a client starts the host
-    /// when it needs one.
-    StartsWhenNeeded,
+    /// when it needs one. With what was said of the logon task an earlier
+    /// floti registered: that it was deleted, or a warning that it was not.
+    StartsWhenNeeded(Option<String>),
     /// Why it failed, as one line.
     Failed(String),
 }
@@ -178,6 +184,15 @@ impl SetupOutcome {
         !matches!(self, Self::Failed(_))
     }
 
+    /// What setup says on standard output before [`Self::printed`]'s line:
+    /// what it did of the logon task an earlier floti registered.
+    pub fn said_first(&self) -> Option<&str> {
+        match self {
+            Self::StartsWhenNeeded(said) => said.as_deref(),
+            _ => None,
+        }
+    }
+
     /// Whether setup found nobody signed in here, so the desktop app is not
     /// offered: only where the host waits for the next sign-in.
     pub fn found_nobody_signed_in(&self) -> bool {
@@ -187,9 +202,10 @@ impl SetupOutcome {
     /// The process's exit status.
     pub fn code(&self) -> u8 {
         match self {
-            Self::Running | Self::KeepsRunning | Self::StartsOnConnect | Self::StartsWhenNeeded => {
-                0
-            }
+            Self::Running
+            | Self::KeepsRunning
+            | Self::StartsOnConnect
+            | Self::StartsWhenNeeded(_) => 0,
             Self::AtNextSignIn => AT_NEXT_SIGN_IN_EXIT,
             Self::Failed(_) => 1,
         }
@@ -203,7 +219,7 @@ impl SetupOutcome {
             Self::KeepsRunning => Some(KEEPS_RUNNING_LINE),
             Self::AtNextSignIn => Some(AT_NEXT_SIGN_IN_LINE),
             Self::StartsOnConnect => Some(START_ON_CONNECT_LINE),
-            Self::StartsWhenNeeded => Some(WHEN_NEEDED_LINE),
+            Self::StartsWhenNeeded(_) => Some(WHEN_NEEDED_LINE),
             Self::Failed(_) => None,
         }
     }
@@ -279,8 +295,11 @@ pub fn run_setup(options: SetupOptions) -> u8 {
         }
         done => {
             let mut out = std::io::stdout().lock();
-            let line = done.printed().unwrap_or_default();
-            let _ = writeln!(out, "{line}").and_then(|()| out.flush());
+            for line in done.said_first().into_iter().chain(done.printed()) {
+                let line = line.replace(['\r', '\n'], " ");
+                let _ = writeln!(out, "{line}");
+            }
+            let _ = out.flush();
         }
     }
     if outcome.offers_desktop() {
@@ -443,14 +462,12 @@ pub async fn setup(
     }
     let definition = match start {
         HostStart::AtSignIn(definition) => definition,
-        HostStart::WhenNeeded { leftover } => {
-            return match register::remove_leftovers(system, start, &folders.data) {
-                Ok(_) => SetupOutcome::StartsWhenNeeded,
-                Err(why) => SetupOutcome::Failed(format!(
-                    "could not delete the logon task \"{}\" an earlier floti registered: {why}",
-                    leftover.name
-                )),
-            };
+        HostStart::WhenNeeded { .. } => {
+            return SetupOutcome::StartsWhenNeeded(register::leftovers_line(
+                system,
+                start,
+                &folders.data,
+            ));
         }
     };
     match register_and_start(system, definition, &home, linger) {
@@ -480,8 +497,7 @@ fn data_folder_and_key(data: &Path) -> Result<KeyPair, String> {
 }
 
 /// Whether the host on `folders` answers within `within`: it takes a
-/// connection proving its own `key`, as `floti devices` makes, and welcomes
-/// it.
+/// connection proving its own `key`, the one setup made, and welcomes it.
 async fn answers(folders: &Folders, key: &KeyPair, within: Duration) -> bool {
     let endpoint = local_endpoint(folders);
     let deadline = Instant::now() + within;

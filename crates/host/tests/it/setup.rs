@@ -460,7 +460,7 @@ async fn s4_on_windows_setup_registers_nothing_starts_no_host_and_says_the_host_
 
         let outcome = run_windows_setup(&dirs, &os).await;
 
-        assert_eq!(outcome, SetupOutcome::StartsWhenNeeded);
+        assert_eq!(outcome, SetupOutcome::StartsWhenNeeded(None));
         assert_eq!(outcome.code(), 0, "never {AT_NEXT_SIGN_IN_EXIT}");
         assert_eq!(outcome.printed(), Some(WHEN_NEEDED_LINE));
         assert!(!WHEN_NEEDED_LINE.contains('\n'));
@@ -496,7 +496,14 @@ async fn on_windows_setup_deletes_the_logon_task_an_earlier_floti_registered_and
 
     let outcome = run_windows_setup(&dirs, &os).await;
 
-    assert_eq!(outcome, SetupOutcome::StartsWhenNeeded);
+    assert_eq!(
+        outcome.said_first(),
+        Some(
+            "Deleted the logon task \"Floti host\" an earlier floti registered; the Floti host starts when Floti or a connection needs it."
+        )
+    );
+    assert_eq!(outcome.printed(), Some(WHEN_NEEDED_LINE));
+    assert_eq!(outcome.code(), 0);
     assert_eq!(os.runs(), [QUERY, DELETE]);
     assert!(os.state.lock().unwrap().tasks.is_empty());
     assert!(!xml.exists());
@@ -506,10 +513,10 @@ async fn on_windows_setup_deletes_the_logon_task_an_earlier_floti_registered_and
     assert_eq!(os.starts(), 1);
     assert_host_answers_with_the_key_setup_made(&dirs).await;
 
-    // Run again, as the next update does: nothing left to delete.
+    // Run again, as the next update does: nothing left to delete or say.
     assert_eq!(
         run_windows_setup(&dirs, &os).await,
-        SetupOutcome::StartsWhenNeeded
+        SetupOutcome::StartsWhenNeeded(None)
     );
     assert_eq!(os.runs(), [QUERY, DELETE, QUERY]);
     os.stop().await;
@@ -969,7 +976,8 @@ async fn a_registration_the_os_refuses_fails_with_its_last_line_unedited_and_sta
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn on_windows_a_leftover_task_task_scheduler_will_not_delete_fails_setup_with_its_line() {
+async fn on_windows_a_leftover_task_task_scheduler_will_not_delete_is_a_warning_and_setup_still_succeeds()
+ {
     let dirs = TestDirs::new();
     let agent = fake_agent!(&dirs);
     let os = FakeOs::new(&dirs, &agent, true).failing(DELETE, "ERROR: Access is denied.\r\n");
@@ -981,14 +989,17 @@ async fn on_windows_a_leftover_task_task_scheduler_will_not_delete_fails_setup_w
 
     let outcome = run_windows_setup(&dirs, &os).await;
 
+    // A cleanup never fails an install: install-self, the installer and an
+    // install over ssh go on.
     assert_eq!(
         outcome,
-        SetupOutcome::Failed(
-            "could not delete the logon task \"Floti host\" an earlier floti registered: ERROR: Access is denied."
+        SetupOutcome::StartsWhenNeeded(Some(
+            "Warning: the logon task \"Floti host\" an earlier floti registered was not deleted (ERROR: Access is denied.); schtasks /Delete /TN \"Floti host\" /F deletes it."
                 .to_owned()
-        )
+        ))
     );
-    assert_eq!(outcome.code(), 1);
+    assert_eq!(outcome.code(), 0);
+    assert!(outcome.offers_desktop());
     assert_eq!(os.starts(), 0);
 }
 
@@ -1060,7 +1071,7 @@ async fn on_windows_doctor_finds_no_sign_in_entry_missing_before_setup_or_after(
     assert!(os.runs().is_empty(), "{:?}", os.runs());
     assert_eq!(
         run_windows_setup(&dirs, &os).await,
-        SetupOutcome::StartsWhenNeeded
+        SetupOutcome::StartsWhenNeeded(None)
     );
     assert_eq!(
         sign_in_finding(&os, &when_needed(), &dirs.home, &dirs.data),
@@ -1454,7 +1465,7 @@ fn install_self_runs_setup_with_no_desktop_and_only_a_set_up_host_goes_on_to_the
         SetupOutcome::KeepsRunning,
         SetupOutcome::AtNextSignIn,
         SetupOutcome::StartsOnConnect,
-        SetupOutcome::StartsWhenNeeded,
+        SetupOutcome::StartsWhenNeeded(None),
     ] {
         assert!(outcome.offers_desktop(), "{outcome:?}");
         // Only a host waiting for the next sign-in means nobody is here.

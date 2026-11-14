@@ -1140,10 +1140,17 @@ range, makes the data folder and the host key, and then:
   its notification area icon. Setup deletes the logon task "Floti host" an
   earlier floti registered, which ran the console program `floti.exe host`
   and so opened a console window at every sign-in, with its XML and the
-  data folder's `startup` folder once that is empty. Deleting the task ends
-  nothing: the host it started runs on until it next restarts, which an
-  update does. A task Task Scheduler will not delete fails setup with
-  schtasks' line.
+  data folder's `startup` folder once that is empty, and says so in one line
+  before its last. Deleting the task ends nothing: the host it started runs
+  on until it next restarts, which an update does. A task Task Scheduler
+  will not delete is a warning on that line, naming `schtasks /Delete`,
+  never a failure: install-self, the installer and an install over ssh do
+  not fail on a cleanup. `floti update` deletes it the same way, and so does
+  every host at its start, off the start's way and with no window: a host
+  updated in the background relaunches on the new floti and runs no setup,
+  and the desktop app then finds floti current and runs no install-self. A
+  host started with `FLOTI_CONFIG_READ_ONLY` (development and check runs)
+  and a test build leave the task alone.
 
 Then it says how that ended in one line and exits with that outcome's
 status:

@@ -36,7 +36,8 @@
 //!
 //! On Windows an earlier floti registered the logon task "Floti host" with
 //! Task Scheduler, from XML it kept under the data folder. `floti setup`,
-//! `floti update` and `floti uninstall` delete it ([`remove_leftover_task`]):
+//! `floti update`, the host's own start and `floti uninstall` delete it
+//! ([`remove_leftover_task`], [`leftovers_line`]):
 //! `schtasks /Delete` when `schtasks /Query` lists it, and the XML with its
 //! folder. Deleting a task never ends what it started, so the host it
 //! started runs on until it next restarts; nothing here ends it.
@@ -49,6 +50,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::{HostStart, LeftoverTask, StartupDefinition, StartupKind};
+use crate::platform::folders::{CONFIG_READ_ONLY_VAR, UserEnv};
 
 /// One OS command: a program, found on `PATH`, and its arguments, run
 /// without a shell.
@@ -224,6 +226,50 @@ pub fn remove_leftovers(
         HostStart::AtSignIn(_) => Ok(false),
         HostStart::WhenNeeded { leftover } => remove_leftover_task(system, leftover, data),
     }
+}
+
+/// What `floti setup`, `floti update` and a host's start say once they have
+/// taken out what an earlier floti registered that `start` does not
+/// ([`remove_leftovers`]): on Windows the logon task "Floti host" and its
+/// XML. `None` when there was nothing. A failure is a warning naming the
+/// command that deletes it, and fails nothing: a cleanup never fails an
+/// install, an update or a start.
+pub fn leftovers_line(system: &dyn SignInSystem, start: &HostStart, data: &Path) -> Option<String> {
+    let HostStart::WhenNeeded { leftover } = start else {
+        return None;
+    };
+    match remove_leftovers(system, start, data) {
+        Ok(false) => None,
+        Ok(true) => Some(format!(
+            "Deleted the logon task \"{}\" an earlier floti registered; the Floti host starts when Floti or a connection needs it.",
+            leftover.name
+        )),
+        Err(why) => Some(format!(
+            "Warning: the logon task \"{}\" an earlier floti registered was not deleted ({}); schtasks /Delete /TN \"{}\" /F deletes it.",
+            leftover.name,
+            why.replace(['\r', '\n'], " "),
+            leftover.name
+        )),
+    }
+}
+
+/// [`leftovers_line`] at a host's start, for the user `env` describes: a
+/// host updated in the background relaunches on the new floti and runs no
+/// setup, and the desktop app then finds floti current and runs none
+/// either, so the host takes out what an earlier floti registered itself.
+/// A host started with [`CONFIG_READ_ONLY_VAR`] set (a development or check
+/// run beside the installed Floti) leaves the computer's entries alone and
+/// asks nothing.
+pub fn leftovers_at_start(
+    system: &dyn SignInSystem,
+    start: &HostStart,
+    data: &Path,
+    env: &UserEnv,
+) -> Option<String> {
+    if env.var(CONFIG_READ_ONLY_VAR).is_some() {
+        return None;
+    }
+    leftovers_line(system, start, data)
 }
 
 /// Deletes `task` from Task Scheduler when `schtasks /Query` lists it, then

@@ -69,10 +69,11 @@
 //! it ran with ([`Installs::display_env`]).
 //!
 //! Before any of it, on Windows, it deletes the logon task "Floti host" an
-//! earlier floti registered, and its XML ([`leftovers_line`]), saying so in
-//! one line, as `floti setup` does: an update that replaces floti alone
-//! never runs setup. The host that task started runs on until it restarts.
-//! One that could not be deleted is said and stops nothing.
+//! earlier floti registered, and its XML
+//! ([`leftovers_line`](crate::platform::startup::register::leftovers_line)),
+//! saying so in one line, as `floti setup` does: an update that replaces
+//! floti alone never runs setup. The host that task started runs on until it
+//! restarts. One that could not be deleted is a warning and stops nothing.
 //!
 //! What is checked and replaced is the per-OS concern
 //! [`platform::installs`](crate::platform::installs).
@@ -109,8 +110,6 @@ use crate::platform::links::{self, remove_tree};
 use crate::platform::process_table::{self, ProcessTable};
 use crate::platform::process_tree::{self, ProcessTree};
 use crate::platform::standalone::{self, Standalone};
-use crate::platform::startup::HostStart;
-use crate::platform::startup::register::{self, SignInSystem};
 use crate::version::{FLOTI_VERSION, cpu_name, os_name};
 use manifest::{FileEntry, Release};
 use network::{Network, get_whole};
@@ -928,40 +927,18 @@ fn run_native(options: Options, relaunch_host: RelaunchHost<'_>) -> Result<Outco
     updater.run().map_err(|err| failure_line(&err))
 }
 
-/// What `floti update` says once it has taken out what an earlier floti
-/// registered that `start` does not, through `system`, from the data folder
-/// `data`: on Windows the logon task "Floti host" and its XML
-/// ([`register::remove_leftovers`]). `None` when there was nothing; a
-/// failure is a warning, which stops nothing.
-pub fn leftovers_line(system: &dyn SignInSystem, start: &HostStart, data: &Path) -> Option<String> {
-    let HostStart::WhenNeeded { leftover } = start else {
-        return None;
-    };
-    match register::remove_leftovers(system, start, data) {
-        Ok(false) => None,
-        Ok(true) => Some(format!(
-            "Deleted the logon task \"{}\" an earlier floti registered; the Floti host starts when Floti or a connection needs it.",
-            leftover.name
-        )),
-        Err(why) => Some(format!(
-            "Warning: the logon task \"{}\" an earlier floti registered was not deleted ({}); floti setup deletes it.",
-            leftover.name,
-            why.replace(['\r', '\n'], " ")
-        )),
-    }
-}
-
-/// [`leftovers_line`] on this computer, for `binary`, the floti running.
+/// [`leftovers_line`](crate::platform::startup::register::leftovers_line)
+/// on this computer, for `binary`, the floti running.
 #[cfg(not(feature = "testkit"))]
 fn native_leftovers_line(binary: &Path, data: &Path) -> Option<String> {
-    use crate::platform::startup::{self, HostStartup};
+    use crate::platform::startup::{self, HostStartup, register};
     let start = startup::Native.host_start(binary).ok()?;
-    leftovers_line(&register::NativeSystem, &start, data)
+    register::leftovers_line(&register::NativeSystem, &start, data)
 }
 
 /// In a test build of floti, which the crate's tests run as a program, this
-/// computer's Task Scheduler is never asked: [`leftovers_line`] is tested
-/// against a fake one.
+/// computer's Task Scheduler is never asked: the line is tested against a
+/// fake one.
 #[cfg(feature = "testkit")]
 fn native_leftovers_line(_binary: &Path, _data: &Path) -> Option<String> {
     None
