@@ -40,6 +40,14 @@ push and on all three OSes, and nobody runs one locally unless the owner
 asks. A review reads the worker's commands and results, and runs only a test
 it doubts or one the worker skipped. Nobody waits on CI to merge.
 
+An agent's session enforces this. `.claude/settings.json` runs
+`scripts/test-scope.mjs` before every shell command an agent sends, and it
+refuses one that runs a whole suite: `pnpm check`, `pnpm test`, a vitest run
+that names no file, `cargo nextest run` or `cargo test` that names no test
+binary, and any end-to-end run. The refusal names the command to run instead.
+When the owner asks for a suite, the command sets `OWNER_ASKED_FULL_SUITE=1`.
+CI and a person's own terminal never run the hook.
+
 **Unit and integration tests validate the work; end-to-end tests run only
 before a release is cut.** An end-to-end run builds the app and drives it,
 which costs minutes and a great deal of memory. `pnpm test:e2e` runs as a step
