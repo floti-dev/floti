@@ -465,7 +465,7 @@ the installed app has moved it.
 The installed app's floti is floti installed on its own, where the install
 scripts put it: `%LOCALAPPDATA%\Programs\Floti\bin\floti.exe` on Windows,
 `~/.local/bin/floti` on macOS and Linux. So a computer has one floti however
-Floti came to it, the host started at sign-in is that one, and
+Floti came to it, the host is that one however it is started, and
 `ssh <computer> floti version` finds it. `floti install-self`
 (`crates/host/src/install_self.rs`), run from the floti the app carries,
 puts it there:
@@ -495,10 +495,14 @@ puts it there:
    it finds `floti`. On macOS and Linux floti's line goes at the end of the
    startup file the user's shell reads, as [floti setup](#floti-setup)
    adds it after the install script, and it says which file.
-4. `floti setup --no-desktop` runs from the installed floti, which registers
-   it to start the host at sign-in and starts it, and neither asks about nor
+4. `floti setup --no-desktop` runs from the installed floti. On macOS and
+   Linux it registers it to start the host at sign-in and starts it; on
+   Windows it registers nothing and starts no host, which the app starts
+   when it needs one ([floti setup](#floti-setup)). It neither asks about nor
    installs the desktop app, which is there already. A host already running
-   keeps running.
+   keeps running. Its output is relayed by install-self as it comes, and it
+   runs with no window, as does `floti version`, since install-self also
+   runs from a host with no console, through `floti update`.
 
 Who runs it:
 
@@ -526,7 +530,7 @@ and the desktop alike, so the answer does not change while Floti runs. A host
 started with `FLOTI_CONFIG_READ_ONLY` (a development or check run) moves
 nothing. The installed app gives its
 host no config folder of its own, so the host it starts and the host started
-at sign-in read the same one.
+any other way read the same one.
 
 What it adds outside the install folder, which uninstalling the app leaves
 and `floti uninstall` removes ([below](#floti-uninstall)), the host's data
@@ -536,7 +540,7 @@ only with `--purge`:
 |---|---|
 | floti, copies of it put aside, its Node, and copies an install stopped part way left | `%LOCALAPPDATA%\Programs\Floti\bin\` (`floti.exe`, `floti.old-*.exe`, `node\` with any `node.old-*.exe`, `.floti.exe.floti-install-*`); `~/.local/bin/floti`, `~/.local/bin/node/` and `.floti.floti-install-*` there |
 | The PATH entry | on Windows that folder, appended to `Path` in `HKEY_CURRENT_USER\Environment`; on macOS and Linux floti's line, ending `# added by floti`, at the end of the startup file the user's shell reads ([floti setup](#floti-setup)) |
-| The start-at-sign-in entry | the logon task "Floti host" and its XML under the data folder's `startup\`; the LaunchAgent `~/Library/LaunchAgents/dev.floti.host.plist`; the user unit `~/.config/systemd/user/floti.service` |
+| The start-at-sign-in entry | the LaunchAgent `~/Library/LaunchAgents/dev.floti.host.plist`; the user unit `~/.config/systemd/user/floti.service`; none on Windows, where an earlier floti's logon task "Floti host" and its XML under the data folder's `startup\` are deleted by setup, `floti update` and `floti uninstall` |
 | The host's data | `%LOCALAPPDATA%\Floti`, `~/Library/Application Support/Floti`, `~/.local/share/floti` and `~/.local/state/floti`, kept as Floti's data is |
 
 The host and its session keeper run from that folder, so they outlive the
@@ -1011,7 +1015,7 @@ setup left, each missing thing failing the job with one line naming it:
 |---|---|
 | `ubuntu-latest`, `ubuntu-24.04-arm` | `~/.config/systemd/user/floti.service` running that floti, enabled and active in the user's systemd |
 | `macos-latest` | `~/Library/LaunchAgents/dev.floti.host.plist` running that floti, loaded and running in `gui/<uid>` |
-| `windows-latest`, `windows-11-arm` | the logon task "Floti host" running that `floti.exe host` at sign-in, running, with a host running from its folder and the folder on the user's `Path` |
+| `windows-latest`, `windows-11-arm` | the folder on the user's `Path`, no logon task "Floti host", and no host running from its folder, since a client starts the host when it needs one |
 | `debian` as root | nothing: no unit and no start-on-connect marker, as a refused setup leaves |
 | `debian` as an ordinary user, with `WSL_DISTRO_NAME` set | the start-on-connect marker in the data folder and no unit, as in a WSL distro where no systemd runs |
 
@@ -1025,17 +1029,19 @@ where nothing of Floti's may be there first
 and no process running from the app's own folder, so the floti the app
 carries is not the running host; and `check-setup.ps1` must pass as it does
 after `install.ps1`. Those same checks after either way in are what "runs
-the same setup" means: the same floti on the same `Path`, started by the
-same logon task. `floti doctor` is not the check, because on a runner it
+the same setup" means: the same floti on the same `Path`, and nothing that
+starts it at sign-in. `floti doctor` is not the check, because on a runner it
 reports Claude Code missing, which says nothing about setup.
 
 Last in each of those jobs, on every runner and in both container runs,
 `scripts/floti.dev/try-uninstall.sh` or `try-uninstall.ps1` runs
 [`floti uninstall`](#floti-uninstall) three times, each of which must exit 0:
 
-1. `floti uninstall`, from the installed floti. floti and its `node`, the
-   sign-in entry (the unit, the LaunchAgent and what launchd has loaded, the
-   logon task, or the start-on-connect marker), the desktop app where an
+1. `floti uninstall`, from the installed floti. On Windows the logon task
+   "Floti host" an earlier floti registered is registered first, from the
+   XML that floti kept, and run, so the host it starts is running. floti and
+   its `node`, the sign-in entry (the unit, the LaunchAgent and what launchd
+   has loaded, that logon task and its XML, or the start-on-connect marker), the desktop app where an
    installer put it there (`Floti.exe` and the Start menu's `Floti.lnk`) and,
    on Windows, floti's folder on the user's `Path` must be gone, with the
    lines that say so; on macOS and Linux no startup file may hold floti's
@@ -1119,11 +1125,47 @@ runs the same capture locally on any OS, into `reports/screenshots`.
 `floti setup` (`crates/host/src/setup.rs`) is what the install scripts run,
 and what `floti install-self` runs from the floti it puts in place. It checks
 Claude Code and says what to run when it is missing or outside the tested
-range, makes the data folder and the host key, registers the host to start
-at sign-in with the OS's per-user mechanism (on a Linux server with
-lingering on; in WSL without systemd it marks the host to start when a
-client connects) and starts it, then says how that ended in one line and
-exits with that outcome's status.
+range, makes the data folder and the host key, and then:
+
+- **macOS and Linux**: registers the host to start at sign-in with the OS's
+  per-user mechanism (on a Linux server with lingering on; in WSL without
+  systemd it marks the host to start when a client connects) and starts it.
+- **Windows**: registers nothing and starts nothing. The host starts when a
+  client needs it: the desktop app when no host answers it, or `floti
+  connect`. Each starts it with no console (`DETACHED_PROCESS`, through
+  `ProcessTree::start_detached`, or Node's `detached` and `windowsHide`), so
+  no window opens for it and none can be closed to stop it. A host setup
+  started would have no `--desktop`, and since every install runs setup
+  through `floti install-self`, the app would find it running and never show
+  its notification area icon. Setup deletes the logon task "Floti host" an
+  earlier floti registered, which ran the console program `floti.exe host`
+  and so opened a console window at every sign-in, with its XML and the
+  data folder's `startup` folder once that is empty, and says so in one line
+  before its last. Deleting the task ends nothing: the host it started runs
+  on until it next restarts, which an update does. A task Task Scheduler
+  will not delete is a warning on that line, naming `schtasks /Delete`,
+  never a failure: install-self, the installer and an install over ssh do
+  not fail on a cleanup. `floti update` deletes it the same way, and so does
+  every host at its start, off the start's way and with no window: a host
+  updated in the background relaunches on the new floti and runs no setup,
+  and the desktop app then finds floti current and runs no install-self. A
+  host started with `FLOTI_CONFIG_READ_ONLY` (development and check runs)
+  and a test build leave the task alone.
+
+Then it says how that ended in one line and exits with that outcome's
+status:
+
+| Outcome | Line | Status |
+|---|---|---|
+| Running | `The Floti host is running, and starts at each sign-in.` | 0 |
+| Running on a Linux server | `The Floti host is running, and keeps running with nobody signed in.` | 0 |
+| Nobody signed in (macOS and Linux) | `The Floti host starts at the next sign-in.` | 10 |
+| WSL without systemd | `The Floti host starts when a client connects.` | 0 |
+| Windows | `The Floti host starts when Floti or a connection needs it.` | 0 |
+| A failure | `floti setup: <why>` on standard error | 1 |
+
+`floti doctor` reports a missing start-at-sign-in entry on macOS and Linux
+only; on Windows there is none to miss, and it says nothing of one.
 
 **floti's folder on PATH.** Before the host, when the floti setup runs from
 is the one in the user's own folder (`~/.local/bin/floti`,
@@ -1477,13 +1519,15 @@ half-working, and the next run carries on where it stopped:
    With no host answering, a keeper a host left running is ended with what
    it holds. The sessions' history stays in the data folder.
 3. **The start-at-sign-in entry** (`platform/startup/register.rs`,
-   `unregister`): the logon task "Floti host" (`schtasks /Delete`, and its
-   XML under the data folder), the LaunchAgent `dev.floti.host`
+   `unregister`): the LaunchAgent `dev.floti.host`
    (`launchctl bootout` when loaded, then its property list), or the user
    unit `floti.service` (`systemctl --user disable --now`, its file, then
    `daemon-reload`; with no user manager answering, the unit and its
-   `default.target.wants` link go by hand). In a WSL distro without systemd,
-   the record that has `floti connect` start the host goes instead.
+   `default.target.wants` link go by hand). On Windows, which registers
+   none, the logon task "Floti host" an earlier floti registered, when
+   `schtasks /Query` lists it (`schtasks /Delete`, never `/End`), and its XML
+   under the data folder (`remove_leftover_task`). In a WSL distro without
+   systemd, the record that has `floti connect` start the host goes instead.
    **Lingering is left on**: it is a per-user setting other services may rely
    on, so a Linux computer with it on gets one line saying so and that
    `loginctl disable-linger` turns it off.

@@ -1152,8 +1152,9 @@ jobs:
   # the floti it installed, then that setup ran. The drivers are
   # scripts/floti.dev/try-install.sh and try-install.ps1. Then
   # check-setup.sh or check-setup.ps1 checks what setup registered there and
-  # that it runs: the systemd user unit, the LaunchAgent, or the logon task
-  # "Floti host" with floti's folder on the user's Path. On Windows the run's
+  # that it runs: the systemd user unit or the LaunchAgent; on Windows,
+  # floti's folder on the user's Path, no logon task "Floti host" and no host
+  # running, since a client starts the host there. On Windows the run's
   # desktop installer then runs silently over that install
   # (try-installer.ps1), which must leave the same floti, the release's for
   # this CPU, and the same setup, with nothing running from the app's folder.

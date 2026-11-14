@@ -4,8 +4,8 @@
 #
 # It installs floti {{version}} in your own folder,
 # %LOCALAPPDATA%\Programs\Floti\bin, with no admin rights, puts that folder on
-# your PATH, then runs `floti setup`, which starts the Floti host at each
-# sign-in. It picks the floti for this computer's CPU, downloads it from the
+# your PATH, then runs `floti setup`, which makes the host's key; the Floti
+# host starts when Floti or a connection needs it. It picks the floti for this computer's CPU, downloads it from the
 # release, and checks it against the SHA-256 written below before it is put
 # in place. The whole script is one function called on its last line, so a
 # script cut off halfway runs nothing. It runs in your own PowerShell session,

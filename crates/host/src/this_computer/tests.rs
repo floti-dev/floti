@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use super::*;
 use crate::agent::Version;
 use crate::platform::startup::register::{OsCommand, Ran};
-use crate::platform::startup::{linux, macos, windows};
+use crate::platform::startup::{HostStart, linux, macos, windows};
 use crate::platform::user_path::Added;
 use crate::testkit::TestDirs;
 
@@ -233,66 +233,22 @@ fn no_entry() -> Finding {
 }
 
 #[test]
-fn the_logon_task_is_a_row_of_schtasks_csv_listing_and_a_failed_listing_could_not_tell() {
+fn where_a_client_starts_the_host_there_is_no_sign_in_entry_to_find_and_nothing_is_asked() {
     let dirs = TestDirs::new();
-    let task = windows::logon_task(
-        Path::new(r"C:\Users\me\AppData\Local\Programs\Floti\bin\floti.exe"),
-        r"BOX\me",
-    )
-    .unwrap();
-    let there = FakeOs::new(|_| {
-        ran(
-            true,
-            "\"\\Microsoft\\OneDrive Update\",\"N/A\",\"Ready\"\r\n\"\\floti HOST\",\"N/A\",\"Running\"\r\n",
-            "",
-        )
-    });
-    assert_eq!(
-        start_at_sign_in(&there, &task, &dirs.home, &dirs.data),
-        Finding::Fine
-    );
-    assert_eq!(*there.runs.borrow(), ["schtasks /Query /FO CSV /NH"]);
+    let os = FakeOs::new(|line| panic!("nothing is looked at, not {line}"));
+    let start = HostStart::WhenNeeded {
+        leftover: windows::LEFTOVER_TASK,
+    };
+    assert_eq!(sign_in_finding(&os, &start, &dirs.home, &dirs.data), None);
+    assert!(os.runs.borrow().is_empty());
 
-    // Listed, but not this task: one in a folder, or one whose name only
-    // starts with it.
-    let absent = FakeOs::new(|_| {
-        ran(
-            true,
-            "\"\\Tools\\Floti host\",\"N/A\",\"Ready\"\r\n\"\\Floti host old\",\"N/A\",\"Ready\"\r\n",
-            "",
-        )
-    });
+    // Where the host starts at sign-in, the entry is what is found.
+    let unit = linux::user_unit(Path::new("/home/me/.local/bin/floti")).unwrap();
+    let never = FakeOs::new(|line| panic!("no unit file asks nothing, not {line}"));
     assert_eq!(
-        start_at_sign_in(&absent, &task, &dirs.home, &dirs.data),
-        no_entry()
+        sign_in_finding(&never, &HostStart::AtSignIn(unit), &dirs.home, &dirs.data),
+        Some(no_entry())
     );
-    let none = FakeOs::new(|_| {
-        ran(
-            true,
-            "INFO: There are no scheduled tasks presently available at your access level.\r\n",
-            "",
-        )
-    });
-    assert_eq!(
-        start_at_sign_in(&none, &task, &dirs.home, &dirs.data),
-        no_entry()
-    );
-
-    // The listing itself failing says nothing about the task.
-    let refused = FakeOs::new(|_| ran(false, "", "ERROR: Access is denied."));
-    assert_eq!(
-        start_at_sign_in(&refused, &task, &dirs.home, &dirs.data),
-        Finding::CouldNotTell {
-            what: "whether the host starts at sign-in".to_owned(),
-            why: "ERROR: Access is denied.".to_owned(),
-        }
-    );
-
-    let no_schtasks = FakeOs::new(|_| Err(io::Error::from(io::ErrorKind::NotFound)));
-    assert!(matches!(
-        start_at_sign_in(&no_schtasks, &task, &dirs.home, &dirs.data),
-        Finding::CouldNotTell { .. }
-    ));
 }
 
 #[test]

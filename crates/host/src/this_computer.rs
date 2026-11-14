@@ -18,6 +18,8 @@
 //!   registered, looked at by setup's own registration code
 //!   ([`is_registered`]), or, in a WSL distro whose systemd user manager does
 //!   not answer, whether setup recorded that the host starts on connect.
+//!   Where nothing starts the host at sign-in (Windows: a client starts it
+//!   when it needs one) there is nothing to check ([`sign_in_finding`]).
 //! - [`floti_on_path`]: whether this floti's folder is on the `PATH` the
 //!   user's next terminal gets ([`UserPath`]), not only this process's.
 //!
@@ -36,9 +38,8 @@ use crate::connect::START_ON_CONNECT_FILE;
 use crate::platform::command_shell::ShellFamily;
 use crate::platform::folders::UserEnv;
 use crate::platform::process_tree;
-use crate::platform::startup::StartupDefinition;
-use crate::platform::startup::StartupKind;
 use crate::platform::startup::register::{SignInSystem, is_registered, user_manager_answers};
+use crate::platform::startup::{HostStart, StartupDefinition, StartupKind};
 use crate::platform::user_path::UserPath;
 
 /// What the fix for a missing start-at-sign-in entry runs.
@@ -164,6 +165,22 @@ pub fn claude_here(env: &UserEnv, shell: ShellFamily) -> Finding {
     claude(&backend, TESTED_VERSIONS, &looked_in, shell)
 }
 
+/// What doctor finds of how the host starts, as `start` says: whether its
+/// start-at-sign-in entry is there ([`start_at_sign_in`]), or `None` where
+/// nothing starts it at sign-in, which leaves nothing to check and nothing
+/// to say.
+pub fn sign_in_finding(
+    system: &dyn SignInSystem,
+    start: &HostStart,
+    home: &Path,
+    data: &Path,
+) -> Option<Finding> {
+    match start {
+        HostStart::AtSignIn(definition) => Some(start_at_sign_in(system, definition, home, data)),
+        HostStart::WhenNeeded { .. } => None,
+    }
+}
+
 /// Whether the host starts on its own: `definition` is registered through
 /// `system`, for the user whose home and Floti data folder are `home` and
 /// `data`; or, in a WSL distro whose systemd user manager does not answer,
@@ -191,7 +208,7 @@ pub fn start_at_sign_in(
             ),
         };
     }
-    match is_registered(system, definition, home, data) {
+    match is_registered(system, definition, home) {
         Ok(true) => Finding::Fine,
         Ok(false) => Finding::Problem {
             problem:
@@ -230,48 +247,60 @@ pub fn floti_on_path(path: &dyn UserPath, env: &UserEnv, floti: &Path) -> Findin
 
 /// What doctor reports of this computer, for the user `env` describes with
 /// Floti's data folder `data`, in the order it prints them: the
-/// start-at-sign-in entry, floti on `PATH`, then Claude Code.
+/// start-at-sign-in entry where the host has one, floti on `PATH`, then
+/// Claude Code.
 pub fn findings_here(env: &UserEnv, data: &Path, shell: ShellFamily) -> Vec<Finding> {
-    let [entry, path] = os_findings(env, data);
-    vec![entry, path, claude_here(env, shell)]
+    let (entry, path) = os_findings(env, data);
+    entry
+        .into_iter()
+        .chain([path, claude_here(env, shell)])
+        .collect()
 }
 
-/// This computer's start-at-sign-in entry and `PATH`, asked of the OS.
+/// This computer's start-at-sign-in entry, where the host has one, and
+/// `PATH`, asked of the OS.
 #[cfg(not(feature = "testkit"))]
-fn os_findings(env: &UserEnv, data: &Path) -> [Finding; 2] {
+fn os_findings(env: &UserEnv, data: &Path) -> (Option<Finding>, Finding) {
     use crate::platform::startup::register::NativeSystem;
-    use crate::platform::startup::{self, StartAtSignIn};
+    use crate::platform::startup::{self, HostStartup};
     use crate::platform::user_path;
 
     let floti = match std::env::current_exe() {
         Ok(floti) => floti,
         Err(err) => {
             let why = format!("could not tell where this floti is: {err}");
-            return [
-                Finding::could_not_tell("whether the host starts at sign-in", why.clone()),
+            return (
+                Some(Finding::could_not_tell(
+                    "whether the host starts at sign-in",
+                    why.clone(),
+                )),
                 Finding::could_not_tell("whether floti is on your PATH", why),
-            ];
+            );
         }
     };
-    let entry = match (startup::Native.definition(&floti), env.require_home()) {
-        (Ok(definition), Ok(home)) => start_at_sign_in(&NativeSystem, &definition, home, data),
-        (Err(err), _) | (_, Err(err)) => {
-            Finding::could_not_tell("whether the host starts at sign-in", err.to_string())
-        }
+    let entry = match (startup::Native.host_start(&floti), env.require_home()) {
+        (Ok(start), Ok(home)) => sign_in_finding(&NativeSystem, &start, home, data),
+        (Err(err), _) | (_, Err(err)) => Some(Finding::could_not_tell(
+            "whether the host starts at sign-in",
+            err.to_string(),
+        )),
     };
-    [entry, floti_on_path(&user_path::Native, env, &floti)]
+    (entry, floti_on_path(&user_path::Native, env, &floti))
 }
 
 /// In a test build of floti, which the crate's tests run as a program,
 /// neither is asked: a test never reads this computer's sign-in entries or
 /// the user's `PATH`. The checks themselves are tested against a fake OS.
 #[cfg(feature = "testkit")]
-fn os_findings(_env: &UserEnv, _data: &Path) -> [Finding; 2] {
+fn os_findings(_env: &UserEnv, _data: &Path) -> (Option<Finding>, Finding) {
     let why = TEST_BUILD_LOOKS_AT_NOTHING;
-    [
-        Finding::could_not_tell("whether the host starts at sign-in", why),
+    (
+        Some(Finding::could_not_tell(
+            "whether the host starts at sign-in",
+            why,
+        )),
         Finding::could_not_tell("whether floti is on your PATH", why),
-    ]
+    )
 }
 
 /// Why a test build of floti says it could not tell either.

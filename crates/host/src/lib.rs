@@ -235,6 +235,7 @@ pub fn run_host(options: HostOptions) -> Result<()> {
         return not_started(Err(Error::Refused(refusal)));
     }
     let mut config = not_started(HostConfig::from_env(&env))?;
+    let data = config.folders.data.clone();
     config.run.desktop = options.desktop.is_some();
     let started = Timestamp::now();
     let log = open_log(&config.folders);
@@ -254,6 +255,7 @@ pub fn run_host(options: HostOptions) -> Result<()> {
         if let Some(log) = log {
             own_log(log, started);
         }
+        remove_leftovers_at_start(&env, data);
         say(&format!("Floti host is listening at {}.", host.endpoint()));
         let stopper = host.stopper();
         let mut area = None;
@@ -300,6 +302,45 @@ pub fn run_host(options: HostOptions) -> Result<()> {
     }
     Ok(())
 }
+
+/// Takes out what an earlier floti registered at sign-in that this one does
+/// not (on Windows the logon task "Floti host"), on a thread of its own so
+/// the start does not wait for it, and says what it did in the log
+/// ([`startup::register::leftovers_at_start`]). It never ends what the task
+/// started, and asks nothing of a host run read-only beside the installed
+/// Floti.
+#[cfg(not(any(test, feature = "testkit")))]
+fn remove_leftovers_at_start(env: &UserEnv, data: PathBuf) {
+    use platform::startup::HostStartup;
+    use platform::startup::register::{NativeSystem, leftovers_at_start};
+    let Ok(start) = std::env::current_exe().and_then(|binary| {
+        startup::Native
+            .host_start(&binary)
+            .map_err(|err| std::io::Error::other(err.to_string()))
+    }) else {
+        return;
+    };
+    if !matches!(start, startup::HostStart::WhenNeeded { .. }) {
+        return;
+    }
+    let env = env.clone();
+    let spawned = std::thread::Builder::new()
+        .name("leftover sign-in entry".to_owned())
+        .spawn(move || {
+            if let Some(line) = leftovers_at_start(&NativeSystem, &start, &data, &env) {
+                log_line!("floti host: {line}");
+            }
+        });
+    if let Err(err) = spawned {
+        log_line!("floti host: could not look for an earlier floti's logon task: {err}");
+    }
+}
+
+/// In a test build, which the crate's tests run as a program, this
+/// computer's Task Scheduler is never asked: the cleanup is tested against a
+/// fake one.
+#[cfg(any(test, feature = "testkit"))]
+fn remove_leftovers_at_start(_env: &UserEnv, _data: PathBuf) {}
 
 /// Starts the floti at `program` with `args` in this host's place.
 fn relaunch(program: Option<&Path>, args: &[OsString], tree: &impl ProcessTree) -> Result<()> {

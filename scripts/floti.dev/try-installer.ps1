@@ -16,7 +16,8 @@
 # - no process runs from the app's own folder, %LOCALAPPDATA%\Programs\Floti\desktop,
 #   so the floti the app carries is not the running host;
 # - check-setup.ps1 passes: that floti says <Version>, its folder is on the
-#   user's Path, and the logon task "Floti host" runs it and is running.
+#   user's Path, no logon task "Floti host" is registered, and no host runs,
+#   since on Windows setup starts none.
 #
 # Every check runs, and each one that fails is one line naming what is wrong.
 param(
@@ -56,8 +57,8 @@ if ($Order -eq 'alone') {
 }
 
 # Start-Process -Wait waits for the installer and every process it started
-# that is still its descendant; the host is started by Task Scheduler, not by
-# the installer, so it is not one.
+# that is still its descendant; the installer starts no host, since setup
+# starts none on Windows.
 $run = Start-Process -FilePath $Installer -ArgumentList '/S' -Wait -PassThru
 if ($run.ExitCode -ne 0) { Fail "$Installer /S exited $($run.ExitCode)." }
 

@@ -752,13 +752,15 @@ as `systemctl --user stop` does, or kills and starts again as the unit's
 `Restart=on-failure` does.
 
 `floti setup` itself is tested against a fake OS (`crates/host/tests/it/setup.rs`)
-that plays Task Scheduler, launchd and systemd's user manager in memory, and,
+that plays launchd and systemd's user manager in memory, Task Scheduler for
+the logon task an earlier floti left on Windows, and,
 for Linux, `systemctl get-default` (a desktop, a server, or a computer that
 cannot tell) and lingering through `loginctl show-user` and `loginctl
 enable-linger` (off, on, or refused). Nothing there registers anything with
 this computer or turns lingering on for real. The same fake OS answers the
 read-only looks `floti doctor` makes at the entry setup registered
-(`schtasks /Query /FO CSV /NH`, `systemctl --user is-enabled`), and setup's
+(`systemctl --user is-enabled`; on Windows there is no entry, and doctor
+looks at nothing), and setup's
 Claude Code check runs the fake CLI installed as `claude` in the test's home.
 
 `floti doctor`'s problems on this computer are tested in two places. The

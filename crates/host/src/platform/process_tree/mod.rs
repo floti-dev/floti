@@ -11,6 +11,10 @@
 //! own life instead and is started to outlive the host
 //! ([`ProcessTree::prepare_lasting_root`]).
 //!
+//! The same concern starts a host apart from what starts it
+//! ([`ProcessTree::start_detached`]): with no console on Windows, so no
+//! window opens for it and none can be closed to end it.
+//!
 //! Beside the trees, [`OneProcess`] ends one process alone, at once, as a
 //! crash would (`TerminateProcess` on Windows, SIGKILL to that pid alone on
 //! macOS and Linux), never its tree or group: what `floti end-old-host` ends
@@ -43,6 +47,13 @@ pub use macos::descendants;
 #[cfg(all(target_os = "windows", any(test, feature = "testkit")))]
 pub use windows::descendants;
 
+#[cfg(target_os = "linux")]
+pub use linux::console_of;
+#[cfg(target_os = "macos")]
+pub use macos::console_of;
+#[cfg(target_os = "windows")]
+pub use windows::console_of;
+
 use floti_protocol::Knowable;
 
 use crate::Result;
@@ -57,6 +68,33 @@ pub enum Outliving {
     /// holds once its last handle closes, which can be before it is done.
     InJob { ends_with_job: bool },
 }
+
+/// A host [`ProcessTree::start_detached`] started, and where it runs.
+pub struct Detached {
+    /// The host's process, to tell whether it has exited.
+    pub process: Box<dyn Started>,
+    /// Out of this process's Windows job, or in it.
+    pub outliving: Outliving,
+}
+
+impl Detached {
+    /// Whether it outlives this process: apart from it, or in a job that
+    /// does not end what it holds once its last handle closes. A host in
+    /// this host's own job, which a job above it refused to let go of, ends
+    /// as soon as this host exits.
+    pub fn outlives_this_process(&self) -> bool {
+        !matches!(
+            self.outliving,
+            Outliving::InJob {
+                ends_with_job: true
+            }
+        )
+    }
+}
+
+/// Why a program [`ProcessTree::start_detached`] started would not outlive
+/// this process, which a relaunch and `floti connect` fail with.
+pub const ENDS_WITH_THIS_PROCESS: &str = "a job this process is in let it start only inside that job, which ends what it holds once this process exits, so it would end with it";
 
 /// `ERROR_ACCESS_DENIED`, what Windows answers a start out of a job that
 /// does not let what it holds break away.
@@ -161,8 +199,8 @@ pub trait ProcessTree {
     /// ([`ProcessTree::prepare_lasting_root`]), with nothing on its standard
     /// input, output and error, and holding nothing of this process's open,
     /// so a pipe this process was handed closes once this process and the
-    /// pipe's other holders end, whatever it started. `floti connect` starts
-    /// the host this way. On macOS and Linux every descriptor but the
+    /// pipe's other holders end, whatever it started. `floti update` opens
+    /// the desktop app this way. On macOS and Linux every descriptor but the
     /// standard three is closed at exec already; Windows hands a child every
     /// handle marked inheritable unless it is started with none.
     fn start_alone(
@@ -178,6 +216,42 @@ pub trait ProcessTree {
             .stderr(std::process::Stdio::null());
         self.prepare_lasting_root(&mut command);
         Ok(Box::new(command.spawn()?))
+    }
+
+    /// Starts a host, `program` with `args`, detached from this process: as
+    /// [`ProcessTree::start_alone`] starts a program, and with each variable
+    /// `env_remove` names left out of the environment it gets from this
+    /// process. Every start of a host by floti goes through here: a relaunch
+    /// ([`ProcessTree::replace_this_process`]) and `floti connect`.
+    ///
+    /// On Windows it has no console (`DETACHED_PROCESS`), so no window opens
+    /// for it, however it was started, and none can be closed to end it;
+    /// `CREATE_NO_WINDOW` would give it a console all the same, hidden. It
+    /// leads a process group of its own (`CREATE_NEW_PROCESS_GROUP`), gets no
+    /// handle of this process's, and leaves this process's job, or stays in
+    /// it when the job refuses ([`start_outliving`]); the answer says which.
+    /// On macOS and Linux it starts as `start_alone` starts a program, and
+    /// is always [`Outliving::Apart`].
+    fn start_detached(
+        &self,
+        program: &std::path::Path,
+        args: &[&str],
+        env_remove: &[&str],
+    ) -> std::io::Result<Detached> {
+        let mut command = std::process::Command::new(program);
+        command
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        for name in env_remove {
+            command.env_remove(name);
+        }
+        self.prepare_lasting_root(&mut command);
+        Ok(Detached {
+            process: Box::new(command.spawn()?),
+            outliving: Outliving::Apart,
+        })
     }
 
     /// Starts `program` with `args` apart: with nothing on its standard
@@ -207,20 +281,30 @@ pub trait ProcessTree {
     /// this process's image is replaced (`exec`), so the new program keeps
     /// this process's id and whatever started it, launchd, the systemd user
     /// unit or a desktop, goes on holding it. Windows has no `exec`: the
-    /// program is started alone ([`ProcessTree::start_alone`]) and this
-    /// returns once it has started, for the caller to exit. An `exec` that
-    /// fails falls back to that too, saying so in the log, so a failed
-    /// replacement still leaves a host: a LaunchAgent restarts nothing.
+    /// program is started detached ([`ProcessTree::start_detached`]), with
+    /// no console, and this returns once it has started, for the caller to
+    /// exit. An `exec` that fails falls back to that too, saying so in the
+    /// log, so a failed replacement still leaves a host: a LaunchAgent
+    /// restarts nothing. A start that would end when this process does
+    /// ([`Detached::outlives_this_process`]) is an error
+    /// ([`ENDS_WITH_THIS_PROCESS`]), as a start that failed is: the new host
+    /// would be gone as soon as this one exits.
     fn replace_this_process(
         &self,
         program: &std::path::Path,
         args: &[&str],
     ) -> std::io::Result<()> {
-        self.start_alone(program, args).map(|_| ())
+        let detached = self.start_detached(program, args, &[])?;
+        if detached.outlives_this_process() {
+            Ok(())
+        } else {
+            Err(std::io::Error::other(ENDS_WITH_THIS_PROCESS))
+        }
     }
 }
 
-/// A program [`ProcessTree::start_alone`] started.
+/// A program [`ProcessTree::start_alone`] or
+/// [`ProcessTree::start_detached`] started.
 pub trait Started: Send {
     /// Its exit code once it has exited (no code when a signal ended it),
     /// nothing while it runs or when that cannot be told.

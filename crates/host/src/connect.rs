@@ -223,11 +223,12 @@ pub const START_DEADLINE: Duration = Duration::from_secs(60);
 /// How often it looks.
 const LOOK_AGAIN: Duration = Duration::from_millis(100);
 
-/// Starts `floti host`, this executable, alone
-/// ([`ProcessTree::start_alone`](crate::platform::process_tree::ProcessTree::start_alone)):
+/// Starts `floti host`, this executable, detached
+/// ([`ProcessTree::start_detached`](crate::platform::process_tree::ProcessTree::start_detached)):
 /// outside this process's tie, so it outlives the connection that started
-/// it, and holding none of the connection's pipes, so the connection ends
-/// when its transport does. Waits up to `within` for it to answer on
+/// it, holding none of the connection's pipes, so the connection ends when
+/// its transport does, and with no console on Windows. A host that could
+/// start only in a job that ends it with this connection is a failure. Waits up to `within` for it to answer on
 /// `endpoint`. A host that cannot start says why in its own log; this says
 /// that it did not answer, with how it exited when it did.
 async fn start_host(
@@ -236,9 +237,16 @@ async fn start_host(
 ) -> Result<crate::platform::socket::LocalStream, String> {
     let exe = std::env::current_exe()
         .map_err(|err| format!("could not tell where this floti is: {err}"))?;
-    let mut child = process_tree::Native
-        .start_alone(&exe, &["host"])
+    let detached = process_tree::Native
+        .start_detached(&exe, &["host"], &[])
         .map_err(|err| format!("could not start the Floti host: {err}"))?;
+    if !detached.outlives_this_process() {
+        return Err(format!(
+            "could not start the Floti host apart from this connection: {}.",
+            process_tree::ENDS_WITH_THIS_PROCESS
+        ));
+    }
+    let mut child = detached.process;
     let deadline = Instant::now() + within;
     loop {
         if let Ok(socket) = NativeSocket.connect(endpoint).await {

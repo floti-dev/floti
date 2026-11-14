@@ -4,8 +4,8 @@ use std::process::{Command, Stdio};
 use floti_protocol::Knowable;
 
 use super::{
-    BREAKAWAY_REFUSED, Ending, Native, OneProcess, Outliving, ProcessTree, descendants,
-    start_outliving, tree_under,
+    BREAKAWAY_REFUSED, Detached, ENDS_WITH_THIS_PROCESS, Ending, Native, OneProcess, Outliving,
+    ProcessTree, Started, descendants, start_outliving, tree_under,
 };
 use crate::session::tests::fake_agent_exe;
 
@@ -266,4 +266,205 @@ fn any_other_failure_of_the_breakaway_start_is_not_tried_inside() {
     );
     assert_eq!(answer.unwrap_err().kind(), std::io::ErrorKind::NotFound);
     assert_eq!(asked, [true]);
+}
+
+/// What, near where a program is started, makes it open no console window
+/// when the host starting it has no console: the launcher's `windowless` or
+/// a `prepare_*` here (each `CREATE_NO_WINDOW` on Windows), or the flag
+/// itself, or `DETACHED_PROCESS`, which gives it no console at all.
+const NO_WINDOW_MARKS: [&str; 6] = [
+    "windowless(",
+    "prepare_root(",
+    "prepare_lasting_root(",
+    "prepare_orphan_root(",
+    "CREATE_NO_WINDOW",
+    "DETACHED_PROCESS",
+];
+
+/// The starts that need none of them, by file, and why.
+const OPENS_NO_CONSOLE: [(&str, &str); 3] = [
+    (
+        "platform/installs/windows.rs",
+        "the desktop app's installer, a GUI program, which has no console",
+    ),
+    (
+        "platform/tray/windows.rs",
+        "the desktop app itself, a GUI program, which has no console",
+    ),
+    (
+        "platform/socket/windows.rs",
+        "netstat in a function only test builds have",
+    ),
+];
+
+/// Files compiled only on macOS and Linux, where no program has a console
+/// window to open.
+fn unix_only(file: &str) -> bool {
+    [
+        "unix.rs",
+        "macos.rs",
+        "linux.rs",
+        "posix.rs",
+        "signin_unix.rs",
+    ]
+    .iter()
+    .any(|name| file.ends_with(name))
+}
+
+/// Every `.rs` file under `folder` but tests and the testkit, by its path
+/// from `src`, with its text up to its test module.
+fn host_sources(
+    folder: &std::path::Path,
+    src: &std::path::Path,
+    found: &mut Vec<(String, String)>,
+) {
+    for entry in std::fs::read_dir(folder).expect("read the host's sources") {
+        let path = entry.expect("a source entry").path();
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        if path.is_dir() {
+            if name != "tests" && name != "testkit" {
+                host_sources(&path, src, found);
+            }
+            continue;
+        }
+        if !name.ends_with(".rs") || name == "tests.rs" || name == "testkit.rs" {
+            continue;
+        }
+        let file = path
+            .strip_prefix(src)
+            .expect("under src")
+            .to_string_lossy()
+            .replace('\\', "/");
+        // A Windows checkout may hold CRLF line ends.
+        let text = std::fs::read_to_string(&path)
+            .expect("read a source file")
+            .replace('\r', "");
+        let text = match text.find("#[cfg(test)]\nmod tests {") {
+            Some(at) => text[..at].to_owned(),
+            None => text,
+        };
+        found.push((file, text));
+    }
+}
+
+/// Every program the host starts outside a terminal is started so that,
+/// run from a host with no console (every host Floti starts on Windows),
+/// it opens no console window: a console program a process with no console
+/// starts without `CREATE_NO_WINDOW` opens one. A new start that is not
+/// says where it is.
+#[test]
+fn every_program_the_host_starts_opens_no_console_window() {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut sources = Vec::new();
+    host_sources(&src, &src, &mut sources);
+    assert!(sources.len() > 50, "found only {} files", sources.len());
+    let mut unmarked = Vec::new();
+    let mut starts = 0;
+    for (file, text) in &sources {
+        if unix_only(file) || OPENS_NO_CONSOLE.iter().any(|(named, _)| file == named) {
+            continue;
+        }
+        let lines: Vec<&str> = text.lines().collect();
+        for (at, line) in lines.iter().enumerate() {
+            let code = line.trim_start();
+            if code.starts_with("//") {
+                continue;
+            }
+            let started = code.match_indices("Command::new(").any(|(i, _)| {
+                !code[..i]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_')
+            });
+            if !started {
+                continue;
+            }
+            starts += 1;
+            let near = &lines[at..lines.len().min(at + 20)];
+            if !near
+                .iter()
+                .any(|line| NO_WINDOW_MARKS.iter().any(|mark| line.contains(mark)))
+            {
+                unmarked.push(format!("{file}:{}: {}", at + 1, code));
+            }
+        }
+    }
+    assert!(starts > 10, "found only {starts} starts");
+    assert!(
+        unmarked.is_empty(),
+        "these start a program that would open a console window from a host with no console:\n{}",
+        unmarked.join("\n")
+    );
+}
+
+/// A tree whose detached starts land where `outliving` says, as a job that
+/// refuses breakaway puts them, and start nothing real.
+struct StartsWhere(Outliving);
+
+/// A program that has already exited.
+struct Exited;
+
+impl Started for Exited {
+    fn exited(&mut self) -> Option<Option<i32>> {
+        Some(Some(0))
+    }
+}
+
+impl ProcessTree for StartsWhere {
+    fn end_tree(&self, _root_pid: u32, _how: Ending) -> crate::Result<()> {
+        Ok(())
+    }
+
+    fn is_alive(&self, _pid: u32) -> Knowable<bool> {
+        Knowable::Unknown
+    }
+
+    fn end_tree_with_this_process(&self) -> Knowable<bool> {
+        Knowable::Unknown
+    }
+
+    fn tie_tree(&self, _root_pid: u32) {}
+
+    fn untie_tree(&self, _root_pid: u32) {}
+
+    fn start_detached(
+        &self,
+        _program: &std::path::Path,
+        _args: &[&str],
+        _env_remove: &[&str],
+    ) -> std::io::Result<Detached> {
+        Ok(Detached {
+            process: Box::new(Exited),
+            outliving: self.0,
+        })
+    }
+}
+
+#[test]
+fn a_relaunch_that_could_start_only_in_a_job_ending_with_this_host_fails() {
+    let program = std::path::Path::new("floti");
+    let ends = StartsWhere(Outliving::InJob {
+        ends_with_job: true,
+    });
+    let err = ends
+        .replace_this_process(program, &["host"])
+        .expect_err("the new host would end with this one");
+    assert_eq!(err.to_string(), ENDS_WITH_THIS_PROCESS);
+
+    // Apart, or in a job that leaves what it holds running: the new host
+    // outlives this one.
+    for outliving in [
+        Outliving::Apart,
+        Outliving::InJob {
+            ends_with_job: false,
+        },
+    ] {
+        StartsWhere(outliving)
+            .replace_this_process(program, &["host"])
+            .unwrap_or_else(|err| panic!("{outliving:?}: {err}"));
+    }
 }

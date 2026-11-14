@@ -48,9 +48,10 @@
 use std::fs::File;
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use crate::platform::folders::UserEnv;
+use crate::platform::launcher::{Native as NativeLauncher, ProgramLauncher};
 use crate::platform::node_runtime::SHIPPED_FOLDER;
 use crate::platform::standalone::{Native as NativeStandalone, Standalone};
 use crate::platform::user_path::{Added, Native as NativeUserPath, UserPath};
@@ -82,7 +83,9 @@ pub trait InstallSystem {
     fn native_cpu(&self) -> &'static str;
 }
 
-/// This computer, for the user this process runs as.
+/// This computer, for the user this process runs as. The floti it runs is
+/// started with no window: install-self is run by the desktop app and by
+/// `floti update`, which a host with no console runs too.
 pub struct NativeSystem {
     env: UserEnv,
 }
@@ -97,10 +100,32 @@ impl InstallSystem for NativeSystem {
     }
 
     fn setup(&self, floti: &Path) -> Result<u8, String> {
-        let status = Command::new(floti)
+        let mut command = Command::new(floti);
+        command
             .args(SETUP_ARGS)
-            .status()
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        NativeLauncher.windowless(&mut command);
+        let mut child = command
+            .spawn()
             .map_err(|err| format!("could not run {} setup: {err}", floti.display()))?;
+        // Relayed as it comes: a program with no window of its own cannot
+        // write to this process's console.
+        let relays = [
+            child.stdout.take().map(|mut from| {
+                std::thread::spawn(move || std::io::copy(&mut from, &mut std::io::stdout()))
+            }),
+            child.stderr.take().map(|mut from| {
+                std::thread::spawn(move || std::io::copy(&mut from, &mut std::io::stderr()))
+            }),
+        ];
+        let status = child
+            .wait()
+            .map_err(|err| format!("could not run {} setup: {err}", floti.display()))?;
+        for relay in relays.into_iter().flatten() {
+            let _ = relay.join();
+        }
         Ok(status
             .code()
             .and_then(|code| u8::try_from(code).ok())
@@ -108,7 +133,10 @@ impl InstallSystem for NativeSystem {
     }
 
     fn version_of(&self, floti: &Path) -> Option<String> {
-        let output = Command::new(floti).arg("version").output().ok()?;
+        let mut command = Command::new(floti);
+        command.arg("version");
+        NativeLauncher.windowless(&mut command);
+        let output = command.output().ok()?;
         version_in(&String::from_utf8_lossy(&output.stdout))
     }
 

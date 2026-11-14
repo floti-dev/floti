@@ -16,11 +16,13 @@
 //!    sessions it ended; with no host answering, a keeper a host left running
 //!    is ended with what it holds. The sessions' history stays in the data
 //!    folder.
-//! 3. The start-at-sign-in entry ([`register::unregister`]): the logon task
-//!    "Floti host", the LaunchAgent `dev.floti.host` or the user unit
-//!    `floti.service`, and in a WSL distro without systemd the record that
-//!    makes `floti connect` start the host. Lingering on Linux is a per-user
-//!    setting other services may rely on, so it is left on, and said so.
+//! 3. The start-at-sign-in entry ([`register::unregister`]): the LaunchAgent
+//!    `dev.floti.host` or the user unit `floti.service`; on Windows, which
+//!    registers none, the logon task "Floti host" an earlier floti
+//!    registered, when it finds one ([`register::remove_leftover_task`]);
+//!    and in a WSL distro without systemd the record that makes `floti
+//!    connect` start the host. Lingering on Linux is a per-user setting
+//!    other services may rely on, so it is left on, and said so.
 //! 4. The desktop app ([`Installs::removal`]): on Windows by its own NSIS
 //!    uninstaller, run silently and waited for, then what it leaves of its
 //!    folder, waiting out a file still held for a moment after it exits
@@ -95,7 +97,7 @@ use crate::platform::process_tree::{self, OneProcess, Outliving, ProcessTree};
 use crate::platform::secret_seal::{self, StoreEntry};
 use crate::platform::standalone::{self, Standalone};
 use crate::platform::startup::register::{self, SignInSystem};
-use crate::platform::startup::{self, StartAtSignIn, StartupDefinition, StartupKind};
+use crate::platform::startup::{self, HostStart, HostStartup, StartupKind};
 use crate::platform::user_path::{self, UserPath};
 use crate::server::HOST_KEY_FILE;
 use crate::store::DB_FILE;
@@ -192,8 +194,9 @@ pub struct Uninstall<'a> {
     pub layout: Option<Folders>,
     /// The floti running this.
     pub running: &'a Path,
-    /// This OS's start-at-sign-in entry, for its name and where its file is.
-    pub definition: &'a StartupDefinition,
+    /// How the host starts on this OS: the start-at-sign-in entry to take
+    /// out, or the leftover an earlier floti registered.
+    pub start: &'a HostStart,
     /// The secret store entry this computer's host keeps its key in.
     pub secret_entry: StoreEntry,
     /// Whether to remove the data too.
@@ -251,8 +254,8 @@ pub fn run(options: Options, stop_host: StopHost<'_>) -> u8 {
         Ok(folders) => folders,
         Err(why) => return fail(&mut err, &format!("{why} Nothing was changed.")),
     };
-    let definition = match startup::Native.definition(&running) {
-        Ok(definition) => definition,
+    let start = match startup::Native.host_start(&running) {
+        Ok(start) => start,
         Err(why) => return fail(&mut err, &format!("{why} Nothing was changed.")),
     };
     let secret_entry = if env.var(DATA_DIR_VAR).is_some() {
@@ -270,7 +273,7 @@ pub fn run(options: Options, stop_host: StopHost<'_>) -> u8 {
             folders: &folders,
             layout: folders::Native.resolve(&env).ok(),
             running: &running,
-            definition: &definition,
+            start: &start,
             secret_entry,
             purge: options.purge,
         },
@@ -394,12 +397,14 @@ fn processes(count: usize) -> String {
     }
 }
 
-/// What a person calls `definition`'s entry.
-pub fn entry_name(definition: &StartupDefinition) -> String {
-    match definition.kind {
-        StartupKind::LogonTask => format!("logon task \"{}\"", definition.name),
-        StartupKind::LaunchAgent => format!("LaunchAgent {}", definition.name),
-        StartupKind::SystemdUserUnit => format!("systemd user unit {}", definition.name),
+/// What a person calls the entry `start` takes out.
+pub fn entry_name(start: &HostStart) -> String {
+    match start {
+        HostStart::AtSignIn(definition) => match definition.kind {
+            StartupKind::LaunchAgent => format!("LaunchAgent {}", definition.name),
+            StartupKind::SystemdUserUnit => format!("systemd user unit {}", definition.name),
+        },
+        HostStart::WhenNeeded { leftover } => format!("logon task \"{}\"", leftover.name),
     }
 }
 
@@ -458,14 +463,21 @@ fn sign_in_entry(
     system: &dyn UninstallSystem,
     say: &mut Say<'_>,
 ) -> Result<(), String> {
-    let name = entry_name(what.definition);
-    let home = what
-        .env
-        .require_home()
-        .map_err(|why| format!("sign-in entry: {why}"))?;
-    let registered =
-        register::unregister(system.sign_in(), what.definition, home, &what.folders.data)
-            .map_err(|why| format!("sign-in entry: could not remove the {name}: {why}"))?;
+    let name = entry_name(what.start);
+    let registered = match what.start {
+        HostStart::AtSignIn(definition) => {
+            let home = what
+                .env
+                .require_home()
+                .map_err(|why| format!("sign-in entry: {why}"))?;
+            register::unregister(system.sign_in(), definition, home)
+        }
+        HostStart::WhenNeeded { leftover } => {
+            register::remove_leftover_task(system.sign_in(), leftover, &what.folders.data)
+                .map(register::LeftoverRemoved::any)
+        }
+    }
+    .map_err(|why| format!("sign-in entry: could not remove the {name}: {why}"))?;
     let on_connect = what.folders.data.join(START_ON_CONNECT_FILE);
     let marked = remove_file(&on_connect).map_err(|why| format!("sign-in entry: {why}"))?;
     if registered {
@@ -480,7 +492,8 @@ fn sign_in_entry(
     if !registered && !marked {
         say("sign-in entry: not found".to_owned());
     }
-    if what.definition.kind == StartupKind::SystemdUserUnit
+    if let HostStart::AtSignIn(definition) = what.start
+        && definition.kind == StartupKind::SystemdUserUnit
         && register::lingering_on(system.sign_in())
     {
         say(LINGER_LINE.to_owned());

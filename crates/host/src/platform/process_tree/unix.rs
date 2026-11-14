@@ -130,7 +130,7 @@ impl ProcessTree for Native {
             "floti host: {} could not take this process's place ({failed}), so it is started apart.",
             program.display()
         );
-        self.start_alone(program, args).map(|_| ())
+        self.start_detached(program, args, &[]).map(|_| ())
     }
 
     fn prepare_orphan_root(&self, command: &mut std::process::Command) {
@@ -402,6 +402,13 @@ fn pause(step: Duration) {
     };
     // SAFETY: nanosleep reads `time`.
     unsafe { libc::nanosleep(&time, std::ptr::null_mut()) };
+}
+
+/// Whether process `pid` has a console: macOS and Linux give no process a
+/// console window, so there is none to look for, and this is Unknown. The
+/// console tests ask it, through `floti-fake-gui`.
+pub fn console_of(_pid: u32) -> io::Result<Knowable<bool>> {
+    Ok(Knowable::Unknown)
 }
 
 /// Every process running now that `root_pid` started, and every process

@@ -24,8 +24,9 @@
 ; puts floti, renaming aside a floti.exe or node.exe there that is running
 ; rather than replacing it; puts that folder on the user's PATH (their `Path`
 ; value, kept an expandable string); and runs `floti setup` from there, which
-; registers that floti to start the host at sign-in and starts it. Helm runs
-; every floti it needs from there. What it prints goes to the details log; a
+; on Windows registers nothing and starts no host (the app starts the host
+; when it needs one, with no console) and deletes the logon task "Floti host"
+; an earlier floti registered. Helm runs every floti it needs from there. What it prints goes to the details log; a
 ; failure does not fail the install, and Helm tries the same step again when
 ; it starts (`src/main/host/local-floti.ts`).
 ;
@@ -80,9 +81,10 @@
 ;
 ; What the install adds outside $INSTDIR, which this uninstaller leaves and
 ; `floti uninstall` removes (docs/PACKAGING.md lists it):
-; %LOCALAPPDATA%\Programs\Floti\bin, the entry for it in the user's Path, and
-; setup's logon task "Floti host". `floti uninstall` runs this uninstaller
-; itself, silently and in place (`/S _?=$INSTDIR`).
+; %LOCALAPPDATA%\Programs\Floti\bin and the entry for it in the user's Path;
+; it also deletes the logon task "Floti host" an earlier floti registered,
+; when it finds one. `floti uninstall` runs this uninstaller itself, silently
+; and in place (`/S _?=$INSTDIR`).
 
 !include "LogicLib.nsh"
 ; The installer alone uses it, and makensis is run with warnings as errors.

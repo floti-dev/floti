@@ -1,10 +1,12 @@
 //! `floti setup`, against a fake OS: the data folder and host key it makes,
 //! the start-at-sign-in entry it writes and registers with each OS's
-//! per-user mechanism, and the host it starts through that mechanism.
+//! per-user mechanism, and the host it starts through that mechanism; on
+//! Windows, that it registers and starts nothing, and deletes the logon task
+//! an earlier floti registered without ending the host that task started.
 //!
 //! Nothing here registers anything on this computer. Every OS command setup
-//! runs goes to a [`FakeOs`] that records it and plays Task Scheduler,
-//! launchd or systemd's user manager: it keeps their entries in memory, and
+//! runs goes to a [`FakeOs`] that records it and plays Task Scheduler (only
+//! for what an earlier floti left there), launchd or systemd's user manager: it keeps their entries in memory, and
 //! "starts the host" by starting a real one in-process on the test's own
 //! folders, so setup's wait for it to answer meets a real host. For Linux it
 //! also plays `systemctl get-default` (a desktop, a server, or a computer
@@ -40,23 +42,21 @@ use floti_host::platform::launcher::{Native as NativeLauncher, ProgramLauncher};
 use floti_host::platform::process_table::ProcessRow;
 use floti_host::platform::startup::register::linger_refused_line;
 use floti_host::platform::startup::register::{OsCommand, Ran, SignInSystem};
-use floti_host::platform::startup::{StartupDefinition, linux, macos, windows};
+use floti_host::platform::startup::{HostStart, StartupDefinition, linux, macos, windows};
 use floti_host::server::{HOST_KEY_FILE, HostConfig, host_public_key, local_endpoint};
 use floti_host::setup::claude_sentence;
 use floti_host::setup::desktop::{DesktopOutcome, DesktopStep, question};
 use floti_host::setup::{
     AT_NEXT_SIGN_IN_EXIT, AT_NEXT_SIGN_IN_LINE, DesktopChoice, KEEPS_RUNNING_LINE, Linger,
-    RUNNING_LINE, START_ON_CONNECT_FILE, START_ON_CONNECT_LINE, SetupOptions, SetupOutcome, parse,
-    setup,
+    RUNNING_LINE, START_ON_CONNECT_FILE, START_ON_CONNECT_LINE, SetupOptions, SetupOutcome,
+    WHEN_NEEDED_LINE, parse, setup,
 };
 use floti_host::testkit::{FakeAgent, PATIENCE, RunningHost, TestDirs, run_floti};
-use floti_host::this_computer::{Finding, SETUP_FIX, start_at_sign_in};
+use floti_host::this_computer::{Finding, SETUP_FIX, sign_in_finding, start_at_sign_in};
 use floti_host::update::signature::TEST_UPDATE_MARKER;
 use floti_host::version::FLOTI_VERSION;
 use floti_protocol::channels::host::HostStopReason;
 
-const WINDOWS_FLOTI: &str = r"C:\Users\me\AppData\Local\Programs\Floti\bin\floti.exe";
-const WINDOWS_USER: &str = r"BUILD-BOX\me";
 const UNIX_FLOTI: &str = "/home/me/.local/bin/floti";
 const UID: &str = "501";
 
@@ -91,7 +91,7 @@ fn host_config(dirs: &TestDirs, agent: &FakeAgent) -> HostConfig {
 struct OsState {
     /// Every command run, as its command line.
     runs: Vec<String>,
-    /// Task Scheduler's tasks, by name: the XML imported.
+    /// Task Scheduler's tasks, by name: the XML an earlier floti imported.
     tasks: BTreeMap<String, Vec<u8>>,
     /// launchd's agents loaded in the GUI domain, by label: the property
     /// list it was given.
@@ -245,14 +245,6 @@ impl SignInSystem for FakeOs {
             .collect();
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
         match (command.program.as_str(), args.as_slice()) {
-            ("schtasks", ["/Create", "/TN", name, "/XML", file, rest @ ..]) => {
-                if state.tasks.contains_key(*name) && rest != ["/F"] {
-                    return failed("ERROR: Cannot create a file when that file already exists.");
-                }
-                let xml = std::fs::read(file)?;
-                state.tasks.insert((*name).to_owned(), xml);
-                ok("SUCCESS: The scheduled task has successfully been created.")
-            }
             ("schtasks", ["/Query", "/FO", "CSV", "/NH"]) => {
                 if state.tasks.is_empty() {
                     return ok(
@@ -266,9 +258,10 @@ impl SignInSystem for FakeOs {
                     .collect();
                 ok(&rows)
             }
-            ("schtasks", ["/Run", "/TN", name]) if state.tasks.contains_key(*name) => {
-                self.start_host(&mut state);
-                ok("SUCCESS: Attempted to run the scheduled task.")
+            // Deleting a task leaves whatever it started running.
+            ("schtasks", ["/Delete", "/TN", name, "/F"]) if state.tasks.contains_key(*name) => {
+                state.tasks.remove(*name);
+                ok("SUCCESS: The scheduled task \"Floti host\" was successfully deleted.")
             }
             ("id", ["-u"]) => ok(&format!("{UID}\n")),
             ("launchctl", ["print", domain]) if *domain == format!("gui/{UID}") => {
@@ -377,16 +370,36 @@ async fn run_setup_with(
     definition: &StartupDefinition,
     linger: Linger,
 ) -> SetupOutcome {
-    setup(&user(dirs), os, definition, linger, PATIENCE).await
+    let start = HostStart::AtSignIn(definition.clone());
+    setup(&user(dirs), os, &start, linger, PATIENCE).await
 }
 
-fn logon_task(binary: &str) -> StartupDefinition {
-    windows::logon_task(Path::new(binary), WINDOWS_USER).unwrap()
+/// How the host starts on Windows: when a client needs it.
+fn when_needed() -> HostStart {
+    HostStart::WhenNeeded {
+        leftover: windows::LEFTOVER_TASK,
+    }
 }
 
+/// Runs setup as it runs on Windows.
+async fn run_windows_setup(dirs: &TestDirs, os: &FakeOs) -> SetupOutcome {
+    setup(
+        &user(dirs),
+        os,
+        &when_needed(),
+        Linger::ByComputer,
+        PATIENCE,
+    )
+    .await
+}
+
+/// Where an earlier floti kept its logon task's XML.
 fn task_file(dirs: &TestDirs) -> PathBuf {
     dirs.data.join("startup").join("Floti host.xml")
 }
+
+const QUERY: &str = "schtasks /Query /FO CSV /NH";
+const DELETE: &str = "schtasks /Delete /TN Floti host /F";
 
 fn plist_file(dirs: &TestDirs) -> PathBuf {
     dirs.home
@@ -438,42 +451,74 @@ async fn assert_host_answers_with_the_key_setup_made(dirs: &TestDirs) {
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s4_on_windows_setup_imports_the_logon_task_runs_it_in_the_signed_in_session_and_says_the_host_is_running()
+async fn s4_on_windows_setup_registers_nothing_starts_no_host_and_says_the_host_starts_when_needed()
+{
+    for signed_in in [true, false] {
+        let dirs = TestDirs::new();
+        let agent = fake_agent!(&dirs);
+        let os = FakeOs::new(&dirs, &agent, signed_in);
+
+        let outcome = run_windows_setup(&dirs, &os).await;
+
+        assert_eq!(outcome, SetupOutcome::StartsWhenNeeded(None));
+        assert_eq!(outcome.code(), 0, "never {AT_NEXT_SIGN_IN_EXIT}");
+        assert_eq!(outcome.printed(), Some(WHEN_NEEDED_LINE));
+        assert!(!WHEN_NEEDED_LINE.contains('\n'));
+        assert!(!outcome.found_nobody_signed_in());
+        // It only looked for what an earlier floti left.
+        assert_eq!(os.runs(), [QUERY]);
+        assert!(os.state.lock().unwrap().tasks.is_empty());
+        assert_eq!(os.starts(), 0, "no host was started");
+        assert!(!dirs.data.join("startup").exists());
+        // The data folder and its key are there for the host a client starts.
+        assert!(host_public_key(&dirs.data).unwrap().is_some());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn on_windows_setup_deletes_the_logon_task_an_earlier_floti_registered_and_its_xml_and_the_host_it_started_runs_on()
  {
     let dirs = TestDirs::new();
     let agent = fake_agent!(&dirs);
     let os = FakeOs::new(&dirs, &agent, true);
-    let definition = logon_task(WINDOWS_FLOTI);
-
-    let outcome = run_setup(&dirs, &os, &definition).await;
-
-    assert_eq!(outcome, SetupOutcome::Running);
-    assert_eq!(outcome.code(), 0);
-    assert_eq!(outcome.printed(), Some(RUNNING_LINE));
-    assert!(!RUNNING_LINE.contains('\n'));
-    let file = task_file(&dirs);
-    assert_eq!(
-        os.runs(),
-        [
-            format!("schtasks /Create /TN Floti host /XML {} /F", file.display()),
-            "schtasks /Run /TN Floti host".to_owned(),
-        ]
-    );
-    assert_per_user_only(&os.runs());
-    // The task Task Scheduler holds is the definition for this user, at
-    // logon, with an interactive token and least privilege.
-    let tasks = os.state.lock().unwrap().tasks.clone();
-    assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks["Floti host"], definition.file_bytes());
-    for part in [
-        "<LogonTrigger>",
-        "<LogonType>InteractiveToken</LogonType>",
-        "<RunLevel>LeastPrivilege</RunLevel>",
-    ] {
-        assert!(definition.contents.contains(part), "{part}");
+    // What preview.12's setup left: the task, its XML, and the host the task
+    // started at sign-in, running.
+    let xml = task_file(&dirs);
+    std::fs::create_dir_all(xml.parent().unwrap()).unwrap();
+    std::fs::write(&xml, b"<Task/>").unwrap();
+    {
+        let mut state = os.state.lock().unwrap();
+        state
+            .tasks
+            .insert("Floti host".to_owned(), b"<Task/>".to_vec());
+        os.start_host(&mut state);
     }
+
+    let outcome = run_windows_setup(&dirs, &os).await;
+
+    assert_eq!(
+        outcome.said_first(),
+        Some(
+            "Deleted the logon task \"Floti host\" an earlier floti registered; the Floti host starts when Floti or a connection needs it."
+        )
+    );
+    assert_eq!(outcome.printed(), Some(WHEN_NEEDED_LINE));
+    assert_eq!(outcome.code(), 0);
+    assert_eq!(os.runs(), [QUERY, DELETE]);
+    assert!(os.state.lock().unwrap().tasks.is_empty());
+    assert!(!xml.exists());
+    assert!(!dirs.data.join("startup").exists(), "its emptied folder");
+    // Never `schtasks /End`: the host the task started still answers, and
+    // nothing started another.
     assert_eq!(os.starts(), 1);
     assert_host_answers_with_the_key_setup_made(&dirs).await;
+
+    // Run again, as the next update does: nothing left to delete or say.
+    assert_eq!(
+        run_windows_setup(&dirs, &os).await,
+        SetupOutcome::StartsWhenNeeded(None)
+    );
+    assert_eq!(os.runs(), [QUERY, DELETE, QUERY]);
     os.stop().await;
 }
 
@@ -798,33 +843,6 @@ async fn floti_setup_with_both_desktop_flags_is_a_usage_error_and_sets_nothing_u
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s5_on_windows_with_nobody_signed_in_setup_registers_the_logon_task_starts_no_host_and_says_it_starts_at_the_next_sign_in()
- {
-    let dirs = TestDirs::new();
-    let agent = fake_agent!(&dirs);
-    let os = FakeOs::new(&dirs, &agent, false);
-    let definition = logon_task(WINDOWS_FLOTI);
-
-    let outcome = run_setup(&dirs, &os, &definition).await;
-
-    assert_eq!(outcome, SetupOutcome::AtNextSignIn);
-    assert_eq!(outcome.code(), AT_NEXT_SIGN_IN_EXIT);
-    assert_eq!(outcome.printed(), Some(AT_NEXT_SIGN_IN_LINE));
-    assert!(!AT_NEXT_SIGN_IN_LINE.contains('\n'));
-    assert_eq!(
-        os.runs(),
-        [format!(
-            "schtasks /Create /TN Floti host /XML {} /F",
-            task_file(&dirs).display()
-        )]
-    );
-    assert_eq!(os.state.lock().unwrap().tasks.len(), 1);
-    assert_eq!(os.starts(), 0, "no host was started");
-    // The data folder and its key are there for the host that starts then.
-    assert!(host_public_key(&dirs.data).unwrap().is_some());
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn s5_on_macos_with_no_gui_domain_setup_leaves_the_agent_for_launchd_to_load_at_the_next_sign_in()
  {
     let dirs = TestDirs::new();
@@ -835,6 +853,10 @@ async fn s5_on_macos_with_no_gui_domain_setup_leaves_the_agent_for_launchd_to_lo
     let outcome = run_setup(&dirs, &os, &definition).await;
 
     assert_eq!(outcome, SetupOutcome::AtNextSignIn);
+    assert_eq!(outcome.code(), AT_NEXT_SIGN_IN_EXIT);
+    assert_eq!(outcome.printed(), Some(AT_NEXT_SIGN_IN_LINE));
+    assert!(!AT_NEXT_SIGN_IN_LINE.contains('\n'));
+    assert!(outcome.found_nobody_signed_in());
     assert!(plist_file(&dirs).is_file());
     assert_eq!(os.runs(), ["id -u", "launchctl print gui/501"]);
     assert_eq!(os.starts(), 0);
@@ -843,34 +865,6 @@ async fn s5_on_macos_with_no_gui_domain_setup_leaves_the_agent_for_launchd_to_lo
 // ---------------------------------------------------------------------------
 // S6: running setup again replaces its one entry, never adding a second
 // ---------------------------------------------------------------------------
-
-#[tokio::test(flavor = "multi_thread")]
-async fn s6_on_windows_setup_run_again_for_an_update_replaces_the_one_logon_task() {
-    let dirs = TestDirs::new();
-    let agent = fake_agent!(&dirs);
-    let os = FakeOs::new(&dirs, &agent, false);
-
-    let first = logon_task(WINDOWS_FLOTI);
-    assert_eq!(
-        run_setup(&dirs, &os, &first).await,
-        SetupOutcome::AtNextSignIn
-    );
-    let moved = logon_task(r"C:\Users\me\Floti\floti.exe");
-    assert_eq!(
-        run_setup(&dirs, &os, &moved).await,
-        SetupOutcome::AtNextSignIn
-    );
-
-    let tasks = os.state.lock().unwrap().tasks.clone();
-    assert_eq!(tasks.keys().collect::<Vec<_>>(), ["Floti host"]);
-    assert_eq!(tasks["Floti host"], moved.file_bytes());
-    assert_eq!(
-        std::fs::read_dir(dirs.data.join("startup"))
-            .unwrap()
-            .count(),
-        1
-    );
-}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn s6_on_macos_setup_run_again_keeps_one_agent_reloading_it_only_when_it_changed() {
@@ -964,19 +958,53 @@ async fn s6_on_linux_setup_run_again_keeps_one_enabled_unit() {
 async fn a_registration_the_os_refuses_fails_with_its_last_line_unedited_and_starts_nothing() {
     let dirs = TestDirs::new();
     let agent = fake_agent!(&dirs);
-    let os = FakeOs::new(&dirs, &agent, true)
-        .failing("schtasks /Create", "ERROR: Access is denied.\r\n");
+    let os = FakeOs::new(&dirs, &agent, true).failing(
+        "systemctl --user enable",
+        "Failed to enable unit: Access denied\n",
+    );
 
-    let outcome = run_setup(&dirs, &os, &logon_task(WINDOWS_FLOTI)).await;
+    let outcome = run_setup(
+        &dirs,
+        &os,
+        &linux::user_unit(Path::new(UNIX_FLOTI)).unwrap(),
+    )
+    .await;
 
     assert_eq!(
         outcome,
-        SetupOutcome::Failed("ERROR: Access is denied.".to_owned())
+        SetupOutcome::Failed("Failed to enable unit: Access denied".to_owned())
     );
     assert_eq!(outcome.code(), 1);
     assert_eq!(outcome.printed(), None);
     assert_eq!(os.starts(), 0);
-    assert_eq!(os.runs().len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn on_windows_a_leftover_task_task_scheduler_will_not_delete_is_a_warning_and_setup_still_succeeds()
+ {
+    let dirs = TestDirs::new();
+    let agent = fake_agent!(&dirs);
+    let os = FakeOs::new(&dirs, &agent, true).failing(DELETE, "ERROR: Access is denied.\r\n");
+    os.state
+        .lock()
+        .unwrap()
+        .tasks
+        .insert("Floti host".to_owned(), b"<Task/>".to_vec());
+
+    let outcome = run_windows_setup(&dirs, &os).await;
+
+    // A cleanup never fails an install: install-self, the installer and an
+    // install over ssh go on.
+    assert_eq!(
+        outcome,
+        SetupOutcome::StartsWhenNeeded(Some(
+            "Warning: the logon task \"Floti host\" an earlier floti registered was not deleted (ERROR: Access is denied.); schtasks /Delete /TN \"Floti host\" /F deletes it."
+                .to_owned()
+        ))
+    );
+    assert_eq!(outcome.code(), 0);
+    assert!(outcome.offers_desktop());
+    assert_eq!(os.starts(), 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1032,15 +1060,34 @@ async fn in_a_wsl_distro_whose_systemd_user_manager_answers_setup_registers_the_
 
 /// The commands that only look, which doctor may run.
 fn only_looks(run: &str) -> bool {
-    run == "schtasks /Query /FO CSV /NH"
-        || run.starts_with("systemctl --user is-enabled ")
-        || run == "systemctl --user show-environment"
+    run.starts_with("systemctl --user is-enabled ") || run == "systemctl --user show-environment"
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn doctor_finds_no_entry_before_setup_and_the_entry_setup_registered_after_on_every_os() {
+async fn on_windows_doctor_finds_no_sign_in_entry_missing_before_setup_or_after() {
+    let dirs = TestDirs::new();
+    let agent = fake_agent!(&dirs);
+    let os = FakeOs::new(&dirs, &agent, true);
+    assert_eq!(
+        sign_in_finding(&os, &when_needed(), &dirs.home, &dirs.data),
+        None
+    );
+    assert!(os.runs().is_empty(), "{:?}", os.runs());
+    assert_eq!(
+        run_windows_setup(&dirs, &os).await,
+        SetupOutcome::StartsWhenNeeded(None)
+    );
+    assert_eq!(
+        sign_in_finding(&os, &when_needed(), &dirs.home, &dirs.data),
+        None
+    );
+    assert_eq!(os.runs(), [QUERY], "doctor looked at nothing");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn doctor_finds_no_entry_before_setup_and_the_entry_setup_registered_after_on_macos_and_linux()
+ {
     for definition in [
-        logon_task(WINDOWS_FLOTI),
         macos::launch_agent(Path::new(UNIX_FLOTI)).unwrap(),
         linux::user_unit(Path::new(UNIX_FLOTI)).unwrap(),
     ] {
@@ -1422,8 +1469,15 @@ fn install_self_runs_setup_with_no_desktop_and_only_a_set_up_host_goes_on_to_the
         SetupOutcome::KeepsRunning,
         SetupOutcome::AtNextSignIn,
         SetupOutcome::StartsOnConnect,
+        SetupOutcome::StartsWhenNeeded(None),
     ] {
         assert!(outcome.offers_desktop(), "{outcome:?}");
+        // Only a host waiting for the next sign-in means nobody is here.
+        assert_eq!(
+            outcome.found_nobody_signed_in(),
+            outcome == SetupOutcome::AtNextSignIn,
+            "{outcome:?}"
+        );
     }
     assert!(!SetupOutcome::Failed("schtasks: Access is denied.".into()).offers_desktop());
 }

@@ -1,14 +1,18 @@
-//! Starting the host at the user's sign-in: a Task Scheduler task "Floti
-//! host" on Windows, the LaunchAgent `dev.floti.host` on macOS and the systemd
-//! user unit `floti.service` on Linux. Never a system service, and never
-//! started by SSH.
+//! How the host starts on this computer's OS. On macOS and Linux it starts at
+//! the user's sign-in: the LaunchAgent `dev.floti.host` and the systemd user
+//! unit `floti.service`. On Windows nothing starts it at sign-in: a client
+//! starts it when it needs one ([`HostStart::WhenNeeded`]), the desktop app
+//! when no host answers it, or `floti connect`. Never a system service, and
+//! never started by SSH.
 //!
 //! The host generates the definition; registering it with the OS is `floti
 //! setup`'s step ([`register`]), so generating one registers nothing. Each
 //! generator only composes text, and registering runs each OS command through
-//! a [`register::SignInSystem`] a test fakes, so all three are compiled on
+//! a [`register::SignInSystem`] a test fakes, so every OS's is compiled on
 //! every OS and tested everywhere; the lines below pick which one is
-//! `Native`.
+//! `Native`. Windows also names what an earlier floti registered there, the
+//! logon task "Floti host" ([`LeftoverTask`]), which setup, `floti update`
+//! and `floti uninstall` take out.
 //!
 //! The same concern covers the host's place in that sign-in: it refuses to
 //! start where no sign-in started it ([`launch_refusal`]: from SSH, or as root
@@ -115,11 +119,34 @@ impl StopSignals {
     }
 }
 
+/// How the host starts on an OS: what `floti setup` registers, `floti
+/// doctor` looks for and `floti uninstall` takes out.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HostStart {
+    /// At the user's sign-in, through this definition.
+    AtSignIn(StartupDefinition),
+    /// When a client needs one: the desktop app when no host answers it, or
+    /// `floti connect`. Nothing is registered and nothing is started at
+    /// sign-in or by setup; `leftover` is what an earlier floti registered,
+    /// which is taken out.
+    WhenNeeded { leftover: LeftoverTask },
+}
+
+/// A Task Scheduler task an earlier floti registered, described well enough
+/// to find and delete it, and the XML it was imported from, without
+/// generating it again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LeftoverTask {
+    /// The task's name in Task Scheduler's root folder.
+    pub name: &'static str,
+    /// The file name of its XML in [`register::TASK_FILE_FOLDER`] under the
+    /// data folder.
+    pub file_name: &'static str,
+}
+
 /// The OS mechanism a definition is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StartupKind {
-    /// A Task Scheduler task with a logon trigger.
-    LogonTask,
     /// A launchd agent in the user's `~/Library/LaunchAgents`.
     LaunchAgent,
     /// A systemd user unit.
@@ -130,44 +157,28 @@ pub enum StartupKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StartupDefinition {
     pub kind: StartupKind,
-    /// What the OS knows it by: the task name, the launchd label or the unit
-    /// name.
+    /// What the OS knows it by: the launchd label or the unit name.
     pub name: String,
     /// The file name the definition is written as.
     pub file_name: String,
     /// The folder, relative to the user's home, the file belongs in:
-    /// `Library/LaunchAgents` or `.config/systemd/user`. `None` for the logon
-    /// task, which Task Scheduler stores itself once the file is imported.
-    pub user_folder: Option<&'static str>,
-    /// The definition itself: task XML, a property list or a unit file.
+    /// `Library/LaunchAgents` or `.config/systemd/user`.
+    pub user_folder: &'static str,
+    /// The definition itself: a property list or a unit file.
     pub contents: String,
 }
 
 impl StartupDefinition {
-    /// The file's bytes in the encoding its OS reads: UTF-16LE with a byte
-    /// order mark for the task XML, which declares UTF-16 as Task Scheduler
-    /// exports it, and UTF-8 for the property list and the unit file.
+    /// The file's bytes, UTF-8 for the property list and the unit file.
     pub fn file_bytes(&self) -> Vec<u8> {
-        match self.kind {
-            StartupKind::LogonTask => {
-                let mut bytes = Vec::with_capacity(2 + self.contents.len() * 2);
-                bytes.extend_from_slice(&[0xFF, 0xFE]);
-                for unit in self.contents.encode_utf16() {
-                    bytes.extend_from_slice(&unit.to_le_bytes());
-                }
-                bytes
-            }
-            StartupKind::LaunchAgent | StartupKind::SystemdUserUnit => {
-                self.contents.clone().into_bytes()
-            }
-        }
+        self.contents.clone().into_bytes()
     }
 }
 
-/// The OS's way to start the host at sign-in.
-pub trait StartAtSignIn {
-    /// The definition that runs `binary host` at this user's sign-in.
-    fn definition(&self, binary: &Path) -> Result<StartupDefinition>;
+/// The OS's way to start the host.
+pub trait HostStartup {
+    /// How the host whose binary is `binary` starts for this user.
+    fn host_start(&self, binary: &Path) -> Result<HostStart>;
 }
 
 /// The binary's path as text, refused unless it is valid Unicode, has no

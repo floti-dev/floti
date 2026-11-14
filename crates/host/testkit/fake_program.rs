@@ -9,6 +9,8 @@
 //!   standard streams, and reports its pid.
 //! - `--pid-file PATH`: writes `{"pid": .., "child": ..}` to `PATH` once the
 //!   child (if any) is running, for a test that never sees the output.
+//! - `--report-file PATH`: the report below is written whole to `PATH` too,
+//!   for a test whose program was started with no standard output.
 //! - The report: one line of JSON on stdout with its arguments, its folder,
 //!   the variables asked for, what it read and the child's pid.
 //! - `--stdout-bytes N` / `--stderr-bytes N`: writes `N` bytes of `x`.
@@ -74,6 +76,11 @@ fn main() {
         "stdin": String::from_utf8_lossy(&stdin),
         "child": child,
     });
+    if let Some(path) = value_after("--report-file").last() {
+        let partial = format!("{path}.partial");
+        std::fs::write(&partial, report.to_string()).expect("write the report file");
+        std::fs::rename(&partial, path).expect("finish the report file");
+    }
     if let Some(record) = std::env::var_os("FLOTI_FAKE_PROGRAM_RECORD") {
         let mut file = std::fs::OpenOptions::new()
             .create(true)

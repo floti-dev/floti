@@ -1,10 +1,9 @@
 use std::path::Path;
 
-use super::{StartAtSignIn, StartupKind, linux, macos, windows};
+use super::{HostStart, HostStartup, StartupKind, linux, macos, windows};
 
 const WINDOWS_BINARY: &str = r"C:\Program Files\Floti App\floti.exe";
 const UNIX_BINARY: &str = "/opt/Floti App/bin/floti";
-const WINDOWS_USER: &str = r"WORKSTATION\someone";
 
 /// The text between `<open>` and `</open>`.
 fn section<'a>(contents: &'a str, open: &str) -> &'a str {
@@ -18,105 +17,18 @@ fn section<'a>(contents: &'a str, open: &str) -> &'a str {
 }
 
 #[test]
-fn windows_definition_is_a_logon_task_for_this_user_only_with_least_privilege() {
-    let def = windows::logon_task(Path::new(WINDOWS_BINARY), WINDOWS_USER).unwrap();
-    assert_eq!(def.kind, StartupKind::LogonTask);
-    assert_eq!(def.name, "Floti host");
-    assert_eq!(def.file_name, "Floti host.xml");
-    assert_eq!(def.user_folder, None);
-    let xml = &def.contents;
-
-    assert!(xml.contains(r"<URI>\Floti host</URI>"), "{xml}");
-    // Runs `floti host`, with the path quoted because it has spaces.
-    assert!(
-        xml.contains(r#"<Command>"C:\Program Files\Floti App\floti.exe"</Command>"#),
-        "{xml}"
-    );
-    assert!(xml.contains("<Arguments>host</Arguments>"), "{xml}");
-
-    // One trigger: this user's logon, and nothing else.
-    let triggers = section(xml, "Triggers");
-    assert_eq!(triggers.matches("Trigger>").count(), 2, "{triggers}");
-    assert_eq!(triggers.matches("<LogonTrigger>").count(), 1, "{triggers}");
-    assert!(
-        triggers.contains(r"<UserId>WORKSTATION\someone</UserId>"),
-        "{triggers}"
-    );
-
-    // Run as that user, with an interactive token and least privilege.
-    let principal = section(xml, "Principals");
-    assert!(principal.contains(r"<UserId>WORKSTATION\someone</UserId>"));
-    assert!(principal.contains("<LogonType>InteractiveToken</LogonType>"));
-    assert!(principal.contains("<RunLevel>LeastPrivilege</RunLevel>"));
-
-    // The host runs until it is stopped; Task Scheduler's default limit would
-    // end it after three days.
-    assert!(xml.contains("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>"));
-
-    for absent in [
-        "BootTrigger",
-        "TimeTrigger",
-        "HighestAvailable",
-        "S-1-5-18",
-        "SYSTEM",
-        "LocalSystem",
-        "NetworkService",
-        "LocalService",
-        "<GroupId>",
-        "Password",
-        "S4U",
-        "ServiceAccount",
-    ] {
-        assert!(!xml.contains(absent), "found {absent} in:\n{xml}");
-    }
-}
-
-#[test]
-fn windows_definition_refuses_system_accounts_and_relative_paths() {
-    let binary = Path::new(WINDOWS_BINARY);
-    for account in [
-        r"NT AUTHORITY\SYSTEM",
-        "SYSTEM",
-        r"WORKGROUP\DESKTOP-1$",
-        r"NT AUTHORITY\LOCAL SERVICE",
-        r"NT AUTHORITY\NETWORK SERVICE",
-        "",
-    ] {
-        assert!(
-            windows::logon_task(binary, account).is_err(),
-            "accepted {account:?}"
+fn windows_registers_nothing_and_names_the_logon_task_an_earlier_floti_left() {
+    // Whatever the binary, and with no user to name: nothing is generated.
+    for binary in [WINDOWS_BINARY, "floti.exe", ""] {
+        assert_eq!(
+            windows::Native.host_start(Path::new(binary)).unwrap(),
+            HostStart::WhenNeeded {
+                leftover: windows::LEFTOVER_TASK
+            }
         );
     }
-    for path in [r"floti.exe", r"bin\floti.exe", "/opt/floti"] {
-        let err = windows::logon_task(Path::new(path), WINDOWS_USER).unwrap_err();
-        assert!(err.to_string().contains("not absolute"), "{err}");
-    }
-    assert!(windows::logon_task(Path::new(r"\\server\share\floti.exe"), WINDOWS_USER).is_ok());
-}
-
-#[test]
-fn windows_definition_escapes_the_path_and_is_written_as_utf16() {
-    let def = windows::logon_task(Path::new(r"C:\R&D <tools>\floti.exe"), WINDOWS_USER).unwrap();
-    assert!(
-        def.contents
-            .contains(r#"<Command>"C:\R&amp;D &lt;tools&gt;\floti.exe"</Command>"#),
-        "{}",
-        def.contents
-    );
-
-    let bytes = def.file_bytes();
-    assert_eq!(&bytes[..2], &[0xFF, 0xFE], "UTF-16LE byte order mark");
-    let units: Vec<u16> = bytes[2..]
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|&pair| u16::from_le_bytes(pair))
-        .collect();
-    assert_eq!(String::from_utf16(&units).unwrap(), def.contents);
-    assert!(
-        def.contents
-            .starts_with(r#"<?xml version="1.0" encoding="UTF-16"?>"#)
-    );
+    assert_eq!(windows::LEFTOVER_TASK.name, "Floti host");
+    assert_eq!(windows::LEFTOVER_TASK.file_name, "Floti host.xml");
 }
 
 #[test]
@@ -125,7 +37,7 @@ fn macos_definition_is_a_launch_agent_that_runs_the_path_as_one_argument() {
     assert_eq!(def.kind, StartupKind::LaunchAgent);
     assert_eq!(def.name, "dev.floti.host");
     assert_eq!(def.file_name, "dev.floti.host.plist");
-    assert_eq!(def.user_folder, Some("Library/LaunchAgents"));
+    assert_eq!(def.user_folder, "Library/LaunchAgents");
     let plist = &def.contents;
 
     assert!(
@@ -181,7 +93,7 @@ fn linux_definition_is_a_user_unit_wanted_by_default_target_with_the_path_quoted
     assert_eq!(def.kind, StartupKind::SystemdUserUnit);
     assert_eq!(def.name, "floti.service");
     assert_eq!(def.file_name, "floti.service");
-    assert_eq!(def.user_folder, Some(".config/systemd/user"));
+    assert_eq!(def.user_folder, ".config/systemd/user");
     let unit = &def.contents;
 
     let exec: Vec<&str> = unit
@@ -259,11 +171,28 @@ fn linux_definition_escapes_what_systemd_would_expand() {
 }
 
 #[test]
-fn native_definition_runs_this_binary() {
+fn macos_and_linux_start_the_host_at_sign_in_through_their_definitions() {
+    let binary = Path::new(UNIX_BINARY);
+    assert_eq!(
+        macos::Native.host_start(binary).unwrap(),
+        HostStart::AtSignIn(macos::launch_agent(binary).unwrap())
+    );
+    assert_eq!(
+        linux::Native.host_start(binary).unwrap(),
+        HostStart::AtSignIn(linux::user_unit(binary).unwrap())
+    );
+    assert!(linux::Native.host_start(Path::new("floti")).is_err());
+}
+
+#[test]
+fn native_start_runs_this_binary_where_it_starts_at_sign_in() {
     let binary = std::env::current_exe().unwrap();
-    let def = super::Native.definition(&binary).unwrap();
-    assert!(!def.contents.is_empty());
-    assert!(def.contents.contains("host"));
+    match super::Native.host_start(&binary).unwrap() {
+        HostStart::AtSignIn(def) => {
+            assert!(def.contents.contains("host"), "{}", def.contents);
+        }
+        HostStart::WhenNeeded { leftover } => assert_eq!(leftover, windows::LEFTOVER_TASK),
+    }
 }
 
 /// Generating a definition registers nothing: the generators compose text and
@@ -381,10 +310,12 @@ mod unregistering {
     use std::path::{Path, PathBuf};
 
     use super::super::register::{
-        OsCommand, Ran, SignInSystem, WANTS_FOLDER, lingering_on, unregister,
+        LeftoverRemoved, OsCommand, Ran, SignInSystem, WANTS_FOLDER, leftovers_at_start,
+        leftovers_line, lingering_on, remove_leftover_task, remove_leftovers, unregister,
     };
-    use super::super::{StartupDefinition, linux, macos, windows};
-    use super::{UNIX_BINARY, WINDOWS_BINARY, WINDOWS_USER};
+    use super::super::{HostStart, StartupDefinition, linux, macos, windows};
+    use super::UNIX_BINARY;
+    use crate::platform::folders::{CONFIG_READ_ONLY_VAR, UserEnv};
     use crate::testkit::TestDirs;
 
     /// An OS that answers each command line it is given from `answers`,
@@ -445,49 +376,176 @@ mod unregistering {
         std::fs::write(path, text).unwrap();
     }
 
-    fn task() -> StartupDefinition {
-        windows::logon_task(Path::new(WINDOWS_BINARY), WINDOWS_USER).unwrap()
-    }
-
     const QUERY: &str = "schtasks /Query /FO CSV /NH";
     const DELETE: &str = "schtasks /Delete /TN Floti host /F";
     const LISTED: &str =
         "\"\\Floti host\",\"N/A\",\"Running\"\r\n\"\\Other\",\"N/A\",\"Ready\"\r\n";
 
+    const TASK: super::super::LeftoverTask = windows::LEFTOVER_TASK;
+
+    const BOTH: LeftoverRemoved = LeftoverRemoved {
+        task: true,
+        file: true,
+    };
+    const NEITHER: LeftoverRemoved = LeftoverRemoved {
+        task: false,
+        file: false,
+    };
+
+    /// Never `schtasks /End` or `/Run`: deleting a task leaves the host it
+    /// started running, and starts nothing.
+    fn assert_only_query_and_delete(os: &FakeOs) {
+        for line in os.ran() {
+            assert!(line == QUERY || line == DELETE, "ran {line}");
+        }
+    }
+
     #[test]
-    fn a_listed_logon_task_is_deleted_and_its_xml_and_folder_go() {
+    fn a_listed_leftover_logon_task_is_deleted_and_its_xml_and_folder_go() {
         let dirs = TestDirs::new();
         let xml = dirs.data.join("startup").join("Floti host.xml");
         write(&xml, "<Task/>");
         let os = FakeOs::answering(&[(QUERY, true, LISTED)]);
 
-        assert_eq!(unregister(&os, &task(), &dirs.home, &dirs.data), Ok(true));
+        assert_eq!(remove_leftover_task(&os, &TASK, &dirs.data), Ok(BOTH));
         assert_eq!(os.ran(), [QUERY, DELETE]);
         assert!(!xml.exists());
         assert!(!dirs.data.join("startup").exists(), "its emptied folder");
+        assert_only_query_and_delete(&os);
     }
 
     #[test]
-    fn a_logon_task_that_is_not_listed_is_not_found_and_nothing_is_deleted() {
+    fn a_leftover_task_that_is_not_listed_is_not_found_and_nothing_is_deleted() {
         let dirs = TestDirs::new();
         let os = FakeOs::answering(&[(QUERY, true, "\"\\Other\",\"N/A\",\"Ready\"\r\n")]);
-        assert_eq!(unregister(&os, &task(), &dirs.home, &dirs.data), Ok(false));
+        assert_eq!(remove_leftover_task(&os, &TASK, &dirs.data), Ok(NEITHER));
         assert_eq!(os.ran(), [QUERY]);
         // A startup folder holding something else stays.
         let note = dirs.data.join("startup").join("note.txt");
         write(&note, "mine");
-        assert_eq!(unregister(&os, &task(), &dirs.home, &dirs.data), Ok(false));
+        assert_eq!(remove_leftover_task(&os, &TASK, &dirs.data), Ok(NEITHER));
         assert!(note.exists());
     }
 
     #[test]
-    fn a_refused_delete_says_schtasks_own_last_line() {
+    fn a_leftover_xml_whose_task_is_gone_still_goes() {
+        let dirs = TestDirs::new();
+        let xml = dirs.data.join("startup").join("Floti host.xml");
+        write(&xml, "<Task/>");
+        let os = FakeOs::answering(&[(QUERY, true, "")]);
+        assert_eq!(
+            remove_leftover_task(&os, &TASK, &dirs.data),
+            Ok(LeftoverRemoved {
+                task: false,
+                file: true
+            })
+        );
+        assert_eq!(os.ran(), [QUERY]);
+        assert!(!xml.exists());
+
+        // Said as what it was: the XML, not the task.
+        write(&xml, "<Task/>");
+        let gone = FakeOs::answering(&[(QUERY, true, "")]);
+        assert_eq!(
+            leftovers_line(&gone, &HostStart::WhenNeeded { leftover: TASK }, &dirs.data),
+            Some(format!(
+                "Deleted {}, the XML of the logon task \"Floti host\" an earlier floti registered, whose task was gone already.",
+                xml.display()
+            ))
+        );
+    }
+
+    #[test]
+    fn a_refused_delete_or_listing_says_schtasks_own_last_line() {
         let dirs = TestDirs::new();
         let os = FakeOs::answering(&[(QUERY, true, LISTED), (DELETE, false, "")]);
         assert_eq!(
-            unregister(&os, &task(), &dirs.home, &dirs.data),
+            remove_leftover_task(&os, &TASK, &dirs.data),
             Err(format!("{DELETE} refused"))
         );
+        let os = FakeOs::answering(&[(QUERY, false, "")]);
+        assert_eq!(
+            remove_leftover_task(&os, &TASK, &dirs.data),
+            Err(format!("{QUERY} refused"))
+        );
+    }
+
+    #[test]
+    fn deleting_the_leftover_task_is_said_in_one_line_and_a_refusal_is_a_warning_naming_the_fix() {
+        let dirs = TestDirs::new();
+        let when_needed = HostStart::WhenNeeded { leftover: TASK };
+        let os = FakeOs::answering(&[(QUERY, true, LISTED)]);
+        assert_eq!(
+            leftovers_line(&os, &when_needed, &dirs.data).as_deref(),
+            Some(
+                "Deleted the logon task \"Floti host\" an earlier floti registered; the Floti host starts when Floti or a connection needs it."
+            )
+        );
+        let nothing = FakeOs::answering(&[(QUERY, true, "")]);
+        assert_eq!(leftovers_line(&nothing, &when_needed, &dirs.data), None);
+        let refused = FakeOs::answering(&[(QUERY, true, LISTED), (DELETE, false, "")]);
+        assert_eq!(
+            leftovers_line(&refused, &when_needed, &dirs.data).as_deref(),
+            Some(
+                "Warning: the logon task \"Floti host\" an earlier floti registered was not deleted (schtasks /Delete /TN Floti host /F refused); schtasks /Delete /TN \"Floti host\" /F deletes it."
+            )
+        );
+        assert_only_query_and_delete(&refused);
+        let at_sign_in = FakeOs::answering(&[]);
+        assert_eq!(
+            leftovers_line(&at_sign_in, &HostStart::AtSignIn(unit()), &dirs.data),
+            None
+        );
+        assert!(at_sign_in.ran().is_empty());
+    }
+
+    #[test]
+    fn a_host_deletes_the_leftover_task_at_its_start_unless_it_runs_read_only() {
+        let dirs = TestDirs::new();
+        let when_needed = HostStart::WhenNeeded { leftover: TASK };
+        let user = |vars: &[(&str, &str)]| UserEnv {
+            home: None,
+            vars: vars
+                .iter()
+                .map(|(name, value)| ((*name).into(), (*value).into()))
+                .collect(),
+        };
+
+        // A development or check host beside the installed Floti asks nothing.
+        let read_only = FakeOs::answering(&[(QUERY, true, LISTED)]);
+        let env = user(&[(CONFIG_READ_ONLY_VAR, "1")]);
+        assert_eq!(
+            leftovers_at_start(&read_only, &when_needed, &dirs.data, &env),
+            None
+        );
+        assert!(read_only.ran().is_empty(), "{:?}", read_only.ran());
+
+        let os = FakeOs::answering(&[(QUERY, true, LISTED)]);
+        let line = leftovers_at_start(&os, &when_needed, &dirs.data, &user(&[])).unwrap();
+        assert!(
+            line.starts_with("Deleted the logon task \"Floti host\""),
+            "{line}"
+        );
+        assert_eq!(os.ran(), [QUERY, DELETE]);
+        assert_only_query_and_delete(&os);
+    }
+
+    #[test]
+    fn only_a_start_when_needed_has_leftovers_to_remove() {
+        let dirs = TestDirs::new();
+        let os = FakeOs::answering(&[(QUERY, true, LISTED)]);
+        let at_sign_in = HostStart::AtSignIn(unit());
+        assert_eq!(remove_leftovers(&os, &at_sign_in, &dirs.data), Ok(NEITHER));
+        assert!(os.ran().is_empty(), "{:?}", os.ran());
+        let when_needed = HostStart::WhenNeeded { leftover: TASK };
+        assert_eq!(
+            remove_leftovers(&os, &when_needed, &dirs.data),
+            Ok(LeftoverRemoved {
+                task: true,
+                file: false
+            })
+        );
+        assert_eq!(os.ran(), [QUERY, DELETE]);
     }
 
     fn agent() -> StartupDefinition {
@@ -507,7 +565,7 @@ mod unregistering {
         write(&plist(&dirs), "<plist/>");
         let os = FakeOs::answering(&[("id -u", true, "501\n")]);
 
-        assert_eq!(unregister(&os, &agent(), &dirs.home, &dirs.data), Ok(true));
+        assert_eq!(unregister(&os, &agent(), &dirs.home), Ok(true));
         assert_eq!(
             os.ran(),
             [
@@ -528,11 +586,11 @@ mod unregistering {
             ("id -u", true, "501\n"),
             ("launchctl print gui/501", false, ""),
         ]);
-        assert_eq!(unregister(&os, &agent(), &dirs.home, &dirs.data), Ok(true));
+        assert_eq!(unregister(&os, &agent(), &dirs.home), Ok(true));
         assert_eq!(os.ran(), ["id -u", "launchctl print gui/501"]);
         assert!(!plist(&dirs).exists());
         // Again: neither loaded nor there.
-        assert_eq!(unregister(&os, &agent(), &dirs.home, &dirs.data), Ok(false));
+        assert_eq!(unregister(&os, &agent(), &dirs.home), Ok(false));
     }
 
     #[test]
@@ -542,7 +600,7 @@ mod unregistering {
             ("id -u", true, "501\n"),
             ("launchctl print gui/501/dev.floti.host", false, ""),
         ]);
-        assert_eq!(unregister(&os, &agent(), &dirs.home, &dirs.data), Ok(false));
+        assert_eq!(unregister(&os, &agent(), &dirs.home), Ok(false));
         assert!(!os.ran().iter().any(|line| line.contains("bootout")));
     }
 
@@ -567,7 +625,7 @@ mod unregistering {
         write(&wants, "the link systemctl enable made");
         let os = FakeOs::default();
 
-        assert_eq!(unregister(&os, &unit(), &dirs.home, &dirs.data), Ok(true));
+        assert_eq!(unregister(&os, &unit(), &dirs.home), Ok(true));
         assert_eq!(
             os.ran(),
             [
@@ -579,10 +637,7 @@ mod unregistering {
         assert!(!file.exists() && !wants.exists());
         // Again: nothing there, nothing run.
         let again = FakeOs::default();
-        assert_eq!(
-            unregister(&again, &unit(), &dirs.home, &dirs.data),
-            Ok(false)
-        );
+        assert_eq!(unregister(&again, &unit(), &dirs.home), Ok(false));
         assert!(again.ran().is_empty());
     }
 
@@ -594,7 +649,7 @@ mod unregistering {
         write(&wants, "the link systemctl enable made");
         let os = FakeOs::answering(&[("systemctl --user show-environment", false, "")]);
 
-        assert_eq!(unregister(&os, &unit(), &dirs.home, &dirs.data), Ok(true));
+        assert_eq!(unregister(&os, &unit(), &dirs.home), Ok(true));
         assert_eq!(os.ran(), ["systemctl --user show-environment"]);
         assert!(!file.exists() && !wants.exists());
     }
@@ -605,7 +660,7 @@ mod unregistering {
         let (_, wants) = unit_files(&dirs);
         write(&wants, "a link to a unit that is gone");
         let os = FakeOs::default();
-        assert_eq!(unregister(&os, &unit(), &dirs.home, &dirs.data), Ok(true));
+        assert_eq!(unregister(&os, &unit(), &dirs.home), Ok(true));
         assert!(os.ran().is_empty(), "{:?}", os.ran());
         assert!(!wants.exists());
     }
