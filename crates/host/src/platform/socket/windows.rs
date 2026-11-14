@@ -852,6 +852,12 @@ mod tests {
         #[tokio::test]
         async fn an_elevated_hosts_pipe_takes_the_same_users_medium_integrity_client() {
             let integrity = this_process_integrity();
+            // GitHub's Windows runners run tests elevated, so there a test
+            // process that is not is a failure, never a skip that passes.
+            assert!(
+                integrity == HIGH || std::env::var_os("GITHUB_ACTIONS").is_none(),
+                "on a GitHub runner this test process runs at {integrity}, not High"
+            );
             if integrity != HIGH {
                 eprintln!(
                     "SKIPPED: this test needs a test process at High integrity (elevated), as on CI's Windows runners; this one runs at {integrity}"

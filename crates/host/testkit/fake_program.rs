@@ -24,7 +24,7 @@
 //!
 //! `--in-job <line>`, as its only arguments, is another program altogether:
 //! a transport that stands for Windows OpenSSH's server. It puts itself in a
-//! new job that ends everything in it once its last handle closes and lets a
+//! job that ends everything in it once its last handle closes and lets a
 //! program in it break away, as sshd's job for a login does, then runs
 //! `<line>` in it, split at spaces, `floti` being the binary
 //! `FAKE_SSH_FLOTI` names, with its own standard streams, and exits with its
@@ -133,39 +133,21 @@ fn main() {
     std::process::exit(i32::try_from(code).expect("an exit code"));
 }
 
-/// Runs `line` in a new job that ends what it holds when this process ends
-/// and lets it break away, and says how it exited.
-#[cfg(windows)]
+/// Runs `line` in a job that ends what it holds when this process ends and
+/// lets it break away, and says how it exited. The job is the one a host
+/// joins to tie what it starts to its own life
+/// ([`ProcessTree::end_tree_with_this_process`]): on Windows a job with
+/// `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and `JOB_OBJECT_LIMIT_BREAKAWAY_OK`,
+/// as sshd's for a login is. Elsewhere it ties only what is named to it,
+/// which nothing here is, so there the line runs as any child.
 fn in_job(line: &str) -> i32 {
-    use windows_sys::Win32::System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_BREAKAWAY_OK,
-        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-        JobObjectExtendedLimitInformation, SetInformationJobObject,
-    };
-    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+    use floti_host::platform::process_tree::{Native, ProcessTree};
+    use floti_protocol::Knowable;
 
-    // SAFETY: an unnamed job with default security. Its handle is never
-    // closed here: it closes as this process ends, which is the point.
-    let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
-    assert!(!job.is_null(), "{}", std::io::Error::last_os_error());
-    let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-    limits.BasicLimitInformation.LimitFlags =
-        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
-    // SAFETY: `limits` is the structure the class names, at its own size.
-    let set = unsafe {
-        SetInformationJobObject(
-            job,
-            JobObjectExtendedLimitInformation,
-            (&raw const limits).cast(),
-            u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())
-                .expect("the limits' size fits"),
-        )
-    };
-    assert_ne!(set, 0, "{}", std::io::Error::last_os_error());
-    // SAFETY: the pseudo handle of this process, put in the job it made.
-    let assigned = unsafe { AssignProcessToJobObject(job, GetCurrentProcess()) };
-    assert_ne!(assigned, 0, "{}", std::io::Error::last_os_error());
-
+    if Native.end_tree_with_this_process() != Knowable::Known(true) {
+        eprintln!("floti-fake-program: could not put itself in a job that ends with it");
+        return 2;
+    }
     let mut words = line.split(' ');
     let program = match words.next() {
         Some("floti") => std::env::var_os("FAKE_SSH_FLOTI").expect("FAKE_SSH_FLOTI names floti"),
@@ -177,11 +159,4 @@ fn in_job(line: &str) -> i32 {
         .status()
         .expect("run the line in the job");
     status.code().unwrap_or(1)
-}
-
-/// A Windows job, which no other OS has.
-#[cfg(not(windows))]
-fn in_job(_line: &str) -> i32 {
-    eprintln!("floti-fake-program: --in-job is a Windows job, which this OS has none of");
-    2
 }

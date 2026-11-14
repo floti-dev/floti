@@ -2332,7 +2332,6 @@ async fn s9_in_a_distro_set_to_start_on_connect_floti_connect_starts_the_host_an
 /// The transport Windows OpenSSH's server is, for a login: `floti connect`
 /// runs in a job that ends everything in it when the connection closes, and
 /// lets a program break away from it (`floti-fake-program --in-job`).
-#[cfg(windows)]
 fn in_a_login_job() -> Vec<String> {
     vec![
         env!("CARGO_BIN_EXE_floti-fake-program").to_owned(),
@@ -2344,12 +2343,20 @@ fn in_a_login_job() -> Vec<String> {
 /// connect` from an administrator's login: no start-on-connect record and
 /// no host running. The connection starts the host and is served; closing it
 /// ends the job its login ran in, and the host, its keeper and the session
-/// it runs carry on. Windows only: the job is a Windows job.
-#[cfg(windows)]
+/// it runs carry on. Where no host starts on connect without setup's record,
+/// macOS and Linux, it says so and ends at once: there is nothing to start.
 #[tokio::test(flavor = "multi_thread")]
 async fn on_windows_a_connection_starts_the_host_and_closing_it_leaves_the_host_its_keeper_and_sessions_running()
  {
     let dirs = TestDirs::new();
+    let plain = SaidLogin {
+        elevated: Some(false),
+        desktop_session: Some(false),
+    };
+    if startup::Native.on_connect(&dirs.data, &plain) == OnConnect::NoHost {
+        eprintln!("SKIPPED: this OS starts no host on connect without setup's record");
+        return;
+    }
     let agent = fake_agent!(&dirs);
     // The host's key, as an install leaves it, and no record that it starts
     // on connect: Windows starts it without one.
