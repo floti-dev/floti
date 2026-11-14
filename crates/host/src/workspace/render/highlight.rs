@@ -5,7 +5,7 @@
 //! two-face carries only for Oniguruma (PowerShell).
 //!
 //! [`ALIASES`] and [`PLAIN`] are the tables a name is resolved with, and
-//! `tests/highlighting.rs` walks them and the app's language names and
+//! `tests/it/highlighting.rs` walks them and the app's language names and
 //! checks each one highlights over a client connection. A language with its
 //! own grammar in the set is highlighted with it; [`STAND_INS`] holds only the
 //! few that have none, with the nearest grammar that runs.

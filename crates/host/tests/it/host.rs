@@ -1629,7 +1629,7 @@ async fn a_killed_floti_host_leaves_what_its_sessions_and_terminals_started_to_i
 }
 
 /// The owner watch every fake uses, put beside a plugin's service script.
-const FAKE_COMMON: &str = include_str!("../../../test/fake-agents/common.mjs");
+const FAKE_COMMON: &str = include_str!("../../../../test/fake-agents/common.mjs");
 
 /// A plugin service that listens on the port it is told and starts a child
 /// of its own; both exit once the test process is gone.

@@ -35,7 +35,7 @@ use floti_protocol::{Knowable, Payload};
 use serde_json::{Value, json};
 
 /// The shared owner watch every fake uses, put beside each service script.
-const COMMON: &str = include_str!("../../../test/fake-agents/common.mjs");
+const COMMON: &str = include_str!("../../../../test/fake-agents/common.mjs");
 
 /// A service as plugin authors write one: HTTP on the port it is told,
 /// answering only requests carrying its token. It records each start in

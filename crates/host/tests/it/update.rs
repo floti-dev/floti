@@ -16,13 +16,11 @@
 //! (under the test's home and local app data), relaunching on the same
 //! build served as a newer release, with its sessions in a real keeper.
 
-mod common;
-
 use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::time::{Duration, Instant};
 
-use common::{Served, Server, Signer};
+use crate::common::{Served, Server, Signer};
 
 use floti_host::fake_agent;
 use floti_host::keeper::TEST_KEEPER_LINK_VERSION;

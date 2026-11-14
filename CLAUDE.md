@@ -73,7 +73,8 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   task. Something only an end-to-end run caught is a gap in the lower tiers:
   add the unit or integration test that fails for it, then fix it.
 - A Rust test run names the binary that holds the tests: `--lib` for a
-  module's tests, `--test <file>` for one of `crates/host/tests/*.rs`. A
+  module's tests, `--test it -E 'test(<module>::)'` for one file of
+  `crates/host/tests/it`, which is one binary with a module per file. A
   filter alone builds and links every test binary in the crate first.
   `cargo check` finds compile errors without linking. A test that passed runs
   again only after the code it covers changed.

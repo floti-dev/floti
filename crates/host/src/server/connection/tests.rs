@@ -3,7 +3,7 @@
 //! The deadline, on tokio's paused clock: a connection that says nothing, or
 //! stops partway through its first message, is refused at the deadline
 //! exactly, and one that finishes just inside it is admitted. The
-//! integration test (`tests/noise_sessions.rs`) shows the same refusals logged
+//! integration test (`tests/it/noise_sessions.rs`) shows the same refusals logged
 //! by the executable while another client is served, on a short deadline.
 //!
 //! The wait for `hello` after it, on the same clock: a device that finished

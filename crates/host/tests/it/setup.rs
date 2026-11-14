@@ -15,11 +15,9 @@
 //!
 //! The desktop step runs in-process too, through `floti add desktop`'s own
 //! code against a loopback server serving floti's own release, signed with a
-//! key made in the test (as `tests/add.rs` serves it), with this OS's
+//! key made in the test (as `tests/it/add.rs` serves it), with this OS's
 //! installs looking only in the test's Applications folder and installing
 //! nothing: what would be installed is recorded.
-
-mod common;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
@@ -27,7 +25,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use common::{Served, Server, Signer};
+use crate::common::{Served, Server, Signer};
 use floti_host::add;
 use floti_host::agent::AgentBackend;
 use floti_host::fake_agent;

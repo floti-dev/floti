@@ -5,7 +5,7 @@
 //! profile channels and `profiles:changed` are tested as a client sees them
 //! too: through a client connection to a running host, with the inputs and
 //! expectations of the router's tests in `server/features/profiles.rs`. The
-//! launch is `profile:launch`'s, in `tests/sessions.rs`.
+//! launch is `profile:launch`'s, in `tests/it/sessions.rs`.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};

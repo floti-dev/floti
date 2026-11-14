@@ -13,12 +13,10 @@
 //! program, which records how it was run. Everything is under the test's
 //! `TestDirs`; nothing real is installed.
 
-mod common;
-
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use common::{Served, Server, Signer};
+use crate::common::{Served, Server, Signer};
 use floti_host::platform::folders::UserEnv;
 use floti_host::platform::installs::{
     DESKTOP_DIR_VAR, DISPLAY_TEST_VAR, Desktop, FakeDesktop, Installs, Native,
