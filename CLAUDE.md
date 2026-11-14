@@ -140,6 +140,12 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   `crates/host/src/keeper`), so a host that crashes takes no session with it.
   Floti never stops the host on its own. What quitting, stopping and
   reconnecting end is in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- Nothing Floti runs in the background shows a window. On Windows nothing
+  starts the host at sign-in; every host start goes through
+  `process_tree::start_detached` (no console), and every console program the
+  host starts goes through `launcher::windowless` or `process_tree`
+  (`CREATE_NO_WINDOW`). `tests/it/console.rs` and the start audit in
+  `process_tree/tests.rs` fail otherwise.
 - Tabs, panes, splits and families are kept per device (`paneLayout` in
   `helm.db`) and never reach the host.
 - A host on another computer is reached through the user's own
