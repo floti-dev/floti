@@ -291,21 +291,18 @@ describe('making a file owner-only', () => {
   })
 
   it.runIf(process.platform === 'win32')(
-    'leaves one entry on a file in a folder with nothing inheritable, which Windows gives explicit entries',
+    'leaves one entry on a file whose entries are its own, as Windows gives a file in a folder with nothing inheritable',
     () => {
       const root = mkdtempSync(join(tmpdir(), 'owner only '))
-      const sid = /"(S-1-[0-9-]+)"\s*$/m.exec(
-        spawnSync(join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'whoami.exe'), ['/user', '/fo', 'csv', '/nh'], {
-          encoding: 'utf8',
-          windowsHide: true
-        }).stdout
-      )?.[1]
-      expect(sid).toBeDefined()
-      // The folder's own grant only, inherited by nothing in it.
-      expect(icacls([root, '/inheritance:r', '/grant:r', `*${sid}:F`]).status).toBe(0)
       const key = join(root, 'device.key')
       writeFileSync(key, 'a device key')
-      expect(icacls([key]).stdout).not.toMatch(/\(I\)/)
+      // Every entry made the file's own, and one more beside them: the
+      // explicit entries removing inheritance alone would keep.
+      expect(icacls([key, '/inheritance:d']).status).toBe(0)
+      expect(icacls([key, '/grant', '*S-1-1-0:R']).status).toBe(0)
+      const before = icacls([key]).stdout
+      expect(before).not.toMatch(/\(I\)/)
+      expect(before.split(/\r?\n/).filter((line) => line.includes(':(')).length).toBeGreaterThan(1)
 
       makeOwnerOnly(key)
 
