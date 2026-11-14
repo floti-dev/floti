@@ -84,7 +84,7 @@ describe('Rail', () => {
   })
 
   it('is walked with the keys: the arrows and a typed first letter move the row it marks, and Enter unticks that row', async () => {
-    render(<Harness />)
+    render(<Workspace />)
     fireEvent.contextMenu(screen.getByRole('navigation', { name: 'Destinations' }), { clientX: 20, clientY: 40 })
     const menu = screen.getByRole('menu', { name: 'Show on the rail' })
     // The keys go to the menu itself, which names the row it is on.

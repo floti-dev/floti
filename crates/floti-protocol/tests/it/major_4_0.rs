@@ -64,7 +64,7 @@ fn names(found: &[Difference], part: Part, change: Change) -> Vec<&str> {
 
 #[test]
 fn protocol_4_0_is_3_1_with_harness_renamed_workspace_and_nothing_else() {
-    assert!(PROTOCOL_VERSION.major >= V4_0.major);
+    const { assert!(PROTOCOL_VERSION.major >= V4_0.major) };
     let (before, after) = (record_text(V3_1), record_text(V4_0));
     assert!(
         !after.to_lowercase().contains("harness"),
