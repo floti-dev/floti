@@ -256,23 +256,17 @@ describe('removing a tree', () => {
 })
 
 describe('making a file owner-only', () => {
-  it('leaves it readable and writable by the current user alone, as the host makes a key', () => {
-    const root = mkdtempSync(join(tmpdir(), 'owner only '))
-    const key = join(root, 'device.key')
-    writeFileSync(key, 'a device key')
-    if (process.platform !== 'win32') chmodSync(key, 0o644)
+  const icacls = (args: string[]) =>
+    spawnSync(join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'icacls.exe'), args, {
+      encoding: 'utf8',
+      windowsHide: true
+    })
 
-    makeOwnerOnly(key)
-
+  /** One entry, for this user, and nothing inherited: icacls lists each entry on a line of its own after the path. */
+  function expectOwnerOnly(key: string): void {
     if (process.platform === 'win32') {
-      // One entry, for this user, and nothing inherited: icacls lists each
-      // entry on a line of its own after the path.
-      const listed = spawnSync(join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'icacls.exe'), [key], {
-        encoding: 'utf8',
-        windowsHide: true
-      })
-      const entries = listed.stdout
-        .replace(key, '')
+      const entries = icacls([key])
+        .stdout.replace(key, '')
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter((line) => line.includes(':('))
@@ -283,5 +277,39 @@ describe('making a file owner-only', () => {
       expect(statSync(key).mode & 0o777).toBe(0o600)
     }
     expect(readFileSync(key, 'utf8')).toBe('a device key')
+  }
+
+  it('leaves it readable and writable by the current user alone, as the host makes a key', () => {
+    const root = mkdtempSync(join(tmpdir(), 'owner only '))
+    const key = join(root, 'device.key')
+    writeFileSync(key, 'a device key')
+    if (process.platform !== 'win32') chmodSync(key, 0o644)
+
+    makeOwnerOnly(key)
+
+    expectOwnerOnly(key)
   })
+
+  it.runIf(process.platform === 'win32')(
+    'leaves one entry on a file in a folder with nothing inheritable, which Windows gives explicit entries',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'owner only '))
+      const sid = /"(S-1-[0-9-]+)"\s*$/m.exec(
+        spawnSync(join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'whoami.exe'), ['/user', '/fo', 'csv', '/nh'], {
+          encoding: 'utf8',
+          windowsHide: true
+        }).stdout
+      )?.[1]
+      expect(sid).toBeDefined()
+      // The folder's own grant only, inherited by nothing in it.
+      expect(icacls([root, '/inheritance:r', '/grant:r', `*${sid}:F`]).status).toBe(0)
+      const key = join(root, 'device.key')
+      writeFileSync(key, 'a device key')
+      expect(icacls([key]).stdout).not.toMatch(/\(I\)/)
+
+      makeOwnerOnly(key)
+
+      expectOwnerOnly(key)
+    }
+  )
 })

@@ -152,21 +152,28 @@ const REAL_WORLD: MoveWorld = { probe: probeProcess, pid: process.pid, ownerOnly
  * Makes the file at `path` the current user's alone, as the host's
  * `platform/private_files` makes a key: `0600` on macOS and Linux; on
  * Windows a protected access list with one entry, full access for the
- * current user, set by `icacls` (inheritance removed, the user's grant
- * replacing any other). Throws when it could not.
+ * current user, set by `icacls`. Throws when it could not.
+ *
+ * `/reset` comes first because a file in a folder with nothing inheritable
+ * is given the process token's default list as explicit entries (the user,
+ * SYSTEM, the logon session), and `/inheritance:r` removes only inherited
+ * ones. Reset, every entry is inherited, so removing inheritance and
+ * granting the user leaves that one grant.
  */
 export function makeOwnerOnly(path: string): void {
   if (process.platform !== 'win32') {
     chmodSync(path, 0o600)
     return
   }
-  const icacls = spawnSync(
-    systemProgram('icacls.exe'),
-    [path, '/inheritance:r', '/grant:r', `*${currentUserSid()}:F`],
-    { windowsHide: true, encoding: 'utf8' }
-  )
-  if (icacls.status !== 0) {
-    throw new Error(`icacls could not make ${path} owner-only: ${(icacls.stderr || icacls.stdout || String(icacls.error)).trim()}`)
+  icacls(path, ['/reset'])
+  icacls(path, ['/inheritance:r', '/grant:r', `*${currentUserSid()}:F`])
+}
+
+/** Runs `icacls` on `path` with `args`; throws with what it said when it fails. */
+function icacls(path: string, args: string[]): void {
+  const run = spawnSync(systemProgram('icacls.exe'), [path, ...args], { windowsHide: true, encoding: 'utf8' })
+  if (run.status !== 0) {
+    throw new Error(`icacls could not make ${path} owner-only: ${(run.stderr || run.stdout || String(run.error)).trim()}`)
   }
 }
 

@@ -137,7 +137,7 @@ describe('the Linux AppImage check', () => {
 
   it('refuses an app missing its executable, floti, Node or the files beside them', async () => {
     const root = await extracted({
-      helm: null,
+      'floti-desktop': null,
       'resources/floti': null,
       'resources/floti-SHA256SUMS': null,
       'resources/node/bin/node': new Uint8Array([1, 2, 3]),
