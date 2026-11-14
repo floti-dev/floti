@@ -20,15 +20,19 @@
 //! ([`HostStartup::launch_refusal`]). `floti connect` asks it whether to
 //! start a host when none answers ([`HostStartup::on_connect`]). And it stops
 //! on the OS's stop requests ([`StopSignals`]: Ctrl+C, SIGTERM or the console
-//! events, and signing out). What those read of the OS (the account,
-//! elevation, the user's desktop session: [`Login`]) has one file per OS
-//! family, `signin_windows.rs` and `signin_unix.rs`.
+//! events, and signing out or shutting down). What those read of the OS (the
+//! account, elevation, the user's desktop session: [`Login`]) has one file per
+//! OS family, `signin_windows.rs` and `signin_unix.rs`; Windows tells a
+//! process that the session is ending through a window, which
+//! `end_session_windows.rs` keeps.
 
 pub mod linux;
 pub mod macos;
 pub mod register;
 pub mod windows;
 
+#[cfg(windows)]
+mod end_session_windows;
 #[cfg(unix)]
 mod signin_unix;
 #[cfg(windows)]
@@ -48,6 +52,8 @@ use signin_windows as signin;
 
 #[cfg(any(test, feature = "testkit"))]
 pub use signin::{interrupt, stoppable, terminate};
+#[cfg(any(test, feature = "testkit"))]
+pub use signin::{send_session_message, top_level_windows, without_console};
 
 #[cfg(test)]
 mod tests;
@@ -57,6 +63,10 @@ use std::path::Path;
 
 use crate::platform::folders::UserEnv;
 use crate::{Error, Result};
+
+/// The class of the hidden window through which a Windows host hears the
+/// session ending; a test finds the window by it and the host's process.
+pub const END_SESSION_WINDOW_CLASS: &str = "FlotiHostEndSession";
 
 /// Variables an SSH server sets in the sessions it starts.
 pub const SSH_VARS: [&str; 3] = ["SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"];
@@ -228,6 +238,11 @@ fn this_login(env: &UserEnv) -> Box<dyn Login> {
 /// on. Registering replaces the default action, which would end the host
 /// without recording its sessions.
 ///
+/// On Windows that includes the session ending, signing out or shutting
+/// down, which Windows says to a window rather than to a console: every
+/// Windows host has a hidden window for it from [`register`] on, which keeps
+/// Windows waiting until the host drops its [`HostStopped`].
+///
 /// [`register`]: StopSignals::register
 pub struct StopSignals(signin::Signals);
 
@@ -241,6 +256,42 @@ impl StopSignals {
     pub async fn recv(&mut self) -> &'static str {
         self.0.recv().await
     }
+
+    /// What the host drops once its stop is over, whatever stopped it, and
+    /// on every way out of starting: until one is dropped, a Windows session
+    /// that is ending waits (for at most 20 s) rather than ending the host
+    /// before its sessions are recorded.
+    pub fn stopped(&self) -> HostStopped {
+        HostStopped {
+            _stopped: self.0.stopped(),
+        }
+    }
+}
+
+/// Dropped, or [`finish`]ed, once the host's stop is over
+/// ([`StopSignals::stopped`]).
+///
+/// [`finish`]: HostStopped::finish
+pub struct HostStopped {
+    _stopped: signin::Stopped,
+}
+
+impl HostStopped {
+    /// Says the host's stop is over, as dropping it does.
+    pub fn finish(self) {}
+}
+
+/// A message Windows sends a process's top-level windows when the user's
+/// session ends, as a test sends one to a host ([`send_session_message`]).
+#[cfg(any(test, feature = "testkit"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionMessage {
+    /// `WM_QUERYENDSESSION`: may the session end, for a sign-out when
+    /// `sign_out` and a shutdown otherwise.
+    Query { sign_out: bool },
+    /// `WM_ENDSESSION`: the session ends when `ends`, and does not after all
+    /// otherwise, for a sign-out when `sign_out` and a shutdown otherwise.
+    End { ends: bool, sign_out: bool },
 }
 
 /// How the host starts on an OS: what `floti setup` registers, `floti

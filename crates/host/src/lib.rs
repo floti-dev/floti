@@ -193,8 +193,10 @@ pub struct DesktopCommand {
 }
 
 /// Runs the host until it is stopped: by a client, or by Ctrl+C, SIGTERM,
-/// signing out or the other stop requests the OS makes, each of which is a
-/// plain stop.
+/// signing out, shutting down or the other stop requests the OS makes, each
+/// of which is a plain stop. On Windows, a session that is ending waits, for
+/// at most 20 s, until that stop has recorded the sessions
+/// ([`StopSignals::stopped`]).
 ///
 /// A host a desktop started ([`HostOptions::desktop`]) also stops by itself,
 /// as a plain stop, once it runs no session or plain terminal and no client
@@ -251,6 +253,10 @@ pub fn run_host(options: HostOptions) -> Result<()> {
     )?;
     let reason = runtime.block_on(async {
         let mut signals = not_started(StopSignals::register())?;
+        // Dropped once the stop is over, and on every way out before it: a
+        // Windows session that is ending waits for it, so the host is not
+        // ended before its sessions are recorded.
+        let stopped = signals.stopped();
         let host = not_started(Host::start(config))?;
         if let Some(log) = log {
             own_log(log, started);
@@ -275,13 +281,14 @@ pub fn run_host(options: HostOptions) -> Result<()> {
             say(&format!("Floti host is stopping: {what}."));
             stopper.stop(HostStopReason::Stop);
         });
-        let stopped = host.run_until_stopped().await;
+        let reason = host.run_until_stopped().await;
+        stopped.finish();
         if let Some(area) = area
             && let Err(err) = area.hide()
         {
             log_line!("floti host: the notification area: {err}");
         }
-        stopped
+        reason
     });
     // Not a plain drop, which waits for every blocking task however long it
     // takes: the sessions are ended or handed to the keeper by now.

@@ -121,6 +121,12 @@ gets skipped.
   sessions running. Floti opened at that PC's desktop later connects to the
   same host. From an administrator's SSH login while you are signed in at
   that PC, it starts nothing and says to open Floti on that PC instead.
+- On Windows, signing out or shutting down now stops the host the way Stop
+  host does, before Windows ends it: each running session is recorded as
+  stopped by Floti, whether the host was started by Floti or by `floti host`
+  in a terminal. Before, Windows ended the host without a stop. While it
+  stops, Windows lists Floti as "Floti is saving its sessions", for at most
+  20 seconds.
 - On macOS and Linux, installing floti now puts it on your PATH: when
   `~/.local/bin` is not on it already, one line marked `# added by floti`
   goes at the end of the startup file your shell reads (`~/.zshenv` for zsh,
