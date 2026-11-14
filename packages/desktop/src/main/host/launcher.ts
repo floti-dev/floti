@@ -490,8 +490,9 @@ export async function startLocalHost(
   const hostOptions: SpawnOptions = {
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
-    detached: true
+    // Temporary control for the console workflow: no detached, so the host
+    // gets a hidden console through windowsHide alone. Reverted next.
+    windowsHide: true
   }
   const hostArgs = ['host', ...desktopArgs(places)]
 
