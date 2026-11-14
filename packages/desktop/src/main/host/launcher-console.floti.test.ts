@@ -14,7 +14,7 @@ import {
   startedProcesses,
   stopFlotiHost
 } from '../../../test/floti-host'
-import { hostEnvironment, startLocalHost, type HostChild, type HostPlaces, type LauncherDeps } from './launcher'
+import { hostEnvironment, startLocalHost, type HostPlaces, type LauncherDeps } from './launcher'
 
 /**
  * The host this Floti starts on Windows has no console, so no window opens
@@ -52,13 +52,15 @@ async function hostWorld(label: string) {
   }
   const programs = { platform: process.platform, env: process.env, tmpdir, exists: existsSync }
   /** Each host Helm's start path started, with when it exits. */
-  const hosts: Array<{ child: HostChild; exited: Promise<void> }> = []
+  const hosts: Array<{ pid: number | undefined; exited: Promise<void> }> = []
   const deps: LauncherDeps = {
     ...programs,
     spawn: (command, args, options) => {
       const child = spawn(command, args, options)
       startedProcesses.push(child)
-      if (args[0] === 'host') hosts.push({ child, exited: new Promise((done) => child.once('exit', () => done())) })
+      if (args[0] === 'host') {
+        hosts.push({ pid: child.pid, exited: new Promise((done) => child.once('exit', () => done())) })
+      }
       return child
     },
     appVersion: '0.0.0',
@@ -76,7 +78,7 @@ describe.runIf(runs)('the host this Floti starts on Windows', { timeout: PATIENC
     expect(local.startedHost).toBe(true)
     expect(world.hosts).toHaveLength(1)
     const host = world.hosts[0]!
-    expect(hasConsole(host.child.pid!)).toBe(false)
+    expect(hasConsole(host.pid!)).toBe(false)
 
     // A deliberate stop ends the keeper before the host exits, so this test
     // leaves nothing running.

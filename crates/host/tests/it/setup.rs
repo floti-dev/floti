@@ -853,6 +853,11 @@ async fn s5_on_macos_with_no_gui_domain_setup_leaves_the_agent_for_launchd_to_lo
     let outcome = run_setup(&dirs, &os, &definition).await;
 
     assert_eq!(outcome, SetupOutcome::AtNextSignIn);
+    assert_eq!(outcome.code(), AT_NEXT_SIGN_IN_EXIT);
+    assert_eq!(outcome.printed(), Some(AT_NEXT_SIGN_IN_LINE));
+    assert!(!AT_NEXT_SIGN_IN_LINE.contains('
+'));
+    assert!(outcome.found_nobody_signed_in());
     assert!(plist_file(&dirs).is_file());
     assert_eq!(os.runs(), ["id -u", "launchctl print gui/501"]);
     assert_eq!(os.starts(), 0);
