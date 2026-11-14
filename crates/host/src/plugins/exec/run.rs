@@ -62,6 +62,43 @@ impl Drop for Tree {
     }
 }
 
+/// The program's process, waited for even when the call stops waiting: a
+/// call cancelled, or a tree ended past the timeout that has not let go
+/// within [`AFTER_END`], leaves it to a task of its own, which reaps it as
+/// soon as it exits.
+///
+/// Dropped unwaited, tokio would hand it to its orphan queue, which looks
+/// again only on the next SIGCHLD. A program that exits between tokio's last
+/// look at it and its queueing has had its SIGCHLD already, and would stay
+/// a zombie until another child of the host exited.
+struct Reaped(Option<tokio::process::Child>);
+
+impl Reaped {
+    fn child(&mut self) -> &mut tokio::process::Child {
+        self.0
+            .as_mut()
+            .expect("the child is kept until it is dropped")
+    }
+}
+
+impl Drop for Reaped {
+    fn drop(&mut self) {
+        let Some(mut child) = self.0.take() else {
+            return;
+        };
+        if !matches!(child.try_wait(), Ok(None)) {
+            return;
+        }
+        // Outside a runtime there is nothing to wait on; tokio's queue is
+        // left to it.
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            runtime.spawn(async move {
+                let _ = child.wait().await;
+            });
+        }
+    }
+}
+
 /// Reads `stream` into `into` until it closes. Past [`OUTPUT_MAX_BYTES`] it
 /// ends `tree` and answers true.
 async fn read_into(
@@ -124,6 +161,7 @@ pub async fn run(
     let stdin = child.stdin.take();
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
+    let mut child = Reaped(Some(child));
     let input = request.stdin.clone();
     let mut out = Vec::new();
     let mut err = Vec::new();
@@ -146,7 +184,7 @@ pub async fn run(
                 read_into(stdout, &mut out, &tree),
                 read_into(stderr, &mut err, &tree),
             );
-            let status = child.wait().await;
+            let status = child.child().wait().await;
             (out_over || err_over, status)
         };
         tokio::pin!(work);
