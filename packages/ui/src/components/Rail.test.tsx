@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { overlayOpen } from '../lib/overlay'
@@ -81,6 +81,26 @@ describe('Rail', () => {
     fireEvent.keyDown(menu, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
     expect(overlayOpen()).toBe(false)
+  })
+
+  it('is walked with the keys: the arrows and a typed first letter move the row it marks, and Enter unticks that row', async () => {
+    render(<Harness />)
+    fireEvent.contextMenu(screen.getByRole('navigation', { name: 'Destinations' }), { clientX: 20, clientY: 40 })
+    const menu = screen.getByRole('menu', { name: 'Show on the rail' })
+    // The keys go to the menu itself, which names the row it is on.
+    await waitFor(() => expect(document.activeElement).toBe(menu))
+    const marked = (): string | null | undefined =>
+      document.getElementById(menu.getAttribute('aria-activedescendant') ?? '')?.textContent
+
+    expect(marked()).toBe('Sessions')
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(marked()).toBe('Profiles')
+    fireEvent.keyDown(menu, { key: 'b' })
+    expect(marked()).toBe('Browser')
+
+    fireEvent.keyDown(menu, { key: 'Enter' })
+    expect(within(menu).getByRole('menuitemcheckbox', { name: 'Browser' }).getAttribute('aria-checked')).toBe('false')
+    expect(buttons()).not.toContain('browser')
   })
 
   it('keeps Settings: ticked, disabled, and a click on it changes nothing', () => {

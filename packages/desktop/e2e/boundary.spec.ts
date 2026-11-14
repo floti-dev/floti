@@ -117,7 +117,7 @@ test('history and the usage figures come over the window’s own connection', as
   await expectOnlyClientChannels(helm)
 })
 
-test('the Files view and a note use only client channels', async ({ helm }) => {
+test('the Files view, a note and the profile form use only client channels', async ({ helm }) => {
   const { window } = helm
   await window.locator('[data-rail="files"]').click()
   const picker = window.getByRole('button', { name: 'Project', exact: true })
@@ -129,11 +129,7 @@ test('the Files view and a note use only client channels', async ({ helm }) => {
   await files.getByRole('button', { name: /^notes\b/ }).click()
   await files.getByRole('button', { name: /^first\.md/ }).click()
   await expect(window.getByRole('heading', { level: 1, name: 'First note' })).toBeVisible()
-  await expectOnlyClientChannels(helm)
-})
 
-test('profiles use only client channels', async ({ helm }) => {
-  const { window } = helm
   await destination(helm, 'Profiles').click()
   await window.getByRole('button', { name: 'New profile' }).click()
   const dialog = window.getByRole('dialog', { name: 'New profile' })
@@ -173,7 +169,8 @@ test('plugin pages of both versions, a version 1 background page, a tool called 
   await expect(window.locator(`[data-status-plugin="${CLASSIC.id}"]`)).toHaveText('Classic: running')
   await destination(helm, new RegExp(`^${CLASSIC.name}`)).click()
   const classic = await pluginFrame(window, 'panel.html', CLASSIC.origin)
-  expect(await classic.evaluate('typeof window.helm')).toBe('object')
+  // Its page has the version 1 bridge and no other.
+  expect(await classic.evaluate('[window.helm.apiVersion, typeof window.floti]')).toEqual([1, 'undefined'])
   const sent = { from: 'the panel' }
   await expect
     .poll(() =>

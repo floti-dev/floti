@@ -5,22 +5,10 @@ import { expect, startSession, test } from './helm'
 const section = (window: Page, name: string) =>
   window.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name, exact: true })
 
-test('a setting changed in the settings pane survives a restart', async ({ helm, relaunch }) => {
-  await helm.window.getByRole('button', { name: 'Settings' }).click()
-  await section(helm.window, 'Appearance').click()
-  const compact = helm.window.getByRole('radiogroup', { name: 'Density' }).getByRole('radio', { name: 'Compact' })
-  await compact.click()
-  await expect(compact).toBeChecked()
-
-  // The Settings tab comes back with the layout, and its Close Settings
-  // button matches the name too, so the rail's gear is named exactly.
-  const { window } = await relaunch()
-  await window.getByRole('button', { name: 'Settings', exact: true }).click()
-  await section(window, 'Appearance').click()
-  await expect(window.getByRole('radiogroup', { name: 'Density' }).getByRole('radio', { name: 'Compact' })).toBeChecked()
-})
-
-test('the gear opens Settings as a tab with its sections beside it, and Ctrl+Tab walks every tab once from inside a terminal', async ({ helm }) => {
+test('the gear opens Settings as a tab with its sections beside it, Ctrl+Tab walks every tab once from inside a terminal, and a setting changed there survives a restart', async ({
+  helm,
+  relaunch
+}) => {
   const { window } = helm
   await startSession(window, 'alpha')
   await startSession(window, 'beta')
@@ -46,4 +34,17 @@ test('the gear opens Settings as a tab with its sections beside it, and Ctrl+Tab
     await window.keyboard.press('Control+Tab')
     await expect(window.getByRole('tab', { selected: true })).toHaveAccessibleName(next)
   }
+
+  await window.getByRole('tab', { name: 'Settings' }).click()
+  await section(window, 'Appearance').click()
+  const compact = window.getByRole('radiogroup', { name: 'Density' }).getByRole('radio', { name: 'Compact' })
+  await compact.click()
+  await expect(compact).toBeChecked()
+
+  // The Settings tab comes back with the layout, and its Close Settings
+  // button matches the name too, so the rail's gear is named exactly.
+  const next = (await relaunch()).window
+  await next.getByRole('button', { name: 'Settings', exact: true }).click()
+  await section(next, 'Appearance').click()
+  await expect(next.getByRole('radiogroup', { name: 'Density' }).getByRole('radio', { name: 'Compact' })).toBeChecked()
 })

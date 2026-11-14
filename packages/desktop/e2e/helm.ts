@@ -211,6 +211,34 @@ export async function keepClearOfCursor(helm: Helm): Promise<void> {
   })
 }
 
+/** Closes Helm's window the way its close button or Alt+F4 does. */
+export const closeWindow = (app: ElectronApplication): Promise<void> =>
+  app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()
+      .find((win) => win.isVisible())
+      ?.close()
+  })
+
+/**
+ * Clicks an answer that quits Helm. The page clicks it once this call has
+ * returned: Playwright fails any action whose page closes under it. Helm's
+ * exit is then awaited on its main process, since a host it leaves running
+ * holds the stdio Playwright's own close event waits on.
+ */
+export const answer = (button: Locator): Promise<void> =>
+  button.evaluate((element) => {
+    setTimeout(() => (element as HTMLElement).click(), 0)
+  })
+
+/** Picks Close tab, keep running from a session tab's menu. */
+export async function closeKeepRunning(window: Page, tab: Locator, name: string): Promise<void> {
+  await tab.click({ button: 'right' })
+  await window
+    .getByRole('menu', { name: `${name} tab` })
+    .getByRole('menuitem', { name: 'Close tab, keep running' })
+    .click()
+}
+
 /** The pid of Helm's main process: `app.process()` is the launcher Playwright started. */
 export const mainPid = (helm: Helm): Promise<number> => helm.app.evaluate(() => process.pid)
 

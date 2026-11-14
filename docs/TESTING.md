@@ -469,18 +469,23 @@ over the window, or Electron's own guards on a page.
 
 | spec | workflows |
 |---|---|
-| `sessions` | a session from start to end; renaming a tab and closing it with confirmation; quitting ends every session and what it started; a word copied from a session and pasted back into it once; a link Ctrl+clicked in a session that has the mouse |
-| `panes` | two panes, the waiting one marked |
-| `settings` | a setting survives a restart; the gear opens Settings and Ctrl+Tab walks every tab |
-| `history` | an ended session is in history and resumes where it ran |
-| `profiles` | a profile made in the form starts with its overlay when saved |
-| `launcher` | Ctrl+N, a folder typed, a profile and mode picked there; a conversation reopened in the pane beside; a new harness and a new profile each end in a session |
-| `content` | a wikilink followed; an HTML artifact framed with no reach |
+| `sessions` | a session from start to end, taking input and the pane's size and drawn once after a reload; quitting asks first, and End and quit ends every session, what it started, the host and its bridges, with the sessions pane showing a session's process tree and ports as the host read them; a tab closed keeping its session, opened again from the sessions pane with its screen, renamed and ended with confirmation, and a session not open here ended from the sessions pane; a word copied from a session and pasted back into it once; a link Ctrl+clicked in a session that has the mouse |
+| `host-sessions` | closing the window asks first, and Keep running and quit leaves the sessions in the host, the next start bringing back this device's tabs, panes and split with their screens and input; Settings' Stop host; Helm killed outright, its sessions running on and reattached with nothing offered back; the host dying, a new one started and the tab taking its session back running |
+| `panes` | two sessions side by side, the waiting one marked; a tab dragged to a pane's side or middle; a divider dragged, the arrangement surviving a restart |
+| `terminal` | a terminal tab per shell, opened from Ctrl+N or a pane's `+` and ending with its tab; a project's own terminal drawn again after a reload |
+| `newtab` | a pane's `+` opening a session, a profile session or a browser tab in that pane |
+| `sidebar` | clicking a tab brings its sidebar back, opened and pointed at it |
+| `settings` | the gear opens Settings as a tab with its sections, Ctrl+Tab walks every tab from inside a terminal, and a setting changed there survives a restart |
+| `launcher` | Ctrl+N, a folder typed, a profile and mode picked there; a conversation reopened in the pane beside; a new harness ending in a session |
+| `profiles` | a profile made in the form, saved in the host, starting with its overlay, name and opening prompt |
+| `history` | an ended session in History without a refresh, its archive read in a tab with nothing of it in `helm.db`, found by what was said, and resumed where it ran |
+| `own-data` | what only `helm.db` held copied into the host, and History and the archived conversation showing it |
 | `files` | a file opened from the tree beside its session, its changed lines counted, its line numbers to the bottom, and the view following the session's next edit; Ctrl+P, and the hand-offs to VS Code, Explorer and the clipboard |
-| `browser` | browsing; the security posture; the refusals; a cookie surviving a restart |
-| `agent-tools` | a session drives the browser pane through its own token, and only its own tabs |
-| `plugins` | the sample plugin, a version 2 plugin, against a server of its own: its background module, read through what it does (the badge, the status bar item, a command's effect, the tools' answers), a secret it asks for, its panel, badge, status and a tab with parameters, its pages on `floti-plugin://sample/` with `window.floti`; `floti.fetch` held to the manifest's origins on every redirect; Helm's shortcuts from inside a plugin page and its commands from Ctrl+Shift+P; a crashed plugin page and Reload; an unsupported `apiVersion` said in Settings, and a plugin turned off and on; a small version 1 plugin beside it, its page on `helm-plugin://` with `window.helm` and its background page in the hidden window; a theme change reaching a page without reloading it; a session calling the plugin's tools, answered by its background module, and losing them when they are turned off in Settings |
-| `host-sessions` | the first start pinning the host's key and served in full; a session and a project terminal in the host, drawn again after a reload; the sessions pane showing a host session's process tree and ports as the host read them; a host session's browser tools, a profile's and a plugin's sessions, and the plugin's and Helm's session tools through the host; quitting, and Helm killed outright; an ended session listed in history and archived by the host, nothing of it in `helm.db`, and resumed through the host where it ran; the status bar showing the usage the host read, and a rewritten reading reaching it |
+| `notes` | a note rendered and its wikilink followed; a note edited beside its preview, its draft kept behind another tab, and saved; Ctrl+Shift+F finding a note; an HTML artifact framed with no reach |
+| `browser` | browsing; the security posture; a cookie surviving a restart; find in page; the browser's keys with the caret in the page; the page standing down for the address list and the menu; clipboard writing and fullscreen; the page standing down while a divider or the Browser tab is dragged |
+| `agent-tools` | a session drives a browser tab of its own through its own token, and loses its tools when it ends; a page the user shares with a session, read and driven until the share is taken back or the session ends |
+| `plugins` | the sample plugin, a version 2 plugin, against a server of its own: its background module, read through what it does (the badge, the status bar item, a command's effect, the tools' answers), a secret it asks for, its panel, badge, status and a tab with parameters, its pages on `floti-plugin://sample/` with `window.floti`, and `floti.fetch` held to the manifest's origins on every redirect; Helm's shortcuts from inside a plugin page and its commands from Ctrl+Shift+P; a crashed plugin page and Reload; a folder added in Settings, kept across a restart, and turned off and on; a session calling the plugin's tools through the host, answered by its background module, and losing them when they are turned off in Settings; a page strip; a plugin page starting a session and opening a link from a click |
+| `boundary` | every channel a workflow uses crosses only as `channels/boundary.rs` allows: the launcher, sessions and terminals; history and usage; the Files view, a note and the profile form; plugin pages of both versions, a version 1 background page, a tool called by a session, and the Browser tab |
 
 - **Each test gets a world** (`test/world.ts`): a temporary root with a space in
   its path, in the run's root, named owner of its fake agents (a `test-owner`
@@ -498,7 +503,8 @@ over the window, or Electron's own guards on a page.
   templates, notes, files and the plugins registry are the local host's.
 - **`e2e/helm.ts`** has the `test` fixture (`world`, `helm`, `relaunch`) and
   the helpers: `startSession`, `typeLine`, `terminalText`, `claudeRunIn`,
-  `processAlive`.
+  `processAlive`, and for quitting `closeWindow`, `answer` and
+  `closeKeepRunning`.
 - **Find elements by role and accessible name**, as a user sees them. Two
   exceptions, both read-only: terminal text comes from
   `window.__helmTerminals()`, because xterm paints to a canvas; and a pane's

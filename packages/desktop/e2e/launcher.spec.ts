@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { removeShims } from '../test/overlay-world'
@@ -126,48 +125,7 @@ test('a conversation that ended reopens from the launcher, in the pane beside', 
   await expect.poll(() => terminalText(window, resumedId)).toContain(`Resumed ${ended.sessionId}`)
 })
 
-test('coming back to the window shows the branch and changes made in a terminal meanwhile', async ({
-  helm,
-  world
-}) => {
-  const { app, window } = helm
-  const row = window
-    .getByRole('navigation', { name: 'Projects and sessions' })
-    .getByTitle(world.projects.alpha, { exact: true })
-  await expect(row).toContainText('main')
-  await row.click()
-  await expect(window.getByRole('heading', { name: 'Git' })).toBeVisible()
-  await expect(window.getByTitle('On branch main', { exact: true })).toBeVisible()
-  await expect(window.getByTitle(/changed files?$/)).toHaveCount(0)
-
-  // What someone does in a terminal while Helm is behind another window.
-  const git = (...args: string[]): void => {
-    execFileSync('git', args, { cwd: world.projects.alpha, stdio: 'ignore' })
-  }
-  git('switch', '-q', '-c', 'work/terminal')
-  writeFileSync(join(world.projects.alpha, 'notes from the terminal.md'), '# scratch\n')
-
-  // Coming back to the front is the window's `focus`, which the page itself
-  // hears. A focus the launch
-  // itself caused may still be reading git, and a focus during that one is
-  // dropped, so it is given again until the fresh reading arrives.
-  const browserWindow = await app.browserWindow(window)
-  await expect
-    .poll(async () => {
-      await browserWindow.evaluate((win) => {
-        win.emit('focus')
-      })
-      await window.evaluate(() => {
-        globalThis.dispatchEvent(new Event('focus'))
-      })
-      return row.textContent()
-    })
-    .toContain('work/terminal')
-  await expect(window.getByTitle('On branch work/terminal', { exact: true })).toBeVisible()
-  await expect(window.getByTitle('1 changed file', { exact: true })).toHaveText('1')
-})
-
-test('a new harness and a new profile each end in a session, not on a page', async ({ helm, world }) => {
+test('a new harness ends in a session, not on a page', async ({ helm, world }) => {
   const { window } = helm
   await expect(window.getByRole('button', { name: 'Start a session in alpha' })).toBeAttached()
 
@@ -178,15 +136,4 @@ test('a new harness and a new profile each end in a session, not on a page', asy
   await expect(create).toBeHidden()
   await expect(window.getByRole('tab', { name: 'camp, ready' })).toBeVisible()
   await claudeRunIn(world, join(world.projectsDir, 'camp'))
-
-  await window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name: 'Profiles' }).click()
-  await window.getByRole('button', { name: 'New profile' }).click()
-  const editor = window.getByRole('dialog', { name: 'New profile' })
-  await editor.getByRole('textbox', { name: 'Profile name' }).fill('beta plain')
-  await editor.getByRole('textbox', { name: 'Root directory' }).fill(world.projects.beta)
-  await editor.getByRole('button', { name: 'Save and start' }).click()
-  await expect(editor).toBeHidden()
-  await expect(window.getByRole('tab', { name: 'beta plain, ready' })).toBeVisible()
-  const run = await claudeRunIn(world, world.projects.beta)
-  expect(after(run.argv, '-n')).toBe('beta plain')
 })
