@@ -254,10 +254,7 @@ async fn start_host(
     let detached = process_tree::Native
         .start_detached(&exe, &["host"], env_remove)
         .map_err(|err| format!("could not start the Floti host: {err}"))?;
-    if !detached.outlives_this_process() {
-        return Err(ENDS_WITH_LOGIN.to_owned());
-    }
-    let mut child = detached.process;
+    let mut child = outliving_or_ended(detached)?;
     let deadline = Instant::now() + within;
     loop {
         if let Ok(socket) = NativeSocket.connect(endpoint).await {
@@ -283,6 +280,21 @@ async fn start_host(
     }
 }
 
+/// The host `detached` started, when it outlives this connection. One that
+/// could start only inside a job that ends with this connection is ended at
+/// once, before it starts a session keeper of its own in that job, and the
+/// connection fails with [`ENDS_WITH_LOGIN`]: no host is left starting.
+fn outliving_or_ended(
+    mut detached: process_tree::Detached,
+) -> Result<Box<dyn process_tree::Started>, String> {
+    if detached.outlives_this_process() {
+        Ok(detached.process)
+    } else {
+        detached.process.end();
+        Err(ENDS_WITH_LOGIN.to_owned())
+    }
+}
+
 fn no_host() -> ConnectExit {
     say(NO_HOST_LINE);
     ConnectExit::NoHost
@@ -300,4 +312,63 @@ fn fail(exit: ConnectExit, why: &str) -> ConnectExit {
 fn say(line: &str) {
     let mut err = std::io::stderr().lock();
     let _ = writeln!(err, "{line}").and_then(|()| err.flush());
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use super::{ENDS_WITH_LOGIN, outliving_or_ended};
+    use crate::platform::process_tree::{Detached, Outliving, Started};
+
+    /// A host that runs until it is ended, which it records.
+    struct Running(Arc<AtomicBool>);
+
+    impl Started for Running {
+        fn exited(&mut self) -> Option<Option<i32>> {
+            None
+        }
+
+        fn end(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    fn started(outliving: Outliving) -> (Detached, Arc<AtomicBool>) {
+        let ended = Arc::new(AtomicBool::new(false));
+        let detached = Detached {
+            process: Box::new(Running(Arc::clone(&ended))),
+            outliving,
+        };
+        (detached, ended)
+    }
+
+    #[test]
+    fn a_host_that_could_start_only_in_a_job_ending_with_the_connection_is_ended_and_the_connection_says_so()
+     {
+        let (detached, ended) = started(Outliving::InJob {
+            ends_with_job: true,
+        });
+        let Err(why) = outliving_or_ended(detached) else {
+            panic!("a host in a job that ends with the connection was kept");
+        };
+        assert_eq!(why, ENDS_WITH_LOGIN);
+        assert!(ended.load(Ordering::SeqCst), "the host was left starting");
+        assert_eq!(why.matches(". ").count(), 0, "one sentence: {why}");
+    }
+
+    #[test]
+    fn a_host_that_outlives_the_connection_is_kept_running() {
+        for outliving in [
+            Outliving::Apart,
+            Outliving::InJob {
+                ends_with_job: false,
+            },
+        ] {
+            let (detached, ended) = started(outliving);
+            assert!(outliving_or_ended(detached).is_ok(), "{outliving:?}");
+            assert!(!ended.load(Ordering::SeqCst), "{outliving:?}: ended");
+        }
+    }
 }

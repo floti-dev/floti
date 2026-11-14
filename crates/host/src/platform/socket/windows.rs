@@ -19,6 +19,7 @@
 use std::ffi::{OsString, c_void};
 use std::fmt;
 use std::io;
+use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
 use std::path::Path;
 use std::ptr;
@@ -28,7 +29,9 @@ use floti_protocol::Knowable;
 use tokio::net::windows::named_pipe::{
     ClientOptions, NamedPipeClient, NamedPipeServer, PipeMode, ServerOptions,
 };
-use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_PIPE_BUSY, HANDLE, LocalFree};
+use windows_sys::Win32::Foundation::{
+    ERROR_ACCESS_DENIED, ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY, HANDLE, LocalFree,
+};
 use windows_sys::Win32::Security::Authorization::{
     ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
@@ -36,7 +39,7 @@ use windows_sys::Win32::Security::{
     GetTokenInformation, PSECURITY_DESCRIPTOR, PSID, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER,
     TokenUser,
 };
-use windows_sys::Win32::System::Pipes::GetNamedPipeServerProcessId;
+use windows_sys::Win32::System::Pipes::{GetNamedPipeServerProcessId, WaitNamedPipeW};
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
 use super::{CONNECT_PATIENCE, Endpoint, LocalListener, LocalSocket, LocalStream, already_running};
@@ -96,11 +99,8 @@ impl LocalSocket for Native {
         let descriptor = UserOnlyDescriptor::for_current_user()
             .map_err(|e| Error::io("build the pipe's access list for this user", e))?;
         let waiting = create_instance(&name, &descriptor, true).map_err(|e| {
-            if e.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) {
-                already_running(endpoint)
-            } else {
-                Error::path("listen on", endpoint.as_path(), e)
-            }
+            let held = e.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) && pipe_exists(&name);
+            first_instance_refused(endpoint, e, held)
         })?;
         Ok(Listener {
             name,
@@ -132,6 +132,42 @@ impl LocalSocket for Native {
         };
         Ok((Box::pin(client), server))
     }
+}
+
+/// What a refused first instance means. `FILE_FLAG_FIRST_PIPE_INSTANCE`
+/// answers ACCESS_DENIED when a pipe of that name exists: another host, or a
+/// process squatting on the name, when `held`. With no pipe of that name,
+/// the denial is the descriptor's, its access list or its integrity label,
+/// and is said as that, never as a host already running.
+fn first_instance_refused(endpoint: &Endpoint, err: io::Error, held: bool) -> Error {
+    if err.raw_os_error() != Some(ERROR_ACCESS_DENIED as i32) {
+        return Error::path("listen on", endpoint.as_path(), err);
+    }
+    if held {
+        return already_running(endpoint);
+    }
+    Error::path(
+        "listen on",
+        endpoint.as_path(),
+        io::Error::new(
+            err.kind(),
+            format!(
+                "{err}: no other process holds the name, so Windows refused the pipe's access list or its integrity label"
+            ),
+        ),
+    )
+}
+
+/// Whether a pipe named `name` exists now, whoever holds it.
+/// `WaitNamedPipeW` tells without opening it, so it takes no instance a
+/// client is waiting for; only "not found" means there is none.
+fn pipe_exists(name: &OsString) -> bool {
+    let wide: Vec<u16> = name.encode_wide().chain(Some(0)).collect();
+    // SAFETY: `wide` is NUL-terminated; the call waits at most 1 ms.
+    if unsafe { WaitNamedPipeW(wide.as_ptr(), 1) } != 0 {
+        return true;
+    }
+    io::Error::last_os_error().raw_os_error() != Some(ERROR_FILE_NOT_FOUND as i32)
 }
 
 /// This user's client end of the pipe at `endpoint`, trying again while it is
@@ -523,6 +559,37 @@ mod tests {
         drop(server);
     }
 
+    #[tokio::test]
+    async fn a_pipe_exists_while_a_process_holds_its_name_and_not_before() {
+        let dirs = TestDirs::new();
+        let endpoint = dirs.endpoint();
+        let name = endpoint.as_path().as_os_str().to_owned();
+        assert!(!pipe_exists(&name), "nothing holds the name yet");
+        let listener = Native.bind(&endpoint).expect("bind");
+        assert!(pipe_exists(&name), "the host's pipe holds it");
+        drop(listener);
+        assert!(!pipe_exists(&name), "the name is free again");
+    }
+
+    #[test]
+    fn a_denied_first_instance_is_a_host_running_only_while_a_pipe_holds_the_name() {
+        let endpoint = Native.endpoint(Path::new("unused"), &unique_name());
+        let denied = || io::Error::from_raw_os_error(ERROR_ACCESS_DENIED as i32);
+        let held = first_instance_refused(&endpoint, denied(), true).to_string();
+        assert!(held.contains("already running"), "{held}");
+        let refused = first_instance_refused(&endpoint, denied(), false).to_string();
+        assert!(!refused.contains("already running"), "{refused}");
+        assert!(refused.contains("integrity label"), "{refused}");
+        // Any other failure is said as it is.
+        let other = first_instance_refused(
+            &endpoint,
+            io::Error::from_raw_os_error(ERROR_PIPE_BUSY as i32),
+            true,
+        )
+        .to_string();
+        assert!(!other.contains("already running"), "{other}");
+    }
+
     #[test]
     fn a_pipe_name_already_held_is_refused() {
         let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -545,7 +612,9 @@ mod tests {
     mod integrity {
         use std::io::Write;
 
-        use windows_sys::Win32::Security::Authorization::ConvertStringSidToSidW;
+        use windows_sys::Win32::Security::Authorization::{
+            ConvertStringSidToSidW, GetNamedSecurityInfoW, SE_FILE_OBJECT,
+        };
         use windows_sys::Win32::Security::{
             CreateRestrictedToken, DuplicateTokenEx, GetLengthSid, ImpersonateLoggedOnUser,
             LABEL_SECURITY_INFORMATION, RevertToSelf, SID_AND_ATTRIBUTES,
@@ -644,9 +713,11 @@ mod tests {
             integrity_of(token.as_raw_handle() as HANDLE)
         }
 
-        /// The mandatory label entries on `handle`'s object, as (ACE type,
-        /// mask, SID text).
-        fn labels(handle: HANDLE) -> Vec<(u8, u32, String)> {
+        /// One mandatory label entry: (ACE type, mask, SID text).
+        type Label = (u8, u32, String);
+
+        /// The mandatory label entries on `handle`'s object.
+        fn labels(handle: HANDLE) -> Vec<Label> {
             let mut sacl: *mut ACL = ptr::null_mut();
             let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
             // SAFETY: `handle` is a live pipe handle; the out pointers are
@@ -664,6 +735,34 @@ mod tests {
                 )
             };
             assert_eq!(status, ERROR_SUCCESS, "read the pipe's label");
+            label_entries(sacl, descriptor)
+        }
+
+        /// The mandatory label entries on the file at `path`.
+        fn file_labels(path: &Path) -> Vec<Label> {
+            let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+            let mut sacl: *mut ACL = ptr::null_mut();
+            let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
+            // SAFETY: `wide` is NUL-terminated; the out pointers are valid.
+            let status = unsafe {
+                GetNamedSecurityInfoW(
+                    wide.as_ptr(),
+                    SE_FILE_OBJECT,
+                    LABEL_SECURITY_INFORMATION,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    &mut sacl,
+                    &mut descriptor,
+                )
+            };
+            assert_eq!(status, ERROR_SUCCESS, "read the file's label");
+            label_entries(sacl, descriptor)
+        }
+
+        /// The entries of `sacl`, a label list in `descriptor`, which this
+        /// frees.
+        fn label_entries(sacl: *mut ACL, descriptor: PSECURITY_DESCRIPTOR) -> Vec<Label> {
             let mut found = Vec::new();
             if !sacl.is_null() {
                 let mut size = ACL_SIZE_INFORMATION::default();
@@ -787,14 +886,17 @@ mod tests {
             client
         }
 
-        /// Opens the pipe `name` for reading and writing on a thread of its
-        /// own that impersonates `token`, writes `said` to it, and says what
-        /// the thread's integrity was, with the opened pipe or the error.
-        fn open_as(token: &OwnedHandle, name: &str, said: &[u8]) -> (String, io::Result<()>) {
+        /// Runs `work` on a thread of its own that impersonates `token`, as
+        /// a process running with it would, inside this test's runtime, and
+        /// says what the thread's integrity was, with what `work` gave.
+        fn as_token<T: Send + 'static>(
+            token: &OwnedHandle,
+            work: impl FnOnce() -> T + Send + 'static,
+        ) -> (String, T) {
             let token = token.as_raw_handle() as usize;
-            let name = name.to_owned();
-            let said = said.to_vec();
+            let runtime = tokio::runtime::Handle::current();
             std::thread::spawn(move || {
+                let _entered = runtime.enter();
                 // SAFETY: `token` is an impersonation token that outlives the
                 // thread; the thread reverts before it ends.
                 assert_ne!(unsafe { ImpersonateLoggedOnUser(token as HANDLE) }, 0);
@@ -807,17 +909,47 @@ mod tests {
                 // SAFETY: OpenThreadToken succeeded.
                 let thread = unsafe { OwnedHandle::from_raw_handle(raw as RawHandle) };
                 let integrity = integrity_of(thread.as_raw_handle() as HANDLE);
-                let opened = std::fs::OpenOptions::new()
+                let done = work();
+                // SAFETY: ends this thread's impersonation.
+                assert_ne!(unsafe { RevertToSelf() }, 0);
+                (integrity, done)
+            })
+            .join()
+            .expect("the impersonating thread")
+        }
+
+        /// Opens the pipe `name` for reading and writing as `token` and
+        /// writes `said` to it: its integrity, and the open or the error.
+        fn open_as(token: &OwnedHandle, name: &str, said: &[u8]) -> (String, io::Result<()>) {
+            let name = name.to_owned();
+            let said = said.to_vec();
+            as_token(token, move || {
+                std::fs::OpenOptions::new()
                     .read(true)
                     .write(true)
                     .open(&name)
-                    .and_then(|mut pipe| pipe.write_all(&said));
-                // SAFETY: ends this thread's impersonation.
-                assert_ne!(unsafe { RevertToSelf() }, 0);
-                (integrity, opened)
+                    .and_then(|mut pipe| pipe.write_all(&said))
             })
-            .join()
-            .expect("the client thread")
+        }
+
+        /// Whether this test process runs elevated, failing on a GitHub
+        /// runner, whose tests run elevated, when it does not; anywhere else
+        /// a test that needs it says it was skipped.
+        fn elevated(test: &str) -> bool {
+            let integrity = this_process_integrity();
+            assert!(
+                integrity == HIGH || std::env::var_os("GITHUB_ACTIONS").is_none(),
+                "on a GitHub runner this test process runs at {integrity}, not High"
+            );
+            if integrity == HIGH {
+                eprintln!("{test}: this test process runs elevated, at High integrity");
+                true
+            } else {
+                eprintln!(
+                    "SKIPPED {test}: it needs a test process at High integrity (elevated), as on CI's Windows runners; this one runs at {integrity}"
+                );
+                false
+            }
         }
 
         #[test]
@@ -851,20 +983,9 @@ mod tests {
         /// it says so and checks nothing.
         #[tokio::test]
         async fn an_elevated_hosts_pipe_takes_the_same_users_medium_integrity_client() {
-            let integrity = this_process_integrity();
-            // GitHub's Windows runners run tests elevated, so there a test
-            // process that is not is a failure, never a skip that passes.
-            assert!(
-                integrity == HIGH || std::env::var_os("GITHUB_ACTIONS").is_none(),
-                "on a GitHub runner this test process runs at {integrity}, not High"
-            );
-            if integrity != HIGH {
-                eprintln!(
-                    "SKIPPED: this test needs a test process at High integrity (elevated), as on CI's Windows runners; this one runs at {integrity}"
-                );
+            if !elevated("an elevated host's pipe") {
                 return;
             }
-            eprintln!("this test process runs elevated, at High integrity");
             let client = medium_client_token();
 
             let dirs = TestDirs::new();
@@ -911,6 +1032,47 @@ mod tests {
                 Some(ERROR_ACCESS_DENIED as i32),
                 "{refused}"
             );
+        }
+
+        /// A host or desktop that is not elevated, as every Floti is but one
+        /// started from an administrator's SSH login, makes its pipe and its
+        /// owner-only files with the same Medium label: a label at its own
+        /// integrity, set as each is made, which needs no privilege. Shown by
+        /// a thread impersonating a Medium, Administrators-deny-only token,
+        /// which needs an elevated process to make.
+        #[tokio::test]
+        async fn a_process_at_medium_integrity_binds_the_pipe_and_makes_owner_only_files_with_the_medium_label()
+         {
+            if !elevated("a Medium process's pipe and files") {
+                return;
+            }
+            let client = medium_client_token();
+            let dirs = TestDirs::new();
+            let endpoint = dirs.endpoint();
+            let (integrity, bound) = as_token(&client, move || {
+                Native
+                    .bind(&endpoint)
+                    .map(|listener| labels(listener.waiting.as_raw_handle() as HANDLE))
+                    .map_err(|err| err.to_string())
+            });
+            assert_eq!(integrity, MEDIUM, "the thread runs at Medium");
+            let medium_label = [(MANDATORY_LABEL, NO_WRITE_UP, MEDIUM.to_owned())];
+            assert_eq!(
+                bound.expect("a Medium process binds the pipe"),
+                medium_label
+            );
+
+            let file = dirs.root().join("owner only");
+            let made = file.clone();
+            let (_, created) = as_token(&client, move || {
+                use crate::platform::private_files::{Native as Files, PrivateFiles};
+                Files
+                    .create_new(&made)
+                    .and_then(|mut opened| opened.write_all(b"medium"))
+            });
+            created.expect("a Medium process makes an owner-only file");
+            assert_eq!(file_labels(&file), medium_label);
+            assert_eq!(std::fs::read(&file).unwrap(), b"medium");
         }
     }
 }

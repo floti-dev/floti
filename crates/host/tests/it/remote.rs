@@ -55,7 +55,9 @@ use floti_protocol::channels::sessions::{
 };
 use floti_protocol::message::{ClientInfo, ClientKind, Hello, Request, StreamData, StreamOpen};
 use floti_protocol::noise::{KeyPair, PublicKey};
-use floti_protocol::{Bytes, FrameDecoder, Message, PROTOCOL_VERSION, StreamChannel, encode_frame};
+use floti_protocol::{
+    Bytes, FrameDecoder, Knowable, Message, PROTOCOL_VERSION, StreamChannel, encode_frame,
+};
 use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::sync::mpsc;
@@ -2329,6 +2331,19 @@ async fn s9_in_a_distro_set_to_start_on_connect_floti_connect_starts_the_host_an
     drop(agent);
 }
 
+/// The process serving the host's socket at `endpoint`, as the OS names it.
+async fn serving_host(endpoint: &Endpoint) -> u32 {
+    let (stream, server) = NativeSocket
+        .connect_naming_server(endpoint)
+        .await
+        .expect("a host answers");
+    drop(stream);
+    match server {
+        Knowable::Known(pid) => pid,
+        Knowable::Unknown => panic!("the OS would not name the host's process"),
+    }
+}
+
 /// The transport Windows OpenSSH's server is, for a login: `floti connect`
 /// runs in a job that ends everything in it when the connection closes, and
 /// lets a program break away from it (`floti-fake-program --in-job`).
@@ -2404,16 +2419,26 @@ async fn on_windows_a_connection_starts_the_host_and_closing_it_leaves_the_host_
             ran.env_names
         );
     }
+    let started = serving_host(&endpoint).await;
     // The connection closes: floti connect ends, and so does the job its
     // login ran in, ending whatever is still in it.
     first.close_stdin();
     assert_eq!(first.ended().await.code, Some(0));
 
-    // The host it started still runs, and so does the session, which its
-    // keeper holds: a new connection types into it and is answered.
+    // The host it started still runs: the same process answers, asked
+    // before any connection could start another.
+    assert_eq!(
+        serving_host(&endpoint).await,
+        started,
+        "{}",
+        dirs.host_log()
+    );
+    // And so does the session, which its keeper holds: a new connection
+    // types into it and is answered, by that host still.
     let mut again = Bridge::spawn(bridge());
     again.welcomed().await;
     assert_eq!(again.listed(1).await, [session.id]);
+    assert_eq!(serving_host(&endpoint).await, started);
     again
         .screen_of(2, session.id, |text| !text.is_empty())
         .await;

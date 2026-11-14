@@ -348,6 +348,13 @@ impl Started for Alone {
         }
         Some(Some(code.cast_signed()))
     }
+
+    fn end(&mut self) {
+        // SAFETY: `self.0` is the process handle CreateProcessW handed,
+        // with every access right, PROCESS_TERMINATE among them. One that
+        // has exited already makes the call fail, which leaves it as it is.
+        unsafe { TerminateProcess(self.0, 1) };
+    }
 }
 
 impl Drop for Alone {

@@ -149,9 +149,16 @@ preview.
   another, naming the host, until the user removes it and adds it again.
   Each is an owner-only file (`platform/private_files`): `0600` on macOS and
   Linux, an access list naming only the user on Windows, with a Medium
-  integrity label, as the host's pipes have, so a host started from an
-  administrator's elevated SSH login still serves the same user's desktop
-  client and nobody else (`platform/socket/windows.rs`). The device key
+  integrity label, as the host's pipes have (`platform/socket/windows.rs`).
+  A host that `floti connect` starts from an administrator's SSH login on
+  Windows runs elevated, and so do the sessions it starts: OpenSSH gives such
+  a login the full administrator token. The Medium label is what lets the
+  same user's ordinary, non-elevated processes, the desktop app included,
+  open that host's pipe and so drive those elevated sessions. No other
+  account can, since the access list names this user alone. That is the
+  price of starting a host with nobody signed in: with the user signed in at
+  the desktop, an elevated login starts none and says to open Floti there.
+  The device key
   names the device in the attached list (`devices:attached`, Settings >
   Devices) and records which sessions it started, so quitting a client ends
   only its own. Disconnect there (`devices:disconnect`) closes every
