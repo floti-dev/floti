@@ -1,12 +1,12 @@
 # Changelog
 
-What each release changed **for somebody using Helm**. One section per version,
+What each release changed **for somebody using Floti**. One section per version,
 newest first, and `.github/workflows/release.yml` publishes the section matching
 the version being released as the release body.
 
 Not a commit log. The commits are one click away under "Full changelog" on every
 release page, and they include the checks, the fixtures and the refactors - all
-of which matter to whoever works on Helm and none of which a person downloading
+of which matter to whoever works on Floti and none of which a person downloading
 an exe has any use for. Deriving this from `git log` was tried through 0.4.0 and
 produced fifty-nine lines, most of them naming probe ids.
 
@@ -16,6 +16,41 @@ gets skipped.
 
 ## 3.0.0
 
+- Helm is now Floti: the app, its window, its Start menu entry and its
+  downloads (`Floti-<version>-*`), with the app ID `dev.floti.desktop`.
+- Floti keeps its data in `%LOCALAPPDATA%\Floti\desktop` (macOS
+  `~/Library/Application Support/Floti/desktop`, Linux
+  `~/.local/share/floti/desktop`). The first start copies it from Helm's
+  folder, leaving caches behind, and removes the old folder once the copy has
+  opened. On Windows browser sign-ins carry over; on macOS and Linux sites in
+  the browser pane ask you to sign in once more.
+- Your templates, themes, agents and plugins move from `~/.config/helm` to
+  `~/.config/floti` once, and the host, the one started at sign-in included,
+  reads them there.
+- On Windows the app installs in `%LOCALAPPDATA%\Programs\Floti\desktop`,
+  beside floti's `bin`, and replaces an installed Helm together with its
+  uninstall entry and shortcut. On macOS, if updating from Helm stops at the
+  desktop app with "The Helm release holds no Helm.app", run `floti update`
+  again.
+- The agent tools are `floti-browser`, `floti-sessions` and
+  `floti-plugin-<id>`, and sessions running across the update keep theirs.
+  Floti does not edit your Claude settings, so an allow rule that names a
+  `helm-*` tool asks again until you rename it: `mcp__helm-browser__*`
+  becomes `mcp__floti-browser__*`.
+- Plugins: the plugin folder variable is `FLOTI_PLUGINS`, and the SDK is
+  `@floti-dev/plugin-sdk` 1.6.0; `@coledtaylor/helm-plugin-sdk` is
+  deprecated. A plugin's tool names now start `mcp__floti-plugin-`, one
+  character longer, so a tool whose full name was exactly 64 characters needs
+  one character less.
+- Linux: the browser pane's AppArmor profile is now `floti-appimage`, for
+  `Floti-*.AppImage`; run the command the app shows once.
+- Harnesses are now called workspaces, everywhere Floti names them: the
+  launcher, Setup, Settings, the template picker, the welcome pane and the
+  docs. A new workspace is written with `workspace.yaml`. A folder with
+  `harness.yaml` stays a workspace and works exactly as before, and Floti
+  renames or rewrites nothing in it; where a folder has both, `workspace.yaml`
+  is read. Floti says all this once, the first time it opens after the
+  update.
 - Config is removed: its page, its rail entry and its tab. Claude Code edits
   its own config - `/config`, `/mcp`, `/hooks` and `/agents`, or ask the
   session - and Floti now writes nothing into an agent's config folder: Files
@@ -61,15 +96,16 @@ gets skipped.
   top of History until each is back, with Dismiss and Undo. Grouping by
   project and Resumable only are gone, and a saved layout with a History tab
   opens without it.
-- Helm and its host speak Floti protocol 3.0. A desktop or host on an earlier
-  release is refused at connect with a sentence saying which side to update.
-- Installing Helm on Windows puts floti where the install script does,
+- Floti and its host speak Floti protocol 4.0. A desktop or host on an
+  earlier release is refused at connect with a sentence saying which side to
+  update.
+- Installing Floti on Windows puts floti where the install script does,
   `%LOCALAPPDATA%\Programs\Floti\bin`, adds that folder to your PATH and sets
   the host up to start when you sign in, so another computer that reaches
   this one over ssh finds `floti` and the host already running. On macOS and
-  Linux Helm puts floti in `~/.local/bin` and sets the host up the first time
-  it starts, and again whenever it carries a newer floti. Helm runs that floti
-  from then on.
+  Linux the desktop puts floti in `~/.local/bin` and sets the host up the
+  first time it starts, and again whenever it carries a newer floti. The
+  desktop runs that floti from then on.
 - On macOS and Linux, installing floti now puts it on your PATH: when
   `~/.local/bin` is not on it already, one line marked `# added by floti`
   goes at the end of the startup file your shell reads (`~/.zshenv` for zsh,
@@ -85,9 +121,6 @@ gets skipped.
   Helm whose host runs from inside its own install folder: that host is asked
   about and stopped first, as before, and its sessions are offered back.
 - The portable exe installs nothing and runs the floti inside it.
-- A host started at sign-in reads the same agents, templates and plugins as
-  the one Helm starts: `~/.config/helm` where that is there, else
-  `~/.config/floti`.
 
 ## 2.4.1-preview.12
 
