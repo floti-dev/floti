@@ -22,15 +22,15 @@ use floti_protocol::Message;
 use floti_protocol::channel::{EventChannel, RequestChannel, from_payload};
 use floti_protocol::channels::host::HostStopReason;
 use floti_protocol::channels::workspace::{
-    AppMode, CreateWorkspace, CreateWorkspaceOutcome, CreateWorkspaceRequest, CreateTemplate,
-    CreateTemplateRequest, DeleteTemplate, FolderTemplateKind, FolderTemplatePreview,
-    FolderTemplateRequest, WorkspaceMode, HostSettings, ImportIntoTemplate,
-    ImportIntoTemplateRequest, ListTemplates, PreviewFolderTemplate, PreviewTemplate, ReadSettings,
-    ReadTemplateDetail, RenameTemplate, RenameTemplateRequest, SaveFolderAsTemplate,
-    SaveFolderAsTemplateRequest, SaveFolderAsTemplateResult, ScanForProjects, ScanRequest,
-    SettingsChanged, SubstituteTemplateFile, TemplateDetail, TemplateFileRequest, TemplateListing,
+    AppMode, CreateTemplate, CreateTemplateRequest, CreateWorkspace, CreateWorkspaceOutcome,
+    CreateWorkspaceRequest, DeleteTemplate, FolderTemplateKind, FolderTemplatePreview,
+    FolderTemplateRequest, HostSettings, ImportIntoTemplate, ImportIntoTemplateRequest,
+    ListTemplates, PreviewFolderTemplate, PreviewTemplate, ReadSettings, ReadTemplateDetail,
+    RenameTemplate, RenameTemplateRequest, SaveFolderAsTemplate, SaveFolderAsTemplateRequest,
+    SaveFolderAsTemplateResult, ScanForProjects, ScanRequest, SettingsChanged,
+    SubstituteTemplateFile, TemplateDetail, TemplateFileRequest, TemplateListing,
     TemplateMetadataRequest, TemplatePreview, TemplatePreviewRequest, TemplateRef,
-    TemplateWriteResult, WriteTemplateMetadata,
+    TemplateWriteResult, WorkspaceMode, WriteTemplateMetadata,
 };
 
 /// Writes `content` at `path`, making its parents.
@@ -264,7 +264,12 @@ impl Wire {
         result.ok
     }
 
-    async fn workspace(&mut self, dir: &Path, name: &str, template: &str) -> CreateWorkspaceOutcome {
+    async fn workspace(
+        &mut self,
+        dir: &Path,
+        name: &str,
+        template: &str,
+    ) -> CreateWorkspaceOutcome {
         self.ask::<CreateWorkspace>(&CreateWorkspaceRequest {
             mode: WorkspaceMode::New,
             dir: dir.display().to_string(),
@@ -337,7 +342,8 @@ async fn heard_roots(watcher: &mut TestClient, wait: Duration) -> Option<Vec<Str
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_client_makes_a_workspace_from_a_template_with_its_values_filled_in_and_a_scan_lists_it() {
+async fn a_client_makes_a_workspace_from_a_template_with_its_values_filled_in_and_a_scan_lists_it()
+{
     let mut wire = Wire::start().await;
     let literal = "runs-on: ${{ matrix.os }}\nname: {{NAME}}\n";
     for (relative, content) in [

@@ -3,9 +3,9 @@ use std::fs;
 use floti_protocol::channels::workspace::{CreateWorkspaceRequest, WorkspaceMode};
 
 use super::{SHIPPED_TEMPLATES, seed_templates};
-use crate::workspace::templates::workspace::create_workspace;
 use crate::workspace::templates::reader::list_templates;
 use crate::workspace::templates::testing::{World, ids, line_matches, read, tree};
+use crate::workspace::templates::workspace::create_workspace;
 
 // ---------------------------------------------------------------------------
 // Seeding the templates folder

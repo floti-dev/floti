@@ -37,9 +37,9 @@ pub mod authoring;
 pub mod import;
 pub mod reader;
 pub mod seed;
-pub mod workspace;
 #[cfg(test)]
 mod testing;
+pub mod workspace;
 
 use std::cmp::Ordering;
 use std::io;

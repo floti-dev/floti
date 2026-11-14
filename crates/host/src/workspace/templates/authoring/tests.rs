@@ -763,7 +763,13 @@ fn copies_what_was_ticked_leaves_out_what_was_not_and_writes_a_manifest() {
         ]
     );
     // The manifest a workspace gets is the host's to write, so it is not carried in.
-    assert!(!world.templates.join("frozen").join("workspace.yaml").exists());
+    assert!(
+        !world
+            .templates
+            .join("frozen")
+            .join("workspace.yaml")
+            .exists()
+    );
     assert_eq!(result.file_count, 4);
 
     let listing = list_templates(&world.templates);
@@ -784,7 +790,13 @@ fn refuses_workspace_yaml_even_when_it_is_ticked_rather_than_authoring_a_broken_
         vec!["workspace.yaml".into(), "CLAUDE.md".into()],
     );
 
-    assert!(!world.templates.join("frozen").join("workspace.yaml").exists());
+    assert!(
+        !world
+            .templates
+            .join("frozen")
+            .join("workspace.yaml")
+            .exists()
+    );
     assert!(world.templates.join("frozen").join("CLAUDE.md").exists());
     assert!(
         result.problems.join(" ").contains("workspace.yaml"),

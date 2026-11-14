@@ -5,12 +5,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use floti_protocol::channels::workspace::{
-    CreateWorkspaceRequest, CreateTemplateRequest, WorkspaceMode,
+    CreateTemplateRequest, CreateWorkspaceRequest, WorkspaceMode,
 };
 
 use super::authoring::create_template;
-use super::workspace::{WorkspaceCreated, create_workspace};
 use super::reader::list_templates;
+use super::workspace::{WorkspaceCreated, create_workspace};
 use crate::platform::links;
 use crate::store::Store;
 use crate::testkit::TestDirs;

@@ -862,7 +862,10 @@ fn does_not_hide_the_repos_of_a_folder_converted_in_place_with_repos_dot() {
 fn refuses_a_repos_key_that_leaves_the_workspace_rather_than_scanning_it() {
     let world = Fixtures::new();
     world.dir("outside/secret");
-    world.file("dev/workspace.yaml", "name: \"dev\"\nrepos: \"../outside\"\n");
+    world.file(
+        "dev/workspace.yaml",
+        "name: \"dev\"\nrepos: \"../outside\"\n",
+    );
     world.dir("dev/repos/alpha");
 
     let escaped = world.scan_of(&["dev"]);

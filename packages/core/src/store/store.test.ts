@@ -1300,7 +1300,8 @@ describe('settings validation', () => {
       quitSessions: { local: 'keep' },
       hosts: [{ id: 'h1', name: 'build-box', transport: { kind: 'ssh', target: 'you@build-box' } }],
       profilesCopiedToHostAt: null,
-      pluginsCopiedToHostAt: null
+      pluginsCopiedToHostAt: null,
+      upgradeNoteSeenAt: null
     })
 
     expect(() => writeSettings(store, readSettings(store))).not.toThrow()
@@ -1356,7 +1357,8 @@ const DEFAULT_SETTINGS_SHAPE = (dir: string): typeof DEFAULT_SETTINGS => ({
   quitSessions: { local: 'keep' },
   hosts: [{ id: 'h1', name: 'build-box', transport: { kind: 'ssh', target: 'you@build-box' } }],
   profilesCopiedToHostAt: null,
-  pluginsCopiedToHostAt: null
+  pluginsCopiedToHostAt: null,
+  upgradeNoteSeenAt: null
 })
 
 describe('pinned projects', () => {
