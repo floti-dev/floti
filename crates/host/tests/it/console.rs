@@ -32,7 +32,7 @@ const LOOK_AGAIN: Duration = Duration::from_millis(20);
 
 /// What the probe found of a process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Console {
+enum Console {
     /// It has a console, hidden or not.
     Has,
     /// It has none.
@@ -42,7 +42,7 @@ pub(super) enum Console {
 }
 
 /// Whether process `pid` has a console, asked by `floti-fake-gui`.
-pub(super) fn console_of(pid: u32) -> Console {
+fn console_of(pid: u32) -> Console {
     let output = Command::new(env!("CARGO_BIN_EXE_floti-fake-gui"))
         .arg(format!("--console-of={pid}"))
         .stdin(Stdio::null())

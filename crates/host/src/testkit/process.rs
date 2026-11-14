@@ -122,11 +122,6 @@ impl HostProcess {
         }
     }
 
-    /// The host's process id.
-    pub fn id(&self) -> u32 {
-        self.child.as_ref().expect("a host still running").id()
-    }
-
     /// Asks the host to stop through `client` and hands back its stdout and
     /// its log once it has exited.
     pub async fn stop(self, mut client: TestClient) -> (String, String) {

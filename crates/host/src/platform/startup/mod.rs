@@ -48,8 +48,6 @@ use signin_windows as signin;
 
 #[cfg(any(test, feature = "testkit"))]
 pub use signin::{interrupt, stoppable, terminate};
-#[cfg(any(test, feature = "testkit"))]
-pub use signin::{send_session_message, top_level_windows, without_console};
 
 #[cfg(test)]
 mod tests;
@@ -243,19 +241,6 @@ impl StopSignals {
     pub async fn recv(&mut self) -> &'static str {
         self.0.recv().await
     }
-}
-
-/// A message Windows sends a process's top-level windows when the user's
-/// session ends, as a test sends one to a host ([`send_session_message`]).
-#[cfg(any(test, feature = "testkit"))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SessionMessage {
-    /// `WM_QUERYENDSESSION`: may the session end, for a sign-out when
-    /// `sign_out` and a shutdown otherwise.
-    Query { sign_out: bool },
-    /// `WM_ENDSESSION`: the session ends when `ends`, and does not after all
-    /// otherwise, for a sign-out when `sign_out` and a shutdown otherwise.
-    End { ends: bool, sign_out: bool },
 }
 
 /// How the host starts on an OS: what `floti setup` registers, `floti
