@@ -58,3 +58,66 @@ fn start_of_day(zone: &TimeZone, now_ms: u64) -> Option<u64> {
     let start = now.to_zoned(zone.clone()).start_of_day().ok()?;
     u64::try_from(start.timestamp().as_millisecond()).ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use jiff::tz::TimeZone;
+
+    use super::{LocalDay, ZonedDay};
+
+    /// US Eastern as a POSIX rule, which needs no time zone database on any
+    /// OS: summer time from 02:00 on the second Sunday of March to 02:00 on
+    /// the first Sunday of November.
+    const EASTERN: &str = "EST5EDT,M3.2.0,M11.1.0";
+
+    const HOUR: u64 = 3_600_000;
+
+    fn eastern() -> ZonedDay {
+        ZonedDay::new(TimeZone::posix(EASTERN).expect("a valid POSIX rule"))
+    }
+
+    #[test]
+    fn today_starts_at_local_midnight_in_the_zone() {
+        // 2026-07-15T14:30 EDT; that day's midnight is 04:00Z.
+        let now = 1_784_140_200_000;
+        let midnight = 1_784_088_000_000;
+        assert_eq!(eastern().today_start_ms(now), Some(midnight));
+        // Midnight is the first instant of its own day, and the instant before
+        // it is the day before's.
+        assert_eq!(eastern().today_start_ms(midnight), Some(midnight));
+        assert_eq!(
+            eastern().today_start_ms(midnight - 1),
+            Some(midnight - 24 * HOUR)
+        );
+    }
+
+    #[test]
+    fn today_starts_at_local_midnight_on_a_day_of_23_hours() {
+        // 2026-03-08, when the clocks go forward: 20:00 EDT is 19 hours after
+        // that day's midnight (05:00Z), not 20 and not 24.
+        let now = 1_773_014_400_000;
+        let midnight = 1_772_946_000_000;
+        let start = eastern().today_start_ms(now);
+        assert_eq!(start, Some(midnight));
+        assert_eq!(now - midnight, 19 * HOUR);
+        assert_ne!(start, Some(now - 24 * HOUR));
+    }
+
+    #[test]
+    fn today_starts_at_local_midnight_on_a_day_of_25_hours() {
+        // 2026-11-01, when the clocks go back: 22:00 EST is 23 hours after
+        // that day's midnight (04:00Z), not 22 and not 24.
+        let now = 1_793_588_400_000;
+        let midnight = 1_793_505_600_000;
+        let start = eastern().today_start_ms(now);
+        assert_eq!(start, Some(midnight));
+        assert_eq!(now - midnight, 23 * HOUR);
+        assert_ne!(start, Some(now - 24 * HOUR));
+    }
+
+    #[test]
+    fn a_zone_nobody_can_tell_has_no_local_midnight() {
+        let unknown = ZonedDay::new(TimeZone::unknown());
+        assert_eq!(unknown.today_start_ms(1_784_140_200_000), None);
+    }
+}

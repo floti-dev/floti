@@ -13,6 +13,8 @@
 
 pub mod document;
 pub mod store;
+#[cfg(test)]
+mod tests;
 
 use std::path::Path;
 

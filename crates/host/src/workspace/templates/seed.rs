@@ -159,3 +159,6 @@ fn failed(created: Vec<String>, err: &io::Error) -> Seeded {
         problem: Some(format!("the templates folder could not be seeded: {err}")),
     }
 }
+
+#[cfg(test)]
+mod tests;

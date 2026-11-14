@@ -650,7 +650,7 @@ async fn what_a_service_run_on_the_node_it_was_handed_prints_reaches_its_plugins
             ("service.mjs", TALKING_SERVICE),
             (
                 "common.mjs",
-                include_str!("../../../test/fake-agents/common.mjs"),
+                include_str!("../../../../test/fake-agents/common.mjs"),
             ),
         ],
     );

@@ -258,3 +258,6 @@ fn write(path: &Path, content: &str) -> Result<(), String> {
     std::fs::write(path, content)
         .map_err(|err| format!("Floti could not write {}: {err}", path.display()))
 }
+
+#[cfg(test)]
+mod tests;

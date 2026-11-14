@@ -427,7 +427,7 @@ every check, on every OS.
   include and `Var pid` that defining the macro drops. A silent install
   (`/S`) answers OK, as that check does. The uninstaller runs the default
   check alone. The decision is tested in `crates/host` (`update_stop.rs` and
-  `tests/update_stop.rs`), `install-self` in `tests/install_self.rs`;
+  `tests/it/update_stop.rs`), `install-self` in `tests/it/install_self.rs`;
   nothing in the suite runs an installer. The release's dry run runs it for
   real on Windows runners ([A dry run](#a-dry-run)).
 
@@ -1216,7 +1216,7 @@ alone.
 Progress goes to standard output, one line a step; the status is 0 when the
 app was installed or already there and 1 otherwise. Its tests use fake
 release files served from a loopback port and fake folders
-(`crates/host/tests/add.rs`, `src/add/tests.rs`); a test build alone reads
+(`crates/host/tests/it/add.rs`, `src/add/tests.rs`); a test build alone reads
 `FLOTI_DESKTOP_DIR` for the folder the app goes in, `FLOTI_TEST_DISPLAY`
 for whether there is a display, and the releases' address and the key from
 the marker in its data folder, as `floti update`'s tests do.
@@ -1512,7 +1512,7 @@ since stopping the host would end it. Any other argument is a usage error,
 status 2.
 
 Its tests use fake folders and a fake system, never the computer's own
-(`crates/host/tests/uninstall.rs`, `src/uninstall/tests.rs`, and the
+(`crates/host/tests/it/uninstall.rs`, `src/uninstall/tests.rs`, and the
 `unregister`, `removal`, `remove` and `delete_after_exit` tests in each
 concern). The install and uninstall run for real only on CI runners, in the
 release's dry run ([A dry run](#a-dry-run)).

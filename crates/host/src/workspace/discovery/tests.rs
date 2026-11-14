@@ -1,23 +1,27 @@
-//! The parts of discovery a client cannot reach one at a time: the parse of
-//! `git status` (core's git.test.ts), which cached rows a scan or a removed
-//! root proves wrong (scan.test.ts, "reconciling the discovery cache"), and
-//! scans that overlap (desktop's services.scan.test.ts), with the same
-//! inputs and expectations.
+//! Discovery's rules, one module at a time: the parse of `git status`
+//! (core's git.test.ts), which cached rows a scan or a removed root proves
+//! wrong (scan.test.ts, "reconciling the discovery cache"), what a scan of
+//! folders the test makes finds and how a project's `.claude` is counted
+//! (core's scan and claude-inventory tests), and scans that overlap
+//! (desktop's services.scan.test.ts), with the same inputs and expectations.
 
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use floti_protocol::channels::workspace::{
-    DiscoveryError, DiscoveryResult, GitState, HostSettingsPatch, Millis, Project, ProjectKind,
+    ClaudeInventory, DiscoveryError, DiscoveryResult, GitState, HostSettingsPatch, Millis, Project,
+    ProjectKind,
 };
 
 use super::git::parse_git_status;
+use super::inventory::read_claude_inventory;
 use super::scan::{disproved_project_paths, orphaned_project_paths, scan};
 use super::suggest::{find_enclosing_harness, suggest_roots};
 use super::*;
 use crate::store::Store;
 use crate::store::projects::EMPTY_INVENTORY;
-use crate::testkit::TestDirs;
+use crate::testkit::{GitRepo, TestDirs};
 
 fn state(branch: Option<&str>, detached: bool, dirty: u32, ahead: u32, behind: u32) -> GitState {
     GitState {
@@ -435,4 +439,468 @@ fn the_branch_at_spawn_is_the_checked_out_branch_and_none_without_one() {
     repo.git(&["checkout", "--quiet", "--detach"]);
     assert_eq!(super::git::read_git_branch(repo.path()), None);
     assert_eq!(super::git::read_git_branch(&dirs.folder("plain")), None);
+}
+
+// ---------------------------------------------------------------------------
+// The scan (scan.test.ts): folders the test makes, scanned without git.
+// ---------------------------------------------------------------------------
+
+/// A folder each test's fixtures go in, as scan roots or the folder holding
+/// them.
+struct Fixtures {
+    root: PathBuf,
+    /// Last: fields drop in order.
+    _dirs: TestDirs,
+}
+
+impl Fixtures {
+    fn new() -> Self {
+        let dirs = TestDirs::new();
+        Self {
+            root: dirs.folder("scan root"),
+            _dirs: dirs,
+        }
+    }
+
+    fn path(&self, relative: &str) -> PathBuf {
+        relative
+            .split('/')
+            .fold(self.root.clone(), |path, part| path.join(part))
+    }
+
+    fn text(&self, relative: &str) -> String {
+        self.path(relative).to_string_lossy().into_owned()
+    }
+
+    /// A file at `relative` holding `content`, with its folders.
+    fn file(&self, relative: &str, content: &str) {
+        let path = self.path(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+    }
+
+    fn dir(&self, relative: &str) {
+        std::fs::create_dir_all(self.path(relative)).unwrap();
+    }
+
+    /// The fixtures under `relative` (each a folder in this test's root)
+    /// scanned as the roots, without git.
+    fn scan_of(&self, relative: &[&str]) -> DiscoveryResult {
+        let roots: Vec<String> = relative.iter().map(|path| self.text(path)).collect();
+        scan(&roots, false)
+    }
+}
+
+fn names(result: &DiscoveryResult) -> Vec<String> {
+    let mut names: Vec<String> = result.projects.iter().map(|p| p.name.clone()).collect();
+    names.sort();
+    names
+}
+
+fn sorted(names: &[&str]) -> Vec<String> {
+    let mut names: Vec<String> = names.iter().map(|name| (*name).to_owned()).collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn reports_a_root_that_does_not_exist_as_an_error_rather_than_failing() {
+    let world = Fixtures::new();
+    let result = world.scan_of(&["nope"]);
+    assert!(result.projects.is_empty());
+    assert_eq!(result.errors.len(), 1);
+    assert_eq!(result.errors[0].path, world.text("nope"));
+    assert_eq!(result.errors[0].message, "not a directory");
+}
+
+#[test]
+fn finds_a_harness_pointed_at_directly_and_its_repos() {
+    let world = Fixtures::new();
+    world.file(
+        "dev/harness.yaml",
+        "name: \"dev\"\ntemplate: \"dev\"\nversion: \"0.1.0\"\n",
+    );
+    world.dir("dev/repos/alpha");
+    world.dir("dev/repos/beta");
+    world.file("dev/.claude/skills/notes/SKILL.md", "");
+    world.file("dev/repos/alpha/.claude/skills/one/SKILL.md", "");
+    world.file("dev/repos/alpha/.claude/agents/reviewer.md", "");
+
+    let result = world.scan_of(&["dev"]);
+
+    assert_eq!(result.harnesses.len(), 1);
+    let harness = &result.harnesses[0];
+    assert_eq!(
+        (
+            harness.name.as_str(),
+            harness.template.as_deref(),
+            harness.version.as_deref()
+        ),
+        ("dev", Some("dev"), Some("0.1.0"))
+    );
+    assert_eq!(names(&result), sorted(&["alpha", "beta", "dev"]));
+    let by_name: BTreeMap<&str, _> = result
+        .projects
+        .iter()
+        .map(|p| (p.name.as_str(), p))
+        .collect();
+    assert_eq!(by_name["dev"].kind, ProjectKind::Harness);
+    assert_eq!(by_name["alpha"].kind, ProjectKind::Repo);
+    assert_eq!(
+        by_name["alpha"].harness_path.as_deref(),
+        Some(world.text("dev").as_str())
+    );
+    assert_eq!(by_name["dev"].inventory.skills, 1);
+    assert_eq!(by_name["alpha"].inventory.skills, 1);
+    assert_eq!(by_name["alpha"].inventory.agents, 1);
+    assert_eq!(by_name["beta"].inventory.skills, 0);
+}
+
+#[test]
+fn finds_harnesses_one_level_below_the_root() {
+    let world = Fixtures::new();
+    world.file("all/dev/harness.yaml", "name: \"dev\"\n");
+    world.dir("all/dev/repos/alpha");
+    world.file("all/work/harness.yaml", "name: \"work\"\n");
+    world.dir("all/work/repos/gamma");
+    // A sibling that is not a harness is not a project here: the root
+    // turned out to be a folder of harnesses.
+    world.dir("all/downloads");
+
+    let result = world.scan_of(&["all"]);
+
+    let mut harnesses: Vec<&str> = result.harnesses.iter().map(|h| h.name.as_str()).collect();
+    harnesses.sort_unstable();
+    assert_eq!(harnesses, ["dev", "work"]);
+    assert_eq!(names(&result), sorted(&["alpha", "dev", "gamma", "work"]));
+}
+
+#[test]
+fn degrades_to_plain_folders_when_there_is_no_harness_anywhere() {
+    let world = Fixtures::new();
+    world.dir("all/one");
+    world.dir("all/two");
+    world.file("all/one/CLAUDE.md", "");
+
+    let result = world.scan_of(&["all"]);
+
+    assert!(result.harnesses.is_empty());
+    assert_eq!(names(&result), sorted(&["one", "two"]));
+    assert!(
+        result
+            .projects
+            .iter()
+            .all(|p| p.kind == ProjectKind::Folder)
+    );
+    let one = result.projects.iter().find(|p| p.name == "one").unwrap();
+    assert!(one.inventory.claude_md);
+}
+
+#[test]
+fn lists_the_folder_itself_when_none_of_its_children_looks_like_a_project() {
+    let world = Fixtures::new();
+    for child in ["data", "scripts", "src", "tests"] {
+        world.dir(&format!("tool/{child}"));
+    }
+    world.file("tool/pyproject.toml", "");
+
+    let result = world.scan_of(&["tool"]);
+
+    assert_eq!(names(&result), ["tool"]);
+    assert_eq!(result.projects[0].path, world.text("tool"));
+    assert_eq!(result.projects[0].kind, ProjectKind::Folder);
+}
+
+#[test]
+fn still_lists_the_children_when_one_of_them_looks_like_a_project() {
+    let world = Fixtures::new();
+    world.dir("repos/alpha");
+    world.dir("repos/beta");
+    world.dir("repos/gamma");
+
+    let bare = world.scan_of(&["repos"]);
+    assert_eq!(names(&bare), ["repos"]);
+
+    for marker in [
+        "alpha/.git",
+        "alpha/.claude/skills/one/SKILL.md",
+        "alpha/CLAUDE.md",
+    ] {
+        std::fs::remove_dir_all(world.path("repos/alpha")).unwrap();
+        world.file(&format!("repos/{marker}"), "");
+        let result = world.scan_of(&["repos"]);
+        assert_eq!(
+            names(&result),
+            sorted(&["alpha", "beta", "gamma"]),
+            "{marker}"
+        );
+    }
+}
+
+#[test]
+fn sees_a_git_worktree_whose_git_is_a_file_rather_than_a_folder() {
+    let world = Fixtures::new();
+    world.dir("checkouts/branch-b");
+    world.file(
+        "checkouts/branch-a/.git",
+        "gitdir: ../../real/.git/worktrees/branch-a\n",
+    );
+
+    let result = world.scan_of(&["checkouts"]);
+
+    assert_eq!(names(&result), sorted(&["branch-a", "branch-b"]));
+}
+
+#[test]
+fn lists_an_empty_root_as_itself_rather_than_as_nothing_at_all() {
+    let world = Fixtures::new();
+    world.dir("empty");
+    let result = world.scan_of(&["empty"]);
+    assert_eq!(names(&result), ["empty"]);
+    assert!(result.errors.is_empty());
+}
+
+#[test]
+fn handles_a_harness_whose_manifest_is_malformed() {
+    let world = Fixtures::new();
+    world.file("dev/harness.yaml", ":\n  - this is not: valid: yaml\n");
+    world.dir("dev/repos/alpha");
+
+    let result = world.scan_of(&["dev"]);
+
+    // The file's presence is the signal; its contents are decoration.
+    assert_eq!(result.harnesses.len(), 1);
+    assert_eq!(result.harnesses[0].name, "dev");
+    assert_eq!(names(&result), sorted(&["alpha", "dev"]));
+}
+
+#[test]
+fn handles_a_harness_with_no_repos_directory() {
+    let world = Fixtures::new();
+    world.file("dev/harness.yaml", "name: \"dev\"\n");
+    let result = world.scan_of(&["dev"]);
+    assert!(result.harnesses[0].repo_paths.is_empty());
+    assert_eq!(names(&result), ["dev"]);
+}
+
+#[test]
+fn honours_a_repos_key_naming_a_different_directory() {
+    let world = Fixtures::new();
+    world.file("dev/harness.yaml", "name: \"dev\"\nrepos: \"projects\"\n");
+    world.dir("dev/projects/alpha");
+    world.dir("dev/projects/beta");
+    // The default folder exists too and is ignored: `repos:` names the
+    // folder, it does not add one.
+    world.dir("dev/repos/ignored");
+
+    let result = world.scan_of(&["dev"]);
+
+    assert_eq!(names(&result), sorted(&["alpha", "beta", "dev"]));
+    let mut repos = result.harnesses[0].repo_paths.clone();
+    repos.sort();
+    assert_eq!(
+        repos,
+        [
+            world.text("dev/projects/alpha"),
+            world.text("dev/projects/beta")
+        ]
+    );
+}
+
+#[test]
+fn falls_back_to_repos_when_the_key_is_absent_empty_or_not_a_string() {
+    let world = Fixtures::new();
+    world.file("a/harness.yaml", "name: \"a\"\n");
+    world.dir("a/repos/one");
+    world.file("b/harness.yaml", "name: \"b\"\nrepos: \"\"\n");
+    world.dir("b/repos/two");
+    world.file("c/harness.yaml", "name: \"c\"\nrepos: 3\n");
+    world.dir("c/repos/three");
+
+    for (name, repo) in [("a", "one"), ("b", "two"), ("c", "three")] {
+        let result = world.scan_of(&[name]);
+        assert_eq!(names(&result), sorted(&[name, repo]), "{name}");
+    }
+}
+
+#[test]
+fn does_not_hide_the_repos_of_a_folder_converted_in_place_with_repos_dot() {
+    let world = Fixtures::new();
+    world.dir("work/alpha");
+    world.dir("work/beta");
+    world.file("work/alpha/.claude/skills/one/SKILL.md", "");
+
+    let before = world.scan_of(&["work"]);
+    assert_eq!(names(&before), sorted(&["alpha", "beta"]));
+
+    world.file("work/harness.yaml", "name: \"work\"\nrepos: \".\"\n");
+    let after = world.scan_of(&["work"]);
+    assert_eq!(
+        after
+            .harnesses
+            .iter()
+            .map(|h| h.name.as_str())
+            .collect::<Vec<_>>(),
+        ["work"]
+    );
+    assert_eq!(names(&after), sorted(&["alpha", "beta", "work"]));
+    let alpha = after.projects.iter().find(|p| p.name == "alpha").unwrap();
+    assert_eq!(
+        alpha.harness_path.as_deref(),
+        Some(world.text("work").as_str())
+    );
+    assert_eq!(alpha.inventory.skills, 1);
+}
+
+#[test]
+fn refuses_a_repos_key_that_leaves_the_harness_rather_than_scanning_it() {
+    let world = Fixtures::new();
+    world.dir("outside/secret");
+    world.file("dev/harness.yaml", "name: \"dev\"\nrepos: \"../outside\"\n");
+    world.dir("dev/repos/alpha");
+
+    let escaped = world.scan_of(&["dev"]);
+    assert_eq!(names(&escaped), sorted(&["alpha", "dev"]));
+
+    let absolute = serde_json::to_string(&world.text("outside")).unwrap();
+    world.file(
+        "dev/harness.yaml",
+        &format!("name: \"dev\"\nrepos: {absolute}\n"),
+    );
+    let absolute = world.scan_of(&["dev"]);
+    assert_eq!(names(&absolute), sorted(&["alpha", "dev"]));
+}
+
+#[test]
+fn handles_repo_directories_whose_names_contain_spaces() {
+    let world = Fixtures::new();
+    world.file("dev/harness.yaml", "name: \"dev\"\n");
+    world.file("dev/repos/Acme Project/.claude/skills/one/SKILL.md", "");
+
+    let result = world.scan_of(&["dev"]);
+
+    let project = result
+        .projects
+        .iter()
+        .find(|p| p.name == "Acme Project")
+        .expect("the project with a space in its name");
+    assert_eq!(project.inventory.skills, 1);
+}
+
+#[test]
+fn skips_node_modules_and_dotted_directories() {
+    let world = Fixtures::new();
+    world.dir("all/project/node_modules/left-pad");
+    world.dir("all/project/.git");
+    world.dir("all/project/src");
+
+    let result = world.scan_of(&["all"]);
+
+    assert_eq!(names(&result), ["project"]);
+}
+
+#[test]
+fn does_not_report_the_same_project_twice_when_two_roots_overlap() {
+    let world = Fixtures::new();
+    world.file("all/dev/harness.yaml", "name: \"dev\"\n");
+    world.dir("all/dev/repos/alpha");
+
+    let result = world.scan_of(&["all", "all/dev"]);
+
+    assert_eq!(names(&result), sorted(&["alpha", "dev"]));
+}
+
+#[test]
+fn leaves_git_null_unless_asked_for_it() {
+    let world = Fixtures::new();
+    world.file("dev/harness.yaml", "name: \"dev\"\n");
+    GitRepo::init(world.path("dev/repos/alpha"));
+    let result = world.scan_of(&["dev"]);
+    assert!(result.projects.iter().all(|p| p.git.is_none()));
+}
+
+// ---------------------------------------------------------------------------
+// A project's `.claude` counted (claude-inventory.test.ts).
+// ---------------------------------------------------------------------------
+
+/// The inventory of a project folder holding `files`.
+fn inventory_of(files: &[(&str, &str)]) -> ClaudeInventory {
+    let world = Fixtures::new();
+    world.dir("project");
+    for (path, content) in files {
+        world.file(&format!("project/{path}"), content);
+    }
+    read_claude_inventory(&world.path("project"))
+}
+
+#[test]
+fn reports_nothing_for_a_directory_with_no_claude_folder_and_no_claude_md() {
+    assert_eq!(
+        inventory_of(&[]),
+        ClaudeInventory {
+            skills: 0,
+            commands: 0,
+            agents: 0,
+            hooks: false,
+            settings: false,
+            claude_md: false,
+            mcp: false
+        }
+    );
+}
+
+#[test]
+fn sees_a_claude_md_even_without_a_claude_folder() {
+    let inventory = inventory_of(&[("CLAUDE.md", "# rules")]);
+    assert!(inventory.claude_md);
+    assert_eq!(inventory.skills, 0);
+}
+
+#[test]
+fn counts_a_skill_as_a_directory_holding_skill_md_not_as_a_directory() {
+    let inventory = inventory_of(&[
+        (".claude/skills/notes/SKILL.md", ""),
+        (".claude/skills/notes/reference.md", ""),
+        (".claude/skills/notes/scripts/helper.md", ""),
+        // A folder under skills/ with no SKILL.md is not a skill.
+        (".claude/skills/leftovers/README.md", ""),
+    ]);
+    assert_eq!(inventory.skills, 1);
+}
+
+#[test]
+fn counts_namespaced_commands_at_every_depth() {
+    let inventory = inventory_of(&[
+        (".claude/commands/spec/plan.md", ""),
+        (".claude/commands/spec/board.md", ""),
+        (".claude/commands/status.md", ""),
+    ]);
+    assert_eq!(inventory.commands, 3);
+}
+
+#[test]
+fn counts_agents_as_markdown_files() {
+    let inventory = inventory_of(&[
+        (".claude/agents/reviewer.md", ""),
+        (".claude/agents/planner.md", ""),
+        (".claude/agents/notes.txt", ""),
+    ]);
+    assert_eq!(inventory.agents, 2);
+}
+
+#[test]
+fn flags_hooks_settings_claude_md_and_mcp_json() {
+    let inventory = inventory_of(&[
+        (".claude/hooks/post-bash.ps1", ""),
+        (".claude/settings.json", "{}"),
+        ("CLAUDE.md", ""),
+        (".mcp.json", "{}"),
+    ]);
+    assert!(inventory.hooks && inventory.settings && inventory.claude_md && inventory.mcp);
+}
+
+#[test]
+fn treats_settings_local_json_as_settings() {
+    let inventory = inventory_of(&[(".claude/settings.local.json", "{}")]);
+    assert!(inventory.settings);
 }

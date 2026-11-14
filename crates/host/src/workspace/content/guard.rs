@@ -151,3 +151,51 @@ impl PathGuard for ContentGuard {
         ContentGuard::check(self, scope, path)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ContentGuard;
+    use crate::testkit::TestDirs;
+
+    #[test]
+    fn the_guard_allows_a_script_an_extensionless_file_a_note_and_a_skill() {
+        let dirs = TestDirs::new();
+        let v = dirs.folder("v");
+        for rel in [
+            "tools/rebuild.py",
+            "LICENSE",
+            "notes/a.md",
+            ".claude/skills/x/SKILL.md",
+        ] {
+            let path = rel.split('/').fold(v.clone(), |path, part| path.join(part));
+            assert_eq!(ContentGuard::default().check(&v, &path), Ok(()), "{rel}");
+        }
+    }
+
+    #[test]
+    fn the_guard_refuses_outside_the_scope_a_nested_repository_and_a_binary() {
+        let dirs = TestDirs::new();
+        let v = dirs.folder("v");
+        let outside = v.join("..").join("other").join("notes").join("a.md");
+        assert!(
+            ContentGuard::default()
+                .check(&v, &outside)
+                .unwrap_err()
+                .contains("not inside")
+        );
+        let nested = v.join("repos").join("x").join("notes").join("a.md");
+        assert!(
+            ContentGuard::default()
+                .check(&v, &nested)
+                .unwrap_err()
+                .contains("not content")
+        );
+        let binary = v.join("notes").join("a.exe");
+        assert!(
+            ContentGuard::default()
+                .check(&v, &binary)
+                .unwrap_err()
+                .contains("binary")
+        );
+    }
+}

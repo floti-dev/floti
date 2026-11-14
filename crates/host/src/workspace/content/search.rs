@@ -259,6 +259,13 @@ pub fn search_corpus(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
+
+    use floti_protocol::channels::workspace::ConfigScopeKind;
+
+    use crate::testkit::TestDirs;
+    use crate::workspace::content::testing::{fixture, put, tree_of};
+    use crate::workspace::content::tree::{content_scope, read_content_tree};
 
     #[test]
     fn an_excerpt_counts_its_offsets_in_utf16_units_after_the_trimmed_indent() {
@@ -278,5 +285,190 @@ mod tests {
         let folded = fold(text);
         assert_eq!(folded.len(), text.len());
         assert_eq!(folded.find("quokka"), text.find("QUOKKA"));
+    }
+
+    #[test]
+    fn search_matches_inside_a_word_and_reports_the_line() {
+        let dirs = TestDirs::new();
+        let root = dirs.folder("my harness");
+        fixture(&root);
+        let tree = tree_of(&root);
+        let result = search_corpus(
+            &build_corpus("scope", &tree.files),
+            "geofenc",
+            true,
+            MAX_HITS,
+        );
+        assert_eq!(result.total_matches, 1);
+        assert!(result.hits[0].lines[0].text.contains("geofencing"));
+    }
+
+    #[test]
+    fn search_finds_an_html_file_by_name_without_reading_its_contents() {
+        let dirs = TestDirs::new();
+        let root = dirs.folder("my harness");
+        fixture(&root);
+        put(
+            &root.join("notes").join("dashboard.html"),
+            "<style>notes { color: red }</style>",
+        );
+        let tree = tree_of(&root);
+        let corpus = build_corpus("scope", &tree.files);
+        let by_name = search_corpus(&corpus, "dashboard", true, MAX_HITS);
+        let hit = by_name
+            .hits
+            .iter()
+            .find(|hit| hit.rel_path == "notes/dashboard.html")
+            .unwrap();
+        assert!(hit.name_match);
+        let by_body = search_corpus(&corpus, "color: red", true, MAX_HITS);
+        assert!(
+            !by_body
+                .hits
+                .iter()
+                .any(|hit| hit.rel_path == "notes/dashboard.html")
+        );
+    }
+
+    /// One file per kind, each saying "quokka" in its body, so a kind whose body
+    /// is skipped shows as a count that comes up short.
+    const BODIES: [(&str, &str); 6] = [
+        (
+            "notes/zebra.md",
+            "# Zebra\n\nQuokka quokka.\nA QUOKKA again.\n",
+        ),
+        ("notes/data.json", "{ \"animal\": \"quokka\" }\n"),
+        ("notes/plain.txt", "quokka, then quokka\n"),
+        ("notes/tool.py", "print(\"quokka\")\n"),
+        ("notes/page.html", "<p>quokka quokka quokka</p>\n"),
+        ("notes/blob.png", "quokka in bytes"),
+    ];
+    const READ: [&str; 4] = [
+        "notes/zebra.md",
+        "notes/data.json",
+        "notes/plain.txt",
+        "notes/tool.py",
+    ];
+
+    fn search_fixture(root: &Path) -> crate::workspace::content::search::ContentCorpus {
+        for (rel, body) in BODIES {
+            put(&root.join(rel), body);
+        }
+        // Past the 4 MB ceiling and full of the word, so reading it would show.
+        let huge = "quokka filler line\n".repeat((4 * 1024 * 1024 + 4096) / 19 + 1);
+        put(&root.join("notes").join("huge.md"), &huge);
+        let tree = read_content_tree(&content_scope(root, ConfigScopeKind::Project, None));
+        let mut listed: Vec<&str> = tree
+            .files
+            .iter()
+            .map(|file| file.rel_path.as_str())
+            .collect();
+        listed.sort_unstable();
+        let mut expected: Vec<&str> = BODIES.iter().map(|(rel, _)| *rel).collect();
+        expected.push("notes/huge.md");
+        expected.sort_unstable();
+        assert_eq!(listed, expected);
+        build_corpus("scope", &tree.files)
+    }
+
+    fn occurrences(term: &str) -> u32 {
+        let term = term.to_lowercase();
+        READ.iter()
+            .map(|rel| {
+                let body = BODIES.iter().find(|(path, _)| path == rel).unwrap().1;
+                u32::try_from(body.to_lowercase().matches(&term).count()).unwrap()
+            })
+            .sum()
+    }
+
+    #[test]
+    fn search_reads_bodies_for_markdown_data_text_and_source_only_and_says_so() {
+        let dirs = TestDirs::new();
+        let corpus = search_fixture(&dirs.folder("search scope"));
+        let result = search_corpus(&corpus, "quokka", true, MAX_HITS);
+        let mut kinds = result.body_kinds.clone();
+        kinds.sort_by_key(|kind| format!("{kind:?}"));
+        assert_eq!(
+            kinds,
+            [
+                ContentFileKind::Data,
+                ContentFileKind::Markdown,
+                ContentFileKind::Source,
+                ContentFileKind::Text
+            ]
+        );
+        assert_eq!(result.files_searched, 7);
+        assert_eq!(result.files_with_text, 4);
+        let mut matched: Vec<(&str, u32)> = result
+            .hits
+            .iter()
+            .map(|hit| (hit.rel_path.as_str(), hit.matches))
+            .collect();
+        matched.sort_unstable();
+        assert_eq!(
+            matched,
+            [
+                ("notes/data.json", 1),
+                ("notes/plain.txt", 2),
+                ("notes/tool.py", 1),
+                ("notes/zebra.md", 3)
+            ]
+        );
+    }
+
+    #[test]
+    fn search_matches_a_file_over_4_mb_by_its_name_only() {
+        let dirs = TestDirs::new();
+        let corpus = search_fixture(&dirs.folder("search scope"));
+        let result = search_corpus(&corpus, "huge", true, MAX_HITS);
+        let hits: Vec<(&str, bool, u32)> = result
+            .hits
+            .iter()
+            .map(|hit| (hit.rel_path.as_str(), hit.name_match, hit.matches))
+            .collect();
+        assert_eq!(hits, [("notes/huge.md", true, 0)]);
+        assert_eq!(
+            search_corpus(&corpus, "filler", true, MAX_HITS).total_matches,
+            0
+        );
+    }
+
+    #[test]
+    fn search_totals_every_occurrence_for_terms_that_match_many_part_of_a_word_or_nothing() {
+        let dirs = TestDirs::new();
+        let corpus = search_fixture(&dirs.folder("search scope"));
+        for term in ["quokka", "QUOKKA", "okk", "quokka.", "wombat"] {
+            let result = search_corpus(&corpus, term, false, MAX_HITS);
+            assert_eq!(result.total_matches, occurrences(term), "{term}");
+        }
+        assert_eq!(occurrences("wombat"), 0);
+        assert!(
+            search_corpus(&corpus, "wombat", false, MAX_HITS)
+                .hits
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn search_caps_the_hit_list_at_200_files_and_keeps_counting_past_it() {
+        let dirs = TestDirs::new();
+        let root = dirs.folder("search cap");
+        for i in 0..205 {
+            put(
+                &root.join("notes").join(format!("n{i:03}.md")),
+                "needle and needle\n",
+            );
+        }
+        let tree = read_content_tree(&content_scope(&root, ConfigScopeKind::Project, None));
+        assert_eq!(tree.files.len(), 205);
+        let result = search_corpus(
+            &build_corpus("scope", &tree.files),
+            "needle",
+            true,
+            MAX_HITS,
+        );
+        assert_eq!(result.hits.len(), 200);
+        assert!(result.truncated);
+        assert_eq!(result.total_matches, 205 * 2);
     }
 }

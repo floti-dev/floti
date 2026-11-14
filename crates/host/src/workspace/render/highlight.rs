@@ -5,7 +5,7 @@
 //! two-face carries only for Oniguruma (PowerShell).
 //!
 //! [`ALIASES`] and [`PLAIN`] are the tables a name is resolved with, and
-//! `tests/highlighting.rs` walks them and the app's language names and
+//! `tests/it/highlighting.rs` walks them and the app's language names and
 //! checks each one highlights over a client connection. A language with its
 //! own grammar in the set is highlighted with it; [`STAND_INS`] holds only the
 //! few that have none, with the nearest grammar that runs.
@@ -585,5 +585,13 @@ mod tests {
         assert!(!out.highlighted);
         assert_eq!(editor_extension("C:\\notes\\big.TS"), "ts");
         assert_eq!(editor_extension("/repo/Makefile"), "makefile");
+    }
+
+    #[test]
+    fn an_editor_source_under_the_ceiling_is_highlighted() {
+        let out = editor_highlight("notes/small.ts", "const value = 1\n");
+        assert!(!out.too_large);
+        assert!(out.highlighted);
+        assert!(!out.lines.is_empty());
     }
 }

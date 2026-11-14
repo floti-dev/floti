@@ -915,30 +915,4 @@ pub(super) fn to_i64(value: u64) -> i64 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_prompts_rank_is_read_back_from_the_title_rule() {
-        assert_eq!(title_rank("fix the login page redirect"), 0);
-        assert_eq!(title_rank("/spec:quick when a user goes to admin"), 0);
-        assert_eq!(title_rank("/usage"), 1);
-        assert_eq!(title_rank("ok"), 1);
-        assert_eq!(title_rank(RANK_PROBE), 0);
-        assert_eq!(title_rank("[Image #1]"), 2);
-        assert_eq!(title_rank(""), 2);
-    }
-
-    #[test]
-    fn like_wildcards_typed_in_a_search_are_literal() {
-        assert_eq!(like_pattern("50%"), "%50\\%%");
-        assert_eq!(like_pattern("a_b\\c"), "%a\\_b\\\\c%");
-    }
-
-    #[test]
-    fn a_name_loses_the_characters_that_would_corrupt_its_row() {
-        assert_eq!(clean_name("alpha beta\u{200B}gamma"), "alpha beta gamma");
-        assert_eq!(clean_name("  two\t\nlines  "), "two lines");
-        assert_eq!(clean_name("\u{202E}reversed"), "reversed");
-    }
-}
+mod tests;

@@ -1,5 +1,5 @@
 //! The family on a world made here. What it says about real sessions, over
-//! the listener, is `tests/agent_tools.rs`'s.
+//! the listener, is `tests/it/agent_tools.rs`'s.
 
 use std::sync::Mutex;
 

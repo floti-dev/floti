@@ -476,6 +476,8 @@ pub fn describe_unlisted(scope: &Path, path: &Path, size: u64, mtime: Millis) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testkit::TestDirs;
+    use crate::workspace::content::testing::{fixture, put, tree_of};
 
     #[test]
     fn a_title_comes_from_the_first_heading_without_its_closing_hashes() {
@@ -488,5 +490,119 @@ mod tests {
             html_title("<html><head><TITLE>\n A  lesson </title>").as_deref(),
             Some("A lesson")
         );
+    }
+
+    #[test]
+    fn the_tree_finds_the_named_roots_the_scope_root_and_nothing_inside_repos() {
+        let dirs = TestDirs::new();
+        let root = dirs.folder("my harness");
+        fixture(&root);
+        let tree = tree_of(&root);
+        let roots: Vec<&str> = tree
+            .roots
+            .iter()
+            .map(|root| root.rel_path.as_str())
+            .collect();
+        for expected in ["notes", "docs", ".claude/skills", ""] {
+            assert!(roots.contains(&expected), "{expected} in {roots:?}");
+        }
+        assert!(
+            !tree
+                .files
+                .iter()
+                .any(|file| file.rel_path.starts_with("repos/"))
+        );
+        let alpha = tree.files.iter().find(|file| file.slug == "alpha").unwrap();
+        assert_eq!(alpha.note_type.as_deref(), Some("journal"));
+        assert_eq!(alpha.tags, ["helm", "notes"]);
+        assert_eq!(alpha.title, "Alpha");
+        let skill = tree
+            .files
+            .iter()
+            .find(|file| file.rel_path == ".claude/skills/think/SKILL.md")
+            .unwrap();
+        assert_eq!(skill.title, "think");
+    }
+
+    #[test]
+    fn the_tree_offers_a_folder_of_scripts_and_not_one_of_bytes() {
+        let dirs = TestDirs::new();
+        let root = dirs.folder("my harness");
+        fixture(&root);
+        let tree = tree_of(&root);
+        let rels: Vec<&str> = tree
+            .roots
+            .iter()
+            .map(|root| root.rel_path.as_str())
+            .collect();
+        assert!(rels.contains(&"tools"));
+        assert!(!rels.contains(&"screenshots"));
+        assert!(
+            !tree
+                .files
+                .iter()
+                .any(|file| file.rel_path == "screenshots/one.png")
+        );
+        let tools = tree
+            .roots
+            .iter()
+            .find(|root| root.rel_path == "tools")
+            .unwrap();
+        assert_eq!(tools.offer, RootOffer::Discovered);
+    }
+
+    #[test]
+    fn the_tree_lists_every_file_inside_a_root_it_offers_binary_included() {
+        let dirs = TestDirs::new();
+        let root = dirs.folder("my harness");
+        fixture(&root);
+        let tree = tree_of(&root);
+        let find = |rel: &str| tree.files.iter().find(|file| file.rel_path == rel).unwrap();
+        let in_tools: Vec<&str> = tree
+            .files
+            .iter()
+            .filter(|file| file.root == "tools")
+            .map(|file| file.rel_path.as_str())
+            .collect();
+        assert!(in_tools.contains(&"tools/rebuild.py"));
+        assert!(in_tools.contains(&"tools/notes.png"));
+        assert_eq!(find("tools/rebuild.py").kind, ContentFileKind::Source);
+        assert_eq!(find("tools/notes.png").kind, ContentFileKind::Binary);
+        assert_eq!(find("tools/rebuild.py").ext, "py");
+        assert_eq!(find("tools/rebuild.py").title, "rebuild.py");
+        assert_eq!(find("tools/notes.png").title, "notes.png");
+    }
+
+    #[test]
+    fn the_tree_gives_a_dotfile_a_name_rather_than_an_empty_one() {
+        let dirs = TestDirs::new();
+        let root = dirs.folder("my harness");
+        fixture(&root);
+        put(&root.join("tools").join(".gitignore"), "out/\n");
+        let tree = tree_of(&root);
+        let dotfile = tree
+            .files
+            .iter()
+            .find(|file| file.rel_path == "tools/.gitignore")
+            .unwrap();
+        assert_eq!(dotfile.title, ".gitignore");
+        assert_eq!(dotfile.slug, ".gitignore");
+        assert_eq!(dotfile.kind, ContentFileKind::Source);
+    }
+
+    #[test]
+    fn the_tree_keeps_an_empty_named_root_badged_named() {
+        let dirs = TestDirs::new();
+        let root = dirs.folder("my harness");
+        fixture(&root);
+        let tree = tree_of(&root);
+        let context = tree
+            .roots
+            .iter()
+            .find(|root| root.rel_path == "context")
+            .unwrap();
+        assert_eq!(context.files, 0);
+        assert_eq!(context.offer, RootOffer::Named);
+        assert!(!tree.files.iter().any(|file| file.root == "context"));
     }
 }

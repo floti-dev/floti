@@ -45,7 +45,7 @@ const PLUGIN_CALLS: u64 = 50;
 const PLUGINS_CHANGED: u64 = 60;
 
 /// The shared owner watch every fake uses, put beside the service script.
-const COMMON: &str = include_str!("../../../test/fake-agents/common.mjs");
+const COMMON: &str = include_str!("../../../../test/fake-agents/common.mjs");
 
 // ---------------------------------------------------------------------------
 // The version 2 plugin

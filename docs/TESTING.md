@@ -27,12 +27,14 @@ waits on CI to merge. The end-to-end tier runs locally only, never in CI.
 **While building, run only the tests for what changed**: the test file beside
 the code (`pnpm vitest run <file>`), the host's tests in the one test binary
 that holds them (`cargo nextest run -p floti-host --lib -E 'test(<name>)'` for
-a module's tests, `--test <file>` for one of `crates/host/tests/*.rs`), and
-`pnpm test:posix <file>` for code that differs by OS. Each file in
-`crates/host/tests` is a binary of its own, and a filter only chooses which
-tests run after the build: `cargo nextest run -p floti-host <filter>` compiles
-and links every one of them first, which costs minutes and several gigabytes
-of memory. `cargo check -p <crate>` finds compile errors without linking
+a module's tests, `--test it -E 'test(<module>::)'` for one file of
+`crates/host/tests/it`), and `pnpm test:posix <file>` for code that differs by
+OS. A crate's integration tests are one binary, `it`, with a module per file
+in `tests/it`, so a change under `src` relinks one test binary rather than one
+per file. A filter only chooses which tests run after the build:
+`cargo nextest run -p floti-host <filter>` compiles and links every test
+binary of the crate first, which costs minutes and several gigabytes of
+memory. `cargo check -p <crate>` finds compile errors without linking
 anything. A test that passed is run again only once the code it covers has
 changed. A full suite, every test of every crate and package, `pnpm check`
 and `pnpm test` included, is a regression check that runs on CI, on every
@@ -121,7 +123,7 @@ answers each line with `echo: <line>`, and `/exit <code>`, `/print <hex>`,
 child serving HTTP on 127.0.0.1 at that port (the OS picks one for 0) and
 writes `serving <port>`: a GET is answered with `fake dev server: <method>
 <path>`, a POST with its body, byte for byte, for the forwarded-port tests
-(`tests/forwards.rs`). `/flood <n>` writes `n` numbered lines at once, then
+(`tests/it/forwards.rs`). `/flood <n>` writes `n` numbered lines at once, then
 `flood done`, for a client that falls behind.
 `floti-fake-gui` is built for the Windows `windows` subsystem, so there it has
 no console and the pseudoconsole closing does not reach it, as with a GUI app
@@ -154,13 +156,13 @@ parser does (a name is optional) and records what it was given as
 `remoteControl` in its run log: the name, an empty string for the flag alone,
 `null` for a run without it. The other fake agent has no Remote Control and its
 backend declares none, so a child started on it is the case of a backend
-without. `crates/host/tests/agents.rs` starts a session from a profile with
+without. `crates/host/tests/it/agents.rs` starts a session from a profile with
 Remote Control on and reads each run's log for the name it ran under, down to
 a grandchild's whole line, and for the child on the other fake that runs
-without and is said to; `crates/host/tests/notices.rs` connects one client at
+without and is said to; `crates/host/tests/it/notices.rs` connects one client at
 protocol 2.1 and one at 2.0 (`TestClient::connect_at`) to the same host.
 
-The host process itself is tested in `crates/host/tests/host.rs`, through
+The host process itself is tested in `crates/host/tests/it/host.rs`, through
 `TestClient` (`testkit/client.rs`): a protocol client that connects on the
 local socket, runs the Noise handshake as the testkit's device, pinned to
 that host's key, says `hello`, makes typed requests and reads a session's
@@ -207,12 +209,18 @@ another. Every test ends every process it started and checks that each
 process tree is gone.
 
 What a client browses around its sessions is tested through `TestClient`
-against a `RunningHost`, one file per feature in `crates/host/tests/`:
+against a `RunningHost`, one file per feature in `crates/host/tests/it/`:
 `discovery.rs`, `settings.rs`, `profiles.rs`, `templates.rs`, `content.rs`,
 `files.rs` and `highlighting.rs`, with the processes-and-ports pass in
-`resources.rs`. They carry core's and main's cases for discovery, roots,
-harnesses, settings, profiles, templates, content and the Files view with the
-same inputs and expectations. A test that needs a repository makes one with
+`resources.rs`. For discovery, profiles, templates, content, history and
+usage those files hold only the wiring: each operation once through a real
+host, and each way an answer or an error crosses the protocol. The cases
+about a rule (what a scan finds, what a profile's YAML may say, what a
+template name may be, how a note renders, what a transcript indexes as, where
+a day's usage ends) are unit tests beside the code, in
+`src/workspace/{discovery,profiles,templates,content,render}`, `src/history`
+and `src/usage`, calling it directly on a folder the test made. A new case
+about a rule goes there. A test that needs a repository makes one with
 `GitRepo` (testkit), which commits with a fixed author and date and none of
 the machine's git configuration. One that needs a link makes it with
 `link_folder`, a junction on Windows and a symlink on macOS and Linux, and
@@ -227,7 +235,7 @@ the body is read, 404 for a family switched off, Origin refused, one token
 per session. `src/server/session_tools/tests.rs` calls helm-sessions on a
 world made in the test, for what a real host cannot be put in on demand (a
 listing not ready yet, a token whose session is not live). And
-`crates/host/tests/agent_tools.rs` runs a `RunningHost` with sessions on the
+`crates/host/tests/it/agent_tools.rs` runs a `RunningHost` with sessions on the
 fake agent (`FakeAgent::backend(..).with_agent_tools()`, which takes agent
 tools as Claude Code does) and the fake `claude`, reads each session's URL
 and token out of the `--mcp-config` file it was launched with, and calls the
@@ -247,7 +255,7 @@ tools a session lists and the read-only one in `--allowedTools`, a call
 answered by that client, a server left out of the next offer refused to a
 running session at once, calls failing at once when the client leaves, and a
 call withdrawn from the client when the session cancels it or ends.
-`crates/host/tests/host_plugin_tools.rs` does the same for the tools the host
+`crates/host/tests/it/host_plugin_tools.rs` does the same for the tools the host
 serves itself: a version 2 plugin of the test's own, its background module
 answering its tools with the caller it was told, painting a badge and a status
 item at load and fetching from its Node service on demand, with no client
@@ -257,7 +265,7 @@ with its tools off; a client's offer under its name passed over; and a version
 themselves (`src/server/features/agent_browser.rs`, `agent_plugin.rs`) have
 unit tests with no listener.
 
-`crates/host/tests/os_conditionals.rs` fails, naming each `file:line`, when a
+`crates/host/tests/it/os_conditionals.rs` fails, naming each `file:line`, when a
 compile-time OS conditional (`cfg(windows)`, `cfg!(unix)`, `target_os` and
 the like) appears outside `src/platform/mod.rs` and the per-OS
 implementations of the platform concerns (`startup`, `socket`, `folders`,
@@ -270,7 +278,7 @@ way the pipe's is; each with a control file made the ordinary way that the
 check rejects.
 
 The plugin runtime is tested the same way, one file per part in
-`crates/host/tests/`: `plugins.rs` (folders, the registry and settings),
+`crates/host/tests/it/`: `plugins.rs` (folders, the registry and settings),
 `plugin_secrets.rs`, `plugin_runtime.rs` (the isolates: globals, imports,
 timers, BroadcastChannel, crashes, endless loops, tool calls),
 `plugin_exec.rs` and `plugin_fetch.rs`, and `plugin_background.rs`, which
@@ -315,7 +323,7 @@ cargo nextest run --workspace      # every crate's tests; CI adds --profile ci
 cargo nextest run -p floti-protocol   # the protocol crate, its ipc.ts coverage and generated-file check included
 cargo nextest run -p floti-host    # the host, with the fake agents (Node on PATH)
 cargo nextest run -p floti-host --lib -E 'test(<name>)'   # matching unit tests, building only the library's test binary
-cargo nextest run -p floti-host --test <file>             # one integration file in crates/host/tests, building only that binary
+cargo nextest run -p floti-host --test it -E 'test(<module>::)'   # one file's tests in crates/host/tests/it, building only the integration binary
 cargo check -p floti-host --all-targets                   # compile errors in the host and its tests, linking nothing
 cargo test --doc --workspace       # the doctests, which nextest does not run
 cargo run -p floti-protocol --bin generate                      # rewrite the generated schema and TypeScript
@@ -656,7 +664,7 @@ A backend with the same fake and no MCP tools is `OtherAgentBackend::BARE_ID`
 (`OtherAgent::backend_without_tools`): it is given no agent tools, whatever the
 host would offer, so what it tells its parent is only its program's status.
 `backend_that_cannot_start` names a program that is not installed, for a launch
-that fails. `crates/host/tests/hearing.rs` drives all of these: a child reports
+that fails. `crates/host/tests/it/hearing.rs` drives all of these: a child reports
 and a parent waits on its children, over HTTP with the URL and token each
 session was given, and from a session's own shell with the real `floti`.
 
@@ -736,14 +744,14 @@ real ones. They share `common.mjs`:
   carries no `WSL_UTF8` across, as a real ssh does not. Runs are recorded
   with `program` `wsl` and the `distro`.
 
-The host's tests (`crates/host/tests/remote.rs`) drive both through
+The host's tests (`crates/host/tests/it/remote.rs`) drive both through
 `floti bridge`; the desktop's run the same files through its own bridge. A
 headless server's host is the `floti host` executable as its user unit runs
 it (no desktop, no SSH variables), which the test stops with its stop signal
 as `systemctl --user stop` does, or kills and starts again as the unit's
 `Restart=on-failure` does.
 
-`floti setup` itself is tested against a fake OS (`crates/host/tests/setup.rs`)
+`floti setup` itself is tested against a fake OS (`crates/host/tests/it/setup.rs`)
 that plays Task Scheduler, launchd and systemd's user manager in memory, and,
 for Linux, `systemctl get-default` (a desktop, a server, or a computer that
 cannot tell) and lingering through `loginctl show-user` and `loginctl
@@ -757,7 +765,7 @@ Claude Code check runs the fake CLI installed as `claude` in the test's home.
 checks themselves (`crates/host/src/this_computer`, `platform/user_path`)
 are unit tests over a fake OS, a fake `claude` and a fake `PATH`, with each
 OS's startup files and system lists written under the test's own root. The
-program (`crates/host/tests/remote.rs`, and the desktop's
+program (`crates/host/tests/it/remote.rs`, and the desktop's
 `doctor-hosts.floti.test.ts`) runs with its home in the test's folder, its
 `PATH` set to one empty folder and the fake CLI as the only `claude`, in that
 home's `~/.local/bin`; a test build of floti never

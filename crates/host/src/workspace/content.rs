@@ -22,6 +22,9 @@ pub mod kinds;
 pub mod search;
 pub mod tree;
 
+#[cfg(test)]
+mod testing;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -366,3 +369,6 @@ impl ContentService {
             .resolve(&parse_wikilink(target, false), Some(&from)))
     }
 }
+
+#[cfg(test)]
+mod tests;

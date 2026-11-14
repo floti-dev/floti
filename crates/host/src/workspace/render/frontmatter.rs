@@ -227,4 +227,32 @@ mod tests {
         );
         assert!(parsed.fields.is_empty());
     }
+
+    #[test]
+    fn frontmatter_parses_lists_and_leaves_the_body_behind() {
+        let parsed = parse_note_frontmatter("---\ntype: journal\ntags: [a, b]\n---\n\n# Title\n");
+        assert!(parsed.present);
+        assert_eq!(parsed.body.trim(), "# Title");
+        let tags = parsed
+            .fields
+            .iter()
+            .find(|field| field.key == "tags")
+            .unwrap();
+        assert_eq!(tags.values, ["a", "b"]);
+    }
+
+    #[test]
+    fn frontmatter_treats_an_unclosed_fence_as_a_document() {
+        let parsed = parse_note_frontmatter("---\nnot closed\n\n# Title\n");
+        assert!(!parsed.present);
+        assert!(parsed.body.contains("# Title"));
+    }
+
+    #[test]
+    fn frontmatter_reports_a_broken_block_rather_than_rendering_it_as_text() {
+        let parsed = parse_note_frontmatter("---\n: : :\n\ta\n---\nbody\n");
+        assert!(parsed.present);
+        assert!(parsed.error.is_some());
+        assert_eq!(parsed.body.trim(), "body");
+    }
 }
