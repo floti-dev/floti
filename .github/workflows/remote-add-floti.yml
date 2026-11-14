@@ -1,0 +1,87 @@
+name: Remote add through floti
+
+# Temporary: runs remote-add.floti.test.ts, which the gate skips because no
+# floti is built there, on Windows against the floti this branch builds with
+# the testkit. It fails unless its one test ran and passed, so the file's
+# runIf cannot skip it unseen. Removed before the branch merges.
+on:
+  push:
+    branches: [agent/h208]
+
+concurrency:
+  group: remote-add-floti-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  remote-add:
+    name: remote-add (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out with LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Rust toolchain
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+
+      # As in host.yml: V8's static library lives outside what rust-cache keeps.
+      - name: Cache V8's static library
+        uses: actions/cache@v4
+        with:
+          path: target/debug/gn_out
+          key: rusty-v8-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: rusty-v8-${{ runner.os }}-
+
+      - name: Fetch V8 again when its static library is missing
+        shell: bash
+        run: |
+          if [ ! -f target/debug/gn_out/obj/rusty_v8.lib ] && [ ! -f target/debug/gn_out/obj/librusty_v8.a ]; then
+            cargo clean -p v8
+          fi
+
+      - name: Build floti with the testkit
+        run: cargo build -p floti-host --features testkit --bin floti --locked
+
+      - name: floti is where the test looks
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath 'target\debug\floti.exe' -PathType Leaf)) { Write-Output "::error::target\debug\floti.exe was not built"; exit 1 }
+
+      - name: The remote add test
+        run: pnpm exec vitest run packages/desktop/src/main/host/remote-add.floti.test.ts --reporter=default --reporter=json --outputFile.json=remote-add-report.json
+
+      - name: The test ran, and was not skipped
+        if: success() || failure()
+        shell: bash
+        run: |
+          node -e '
+            const report = require("./remote-add-report.json")
+            const line = `passed ${report.numPassedTests}, failed ${report.numFailedTests}, skipped ${report.numPendingTests + report.numTodoTests}`
+            console.log(line)
+            if (report.numPassedTests !== 1 || report.numFailedTests !== 0 || report.numPendingTests !== 0) {
+              console.log(`::error::the remote add test did not run and pass: ${line}`)
+              process.exit(1)
+            }
+          '
