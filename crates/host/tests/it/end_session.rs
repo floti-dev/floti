@@ -103,10 +103,19 @@ async fn a_session_running_the_fake_agent(
     client
         .type_into(1, format!("\"{}\"\r", agent.exe().display()).as_bytes())
         .await;
-    client
-        .read_stream_until(1, |_| !agent.records().is_empty())
-        .await;
-    agent.records()[0].pid
+    // It records itself as it starts and prints nothing until it reads a
+    // line, so its record is looked for rather than its output.
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        if let Some(record) = agent.records().first() {
+            return record.pid;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the fake agent did not start within {PATIENCE:?}"
+        );
+        tokio::time::sleep(LOOK_AGAIN).await;
+    }
 }
 
 /// Each session's status and who stopped it, from the host's database.
