@@ -8,8 +8,9 @@ import { expect, startSession, terminalText, test, type Helm } from '../../e2e/h
 /**
  * A screenshot of every destination on the rail and of a session's terminal,
  * once in the light theme and once in the dark, for a person to review a
- * platform nobody has in front of them. Run by `pnpm screenshots`; the macOS
- * screenshot workflow runs it on macos-latest and uploads what it writes.
+ * platform nobody has in front of them. Run by `pnpm screenshots`; the
+ * macOS build workflow runs it on macos-latest, only when started by hand, and
+ * uploads what it writes.
  *
  * Each view is saved twice where the OS allows it:
  *

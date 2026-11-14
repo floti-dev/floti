@@ -1093,26 +1093,26 @@ and step gates on. `ci.yml` and `floti.yml` skip those branches, as they skip
 ## Looking at the Mac build
 
 Nobody working on Floti has a Mac in front of them, so the
-**macOS build and screenshots** workflow
-(`.github/workflows/macos-screenshots.yml`) builds and photographs it on
-`macos-latest`. It runs on a push to any branch but `main` that changes how the
-Mac build is made or photographed - `electron-builder.yml`, `build/`,
-`packages/desktop/package.json`, `verify-mac-artifact.mjs`, the `afterPack`
-hook and the spawn-helper script it shares with the postinstall, the screenshot run,
-the E2E launch and world it uses, or the workflow itself - so a branch shows
-its dmg and zip build before it merges rather than at release time. It can
-also be started by hand from the Actions tab, or with
-`gh workflow run macos-screenshots.yml --ref <branch>` once the file is on
-`main`.
+**macOS build** workflow (`.github/workflows/macos-screenshots.yml`) builds it
+on `macos-latest`, and photographs it when someone starts it by hand. It runs
+on a push to any branch but `main` that changes how the Mac build is made or
+photographed - `electron-builder.yml`, `build/`, `packages/desktop/package.json`,
+`verify-mac-artifact.mjs`, the `afterPack` hook and the spawn-helper script it
+shares with the postinstall, the screenshot run, the E2E launch and world it
+uses, or the workflow itself - so a branch shows its dmg and zip build before it
+merges rather than at release time. On a push it runs `pnpm dist:mac` and
+`verify-mac-artifact.mjs` over the dmg and the zip exactly as `release-mac`
+does, and stops there.
 
-It runs `pnpm dist:mac` and `verify-mac-artifact.mjs` over the dmg and the zip
-exactly as `release-mac` does, then launches the built app through the E2E
-tests' Playwright launch into a world with the fake claude, and photographs
-every destination on the rail and a session terminal in the light and the dark
-theme. The pictures are the run's `helm-macos-screenshots` artifact: each view
-as the page and, on macOS, as the window with its traffic lights. It is no
-check in the gate and nothing waits on it. `pnpm screenshots` runs the same
-capture locally on any OS, into `reports/screenshots`.
+The photographs are taken only when the workflow is started by hand, from the
+Actions tab or with `gh workflow run macos-screenshots.yml --ref <branch>` once
+the file is on `main`. That run also builds the local host, launches the built
+app through the E2E tests' Playwright launch into a world with the fake claude,
+and photographs every destination on the rail and a session terminal in the
+light and the dark theme. The pictures are the run's `helm-macos-screenshots`
+artifact: each view as the page and, on macOS, as the window with its traffic
+lights. It is no check in the gate and nothing waits on it. `pnpm screenshots`
+runs the same capture locally on any OS, into `reports/screenshots`.
 
 ## floti setup
 
