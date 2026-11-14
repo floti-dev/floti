@@ -148,7 +148,10 @@ preview.
   (`host.pub`) at its first connection, and refuses a host that proves
   another, naming the host, until the user removes it and adds it again.
   Each is an owner-only file (`platform/private_files`): `0600` on macOS and
-  Linux, an access list naming only the user on Windows. The device key
+  Linux, an access list naming only the user on Windows, with a Medium
+  integrity label, as the host's pipes have, so a host started from an
+  administrator's elevated SSH login still serves the same user's desktop
+  client and nobody else (`platform/socket/windows.rs`). The device key
   names the device in the attached list (`devices:attached`, Settings >
   Devices) and records which sessions it started, so quitting a client ends
   only its own. Disconnect there (`devices:disconnect`) closes every

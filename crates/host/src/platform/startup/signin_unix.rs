@@ -22,11 +22,17 @@ pub(super) fn windows_build() -> Option<u32> {
     None
 }
 
-/// Whether this user has a desktop session here. Only the Windows logon task
-/// asks: on macOS setup asks launchd for the user's GUI domain, and on Linux
-/// the user's own service manager starts the unit.
+/// Whether this user has a desktop session here. Only Windows' rules ask: on
+/// macOS setup asks launchd for the user's GUI domain, and on Linux the
+/// user's own service manager starts the unit.
 pub(super) fn desktop_session() -> std::io::Result<bool> {
     Ok(true)
+}
+
+/// Whether this process's token is elevated, which only Windows has: root is
+/// an account here ([`account`]), not an elevation.
+pub(super) fn elevated() -> Option<bool> {
+    None
 }
 
 /// The signals that stop the host, registered while this lives.

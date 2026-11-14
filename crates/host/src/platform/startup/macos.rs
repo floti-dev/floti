@@ -5,8 +5,12 @@
 
 use std::path::Path;
 
-use super::{HostStart, HostStartup, StartupDefinition, StartupKind, binary_text, xml_escape};
+use super::{
+    Account, HostStart, HostStartup, Login, OnConnect, StartupDefinition, StartupKind, binary_text,
+    on_connect_where_recorded, refused_outside_sign_in, xml_escape,
+};
 use crate::Result;
+use crate::platform::folders::UserEnv;
 
 /// The launchd label (design I11).
 pub const LABEL: &str = "dev.floti.host";
@@ -21,6 +25,18 @@ pub struct Native;
 impl HostStartup for Native {
     fn host_start(&self, binary: &Path) -> Result<HostStart> {
         launch_agent(binary).map(HostStart::AtSignIn)
+    }
+
+    /// It starts at the user's sign-in, so not from an SSH session, and
+    /// never as root.
+    fn launch_refusal(&self, env: &UserEnv, account: Account) -> Option<String> {
+        refused_outside_sign_in(env, account)
+    }
+
+    /// Only where setup recorded it, which it does only in a WSL distro, so
+    /// never on a Mac.
+    fn on_connect(&self, data: &Path, _login: &dyn Login) -> OnConnect {
+        on_connect_where_recorded(data)
     }
 }
 

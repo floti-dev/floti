@@ -1,5 +1,7 @@
 //! Owner-only files on Windows: a protected access list with one entry, full
-//! access for the user Floti runs as.
+//! access for the user Floti runs as, and a Medium integrity label, so a
+//! file an elevated host wrote is the same user's to read and write at
+//! Medium too.
 //!
 //! The list is the local pipe's (`socket/windows.rs` builds it), given to
 //! `CreateFileW` so the file has it from the moment it exists. Protected

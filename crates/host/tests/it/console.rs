@@ -23,8 +23,8 @@ use std::time::{Duration, Instant};
 
 use floti_host::platform::process_tree::{Native as NativeTree, ProcessTree};
 use floti_host::platform::socket::Endpoint;
+use floti_host::platform::startup::LOGIN_TEST_VAR;
 use floti_host::server::LOCK_FILE;
-use floti_host::setup::{START_ON_CONNECT_FILE, START_ON_CONNECT_LINE};
 use floti_host::testkit::{PATIENCE, TestClient, TestDirs, record_test_host};
 use floti_protocol::channels::host::{HostStop, HostStopReason, HostStopRequest};
 
@@ -230,12 +230,11 @@ async fn a_host_floti_connect_started_has_no_console() {
         return;
     }
     let dirs = TestDirs::new();
-    // Where nothing runs, `floti connect` starts the host when setup left
-    // this record.
-    std::fs::create_dir_all(&dirs.data).unwrap();
-    std::fs::write(dirs.data.join(START_ON_CONNECT_FILE), START_ON_CONNECT_LINE).unwrap();
+    // Where nothing runs, `floti connect` on Windows starts the host, in a
+    // login that is not an elevated one at the desktop.
     let host = HostOnTestFolders::new(&dirs);
     let mut connect = floti(&dirs, &["connect"])
+        .env(LOGIN_TEST_VAR, "plain")
         .stdin(Stdio::piped())
         .spawn()
         .expect("run floti connect");

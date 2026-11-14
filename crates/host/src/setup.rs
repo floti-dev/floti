@@ -24,9 +24,9 @@
 //!   not fail on a cleanup.
 //!
 //! It never starts the host as its own child, so a setup run over ssh
-//! leaves no host under ssh, which
+//! leaves no host under ssh, which on macOS and Linux
 //! [`launch_refusal`](crate::platform::startup::launch_refusal) refuses
-//! anyway.
+//! anyway; on Windows `floti connect` starts it, detached.
 //!
 //! On Linux it first turns lingering on for a server, a computer that does
 //! not boot to a desktop, so the user's service manager runs the unit from
