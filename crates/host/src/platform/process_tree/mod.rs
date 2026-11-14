@@ -77,6 +77,25 @@ pub struct Detached {
     pub outliving: Outliving,
 }
 
+impl Detached {
+    /// Whether it outlives this process: apart from it, or in a job that
+    /// does not end what it holds once its last handle closes. A host in
+    /// this host's own job, which a job above it refused to let go of, ends
+    /// as soon as this host exits.
+    pub fn outlives_this_process(&self) -> bool {
+        !matches!(
+            self.outliving,
+            Outliving::InJob {
+                ends_with_job: true
+            }
+        )
+    }
+}
+
+/// Why a program [`ProcessTree::start_detached`] started would not outlive
+/// this process, which a relaunch and `floti connect` fail with.
+pub const ENDS_WITH_THIS_PROCESS: &str = "a job this process is in let it start only inside that job, which ends what it holds once this process exits, so it would end with it";
+
 /// `ERROR_ACCESS_DENIED`, what Windows answers a start out of a job that
 /// does not let what it holds break away.
 pub const BREAKAWAY_REFUSED: i32 = 5;
@@ -266,13 +285,21 @@ pub trait ProcessTree {
     /// no console, and this returns once it has started, for the caller to
     /// exit. An `exec` that fails falls back to that too, saying so in the
     /// log, so a failed replacement still leaves a host: a LaunchAgent
-    /// restarts nothing.
+    /// restarts nothing. A start that would end when this process does
+    /// ([`Detached::outlives_this_process`]) is an error
+    /// ([`ENDS_WITH_THIS_PROCESS`]), as a start that failed is: the new host
+    /// would be gone as soon as this one exits.
     fn replace_this_process(
         &self,
         program: &std::path::Path,
         args: &[&str],
     ) -> std::io::Result<()> {
-        self.start_detached(program, args, &[]).map(|_| ())
+        let detached = self.start_detached(program, args, &[])?;
+        if detached.outlives_this_process() {
+            Ok(())
+        } else {
+            Err(std::io::Error::other(ENDS_WITH_THIS_PROCESS))
+        }
     }
 }
 

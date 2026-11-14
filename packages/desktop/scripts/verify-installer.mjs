@@ -306,7 +306,7 @@ function installerChecks(setupExe) {
         'Installed silently as the ordinary user. This shell is not elevated, and a per-machine installer would fail here rather than prompt, so "no elevation" is the reason it worked rather than an assumption.',
         'The installed app is asked for the same selftest the portable exe ran, and it reports its own mode and data directory, which are compared against %LOCALAPPDATA%\\Floti\\desktop.',
         'Nothing landed beside the exe: the install directory holds no helm-data, no .db and no WAL.',
-        'The install put floti in %LOCALAPPDATA%\\Programs\\Floti\\bin and ran floti setup from there, which also put that folder on the user\'s PATH and registered the logon task "Floti host". The uninstaller leaves all three for now; docs/PACKAGING.md lists them.',
+        'The install put floti in %LOCALAPPDATA%\\Programs\\Floti\\bin and ran floti setup from there, which also put that folder on the user\'s PATH and registered nothing to start the host at sign-in. The uninstaller leaves floti and the PATH entry for now; docs/PACKAGING.md lists them.',
         'A start-menu entry is created and a desktop icon deliberately is not. Both are checked, and the uninstall has to take back the one it made.',
         'An empty install directory counts as removed: NSIS deletes every file it installed but cannot remove the folder its own uninstaller is running out of, so an empty shell is the ordinary successful outcome.',
         '%LOCALAPPDATA%\\Floti\\desktop is deliberately NOT removed by the uninstaller. deleteAppDataOnUninstall stays false: the database holds the user\'s profiles, session index and config snapshots, and an uninstall is not a request to destroy them.',

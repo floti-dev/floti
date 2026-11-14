@@ -4,8 +4,8 @@ use std::process::{Command, Stdio};
 use floti_protocol::Knowable;
 
 use super::{
-    BREAKAWAY_REFUSED, Ending, Native, OneProcess, Outliving, ProcessTree, descendants,
-    start_outliving, tree_under,
+    BREAKAWAY_REFUSED, Detached, ENDS_WITH_THIS_PROCESS, Ending, Native, OneProcess, Outliving,
+    ProcessTree, Started, descendants, start_outliving, tree_under,
 };
 use crate::session::tests::fake_agent_exe;
 
@@ -399,4 +399,72 @@ fn every_program_the_host_starts_opens_no_console_window() {
         "these start a program that would open a console window from a host with no console:\n{}",
         unmarked.join("\n")
     );
+}
+
+/// A tree whose detached starts land where `outliving` says, as a job that
+/// refuses breakaway puts them, and start nothing real.
+struct StartsWhere(Outliving);
+
+/// A program that has already exited.
+struct Exited;
+
+impl Started for Exited {
+    fn exited(&mut self) -> Option<Option<i32>> {
+        Some(Some(0))
+    }
+}
+
+impl ProcessTree for StartsWhere {
+    fn end_tree(&self, _root_pid: u32, _how: Ending) -> crate::Result<()> {
+        Ok(())
+    }
+
+    fn is_alive(&self, _pid: u32) -> Knowable<bool> {
+        Knowable::Unknown
+    }
+
+    fn end_tree_with_this_process(&self) -> Knowable<bool> {
+        Knowable::Unknown
+    }
+
+    fn tie_tree(&self, _root_pid: u32) {}
+
+    fn untie_tree(&self, _root_pid: u32) {}
+
+    fn start_detached(
+        &self,
+        _program: &std::path::Path,
+        _args: &[&str],
+        _env_remove: &[&str],
+    ) -> std::io::Result<Detached> {
+        Ok(Detached {
+            process: Box::new(Exited),
+            outliving: self.0,
+        })
+    }
+}
+
+#[test]
+fn a_relaunch_that_could_start_only_in_a_job_ending_with_this_host_fails() {
+    let program = std::path::Path::new("floti");
+    let ends = StartsWhere(Outliving::InJob {
+        ends_with_job: true,
+    });
+    let err = ends
+        .replace_this_process(program, &["host"])
+        .expect_err("the new host would end with this one");
+    assert_eq!(err.to_string(), ENDS_WITH_THIS_PROCESS);
+
+    // Apart, or in a job that leaves what it holds running: the new host
+    // outlives this one.
+    for outliving in [
+        Outliving::Apart,
+        Outliving::InJob {
+            ends_with_job: false,
+        },
+    ] {
+        StartsWhere(outliving)
+            .replace_this_process(program, &["host"])
+            .unwrap_or_else(|err| panic!("{outliving:?}: {err}"));
+    }
 }

@@ -17,6 +17,7 @@ mod bridge;
 mod carry;
 mod console;
 mod content;
+mod detached;
 mod discovery;
 mod fake_agent;
 mod fake_agent_input;

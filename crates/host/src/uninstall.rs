@@ -474,6 +474,7 @@ fn sign_in_entry(
         }
         HostStart::WhenNeeded { leftover } => {
             register::remove_leftover_task(system.sign_in(), leftover, &what.folders.data)
+                .map(register::LeftoverRemoved::any)
         }
     }
     .map_err(|why| format!("sign-in entry: could not remove the {name}: {why}"))?;

@@ -213,17 +213,33 @@ pub fn leftover_task_file(task: &LeftoverTask, data: &Path) -> PathBuf {
     data.join(TASK_FILE_FOLDER).join(task.file_name)
 }
 
+/// What [`remove_leftover_task`] found there and took out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LeftoverRemoved {
+    /// The task, from Task Scheduler.
+    pub task: bool,
+    /// Its XML, from the data folder.
+    pub file: bool,
+}
+
+impl LeftoverRemoved {
+    /// Whether anything was there.
+    pub fn any(self) -> bool {
+        self.task || self.file
+    }
+}
+
 /// Takes out what an earlier floti registered that `start` no longer does,
-/// for `floti setup` and `floti update`, and answers whether there was any:
-/// on Windows the logon task ([`remove_leftover_task`]); nothing where the
-/// host starts at sign-in, whose entry setup replaces.
+/// for `floti setup` and `floti update`, and answers what was there: on
+/// Windows the logon task and its XML ([`remove_leftover_task`]); nothing
+/// where the host starts at sign-in, whose entry setup replaces.
 pub fn remove_leftovers(
     system: &dyn SignInSystem,
     start: &HostStart,
     data: &Path,
-) -> Result<bool, String> {
+) -> Result<LeftoverRemoved, String> {
     match start {
-        HostStart::AtSignIn(_) => Ok(false),
+        HostStart::AtSignIn(_) => Ok(LeftoverRemoved::default()),
         HostStart::WhenNeeded { leftover } => remove_leftover_task(system, leftover, data),
     }
 }
@@ -239,9 +255,20 @@ pub fn leftovers_line(system: &dyn SignInSystem, start: &HostStart, data: &Path)
         return None;
     };
     match remove_leftovers(system, start, data) {
-        Ok(false) => None,
-        Ok(true) => Some(format!(
+        Ok(LeftoverRemoved {
+            task: false,
+            file: false,
+        }) => None,
+        Ok(LeftoverRemoved { task: true, .. }) => Some(format!(
             "Deleted the logon task \"{}\" an earlier floti registered; the Floti host starts when Floti or a connection needs it.",
+            leftover.name
+        )),
+        Ok(LeftoverRemoved {
+            task: false,
+            file: true,
+        }) => Some(format!(
+            "Deleted {}, the XML of the logon task \"{}\" an earlier floti registered, whose task was gone already.",
+            leftover_task_file(leftover, data).display(),
             leftover.name
         )),
         Err(why) => Some(format!(
@@ -274,14 +301,14 @@ pub fn leftovers_at_start(
 
 /// Deletes `task` from Task Scheduler when `schtasks /Query` lists it, then
 /// its XML under `data` and that file's folder once it is empty, and
-/// answers whether either was there. Never `schtasks /End`: a host the task
+/// answers which of them was there. Never `schtasks /End`: a host the task
 /// started runs on. `Err` is the one line to say: the last line the failing
 /// command wrote, unedited, or why the file could not be removed.
 pub fn remove_leftover_task(
     system: &dyn SignInSystem,
     task: &LeftoverTask,
     data: &Path,
-) -> Result<bool, String> {
+) -> Result<LeftoverRemoved, String> {
     let listed = must(
         system,
         &OsCommand::new("schtasks", &["/Query", "/FO", "CSV", "/NH"]),
@@ -299,7 +326,10 @@ pub fn remove_leftover_task(
         // Only when empty: the folder holds nothing else of floti's.
         let _ = std::fs::remove_dir(folder);
     }
-    Ok(registered || written)
+    Ok(LeftoverRemoved {
+        task: registered,
+        file: written,
+    })
 }
 
 /// Writes `definition` where its OS reads it, replacing what was there,

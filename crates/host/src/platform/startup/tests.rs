@@ -310,8 +310,8 @@ mod unregistering {
     use std::path::{Path, PathBuf};
 
     use super::super::register::{
-        OsCommand, Ran, SignInSystem, WANTS_FOLDER, leftovers_at_start, leftovers_line,
-        lingering_on, remove_leftover_task, remove_leftovers, unregister,
+        LeftoverRemoved, OsCommand, Ran, SignInSystem, WANTS_FOLDER, leftovers_at_start,
+        leftovers_line, lingering_on, remove_leftover_task, remove_leftovers, unregister,
     };
     use super::super::{HostStart, StartupDefinition, linux, macos, windows};
     use super::UNIX_BINARY;
@@ -383,6 +383,15 @@ mod unregistering {
 
     const TASK: super::super::LeftoverTask = windows::LEFTOVER_TASK;
 
+    const BOTH: LeftoverRemoved = LeftoverRemoved {
+        task: true,
+        file: true,
+    };
+    const NEITHER: LeftoverRemoved = LeftoverRemoved {
+        task: false,
+        file: false,
+    };
+
     /// Never `schtasks /End` or `/Run`: deleting a task leaves the host it
     /// started running, and starts nothing.
     fn assert_only_query_and_delete(os: &FakeOs) {
@@ -398,7 +407,7 @@ mod unregistering {
         write(&xml, "<Task/>");
         let os = FakeOs::answering(&[(QUERY, true, LISTED)]);
 
-        assert_eq!(remove_leftover_task(&os, &TASK, &dirs.data), Ok(true));
+        assert_eq!(remove_leftover_task(&os, &TASK, &dirs.data), Ok(BOTH));
         assert_eq!(os.ran(), [QUERY, DELETE]);
         assert!(!xml.exists());
         assert!(!dirs.data.join("startup").exists(), "its emptied folder");
@@ -409,12 +418,12 @@ mod unregistering {
     fn a_leftover_task_that_is_not_listed_is_not_found_and_nothing_is_deleted() {
         let dirs = TestDirs::new();
         let os = FakeOs::answering(&[(QUERY, true, "\"\\Other\",\"N/A\",\"Ready\"\r\n")]);
-        assert_eq!(remove_leftover_task(&os, &TASK, &dirs.data), Ok(false));
+        assert_eq!(remove_leftover_task(&os, &TASK, &dirs.data), Ok(NEITHER));
         assert_eq!(os.ran(), [QUERY]);
         // A startup folder holding something else stays.
         let note = dirs.data.join("startup").join("note.txt");
         write(&note, "mine");
-        assert_eq!(remove_leftover_task(&os, &TASK, &dirs.data), Ok(false));
+        assert_eq!(remove_leftover_task(&os, &TASK, &dirs.data), Ok(NEITHER));
         assert!(note.exists());
     }
 
@@ -424,9 +433,26 @@ mod unregistering {
         let xml = dirs.data.join("startup").join("Floti host.xml");
         write(&xml, "<Task/>");
         let os = FakeOs::answering(&[(QUERY, true, "")]);
-        assert_eq!(remove_leftover_task(&os, &TASK, &dirs.data), Ok(true));
+        assert_eq!(
+            remove_leftover_task(&os, &TASK, &dirs.data),
+            Ok(LeftoverRemoved {
+                task: false,
+                file: true
+            })
+        );
         assert_eq!(os.ran(), [QUERY]);
         assert!(!xml.exists());
+
+        // Said as what it was: the XML, not the task.
+        write(&xml, "<Task/>");
+        let gone = FakeOs::answering(&[(QUERY, true, "")]);
+        assert_eq!(
+            leftovers_line(&gone, &HostStart::WhenNeeded { leftover: TASK }, &dirs.data),
+            Some(format!(
+                "Deleted {}, the XML of the logon task \"Floti host\" an earlier floti registered, whose task was gone already.",
+                xml.display()
+            ))
+        );
     }
 
     #[test]
@@ -509,10 +535,16 @@ mod unregistering {
         let dirs = TestDirs::new();
         let os = FakeOs::answering(&[(QUERY, true, LISTED)]);
         let at_sign_in = HostStart::AtSignIn(unit());
-        assert_eq!(remove_leftovers(&os, &at_sign_in, &dirs.data), Ok(false));
+        assert_eq!(remove_leftovers(&os, &at_sign_in, &dirs.data), Ok(NEITHER));
         assert!(os.ran().is_empty(), "{:?}", os.ran());
         let when_needed = HostStart::WhenNeeded { leftover: TASK };
-        assert_eq!(remove_leftovers(&os, &when_needed, &dirs.data), Ok(true));
+        assert_eq!(
+            remove_leftovers(&os, &when_needed, &dirs.data),
+            Ok(LeftoverRemoved {
+                task: true,
+                file: false
+            })
+        );
         assert_eq!(os.ran(), [QUERY, DELETE]);
     }
 
