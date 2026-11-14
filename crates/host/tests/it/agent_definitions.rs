@@ -260,8 +260,51 @@ impl World {
         Agent { record, run }
     }
 
-    /// Types `line` into `agent` and waits for the fake to take it. The fake
-    /// `claude` keeps a conversation to resume only once it has been typed to.
+    /// Types `prompt` into `agent` and waits until its conversation keeps the
+    /// turn, so there is a conversation to resume. The fake `claude` logs a
+    /// line as received before it takes it as a turn and writes that turn to
+    /// its transcript, and `--resume` finds a conversation only by its
+    /// transcript: a host stopped between the two would leave nothing to
+    /// resume. The other fake records its conversation when it starts.
+    async fn converse(&self, agent: &Agent, prompt: &str) {
+        self.type_line(agent, prompt).await;
+        if agent.record.backend != BackendId::new(CLAUDE) {
+            return;
+        }
+        let conversation = agent
+            .record
+            .conversation_id
+            .clone()
+            .expect("the session has a conversation");
+        let answer = format!("You said: {prompt}");
+        eventually("the agent to keep the turn in its transcript", async || {
+            self.transcript_answers(&conversation, &answer)
+                .then_some(())
+        })
+        .await;
+    }
+
+    /// Whether the fake `claude`'s transcript of `conversation` holds the
+    /// answer `answer`, the last entry a turn writes. The transcript is found
+    /// as the fake finds it on `--resume`: in any folder of `projects`.
+    fn transcript_answers(&self, conversation: &str, answer: &str) -> bool {
+        let Ok(folders) = std::fs::read_dir(self.claude.join("projects")) else {
+            return false;
+        };
+        folders.filter_map(Result::ok).any(|folder| {
+            let file = folder.path().join(format!("{conversation}.jsonl"));
+            let Ok(text) = std::fs::read_to_string(file) else {
+                return false;
+            };
+            text.lines()
+                .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+                .any(|entry| {
+                    entry["type"] == "assistant" && entry["message"]["content"][0]["text"] == answer
+                })
+        })
+    }
+
+    /// Types `line` into `agent` and waits for the fake to take it.
     async fn type_line(&self, agent: &Agent, line: &str) {
         let conversation = agent
             .record
@@ -2318,7 +2361,7 @@ async fn s2_a_lost_child_is_reopened_in_its_agent_as_the_file_reads_when_it_come
     );
     // Each has been worked with, so there is a conversation to resume.
     for kid in kids.values() {
-        world.type_line(kid, "carry on").await;
+        world.converse(kid, "carry on").await;
     }
 
     // The host stops for an update: every row is left for the next start.
@@ -2505,7 +2548,7 @@ async fn a_session_launched_before_the_rename_starts_by_role_calls_agents_roles_
     assert_eq!(world.children_made(), made, "nothing was started");
 
     // A resume refuses role as it refuses agent.
-    world.type_line(&by_role, "remember this").await;
+    world.converse(&by_role, "remember this").await;
     stop_and_wait(&world, &parent, "by-role", by_role.id()).await;
     let refused = parent
         .start(json!({ "task": "again", "resume": "by-role", "role": "careful" }))
@@ -2575,7 +2618,7 @@ async fn a_lost_child_whose_row_says_agent_comes_back_as_the_default_with_no_war
         told.contains("You were started by another session, parent. Your first message"),
         "{told}"
     );
-    world.type_line(&kid, "carry on").await;
+    world.converse(&kid, "carry on").await;
 
     let mut client = world.client().await;
     client
@@ -2655,7 +2698,7 @@ async fn an_agent_md_with_no_default_md_is_the_default_for_a_new_start_and_a_res
 
     // A child whose row still says agent resumes as it too, saying nothing
     // of an agent that no longer exists.
-    world.type_line(&kid, "remember this").await;
+    world.converse(&kid, "remember this").await;
     stop_and_wait(&world, &parent, "kid", kid.id()).await;
     set_row_agent(&world, kid.id(), "agent");
     let resumed = parent
@@ -3247,7 +3290,7 @@ impl World {
     /// The conversation `agent` is in, once a line was typed into it so that
     /// history can reopen it, and its session has ended.
     async fn worked_and_ended(&self, agent: &Agent) -> String {
-        self.type_line(agent, "remember this conversation").await;
+        self.converse(agent, "remember this conversation").await;
         self.end_from_its_terminal(agent).await;
         agent
             .record
@@ -3620,7 +3663,7 @@ async fn the_restore_offer_names_an_agents_problem_and_restores_it_without_the_a
         .await
         .expect("the scribe starts");
     for agent in [&planner, &scribe] {
-        world.type_line(agent, "carry on").await;
+        world.converse(agent, "carry on").await;
     }
 
     let mut client = world.client().await;
@@ -3883,7 +3926,7 @@ async fn a_restore_of_a_session_whose_agent_file_cannot_be_loaded_is_refused_unl
         .launch(launch_request(&world.project("notes"), Some("scribe")))
         .await
         .expect("the scribe starts");
-    world.type_line(&scribe, "carry on").await;
+    world.converse(&scribe, "carry on").await;
 
     let mut client = world.client().await;
     client
