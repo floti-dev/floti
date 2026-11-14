@@ -43,9 +43,9 @@ fn writes_the_tree_substitutes_only_tpl_and_records_the_provenance() {
             ".claude",
             ".claude/settings.json",
             "CLAUDE.md",
-            "workspace.yaml",
             "notes",
-            "workflow.yml"
+            "workflow.yml",
+            "workspace.yaml"
         ]
     );
 
@@ -115,7 +115,7 @@ fn does_not_write_the_gitkeep_it_made_the_folder_for() {
     world.plant("demo", &[("notes/.gitkeep", "")]);
     world.workspace("work", Some("demo"));
 
-    assert_eq!(tree(&world.root.join("work")), ["workspace.yaml", "notes"]);
+    assert_eq!(tree(&world.root.join("work")), ["notes", "workspace.yaml"]);
 }
 
 #[test]
@@ -163,7 +163,7 @@ fn will_not_follow_a_link_out_of_the_template() {
     assert!(problems.contains("link"), "{problems}");
     // The workspace has the honest half of the template and nothing else, and
     // what the link pointed at is exactly as it was.
-    assert_eq!(tree(&world.root.join("work")), ["workspace.yaml", "ok.txt"]);
+    assert_eq!(tree(&world.root.join("work")), ["ok.txt", "workspace.yaml"]);
     assert_eq!(tree(&outside), ["secret.txt"]);
     assert_eq!(read(&outside.join("secret.txt")), "untouched");
 }
@@ -321,7 +321,7 @@ fn scaffolds_the_minimum_and_nothing_else_for_the_minimal_template() {
     assert_eq!(result.path.as_deref(), Some(root.join("work").as_path()));
     assert_eq!(
         tree(&root.join("work")),
-        [".claude", "workspace.yaml", "repos"]
+        [".claude", "repos", "workspace.yaml"]
     );
 }
 
@@ -334,7 +334,7 @@ fn defaults_to_the_minimal_template_when_none_is_named() {
     assert_eq!(result.created, ["repos", ".claude", "workspace.yaml"]);
     assert_eq!(
         tree(&root.join("work")),
-        [".claude", "workspace.yaml", "repos"]
+        [".claude", "repos", "workspace.yaml"]
     );
     assert!(line_matches(
         &read(&root.join("work").join("workspace.yaml")),

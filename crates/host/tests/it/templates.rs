@@ -381,9 +381,9 @@ async fn a_client_makes_a_workspace_from_a_template_with_its_values_filled_in_an
             ".claude",
             ".claude/settings.json",
             "CLAUDE.md",
-            "workspace.yaml",
             "notes",
-            "workflow.yml"
+            "workflow.yml",
+            "workspace.yaml"
         ]
     );
     let claude_md = read(&workspace.join("CLAUDE.md"));
@@ -660,10 +660,10 @@ async fn a_client_previews_a_folder_as_a_template_and_saves_what_was_ticked() {
             ".claude",
             ".git",
             "CLAUDE.md",
-            "workspace.yaml",
             "notes",
             "repos",
-            "tools"
+            "tools",
+            "workspace.yaml"
         ]
     );
     let include = ticked(&preview);

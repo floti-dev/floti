@@ -669,10 +669,10 @@ fn lists_the_top_level_unticks_the_instance_data_and_counts_what_is_ticked() {
             ".claude",
             ".git",
             "CLAUDE.md",
-            "workspace.yaml",
             "notes",
             "repos",
-            "tools"
+            "tools",
+            "workspace.yaml"
         ]
     );
     // The defaults, and each is listed rather than pruned.

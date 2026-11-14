@@ -105,8 +105,8 @@ fn produces_a_workspace_from_the_shipped_example() {
             ".claude",
             ".claude/skills",
             "CLAUDE.md",
-            "workspace.yaml",
-            "repos"
+            "repos",
+            "workspace.yaml"
         ]
     );
     assert!(line_matches(
