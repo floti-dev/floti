@@ -1,10 +1,7 @@
 //! Registering a start-at-sign-in definition with the OS's per-user
-//! mechanism, and starting the host through it, for `floti setup`.
+//! mechanism, and starting the host through it, for `floti setup`. Windows
+//! registers nothing ([`HostStart::WhenNeeded`]).
 //!
-//! - The logon task: Task Scheduler imports the task XML under its name,
-//!   replacing a task of that name (`schtasks /Create /XML ... /F`), and runs
-//!   it (`schtasks /Run`) when this user has a desktop session on the
-//!   computer. With nobody signed in it starts at the next sign-in.
 //! - The LaunchAgent: the property list goes in `~/Library/LaunchAgents`,
 //!   replacing the one there. When this user's GUI domain (`gui/<uid>`)
 //!   exists, launchd is given it (`launchctl bootstrap`, after `bootout` when
@@ -37,14 +34,21 @@
 //! `floti uninstall` takes each entry out again ([`unregister`]) through the
 //! same mechanism, and never turns lingering off.
 //!
-//! All three are compiled on every OS and tested everywhere with a fake
+//! On Windows an earlier floti registered the logon task "Floti host" with
+//! Task Scheduler, from XML it kept under the data folder. `floti setup`,
+//! `floti update` and `floti uninstall` delete it ([`remove_leftover_task`]):
+//! `schtasks /Delete` when `schtasks /Query` lists it, and the XML with its
+//! folder. Deleting a task never ends what it started, so the host it
+//! started runs on until it next restarts; nothing here ends it.
+//!
+//! Every mechanism is compiled on every OS and tested everywhere with a fake
 //! system, like the generators.
 
 use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::{StartupDefinition, StartupKind};
+use super::{HostStart, LeftoverTask, StartupDefinition, StartupKind};
 
 /// One OS command: a program, found on `PATH`, and its arguments, run
 /// without a shell.
@@ -105,8 +109,8 @@ pub trait SignInSystem {
     fn run(&self, command: &OsCommand) -> io::Result<Ran>;
 
     /// Whether this user has a desktop session on this computer now, at the
-    /// console or over remote desktop, connected or not: where a logon task
-    /// runs when it is started. Asked only for the logon task.
+    /// console or over remote desktop, connected or not. Windows answers it;
+    /// registering asks nothing of it.
     fn desktop_session(&self) -> io::Result<bool>;
 
     /// Whether this process runs inside a WSL distro, where systemd may not
@@ -172,8 +176,8 @@ pub enum Started {
 }
 
 /// Whether setup turns lingering on for the systemd user unit, so the host
-/// runs with nobody signed in. Only the user unit asks; the logon task and
-/// the LaunchAgent have no such thing.
+/// runs with nobody signed in. Only the user unit asks; the LaunchAgent has
+/// no such thing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Linger {
     /// On for a server, as it is on a computer that boots to a desktop: what
@@ -189,20 +193,67 @@ pub enum Linger {
 /// The default target of a computer that boots to a desktop.
 pub const DESKTOP_TARGET: &str = "graphical.target";
 
-/// The folder the logon task's XML is kept in, under the data folder: Task
-/// Scheduler keeps its own copy once it is imported.
+/// The folder under the data folder an earlier floti kept its logon task's
+/// XML in.
 pub const TASK_FILE_FOLDER: &str = "startup";
 
-/// Where `definition`'s file is written: under `home` for the LaunchAgent
-/// and the unit, under `data` for the logon task's XML.
-pub fn definition_file(definition: &StartupDefinition, home: &Path, data: &Path) -> PathBuf {
-    match definition.user_folder {
-        Some(folder) => folder
-            .split('/')
-            .fold(home.to_path_buf(), |path, part| path.join(part))
-            .join(&definition.file_name),
-        None => data.join(TASK_FILE_FOLDER).join(&definition.file_name),
+/// Where `definition`'s file is written, under `home`.
+pub fn definition_file(definition: &StartupDefinition, home: &Path) -> PathBuf {
+    definition
+        .user_folder
+        .split('/')
+        .fold(home.to_path_buf(), |path, part| path.join(part))
+        .join(&definition.file_name)
+}
+
+/// Where an earlier floti kept `task`'s XML, under `data`.
+pub fn leftover_task_file(task: &LeftoverTask, data: &Path) -> PathBuf {
+    data.join(TASK_FILE_FOLDER).join(task.file_name)
+}
+
+/// Takes out what an earlier floti registered that `start` no longer does,
+/// for `floti setup` and `floti update`, and answers whether there was any:
+/// on Windows the logon task ([`remove_leftover_task`]); nothing where the
+/// host starts at sign-in, whose entry setup replaces.
+pub fn remove_leftovers(
+    system: &dyn SignInSystem,
+    start: &HostStart,
+    data: &Path,
+) -> Result<bool, String> {
+    match start {
+        HostStart::AtSignIn(_) => Ok(false),
+        HostStart::WhenNeeded { leftover } => remove_leftover_task(system, leftover, data),
     }
+}
+
+/// Deletes `task` from Task Scheduler when `schtasks /Query` lists it, then
+/// its XML under `data` and that file's folder once it is empty, and
+/// answers whether either was there. Never `schtasks /End`: a host the task
+/// started runs on. `Err` is the one line to say: the last line the failing
+/// command wrote, unedited, or why the file could not be removed.
+pub fn remove_leftover_task(
+    system: &dyn SignInSystem,
+    task: &LeftoverTask,
+    data: &Path,
+) -> Result<bool, String> {
+    let listed = must(
+        system,
+        &OsCommand::new("schtasks", &["/Query", "/FO", "CSV", "/NH"]),
+    )?;
+    let registered = lists_task(&listed.stdout, task.name);
+    if registered {
+        must(
+            system,
+            &OsCommand::new("schtasks", &["/Delete", "/TN", task.name, "/F"]),
+        )?;
+    }
+    let file = leftover_task_file(task, data);
+    let written = remove_file(&file)?;
+    if let Some(folder) = file.parent() {
+        // Only when empty: the folder holds nothing else of floti's.
+        let _ = std::fs::remove_dir(folder);
+    }
+    Ok(registered || written)
 }
 
 /// Writes `definition` where its OS reads it, replacing what was there,
@@ -215,45 +266,21 @@ pub fn register_and_start(
     system: &dyn SignInSystem,
     definition: &StartupDefinition,
     home: &Path,
-    data: &Path,
     linger: Linger,
 ) -> Result<Started, String> {
     let lingering = match definition.kind {
         StartupKind::SystemdUserUnit => settle_lingering(system, linger)?,
-        StartupKind::LogonTask | StartupKind::LaunchAgent => false,
+        StartupKind::LaunchAgent => false,
     };
-    let file = definition_file(definition, home, data);
+    let file = definition_file(definition, home);
     let previous = std::fs::read(&file).ok();
     let bytes = definition.file_bytes();
     write_file(&file, &bytes)?;
     let changed = previous.as_deref() != Some(bytes.as_slice());
     match definition.kind {
-        StartupKind::LogonTask => logon_task(system, definition, &file),
         StartupKind::LaunchAgent => launch_agent(system, definition, &file, changed),
         StartupKind::SystemdUserUnit => user_unit(system, definition, lingering),
     }
-}
-
-fn logon_task(
-    system: &dyn SignInSystem,
-    definition: &StartupDefinition,
-    file: &Path,
-) -> Result<Started, String> {
-    let name = definition.name.as_str();
-    must(
-        system,
-        &OsCommand::new("schtasks", &["/Create", "/TN", name, "/XML"])
-            .arg(file)
-            .arg("/F"),
-    )?;
-    let signed_in = system
-        .desktop_session()
-        .map_err(|err| format!("could not tell whether you are signed in here: {err}"))?;
-    if !signed_in {
-        return Ok(Started::AtNextSignIn);
-    }
-    must(system, &OsCommand::new("schtasks", &["/Run", "/TN", name]))?;
-    Ok(Started::Running)
 }
 
 fn launch_agent(
@@ -408,10 +435,6 @@ fn write_file(file: &Path, bytes: &[u8]) -> Result<(), String> {
 /// Whether `definition` is registered with the OS's per-user mechanism, as
 /// [`register_and_start`] registers it, looked at without changing anything:
 ///
-/// - the logon task: it is a row of `schtasks /Query /FO CSV /NH`, which
-///   lists every task this user can see, named by its path (`\Floti host`).
-///   That listing failing is could not tell, never "not registered": a query
-///   of the one name fails the same way for a missing task as for a refusal;
 /// - the LaunchAgent: its property list is in `~/Library/LaunchAgents`,
 ///   which launchd loads at each sign-in;
 /// - the user unit: its unit file is in `~/.config/systemd/user` and
@@ -424,20 +447,12 @@ pub fn is_registered(
     system: &dyn SignInSystem,
     definition: &StartupDefinition,
     home: &Path,
-    data: &Path,
 ) -> Result<bool, String> {
     let name = definition.name.as_str();
     match definition.kind {
-        StartupKind::LogonTask => {
-            let listed = must(
-                system,
-                &OsCommand::new("schtasks", &["/Query", "/FO", "CSV", "/NH"]),
-            )?;
-            Ok(lists_task(&listed.stdout, name))
-        }
-        StartupKind::LaunchAgent => file_there(&definition_file(definition, home, data)),
+        StartupKind::LaunchAgent => file_there(&definition_file(definition, home)),
         StartupKind::SystemdUserUnit => {
-            if !file_there(&definition_file(definition, home, data))? {
+            if !file_there(&definition_file(definition, home))? {
                 return Ok(false);
             }
             let state = ran(
@@ -463,9 +478,6 @@ pub fn is_registered(
 /// [`register_and_start`] put it there, for `floti uninstall`, and answers
 /// whether there was one. It is the explicit act, so it asks nothing.
 ///
-/// - The logon task: when `schtasks /Query` lists it, `schtasks /Delete /F`
-///   deletes it; its XML under the data folder goes either way, and the
-///   `startup` folder with it once that is empty.
 /// - The LaunchAgent: when launchd has it loaded in the user's GUI domain,
 ///   `launchctl bootout` unloads it (which stops a host it runs); then its
 ///   property list goes from `~/Library/LaunchAgents`, so no later sign-in
@@ -483,30 +495,10 @@ pub fn unregister(
     system: &dyn SignInSystem,
     definition: &StartupDefinition,
     home: &Path,
-    data: &Path,
 ) -> Result<bool, String> {
     let name = definition.name.as_str();
-    let file = definition_file(definition, home, data);
+    let file = definition_file(definition, home);
     match definition.kind {
-        StartupKind::LogonTask => {
-            let listed = must(
-                system,
-                &OsCommand::new("schtasks", &["/Query", "/FO", "CSV", "/NH"]),
-            )?;
-            let registered = lists_task(&listed.stdout, name);
-            if registered {
-                must(
-                    system,
-                    &OsCommand::new("schtasks", &["/Delete", "/TN", name, "/F"]),
-                )?;
-            }
-            let written = remove_file(&file)?;
-            if let Some(folder) = file.parent() {
-                // Only when empty: the folder holds nothing else of setup's.
-                let _ = std::fs::remove_dir(folder);
-            }
-            Ok(registered || written)
-        }
         StartupKind::LaunchAgent => {
             let there = file_there(&file)?;
             let loaded = match gui_domain(system)? {

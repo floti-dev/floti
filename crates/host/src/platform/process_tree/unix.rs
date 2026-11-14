@@ -130,7 +130,7 @@ impl ProcessTree for Native {
             "floti host: {} could not take this process's place ({failed}), so it is started apart.",
             program.display()
         );
-        self.start_alone(program, args).map(|_| ())
+        self.start_detached(program, args, &[]).map(|_| ())
     }
 
     fn prepare_orphan_root(&self, command: &mut std::process::Command) {

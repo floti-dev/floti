@@ -1676,3 +1676,116 @@ fn from_the_desktop_with_no_app_installed_the_host_still_relaunches_on_the_new_f
     assert_eq!(*world.done.borrow(), vec!["relaunch".to_owned()]);
     assert_eq!(world.binary(), release.floti);
 }
+
+// ---------------------------------------------------------------------------
+// The logon task an earlier floti registered on Windows
+// ---------------------------------------------------------------------------
+
+mod leftovers {
+    use std::cell::RefCell;
+    use std::io;
+
+    use crate::platform::startup::register::{OsCommand, Ran, SignInSystem};
+    use crate::platform::startup::{HostStart, linux, windows};
+    use crate::testkit::TestDirs;
+    use crate::update::leftovers_line;
+
+    const QUERY: &str = "schtasks /Query /FO CSV /NH";
+    const DELETE: &str = "schtasks /Delete /TN Floti host /F";
+
+    /// Task Scheduler holding the task or not, refusing to delete it when
+    /// `refuses`, and recording what it was asked.
+    struct FakeScheduler {
+        listed: bool,
+        refuses: bool,
+        ran: RefCell<Vec<String>>,
+    }
+
+    impl SignInSystem for FakeScheduler {
+        fn run(&self, command: &OsCommand) -> io::Result<Ran> {
+            let line = command.described();
+            self.ran.borrow_mut().push(line.clone());
+            let listed = "\"\\Floti host\",\"N/A\",\"Running\"\r\n";
+            Ok(match line.as_str() {
+                QUERY if self.listed => Ran {
+                    success: true,
+                    stdout: listed.to_owned(),
+                    stderr: String::new(),
+                },
+                DELETE if self.refuses => Ran {
+                    success: false,
+                    stdout: String::new(),
+                    stderr: "ERROR: Access is denied.\r\n".to_owned(),
+                },
+                _ => Ran {
+                    success: true,
+                    ..Ran::default()
+                },
+            })
+        }
+
+        fn desktop_session(&self) -> io::Result<bool> {
+            unreachable!("an update asks nobody whether they are signed in")
+        }
+    }
+
+    fn scheduler(listed: bool, refuses: bool) -> FakeScheduler {
+        FakeScheduler {
+            listed,
+            refuses,
+            ran: RefCell::default(),
+        }
+    }
+
+    fn when_needed() -> HostStart {
+        HostStart::WhenNeeded {
+            leftover: windows::LEFTOVER_TASK,
+        }
+    }
+
+    #[test]
+    fn an_update_deletes_the_logon_task_an_earlier_floti_registered_and_says_so_once() {
+        let dirs = TestDirs::new();
+        let xml = dirs.data.join("startup").join("Floti host.xml");
+        std::fs::create_dir_all(xml.parent().unwrap()).unwrap();
+        std::fs::write(&xml, "<Task/>").unwrap();
+        let there = scheduler(true, false);
+        assert_eq!(
+            leftovers_line(&there, &when_needed(), &dirs.data).as_deref(),
+            Some(
+                "Deleted the logon task \"Floti host\" an earlier floti registered; the Floti host starts when Floti or a connection needs it."
+            )
+        );
+        assert_eq!(*there.ran.borrow(), [QUERY, DELETE]);
+        assert!(!xml.exists());
+
+        // Nothing left: nothing said.
+        let gone = scheduler(false, false);
+        assert_eq!(leftovers_line(&gone, &when_needed(), &dirs.data), None);
+        assert_eq!(*gone.ran.borrow(), [QUERY]);
+    }
+
+    #[test]
+    fn a_task_that_could_not_be_deleted_is_a_warning_that_names_setup() {
+        let dirs = TestDirs::new();
+        let refusing = scheduler(true, true);
+        assert_eq!(
+            leftovers_line(&refusing, &when_needed(), &dirs.data).as_deref(),
+            Some(
+                "Warning: the logon task \"Floti host\" an earlier floti registered was not deleted (ERROR: Access is denied.); floti setup deletes it."
+            )
+        );
+    }
+
+    #[test]
+    fn where_the_host_starts_at_sign_in_an_update_asks_nothing() {
+        let dirs = TestDirs::new();
+        let os = scheduler(true, false);
+        let unit = linux::user_unit(std::path::Path::new("/home/me/.local/bin/floti")).unwrap();
+        assert_eq!(
+            leftovers_line(&os, &HostStart::AtSignIn(unit), &dirs.data),
+            None
+        );
+        assert!(os.ran.borrow().is_empty());
+    }
+}

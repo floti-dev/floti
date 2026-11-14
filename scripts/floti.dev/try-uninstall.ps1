@@ -6,12 +6,15 @@
 #
 # Three runs, each of which must exit 0:
 #
-# 1. `floti uninstall` from %LOCALAPPDATA%\Programs\Floti\bin\floti.exe. It
-#    must say it stopped the host, and no process may run from floti's
-#    folder after it; floti.exe, the logon task "Floti host",
-#    the desktop app where it was installed (Floti.exe and the Start menu's
-#    Floti.lnk) and floti's folder on the user's Path must be gone, and the
-#    data folder, %LOCALAPPDATA%\Floti, must stay. The floti.exe uninstall
+# 1. `floti uninstall` from %LOCALAPPDATA%\Programs\Floti\bin\floti.exe, on
+#    a computer an earlier floti set up first: its logon task "Floti host",
+#    imported from the XML it kept in the data folder's `startup` folder, is
+#    registered here and run, so the host it starts runs from floti's folder.
+#    Uninstall must say it stopped the host and removed that task, and no
+#    process may run from floti's folder after it; floti.exe, the task and
+#    its XML, the desktop app where it was installed (Floti.exe and the Start
+#    menu's Floti.lnk) and floti's folder on the user's Path must be gone,
+#    and the data folder, %LOCALAPPDATA%\Floti, must stay. The floti.exe uninstall
 #    runs from is renamed aside and deleted by a detached Windows PowerShell
 #    once it exits, then Programs\Floti goes; that is waited for, up to a
 #    minute, and a copy uninstall says is left for a later sweep fails it.
@@ -57,6 +60,70 @@ $menu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Floti.lnk'
 if (-not (Test-Path -LiteralPath $floti -PathType Leaf)) { Fail "there is no $floti to uninstall." }
 if (-not (Test-Path -LiteralPath $data -PathType Container)) { Fail "setup made no data folder at $data." }
 $hadApp = Test-Path -LiteralPath $app -PathType Leaf
+
+# What an earlier floti's setup left: the logon task "Floti host", as its
+# setup wrote and imported it, and the host the task started. This floti's
+# setup registers and starts neither.
+$startup = Join-Path $data 'startup'
+$taskXml = Join-Path $startup 'Floti host.xml'
+New-Item -ItemType Directory -Force -Path $startup | Out-Null
+$user = if ($env:USERDOMAIN) { "$env:USERDOMAIN\$env:USERNAME" } else { $env:USERNAME }
+$escape = { param([string]$Text) [Security.SecurityElement]::Escape($Text) }
+$task = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Starts the Floti host when you sign in.</Description>
+    <URI>\Floti host</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>$(& $escape $user)</UserId>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>$(& $escape $user)</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>"$(& $escape $floti)"</Command>
+      <Arguments>host</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"@
+[IO.File]::WriteAllText($taskXml, $task, [Text.Encoding]::Unicode)
+& schtasks.exe /Create /TN 'Floti host' /XML $taskXml /F | Out-Null
+if ($LASTEXITCODE -ne 0) { Fail "could not register the earlier floti's logon task to uninstall (schtasks exited $LASTEXITCODE)." }
+& schtasks.exe /Run /TN 'Floti host' | Out-Null
+if ($LASTEXITCODE -ne 0) { Fail "could not run the earlier floti's logon task (schtasks exited $LASTEXITCODE)." }
+# The host answers once `floti update-stop --ask` reaches it: 0 with
+# sessions to end, 7 with none; 3 while nothing answers yet.
+$answered = $false
+$previous = $ErrorActionPreference
+# What it says on standard error while nothing answers must not stop the script.
+$ErrorActionPreference = 'Continue'
+try {
+  for ($try = 0; $try -lt 600 -and -not $answered; $try++) {
+    & $floti update-stop --ask *> $null
+    if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 7) { $answered = $true } else { Start-Sleep -Milliseconds 100 }
+  }
+} finally {
+  $ErrorActionPreference = $previous
+}
+if (-not $answered) { Fail 'the host the logon task started did not answer within a minute.' }
+
 $work = Join-Path $env:RUNNER_TEMP "try-uninstall-$PID"
 New-Item -ItemType Directory -Path $work | Out-Null
 $copy = Join-Path $work 'floti.exe'
@@ -88,12 +155,13 @@ function Assert-Said([string[]]$Lines, [string]$Pattern, [string]$Run) {
 Write-Output 'floti uninstall:'
 $said = Invoke-Uninstall $floti @()
 Assert-Said $said '^host: stopped' ''
-Assert-Said $said '^sign-in entry: removed' ''
+Assert-Said $said '^sign-in entry: removed \(logon task "Floti host"\)$' ''
 Assert-Said $said '^PATH entry: removed' ''
 Assert-Said $said '^data: kept' ''
 Assert-Said $said '^floti: removed' ''
 if (Test-Path -LiteralPath $floti) { Fail "floti uninstall left $floti." }
 if (Get-ScheduledTask -TaskName 'Floti host' -ErrorAction SilentlyContinue) { Fail 'floti uninstall left the logon task "Floti host".' }
+if (Test-Path -LiteralPath $startup) { Fail "floti uninstall left the logon task's XML folder $startup." }
 $onPath = [Environment]::ExpandEnvironmentVariables((Get-UserPath)) -split ';' | ForEach-Object { $_.Trim().TrimEnd('\') }
 if ($onPath -contains $folder) { Fail "floti uninstall left $folder on the user's Path." }
 if ($hadApp) {

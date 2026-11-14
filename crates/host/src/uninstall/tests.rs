@@ -36,15 +36,17 @@ fn the_host_line_says_how_many_sessions_it_ended() {
 fn each_oss_entry_is_named_as_a_person_calls_it() {
     let binary = Path::new("/home/me/.local/bin/floti");
     assert_eq!(
-        entry_name(&windows::logon_task(Path::new(r"C:\Floti\floti.exe"), "me").unwrap()),
+        entry_name(&HostStart::WhenNeeded {
+            leftover: windows::LEFTOVER_TASK
+        }),
         "logon task \"Floti host\""
     );
     assert_eq!(
-        entry_name(&macos::launch_agent(binary).unwrap()),
+        entry_name(&HostStart::AtSignIn(macos::launch_agent(binary).unwrap())),
         "LaunchAgent dev.floti.host"
     );
     assert_eq!(
-        entry_name(&linux::user_unit(binary).unwrap()),
+        entry_name(&HostStart::AtSignIn(linux::user_unit(binary).unwrap())),
         "systemd user unit floti.service"
     );
 }
@@ -244,13 +246,14 @@ fn plan(
     layout: Option<Folders>,
 ) -> Result<Vec<PurgeTarget>, String> {
     let folders = dirs.folders();
-    let definition = linux::user_unit(Path::new("/home/me/.local/bin/floti")).unwrap();
+    let start =
+        HostStart::AtSignIn(linux::user_unit(Path::new("/home/me/.local/bin/floti")).unwrap());
     purge_plan(&Uninstall {
         env,
         folders: &folders,
         layout,
         running: Path::new("floti"),
-        definition: &definition,
+        start: &start,
         secret_entry: StoreEntry::installed(),
         purge: true,
     })
@@ -381,14 +384,15 @@ fn the_home_folder_a_folder_holding_it_and_claude_and_ssh_are_never_purged() {
     // Where floti would use it, an override's home folder is still refused.
     let mut folders = dirs.folders();
     folders.data = home.clone();
-    let definition = linux::user_unit(Path::new("/home/me/.local/bin/floti")).unwrap();
+    let start =
+        HostStart::AtSignIn(linux::user_unit(Path::new("/home/me/.local/bin/floti")).unwrap());
     let env = dirs.user_env();
     let refused = purge_plan(&Uninstall {
         env: &env,
         folders: &folders,
         layout: Some(folders.clone()),
         running: Path::new("floti"),
-        definition: &definition,
+        start: &start,
         secret_entry: StoreEntry::installed(),
         purge: true,
     })

@@ -8,7 +8,7 @@
 
 use std::path::Path;
 
-use super::{StartAtSignIn, StartupDefinition, StartupKind, binary_text};
+use super::{HostStart, HostStartup, StartupDefinition, StartupKind, binary_text};
 use crate::Result;
 
 /// The unit's name (design I11).
@@ -21,9 +21,9 @@ pub const USER_FOLDER: &str = ".config/systemd/user";
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Native;
 
-impl StartAtSignIn for Native {
-    fn definition(&self, binary: &Path) -> Result<StartupDefinition> {
-        user_unit(binary)
+impl HostStartup for Native {
+    fn host_start(&self, binary: &Path) -> Result<HostStart> {
+        user_unit(binary).map(HostStart::AtSignIn)
     }
 }
 
@@ -71,7 +71,7 @@ WantedBy=default.target
         kind: StartupKind::SystemdUserUnit,
         name: UNIT_NAME.to_owned(),
         file_name: UNIT_NAME.to_owned(),
-        user_folder: Some(USER_FOLDER),
+        user_folder: USER_FOLDER,
         contents,
     })
 }

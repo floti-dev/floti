@@ -2,15 +2,28 @@
 //! computer that is to be a host, usually through ssh by the desktop that
 //! installed it there.
 //!
-//! It makes the data folder and the host's key when they are absent, writes
-//! the start-at-sign-in definition for this floti (the logon task "Floti
-//! host", the LaunchAgent `dev.floti.host` or the user unit `floti.service`),
-//! registers it with the OS's per-user mechanism, replacing its own entry
-//! when there is one, and starts the host through that mechanism in the
-//! user's signed-in session ([`register`]). It never starts the host as its
-//! own child, so a setup run over ssh leaves no host under ssh, which
+//! It makes the data folder and the host's key when they are absent. Then,
+//! how the host starts depends on the OS ([`HostStart`]):
+//!
+//! - On macOS and Linux it writes the start-at-sign-in definition for this
+//!   floti (the LaunchAgent `dev.floti.host` or the user unit
+//!   `floti.service`), registers it with the OS's per-user mechanism,
+//!   replacing its own entry when there is one, and starts the host through
+//!   that mechanism in the user's signed-in session ([`register`]). With
+//!   nobody signed in, it starts nothing.
+//! - On Windows it registers nothing and starts nothing: the host starts
+//!   when a client needs one, the desktop app when no host answers it, or
+//!   `floti connect`, each with no console. A host setup started would have
+//!   no `--desktop`, and since every install runs setup through
+//!   `floti install-self`, the desktop app would find it running and never
+//!   show its notification area icon. Setup deletes the logon task "Floti
+//!   host" an earlier floti registered, and its XML
+//!   ([`register::remove_leftovers`]); a host that task started runs on.
+//!
+//! It never starts the host as its own child, so a setup run over ssh
+//! leaves no host under ssh, which
 //! [`launch_refusal`](crate::platform::startup::launch_refusal) refuses
-//! anyway. With nobody signed in, it starts nothing.
+//! anyway.
 //!
 //! On Linux it first turns lingering on for a server, a computer that does
 //! not boot to a desktop, so the user's service manager runs the unit from
@@ -52,7 +65,10 @@
 //! - [`KEEPS_RUNNING_LINE`], status 0: the same, on a computer where it
 //!   keeps running with nobody signed in (the Linux unit with lingering on).
 //! - [`AT_NEXT_SIGN_IN_LINE`], status [`AT_NEXT_SIGN_IN_EXIT`]: registered,
-//!   and nobody is signed in, so the host starts at the next sign-in.
+//!   and nobody is signed in, so the host starts at the next sign-in (macOS
+//!   and Linux).
+//! - [`WHEN_NEEDED_LINE`], status 0: on Windows, nothing registered or
+//!   started; the host starts when Floti or a connection needs it.
 //! - [`START_ON_CONNECT_LINE`], status 0: in a WSL distro whose systemd user
 //!   manager does not answer (`systemctl --user show-environment`), so no
 //!   unit would ever run. Nothing is registered or started; setup records
@@ -94,9 +110,9 @@ use crate::platform::folders::{self, Folders, UserEnv};
 use crate::platform::installs;
 pub use crate::platform::startup::register::Linger;
 use crate::platform::startup::register::{
-    NativeSystem, SignInSystem, Started, register_and_start, user_manager_answers,
+    self, NativeSystem, SignInSystem, Started, register_and_start, user_manager_answers,
 };
-use crate::platform::startup::{self, Account, StartAtSignIn, StartupDefinition, StartupKind};
+use crate::platform::startup::{self, Account, HostStart, HostStartup, StartupKind};
 use crate::platform::terminal_size::{Foreground, Native as NativeTerminal};
 use crate::platform::user_path::{self, UserPath};
 use crate::server::{HOST_KEY_FILE, local_endpoint};
@@ -118,6 +134,10 @@ pub const START_ON_CONNECT_LINE: &str = "The Floti host starts when a client con
 
 /// What `floti setup` prints when nobody is signed in to start it in.
 pub const AT_NEXT_SIGN_IN_LINE: &str = "The Floti host starts at the next sign-in.";
+
+/// What `floti setup` prints on Windows, where nothing starts the host at
+/// sign-in.
+pub const WHEN_NEEDED_LINE: &str = "The Floti host starts when Floti or a connection needs it.";
 
 /// The exit status when the host was registered but nobody is signed in.
 pub const AT_NEXT_SIGN_IN_EXIT: u8 = 10;
@@ -144,6 +164,9 @@ pub enum SetupOutcome {
     /// Nothing is registered: in a WSL distro with no systemd user manager,
     /// `floti connect` starts the host when a client connects.
     StartsOnConnect,
+    /// Nothing is registered or started: on Windows a client starts the host
+    /// when it needs one.
+    StartsWhenNeeded,
     /// Why it failed, as one line.
     Failed(String),
 }
@@ -155,10 +178,18 @@ impl SetupOutcome {
         !matches!(self, Self::Failed(_))
     }
 
+    /// Whether setup found nobody signed in here, so the desktop app is not
+    /// offered: only where the host waits for the next sign-in.
+    pub fn found_nobody_signed_in(&self) -> bool {
+        matches!(self, Self::AtNextSignIn)
+    }
+
     /// The process's exit status.
     pub fn code(&self) -> u8 {
         match self {
-            Self::Running | Self::KeepsRunning | Self::StartsOnConnect => 0,
+            Self::Running | Self::KeepsRunning | Self::StartsOnConnect | Self::StartsWhenNeeded => {
+                0
+            }
             Self::AtNextSignIn => AT_NEXT_SIGN_IN_EXIT,
             Self::Failed(_) => 1,
         }
@@ -172,6 +203,7 @@ impl SetupOutcome {
             Self::KeepsRunning => Some(KEEPS_RUNNING_LINE),
             Self::AtNextSignIn => Some(AT_NEXT_SIGN_IN_LINE),
             Self::StartsOnConnect => Some(START_ON_CONNECT_LINE),
+            Self::StartsWhenNeeded => Some(WHEN_NEEDED_LINE),
             Self::Failed(_) => None,
         }
     }
@@ -252,7 +284,9 @@ pub fn run_setup(options: SetupOptions) -> u8 {
         }
     }
     if outcome.offers_desktop() {
-        native_desktop(options.desktop, outcome != SetupOutcome::AtNextSignIn);
+        // Where nothing waits for a sign-in, whether a person is at this
+        // session is the display check's: an ssh login to Windows has none.
+        native_desktop(options.desktop, !outcome.found_nobody_signed_in());
     }
     outcome.code()
 }
@@ -350,27 +384,29 @@ async fn native_setup(linger: Linger) -> SetupOutcome {
             return SetupOutcome::Failed(format!("could not tell where this floti is: {err}"));
         }
     };
-    let definition = match startup::Native.definition(&binary) {
-        Ok(definition) => definition,
+    let start = match startup::Native.host_start(&binary) {
+        Ok(start) => start,
         Err(err) => return SetupOutcome::Failed(err.to_string()),
     };
     setup(
         &UserEnv::from_process(),
         &NativeSystem,
-        &definition,
+        &start,
         linger,
         ANSWER_DEADLINE,
     )
     .await
 }
 
-/// Sets up the host for the user `env` describes, registering `definition`
-/// through `system` with lingering settled as `linger` says, and, once it is
-/// started, waits up to `answer_within` for it to answer.
+/// Sets up the host for the user `env` describes as `start` says: for a
+/// start at sign-in, registers its definition through `system` with
+/// lingering settled as `linger` says, and, once it is started, waits up to
+/// `answer_within` for it to answer; for a start when needed, takes out
+/// what an earlier floti registered and starts nothing.
 pub async fn setup(
     env: &UserEnv,
     system: &dyn SignInSystem,
-    definition: &StartupDefinition,
+    start: &HostStart,
     linger: Linger,
     answer_within: Duration,
 ) -> SetupOutcome {
@@ -387,7 +423,8 @@ pub async fn setup(
         Err(why) => return SetupOutcome::Failed(why),
     };
     let on_connect = folders.data.join(START_ON_CONNECT_FILE);
-    if definition.kind == StartupKind::SystemdUserUnit
+    if let HostStart::AtSignIn(definition) = start
+        && definition.kind == StartupKind::SystemdUserUnit
         && system.inside_wsl()
         && !user_manager_answers(system)
     {
@@ -404,7 +441,19 @@ pub async fn setup(
     {
         return SetupOutcome::Failed(format!("could not remove {}: {err}", on_connect.display()));
     }
-    match register_and_start(system, definition, &home, &folders.data, linger) {
+    let definition = match start {
+        HostStart::AtSignIn(definition) => definition,
+        HostStart::WhenNeeded { leftover } => {
+            return match register::remove_leftovers(system, start, &folders.data) {
+                Ok(_) => SetupOutcome::StartsWhenNeeded,
+                Err(why) => SetupOutcome::Failed(format!(
+                    "could not delete the logon task \"{}\" an earlier floti registered: {why}",
+                    leftover.name
+                )),
+            };
+        }
+    };
+    match register_and_start(system, definition, &home, linger) {
         Ok(Started::AtNextSignIn) => SetupOutcome::AtNextSignIn,
         Ok(started @ (Started::Running | Started::KeepsRunning)) => {
             if !answers(&folders, &key, answer_within).await {

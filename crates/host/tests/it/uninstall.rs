@@ -25,8 +25,10 @@ use floti_host::platform::process_table::ProcessRow;
 use floti_host::platform::process_tree::Outliving;
 use floti_host::platform::secret_seal::StoreEntry;
 use floti_host::platform::standalone::{Native as NativeStandalone, Standalone};
-use floti_host::platform::startup::register::{OsCommand, Ran, SignInSystem, definition_file};
-use floti_host::platform::startup::{self, StartAtSignIn, StartupDefinition, StartupKind};
+use floti_host::platform::startup::register::{
+    OsCommand, Ran, SignInSystem, definition_file, leftover_task_file,
+};
+use floti_host::platform::startup::{self, HostStart, HostStartup, StartupKind};
 use floti_host::testkit::TestDirs;
 use floti_host::uninstall::{
     Closed, DESKTOP_SETTINGS_LINE, HostStop, IN_SESSION_LINE, JOB_ENDS_IT_FIRST, LINGER_LINE,
@@ -216,7 +218,9 @@ struct World {
     folders: Folders,
     apps: PathBuf,
     binary: PathBuf,
-    definition: StartupDefinition,
+    /// How the host starts on this OS: the entry install registered, or on
+    /// Windows the logon task an earlier floti registered.
+    start: HostStart,
 }
 
 struct Outcome {
@@ -244,9 +248,9 @@ impl World {
         env.vars
             .insert(DESKTOP_DIR_VAR.into(), apps.clone().into_os_string());
         let binary = NativeStandalone.binary(&env).expect("floti's place");
-        let definition = startup::Native
-            .definition(&binary)
-            .expect("this OS's definition");
+        let start = startup::Native
+            .host_start(&binary)
+            .expect("how this OS starts the host");
         let folders = dirs.folders();
         Self {
             dirs,
@@ -254,7 +258,7 @@ impl World {
             folders,
             apps,
             binary,
-            definition,
+            start,
         }
     }
 
@@ -288,7 +292,11 @@ impl World {
 
         let entry = world.entry_file();
         std::fs::create_dir_all(entry.parent().unwrap()).unwrap();
-        std::fs::write(&entry, world.definition.file_bytes()).unwrap();
+        let bytes = match &world.start {
+            HostStart::AtSignIn(definition) => definition.file_bytes(),
+            HostStart::WhenNeeded { .. } => b"<Task/>".to_vec(),
+        };
+        std::fs::write(&entry, bytes).unwrap();
 
         std::fs::write(world.folders.data.join("floti.db"), b"history").unwrap();
         std::fs::write(world.folders.logs.join("host.log"), b"log").unwrap();
@@ -318,8 +326,19 @@ impl World {
             .unwrap_or_default()
     }
 
+    /// The start-at-sign-in entry's file, or on Windows the XML an earlier
+    /// floti kept of its logon task.
     fn entry_file(&self) -> PathBuf {
-        definition_file(&self.definition, &self.dirs.home, &self.folders.data)
+        match &self.start {
+            HostStart::AtSignIn(definition) => definition_file(definition, &self.dirs.home),
+            HostStart::WhenNeeded { leftover } => leftover_task_file(leftover, &self.folders.data),
+        }
+    }
+
+    /// Whether this OS's entry is the systemd user unit, whose lingering is
+    /// left on and said so.
+    fn lingers(&self) -> bool {
+        matches!(&self.start, HostStart::AtSignIn(definition) if definition.kind == StartupKind::SystemdUserUnit)
     }
 
     fn desktop(&self) -> Option<Desktop> {
@@ -363,7 +382,7 @@ impl World {
             folders: &self.folders,
             layout,
             running,
-            definition: &self.definition,
+            start: &self.start,
             secret_entry: StoreEntry::for_moved_data_folder(&self.folders.data),
             purge,
         };
@@ -380,9 +399,9 @@ impl World {
     fn removed_lines(&self) -> Vec<String> {
         let mut lines = vec![format!(
             "sign-in entry: removed ({})",
-            entry_name(&self.definition)
+            entry_name(&self.start)
         )];
-        if self.definition.kind == StartupKind::SystemdUserUnit {
+        if self.lingers() {
             lines.push(LINGER_LINE.to_owned());
         }
         lines.push(format!(
@@ -491,7 +510,7 @@ fn a_second_run_finds_nothing_and_exits_0() {
         "host: not running".to_owned(),
         "sign-in entry: not found".to_owned(),
     ];
-    if world.definition.kind == StartupKind::SystemdUserUnit {
+    if world.lingers() {
         wanted.push(LINGER_LINE.to_owned());
     }
     wanted.extend(["desktop app: not found", "PATH entry: not found"].map(str::to_owned));

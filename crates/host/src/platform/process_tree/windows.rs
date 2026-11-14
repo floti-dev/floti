@@ -15,8 +15,13 @@
 //! starts afterwards is in the job, each pseudoconsole's `conhost.exe`
 //! included, and Windows closes the handle when the host ends, however it
 //! ends.
+//!
+//! A host is started with no console at all (`DETACHED_PROCESS`), never with
+//! `CREATE_NO_WINDOW`, which gives a console program a console of its own,
+//! hidden. Every console program a host with no console starts outside a
+//! terminal is started with `CREATE_NO_WINDOW`, or it would open a window.
 
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::io;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::process::CommandExt;
@@ -35,12 +40,13 @@ use windows_sys::Win32::System::JobObjects::{
     JobObjectExtendedLimitInformation, QueryInformationJobObject, SetInformationJobObject,
 };
 use windows_sys::Win32::System::Threading::{
-    CREATE_BREAKAWAY_FROM_JOB, CREATE_NO_WINDOW, CreateProcessW, GetCurrentProcess,
+    CREATE_BREAKAWAY_FROM_JOB, CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW,
+    CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DETACHED_PROCESS, GetCurrentProcess,
     GetExitCodeProcess, OpenProcess, PROCESS_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION,
     PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, STARTUPINFOW, TerminateProcess, WaitForSingleObject,
 };
 
-use super::{Ending, Outliving, ProcessTree, Started, start_outliving};
+use super::{Detached, Ending, Outliving, ProcessTree, Started, start_outliving};
 use crate::{Error, Result};
 
 /// Whether this process's tree ends with it: decided at the first ask, and
@@ -138,7 +144,39 @@ impl ProcessTree for Native {
     }
 
     fn start_alone(&self, program: &Path, args: &[&str]) -> io::Result<Box<dyn Started>> {
-        create_alone(program, args, true)
+        create_alone(
+            program,
+            args,
+            CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB,
+            None,
+        )
+    }
+
+    fn start_detached(
+        &self,
+        program: &Path,
+        args: &[&str],
+        env_remove: &[&str],
+    ) -> io::Result<Detached> {
+        let environment =
+            (!env_remove.is_empty()).then(|| environment_block(std::env::vars_os(), env_remove));
+        let mut started = None;
+        let outliving = start_outliving(
+            &mut |breakaway| {
+                let apart = if breakaway {
+                    CREATE_BREAKAWAY_FROM_JOB
+                } else {
+                    0
+                };
+                let flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | apart;
+                started = Some(create_alone(program, args, flags, environment.as_deref())?);
+                Ok(())
+            },
+            &this_job_ends_what_it_holds,
+        )?;
+        let process =
+            started.ok_or_else(|| io::Error::other("the host's start answered with no process"))?;
+        Ok(Detached { process, outliving })
     }
 
     // A pipe for its output would need every inheritable handle passed
@@ -148,18 +186,63 @@ impl ProcessTree for Native {
     // unless that job ends what it holds.
     fn start_apart(&self, program: &Path, args: &[&str]) -> io::Result<Outliving> {
         start_outliving(
-            &mut |breakaway| create_alone(program, args, breakaway).map(drop),
+            &mut |breakaway| {
+                let flags = if breakaway {
+                    CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB
+                } else {
+                    CREATE_NO_WINDOW
+                };
+                create_alone(program, args, flags, None).map(drop)
+            },
             &this_job_ends_what_it_holds,
         )
     }
 }
 
-/// Starts `program` with `args` passing it no handle, with no window, and
-/// out of this process's job when `breakaway`. `std::process::Command`
-/// always lets a child inherit every inheritable handle, which would keep
-/// the pipes this process was handed open for as long as the child runs:
-/// `CreateProcessW` is told to pass none.
-fn create_alone(program: &Path, args: &[&str], breakaway: bool) -> io::Result<Box<dyn Started>> {
+/// The environment block `CreateProcessW` takes for `vars` with each of
+/// `removed` left out, by name and ignoring case as Windows names them:
+/// `NAME=value` entries in UTF-16, each ending in NUL, sorted by name
+/// ignoring case as Windows keeps them, and one more NUL to end the block.
+pub(super) fn environment_block(
+    vars: impl IntoIterator<Item = (OsString, OsString)>,
+    removed: &[&str],
+) -> Vec<u16> {
+    let upper = |name: &OsStr| name.to_string_lossy().to_uppercase();
+    let mut kept: Vec<(OsString, OsString)> = vars
+        .into_iter()
+        .filter(|(name, _)| {
+            !removed
+                .iter()
+                .any(|gone| name.to_string_lossy().eq_ignore_ascii_case(gone))
+        })
+        .collect();
+    kept.sort_by_key(|(name, _)| upper(name));
+    let mut block: Vec<u16> = Vec::new();
+    for (name, value) in &kept {
+        block.extend(name.encode_wide());
+        block.push(u16::from(b'='));
+        block.extend(value.encode_wide());
+        block.push(0);
+    }
+    if kept.is_empty() {
+        // An empty block is still two NULs.
+        block.push(0);
+    }
+    block.push(0);
+    block
+}
+
+/// Starts `program` with `args` passing it no handle, with `flags`, and with
+/// `environment` (a block [`environment_block`] made) or this process's.
+/// `std::process::Command` always lets a child inherit every inheritable
+/// handle, which would keep the pipes this process was handed open for as
+/// long as the child runs: `CreateProcessW` is told to pass none.
+fn create_alone(
+    program: &Path,
+    args: &[&str],
+    flags: u32,
+    environment: Option<&[u16]>,
+) -> io::Result<Box<dyn Started>> {
     let mut line: Vec<u16> = Vec::new();
     let words = std::iter::once(program.as_os_str()).chain(args.iter().map(OsStr::new));
     for (at, word) in words.enumerate() {
@@ -189,9 +272,18 @@ fn create_alone(program: &Path, args: &[&str], breakaway: bool) -> io::Result<Bo
     let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
     startup.cb = u32::try_from(std::mem::size_of::<STARTUPINFOW>()).unwrap_or(u32::MAX);
     let mut started: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+    let (flags, environment) = match environment {
+        Some(block) => (
+            flags | CREATE_UNICODE_ENVIRONMENT,
+            block.as_ptr().cast::<std::ffi::c_void>(),
+        ),
+        None => (flags, std::ptr::null()),
+    };
     // SAFETY: `application` and `line` are NUL-terminated and outlive
-    // the call, `line` is writable as CreateProcessW asks, and the
-    // environment and folder are this process's (null).
+    // the call, `line` is writable as CreateProcessW asks, the environment
+    // is this process's (null) or a UTF-16 block ending in two NULs that
+    // outlives the call, as CREATE_UNICODE_ENVIRONMENT says, and the folder
+    // is this process's (null).
     let made = unsafe {
         CreateProcessW(
             application.as_ptr(),
@@ -199,12 +291,8 @@ fn create_alone(program: &Path, args: &[&str], breakaway: bool) -> io::Result<Bo
             std::ptr::null(),
             std::ptr::null(),
             0,
-            if breakaway {
-                CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB
-            } else {
-                CREATE_NO_WINDOW
-            },
-            std::ptr::null(),
+            flags,
+            environment,
             std::ptr::null(),
             &startup,
             &mut started,
@@ -239,8 +327,8 @@ fn this_job_ends_what_it_holds() -> bool {
     read != 0 && limits.BasicLimitInformation.LimitFlags & JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE != 0
 }
 
-/// The handle of a process [`Native::start_alone`] started, closed when
-/// this is dropped.
+/// The handle of a process [`Native::start_alone`] or
+/// [`Native::start_detached`] started, closed when this is dropped.
 struct Alone(HANDLE);
 
 // SAFETY: a process handle may be waited on and closed from any thread.
@@ -450,6 +538,30 @@ mod tests {
 
     use super::*;
     use crate::session::tests::fake_agent_exe;
+
+    #[test]
+    fn the_environment_block_leaves_out_the_named_variables_ignoring_case_and_ends_in_two_nuls() {
+        let vars = [
+            ("Path", r"C:\bin"),
+            ("SSH_CONNECTION", "203.0.113.9 50022 192.0.2.1 22"),
+            ("ssh_client", "203.0.113.9 50022 22"),
+            ("APPDATA", r"C:\Users\me\AppData\Roaming"),
+        ]
+        .map(|(name, value)| (OsString::from(name), OsString::from(value)));
+        let block = environment_block(vars, &["SSH_CONNECTION", "SSH_CLIENT"]);
+        assert_eq!(&block[block.len() - 2..], &[0, 0]);
+        let entries: Vec<String> = block[..block.len() - 1]
+            .split(|&unit| unit == 0)
+            .filter(|entry| !entry.is_empty())
+            .map(String::from_utf16_lossy)
+            .collect();
+        // Sorted by name, ignoring case, as Windows keeps them.
+        assert_eq!(
+            entries,
+            [r"APPDATA=C:\Users\me\AppData\Roaming", r"Path=C:\bin"]
+        );
+        assert_eq!(environment_block(Vec::new(), &[]), [0, 0]);
+    }
 
     /// A program that asks to leave the job this process put itself in
     /// starts, outside it.

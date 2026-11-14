@@ -25,8 +25,7 @@ gets skipped.
   opened. On Windows browser sign-ins carry over; on macOS and Linux sites in
   the browser pane ask you to sign in once more.
 - Your templates, themes, agents and plugins move from `~/.config/helm` to
-  `~/.config/floti` once, and the host, the one started at sign-in included,
-  reads them there.
+  `~/.config/floti` once, and every host reads them there.
 - On Windows the app installs in `%LOCALAPPDATA%\Programs\Floti\desktop`,
   beside floti's `bin`, and replaces an installed Helm together with its
   uninstall entry and shortcut. On macOS, if updating from Helm stops at the
@@ -100,12 +99,20 @@ gets skipped.
   earlier release is refused at connect with a sentence saying which side to
   update.
 - Installing Floti on Windows puts floti where the install script does,
-  `%LOCALAPPDATA%\Programs\Floti\bin`, adds that folder to your PATH and sets
-  the host up to start when you sign in, so another computer that reaches
-  this one over ssh finds `floti` and the host already running. On macOS and
+  `%LOCALAPPDATA%\Programs\Floti\bin`, and adds that folder to your PATH, so
+  another computer that reaches this one over ssh finds `floti`. On macOS and
   Linux the desktop puts floti in `~/.local/bin` and sets the host up the
   first time it starts, and again whenever it carries a newer floti. The
   desktop runs that floti from then on.
+- On Windows nothing starts the host at sign-in or at install, and no window
+  ever opens for it: the host starts when Floti or a connection needs it,
+  with no console, so there is no window to close by mistake. `floti setup`
+  registers nothing there and says the host starts when Floti or a
+  connection needs it. The logon task "Floti host" an earlier preview
+  registered, which opened a console window at every sign-in, is deleted
+  when Floti installs or updates and by `floti uninstall`; the host it
+  started keeps running until its next restart. macOS and Linux still start
+  the host at sign-in.
 - On macOS and Linux, installing floti now puts it on your PATH: when
   `~/.local/bin` is not on it already, one line marked `# added by floti`
   goes at the end of the startup file your shell reads (`~/.zshenv` for zsh,

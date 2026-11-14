@@ -15,6 +15,7 @@ mod agents;
 mod attached_devices;
 mod bridge;
 mod carry;
+mod console;
 mod content;
 mod discovery;
 mod fake_agent;

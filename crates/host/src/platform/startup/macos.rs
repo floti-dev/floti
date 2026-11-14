@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use super::{StartAtSignIn, StartupDefinition, StartupKind, binary_text, xml_escape};
+use super::{HostStart, HostStartup, StartupDefinition, StartupKind, binary_text, xml_escape};
 use crate::Result;
 
 /// The launchd label (design I11).
@@ -18,9 +18,9 @@ pub const USER_FOLDER: &str = "Library/LaunchAgents";
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Native;
 
-impl StartAtSignIn for Native {
-    fn definition(&self, binary: &Path) -> Result<StartupDefinition> {
-        launch_agent(binary)
+impl HostStartup for Native {
+    fn host_start(&self, binary: &Path) -> Result<HostStart> {
+        launch_agent(binary).map(HostStart::AtSignIn)
     }
 }
 
@@ -58,7 +58,7 @@ pub fn launch_agent(binary: &Path) -> Result<StartupDefinition> {
         kind: StartupKind::LaunchAgent,
         name: LABEL.to_owned(),
         file_name: format!("{LABEL}.plist"),
-        user_folder: Some(USER_FOLDER),
+        user_folder: USER_FOLDER,
         contents,
     })
 }
