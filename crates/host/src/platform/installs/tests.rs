@@ -162,19 +162,22 @@ fn windows_counts_only_the_installed_program_s_processes() {
         name: "Floti",
         path: "C:\\Users\\Some One\\AppData\\Local\\Programs\\Floti\\desktop".into(),
     };
-    let installed = r#""C:\Users\Some One\AppData\Local\Programs\Floti\desktop\Floti.exe" --type=renderer"#;
+    let installed =
+        r#""C:\Users\Some One\AppData\Local\Programs\Floti\desktop\Floti.exe" --type=renderer"#;
     assert!(windows::Native.is_desktop_process(&desktop, &row("Floti.exe", Some(installed))));
     assert!(
         windows::Native
             .is_desktop_process(&desktop, &row("floti.EXE", Some(&installed.to_uppercase())))
     );
-    let unquoted = r"C:\Users\Some One\AppData\Local\Programs\Floti\desktop\Floti.exe --type=gpu-process";
+    let unquoted =
+        r"C:\Users\Some One\AppData\Local\Programs\Floti\desktop\Floti.exe --type=gpu-process";
     assert!(windows::Native.is_desktop_process(&desktop, &row("Floti.exe", Some(unquoted))));
     assert!(!windows::Native.is_desktop_process(
         &desktop,
         &row("Floti.exe", Some(r"C:\Temp\portable\Floti.exe"))
     ));
-    let host = r#""C:\Users\Some One\AppData\Local\Programs\Floti\desktop\resources\floti.exe" host"#;
+    let host =
+        r#""C:\Users\Some One\AppData\Local\Programs\Floti\desktop\resources\floti.exe" host"#;
     assert!(!windows::Native.is_desktop_process(&desktop, &row("floti.exe", Some(host))));
 }
 
@@ -198,7 +201,10 @@ fn windows_never_takes_the_host_for_the_app_though_their_names_differ_only_by_ca
     // Whose command line could not be read: never the app, whatever its
     // image name says.
     for name in ["floti.exe", "Floti.exe", "FLOTI.EXE"] {
-        assert!(!windows::Native.is_desktop_process(&desktop, &row(name, None)), "{name}");
+        assert!(
+            !windows::Native.is_desktop_process(&desktop, &row(name, None)),
+            "{name}"
+        );
     }
     // A program whose path only starts like the app's is another program.
     assert!(!windows::Native.is_desktop_process(
@@ -240,7 +246,10 @@ fn macos_counts_processes_run_from_inside_the_bundle() {
     };
     assert!(macos::Native.is_desktop_process(
         &desktop,
-        &row("Floti", Some("/Applications/Floti.app/Contents/MacOS/Floti"))
+        &row(
+            "Floti",
+            Some("/Applications/Floti.app/Contents/MacOS/Floti")
+        )
     ));
     assert!(macos::Native.is_desktop_process(
         &desktop,
@@ -358,7 +367,10 @@ fn macos_installs_a_first_app_in_the_user_s_applications_folder() {
     let dirs = TestDirs::new();
     let user = env(&dirs.home, &[]);
     let target = macos::Native.desktop_target(&user).unwrap();
-    assert_eq!(target.path, dirs.home.join("Applications").join("Floti.app"));
+    assert_eq!(
+        target.path,
+        dirs.home.join("Applications").join("Floti.app")
+    );
 }
 
 #[test]
@@ -399,7 +411,8 @@ fn linux_counts_the_app_image_s_runtime() {
         path: "/home/someone/Applications/Floti.AppImage".into(),
     };
     assert!(
-        linux::Native.is_desktop_process(&desktop, &row("Floti.AppImage", Some("./Floti.AppImage")))
+        linux::Native
+            .is_desktop_process(&desktop, &row("Floti.AppImage", Some("./Floti.AppImage")))
     );
     assert!(linux::Native.is_desktop_process(
         &desktop,
@@ -767,7 +780,10 @@ fn linux_adds_a_menu_entry_and_its_icon_under_the_data_home() {
         .add_launcher(&env(&dirs.home, &[]), &desktop)
         .unwrap()
         .unwrap();
-    assert_eq!(entry, share.join("applications").join("dev.floti.desktop.desktop"));
+    assert_eq!(
+        entry,
+        share.join("applications").join("dev.floti.desktop.desktop")
+    );
     let text = std::fs::read_to_string(&entry).unwrap();
     assert!(text.starts_with("[Desktop Entry]\n"), "{text}");
     for line in [
@@ -797,7 +813,12 @@ fn linux_adds_a_menu_entry_and_its_icon_under_the_data_home() {
         .add_launcher(&env(&dirs.home, &[("XDG_DATA_HOME", &data_home)]), &desktop)
         .unwrap()
         .unwrap();
-    assert_eq!(moved, data_home.join("applications").join("dev.floti.desktop.desktop"));
+    assert_eq!(
+        moved,
+        data_home
+            .join("applications")
+            .join("dev.floti.desktop.desktop")
+    );
     linux::Native
         .add_launcher(&env(&dirs.home, &[("XDG_DATA_HOME", &data_home)]), &desktop)
         .unwrap();
@@ -1050,11 +1071,17 @@ fn windows_finds_an_install_from_before_the_rename_and_prefers_floti_s() {
     assert_eq!(windows::Native.desktop_target(&user), Some(old.clone()));
     assert!(windows::Native.is_desktop_process(
         &old,
-        &row("Helm.exe", Some(&format!("\"{}\"", helm.join("Helm.exe").display())))
+        &row(
+            "Helm.exe",
+            Some(&format!("\"{}\"", helm.join("Helm.exe").display()))
+        )
     ));
     assert!(!windows::Native.is_desktop_process(&old, &row("Floti.exe", None)));
     let removal = windows::Native.removal(&user).unwrap();
-    assert_eq!(removal.uninstaller.unwrap().0, helm.join("Uninstall Helm.exe"));
+    assert_eq!(
+        removal.uninstaller.unwrap().0,
+        helm.join("Uninstall Helm.exe")
+    );
 
     // What the installer leaves in its place: the app in its new folder.
     let floti = Desktop {
@@ -1081,7 +1108,11 @@ fn macos_finds_a_helm_app_from_before_the_rename_and_prefers_floti_s() {
     let user = env(&dirs.home, &[(DESKTOP_DIR_VAR, &apps)]);
     let helm = apps.join("Helm.app");
     std::fs::create_dir_all(helm.join("Contents")).unwrap();
-    std::fs::write(helm.join("Contents").join("Info.plist"), macos::fake_plist("2.4.0")).unwrap();
+    std::fs::write(
+        helm.join("Contents").join("Info.plist"),
+        macos::fake_plist("2.4.0"),
+    )
+    .unwrap();
     assert_eq!(
         macos::Native.desktop(&user),
         Some(Desktop {
@@ -1091,7 +1122,11 @@ fn macos_finds_a_helm_app_from_before_the_rename_and_prefers_floti_s() {
     );
     let floti = apps.join("Floti.app");
     std::fs::create_dir_all(floti.join("Contents")).unwrap();
-    std::fs::write(floti.join("Contents").join("Info.plist"), macos::fake_plist("3.0.0")).unwrap();
+    std::fs::write(
+        floti.join("Contents").join("Info.plist"),
+        macos::fake_plist("3.0.0"),
+    )
+    .unwrap();
     assert_eq!(
         macos::Native.desktop(&user),
         Some(Desktop {
@@ -1122,12 +1157,23 @@ fn linux_updates_a_helm_app_image_into_floti_s_and_carries_its_menu_entry_over()
     );
     // The entry floti wrote for it, as it wrote it then.
     let old_entry = linux::Native.add_launcher(&user, &old).unwrap().unwrap();
-    assert_eq!(old_entry, data_home.join("applications").join("helm.desktop"));
+    assert_eq!(
+        old_entry,
+        data_home.join("applications").join("helm.desktop")
+    );
     let old_text = std::fs::read_to_string(&old_entry).unwrap();
-    assert!(old_text.lines().any(|line| line == "Name=Helm"), "{old_text}");
-    assert!(old_text.lines().any(|line| line == "Icon=helm"), "{old_text}");
+    assert!(
+        old_text.lines().any(|line| line == "Name=Helm"),
+        "{old_text}"
+    );
+    assert!(
+        old_text.lines().any(|line| line == "Icon=helm"),
+        "{old_text}"
+    );
 
-    let release = dirs.folder("download").join("Floti-3.0.0-linux-x64.AppImage");
+    let release = dirs
+        .folder("download")
+        .join("Floti-3.0.0-linux-x64.AppImage");
     std::fs::write(&release, b"new app").unwrap();
     let installed = linux::Native.install_desktop(&old, &release).unwrap();
 
@@ -1139,24 +1185,42 @@ fn linux_updates_a_helm_app_image_into_floti_s_and_carries_its_menu_entry_over()
         }
     );
     assert_eq!(std::fs::read(&installed.path).unwrap(), b"new app");
-    assert!(helm.exists(), "the old AppImage stays until it is removed apart");
+    assert!(
+        helm.exists(),
+        "the old AppImage stays until it is removed apart"
+    );
     linux::Native.remove_replaced(&old, &installed).unwrap();
     assert!(!helm.exists(), "the old AppImage is removed");
-    linux::Native.remove_replaced(&installed, &installed).unwrap();
-    assert!(installed.path.is_file(), "the app is never removed as its own old copy");
+    linux::Native
+        .remove_replaced(&installed, &installed)
+        .unwrap();
+    assert!(
+        installed.path.is_file(),
+        "the app is never removed as its own old copy"
+    );
     let entry = linux::Native
         .carry_launcher(&user, &old, &installed)
         .unwrap()
         .unwrap();
     assert_eq!(
         entry,
-        data_home.join("applications").join("dev.floti.desktop.desktop")
+        data_home
+            .join("applications")
+            .join("dev.floti.desktop.desktop")
     );
     let text = std::fs::read_to_string(&entry).unwrap();
     assert!(text.lines().any(|line| line == "Name=Floti"), "{text}");
-    assert!(text.lines().any(|line| line == "StartupWMClass=dev.floti.desktop"), "{text}");
+    assert!(
+        text.lines()
+            .any(|line| line == "StartupWMClass=dev.floti.desktop"),
+        "{text}"
+    );
     assert!(!old_entry.exists(), "the old entry is removed");
-    let icons = data_home.join("icons").join("hicolor").join("256x256").join("apps");
+    let icons = data_home
+        .join("icons")
+        .join("hicolor")
+        .join("256x256")
+        .join("apps");
     assert!(!icons.join("helm.png").exists());
     assert!(icons.join("dev.floti.desktop.png").is_file());
     assert_eq!(linux::Native.desktop(&user), Some(installed));
@@ -1176,12 +1240,16 @@ fn linux_writes_no_menu_entry_for_an_app_image_floti_never_wrote_one_for() {
         path: dirs.folder("apps").join("Floti.AppImage"),
     };
     assert_eq!(
-        linux::Native.carry_launcher(&user, &old, &installed).unwrap(),
+        linux::Native
+            .carry_launcher(&user, &old, &installed)
+            .unwrap(),
         None
     );
     assert!(!data_home.join("applications").exists());
     assert_eq!(
-        linux::Native.carry_launcher(&user, &installed, &installed).unwrap(),
+        linux::Native
+            .carry_launcher(&user, &installed, &installed)
+            .unwrap(),
         None
     );
 }

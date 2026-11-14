@@ -749,10 +749,7 @@ impl Updater<'_> {
                     installed.name
                 ));
             }
-            match self
-                .installs
-                .carry_launcher(&self.env, app, &installed)
-            {
+            match self.installs.carry_launcher(&self.env, app, &installed) {
                 Ok(Some(entry)) => self.say(&format!("Its menu entry is {}.", entry.display())),
                 Ok(None) => {}
                 Err(err) => self.say(&format!(

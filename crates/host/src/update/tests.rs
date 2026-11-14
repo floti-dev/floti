@@ -167,7 +167,10 @@ impl Installs for FakeInstalls {
     }
 
     fn opener(&self, desktop: &Desktop) -> (PathBuf, Vec<String>) {
-        (desktop.path.join(format!("{}.exe", desktop.name)), Vec::new())
+        (
+            desktop.path.join(format!("{}.exe", desktop.name)),
+            Vec::new(),
+        )
     }
 
     fn remove_replaced(&self, _replaced: &Desktop, _installed: &Desktop) -> Result<()> {
@@ -777,7 +780,11 @@ fn a_running_app_is_waited_for_and_replaced_once_it_has_quit() {
         "{}",
         run.out
     );
-    assert!(run.out.contains("Floti is updated to 2.1.0."), "{}", run.out);
+    assert!(
+        run.out.contains("Floti is updated to 2.1.0."),
+        "{}",
+        run.out
+    );
     assert_eq!(
         *installs.desktop_installs.lock().unwrap(),
         vec![release.desktop.clone().unwrap()]

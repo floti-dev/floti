@@ -155,9 +155,7 @@ impl Installs for Native {
         // away once it is in.
         let installed = Desktop {
             name: DESKTOP_NAME,
-            path: desktop
-                .path
-                .with_file_name(Self::bundle_name(DESKTOP_NAME)),
+            path: desktop.path.with_file_name(Self::bundle_name(DESKTOP_NAME)),
         };
         let unpacked = beside(&installed.path, NEW_COPY);
         let old = beside(&installed.path, OLD_COPY);

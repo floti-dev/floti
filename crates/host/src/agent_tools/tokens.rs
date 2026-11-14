@@ -207,12 +207,24 @@ mod tests {
     fn a_grant_kept_under_the_names_from_before_the_rename_holds_the_families_now() {
         let mut tokens = Tokens::default();
         let grant = tokens.take_back(
-            &kept(&["helm-browser", "helm-sessions", "helm-plugin-notes", "floti-agents"]),
+            &kept(&[
+                "helm-browser",
+                "helm-sessions",
+                "helm-plugin-notes",
+                "floti-agents",
+            ]),
             SessionId(7),
         );
 
-        let holder = tokens.resolve(b"Bearer a kept token").expect("the kept token");
-        for family in ["floti-browser", "floti-sessions", "floti-plugin-notes", "floti-agents"] {
+        let holder = tokens
+            .resolve(b"Bearer a kept token")
+            .expect("the kept token");
+        for family in [
+            "floti-browser",
+            "floti-sessions",
+            "floti-plugin-notes",
+            "floti-agents",
+        ] {
             assert!(holder.holds(family), "{family}");
         }
         for old in ["helm-browser", "helm-sessions", "helm-plugin-notes"] {
@@ -222,7 +234,12 @@ mod tests {
         // What the host keeps for the next one is the names now.
         assert_eq!(
             tokens.kept(grant, 2).unwrap().families,
-            ["floti-browser", "floti-sessions", "floti-plugin-notes", "floti-agents"]
+            [
+                "floti-browser",
+                "floti-sessions",
+                "floti-plugin-notes",
+                "floti-agents"
+            ]
         );
     }
 

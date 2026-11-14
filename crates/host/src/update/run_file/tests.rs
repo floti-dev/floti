@@ -69,7 +69,10 @@ fn each_step_is_kept_and_the_end_says_how_it_went() {
     let dirs = TestDirs::new();
     let mut lock =
         RunLock::take(&dirs.data, ME, "Starting.", &alive(Knowable::Known(true))).unwrap();
-    lock.step("Waiting for Floti to quit; it is updated once it has.", true);
+    lock.step(
+        "Waiting for Floti to quit; it is updated once it has.",
+        true,
+    );
     assert_eq!(
         look(&dirs.data),
         Look::Running(RunRecord {

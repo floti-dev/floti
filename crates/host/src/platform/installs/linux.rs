@@ -246,7 +246,10 @@ impl Installs for Native {
         } else {
             // An AppImage from before the rename keeps the entry it had.
             text.replace(&format!("={ENTRY_NAME}\n"), &format!("={name}\n"))
-                .replace(&format!("Name={DESKTOP_NAME}\n"), &format!("Name={}\n", desktop.name))
+                .replace(
+                    &format!("Name={DESKTOP_NAME}\n"),
+                    &format!("Name={}\n", desktop.name),
+                )
         };
         write_into_place(&entry, text.as_bytes())?;
         Ok(Some(entry))
@@ -288,14 +291,21 @@ impl Installs for Native {
     }
 
     fn removal(&self, env: &UserEnv) -> Option<DesktopRemoval> {
-        let app_image = self.desktop(env).map_or(Self::app_image(env)?, |app| app.path);
+        let app_image = self
+            .desktop(env)
+            .map_or(Self::app_image(env)?, |app| app.path);
         // Both entries floti may have written: the app ID's, and the one it
         // wrote for an AppImage from before the rename.
         let launcher = Self::data_home(env)
             .map(|share| {
                 [ENTRY_NAME, HELM_ENTRY_NAME]
                     .into_iter()
-                    .flat_map(|name| [Self::icon_path(&share, name), Self::entry_path(&share, name)])
+                    .flat_map(|name| {
+                        [
+                            Self::icon_path(&share, name),
+                            Self::entry_path(&share, name),
+                        ]
+                    })
                     .collect::<Vec<_>>()
             })
             .into_iter()
