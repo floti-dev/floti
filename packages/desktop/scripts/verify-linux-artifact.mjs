@@ -4,7 +4,7 @@
 //
 // For the app inside it:
 //
-// - its executable (`helm`) is an x64 Linux program, the only architecture the
+// - its executable (`floti-desktop`) is an x64 Linux program, the only architecture the
 //   release builds;
 // - its native modules are unpacked beside the asar: better-sqlite3's prebuild,
 //   node-pty's addon (compiled by `pnpm install`, since node-pty ships no Linux
@@ -171,7 +171,7 @@ export function appProblems(root, { floti, sums, origin, modes = process.platfor
   }
 
   const program = join(root, 'floti-desktop')
-  if (!existsSync(program)) fail("helm, the app's executable, is missing")
+  if (!existsSync(program)) fail("floti-desktop, the app's executable, is missing")
   else {
     x64Linux(program, 'floti-desktop')
     executable(program, 'floti-desktop')
