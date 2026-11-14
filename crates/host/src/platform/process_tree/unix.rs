@@ -406,6 +406,13 @@ fn pause(step: Duration) {
 
 /// Every process running now that `root_pid` started, and every process
 /// those started, by parent process id, as `ps` lists them on macOS and
+/// Whether process `pid` has a console: macOS and Linux give no process a
+/// console window, so there is none to look for, and this is Unknown. The
+/// console tests ask it, through `floti-fake-gui`.
+pub fn console_of(_pid: u32) -> io::Result<Knowable<bool>> {
+    Ok(Knowable::Unknown)
+}
+
 /// Linux alike. A process whose parent ends is handed to another, so a
 /// parent id always names the live parent. Unknown when `ps` would not run.
 #[cfg(any(test, feature = "testkit"))]

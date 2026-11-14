@@ -12,20 +12,21 @@
 //! probe finds that one, and the one a host started with no flags shares,
 //! so the others failing to find one means there is none.
 //!
+//! macOS and Linux give no process a console, so there the probe says so
+//! (exit 3) and each test ends at once: there is nothing to look for.
+//!
 //! Every host here runs on the test's own folders and is asked to stop by
 //! the test, or by the guard that holds it when the test fails first.
-#![cfg(windows)]
 
-use std::os::windows::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+use floti_host::platform::process_tree::{Native as NativeTree, ProcessTree};
 use floti_host::platform::socket::Endpoint;
 use floti_host::server::LOCK_FILE;
 use floti_host::setup::{START_ON_CONNECT_FILE, START_ON_CONNECT_LINE};
 use floti_host::testkit::{PATIENCE, TestClient, TestDirs, record_test_host};
 use floti_protocol::channels::host::{HostStop, HostStopReason, HostStopRequest};
-use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
 const LOOK_AGAIN: Duration = Duration::from_millis(20);
 
@@ -36,6 +37,8 @@ enum Console {
     Has,
     /// It has none.
     None,
+    /// This OS gives no process a console.
+    NoneOnThisOs,
 }
 
 /// Whether process `pid` has a console, asked by `floti-fake-gui`.
@@ -48,11 +51,18 @@ fn console_of(pid: u32) -> Console {
     match output.status.code() {
         Some(0) => Console::Has,
         Some(1) => Console::None,
+        Some(3) => Console::NoneOnThisOs,
         _ => panic!(
             "the probe could not tell whether process {pid} has a console: {}",
             String::from_utf8_lossy(&output.stderr)
         ),
     }
+}
+
+/// Whether this OS gives a process a console to look for: this test
+/// process's, which every test runner here has, is asked.
+fn consoles_here() -> bool {
+    console_of(std::process::id()) != Console::NoneOnThisOs
 }
 
 /// `floti <args>` over the test's folders.
@@ -166,13 +176,21 @@ async fn exited(child: &mut Child, what: &str) -> Option<i32> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_probe_finds_a_console_in_a_host_started_with_no_flags_or_with_create_no_window() {
-    for (how, flags) in [("no flags", 0), ("CREATE_NO_WINDOW", CREATE_NO_WINDOW)] {
+    if !consoles_here() {
+        return;
+    }
+    // A plain start shares this test's console; a tree root outside a
+    // terminal is started with CREATE_NO_WINDOW, which gives it a console of
+    // its own, hidden: how a relaunch and floti connect started the host
+    // before.
+    for (how, hidden) in [("no flags", false), ("CREATE_NO_WINDOW", true)] {
         let dirs = TestDirs::new();
         let host = HostOnTestFolders::new(&dirs);
-        let mut child = floti(&dirs, &["host"])
-            .creation_flags(flags)
-            .spawn()
-            .expect("run floti host");
+        let mut command = floti(&dirs, &["host"]);
+        if hidden {
+            NativeTree.prepare_root(&mut command);
+        }
+        let mut child = command.spawn().expect("run floti host");
         // It answers, so it is past every start-up step that could exit.
         drop(TestClient::connect(&host.endpoint, &[]).await);
         assert_eq!(console_of(child.id()), Console::Has, "started with {how}");
@@ -183,6 +201,9 @@ async fn the_probe_finds_a_console_in_a_host_started_with_no_flags_or_with_creat
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_relaunched_host_has_no_console() {
+    if !consoles_here() {
+        return;
+    }
     let dirs = TestDirs::new();
     let host = HostOnTestFolders::new(&dirs);
     let mut first = floti(&dirs, &["host"]).spawn().expect("run floti host");
@@ -205,6 +226,9 @@ async fn a_relaunched_host_has_no_console() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_host_floti_connect_started_has_no_console() {
+    if !consoles_here() {
+        return;
+    }
     let dirs = TestDirs::new();
     // Where nothing runs, `floti connect` starts the host when setup left
     // this record.
@@ -235,6 +259,9 @@ async fn a_host_floti_connect_started_has_no_console() {
 /// for a process that has ended, so a wrong pid is never read as "none".
 #[test]
 fn the_probe_finds_no_console_in_a_program_with_none_and_cannot_tell_for_one_that_ended() {
+    if !consoles_here() {
+        return;
+    }
     let mut gui = Command::new(env!("CARGO_BIN_EXE_floti-fake-gui"))
         .arg("--fake-sleep=600000")
         .stdin(Stdio::null())

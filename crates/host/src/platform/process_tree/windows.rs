@@ -511,6 +511,27 @@ pub fn descendants(root_pid: u32) -> Knowable<Vec<u32>> {
     }))
 }
 
+/// Whether process `pid` has a console, hidden or not, asked by attaching
+/// this process to it (`AttachConsole`), which only a process with no
+/// console of its own may do: `floti-fake-gui`, a program built with none,
+/// asks it for the tests. A console it attached to is let go of at once.
+/// `Err` when that could not be told, such as for a process that has ended.
+pub fn console_of(pid: u32) -> io::Result<Knowable<bool>> {
+    use windows_sys::Win32::Foundation::ERROR_INVALID_HANDLE;
+    use windows_sys::Win32::System::Console::{AttachConsole, FreeConsole};
+    // SAFETY: plain calls on a process id.
+    if unsafe { AttachConsole(pid) } != 0 {
+        unsafe { FreeConsole() };
+        return Ok(Knowable::Known(true));
+    }
+    let err = io::Error::last_os_error();
+    if err.raw_os_error() == Some(ERROR_INVALID_HANDLE.cast_signed()) {
+        Ok(Knowable::Known(false))
+    } else {
+        Err(err)
+    }
+}
+
 /// When process `pid` started, in 100-nanosecond ticks since 1601, or
 /// `None` when it cannot be opened.
 #[cfg(any(test, feature = "testkit"))]

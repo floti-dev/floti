@@ -11,10 +11,11 @@
 //! With `--console-of=<pid>` it only says whether process `pid` has a
 //! console, hidden or not, by asking Windows to attach it to that console
 //! (`AttachConsole`), which only a program with no console of its own may
-//! ask: it exits 0 when `pid` has one, 1 when it has none, and 2, with why
-//! on standard error, when that could not be told, as on macOS and Linux,
-//! which have no consoles. The tests that a host Floti starts has no console
-//! ask it.
+//! ask: it exits 0 when `pid` has one, 1 when it has none, 2, with why on
+//! standard error, when that could not be told, and 3 on macOS and Linux,
+//! which give no process a console
+//! (`floti_host::platform::process_tree::console_of`). The tests that a host
+//! Floti starts has no console ask it.
 
 #![windows_subsystem = "windows"]
 
@@ -32,34 +33,17 @@ const DEFAULT_MS: u64 = 600_000;
 const LOG_VAR: &str = "FLOTI_FAKE_AGENT_LOG";
 
 /// Exits 0 when process `pid` has a console, 1 when it has none, 2 when
-/// that could not be told.
-#[cfg(windows)]
+/// that could not be told, and 3 where the OS gives no process a console.
 fn console_of(pid: u32) -> i32 {
-    use windows_sys::Win32::Foundation::{ERROR_INVALID_HANDLE, GetLastError};
-    use windows_sys::Win32::System::Console::{AttachConsole, FreeConsole};
-    // SAFETY: plain calls on a process id; a console attached to is let go
-    // of at once.
-    if unsafe { AttachConsole(pid) } != 0 {
-        unsafe { FreeConsole() };
-        return 0;
-    }
-    // SAFETY: reads the calling thread's last error.
-    match unsafe { GetLastError() } {
-        ERROR_INVALID_HANDLE => 1,
-        other => {
-            eprintln!(
-                "could not tell whether process {pid} has a console: {}",
-                std::io::Error::from_raw_os_error(other.cast_signed())
-            );
+    match floti_host::platform::process_tree::console_of(pid) {
+        Ok(Knowable::Known(true)) => 0,
+        Ok(Knowable::Known(false)) => 1,
+        Ok(Knowable::Unknown) => 3,
+        Err(err) => {
+            eprintln!("could not tell whether process {pid} has a console: {err}");
             2
         }
     }
-}
-
-#[cfg(not(windows))]
-fn console_of(_pid: u32) -> i32 {
-    eprintln!("only Windows gives a process a console to look for");
-    2
 }
 
 fn main() {

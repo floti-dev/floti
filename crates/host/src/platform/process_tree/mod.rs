@@ -47,6 +47,13 @@ pub use macos::descendants;
 #[cfg(all(target_os = "windows", any(test, feature = "testkit")))]
 pub use windows::descendants;
 
+#[cfg(target_os = "linux")]
+pub use linux::console_of;
+#[cfg(target_os = "macos")]
+pub use macos::console_of;
+#[cfg(target_os = "windows")]
+pub use windows::console_of;
+
 use floti_protocol::Knowable;
 
 use crate::Result;

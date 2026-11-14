@@ -339,7 +339,10 @@ fn host_sources(
             .expect("under src")
             .to_string_lossy()
             .replace('\\', "/");
-        let text = std::fs::read_to_string(&path).expect("read a source file");
+        // A Windows checkout may hold CRLF line ends.
+        let text = std::fs::read_to_string(&path)
+            .expect("read a source file")
+            .replace('\r', "");
         let text = match text.find("#[cfg(test)]\nmod tests {") {
             Some(at) => text[..at].to_owned(),
             None => text,
