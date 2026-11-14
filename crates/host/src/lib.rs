@@ -119,6 +119,7 @@ pub use error::{Error, Result};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use floti_protocol::channels::host::HostStopReason;
@@ -192,11 +193,12 @@ pub struct DesktopCommand {
     pub args: Vec<OsString>,
 }
 
-/// Runs the host until it is stopped: by a client, or by Ctrl+C, SIGTERM,
-/// signing out, shutting down or the other stop requests the OS makes, each
-/// of which is a plain stop. On Windows, a session that is ending waits, for
-/// at most 20 s, until that stop has recorded the sessions
-/// ([`StopSignals::stopped`]).
+/// Runs the host until it is stopped: by a client, or by Ctrl+C, SIGTERM or
+/// the other stop requests the OS makes, each of which is a plain stop. The
+/// user's session ending on Windows (signing out, shutting down, or Restart
+/// Manager closing it) is a stop for an update instead, which leaves every
+/// session to be offered for restore at the next start, and Windows waits,
+/// for at most 20 s, until that stop is over ([`StopSignals::stopped`]).
 ///
 /// A host a desktop started ([`HostOptions::desktop`]) also stops by itself,
 /// as a plain stop, once it runs no session or plain terminal and no client
@@ -276,10 +278,24 @@ pub fn run_host(options: HostOptions) -> Result<()> {
                 }
             });
         }
-        tokio::spawn(async move {
-            let what = signals.recv().await;
-            say(&format!("Floti host is stopping: {what}."));
-            stopper.stop(HostStopReason::Stop);
+        let session_ended = Arc::new(AtomicBool::new(false));
+        tokio::spawn({
+            let session_ended = Arc::clone(&session_ended);
+            async move {
+                let request = signals.recv().await;
+                say(&format!("Floti host is stopping: {}.", request.what));
+                // The OS ends the sessions' processes too, in no set order. A
+                // stop for an update freezes the records before it ends them,
+                // so none Windows kills meanwhile is recorded as exited, and
+                // leaves every row running for the next start to offer for
+                // restore once. A plain stop would record them stopped, and
+                // none would be offered.
+                if !request.session_ending {
+                    stopper.stop(HostStopReason::Stop);
+                } else if stopper.stop(HostStopReason::Update) {
+                    session_ended.store(true, Ordering::SeqCst);
+                }
+            }
         });
         let reason = host.run_until_stopped().await;
         stopped.finish();
@@ -288,14 +304,17 @@ pub fn run_host(options: HostOptions) -> Result<()> {
         {
             log_line!("floti host: the notification area: {err}");
         }
-        reason
+        reason.map(|reason| (reason, session_ended.load(Ordering::SeqCst)))
     });
     // Not a plain drop, which waits for every blocking task however long it
     // takes: the sessions are ended or handed to the keeper by now.
     runtime.shutdown_timeout(RUNTIME_RELEASE);
-    let reason = reason?;
+    let (reason, session_ended) = reason?;
     say(match reason {
         HostStopReason::Stop => "Floti host stopped.",
+        HostStopReason::Update if session_ended => {
+            "Floti host stopped as the session ended; its next start offers its sessions for restore."
+        }
         HostStopReason::Update => "Floti host stopped for an update.",
         HostStopReason::Restart => {
             "Floti host stopped to be restarted for an update; its sessions run on in the session keeper."

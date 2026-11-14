@@ -238,10 +238,11 @@ fn this_login(env: &UserEnv) -> Box<dyn Login> {
 /// on. Registering replaces the default action, which would end the host
 /// without recording its sessions.
 ///
-/// On Windows that includes the session ending, signing out or shutting
-/// down, which Windows says to a window rather than to a console: every
-/// Windows host has a hidden window for it from [`register`] on, which keeps
-/// Windows waiting until the host drops its [`HostStopped`].
+/// On Windows that includes the session ending (signing out, shutting down
+/// or Restart Manager closing the host), which Windows says to a window
+/// rather than to a console: every Windows host has a hidden window for it
+/// from [`register`] on, which keeps Windows waiting until the host drops its
+/// [`HostStopped`].
 ///
 /// [`register`]: StopSignals::register
 pub struct StopSignals(signin::Signals);
@@ -253,19 +254,32 @@ impl StopSignals {
     }
 
     /// Waits for the next stop request, and says what it was.
-    pub async fn recv(&mut self) -> &'static str {
+    pub async fn recv(&mut self) -> StopRequest {
         self.0.recv().await
     }
 
     /// What the host drops once its stop is over, whatever stopped it, and
     /// on every way out of starting: until one is dropped, a Windows session
     /// that is ending waits (for at most 20 s) rather than ending the host
-    /// before its sessions are recorded.
+    /// before its stop has frozen its records.
     pub fn stopped(&self) -> HostStopped {
         HostStopped {
             _stopped: self.0.stopped(),
         }
     }
+}
+
+/// A request from the OS to stop the host.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StopRequest {
+    /// What it was, as the host's stop line says it after "Floti host is
+    /// stopping: ".
+    pub what: &'static str,
+    /// Whether it is the user's session ending (on Windows: signing out,
+    /// shutting down, or Restart Manager closing the host), in which the OS
+    /// ends the sessions' processes too, in no set order. Ctrl+C and the
+    /// other requests are not.
+    pub session_ending: bool,
 }
 
 /// Dropped, or [`finish`]ed, once the host's stop is over
@@ -281,17 +295,31 @@ impl HostStopped {
     pub fn finish(self) {}
 }
 
+/// Why Windows ends the user's session, as its session messages say it
+/// (their `lParam`).
+#[cfg(any(test, feature = "testkit"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionEnd {
+    /// The user signing out (`ENDSESSION_LOGOFF`).
+    SignOut,
+    /// The computer shutting down or restarting (no flag).
+    Shutdown,
+    /// Restart Manager closing the program, for an installer or an update
+    /// (`ENDSESSION_CLOSEAPP`).
+    CloseApp,
+}
+
 /// A message Windows sends a process's top-level windows when the user's
 /// session ends, as a test sends one to a host ([`send_session_message`]).
 #[cfg(any(test, feature = "testkit"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionMessage {
-    /// `WM_QUERYENDSESSION`: may the session end, for a sign-out when
-    /// `sign_out` and a shutdown otherwise.
-    Query { sign_out: bool },
-    /// `WM_ENDSESSION`: the session ends when `ends`, and does not after all
-    /// otherwise, for a sign-out when `sign_out` and a shutdown otherwise.
-    End { ends: bool, sign_out: bool },
+    /// `WM_QUERYENDSESSION`: may the session end?
+    Query(SessionEnd),
+    /// `WM_ENDSESSION` with `wParam` TRUE: it ends.
+    Ends(SessionEnd),
+    /// `WM_ENDSESSION` with `wParam` FALSE: it does not after all.
+    DoesNotEnd(SessionEnd),
 }
 
 /// How the host starts on an OS: what `floti setup` registers, `floti

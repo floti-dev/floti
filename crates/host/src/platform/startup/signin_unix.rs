@@ -5,7 +5,7 @@
 
 use tokio::signal::unix::{Signal, SignalKind, signal};
 
-use super::Account;
+use super::{Account, StopRequest};
 use crate::{Error, Result};
 
 pub(super) fn account() -> Account {
@@ -54,11 +54,17 @@ impl Signals {
         })
     }
 
-    pub(super) async fn recv(&mut self) -> &'static str {
-        tokio::select! {
+    pub(super) async fn recv(&mut self) -> StopRequest {
+        let what = tokio::select! {
             _ = self.interrupt.recv() => "Ctrl+C",
             _ = self.terminate.recv() => "SIGTERM",
             _ = self.hangup.recv() => "SIGHUP",
+        };
+        // SIGTERM is also what `systemctl stop` and `launchctl` send, so it
+        // does not say the session is ending.
+        StopRequest {
+            what,
+            session_ending: false,
         }
     }
 

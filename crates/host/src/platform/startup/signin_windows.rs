@@ -18,9 +18,9 @@ use windows_sys::Win32::Security::{
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
-use super::Account;
 use super::end_session_windows::EndSession;
 pub(super) use super::end_session_windows::Stopped;
+use super::{Account, StopRequest};
 use crate::{Error, Result};
 
 /// The machine's Windows build number, from `RtlGetVersion`, which answers
@@ -229,12 +229,19 @@ impl Signals {
         })
     }
 
-    pub(super) async fn recv(&mut self) -> &'static str {
+    pub(super) async fn recv(&mut self) -> StopRequest {
+        let asked = |what| StopRequest {
+            what,
+            session_ending: false,
+        };
         tokio::select! {
-            _ = self.ctrl_c.recv() => "Ctrl+C",
-            _ = self.ctrl_break.recv() => "Ctrl+Break",
-            _ = self.close.recv() => "the console closing",
-            Some(why) = self.end_session.recv() => why,
+            _ = self.ctrl_c.recv() => asked("Ctrl+C"),
+            _ = self.ctrl_break.recv() => asked("Ctrl+Break"),
+            _ = self.close.recv() => asked("the console closing"),
+            Some(what) = self.end_session.recv() => StopRequest {
+                what,
+                session_ending: true,
+            },
         }
     }
 
@@ -319,21 +326,22 @@ pub fn send_session_message(
     message: super::SessionMessage,
     within: std::time::Duration,
 ) -> io::Result<isize> {
+    use super::{SessionEnd, SessionMessage};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        ENDSESSION_LOGOFF, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_ENDSESSION, WM_QUERYENDSESSION,
+        ENDSESSION_CLOSEAPP, ENDSESSION_LOGOFF, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
+        WM_ENDSESSION, WM_QUERYENDSESSION,
     };
-    let flags = |sign_out: bool| {
-        if sign_out {
-            ENDSESSION_LOGOFF as usize as isize
-        } else {
-            0
+    let flags = |why: SessionEnd| -> isize {
+        match why {
+            SessionEnd::SignOut => ENDSESSION_LOGOFF as usize as isize,
+            SessionEnd::Shutdown => 0,
+            SessionEnd::CloseApp => ENDSESSION_CLOSEAPP as isize,
         }
     };
     let (id, wparam, lparam) = match message {
-        super::SessionMessage::Query { sign_out } => (WM_QUERYENDSESSION, 0, flags(sign_out)),
-        super::SessionMessage::End { ends, sign_out } => {
-            (WM_ENDSESSION, usize::from(ends), flags(sign_out))
-        }
+        SessionMessage::Query(why) => (WM_QUERYENDSESSION, 0, flags(why)),
+        SessionMessage::Ends(why) => (WM_ENDSESSION, 1, flags(why)),
+        SessionMessage::DoesNotEnd(why) => (WM_ENDSESSION, 0, flags(why)),
     };
     let ms = u32::try_from(within.as_millis()).unwrap_or(u32::MAX);
     let mut answer = 0usize;

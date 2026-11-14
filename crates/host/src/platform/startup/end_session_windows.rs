@@ -21,9 +21,16 @@
 //! end the process at any moment, so the window says why it is waiting (the
 //! shutdown block reason, which Windows shows when it lists what is still
 //! running), hands the reason to [`EndSession::recv`] and waits until the
-//! host has stopped and recorded its sessions: the host drops its
-//! [`Stopped`] once its stop is over, whatever stopped it, and the wait is
-//! bounded by [`STOP_BOUND`] in case it never does.
+//! host's stop is over: the host drops its [`Stopped`] once it is, whatever
+//! stopped it, and the wait is bounded by [`STOP_BOUND`] in case it never
+//! does.
+//!
+//! The host stops for the session ending as for an update (`run_host`): its
+//! records freeze first, so the sessions Windows kills meanwhile, in no set
+//! order, are not recorded as having exited, and each row is left running for
+//! the next start to offer for restore once. A host Windows ended without
+//! that would record every session it saw end as exited, and none of those
+//! would be offered.
 
 use std::ffi::c_void;
 use std::io;

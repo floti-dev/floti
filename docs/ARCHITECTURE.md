@@ -87,23 +87,26 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   keeper died), comes back through the host's restore offer, which the window
   asks for again then; a lost shell, as a new shell in its folder.
 - The host stops on the OS's stop requests (`StopSignals`,
-  `crates/host/src/platform/startup`) as a plain stop, which records every
-  session as stopped by Floti: Ctrl+C, and on macOS and Linux SIGTERM, which
-  launchd and systemd send when the user signs out, and SIGHUP. Windows tells
-  a process that has loaded user32, as floti has, that the user is signing
-  out or the computer is shutting down only through its top-level windows,
-  never with the console's logoff and shutdown events. So every Windows host,
+  `crates/host/src/platform/startup`). Ctrl+C, and on macOS and Linux SIGTERM
+  and SIGHUP, are a plain stop, which records every session as stopped by
+  Floti; `floti host` run in a Windows terminal also stops so on Ctrl+Break
+  and its console closing. Windows tells a process that has loaded user32, as
+  floti has, that the user is signing out, the computer is shutting down or
+  Restart Manager is closing it only through its top-level windows, never
+  with the console's logoff and shutdown events, and then ends the host, its
+  keeper and its sessions' processes in no set order. So every Windows host,
   with or without a console or `--desktop`, keeps a hidden top-level window
   of its own (class `FlotiHostEndSession`, `end_session_windows.rs`) on a
   thread of its own from its start to the end of its stop. It answers
   `WM_QUERYENDSESSION` yes at once, so it never holds up a sign-out. On
   `WM_ENDSESSION` for a session that ends it sets a shutdown block reason
-  ("Floti is saving its sessions"), stops the host, and returns only once
-  `run_host` says the stop is over (`HostStopped`), or after 20 s: once it
-  returns, Windows may end the process at any moment. The notification
-  area's window is not used for this: it exists only for a host a desktop
-  started. `floti host` run in a terminal also stops on Ctrl+C, Ctrl+Break and
-  its console closing.
+  ("Floti is saving its sessions") and stops the host as for an update: the
+  records freeze first, so no session Windows kills is recorded as exited,
+  every row is left running, and the next start offers each session for
+  restore once. It returns only once `run_host` says the stop is over
+  (`HostStopped`), or after 20 s: once it returns, Windows may end the
+  process at any moment. The notification area's window is not used for
+  this: it exists only for a host a desktop started.
 
 ## Hosts on other computers
 

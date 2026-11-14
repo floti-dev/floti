@@ -1,12 +1,16 @@
-//! A Windows host hears the user signing out, or the computer shutting down,
-//! as Windows tells a process that has loaded user32: through its top-level
-//! windows, with `WM_QUERYENDSESSION` and then `WM_ENDSESSION`. Each test
-//! plays Windows for one real host running a fake agent in a session: it
-//! finds the host's window by its class and the host's process, sends both
-//! messages as Windows does (`SendMessageTimeoutW`), and checks that by the
-//! time `WM_ENDSESSION` returns, after which Windows may end the process at
-//! once, the session is recorded as stopped by Floti, and that the host then
-//! exits.
+//! A Windows host hears the user signing out, the computer shutting down or
+//! Restart Manager closing it as Windows tells a process that has loaded
+//! user32: through its top-level windows, with `WM_QUERYENDSESSION` and then
+//! `WM_ENDSESSION`. Windows then ends the host, its keeper and its sessions'
+//! processes in no set order, and a host still alive while its sessions die
+//! would record each as exited, so none would be offered for restore.
+//!
+//! Each test plays Windows for one real host with a fake agent running in a
+//! shell session. It finds the host's window by its class and the host's
+//! process and sends both messages as Windows does (`SendMessageTimeoutW`).
+//! Once `WM_ENDSESSION` has returned it kills the session's processes, as
+//! Windows would. It checks that the session's row is still `running`, that
+//! the host exits, and that the next host offers the session for restore.
 //!
 //! A host with no console is the one Floti starts; one with a console is
 //! `floti host` run in a terminal. macOS and Linux tell a process with a
@@ -17,13 +21,16 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use floti_host::fake_agent;
-use floti_host::platform::process_tree::{Native as NativeTree, ProcessTree};
-use floti_host::platform::startup::{self, SessionMessage};
+use floti_host::platform::process_table::{self, ProcessTable};
+use floti_host::platform::process_tree::{Ending, Native as NativeTree, ProcessTree};
+use floti_host::platform::startup::{self, SessionEnd, SessionMessage};
 use floti_host::testkit::{
     FakeAgent, HostProcess, PATIENCE, TestClient, TestDirs, record_test_host,
 };
 use floti_protocol::Knowable;
-use floti_protocol::channels::sessions::{SessionList, SessionStart, StartSessionRequest};
+use floti_protocol::channels::sessions::{
+    SessionList, SessionRestorable, SessionStart, StartSessionRequest,
+};
 
 use super::console::{Console, console_of};
 
@@ -78,13 +85,22 @@ fn host(dirs: &TestDirs, agent: &FakeAgent, start: Start) -> HostProcess {
     HostProcess::spawn(command)
 }
 
-/// Starts a shell session through `client` with the fake agent running in
-/// it, and returns the fake agent's process.
+/// A shell session with the fake agent running in it.
+struct Session {
+    id: u64,
+    /// The session's shell, its root process.
+    shell: u32,
+    /// What started the shell, so a later look can tell it is still the
+    /// same process.
+    shell_parent: u32,
+}
+
+/// Starts a shell session through `client` and runs the fake agent in it.
 async fn a_session_running_the_fake_agent(
     dirs: &TestDirs,
     agent: &FakeAgent,
     client: &mut TestClient,
-) -> u32 {
+) -> Session {
     let folder = dirs.folder("a project");
     let session = client
         .request::<SessionStart>(&StartSessionRequest {
@@ -104,13 +120,52 @@ async fn a_session_running_the_fake_agent(
     // It records itself as it starts and prints nothing until it reads a
     // line, so its record is looked for rather than its output.
     let deadline = Instant::now() + PATIENCE;
-    loop {
+    let fake = loop {
         if let Some(record) = agent.records().first() {
-            return record.pid;
+            break record.pid;
         }
         assert!(
             Instant::now() < deadline,
             "the fake agent did not start within {PATIENCE:?}"
+        );
+        tokio::time::sleep(LOOK_AGAIN).await;
+    };
+    let shell = process(fake)
+        .expect("the fake agent is in the process table")
+        .1;
+    let shell_parent = process(shell)
+        .expect("the session's shell is in the process table")
+        .1;
+    Session {
+        id: session.id,
+        shell,
+        shell_parent,
+    }
+}
+
+/// Process `pid`'s row in the process table, as its pid and its parent's.
+fn process(pid: u32) -> Option<(u32, u32)> {
+    process_table::Native
+        .processes()
+        .expect("read the process table")
+        .into_iter()
+        .find(|row| row.pid == pid)
+        .map(|row| (row.pid, row.parent_pid))
+}
+
+/// Kills the session's shell and the fake agent in it, as Windows ends every
+/// process of a session that is ending, when they still run: a host that
+/// froze its records has ended them already. A shell whose id now names
+/// another process is left alone.
+async fn kill_as_windows_would(session: &Session) {
+    if process(session.shell) == Some((session.shell, session.shell_parent)) {
+        let _ = NativeTree.end_tree(session.shell, Ending::Forced);
+    }
+    let deadline = Instant::now() + PATIENCE;
+    while NativeTree.is_alive(session.shell) == Knowable::Known(true) {
+        assert!(
+            Instant::now() < deadline,
+            "the session's shell was still running {PATIENCE:?} after it was killed"
         );
         tokio::time::sleep(LOOK_AGAIN).await;
     }
@@ -138,39 +193,27 @@ async fn send(window: isize, message: SessionMessage, within: Duration) -> isize
         .unwrap_or_else(|err| panic!("{message:?} was not answered within {within:?}: {err}"))
 }
 
-/// Waits until process `pid` has ended.
-async fn ended(pid: u32) {
-    let deadline = Instant::now() + PATIENCE;
-    while NativeTree.is_alive(pid) != Knowable::Known(false) {
-        if Instant::now() >= deadline {
-            let _ = NativeTree.end_tree(pid, floti_host::platform::process_tree::Ending::Forced);
-            panic!("process {pid} was still running {PATIENCE:?} after the host stopped");
-        }
-        tokio::time::sleep(LOOK_AGAIN).await;
-    }
-}
-
 /// A host started as `start` with a session running is sent the session
-/// ending as Windows sends it, for a sign-out when `sign_out` and a shutdown
-/// otherwise, and its stop says it stopped for `said`.
-async fn the_session_ends(start: Start, sign_out: bool, said: &str) {
+/// ending for `why`, as Windows sends it, and says it stopped for `said`.
+async fn the_session_ends(start: Start, why: SessionEnd, said: &str) {
     if !windows_here() {
         return;
     }
     let dirs = TestDirs::new();
     let agent = fake_agent!(&dirs);
     let host = host(&dirs, &agent, start);
+    let host_pid = host.id();
     let endpoint = dirs.floti_endpoint();
     let mut client = TestClient::connect(&endpoint, TERMINAL).await;
-    let fake = a_session_running_the_fake_agent(&dirs, &agent, &mut client).await;
+    let session = a_session_running_the_fake_agent(&dirs, &agent, &mut client).await;
     let expected = if start == Start::Console {
         Console::Has
     } else {
         Console::None
     };
-    assert_eq!(console_of(host.id()), expected, "{start:?}");
+    assert_eq!(console_of(host_pid), expected, "{start:?}");
 
-    let windows = startup::top_level_windows(host.id(), WINDOW_CLASS);
+    let windows = startup::top_level_windows(host_pid, WINDOW_CLASS);
     let Knowable::Known(windows) = windows else {
         panic!("the host's windows could not be looked for");
     };
@@ -188,7 +231,7 @@ async fn the_session_ends(start: Start, sign_out: bool, said: &str) {
         drop(client);
         client = TestClient::connect(&endpoint, TERMINAL).await;
         assert_eq!(
-            startup::top_level_windows(host.id(), WINDOW_CLASS),
+            startup::top_level_windows(host_pid, WINDOW_CLASS),
             Knowable::Known(vec![window])
         );
     }
@@ -196,68 +239,104 @@ async fn the_session_ends(start: Start, sign_out: bool, said: &str) {
     // Asked whether the session may end, the host says yes and does
     // nothing more; nor does a session that turns out not to end.
     assert_eq!(
-        send(window, SessionMessage::Query { sign_out }, PATIENCE).await,
+        send(window, SessionMessage::Query(why), PATIENCE).await,
         1,
         "the host agrees the session may end"
     );
-    send(
-        window,
-        SessionMessage::End {
-            ends: false,
-            sign_out,
-        },
-        PATIENCE,
-    )
-    .await;
+    send(window, SessionMessage::DoesNotEnd(why), PATIENCE).await;
     assert_eq!(
         client.request::<SessionList>(&()).await.unwrap().len(),
         1,
         "the session runs on"
     );
 
-    send(
-        window,
-        SessionMessage::End {
-            ends: true,
-            sign_out,
-        },
-        END_SESSION_SEND,
-    )
-    .await;
-    // Windows may end the host from here on: the session is recorded.
+    send(window, SessionMessage::Ends(why), END_SESSION_SEND).await;
+    // From here Windows may end the host at any moment, and ends the
+    // session's processes too.
+    kill_as_windows_would(&session).await;
+    // The host goes, or records the session's end, whichever comes first.
+    let deadline = Instant::now() + PATIENCE;
+    while NativeTree.is_alive(host_pid) == Knowable::Known(true)
+        && rows(&dirs.data)
+            .iter()
+            .all(|(status, _)| status == "running")
+    {
+        assert!(
+            Instant::now() < deadline,
+            "the host neither exited nor recorded the session's end within {PATIENCE:?}"
+        );
+        tokio::time::sleep(LOOK_AGAIN).await;
+    }
     assert_eq!(
         rows(&dirs.data),
-        [("exited".to_owned(), Some("floti".to_owned()))],
-        "{}",
+        [("running".to_owned(), None)],
+        "the session's row is left for the next start: {}",
         dirs.host_log()
     );
-
     drop(client);
     let (stdout, log) = host.exited().await;
     assert!(
         stdout.contains(&format!("Floti host is stopping: {said}.")),
         "{stdout}{log}"
     );
-    assert!(stdout.contains("Floti host stopped."), "{stdout}{log}");
-    ended(fake).await;
+    assert!(
+        stdout.contains(
+            "Floti host stopped as the session ended; its next start offers its sessions for restore."
+        ),
+        "{stdout}{log}"
+    );
+
+    // The next host, at the next sign-in, offers it for restore.
+    let next = self::host(&dirs, &agent, Start::NoConsole);
+    let mut client = TestClient::connect(&endpoint, TERMINAL).await;
+    let offer = client
+        .request::<SessionRestorable>(&())
+        .await
+        .unwrap()
+        .expect("the session is offered for restore");
+    assert_eq!(
+        offer
+            .sessions
+            .iter()
+            .map(|lost| lost.id)
+            .collect::<Vec<_>>(),
+        [session.id]
+    );
+    assert_eq!(rows(&dirs.data), [("lost".to_owned(), None)]);
+    next.stop(client).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_host_with_no_console_records_its_sessions_before_a_sign_out_goes_on_and_then_exits() {
-    the_session_ends(Start::NoConsole, true, "signing out").await;
+async fn a_host_with_no_console_leaves_its_sessions_for_restore_when_the_user_signs_out() {
+    the_session_ends(Start::NoConsole, SessionEnd::SignOut, "signing out").await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_host_with_no_console_records_its_sessions_before_a_shutdown_goes_on_and_then_exits() {
-    the_session_ends(Start::NoConsole, false, "the computer shutting down").await;
+async fn a_host_with_no_console_leaves_its_sessions_for_restore_when_the_computer_shuts_down() {
+    the_session_ends(
+        Start::NoConsole,
+        SessionEnd::Shutdown,
+        "the computer shutting down",
+    )
+    .await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_host_with_a_console_records_its_sessions_before_a_sign_out_goes_on_and_then_exits() {
-    the_session_ends(Start::Console, true, "signing out").await;
+async fn a_host_with_no_console_leaves_its_sessions_for_restore_when_restart_manager_closes_it() {
+    the_session_ends(
+        Start::NoConsole,
+        SessionEnd::CloseApp,
+        "Windows asking it to close",
+    )
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_host_with_a_console_leaves_its_sessions_for_restore_when_the_user_signs_out() {
+    the_session_ends(Start::Console, SessionEnd::SignOut, "signing out").await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_host_a_desktop_started_hears_a_sign_out_through_its_own_window_whatever_its_icon_does() {
-    the_session_ends(Start::Desktop, true, "signing out").await;
+    the_session_ends(Start::Desktop, SessionEnd::SignOut, "signing out").await;
 }
