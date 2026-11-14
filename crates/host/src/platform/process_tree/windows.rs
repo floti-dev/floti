@@ -168,10 +168,8 @@ impl ProcessTree for Native {
                 } else {
                     0
                 };
-                let flags = CREATE_NO_WINDOW
-                    | apart
-                    | (DETACHED_PROCESS & 0)
-                    | (CREATE_NEW_PROCESS_GROUP & 0);
+                let _ = (DETACHED_PROCESS, CREATE_NEW_PROCESS_GROUP);
+                let flags = CREATE_NO_WINDOW | apart;
                 started = Some(create_alone(program, args, flags, environment.as_deref())?);
                 Ok(())
             },
