@@ -265,3 +265,82 @@ pub fn interrupt(pid: u32) -> io::Result<()> {
 pub fn terminate(pid: u32) -> io::Result<()> {
     interrupt(pid)
 }
+
+/// Makes `command` start with no console at all, as Floti starts a host
+/// (`DETACHED_PROCESS`), in a process group of its own as [`stoppable`]
+/// gives it.
+#[cfg(any(test, feature = "testkit"))]
+pub fn without_console(command: &mut std::process::Command) {
+    use std::os::windows::process::CommandExt;
+    use windows_sys::Win32::System::Threading::{CREATE_NEW_PROCESS_GROUP, DETACHED_PROCESS};
+    command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+}
+
+/// The top-level windows of class `class` that process `pid` made, as
+/// addresses: what a test sends Windows' session messages to.
+#[cfg(any(test, feature = "testkit"))]
+pub fn top_level_windows(pid: u32, class: &str) -> floti_protocol::Knowable<Vec<isize>> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowExW, GetWindowThreadProcessId};
+    let class: Vec<u16> = class.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut found = Vec::new();
+    let mut after = ptr::null_mut();
+    loop {
+        // SAFETY: top-level windows (no parent) of a nul-terminated class,
+        // after the last one found.
+        after = unsafe { FindWindowExW(ptr::null_mut(), after, class.as_ptr(), ptr::null()) };
+        if after.is_null() {
+            return floti_protocol::Knowable::Known(found);
+        }
+        let mut owner = 0u32;
+        // SAFETY: a window just found, and a place for its process id.
+        unsafe { GetWindowThreadProcessId(after, &mut owner) };
+        if owner == pid {
+            found.push(after as isize);
+        }
+    }
+}
+
+/// Sends `window` `message` as Windows does when the session ends, and
+/// returns its answer, failing when it has not answered within `within`.
+#[cfg(any(test, feature = "testkit"))]
+pub fn send_session_message(
+    window: isize,
+    message: super::SessionMessage,
+    within: std::time::Duration,
+) -> io::Result<isize> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        ENDSESSION_LOGOFF, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_ENDSESSION, WM_QUERYENDSESSION,
+    };
+    let flags = |sign_out: bool| {
+        if sign_out {
+            ENDSESSION_LOGOFF as usize as isize
+        } else {
+            0
+        }
+    };
+    let (id, wparam, lparam) = match message {
+        super::SessionMessage::Query { sign_out } => (WM_QUERYENDSESSION, 0, flags(sign_out)),
+        super::SessionMessage::End { ends, sign_out } => {
+            (WM_ENDSESSION, usize::from(ends), flags(sign_out))
+        }
+    };
+    let ms = u32::try_from(within.as_millis()).unwrap_or(u32::MAX);
+    let mut answer = 0usize;
+    // SAFETY: a window handle, which a stale one fails; the answer is
+    // written to `answer`.
+    let sent = unsafe {
+        SendMessageTimeoutW(
+            window as windows_sys::Win32::Foundation::HWND,
+            id,
+            wparam,
+            lparam,
+            SMTO_ABORTIFHUNG,
+            ms,
+            &mut answer,
+        )
+    };
+    if sent == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(answer as isize)
+}

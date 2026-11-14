@@ -93,3 +93,28 @@ fn send(pid: u32, signal: libc::c_int) -> std::io::Result<()> {
     }
     Ok(())
 }
+
+/// Makes `command` start with no console. macOS and Linux give no process
+/// one, so there is nothing to do.
+#[cfg(any(test, feature = "testkit"))]
+pub fn without_console(_command: &mut std::process::Command) {}
+
+/// The windows a process made for the OS to tell it the session is ending:
+/// macOS and Linux tell a process with a signal, so it has none to find.
+#[cfg(any(test, feature = "testkit"))]
+pub fn top_level_windows(_pid: u32, _class: &str) -> floti_protocol::Knowable<Vec<isize>> {
+    floti_protocol::Knowable::Unknown
+}
+
+/// macOS and Linux send no window messages when the session ends.
+#[cfg(any(test, feature = "testkit"))]
+pub fn send_session_message(
+    _window: isize,
+    _message: super::SessionMessage,
+    _within: std::time::Duration,
+) -> std::io::Result<isize> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "this OS sends no window messages when the session ends",
+    ))
+}
