@@ -184,6 +184,9 @@ export function seedSettings(world: World, patch: Partial<AppSettings> = {}): vo
       claudePath: world.claude,
       updateCheck: false,
       firstRunCompletedAt: new Date().toISOString(),
+      // A test's app was set up before it opened, not upgraded into: the
+      // upgrade note would sit over every surface it drives.
+      upgradeNoteSeenAt: new Date().toISOString(),
       ...patch
     })
   } finally {

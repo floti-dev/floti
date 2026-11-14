@@ -50,7 +50,7 @@ describe('HostProfiles', () => {
         name="build-box"
         connected
         projects={[]}
-        harnesses={[]}
+        workspaces={[]}
         blank={(root, name) => ({ ...INFRA, root, name })}
         onLaunched={onLaunched}
         paneSize={() => null}
@@ -71,7 +71,7 @@ describe('HostProfiles', () => {
       name: 'build-box',
       connected: true,
       projects: [],
-      harnesses: [],
+      workspaces: [],
       blank: (root: string, name: string) => ({ ...INFRA, root, name }),
       onLaunched: vi.fn(),
       paneSize: () => null
@@ -101,7 +101,7 @@ describe('HostProfiles', () => {
         name="build-box"
         connected
         projects={[]}
-        harnesses={[]}
+        workspaces={[]}
         blank={(root, name) => ({ ...INFRA, root, name })}
         onLaunched={vi.fn()}
         paneSize={() => null}

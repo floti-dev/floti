@@ -1,5 +1,5 @@
 //! Folder links: an overlay's skills, commands and agents are links into the
-//! harness's real folders, so editing a skill in its repository changes what
+//! workspace's real folders, so editing a skill in its repository changes what
 //! the next session loads, with nothing copied to drift.
 //!
 //! A junction on Windows, which any user may make where a symlink needs

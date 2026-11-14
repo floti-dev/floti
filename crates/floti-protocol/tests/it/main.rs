@@ -18,6 +18,7 @@ mod framing;
 mod generated_files;
 mod ipc_catalogue;
 mod major_3_0;
+mod major_4_0;
 mod minor_2_2;
 mod minor_2_3;
 mod noise;

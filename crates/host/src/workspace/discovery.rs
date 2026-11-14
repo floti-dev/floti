@@ -1,6 +1,6 @@
-//! Project discovery: scan roots, harnesses and each project's git state.
+//! Project discovery: scan roots, workspaces and each project's git state.
 //!
-//! - [`scan`]: walking the roots into harnesses and projects, and which
+//! - [`scan`]: walking the roots into workspaces and projects, and which
 //!   cached rows a scan or a removed root proves wrong.
 //! - [`inventory`]: what a project's `.claude/` holds.
 //! - [`git`]: a working tree's branch and change counts, by running `git`.
@@ -138,7 +138,7 @@ impl DiscoveryService {
         {
             let mut store = lock(&self.store);
             let conn = store.connection_mut();
-            cache_projects(conn, &result.projects, &result.harnesses, &now_iso())?;
+            cache_projects(conn, &result.projects, &result.workspaces, &now_iso())?;
             let cached: Vec<String> = read_cached_projects(conn)?
                 .into_iter()
                 .map(|row| row.path)
@@ -174,13 +174,13 @@ impl DiscoveryService {
                         project.git = state.clone();
                     }
                 }
-                // The harnesses go in with them: the write is an upsert over
+                // The workspaces go in with them: the write is an upsert over
                 // the same rows, and the projects alone would put null over
                 // every recorded `template:`.
                 cache_projects(
                     lock(&self.store).connection_mut(),
                     &last.projects,
-                    &last.harnesses,
+                    &last.workspaces,
                     &now_iso(),
                 )?;
             }
@@ -266,7 +266,7 @@ impl DiscoveryService {
 
 /// Adds each of `paths` that is not a scan root already, compared ignoring
 /// case, in order, and answers the roots after. Nothing is written when
-/// every one is a root already. A harness made from a template becomes a
+/// every one is a root already. A workspace made from a template becomes a
 /// root through this too.
 pub fn add_roots(
     settings: &SettingsService,

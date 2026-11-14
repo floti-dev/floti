@@ -1,5 +1,5 @@
 import { useState, type JSX, type ReactNode } from 'react'
-import type { AgentWorktree, AgentWorktreeRemoval, Harness, LiveSession, Project } from '@helm/core'
+import type { AgentWorktree, AgentWorktreeRemoval, Workspace, LiveSession, Project } from '@helm/core'
 import { cn } from '../lib/cn'
 import { GitChip } from './GitChip'
 import {
@@ -12,7 +12,7 @@ import {
 } from './icons'
 
 const KIND_LABEL = {
-  harness: 'Harness',
+  workspace: 'Workspace',
   repo: 'Repo',
   folder: 'Folder'
 } as const
@@ -23,13 +23,13 @@ const LABEL = 'text-[9.5px] font-semibold tracking-[.08em] text-fg-subtle upperc
 export interface ProjectPaneProps {
   project: Project
   /**
-   * The harness this pane is *about*, when the project is a harness root.
+   * The workspace this pane is *about*, when the project is a workspace root.
    *
    * Only for its `template:`, which is provenance and lives in the manifest
    * rather than on the project row discovery builds. Absent for every other
-   * kind of project, and for a harness whose manifest names no template.
+   * kind of project, and for a workspace whose manifest names no template.
    */
-  harness?: Harness | null | undefined
+  workspace?: Workspace | null | undefined
   /** Shows the folder in this PC's file manager; absent for a folder on another computer. */
   onReveal?: ((path: string) => void) | undefined
   /**
@@ -55,9 +55,9 @@ export interface ProjectPaneProps {
   /** Opens the profile editor seeded with this project as the root. */
   onSaveAsProfile?: ((project: Project) => void) | undefined
   /**
-   * Freezes this harness's layout into a template.
+   * Freezes this workspace's layout into a template.
    *
-   * Passed **only for a harness**, which is the only kind of project that has a
+   * Passed **only for a workspace**, which is the only kind of project that has a
    * layout to freeze - a repo is somebody else's tree and a folder is not a
    * scaffold. A peer of "Save as profile" rather than a panel of its own: both
    * turn what is on screen into something reusable, neither touches the folder,
@@ -111,7 +111,7 @@ export interface ProjectPaneProps {
  */
 export function ProjectPane({
   project,
-  harness = null,
+  workspace = null,
   onReveal,
   onLaunch,
   launching = false,
@@ -166,16 +166,16 @@ export function ProjectPane({
           </span>
         </header>
 
-        {/* The template this harness was built from, and nothing more is made
+        {/* The template this workspace was built from, and nothing more is made
             of it: it is a record of where the directory came from, not a
             relationship Helm maintains. Nothing re-applies a template and
-            nothing compares against one - the harness belongs to whoever works
+            nothing compares against one - the workspace belongs to whoever works
             in it from the moment it exists. */}
-        {harness?.template && (
+        {workspace?.template && (
           <p className="mt-1.5 text-[11px] leading-[1.55] text-fg-subtle">
             Created from the{' '}
-            <span data-harness-template-name className="font-mono text-fg-muted">
-              {harness.template}
+            <span data-workspace-template-name className="font-mono text-fg-muted">
+              {workspace.template}
             </span>{' '}
             template.
           </p>

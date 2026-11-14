@@ -12,7 +12,7 @@ const scopeKey = (path: string): string => path.replace(/\\/g, '/').replace(/\/+
  * A scanned folder's config scope, from what the scan found there: its
  * `.claude` beside it, which exists when the scan saw it or a `CLAUDE.md`.
  */
-export function scannedConfigScope(folder: Project, kind: 'harness' | 'project'): ConfigScope {
+export function scannedConfigScope(folder: Project, kind: 'workspace' | 'project'): ConfigScope {
   const base = folder.path.replace(/[\\/]+$/, '')
   const separator = base.includes('\\') ? '\\' : '/'
   return {
@@ -26,7 +26,7 @@ export function scannedConfigScope(folder: Project, kind: 'harness' | 'project')
 
 /**
  * The switcher's list, in the order Helm has always given it: the user scope,
- * then the scanned harnesses, then the scanned projects, then every other
+ * then the scanned workspaces, then the scanned projects, then every other
  * folder the host lists (a saved profile's root and overlays), each once by
  * its path, ignoring case.
  */
@@ -40,8 +40,8 @@ export function configScopesWithScan(host: readonly ConfigScope[], scanned: read
     out.push(scope)
   }
   for (const scope of host) if (scope.kind === 'user') add(scope)
-  for (const folder of scanned) if (folder.kind === 'harness') add(scannedConfigScope(folder, 'harness'))
-  for (const folder of scanned) if (folder.kind !== 'harness') add(scannedConfigScope(folder, 'project'))
+  for (const folder of scanned) if (folder.kind === 'workspace') add(scannedConfigScope(folder, 'workspace'))
+  for (const folder of scanned) if (folder.kind !== 'workspace') add(scannedConfigScope(folder, 'project'))
   for (const scope of host) if (scope.kind !== 'user') add(scope)
   return out
 }

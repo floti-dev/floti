@@ -1,6 +1,6 @@
 //! What a config scope's entries become inside a template, for "import
 //! into template": the files the user ticked in a scope's tree, with a
-//! skill brought whole, each mapped to where a harness made from the
+//! skill brought whole, each mapped to where a workspace made from the
 //! template expects it.
 //!
 //! The scope is read through the backend's own tree, so nothing the config

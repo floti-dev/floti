@@ -27,7 +27,7 @@ export interface ProjectRowProps {
    * you.
    */
   summary?: SessionState | null | undefined
-  /** In the Pinned section rather than under its harness. */
+  /** In the Pinned section rather than under its workspace. */
   pinned?: boolean | undefined
   /** Omitted, the row carries no star at all. */
   onTogglePin?: ((project: Project) => void) | undefined

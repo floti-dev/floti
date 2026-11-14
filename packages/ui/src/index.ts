@@ -56,7 +56,7 @@ export {
   type ContentDocumentPaneProps,
   type ContentMode
 } from './components/ContentDocumentPane'
-export { NewHarnessDialog, type NewHarnessDialogProps } from './components/NewHarnessDialog'
+export { NewWorkspaceDialog, type NewWorkspaceDialogProps } from './components/NewWorkspaceDialog'
 export {
   NewSessionDialog,
   type LaunchChoice,
@@ -77,6 +77,7 @@ export {
   type ConfirmSessionDialogProps
 } from './components/ConfirmSessionDialog'
 export { DeleteProfileDialog, type DeleteProfileDialogProps } from './components/DeleteProfileDialog'
+export { UpgradeNoteDialog, type UpgradeNoteDialogProps } from './components/UpgradeNoteDialog'
 export {
   SetupPane,
   type SetupClaudeStatus,

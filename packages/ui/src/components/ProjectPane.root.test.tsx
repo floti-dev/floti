@@ -10,7 +10,7 @@ const folder = (path: string, kind: Project['kind']): Project => ({
   path,
   name: path.split('\\').pop() ?? path,
   kind,
-  harnessPath: null,
+  workspacePath: null,
   hasClaudeDir: false,
   inventory: EMPTY_INVENTORY,
   git: null

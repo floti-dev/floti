@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { TemplateChoice, TemplatePreview } from '@helm/core'
-import { NewHarnessDialog, type NewHarnessDialogProps } from './NewHarnessDialog'
+import { NewWorkspaceDialog, type NewWorkspaceDialogProps } from './NewWorkspaceDialog'
 
 const TEMPLATES: TemplateChoice[] = [
   {
@@ -19,13 +19,13 @@ const TEMPLATES: TemplateChoice[] = [
 /** What `template:preview` answers for `client`: the manifest first. */
 const PREVIEW: TemplatePreview = {
   template: 'client',
-  entries: ['harness.yaml', '.claude/skills/review/SKILL.md', 'CLAUDE.md', 'notes/'],
+  entries: ['workspace.yaml', '.claude/skills/review/SKILL.md', 'CLAUDE.md', 'notes/'],
   note: 'From the Client work template.',
   problems: []
 }
 
-function renderDialog(overrides: Partial<NewHarnessDialogProps> = {}) {
-  const props: NewHarnessDialogProps = {
+function renderDialog(overrides: Partial<NewWorkspaceDialogProps> = {}) {
+  const props: NewWorkspaceDialogProps = {
     mode: 'new',
     dir: 'C:\\work',
     onChooseDir: vi.fn(),
@@ -38,11 +38,11 @@ function renderDialog(overrides: Partial<NewHarnessDialogProps> = {}) {
     onCancel: vi.fn(),
     ...overrides
   }
-  render(<NewHarnessDialog {...props} />)
+  render(<NewWorkspaceDialog {...props} />)
   return props
 }
 
-describe('NewHarnessDialog', () => {
+describe('NewWorkspaceDialog', () => {
   it('shows each template by the label and description its template.yaml gives', () => {
     renderDialog()
     const picker = screen.getByRole('radiogroup', { name: 'Template' })
@@ -55,19 +55,19 @@ describe('NewHarnessDialog', () => {
     expect(within(picker).getByRole('radio', { name: /^Minimal/ }).getAttribute('aria-checked')).toBe('true')
   })
 
-  it('picks a template and creates the harness from it', async () => {
+  it('picks a template and creates the workspace from it', async () => {
     const props = renderDialog({ template: 'client', preview: PREVIEW })
     await userEvent.click(screen.getByRole('radio', { name: /^bare/ }))
     expect(props.onTemplateChange).toHaveBeenCalledWith('bare')
 
-    await userEvent.type(screen.getByRole('textbox', { name: 'Harness name' }), 'acme')
-    await userEvent.click(screen.getByRole('button', { name: 'Create harness' }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'Workspace name' }), 'acme')
+    await userEvent.click(screen.getByRole('button', { name: 'Create workspace' }))
     expect(props.onCreate).toHaveBeenCalledWith({ mode: 'new', dir: 'C:\\work', name: 'acme', template: 'client' })
   })
 
   it('lists what gets written exactly as the preview gives it, manifest first', async () => {
     renderDialog({ template: 'client', preview: PREVIEW })
-    await userEvent.type(screen.getByRole('textbox', { name: 'Harness name' }), 'acme')
+    await userEvent.type(screen.getByRole('textbox', { name: 'Workspace name' }), 'acme')
 
     expect(screen.getByText('C:\\work\\acme')).toBeTruthy()
     expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(PREVIEW.entries)

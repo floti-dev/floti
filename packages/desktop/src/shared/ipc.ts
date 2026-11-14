@@ -187,9 +187,9 @@ export interface ClaudeStatus {
   error: string | null
 }
 
-/** Creating a harness, or turning a folder that holds repos into one. */
-export interface CreateHarnessOutcome {
-  /** The harness directory, or null when nothing was written. */
+/** Creating a workspace, or turning a folder that holds repos into one. */
+export interface CreateWorkspaceOutcome {
+  /** The workspace directory, or null when nothing was written. */
   path: string | null
   /** Paths written, relative to `path`. */
   created: string[]
@@ -200,7 +200,7 @@ export interface CreateHarnessOutcome {
    * rollback is claimed.
    */
   problems: string[]
-  /** The scan roots after the new harness was added to them. */
+  /** The scan roots after the new workspace was added to them. */
   roots: string[]
 }
 
@@ -916,7 +916,7 @@ export interface IpcRequests {
   'roots:suggest': { request: void; response: string[] }
   /** Native directory picker. Returns the roots after the addition. */
   'roots:add': { request: void; response: string[] }
-  /** Adds a path already in hand - a suggestion accepted, a harness created. */
+  /** Adds a path already in hand - a suggestion accepted, a workspace created. */
   'roots:accept': { request: { path: string }; response: string[] }
   'roots:remove': { request: { path: string }; response: string[] }
 
@@ -946,20 +946,20 @@ export interface IpcRequests {
   'path:chooseFile': { request: { title?: string }; response: { path: string | null } }
 
   /**
-   * Scaffold a harness, or turn a folder that already holds repositories into
-   * one. The new harness becomes a scan root in the same call, because a
-   * harness the user cannot see is not one they created.
+   * Scaffold a workspace, or turn a folder that already holds repositories into
+   * one. The new workspace becomes a scan root in the same call, because a
+   * workspace the user cannot see is not one they created.
    *
    * `template` applies in `'new'` mode only. Absent or `minimal` writes the
-   * built-in scaffold - `harness.yaml`, `repos/`, an empty `.claude/` - and
+   * built-in scaffold - `workspace.yaml`, `repos/`, an empty `.claude/` - and
    * anything else names a directory in the templates directory, whose tree is
-   * written into the new harness. Converting is deliberately template-free: it
+   * written into the new workspace. Converting is deliberately template-free: it
    * writes a manifest and a `.claude/` into a folder somebody already has, and
    * a layout written into their work is not a scaffold.
    */
-  'harness:create': {
+  'workspace:create': {
     request: { mode: 'new' | 'convert'; dir: string; name?: string; template?: string }
-    response: CreateHarnessOutcome
+    response: CreateWorkspaceOutcome
   }
 
   /**
@@ -987,7 +987,7 @@ export interface IpcRequests {
    * the folder and their own editor takes it from there. What is here is what
    * Explorer has no idea about: the metadata the picker reads, the `.tpl`
    * convention, copying in a skill the user already wrote, and freezing a
-   * whole harness into a layout.
+   * whole workspace into a layout.
    *
    * Every write behind these lands **inside the templates directory and
    * nowhere else** (`assertTemplateWritable`), and `template:import` reads its
@@ -996,7 +996,7 @@ export interface IpcRequests {
    * it.
    */
 
-  /** One template's files, with what a harness would receive each one as. */
+  /** One template's files, with what a workspace would receive each one as. */
   'template:detail': { request: { template: string }; response: TemplateDetail }
   /** Scaffolds a `template.yaml` and an empty tree. No starter files. */
   'template:create': {
@@ -1038,7 +1038,7 @@ export interface IpcRequests {
    * What "Save as template" would copy, before anything is copied.
    *
    * Top-level entries with the recursive file count and byte size of each, so
-   * the dialog states the total before writing - a harness with repositories in
+   * the dialog states the total before writing - a workspace with repositories in
    * it is gigabytes, and the number is what stops that being a surprise.
    */
   'template:folderPreview': {
@@ -2273,7 +2273,7 @@ export const REQUEST_CHANNELS = Object.keys({
   'setup:complete': true,
   'path:chooseDirectory': true,
   'path:chooseFile': true,
-  'harness:create': true,
+  'workspace:create': true,
   'template:list': true,
   'template:preview': true,
   'template:detail': true,

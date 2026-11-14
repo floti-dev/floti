@@ -223,10 +223,10 @@ mod tests {
     #[test]
     fn sweeping_unlinks_an_overlay_and_leaves_the_repository_it_points_into() {
         let dirs = TestDirs::new();
-        let skills = dirs.folder("harness/.claude/skills/think");
+        let skills = dirs.folder("workspace/.claude/skills/think");
         std::fs::write(skills.join("SKILL.md"), "think").unwrap();
         let folder = owned_by(&dirs.data, &[10]);
-        let overlay = folder.join("overlays").join("harness");
+        let overlay = folder.join("overlays").join("workspace");
         std::fs::create_dir_all(&overlay).unwrap();
         Links
             .link_folder(skills.parent().unwrap(), &overlay.join("skills"))

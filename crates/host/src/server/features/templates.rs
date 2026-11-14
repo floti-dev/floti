@@ -1,4 +1,4 @@
-//! Harness templates: every `template:*` channel, and `harness:create`.
+//! Workspace templates: every `template:*` channel, and `workspace:create`.
 //!
 //! The templates folder is `templates` in the host's config folder. The
 //! shipped README and example are written there when the feature starts and
@@ -7,7 +7,7 @@
 //! fill, import into or delete a template, each confined to one template's
 //! folder.
 //!
-//! `harness:create` makes the harness, then adds it to the scan roots unless
+//! `workspace:create` makes the workspace, then adds it to the scan roots unless
 //! a root already covers it, so the launcher sees what the user made without
 //! listing it twice. The outcome carries the roots after.
 
@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use floti_protocol::channel::Router;
 use floti_protocol::channels::workspace::{
-    CreateHarness, CreateHarnessOutcome, CreateTemplate, DeleteTemplate, ImportIntoTemplate,
+    CreateTemplate, CreateWorkspace, CreateWorkspaceOutcome, DeleteTemplate, ImportIntoTemplate,
     ListTemplates, PreviewFolderTemplate, PreviewTemplate, ReadTemplateDetail, RenameTemplate,
     SaveFolderAsTemplate, SubstituteTemplateFile, TemplateImportResult, WriteTemplateMetadata,
 };
@@ -32,10 +32,10 @@ use crate::workspace::templates::authoring::{
     preview_folder_as_template, read_template_detail, rename_template, save_folder_as_template,
     write_template_metadata,
 };
-use crate::workspace::templates::harness::create_harness;
 use crate::workspace::templates::import::resolve_import;
 use crate::workspace::templates::reader::{list_templates, preview_template};
 use crate::workspace::templates::seed::seed_templates;
+use crate::workspace::templates::workspace::create_workspace;
 use crate::workspace::templates::{below, templates_folder};
 
 pub(crate) struct Templates {
@@ -63,11 +63,11 @@ impl Templates {
         })
     }
 
-    fn harness(
+    fn workspace(
         &self,
-        request: &floti_protocol::channels::workspace::CreateHarnessRequest,
-    ) -> Result<CreateHarnessOutcome, String> {
-        let made = create_harness(request, Some(&self.dir))?;
+        request: &floti_protocol::channels::workspace::CreateWorkspaceRequest,
+    ) -> Result<CreateWorkspaceOutcome, String> {
+        let made = create_workspace(request, Some(&self.dir))?;
         let current = self
             .settings
             .read()
@@ -79,7 +79,7 @@ impl Templates {
             }
             _ => current,
         };
-        Ok(CreateHarnessOutcome {
+        Ok(CreateWorkspaceOutcome {
             path: made.path.map(|path| path.display().to_string()),
             created: made.created,
             problems: made.problems,
@@ -172,7 +172,7 @@ impl Feature for Templates {
                     save_folder_as_template(store.connection(), dir, &request)
                 }))
             })
-            .handle::<CreateHarness>(move |request| off_the_workers(|| self.harness(&request)));
+            .handle::<CreateWorkspace>(move |request| off_the_workers(|| self.workspace(&request)));
     }
 }
 

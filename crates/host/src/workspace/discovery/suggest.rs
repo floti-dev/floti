@@ -4,16 +4,16 @@
 
 use std::path::{Path, PathBuf};
 
-use super::scan::is_harness;
+use super::scan::is_workspace;
 use crate::agent_config::normalize;
 
-/// The nearest folder at or above `start` that holds a `harness.yaml`. The
-/// host is normally started from inside the harness it serves, so where it
+/// The nearest folder at or above `start` that holds a `workspace.yaml`. The
+/// host is normally started from inside the workspace it serves, so where it
 /// runs is the strongest hint there is.
-pub fn find_enclosing_harness(start: &Path) -> Option<PathBuf> {
+pub fn find_enclosing_workspace(start: &Path) -> Option<PathBuf> {
     let mut current = normalize(start);
     loop {
-        if is_harness(&current) {
+        if is_workspace(&current) {
             return Some(current);
         }
         if !current.pop() {
@@ -23,12 +23,12 @@ pub fn find_enclosing_harness(start: &Path) -> Option<PathBuf> {
 }
 
 /// Ordered best guesses for a first-run scan root, each an existing folder
-/// and each once ignoring case: the folder holding the harness enclosing
-/// `start` (it covers that harness and its siblings), then `.harness` in
+/// and each once ignoring case: the folder holding the workspace enclosing
+/// `start` (it covers that workspace and its siblings), then `.harness` in
 /// `home`. Empty is an answer: the client then asks rather than guesses.
 pub fn suggest_roots(start: &Path, home: Option<&Path>) -> Vec<String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Some(enclosing) = find_enclosing_harness(start) {
+    if let Some(enclosing) = find_enclosing_workspace(start) {
         candidates.push(
             enclosing
                 .parent()

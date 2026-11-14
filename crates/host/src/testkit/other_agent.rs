@@ -332,7 +332,7 @@ impl OtherAgentBackend {
             conversation_id: Some(conversation_id),
             launch_folder: Some(folder.path().to_path_buf()),
         });
-        launch.not_taken = parts_not_taken(&self.harness(), &composition.overlays);
+        launch.not_taken = parts_not_taken(&self.workspace(), &composition.overlays);
         Ok(launch)
     }
 

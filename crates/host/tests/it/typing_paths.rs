@@ -136,7 +136,7 @@ fn sources(root: &Path) -> Vec<(String, String)> {
                 folders.push(path);
             } else if path.extension().is_some_and(|ext| ext == "rs") {
                 let name = relative(root, &path);
-                // Test code types as it likes: the fakes and harnesses are not
+                // Test code types as it likes: the fakes and workspaces are not
                 // the host.
                 let is_test = name.ends_with("/tests.rs")
                     || name == "tests.rs"

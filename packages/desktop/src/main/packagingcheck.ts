@@ -29,7 +29,7 @@ import type { Check } from './fidelity'
  *
  * Two of the criteria cannot be settled that way and are handled differently:
  *
- *   "A machine with a fresh `~/.claude` and no harness at all" is not a state
+ *   "A machine with a fresh `~/.claude` and no workspace at all" is not a state
  *   this process can enter. So it is a **second process**, started by
  *   `run-packaging.mjs` with `PORTABLE_EXECUTABLE_DIR` pointed at a temporary
  *   directory. That is not a test hook - it is the app's own portable-mode
@@ -52,11 +52,11 @@ import type { Check } from './fidelity'
  * `pnpm packaging-check` -> helm-data/packaging-report.json + helm-data/packaging-firstrun-report.json
  */
 
-const GROUPS = ['audit', 'cli', 'firstrun', 'harness', 'scan', 'version'] as const
+const GROUPS = ['audit', 'cli', 'firstrun', 'workspace', 'scan', 'version'] as const
 type Group = (typeof GROUPS)[number]
 
 const MACHINE_GROUPS: Group[] = ['audit', 'cli']
-const FIRSTRUN_GROUPS: Group[] = ['firstrun', 'harness', 'scan', 'version']
+const FIRSTRUN_GROUPS: Group[] = ['firstrun', 'workspace', 'scan', 'version']
 
 export interface PackagingOptions {
   phase: 'machine' | 'firstrun'
@@ -175,7 +175,7 @@ async function addRootThroughUi(win: BrowserWindow, path: string): Promise<void>
 
 /**
  * Every path under a directory, relative and sorted. A plain recursion with no
- * knowledge of what a harness is, so it can disagree with the scaffolder.
+ * knowledge of what a workspace is, so it can disagree with the scaffolder.
  */
 function walk(dir: string, base = dir, into: string[] = []): string[] {
   let entries
@@ -287,7 +287,7 @@ function buildPersonal(root: string | null): Array<{ id: string; re: RegExp }> {
   return patterns
 }
 
-/** Sibling directories of `root`, which in a harness are the other repos. */
+/** Sibling directories of `root`, which in a workspace are the other repos. */
 function neighbourRepoNames(root: string | null): string[] {
   if (root === null) return []
   try {
@@ -334,8 +334,8 @@ const IDENTITY_ALLOWED: Array<{ needle: string; why: string }> = [
  * the profile root, so it is enumerated here rather than inferred: short,
  * countable, and each entry has to earn its line.
  *
- * The harness root is the suggested-roots convention the product itself ships,
- * so its `~`-relative form is the project speaking. An *absolute* harness path
+ * The `.harness` root is the suggested-roots convention the product itself ships,
+ * so its `~`-relative form is the project speaking. An *absolute* `.harness` path
  * is not covered and still fails: that one names a machine.
  *
  * Written to be unspellable by its own patterns, for the reason the probe's
@@ -637,15 +637,15 @@ function repoRoot(): string | null {
 
 interface Fixtures {
   root: string
-  /** Plain project folders, no harness anywhere. */
+  /** Plain project folders, no workspace anywhere. */
   plain: string
   /** A folder of repositories, to be converted in place. */
   convertible: string
-  /** A harness whose manifest names a different repos directory. */
+  /** A workspace whose manifest names a different repos directory. */
   named: string
-  /** A harness with no `repos:` key at all. */
+  /** A workspace with no `repos:` key at all. */
   fallback: string
-  /** Empty, and where the created harness goes. */
+  /** Empty, and where the created workspace goes. */
   parent: string
   /** A `claude` that reports a version outside the tested range. */
   stubCli: string
@@ -679,14 +679,14 @@ function buildFixtures(root: string, claudeHome: string): Fixtures {
   dir('convertible', 'second', '.git')
 
   const named = dir('named')
-  file(join(named, 'harness.yaml'), 'name: "named"\nrepos: "projects"\n')
+  file(join(named, 'workspace.yaml'), 'name: "named"\nrepos: "projects"\n')
   dir('named', 'projects', 'inside-projects')
   // A decoy in the default location. `repos:` names the directory; it does not
   // add one, so this must not appear.
   dir('named', 'repos', 'decoy')
 
   const fallback = dir('fallback')
-  file(join(fallback, 'harness.yaml'), 'name: "fallback"\n')
+  file(join(fallback, 'workspace.yaml'), 'name: "fallback"\n')
   dir('fallback', 'repos', 'inside-repos')
 
   const parent = dir('parent')
@@ -866,7 +866,7 @@ function auditChecks(): Check[] {
         probe: { caught: probePatterns, removed: probeRemoved }
       },
       notes: [
-        `The auditor was made to fail first: a planted file carrying a Windows profile path, a harness path and a private project name was caught under ${String(probePatterns.length)} patterns and then deleted.`,
+        `The auditor was made to fail first: a planted file carrying a Windows profile path, a .harness path and a private project name was caught under ${String(probePatterns.length)} patterns and then deleted.`,
         `${String(shipped.length)} hits in what ships. ${String(harness.length)} in the development harness - the check drivers, the unit tests and the measured evidence - which is the "outside test fixtures" the criterion allows, and they are listed by file rather than waved at.`,
         'Three occurrences are identity rather than assumption and are allowlisted by their exact text: an application id, a release address, and an authorship field. None is read at runtime to find anything on disk.',
         'Two real portability bugs were found by this audit and fixed rather than excused: claudecheck.ts and selftest.ts each started their session in a literal path under one machine\'s home directory, and now derive the checkout from app.getAppPath().'
@@ -910,7 +910,7 @@ function auditChecks(): Check[] {
           ? `The bare private names come from \`${PRIVATE_LOCAL_FILE}\`, which .gitignore covers, so the audit never publishes the list it polices. ${String(local.names.length)} names loaded${local.rejected.length === 0 ? '' : `, ${String(local.rejected.length)} rejected as too short to discriminate`}. The discovered patterns anchor a repository name to \`repos/<name>\`, which is right for a path and blind to the same name in a sentence - this class is what closes that.`
           : `\`${PRIVATE_LOCAL_FILE}\` is absent, so the bare-private-name class was not exercised. The structural and discovered patterns still ran. See ${PRIVATE_LOCAL_FILE}.example for the format.`,
         `The auditor was made to fail first here too: the planted file was seen by the enumeration (${probeEnumerated ? 'yes' : 'no'}) and caught under ${String(publicationProbePatterns.length)} patterns - ${publicationProbePatterns.join(', ')} - before being deleted. Every bait is assembled at runtime from pieces that match nothing on their own, so this driver contains no line its own audit would have to excuse.`,
-        'The placeholder allowlist is counted rather than waved at, the same discipline as the identity allowlist: a path is excused only where the segment after `Users` is a placeholder, and `~/.harness` only in its `~`-relative form. An absolute harness path still fails.'
+        'The placeholder allowlist is counted rather than waved at, the same discipline as the identity allowlist: a path is excused only where the segment after `Users` is a placeholder, and `~/.harness` only in its `~`-relative form. An absolute `.harness` path still fails.'
       ]
     }
   ]
@@ -1076,7 +1076,7 @@ async function firstRunChecks(
    *
    * Going through setup is not one group among four - it is the precondition
    * for the other three, which are all about a launcher that does not exist
-   * until it has happened. `--only=harness` re-runs the harness *assertions*
+   * until it has happened. `--only=workspace` re-runs the workspace *assertions*
    * against a real first run rather than against a pane still waiting for a
    * folder.
    */
@@ -1094,8 +1094,8 @@ async function firstRunChecks(
     return checks
   }
 
-  if (wanted('harness')) {
-    checks.push(...(await harnessGroup(ctx, collector, shotDir, fixtures)))
+  if (wanted('workspace')) {
+    checks.push(...(await workspaceGroup(ctx, collector, shotDir, fixtures)))
   }
   if (wanted('scan')) {
     checks.push(...(await scanGroup(ctx, shotDir, fixtures)))
@@ -1238,7 +1238,7 @@ async function reachLauncher(
   checks.push({
     id: 'PKG-3',
     criterion:
-      'First run on a machine with a fresh ~/.claude (no harness at all) reaches a working launcher with plain project folders',
+      'First run on a machine with a fresh ~/.claude (no workspace at all) reaches a working launcher with plain project folders',
     title: `Two plain folders added and launched into a working tree`,
     ok:
       rootAppeared &&
@@ -1262,7 +1262,7 @@ async function reachLauncher(
     notes: [
       'Added through the pane\'s own button, with the native picker answered by the driver - it has no automation surface, and the handler, the settings write and the rescan behind it are all the real ones.',
       'Checked against a `readdirSync` of the folder rather than against another scan.',
-      'No harness anywhere: both rows are plain folders, which is the shape the portability requirement is about.'
+      'No workspace anywhere: both rows are plain folders, which is the shape the portability requirement is about.'
     ]
   })
 
@@ -1270,10 +1270,10 @@ async function reachLauncher(
 }
 
 // ---------------------------------------------------------------------------
-// PKG-8, PKG-11, PKG-12  creating a harness
+// PKG-8, PKG-11, PKG-12  creating a workspace
 // ---------------------------------------------------------------------------
 
-const HARNESS_NAME = 'Team Harness'
+const WORKSPACE_NAME = 'Team Workspace'
 
 /** Words that would mean the scaffold had an opinion about how to work. */
 const OPINION_WORDS = [
@@ -1291,7 +1291,7 @@ const OPINION_WORDS = [
   'scratch'
 ]
 
-async function harnessGroup(
+async function workspaceGroup(
   ctx: CheckContext,
   collector: Collector,
   shotDir: string,
@@ -1301,14 +1301,14 @@ async function harnessGroup(
   const checks: Check[] = []
 
   // --- PKG-12: the action is still there, after first run finished ----------
-  const reachable = await exists(win, '[data-create-harness]')
-  const opened = await click(win, '[data-create-harness]')
-  const dialogUp = await pollJs(win, `document.querySelector('[data-harness-dialog]')`, 10_000)
+  const reachable = await exists(win, '[data-create-workspace]')
+  const opened = await click(win, '[data-create-workspace]')
+  const dialogUp = await pollJs(win, `document.querySelector('[data-workspace-dialog]')`, 10_000)
 
   answerPicker('directory', fixtures.parent)
-  await click(win, '[data-harness-choose]')
-  await pollJs(win, `document.querySelector('[data-harness-dir]')?.value`, 10_000)
-  await fill(win, '[data-harness-name]', HARNESS_NAME)
+  await click(win, '[data-workspace-choose]')
+  await pollJs(win, `document.querySelector('[data-workspace-dir]')?.value`, 10_000)
+  await fill(win, '[data-workspace-name]', WORKSPACE_NAME)
 
   /*
    * Which template this creation is from, chosen rather than assumed.
@@ -1320,25 +1320,25 @@ async function harnessGroup(
    * default that quietly changed would fail the probe rather than silently
    * re-point it at a tree it was never written about.
    */
-  const pickerUp = await pollJs(win, `document.querySelector('[data-harness-templates]')`, 10_000)
-  await click(win, '[data-harness-template="minimal"]')
+  const pickerUp = await pollJs(win, `document.querySelector('[data-workspace-templates]')`, 10_000)
+  await click(win, '[data-workspace-template="minimal"]')
   await sleep(200)
   const chosenTemplate = await js<string | null>(
     win,
-    `(() => { const el = document.querySelector('[data-harness-templates] [role="radio"][aria-checked="true"]');
-      return el ? el.getAttribute('data-harness-template') : null })()`
+    `(() => { const el = document.querySelector('[data-workspace-templates] [role="radio"][aria-checked="true"]');
+      return el ? el.getAttribute('data-workspace-template') : null })()`
   )
   const writtenList = await js<string[]>(
     win,
-    `[...document.querySelectorAll('[data-harness-written] li')].map((li) => li.textContent ?? '')`
+    `[...document.querySelectorAll('[data-workspace-written] li')].map((li) => li.textContent ?? '')`
   )
   await sleep(200)
-  const preview = await text(win, '[data-harness-target]')
-  const dialogShot = await screenshot(win, shotDir, 'packaging-create-harness.png')
-  await click(win, '[data-harness-create]')
+  const preview = await text(win, '[data-workspace-target]')
+  const dialogShot = await screenshot(win, shotDir, 'packaging-create-workspace.png')
+  await click(win, '[data-workspace-create]')
 
-  const created = join(fixtures.parent, HARNESS_NAME)
-  const onDisk = await waitFor(() => existsSync(join(created, 'harness.yaml')), 20_000)
+  const created = join(fixtures.parent, WORKSPACE_NAME)
+  const onDisk = await waitFor(() => existsSync(join(created, 'workspace.yaml')), 20_000)
   await pollJs(
     win,
     `[...document.querySelectorAll('aside button[title]')].some((b) =>
@@ -1347,11 +1347,11 @@ async function harnessGroup(
   )
   await sleep(400)
   const sidebar = await sidebarPaths(win)
-  const shot = await screenshot(win, shotDir, 'packaging-harness-in-sidebar.png')
+  const shot = await screenshot(win, shotDir, 'packaging-workspace-in-sidebar.png')
 
   // --- PKG-11: the scaffold, read by a walker that knows nothing about it ---
   const tree = walk(created)
-  const manifest = onDisk ? readManifestLines(join(created, 'harness.yaml')) : null
+  const manifest = onDisk ? readManifestLines(join(created, 'workspace.yaml')) : null
   const scaffoldBytes = tree
     .map((rel) => {
       try {
@@ -1378,10 +1378,10 @@ async function harnessGroup(
       pickerUp &&
       chosenTemplate === 'minimal' &&
       onDisk &&
-      tree.join(',') === '.claude,harness.yaml,repos' &&
+      tree.join(',') === '.claude,workspace.yaml,repos' &&
       manifest !== null &&
       manifest.keys.join(',') === 'name,template,version,created' &&
-      manifest.values['name'] === HARNESS_NAME &&
+      manifest.values['name'] === WORKSPACE_NAME &&
       manifest.values['template'] === 'minimal' &&
       opinions.length === 0 &&
       personalHits.length === 0 &&
@@ -1401,7 +1401,7 @@ async function harnessGroup(
     },
     notes: [
       'Scoped to the minimal template since the dialog grew a picker: a user template writes its own tree, so "exactly these three entries" is a claim about the built-in scaffold and about nothing else. The selected row is read back out of the DOM rather than assumed, so a changed default fails here instead of quietly re-pointing this probe.',
-      'The tree is read by a plain recursion that knows nothing about harnesses, so it disagrees with the scaffolder if the scaffolder writes anything extra.',
+      'The tree is read by a plain recursion that knows nothing about workspaces, so it disagrees with the scaffolder if the scaffolder writes anything extra.',
       'The manifest is parsed line by line rather than with a YAML library, which is what makes "exactly four keys, in this order, no comments" checkable - a parser would forgive a repeat, a stray key or a comment.',
       `Nothing in it matches any of ${String(OPINION_WORDS.length - 1)} workflow words or any of ${String(personal().length)} personal-path patterns. The whole scaffold is ${String(scaffoldBytes)} bytes.`
     ]
@@ -1409,7 +1409,7 @@ async function harnessGroup(
 
   // --- PKG-8: usable immediately - visible, and a session launches from it --
   const inSidebar = sidebar.some((p) => p.toLowerCase() === created.toLowerCase())
-  // The harness row itself, found by its own `title` rather than by a CSS
+  // The workspace row itself, found by its own `title` rather than by a CSS
   // attribute selector - a backslash inside one is an escape, not a character.
   await js<boolean>(
     win,
@@ -1435,12 +1435,12 @@ async function harnessGroup(
     stop()
     await sleep(1500)
   }
-  const sessionShot = await screenshot(win, shotDir, 'packaging-harness-session.png')
+  const sessionShot = await screenshot(win, shotDir, 'packaging-workspace-session.png')
 
   checks.push({
     id: 'PKG-8',
     criterion:
-      'On a machine with no harness, first-run offers "Create a harness" and the result is immediately usable',
+      'On a machine with no workspace, first-run offers "Create a workspace" and the result is immediately usable',
     title: 'Created through the dialog, in the sidebar, and a live session launched from its root',
     ok: reachable && opened && dialogUp && onDisk && inSidebar && started && ready && session?.cwd.toLowerCase() === created.toLowerCase(),
     detail: {
@@ -1457,16 +1457,16 @@ async function harnessGroup(
     },
     notes: [
       'Driven entirely through the window: the sidebar action, the dialog, the folder picker and the name field, then the launcher row and its launch button.',
-      'The session is a real `claude`, and "usable" means it reached its own input prompt with the harness root as its working directory.'
+      'The session is a real `claude`, and "usable" means it reached its own input prompt with the workspace root as its working directory.'
     ]
   })
 
   checks.push({
     id: 'PKG-12',
-    criterion: '"Create a harness" remains reachable after first run',
+    criterion: '"Create a workspace" remains reachable after first run',
     title: 'The action is in the sidebar once the setup pane is gone',
     ok: reachable && opened && dialogUp,
-    detail: { selector: '[data-create-harness]', found: reachable, dialogOpened: dialogUp },
+    detail: { selector: '[data-create-workspace]', found: reachable, dialogOpened: dialogUp },
     notes: [
       'Checked after `setup:complete` was stamped and the launcher replaced the pane, which is the only state where the question means anything.'
     ]
@@ -1507,15 +1507,15 @@ async function scanGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtures)
 
   checks.push({
     id: 'PKG-9',
-    criterion: 'Scanner honors `repos:` in harness.yaml; absent key falls back to `repos/`',
+    criterion: 'Scanner honors `repos:` in workspace.yaml; absent key falls back to `repos/`',
     title: 'The named directory is listed, the default one beside it is not, and a manifest without the key still finds repos/',
     ok:
       namedExpected.every((p) => paths.includes(p)) &&
       !paths.includes(decoy) &&
       fallbackExpected.every((p) => paths.includes(p)),
     detail: {
-      named: { harness: fixtures.named, key: 'projects', expected: namedExpected, decoyShown: paths.includes(decoy), decoy },
-      fallback: { harness: fixtures.fallback, key: null, expected: fallbackExpected },
+      named: { workspace: fixtures.named, key: 'projects', expected: namedExpected, decoyShown: paths.includes(decoy), decoy },
+      fallback: { workspace: fixtures.fallback, key: null, expected: fallbackExpected },
       sidebar: paths,
       screenshot: shot.file
     },
@@ -1534,17 +1534,17 @@ async function scanGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtures)
     .map((e) => join(fixtures.convertible, e.name).toLowerCase())
   const visibleBefore = expected.filter((p) => beforePaths.includes(p))
 
-  await click(win, '[data-create-harness]')
-  await pollJs(win, `document.querySelector('[data-harness-dialog]')`, 10_000)
-  await click(win, '[data-harness-mode="convert"]')
+  await click(win, '[data-create-workspace]')
+  await pollJs(win, `document.querySelector('[data-workspace-dialog]')`, 10_000)
+  await click(win, '[data-workspace-mode="convert"]')
   await sleep(150)
   answerPicker('directory', fixtures.convertible)
-  await click(win, '[data-harness-choose]')
-  await pollJs(win, `document.querySelector('[data-harness-dir]')?.value`, 10_000)
-  await click(win, '[data-harness-create]')
+  await click(win, '[data-workspace-choose]')
+  await pollJs(win, `document.querySelector('[data-workspace-dir]')?.value`, 10_000)
+  await click(win, '[data-workspace-create]')
 
   const manifestWritten = await waitFor(
-    () => existsSync(join(fixtures.convertible, 'harness.yaml')),
+    () => existsSync(join(fixtures.convertible, 'workspace.yaml')),
     20_000
   )
   await pollJs(
@@ -1558,15 +1558,15 @@ async function scanGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtures)
   const afterPaths = (await sidebarPaths(win)).map((p) => p.toLowerCase())
   const visibleAfter = expected.filter((p) => afterPaths.includes(p))
   const manifest = manifestWritten
-    ? readManifestLines(join(fixtures.convertible, 'harness.yaml'))
+    ? readManifestLines(join(fixtures.convertible, 'workspace.yaml'))
     : null
   const convertShot = await screenshot(win, shotDir, 'packaging-converted-folder.png')
 
   checks.push({
     id: 'PKG-10',
     criterion:
-      'Converting an existing folder of repos into a harness does not hide its repos',
-    title: `${String(visibleBefore.length)} folders before, ${String(visibleAfter.length)} after, and the harness root gained beside them`,
+      'Converting an existing folder of repos into a workspace does not hide its repos',
+    title: `${String(visibleBefore.length)} folders before, ${String(visibleAfter.length)} after, and the workspace root gained beside them`,
     ok:
       manifestWritten &&
       manifest?.values['repos'] === '.' &&
@@ -1580,11 +1580,11 @@ async function scanGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtures)
       visibleAfter,
       manifest: manifest?.raw ?? null,
       reposKey: manifest?.values['repos'] ?? null,
-      harnessRootShown: afterPaths.includes(fixtures.convertible.toLowerCase()),
+      workspaceRootShown: afterPaths.includes(fixtures.convertible.toLowerCase()),
       screenshot: convertShot.file
     },
     notes: [
-      'This is the failure the `repos:` key exists for: before it, dropping a harness.yaml into a folder whose repos sit at its top level made every one of them disappear, because a harness only ever listed `repos/*`.',
+      'This is the failure the `repos:` key exists for: before it, dropping a workspace.yaml into a folder whose repos sit at its top level made every one of them disappear, because a workspace only ever listed `repos/*`.',
       'The before and after lists are the same `readdirSync` of the folder, compared against the sidebar on each side of the conversion.'
     ]
   })

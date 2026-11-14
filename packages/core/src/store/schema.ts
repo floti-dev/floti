@@ -74,13 +74,13 @@ export const projects = sqliteTable(
   {
     path: text('path').primaryKey(),
     name: text('name').notNull(),
-    kind: text('kind', { enum: ['harness', 'repo', 'folder'] }).notNull(),
-    harnessPath: text('harness_path'),
+    kind: text('kind', { enum: ['workspace', 'repo', 'folder'] }).notNull(),
+    workspacePath: text('workspace_path'),
     /**
-     * `template:` from the harness manifest, for a `kind: 'harness'` row only.
+     * `template:` from the workspace manifest, for a `kind: 'workspace'` row only.
      *
      * Provenance rather than behaviour: nothing reads it back to decide
-     * anything, and a harness is free to stop resembling the template it came
+     * anything, and a workspace is free to stop resembling the template it came
      * from the moment it exists. It is here because the launcher paints from
      * this cache before the first scan lands, and a fact that the cache drops
      * is a fact that flickers on every start.
@@ -93,7 +93,7 @@ export const projects = sqliteTable(
     git: text('git', { mode: 'json' }),
     lastSeenAt: text('last_seen_at').notNull().default(now)
   },
-  (t) => [index('projects_harness_idx').on(t.harnessPath)]
+  (t) => [index('projects_workspace_idx').on(t.workspacePath)]
 )
 
 /**

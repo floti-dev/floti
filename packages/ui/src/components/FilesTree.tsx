@@ -6,7 +6,7 @@ import { cn } from '../lib/cn'
 import { copyPathLabel, useCopyFeedback } from '../lib/copyFeedback'
 import { shortcutLabel } from '../lib/platform'
 import { ROW_SELECTED_GROUP } from '../lib/rows'
-import { CaretIcon, CheckIcon, CodeIcon, CopyIcon, DocIcon, FolderIcon, HarnessIcon, LinkIcon, SearchIcon, WarnIcon } from './icons'
+import { CaretIcon, CheckIcon, CodeIcon, CopyIcon, DocIcon, FolderIcon, WorkspaceIcon, LinkIcon, SearchIcon, WarnIcon } from './icons'
 import { HostSwitch, type HostChoice } from './HostSwitch'
 import { Menu } from './Menu'
 
@@ -201,8 +201,8 @@ export function FilesRootPicker({
             checked: scope.path.toLowerCase() === key,
             title: scope.path,
             icon:
-              scope.kind === 'harness' ? (
-                <HarnessIcon width={13} height={13} />
+              scope.kind === 'workspace' ? (
+                <WorkspaceIcon width={13} height={13} />
               ) : (
                 <FolderIcon width={13} height={13} />
               )

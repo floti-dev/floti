@@ -6,7 +6,7 @@ import { bridgeFor } from './bridge'
 import { readable } from './errors'
 
 /**
- * What the window knows of each host on another computer: its harnesses and
+ * What the window knows of each host on another computer: its workspaces and
  * projects, its pinned projects and its sessions, each read through that
  * host's own bridge (`bridgeFor`) and never through this PC's.
  *
@@ -197,14 +197,14 @@ export function useHostWorkspaces(
                   ...current,
                   discovery: {
                     roots: [],
-                    harnesses: cached
-                      .filter((project) => project.kind === 'harness')
+                    workspaces: cached
+                      .filter((project) => project.kind === 'workspace')
                       .map((project) => ({
                         path: project.path,
                         name: project.name,
                         template: project.template,
                         version: null,
-                        repoPaths: cached.filter((each) => each.harnessPath === project.path).map((each) => each.path)
+                        repoPaths: cached.filter((each) => each.workspacePath === project.path).map((each) => each.path)
                       })),
                     projects: cached,
                     errors: [],

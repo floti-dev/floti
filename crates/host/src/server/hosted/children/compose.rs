@@ -126,7 +126,7 @@ mod tests {
             id: 4,
             name: "Acme".into(),
             root: "C:/work".into(),
-            overlays: vec!["C:/work/harness".into()],
+            overlays: vec!["C:/work/workspace".into()],
             access: vec!["C:/work/shared".into()],
             model: Some(model.to_owned()),
             effort: Some(effort),
@@ -178,7 +178,7 @@ mod tests {
         // What the profile gave and the agent did not stays.
         assert_eq!(
             composition.overlays,
-            [std::path::PathBuf::from("C:/work/harness")]
+            [std::path::PathBuf::from("C:/work/workspace")]
         );
         assert_eq!(
             composition.extra_folders,

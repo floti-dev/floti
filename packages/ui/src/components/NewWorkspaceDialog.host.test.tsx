@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { TemplateChoice } from '@helm/core'
-import { NewHarnessDialog, type NewHarnessDialogProps } from './NewHarnessDialog'
+import { NewWorkspaceDialog, type NewWorkspaceDialogProps } from './NewWorkspaceDialog'
 
 /** build-box's own templates, as its `template:list` answers. */
 const BUILD_BOX_TEMPLATES: TemplateChoice[] = [
@@ -11,12 +11,12 @@ const BUILD_BOX_TEMPLATES: TemplateChoice[] = [
   { id: 'infra', label: 'Infra', description: 'Runbooks and deploy scripts.', order: 1, builtIn: false }
 ]
 
-function Typed(props: Omit<NewHarnessDialogProps, 'dir' | 'onDirChange'> & { initial: string }) {
+function Typed(props: Omit<NewWorkspaceDialogProps, 'dir' | 'onDirChange'> & { initial: string }) {
   const [dir, setDir] = useState(props.initial)
-  return <NewHarnessDialog {...props} dir={dir} onDirChange={setDir} />
+  return <NewWorkspaceDialog {...props} dir={dir} onDirChange={setDir} />
 }
 
-describe('NewHarnessDialog on another host', () => {
+describe('NewWorkspaceDialog on another host', () => {
   it('says it creates on build-box, takes a typed path in build-box’s form with no Choose…, and lists build-box’s templates', async () => {
     const onCreate = vi.fn()
     const onChooseDir = vi.fn()
@@ -34,8 +34,8 @@ describe('NewHarnessDialog on another host', () => {
       />
     )
 
-    expect(screen.getByRole('dialog', { name: 'Create a harness on build-box' })).toBeTruthy()
-    expect(screen.getByRole('heading').textContent).toBe('New harness on build-box')
+    expect(screen.getByRole('dialog', { name: 'Create a workspace on build-box' })).toBeTruthy()
+    expect(screen.getByRole('heading').textContent).toBe('New workspace on build-box')
     expect(screen.queryByRole('button', { name: 'Choose…' })).toBeNull()
     expect(screen.getByText(/nothing is written on this PC/)).toBeTruthy()
     expect(screen.getByText('Infra')).toBeTruthy()
@@ -44,7 +44,7 @@ describe('NewHarnessDialog on another host', () => {
     expect((parent as HTMLInputElement).value).toBe('/home/you/work')
     await userEvent.clear(parent)
     await userEvent.type(parent, '/srv/work')
-    await userEvent.type(screen.getByRole('textbox', { name: 'Harness name' }), 'ops')
+    await userEvent.type(screen.getByRole('textbox', { name: 'Workspace name' }), 'ops')
     // The target is joined in build-box's own form.
     expect(screen.getByTitle('/srv/work/ops')).toBeTruthy()
 

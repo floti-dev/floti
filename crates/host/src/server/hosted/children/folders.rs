@@ -1,7 +1,7 @@
 //! Where a child may run, and under which profile.
 //!
 //! A child runs only in a folder Floti tracks: inside a scanned project, a
-//! harness, or a saved profile's folder. It is judged on where the folder
+//! workspace, or a saved profile's folder. It is judged on where the folder
 //! leads, with junctions, symlinks and `..` resolved the way the disk
 //! resolves them, and with case ignored where the OS ignores it. A session's
 //! own working directory does not make a folder tracked, so a session
@@ -46,7 +46,7 @@ pub(super) fn child_folder(
         .any(|root| resolves_inside(&root.path, &wanted))
     {
         return Err(format!(
-            "{} is not a folder Floti tracks, so no agent starts there. Agents run only inside a project, a harness or a profile's folder.",
+            "{} is not a folder Floti tracks, so no agent starts there. Agents run only inside a project, a workspace or a profile's folder.",
             wanted.display()
         ));
     }
@@ -160,8 +160,8 @@ mod tests {
     #[test]
     fn a_folder_inside_a_profiles_folder_is_tracked_and_one_outside_every_folder_is_not() {
         let dirs = TestDirs::new();
-        let root = dirs.folder("harness");
-        let inside = dirs.folder("harness/repos/acme");
+        let root = dirs.folder("workspace");
+        let inside = dirs.folder("workspace/repos/acme");
         let outside = dirs.folder("elsewhere");
         let store = store_with(&dirs, &[profile(1, "Acme", &root)]);
         assert_eq!(
@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn a_link_out_of_a_tracked_folder_is_untracked_however_it_is_spelled() {
         let dirs = TestDirs::new();
-        let root = dirs.folder("harness");
+        let root = dirs.folder("workspace");
         let outside = dirs.folder("elsewhere");
         link_folder(&outside, &root.join("escape"));
         let store = store_with(&dirs, &[profile(1, "Acme", &root)]);
@@ -197,8 +197,8 @@ mod tests {
     #[test]
     fn the_profile_is_the_one_whose_nearest_folder_holds_the_folder() {
         let dirs = TestDirs::new();
-        let outer = dirs.folder("harness");
-        let inner = dirs.folder("harness/repos/acme");
+        let outer = dirs.folder("workspace");
+        let inner = dirs.folder("workspace/repos/acme");
         let store = store_with(
             &dirs,
             &[profile(1, "Outer", &outer), profile(2, "Inner", &inner)],

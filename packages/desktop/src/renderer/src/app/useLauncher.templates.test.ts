@@ -16,7 +16,7 @@ const cached = (path: string, name: string, kind: CachedProject['kind'], templat
   path,
   name,
   kind,
-  harnessPath: HUB,
+  workspacePath: HUB,
   hasClaudeDir: true,
   inventory: EMPTY_INVENTORY,
   git: null,
@@ -26,7 +26,7 @@ const cached = (path: string, name: string, kind: CachedProject['kind'], templat
 
 /**
  * A cold start, before the first scan lands: the tree is painted from the
- * discovery cache, and a harness's provenance has to be in that first frame.
+ * discovery cache, and a workspace's provenance has to be in that first frame.
  */
 describe('useLauncher on a cold start', () => {
   beforeEach(() => {
@@ -35,16 +35,16 @@ describe('useLauncher on a cold start', () => {
     bridge.answer('settings:read', () => ({ ...DEFAULT_SETTINGS, scanRoots: [ROOT] }))
   })
 
-  it('carries the template a harness was built from out of the cache', async () => {
+  it('carries the template a workspace was built from out of the cache', async () => {
     bridge.answer('discovery:cached', () => [
-      cached(HUB, 'hub', 'harness', 'client'),
+      cached(HUB, 'hub', 'workspace', 'client'),
       cached(TOOLS, 'tools', 'repo', null)
     ])
     const { result } = renderHook(() => useLauncher())
 
     await waitFor(() => expect(result.current.discovery).not.toBeNull())
     expect(result.current.discovery?.roots).toEqual([ROOT])
-    expect(result.current.discovery?.harnesses.map(({ path, name, template }) => ({ path, name, template }))).toEqual([
+    expect(result.current.discovery?.workspaces.map(({ path, name, template }) => ({ path, name, template }))).toEqual([
       { path: HUB, name: 'hub', template: 'client' }
     ])
     expect(bridge.sends.map((send) => send.channel)).toContain('renderer:ready')

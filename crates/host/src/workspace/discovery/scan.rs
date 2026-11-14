@@ -1,14 +1,14 @@
 //! Turns a list of root paths into the launcher's tree.
 //!
 //! The shape it looks for, in order:
-//!   1. the root itself is a harness (`harness.yaml`) -> the harness and its
-//!      repos
-//!   2. the root *contains* harnesses -> each one, as above
+//!   1. the root itself is a workspace (`workspace.yaml`, or the
+//!      `harness.yaml` it had before) -> the workspace and its repos
+//!   2. the root *contains* workspaces -> each one, as above
 //!   3. the root's children look like projects -> those children
 //!   4. anything else -> the root itself
 //!
 //! Step 3 is what makes the host useful pointed at a folder of ordinary
-//! repositories with no harness anywhere; step 4 is why a folder picked
+//! repositories with no workspace anywhere; step 4 is why a folder picked
 //! meaning "this one" is what appears, rather than its `src` and `tests`.
 //!
 //! Paths are compared ignoring case on every OS, as the discovery cache
@@ -20,7 +20,7 @@ use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
 use floti_protocol::channels::workspace::{
-    DiscoveryError, DiscoveryResult, Harness, Millis, Project, ProjectKind,
+    DiscoveryError, DiscoveryResult, Millis, Project, ProjectKind, Workspace,
 };
 use serde_yaml_ng::Value;
 
@@ -29,12 +29,21 @@ use super::inventory::{has_claude_dir, read_claude_inventory};
 use crate::agent_config::normalize;
 use crate::agent_config::time::now_iso;
 
-/// The file whose presence makes a folder a harness.
-pub const HARNESS_MANIFEST: &str = "harness.yaml";
+/// The manifest a new workspace is written with.
+pub const WORKSPACE_MANIFEST: &str = "workspace.yaml";
+
+/// The manifest workspaces had while they were called harnesses. A folder
+/// with it is a workspace for good: it is read exactly as a `workspace.yaml`
+/// is, and nothing renames or rewrites it.
+pub const LEGACY_WORKSPACE_MANIFEST: &str = "harness.yaml";
+
+/// Every file whose presence makes a folder a workspace, in the order they are
+/// read: with both present, `workspace.yaml` is the one read.
+pub const WORKSPACE_MANIFESTS: [&str; 2] = [WORKSPACE_MANIFEST, LEGACY_WORKSPACE_MANIFEST];
 const REPOS_DIRNAME: &str = "repos";
 
-/// How deep below a root harnesses are looked for: 1 finds
-/// `<root>/<harness>`.
+/// How deep below a root workspaces are looked for: 1 finds
+/// `<root>/<workspace>`.
 const MAX_DEPTH: usize = 1;
 
 /// What makes a folder a project in its own right rather than a container
@@ -67,13 +76,22 @@ fn is_directory(path: &Path) -> bool {
     std::fs::metadata(path).is_ok_and(|meta| meta.is_dir())
 }
 
-/// Whether `path` holds a `harness.yaml`.
-pub fn is_harness(path: &Path) -> bool {
-    std::fs::metadata(path.join(HARNESS_MANIFEST)).is_ok_and(|meta| meta.is_file())
+/// The manifest that makes `path` a workspace: the first of
+/// [`WORKSPACE_MANIFESTS`] that is a file there, or `None` when neither is.
+pub fn manifest_of(path: &Path) -> Option<PathBuf> {
+    WORKSPACE_MANIFESTS
+        .iter()
+        .map(|name| path.join(name))
+        .find(|manifest| std::fs::metadata(manifest).is_ok_and(|meta| meta.is_file()))
+}
+
+/// Whether `path` holds a `workspace.yaml` or a `harness.yaml`.
+pub fn is_workspace(path: &Path) -> bool {
+    manifest_of(path).is_some()
 }
 
 #[derive(Debug, Default)]
-struct HarnessManifest {
+struct WorkspaceManifest {
     name: Option<String>,
     template: Option<String>,
     version: Option<String>,
@@ -82,16 +100,16 @@ struct HarnessManifest {
 }
 
 /// The manifest's string keys. A manifest that is not a mapping has none;
-/// one that cannot be read or parsed is `None`, and the harness is still a
-/// harness: the file's presence is the signal, its contents decoration.
-fn read_harness_manifest(path: &Path) -> Option<HarnessManifest> {
-    let raw = std::fs::read_to_string(path.join(HARNESS_MANIFEST)).ok()?;
+/// one that cannot be read or parsed is `None`, and the workspace is still a
+/// workspace: the file's presence is the signal, its contents decoration.
+fn read_workspace_manifest(path: &Path) -> Option<WorkspaceManifest> {
+    let raw = std::fs::read_to_string(manifest_of(path)?).ok()?;
     let parsed: Value = serde_yaml_ng::from_str(&raw).ok()?;
     let Value::Mapping(record) = parsed else {
-        return Some(HarnessManifest::default());
+        return Some(WorkspaceManifest::default());
     };
     let string = |key: &str| record.get(key).and_then(Value::as_str).map(str::to_owned);
-    Some(HarnessManifest {
+    Some(WorkspaceManifest {
         name: string("name"),
         template: string("template"),
         version: string("version"),
@@ -99,15 +117,15 @@ fn read_harness_manifest(path: &Path) -> Option<HarnessManifest> {
     })
 }
 
-/// Which folder a harness keeps its repositories in: `repos:`, relative to
-/// the harness, or `repos/` when it is absent or empty. `repos: .` is how a
-/// folder of repositories becomes a harness without hiding them.
+/// Which folder a workspace keeps its repositories in: `repos:`, relative to
+/// the workspace, or `repos/` when it is absent or empty. `repos: .` is how a
+/// folder of repositories becomes a workspace without hiding them.
 ///
-/// An absolute `repos:`, or one that climbs out of the harness, falls back
+/// An absolute `repos:`, or one that climbs out of the workspace, falls back
 /// to `repos/`: a manifest travels with someone else's workspace, and a
 /// line in it must not point a scan at the whole disk.
-fn repos_dir_of(harness: &Path, manifest: Option<&HarnessManifest>) -> PathBuf {
-    let fallback = harness.join(REPOS_DIRNAME);
+fn repos_dir_of(workspace: &Path, manifest: Option<&WorkspaceManifest>) -> PathBuf {
+    let fallback = workspace.join(REPOS_DIRNAME);
     let declared = manifest
         .and_then(|manifest| manifest.repos.as_deref())
         .map(str::trim)
@@ -115,8 +133,8 @@ fn repos_dir_of(harness: &Path, manifest: Option<&HarnessManifest>) -> PathBuf {
     if declared.is_empty() || Path::new(declared).is_absolute() {
         return fallback;
     }
-    let resolved = normalize(&harness.join(declared));
-    if resolved.starts_with(harness) {
+    let resolved = normalize(&workspace.join(declared));
+    if resolved.starts_with(workspace) {
         resolved
     } else {
         fallback
@@ -140,24 +158,24 @@ fn list_dirs(path: &Path) -> std::io::Result<Vec<String>> {
     Ok(names)
 }
 
-fn describe_project(path: &Path, kind: ProjectKind, harness_path: Option<&Path>) -> Project {
+fn describe_project(path: &Path, kind: ProjectKind, workspace_path: Option<&Path>) -> Project {
     Project {
         path: text(path),
         name: path
             .file_name()
             .map_or_else(|| text(path), |name| name.to_string_lossy().into_owned()),
         kind,
-        harness_path: harness_path.map(text),
+        workspace_path: workspace_path.map(text),
         has_claude_dir: has_claude_dir(path),
         inventory: read_claude_inventory(path),
         git: None,
     }
 }
 
-/// A harness and every project in its repos folder. The harness is itself a
+/// A workspace and every project in its repos folder. The workspace is itself a
 /// project: it has its own `.claude/` and is where a session launches from.
-fn scan_harness(path: &Path) -> (Harness, Vec<Project>) {
-    let manifest = read_harness_manifest(path);
+fn scan_workspace(path: &Path) -> (Workspace, Vec<Project>) {
+    let manifest = read_workspace_manifest(path);
     let repos_dir = repos_dir_of(path, manifest.as_ref());
     let repo_names = if is_directory(&repos_dir) {
         list_dirs(&repos_dir).unwrap_or_default()
@@ -165,21 +183,21 @@ fn scan_harness(path: &Path) -> (Harness, Vec<Project>) {
         Vec::new()
     };
     let repo_paths: Vec<PathBuf> = repo_names.iter().map(|name| repos_dir.join(name)).collect();
-    let mut projects = vec![describe_project(path, ProjectKind::Harness, Some(path))];
+    let mut projects = vec![describe_project(path, ProjectKind::Workspace, Some(path))];
     projects.extend(
         repo_paths
             .iter()
             .map(|repo| describe_project(repo, ProjectKind::Repo, Some(path))),
     );
     let manifest = manifest.unwrap_or_default();
-    let harness = Harness {
+    let workspace = Workspace {
         path: text(path),
         name: manifest.name.unwrap_or_else(|| projects[0].name.clone()),
         template: manifest.template,
         version: manifest.version,
         repo_paths: repo_paths.iter().map(|repo| text(repo)).collect(),
     };
-    (harness, projects)
+    (workspace, projects)
 }
 
 /// Whether `path` carries any of [`PROJECT_MARKERS`]. Existence only, not
@@ -192,7 +210,7 @@ fn looks_like_project(path: &Path) -> bool {
 
 #[derive(Default)]
 struct Walk {
-    harnesses: Vec<Harness>,
+    workspaces: Vec<Workspace>,
     projects: Vec<Project>,
     errors: Vec<DiscoveryError>,
     seen: HashSet<String>,
@@ -208,9 +226,9 @@ impl Walk {
     }
 
     fn visit(&mut self, path: &Path, depth: usize) {
-        if is_harness(path) {
-            let (harness, found) = scan_harness(path);
-            self.harnesses.push(harness);
+        if is_workspace(path) {
+            let (workspace, found) = scan_workspace(path);
+            self.workspaces.push(workspace);
             self.add(found);
             return;
         }
@@ -230,16 +248,19 @@ impl Walk {
             }
         };
         let children: Vec<PathBuf> = children.iter().map(|name| path.join(name)).collect();
-        let harnesses: Vec<&PathBuf> = children.iter().filter(|child| is_harness(child)).collect();
-        if !harnesses.is_empty() {
-            // A folder of harnesses: its other children are whatever else
+        let workspaces: Vec<&PathBuf> = children
+            .iter()
+            .filter(|child| is_workspace(child))
+            .collect();
+        if !workspaces.is_empty() {
+            // A folder of workspaces: its other children are whatever else
             // lives beside them, not projects.
-            for child in harnesses {
+            for child in workspaces {
                 self.visit(child, depth + 1);
             }
             return;
         }
-        // No harness below, so the folder is a container of projects or a
+        // No workspace below, so the folder is a container of projects or a
         // project, and only a child that looks like a project says which.
         // Never the converse: a folder of repositories with a CLAUDE.md at
         // its top is still a container.
@@ -291,7 +312,7 @@ pub fn scan(roots: &[String], include_git: bool) -> DiscoveryResult {
     });
     DiscoveryResult {
         roots: roots.iter().map(|root| text(root)).collect(),
-        harnesses: walk.harnesses,
+        workspaces: walk.workspaces,
         projects: walk.projects,
         errors: walk.errors,
         scanned_at: now_iso(),

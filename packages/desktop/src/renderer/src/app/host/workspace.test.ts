@@ -45,13 +45,13 @@ const git = (dirty: number): P.GitState => ({ branch: 'main', detached: false, d
 
 const scanResult = (dirty: number): P.DiscoveryResult => ({
   roots: [HUB],
-  harnesses: [],
+  workspaces: [],
   projects: [
     {
       path: ALPHA,
       name: 'alpha',
       kind: 'repo',
-      harnessPath: HUB,
+      workspacePath: HUB,
       hasClaudeDir: true,
       inventory: { skills: 0, commands: 0, agents: 0, hooks: false, settings: false, claudeMd: true, mcp: false },
       git: git(dirty)

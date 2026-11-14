@@ -12,7 +12,7 @@ const PROJECT: Project = {
   path: 'C:\\work\\shop',
   name: 'shop',
   kind: 'repo',
-  harnessPath: null,
+  workspacePath: null,
   hasClaudeDir: false,
   inventory: EMPTY_INVENTORY,
   git: null

@@ -61,7 +61,7 @@ export function initDataDir(): void {
 export const dbFile: string = join(dataDir, 'helm.db')
 
 /**
- * Where the user's harness templates live.
+ * Where the user's workspace templates live.
  *
  * The same `PORTABLE_EXECUTABLE_DIR` branch `dataDir` takes, and that is the
  * whole of the mechanism - one rule covering all four run modes rather than a

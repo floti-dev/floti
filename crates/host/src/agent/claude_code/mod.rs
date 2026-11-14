@@ -32,7 +32,7 @@ use std::time::Duration;
 use floti_protocol::channels::common::PermissionMode;
 use floti_protocol::channels::sessions::{SessionActivity, UsageSnapshot};
 use floti_protocol::channels::workspace::ConfigFile;
-use floti_protocol::{BackendId, HarnessPart, HarnessSupport, Knowable};
+use floti_protocol::{BackendId, Knowable, WorkspacePart, WorkspaceSupport};
 
 use super::{
     AgentBackend, AgentInput, AgentToolServer, AgentTools, Composition, ConfigSource, Conversation,
@@ -87,7 +87,7 @@ pub const INPUT_PAUSE_RECORDED_ON: &str = "2.1.319";
 /// What a Claude Code parent is told of its own way to message a child.
 const CLAUDE_CODE_MESSAGING: &str = "A child on this computer can also be reached with your own SendMessage, by the name ListAgents shows for it, and reads it between its tool calls even mid-turn; Floti does not see such a message, so it is not queued and no delivered news comes for it.";
 
-/// The settings every launch passes with `--settings`, so a harness and a
+/// The settings every launch passes with `--settings`, so a workspace and a
 /// repository written in different shapes both reach the session: Claude Code
 /// then loads `CLAUDE.md` and `AGENTS.md` together, each once.
 pub const LAUNCH_SETTINGS: &str = r#"{"instructionFiles":"claude-md-and-agents-md"}"#;
@@ -353,7 +353,7 @@ impl ClaudeCodeBackend {
             overlays: built.into_iter().map(|overlay| overlay.name).collect(),
             composed_instructions: instructions.is_some(),
             warnings,
-            not_taken: super::parts_not_taken(&self.harness(), &overlays),
+            not_taken: super::parts_not_taken(&self.workspace(), &overlays),
         })
     }
 }
@@ -508,8 +508,8 @@ impl AgentBackend for ClaudeCodeBackend {
 
     /// Instructions from `CLAUDE.md` and `AGENTS.md`; skills, commands,
     /// subagents and workflows through the overlay. Nothing it cannot take.
-    fn harness(&self) -> HarnessSupport {
-        HarnessSupport::taking(["CLAUDE.md", "AGENTS.md"], HarnessPart::ALL)
+    fn workspace(&self) -> WorkspaceSupport {
+        WorkspaceSupport::taking(["CLAUDE.md", "AGENTS.md"], WorkspacePart::ALL)
     }
 }
 

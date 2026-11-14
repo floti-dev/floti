@@ -1,4 +1,4 @@
-//! A harness project as a plugin folder `--plugin-dir` accepts, and its
+//! A workspace project as a plugin folder `--plugin-dir` accepts, and its
 //! instructions composed into one `--append-system-prompt-file`.
 //!
 //! A plugin is a folder with a manifest and convention folders beside it,
@@ -15,7 +15,7 @@
 //! └── workflows/  ──link──▶  acme/.claude/workflows
 //! ```
 //!
-//! A harness with skills in both shapes gets a real `skills/` folder holding
+//! A workspace with skills in both shapes gets a real `skills/` folder holding
 //! a link per skill, `.claude`'s winning a name both have. `hooks/` is never
 //! composed: a hook's commands are written against its own repository's
 //! folder, and an overlay's session runs somewhere else. A link that cannot be
@@ -23,7 +23,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::agent::harness::{HarnessProject, Skills, is_same_or_ancestor};
+use crate::agent::workspace::{Skills, WorkspaceProject, is_same_or_ancestor};
 use crate::agent::{AgentInstructions, LaunchFolder};
 use crate::platform::links::{FolderLinks, Native as Links};
 use crate::{Error, Result};
@@ -36,7 +36,7 @@ const OVERLAYS_DIR: &str = "overlays";
 pub(super) struct Overlay {
     /// The plugin name its skills are namespaced under.
     pub name: String,
-    pub project: HarnessProject,
+    pub project: WorkspaceProject,
     /// The plugin folder passed with `--plugin-dir`.
     pub dir: PathBuf,
 }
@@ -94,7 +94,7 @@ pub(super) fn build_overlays(
     let names = overlay_plugin_names(projects);
     let mut overlays = Vec::new();
     for (project, name) in projects.iter().zip(names) {
-        let project = HarnessProject::read(project);
+        let project = WorkspaceProject::read(project);
         if project.parts().is_empty() {
             warnings.push(format!(
                 "{} has no .claude/ or .agents/ directory and no CLAUDE.md or AGENTS.md to compose.",
@@ -114,7 +114,7 @@ pub(super) fn build_overlays(
     Ok(overlays)
 }
 
-fn build_one(project: &HarnessProject, name: &str, dir: &Path) -> Result<()> {
+fn build_one(project: &WorkspaceProject, name: &str, dir: &Path) -> Result<()> {
     let manifest_dir = dir.join(".claude-plugin");
     std::fs::create_dir_all(&manifest_dir)
         .map_err(|source| Error::path("create an overlay", &manifest_dir, source))?;

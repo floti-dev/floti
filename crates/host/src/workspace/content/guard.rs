@@ -19,8 +19,8 @@ use super::kinds::content_file_kind;
 use crate::agent_config::{AgentConfigFolders, PathGuard, normalize};
 
 /// Folders that are never content, whatever they hold. `repos` matters most:
-/// each repository under a harness is a scope of its own, and a save that
-/// reached into one through the harness would file its snapshot under the
+/// each repository under a workspace is a scope of its own, and a save that
+/// reached into one through the workspace would file its snapshot under the
 /// wrong scope.
 pub const FORBIDDEN: &[&str] = &[
     "repos",

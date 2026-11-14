@@ -84,11 +84,11 @@ export function rankProjects(
  * none.
  *
  * A profile is about a folder when the folder is its root or one of its
- * overlays. Profiles are mostly made at a harness root and name their project
- * through their overlays - the harness itself, then the repository - so the
- * root alone would match the harness to every profile and a repository to
+ * overlays. Profiles are mostly made at a workspace root and name their project
+ * through their overlays - the workspace itself, then the repository - so the
+ * root alone would match the workspace to every profile and a repository to
  * almost none. Among those that are about it, the one composing the fewest
- * folders is the most specific: the harness's own profile for the harness, a
+ * folders is the most specific: the workspace's own profile for the workspace, a
  * repository's own for the repository, and a profile spanning five
  * repositories for none of them in particular.
  *

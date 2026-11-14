@@ -1,9 +1,9 @@
-//! A profile as a file, so it can travel with a harness.
+//! A profile as a file, so it can travel with a workspace.
 //!
 //! The wire format is snake_case keys, with paths written relative to the
 //! profile's own root wherever they are under it and the root itself written
 //! against home (`~/.harness/dev`). That is what makes an export portable
-//! rather than merely serialised: the same harness cloned somewhere else on
+//! rather than merely serialised: the same workspace cloned somewhere else on
 //! another machine still resolves `repos/acme`. Import reverses it against
 //! the root, so a profile that has been through the file is the profile that
 //! went in.
@@ -268,7 +268,7 @@ mod tests {
         std::env::temp_dir().join("floti profile home")
     }
 
-    fn harness() -> PathBuf {
+    fn workspace() -> PathBuf {
         home().join(".harness").join("dev")
     }
 
@@ -278,17 +278,17 @@ mod tests {
 
     /// The spec's example profile, rooted at `~/.harness/dev`.
     fn sample() -> ProfileDraft {
-        let harness = harness();
+        let workspace = workspace();
         ProfileDraft {
             name: "Acme cloud sync".into(),
-            root: text(&harness),
+            root: text(&workspace),
             overlays: vec![
-                text(&harness.join("repos").join("acme")),
-                text(&harness.join("repos").join("acme-reporting")),
+                text(&workspace.join("repos").join("acme")),
+                text(&workspace.join("repos").join("acme-reporting")),
             ],
             access: vec![
-                text(&harness.join("repos").join("acme")),
-                text(&harness.join("repos").join("other-repo")),
+                text(&workspace.join("repos").join("acme")),
+                text(&workspace.join("repos").join("other-repo")),
             ],
             model: Some("opus".into()),
             effort: Some(EffortLevel::High),
@@ -319,7 +319,7 @@ mod tests {
         assert!(yaml.contains("repos/acme"), "{yaml}");
         assert!(yaml.contains("~/.harness/dev"), "{yaml}");
         assert!(
-            !yaml.contains(&text(&harness().join("repos").join("acme"))),
+            !yaml.contains(&text(&workspace().join("repos").join("acme"))),
             "{yaml}"
         );
     }
@@ -384,7 +384,7 @@ mod tests {
         let home = Some(home.as_path());
         let bare = ProfileDraft {
             name: "bare".into(),
-            root: text(&harness()),
+            root: text(&workspace()),
             overlays: Vec::new(),
             access: Vec::new(),
             model: None,
@@ -449,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    fn relative_paths_resolve_against_the_root_so_a_moved_harness_still_works() {
+    fn relative_paths_resolve_against_the_root_so_a_moved_workspace_still_works() {
         let imported = profile_from_yaml(
             "name: moved\nroot: C:/somewhere/else\noverlays:\n  - repos/acme\n",
             None,
@@ -466,7 +466,7 @@ mod tests {
         let imported = profile_from_yaml(
             &format!(
                 "name: odd\nroot: {}\neffort: medium-high\npermission_mode: whatever\n",
-                text(&harness()).replace('\\', "/")
+                text(&workspace()).replace('\\', "/")
             ),
             None,
         )
@@ -479,7 +479,7 @@ mod tests {
     fn a_document_that_is_not_a_profile_is_refused() {
         let refusal = |yaml: &str| profile_from_yaml(yaml, None).unwrap_err();
         assert!(refusal("- a\n- b").contains("mapping"));
-        assert!(refusal("root: /harness").contains("name"));
+        assert!(refusal("root: /workspace").contains("name"));
         assert!(refusal("name: x").contains("root"));
         assert!(refusal("name: [unclosed").contains("YAML"));
     }

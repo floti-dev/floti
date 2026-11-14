@@ -18,14 +18,14 @@ const project = (path: string, name: string, kind: Project['kind']): Project => 
   path,
   name,
   kind,
-  harnessPath: HUB,
+  workspacePath: HUB,
   hasClaudeDir: true,
   inventory: EMPTY_INVENTORY,
   git: null
 })
 
-/** What a scan of a harness with two repositories hands the form. */
-const PROJECTS = [project(HUB, 'hub', 'harness'), project(TOOLS, 'tools', 'repo'), project(DOCS, 'docs', 'repo')]
+/** What a scan of a workspace with two repositories hands the form. */
+const PROJECTS = [project(HUB, 'hub', 'workspace'), project(TOOLS, 'tools', 'repo'), project(DOCS, 'docs', 'repo')]
 
 const BLANK: ProfileDraft = {
   name: '',
@@ -121,14 +121,14 @@ describe('ProfileEditor', () => {
     vi.useRealTimers()
   })
 
-  it('offers every discovered project to compose or grant, with the harness root marked', () => {
+  it('offers every discovered project to compose or grant, with the workspace root marked', () => {
     renderEditor()
     expect(screen.getByRole('dialog', { name: 'New profile' })).toBeTruthy()
     for (const name of ['hub', 'tools', 'docs']) {
       expect(screen.getByRole('checkbox', { name: `Compose ${name}` })).toBeTruthy()
       expect(screen.getByRole('checkbox', { name: `Grant access to ${name}` })).toBeTruthy()
     }
-    expect(screen.getAllByText('harness root')).toHaveLength(1)
+    expect(screen.getAllByText('workspace root')).toHaveLength(1)
   })
 
   it('saves the name, root, model, opening prompt, overlays and access it was given', () => {

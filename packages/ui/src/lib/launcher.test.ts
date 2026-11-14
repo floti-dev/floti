@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest'
 import type { Profile, Project } from '@helm/core/types'
 import { folderName, homePath, launchSentence, profileFor, rankProjects, type SentencePart } from './launcher'
 
-const HARNESS = 'C:\\Users\\someone\\.harness\\dev'
-const repo = (name: string): string => `${HARNESS}\\repos\\${name}`
+const WORKSPACE = 'C:\\Users\\someone\\.harness\\dev'
+const repo = (name: string): string => `${WORKSPACE}\\repos\\${name}`
 
 function project(path: string, name = folderName(path)): Project {
   return {
     path,
     name,
     kind: 'repo',
-    harnessPath: HARNESS,
+    workspacePath: WORKSPACE,
     hasClaudeDir: false,
     inventory: { skills: [], agents: [], commands: [], hooks: [], mcpServers: [], claudeMd: false } as never,
     git: null
@@ -21,7 +21,7 @@ let nextId = 1
 function profile(patch: Partial<Profile> & Pick<Profile, 'name'>): Profile {
   return {
     id: nextId++,
-    root: HARNESS,
+    root: WORKSPACE,
     overlays: [],
     access: [],
     model: null,
@@ -83,23 +83,23 @@ describe('rankProjects', () => {
 })
 
 describe('profileFor', () => {
-  const dev = profile({ name: 'dev', overlays: [HARNESS] })
-  const timeclickProfile = profile({ name: 'Timeclick', root: repo('timeclick'), overlays: [HARNESS, repo('timeclick')] })
-  const builderProfile = profile({ name: 'Timeclick Builder', overlays: [HARNESS, repo('timeclick'), repo('TimeClick-Builder')] })
+  const dev = profile({ name: 'dev', overlays: [WORKSPACE] })
+  const timeclickProfile = profile({ name: 'Timeclick', root: repo('timeclick'), overlays: [WORKSPACE, repo('timeclick')] })
+  const builderProfile = profile({ name: 'Timeclick Builder', overlays: [WORKSPACE, repo('timeclick'), repo('TimeClick-Builder')] })
   const cloud = profile({
     name: 'tc-cloud',
-    overlays: [HARNESS, repo('timeclick'), repo('timeclick-ui'), repo('timeclick-reporting')]
+    overlays: [WORKSPACE, repo('timeclick'), repo('timeclick-ui'), repo('timeclick-reporting')]
   })
-  const cash = profile({ name: 'CashApp', overlays: [HARNESS, `${HARNESS}\\tools\\cashflow`] })
+  const cash = profile({ name: 'CashApp', overlays: [WORKSPACE, `${WORKSPACE}\\tools\\cashflow`] })
   const profiles = [cloud, builderProfile, cash, dev, timeclickProfile]
 
   it('picks the profile composing the fewest folders among those about the folder', () => {
-    expect(profileFor(HARNESS, profiles)?.name).toBe('dev')
+    expect(profileFor(WORKSPACE, profiles)?.name).toBe('dev')
     expect(profileFor(repo('timeclick'), profiles)?.name).toBe('Timeclick')
     expect(profileFor(repo('TimeClick-Builder'), profiles)?.name).toBe('Timeclick Builder')
     expect(profileFor(repo('timeclick-ui'), profiles)?.name).toBe('tc-cloud')
-    // An overlay is enough: this profile runs at the harness root.
-    expect(profileFor(`${HARNESS}\\TOOLS\\cashflow`, profiles)?.name).toBe('CashApp')
+    // An overlay is enough: this profile runs at the workspace root.
+    expect(profileFor(`${WORKSPACE}\\TOOLS\\cashflow`, profiles)?.name).toBe('CashApp')
   })
 
   it('starts a folder no profile is about with none', () => {
@@ -109,15 +109,15 @@ describe('profileFor', () => {
 
   it('breaks a tie with the profile rooted there, then the pinned order, then the name', () => {
     const at = repo('vibecast')
-    const rooted = profile({ name: 'zeta', root: at, overlays: [HARNESS] })
+    const rooted = profile({ name: 'zeta', root: at, overlays: [WORKSPACE] })
     const overlaid = profile({ name: 'alpha', overlays: [at] })
     expect(profileFor(at, [overlaid, rooted])?.name).toBe('zeta')
 
-    const second = profile({ name: 'a second', overlays: [HARNESS, at], pinnedOrder: 2 })
-    const first = profile({ name: 'b first', overlays: [HARNESS, at], pinnedOrder: 1 })
-    const unpinned = profile({ name: 'a unpinned', overlays: [HARNESS, at] })
+    const second = profile({ name: 'a second', overlays: [WORKSPACE, at], pinnedOrder: 2 })
+    const first = profile({ name: 'b first', overlays: [WORKSPACE, at], pinnedOrder: 1 })
+    const unpinned = profile({ name: 'a unpinned', overlays: [WORKSPACE, at] })
     expect(profileFor(at, [unpinned, second, first])?.name).toBe('b first')
-    expect(profileFor(at, [unpinned, profile({ name: 'B', overlays: [HARNESS, at] })])?.name).toBe('a unpinned')
+    expect(profileFor(at, [unpinned, profile({ name: 'B', overlays: [WORKSPACE, at] })])?.name).toBe('a unpinned')
   })
 })
 
@@ -146,8 +146,8 @@ describe('launchSentence', () => {
   it('names the profile, what it composes and grants, every flag, and the opening prompt', () => {
     const p = profile({
       name: 'Timeclick',
-      overlays: [HARNESS, repo('timeclick'), repo('timeclick-ui')],
-      access: [HARNESS, repo('timeclick'), repo('hawkeye')],
+      overlays: [WORKSPACE, repo('timeclick'), repo('timeclick-ui')],
+      access: [WORKSPACE, repo('timeclick'), repo('hawkeye')],
       model: 'opus',
       effort: 'xhigh',
       agent: 'reviewer',
@@ -159,7 +159,7 @@ describe('launchSentence', () => {
   })
 
   it('says a conversation is being reopened, and drops the opening prompt a resume does not send', () => {
-    const p = profile({ name: 'dev', overlays: [HARNESS], openingPrompt: '/recap' })
+    const p = profile({ name: 'dev', overlays: [WORKSPACE], openingPrompt: '/recap' })
     expect(
       read(launchSentence({ cwd: repo('timeclick'), home, profile: p, permissionMode: null, resume: 'payroll export fix' }))
     ).toBe('Reopens “payroll export fix” with `claude --resume` in `~\\.harness\\dev\\repos\\timeclick` with the dev profile, composing `dev`.')

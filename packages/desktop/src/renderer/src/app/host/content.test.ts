@@ -49,7 +49,7 @@ const folder = (path: string, kind: Project['kind'], name: string, claudeMd = tr
   path,
   name,
   kind,
-  harnessPath: null,
+  workspacePath: null,
   hasClaudeDir: false,
   inventory: { skills: 0, commands: 0, agents: 0, hooks: false, settings: false, claudeMd, mcp: false },
   git: null
@@ -96,20 +96,20 @@ const effective = (cwd: string): P.EffectiveView => ({
 })
 
 describe('what composition reads of an agent’s config, over the window’s own connection', () => {
-  it('lists the user scope, then the scanned harnesses, then the scanned projects, then the profiles’ folders, each once', async () => {
+  it('lists the user scope, then the scanned workspaces, then the scanned projects, then the profiles’ folders, each once', async () => {
     const { adapter } = compositionWorld(new FakeConnection(), [
       folder(ALPHA, 'repo', 'alpha'),
-      folder(HUB, 'harness', 'hub', false),
+      folder(HUB, 'workspace', 'hub', false),
       folder(OUTSIDE.toUpperCase(), 'folder', 'tooling')
     ])
     const scopes = await ask(adapter, 'config:scopes')
     expect(scopes.map((s) => [s.kind, s.label])).toEqual([
       ['user', 'User'],
-      ['harness', 'hub'],
+      ['workspace', 'hub'],
       ['project', 'alpha'],
       ['project', 'tooling']
     ])
-    expect(scopes[1]).toEqual({ kind: 'harness', path: HUB, claudeDir: `${HUB}/.claude`, label: 'hub', exists: false })
+    expect(scopes[1]).toEqual({ kind: 'workspace', path: HUB, claudeDir: `${HUB}/.claude`, label: 'hub', exists: false })
   })
 
   it('tells apart paths that differ only by separators, a trailing one or case', () => {

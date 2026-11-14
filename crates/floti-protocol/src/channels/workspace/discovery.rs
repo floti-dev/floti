@@ -1,5 +1,5 @@
-//! Project discovery, scan roots and harnesses: `discovery:*`, `scan:status`,
-//! `git:updated`, `roots:*` and `harness:create`.
+//! Project discovery, scan roots and workspaces: `discovery:*`, `scan:status`,
+//! `git:updated`, `roots:*` and `workspace:create`.
 
 use std::collections::BTreeMap;
 
@@ -39,24 +39,25 @@ request_channel!(
     SuggestRoots = "roots:suggest", () => Vec<String>
 );
 request_channel!(
-    /// Adds a scan root: a suggestion accepted, a harness created, or the
+    /// Adds a scan root: a suggestion accepted, a workspace created, or the
     /// folder the client's picker chose. Answers the roots after.
     AcceptRoot = "roots:accept", RootPath => Vec<String>
 );
 request_channel!(RemoveRoot = "roots:remove", RootPath => Vec<String>);
 request_channel!(
-    /// Scaffolds a harness, or turns a folder that holds repositories into
-    /// one. The new harness becomes a scan root in the same call.
-    CreateHarness = "harness:create", CreateHarnessRequest => CreateHarnessOutcome
+    /// Scaffolds a workspace, or turns a folder that holds repositories into
+    /// one. The new workspace becomes a scan root in the same call.
+    CreateWorkspace = "workspace:create", CreateWorkspaceRequest => CreateWorkspaceOutcome
 );
 
 /// What a discovered folder turned out to be.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ProjectKind {
-    /// Has a `harness.yaml`. Its `repos/*` children are projects too.
-    Harness,
-    /// A repository inside a harness's `repos/`.
+    /// Has a `workspace.yaml`, or the `harness.yaml` it had before. Its
+    /// `repos/*` children are projects too.
+    Workspace,
+    /// A repository inside a workspace's `repos/`.
     Repo,
     /// Neither, scanned because a root pointed at it.
     Folder,
@@ -99,8 +100,8 @@ pub struct Project {
     pub path: String,
     pub name: String,
     pub kind: ProjectKind,
-    /// The harness this project belongs to, if any.
-    pub harness_path: Option<String>,
+    /// The workspace this project belongs to, if any.
+    pub workspace_path: Option<String>,
     pub has_claude_dir: bool,
     pub inventory: ClaudeInventory,
     pub git: Option<GitState>,
@@ -113,22 +114,22 @@ pub struct CachedProject {
     pub path: String,
     pub name: String,
     pub kind: ProjectKind,
-    pub harness_path: Option<String>,
+    pub workspace_path: Option<String>,
     pub has_claude_dir: bool,
     pub inventory: ClaudeInventory,
     pub git: Option<GitState>,
     /// ISO 8601.
     pub last_seen_at: String,
-    /// The harness manifest's `template:`, for a harness row; null otherwise.
+    /// The workspace manifest's `template:`, for a workspace row; null otherwise.
     pub template: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct Harness {
+pub struct Workspace {
     pub path: String,
     pub name: String,
-    /// From `harness.yaml` when present.
+    /// From its manifest when present: `workspace.yaml`, else `harness.yaml`.
     pub template: Option<String>,
     pub version: Option<String>,
     /// The projects found under `repos/`.
@@ -148,7 +149,7 @@ pub struct DiscoveryError {
 pub struct DiscoveryResult {
     /// The roots that were scanned.
     pub roots: Vec<String>,
-    pub harnesses: Vec<Harness>,
+    pub workspaces: Vec<Workspace>,
     pub projects: Vec<Project>,
     pub errors: Vec<DiscoveryError>,
     /// ISO 8601.
@@ -181,18 +182,18 @@ pub struct RootPath {
     pub path: String,
 }
 
-/// A new harness, or a folder of repositories turned into one.
+/// A new workspace, or a folder of repositories turned into one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
-pub enum HarnessMode {
+pub enum WorkspaceMode {
     New,
     Convert,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateHarnessRequest {
-    pub mode: HarnessMode,
+pub struct CreateWorkspaceRequest {
+    pub mode: WorkspaceMode,
     pub dir: String,
     #[serde(default)]
     pub name: Option<String>,
@@ -204,14 +205,14 @@ pub struct CreateHarnessRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateHarnessOutcome {
-    /// The harness folder, or null when nothing was written.
+pub struct CreateWorkspaceOutcome {
+    /// The workspace folder, or null when nothing was written.
     pub path: Option<String>,
     /// Paths written, relative to `path`.
     pub created: Vec<String>,
     /// What went wrong, as sentences. With `path` set, a template applied in
     /// part: `created` is what landed, and no rollback is claimed.
     pub problems: Vec<String>,
-    /// The scan roots after the new harness was added to them.
+    /// The scan roots after the new workspace was added to them.
     pub roots: Vec<String>,
 }

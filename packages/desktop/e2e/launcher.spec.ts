@@ -125,14 +125,14 @@ test('a conversation that ended reopens from the launcher, in the pane beside', 
   await expect.poll(() => terminalText(window, resumedId)).toContain(`Resumed ${ended.sessionId}`)
 })
 
-test('a new harness ends in a session, not on a page', async ({ helm, world }) => {
+test('a new workspace ends in a session, not on a page', async ({ helm, world }) => {
   const { window } = helm
   await expect(window.getByRole('button', { name: 'Start a session in alpha' })).toBeAttached()
 
-  await window.getByRole('button', { name: 'Create a new harness' }).click()
-  const create = window.getByRole('dialog', { name: 'Create a harness' })
-  await create.getByRole('textbox', { name: 'Harness name' }).fill('camp')
-  await create.getByRole('button', { name: 'Create harness' }).click()
+  await window.getByRole('button', { name: 'Create a new workspace' }).click()
+  const create = window.getByRole('dialog', { name: 'Create a workspace' })
+  await create.getByRole('textbox', { name: 'Workspace name' }).fill('camp')
+  await create.getByRole('button', { name: 'Create workspace' }).click()
   await expect(create).toBeHidden()
   await expect(window.getByRole('tab', { name: 'camp, ready' })).toBeVisible()
   await claudeRunIn(world, join(world.projectsDir, 'camp'))

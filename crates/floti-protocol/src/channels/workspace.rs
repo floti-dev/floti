@@ -1,7 +1,7 @@
-//! Settings, setup, discovery, roots, harnesses, templates, what composition
+//! Settings, setup, discovery, roots, workspaces, templates, what composition
 //! reads of an agent's config, content, the Files view and agent worktrees:
 //! `app:info`, `settings:*`, `setup:*`, `discovery:*`, `scan:status`,
-//! `git:updated`, `roots:*`, `harness:create`, `template:*`,
+//! `git:updated`, `roots:*`, `workspace:create`, `template:*`,
 //! `config:scopes`, `config:tree`, `config:effective`, `editor:highlight`,
 //! `content:*`, `files:*` and `worktrees:*` in `shared/ipc.ts`.
 //!
@@ -72,7 +72,7 @@ pub fn declare(catalogue: &mut Catalogue) {
         .request::<ReadSetupStatus>()
         .request::<LocateBackend>()
         .request::<CompleteSetup>()
-        // Discovery, roots and harnesses.
+        // Discovery, roots and workspaces.
         .request::<ReadCachedDiscovery>()
         .request::<ScanForProjects>()
         .event::<DiscoveryUpdated>()
@@ -82,7 +82,7 @@ pub fn declare(catalogue: &mut Catalogue) {
         .request::<SuggestRoots>()
         .request::<AcceptRoot>()
         .request::<RemoveRoot>()
-        .request::<CreateHarness>()
+        .request::<CreateWorkspace>()
         // Templates.
         .request::<ListTemplates>()
         .request::<PreviewTemplate>()

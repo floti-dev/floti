@@ -30,7 +30,7 @@ const PLAIN = profile(2, 'plain')
 function renderList(overrides: Partial<ProfileListProps> = {}) {
   const props: ProfileListProps = {
     profiles: [DEV, PLAIN],
-    harnesses: [{ name: 'hub', path: HUB }],
+    workspaces: [{ name: 'hub', path: HUB }],
     onLaunch: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
@@ -46,7 +46,7 @@ function renderList(overrides: Partial<ProfileListProps> = {}) {
 const row = (name: RegExp): HTMLElement => screen.getByRole('button', { name })
 
 describe('ProfileList', () => {
-  it('lists each saved profile with what it composes and the harness it launches into', () => {
+  it('lists each saved profile with what it composes and the workspace it launches into', () => {
     renderList()
     const list = screen.getByRole('list', { name: 'Saved profiles' })
     expect(within(list).getAllByRole('listitem')).toHaveLength(2)

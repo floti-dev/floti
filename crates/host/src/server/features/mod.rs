@@ -14,9 +14,9 @@
 //!   tree listens on (`sessions:port`).
 //! - [`workspace`]: the host's identity, settings and setup, and what the
 //!   workspace features below share.
-//! - [`discovery`]: project discovery, scan roots and harnesses.
+//! - [`discovery`]: project discovery, scan roots and workspaces.
 //! - [`profiles`]: saved profiles.
-//! - [`templates`]: harness templates.
+//! - [`templates`]: workspace templates.
 //! - [`content`]: notes and documents, and the renderer.
 //! - [`files`]: the Files view.
 //! - [`worktrees`]: a project's agent worktrees, listed and removed.

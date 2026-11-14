@@ -236,7 +236,7 @@ describe('FilesRootPicker', () => {
     render(
       <FilesRootPicker
         roots={[
-          { kind: 'harness', path: 'C:\\dev', label: 'dev' },
+          { kind: 'workspace', path: 'C:\\dev', label: 'dev' },
           { kind: 'project', path: 'C:\\dev\\repos\\helm', label: 'helm' },
           { kind: 'project', path: 'C:\\dev\\repos\\hub', label: 'hub' }
         ]}

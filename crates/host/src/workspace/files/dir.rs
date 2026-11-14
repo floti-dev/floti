@@ -31,7 +31,7 @@ use crate::workspace::content::tree::CURATED_SKIPPED_DIRS;
 
 /// Whether the built-in list skips a folder named `lower`: the curated
 /// view's list without `repos/`, because a tree's promise is every file,
-/// lazily, and a harness keeps its actual work in `repos/`.
+/// lazily, and a workspace keeps its actual work in `repos/`.
 pub fn is_fallback_skipped(lower: &str) -> bool {
     lower != "repos" && CURATED_SKIPPED_DIRS.contains(&lower)
 }

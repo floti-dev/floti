@@ -219,20 +219,20 @@ fn state_of(client_start: &Message) -> Payload {
 // A scan as its subscribers see it, and the cache it leaves.
 // ---------------------------------------------------------------------------
 
-/// A harness with two repositories, and beside it a folder of projects: a
+/// A workspace with two repositories, and beside it a folder of projects: a
 /// repository, a plain folder and a folder with only a CLAUDE.md.
 fn workspace_fixture(world: &World) -> (GitRepo, GitRepo) {
     world.file(
-        "harnesses/dev/harness.yaml",
+        "workspaces/dev/workspace.yaml",
         "name: \"dev\"\ntemplate: \"starter\"\nversion: \"0.1.0\"\n",
     );
-    world.file("harnesses/dev/.claude/skills/notes/SKILL.md", "");
-    let alpha = GitRepo::init(world.path("harnesses/dev/repos/alpha"));
+    world.file("workspaces/dev/.claude/skills/notes/SKILL.md", "");
+    let alpha = GitRepo::init(world.path("workspaces/dev/repos/alpha"));
     alpha.write("README.md", "# alpha\n");
     alpha.write(".claude/agents/reviewer.md", "");
     alpha.commit_all("first");
     alpha.write("README.md", "# alpha, changed\n");
-    world.dir("harnesses/dev/repos/beta");
+    world.dir("workspaces/dev/repos/beta");
     let gamma = GitRepo::init(world.path("projects/gamma"));
     gamma.write("README.md", "# gamma\n");
     gamma.commit_all("first");
@@ -246,7 +246,7 @@ async fn a_scan_is_pushed_between_running_and_stopped_and_its_projects_stay_cach
  {
     let mut world = World::start().await;
     let _repos = workspace_fixture(&world);
-    let roots = [world.text("harnesses"), world.text("projects")];
+    let roots = [world.text("workspaces"), world.text("projects")];
     world.set_roots(&roots).await;
     let before = world
         .client
@@ -284,20 +284,20 @@ async fn a_scan_is_pushed_between_running_and_stopped_and_its_projects_stay_cach
     assert_eq!(seen, ["running", "result", "stopped"]);
     assert_eq!(pushed.as_ref(), Some(&answer));
 
-    // The answer: the harness and its repositories, then the folder of
+    // The answer: the workspace and its repositories, then the folder of
     // projects, which lists its children because one is a repository.
     assert_eq!(answer.roots, roots);
     assert!(answer.errors.is_empty(), "{:?}", answer.errors);
-    assert_eq!(answer.harnesses.len(), 1);
-    let harness = &answer.harnesses[0];
-    assert_eq!(harness.name, "dev");
-    assert_eq!(harness.template.as_deref(), Some("starter"));
-    assert_eq!(harness.version.as_deref(), Some("0.1.0"));
+    assert_eq!(answer.workspaces.len(), 1);
+    let workspace = &answer.workspaces[0];
+    assert_eq!(workspace.name, "dev");
+    assert_eq!(workspace.template.as_deref(), Some("starter"));
+    assert_eq!(workspace.version.as_deref(), Some("0.1.0"));
     assert_eq!(
-        harness.repo_paths,
+        workspace.repo_paths,
         [
-            world.text("harnesses/dev/repos/alpha"),
-            world.text("harnesses/dev/repos/beta")
+            world.text("workspaces/dev/repos/alpha"),
+            world.text("workspaces/dev/repos/beta")
         ]
     );
     let by_name: BTreeMap<&str, _> = answer
@@ -309,17 +309,20 @@ async fn a_scan_is_pushed_between_running_and_stopped_and_its_projects_stay_cach
         by_name.keys().copied().collect::<Vec<_>>(),
         ["alpha", "beta", "dev", "gamma", "plain", "rules"]
     );
-    let dev = world.text("harnesses/dev");
-    assert_eq!(by_name["dev"].kind, ProjectKind::Harness);
-    assert_eq!(by_name["dev"].harness_path.as_deref(), Some(dev.as_str()));
+    let dev = world.text("workspaces/dev");
+    assert_eq!(by_name["dev"].kind, ProjectKind::Workspace);
+    assert_eq!(by_name["dev"].workspace_path.as_deref(), Some(dev.as_str()));
     assert_eq!(by_name["dev"].inventory.skills, 1);
     assert_eq!(by_name["alpha"].kind, ProjectKind::Repo);
-    assert_eq!(by_name["alpha"].harness_path.as_deref(), Some(dev.as_str()));
+    assert_eq!(
+        by_name["alpha"].workspace_path.as_deref(),
+        Some(dev.as_str())
+    );
     assert!(by_name["alpha"].has_claude_dir);
     assert_eq!(by_name["alpha"].inventory.agents, 1);
     for folder in ["gamma", "plain", "rules"] {
         assert_eq!(by_name[folder].kind, ProjectKind::Folder, "{folder}");
-        assert_eq!(by_name[folder].harness_path, None, "{folder}");
+        assert_eq!(by_name[folder].workspace_path, None, "{folder}");
     }
     assert!(by_name["rules"].inventory.claude_md);
     let alpha_git = by_name["alpha"]
@@ -354,7 +357,7 @@ async fn a_scan_is_pushed_between_running_and_stopped_and_its_projects_stay_cach
         .projects
         .iter()
         .map(|project| {
-            let template = (project.kind == ProjectKind::Harness).then(|| "starter".to_owned());
+            let template = (project.kind == ProjectKind::Workspace).then(|| "starter".to_owned());
             (project.path.clone(), project.kind, template)
         })
         .collect();
@@ -633,12 +636,12 @@ async fn every_pin_stays_across_a_rescan_one_whose_folder_is_gone_included() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn suggested_roots_put_an_enclosing_harness_first_then_the_home_harness_folder() {
+async fn suggested_roots_put_an_enclosing_workspace_first_then_the_home_workspace_folder() {
     let mut world = World::start().await;
     std::fs::create_dir_all(world.dirs.home.join(".harness")).unwrap();
     let suggested = world.client.request::<SuggestRoots>(&()).await.unwrap();
     // The host looks around the folder it runs in, as today's app looks
-    // around its own: that may or may not be inside a harness.
+    // around its own: that may or may not be inside a workspace.
     let start = std::env::current_dir().unwrap();
     assert_eq!(suggested, suggest_roots(&start, Some(&world.dirs.home)));
     assert_eq!(

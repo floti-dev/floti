@@ -86,7 +86,7 @@ pub struct AppInfo {
 pub struct HostSettings {
     /// Folders discovery scans. Empty means "not set up yet".
     pub scan_roots: Vec<String>,
-    /// Projects lifted out of their harness group into Pinned, by path.
+    /// Projects lifted out of their workspace group into Pinned, by path.
     pub pinned_projects: Vec<String>,
     /// When setup was finished, ISO 8601, or null while it has not been.
     pub first_run_completed_at: Option<String>,

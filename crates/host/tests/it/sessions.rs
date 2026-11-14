@@ -338,8 +338,8 @@ fn has(argv: &[String], arg: &str) -> bool {
     argv.iter().any(|a| a == arg)
 }
 
-/// A harness in Claude's shape, with a skill to compose.
-fn claude_shaped_harness(root: &Path) {
+/// A workspace in Claude's shape, with a skill to compose.
+fn claude_shaped_workspace(root: &Path) {
     let skill = root.join(".claude").join("skills").join("think");
     std::fs::create_dir_all(&skill).unwrap();
     std::fs::write(
@@ -456,8 +456,8 @@ async fn a_start_carries_the_whole_composition_to_the_agent_in_the_requested_fol
     let host = world.host();
     let mut client = world.client().await;
     let project = world.folder("work/cloud sync");
-    let harness = world.folder("harness");
-    claude_shaped_harness(&harness);
+    let workspace = world.folder("workspace");
+    claude_shaped_workspace(&workspace);
     let access = world.folder("repos/a");
     let profile_access = world.folder("repos/b");
     let elsewhere = world.folder("the profile's root");
@@ -475,7 +475,7 @@ async fn a_start_carries_the_whole_composition_to_the_agent_in_the_requested_fol
             name: Some("cloud".into()),
             project_path: Some(text(&project)),
             profile_id: Some(profile),
-            overlays: Some(vec![text(&harness)]),
+            overlays: Some(vec![text(&workspace)]),
             extra_folders: Some(vec![text(&access)]),
             model: Some("opus".into()),
             effort: Some(EffortLevel::High),

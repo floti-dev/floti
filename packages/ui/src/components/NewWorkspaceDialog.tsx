@@ -7,7 +7,7 @@ import { SEGMENT_ON } from '../lib/segmented'
 import { CloseIcon, HelmMarkIcon } from './icons'
 import { Overlay } from './Overlay'
 
-export interface NewHarnessDialogProps {
+export interface NewWorkspaceDialogProps {
   /**
    * Which of the two the dialog opens on. Both are reachable from inside it -
    * they are the same decision seen from two directions ("I want a workspace"
@@ -42,7 +42,7 @@ export interface NewHarnessDialogProps {
    * One of its two entry points, and the other is Settings. Here because
    * "there is no template that does what I want" is a thought people have
    * while looking at this picker; there because templates are app-level and
-   * nobody should have to start creating a harness to tidy them up.
+   * nobody should have to start creating a workspace to tidy them up.
    */
   onManageTemplates?: (() => void) | undefined
   /** A template that could not be read, as a sentence. Not fatal to the rest. */
@@ -68,8 +68,8 @@ export interface NewHarnessDialogProps {
 }
 
 /**
- * Creating a harness, which is a smaller thing than the word suggests: a
- * directory with a `harness.yaml` in it.
+ * Creating a workspace, which is a smaller thing than the word suggests: a
+ * directory with a `workspace.yaml` in it.
  *
  * The dialog says exactly what will be written, and since templates landed that
  * list is **read from the engine that writes it** (`template:preview`) rather
@@ -82,7 +82,7 @@ export interface NewHarnessDialogProps {
  * into a directory somebody already has, and a template applied to that would
  * be Helm writing a layout into their work.
  */
-export function NewHarnessDialog({
+export function NewWorkspaceDialog({
   mode: initialMode,
   dir,
   onChooseDir,
@@ -100,7 +100,7 @@ export function NewHarnessDialog({
   onCancel,
   host,
   onDirChange
-}: NewHarnessDialogProps): JSX.Element {
+}: NewWorkspaceDialogProps): JSX.Element {
   const [mode, setMode] = useState(initialMode)
   const [name, setName] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
@@ -128,20 +128,20 @@ export function NewHarnessDialog({
   return (
     <Overlay
       aria-label={
-        (mode === 'new' ? 'Create a harness' : 'Turn a folder into a harness') + (host === undefined ? '' : ` on ${host}`)
+        (mode === 'new' ? 'Create a workspace' : 'Turn a folder into a workspace') + (host === undefined ? '' : ` on ${host}`)
       }
-      data-harness-dialog={mode}
+      data-workspace-dialog={mode}
       className="max-w-[520px]"
       onDismiss={onCancel}
     >
       <header className="flex shrink-0 items-center gap-[9px] px-[22px] pt-[18px]">
         <HelmMarkIcon width={13} height={13} className="shrink-0 text-accent" />
         <h2 className="text-[15px] font-medium tracking-tight text-fg">
-          {mode === 'new' ? 'New harness' : 'Turn a folder into a harness'}
+          {mode === 'new' ? 'New workspace' : 'Turn a folder into a workspace'}
           {host !== undefined && (
             <>
               {' on '}
-              <span data-harness-host className="font-mono text-[13px]">
+              <span data-workspace-host className="font-mono text-[13px]">
                 {host}
               </span>
             </>
@@ -162,8 +162,8 @@ export function NewHarnessDialog({
       <div className="min-h-0 flex-1 overflow-y-auto px-[22px] pt-2 pb-1">
         <p className="text-[11px] leading-[1.55] text-fg-muted">
           {host === undefined
-            ? 'A harness is a working root with its own config, repos and sessions. Projects and Config always resolve inside one.'
-            : `A harness there is a folder on ${host}, and its sessions run there. It is created on ${host}; nothing is written on this PC.`}
+            ? 'A workspace is a working root with its own config, repos and sessions. Projects and Config always resolve inside one.'
+            : `A workspace there is a folder on ${host}, and its sessions run there. It is created on ${host}; nothing is written on this PC.`}
         </p>
 
         <div
@@ -177,7 +177,7 @@ export function NewHarnessDialog({
               type="button"
               role="radio"
               aria-checked={mode === candidate}
-              data-harness-mode={candidate}
+              data-workspace-mode={candidate}
               onClick={() => chooseMode(candidate)}
               className={cn(
                 'flex-1 rounded-raised px-2.5 py-1 text-[12px] transition-colors',
@@ -194,7 +194,7 @@ export function NewHarnessDialog({
         {problems.length > 0 && (
           <ul
             role="alert"
-            data-harness-problems
+            data-workspace-problems
             className="mt-4 rounded-raised border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-danger"
           >
             {problems.map((problem) => (
@@ -211,8 +211,8 @@ export function NewHarnessDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               spellCheck={false}
-              data-harness-name
-              aria-label="Harness name"
+              data-workspace-name
+              aria-label="Workspace name"
               placeholder="e.g. client-work"
               className={inputClass}
             />
@@ -230,13 +230,13 @@ export function NewHarnessDialog({
                   readOnly
                   value={dir}
                   aria-label={mode === 'new' ? 'Parent folder' : 'Folder'}
-                  data-harness-dir
+                  data-workspace-dir
                   placeholder="Choose a folder…"
                   className={cn(inputClass, 'min-w-0 flex-1 font-mono text-[11px] text-fg-muted')}
                 />
                 <button
                   type="button"
-                  data-harness-choose
+                  data-workspace-choose
                   onClick={onChooseDir}
                   className="h-[30px] shrink-0 rounded-well border border-border-strong px-2.5 text-[12px] text-fg transition-colors hover:bg-hover"
                 >
@@ -250,7 +250,7 @@ export function NewHarnessDialog({
                 onChange={(e) => onDirChange?.(e.target.value)}
                 spellCheck={false}
                 aria-label={mode === 'new' ? `Parent folder on ${host}` : `Folder on ${host}`}
-                data-harness-dir
+                data-workspace-dir
                 placeholder={`A folder on ${host}`}
                 className={cn(inputClass, 'min-w-0 flex-1 font-mono text-[11px]')}
               />
@@ -258,7 +258,7 @@ export function NewHarnessDialog({
           </span>
           <span className="mt-[5px] block text-[10px] text-fg-subtle">
             {mode === 'new'
-              ? 'The harness is created as a folder of this name inside it.'
+              ? 'The workspace is created as a folder of this name inside it.'
               : 'Nothing is moved or renamed.'}
           </span>
         </label>
@@ -275,7 +275,7 @@ export function NewHarnessDialog({
                       project pane's Config and Content links make. */}
                   <button
                     type="button"
-                    data-harness-manage-templates
+                    data-workspace-manage-templates
                     onClick={onManageTemplates}
                     className="text-[11px] text-fg-muted transition-colors hover:text-accent-text"
                   >
@@ -287,7 +287,7 @@ export function NewHarnessDialog({
             <div
               role="radiogroup"
               aria-label="Template"
-              data-harness-templates
+              data-workspace-templates
               className="flex flex-col gap-0.5 rounded-well border border-border bg-surface-sunken p-1"
             >
               {templates.map((choice) => {
@@ -298,7 +298,7 @@ export function NewHarnessDialog({
                     type="button"
                     role="radio"
                     aria-checked={on}
-                    data-harness-template={choice.id}
+                    data-workspace-template={choice.id}
                     onClick={() => onTemplateChange?.(choice.id)}
                     className={cn(
                       'relative flex w-full items-start gap-2 rounded-raised py-1.5 pr-2.5 pl-2.5 text-left transition-colors',
@@ -322,7 +322,7 @@ export function NewHarnessDialog({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span
-                        data-harness-template-label
+                        data-workspace-template-label
                         className="block truncate text-[12px] leading-[15px] text-fg"
                       >
                         {choice.label}
@@ -341,13 +341,13 @@ export function NewHarnessDialog({
               <span
                 className="mt-[5px] block truncate font-mono text-[10px] text-fg-subtle"
                 title={templatesDir}
-                data-harness-templates-dir
+                data-workspace-templates-dir
               >
                 {templatesDir}
               </span>
             )}
             {templateProblems.length > 0 && (
-              <ul data-harness-template-problems className="mt-1.5 space-y-0.5 text-[10.5px] text-warn">
+              <ul data-workspace-template-problems className="mt-1.5 space-y-0.5 text-[10.5px] text-warn">
                 {templateProblems.map((problem) => (
                   <li key={problem}>{problem}</li>
                 ))}
@@ -362,7 +362,7 @@ export function NewHarnessDialog({
             <p
               className="truncate font-mono text-[11px] text-fg-muted"
               title={target}
-              data-harness-target
+              data-workspace-target
             >
               {target === '' ? '…' : target}
             </p>
@@ -370,7 +370,7 @@ export function NewHarnessDialog({
                 Before it answers the list is simply absent - a placeholder
                 three-line scaffold would be this component describing a layout
                 it does not know it is getting. */}
-            <ul data-harness-written className="mt-2 space-y-0.5 font-mono text-[11px] text-fg-subtle">
+            <ul data-workspace-written className="mt-2 space-y-0.5 font-mono text-[11px] text-fg-subtle">
               {(preview?.entries ?? []).map((entry) => (
                 <li key={entry}>{entry}</li>
               ))}
@@ -399,7 +399,7 @@ export function NewHarnessDialog({
         </button>
         <button
           type="button"
-          data-harness-create
+          data-workspace-create
           disabled={!ready || busy}
           onClick={() =>
             onCreate({ mode, dir, name: trimmed, template: mode === 'new' ? template : 'minimal' })
@@ -411,7 +411,7 @@ export function NewHarnessDialog({
               : 'cursor-default border-border text-fg-subtle opacity-60'
           )}
         >
-          {busy ? 'Creating…' : mode === 'new' ? 'Create harness' : 'Convert'}
+          {busy ? 'Creating…' : mode === 'new' ? 'Create workspace' : 'Convert'}
         </button>
       </footer>
     </Overlay>

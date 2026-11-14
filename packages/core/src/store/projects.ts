@@ -6,6 +6,6 @@ import type { Project } from '../types'
  */
 export interface CachedProject extends Project {
   lastSeenAt: string
-  /** The harness manifest's `template:`, for a harness row. Null otherwise. */
+  /** The workspace manifest's `template:`, for a workspace row. Null otherwise. */
   template: string | null
 }

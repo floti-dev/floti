@@ -1,5 +1,5 @@
 //! Authoring a template: the parts of it a file explorer cannot do. Copy a
-//! skill you already wrote into one, turn a harness you have been living in
+//! skill you already wrote into one, turn a workspace you have been living in
 //! into one, and create, rename, describe and delete them. There is no
 //! in-app file editor; a template is a plain folder the user edits in their
 //! own.
@@ -27,8 +27,9 @@ use rusqlite::Connection;
 
 use super::reader::{is_tpl, rewrite_segment, template_dir, template_id_problems};
 use super::{
-    Entry, HARNESS_MANIFEST, KEEP_FILE, MINIMAL_TEMPLATE, TEMPLATE_MANIFEST, TPL_SUFFIX, below,
-    collate, entries_of, exists, is_real_dir, label, link_on_the_way, mtime, remove_tree,
+    Entry, KEEP_FILE, LEGACY_WORKSPACE_MANIFEST, MINIMAL_TEMPLATE, TEMPLATE_MANIFEST, TPL_SUFFIX,
+    WORKSPACE_MANIFEST, WORKSPACE_MANIFESTS, below, collate, entries_of, exists, is_real_dir,
+    label, link_on_the_way, mtime, remove_tree,
 };
 use crate::agent_config::{PathGuard, SnapshotWriter, normalize, read_file};
 use crate::platform::links;
@@ -42,8 +43,12 @@ const NEVER_COPIED: &[(&str, &str)] = &[
 /// Refused at the top of a folder being saved as a template, each with why.
 const ROOT_REFUSED: &[(&str, &str)] = &[
     (
-        HARNESS_MANIFEST,
-        "Floti writes this into the new harness, so a template cannot supply one",
+        WORKSPACE_MANIFEST,
+        "Floti writes this into the new workspace, so a template cannot supply one",
+    ),
+    (
+        LEGACY_WORKSPACE_MANIFEST,
+        "Floti writes the new workspace's workspace.yaml, so a template cannot supply a manifest",
     ),
     (
         TEMPLATE_MANIFEST,
@@ -52,7 +57,7 @@ const ROOT_REFUSED: &[(&str, &str)] = &[
 ];
 
 /// Listed and counted but unticked when the dialog opens: `repos/` is the
-/// one folder whose purpose is to hold what belongs to this harness rather
+/// one folder whose purpose is to hold what belongs to this workspace rather
 /// than to its layout.
 const UNTICKED_BY_DEFAULT: &[&str] = &["repos"];
 
@@ -335,7 +340,7 @@ pub fn delete_template(templates_dir: &Path, template: &str) -> TemplateDeleteRe
     }
 }
 
-/// What a harness receives a file as: `.tpl` dropped, `dot-claude`
+/// What a workspace receives a file as: `.tpl` dropped, `dot-claude`
 /// rewritten, a `.gitkeep` as the folder it declares; empty when the file is
 /// not written at all.
 fn target_of(rel: &str, name: &str) -> String {
@@ -354,7 +359,7 @@ fn target_of(rel: &str, name: &str) -> String {
     } else {
         rewritten.as_str()
     };
-    if written == HARNESS_MANIFEST {
+    if WORKSPACE_MANIFESTS.contains(&written) {
         String::new()
     } else {
         written.to_owned()
@@ -571,7 +576,7 @@ pub fn make_substitutable(
     let rel = segments.join("/");
     if rel == TEMPLATE_MANIFEST {
         return refuse(vec![format!(
-            "{TEMPLATE_MANIFEST} describes the template rather than being written into a harness."
+            "{TEMPLATE_MANIFEST} describes the template rather than being written into a workspace."
         )]);
     }
     if is_tpl(&rel) {
@@ -806,8 +811,8 @@ pub fn preview_folder_as_template(dir: &str, kind: FolderTemplateKind) -> Folder
         file_count,
         total_bytes,
         note: match kind {
-            FolderTemplateKind::Harness => "Ticked folders are copied whole. Untick anything that belongs to this harness rather than to the layout - Floti cannot tell a journal from a scaffold.",
-            FolderTemplateKind::Folder => "Ticked folders are copied whole. dot-claude/ is kept as it is; a harness made from this template receives it as .claude/.",
+            FolderTemplateKind::Workspace => "Ticked folders are copied whole. Untick anything that belongs to this workspace rather than to the layout - Floti cannot tell a journal from a scaffold.",
+            FolderTemplateKind::Folder => "Ticked folders are copied whole. dot-claude/ is kept as it is; a workspace made from this template receives it as .claude/.",
         }
         .to_owned(),
         problems,
@@ -884,9 +889,9 @@ fn copy_new(source: &Path, destination: &Path) -> io::Result<u64> {
 }
 
 /// Copies the ticked entries of a folder into a new template, the same call
-/// behind "save this harness as a template" and "import a folder as a
+/// behind "save this workspace as a template" and "import a folder as a
 /// template". `dot-claude/` is copied as it is: the alias is applied when a
-/// harness is written, not undone on the way in. The manifest is written
+/// workspace is written, not undone on the way in. The manifest is written
 /// last, so a copy that failed half way leaves a folder rather than a broken
 /// picker row.
 pub fn save_folder_as_template(

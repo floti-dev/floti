@@ -28,7 +28,7 @@ request_channel!(
 #[serde(rename_all = "camelCase")]
 pub enum ConfigScopeKind {
     User,
-    Harness,
+    Workspace,
     Project,
 }
 

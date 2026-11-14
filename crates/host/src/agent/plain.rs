@@ -3,7 +3,7 @@
 //! it declares nothing beyond running: no status records, history, resume or
 //! agent tools, because Floti cannot know where an unknown CLI keeps them.
 //! Its status comes only from its program's own OSC 7501 reports, which the
-//! host reads from every session's output. Of a harness it takes the folder
+//! host reads from every session's output. Of a workspace it takes the folder
 //! only. It moves no tool call to the background, supports no MCP tasks and
 //! has no MCP tools, and it enforces no tool rule: asked to, it refuses
 //! ([`AgentBackend::check_rules`]). It takes no turns, so it declares no input
@@ -94,8 +94,8 @@ impl AgentBackend for PlainCommandBackend {
             launch_folder: Some(folder.path().to_path_buf()),
         });
         // A plain tab gets the folder and nothing else: every part of a
-        // harness its overlays hold is one it could not take.
-        launch.not_taken = super::parts_not_taken(&self.harness(), &request.composition.overlays);
+        // workspace its overlays hold is one it could not take.
+        launch.not_taken = super::parts_not_taken(&self.workspace(), &request.composition.overlays);
         Ok(launch)
     }
 }
@@ -105,7 +105,7 @@ mod tests {
     use std::path::PathBuf;
 
     use floti_protocol::channels::common::PermissionMode;
-    use floti_protocol::{BackendFeature, HarnessPart, Support};
+    use floti_protocol::{BackendFeature, Support, WorkspacePart};
 
     use super::*;
     use crate::agent::{Composition, ToolRules, ToolSupport};
@@ -133,8 +133,11 @@ mod tests {
             };
             assert_eq!(descriptor.support(feature), expected, "{feature:?}");
         }
-        assert!(descriptor.harness.takes.is_empty());
-        assert_eq!(descriptor.harness.cannot_take, HarnessPart::ALL.to_vec());
+        assert!(descriptor.workspace.takes.is_empty());
+        assert_eq!(
+            descriptor.workspace.cannot_take,
+            WorkspacePart::ALL.to_vec()
+        );
     }
 
     #[test]
@@ -166,17 +169,17 @@ mod tests {
     }
 
     #[test]
-    fn a_harness_reaches_it_as_its_folder_only_and_the_launch_names_the_rest() {
+    fn a_workspace_reaches_it_as_its_folder_only_and_the_launch_names_the_rest() {
         let dirs = TestDirs::new();
-        let harness = dirs.folder("harness");
-        std::fs::write(harness.join("AGENTS.md"), "x").unwrap();
-        std::fs::create_dir_all(harness.join(".claude").join("commands")).unwrap();
+        let workspace = dirs.folder("workspace");
+        std::fs::write(workspace.join("AGENTS.md"), "x").unwrap();
+        std::fs::create_dir_all(workspace.join(".claude").join("commands")).unwrap();
         let launch = backend()
             .launch(
                 &LaunchRequest {
-                    folder: harness.clone(),
+                    folder: workspace.clone(),
                     composition: Composition {
-                        overlays: vec![harness],
+                        overlays: vec![workspace],
                         ..Composition::default()
                     },
                     ..LaunchRequest::default()
@@ -186,7 +189,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             launch.not_taken,
-            vec![HarnessPart::Instructions, HarnessPart::Commands]
+            vec![WorkspacePart::Instructions, WorkspacePart::Commands]
         );
     }
 

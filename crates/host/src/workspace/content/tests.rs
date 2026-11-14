@@ -111,7 +111,7 @@ impl World {
             path: path.display().to_string(),
             name: name.to_owned(),
             kind,
-            harness_path: None,
+            workspace_path: None,
             has_claude_dir: false,
             inventory: EMPTY_INVENTORY,
             git: None,
@@ -199,10 +199,10 @@ fn shown(path: &Path) -> String {
 // The service: scopes, reading, rendering, searching, wikilinks, artifacts.
 
 #[test]
-fn scopes_are_harnesses_then_projects_then_profile_roots_read_per_call() {
+fn scopes_are_workspaces_then_projects_then_profile_roots_read_per_call() {
     let world = World::new();
     let project = world.scanned("a project", ProjectKind::Folder);
-    let harness = world.scanned("the harness", ProjectKind::Harness);
+    let workspace = world.scanned("the workspace", ProjectKind::Workspace);
     let outside = world.dirs.folder("elsewhere tooling");
     let session = world.dirs.folder("a session folder");
     world.sessions.write().unwrap().push(shown(&session));
@@ -219,7 +219,7 @@ fn scopes_are_harnesses_then_projects_then_profile_roots_read_per_call() {
     assert_eq!(
         lower(&world),
         [
-            shown(&harness).to_lowercase(),
+            shown(&workspace).to_lowercase(),
             shown(&project).to_lowercase()
         ]
     );
@@ -228,8 +228,8 @@ fn scopes_are_harnesses_then_projects_then_profile_roots_read_per_call() {
     world.add_profile(&outside);
     let scopes = world.content.scopes().unwrap();
     assert_eq!(scopes.len(), 3);
-    assert_eq!(scopes[0].kind, ConfigScopeKind::Harness);
-    assert_eq!(scopes[0].label, "the harness");
+    assert_eq!(scopes[0].kind, ConfigScopeKind::Workspace);
+    assert_eq!(scopes[0].label, "the workspace");
     assert_eq!(
         scopes[2].path.to_lowercase(),
         shown(&normalize(&outside)).to_lowercase()
@@ -251,7 +251,7 @@ fn scopes_are_harnesses_then_projects_then_profile_roots_read_per_call() {
 #[test]
 fn a_document_reads_renders_and_resolves_its_wikilinks_against_its_scope() {
     let world = World::new();
-    let scope = world.scanned("my harness", ProjectKind::Harness);
+    let scope = world.scanned("my workspace", ProjectKind::Workspace);
     fixture(&scope);
     let alpha = scope.join("notes").join("alpha.md");
 
@@ -326,7 +326,7 @@ fn a_document_reads_renders_and_resolves_its_wikilinks_against_its_scope() {
 #[test]
 fn a_search_is_cold_once_then_warm_and_a_save_makes_it_cold_again() {
     let world = World::new();
-    let scope = world.scanned("my harness", ProjectKind::Harness);
+    let scope = world.scanned("my workspace", ProjectKind::Workspace);
     fixture(&scope);
     let first = world.content.search(&shown(&scope), "geofenc").unwrap();
     assert!(first.cold);
@@ -511,7 +511,7 @@ fn an_artifact_is_told_which_wikilinks_resolve_and_nothing_about_where() {
 #[test]
 fn a_save_takes_a_snapshot_of_the_old_bytes_before_writing_the_new() {
     let world = World::new();
-    let scope = world.scanned("my harness", ProjectKind::Harness);
+    let scope = world.scanned("my workspace", ProjectKind::Workspace);
     let note = scope.join("notes").join("today.md");
     put(&note, "# Before\n");
 
@@ -535,7 +535,7 @@ fn a_save_takes_a_snapshot_of_the_old_bytes_before_writing_the_new() {
 #[test]
 fn a_save_over_a_file_that_changed_outside_is_a_conflict_and_writes_nothing() {
     let world = World::new();
-    let scope = world.scanned("my harness", ProjectKind::Harness);
+    let scope = world.scanned("my workspace", ProjectKind::Workspace);
     let note = scope.join("notes").join("today.md");
     put(&note, "# Opened\n");
     let opened = hash_content("# Opened\n");
@@ -562,7 +562,7 @@ fn a_save_over_a_file_that_changed_outside_is_a_conflict_and_writes_nothing() {
 #[test]
 fn a_save_whose_snapshot_cannot_be_taken_is_aborted_and_the_file_left_alone() {
     let world = World::new();
-    let scope = world.scanned("my harness", ProjectKind::Harness);
+    let scope = world.scanned("my workspace", ProjectKind::Workspace);
     let note = scope.join("notes").join("today.md");
     put(&note, "# Before\n");
     world.break_snapshots();
@@ -582,7 +582,7 @@ fn a_save_whose_snapshot_cannot_be_taken_is_aborted_and_the_file_left_alone() {
 #[test]
 fn a_notes_snapshots_list_newest_first_and_a_restore_snapshots_the_current_bytes_first() {
     let world = World::new();
-    let scope = world.scanned("my harness", ProjectKind::Harness);
+    let scope = world.scanned("my workspace", ProjectKind::Workspace);
     let note = scope.join("notes").join("today.md");
     put(&note, "one\n");
     world
@@ -865,7 +865,7 @@ fn a_projects_own_claude_folder_is_not_an_agents_config_and_its_skill_saves() {
 #[test]
 fn a_save_is_refused_for_a_relative_path() {
     let world = World::new();
-    let scope = world.scanned("my harness", ProjectKind::Harness);
+    let scope = world.scanned("my workspace", ProjectKind::Workspace);
     let refused = world
         .write(&scope, Path::new("notes/today.md"), "x", None)
         .unwrap_err();
@@ -878,7 +878,7 @@ fn a_save_is_refused_for_a_relative_path() {
 #[test]
 fn a_save_is_refused_outside_the_scope() {
     let world = World::new();
-    let scope = world.scanned("my harness", ProjectKind::Harness);
+    let scope = world.scanned("my workspace", ProjectKind::Workspace);
     let other = world.scanned("another project", ProjectKind::Folder);
     for path in [
         other.join("notes").join("a.md"),
@@ -895,7 +895,7 @@ fn a_save_is_refused_outside_the_scope() {
 #[test]
 fn a_save_is_refused_under_repos_node_modules_git_or_build() {
     let world = World::new();
-    let scope = world.scanned("my harness", ProjectKind::Harness);
+    let scope = world.scanned("my workspace", ProjectKind::Workspace);
     for folder in ["repos", "node_modules", ".git", "build", "Repos"] {
         let path = scope.join(folder).join("inner").join("a.md");
         let refused = world.write(&scope, &path, "x", None).unwrap_err();
@@ -911,7 +911,7 @@ fn a_save_is_refused_under_repos_node_modules_git_or_build() {
 #[test]
 fn a_save_is_refused_for_a_binary_file() {
     let world = World::new();
-    let scope = world.scanned("my harness", ProjectKind::Harness);
+    let scope = world.scanned("my workspace", ProjectKind::Workspace);
     let image = scope.join("notes").join("chart.png");
     put(&image, "bytes");
     let refused = world
@@ -927,7 +927,7 @@ fn a_save_is_refused_for_a_binary_file() {
 #[test]
 fn a_save_to_a_scope_that_is_neither_a_content_scope_nor_a_known_root_is_refused() {
     let world = World::new();
-    world.scanned("my harness", ProjectKind::Harness);
+    world.scanned("my workspace", ProjectKind::Workspace);
     let stranger = world.dirs.folder("stranger");
     let note = stranger.join("note.md");
     put(&note, "mine\n");

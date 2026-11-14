@@ -9,7 +9,7 @@ vi.mock('./bridge', () => import('./bridge.testkit'))
 const DIR = 'C:\\Users\\me\\.config\\helm\\templates'
 const MINIMAL: TemplateChoice = { id: 'minimal', label: 'Minimal', description: null, order: null, builtIn: true }
 const USER: ConfigScope = { kind: 'user', path: 'C:\\Users\\me\\.claude', claudeDir: 'C:\\Users\\me\\.claude', label: 'User', exists: true }
-const HUB: ConfigScope = { kind: 'harness', path: 'C:\\work\\hub', claudeDir: 'C:\\work\\hub\\.claude', label: 'hub', exists: true }
+const HUB: ConfigScope = { kind: 'workspace', path: 'C:\\work\\hub', claudeDir: 'C:\\work\\hub\\.claude', label: 'hub', exists: true }
 const SKILL = `${USER.path}\\skills\\think\\SKILL.md`
 
 /**

@@ -1281,8 +1281,15 @@
           },
           "type": "array"
         },
-        "harness": {
-          "$ref": "#/$defs/HarnessSupport",
+        "id": {
+          "$ref": "#/$defs/BackendId"
+        },
+        "name": {
+          "description": "What to call it on screen, such as \"Claude Code\".",
+          "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceSupport",
           "default": {
             "cannotTake": [
               "instructions",
@@ -1294,14 +1301,7 @@
             "instructionFiles": [],
             "takes": []
           },
-          "description": "How it takes a harness: which instruction files it reads, and which\nparts of a harness reach it and which it has no equivalent for."
-        },
-        "id": {
-          "$ref": "#/$defs/BackendId"
-        },
-        "name": {
-          "description": "What to call it on screen, such as \"Claude Code\".",
-          "type": "string"
+          "description": "How it takes a workspace: which instruction files it reads, and which\nparts of a workspace reach it and which it has no equivalent for."
         }
       },
       "required": [
@@ -1492,12 +1492,6 @@
             }
           ]
         },
-        "harnessPath": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "hasClaudeDir": {
           "type": "boolean"
         },
@@ -1518,7 +1512,13 @@
           "type": "string"
         },
         "template": {
-          "description": "The harness manifest's `template:`, for a harness row; null otherwise.",
+          "description": "The workspace manifest's `template:`, for a workspace row; null otherwise.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "workspacePath": {
           "type": [
             "string",
             "null"
@@ -2158,7 +2158,7 @@
       "description": "Where a config tree sits in the precedence chain.",
       "enum": [
         "user",
-        "harness",
+        "workspace",
         "project"
       ],
       "type": "string"
@@ -2842,74 +2842,6 @@
       ],
       "type": "object"
     },
-    "CreateHarnessOutcome": {
-      "properties": {
-        "created": {
-          "description": "Paths written, relative to `path`.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "path": {
-          "description": "The harness folder, or null when nothing was written.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "problems": {
-          "description": "What went wrong, as sentences. With `path` set, a template applied in\npart: `created` is what landed, and no rollback is claimed.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "roots": {
-          "description": "The scan roots after the new harness was added to them.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "created",
-        "problems",
-        "roots"
-      ],
-      "type": "object"
-    },
-    "CreateHarnessRequest": {
-      "properties": {
-        "dir": {
-          "type": "string"
-        },
-        "mode": {
-          "$ref": "#/$defs/HarnessMode"
-        },
-        "name": {
-          "default": null,
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "template": {
-          "default": null,
-          "description": "For `new` only: `minimal` or absent writes the built-in scaffold, and\nanything else names a template.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "mode",
-        "dir"
-      ],
-      "type": "object"
-    },
     "CreateTemplateRequest": {
       "properties": {
         "description": {
@@ -2932,6 +2864,74 @@
       },
       "required": [
         "name"
+      ],
+      "type": "object"
+    },
+    "CreateWorkspaceOutcome": {
+      "properties": {
+        "created": {
+          "description": "Paths written, relative to `path`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "path": {
+          "description": "The workspace folder, or null when nothing was written.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "problems": {
+          "description": "What went wrong, as sentences. With `path` set, a template applied in\npart: `created` is what landed, and no rollback is claimed.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "roots": {
+          "description": "The scan roots after the new workspace was added to them.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "created",
+        "problems",
+        "roots"
+      ],
+      "type": "object"
+    },
+    "CreateWorkspaceRequest": {
+      "properties": {
+        "dir": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/WorkspaceMode"
+        },
+        "name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "template": {
+          "default": null,
+          "description": "For `new` only: `minimal` or absent writes the built-in scaffold, and\nanything else names a template.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "mode",
+        "dir"
       ],
       "type": "object"
     },
@@ -3045,12 +3045,6 @@
           },
           "type": "array"
         },
-        "harnesses": {
-          "items": {
-            "$ref": "#/$defs/Harness"
-          },
-          "type": "array"
-        },
         "projects": {
           "items": {
             "$ref": "#/$defs/Project"
@@ -3067,11 +3061,17 @@
         "scannedAt": {
           "description": "ISO 8601.",
           "type": "string"
+        },
+        "workspaces": {
+          "items": {
+            "$ref": "#/$defs/Workspace"
+          },
+          "type": "array"
         }
       },
       "required": [
         "roots",
-        "harnesses",
+        "workspaces",
         "projects",
         "errors",
         "scannedAt",
@@ -3990,7 +3990,7 @@
     "FolderTemplateKind": {
       "description": "Which kind of folder becomes a template. The defaults and the wording\ndiffer; nothing else.",
       "enum": [
-        "harness",
+        "workspace",
         "folder"
       ],
       "type": "string"
@@ -4112,112 +4112,6 @@
         "dirty",
         "ahead",
         "behind"
-      ],
-      "type": "object"
-    },
-    "Harness": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "path": {
-          "type": "string"
-        },
-        "repoPaths": {
-          "description": "The projects found under `repos/`.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "template": {
-          "description": "From `harness.yaml` when present.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "version": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "path",
-        "name",
-        "repoPaths"
-      ],
-      "type": "object"
-    },
-    "HarnessMode": {
-      "description": "A new harness, or a folder of repositories turned into one.",
-      "enum": [
-        "new",
-        "convert"
-      ],
-      "type": "string"
-    },
-    "HarnessPart": {
-      "description": "A part of a harness: what a profile's harness can give a session besides\nits folder.",
-      "oneOf": [
-        {
-          "const": "instructions",
-          "description": "Project instructions, such as `CLAUDE.md` or `AGENTS.md`.",
-          "type": "string"
-        },
-        {
-          "const": "skills",
-          "description": "`SKILL.md` folders, the same in every agent under the Agent Skills\nstandard.",
-          "type": "string"
-        },
-        {
-          "const": "commands",
-          "description": "Slash commands.",
-          "type": "string"
-        },
-        {
-          "const": "subagents",
-          "description": "Subagent definitions.",
-          "type": "string"
-        },
-        {
-          "const": "workflows",
-          "description": "Workflow scripts.",
-          "type": "string"
-        }
-      ]
-    },
-    "HarnessSupport": {
-      "description": "How a backend takes a harness, declared before a launch so a client can\nsay what an agent will and will not get.\n\nThe default is a plain tab's: the folder and nothing else, because Floti\ncannot know where an unknown CLI reads. Every part in [`HarnessPart::ALL`]\nis in exactly one of `takes` and `cannot_take`.",
-      "properties": {
-        "cannotTake": {
-          "description": "The parts it has no equivalent for. A launch names each one of these a\nharness holds.",
-          "items": {
-            "$ref": "#/$defs/HarnessPart"
-          },
-          "type": "array"
-        },
-        "instructionFiles": {
-          "description": "The instruction file names it reads, such as `CLAUDE.md` and\n`AGENTS.md`, in the order it reads them.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "takes": {
-          "description": "The parts that reach it.",
-          "items": {
-            "$ref": "#/$defs/HarnessPart"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "instructionFiles",
-        "takes",
-        "cannotTake"
       ],
       "type": "object"
     },
@@ -4875,7 +4769,7 @@
           ]
         },
         "pinnedProjects": {
-          "description": "Projects lifted out of their harness group into Pinned, by path.",
+          "description": "Projects lifted out of their workspace group into Pinned, by path.",
           "items": {
             "type": "string"
           },
@@ -5444,9 +5338,9 @@
         },
         "notTaken": {
           "default": [],
-          "description": "Parts of the harness the session's backend has no equivalent for, and\nso did not get, such as commands for an agent without slash commands.",
+          "description": "Parts of the workspace the session's backend has no equivalent for, and\nso did not get, such as commands for an agent without slash commands.",
           "items": {
-            "$ref": "#/$defs/HarnessPart"
+            "$ref": "#/$defs/WorkspacePart"
           },
           "type": "array"
         },
@@ -7942,13 +7836,6 @@
             }
           ]
         },
-        "harnessPath": {
-          "description": "The harness this project belongs to, if any.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "hasClaudeDir": {
           "type": "boolean"
         },
@@ -7964,6 +7851,13 @@
         "path": {
           "description": "Absolute and normalised; a project's identity across scans.",
           "type": "string"
+        },
+        "workspacePath": {
+          "description": "The workspace this project belongs to, if any.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -7979,13 +7873,13 @@
       "description": "What a discovered folder turned out to be.",
       "oneOf": [
         {
-          "const": "harness",
-          "description": "Has a `harness.yaml`. Its `repos/*` children are projects too.",
+          "const": "workspace",
+          "description": "Has a `workspace.yaml`, or the `harness.yaml` it had before. Its\n`repos/*` children are projects too.",
           "type": "string"
         },
         {
           "const": "repo",
-          "description": "A repository inside a harness's `repos/`.",
+          "description": "A repository inside a workspace's `repos/`.",
           "type": "string"
         },
         {
@@ -10247,7 +10141,7 @@
           ]
         },
         "id": {
-          "description": "The folder name, and what a harness records. `minimal` for the\nbuilt-in scaffold.",
+          "description": "The folder name, and what a workspace records. `minimal` for the\nbuilt-in scaffold.",
           "type": "string"
         },
         "label": {
@@ -10355,7 +10249,7 @@
       "type": "object"
     },
     "TemplateFile": {
-      "description": "One file in a template, and what a harness would receive it as.",
+      "description": "One file in a template, and what a workspace would receive it as.",
       "properties": {
         "link": {
           "description": "A link, which is refused. Listed so the author can see why.",
@@ -10378,7 +10272,7 @@
           "type": "boolean"
         },
         "target": {
-          "description": "The path a new harness gets; empty when the file is not written.",
+          "description": "The path a new workspace gets; empty when the file is not written.",
           "type": "string"
         }
       },
@@ -10489,7 +10383,7 @@
       "type": "object"
     },
     "TemplatePreview": {
-      "description": "What a new harness's \"What gets written\" lists.",
+      "description": "What a new workspace's \"What gets written\" lists.",
       "properties": {
         "entries": {
           "description": "The manifest first, then everything else by path.",
@@ -10525,7 +10419,7 @@
         "mode": {
           "anyOf": [
             {
-              "$ref": "#/$defs/HarnessMode"
+              "$ref": "#/$defs/WorkspaceMode"
             },
             {
               "type": "null"
@@ -11095,6 +10989,112 @@
           ]
         }
       },
+      "type": "object"
+    },
+    "Workspace": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "repoPaths": {
+          "description": "The projects found under `repos/`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "template": {
+          "description": "From its manifest when present: `workspace.yaml`, else `harness.yaml`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "name",
+        "repoPaths"
+      ],
+      "type": "object"
+    },
+    "WorkspaceMode": {
+      "description": "A new workspace, or a folder of repositories turned into one.",
+      "enum": [
+        "new",
+        "convert"
+      ],
+      "type": "string"
+    },
+    "WorkspacePart": {
+      "description": "A part of a workspace: what a profile's workspace can give a session besides\nits folder.",
+      "oneOf": [
+        {
+          "const": "instructions",
+          "description": "Project instructions, such as `CLAUDE.md` or `AGENTS.md`.",
+          "type": "string"
+        },
+        {
+          "const": "skills",
+          "description": "`SKILL.md` folders, the same in every agent under the Agent Skills\nstandard.",
+          "type": "string"
+        },
+        {
+          "const": "commands",
+          "description": "Slash commands.",
+          "type": "string"
+        },
+        {
+          "const": "subagents",
+          "description": "Subagent definitions.",
+          "type": "string"
+        },
+        {
+          "const": "workflows",
+          "description": "Workflow scripts.",
+          "type": "string"
+        }
+      ]
+    },
+    "WorkspaceSupport": {
+      "description": "How a backend takes a workspace, declared before a launch so a client can\nsay what an agent will and will not get.\n\nThe default is a plain tab's: the folder and nothing else, because Floti\ncannot know where an unknown CLI reads. Every part in [`WorkspacePart::ALL`]\nis in exactly one of `takes` and `cannot_take`.",
+      "properties": {
+        "cannotTake": {
+          "description": "The parts it has no equivalent for. A launch names each one of these a\nworkspace holds.",
+          "items": {
+            "$ref": "#/$defs/WorkspacePart"
+          },
+          "type": "array"
+        },
+        "instructionFiles": {
+          "description": "The instruction file names it reads, such as `CLAUDE.md` and\n`AGENTS.md`, in the order it reads them.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "takes": {
+          "description": "The parts that reach it.",
+          "items": {
+            "$ref": "#/$defs/WorkspacePart"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "instructionFiles",
+        "takes",
+        "cannotTake"
+      ],
       "type": "object"
     },
     "WorktreeChild": {
@@ -11917,17 +11917,6 @@
           ]
         },
         "type": "object"
-      }
-    },
-    {
-      "capability": null,
-      "kind": "request",
-      "name": "harness:create",
-      "request": {
-        "$ref": "#/$defs/CreateHarnessRequest"
-      },
-      "response": {
-        "$ref": "#/$defs/CreateHarnessOutcome"
       }
     },
     {
@@ -13138,6 +13127,17 @@
     {
       "capability": null,
       "kind": "request",
+      "name": "workspace:create",
+      "request": {
+        "$ref": "#/$defs/CreateWorkspaceRequest"
+      },
+      "response": {
+        "$ref": "#/$defs/CreateWorkspaceOutcome"
+      }
+    },
+    {
+      "capability": null,
+      "kind": "request",
       "name": "worktrees:list",
       "request": {
         "$ref": "#/$defs/WorktreesProject"
@@ -13171,5 +13171,5 @@
   ],
   "x-defaultInitialCredit": 262144,
   "x-maxFrameLen": 16777216,
-  "x-protocolVersion": "3.1"
+  "x-protocolVersion": "4.0"
 }

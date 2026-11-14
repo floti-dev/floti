@@ -23,7 +23,7 @@
           },
           "folder": {
             "type": "string",
-            "description": "The folder it works in, inside a project, harness or profile folder Floti tracks. Omit it to use your own folder."
+            "description": "The folder it works in, inside a project, workspace or profile folder Floti tracks. Omit it to use your own folder."
           },
           "profile": {
             "type": "string",
