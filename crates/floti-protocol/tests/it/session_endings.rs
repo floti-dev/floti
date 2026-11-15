@@ -1,14 +1,14 @@
-//! A client on 4.0 still talks to a host on 4.1: protocol 4.1 adds
-//! `session:endings`, which answers how each session named ended from the
-//! host's records, and changes nothing else. A 4.0 client never asks it, and
-//! every frame it knows is the same.
+//! `session:endings`, added in protocol 4.1, answers how each session named
+//! ended from the host's records, with status fields only. A 4.0 client never
+//! asks it, and every frame it knows is the same (`minor_4_1` holds what 4.1
+//! adds).
 
+use floti_protocol::ProtocolVersion;
 use floti_protocol::channel::{from_payload, to_payload};
 use floti_protocol::channels::common::{EndedBy, SessionStatus};
 use floti_protocol::channels::sessions::{SessionEnding, SessionEndingsRequest};
-use floti_protocol::record::{Change, Difference, Part, differences, records, records_dir};
+use floti_protocol::record::{records, records_dir};
 use floti_protocol::version::negotiate;
-use floti_protocol::{PROTOCOL_VERSION, ProtocolVersion};
 use serde_json::{Value, json};
 
 const V4_0: ProtocolVersion = ProtocolVersion::new(4, 0);
@@ -20,34 +20,6 @@ fn record_text(version: ProtocolVersion) -> String {
         .into_iter()
         .find_map(|(found, text)| (found == version).then_some(text))
         .unwrap_or_else(|| panic!("there is no record of {version}"))
-}
-
-#[test]
-fn protocol_4_1_adds_only_the_session_endings_request_and_its_two_types() {
-    assert!(PROTOCOL_VERSION >= V4_1);
-    let found = differences(&record_text(V4_0), &record_text(V4_1)).unwrap();
-    assert_eq!(
-        found,
-        vec![
-            Difference {
-                part: Part::Channel,
-                name: "session:endings".to_owned(),
-                change: Change::Added,
-            },
-            Difference {
-                part: Part::Type,
-                name: "SessionEnding".to_owned(),
-                change: Change::Added,
-            },
-            Difference {
-                part: Part::Type,
-                name: "SessionEndingsRequest".to_owned(),
-                change: Change::Added,
-            },
-        ]
-    );
-    let after: Value = serde_json::from_str(&record_text(V4_1)).unwrap();
-    assert_eq!(after["channels"]["session:endings"]["kind"], "request");
 }
 
 #[test]
