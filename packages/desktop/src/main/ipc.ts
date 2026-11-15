@@ -10,6 +10,7 @@ import { basename } from 'node:path'
 import { pluginThemeOf, type AppSettings } from '@helm/core'
 import { remoteHostsProblem, type SshConfigHosts, type WslDistroList } from '@helm/core/types'
 import type { BrowserHost } from './browser'
+import type { MenuLayer } from './menuLayer'
 import type { BrowserMcpHost } from './browser-mcp'
 import type { FilesService } from './files'
 import { applyWindowTheme } from './chrome'
@@ -138,6 +139,8 @@ export interface IpcContext {
   forwards: PortForwards
   /** Owns the browser pane's `WebContentsView`s; see `browser.ts`. */
   browsers: BrowserHost
+  /** The browser's menu layer: the bar's menus drawn over a live page (`menuLayer.ts`). */
+  menuLayer: MenuLayer
   /**
    * Answers the browser calls the host relays for its sessions; see
    * `browser-mcp.ts`. Nothing on any channel reaches it, and nothing ever
@@ -534,6 +537,15 @@ export function registerIpc(ctx: IpcContext): void {
     },
 
     'browser:bounds': (payload) => ctx.browsers.bounds(payload),
+    // The window asks for the menu layer, and only the window; the layer page answers, and only it.
+    'browser:layer': (payload, event) => {
+      const win = ctx.window()
+      if (win === null || win.isDestroyed() || win.webContents.id !== event.sender.id) return
+      ctx.menuLayer.request(payload)
+    },
+    'browser:layer-report': (payload, event) => {
+      if (ctx.menuLayer.isLayer(event.sender.id)) ctx.menuLayer.report(payload)
+    },
     'browser:stop': ({ id }) => {
       ctx.browsers.stop(id)
     },

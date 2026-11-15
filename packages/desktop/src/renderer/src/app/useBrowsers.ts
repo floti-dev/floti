@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { subscribeOverlay, overlayOpen, type ConsoleEntry } from '@helm/ui'
 import type { BrowserSuggestions } from '@helm/core/types'
-import type { BrowserAvailability, BrowserShare, BrowserState } from '../../../shared/ipc'
+import { subscribeOverlay, overlayOpen, type ConsoleEntry, type MenuLayerPort } from '@helm/ui'
+import type {
+  BrowserAvailability,
+  BrowserLayerClosed,
+  BrowserLayerContent,
+  BrowserLayerRect,
+  BrowserShare,
+  BrowserState
+} from '../../../shared/ipc'
 import { helm } from './bridge'
+import { lookOfDocument } from './theme'
 import {
   activatePage,
   addPage,
@@ -39,8 +47,9 @@ import {
  * So the pane reports its rectangle and this decides whether it paints.
  *
  * **A view that stands down for something drawn over it leaves a still of
- * itself behind** (`stills`). Without one, the page vanished whenever a menu
- * opened over it - the overflow menu, the address list, a dialog - and an
+ * itself behind** (`stills`). The bar's own menus and the address suggestions
+ * need none: they are drawn in the menu layer, above the page (`menuLayer`). Without one, the page vanished whenever a menu
+ * opened over it - a dialog, a menu from the rail - and an
  * empty hole under a menu is the least browser-like thing the pane did. So the
  * page in front is captured first (`browser:snapshot`), the picture is painted
  * in the hole, and only then does the view go; coming back, the view returns
@@ -84,10 +93,18 @@ function frames(count: number): Promise<void> {
 }
 
 /**
- * Why every view is off the screen: a tab being dragged, a pane divider being
- * dragged, or the address bar's list hanging over the page.
+ * Why every view is off the screen: a tab being dragged, or a pane divider
+ * being dragged.
  */
-export type SuppressReason = 'tab-drag' | 'pane-resize' | 'address-list'
+export type SuppressReason = 'tab-drag' | 'pane-resize'
+
+/** What the open menu layer does with what the layer reports. */
+interface LayerHandlers {
+  pick?: (id: string) => void
+  row?: (index: number) => void
+  hover?: (index: number) => void
+  closed: (why: BrowserLayerClosed) => void
+}
 
 export interface BrowserPanesState {
   /** Every live view, keyed by id. Adopted from main on mount. */
@@ -154,12 +171,10 @@ export interface BrowserPanesState {
    * Take every view off the screen, whatever the panes last said, for one
    * `reason` - until that reason says it is over.
    *
-   * A tab drag, and the address bar's dropdown: the cases that cannot be
-   * expressed as a bounds report, because nothing resizes and so nothing
-   * re-measures. Each reason is held on its own. They were one boolean once,
-   * and then the dropdown's "not covering" - said by every browser pane as it
-   * mounts - ended a drag that was still running, and hid that a drag whose
-   * end was never heard was still holding every view down.
+   * A tab drag and a divider drag: the cases that cannot be expressed as a
+   * bounds report, because nothing resizes and so nothing re-measures. Each
+   * reason is held on its own, so one reason ending never ends another that
+   * is still running.
    */
   setSuppressed: (reason: SuppressReason, suppressed: boolean) => void
   /**
@@ -171,6 +186,13 @@ export interface BrowserPanesState {
   forget: (url: string) => void
   /** Forget the whole history: the More menu's Clear browsing history. */
   clearHistory: () => void
+  /**
+   * The browser's menu layer (`main/menuLayer.ts`): where the bar's menus and
+   * the address suggestions are drawn, over the live page, rather than in the
+   * window behind a still of it. One open at a time; opening one forgets the
+   * last one's callbacks.
+   */
+  menuLayer: MenuLayerPort
   /** The last problem `browser:open` refused with, for the strip to report. */
   error: string | null
   dismissError: () => void
@@ -610,6 +632,74 @@ export function useBrowsers(): BrowserPanesState {
     [push]
   )
 
+  /**
+   * The count of menu layer opens, and what the open one does with what the
+   * layer reports: a menu's pick by id, the suggestions' pick and hover by
+   * index, and a close.
+   */
+  const layerTurn = useRef(0)
+  const layerOpen = useRef<{ turn: number; on: LayerHandlers } | null>(null)
+  useEffect(
+    () =>
+      helm.on('browser:layer-event', (event) => {
+        const open = layerOpen.current
+        if (open === null || open.turn !== event.turn) return
+        if ('pick' in event) open.on.pick?.(event.pick)
+        else if ('row' in event) open.on.row?.(event.row)
+        else if ('hover' in event) open.on.hover?.(event.hover)
+        else {
+          layerOpen.current = null
+          open.on.closed(event.closed)
+        }
+      }),
+    []
+  )
+  const menuLayer = useMemo<MenuLayerPort>(() => {
+    /** One open: the content and its rectangle sent now and on each update, until it closes. */
+    const begin = <C extends BrowserLayerContent>(content: C, rect: BrowserLayerRect, on: LayerHandlers) => {
+      const turn = ++layerTurn.current
+      layerOpen.current = { turn, on }
+      const send = (next: C, at: BrowserLayerRect): void => {
+        // The look on each send: a theme changed while a menu is open repaints it too.
+        helm.send('browser:layer', { open: { turn, rect: at, content: next, look: lookOfDocument() } })
+      }
+      send(content, rect)
+      const current = (): boolean => layerOpen.current?.turn === turn
+      return {
+        turn,
+        update: (next: C, at: BrowserLayerRect): void => {
+          if (current()) send(next, at)
+        },
+        close: (): void => {
+          if (!current()) return
+          layerOpen.current = null
+          helm.send('browser:layer', { close: { turn } })
+        },
+        current
+      }
+    }
+    return {
+      open: (menu, rect, on) => {
+        const { update, close } = begin(menu, rect, { pick: on.pick, closed: on.closed })
+        return { update, close }
+      },
+      openSuggestions: (content, rect, on) => {
+        const { turn, update, close, current } = begin(content, rect, {
+          row: on.pick,
+          hover: on.hover,
+          closed: () => on.closed('blur')
+        })
+        return {
+          update,
+          close,
+          blurred: () => {
+            if (current()) helm.send('browser:layer', { blurred: { turn } })
+          }
+        }
+      }
+    }
+  }, [])
+
   const setSuppressed = useCallback(
     (reason: SuppressReason, next: boolean) => {
       if (suppressed.current.has(reason) === next) return
@@ -652,6 +742,7 @@ export function useBrowsers(): BrowserPanesState {
     suggest,
     forget,
     clearHistory,
+    menuLayer,
     error,
     dismissError: () => setError(null),
     availability

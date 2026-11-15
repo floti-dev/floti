@@ -295,6 +295,14 @@ export class FakeWebContents extends EventEmitter {
   getZoomFactor(): number {
     return this.zoomFactor
   }
+  setZoomFactor(factor: number): void {
+    this.zoomFactor = factor
+  }
+  /** What main sent this page's renderer, in order: the menu layer's page is told what to draw this way. */
+  readonly sent: Array<{ channel: string; payload: unknown }> = []
+  send(channel: string, payload: unknown): void {
+    this.sent.push({ channel, payload })
+  }
   isDevToolsOpened(): boolean {
     return this.devtools
   }

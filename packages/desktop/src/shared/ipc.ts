@@ -72,6 +72,7 @@ import type {
   SecretsState
 } from '@helm/core'
 import type {
+  BrowserSuggestion,
   BrowserSuggestions,
   HostAddOutcome,
   HostAddRequest,
@@ -684,6 +685,121 @@ export interface BrowserBounds {
   height: number
   visible: boolean
 }
+
+// ---------------------------------------------------------------------------
+// The menu layer (`main/menuLayer.ts`)
+// ---------------------------------------------------------------------------
+
+/**
+ * One row of a menu drawn in the menu layer: the shared `Menu`'s entry with
+ * nothing that cannot cross a process. The window keeps what a row does, by
+ * its id.
+ */
+export type BrowserLayerMenuEntry =
+  | {
+      kind: 'item'
+      id: string
+      label: string
+      hint?: string | undefined
+      checked?: boolean | undefined
+      disabled?: boolean | undefined
+      title?: string | undefined
+      detail?: string | undefined
+    }
+  | { kind: 'separator'; id: string }
+  | { kind: 'heading'; id: string; label: string }
+
+/** A menu for the layer to draw: the `Menu` props that are data. */
+export interface BrowserLayerMenu {
+  kind: 'menu'
+  label: string
+  role: 'menu' | 'listbox'
+  stayOpen: boolean
+  entries: BrowserLayerMenuEntry[]
+}
+
+/**
+ * The address suggestions for the layer to draw: `BrowserSuggestions`' rows
+ * and the row the bar's keys or the pointer are on (-1 for none). The bar
+ * keeps the keyboard; the layer never takes it.
+ */
+export interface BrowserLayerSuggestions {
+  kind: 'suggestions'
+  rows: BrowserSuggestion[]
+  highlighted: number
+}
+
+export type BrowserLayerContent = BrowserLayerMenu | BrowserLayerSuggestions
+
+/**
+ * The window's theme and shape as painted, for the layer to paint the same:
+ * every custom property on the window's `<html>`, its kind and its data
+ * attributes (`renderer/src/app/theme.ts`, `lookOfDocument`).
+ */
+export interface BrowserLayerLook {
+  vars: Record<string, string>
+  kind: 'light' | 'dark'
+  data: Record<string, string>
+}
+
+/** A rectangle in the window's CSS pixels. */
+export interface BrowserLayerRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/**
+ * The window to main: draw this over the page, or stop. `turn` is the
+ * window's count of opens; an open with the turn already showing replaces its
+ * content and rectangle, and a close for any other turn is stale.
+ */
+export type BrowserLayerRequest =
+  | { open: { turn: number; rect: BrowserLayerRect; content: BrowserLayerContent; look: BrowserLayerLook } }
+  | { close: { turn: number } }
+  /**
+   * The address bar lost the keyboard while its suggestions were up. Main
+   * closes them (`closed: 'blur'`) unless the press that took the keyboard was
+   * on the list, which it has already handed back to the window.
+   */
+  | { blurred: { turn: number } }
+
+/**
+ * Why the layer closed of its own accord. A close the window asked for is
+ * not reported. `window` is a press in Floti's own window taking the keyboard
+ * from a menu - that press reaches the window after this does - and `blur`
+ * the keyboard going anywhere else: the page, another program.
+ */
+export type BrowserLayerClosed = 'escape' | 'blur' | 'window' | 'pick'
+
+/** Main to the window: what happened in the layer, on the turn it happened in. */
+export type BrowserLayerEvent =
+  | { turn: number; pick: string }
+  | { turn: number; row: number }
+  | { turn: number; hover: number }
+  | { turn: number; closed: BrowserLayerClosed }
+
+/**
+ * Main to the layer page: what to draw now, or (`null`) nothing - the layer
+ * is being hidden, and the frame it shows when it is next shown must not be
+ * the last menu's.
+ */
+export type BrowserLayerShow = {
+  turn: number
+  content: BrowserLayerContent
+  look: BrowserLayerLook
+} | null
+
+/** The layer page to main: it is listening, or something happened in it. */
+export type BrowserLayerReport =
+  | { ready: true }
+  | { turn: number; pick: string }
+  /** A suggestion picked with the pointer, by index. */
+  | { turn: number; row: number }
+  /** The pointer moved onto a suggestion. */
+  | { turn: number; hover: number }
+  | { turn: number; closed: 'escape' | 'pick' }
 
 /**
  * A page the window did not ask for, and where it goes in the Browser tab's
@@ -1972,6 +2088,13 @@ export interface IpcSends {
   'browser:forget': { url: string }
   /** Forget the browser's whole history: the More menu's Clear browsing history. */
   'browser:clearHistory': void
+  /**
+   * The window asks main to draw a menu over the page, or to stop
+   * (`main/menuLayer.ts`). Taken from the window's own web contents only.
+   */
+  'browser:layer': BrowserLayerRequest
+  /** The menu layer's page says it is listening, or what happened in it. Taken from the layer only. */
+  'browser:layer-report': BrowserLayerReport
 
   /** A plugin page aborted a call it made - a fetch's `AbortSignal`, a page that went away. */
   'plugins:cancel': { callId: string }
@@ -2170,6 +2293,11 @@ export interface IpcEvents {
 
   /** The mouse's back or forward button, with where the pointer was. Windows and Linux only; macOS reads the buttons in the window. */
   'browser:pointerCommand': BrowserPointerCommandEvent
+
+  /** A pick or a close in the menu layer, for the window that opened it. */
+  'browser:layer-event': BrowserLayerEvent
+  /** What the menu layer's page draws now. Sent to the layer only. */
+  'browser:layer-show': BrowserLayerShow
 
   /**
    * Files changed under a root the window is watching - project-relative and
@@ -2436,6 +2564,8 @@ export const SEND_CHANNELS = Object.keys({
   'browser:stop': true,
   'browser:forget': true,
   'browser:clearHistory': true,
+  'browser:layer': true,
+  'browser:layer-report': true,
   'plugins:cancel': true,
   'plugins:answer': true,
   'plugins:backgroundState': true,
@@ -2488,6 +2618,8 @@ export const EVENT_CHANNELS = Object.keys({
   'browser:favicon': true,
   'browser:command': true,
   'browser:pointerCommand': true,
+  'browser:layer-event': true,
+  'browser:layer-show': true,
   'files:changed': true,
   'plugins:changed': true,
   'plugins:ui': true,

@@ -71,7 +71,26 @@ export {
 } from './components/SaveAsTemplateDialog'
 export { TemplateManager, type TemplateManagerProps } from './components/TemplateManager'
 export { Overlay, type OverlayProps } from './components/Overlay'
-export { Menu, type MenuAnchor, type MenuEntry, type MenuProps } from './components/Menu'
+export {
+  Menu,
+  MENU_FRAME,
+  MenuList,
+  layerEntries,
+  type MenuAnchor,
+  type MenuEntry,
+  type MenuListProps,
+  type MenuProps
+} from './components/Menu'
+export type {
+  LayerMenu,
+  LayerMenuClosed,
+  LayerMenuEntry,
+  LayerRect,
+  LayerSuggestions,
+  MenuLayerHandle,
+  MenuLayerPort,
+  SuggestionsLayerHandle
+} from './lib/menuLayer'
 export {
   ConfirmSessionDialog,
   type ConfirmChild,
@@ -217,7 +236,7 @@ export { Sidebar, SidebarAction, type SidebarProps } from './components/Sidebar'
 export { StatusBar, type StatusBarProps, type StatusHostItem, type StatusPluginItem } from './components/StatusBar'
 export { TabBar, type Tab, type TabBarProps, type TabIndicator } from './components/TabBar'
 export { SESSION_STATE_LABEL, type SessionState } from './lib/sessionstate'
-export type { PopupAnchor } from './lib/popup'
+export { placePopup, POPUP_MARGIN, type PopupAnchor } from './lib/popup'
 export {
   BROWSER_PAGE_MIME,
   BrowserPages,

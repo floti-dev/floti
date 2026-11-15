@@ -263,6 +263,45 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   does while the sidebar is hidden. The view never enters the top 36px, where
   Windows draws the window controls, except in fullscreen, when the page has
   the whole window and there is no title bar.
+- The bar's own menus (More, Share) and the address suggestions are drawn
+  over the live page instead, in the **menu layer** (`main/menuLayer.ts`):
+  one transparent `WebContentsView` per window, made with the window's first
+  page, loading `layer.html`, a Floti page with the window's preload and CSP.
+  It is not a browser view: it is not in the exemption registry, so
+  `will-navigate` and `setWindowOpenHandler` stay denied for it. It is raised
+  above every page whenever one is added or raised (`onViewRaised` in
+  `browser.ts`, the fullscreen raise included). A transparent part of a view
+  still takes clicks, so its bounds are always the open menu's rectangle, and
+  idle it is hidden. It is shown only once its page has said it is listening
+  (`browser:layer-report` `ready`), so a page still loading, or loading again,
+  never shows an empty view that takes clicks; a layer whose renderer died is
+  replaced by a new one at the next open. The window measures the menu by drawing it hidden and
+  inert with the same recipe, places it with `placePopup`
+  (`ui/src/lib/popup.ts`: dropped from its control, kept 8px inside the
+  window), and sends `browser:layer` with the rectangle in CSS pixels, the
+  rows as data (the window keeps what each does, by id) and the window's
+  look (`lookOfDocument` in `theme.ts`: every custom property, the kind and
+  the data attributes on `<html>`, painted again in the layer). Main converts
+  the rectangle with the window's zoom factor, keeps it inside the window and
+  below the title bar, draws the layer page at the same zoom, shows it and,
+  for a menu, gives it the keyboard, so `Menu`'s own keys work. A pick,
+  Escape or a click anywhere else (the page or Floti's chrome, which blurs the
+  layer) closes it; main hides it, gives the keyboard back to the window if
+  the layer had it, and tells the window on `browser:layer-event`, and the
+  window returns focus to the control that opened the menu. For a blur, main
+  reads where the keyboard went once Chromium has placed it: Floti's own
+  window by a press on its page (`window`, a `before-mouse-event` press while
+  the menu was open), or anywhere else (`blur`: the browser's page, another
+  program, or the window by a way that sends its page no press, such as the
+  title bar). The window can hear `window` before or after the press that
+  caused it (measured: within 2ms), so it takes that press when it comes, and
+  a press on the opening control is left to that control's click, which
+  closes the menu. An overlay opening (a dialog Floti opens on its own, drawn
+  in the window under the layer) closes a layered menu or the suggestions,
+  and leaves the dialog its focus. A window resize or a pane move closes it
+  from the window, and the Browser tab leaving the screen unmounts the menu,
+  which closes it. These menus are no overlay: no still, nothing stands down.
+  Dialogs and every other menu keep the still.
 - The browser's keys are one table (`shared/browserKeys.ts`): main reads it in
   `before-input-event` for a key pressed in a page, the window for a key in
   Floti's chrome, and both run the window's one dispatch. A key an agent sends
@@ -312,8 +351,23 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   first restores what was typed, and Shift+Delete forgets a page
   (`browser:forget`). The More menu's Clear browsing history empties it
   (`browser:clearHistory`). `BrowserSuggestions` draws the list from props
-  alone; while it is open the views stand down behind a still
-  (`setSuppressed('address-list')`).
+  alone, and is drawn in the menu layer.
+- The suggestions in the menu layer never hold the keyboard: the bar keeps
+  it and sends each change of rows or highlight, and the layer reports the
+  pointer's pick (on the press) and hover by row. A press on the list still
+  gives the layer focus, as Chromium focuses the view a press lands in; main
+  sees the layer's `focus` and hands the keyboard straight back to the
+  window, and the press's pick follows. Measured in the dev app, the bar then
+  sees no blur at all, or a blur and a focus in the same millisecond. Focus
+  moving within the window closes the list in the window; the window losing
+  the keyboard is reported as `blurred`, and main closes the list
+  (`closed: 'blur'`) unless the keyboard is back in the window by then. The window keeps the same list
+  where it hangs from the bar, transparent and taking no pointer: the layer's
+  rectangle is measured from it, and it is the listbox the bar's
+  `aria-controls` and `aria-activedescendant` point into, so assistive
+  technology follows the keys' highlight by the option ids it always had.
+  The list moves with the bar on a resize or a pane move rather than
+  closing.
 - Stop (`browser:stop`, `stop` in `browser.ts`) stops the load and any quiet
   reconnect. The reload button turns into Stop while a page loads. Escape
   stops a load from the bar when nothing is typed. In a page, main takes

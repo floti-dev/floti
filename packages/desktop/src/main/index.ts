@@ -7,7 +7,9 @@ import {
   nativeTheme,
   protocol,
   screen,
-  shell
+  shell,
+  WebContentsView,
+  type WebPreferences
 } from 'electron'
 import { appCommandBrowserCommand } from '../shared/browserKeys'
 import {
@@ -49,6 +51,7 @@ import {
   type BrowserHost
 } from './browser'
 import { createBrowserMcp, type BrowserMcpHost } from './browser-mcp'
+import { createMenuLayer } from './menuLayer'
 import { browserAvailability, readAppArmorRestricts, withBrowserAvailability } from './browser-sandbox'
 import { installIpcRecorder } from './ipc-recorder'
 import { followHostUpdate } from './update'
@@ -220,6 +223,20 @@ let pluginFrameHosts: (contentsId: number) => boolean = () => false
  */
 let quitFromMenu: () => void = () => app.quit()
 
+/** What every Floti page runs with: the window's and the browser's menu layer's. */
+function flotiPagePreferences(): WebPreferences {
+  return {
+    preload: join(__dirname, '../preload/index.js'),
+    contextIsolation: true,
+    nodeIntegration: false,
+    // The preload only touches `contextBridge` and `ipcRenderer`, both of
+    // which are available to a sandboxed preload, so the renderer runs in the
+    // OS sandbox like any other Chromium content process.
+    sandbox: true,
+    webviewTag: false
+  }
+}
+
 function createWindow(
   page: 'index' | 'spike',
   bounds?: AppSettings['windowBounds'],
@@ -258,16 +275,7 @@ function createWindow(
       app.isPackaged ? process.resourcesPath : join(__dirname, '../../build'),
       process.platform === 'win32' ? 'icon.ico' : 'icon.png'
     ),
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      // The preload only touches `contextBridge` and `ipcRenderer`, both of
-      // which are available to a sandboxed preload, so the renderer runs in the
-      // OS sandbox like any other Chromium content process.
-      sandbox: true,
-      webviewTag: false
-    }
+    webPreferences: flotiPagePreferences()
   })
 
   if (page === 'index') void requestSmallCorners(win)
@@ -581,6 +589,22 @@ function startApp(options: AppOptions = {}): void {
     openExternal: (url) => shell.openExternal(url)
   })
 
+  /*
+   * The browser's menu layer: the bar's menus drawn over a live page, in a
+   * Floti page of their own, never a browser view - not in the exemption
+   * registry, so `will-navigate` and `setWindowOpenHandler` stay denied for it.
+   */
+  const menuLayer = createMenuLayer({
+    window: () => win,
+    createView: () => new WebContentsView({ webPreferences: flotiPagePreferences() }),
+    load: (contents) => {
+      const devUrl = process.env['ELECTRON_RENDERER_URL']
+      if (devUrl) void contents.loadURL(`${devUrl}/layer.html`)
+      else void contents.loadFile(join(__dirname, '../renderer/layer.html'))
+    },
+    onEvent: (event) => emit(win, 'browser:layer-event', event)
+  })
+
   /**
    * The browser pane's views.
    *
@@ -594,6 +618,7 @@ function startApp(options: AppOptions = {}): void {
    */
   const browsers: BrowserHost = createBrowserHost({
     window: () => win,
+    onViewRaised: () => menuLayer.raise(),
     settings: () => services.settings,
     writeSettings: (patch) => {
       const next = updateSettings(services, patch)
@@ -639,6 +664,7 @@ function startApp(options: AppOptions = {}): void {
     services,
     pageLinks,
     browsers,
+    menuLayer,
     browserMcp,
     // The folders the window's picker chose go to the host's scan roots.
     workspace: desktopHost.workspace,
@@ -836,6 +862,7 @@ function startApp(options: AppOptions = {}): void {
      * `destroy()`.
      */
     browsers.shutdown()
+    menuLayer.destroy()
   })
 
   app.on('will-quit', () => {

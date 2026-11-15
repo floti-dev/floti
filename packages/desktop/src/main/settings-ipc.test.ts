@@ -125,6 +125,7 @@ describe('settings over IPC', () => {
       wslDistros: () => Promise.resolve([]),
       forwards: {} as never,
       browsers: {} as never,
+      menuLayer: {} as never,
       browserMcp: null,
       workspace: {
         acceptRoots: (paths: string[]) => {
