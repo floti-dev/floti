@@ -2,7 +2,7 @@ import type { JSX, RefObject } from 'react'
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { cn } from '../lib/cn'
 import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
-import { shortcutLabel } from '../lib/platform'
+import { isMac, shortcutLabel } from '../lib/platform'
 import { SEGMENT_ON } from '../lib/segmented'
 import { ConsolePanel, type ConsoleEntry } from './ConsolePanel'
 import {
@@ -100,6 +100,13 @@ export interface BrowserPaneProps {
   onClearStorage: () => void
   onEvaluate: (source: string) => Promise<{ ok: boolean; value: string; error: string | null }>
   /**
+   * Whether the console is open. Held by the window, so the console key
+   * (`shared/browserKeys.ts`) and the More menu's item are one path. Closed, the
+   * pane draws no console at all - no row, no count.
+   */
+  consoleOpen: boolean
+  onToggleConsole: () => void
+  /**
    * The pane is drawing something over where the view is, and the view has to
    * stand down for it.
    *
@@ -177,6 +184,8 @@ export function BrowserPane({
   onZoom,
   onClearStorage,
   onEvaluate,
+  consoleOpen,
+  onToggleConsole,
   onCovering,
   recent,
   focusRequest,
@@ -230,7 +239,6 @@ export function BrowserPane({
     }
     void Promise.resolve(onNavigate(input)).then(answered, answered)
   }
-  const [consoleOpen, setConsoleOpen] = useState(false)
   const [finding, setFinding] = useState(false)
   const [findQuery, setFindQuery] = useState('')
   const [width, setWidth] = useState<number | null>(null)
@@ -356,6 +364,12 @@ export function BrowserPane({
     { kind: 'separator', id: 'after-width' },
     {
       kind: 'item',
+      id: 'console',
+      label: consoleOpen ? 'Close console' : 'Open console',
+      hint: shortcutLabel('J', { alt: isMac(), shift: !isMac(), separator: ' ' })
+    },
+    {
+      kind: 'item',
       id: 'devtools',
       label: state.devtoolsOpen ? 'Close DevTools' : 'Open DevTools',
       hint: 'F12'
@@ -438,6 +452,7 @@ export function BrowserPane({
     if (id === 'zoom-in') onZoom(state.zoomLevel + BROWSER_ZOOM.step)
     else if (id === 'zoom-out') onZoom(state.zoomLevel - BROWSER_ZOOM.step)
     else if (id === 'zoom-reset') onZoom(0)
+    else if (id === 'console') onToggleConsole()
     else if (id === 'devtools') onDevTools()
     else if (id === 'clear-storage') onClearStorage()
     else if (id.startsWith('width:')) setWidth(BROWSER_WIDTHS.find(([label]) => `width:${label}` === id)?.[1] ?? null)
@@ -784,13 +799,9 @@ export function BrowserPane({
         </div>
       </div>
 
-      <ConsolePanel
-        name="browser"
-        entries={entries}
-        open={consoleOpen}
-        onToggle={() => setConsoleOpen((current) => !current)}
-        onEvaluate={onEvaluate}
-      />
+      {consoleOpen && (
+        <ConsolePanel name="browser" entries={entries} open onToggle={onToggleConsole} onEvaluate={onEvaluate} />
+      )}
     </div>
   )
 }

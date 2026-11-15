@@ -32,6 +32,7 @@ export type BrowserCommand =
   | 'zoom-reset'
   | 'devtools'
   | 'stop'
+  | 'console'
 
 /** A key press, in the shape both Electron's `Input` and a DOM event can give. */
 export interface BrowserKey {
@@ -102,8 +103,12 @@ function macCommand(press: BrowserKey): BrowserCommand | null {
   if (!press.meta || press.control) return null
   const key = press.key.length === 1 ? press.key.toLowerCase() : press.key
   if (press.alt) {
-    // Cmd+Option+I. Option changes the character, so the physical key decides.
-    return !press.shift && (press.code === 'KeyI' || key === 'i') ? 'devtools' : null
+    // Cmd+Option+I and Cmd+Option+J. Option changes the character, so the
+    // physical key decides.
+    if (press.shift) return null
+    if (press.code === 'KeyI' || key === 'i') return 'devtools'
+    if (press.code === 'KeyJ' || key === 'j') return 'console'
+    return null
   }
   if (press.shift) {
     if (key === 't') return 'reopen-page'
@@ -160,6 +165,7 @@ function windowsCommand(press: BrowserKey): BrowserCommand | null {
     if (key === 't') return 'reopen-page'
     if (key === 'r') return 'hard-reload'
     if (key === 'i') return 'devtools'
+    if (key === 'j') return 'console'
     // Ctrl+Shift+= is how a US keyboard types Ctrl++.
     if (key === '+') return 'zoom-in'
     return null
@@ -188,4 +194,24 @@ function windowsCommand(press: BrowserKey): BrowserCommand | null {
     default:
       return null
   }
+}
+
+/**
+ * What a mouse's side buttons do in the Browser tab. Windows and Linux
+ * deliver them to the window as an `app-command` (`browser-backward`,
+ * `browser-forward`); macOS has no such event, so the window reads a DOM
+ * `mouseup` whose `button` is 3 (back) or 4 (forward). One press arrives one
+ * way only: the DOM path is used on macOS alone.
+ */
+export function appCommandBrowserCommand(appCommand: string): BrowserCommand | null {
+  if (appCommand === 'browser-backward') return 'back'
+  if (appCommand === 'browser-forward') return 'forward'
+  return null
+}
+
+/** A DOM mouse button's command: 3 is the back button, 4 the forward button. */
+export function mouseButtonBrowserCommand(button: number): BrowserCommand | null {
+  if (button === 3) return 'back'
+  if (button === 4) return 'forward'
+  return null
 }

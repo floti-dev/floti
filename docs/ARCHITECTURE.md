@@ -258,6 +258,21 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   `before-input-event` for a key pressed in a page, the window for a key in
   Floti's chrome, and both run the window's one dispatch. A key an agent sends
   (`agentInput`) is always the page's.
+- The console is closed until it is asked for: nothing is drawn under the page,
+  no row and no count. The More menu's Console item and Ctrl+Shift+J
+  (Cmd+Option+J on macOS) open and close it, as the `console` command in
+  `shared/browserKeys.ts`; which pages have it open is held in `App.tsx`, so
+  the menu and the key are one path. The artifact viewer's console is its own
+  and unchanged.
+- The mouse's back and forward buttons act on the page in front of the Browser
+  tab, never on a page an agent drives in the background. On Windows and Linux
+  the window gets an `app-command` and main sends it with where the pointer was
+  (`browser:pointerCommand`); the window acts when the pointer is over the
+  Browser tab (its view, strip or bar) and the tab is in front of any visible
+  pane, focused or not (`useBrowserPointerCommands`). On macOS, which has no
+  `app-command`, a DOM `mouseup` with button 3 or 4 on the tab's strip and bar
+  does the same, and over a page nothing reads the buttons. A press is handled
+  by one of the two paths, never both.
 - The address bar shows `pendingUrl` while a load is under way, and `url`
   otherwise. `url` is the committed address (`getURL()`), and agent tools read
   only that. `load()` in `browser.ts`, which serves the bar and an agent's open

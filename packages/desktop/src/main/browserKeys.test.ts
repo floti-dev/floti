@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  appCommandBrowserCommand,
   browserKeyCommand,
+  mouseButtonBrowserCommand,
   COMMANDS_FOR_THE_PAGE_ONLY,
   COMMANDS_FOR_THE_WINDOW,
   COMMANDS_THAT_REPEAT,
@@ -37,7 +39,8 @@ describe('browserKeyCommand on Windows and Linux', () => {
     [press('-', { control: true }), 'zoom-out'],
     [press('0', { control: true }), 'zoom-reset'],
     [press('F12'), 'devtools'],
-    [press('I', { control: true, shift: true }), 'devtools']
+    [press('I', { control: true, shift: true }), 'devtools'],
+    [press('J', { control: true, shift: true }), 'console']
   ]
 
   it('maps the bindings every browser on Windows has, unchanged', () => {
@@ -87,7 +90,9 @@ describe('browserKeyCommand on macOS', () => {
       // Option changes the character the key types; the physical key decides.
       [press('ˆ', { meta: true, alt: true, code: 'KeyI' }), 'devtools'],
       [press('Dead', { meta: true, alt: true, code: 'KeyI' }), 'devtools'],
-      [press('i', { meta: true, alt: true }), 'devtools']
+      [press('i', { meta: true, alt: true }), 'devtools'],
+      [press('∆', { meta: true, alt: true, code: 'KeyJ' }), 'console'],
+      [press('j', { meta: true, alt: true }), 'console']
     ]
     for (const [key, command] of table) expect(browserKeyCommand(key, 'darwin'), JSON.stringify(key)).toBe(command)
   })
@@ -115,7 +120,9 @@ describe('browserKeyCommand on macOS', () => {
       press('c', { meta: true }),
       press('ArrowLeft', { meta: true }),
       press('i', { meta: true, alt: true, shift: true }),
-      press('w', { meta: true, alt: true })
+      press('w', { meta: true, alt: true }),
+      press('j', { meta: true, alt: true, shift: true }),
+      press('J', { control: true, shift: true })
     ]
     for (const key of theirs) expect(browserKeyCommand(key, 'darwin'), JSON.stringify(key)).toBeNull()
   })
@@ -135,5 +142,20 @@ describe('Escape', () => {
     expect(COMMANDS_FOR_THE_PAGE_ONLY.has('stop')).toBe(true)
     expect(COMMANDS_FOR_THE_WINDOW.has('stop')).toBe(false)
     expect(COMMANDS_THAT_REPEAT.has('stop')).toBe(false)
+  })
+})
+
+describe('the mouse side buttons', () => {
+  it('maps the window app-command to back and forward, and ignores the rest', () => {
+    expect(appCommandBrowserCommand('browser-backward')).toBe('back')
+    expect(appCommandBrowserCommand('browser-forward')).toBe('forward')
+    expect(appCommandBrowserCommand('browser-home')).toBeNull()
+    expect(appCommandBrowserCommand('media-play')).toBeNull()
+  })
+
+  it('maps the DOM back and forward buttons, and ignores left, middle and right', () => {
+    expect(mouseButtonBrowserCommand(3)).toBe('back')
+    expect(mouseButtonBrowserCommand(4)).toBe('forward')
+    for (const button of [0, 1, 2, 5]) expect(mouseButtonBrowserCommand(button)).toBeNull()
   })
 })

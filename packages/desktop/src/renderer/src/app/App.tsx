@@ -271,6 +271,7 @@ import type {
 } from "../../../shared/ipc";
 import {
   browserKeyCommand,
+  mouseButtonBrowserCommand,
   COMMANDS_FOR_THE_PAGE_ONLY,
   COMMANDS_THAT_REPEAT,
   type BrowserCommand,
@@ -343,6 +344,7 @@ import { HostProfiles } from "./HostProfiles";
 import { useTemplates } from "./useTemplates";
 import { useThemes } from "./useThemes";
 import { useBrowsers } from "./useBrowsers";
+import { useBrowserPointerCommands } from "./useBrowserPointerCommands";
 import { useShells } from "./useShells";
 import { treeLaunchNotice, type TreeLaunchFailure } from "./launchNotice";
 import {
@@ -1731,6 +1733,19 @@ export function App(): JSX.Element {
     what: "address" | "find";
   } | null>(null);
   const browserFocusDone = useCallback(() => setBrowserFocus(null), []);
+  /** The pages whose console is open. Closed is the default: nothing is drawn. */
+  const [consolePages, setConsolePages] = useState<ReadonlySet<number>>(
+    () => new Set(),
+  );
+  const toggleConsole = useCallback(
+    (page: number) =>
+      setConsolePages((current) => {
+        const next = new Set(current);
+        if (!next.delete(page)) next.add(page);
+        return next;
+      }),
+    [],
+  );
 
   /**
    * A new page in the Browser tab, on whichever project the focused pane is
@@ -2855,9 +2870,12 @@ export function App(): JSX.Element {
           return;
         case "devtools":
           browsers.devtools(page.id);
+          return;
+        case "console":
+          toggleConsole(page.id);
       }
     },
-    [openBrowser, browsers, browserViews, frontPage, commit],
+    [openBrowser, browsers, browserViews, frontPage, commit, toggleConsole],
   );
   useEffect(
     () =>
@@ -2903,6 +2921,8 @@ export function App(): JSX.Element {
     return () =>
       window.removeEventListener("keydown", onKeyDown, { capture: true });
   }, [browserInFront, frontPage, runBrowserCommand]);
+
+  useBrowserPointerCommands(browserShown, frontPage, runBrowserCommand);
 
   /**
    * Ctrl+W and Ctrl+F4 close the page in front of a plugin's strip, as they
@@ -5330,7 +5350,22 @@ export function App(): JSX.Element {
           frontPage === null ? undefined : browserViews.get(frontPage);
         const holder = findTab(open, paneId(ref));
         return (
-          <div className="flex h-full min-h-0 flex-col">
+          <div
+            data-browser-tab
+            className="flex h-full min-h-0 flex-col"
+            // macOS only: Windows and Linux get the buttons as `app-command`,
+            // and reading them here too would handle one press twice.
+            onMouseUp={
+              isMac()
+                ? (event) => {
+                    const command = mouseButtonBrowserCommand(event.button);
+                    if (command === null || frontPage === null) return;
+                    event.preventDefault();
+                    runBrowserCommand(frontPage, command);
+                  }
+                : undefined
+            }
+          >
             <BrowserPages
               pages={browsers.pages.flatMap((id) => {
                 const page = browserViews.get(id);
@@ -5379,6 +5414,8 @@ export function App(): JSX.Element {
                   onZoom={(level) => browsers.zoom(view.id, level)}
                   onClearStorage={() => browsers.clearStorage(view.id)}
                   onEvaluate={(source) => browsers.evaluate(view.id, source)}
+                  consoleOpen={consolePages.has(view.id)}
+                  onToggleConsole={() => toggleConsole(view.id)}
                   // The address dropdown hangs over the page; the view stands
                   // down for it, the same way it does for a tab drag.
                   onCovering={(covering) =>
