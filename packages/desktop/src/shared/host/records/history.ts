@@ -1,8 +1,8 @@
-import type { HistoryPage, HistoryQuery, HistorySession, HistorySummary, UsageSnapshot } from '@helm/core'
+import type { HistoryPage, HistoryQuery, HistorySession, HistorySummary } from '@helm/core'
 import type * as P from '../protocol'
 
 /**
- * The host's history, archive and usage records in the window's vocabulary.
+ * The host's history and archive records in the window's vocabulary.
  * Both main and a Helm page's own connection read them, so they live where
  * both builds reach.
  */
@@ -92,28 +92,4 @@ export function historyQueryForHost(query: HistoryQuery): P.HistoryQuery {
     ...(query.parent === undefined ? {} : { parent: query.parent }),
     ...(query.topLevel === undefined ? {} : { topLevel: query.topLevel })
   }
-}
-
-/**
- * The reading the status bar shows: `backend`'s, out of the host's one per
- * backend. A host with none for it has not read any, which is a reading that
- * paints nothing and says why, never a zero.
- */
-export function usageFromHost(readings: readonly P.UsageSnapshot[], backend: string): UsageSnapshot {
-  const reading = readings.find((candidate) => candidate.backend === backend)
-  if (reading === undefined) {
-    return unreadableUsage('The local host has no usage reading for Claude Code.')
-  }
-  return {
-    file: reading.file,
-    fetchedAtMs: reading.fetchedAtMs,
-    limits: reading.limits,
-    problem: reading.problem,
-    spend: reading.spend
-  }
-}
-
-/** A reading of nothing, with the sentence that says why. */
-export function unreadableUsage(detail: string): UsageSnapshot {
-  return { file: '', fetchedAtMs: null, limits: [], problem: { kind: 'unreadable', detail }, spend: null }
 }

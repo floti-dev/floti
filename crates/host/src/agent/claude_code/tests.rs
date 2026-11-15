@@ -1,6 +1,6 @@
 //! Claude Code behind the trait, against today's app: the cases core's tests
 //! check for launch, resume, overlays, agent tool registration, session
-//! records, history, usage, config files and sign-in, with the same inputs and
+//! records, history, config files and sign-in, with the same inputs and
 //! expectations. A launch is run through the fake `claude`
 //! (`test/fake-agents/claude-code.mjs`, under Node), which reads its argv as
 //! the real parser does and logs what it loaded. Every folder is temporary:
@@ -15,9 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use floti_protocol::channels::common::PermissionMode;
-use floti_protocol::channels::sessions::{
-    EffortLevel, SessionActivity, UsageGroup, UsageProblemKind,
-};
+use floti_protocol::channels::sessions::{EffortLevel, SessionActivity};
 use floti_protocol::channels::workspace::ConfigFileKind;
 use floti_protocol::{BackendFeature, Knowable, WorkspacePart};
 use serde_json::{Value, json};
@@ -2041,14 +2039,13 @@ fn no_answer_carries_a_credential_and_every_credential_path_is_named() {
     );
 
     let answers = format!(
-        "{:?}{:?}{:?}{:?}{:?}{:?}",
+        "{:?}{:?}{:?}{:?}{:?}",
         world.backend.read_status(&SessionRef {
             pid: 28160,
             conversation_id: Some(RECORD_ID.into())
         }),
         world.backend.read_conversations(),
         world.backend.history().unwrap().transcript(id).unwrap(),
-        world.backend.read_usage(now_ms(), 0),
         world.backend.read_config_files(Some(&project)),
         world.backend.read_sign_in(),
     );
@@ -2526,187 +2523,6 @@ fn the_config_folder_is_dot_claude_in_the_home_when_claude_config_dir_is_unset_o
 }
 
 // ---------------------------------------------------------------------------
-// Usage (usage/read.ts, shape.ts, transcripts.ts, prices.ts)
-// ---------------------------------------------------------------------------
-
-fn usage_file(world: &World, fetched_at_ms: u64, now: u64) {
-    write(
-        &world.config.join(".claude.json"),
-        json!({
-            "cachedUsageUtilization": {
-                "fetchedAtMs": fetched_at_ms,
-                "utilization": { "limits": [
-                    { "kind": "five_hour", "group": "session", "percent": 42.0, "severity": "normal",
-                      "resets_at": iso(now + 2 * 3_600_000) },
-                    { "kind": "seven_day", "group": "weekly", "percent": 10.0, "severity": "warning",
-                      "resets_at": iso(now + 3 * 86_400_000) },
-                    { "kind": "seven_day_opus", "group": "weekly", "percent": 55.0,
-                      "scope": { "model": { "display_name": "Opus" } },
-                      "resets_at": iso(now + 3 * 86_400_000) },
-                ]},
-            },
-        })
-        .to_string(),
-    );
-}
-
-#[test]
-fn usage_reads_the_plan_windows_and_token_counts_with_dollars_as_an_estimate() {
-    let world = World::new();
-    let now = now_ms();
-    usage_file(&world, now - 60_000, now);
-    let project = world.folder("work");
-    write(
-        &world
-            .config
-            .join("projects")
-            .join("w")
-            .join("7b3d1c20-4a55-4f18-9c21-8e0c5a6d1f01.jsonl"),
-        [
-            transcript_row("user", "u1", &project, now - 120_000, json!("go")),
-            transcript_row("assistant", "a1", &project, now - 110_000, json!("ok")),
-            // A forked conversation repeats its parent's rows.
-            transcript_row("assistant", "a1", &project, now - 110_000, json!("ok")),
-        ]
-        .concat(),
-    );
-
-    let snapshot = world
-        .backend
-        .read_usage(now, now - 3_600_000)
-        .known()
-        .unwrap();
-    assert_eq!(snapshot.backend, floti_protocol::BackendId::claude_code());
-    assert!(snapshot.problem.is_none());
-    let view = usage_view(&snapshot, now);
-    assert!(!view.at_least);
-    assert_eq!(
-        view.buckets
-            .iter()
-            .map(|bucket| (
-                bucket.group,
-                bucket.label,
-                bucket.percent,
-                bucket.scope.clone()
-            ))
-            .collect::<Vec<_>>(),
-        vec![
-            (UsageGroup::Session, "Session", 42.0, None),
-            // The binding weekly limit is the one closest to its cap.
-            (UsageGroup::Weekly, "Week", 55.0, Some("Opus".to_owned())),
-        ]
-    );
-
-    let spend = snapshot.spend.expect("the transcripts were readable");
-    assert_eq!(spend.priced_at, PRICE_TABLE_DATE);
-    for window in [&spend.session, &spend.today, &spend.week] {
-        assert_eq!(window.messages, 1);
-        assert_eq!(window.tokens.input, 1000);
-        assert_eq!(window.tokens.output, 100);
-        // claude-opus-5 at $5 in and $25 out per million.
-        assert!((window.dollars - 0.0075).abs() < 1e-12);
-    }
-    assert!(spend.unpriced_models.is_empty());
-}
-
-#[test]
-fn kept_usage_of_a_conversation_whose_transcript_is_gone_counts_and_a_message_on_disk_counts_from_disk()
- {
-    let world = World::new();
-    let now = now_ms();
-    usage_file(&world, now - 60_000, now);
-    let project = world.folder("work");
-    write(
-        &world
-            .config
-            .join("projects")
-            .join("w")
-            .join("7b3d1c20-4a55-4f18-9c21-8e0c5a6d1f01.jsonl"),
-        transcript_row("assistant", "a1", &project, now - 110_000, json!("ok")),
-    );
-    let kept = |uuid: &str, at: u64, input: u64| crate::usage::KeptUsage {
-        uuid: uuid.to_owned(),
-        at,
-        model: "claude-opus-5".to_owned(),
-        input,
-        output: 100,
-        cache_write_5m: 0,
-        cache_write_1h: 0,
-        cache_read: 0,
-    };
-    let rows = [
-        // The same message as on disk, with other figures: disk wins.
-        kept("a1", now - 110_000, 999_999),
-        // A conversation whose transcript is gone, two days ago.
-        kept("gone", now - 2 * 86_400_000, 2000),
-        // Older than every window.
-        kept("old", now - 9 * 86_400_000, 5000),
-    ];
-    let spend = world
-        .backend
-        .read_usage_keeping(now, now - 3_600_000, &rows)
-        .known()
-        .unwrap()
-        .spend
-        .expect("the transcripts were readable");
-    assert_eq!(
-        (spend.session.messages, spend.session.tokens.input),
-        (1, 1000)
-    );
-    assert_eq!((spend.today.messages, spend.today.tokens.input), (1, 1000));
-    assert_eq!((spend.week.messages, spend.week.tokens.input), (2, 3000));
-    // claude-opus-5 at $5 in and $25 out per million.
-    assert!((spend.week.dollars - (3000.0 * 5.0 + 200.0 * 25.0) / 1e6).abs() < 1e-12);
-}
-
-#[test]
-fn a_stale_reading_of_a_running_window_is_a_lower_bound_and_a_rolled_over_one_paints_nothing() {
-    let world = World::new();
-    let now = now_ms();
-    usage_file(&world, now - 45 * 60_000, now);
-    let snapshot = world.backend.read_usage(now, now).known().unwrap();
-    let view = usage_view(&snapshot, now);
-    assert!(view.at_least);
-    assert_eq!(view.buckets.len(), 2);
-
-    // Roll-over is judged before age: every window has reset.
-    let later = now + 4 * 86_400_000;
-    let view = usage_view(&snapshot, later);
-    assert!(view.buckets.is_empty());
-    assert_eq!(view.problem.unwrap().kind, UsageProblemKind::RolledOver);
-}
-
-#[test]
-fn usage_that_cannot_be_read_is_no_number_never_zero() {
-    let world = World::new();
-    let now = now_ms();
-    let missing = world.backend.read_usage(now, now).known().unwrap();
-    assert!(missing.limits.is_empty());
-    assert_eq!(
-        missing.problem.as_ref().unwrap().kind,
-        UsageProblemKind::NoFile
-    );
-    assert!(usage_view(&missing, now).buckets.is_empty());
-
-    write(&world.config.join(".claude.json"), "{\"cachedUsageUtil");
-    let half = world.backend.read_usage(now, now).known().unwrap();
-    assert_eq!(half.problem.unwrap().kind, UsageProblemKind::NotJson);
-
-    // A projects folder that cannot be listed is no spend, not a spend of 0.
-    write(&world.config.join("projects"), "not a folder");
-    usage_file(&world, now - 60_000, now);
-    assert!(
-        world
-            .backend
-            .read_usage(now, now)
-            .known()
-            .unwrap()
-            .spend
-            .is_none()
-    );
-}
-
-// ---------------------------------------------------------------------------
 // Config files (config/tree.ts)
 // ---------------------------------------------------------------------------
 
@@ -2779,10 +2595,13 @@ description: MARKER-credential
 // ---------------------------------------------------------------------------
 
 #[test]
-fn claude_code_declares_all_eight_features_and_answers_each() {
+fn claude_code_declares_every_feature_but_usage_and_answers_each() {
     let world = World::new();
     let descriptor = world.backend.capabilities();
-    let mut all = BackendFeature::ALL.to_vec();
+    let mut all: Vec<BackendFeature> = BackendFeature::ALL
+        .into_iter()
+        .filter(|feature| *feature != BackendFeature::Usage)
+        .collect();
     all.sort();
     assert_eq!(descriptor.features, all);
     assert_eq!(descriptor.name, "Claude Code");
@@ -2793,7 +2612,6 @@ fn claude_code_declares_all_eight_features_and_answers_each() {
     };
     assert!(world.backend.read_status(&session).is_known());
     assert!(world.backend.read_conversations().is_known());
-    assert!(world.backend.read_usage(now_ms(), 0).is_known());
     assert!(world.backend.read_config_files(None).is_known());
     assert!(world.backend.read_sign_in().is_known());
     assert!(world.backend.resumer().is_some() && world.backend.agent_tools().is_some());

@@ -1,7 +1,7 @@
 //! Helm's own data carried into a real host over `carry:*`, the way Helm's
 //! main process sends it: a host whose `floti.db` already holds some of it,
 //! a copy that stops part way and is tried again, then everything read back
-//! through History, the archive and usage.
+//! through History and the archive, and the usage rows from the store.
 //!
 //! The rows sent are a Helm database's: archived conversations whose
 //! transcripts are gone, their usage and names given in History. Config file
@@ -18,8 +18,7 @@ use floti_host::history::archive::{self, ArchiveInput};
 use floti_host::platform::process_tree::Native as NativeTree;
 use floti_host::server::HostConfig;
 use floti_host::store::Store;
-use floti_host::testkit::{PATIENCE, RunningHost, TestClient, TestDirs};
-use floti_protocol::channel::from_payload;
+use floti_host::testkit::{RunningHost, TestClient, TestDirs};
 use floti_protocol::channels::carry::{
     CarriedConversation, CarriedConversationPart, CarriedConversations, CarriedSessionName,
     CarriedSessionNames, CarriedUsageRow, CarriedUsageRows, CarryConversations, CarryFinish,
@@ -29,9 +28,7 @@ use floti_protocol::channels::host::HostStopReason;
 use floti_protocol::channels::sessions::{
     ArchiveConversation, ArchiveMessage, ArchiveRole, ArchiveSessionState, HistoryQuery,
     HistoryRefresh, HistorySession, HistorySessionRef, HistorySessions, ReadArchiveStats,
-    ReadUsage, UsageChanged, UsageSnapshot,
 };
-use floti_protocol::{EventChannel, Message};
 use serde_json::json;
 
 const ONE: &str = "11111111-1111-4111-8111-111111111111";
@@ -464,15 +461,6 @@ async fn helms_data_is_merged_into_a_host_that_already_holds_some_of_it_once_and
     assert!(stats.stored_bytes <= stats.max_bytes);
     assert_eq!(stats.max_bytes, world.own_bytes * 2 + world.own_bytes / 2);
 
-    // Usage: the week's spend counts the copied usage of TWO, whose
-    // transcript is gone, and the host's own row for the shared message.
-    let readings = client.request::<ReadUsage>(&()).await.unwrap();
-    let spend = readings
-        .iter()
-        .find_map(|reading| reading.spend.as_ref())
-        .expect("a spend over the week");
-    assert_eq!((spend.week.messages, spend.week.tokens.input), (3, 2007));
-
     // Everything sent again merges nothing new, and the record stands.
     let again = client
         .request::<CarryConversations>(&batch(vec![
@@ -508,80 +496,23 @@ async fn helms_data_is_merged_into_a_host_that_already_holds_some_of_it_once_and
         .collect::<rusqlite::Result<_>>()
         .unwrap();
     assert_eq!(held, ["hash-host"]);
-    store.close().unwrap();
-}
-
-/// The readings a `usage:changed` subscription starts with.
-fn usage_snapshot(message: Message) -> Vec<UsageSnapshot> {
-    match message {
-        Message::Snapshot(snapshot) => from_payload(&snapshot.state).unwrap(),
-        other => panic!("expected a snapshot, got {other:?}"),
-    }
-}
-
-/// The next `usage:changed` event on `subscription`.
-async fn next_usage(client: &mut TestClient, subscription: u64) -> Vec<UsageSnapshot> {
-    let deadline = tokio::time::Instant::now() + PATIENCE;
-    loop {
-        let left = deadline.saturating_duration_since(tokio::time::Instant::now());
-        match client.next(left).await {
-            Some(Message::Event(event)) if event.subscription == subscription => {
-                return from_payload(&event.payload).unwrap();
-            }
-            Some(_) => {}
-            None => panic!("no usage reading within {PATIENCE:?}"),
-        }
-    }
-}
-
-fn week_messages(readings: &[UsageSnapshot]) -> u32 {
-    readings
-        .iter()
-        .find_map(|reading| reading.spend.as_ref())
-        .expect("a spend over the week")
-        .week
-        .messages
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn usage_copied_from_helm_is_counted_in_the_next_reading_every_subscriber_receives() {
-    let world = World::new();
-    let config = world.config();
-    let endpoint = config.endpoint.clone();
-    let host = RunningHost::start(config);
-    let mut copier = TestClient::connect(&endpoint, &[]).await;
-    let mut watcher = TestClient::connect(&endpoint, &[]).await;
-
-    // The host's own kept row is counted from the start.
-    let first = usage_snapshot(copier.subscribe_on(7, UsageChanged::NAME).await);
-    assert_eq!(week_messages(&first), 1);
-    let watched = usage_snapshot(watcher.subscribe_on(8, UsageChanged::NAME).await);
-    assert_eq!(week_messages(&watched), 1);
-
-    let row = |uuid: &str, at: u64| CarriedUsageRow {
-        uuid: uuid.to_owned(),
-        at,
-        model: "claude-opus-5".to_owned(),
-        input: 1000,
-        output: 100,
-        cache_write5m: 0,
-        cache_write1h: 0,
-        cache_read: 0,
-    };
-    let merged = copier
-        .request::<CarryUsage>(&CarriedUsageRows {
-            rows: vec![
-                row("copied-1", world.now - DAY_MS),
-                row("copied-2", world.now - 3 * DAY_MS),
-            ],
-        })
-        .await
+    // The copied usage of TWO, whose transcript is gone, and the host's own
+    // row for the shared message, which the copy's row did not replace.
+    let usage: Vec<(String, i64)> = store
+        .connection()
+        .prepare("SELECT uuid, input_tokens FROM usage_messages ORDER BY uuid")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
         .unwrap();
-    assert_eq!(merged, CarryMerged { added: 2, kept: 0 });
-
-    assert_eq!(week_messages(&next_usage(&mut copier, 7).await), 3);
-    assert_eq!(week_messages(&next_usage(&mut watcher, 8).await), 3);
-    let read = copier.request::<ReadUsage>(&()).await.unwrap();
-    assert_eq!(week_messages(&read), 3);
-    host.stop(HostStopReason::Stop).await;
+    assert_eq!(
+        usage,
+        [
+            ("shared".to_owned(), 7),
+            ("two-2".to_owned(), 1000),
+            ("two-3".to_owned(), 1000)
+        ]
+    );
+    store.close().unwrap();
 }

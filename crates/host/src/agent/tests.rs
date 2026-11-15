@@ -84,7 +84,6 @@ fn a_backend_that_only_runs_answers_unknown_to_every_other_question() {
     };
     assert_eq!(backend.read_status(&session), Knowable::Unknown);
     assert_eq!(backend.read_conversations(), Knowable::Unknown);
-    assert_eq!(backend.read_usage(1, 0), Knowable::Unknown);
     assert_eq!(backend.read_config_files(None), Knowable::Unknown);
     assert_eq!(backend.read_sign_in(), Knowable::Unknown);
     assert!(backend.resumer().is_none());

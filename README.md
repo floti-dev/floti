@@ -187,9 +187,6 @@ in a workspace is yours to decide.
   Ctrl+Shift+F by what it says, and the markdown and HTML artifacts Claude
   writes opened rendered - with wikilinks, an editor beside a live preview for
   notes, and a sandboxed frame for artifacts.
-- **Usage in the status bar** - session and weekly percentages read from Claude
-  Code's own cached figures, or an estimate in dollars. A reading Floti cannot
-  stand behind shows nothing at all rather than a stale number.
 - **Plugins** - a folder with a `helm-plugin.json` adds a rail icon and panel,
   tabs, a status bar item, commands for Ctrl+Shift+P and a settings page, all
   drawn in Floti's theme. Each runs in a process of its own, so one that hangs

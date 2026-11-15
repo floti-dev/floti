@@ -2,7 +2,7 @@
 //!
 //! A backend says how to launch its agent, and each thing Floti can show for
 //! it beyond running is an optional part: resume, status, agent tools,
-//! history, usage, config files and the sign-in check. What a backend
+//! history, config files and the sign-in check. What a backend
 //! declares ([`AgentBackend::capabilities`]) is derived from which parts it
 //! has, so a declaration and an answer cannot disagree, and asking a backend
 //! for a part it lacks answers Unknown ([`BackendAnswers`]), never an empty
@@ -40,7 +40,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use floti_protocol::channels::common::PermissionMode;
-use floti_protocol::channels::sessions::{EffortLevel, SessionActivity, UsageSnapshot};
+use floti_protocol::channels::sessions::{EffortLevel, SessionActivity};
 use floti_protocol::channels::workspace::ConfigFile;
 use floti_protocol::{
     BackendDescriptor, BackendFeature, BackendId, Knowable, WorkspacePart, WorkspaceSupport,
@@ -94,11 +94,6 @@ pub trait AgentBackend: Send + Sync {
 
     /// The agent's transcripts, read only.
     fn history(&self) -> Option<&dyn HistorySource> {
-        None
-    }
-
-    /// Usage, labelled with what it measures.
-    fn usage(&self) -> Option<&dyn UsageSource> {
         None
     }
 
@@ -251,7 +246,9 @@ pub trait AgentBackend: Send + Sync {
             (BackendFeature::Status, self.status().is_some()),
             (BackendFeature::AgentTools, self.agent_tools().is_some()),
             (BackendFeature::History, self.history().is_some()),
-            (BackendFeature::Usage, self.usage().is_some()),
+            // No backend reports usage: the feature stays in the protocol
+            // until its next major, and nothing declares it.
+            (BackendFeature::Usage, false),
             (BackendFeature::Config, self.config().is_some()),
             (BackendFeature::SignInCheck, self.sign_in().is_some()),
         ];
@@ -445,27 +442,6 @@ pub struct PromptTail {
     pub skipped: u64,
     /// Set when the file could not be read at all.
     pub error: Option<String>,
-}
-
-/// The agent's usage figures.
-pub trait UsageSource: Send + Sync {
-    /// The latest reading. `today_start_ms` is local midnight, from the
-    /// caller's clock and timezone, for the "today" estimate.
-    fn usage(&self, now_ms: u64, today_start_ms: u64) -> UsageSnapshot;
-
-    /// The latest reading, its spend also counting `kept`: usage the host
-    /// keeps for messages whose transcripts may be gone. A message the
-    /// agent's own files hold is counted from them. An agent whose spend is
-    /// not summed from messages ignores `kept`.
-    fn usage_keeping(
-        &self,
-        now_ms: u64,
-        today_start_ms: u64,
-        kept: &[crate::usage::KeptUsage],
-    ) -> UsageSnapshot {
-        let _ = kept;
-        self.usage(now_ms, today_start_ms)
-    }
 }
 
 /// The agent's config files.
@@ -944,13 +920,6 @@ impl std::fmt::Display for Version {
 pub trait BackendAnswers {
     fn read_status(&self, session: &SessionRef) -> Knowable<Option<SessionActivity>>;
     fn read_conversations(&self) -> Knowable<Vec<Conversation>>;
-    fn read_usage(&self, now_ms: u64, today_start_ms: u64) -> Knowable<UsageSnapshot>;
-    fn read_usage_keeping(
-        &self,
-        now_ms: u64,
-        today_start_ms: u64,
-        kept: &[crate::usage::KeptUsage],
-    ) -> Knowable<UsageSnapshot>;
     fn read_config_files(&self, project: Option<&Path>) -> Knowable<Vec<ConfigFile>>;
     fn read_sign_in(&self) -> Knowable<SignIn>;
 }
@@ -965,23 +934,6 @@ impl<B: AgentBackend + ?Sized> BackendAnswers for B {
         self.history()
             .and_then(|source| source.conversations().ok())
             .map_or(Knowable::Unknown, Knowable::Known)
-    }
-
-    fn read_usage(&self, now_ms: u64, today_start_ms: u64) -> Knowable<UsageSnapshot> {
-        self.usage().map_or(Knowable::Unknown, |source| {
-            Knowable::Known(source.usage(now_ms, today_start_ms))
-        })
-    }
-
-    fn read_usage_keeping(
-        &self,
-        now_ms: u64,
-        today_start_ms: u64,
-        kept: &[crate::usage::KeptUsage],
-    ) -> Knowable<UsageSnapshot> {
-        self.usage().map_or(Knowable::Unknown, |source| {
-            Knowable::Known(source.usage_keeping(now_ms, today_start_ms, kept))
-        })
     }
 
     fn read_config_files(&self, project: Option<&Path>) -> Knowable<Vec<ConfigFile>> {

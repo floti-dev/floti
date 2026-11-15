@@ -82,11 +82,8 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
     themeState: showing(builtin('nocturne')),
     onOpenThemesFolder: vi.fn(),
     onDuplicateTheme: vi.fn(),
-    usageDisplay: 'percent',
     updateCheck: true,
     onUpdateCheckChange: vi.fn(),
-    onUsageDisplayChange: vi.fn(),
-    hasCostEstimate: false,
     appVersion: '1.2.0',
     releasesUrl: 'https://github.com/example/helm/releases/latest',
     update: null,
@@ -172,7 +169,7 @@ describe('SettingsPane', () => {
   it('draws each section on its own: its title, its groups in order, and their controls', () => {
     const { rerender } = renderPane()
     const sections: Array<[SettingsSectionId, string, string[]]> = [
-      ['general', 'General', ['Claude CLI', 'Status bar']],
+      ['general', 'General', ['Claude CLI']],
       ['appearance', 'Appearance', ['Appearance']],
       ['terminal', 'Terminal', ['Terminal']],
       ['sessions', 'Sessions', ['Sessions']],
@@ -216,7 +213,6 @@ describe('SettingsPane', () => {
         ['radiogroup', 'Density'],
         ['radiogroup', 'Accent']
       ],
-      'Status bar': [['radiogroup', 'Usage display']],
       Files: [['checkbox', 'Wrap long lines in files']],
       Browser: [
         ['combobox', 'Where the browser pane may go'],

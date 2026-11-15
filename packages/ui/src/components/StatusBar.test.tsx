@@ -8,11 +8,6 @@ function renderBar(overrides: Partial<StatusBarProps> = {}) {
     onShowWaiting: vi.fn(),
     mode: null,
     version: "0.4.2",
-    claudeVersion: "2.1.288",
-    claudeMissing: false,
-    usage: null,
-    usageDisplay: "percent",
-    onUsageDisplayChange: vi.fn(),
     update: null,
     onOpenUpdate: vi.fn(),
     ...overrides,
@@ -29,35 +24,91 @@ function segments(): string[] {
   );
 }
 
-describe("StatusBar: which Floti and which claude", () => {
-  it("leads with the version, the build and a newer release, then claude, then the sessions", () => {
+describe("StatusBar: which Floti", () => {
+  it("leads with the version, the build and a newer release, then the sessions", () => {
     renderBar({
       mode: "dev",
       update: { latest: "0.5.0" },
     });
-    expect(segments().slice(0, 7)).toEqual([
+    expect(segments().slice(0, 5)).toEqual([
       "Floti 0.4.2",
       "dev",
       "0.5.0 available",
-      "|",
-      "claude 2.1.288",
       "|",
       "No sessions running",
     ]);
   });
 
-  it("says so in place of the version when claude cannot be found", () => {
-    renderBar({ claudeVersion: null, claudeMissing: true });
-    expect(segments().slice(0, 3)).toEqual([
-      "Floti 0.4.2",
-      "|",
-      "claude CLI not found",
-    ]);
+  it("names no agent CLI and shows no plan usage", () => {
+    renderBar({
+      sessions: { working: 1, waiting: 1, error: 0, idle: 1 },
+      hosts: [{ id: "local", name: "This PC", quitEnds: true, onOpen: vi.fn() }],
+      plugins: [
+        {
+          id: "sample",
+          name: "Sample",
+          text: "2 unread",
+          tone: "neutral",
+          tooltip: null,
+          onSelect: vi.fn(),
+        },
+      ],
+    });
+    expect(document.querySelector("[data-status-claude]")).toBeNull();
+    expect(document.querySelector("[data-usage-segment]")).toBeNull();
+    const text = screen.getByRole("contentinfo").textContent ?? "";
+    expect(text).not.toMatch(/claude/i);
+    expect(text).not.toMatch(/usage|%|Est\./i);
   });
 
-  it("draws neither version, nor a divider for them, before either is known", () => {
-    renderBar({ version: null, claudeVersion: null });
+  it("draws no rule before the sessions until the version, the build or a release is known", () => {
+    renderBar({ version: null });
     expect(segments()[0]).toBe("No sessions running");
+  });
+
+  it("puts a rule only between groups that are there, never first, last or twice", () => {
+    const full = (): void => {
+      const all = segments();
+      expect(all[0]).not.toBe("|");
+      expect(all[all.length - 1]).not.toBe("|");
+      all.forEach((segment, at) => {
+        if (segment === "|") expect(all[at + 1]).not.toBe("|");
+      });
+    };
+    const hosts = [
+      { id: "local", name: "This PC", quitEnds: true, onOpen: vi.fn() },
+    ];
+    const plugins = [
+      {
+        id: "sample",
+        name: "Sample",
+        text: "2 unread",
+        tone: "neutral" as const,
+        tooltip: null,
+        onSelect: vi.fn(),
+      },
+    ];
+
+    const withVersion = renderBar({ hosts, plugins });
+    full();
+    expect(segments().filter((segment) => segment !== "")).toEqual([
+      "Floti 0.4.2",
+      "|",
+      "No sessions running",
+      "|",
+      "This PC · quit ends sessions",
+      "2 unread",
+    ]);
+    withVersion.unmount();
+
+    renderBar({ version: null, hosts, plugins });
+    full();
+    expect(segments().filter((segment) => segment !== "")).toEqual([
+      "No sessions running",
+      "|",
+      "This PC · quit ends sessions",
+      "2 unread",
+    ]);
   });
 });
 
@@ -98,14 +149,14 @@ describe("StatusBar: plugin items", () => {
     expect(all.indexOf("2 unread")).toBeGreaterThan(
       all.indexOf("No sessions running"),
     );
-    // A rule between them and the usage figures.
-    expect(all[all.indexOf("Offline") + 1]).toBe("|");
+    // The last thing on the bar, with no rule after it.
+    expect(all[all.length - 1]).toBe("Offline");
   });
 
   it("draws no rule for plugins when none has an item", () => {
     renderBar({ plugins: [] });
     expect(document.querySelectorAll("[data-status-plugin]")).toHaveLength(0);
-    expect(segments().filter((segment) => segment === "|")).toHaveLength(2);
+    expect(segments().filter((segment) => segment === "|")).toHaveLength(1);
   });
 });
 
@@ -377,14 +428,14 @@ describe("StatusBar: the hosts sessions run in", () => {
   it("shows no host item while sessions run in Floti itself", () => {
     renderBar({ hosts: [] });
     expect(document.querySelectorAll("[data-status-host]")).toHaveLength(0);
-    expect(segments().filter((segment) => segment === "|")).toHaveLength(2);
+    expect(segments().filter((segment) => segment === "|")).toHaveLength(1);
   });
 });
 
 describe("StatusBar: sessions", () => {
   it("says how many sessions report an error, in the danger tone, apart from the idle ones", () => {
     renderBar({ sessions: { working: 1, waiting: 0, error: 1, idle: 2 } });
-    expect(segments().slice(3, 7)).toEqual([
+    expect(segments().slice(1, 5)).toEqual([
       "|",
       "1 working",
       "1 in error",
@@ -401,7 +452,7 @@ describe("StatusBar: sessions", () => {
     renderBar({
       sessions: { working: 1, waiting: 0, error: 0, running: 1, idle: 2 },
     });
-    expect(segments().slice(3, 7)).toEqual([
+    expect(segments().slice(1, 5)).toEqual([
       "|",
       "1 working",
       "1 running",

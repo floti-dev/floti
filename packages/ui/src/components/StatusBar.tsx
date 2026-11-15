@@ -3,12 +3,8 @@ import {
   LOCAL_HOST_KEY,
   localHostVersionsSentence,
   type LocalHostVersions,
-  type UsageDisplayMode,
-  type UsageSnapshot,
 } from "@helm/core/types";
 import { cn } from "../lib/cn";
-import type { HostChoice } from "./HostSwitch";
-import { UsageStatus } from "./UsageStatus";
 
 export interface StatusBarProps {
   /**
@@ -37,19 +33,6 @@ export interface StatusBarProps {
   mode: string | null;
   /** The app's own version, first on the bar. Null until the app has said. */
   version: string | null;
-  /** The `claude` CLI's version, `x.y.z`, or null while it is not known. */
-  claudeVersion: string | null;
-  /** The `claude` CLI was not found. Said here as well as in the banner,
-   * because the banner can be dismissed and the fact cannot. */
-  claudeMissing: boolean;
-  /** Claude Code's cached plan-limit figures, or null before the first read. */
-  usage: UsageSnapshot | null;
-  /** Why the shown host's usage could not be read, while it could not: said as Unknown, never as a figure. */
-  usageError?: string | null | undefined;
-  /** Which host's usage the bar shows, while more than one is connected. */
-  usageHostChoice?: HostChoice | undefined;
-  usageDisplay: UsageDisplayMode;
-  onUsageDisplayChange: (mode: UsageDisplayMode) => void;
   /**
    * A newer release than this build, as this PC's host's last check found
    * it, or null when there is none or nothing is known. Structural rather
@@ -121,27 +104,21 @@ const PLUGIN_TONE: Record<StatusPluginItem["tone"], string> = {
 };
 
 /**
- * The bottom strip. On the left, which Helm this is and which `claude` it
- * runs - the version, the build when it is not an ordinary install, a newer
- * release when there is one - and then what your sessions are doing. On the
- * right, what you have left of the plan.
+ * The bottom strip. On the left, which Floti this is - the version, the build
+ * when it is not an ordinary install, a newer release when there is one -
+ * then what your sessions are doing, then the hosts they run in. On the
+ * right, each plugin's item.
  *
- * The two versions lead because they are what somebody reads the bar for when
- * something is off, and they are fixed-width facts that do not move. How long
- * the last scan took is in Settings; it is a fact about Helm nobody acts on.
+ * The version leads because it is what somebody reads the bar for when
+ * something is off, and it is a fixed-width fact that does not move. Which
+ * agent CLI a session runs, and its version, are in Settings: the bar names
+ * nothing that belongs to one agent.
  */
 export function StatusBar({
   sessions,
   onShowWaiting,
   mode,
   version,
-  claudeVersion,
-  claudeMissing,
-  usage,
-  usageError = null,
-  usageHostChoice,
-  usageDisplay,
-  onUsageDisplayChange,
   update,
   onOpenUpdate,
   plugins = [],
@@ -176,9 +153,8 @@ export function StatusBar({
 
       {/* Beside the version, because that is the thing it is about. The
           accent as *text*, never as a fill: a newer release is worth noticing
-          and is not a warning - colouring it `warn` would put it in the same
-          language as a missing CLI, which is a thing you have to fix. This is
-          an offer. */}
+          and is not a warning - colouring it `warn` would put it in the
+          language of things you have to fix. This is an offer. */}
       {update !== null && (
         <button
           type="button"
@@ -194,28 +170,9 @@ export function StatusBar({
         </button>
       )}
 
-      {(claudeMissing || claudeVersion !== null) && (
-        <>
-          {version !== null && <Divider />}
-          {claudeMissing ? (
-            <span
-              data-status-claude="missing"
-              className="shrink-0 text-warn"
-              title="The claude CLI was not found. Config browsing works; launching a session will not."
-            >
-              claude CLI not found
-            </span>
-          ) : (
-            <span data-status-claude={claudeVersion} className="shrink-0">
-              claude {claudeVersion}
-            </span>
-          )}
-        </>
-      )}
-
-      {(version !== null || claudeMissing || claudeVersion !== null) && (
-        <Divider />
-      )}
+      {/* The rule closes the version group, so it is drawn only while that
+          group has something in it. */}
+      {(version !== null || mode !== null || update !== null) && <Divider />}
 
       {total === 0 ? (
         <span data-status-sessions="none">No sessions running</span>
@@ -404,20 +361,11 @@ ${unreachable.tryLine}
           {item.text}
         </button>
       ))}
-      {plugins.length > 0 && <Divider />}
-
-      <UsageStatus
-        snapshot={usage}
-        mode={usageDisplay}
-        onModeChange={onUsageDisplayChange}
-        error={usageError}
-        hostChoice={usageHostChoice}
-      />
     </footer>
   );
 }
 
-/** A hairline between the groups on the left, the one the usage figures use between their windows. */
+/** A hairline between the groups on the left. */
 function Divider(): JSX.Element {
   return <span aria-hidden className="h-2.5 w-px shrink-0 bg-border-strong" />;
 }

@@ -1,19 +1,11 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState, type JSX } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  DEFAULT_SETTINGS,
-  type DetectedShell,
-  type UsageDisplayMode,
-  type UsageSnapshot
-} from '@helm/core/types'
+import { DEFAULT_SETTINGS, type DetectedShell } from '@helm/core/types'
 import { SettingsPane, type SettingsPaneProps, type TerminalSettings } from './SettingsPane'
-import { StatusBar } from './StatusBar'
 
 /**
- * The Settings pane's Terminal group and its usage-display control, rendered
- * from props. Other groups have files of their own.
+ * The Settings pane's Terminal group, rendered from props. Other groups have files of their own.
  */
 
 const PWSH = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
@@ -62,10 +54,8 @@ function paneProps(overrides: Partial<SettingsPaneProps> = {}): SettingsPaneProp
     themeState: null,
     onOpenThemesFolder: vi.fn(),
     onDuplicateTheme: vi.fn(),
-    usageDisplay: 'percent',
     updateCheck: false,
     onUpdateCheckChange: vi.fn(),
-    onUsageDisplayChange: vi.fn(),
     appVersion: '1.2.0',
     releasesUrl: null,
     update: null,
@@ -74,7 +64,6 @@ function paneProps(overrides: Partial<SettingsPaneProps> = {}): SettingsPaneProp
     onInstallUpdate: vi.fn(),
     onCheckForUpdate: vi.fn(),
     onOpenReleases: vi.fn(),
-    hasCostEstimate: false,
     terminal: TERMINAL,
     onTerminalChange: vi.fn(),
     terminalFontStack: '"Cascadia Mono", "SF Mono", Menlo, Consolas, ui-monospace, monospace',
@@ -300,101 +289,5 @@ describe('the Terminal group', () => {
     await user.type(field, 'D:\\tools\\nu.exe{Enter}')
     expect(onShellPath).toHaveBeenLastCalledWith('D:\\tools\\nu.exe')
     await vi.waitFor(() => expect(field).toHaveProperty('value', ''))
-  })
-})
-
-describe('the usage display control', () => {
-  it('sets each offered mode, and marks the one in force', async () => {
-    const user = userEvent.setup()
-    const props = renderPane({ section: 'general', usageDisplay: 'cost', hasCostEstimate: true })
-    const control = screen.getByRole('radiogroup', { name: 'Usage display' })
-
-    expect(within(control).getByRole('radio', { name: 'Cost' }).getAttribute('aria-checked')).toBe('true')
-    expect(within(control).getByRole('radio', { name: 'Percent' }).getAttribute('aria-checked')).toBe('false')
-
-    await user.click(within(control).getByRole('radio', { name: 'Off' }))
-    await user.click(within(control).getByRole('radio', { name: 'Percent' }))
-    expect(vi.mocked(props.onUsageDisplayChange).mock.calls).toEqual([['off'], ['percent']])
-  })
-
-  it('offers cost only once the index has an estimate, and says why not before', () => {
-    renderPane({ section: 'general', hasCostEstimate: false })
-    const cost = within(screen.getByRole('radiogroup', { name: 'Usage display' })).getByRole('radio', {
-      name: 'Cost'
-    })
-
-    expect(cost).toHaveProperty('disabled', true)
-    expect(cost.title).toMatch(/index has caught up/)
-  })
-
-  it('follows the status bar segment, and the segment follows it, through the one setting', async () => {
-    const user = userEvent.setup()
-    const now = Date.now()
-    const usage: UsageSnapshot = {
-      file: 'C:\\Users\\someone\\.claude.json',
-      fetchedAtMs: now - 60_000,
-      limits: [
-        {
-          kind: 'session',
-          group: 'session',
-          percent: 23,
-          severity: 'normal',
-          resetsAtMs: now + 3_600_000,
-          scope: null,
-          isActive: true
-        }
-      ],
-      problem: null,
-      spend: {
-        session: { tokens: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 }, dollars: 2.5, messages: 1 },
-        today: { tokens: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 }, dollars: 2.5, messages: 1 },
-        week: { tokens: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 }, dollars: 2.5, messages: 1 },
-        pricedAt: '2026-08-10',
-        unpricedModels: [],
-        indexMs: 3
-      }
-    }
-    const writes: UsageDisplayMode[] = []
-
-    // The app's wiring in miniature: both surfaces render `usageDisplay` from
-    // the settings and write it back through one writer.
-    function Window(): JSX.Element {
-      const [usageDisplay, setUsageDisplay] = useState<UsageDisplayMode>('percent')
-      const write = (mode: UsageDisplayMode): void => {
-        writes.push(mode)
-        setUsageDisplay(mode)
-      }
-      return (
-        <>
-          <SettingsPane {...paneProps({ section: 'general', usageDisplay, onUsageDisplayChange: write, hasCostEstimate: true })} />
-          <StatusBar
-            sessions={{ working: 0, waiting: 0, error: 0, idle: 0 }}
-            onShowWaiting={vi.fn()}
-            mode={null}
-            version="1.2.0"
-            claudeVersion="2.1.288"
-            claudeMissing={false}
-            usage={usage}
-            usageDisplay={usageDisplay}
-            onUsageDisplayChange={write}
-            update={null}
-            onOpenUpdate={vi.fn()}
-          />
-        </>
-      )
-    }
-    render(<Window />)
-    const radio = (name: string): HTMLElement =>
-      within(screen.getByRole('radiogroup', { name: 'Usage display' })).getByRole('radio', { name })
-    const segment = (): HTMLElement => within(screen.getByRole('contentinfo')).getByRole('button')
-
-    expect(segment().textContent).toContain('Session 23%')
-    await user.click(radio('Cost'))
-    expect(segment().textContent).toMatch(/^Est\./)
-
-    fireEvent.click(segment())
-    expect(radio('Off').getAttribute('aria-checked')).toBe('true')
-    expect(radio('Cost').getAttribute('aria-checked')).toBe('false')
-    expect(writes).toEqual(['cost', 'off'])
   })
 })

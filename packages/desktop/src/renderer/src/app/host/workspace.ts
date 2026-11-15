@@ -234,22 +234,13 @@ export function createWorkspaceAdapter({
     requests: {
       'app:info': async () => {
         const build = await own.invoke('ownApp:info')
-        let claudeVersion: string | null = null
         let hostLogFile: string | null = null
         try {
-          const connection = await host()
-          const [status, info] = await Promise.allSettled([
-            connection.request('setup:status', null),
-            connection.request('app:info', null)
-          ])
-          if (status.status === 'fulfilled') claudeVersion = claude(status.value).version
-          else log(`host: the claude version could not be read (${(status.reason as Error).message})`)
-          if (info.status === 'fulfilled') hostLogFile = info.value.logFile
-          else log(`host: the host's log file could not be read (${(info.reason as Error).message})`)
+          hostLogFile = (await (await host()).request('app:info', null)).logFile
         } catch (error) {
-          log(`host: the claude version could not be read (${(error as Error).message})`)
+          log(`host: the host's log file could not be read (${(error as Error).message})`)
         }
-        return { ...build, claudeVersion, hostLogFile }
+        return { ...build, hostLogFile }
       },
 
       'settings:read': async () => {

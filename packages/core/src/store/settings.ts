@@ -39,7 +39,6 @@ import {
   THEME_ID_PATTERN,
   THEME_PREFERENCES,
   TRANSCRIPT_ARCHIVE_BYTES,
-  USAGE_DISPLAY_MODES,
   WORKSPACE_TABS_MAX,
   type AppSettings
 } from '../types'
@@ -370,8 +369,6 @@ export const SETTING_VALIDATORS: SettingValidators = {
     value === null || (typeof value === 'string' && ACCENT_HEX.test(value))
       ? null
       : `expected null or a lower-case #rrggbb, got ${describe(value)}`,
-
-  usageDisplay: oneOf(USAGE_DISPLAY_MODES),
 
   /**
    * Absolute paths only. A relative root would be resolved against whatever

@@ -29,9 +29,7 @@ export {
   historyPageFromHost,
   historyQueryForHost,
   historySessionFromHost,
-  historySummaryFromHost,
-  unreadableUsage,
-  usageFromHost
+  historySummaryFromHost
 } from './history'
 export {
   deliveryFromHost,

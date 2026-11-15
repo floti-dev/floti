@@ -53,7 +53,6 @@ import type {
   TemplateWriteResult,
   ThemeListing,
   ThemeState,
-  UsageSnapshot,
   WriteConfigRequest,
   WriteConfigResult
 } from '@helm/core'
@@ -123,11 +122,6 @@ export interface AppInfo {
     chrome: string
     node: string
   }
-  /**
-   * `claude --version`, or null if the CLI was not found. Helm warns and keeps
-   * going: the CLI is required to launch a session, not to browse config.
-   */
-  claudeVersion: string | null
   /**
    * The log file this PC's host writes its standard error and panics to,
    * from the host's own `app:info`; null with sessions in Helm itself, or
@@ -724,8 +718,8 @@ export interface ForwardedPort {
   local: number
 }
 
-/** What Helm's own build says of itself; `app:info` adds the `claude` version wherever sessions run. */
-export type OwnAppInfo = Omit<AppInfo, 'claudeVersion' | 'hostLogFile'>
+/** What Helm's own build says of itself; `app:info` adds the host's log file. */
+export type OwnAppInfo = Omit<AppInfo, 'hostLogFile'>
 
 /** How many rows of each kind a copy of Helm's own data added to the local host. */
 export interface OwnDataCopied {
@@ -1361,17 +1355,6 @@ export interface IpcRequests {
   'config:scopes': { request: void; response: ConfigScope[] }
   'config:tree': { request: { scopePath: string }; response: ConfigTree }
   'config:effective': { request: EffectiveViewRequest; response: EffectiveView }
-
-  /**
-   * Claude Code's cached answer about plan limits, read out of
-   * `~/.claude.json`. Read-only, like the session index: these are the
-   * server's figures and Helm mirrors them.
-   *
-   * The reading is shipped raw - what may be *painted* from it is decided in
-   * the window, on a timer, because a reading goes stale and a usage window
-   * rolls over without any file having changed.
-   */
-  'usage:read': { request: void; response: UsageSnapshot }
 
   /**
    * Notes and artifacts opened from the Files view, and Ctrl+P's text search.
@@ -2034,13 +2017,6 @@ export interface IpcEvents {
   'archive:changed': ArchiveStats
 
   /**
-   * Claude Code refreshed its usage figures. Pushed for the same reason
-   * `history:changed` is: the file belongs to every `claude` on the machine,
-   * and the refresh that matters is the one Helm did not cause.
-   */
-  'usage:changed': UsageSnapshot
-
-  /**
    * "This session is still running" - asked by main, answered by the renderer
    * on `session:confirmed`.
    *
@@ -2317,7 +2293,6 @@ export const REQUEST_CHANNELS = Object.keys({
   'config:scopes': true,
   'config:tree': true,
   'config:effective': true,
-  'usage:read': true,
   'content:scopes': true,
   'content:document': true,
   'content:render': true,
@@ -2433,7 +2408,6 @@ export const EVENT_CHANNELS = Object.keys({
   'themes:changed': true,
   'history:changed': true,
   'archive:changed': true,
-  'usage:changed': true,
   'content:artifactConsole': true,
   'term:create': true,
   'term:write': true,

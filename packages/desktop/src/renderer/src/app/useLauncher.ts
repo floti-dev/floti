@@ -4,8 +4,7 @@ import type {
   CachedProject,
   DiscoveryResult,
   Project,
-  ThemePreference,
-  UsageDisplayMode
+  ThemePreference
 } from '@helm/core'
 import type { AppInfo } from '../../../shared/ipc'
 import { helm } from './bridge'
@@ -34,7 +33,6 @@ export interface LauncherState {
   addRoot: () => void
   removeRoot: (path: string) => void
   setTheme: (theme: ThemePreference) => void
-  setUsageDisplay: (mode: UsageDisplayMode) => void
   /** Forgets a hand-picked `claude`, back to whatever discovery finds. */
   clearClaudePath: () => void
   reveal: (path: string) => void
@@ -213,14 +211,6 @@ export function useLauncher(): LauncherState {
     [writeSettings]
   )
 
-  // Persisted rather than held in the window, so the choice survives a restart
-  // - and written through the same channel every other setting uses, so the
-  // main process is the one that decides what the settings are.
-  const setUsageDisplay = useCallback(
-    (usageDisplay: UsageDisplayMode) => writeSettings({ usageDisplay }),
-    [writeSettings]
-  )
-
   /**
    * Written through `settings:write` rather than through a channel of its own,
    * because the main process's side-effect ladder is what hands the cleared
@@ -257,7 +247,6 @@ export function useLauncher(): LauncherState {
     addRoot,
     removeRoot,
     setTheme,
-    setUsageDisplay,
     clearClaudePath,
     reveal,
     writeSettings

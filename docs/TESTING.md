@@ -145,7 +145,7 @@ in `test/fake-agents`, the same file the app's E2E tests use, run under Node:
 `test/fake-agents/claude-code.mjs` and asserts on its run log, with the config
 folder, home and data folder in a `TestDirs`. Those tests carry core's Claude
 Code cases (launch, resume, overlays, agent tool registration, session
-records, history, usage, config files, sign-in) with the same inputs and
+records, history, config files, sign-in) with the same inputs and
 expectations. `agent/tests.rs` checks the trait's own rules with backends
 made in the test, among them one that only runs a program. An E2E test of the
 desktop against a backend waits until the desktop talks to the Rust host.
@@ -212,14 +212,14 @@ What a client browses around its sessions is tested through `TestClient`
 against a `RunningHost`, one file per feature in `crates/host/tests/it/`:
 `discovery.rs`, `settings.rs`, `profiles.rs`, `templates.rs`, `content.rs`,
 `files.rs` and `highlighting.rs`, with the processes-and-ports pass in
-`resources.rs`. For discovery, profiles, templates, content, history and
-usage those files hold only the wiring: each operation once through a real
+`resources.rs`. For discovery, profiles, templates, content and history
+those files hold only the wiring: each operation once through a real
 host, and each way an answer or an error crosses the protocol. The cases
 about a rule (what a scan finds, what a profile's YAML may say, what a
-template name may be, how a note renders, what a transcript indexes as, where
-a day's usage ends) are unit tests beside the code, in
-`src/workspace/{discovery,profiles,templates,content,render}`, `src/history`
-and `src/usage`, calling it directly on a folder the test made. A new case
+template name may be, how a note renders, what a transcript indexes as) are
+unit tests beside the code, in
+`src/workspace/{discovery,profiles,templates,content,render}` and
+`src/history`, calling it directly on a folder the test made. A new case
 about a rule goes there. A test that needs a repository makes one with
 `GitRepo` (testkit), which commits with a fixed author and date and none of
 the machine's git configuration. One that needs a link makes it with
@@ -493,7 +493,7 @@ over the window, or Electron's own guards on a page.
 | `browser` | browsing; the security posture; a cookie surviving a restart; find in page; the browser's keys with the caret in the page; the page standing down for the address list and the menu; clipboard writing and fullscreen; the page standing down while a divider or the Browser tab is dragged |
 | `agent-tools` | a session drives a browser tab of its own through its own token, and loses its tools when it ends; a page the user shares with a session, read and driven until the share is taken back or the session ends |
 | `plugins` | the sample plugin, a version 2 plugin, against a server of its own: its background module, read through what it does (the badge, the status bar item, a command's effect, the tools' answers), a secret it asks for, its panel, badge, status and a tab with parameters, its pages on `floti-plugin://sample/` with `window.floti`, and `floti.fetch` held to the manifest's origins on every redirect; Floti's shortcuts from inside a plugin page and its commands from Ctrl+Shift+P; a crashed plugin page and Reload; a folder added in Settings, kept across a restart, and turned off and on; a session calling the plugin's tools through the host, answered by its background module, and losing them when they are turned off in Settings; a page strip; a plugin page starting a session and opening a link from a click |
-| `boundary` | every channel a workflow uses crosses only as `channels/boundary.rs` allows: the launcher, sessions and terminals; history and usage; the Files view, a note and the profile form; plugin pages of both versions, a version 1 background page, a tool called by a session, and the Browser tab |
+| `boundary` | every channel a workflow uses crosses only as `channels/boundary.rs` allows: the launcher, sessions and terminals; history; the Files view, a note and the profile form; plugin pages of both versions, a version 1 background page, a tool called by a session, and the Browser tab |
 
 - **Each test gets a world** (`test/world.ts`): a temporary root with a space in
   its path, in the run's root, named owner of its fake agents (a `test-owner`

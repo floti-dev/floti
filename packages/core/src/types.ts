@@ -10,11 +10,8 @@
  * than at typecheck (CLAUDE.md, hard rules).
  */
 
-// Imported as well as re-exported: `AppSettings` below names it, and a
-// re-export alone does not bring a name into this file's scope.
-import type { UsageDisplayMode } from './usage/shape'
-// The same, for `CreateConfigRequest` below.
-// The same again: `AppSettings.browserReach` names it.
+// Imported as well as re-exported: `AppSettings.browserReach` names it, and
+// a re-export alone does not bring a name into this file's scope.
 import type { BrowserReach, BrowserSearch } from './browser/reach'
 import type { SavedPaneLayout } from './layout/panes'
 // A plugin's tab is a `WorkspaceTab`, and its rail id may be in `railHidden`.
@@ -24,8 +21,7 @@ import { LOCAL_HOST_KEY, type RemoteHost } from './hosts'
 
 /**
  * The browser pane's URL rules, re-exported here rather than from the package
- * root for the reason `USAGE_DISPLAY_MODES` is: the
- * address bar and the settings pane are *renderer* code, and a value import
+ * root: the address bar and the settings pane are *renderer* code, and a value import
  * from `@helm/core` reaches the filesystem through `launch/` and `store/`,
  * which fails at rollup rather than at typecheck. These are pure by
  * construction - they decide about a string and touch nothing.
@@ -110,46 +106,6 @@ export * from './hostAdd'
 export * from './hostFailure'
 export * from './hostAgents'
 export * from './sshConfig'
-
-/**
- * The usage reader's pure half, re-exported for the same reason: the status bar
- * re-derives what it may paint on a timer, from the same functions the main
- * process parsed with. Two implementations of "is this reading still good" is
- * exactly the bug this file exists to prevent.
- */
-export {
-  describeAge,
-  nextUsageMode,
-  offerableUsageModes,
-  parseUsage,
-  usageProblem,
-  usageView,
-  COST_MODE_UNAVAILABLE,
-  USAGE_DISPLAY_MODES,
-  USAGE_STALE_AFTER_MS,
-  type UsageBucket,
-  type UsageDisplayMode,
-  type UsageGroup,
-  type UsageLimit,
-  type UsageProblem,
-  type UsageProblemKind,
-  type UsageSeverity,
-  type UsageSnapshot,
-  type UsageSpend,
-  type UsageTokens,
-  type UsageView,
-  type UsageWindowCost
-} from './usage/shape'
-export {
-  costOfTokens,
-  priceFor,
-  priceTableAgeDays,
-  PRICES,
-  PRICE_TABLE_DATE,
-  PRICE_TABLE_FRESH_FOR_DAYS,
-  type ModelPrice,
-  type TokenPrice
-} from './usage/prices'
 
 /**
  * What the editors do when you press a key.
@@ -1691,12 +1647,6 @@ export interface AppSettings {
    * signing in stays entirely between the user and `claude`.
    */
   claudePath: string | null
-  /**
-   * What the status bar's usage segment shows. Set in the settings pane's
-   * Appearance group; clicking the segment itself still cycles it, because a
-   * quick accessor beside the thing it changes is worth keeping.
-   */
-  usageDisplay: UsageDisplayMode
 
   /**
    * A font family for the terminal panes, or null for the built-in stack.
@@ -2059,7 +2009,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   firstRunCompletedAt: null,
   upgradeNoteSeenAt: null,
   claudePath: null,
-  usageDisplay: 'percent',
   // The four defaults below are the values Spike C measured and `terminal.ts`
   // was built around. They are the documented baseline, not a starting point
   // someone picked: a setting left alone must produce the configuration the

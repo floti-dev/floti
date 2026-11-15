@@ -94,7 +94,7 @@ test('the launcher, a session and its terminal, and a project’s terminal use o
   await expectOnlyClientChannels(helm)
 })
 
-test('history and the usage figures come over the window’s own connection', async ({ helm }) => {
+test('history comes over the window’s own connection', async ({ helm }) => {
   const { window } = helm
   const id = await startSession(window, 'alpha')
   const pane = window.getByRole('region', { name: 'First pane' })
@@ -112,7 +112,7 @@ test('history and the usage figures come over the window’s own connection', as
 
   const channels = await recorded(helm)
   // Read over the window's connection: main was asked none of it.
-  expect(channels.filter(({ channel }) => /^(history:(summary|sessions|changed)|archive:|usage:)/.test(channel))).toEqual([])
+  expect(channels.filter(({ channel }) => /^(history:(summary|sessions|changed)|archive:)/.test(channel))).toEqual([])
   expect(channels).toContainEqual({ channel: 'hostLink:open', kind: 'invoke', page: 'window' })
   await expectOnlyClientChannels(helm)
 })

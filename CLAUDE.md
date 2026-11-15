@@ -297,8 +297,6 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   must keep measuring the way xterm does.
 - "Could not look" (`null`, painted "Unknown") and "nothing there" (`[]`) are
   never merged.
-- Usage figures paint nothing rather than a wrong number. Dollar figures are
-  estimates and say so.
 - Every backend resumes in the directory history recorded. Claude Code's
   transcripts are found by scanning `projects/*` for `<uuid>.jsonl`, never by
   deriving a path.

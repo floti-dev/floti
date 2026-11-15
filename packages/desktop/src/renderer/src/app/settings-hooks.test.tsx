@@ -109,7 +109,6 @@ describe('useLauncher', () => {
     dbFile: 'C:\\helm-data\\helm.db',
     migrations: [],
     versions: { electron: '43', chrome: '150', node: '24' },
-    claudeVersion: null,
     hostLogFile: null,
     windowsBuild: null,
     home: 'C:\\Users\\someone',

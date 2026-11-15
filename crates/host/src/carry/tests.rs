@@ -374,10 +374,15 @@ fn usage_the_host_has_for_a_message_is_kept() {
     merge_usage(world.conn(), &[usage("a1", 10)]).unwrap();
     let merged = merge_usage(world.conn(), &[usage("a1", 999), usage("a2", 20)]).unwrap();
     assert_eq!(merged, CarryMerged { added: 1, kept: 1 });
-    let kept = crate::usage::read_kept(world.conn(), 0).unwrap();
-    let mut inputs: Vec<(String, u64)> =
-        kept.into_iter().map(|row| (row.uuid, row.input)).collect();
-    inputs.sort();
+    let mut select = world
+        .conn()
+        .prepare("SELECT uuid, input_tokens FROM usage_messages ORDER BY uuid")
+        .unwrap();
+    let inputs: Vec<(String, i64)> = select
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
     assert_eq!(inputs, [("a1".to_owned(), 10), ("a2".to_owned(), 20)]);
 }
 

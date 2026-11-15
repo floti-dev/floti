@@ -5,8 +5,8 @@ import type { LauncherHost } from './NewSessionDialog'
 
 /**
  * Which host a surface shows, and the hosts it can show: This PC first, then
- * each host on another computer that is connected. History, Usage, Config,
- * Files and Settings > Plugins each take one, and keep the host they show in
+ * each host on another computer that is connected. History, Config, Files,
+ * Agents and Settings > Plugins each take one, and keep the host they show in
  * the window only.
  */
 export interface HostChoice {

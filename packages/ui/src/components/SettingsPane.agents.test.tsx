@@ -40,10 +40,8 @@ function paneProps(overrides: Partial<SettingsPaneProps> = {}): SettingsPaneProp
     themeState: null,
     onOpenThemesFolder: vi.fn(),
     onDuplicateTheme: vi.fn(),
-    usageDisplay: s.usageDisplay,
     updateCheck: false,
     onUpdateCheckChange: vi.fn(),
-    onUsageDisplayChange: vi.fn(),
     appVersion: null,
     releasesUrl: null,
     update: null,
@@ -52,7 +50,6 @@ function paneProps(overrides: Partial<SettingsPaneProps> = {}): SettingsPaneProp
     onInstallUpdate: vi.fn(),
     onCheckForUpdate: vi.fn(),
     onOpenReleases: vi.fn(),
-    hasCostEstimate: false,
     terminal: {
       terminalFontFamily: s.terminalFontFamily,
       terminalFontSize: s.terminalFontSize,

@@ -1,6 +1,6 @@
 //! Claude Code, the first agent backend, matching today's app for launch,
-//! overlays, resume, status, agent tools, permissions, transcripts, usage,
-//! config files and sign-in.
+//! overlays, resume, status, agent tools, permissions, transcripts, config
+//! files and sign-in.
 //!
 //! Everything here reads Claude Code's own records and writes nothing into
 //! its config folder: a launch's agent tool registration, settings file,
@@ -18,7 +18,6 @@ mod sign_in;
 mod status;
 mod time;
 mod title;
-mod usage;
 
 #[cfg(test)]
 mod tests;
@@ -30,7 +29,7 @@ use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::time::Duration;
 
 use floti_protocol::channels::common::PermissionMode;
-use floti_protocol::channels::sessions::{SessionActivity, UsageSnapshot};
+use floti_protocol::channels::sessions::SessionActivity;
 use floti_protocol::channels::workspace::ConfigFile;
 use floti_protocol::{BackendId, Knowable, WorkspacePart, WorkspaceSupport};
 
@@ -38,8 +37,8 @@ use super::{
     AgentBackend, AgentInput, AgentToolServer, AgentTools, Composition, ConfigSource, Conversation,
     ExecutableSetup, HistorySource, Launch, LaunchFolder, LaunchRequest, LaunchSpec, Permissions,
     PromptRecord, PromptTail, Registration, ResumeRequest, Resumer, SessionRef, SignIn,
-    SignInCheck, StatusSource, TestedVersions, ToolRule, ToolSupport, Transcript, UsageSource,
-    Version, VersionCheck,
+    SignInCheck, StatusSource, TestedVersions, ToolRule, ToolSupport, Transcript, Version,
+    VersionCheck,
 };
 use crate::platform::command_shell::ShellFamily;
 use crate::platform::folders::UserEnv;
@@ -51,7 +50,6 @@ pub use argv::{sanitize_session_name, unique_session_name};
 pub use overlay::{overlay_plugin_name, overlay_plugin_names};
 pub(crate) use time::parse_instant;
 pub use title::{SessionTitle, session_title_from};
-pub use usage::{PRICE_TABLE_DATE, UsageBucket, UsageView, usage_view};
 
 /// The versions this backend was tested against: from 2.1.277, the first to
 /// read `AGENTS.md` through `instructionFiles`, up to but not including 2.2.0.
@@ -428,10 +426,6 @@ impl AgentBackend for ClaudeCodeBackend {
         Some(self)
     }
 
-    fn usage(&self) -> Option<&dyn UsageSource> {
-        Some(self)
-    }
-
     fn config(&self) -> Option<&dyn ConfigSource> {
         Some(self)
     }
@@ -674,27 +668,6 @@ impl PromptRecord for ClaudeCodeBackend {
 
     fn prompts_since(&self, offset: u64) -> PromptTail {
         prompts::read_since(&self.prompt_file(), offset)
-    }
-}
-
-impl UsageSource for ClaudeCodeBackend {
-    fn usage(&self, now_ms: u64, today_start_ms: u64) -> UsageSnapshot {
-        self.usage_keeping(now_ms, today_start_ms, &[])
-    }
-
-    fn usage_keeping(
-        &self,
-        now_ms: u64,
-        today_start_ms: u64,
-        kept: &[crate::usage::KeptUsage],
-    ) -> UsageSnapshot {
-        usage::read(
-            &self.id,
-            &self.settings.config_dir,
-            now_ms,
-            today_start_ms,
-            kept,
-        )
     }
 }
 
