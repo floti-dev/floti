@@ -22,8 +22,12 @@ export interface LayerMenu {
   entries: LayerMenuEntry[]
 }
 
-/** Why the menu layer closed: a key, a pick, or a click anywhere else. */
-export type LayerMenuClosed = 'escape' | 'blur' | 'pick'
+/**
+ * Why the menu layer closed: a key, a pick, or a click anywhere else - in
+ * the window's own chrome (`window`, whose press reaches the window after
+ * this does) or outside it (`blur`: the page, another program).
+ */
+export type LayerMenuClosed = 'escape' | 'blur' | 'window' | 'pick'
 
 /** A rectangle in the window's CSS pixels. */
 export interface LayerRect {

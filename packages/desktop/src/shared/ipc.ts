@@ -765,8 +765,13 @@ export type BrowserLayerRequest =
    */
   | { blurred: { turn: number } }
 
-/** Why the layer closed of its own accord. A close the window asked for is not reported. */
-export type BrowserLayerClosed = 'escape' | 'blur' | 'pick'
+/**
+ * Why the layer closed of its own accord. A close the window asked for is
+ * not reported. `window` is a press in Floti's own window taking the keyboard
+ * from a menu - that press reaches the window after this does - and `blur`
+ * the keyboard going anywhere else: the page, another program.
+ */
+export type BrowserLayerClosed = 'escape' | 'blur' | 'window' | 'pick'
 
 /** Main to the window: what happened in the layer, on the turn it happened in. */
 export type BrowserLayerEvent =

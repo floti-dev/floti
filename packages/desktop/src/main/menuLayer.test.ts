@@ -272,16 +272,36 @@ describe('the menu layer - closing', () => {
     expect(r.window.webContents.focused).toBe(1)
   })
 
-  it('closes when a click anywhere else takes the keys, and leaves them where the click put them', () => {
+  it('closes when a click outside the window takes the keys, and leaves them where the click put them', async () => {
     const r = opened()
     r.contents().hasFocus = false
     r.contents().emit('blur')
+    // Where the keyboard went is read once Chromium has placed it.
+    expect(r.events).toEqual([])
+    await nextTurn()
     expect(r.events).toEqual([{ turn: 1, closed: 'blur' }])
     expect(r.view().visible).toBe(false)
     expect(r.window.webContents.focused).toBe(0)
   })
 
-  it('closes when the window asks, without telling it, and ignores a close for a turn that is over', () => {
+  it("says a click in Floti's own window took the keys, so the window waits for that press", async () => {
+    const r = opened()
+    r.contents().hasFocus = false
+    r.window.webContents.hasFocus = true
+    r.contents().emit('blur')
+    await nextTurn()
+    expect(r.events).toEqual([{ turn: 1, closed: 'window' }])
+  })
+
+  it('reports no blur for a menu the window closed before Chromium placed the keyboard', async () => {
+    const r = opened()
+    r.contents().emit('blur')
+    r.layer.request({ close: { turn: 1 } })
+    await nextTurn()
+    expect(r.events).toEqual([])
+  })
+
+  it('closes when the window asks, without telling it, and ignores a close for a turn that is over', async () => {
     const r = opened()
     r.layer.request({ close: { turn: 0 } })
     expect(r.view().visible).toBe(true)
@@ -290,6 +310,7 @@ describe('the menu layer - closing', () => {
     expect(r.events).toEqual([])
     // Hidden, the blur that follows is no close.
     r.contents().emit('blur')
+    await nextTurn()
     expect(r.events).toEqual([])
   })
 

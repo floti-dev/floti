@@ -285,8 +285,12 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   Escape or a click anywhere else (the page or Floti's chrome, which blurs the
   layer) closes it; main hides it, gives the keyboard back to the window if
   the layer had it, and tells the window on `browser:layer-event`, and the
-  window returns focus to the control that opened the menu. A press on that
-  control is left to its own click. A window resize or a pane move closes it
+  window returns focus to the control that opened the menu. For a blur, main
+  reads where the keyboard went once Chromium has placed it: the page or
+  another program (`blur`), or Floti's own window (`window`). The window
+  hears that before the press that caused it (measured: 1-2ms), so for
+  `window` it waits for the press, and a press on the opening control is left
+  to that control's click, which closes the menu. A window resize or a pane move closes it
   from the window, and the Browser tab leaving the screen unmounts the menu,
   which closes it. These menus are no overlay: no still, nothing stands down.
   Dialogs and every other menu keep the still.

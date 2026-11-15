@@ -180,9 +180,9 @@ export function layerEntries(entries: readonly MenuEntry[]): LayerMenuEntry[] {
  * panes move: a menu left floating over a layout that moved points at nothing.
  * Not when the window loses focus - the layer taking the keys is exactly that.
  * A click on the control that opened it blurs the layer too, and that control's
- * own click is what closes the menu, so that blur is not a dismissal. The blur
- * reaches the window before the press that caused it, so a blur that leaves
- * the window holding the keyboard waits for that press to say where it was.
+ * own click is what closes the menu, so that blur is not a dismissal. The
+ * close reaches the window before the press that caused it, so a close for a
+ * press in the window (`window`) waits for that press to say where it was.
  */
 function LayeredMenu({
   label,
@@ -209,12 +209,14 @@ function LayeredMenu({
   useFocusReturns()
 
   /**
-   * The press in the window that took the keyboard from the layer: whether
-   * one on the opening control is under way, whether the layer blurred during
-   * it, and whether a blur came first and the press it is for has not yet
-   * reached the window (`awaiting`).
+   * The press in the window that took the keyboard from the layer, which can
+   * reach the window before or after main's word of the close it caused:
+   * whether one on the opening control is down, whether the layer closed
+   * during it, whether a press elsewhere came first and its close has not
+   * (`elsewhere`), and whether the close came first and its press has not
+   * (`awaiting`).
    */
-  const press = useRef({ down: false, blurred: false, awaiting: false })
+  const press = useRef({ down: false, blurred: false, elsewhere: false, awaiting: false })
 
   /** The rectangle the layer draws the menu in, measured from the hidden copy. */
   const measure = (): LayerRect | null => {
@@ -232,19 +234,19 @@ function LayeredMenu({
     const opened = layer.open(latest.current.menu, rect, {
       pick: (id) => latest.current.onSelect(id),
       closed: (why) => {
-        if (why === 'blur') {
+        if (why === 'blur' || why === 'window') {
           if (press.current.down) {
             press.current.blurred = true
             return
           }
-          // The keyboard came to the window: a press in it took it, and that
-          // press arrives after the blur it caused (measured in the dev app:
-          // 2ms after). Whether it is on the opening control decides.
-          if (document.hasFocus()) {
+          // A press in the window took the keyboard. If it has not reached the
+          // window yet, whether it is on the opening control decides.
+          if (why === 'window' && !press.current.elsewhere) {
             press.current.awaiting = true
             return
           }
         }
+        press.current.elsewhere = false
         latest.current.onDismiss()
       }
     })
@@ -287,15 +289,16 @@ function LayeredMenu({
       event.target instanceof Node && anchorRef?.current?.contains(event.target) === true
     const down = (event: PointerEvent): void => {
       const { awaiting } = press.current
-      press.current = { down: onAnchor(event), blurred: awaiting, awaiting: false }
-      // The press the blur was waiting for, somewhere other than the control.
-      if (awaiting && !press.current.down) latest.current.onDismiss()
+      const anchor = onAnchor(event)
+      press.current = { down: anchor, blurred: awaiting, elsewhere: !awaiting && !anchor, awaiting: false }
+      // The press the close was waiting for, somewhere other than the control.
+      if (awaiting && !anchor) latest.current.onDismiss()
     }
     // Released off the control that was pressed: no click is coming to close
     // the menu, so a blur the press caused closes it now.
     const up = (event: PointerEvent): void => {
-      const { down: wasDown, blurred } = press.current
-      press.current = { down: false, blurred: false, awaiting: false }
+      const { down: wasDown, blurred, elsewhere } = press.current
+      press.current = { down: false, blurred: false, elsewhere, awaiting: false }
       if (wasDown && blurred && !onAnchor(event)) latest.current.onDismiss()
     }
     // The keyboard came back to the window without a press: a key closes it.

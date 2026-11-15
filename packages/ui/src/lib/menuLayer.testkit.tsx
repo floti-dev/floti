@@ -99,11 +99,11 @@ export function fakeMenuLayer(): FakeMenuLayer {
             className={MENU_FRAME}
           />
         )
-      // A press anywhere but the layer takes the keyboard from it, and its
-      // blur arrives first.
+      // A press anywhere in the window but the layer takes the keyboard from
+      // it, and main's word of it arrives first.
       const elsewhere = (event: PointerEvent): void => {
         if (event.target instanceof Node && container.contains(event.target)) return
-        closed('blur')
+        closed('window')
       }
       document.addEventListener('pointerdown', elsewhere, true)
       draw()

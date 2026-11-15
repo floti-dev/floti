@@ -1,5 +1,6 @@
 import type { BrowserWindow, WebContents, WebContentsView } from 'electron'
 import type {
+  BrowserLayerClosed,
   BrowserLayerContent,
   BrowserLayerEvent,
   BrowserLayerLook,
@@ -147,7 +148,7 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
   }
 
   /** The layer closed of its own accord: hidden, and the window told why. */
-  const closed = (why: 'escape' | 'blur' | 'pick'): void => {
+  const closed = (why: BrowserLayerClosed): void => {
     if (open === null) return
     const { turn } = open
     hide()
@@ -161,9 +162,19 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
     view.setVisible(false)
     const made: Layer = { win, view, ready: false, handingBack: false }
     const contents = view.webContents
-    // A click anywhere else takes the keyboard from a menu, and closes it.
+    /*
+     * A click anywhere else takes the keyboard from a menu, and closes it.
+     * Where the keyboard went is read on the next turn, once Chromium has
+     * placed it: Floti's own window (`window`), whose press arrives there
+     * after this report does, or anywhere else (`blur`).
+     */
     contents.on('blur', () => {
-      if (layer === made && open?.content.kind === 'menu') closed('blur')
+      if (layer !== made || open?.content.kind !== 'menu') return
+      const { turn } = open
+      setImmediate(() => {
+        if (layer !== made || open?.turn !== turn) return
+        closed(!win.isDestroyed() && win.webContents.isFocused() ? 'window' : 'blur')
+      })
     })
     /*
      * The suggestions never hold the keyboard: the bar does. A press on the
