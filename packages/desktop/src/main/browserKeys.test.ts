@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  appCommandBrowserCommand,
   browserKeyCommand,
+  mouseButtonBrowserCommand,
   COMMANDS_FOR_THE_PAGE_ONLY,
   COMMANDS_FOR_THE_WINDOW,
   COMMANDS_THAT_REPEAT,
@@ -140,5 +142,20 @@ describe('Escape', () => {
     expect(COMMANDS_FOR_THE_PAGE_ONLY.has('stop')).toBe(true)
     expect(COMMANDS_FOR_THE_WINDOW.has('stop')).toBe(false)
     expect(COMMANDS_THAT_REPEAT.has('stop')).toBe(false)
+  })
+})
+
+describe('the mouse side buttons', () => {
+  it('maps the window app-command to back and forward, and ignores the rest', () => {
+    expect(appCommandBrowserCommand('browser-backward')).toBe('back')
+    expect(appCommandBrowserCommand('browser-forward')).toBe('forward')
+    expect(appCommandBrowserCommand('browser-home')).toBeNull()
+    expect(appCommandBrowserCommand('media-play')).toBeNull()
+  })
+
+  it('maps the DOM back and forward buttons, and ignores left, middle and right', () => {
+    expect(mouseButtonBrowserCommand(3)).toBe('back')
+    expect(mouseButtonBrowserCommand(4)).toBe('forward')
+    for (const button of [0, 1, 2, 5]) expect(mouseButtonBrowserCommand(button)).toBeNull()
   })
 })

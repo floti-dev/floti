@@ -271,6 +271,7 @@ import type {
 } from "../../../shared/ipc";
 import {
   browserKeyCommand,
+  mouseButtonBrowserCommand,
   COMMANDS_FOR_THE_PAGE_ONLY,
   COMMANDS_THAT_REPEAT,
   type BrowserCommand,
@@ -2921,6 +2922,32 @@ export function App(): JSX.Element {
   }, [browserInFront, frontPage, runBrowserCommand]);
 
   /**
+   * The mouse's back and forward buttons. Windows and Linux deliver them to the
+   * window, and main sends where the pointer was; the page in front goes back or
+   * forward when that is over the Browser tab - its view, strip or bar. A page an
+   * agent drives in the background is never the one in front. macOS has no such
+   * event; the Browser tab's own `onMouseUp` below reads the buttons there.
+   */
+  useEffect(
+    () =>
+      helm.on("browser:pointerCommand", ({ command, at }) => {
+        if (!browserInFront || frontPage === null) return;
+        const tab = document.querySelector("[data-browser-tab]");
+        if (tab === null) return;
+        const box = tab.getBoundingClientRect();
+        if (
+          at.x < box.left ||
+          at.x >= box.right ||
+          at.y < box.top ||
+          at.y >= box.bottom
+        )
+          return;
+        runBrowserCommand(frontPage, command);
+      }),
+    [browserInFront, frontPage, runBrowserCommand],
+  );
+
+  /**
    * Ctrl+W and Ctrl+F4 close the page in front of a plugin's strip, as they
    * close the Browser tab's - while that plugin's tab is in front of the
    * focused pane, with the caret in Helm's chrome or in the page, which
@@ -5346,7 +5373,22 @@ export function App(): JSX.Element {
           frontPage === null ? undefined : browserViews.get(frontPage);
         const holder = findTab(open, paneId(ref));
         return (
-          <div className="flex h-full min-h-0 flex-col">
+          <div
+            data-browser-tab
+            className="flex h-full min-h-0 flex-col"
+            // macOS only: Windows and Linux get the buttons as `app-command`,
+            // and reading them here too would handle one press twice.
+            onMouseUp={
+              isMac()
+                ? (event) => {
+                    const command = mouseButtonBrowserCommand(event.button);
+                    if (command === null || frontPage === null) return;
+                    event.preventDefault();
+                    runBrowserCommand(frontPage, command);
+                  }
+                : undefined
+            }
+          >
             <BrowserPages
               pages={browsers.pages.flatMap((id) => {
                 const page = browserViews.get(id);

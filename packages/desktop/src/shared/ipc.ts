@@ -652,6 +652,17 @@ export interface BrowserCommandEvent {
   command: BrowserCommand
 }
 
+/**
+ * A mouse's back or forward button, pressed anywhere in the window on Windows
+ * or Linux, where the window gets it as an `app-command`. Main knows only where
+ * the pointer was, in the window's content coordinates; whether that is over
+ * the Browser tab, and which page is in front, is the window's to say.
+ */
+export interface BrowserPointerCommandEvent {
+  command: BrowserCommand
+  at: { x: number; y: number }
+}
+
 export interface BrowserBounds {
   id: number
   x: number
@@ -2130,6 +2141,9 @@ export interface IpcEvents {
   /** A Browser tab key pressed inside a page. Keyboard focus is already back in the window when it needs to be. */
   'browser:command': BrowserCommandEvent
 
+  /** The mouse's back or forward button, with where the pointer was. Windows and Linux only; macOS reads the buttons in the window. */
+  'browser:pointerCommand': BrowserPointerCommandEvent
+
   /**
    * Files changed under a root the window is watching - project-relative and
    * forward-slashed, `.git` standing for "the status moved" - or null when
@@ -2442,6 +2456,7 @@ export const EVENT_CHANNELS = Object.keys({
   'browser:closed': true,
   'browser:logged': true,
   'browser:command': true,
+  'browser:pointerCommand': true,
   'files:changed': true,
   'plugins:changed': true,
   'plugins:ui': true,

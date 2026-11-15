@@ -195,3 +195,23 @@ function windowsCommand(press: BrowserKey): BrowserCommand | null {
       return null
   }
 }
+
+/**
+ * What a mouse's side buttons do in the Browser tab. Windows and Linux
+ * deliver them to the window as an `app-command` (`browser-backward`,
+ * `browser-forward`); macOS has no such event, so the window reads a DOM
+ * `mouseup` whose `button` is 3 (back) or 4 (forward). One press arrives one
+ * way only: the DOM path is used on macOS alone.
+ */
+export function appCommandBrowserCommand(appCommand: string): BrowserCommand | null {
+  if (appCommand === 'browser-backward') return 'back'
+  if (appCommand === 'browser-forward') return 'forward'
+  return null
+}
+
+/** A DOM mouse button's command: 3 is the back button, 4 the forward button. */
+export function mouseButtonBrowserCommand(button: number): BrowserCommand | null {
+  if (button === 3) return 'back'
+  if (button === 4) return 'forward'
+  return null
+}

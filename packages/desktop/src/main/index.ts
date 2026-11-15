@@ -6,8 +6,10 @@ import {
   Menu,
   nativeTheme,
   protocol,
+  screen,
   shell
 } from 'electron'
+import { appCommandBrowserCommand } from '../shared/browserKeys'
 import {
   addPluginFolder,
   cleanStaleMcpConfigs,
@@ -707,6 +709,18 @@ function startApp(options: AppOptions = {}): void {
       persistBounds()
     }, 400)
   }
+  // The mouse's back and forward buttons arrive as an `app-command` on Windows
+  // and Linux (macOS has none; the window reads the buttons itself). Main only
+  // says where the pointer was: which page is in front, and whether the pointer
+  // is over the Browser tab, is the window's.
+  win.on('app-command', (_event, appCommand) => {
+    const command = appCommandBrowserCommand(appCommand)
+    if (command === null) return
+    const pointer = screen.getCursorScreenPoint()
+    const content = win?.getContentBounds()
+    if (content === undefined) return
+    emit(win, 'browser:pointerCommand', { command, at: { x: pointer.x - content.x, y: pointer.y - content.y } })
+  })
   win.on('resize', scheduleBoundsPersist)
   win.on('move', scheduleBoundsPersist)
 
