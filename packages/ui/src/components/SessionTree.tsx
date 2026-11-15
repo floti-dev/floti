@@ -61,6 +61,31 @@ export interface TreeSession {
 }
 
 /**
+ * Where the window stands with a host, as its group in the tree says it:
+ *
+ * - `connecting`: nothing heard from it yet, or retrying before it was ever
+ *   live. `note` says why it waits, where there is more to say.
+ * - `loading`: connected, and its sessions not listed yet.
+ * - `live`: connected and listed. The only phase whose group may say it has
+ *   nothing.
+ * - `reconnecting`: its connection dropped after it was live. Its last rows
+ *   stay, dimmed: its sessions still run there.
+ * - `unreachable`: its link could not reach it. `reason` is what went wrong,
+ *   a sentence naming the host without its full stop ("Can’t reach
+ *   build-box"); `lastLine` the last line ssh, the command or floti wrote,
+ *   unedited, where there is one.
+ */
+export type TreeHostPhase =
+  | { kind: 'connecting'; note?: string | undefined }
+  | { kind: 'loading' }
+  | { kind: 'live' }
+  | { kind: 'reconnecting' }
+  | { kind: 'unreachable'; reason: string; lastLine?: string | undefined }
+
+const LIVE: TreeHostPhase = { kind: 'live' }
+const LOADING: TreeHostPhase = { kind: 'loading' }
+
+/**
  * A host on another computer, as the tree lists it under its own header after
  * this PC's group: its own workspaces, projects and running sessions, read from
  * its own bridge. Its rows stay listed while it is not connected, dimmed, and
@@ -71,9 +96,9 @@ export interface TreeHost {
   id: string
   /** What the window calls it. */
   name: string
-  /** Whether the window reaches it now. While it does not, its header says retrying. */
-  connected: boolean
-  /** Its floti against this Helm's, which its header says in place of retrying; null or absent when there is nothing to say. */
+  /** Where the window stands with it, which its header and the top of its group say. */
+  phase: TreeHostPhase
+  /** Its floti against this Helm's, which its header says in place of its phase's word; null or absent when there is nothing to say. */
   floti?: HostFlotiVerdict | null | undefined
   discovery: DiscoveryResult | null
   scanning: boolean
@@ -100,6 +125,8 @@ export interface TreeHostActions {
   onNewWorkspace: (host: string) => void
   /** A host header's Rescan, and Unknown's Try again. */
   onRescan: (host: string) => void
+  /** An unreachable host's Try again: its link tries at once rather than after its wait. */
+  onReconnect?: ((host: string) => void) | undefined
   /** The Add a host line at the end of the list: Settings > Hosts. */
   onAddHost: () => void
   /** A host header's older floti or floti too old: the yes-first update of its floti, in Settings > Hosts. */
@@ -112,6 +139,11 @@ export interface SessionTreeProps {
   discovery: DiscoveryResult | null
   scanning: boolean
   scanError?: string | undefined
+  /**
+   * Whether this PC's host has listed its sessions yet. Until it has, its
+   * group says its sessions are loading. Absent, they are listed.
+   */
+  sessionsListed?: boolean | undefined
   /** The project whose page is in front of the focused pane. */
   selectedPath: string | null
   /**
@@ -333,6 +365,7 @@ export function SessionTree({
   discovery,
   scanning,
   scanError,
+  sessionsListed = true,
   selectedPath,
   pinnedPaths,
   onTogglePin,
@@ -365,32 +398,39 @@ export function SessionTree({
     navRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [reveal])
 
+  const localPhase = sessionsListed ? LIVE : LOADING
   const local = (
-    <HostTree
-      discovery={discovery}
-      scanError={scanError}
-      selectedPath={selectedPath}
-      pinnedPaths={pinnedPaths}
-      onTogglePin={onTogglePin}
-      sessionsByPath={sessionsByPath}
-      elsewhere={elsewhere}
-      onSelect={onSelect}
-      onLaunch={onLaunch}
-      launchingPath={launchingPath}
-      onOpenSession={onOpenSession}
-      onRemoveSessions={onRemoveSessions}
-      peekingRow={peekingRow}
-      query={query}
-      reveal={reveal !== null && (reveal.kind === 'session' || (reveal.host ?? localKey) === localKey) ? reveal : null}
-      empty={
-        <ScanEmpty
-          scanning={scanning}
-          filtering={query !== '' && (discovery?.projects.length ?? 0) > 0}
-          hasRoots={(discovery?.roots.length ?? 0) > 0}
-          onAddRoot={onAddRoot}
-        />
-      }
-    />
+    <>
+      <PhaseLine phase={localPhase} name={localName} />
+      <HostTree
+        discovery={discovery}
+        scanError={scanError}
+        selectedPath={selectedPath}
+        pinnedPaths={pinnedPaths}
+        onTogglePin={onTogglePin}
+        sessionsByPath={sessionsByPath}
+        elsewhere={elsewhere}
+        onSelect={onSelect}
+        onLaunch={onLaunch}
+        launchingPath={launchingPath}
+        onOpenSession={onOpenSession}
+        onRemoveSessions={onRemoveSessions}
+        peekingRow={peekingRow}
+        query={query}
+        reveal={reveal !== null && (reveal.kind === 'session' || (reveal.host ?? localKey) === localKey) ? reveal : null}
+        empty={
+          // Until this PC's host has listed its sessions, the loading line above is all it says.
+          localPhase.kind === 'live' ? (
+            <ScanEmpty
+              scanning={scanning}
+              filtering={query !== '' && (discovery?.projects.length ?? 0) > 0}
+              hasRoots={(discovery?.roots.length ?? 0) > 0}
+              onAddRoot={onAddRoot}
+            />
+          ) : null
+        }
+      />
+    </>
   )
 
   return (
@@ -426,7 +466,7 @@ export function SessionTree({
         ) : (
           <>
             <section data-host-group={localKey} aria-label={localName}>
-              <HostHeader host={localKey} name={localName} remote={false} connected actions={hostActions} />
+              <HostHeader host={localKey} name={localName} remote={false} phase={localPhase} actions={hostActions} />
               {local}
             </section>
             {hosts.map((host) => (
@@ -435,11 +475,21 @@ export function SessionTree({
                   host={host.id}
                   name={host.name}
                   remote
-                  connected={host.connected}
+                  phase={host.phase}
                   floti={host.floti ?? null}
                   actions={hostActions}
                 />
-                <div data-host-rows={host.connected ? 'live' : 'dimmed'} className={cn(!host.connected && 'opacity-50')}>
+                <PhaseLine
+                  phase={host.phase}
+                  name={host.name}
+                  onReconnect={
+                    hostActions.onReconnect === undefined ? undefined : () => hostActions.onReconnect?.(host.id)
+                  }
+                />
+                <div
+                  data-host-rows={hostRowsDimmed(host.phase) ? 'dimmed' : 'live'}
+                  className={cn(hostRowsDimmed(host.phase) && 'opacity-50')}
+                >
                   <HostTree
                     discovery={host.discovery}
                     scanError={host.discovery === null ? undefined : host.scanError}
@@ -522,29 +572,60 @@ export function sessionTreeHostProps(options: {
   return { hosts: options.hosts }
 }
 
+/** Whether a host's rows are what it last said rather than what it says now: dimmed while they wait. */
+function hostRowsDimmed(phase: TreeHostPhase): boolean {
+  return phase.kind === 'connecting' || phase.kind === 'reconnecting' || phase.kind === 'unreachable'
+}
+
+/** Each phase's ring dot, the word its header says after the name, and that word's tone. */
+const PHASE_LOOK: Record<TreeHostPhase['kind'], { dot: string; word: string | null; tone: string }> = {
+  connecting: { dot: 'border-fg-subtle', word: 'connecting', tone: 'text-fg-subtle' },
+  loading: { dot: 'border-success', word: 'loading', tone: 'text-fg-subtle' },
+  live: { dot: 'border-success', word: null, tone: '' },
+  reconnecting: { dot: 'border-warn', word: 'reconnecting', tone: 'text-warn' },
+  unreachable: { dot: 'border-danger', word: 'unreachable', tone: 'text-danger' }
+}
+
+/** What a header's phase word says on hover. */
+function phaseTitle(phase: TreeHostPhase, name: string): string {
+  switch (phase.kind) {
+    case 'connecting':
+      return phase.note === undefined ? `Connecting to ${name}` : `Connecting to ${name}: ${phase.note}`
+    case 'loading':
+      return `Connected to ${name}; reading its sessions`
+    case 'live':
+      return ''
+    case 'reconnecting':
+      return `The connection to ${name} dropped; trying again. Its sessions there run on.`
+    case 'unreachable':
+      return `${phase.reason}.`
+  }
+}
+
 /**
- * A host's header row: a ring dot (the warn colour while it is not reached),
- * its name - a remote host's in mono, as the machine data it is - and
- * "retrying" at the right while the window is not connected to it, or, for a
- * floti that is not this Helm's, what it is (`HostFlotiLabel`). Under the
- * pointer it offers New session, New workspace and Rescan, which its right-click
- * menu offers too.
+ * A host's header row: a ring dot in its phase's tone, its name - a remote
+ * host's in mono, as the machine data it is - and its phase's word at the
+ * right ("connecting", "loading", "reconnecting", "unreachable"; nothing once
+ * live), or, for a floti that is not this Helm's, what it is
+ * (`HostFlotiLabel`). Under the pointer it offers New session, New workspace
+ * and Rescan, which its right-click menu offers too.
  */
 function HostHeader({
   host,
   name,
   remote,
-  connected,
+  phase,
   floti = null,
   actions
 }: {
   host: string
   name: string
   remote: boolean
-  connected: boolean
+  phase: TreeHostPhase
   floti?: HostFlotiVerdict | null
   actions: TreeHostActions
 }): JSX.Element {
+  const look = PHASE_LOOK[phase.kind]
   const [menu, setMenu] = useState<MenuAnchor | null>(null)
   const entries: readonly MenuEntry[] = [
     { kind: 'item', id: 'new-session', label: 'New session', icon: <TerminalIcon width={13} height={13} /> },
@@ -568,13 +649,13 @@ function HostHeader({
   return (
     <div
       data-host-header={host}
-      data-host-state={connected ? 'connected' : 'retrying'}
+      data-host-state={phase.kind}
       onContextMenu={openMenu}
       className="group/host mt-1.5 flex h-6 items-center gap-1.5 rounded-raised pr-1 pl-1.5 text-[11px] font-medium text-fg-muted first:mt-0"
     >
       <span
         aria-hidden
-        className={cn('size-1.5 shrink-0 rounded-full border-[1.5px]', connected ? 'border-success' : 'border-warn')}
+        className={cn('size-1.5 shrink-0 rounded-full border-[1.5px]', look.dot)}
       />
       <span className={cn('min-w-0 truncate', remote && 'font-mono text-[10.5px]')}>{name}</span>
       {floti !== null ? (
@@ -588,9 +669,9 @@ function HostHeader({
           }
         />
       ) : (
-        !connected && (
-          <span data-host-retrying className="shrink-0 font-normal text-warn" title={`Not connected to ${name}; trying again`}>
-            retrying
+        look.word !== null && (
+          <span data-host-phase-word className={cn('shrink-0 font-normal', look.tone)} title={phaseTitle(phase, name)}>
+            {look.word}
           </span>
         )
       )}
@@ -680,9 +761,73 @@ function HeaderAction({
 }
 
 /**
+ * The line at the top of a host's group while it is not live, in the plain
+ * 12px `fg-subtle` of "Scanning…": a moment of waiting, not an empty state.
+ * Connecting, its sessions loading, reconnecting, or that it can't be reached:
+ * why (a sentence naming the host, as every surface words it), the line its
+ * link last wrote, and Try again. Nothing once it is live.
+ */
+function PhaseLine({
+  phase,
+  name,
+  onReconnect
+}: {
+  phase: TreeHostPhase
+  name: string
+  onReconnect?: (() => void) | undefined
+}): JSX.Element | null {
+  switch (phase.kind) {
+    case 'live':
+      return null
+    case 'connecting':
+      return (
+        <p data-host-phase="connecting" className="px-2 py-3 text-center text-[12px] text-fg-subtle">
+          Connecting to {name}&hellip;
+          {phase.note !== undefined && <span className="block">{phase.note}</span>}
+        </p>
+      )
+    case 'loading':
+      return (
+        <p data-host-phase="loading" className="px-2 py-3 text-center text-[12px] text-fg-subtle">
+          Loading sessions&hellip;
+        </p>
+      )
+    case 'reconnecting':
+      return (
+        <p data-host-phase="reconnecting" className="px-2 py-3 text-center text-[12px] text-fg-subtle">
+          Reconnecting to {name}&hellip;
+        </p>
+      )
+    case 'unreachable':
+      return (
+        <div data-host-phase="unreachable" className="flex flex-col items-center gap-1 px-2 py-3 text-center">
+          <p className="text-[12px] text-fg-muted">{`${phase.reason}.`}</p>
+          {phase.lastLine !== undefined && phase.lastLine !== '' && (
+            <p data-host-last-line className="font-mono text-[10.5px] break-all text-fg-subtle select-text">
+              {phase.lastLine}
+            </p>
+          )}
+          {onReconnect !== undefined && (
+            <button
+              type="button"
+              onClick={onReconnect}
+              className="mt-1 flex h-7 items-center gap-1.5 rounded-well border border-border-strong px-2.5 text-[12px] text-fg transition-colors hover:bg-hover"
+            >
+              <RefreshIcon width={12} height={12} />
+              Try again
+            </button>
+          )}
+        </div>
+      )
+  }
+}
+
+/**
  * Under a host on another computer whose scan found nothing: the empty-state
- * pattern, offering New workspace there. While its folders cannot be read it
- * says Unknown and why instead, never that it has none.
+ * pattern, offering New workspace there, and only once it is live - it has
+ * listed its sessions. Before then the phase line above says what it waits
+ * for, and this draws nothing. While its folders cannot be read it says
+ * Unknown and why instead, never that it has none.
  */
 function RemoteEmpty({
   host,
@@ -692,7 +837,8 @@ function RemoteEmpty({
   host: TreeHost
   onNewWorkspace: (host: string) => void
   onRescan: (host: string) => void
-}): JSX.Element {
+}): JSX.Element | null {
+  if (host.phase.kind !== 'live') return null
   if (host.scanError !== undefined) {
     return (
       <EmptyWell
@@ -715,7 +861,7 @@ function RemoteEmpty({
       </EmptyWell>
     )
   }
-  if (host.discovery === null && (host.scanning || host.connected)) {
+  if (host.discovery === null) {
     return <p className="px-2 py-3 text-center text-[12px] text-fg-subtle">Scanning&hellip;</p>
   }
   return (
@@ -773,8 +919,8 @@ function HostTree({
   peekingRow: string | null
   query: string
   reveal: TreeReveal | null
-  /** What it says when it has nothing to list. */
-  empty: JSX.Element
+  /** What it says when it has nothing to list; null while the line above its group says what it waits for. */
+  empty: JSX.Element | null
 }): JSX.Element {
   const [foldedGroups, setFoldedGroups] = useState<ReadonlySet<string>>(new Set())
   const [foldedProjects, setFoldedProjects] = useState<ReadonlySet<string>>(new Set())
