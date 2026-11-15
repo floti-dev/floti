@@ -589,17 +589,6 @@ function startApp(options: AppOptions = {}): void {
     openExternal: (url) => shell.openExternal(url)
   })
 
-  /**
-   * The browser pane's views.
-   *
-   * Settings are read through a function and written through one, for the two
-   * different reasons both shapes exist elsewhere in this file. The reach
-   * posture can change while a view is open, so a captured value would make it
-   * a property of when the tab was made. And the addresses a view has been to
-   * are written by *main*, because main is the side that knows a navigation
-   * succeeded - a redirect, a retry that finally connected and a `window.open`
-   * are all invisible to a window that only saw what it asked for.
-   */
   /*
    * The browser's menu layer: the bar's menus drawn over a live page, in a
    * Floti page of their own, never a browser view - not in the exemption
@@ -616,6 +605,17 @@ function startApp(options: AppOptions = {}): void {
     onEvent: (event) => emit(win, 'browser:layer-event', event)
   })
 
+  /**
+   * The browser pane's views.
+   *
+   * Settings are read through a function and written through one, for the two
+   * different reasons both shapes exist elsewhere in this file. The reach
+   * posture can change while a view is open, so a captured value would make it
+   * a property of when the tab was made. And the addresses a view has been to
+   * are written by *main*, because main is the side that knows a navigation
+   * succeeded - a redirect, a retry that finally connected and a `window.open`
+   * are all invisible to a window that only saw what it asked for.
+   */
   const browsers: BrowserHost = createBrowserHost({
     window: () => win,
     onViewRaised: () => menuLayer.raise(),

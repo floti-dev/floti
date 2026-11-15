@@ -1,7 +1,7 @@
 import { createRef, useRef, type JSX } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { overlayOpen } from '../lib/overlay'
+import { overlayMounted, overlayOpen } from '../lib/overlay'
 import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
 import { placePopup, POPUP_MARGIN } from '../lib/popup'
 import type { LayerMenu, LayerMenuClosed, LayerRect, MenuLayerPort } from '../lib/menuLayer'
@@ -175,8 +175,8 @@ describe('Menu in the menu layer', () => {
     const more = screen.getByRole('button', { name: 'More' })
     more.focus()
     setOpen(true)
-    // The layer has the keys now; the window's document lost them.
-    screen.getByRole('button', { name: 'Elsewhere' }).focus()
+    // The layer has the keys now; nothing in the window's document holds them.
+    act(() => more.blur())
     act(() => opened[0]!.on.closed('escape'))
     expect(onDismiss).toHaveBeenCalledTimes(1)
     setOpen(false)
@@ -251,6 +251,24 @@ describe('Menu in the menu layer', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1)
     fireEvent(window, new Event(PANES_MOVED_EVENT))
     expect(onDismiss).toHaveBeenCalledTimes(2)
+  })
+
+  it('closes when Floti opens a dialog on its own, which is drawn under the layer, and leaves the dialog its focus', () => {
+    const { opened, onDismiss, setOpen } = renderBar()
+    screen.getByRole('button', { name: 'More' }).focus()
+    setOpen(true)
+    // The dialog takes the window's focus as it opens.
+    const dialogButton = screen.getByRole('button', { name: 'Elsewhere' })
+    let release: () => void = () => undefined
+    act(() => {
+      dialogButton.focus()
+      release = overlayMounted()
+    })
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+    setOpen(false)
+    expect(opened[0]!.closed).toBe(1)
+    expect(document.activeElement).toBe(dialogButton)
+    act(() => release())
   })
 
   it('closes the layer when it goes, and sends new rows to the open one rather than opening again', () => {

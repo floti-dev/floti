@@ -32,13 +32,17 @@ export function LayerRoot({ bridge }: { bridge: Pick<HelmBridge, 'on' | 'send'> 
   const { turn, content } = show
   if (content.kind === 'suggestions') {
     return (
-      <BrowserSuggestions
-        id="layer-suggestions"
-        rows={content.rows}
-        highlighted={content.highlighted}
-        onPick={(row) => bridge.send('browser:layer-report', { turn, row })}
-        onHover={(hover) => bridge.send('browser:layer-report', { turn, hover })}
-      />
+      // Hidden from assistive technology: the window keeps the list it reads,
+      // which the address bar's aria-activedescendant points into.
+      <div aria-hidden="true">
+        <BrowserSuggestions
+          id="layer-suggestions"
+          rows={content.rows}
+          highlighted={content.highlighted}
+          onPick={(row) => bridge.send('browser:layer-report', { turn, row })}
+          onHover={(hover) => bridge.send('browser:layer-report', { turn, hover })}
+        />
+      </div>
     )
   }
   return (

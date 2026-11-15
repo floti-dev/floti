@@ -272,7 +272,10 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   above every page whenever one is added or raised (`onViewRaised` in
   `browser.ts`, the fullscreen raise included). A transparent part of a view
   still takes clicks, so its bounds are always the open menu's rectangle, and
-  idle it is hidden. The window measures the menu by drawing it hidden and
+  idle it is hidden. It is shown only once its page has said it is listening
+  (`browser:layer-report` `ready`), so a page still loading, or loading again,
+  never shows an empty view that takes clicks; a layer whose renderer died is
+  replaced by a new one at the next open. The window measures the menu by drawing it hidden and
   inert with the same recipe, places it with `placePopup`
   (`ui/src/lib/popup.ts`: dropped from its control, kept 8px inside the
   window), and sends `browser:layer` with the rectangle in CSS pixels, the
@@ -286,11 +289,16 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   layer) closes it; main hides it, gives the keyboard back to the window if
   the layer had it, and tells the window on `browser:layer-event`, and the
   window returns focus to the control that opened the menu. For a blur, main
-  reads where the keyboard went once Chromium has placed it: the page or
-  another program (`blur`), or Floti's own window (`window`). The window
-  hears that before the press that caused it (measured: 1-2ms), so for
-  `window` it waits for the press, and a press on the opening control is left
-  to that control's click, which closes the menu. A window resize or a pane move closes it
+  reads where the keyboard went once Chromium has placed it: Floti's own
+  window by a press on its page (`window`, a `before-mouse-event` press while
+  the menu was open), or anywhere else (`blur`: the browser's page, another
+  program, or the window by a way that sends its page no press, such as the
+  title bar). The window can hear `window` before or after the press that
+  caused it (measured: within 2ms), so it takes that press when it comes, and
+  a press on the opening control is left to that control's click, which
+  closes the menu. An overlay opening (a dialog Floti opens on its own, drawn
+  in the window under the layer) closes a layered menu or the suggestions,
+  and leaves the dialog its focus. A window resize or a pane move closes it
   from the window, and the Browser tab leaving the screen unmounts the menu,
   which closes it. These menus are no overlay: no still, nothing stands down.
   Dialogs and every other menu keep the still.

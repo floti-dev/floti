@@ -84,6 +84,9 @@ export function fakeMenuLayer(): FakeMenuLayer {
       const closed = (why: LayerMenuClosed): void => {
         if (!record.open) return
         end()
+        // The layer's focus is its own page's, never an element of the window's.
+        const focused = document.activeElement
+        if (focused instanceof HTMLElement && container.contains(focused)) focused.blur()
         on.closed(why)
       }
       const draw = (): void =>

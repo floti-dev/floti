@@ -8,7 +8,7 @@ import {
   type BrowserSearch,
   type BrowserSuggestions
 } from '@helm/core/types'
-import { overlayOpen } from '../lib/overlay'
+import { overlayMounted, overlayOpen } from '../lib/overlay'
 import { fakeMenuLayer, type FakeMenuLayer } from '../lib/menuLayer.testkit'
 import { BrowserPane, type BrowserPaneProps, type BrowserPaneState } from './BrowserPane'
 
@@ -422,6 +422,20 @@ describe('BrowserPane - the address bar', () => {
     expect(layer.blurs).toBe(0)
     expect(screen.queryByRole('listbox')).toBeNull()
     expect(layer.suggestions).toBeNull()
+  })
+
+  it('closes the list when Floti opens a dialog on its own, which is drawn under the layer', async () => {
+    const user = userEvent.setup()
+    renderPane()
+    await user.click(address())
+    await screen.findByRole('listbox')
+    let release: () => void = () => undefined
+    act(() => {
+      release = overlayMounted()
+    })
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(layer.suggestions).toBeNull()
+    act(() => release())
   })
 
   it("highlights the row the layer's pointer is on, without putting it in the bar", async () => {
@@ -978,6 +992,20 @@ describe('BrowserPane - the menus in the menu layer', () => {
     await act(async () => undefined)
     expect(screen.queryByRole('menu', { name: 'Browser' })).toBeNull()
     expect(document.activeElement).toBe(more)
+  })
+
+  it('closes More when Floti opens a dialog on its own', async () => {
+    const user = userEvent.setup()
+    renderPane()
+    await openMenu(user)
+    let release: () => void = () => undefined
+    act(() => {
+      release = overlayMounted()
+    })
+    await act(async () => undefined)
+    expect(screen.queryByRole('menu', { name: 'Browser' })).toBeNull()
+    expect(layer.menus[0]!.open).toBe(false)
+    act(() => release())
   })
 
   it('opens Share in the layer too', async () => {

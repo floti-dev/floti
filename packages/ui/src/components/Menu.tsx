@@ -2,6 +2,7 @@ import type { CSSProperties, JSX, KeyboardEvent, ReactNode, RefObject } from 're
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '../lib/cn'
+import { overlayOpen, subscribeOverlay } from '../lib/overlay'
 import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
 import { placePopup, usePopup, type PopupAnchor } from '../lib/popup'
 import { CheckIcon } from './icons'
@@ -148,13 +149,40 @@ function PopupMenu({
   )
 }
 
-/** Focus goes back to whatever had it when the menu opened, once it closes. */
-function useFocusReturns(): void {
+/**
+ * Focus goes back to whatever had it when the menu opened, once it closes.
+ * `unlessMoved`: only if nothing else in the window has taken it since - a
+ * menu in the layer leaves the window's focus where it was, and a dialog that
+ * opened over it keeps the focus it took.
+ */
+function useFocusReturns(unlessMoved = false): void {
   useEffect(() => {
     const before = document.activeElement
     return () => {
-      if (before instanceof HTMLElement && before.isConnected) before.focus({ preventScroll: true })
+      if (!(before instanceof HTMLElement) || !before.isConnected) return
+      const now = document.activeElement
+      if (unlessMoved && now !== null && now !== document.body && now !== before) return
+      before.focus({ preventScroll: true })
     }
+  }, [unlessMoved])
+}
+
+/**
+ * Something on the menu layer goes when an overlay opens: a dialog Floti
+ * opens on its own is drawn in the window, under the layer, so whatever the
+ * layer shows would sit on top of it.
+ */
+export function useClosedByOverlay(close: () => void): void {
+  const latest = useRef(close)
+  useLayoutEffect(() => {
+    latest.current = close
+  })
+  useEffect(() => {
+    const check = (): void => {
+      if (overlayOpen()) latest.current()
+    }
+    check()
+    return subscribeOverlay(check)
   }, [])
 }
 
@@ -178,6 +206,7 @@ export function layerEntries(entries: readonly MenuEntry[]): LayerMenuEntry[] {
  * Dismissed when the layer says it closed (a pick, Escape, or a click anywhere
  * else taking the keyboard from it), when the window changes size, or when the
  * panes move: a menu left floating over a layout that moved points at nothing.
+ * And when an overlay opens, which is drawn under the layer.
  * Not when the window loses focus - the layer taking the keys is exactly that.
  * A click on the control that opened it blurs the layer too, and that control's
  * own click is what closes the menu, so that blur is not a dismissal. The
@@ -206,7 +235,8 @@ function LayeredMenu({
   useLayoutEffect(() => {
     latest.current = { menu, at, onSelect, onDismiss }
   })
-  useFocusReturns()
+  useFocusReturns(true)
+  useClosedByOverlay(onDismiss)
 
   /**
    * The press in the window that took the keyboard from the layer, which can

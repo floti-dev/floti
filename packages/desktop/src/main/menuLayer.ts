@@ -105,8 +105,13 @@ export function layerBounds(rect: BrowserLayerRect, zoom: number, area: Area): B
 interface Layer {
   win: BrowserWindow
   view: WebContentsView
-  /** Whether the page has said it is listening. Until then what it should draw waits here. */
+  /**
+   * Whether the page has said it is listening. Until then the layer is never
+   * shown, and what it should draw waits here.
+   */
   ready: boolean
+  /** Its renderer died. The next open makes a new layer in its place. */
+  gone: boolean
   /**
    * A press on the suggestions took the keyboard and it is on its way back
    * to the window: from the layer's `focus` until the window's.
@@ -119,6 +124,10 @@ interface Open {
   content: BrowserLayerContent
   look: BrowserLayerLook
   zoom: number
+  /** A menu has been given the keyboard, once, as it was first shown. */
+  focused: boolean
+  /** A mouse press reached the window's own page while this was open. */
+  windowPressed: boolean
 }
 
 export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
@@ -128,13 +137,24 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
   const alive = (candidate: Layer | null): candidate is Layer =>
     candidate !== null && !candidate.win.isDestroyed() && !candidate.view.webContents.isDestroyed()
 
-  const show = (): void => {
+  /**
+   * Draws what is open and shows it - only once the page is listening, so a
+   * layer whose page has not loaded, or is loading again, never shows an
+   * empty view that takes clicks. A menu takes the keyboard as it is first
+   * shown, so its own arrows, type-ahead and Escape work.
+   */
+  const reveal = (): void => {
     if (!alive(layer) || !layer.ready || open === null) return
     layer.view.webContents.send('browser:layer-show', {
       turn: open.turn,
       content: open.content,
       look: open.look
     })
+    layer.view.setVisible(true)
+    if (open.content.kind === 'menu' && !open.focused) {
+      open.focused = true
+      layer.view.webContents.focus()
+    }
   }
 
   /** Hides the layer. The keyboard goes back to the window if the layer had it, and nowhere if it had already gone. */
@@ -160,21 +180,27 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
     // Clear where the menu does not draw: the corners of its rounded edge.
     view.setBackgroundColor('#00000000')
     view.setVisible(false)
-    const made: Layer = { win, view, ready: false, handingBack: false }
+    const made: Layer = { win, view, ready: false, gone: false, handingBack: false }
     const contents = view.webContents
     /*
      * A click anywhere else takes the keyboard from a menu, and closes it.
      * Where the keyboard went is read on the next turn, once Chromium has
-     * placed it: Floti's own window (`window`), whose press arrives there
-     * after this report does, or anywhere else (`blur`).
+     * placed it: to Floti's own window by a press on its page (`window`), which
+     * reaches the page after this report does, or anywhere else (`blur`) -
+     * the browser's page, another program, or the window by a way that sends
+     * its page no press, such as the title bar, which nothing would follow.
      */
     contents.on('blur', () => {
       if (layer !== made || open?.content.kind !== 'menu') return
       const { turn } = open
       setImmediate(() => {
         if (layer !== made || open?.turn !== turn) return
-        closed(!win.isDestroyed() && win.webContents.isFocused() ? 'window' : 'blur')
+        const toWindow = !win.isDestroyed() && win.webContents.isFocused() && open.windowPressed
+        closed(toWindow ? 'window' : 'blur')
       })
+    })
+    win.webContents.on('before-mouse-event', (_event: unknown, mouse: { type: string }) => {
+      if (layer === made && open !== null && mouse.type === 'mouseDown') open.windowPressed = true
     })
     /*
      * The suggestions never hold the keyboard: the bar does. A press on the
@@ -198,12 +224,17 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
     win.webContents.on('focus', () => {
       made.handingBack = false
     })
-    // A page that loads again (a reload in development) or dies is not listening.
+    // A page that loads again (a reload in development) is not listening until it says so.
     contents.on('did-start-navigation', (details: { isMainFrame: boolean; isSameDocument: boolean }) => {
-      if (details.isMainFrame && !details.isSameDocument) made.ready = false
+      if (!details.isMainFrame || details.isSameDocument) return
+      made.ready = false
+      view.setVisible(false)
     })
+    // A page whose renderer died never listens again: the next open makes a new layer.
     contents.on('render-process-gone', () => {
       made.ready = false
+      made.gone = true
+      view.setVisible(false)
       if (layer === made) closed('blur')
     })
     win.once('closed', () => {
@@ -218,12 +249,15 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
     return made
   }
 
-  /** The layer of the window there is now, made if it has none. */
+  /** The layer of the window there is now, made if it has none or its page died. */
   const ensure = (): Layer | null => {
     const win = options.window()
     if (win === null || win.isDestroyed()) return null
-    if (alive(layer) && layer.win === win) return layer
-    if (layer !== null && !layer.view.webContents.isDestroyed()) layer.view.webContents.close()
+    if (alive(layer) && layer.win === win && !layer.gone) return layer
+    if (layer !== null) {
+      if (!layer.win.isDestroyed()) layer.win.contentView.removeChildView(layer.view)
+      if (!layer.view.webContents.isDestroyed()) layer.view.webContents.close()
+    }
     layer = make(win)
     return layer
   }
@@ -252,23 +286,27 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
         if (open?.turn === turn) hide()
         return
       }
-      const fresh = open?.turn !== turn
-      open = { turn, content, look, zoom }
+      const same = open?.turn === turn
+      open = {
+        turn,
+        content,
+        look,
+        zoom,
+        focused: same && open !== null && open.focused,
+        windowPressed: same && open !== null && open.windowPressed
+      }
       // The page draws at the window's scale, so the menu is the size the window measured.
       view.webContents.setZoomFactor(zoom)
-      show()
       win.contentView.addChildView(view)
       view.setBounds(bounds)
-      view.setVisible(true)
-      // A menu takes the keys, so its own arrows, type-ahead and Escape work.
-      if (fresh && content.kind === 'menu') view.webContents.focus()
+      reveal()
     },
 
     report(payload) {
       if ('ready' in payload) {
-        if (layer === null) return
+        if (layer === null || layer.gone) return
         layer.ready = true
-        show()
+        reveal()
         return
       }
       if (open === null || payload.turn !== open.turn) return

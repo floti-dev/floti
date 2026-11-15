@@ -197,18 +197,35 @@ describe('the menu layer - above every page', () => {
 })
 
 describe('the menu layer - opening', () => {
-  it('draws the menu in its rectangle, at the window zoom, takes the keys, and holds what to draw until its page listens', () => {
+  it('draws the menu in its rectangle at the window zoom, and shows it and gives it the keys only once its page listens', () => {
     const r = rig()
     r.window.webContents.zoomFactor = 1.25
     r.layer.request(open(1))
-    expect(shown(r)).toEqual([])
     expect(r.view().getBounds()).toEqual({ x: 750, y: 100, width: 275, height: 375 })
-    expect(r.view().visible).toBe(true)
     expect(r.contents().zoomFactor).toBe(1.25)
-    expect(r.contents().focused).toBe(1)
+    // Not listening yet: nothing is shown that would take a click.
+    expect(shown(r)).toEqual([])
+    expect(r.view().visible).toBe(false)
+    expect(r.contents().focused).toBe(0)
 
     r.layer.report({ ready: true })
     expect(shown(r)).toEqual([{ turn: 1, content: MENU, look: LOOK }])
+    expect(r.view().visible).toBe(true)
+    expect(r.contents().focused).toBe(1)
+  })
+
+  it('hides while its page loads again, and comes back when it listens', () => {
+    const r = rig()
+    r.layer.raise()
+    r.layer.report({ ready: true })
+    r.layer.request(open(1))
+    r.contents().startNavigation('http://localhost:5173/layer.html')
+    expect(r.view().visible).toBe(false)
+    r.layer.request(open(1, { ...RECT, x: 500 }))
+    expect(r.view().visible).toBe(false)
+    r.layer.report({ ready: true })
+    expect(r.view().visible).toBe(true)
+    expect(r.view().getBounds().x).toBe(500)
   })
 
   it('takes new content or a new place for the open menu without taking the keys again', () => {
@@ -284,13 +301,25 @@ describe('the menu layer - closing', () => {
     expect(r.window.webContents.focused).toBe(0)
   })
 
-  it("says a click in Floti's own window took the keys, so the window waits for that press", async () => {
+  it("says a press on Floti's own window took the keys, so the window waits for that press", async () => {
     const r = opened()
     r.contents().hasFocus = false
     r.window.webContents.hasFocus = true
     r.contents().emit('blur')
+    r.window.webContents.emit('before-mouse-event', {}, { type: 'mouseDown', x: 150, y: 700 })
     await nextTurn()
     expect(r.events).toEqual([{ turn: 1, closed: 'window' }])
+  })
+
+  it('closes at once when the window took the keys with no press on its page, such as the title bar', async () => {
+    const r = opened()
+    r.contents().hasFocus = false
+    r.window.webContents.hasFocus = true
+    // A press before the menu opened, or a move, is not this one.
+    r.window.webContents.emit('before-mouse-event', {}, { type: 'mouseMove', x: 150, y: 700 })
+    r.contents().emit('blur')
+    await nextTurn()
+    expect(r.events).toEqual([{ turn: 1, closed: 'blur' }])
   })
 
   it('reports no blur for a menu the window closed before Chromium placed the keyboard', async () => {
@@ -323,15 +352,30 @@ describe('the menu layer - closing', () => {
     expect(r.view().visible).toBe(true)
   })
 
-  it('closes when its page dies, and holds what to draw until the page listens again', () => {
+  it('closes when its page dies, and draws the next menu in a new layer once that one listens', () => {
     const r = opened()
+    const dead = r.view()
     r.contents().emit('render-process-gone', {}, { reason: 'crashed' })
     expect(r.events).toEqual([{ turn: 1, closed: 'blur' }])
-    const before = shown(r).length
-    r.layer.request(open(2))
-    expect(shown(r)).toHaveLength(before)
+    expect(dead.visible).toBe(false)
+    // A ready from the dead page is nothing.
     r.layer.report({ ready: true })
-    expect(shown(r)).toHaveLength(before + 1)
+
+    r.layer.request(open(2))
+    const fresh = r.view()
+    expect(fresh).not.toBe(dead)
+    expect(r.loaded).toBe(2)
+    expect(dead.webContents!.isDestroyed()).toBe(true)
+    expect(r.window.children).not.toContain(dead)
+    expect(r.window.children.at(-1)).toBe(fresh)
+    // Never shown, focused or clickable until the new page listens.
+    expect(fresh.visible).toBe(false)
+    expect(r.contents().focused).toBe(0)
+    r.layer.report({ ready: true })
+    expect(fresh.visible).toBe(true)
+    expect(r.contents().focused).toBe(1)
+    expect(shown(r)).toEqual([{ turn: 2, content: MENU, look: LOOK }])
+    expect(r.layer.isLayer(fresh.webContents!.id)).toBe(true)
   })
 
   it('knows its own page from any other', () => {
@@ -415,6 +459,7 @@ describe('the menu layer - the address suggestions', () => {
   it('takes no blur report for a menu, which closes on its own blur', async () => {
     const r = rig()
     r.layer.raise()
+    r.layer.report({ ready: true })
     r.layer.request(open(1))
     r.layer.request({ blurred: { turn: 1 } })
     expect(r.view().visible).toBe(true)

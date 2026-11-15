@@ -3,6 +3,7 @@ import type { BrowserSuggestion } from '@helm/core/types'
 import type { LayerRect, LayerSuggestions, MenuLayerPort, SuggestionsLayerHandle } from '../lib/menuLayer'
 import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
 import { BrowserSuggestions } from './BrowserSuggestions'
+import { useClosedByOverlay } from './Menu'
 
 export interface BrowserSuggestionsLayerProps {
   layer: MenuLayerPort
@@ -30,7 +31,8 @@ export interface BrowserSuggestionsLayerProps {
  * reader follows the keys' highlight through rows with the ids it always had.
  *
  * Opened as it mounts and closed as it unmounts; new rows, a new highlight,
- * or the list moving (its size, the window's, the panes) send it again. The
+ * or the list moving (its size, the window's, the panes) send it again. An
+ * overlay opening closes it (`onClosed`), as it is drawn under the layer. The
  * bar keeps the keyboard throughout.
  */
 export function BrowserSuggestionsLayer({
@@ -50,6 +52,8 @@ export function BrowserSuggestionsLayer({
   useLayoutEffect(() => {
     latest.current = { rows, highlighted, onPick, onHover, onClosed }
   })
+  // A dialog Floti opens on its own is drawn under the layer.
+  useClosedByOverlay(onClosed)
 
   const content = (): LayerSuggestions => ({
     kind: 'suggestions',

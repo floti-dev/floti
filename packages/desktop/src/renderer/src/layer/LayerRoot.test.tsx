@@ -153,12 +153,14 @@ describe('LayerRoot - the address suggestions', () => {
     look: SHOW.look
   }
 
-  it('draws the rows with the highlight it is sent, and never takes the keyboard', () => {
+  it('draws the rows with the highlight it is sent, hidden from assistive technology, and never takes the keyboard', () => {
     const main = fakeMain()
     const before = document.activeElement
     render(<LayerRoot bridge={main.bridge} />)
     main.show(SUGGESTIONS)
-    const options = screen.getAllByRole('option')
+    // The window's copy of the list is the one announced.
+    expect(screen.queryAllByRole('option')).toEqual([])
+    const options = screen.getAllByRole('option', { hidden: true })
     expect(options.map((option) => option.getAttribute('aria-selected'))).toEqual(['false', 'true'])
     expect(document.activeElement).toBe(before)
   })
@@ -167,7 +169,7 @@ describe('LayerRoot - the address suggestions', () => {
     const main = fakeMain()
     render(<LayerRoot bridge={main.bridge} />)
     main.show(SUGGESTIONS)
-    const [search] = screen.getAllByRole('option')
+    const [search] = screen.getAllByRole('option', { hidden: true })
     fireEvent.mouseMove(search!)
     fireEvent.mouseDown(search!, { button: 0 })
     expect(main.reports.slice(1)).toEqual([
