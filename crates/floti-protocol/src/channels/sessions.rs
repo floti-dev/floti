@@ -132,8 +132,7 @@ request_channel! {
 
 request_channel! {
     /// The sessions the host is running now, then each stopped child a
-    /// running parent kept (`kept`), which every client's family view of the
-    /// parent draws.
+    /// running parent kept (`kept`).
     SessionList = "session:list", () => Vec<SessionRecord>
 }
 
@@ -154,10 +153,9 @@ request_channel! {
 
 request_channel! {
     /// Stops keeping stopped children their parents kept: each named
-    /// session that is a kept child stops being kept, so it leaves every
-    /// client's family view. It ends nothing and deletes
-    /// nothing: the child stays in History, and its parent can still resume
-    /// it. A session named that is not a kept child is left as it is.
+    /// session that is a kept child stops being kept. It ends nothing and
+    /// deletes nothing: the child stays in History, and its parent can still
+    /// resume it. A session named that is not a kept child is left as it is.
     /// Answers how many it took out. Added in 2.2.
     SessionRemove = "session:remove", RemoveSessionsRequest => RemovedSessions
 }

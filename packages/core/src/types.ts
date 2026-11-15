@@ -359,11 +359,11 @@ export interface SessionRecord {
    */
   endedBy?: EndedBy
   /**
-   * Whether this child, stopped, stays in its parent's family view: its parent
-   * stopped it with keep, or a person stopped it. Any other ended child leaves
-   * it (`inFamilyTree`); the Sessions tree draws no exited session
-   * (`inSessionTree`). Cleared when it is resumed. Absent reads false, as it
-   * does from a host before protocol 2.2.
+   * Whether the host keeps this stopped child for its parent to resume: its
+   * parent stopped it with keep, or a person stopped it. No view reads it: a
+   * child that has exited leaves the Sessions tree (`inSessionTree`) and its
+   * parent's family view (`inFamilyTree`) either way. Cleared when it is
+   * resumed. Absent reads false, as it does from a host before protocol 2.2.
    */
   kept?: boolean
   /**

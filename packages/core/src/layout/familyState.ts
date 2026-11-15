@@ -67,7 +67,7 @@ export type FamilyShape =
   | 'screen'
   /** A running child as a one-line header. */
   | 'header'
-  /** An ended child as a one-line header saying how and when, with Close. */
+  /** An ended (lost) child as a one-line header saying how and when. */
   | 'ended'
 
 export interface FamilyEntry<T> {

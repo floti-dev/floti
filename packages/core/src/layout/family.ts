@@ -23,26 +23,20 @@ export interface FamilyMember {
   command?: string | null
   /** The exit code of a session that ended, or absent / null where none was observed. */
   exitCode?: number | null
-  /** Whether this child, stopped, stays in its running parent's family view: the host says so (`kept`). Absent reads false. */
+  /** Whether the host keeps this stopped child for its parent to resume by name (`kept`). No view reads it. Absent reads false. */
   kept?: boolean
 }
 
 /**
- * Whether `session` is drawn in its parent's family view, among the sessions
- * `byId` holds. A child that has exited is drawn only while it is kept and its
- * parent is listed and running: its parent stopped it with keep, or a person
- * stopped it, and nobody has resumed it since. Any other child that has exited
- * (one that exited by itself, one its parent stopped without keep, one that
- * ended with its parent) leaves at once; it is still in History and its parent
- * still hears how it ended. A running session, a lost one and every session a
- * person started are drawn as before. The Sessions tree has its own rule
- * (`inSessionTree`).
+ * Whether `session` is drawn in its parent's family view. A child that has
+ * exited, by itself or stopped, leaves it at once, kept or not: it is still in
+ * History, its parent still hears how it ended and can resume it by name, and
+ * it comes back as a running child when it does. A running child, a lost one
+ * and every session a person started are drawn. The Sessions tree has its own
+ * rule (`inSessionTree`).
  */
-export function inFamilyTree<T extends FamilyMember>(byId: ReadonlyMap<number, T>, session: T): boolean {
-  if (!isChild(session) || session.status !== 'exited') return true
-  if (session.kept !== true) return false
-  const parent = byId.get(session.parentId as number)
-  return parent !== undefined && parent.id !== session.id && parent.status === 'running'
+export function inFamilyTree(session: FamilyMember): boolean {
+  return !isChild(session) || session.status !== 'exited'
 }
 
 /**

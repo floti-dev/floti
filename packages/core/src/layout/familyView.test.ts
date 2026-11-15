@@ -61,7 +61,7 @@ const running = (id: number, parentId?: number): FamilyMember => ({
   status: 'running',
   ...(parentId === undefined ? {} : { parentId, parentName: 'lead' })
 })
-/** A stopped child its parent or a person kept, which stays under its running parent. */
+/** A stopped child its parent or a person kept, which the host still lists for its parent. */
 const ended = (id: number, parentId: number): FamilyMember => ({
   id,
   status: 'exited',
@@ -116,15 +116,15 @@ describe('a child shown in its parent’s tab is open here', () => {
     expect(held.get(1)?.map((child) => child.id)).toEqual([2, 3, 4, 5])
   })
 
-  it('holds an ended child too, until its family view closes it, and a child with a tab of its own is not held', () => {
+  it('holds a lost child, and no child with a tab of its own', () => {
     const withTab = openTab(layout, session(3))
-    const held = familiesHere(withTab, [...FAMILY, ended(6, 1)])
+    const held = familiesHere(withTab, [...FAMILY, { ...running(6, 1), status: 'lost' }])
     expect(held.get(1)?.map((child) => child.id)).toEqual([2, 4, 6])
   })
 
-  it('holds no ended child that is not kept: it left the family view when it ended', () => {
+  it('holds no child that has exited, kept or not: it left the family view when it ended', () => {
     const { kept: _kept, ...unkept } = ended(7, 1)
-    const held = familiesHere(layout, [...FAMILY, { ...ended(6, 1), kept: false }, unkept])
+    const held = familiesHere(layout, [...FAMILY, ended(6, 1), unkept])
     expect(held.get(1)?.map((child) => child.id)).toEqual([2, 3, 4])
   })
 

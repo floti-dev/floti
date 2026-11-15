@@ -1089,10 +1089,9 @@ export function sessionTabIds(layout: PaneLayout, host: string = LOCAL_HOST_KEY)
  * no tab of its own whose nearest running ancestor with a tab here is that
  * session (`tabHolder`), in the order the sessions are given.
  *
- * An ended child is held only while it stays in the tree (`inFamilyTree`: its
- * parent or a person stopped it and kept it), and then until it is closed here.
- * Whether the view fits the pane is no part of it: a child is the tab's whether
- * the pane has room to draw it or not.
+ * A child that has exited is not held (`inFamilyTree`), kept or not; a lost
+ * one is. Whether the view fits the pane is no part of it: a child is the
+ * tab's whether the pane has room to draw it or not.
  */
 export function familiesHere<T extends FamilyMember>(
   layout: PaneLayout,
@@ -1103,7 +1102,7 @@ export function familiesHere<T extends FamilyMember>(
   const byId = new Map(sessions.map((session) => [session.id, session]))
   const held = new Map<number, T[]>()
   for (const session of sessions) {
-    if (!isChild(session) || tabbed.has(session.id) || !inFamilyTree(byId, session)) continue
+    if (!isChild(session) || tabbed.has(session.id) || !inFamilyTree(session)) continue
     const holder = tabHolder(byId, session.id, tabbed)
     if (holder === null) continue
     const family = held.get(holder)

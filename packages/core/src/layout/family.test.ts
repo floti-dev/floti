@@ -133,9 +133,6 @@ describe('inSessionTree', () => {
 })
 
 describe('inFamilyTree', () => {
-  const byId = (sessions: readonly Listed[]): Map<number, Listed> =>
-    new Map(sessions.map((session) => [session.id, session]))
-
   it('keeps every session a person started and every running or lost child', () => {
     const sessions = [
       running(1, 'a', { status: 'exited' }),
@@ -143,21 +140,13 @@ describe('inFamilyTree', () => {
       child(3, 'a', 2, 'lead'),
       child(4, 'a', 2, 'lead', { status: 'lost' })
     ]
-    expect(sessions.map((session) => inFamilyTree(byId(sessions), session))).toEqual([true, true, true, true])
+    expect(sessions.map((session) => inFamilyTree(session))).toEqual([true, true, true, true])
   })
 
-  it('keeps an exited child only while it is kept and its parent is listed and running', () => {
-    const lead = running(1, 'a')
-    const kept = child(2, 'a', 1, 'lead', { status: 'exited', kept: true })
-    const dropped = child(3, 'a', 1, 'lead', { status: 'exited' })
-    const orphan = child(4, 'a', 9, 'gone', { status: 'exited', kept: true })
-    const looped = child(5, 'a', 5, 'itself', { status: 'exited', kept: true })
-    const all = byId([lead, kept, dropped, orphan, looped])
-    expect(inFamilyTree(all, kept)).toBe(true)
-    expect(inFamilyTree(all, dropped)).toBe(false)
-    expect(inFamilyTree(all, orphan)).toBe(false)
-    expect(inFamilyTree(all, looped)).toBe(false)
-    expect(inFamilyTree(byId([{ ...lead, status: 'exited' }, kept]), kept)).toBe(false)
+  it('keeps no child that has exited, kept or not, a command child included', () => {
+    expect(inFamilyTree(child(2, 'a', 1, 'lead', { status: 'exited', kept: true }))).toBe(false)
+    expect(inFamilyTree(child(3, 'a', 1, 'lead', { status: 'exited' }))).toBe(false)
+    expect(inFamilyTree(child(4, 'a', 1, 'lead', { status: 'exited', command: 'pnpm test', exitCode: 0 }))).toBe(false)
   })
 })
 

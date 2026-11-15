@@ -198,16 +198,14 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   pane on screen when it ends keeps its row until the user moves away from it,
   so the end is seen; its tab stays until it is closed. A lost session (its
   host died or restarted under it) keeps its row as the restore offer. Every
-  ended session is still in History, and a kept child is still its parent's to
-  resume by name, which gives it a row again. Each device applies the rule to
-  the host's rows, because which tab is in front is the device's own.
-- A child that has exited is drawn in its parent's family view only while it
-  is kept and its parent runs (`inFamilyTree`): its parent stopped it with
-  `keep`, or a person stopped it. Any other ended child (one that exited by
-  itself, one its parent stopped without `keep`, one that ended with its
-  parent) leaves it at once, and its parent still hears how it ended. When a
-  parent ends, its kept children leave with it, and a running child started
-  to outlive it stays as a top-level row naming it.
+  ended session is still in History, and a stopped child is still its parent's
+  to resume by name, which gives it a row again. Each device applies the rule
+  to the host's rows, because which tab is in front is the device's own.
+- A child that has exited, by itself or stopped, kept or not, leaves its
+  parent's family view and the parent's crumb at once (`inFamilyTree`), and
+  its parent still hears how it ended. A lost child stays there as a header
+  with no Close. When a parent ends, a running child started to outlive it
+  stays as a top-level row naming it.
 
 ## Live sessions
 
