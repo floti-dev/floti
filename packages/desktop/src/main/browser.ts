@@ -259,6 +259,20 @@ interface View {
    * which one; once a page has loaded, the page's own address is the truth.
    */
   refused: string | null
+  /**
+   * The address this tab was asked to load - from the bar, or by an agent's
+   * open or navigate - from the moment it was asked until the navigation
+   * commits, fails, is stopped or is superseded; null otherwise. What the bar
+   * shows meanwhile, because `getURL()` is the last *committed* address: `''`
+   * on a new tab and the old page's on an open one until the response arrives
+   * (measured on Electron 43.3.0).
+   *
+   * Only `load` sets it. A navigation a page started itself - a link, a form,
+   * a script setting `location` - never does, and one that starts while this
+   * is set clears it: the bar does not show an address a page chose before the
+   * page is actually there, which is Chrome's rule against spoofing.
+   */
+  pending: string | null
   /** The address a retry is trying to reach, and when it gives up. */
   retry: { url: string; until: number; step: number; timer: NodeJS.Timeout | null } | null
   find: { query: string; matches: number; active: number } | null
@@ -311,6 +325,8 @@ export interface BrowserHost {
   back(id: number): BrowserState | null
   forward(id: number): BrowserState | null
   reload(id: number, hard: boolean): BrowserState | null
+  /** Stop the load in progress, and any retry: the bar goes back to the committed address. */
+  stop(id: number): BrowserState | null
   close(id: number): void
   states(id?: number): BrowserState[]
   evaluate(id: number, source: string): Promise<{ ok: boolean; value: string; error: string | null }>
@@ -703,6 +719,20 @@ function hostOf(url: string): string {
   }
 }
 
+/**
+ * Whether two spellings name the same address. An agent may ask for
+ * `http://localhost:3000` and Chromium starts the navigation at
+ * `http://localhost:3000/`; both parse to one URL.
+ */
+function sameAddress(a: string, b: string): boolean {
+  if (a === b) return true
+  try {
+    return new URL(a).href === new URL(b).href
+  } catch {
+    return false
+  }
+}
+
 /** `isLoopbackUrl`'s question asked of a bare hostname, which is what a
  * certificate request carries. One list, in core, either way. */
 function isLoopbackHostname(hostname: string): boolean {
@@ -815,6 +845,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       id: entry.id,
       url,
       refusedUrl,
+      pendingUrl: entry.pending,
       title: alive && wc.getTitle() !== '' ? wc.getTitle() : host !== '' ? host : (refusedUrl ?? ''),
       host,
       canGoBack: alive && wc.navigationHistory.canGoBack(),
@@ -956,6 +987,9 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     stopRetry(entry)
     entry.problem = null
     entry.refused = null
+    // Set before the call: Electron starts the navigation inside it, and the
+    // `did-start-navigation` that raises is checked against this.
+    entry.pending = url
     void wc.loadURL(url).catch(() => undefined)
     return announce(entry)
   }
@@ -1114,6 +1148,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       console: [],
       problem: null,
       refused: null,
+      pending: null,
       retry: null,
       find: null,
       findRequest: null,
@@ -1153,7 +1188,42 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
 
     wc.on('page-title-updated', () => announce(entry))
     wc.on('did-start-loading', () => announce(entry))
-    wc.on('did-stop-loading', () => announce(entry))
+    // A load can end with nothing committed and no failure reported - a 204,
+    // a response turned into a download, `stop()` - and then only this says
+    // so (measured on 43.3.0). Whatever was pending is not coming.
+    wc.on('did-stop-loading', () => {
+      if (!wc.isLoading()) entry.pending = null
+      announce(entry)
+    })
+
+    /*
+     * Which navigation the pending address belongs to.
+     *
+     * `initiator` is the frame that started a navigation, and is absent for
+     * one the browser started: `loadURL`, back and forward (measured on
+     * 43.3.0: undefined for `loadURL`, the page's frame for a link click and
+     * for `location =`). So a start with no initiator at the pending address is
+     * the load `load()` asked for - adopted at Chromium's spelling of it - and
+     * any other main-frame start replaces it: a link, a form, a script, or the
+     * browser going somewhere else.
+     */
+    wc.on('did-start-navigation', (details) => {
+      if (entry.pending === null || !details.isMainFrame || details.isSameDocument) return
+      if (details.initiator == null && sameAddress(details.url, entry.pending)) {
+        entry.pending = details.url
+        return
+      }
+      entry.pending = null
+      announce(entry)
+    })
+    // A redirect of the pending load is where it is going now. A page's own
+    // navigation cleared the pending address when it started, so it never
+    // gets here.
+    wc.on('did-redirect-navigation', (details) => {
+      if (entry.pending === null || !details.isMainFrame || details.isSameDocument) return
+      entry.pending = details.url
+      announce(entry)
+    })
 
     /*
      * A navigation that **arrived somewhere**.
@@ -1172,6 +1242,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
      * had only asked "did it connect in the end" would have passed.
      */
     wc.on('did-navigate', (_event, url, httpResponseCode) => {
+      entry.pending = null
       if (!grounded) {
         grounded = true
         view.setBackgroundColor('#ffffff')
@@ -1188,15 +1259,22 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       announce(entry)
     })
     wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
-      if (isMainFrame) remember(entry, url)
+      if (isMainFrame) {
+        entry.pending = null
+        remember(entry, url)
+      }
       announce(entry)
     })
 
     wc.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       if (!isMainFrame) return
       // A load a newer navigation replaced is not a failure, and painting it as
-      // one would put an error on the pane every time somebody types fast.
+      // one would put an error on the pane every time somebody types fast. Nor
+      // is what is pending touched: it is the newer navigation's.
       if (errorCode === ERR_ABORTED) return
+      // The bar goes back to the committed address, which after a failure is
+      // the address that failed: Chromium commits its error page there.
+      entry.pending = null
       log(entry, {
         level: 'error',
         message: `${errorDescription} (${String(errorCode)}) loading ${validatedURL}`,
@@ -1273,6 +1351,10 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       if (input.type !== 'keyDown' || entry.agentInput > 0) return
       const command = browserKeyCommand(input, platform)
       if (command === null) return
+      // Escape is the browser's only while there is a load to stop. Otherwise
+      // it is the page's - a dialog, a menu, a game - and in fullscreen it is
+      // Chromium's way out, whether or not anything is loading.
+      if (command === 'stop' && (!wc.isLoading() || entry.fullscreen !== null)) return
       event.preventDefault()
       if (input.isAutoRepeat && !COMMANDS_THAT_REPEAT.has(command)) return
       if (COMMANDS_FOR_THE_WINDOW.has(command)) {
@@ -1734,6 +1816,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     back(id) {
       const entry = viewFor(id)
       if (entry === null) return null
+      entry.pending = null
       const wc = contentsOf(entry)
       if (wc !== null && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack()
       return announce(entry)
@@ -1742,6 +1825,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     forward(id) {
       const entry = viewFor(id)
       if (entry === null) return null
+      entry.pending = null
       const wc = contentsOf(entry)
       if (wc !== null && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward()
       return announce(entry)
@@ -1752,10 +1836,22 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       if (entry === null) return null
       stopRetry(entry)
       entry.problem = null
+      entry.pending = null
       const wc = contentsOf(entry)
       if (wc === null) return announce(entry)
       if (hard) wc.reloadIgnoringCache()
       else wc.reload()
+      return announce(entry)
+    },
+
+    stop(id) {
+      const entry = viewFor(id)
+      if (entry === null) return null
+      // The quiet reconnect is a load too: stopping it says nothing is coming.
+      if (entry.retry !== null) entry.problem = null
+      stopRetry(entry)
+      entry.pending = null
+      contentsOf(entry)?.stop()
       return announce(entry)
     },
 

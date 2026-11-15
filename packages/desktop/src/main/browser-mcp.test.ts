@@ -97,6 +97,7 @@ function fakeBrowsers() {
     const state: BrowserState = {
       id,
       url,
+      pendingUrl: null,
       refusedUrl: null,
       title: `Page at ${new URL(url).host}`,
       host: new URL(url).host,

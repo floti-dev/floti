@@ -258,6 +258,24 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   `before-input-event` for a key pressed in a page, the window for a key in
   Floti's chrome, and both run the window's one dispatch. A key an agent sends
   (`agentInput`) is always the page's.
+- The address bar shows `pendingUrl` while a load is under way, and `url`
+  otherwise. `url` is the committed address (`getURL()`), and agent tools read
+  only that. `load()` in `browser.ts`, which serves the bar and an agent's open
+  and navigate, sets `pendingUrl` to the address it loads: a phrase's search
+  results address, and after a redirect the address redirected to. Committing,
+  failing, stopping or a load ending with nothing committed (a 204) clears it.
+  After a failure the bar shows the failed address, which is where Chromium
+  commits its error page. A main-frame navigation that has an `initiator` (a
+  link, a form, a script setting `location`), or that goes to any other
+  address, clears it and never sets it, so a page cannot put an address in
+  the bar before it is there. From Enter until main answers, the bar keeps
+  what was typed.
+- Stop (`browser:stop`, `stop` in `browser.ts`) stops the load and any quiet
+  reconnect. The reload button turns into Stop while a page loads. Escape
+  stops a load from the bar when nothing is typed. In a page, main takes
+  Escape only while the page is loading and is not fullscreen; otherwise it
+  stays the page's. The window never takes Escape as a command
+  (`COMMANDS_FOR_THE_PAGE_ONLY`).
 - Hide a view with `setVisible(false)`, which keeps the page capturable,
   scriptable and clickable.
 

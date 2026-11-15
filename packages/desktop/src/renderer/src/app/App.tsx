@@ -271,6 +271,7 @@ import type {
 } from "../../../shared/ipc";
 import {
   browserKeyCommand,
+  COMMANDS_FOR_THE_PAGE_ONLY,
   COMMANDS_THAT_REPEAT,
   type BrowserCommand,
 } from "../../../shared/browserKeys";
@@ -2828,6 +2829,9 @@ export function App(): JSX.Element {
         case "hard-reload":
           browsers.reload(page.id, command === "hard-reload");
           return;
+        case "stop":
+          browsers.stop(page.id);
+          return;
         case "back":
           browsers.back(page.id);
           return;
@@ -2887,6 +2891,8 @@ export function App(): JSX.Element {
         hostOs(),
       );
       if (command === null || overlayOpen()) return;
+      // Escape here is the focused field's: the address bar's, the find field's.
+      if (COMMANDS_FOR_THE_PAGE_ONLY.has(command)) return;
       if (document.activeElement?.closest(".xterm")) return;
       event.preventDefault();
       event.stopPropagation();
@@ -5363,6 +5369,7 @@ export function App(): JSX.Element {
                   onBack={() => browsers.back(view.id)}
                   onForward={() => browsers.forward(view.id)}
                   onReload={(hard) => browsers.reload(view.id, hard)}
+                  onStop={() => browsers.stop(view.id)}
                   onDevTools={() => browsers.devtools(view.id)}
                   onOpenExternal={(url) => void helmOpenExternal(url)}
                   onFind={(query, forward) =>
