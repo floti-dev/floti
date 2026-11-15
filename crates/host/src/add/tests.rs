@@ -152,7 +152,7 @@ impl Published {
     }
 
     fn list_file(&self) -> String {
-        format!("Floti-{}-SHA256SUMS", self.version)
+        format!("Floti-{}-desktop-SHA256SUMS", self.version)
     }
 
     fn list_url(&self) -> String {
@@ -852,8 +852,15 @@ fn the_desktop_files_are_named_as_the_release_workflow_names_them() {
             Some(file.replace("${version}", "3.0.0").as_str())
         );
     }
-    assert!(workflow.contains("`Floti-${version}-SHA256SUMS`"));
-    assert_eq!(desktop_sums_name(&version), "Floti-3.0.0-SHA256SUMS");
+    assert!(workflow.contains("`Floti-${version}-desktop-SHA256SUMS`"));
+    assert_eq!(
+        desktop_sums_name(&version),
+        "Floti-3.0.0-desktop-SHA256SUMS"
+    );
+    assert!(
+        !desktop_sums_name(&version).eq_ignore_ascii_case("floti-3.0.0-SHA256SUMS"),
+        "GitHub refuses two release files whose names are equal ignoring case"
+    );
     for target in ["windows-arm64", "linux-arm64", "freebsd-x64"] {
         assert_eq!(desktop_file(&version, target), None, "{target}");
     }

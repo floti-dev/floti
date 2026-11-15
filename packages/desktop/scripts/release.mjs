@@ -16,14 +16,18 @@
 //     --unsigned, only the signed files.
 //
 //   node release.mjs check <folder> <version> [--unsigned]
-//     refuses a folder that does not hold exactly those files, and prints a
-//     Markdown table of each with its size and SHA-256 for the step summary.
+//     refuses a folder that does not hold exactly those files, or holds two
+//     whose names are equal ignoring case (GitHub's asset names ignore it),
+//     and prints a Markdown table of each with its size and SHA-256 for the
+//     step summary.
 //
 //   node release.mjs desktop-sums <folder> <version>
-//     writes `Floti-<version>-SHA256SUMS` into <folder>: the SHA-256 of each of
+//     writes `Floti-<version>-desktop-SHA256SUMS` into <folder>: the SHA-256 of each of
 //     the five desktop files there, in sha256sum's format, which `floti add
 //     desktop` checks a download against. The app carries floti's own list,
-//     so that list cannot hold the app; this one is the desktop files'.
+//     so that list cannot hold the app; this one is the desktop files'. Its
+//     name says `desktop` because floti's is `floti-<version>-SHA256SUMS`,
+//     and GitHub's asset names ignore case.
 
 import { createHash } from 'node:crypto'
 import { createReadStream, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -138,13 +142,17 @@ export function desktopFileNames(version) {
   ]
 }
 
-/** `Floti-<version>-SHA256SUMS`: the SHA-256 of each desktop file, signed like every file. */
+/**
+ * `Floti-<version>-desktop-SHA256SUMS`: the SHA-256 of each desktop file,
+ * signed like every file. Not `Floti-<version>-SHA256SUMS`: floti's list is
+ * `floti-<version>-SHA256SUMS`, and GitHub's asset names ignore case.
+ */
 export function desktopSumsName(version) {
-  return `Floti-${version}-SHA256SUMS`
+  return `Floti-${version}-desktop-SHA256SUMS`
 }
 
 /**
- * Writes `Floti-<version>-SHA256SUMS` into `folder`, listing each of the five
+ * Writes `Floti-<version>-desktop-SHA256SUMS` into `folder`, listing each of the five
  * desktop files there, sorted, and returns its path. A desktop file missing
  * from `folder` is an error.
  */
@@ -192,15 +200,40 @@ export function releaseAssetNames(version, { signed = true } = {}) {
   return signed ? names.flatMap((name) => [name, signatureName(name)]).sort() : names
 }
 
-/** Why a folder's file names are not exactly a release's files, or null when they are. */
+/**
+ * The names among `names` that equal another when case is ignored, each group
+ * sorted and joined with " and ", the groups sorted. GitHub's release asset
+ * names ignore case, so it refuses the second of such a pair as a name that
+ * already exists, after the release's draft is made and its other files are
+ * up.
+ */
+export function caseCollisions(names) {
+  const byFolded = new Map()
+  for (const name of new Set(names)) {
+    const folded = name.toLowerCase()
+    byFolded.set(folded, [...(byFolded.get(folded) ?? []), name])
+  }
+  return [...byFolded.values()]
+    .filter((group) => group.length > 1)
+    .map((group) => group.sort().join(' and '))
+    .sort()
+}
+
+/**
+ * Why a folder's file names are not exactly a release's files, or null when
+ * they are. Two names equal ignoring case are a problem too, whether the
+ * release expects them or not: GitHub would refuse the second.
+ */
 export function assetsProblem(names, version, { signed = true } = {}) {
   const expected = releaseAssetNames(version, { signed })
   const have = new Set(names)
   const missing = expected.filter((name) => !have.has(name))
   const extra = [...have].filter((name) => !expected.includes(name)).sort()
+  const collisions = caseCollisions([...names, ...expected])
   const problems = []
   if (missing.length > 0) problems.push(`missing ${missing.join(', ')}`)
   if (extra.length > 0) problems.push(`not a release file: ${extra.join(', ')}`)
+  if (collisions.length > 0) problems.push(`equal ignoring case, which GitHub refuses as one name: ${collisions.join('; ')}`)
   return problems.length > 0 ? problems.join('; ') : null
 }
 

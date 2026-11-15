@@ -34,5 +34,6 @@ export function protocolFileName(version: string): string
 export function signatureName(name: string): string
 export function signedFileNames(version: string): string[]
 export function releaseAssetNames(version: string, options?: { signed?: boolean }): string[]
+export function caseCollisions(names: string[]): string[]
 export function assetsProblem(names: string[], version: string, options?: { signed?: boolean }): string | null
 export function summaryTable(rows: { name: string; size: number; sha256: string }[]): string

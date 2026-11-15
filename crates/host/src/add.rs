@@ -18,7 +18,7 @@
 //!    refuses in one line and leaves it as it is.
 //! 2. In a session with no display ([`installs::missing_display`]) it
 //!    refuses in one sentence saying why.
-//! 3. It reads `Floti-<version>-SHA256SUMS` from the release that is floti's
+//! 3. It reads `Floti-<version>-desktop-SHA256SUMS` from the release that is floti's
 //!    own version, preview or stable, under the project's GitHub releases
 //!    ([`release_file::releases_url`]): its signature first, made with the
 //!    key built into floti and the trusted comment `floti <version> <file>`,
@@ -108,9 +108,11 @@ pub fn desktop_file(version: &Version, target: &str) -> Option<String> {
 }
 
 /// The signed SHA-256 list of a release's desktop files
-/// (`desktopSumsName` in `packages/desktop/scripts/release.mjs`).
+/// (`desktopSumsName` in `packages/desktop/scripts/release.mjs`). It says
+/// `desktop` because floti's own list is `floti-<version>-SHA256SUMS` and
+/// GitHub's release asset names ignore case.
 pub fn desktop_sums_name(version: &Version) -> String {
-    format!("Floti-{version}-SHA256SUMS")
+    format!("Floti-{version}-desktop-SHA256SUMS")
 }
 
 /// The SHA-256 `list`, in sha256sum's format (`<hex>  <name>` or
