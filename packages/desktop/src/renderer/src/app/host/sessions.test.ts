@@ -860,19 +860,25 @@ describe('sessions over the window’s own connection', () => {
       expect(second.payloads('history:resume')).toEqual([])
     })
 
-    it('tells the window each session the new host lists ended, and one it does not list at all as lost', async () => {
+    it('tells the window each session the new host lists ended, and one it does not list at all as lost when the host cannot say how it ended', async () => {
       const w = await shownWorld()
       w.link.lose({ planned: false, restarts: true })
       await settle()
 
-      // 7 exited while no host ran; 9 went with a keeper the new host could not use.
-      const second = new FakeConnection().answer('session:list', () => [
-        row({ id: 7, status: 'exited', exitCode: 5, endedAt: '2026-10-29T10:06:00.000Z', durationMs: 360_000 }),
-        row({ id: 8, status: 'exited', exitCode: 0 })
-      ])
+      // 7 exited while no host ran; 9 went with a keeper the new host could not use, and a host
+      // before protocol 4.1 refuses the question.
+      const second = new FakeConnection()
+        .answer('session:list', () => [
+          row({ id: 7, status: 'exited', exitCode: 5, endedAt: '2026-10-29T10:06:00.000Z', durationMs: 360_000 }),
+          row({ id: 8, status: 'exited', exitCode: 0 })
+        ])
+        .answer('session:endings', () => {
+          throw new Error('Floti protocol 4.0 has no channel `session:endings`.')
+        })
       await w.link.reconnect(second)
       await settle()
 
+      expect(second.payloads('session:endings')).toEqual([{ ids: [9] }])
       expect(w.exits.map((record) => [record.id, record.status, record.exitCode])).toEqual([
         [7, 'exited', 5],
         [9, 'lost', null]
