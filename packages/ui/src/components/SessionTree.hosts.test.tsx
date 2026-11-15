@@ -26,6 +26,8 @@ const discovery = (roots: string[], workspace: string, repos: string[]): Discove
   durationMs: 1
 })
 
+const TIMED_OUT = 'ssh: connect to host build-box port 22: Connection timed out'
+
 const THIS_PC = discovery(['C:\\work'], 'C:\\work\\my-work', ['C:\\work\\my-work\\repos\\notes'])
 const BUILD_BOX = discovery(['/home/you/work'], '/home/you/work/infra', ['/home/you/work/infra/repos/api'])
 
@@ -220,16 +222,12 @@ describe('SessionTree with hosts on other computers', () => {
     expect(remote().querySelector('[data-empty-state="host-empty:h1"]')).not.toBeNull()
   })
 
-  it('says build-box can’t be reached in its place, with the reason, its link’s last line and Try again', async () => {
+  it('says build-box can’t be reached yet in its place, that Floti keeps trying, with its link’s last line and Try again', async () => {
     const hostActions = { ...actions(), onReconnect: vi.fn() }
     const { view } = renderTree({
       hosts: [
         buildBox({
-          phase: {
-            kind: 'unreachable',
-            reason: 'Can’t reach build-box',
-            lastLine: 'ssh: connect to host build-box port 22: Connection timed out'
-          },
+          phase: { kind: 'unreachable', failure: { reason: 'Can’t reach build-box', lastLine: TIMED_OUT, retrying: true } },
           discovery: null,
           sessionsByPath: new Map()
         })
@@ -241,31 +239,109 @@ describe('SessionTree with hosts on other computers', () => {
     expect(header.getAttribute('data-host-state')).toBe('unreachable')
     const word = within(header).getByText('unreachable')
     expect(word.className).toContain('text-danger')
-    expect(word.getAttribute('title')).toBe('Can’t reach build-box.')
+    expect(word.getAttribute('title')).toBe('Can’t reach build-box. Floti keeps trying.')
     const line = remote.querySelector('[data-host-phase="unreachable"]') as HTMLElement
-    expect(within(line).getByText('Can’t reach build-box.')).toBeTruthy()
-    expect(line.querySelector('[data-host-last-line]')?.textContent).toBe(
-      'ssh: connect to host build-box port 22: Connection timed out'
-    )
+    // All of the line is the plain fg-subtle of "Scanning…".
+    expect(line.className).toContain('text-fg-subtle')
+    expect(line.querySelector('.text-fg-muted')).toBeNull()
+    expect(line.querySelector('[data-host-reason]')?.textContent).toBe('Can’t reach build-box. Floti keeps trying.')
+    expect(line.querySelector('[data-host-last-line]')?.textContent).toBe(TIMED_OUT)
     expect(remote.querySelector('[data-empty-state]')).toBeNull()
     await userEvent.click(within(line).getByRole('button', { name: 'Try again' }))
     expect(hostActions.onReconnect).toHaveBeenCalledWith('h1')
     expect(hostActions.onRescan).not.toHaveBeenCalled()
   })
 
-  it('keeps an unreachable host’s last rows dimmed under the line saying why', () => {
+  it('offers no Try again, and does not say Floti keeps trying, where only the user can fix what stops a host', () => {
     const { view } = renderTree({
-      hosts: [buildBox({ phase: { kind: 'unreachable', reason: 'build-box proved another key than the one this PC pinned for it' } })],
-      hostActions: actions()
+      hosts: [
+        buildBox({
+          phase: {
+            kind: 'unreachable',
+            failure: { reason: 'build-box proved another key than the one this PC pinned for it', retrying: false }
+          }
+        })
+      ],
+      hostActions: { ...actions(), onReconnect: vi.fn() }
     })
     const remote = group(view.container, 'h1')
     const line = remote.querySelector('[data-host-phase="unreachable"]') as HTMLElement
-    expect(line.textContent).toContain('build-box proved another key than the one this PC pinned for it.')
+    expect(line.querySelector('[data-host-reason]')?.textContent).toBe(
+      'build-box proved another key than the one this PC pinned for it.'
+    )
     expect(line.querySelector('[data-host-last-line]')).toBeNull()
+    expect(within(line).queryByRole('button', { name: 'Try again' })).toBeNull()
     // The line is not inside the dimmed rows: it is what the host says now.
     expect(line.closest('[data-host-rows]')).toBeNull()
     expect(remote.querySelector('[data-host-rows]')?.getAttribute('data-host-rows')).toBe('dimmed')
     expect(within(remote).getByRole('button', { name: /^deploy, / })).toBeTruthy()
+  })
+
+  it('keeps saying build-box is reconnecting while its retries fail after it was live, with why, its last line and Try again', async () => {
+    const hostActions = { ...actions(), onReconnect: vi.fn() }
+    const { view } = renderTree({
+      hosts: [
+        buildBox({
+          phase: {
+            kind: 'reconnecting',
+            failure: { reason: 'Can’t reach build-box', lastLine: TIMED_OUT, retrying: true }
+          }
+        })
+      ],
+      hostActions
+    })
+    const remote = group(view.container, 'h1')
+    const header = remote.querySelector('[data-host-header]') as HTMLElement
+    expect(header.getAttribute('data-host-state')).toBe('reconnecting')
+    expect(within(header).queryByText('unreachable')).toBeNull()
+    expect(within(header).getByText('reconnecting').className).toContain('text-warn')
+    const line = remote.querySelector('[data-host-phase="reconnecting"]') as HTMLElement
+    expect(line.className).toContain('text-fg-subtle')
+    expect(within(line).getByText('Reconnecting to build-box…')).toBeTruthy()
+    expect(line.querySelector('[data-host-reason]')?.textContent).toBe('Can’t reach build-box.')
+    expect(line.querySelector('[data-host-last-line]')?.textContent).toBe(TIMED_OUT)
+    expect(remote.querySelector('[data-host-rows]')?.getAttribute('data-host-rows')).toBe('dimmed')
+    await userEvent.click(within(line).getByRole('button', { name: 'Try again' }))
+    expect(hostActions.onReconnect).toHaveBeenCalledWith('h1')
+  })
+
+  it('says Unknown, never loading for ever, when build-box’s sessions could not be listed, and Try again lists them again', async () => {
+    const hostActions = { ...actions(), onRelist: vi.fn(), onReconnect: vi.fn() }
+    const { view } = renderTree({
+      hosts: [buildBox({ phase: { kind: 'unknown', reason: 'The request timed out.' }, sessionsByPath: new Map() })],
+      hostActions
+    })
+    const remote = group(view.container, 'h1')
+    const header = remote.querySelector('[data-host-header]') as HTMLElement
+    expect(header.getAttribute('data-host-state')).toBe('unknown')
+    expect(within(header).getByText('unknown').className).toContain('text-warn')
+    expect(remote.querySelector('[data-host-phase="loading"]')).toBeNull()
+    const unknown = remote.querySelector('[data-empty-state="host-unlisted:h1"]') as HTMLElement
+    expect(within(unknown).getByText('Unknown')).toBeTruthy()
+    expect(within(unknown).getByText('Floti could not list the sessions on build-box. The request timed out.')).toBeTruthy()
+    // Its folders are real and stay readable.
+    expect(remote.querySelector('[data-host-rows]')?.getAttribute('data-host-rows')).toBe('live')
+    await userEvent.click(within(unknown).getByRole('button', { name: 'Try again' }))
+    expect(hostActions.onRelist).toHaveBeenCalledWith('h1')
+    expect(hostActions.onReconnect).not.toHaveBeenCalled()
+  })
+
+  it('says Unknown for this PC when its sessions could not be listed, and Try again lists them again', async () => {
+    const onRelistSessions = vi.fn()
+    const none: DiscoveryResult = { ...THIS_PC, roots: [], workspaces: [], projects: [] }
+    const { view } = renderTree({
+      discovery: none,
+      sessionsByPath: new Map(),
+      sessionsListed: false,
+      sessionsListError: 'This PC’s host did not answer.',
+      onRelistSessions
+    })
+    expect(view.container.querySelector('[data-host-phase="loading"]')).toBeNull()
+    const unknown = view.container.querySelector('[data-empty-state="host-unlisted:local"]') as HTMLElement
+    expect(within(unknown).getByText('Floti could not list the sessions on This PC. This PC’s host did not answer.')).toBeTruthy()
+    expect(screen.queryByText('No folders are being scanned yet.')).toBeNull()
+    await userEvent.click(within(unknown).getByRole('button', { name: 'Try again' }))
+    expect(onRelistSessions).toHaveBeenCalledOnce()
   })
 
   it('says this PC’s sessions are loading until its host has listed them, in its group and with no host groups', () => {
@@ -315,7 +391,10 @@ describe('SessionTree with hosts on other computers', () => {
 
   it('says a floti too old or newer in place of its phase’s word, and offers no update for a newer one', () => {
     const hostActions = { ...actions(), onUpdateFloti: vi.fn() }
-    const refused = { kind: 'unreachable', reason: 'build-box’s floti is too old for this Floti' } as const
+    const refused = {
+      kind: 'unreachable',
+      failure: { reason: 'build-box’s floti is too old for this Floti', retrying: false }
+    } as const
     const { view, rerender } = renderTree({
       hosts: [buildBox({ phase: refused, floti: { verdict: 'tooOld', host: '3.1', client: '3.2' } })],
       hostActions

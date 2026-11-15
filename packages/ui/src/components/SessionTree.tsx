@@ -61,26 +61,42 @@ export interface TreeSession {
 }
 
 /**
+ * Why a host's link could not reach it: `reason` is a sentence naming the host
+ * without its full stop ("Can’t reach build-box"); `lastLine` the last line
+ * ssh, the command or floti wrote, unedited, where there is one. `retrying`
+ * when Floti keeps trying by itself and Try again can help (the transport
+ * failed, or floti was not found there); false where only the user can fix it
+ * (a changed key, a floti too old or newer).
+ */
+export interface TreeHostFailure {
+  reason: string
+  lastLine?: string | undefined
+  retrying: boolean
+}
+
+/**
  * Where the window stands with a host, as its group in the tree says it:
  *
  * - `connecting`: nothing heard from it yet, or retrying before it was ever
  *   live. `note` says why it waits, where there is more to say.
  * - `loading`: connected, and its sessions not listed yet.
+ * - `unknown`: connected, and listing its sessions failed (`reason`): it says
+ *   Unknown and offers Try again, never loading for ever.
  * - `live`: connected and listed. The only phase whose group may say it has
  *   nothing.
  * - `reconnecting`: its connection dropped after it was live. Its last rows
- *   stay, dimmed: its sessions still run there.
- * - `unreachable`: its link could not reach it. `reason` is what went wrong,
- *   a sentence naming the host without its full stop ("Can’t reach
- *   build-box"); `lastLine` the last line ssh, the command or floti wrote,
- *   unedited, where there is one.
+ *   stay, dimmed: its sessions still run there. `failure` is why its retries
+ *   fail, once one has.
+ * - `unreachable`: its link could not reach it, and it was never live in this
+ *   run, or only the user can fix what stops it.
  */
 export type TreeHostPhase =
   | { kind: 'connecting'; note?: string | undefined }
   | { kind: 'loading' }
+  | { kind: 'unknown'; reason: string }
   | { kind: 'live' }
-  | { kind: 'reconnecting' }
-  | { kind: 'unreachable'; reason: string; lastLine?: string | undefined }
+  | { kind: 'reconnecting'; failure?: TreeHostFailure | undefined }
+  | { kind: 'unreachable'; failure: TreeHostFailure }
 
 const LIVE: TreeHostPhase = { kind: 'live' }
 const LOADING: TreeHostPhase = { kind: 'loading' }
@@ -125,8 +141,10 @@ export interface TreeHostActions {
   onNewWorkspace: (host: string) => void
   /** A host header's Rescan, and Unknown's Try again. */
   onRescan: (host: string) => void
-  /** An unreachable host's Try again: its link tries at once rather than after its wait. */
+  /** Try again under a host whose retries fail: its link tries at once rather than after its wait. */
   onReconnect?: ((host: string) => void) | undefined
+  /** Try again under a host whose sessions could not be listed: it lists them again. */
+  onRelist?: ((host: string) => void) | undefined
   /** The Add a host line at the end of the list: Settings > Hosts. */
   onAddHost: () => void
   /** A host header's older floti or floti too old: the yes-first update of its floti, in Settings > Hosts. */
@@ -144,6 +162,10 @@ export interface SessionTreeProps {
    * group says its sessions are loading. Absent, they are listed.
    */
   sessionsListed?: boolean | undefined
+  /** Why this PC's host could not list its sessions: its group says Unknown and this, never loading for ever. */
+  sessionsListError?: string | null | undefined
+  /** That Unknown's Try again: lists this PC's sessions again. */
+  onRelistSessions?: (() => void) | undefined
   /** The project whose page is in front of the focused pane. */
   selectedPath: string | null
   /**
@@ -366,6 +388,8 @@ export function SessionTree({
   scanning,
   scanError,
   sessionsListed = true,
+  sessionsListError = null,
+  onRelistSessions,
   selectedPath,
   pinnedPaths,
   onTogglePin,
@@ -398,10 +422,14 @@ export function SessionTree({
     navRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [reveal])
 
-  const localPhase = sessionsListed ? LIVE : LOADING
+  const localPhase: TreeHostPhase = sessionsListed
+    ? LIVE
+    : sessionsListError !== null
+      ? { kind: 'unknown', reason: sessionsListError }
+      : LOADING
   const local = (
     <>
-      <PhaseLine phase={localPhase} name={localName} />
+      <PhaseLine phase={localPhase} name={localName} id={localKey} onRelist={onRelistSessions} />
       <HostTree
         discovery={discovery}
         scanError={scanError}
@@ -419,7 +447,7 @@ export function SessionTree({
         query={query}
         reveal={reveal !== null && (reveal.kind === 'session' || (reveal.host ?? localKey) === localKey) ? reveal : null}
         empty={
-          // Until this PC's host has listed its sessions, the loading line above is all it says.
+          // Until this PC's host has listed its sessions, the line above is all it says.
           localPhase.kind === 'live' ? (
             <ScanEmpty
               scanning={scanning}
@@ -482,9 +510,11 @@ export function SessionTree({
                 <PhaseLine
                   phase={host.phase}
                   name={host.name}
+                  id={host.id}
                   onReconnect={
                     hostActions.onReconnect === undefined ? undefined : () => hostActions.onReconnect?.(host.id)
                   }
+                  onRelist={hostActions.onRelist === undefined ? undefined : () => hostActions.onRelist?.(host.id)}
                 />
                 <div
                   data-host-rows={hostRowsDimmed(host.phase) ? 'dimmed' : 'live'}
@@ -581,6 +611,7 @@ function hostRowsDimmed(phase: TreeHostPhase): boolean {
 const PHASE_LOOK: Record<TreeHostPhase['kind'], { dot: string; word: string | null; tone: string }> = {
   connecting: { dot: 'border-fg-subtle', word: 'connecting', tone: 'text-fg-subtle' },
   loading: { dot: 'border-success', word: 'loading', tone: 'text-fg-subtle' },
+  unknown: { dot: 'border-success', word: 'unknown', tone: 'text-warn' },
   live: { dot: 'border-success', word: null, tone: '' },
   reconnecting: { dot: 'border-warn', word: 'reconnecting', tone: 'text-warn' },
   unreachable: { dot: 'border-danger', word: 'unreachable', tone: 'text-danger' }
@@ -593,13 +624,22 @@ function phaseTitle(phase: TreeHostPhase, name: string): string {
       return phase.note === undefined ? `Connecting to ${name}` : `Connecting to ${name}: ${phase.note}`
     case 'loading':
       return `Connected to ${name}; reading its sessions`
+    case 'unknown':
+      return `Floti could not list the sessions on ${name}. ${phase.reason}`
     case 'live':
       return ''
     case 'reconnecting':
-      return `The connection to ${name} dropped; trying again. Its sessions there run on.`
+      return `The connection to ${name} dropped; trying again. Its sessions there run on.${
+        phase.failure === undefined ? '' : ` ${phase.failure.reason}.`
+      }`
     case 'unreachable':
-      return `${phase.reason}.`
+      return failureSentence(phase.failure)
   }
+}
+
+/** A failure's reason as a sentence, saying that Floti keeps trying where it does. */
+function failureSentence(failure: TreeHostFailure): string {
+  return failure.retrying ? `${failure.reason}. Floti keeps trying.` : `${failure.reason}.`
 }
 
 /**
@@ -760,66 +800,117 @@ function HeaderAction({
   )
 }
 
+/** The outlined Try again of the Unknown pattern and of a host whose retries fail. */
+function TryAgainButton({ onClick, className }: { onClick: () => void; className?: string }): JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex h-7 items-center gap-1.5 rounded-well border border-border-strong px-2.5 text-[12px] text-fg transition-colors hover:bg-hover',
+        className
+      )}
+    >
+      <RefreshIcon width={12} height={12} />
+      Try again
+    </button>
+  )
+}
+
 /**
- * The line at the top of a host's group while it is not live, in the plain
- * 12px `fg-subtle` of "Scanning…": a moment of waiting, not an empty state.
- * Connecting, its sessions loading, reconnecting, or that it can't be reached:
- * why (a sentence naming the host, as every surface words it), the line its
- * link last wrote, and Try again. Nothing once it is live.
+ * The line at the top of a host's group while it is not live, all of it in
+ * the plain 12px `fg-subtle` of "Scanning…" (the link's last line in mono
+ * 10.5px): a moment of waiting, not an empty state. Connecting, its sessions
+ * loading, reconnecting, or that it can't be reached. Where its link's retries
+ * fail it says why (a sentence naming the host, as every surface words it),
+ * the line the link last wrote and, where Floti keeps trying, that it does and
+ * Try again. A host whose sessions could not be listed says Unknown instead,
+ * the empty-state pattern's "could not be read", with Try again listing them
+ * again. Nothing once it is live.
  */
 function PhaseLine({
   phase,
   name,
-  onReconnect
+  id,
+  onReconnect,
+  onRelist
 }: {
   phase: TreeHostPhase
   name: string
+  id: string
   onReconnect?: (() => void) | undefined
+  onRelist?: (() => void) | undefined
 }): JSX.Element | null {
+  const line = 'px-2 py-3 text-center text-[12px] text-fg-subtle'
   switch (phase.kind) {
     case 'live':
       return null
     case 'connecting':
       return (
-        <p data-host-phase="connecting" className="px-2 py-3 text-center text-[12px] text-fg-subtle">
+        <p data-host-phase="connecting" className={line}>
           Connecting to {name}&hellip;
           {phase.note !== undefined && <span className="block">{phase.note}</span>}
         </p>
       )
     case 'loading':
       return (
-        <p data-host-phase="loading" className="px-2 py-3 text-center text-[12px] text-fg-subtle">
+        <p data-host-phase="loading" className={line}>
           Loading sessions&hellip;
         </p>
       )
+    case 'unknown':
+      return (
+        <div data-host-phase="unknown">
+          <EmptyWell
+            name={`host-unlisted:${id}`}
+            size="list"
+            icon={<ServerIcon width={18} height={18} />}
+            title="Unknown"
+            actions={onRelist === undefined ? undefined : <TryAgainButton onClick={onRelist} />}
+          >
+            {`Floti could not list the sessions on ${name}. ${phase.reason}`}
+          </EmptyWell>
+        </div>
+      )
     case 'reconnecting':
       return (
-        <p data-host-phase="reconnecting" className="px-2 py-3 text-center text-[12px] text-fg-subtle">
-          Reconnecting to {name}&hellip;
-        </p>
-      )
-    case 'unreachable':
-      return (
-        <div data-host-phase="unreachable" className="flex flex-col items-center gap-1 px-2 py-3 text-center">
-          <p className="text-[12px] text-fg-muted">{`${phase.reason}.`}</p>
-          {phase.lastLine !== undefined && phase.lastLine !== '' && (
-            <p data-host-last-line className="font-mono text-[10.5px] break-all text-fg-subtle select-text">
-              {phase.lastLine}
-            </p>
-          )}
-          {onReconnect !== undefined && (
-            <button
-              type="button"
-              onClick={onReconnect}
-              className="mt-1 flex h-7 items-center gap-1.5 rounded-well border border-border-strong px-2.5 text-[12px] text-fg transition-colors hover:bg-hover"
-            >
-              <RefreshIcon width={12} height={12} />
-              Try again
-            </button>
+        <div data-host-phase="reconnecting" className={cn(line, 'flex flex-col items-center gap-1')}>
+          <p>Reconnecting to {name}&hellip;</p>
+          {phase.failure !== undefined && (
+            <FailureDetail failure={phase.failure} sentence={`${phase.failure.reason}.`} onReconnect={onReconnect} />
           )}
         </div>
       )
+    case 'unreachable':
+      return (
+        <div data-host-phase="unreachable" className={cn(line, 'flex flex-col items-center gap-1')}>
+          <FailureDetail failure={phase.failure} sentence={failureSentence(phase.failure)} onReconnect={onReconnect} />
+        </div>
+      )
   }
+}
+
+/** Why a host's link fails, the line it last wrote, and Try again where Floti keeps trying. */
+function FailureDetail({
+  failure,
+  sentence,
+  onReconnect
+}: {
+  failure: TreeHostFailure
+  sentence: string
+  onReconnect: (() => void) | undefined
+}): JSX.Element {
+  return (
+    <>
+      <p data-host-reason>{sentence}</p>
+      {failure.lastLine !== undefined && failure.lastLine !== '' && (
+        <p data-host-last-line className="font-mono text-[10.5px] break-all select-text">
+          {failure.lastLine}
+        </p>
+      )}
+      {failure.retrying && onReconnect !== undefined && <TryAgainButton onClick={onReconnect} className="mt-1" />}
+    </>
+  )
 }
 
 /**
@@ -846,16 +937,7 @@ function RemoteEmpty({
         size="list"
         icon={<ServerIcon width={18} height={18} />}
         title="Unknown"
-        actions={
-          <button
-            type="button"
-            onClick={() => onRescan(host.id)}
-            className="flex h-7 items-center gap-1.5 rounded-well border border-border-strong px-2.5 text-[12px] text-fg transition-colors hover:bg-hover"
-          >
-            <RefreshIcon width={12} height={12} />
-            Try again
-          </button>
-        }
+        actions={<TryAgainButton onClick={() => onRescan(host.id)} />}
       >
         {`Floti could not read the folders on ${host.name}. ${host.scanError}`}
       </EmptyWell>

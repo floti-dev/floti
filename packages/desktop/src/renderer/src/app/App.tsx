@@ -3590,11 +3590,10 @@ export function App(): JSX.Element {
     return {
       id: host.id,
       name: host.name,
-      phase: treeHostPhase(
-        host,
-        remoteView[host.id]?.connection ?? null,
-        work?.listed ?? false,
-      ),
+      phase: treeHostPhase(host, remoteView[host.id]?.connection ?? null, {
+        listed: work?.listed ?? false,
+        listError: work?.listError,
+      }),
       floti: hostFlotiVerdict(remoteView[host.id]?.connection ?? null),
       discovery: work?.discovery ?? null,
       scanning: work?.scanning ?? false,
@@ -3949,6 +3948,7 @@ export function App(): JSX.Element {
     onNewWorkspace: (host: string) => setup.openDialog("new", host),
     onRescan: rescanOn,
     onReconnect: (host: string) => remoteHostLinks.reconnect(host),
+    onRelist: (host: string) => hostWork.relist(host),
     onAddHost: () => setAddingHost(true),
     onUpdateFloti: (host: string) => updateFlotiOn(host),
     onRemoveSessions: removeTreeSessions,
@@ -6113,6 +6113,8 @@ export function App(): JSX.Element {
             scanning={launcher.scanning}
             scanError={launcher.scanError}
             sessionsListed={sessionsListed}
+            sessionsListError={sessionState.listError}
+            onRelistSessions={sessionState.relist}
             selectedPath={front?.kind === "project" ? front.path : null}
             pinnedPaths={
               settings?.pinnedProjects ?? DEFAULT_SETTINGS.pinnedProjects

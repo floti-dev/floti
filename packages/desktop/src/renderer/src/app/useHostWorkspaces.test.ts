@@ -156,6 +156,41 @@ describe('useHostWorkspaces', () => {
     expect(bridge.invocations).toEqual([])
   })
 
+  it('says why build-box’s sessions could not be listed, and lists them when asked again', async () => {
+    const box = remoteBridge(BOX)
+    box.answer('session:list', () => {
+      throw new Error('The request timed out.')
+    })
+    const { result } = renderHook(() => useHostWorkspaces([BOX], [BOX]))
+    await waitFor(() => expect(result.current.byHost.get(BOX)?.listError).toBe('The request timed out.'))
+    expect(result.current.byHost.get(BOX)?.listed).toBe(false)
+
+    box.answer('session:list', () => [deploy])
+    act(() => result.current.relist(BOX))
+    expect(result.current.byHost.get(BOX)?.listError).toBeUndefined()
+    await waitFor(() => expect(result.current.byHost.get(BOX)?.listed).toBe(true))
+    expect(result.current.byHost.get(BOX)?.sessions).toEqual([deploy])
+    expect(result.current.byHost.get(BOX)?.listError).toBeUndefined()
+  })
+
+  it('forgets a failed listing of build-box when it connects again, and lists it afresh', async () => {
+    const box = remoteBridge(BOX)
+    box.answer('session:list', () => {
+      throw new Error('The connection ended.')
+    })
+    const { result, rerender } = renderHook(({ connected }) => useHostWorkspaces([BOX], connected), {
+      initialProps: { connected: [BOX] as string[] }
+    })
+    await waitFor(() => expect(result.current.byHost.get(BOX)?.listError).toBe('The connection ended.'))
+
+    rerender({ connected: [] })
+    box.answer('session:list', () => new Promise<never>(() => undefined))
+    rerender({ connected: [BOX] })
+    // Asked again on the new connection: until it answers, it is loading, not Unknown.
+    await waitFor(() => expect(box.invoked('session:list')).toHaveLength(2))
+    expect(result.current.byHost.get(BOX)?.listError).toBeUndefined()
+  })
+
   it('says why build-box’s folders could not be read', async () => {
     remoteBridge(BOX).answer('discovery:scan', () => {
       throw new Error('Its scan roots could not be read.')

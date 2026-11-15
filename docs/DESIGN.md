@@ -1248,30 +1248,36 @@ overrides the gate; keep it.
   this PC's, and the list ends with an Add a host line. A host's header is a
   6px ring dot, the host's name (a remote host's in mono, as machine data),
   and one 11px word at the right saying where the window stands with it. Under
-  the header, while the host is not live, one plain line says the same thing
-  in 12px `fg-subtle`, centred, the way "Scanning…" is: it is a moment of
-  waiting, not an empty state. The group says one of five phases:
+  the header, while the host is not live, one plain line says the same thing,
+  all of it in 12px `fg-subtle`, centred, the way "Scanning…" is (the line its
+  link last wrote in mono 10.5px): it is a moment of waiting, not an empty
+  state. The group says one of six phases:
 
   | phase | dot | word | line at the top of the group | rows |
   |---|---|---|---|---|
   | connecting: nothing heard yet, or retrying before it was ever live | `fg-subtle` ring | "connecting", `fg-subtle` | "Connecting to build-box…", and why it waits where there is more to say | dimmed |
   | loading: connected, its sessions not listed yet | `success` ring | "loading", `fg-subtle` | "Loading sessions…" | as read |
+  | unknown: connected, and listing its sessions failed | `success` ring | "unknown", `warn` | the empty-state pattern's Unknown: "Floti could not list the sessions on build-box." and why, with Try again, which lists them again | as read |
   | live | `success` ring | none | none | as read |
-  | reconnecting: the connection dropped after it was live | `warn` ring | "reconnecting", `warn` | "Reconnecting to build-box…" | the last ones, dimmed |
-  | unreachable: its link failed, floti is missing there, its key changed, or its floti refused this one | `danger` ring | "unreachable", `danger` | the reason as every surface words it (`classifyHostFailure`), the line its link last wrote in mono 10.5px, and Try again, which reconnects now | the last ones, dimmed |
+  | reconnecting: the connection dropped after it was live, and Floti is trying again | `warn` ring | "reconnecting", `warn` | "Reconnecting to build-box…"; once a retry has failed, the reason as every surface words it (`classifyHostFailure`), the line its link last wrote, and Try again, which reconnects now | the last ones, dimmed |
+  | unreachable: never live in this run and its link fails, or stopped by what only the user can fix (its key changed, its floti refused this one) | `danger` ring | "unreachable", `danger` | the reason; where its link failed or floti is missing there, "Floti keeps trying.", the line its link last wrote and Try again; where only the user can fix it, the reason alone, and Settings > Hosts says what to do | the last ones, dimmed |
 
-  Dimmed is the rows at 50% opacity; the line sits above them and is never
-  dimmed, because it is what the host says now. A floti that is not this one's
-  (too old, newer or older) says so in the word's place, as it does on the
-  Sessions page.
+  A host that was live never turns unreachable because its retries fail: a
+  laptop that wakes before its network is up says reconnecting, and why, for
+  as long as Floti is still trying. Try again is offered only where it can
+  help. Dimmed is the rows at 50% opacity; the line sits above them and is
+  never dimmed, because it is what the host says now. A floti that is not this
+  one's (too old, newer or older) says so in the word's place, as it does on
+  the Sessions page.
 
   **A host says it has nothing only once it has listed its sessions.** The
   empty state ("No workspaces on build-box yet") and this PC's "No folders are
   being scanned yet" draw only in the live phase; before it, the group's line is
   all there is. It is the "Unknown, never nothing" rule again: a host still
   connecting and a host with nothing on it would otherwise look the same, and
-  only one of them means its sessions are not coming. This PC's group says
-  "loading" and "Loading sessions…" the same way until its own host has listed
+  only one of them means its sessions are not coming. A listing that fails
+  says Unknown rather than loading for ever. This PC's group says "loading" and
+  "Loading sessions…", or Unknown, the same way until its own host has listed
   its sessions.
 
   **Files and the rest are destinations on the rail, not rows here.** Each

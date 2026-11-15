@@ -182,6 +182,7 @@ export {
   type SessionTreeProps,
   type TreeHost,
   type TreeHostActions,
+  type TreeHostFailure,
   type TreeHostPhase,
   type TreeNotice,
   type TreeNoticeActions,
