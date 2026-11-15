@@ -16,8 +16,10 @@
 //     --unsigned, only the signed files.
 //
 //   node release.mjs check <folder> <version> [--unsigned]
-//     refuses a folder that does not hold exactly those files, and prints a
-//     Markdown table of each with its size and SHA-256 for the step summary.
+//     refuses a folder that does not hold exactly those files, or holds two
+//     whose names are equal ignoring case (GitHub's asset names ignore it),
+//     and prints a Markdown table of each with its size and SHA-256 for the
+//     step summary.
 //
 //   node release.mjs desktop-sums <folder> <version>
 //     writes `Floti-<version>-SHA256SUMS` into <folder>: the SHA-256 of each of
@@ -192,15 +194,40 @@ export function releaseAssetNames(version, { signed = true } = {}) {
   return signed ? names.flatMap((name) => [name, signatureName(name)]).sort() : names
 }
 
-/** Why a folder's file names are not exactly a release's files, or null when they are. */
+/**
+ * The names among `names` that equal another when case is ignored, each group
+ * sorted and joined with " and ", the groups sorted. GitHub's release asset
+ * names ignore case, so it refuses the second of such a pair as a name that
+ * already exists, after the release's draft is made and its other files are
+ * up.
+ */
+export function caseCollisions(names) {
+  const byFolded = new Map()
+  for (const name of new Set(names)) {
+    const folded = name.toLowerCase()
+    byFolded.set(folded, [...(byFolded.get(folded) ?? []), name])
+  }
+  return [...byFolded.values()]
+    .filter((group) => group.length > 1)
+    .map((group) => group.sort().join(' and '))
+    .sort()
+}
+
+/**
+ * Why a folder's file names are not exactly a release's files, or null when
+ * they are. Two names equal ignoring case are a problem too, whether the
+ * release expects them or not: GitHub would refuse the second.
+ */
 export function assetsProblem(names, version, { signed = true } = {}) {
   const expected = releaseAssetNames(version, { signed })
   const have = new Set(names)
   const missing = expected.filter((name) => !have.has(name))
   const extra = [...have].filter((name) => !expected.includes(name)).sort()
+  const collisions = caseCollisions([...names, ...expected])
   const problems = []
   if (missing.length > 0) problems.push(`missing ${missing.join(', ')}`)
   if (extra.length > 0) problems.push(`not a release file: ${extra.join(', ')}`)
+  if (collisions.length > 0) problems.push(`equal ignoring case, which GitHub refuses as one name: ${collisions.join('; ')}`)
   return problems.length > 0 ? problems.join('; ') : null
 }
 

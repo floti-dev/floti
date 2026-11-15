@@ -6,6 +6,7 @@ import { RUN_ROOT } from '../../../../test/run-root'
 import { parseSums, sha256Of } from '../../scripts/floti-release.mjs'
 import {
   assetsProblem,
+  caseCollisions,
   compareVersions,
   desktopFileNames,
   desktopSumsName,
@@ -156,6 +157,17 @@ describe('the files a release carries', () => {
     expect(assetsProblem(names.filter((name) => name !== 'floti-3.0.0-SHA256SUMS.minisig'), '3.0.0')).toBe('missing floti-3.0.0-SHA256SUMS.minisig')
     expect(assetsProblem(signedFileNames('3.0.0'), '3.0.0', { signed: false })).toBeNull()
     expect(assetsProblem(names, '3.0.0', { signed: false })).toMatch(/^not a release file: Floti-3\.0\.0-SHA256SUMS\.minisig, Floti-3\.0\.0-arm64-mac\.zip\.minisig, /)
+  })
+
+  it('names no two files equal ignoring case, since GitHub refuses the second of such a pair', () => {
+    for (const version of ['3.0.0', '3.0.0-preview.1']) expect(caseCollisions(releaseAssetNames(version))).toEqual([])
+  })
+
+  it('refuses a folder holding two names equal ignoring case, naming the pair', () => {
+    expect(caseCollisions(['a-SUMS', 'b', 'A-sums', 'B', 'c'])).toEqual(['A-sums and a-SUMS', 'B and b'])
+    expect(assetsProblem([...releaseAssetNames('3.0.0'), 'FLOTI-3.0.0-setup.exe'], '3.0.0')).toBe(
+      'not a release file: FLOTI-3.0.0-setup.exe; equal ignoring case, which GitHub refuses as one name: FLOTI-3.0.0-setup.exe and Floti-3.0.0-setup.exe'
+    )
   })
 
   it('writes the SHA-256 list of the desktop files, sorted, in sha256sum format', async () => {
