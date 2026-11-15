@@ -229,7 +229,6 @@ export {
   type PluginPageTab,
   type PluginPagesProps
 } from './components/PluginPages'
-export { UsageStatus, type UsageStatusProps } from './components/UsageStatus'
 export { TitleBar } from './components/TitleBar'
 export {
   RestorePane,
@@ -263,7 +262,7 @@ export {
   type PlatformSource,
   type ShortcutLabelOptions
 } from './lib/platform'
-export { formatAge, formatBytes, formatMoment, formatResetsIn } from './lib/time'
+export { formatAge, formatBytes, formatMoment } from './lib/time'
 export { AgentList, NewAgentButton, type AgentListProps, type NewAgentButtonProps } from './components/AgentList'
 export { AgentPage, type AgentPageProps, type AgentExternalChange } from './components/AgentPage'
 export { UndoToast, type UndoToastProps } from './components/UndoToast'

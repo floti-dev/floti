@@ -366,15 +366,13 @@ describe('the window’s workspace over its own connection', () => {
     expect(host().scanRoots).toEqual([HUB])
   })
 
-  it('answers app:info with Floti’s own build, the host’s claude version and the host’s log file', async () => {
+  it('answers app:info with Floti’s own build and the host’s log file', async () => {
     await expect(ask(world().adapter, 'app:info')).resolves.toEqual({
       ...BUILD,
-      claudeVersion: '2.1.5 (Claude Code)',
       hostLogFile: HOST_INFO.logFile
     })
     await expect(ask(world(null).adapter, 'app:info')).resolves.toEqual({
       ...BUILD,
-      claudeVersion: null,
       hostLogFile: null
     })
   })

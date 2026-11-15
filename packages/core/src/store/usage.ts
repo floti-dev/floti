@@ -24,7 +24,7 @@ export interface UsageIndexInput {
  * doing real work rather than guarding a case that cannot happen: a fork copies
  * its parent's history into a new file, so the same message genuinely is on
  * disk twice, and a reset re-offers every row the file has ever had. Counting
- * either twice would inflate the estimate silently.
+ * either twice would inflate the token counts silently.
  */
 export function indexUsageFile(store: Store, { file, tail }: UsageIndexInput): number {
   let inserted = 0

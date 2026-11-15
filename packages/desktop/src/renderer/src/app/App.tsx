@@ -359,7 +359,6 @@ import { stopChild } from "./familyActions";
 import { FamilyTab, type FamilyKid } from "./FamilyTab";
 import { useUpdate } from "./useUpdate";
 import { useOwnDataCopy } from "./useOwnDataCopy";
-import { useUsage } from "./useUsage";
 import { useHostPlugins, usePlugins } from "./usePlugins";
 import { PluginFrame, PluginsUnavailable } from "./PluginFrame";
 import {
@@ -522,10 +521,9 @@ type OnHost<T> = T & { host: string };
 /** The command palette's entry for History: Floti's own, so no slash, which every plugin command has. */
 const HISTORY_COMMAND = "history";
 
-type HostSurface = "history" | "usage" | "files" | "plugins" | "agents";
+type HostSurface = "history" | "files" | "plugins" | "agents";
 const LOCAL_SURFACES: Readonly<Record<HostSurface, string>> = {
   history: LOCAL_HOST_KEY,
-  usage: LOCAL_HOST_KEY,
   files: LOCAL_HOST_KEY,
   plugins: LOCAL_HOST_KEY,
   agents: LOCAL_HOST_KEY,
@@ -881,7 +879,7 @@ export function App(): JSX.Element {
     dismiss: dismissRestore,
   } = restoreState;
   /**
-   * The host History, Usage, Files and Settings > Plugins each show:
+   * The host History, Files, Agents and Settings > Plugins each show:
    * kept in this window only and sent to no host, This PC until switched. A
    * host removed from this device's list falls back to This PC; one that is
    * listed but not connected stays chosen, and its surface says why it cannot
@@ -907,7 +905,6 @@ export function App(): JSX.Element {
     setHistoryErrorHost(historyHost);
     setHistoryError(null);
   }
-  const usageHost = shownHostOf("usage");
   const filesHost = shownHostOf("files");
   const pluginsHost = shownHostOf("plugins");
   const showHostOn = useCallback(
@@ -933,7 +930,6 @@ export function App(): JSX.Element {
   };
   const history = useHistoryPalette(historyHost, historyOpen);
   const archiveStats = useArchiveStats(historyHost);
-  const usage = useUsage(usageHost);
   const check = useUpdate(UPDATE_DEPS, info?.version ?? null);
   const ownData = useOwnDataCopy();
   const themes = useThemes();
@@ -5007,10 +5003,8 @@ export function App(): JSX.Element {
       themeState={themes.state}
       onOpenThemesFolder={themes.openFolder}
       onDuplicateTheme={themes.duplicate}
-      usageDisplay={settings?.usageDisplay ?? "percent"}
       updateCheck={settings?.updateCheck ?? DEFAULT_SETTINGS.updateCheck}
       onUpdateCheckChange={(updateCheck) => writeSettings({ updateCheck })}
-      onUsageDisplayChange={launcher.setUsageDisplay}
       appVersion={info?.version ?? null}
       // From `app:info` rather than from a check's result: the states that
       // produce no result are exactly the ones where somebody wants this link.
@@ -5024,8 +5018,6 @@ export function App(): JSX.Element {
         if (info?.releasesUrl !== undefined)
           void helmOpenExternal(info.releasesUrl);
       }}
-      // The same fact the status bar's cycle turns on, from the same snapshot.
-      hasCostEstimate={usage.snapshot?.spend != null}
       terminal={terminalSettings}
       onTerminalChange={launcher.writeSettings}
       // The stack the terminals are actually running, so the preview well
@@ -6512,24 +6504,6 @@ export function App(): JSX.Element {
           onShowWaiting={showWaiting}
           mode={info === null ? null : MODE_LABEL[info.mode]}
           version={info?.version ?? null}
-          // From the setup status before `app:info`, which is read once at
-          // startup: after the CLI is relocated the strip would go on naming the
-          // old version while Settings names the new one.
-          claudeVersion={
-            setup.status?.semver ??
-            setup.status?.version ??
-            info?.claudeVersion ??
-            null
-          }
-          // From the setup status, not from `app:info`, which is read once at
-          // startup: after the CLI is relocated the strip would go on saying it
-          // is missing while the banner above it says it was found.
-          claudeMissing={setup.status !== null && setup.status.path === null}
-          usage={usage.snapshot}
-          usageError={usage.error}
-          usageHostChoice={hostChoiceFor("usage")}
-          usageDisplay={settings?.usageDisplay ?? "percent"}
-          onUsageDisplayChange={launcher.setUsageDisplay}
           update={update}
           onOpenUpdate={() => openSettings("updates")}
           plugins={statusPlugins}

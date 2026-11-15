@@ -5,7 +5,6 @@ import type { HostChoice } from './HostSwitch'
 import { HostSwitch } from './HostSwitch'
 import { FilesRootPicker } from './FilesTree'
 import { PluginsPage } from './PluginSettings'
-import { UsageStatus } from './UsageStatus'
 
 const HOSTS = [
   { id: 'local', name: 'This PC', remote: false },
@@ -63,41 +62,6 @@ describe('Files root picker on more than one host', () => {
   it('has no switch with only this PC', () => {
     render(<FilesRootPicker roots={[]} value={null} onChange={vi.fn()} />)
     expect(screen.queryByRole('radiogroup')).toBeNull()
-  })
-})
-
-describe('Usage on more than one host', () => {
-  it('names the host whose usage it shows, with a switch', async () => {
-    const onHostChange = vi.fn()
-    render(
-      <UsageStatus snapshot={null} mode="percent" onModeChange={vi.fn()} hostChoice={choice('local', onHostChange)} />
-    )
-    const group = screen.getByRole('radiogroup', { name: 'Usage host' })
-    expect(within(group).getByRole('radio', { checked: true })?.textContent).toContain('This PC')
-    await userEvent.click(within(group).getByRole('radio', { name: 'build-box' }))
-    expect(onHostChange).toHaveBeenCalledWith('h1')
-  })
-
-  it('says Unknown and why while the shown host’s usage cannot be read, never a figure', () => {
-    render(
-      <UsageStatus
-        snapshot={null}
-        mode="percent"
-        onModeChange={vi.fn()}
-        error="build-box is not connected."
-        hostChoice={choice('h1')}
-      />
-    )
-    const segment = document.querySelector('[data-usage-segment]')
-    expect(segment?.getAttribute('data-usage-segment')).toBe('unknown')
-    expect(segment?.textContent).toContain('Unknown')
-    expect(segment?.getAttribute('title')).toBe('Usage could not be read: build-box is not connected.')
-  })
-
-  it('looks as it always has with only this PC', () => {
-    render(<UsageStatus snapshot={null} mode="percent" onModeChange={vi.fn()} />)
-    expect(screen.queryByRole('radiogroup')).toBeNull()
-    expect(document.querySelector('[data-usage-segment]')?.textContent).toContain('Usage')
   })
 })
 

@@ -545,8 +545,8 @@ overrides the gate; keep it.
   read. All three are "Floti has nothing to add", and the honest paint for that
   is what the tab painted before any of this existed. A renamed status in a
   future CLI therefore degrades to the old behaviour rather than to a guess -
-  the same rule as the usage figures: paint nothing rather than a wrong
-  answer.
+  the rule every figure Floti shows follows: paint nothing rather than a
+  wrong answer.
 
   The session's own sentence for *why* it is waiting goes in the tab's hover
   hint and never on the tab. It is the CLI's string, carried verbatim, and a
@@ -593,8 +593,8 @@ overrides the gate; keep it.
   when nobody named the conversation by hand.
 
   **A tree that could not be read says "Unknown", never nothing.** This is the
-  usage figures' rule at a third surface - paint nothing rather than a wrong
-  number - and here it has an edge the others do not: the wrong answer is not a
+  same rule at another surface - paint nothing rather than a wrong number - and
+  here it has an edge the others do not: the wrong answer is not a
   wrong figure but a *reassuring* one. "This session is holding nothing" and
   "Floti failed to look" render identically as an empty list, and only one of
   them means it is safe to start another agent. So the pane carries a separate
@@ -655,17 +655,20 @@ overrides the gate; keep it.
   label.
 - **Status bar**: plain 11px subtle text directly on the canvas, 26px tall. No
   border and no fill; gaps separate within a group, and a 10px `border-strong`
-  hairline separates the groups. On the left, which Floti this is and which
-  `claude` it runs: "Helm 1.2.0", then a build that is not an ordinary install
-  (a hairline chip: `dev`, `dev · live`, `portable`) and a newer release (an
-  offer in `accent` text), a hairline, "claude 2.1.288" - or "claude CLI not
-  found" in `warn`. The two versions lead because they are what the bar is read
-  for when something is off. After another hairline come your sessions, each
-  count with its dot ("2 working", "1 needs you" in `warn`, "1 in error" in
-  `danger` for a session whose program reports an error, "1 running" with a
-  filled `success` dot for a command child whose command still runs, "2 idle"
-  with the idle ring), or "No sessions running". On the right, the plan's usage. The scan
-  time is in Settings: it is a fact about Floti nobody acts on.
+  hairline separates the groups, drawn only between groups that are there. On
+  the left, which Floti this is: "Floti 1.2.0", then a build that is not an
+  ordinary install (a hairline chip: `dev`, `dev · live`, `portable`) and a
+  newer release (an offer in `accent` text). The version leads because it is
+  what the bar is read for when something is off. After a hairline come your
+  sessions, each count with its dot ("2 working", "1 needs you" in `warn`, "1
+  in error" in `danger` for a session whose program reports an error, "1
+  running" with a filled `success` dot for a command child whose command still
+  runs, "2 idle" with the idle ring), or "No sessions running", then each host
+  sessions run in behind a hairline of its own. On the right, each plugin's
+  item. The bar names nothing that belongs to one agent: which CLI a session
+  runs, and its version, are in Settings, and a missing CLI is the banner's to
+  say. The scan time is in Settings too: it is a fact about Floti nobody acts
+  on.
 - **Section labels**: the 10px/600 caps label style, everywhere a section
   needs a name.
 - **Launch disclosure**: a control that starts a process gets a sentence

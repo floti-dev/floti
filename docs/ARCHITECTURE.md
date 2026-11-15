@@ -333,12 +333,6 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   tools, settings, composed instructions, overlays) is a per-launch file under
   the data directory, never a write into the agent's config.
 
-## Usage figures
-
-- Usage figures paint nothing rather than a wrong number. A stale reading of a
-  window that is still running paints lower bounds. Roll-over is judged before
-  age. Dollar figures are estimates and say so.
-
 ## Processes and ports
 
 - The process-and-ports pass costs about half a second, so it runs only while

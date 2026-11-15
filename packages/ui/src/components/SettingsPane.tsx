@@ -6,18 +6,15 @@ import {
   AGENT_DEPTH,
   AGENT_SESSIONS_PER_HOST,
   AGENT_STARTS_PER_PARENT,
-  offerableUsageModes,
   CORNER_RADIUS,
   DEFAULT_THEME_ID,
   DENSITY_MODES,
   deriveAccent,
   PANE_GAP,
-  COST_MODE_UNAVAILABLE,
   PROJECT_SHELL_HEIGHT_PCT,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_FONT_SIZE,
   TERMINAL_SCROLLBACK,
-  USAGE_DISPLAY_MODES,
   type AppSettings,
   type ArchiveStats,
   browserSearchName,
@@ -33,8 +30,7 @@ import {
   type ThemeKind,
   type ThemeListing,
   type ThemeState,
-  type ThemeTokens,
-  type UsageDisplayMode
+  type ThemeTokens
 } from '@helm/core/types'
 import { cn } from '../lib/cn'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './SettingsSections'
@@ -79,12 +75,11 @@ import { DevicesSettings, type DevicesSettingsProps } from './DevicesSettings'
  * ground: the xterm palette is fixed in both themes and pixel-asserted by the
  * fidelity checks (DESIGN.md par. 6), so colour is deliberately not a row here.
  *
- * Two things on screen elsewhere write the same settings this pane does - the
- * title bar's theme toggle and the status bar's usage segment - and both stay.
- * A quick accessor beside the thing it changes is worth having; what was
- * missing was somewhere to find the setting when you are not already looking at
- * it. Both write through `settings:write` and this pane renders whatever
- * `settings:changed` carries back, so the two cannot disagree.
+ * The title bar's theme toggle writes the same setting this pane does. A
+ * quick accessor beside the thing it changes is worth having, and this pane is
+ * where to find the setting when you are not already looking at it. Both write
+ * through `settings:write` and this pane renders whatever `settings:changed`
+ * carries back, so the two cannot disagree.
  *
  * Internal state is not shown. `windowBounds`, `firstRunCompletedAt` and
  * `upgradeNoteSeenAt` live in the same table but they are things Helm
@@ -145,10 +140,8 @@ export interface SettingsPaneProps {
   /** Writes a complete copy of a theme into that folder and shows it. */
   onDuplicateTheme: (id: string) => void
 
-  usageDisplay: UsageDisplayMode
   updateCheck: boolean
   onUpdateCheckChange: (next: boolean) => void
-  onUsageDisplayChange: (mode: UsageDisplayMode) => void
 
   /** This build's version, from `app:info`. Null until that read lands. */
   appVersion: string | null
@@ -168,12 +161,6 @@ export interface SettingsPaneProps {
   /** Asks the host to update floti and Helm. */
   onInstallUpdate: () => void
   onOpenReleases: () => void
-  /**
-   * Whether the transcript index has an estimate yet. `cost` is offered only
-   * when it has - the same rule the status bar's cycle follows, from the same
-   * function, because a mode that would paint nothing is a broken setting.
-   */
-  hasCostEstimate: boolean
 
   terminal: TerminalSettings
   onTerminalChange: (patch: Partial<TerminalSettings>) => void
@@ -364,12 +351,6 @@ export type AgentLimitSettings = Pick<
 /** What a fact reads when there is nothing to put in it. */
 const NOTHING = '-'
 
-const USAGE_LABEL: Record<UsageDisplayMode, string> = {
-  percent: 'Percent',
-  cost: 'Cost',
-  off: 'Off'
-}
-
 export function SettingsPane({
   section,
   status,
@@ -390,11 +371,8 @@ export function SettingsPane({
   themeState,
   onOpenThemesFolder,
   onDuplicateTheme,
-  usageDisplay,
   updateCheck,
   onUpdateCheckChange,
-  onUsageDisplayChange,
-  hasCostEstimate,
   appVersion,
   releasesUrl,
   update,
@@ -454,13 +432,12 @@ export function SettingsPane({
 }: SettingsPaneProps): JSX.Element {
   const found = status !== null && status.path !== null && status.version !== null
   const overridden = status?.source === 'setting'
-  const offerable = offerableUsageModes(hasCostEstimate)
 
   const meta = SETTINGS_SECTIONS.find((entry) => entry.id === section) ?? SETTINGS_SECTIONS[0]!
-  // General, Workspace and Agents hold two groups each and keep their headings;
-  // every other section is one group, whose title is the page's and whose hint
-  // is the line under it.
-  const sole = section !== 'general' && section !== 'workspace' && section !== 'agents'
+  // Workspace and Agents hold two groups each and keep their headings; every
+  // other section is one group, whose title is the page's and whose hint is the
+  // line under it.
+  const sole = section !== 'workspace' && section !== 'agents'
 
   return (
     <SettingsPage
@@ -549,48 +526,6 @@ export function SettingsPane({
                       Clear override
                     </Action>
                   </Actions>
-                </Group>
-
-                <Group name="statusbar" title="Status bar">
-                  <Row
-                    label="Usage in the status bar"
-                    hint={
-                      hasCostEstimate
-                        ? 'Percentages of your plan limits, an estimate of what the transcripts would have cost, or nothing.'
-                        : 'Percentages of your plan limits, or nothing. Cost joins the list once the transcript index has an estimate.'
-                    }
-                  >
-                    <div
-                      role="radiogroup"
-                      aria-label="Usage display"
-                      className="flex items-center gap-0.5 rounded-well border border-border bg-surface-sunken p-0.5"
-                    >
-                      {USAGE_DISPLAY_MODES.map((mode) => {
-                        const available = offerable.includes(mode)
-                        return (
-                          <button
-                            key={mode}
-                            type="button"
-                            role="radio"
-                            data-settings-usage={mode}
-                            aria-checked={usageDisplay === mode}
-                            disabled={!available}
-                            title={available ? `Show ${USAGE_LABEL[mode].toLowerCase()}` : COST_MODE_UNAVAILABLE}
-                            onClick={() => onUsageDisplayChange(mode)}
-                            className={cn(
-                              'rounded-raised px-2.5 py-1 text-[11.5px] transition-colors',
-                              usageDisplay === mode
-                                ? SEGMENT_ON
-                                : 'text-fg-subtle hover:text-fg',
-                              !available && 'cursor-default opacity-45 hover:text-fg-subtle'
-                            )}
-                          >
-                            {USAGE_LABEL[mode]}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </Row>
                 </Group>
             </>
           )}

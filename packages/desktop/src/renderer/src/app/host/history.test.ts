@@ -67,28 +67,9 @@ const CONVERSATION: P.ArchivedConversation = {
   ]
 }
 
-const reading = (backend: string, percent: number): P.UsageSnapshot => ({
-  backend,
-  file: '/home/.claude.json',
-  fetchedAtMs: 1_790_848_800_000,
-  limits: [
-    {
-      kind: 'session',
-      group: 'session',
-      percent,
-      severity: 'normal',
-      resetsAtMs: 1_790_860_000_000,
-      scope: null,
-      isActive: true
-    }
-  ],
-  problem: null,
-  spend: null
-})
-
 const UNREACHABLE = 'No local host answered on its socket.'
 
-/** The host side: one conversation in its index and archive, and a usage reading per backend. */
+/** The host side: one conversation in its index and archive. */
 function world(connection: FakeConnection | null = new FakeConnection()) {
   connection
     ?.answer('history:summary', () => SUMMARY)
@@ -101,12 +82,11 @@ function world(connection: FakeConnection | null = new FakeConnection()) {
     .answer('history:rename', ({ sessionId, name }) => (sessionId === ONE ? { ...SESSION, label: name } : null))
     .answer('archive:conversation', ({ sessionId }) => (sessionId === ONE ? CONVERSATION : null))
     .answer('archive:stats', () => STATS)
-    .answer('usage:read', () => [reading('pi', 10), reading(CLAUDE_CODE_BACKEND, 42)])
   const link = fakeReach(connection, UNREACHABLE)
   const logged: string[] = []
   const adapter = createHistoryAdapter(link, (line) => logged.push(line))
   const emitted: Array<{ channel: string; payload: unknown }> = []
-  for (const channel of ['history:changed', 'archive:changed', 'usage:changed'] as const) {
+  for (const channel of ['history:changed', 'archive:changed'] as const) {
     listen(adapter, channel, (payload) => emitted.push({ channel, payload }))
   }
   return { connection: connection ?? new FakeConnection(), link, history: reads(adapter), emitted, logged }
@@ -135,12 +115,11 @@ function reads(adapter: HostAdapter) {
     refresh: () => ask(adapter, 'history:refresh', undefined),
     rename: (sessionId: string, name: string) => ask(adapter, 'history:rename', { sessionId, name }),
     conversation: (sessionId: string) => ask(adapter, 'archive:conversation', { sessionId }),
-    archiveStats: () => ask(adapter, 'archive:stats', undefined),
-    usage: () => ask(adapter, 'usage:read', undefined)
+    archiveStats: () => ask(adapter, 'archive:stats', undefined)
   }
 }
 
-describe('history, the archive and usage over the window’s connection to the local host', () => {
+describe('history and the archive over the window’s connection to the local host', () => {
   it('answers each read from the host, in the window’s words', async () => {
     const w = world()
 
@@ -192,54 +171,32 @@ describe('history, the archive and usage over the window’s connection to the l
     expect((await w.history.summary()).error).toBe('history.jsonl could not be read.')
   })
 
-  it('reads Claude Code’s usage out of the host’s reading per backend', async () => {
-    const w = world()
-    const usage = await w.history.usage()
-    expect(usage).toEqual({
-      file: '/home/.claude.json',
-      fetchedAtMs: 1_790_848_800_000,
-      limits: [expect.objectContaining({ kind: 'session', percent: 42 })],
-      problem: null,
-      spend: null
-    })
-  })
-
   it('hands each state the host pushes to the window’s listeners, converted, so a session indexed after the view opened appears without a refresh', async () => {
     const w = world()
     await w.link.connect()
     w.connection.snapshot('history:changed', SUMMARY)
     w.connection.push('history:changed', { ...SUMMARY, sessions: 2, error: null })
     w.connection.push('archive:changed', { ...STATS, sessions: 2 })
-    w.connection.push('usage:changed', [reading(CLAUDE_CODE_BACKEND, 77)])
 
-    expect(w.emitted.map((e) => e.channel)).toEqual([
-      'history:changed',
-      'history:changed',
-      'archive:changed',
-      'usage:changed'
-    ])
+    expect(w.emitted.map((e) => e.channel)).toEqual(['history:changed', 'history:changed', 'archive:changed'])
     expect(w.emitted[1]?.payload).toMatchObject({ sessions: 2 })
     expect(w.emitted[1]?.payload).not.toHaveProperty('error')
     expect(w.emitted[2]?.payload).toMatchObject({ sessions: 2 })
-    expect(w.emitted[3]?.payload).toMatchObject({ limits: [expect.objectContaining({ percent: 77 })] })
-    expect(w.emitted[3]?.payload).not.toHaveProperty('backend')
   })
 
   it('gives a read asked before the first connect has finished the host’s answer, not an empty one', async () => {
     const w = world()
     // The first connect is still in flight: each read joins it.
-    const [summary, stats, page, usage] = await Promise.all([
+    const [summary, stats, page] = await Promise.all([
       w.history.summary(),
       w.history.archiveStats(),
-      w.history.sessions({}),
-      w.history.usage()
+      w.history.sessions({})
     ])
     expect(summary.sessions).toBe(1)
     expect(stats.sessions).toBe(1)
     expect(page.sessions.map((s) => s.sessionId)).toEqual([ONE])
-    expect(usage.limits.map((l) => l.percent)).toEqual([42])
     // And what the window needs pushed was subscribed before any of them was answered.
-    expect([...w.connection.subscriptions.keys()].sort()).toEqual(['archive:changed', 'history:changed', 'usage:changed'])
+    expect([...w.connection.subscriptions.keys()].sort()).toEqual(['archive:changed', 'history:changed'])
   })
 
   it('says the link’s sentence when the host cannot be reached, never an empty list or zero counts', async () => {
@@ -250,21 +207,5 @@ describe('history, the archive and usage over the window’s connection to the l
     await expect(w.history.projects()).rejects.toThrow(UNREACHABLE)
     await expect(w.history.conversation(ONE)).rejects.toThrow(UNREACHABLE)
     await expect(w.history.archiveStats()).rejects.toThrow(UNREACHABLE)
-    expect(await w.history.usage()).toEqual({
-      file: '',
-      fetchedAtMs: null,
-      limits: [],
-      problem: { kind: 'unreadable', detail: UNREACHABLE },
-      spend: null
-    })
-  })
-
-  it('says why usage paints nothing when the host has no reading for Claude Code', async () => {
-    const w = world()
-    w.connection.answer('usage:read', () => [reading('pi', 10)])
-    expect((await w.history.usage()).problem).toEqual({
-      kind: 'unreadable',
-      detail: 'The local host has no usage reading for Claude Code.'
-    })
   })
 })

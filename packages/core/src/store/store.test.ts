@@ -289,7 +289,6 @@ describe('settings', () => {
       firstRunCompletedAt: '2026-08-09T12:00:00.000Z',
       upgradeNoteSeenAt: '2026-11-13T09:00:00.000Z',
       claudePath: join(dir, 'claude.exe'),
-      usageDisplay: 'cost',
       terminalFontFamily: 'Consolas',
       terminalFontSize: 17,
       terminalCursorStyle: 'bar',
@@ -441,8 +440,13 @@ describe('settings', () => {
     store.raw
       .prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('legacyKey', '1', '')")
       .run()
+    // A key an earlier release kept, which no setting reads any more.
+    store.raw
+      .prepare(`INSERT INTO app_settings (key, value, updated_at) VALUES ('usageDisplay', '"cost"', '')`)
+      .run()
 
     expect(readSettings(store)).toEqual(DEFAULT_SETTINGS)
+    expect(readSettings(store)).not.toHaveProperty('usageDisplay')
   })
 
   it('S5: loads a host an earlier version saved with a role with the role dropped, and takes the next write', () => {
@@ -647,11 +651,6 @@ describe('settings validation', () => {
       key: 'accentColor',
       good: [null, '#6ca6f5', '#000000'],
       bad: ['#6CA6F5', '#6ca6f', '#6ca6f5ff', 'rgb(1 2 3)', 'blue', '', 6, {}]
-    },
-    {
-      key: 'usageDisplay',
-      good: ['percent', 'cost', 'off'],
-      bad: ['dollars', 'PERCENT', null, 0, ['off']]
     },
     {
       key: 'scanRoots',
@@ -1229,13 +1228,13 @@ describe('settings validation', () => {
   })
 
   it('applies a patch as one edit: one bad key writes none of them', () => {
-    writeSettings(store, { theme: 'dark', usageDisplay: 'cost' })
+    writeSettings(store, { theme: 'dark', terminalCursorStyle: 'bar' })
 
     expect(() =>
-      writeSettings(store, { theme: 'light', usageDisplay: 'dollars' as never })
+      writeSettings(store, { theme: 'light', terminalCursorStyle: 'square' as never })
     ).toThrow(SettingsValidationError)
 
-    expect(readSettings(store)).toMatchObject({ theme: 'dark', usageDisplay: 'cost' })
+    expect(readSettings(store)).toMatchObject({ theme: 'dark', terminalCursorStyle: 'bar' })
   })
 
   it('names every problem in the patch, not just the first', () => {
@@ -1286,7 +1285,6 @@ describe('settings validation', () => {
       },
       firstRunCompletedAt: '2026-08-11T09:00:00.000Z',
       claudePath: join(dir, 'claude.exe'),
-      usageDisplay: 'off',
       terminalFontFamily: 'Cascadia Mono',
       terminalFontSize: 12,
       terminalCursorStyle: 'underline',
@@ -1343,7 +1341,6 @@ const DEFAULT_SETTINGS_SHAPE = (dir: string): typeof DEFAULT_SETTINGS => ({
   },
   firstRunCompletedAt: '2026-08-11T09:00:00.000Z',
   claudePath: join(dir, 'claude.exe'),
-  usageDisplay: 'off',
   terminalFontFamily: 'Cascadia Mono',
   terminalFontSize: 12,
   terminalCursorStyle: 'underline',
