@@ -27,6 +27,14 @@ export {
   type CopyCounts,
   type UsagePage
 } from './copy'
+export {
+  openBrowserHistory,
+  BROWSER_HISTORY_MAX,
+  BROWSER_HISTORY_TITLE_MAX,
+  BROWSER_HISTORY_URL_MAX,
+  type BrowserHistory,
+  type BrowserHistoryOptions
+} from './browserHistory'
 export { openStore, type HelmDatabase, type OpenStoreOptions, type Store } from './db'
 export {
   historyCursor,

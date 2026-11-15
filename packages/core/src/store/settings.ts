@@ -17,7 +17,6 @@ import {
   BROWSER_PROJECT_URLS_MAX,
   BROWSER_REACH_MODES,
   BROWSER_SEARCH_ENGINES,
-  BROWSER_RECENT_URLS_MAX,
   browserReachAllows,
   CORNER_RADIUS,
   DEFAULT_SETTINGS,
@@ -701,29 +700,11 @@ export const SETTING_VALIDATORS: SettingValidators = {
   },
 
   /**
-   * Addresses the browser pane has been to, newest first.
-   *
-   * Every entry has to be something `browserReachAllows` would allow with the
-   * widest posture - which is to say an absolute http or https URL. A dropdown
-   * whose rows are not addresses is a dropdown whose rows do nothing when
-   * clicked, and the value is written by Helm rather than typed, so a row that
-   * is not one is a bug in this build and not a fact about the past.
+   * The last address a browser pane was on, keyed by the project directory it
+   * was opened beside. Every URL is one `browserReachAllows` would allow with
+   * the widest posture: the value is written by Floti rather than typed, so one
+   * that is not is a bug in this build.
    */
-  browserRecentUrls: (value) => {
-    if (!Array.isArray(value)) return `expected an array of URLs, got ${describe(value)}`
-    if (value.length > BROWSER_RECENT_URLS_MAX) {
-      return `expected at most ${String(BROWSER_RECENT_URLS_MAX)}, got ${String(value.length)}`
-    }
-    for (const entry of value) {
-      if (typeof entry !== 'string') return `expected URLs, got ${describe(entry)}`
-      if (!browserReachAllows(entry, 'web').allowed) {
-        return `expected an http or https URL, got ${JSON.stringify(entry)}`
-      }
-    }
-    return null
-  },
-
-  /** The same, keyed by the project directory the browser was opened beside. */
   browserProjectUrls: (value) => {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       return `expected an object of path to URL, got ${describe(value)}`

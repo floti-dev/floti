@@ -261,5 +261,14 @@ export const MIGRATIONS: readonly EmbeddedMigration[] = [
     "statements": [
       "ALTER TABLE `notices` ADD `cause` text;"
     ]
+  },
+  {
+    "tag": "0034_browser_history",
+    "statements": [
+      "-- The browser's history, for the address bar's suggestions. It replaces the `browserRecentUrls` setting: its addresses (newest first) become the first rows, a millisecond apart so their order is kept, and the setting goes.\nCREATE TABLE `browser_history` (\n\t`url` text PRIMARY KEY NOT NULL,\n\t`title` text DEFAULT '' NOT NULL,\n\t`visits` integer DEFAULT 1 NOT NULL,\n\t`last_visit` integer NOT NULL\n);",
+      "CREATE INDEX `browser_history_last_visit_idx` ON `browser_history` (`last_visit`);",
+      "INSERT OR IGNORE INTO `browser_history` (`url`, `title`, `visits`, `last_visit`)\nSELECT `recent`.`value`, '', 1, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) - `recent`.`key`\nFROM `app_settings`, json_each(`app_settings`.`value`) AS `recent`\nWHERE `app_settings`.`key` = 'browserRecentUrls' AND json_valid(`app_settings`.`value`) AND json_type(`app_settings`.`value`) = 'array'\nAND `recent`.`type` = 'text' AND (`recent`.`value` LIKE 'http://%' OR `recent`.`value` LIKE 'https://%');",
+      "DELETE FROM `app_settings` WHERE `key` = 'browserRecentUrls';"
+    ]
   }
 ]
