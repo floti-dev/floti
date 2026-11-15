@@ -567,7 +567,9 @@ fn session_requests_and_answers_round_trip_over_cbor() {
     );
     exchange::<SessionList>((), vec![record(1), command_child(2)]);
     exchange::<SessionEndings>(
-        SessionEndingsRequest { ids: vec![1, 12, 14] },
+        SessionEndingsRequest {
+            ids: vec![1, 12, 14],
+        },
         vec![
             SessionEnding::from(&record(12)),
             SessionEnding {

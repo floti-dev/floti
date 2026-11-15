@@ -361,9 +361,11 @@ async fn a_client_asks_how_sessions_it_held_running_ended_and_hears_exited_stopp
     client.attach(1, exited).await;
     client.type_into(1, b"/exit 3\r").await;
     client
-        .event_on(EXITS, "the session that exits by itself", |ended: &Value| {
-            ended["id"] == exited
-        })
+        .event_on(
+            EXITS,
+            "the session that exits by itself",
+            |ended: &Value| ended["id"] == exited,
+        )
         .await;
     for id in [stopped, lost] {
         client

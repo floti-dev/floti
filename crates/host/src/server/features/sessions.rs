@@ -50,10 +50,10 @@ use floti_protocol::channels::sessions::{
     PtermClose, PtermExit, PtermExited, PtermOpen, PtermResize, PtermShells, PtermStreamOpen,
     PtermTerminal, RemovedSessions, SessionActivate, SessionActivityChanged, SessionActivityState,
     SessionClose, SessionConfirm, SessionConfirmAnswer, SessionConfirmKind, SessionConfirmRequest,
-    SessionConfirmed, SessionEndings, SessionExit, SessionFocus, SessionLaunch, SessionList, SessionNotify,
-    SessionRemove, SessionRename, SessionResize, SessionRestorable, SessionRestore, SessionSize,
-    SessionSizeResult, SessionStart, SessionStreamOpen, SessionTerminal, SessionsOverview,
-    SessionsOverviewChanged,
+    SessionConfirmed, SessionEndings, SessionExit, SessionFocus, SessionLaunch, SessionList,
+    SessionNotify, SessionRemove, SessionRename, SessionResize, SessionRestorable, SessionRestore,
+    SessionSize, SessionSizeResult, SessionStart, SessionStreamOpen, SessionTerminal,
+    SessionsOverview, SessionsOverviewChanged,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 
