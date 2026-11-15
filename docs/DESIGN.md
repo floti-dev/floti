@@ -357,7 +357,10 @@ overrides the gate; keep it.
   so a browser tab's native view stands down for it as it does for a dialog -
   leaving a still of the page where it was, so the menu opens over the page
   rather than over a hole - and it is portalled to the body and kept 8px inside the window, so neither
-  the sidebar's clip nor the window's edge cuts it off.
+  the sidebar's clip nor the window's edge cuts it off. The browser bar's own
+  menus (More, Share) are the exception: drawn in the browser's menu layer,
+  over the live page, with the same recipe and placement and no still
+  ([ARCHITECTURE.md](ARCHITECTURE.md#browser-pane)).
 - **Stepper**: a segmented-control shell holding − and + buttons either side of
   a tabular mono readout. For a small bounded integer someone nudges while
   watching the result - a terminal's point size, not a scrollback of 25,000.

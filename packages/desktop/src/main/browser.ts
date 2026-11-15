@@ -490,6 +490,12 @@ export interface BrowserHostOptions {
   onLogged: (id: number, entry: BrowserConsoleEntry) => void
   /** A page's icon changed. Only on a change, never with every announce. */
   onFavicon: (favicon: BrowserFavicon) => void
+  /**
+   * A view was added to the window or raised to its top. The menu layer
+   * (`menuLayer.ts`) is added again after it, so the bar's menus draw above
+   * every page.
+   */
+  onViewRaised?: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -1085,6 +1091,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     if (win === null || win.isDestroyed() || entry.attached) return
     win.contentView.addChildView(entry.view)
     entry.attached = true
+    options.onViewRaised?.()
   }
 
   /**
@@ -1105,7 +1112,10 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       if (win.isDestroyed()) return
       const { width, height } = win.getContentBounds()
       // Adding a view its parent already holds raises it to the top.
-      if (entry.attached) win.contentView.addChildView(entry.view)
+      if (entry.attached) {
+        win.contentView.addChildView(entry.view)
+        options.onViewRaised?.()
+      }
       entry.view.setBounds({ x: 0, y: 0, width, height })
       entry.view.setVisible(true)
     }

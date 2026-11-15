@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { subscribeOverlay, overlayOpen, type ConsoleEntry } from '@helm/ui'
 import type { BrowserSuggestions } from '@helm/core/types'
+import { subscribeOverlay, overlayOpen, type ConsoleEntry, type MenuLayerPort } from '@helm/ui'
 import type { BrowserAvailability, BrowserShare, BrowserState } from '../../../shared/ipc'
 import { helm } from './bridge'
+import { lookOfDocument } from './theme'
 import {
   activatePage,
   addPage,
@@ -171,6 +172,11 @@ export interface BrowserPanesState {
   forget: (url: string) => void
   /** Forget the whole history: the More menu's Clear browsing history. */
   clearHistory: () => void
+   * The browser's menu layer (`main/menuLayer.ts`): where the bar's menus are
+   * drawn, over the live page, rather than in the window behind a still of it.
+   * One menu at a time; opening one forgets the last one's callbacks.
+   */
+  menuLayer: MenuLayerPort
   /** The last problem `browser:open` refused with, for the strip to report. */
   error: string | null
   dismissError: () => void
@@ -610,6 +616,49 @@ export function useBrowsers(): BrowserPanesState {
     [push]
   )
 
+  /** The count of menu layer opens, and what the open one does with a pick or a close. */
+  const layerTurn = useRef(0)
+  const layerOpen = useRef<{ turn: number; on: Parameters<MenuLayerPort['open']>[2] } | null>(null)
+  useEffect(
+    () =>
+      helm.on('browser:layer-event', (event) => {
+        const open = layerOpen.current
+        if (open === null || open.turn !== event.turn) return
+        if ('pick' in event) {
+          open.on.pick(event.pick)
+          return
+        }
+        layerOpen.current = null
+        open.on.closed(event.closed)
+      }),
+    []
+  )
+  const menuLayer = useMemo<MenuLayerPort>(
+    () => ({
+      open: (menu, rect, on) => {
+        const turn = ++layerTurn.current
+        layerOpen.current = { turn, on }
+        const send = (content: typeof menu, at: typeof rect): void => {
+          // The look on each send: a theme changed while a menu is open repaints it too.
+          helm.send('browser:layer', { open: { turn, rect: at, content, look: lookOfDocument() } })
+        }
+        send(menu, rect)
+        const current = (): boolean => layerOpen.current?.turn === turn
+        return {
+          update: (next, at) => {
+            if (current()) send(next, at)
+          },
+          close: () => {
+            if (!current()) return
+            layerOpen.current = null
+            helm.send('browser:layer', { close: { turn } })
+          }
+        }
+      }
+    }),
+    []
+  )
+
   const setSuppressed = useCallback(
     (reason: SuppressReason, next: boolean) => {
       if (suppressed.current.has(reason) === next) return
@@ -652,6 +701,7 @@ export function useBrowsers(): BrowserPanesState {
     suggest,
     forget,
     clearHistory,
+    menuLayer,
     error,
     dismissError: () => setError(null),
     availability

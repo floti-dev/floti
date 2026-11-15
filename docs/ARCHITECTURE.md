@@ -263,6 +263,33 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   does while the sidebar is hidden. The view never enters the top 36px, where
   Windows draws the window controls, except in fullscreen, when the page has
   the whole window and there is no title bar.
+- The bar's own menus (More, Share) and the address suggestions are drawn
+  over the live page instead, in the **menu layer** (`main/menuLayer.ts`):
+  one transparent `WebContentsView` per window, made with the window's first
+  page, loading `layer.html`, a Floti page with the window's preload and CSP.
+  It is not a browser view: it is not in the exemption registry, so
+  `will-navigate` and `setWindowOpenHandler` stay denied for it. It is raised
+  above every page whenever one is added or raised (`onViewRaised` in
+  `browser.ts`, the fullscreen raise included). A transparent part of a view
+  still takes clicks, so its bounds are always the open menu's rectangle, and
+  idle it is hidden. The window measures the menu by drawing it hidden and
+  inert with the same recipe, places it with `placePopup`
+  (`ui/src/lib/popup.ts`: dropped from its control, kept 8px inside the
+  window), and sends `browser:layer` with the rectangle in CSS pixels, the
+  rows as data (the window keeps what each does, by id) and the window's
+  look (`lookOfDocument` in `theme.ts`: every custom property, the kind and
+  the data attributes on `<html>`, painted again in the layer). Main converts
+  the rectangle with the window's zoom factor, keeps it inside the window and
+  below the title bar, draws the layer page at the same zoom, shows it and,
+  for a menu, gives it the keyboard, so `Menu`'s own keys work. A pick,
+  Escape or a click anywhere else (the page or Floti's chrome, which blurs the
+  layer) closes it; main hides it, gives the keyboard back to the window if
+  the layer had it, and tells the window on `browser:layer-event`, and the
+  window returns focus to the control that opened the menu. A press on that
+  control is left to its own click. A window resize or a pane move closes it
+  from the window, and the Browser tab leaving the screen unmounts the menu,
+  which closes it. These menus are no overlay: no still, nothing stands down.
+  Dialogs and every other menu keep the still.
 - The browser's keys are one table (`shared/browserKeys.ts`): main reads it in
   `before-input-event` for a key pressed in a page, the window for a key in
   Floti's chrome, and both run the window's one dispatch. A key an agent sends

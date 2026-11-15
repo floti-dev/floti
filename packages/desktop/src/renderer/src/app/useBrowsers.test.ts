@@ -360,3 +360,77 @@ describe('useBrowsers - the address bar’s history', () => {
     expect(bridge.sent('browser:clearHistory')).toHaveLength(1)
   })
 })
+
+describe('useBrowsers - the menu layer', () => {
+  const MENU = {
+    kind: 'menu' as const,
+    label: 'Browser',
+    role: 'menu' as const,
+    stayOpen: false,
+    entries: [{ kind: 'item' as const, id: 'devtools', label: 'Open DevTools' }]
+  }
+  const AT = { x: 1000, y: 80, width: 220, height: 120 }
+
+  it("asks main for the menu with the window's look, and stands no view down for it", () => {
+    document.documentElement.style.setProperty('--helm-surface-raised', '#202124')
+    document.documentElement.classList.add('dark')
+    const { result } = renderHook(() => useBrowsers())
+    act(() => result.current.sendBounds(3, RECT, true))
+    bridge.clearRecords()
+    act(() => {
+      result.current.menuLayer.open(MENU, AT, { pick: () => undefined, closed: () => undefined })
+    })
+    const [sent] = bridge.sent('browser:layer')
+    expect(sent).toMatchObject({ open: { turn: 1, rect: AT, content: MENU, look: { kind: 'dark' } } })
+    expect(sent && 'open' in sent ? sent.open.look.vars['--helm-surface-raised'] : null).toBe('#202124')
+    expect(bridge.invoked('browser:snapshot')).toEqual([])
+    expect(bounds()).toEqual([])
+    document.documentElement.removeAttribute('style')
+    document.documentElement.classList.remove('dark')
+  })
+
+  it('hands the open menu its picks and its close, and nothing meant for an earlier one', () => {
+    const { result } = renderHook(() => useBrowsers())
+    const first = { pick: vi.fn(), closed: vi.fn() }
+    const second = { pick: vi.fn(), closed: vi.fn() }
+    act(() => {
+      result.current.menuLayer.open(MENU, AT, first)
+      result.current.menuLayer.open(MENU, AT, second)
+    })
+    act(() => {
+      bridge.emit('browser:layer-event', { turn: 1, pick: 'devtools' })
+      bridge.emit('browser:layer-event', { turn: 2, pick: 'devtools' })
+      bridge.emit('browser:layer-event', { turn: 2, closed: 'pick' })
+    })
+    expect(first.pick).not.toHaveBeenCalled()
+    expect(second.pick).toHaveBeenCalledWith('devtools')
+    expect(second.closed).toHaveBeenCalledWith('pick')
+  })
+
+  it('sends new content to the open menu, closes it once, and sends nothing for one the layer already closed', () => {
+    const { result } = renderHook(() => useBrowsers())
+    bridge.clearRecords()
+    let handle: ReturnType<typeof result.current.menuLayer.open> | null = null
+    act(() => {
+      handle = result.current.menuLayer.open(MENU, AT, { pick: () => undefined, closed: () => undefined })
+    })
+    act(() => handle!.update(MENU, { ...AT, x: 900 }))
+    act(() => handle!.close())
+    act(() => handle!.close())
+    act(() => handle!.update(MENU, AT))
+    expect(bridge.sent('browser:layer').map((request) => ('open' in request ? 'open' : 'close'))).toEqual([
+      'open',
+      'open',
+      'close'
+    ])
+
+    let closedByLayer: ReturnType<typeof result.current.menuLayer.open> | null = null
+    act(() => {
+      closedByLayer = result.current.menuLayer.open(MENU, AT, { pick: () => undefined, closed: () => undefined })
+    })
+    act(() => bridge.emit('browser:layer-event', { turn: 2, closed: 'escape' }))
+    bridge.clearRecords()
+    act(() => closedByLayer!.close())
+    expect(bridge.sent('browser:layer')).toEqual([])
+  })
+})

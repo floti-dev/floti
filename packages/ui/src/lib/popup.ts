@@ -11,6 +11,36 @@ export const POPUP_MARGIN = 8
 const DROP = 4
 
 /**
+ * Where a popup of `size` goes, `at` a point or under a control, in a window
+ * of `viewport`: flipped above a control with no room under it, and pulled
+ * back to `POPUP_MARGIN` inside the window wherever it would cross the edge.
+ * The one placement, for a popup in the window and for a menu the browser's
+ * menu layer draws over a page.
+ */
+export function placePopup(
+  at: PopupAnchor,
+  size: { width: number; height: number },
+  viewport: { width: number; height: number }
+): { left: number; top: number } {
+  const maxLeft = viewport.width - size.width - POPUP_MARGIN
+  const maxTop = viewport.height - size.height - POPUP_MARGIN
+  let left: number
+  let top: number
+  if ('below' in at) {
+    left = at.below.left
+    top = at.below.bottom + DROP
+    if (top > maxTop && at.below.top - size.height - DROP >= POPUP_MARGIN) top = at.below.top - size.height - DROP
+  } else {
+    left = at.x
+    top = at.y
+  }
+  return {
+    left: Math.max(POPUP_MARGIN, Math.min(left, maxLeft)),
+    top: Math.max(POPUP_MARGIN, Math.min(top, maxTop))
+  }
+}
+
+/**
  * What every popup does that is not about its contents: it counts as an
  * overlay, it is placed once its size is known, and it goes away when the
  * window stops being the thing it was placed against.
@@ -55,22 +85,7 @@ export function usePopup({
     if (popup === null) return
     const placeNow = (): void => {
       const { width, height } = popup.getBoundingClientRect()
-      const maxLeft = window.innerWidth - width - POPUP_MARGIN
-      const maxTop = window.innerHeight - height - POPUP_MARGIN
-      let left: number
-      let top: number
-      if ('below' in at) {
-        left = at.below.left
-        top = at.below.bottom + DROP
-        if (top > maxTop && at.below.top - height - DROP >= POPUP_MARGIN) top = at.below.top - height - DROP
-      } else {
-        left = at.x
-        top = at.y
-      }
-      const next = {
-        left: Math.max(POPUP_MARGIN, Math.min(left, maxLeft)),
-        top: Math.max(POPUP_MARGIN, Math.min(top, maxTop))
-      }
+      const next = placePopup(at, { width, height }, { width: window.innerWidth, height: window.innerHeight })
       setPlace((last) => (last !== null && last.left === next.left && last.top === next.top ? last : next))
     }
     placeNow()
