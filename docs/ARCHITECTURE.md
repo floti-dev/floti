@@ -300,6 +300,16 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   Escape only while the page is loading and is not fullscreen; otherwise it
   stays the page's. The window never takes Escape as a command
   (`COMMANDS_FOR_THE_PAGE_ONLY`).
+- While the page in front loads (`BrowserState.loading`), a 2px indeterminate
+  line runs under the address bar; Electron reports no load progress. A page's
+  tab shows a spinner while it loads, then its site's icon, else the globe.
+  The icon travels on its own `browser:favicon` event (`{ id, icon }`, a
+  `data:` URL or null), never in `BrowserState`, and only when it changes:
+  `page-favicon-updated` names candidates, `main/favicons.ts` fetches the first
+  the tab's reach allows (see [SECURITY.md](SECURITY.md#browser-pane)) and
+  caches it by icon address, and a navigation to another origin clears it. An
+  icon fetched for a page that has since moved on is dropped. A renderer that
+  reloads shows the globe until each page next reports its icon.
 - Hide a view with `setVisible(false)`, which keeps the page capturable,
   scriptable and clickable.
 

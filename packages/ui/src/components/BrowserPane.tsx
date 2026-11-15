@@ -663,6 +663,21 @@ export function BrowserPane({
         </div>
       </div>
 
+      {/* The loading line: 2px of accent over the bar's bottom edge, a mark
+          and not a fill (DESIGN.md "Browser pane"). Indeterminate, because
+          Electron says a page is loading and not how far it has got. It takes
+          no height, so the page below never moves when a load starts or ends. */}
+      {state.loading && (
+        <div aria-hidden="true" className="relative h-0 shrink-0">
+          <div
+            data-browser-loading
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden"
+          >
+            <div className="h-full w-1/3 animate-load bg-accent motion-reduce:w-full motion-reduce:animate-none" />
+          </div>
+        </div>
+      )}
+
       {shareMenu !== null && (
         <Menu
           label="Share"

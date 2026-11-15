@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -5,15 +6,17 @@ import { BROWSER_PAGE_MIME, BrowserPages, type BrowserPagesProps } from './Brows
 import { TAB_MIME } from './TabBar'
 
 const PAGES: BrowserPagesProps['pages'] = [
-  { id: 1, title: 'Dashboard', url: 'http://localhost:5173/', refusedUrl: null, openedBy: null, sharedWith: null },
-  { id: 2, title: '', url: '', refusedUrl: null, openedBy: null, sharedWith: null },
+  { id: 1, title: 'Dashboard', url: 'http://localhost:5173/', refusedUrl: null, openedBy: null, sharedWith: null, loading: false, icon: null },
+  { id: 2, title: '', url: '', refusedUrl: null, openedBy: null, sharedWith: null, loading: false, icon: null },
   {
     id: 3,
     title: 'Settings',
     url: 'http://localhost:5173/settings',
     refusedUrl: null,
     openedBy: 'browser overhaul',
-    sharedWith: null
+    sharedWith: null,
+    loading: false,
+    icon: null
   }
 ]
 
@@ -50,7 +53,7 @@ describe('BrowserPages', () => {
   it('names a page refused its first address after its host, and says on hover that nothing loaded', () => {
     renderPages({
       pages: [
-        { id: 5, title: 'example.com', url: '', refusedUrl: 'https://example.com/docs', openedBy: null, sharedWith: null }
+        { id: 5, title: 'example.com', url: '', refusedUrl: 'https://example.com/docs', openedBy: null, sharedWith: null, loading: false, icon: null }
       ]
     })
     const tab = screen.getByRole('tab', { name: /^example\.com/ })
@@ -66,7 +69,9 @@ describe('BrowserPages', () => {
           url: 'https://example.com/account',
           refusedUrl: null,
           openedBy: null,
-          sharedWith: { session: 9, name: 'browser overhaul' }
+          sharedWith: { session: 9, name: 'browser overhaul' },
+          loading: false,
+          icon: null
         }
       ]
     })
@@ -97,5 +102,77 @@ describe('BrowserPages', () => {
 
     fireEvent.drop(last, carrying(TAB_MIME, 'session:4'))
     expect(props.onMove).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('BrowserPages - what a tab shows before its title', () => {
+  const ICON = 'data:image/png;base64,aWNvbg=='
+  const iconOf = (name: RegExp): string | null =>
+    screen.getByRole('tab', { name }).querySelector('[data-page-icon]')?.getAttribute('data-page-icon') ?? null
+
+  it("shows a spinner while the page loads, then its site's icon, and the globe for a site with none", () => {
+    const page = PAGES[0]!
+    const { rerender } = render(
+      <BrowserPages
+        pages={[{ ...page, loading: true, icon: ICON }]}
+        activeId={1}
+        focused
+        onActivate={vi.fn()}
+        onClose={vi.fn()}
+        onMove={vi.fn()}
+        onNew={vi.fn()}
+      />
+    )
+    expect(iconOf(/^Dashboard/)).toBe('loading')
+
+    const loaded = (icon: string | null): JSX.Element => (
+      <BrowserPages
+        pages={[{ ...page, loading: false, icon }]}
+        activeId={1}
+        focused
+        onActivate={vi.fn()}
+        onClose={vi.fn()}
+        onMove={vi.fn()}
+        onNew={vi.fn()}
+      />
+    )
+    rerender(loaded(ICON))
+    expect(iconOf(/^Dashboard/)).toBe('favicon')
+    expect(screen.getByRole('tab', { name: /^Dashboard/ }).querySelector('img')?.getAttribute('src')).toBe(ICON)
+
+    rerender(loaded(null))
+    expect(iconOf(/^Dashboard/)).toBe('globe')
+  })
+
+  it('falls back to the globe for an icon the image decoder refuses, and tries a new icon again', () => {
+    const page = PAGES[0]!
+    const strip = (icon: string): JSX.Element => (
+      <BrowserPages
+        pages={[{ ...page, icon }]}
+        activeId={1}
+        focused
+        onActivate={vi.fn()}
+        onClose={vi.fn()}
+        onMove={vi.fn()}
+        onNew={vi.fn()}
+      />
+    )
+    const { rerender } = render(strip(ICON))
+    fireEvent.error(screen.getByRole('tab', { name: /^Dashboard/ }).querySelector('img')!)
+    expect(iconOf(/^Dashboard/)).toBe('globe')
+
+    rerender(strip('data:image/png;base64,b3RoZXI='))
+    expect(iconOf(/^Dashboard/)).toBe('favicon')
+  })
+
+  it('shows each tab its own state', () => {
+    renderPages({
+      pages: [
+        { ...PAGES[0]!, loading: true },
+        { ...PAGES[2]!, icon: ICON }
+      ]
+    })
+    expect(iconOf(/^Dashboard/)).toBe('loading')
+    expect(iconOf(/^Settings/)).toBe('favicon')
   })
 })

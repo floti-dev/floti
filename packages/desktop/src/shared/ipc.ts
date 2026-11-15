@@ -631,6 +631,18 @@ export interface BrowserConsoleEntry {
 }
 
 /**
+ * A page's icon for its tab: a `data:` URL main fetched through the browser
+ * partition (`main/favicons.ts`), or null for none - the tab shows the globe.
+ * Its own event rather than a field of `BrowserState`, so the state announced
+ * on every load, title and console line stays small, and sent only when the
+ * icon changes.
+ */
+export interface BrowserFavicon {
+  id: number
+  icon: string | null
+}
+
+/**
  * Where the placeholder is, in CSS pixels, and whether the view should show.
  *
  * Fire-and-forget for the reason `pty:input` is: a `ResizeObserver` on the
@@ -2138,6 +2150,9 @@ export interface IpcEvents {
   /** A line a page wrote, or a load that failed. Feeds the console panel. */
   'browser:logged': { id: number; entry: BrowserConsoleEntry }
 
+  /** A page's icon changed: it reported a new one, or went to another site. */
+  'browser:favicon': BrowserFavicon
+
   /** A Browser tab key pressed inside a page. Keyboard focus is already back in the window when it needs to be. */
   'browser:command': BrowserCommandEvent
 
@@ -2455,6 +2470,7 @@ export const EVENT_CHANNELS = Object.keys({
   'browser:opened': true,
   'browser:closed': true,
   'browser:logged': true,
+  'browser:favicon': true,
   'browser:command': true,
   'browser:pointerCommand': true,
   'files:changed': true,

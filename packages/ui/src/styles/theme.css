@@ -172,6 +172,22 @@
   --font-mono: 'Cascadia Mono', 'SF Mono', Menlo, Consolas, ui-monospace, monospace;
 }
 
+/* `animate-load`: the browser's loading line (DESIGN.md "Browser pane"). A
+ * third of the line crossing it, again and again: indeterminate, because
+ * Electron reports that a page is loading and not how far it has got. */
+@theme {
+  --animate-load: load 1.2s ease-in-out infinite;
+
+  @keyframes load {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(300%);
+    }
+  }
+}
+
 /* --------------------------------------------------------------------------
  * Base
  * ------------------------------------------------------------------------ */

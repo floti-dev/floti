@@ -41,6 +41,11 @@ together. The agent tools listener's token and origin rules are in
 - Every navigation goes through `browserReachAllows` in `@helm/core`; an
   agent's restrictions are composed by `agentReach`. `file:` and custom schemes
   are refused there.
+- A page's icon is fetched by main (`main/favicons.ts`) with the partition's
+  `session.fetch`, only from an address the tab's reach allows (an agent's tab
+  composes `agentReach`), each redirect hop checked again before it is asked
+  for. Only an `image/*` answer up to 64 KB is taken, and it reaches the window
+  as a `data:` URL; the window fetches nothing.
 - Self-signed certificates are accepted for loopback only, and there is no
   `certificate-error` handler. Downloads are refused and handed to the system
   browser. Every permission is denied but clipboard writing and fullscreen,

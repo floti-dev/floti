@@ -637,3 +637,26 @@ describe('BrowserPane - where the view goes', () => {
     expect(hole.className).toContain('overflow-hidden')
   })
 })
+
+describe('BrowserPane - the loading line', () => {
+  const line = (): Element | null => document.querySelector('[data-browser-loading]')
+
+  it('shows under the bar while the page loads, and goes when it has loaded', () => {
+    const props = renderPane({ state: { ...STATE, loading: true, pendingUrl: 'http://localhost:5173/' } })
+    const shown = line()
+    expect(shown).not.toBeNull()
+    // Directly under the bar, drawn in the accent token, and not read out:
+    // the Stop button already says the page is loading.
+    expect(shown!.parentElement!.previousElementSibling?.hasAttribute('data-browser-bar')).toBe(true)
+    expect(shown!.parentElement!.getAttribute('aria-hidden')).toBe('true')
+    expect(shown!.querySelector('.bg-accent')).not.toBeNull()
+
+    redraw(<BrowserPane {...props} state={STATE} />)
+    expect(line()).toBeNull()
+  })
+
+  it('is not there for a page that is not loading', () => {
+    renderPane()
+    expect(line()).toBeNull()
+  })
+})

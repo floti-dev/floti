@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import { useState, type JSX } from 'react'
 import { GlobeIcon } from './icons'
 import { TabBar, type Tab } from './TabBar'
 
@@ -13,6 +13,10 @@ export interface BrowserPage {
   openedBy: string | null
   /** The session the user shared it with, or null. */
   sharedWith: { session: number; name: string } | null
+  /** Whether its page is loading: the tab shows a spinner in place of its icon. */
+  loading: boolean
+  /** Its site's icon as a `data:` URL, or null for the globe. */
+  icon: string | null
 }
 
 /**
@@ -31,6 +35,56 @@ export interface BrowserPagesProps {
   /** A page should end up at `toIndex`, counted after it has left its place. */
   onMove: (id: number, toIndex: number) => void
   onNew: () => void
+}
+
+/** The size of a page tab's icon, in pixels: the globe's, so the three states take one place. */
+const ICON_SIZE = 13
+
+/**
+ * What a page tab shows before its title: a spinner while the page loads, then
+ * the site's icon, or the globe for a site with none - or with one the image
+ * decoder refuses, which only shows itself as an `error` on the `<img>`.
+ */
+function PageIcon({ loading, icon }: { loading: boolean; icon: string | null }): JSX.Element {
+  if (loading) {
+    // A quarter arc turning on a faint ring, in the tab's icon colour: the
+    // shape every browser draws a loading tab with.
+    return (
+      <svg
+        data-page-icon="loading"
+        aria-hidden="true"
+        width={ICON_SIZE}
+        height={ICON_SIZE}
+        viewBox="0 0 16 16"
+        focusable="false"
+        className="block animate-spin"
+      >
+        <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="1.5" />
+        <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  // Keyed on the icon, so a new icon gets a fresh chance after a broken one.
+  if (icon !== null) return <SiteIcon key={icon} icon={icon} />
+  return <GlobeIcon data-page-icon="globe" width={ICON_SIZE} height={ICON_SIZE} />
+}
+
+function SiteIcon({ icon }: { icon: string }): JSX.Element {
+  const [broken, setBroken] = useState(false)
+  if (broken) return <GlobeIcon data-page-icon="globe" width={ICON_SIZE} height={ICON_SIZE} />
+  return (
+    <img
+      data-page-icon="favicon"
+      src={icon}
+      alt=""
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      draggable={false}
+      className="block object-contain"
+      style={{ width: ICON_SIZE, height: ICON_SIZE }}
+      onError={() => setBroken(true)}
+    />
+  )
 }
 
 /** A page's id in the strip. Never shaped like a pane's tab id. */
@@ -80,7 +134,7 @@ export function BrowserPages({
           : page.sharedWith !== null
             ? `${where}\nShared with the session “${page.sharedWith.name}”`
             : where,
-      icon: <GlobeIcon width={13} height={13} />
+      icon: <PageIcon loading={page.loading} icon={page.icon} />
     }
   })
   /** The page behind a strip id, or nothing for an id that is not one of ours. */

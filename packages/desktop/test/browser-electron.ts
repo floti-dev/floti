@@ -92,6 +92,15 @@ export class FakeSession extends EventEmitter {
     this.cleared += 1
     return Promise.resolve()
   }
+  /** Every address fetched through this partition, in order. */
+  readonly fetched: string[] = []
+  /** What a fetch answers. Refused unless a test says otherwise: no test reaches a network. */
+  answerFetch: (url: string) => Response | Promise<Response> = () =>
+    Promise.reject(new Error('browserElectronFake: no network in tests'))
+  fetch(url: string): Promise<Response> {
+    this.fetched.push(url)
+    return Promise.resolve().then(() => this.answerFetch(url))
+  }
 }
 
 export class FakeWebContents extends EventEmitter {
@@ -243,6 +252,11 @@ export class FakeWebContents extends EventEmitter {
   // -------------------------------------------------------------------------
   // Chromium's side, raised by the test
   // -------------------------------------------------------------------------
+
+  /** The page named its icons, best first: `page-favicon-updated`. */
+  reportFavicons(candidates: string[]): void {
+    this.emit('page-favicon-updated', electronEvent(), candidates)
+  }
 
   /** A response arrived and the page committed: `did-navigate` with its status. */
   commit(url: string, options: { status?: number; title?: string } = {}): void {

@@ -605,6 +605,7 @@ function startApp(options: AppOptions = {}): void {
     onClosed: (id) => emit(win, 'browser:closed', { id }),
     onCommand: (command) => emit(win, 'browser:command', command),
     onLogged: (id, entry) => emit(win, 'browser:logged', { id, entry }),
+    onFavicon: (favicon) => emit(win, 'browser:favicon', favicon),
     // With the tools off there is nobody to share a page with.
     sessionOpener: (session) => (browserSettings().browserMcp ? sessions.browserOpener(session) : null),
     shareTargets: () => (browserSettings().browserMcp ? sessions.browserSessions() : []),

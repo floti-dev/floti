@@ -5369,7 +5369,9 @@ export function App(): JSX.Element {
             <BrowserPages
               pages={browsers.pages.flatMap((id) => {
                 const page = browserViews.get(id);
-                return page === undefined ? [] : [page];
+                return page === undefined
+                  ? []
+                  : [{ ...page, icon: browsers.icons.get(id) ?? null }];
               })}
               activeId={frontPage}
               focused={holder !== null && holder.group === open.focused}
