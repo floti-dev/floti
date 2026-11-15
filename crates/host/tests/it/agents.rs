@@ -4730,7 +4730,8 @@ async fn a_command_without_a_name_is_named_after_its_program_and_made_unique_amo
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_command_child_ends_with_its_exit_code_and_its_parent_is_told_the_last_40_lines() {
+async fn a_command_child_ends_with_its_exit_code_and_its_parent_is_told_the_last_40_lines_and_no_notice_stands_for_it()
+ {
     let world = World::new();
     let host = world.host().await;
     let folder = world.project("exits");
@@ -4779,6 +4780,15 @@ async fn a_command_child_ends_with_its_exit_code_and_its_parent_is_told_the_last
         .await;
         assert!(told.contains("Its last lines:"), "{told}");
         assert!(told.contains("line 3"), "{told}");
+
+        // A command that failed is its parent's business: no notice stands
+        // for a person. The exit of `quiet`, heard after the failed one's,
+        // is the barrier: the host has long finished with `tests`'s end.
+        let standing: i64 = world
+            .db()
+            .query_row("SELECT count(*) FROM notices", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(standing, 0, "no notice for a command that exited 3");
     }
     host.stop(HostStopReason::Stop).await;
 }

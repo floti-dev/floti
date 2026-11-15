@@ -39,9 +39,9 @@ use floti_protocol::channel::{EventChannel, from_payload};
 use floti_protocol::channels::common::{EndedBy, SessionRecord};
 use floti_protocol::channels::host::HostStopReason;
 use floti_protocol::channels::sessions::{
-    CloseSessionRequest, HistoryRefresh, HistoryResume, ResumeSessionRequest, SessionActivity,
-    SessionActivityState, SessionClose, SessionExit, SessionList, SessionNotify, SessionStart,
-    StartSessionRequest,
+    CloseSessionRequest, HistoryRefresh, HistoryResume, NoticeCause, NoticeKind,
+    ResumeSessionRequest, SessionActivity, SessionActivityState, SessionClose, SessionExit,
+    SessionList, SessionNotify, SessionStart, StandingNotice, StartSessionRequest,
 };
 use floti_protocol::{BackendId, Knowable, Message};
 use serde_json::{Value, json};
@@ -2113,6 +2113,75 @@ async fn s10_a_launch_that_fails_or_a_program_that_reports_an_error_is_news_with
     // Nothing of any child's conversation is in what the parent was told.
     let inbox = world.inbox_text();
     assert!(!inbox.contains("TOPSECRET"), "{inbox}");
+    host.stop(HostStopReason::Stop).await;
+}
+
+/// The error notices standing on the host, as a window that connects is
+/// given them.
+async fn error_notices(world: &World) -> Vec<StandingNotice> {
+    let mut client = world.client().await;
+    let listed: Vec<StandingNotice> = match client.subscribe_on(9, "notices:changed").await {
+        Message::Snapshot(snapshot) => from_payload(&snapshot.state).expect("the notices"),
+        other => panic!("no snapshot of the notices: {other:?}"),
+    };
+    listed
+        .into_iter()
+        .filter(|notice| notice.kind == NoticeKind::Error)
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_childs_reported_error_stands_as_a_report_until_it_works_again_or_is_resumed() {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("reports");
+    let parent = world.session(CLAUDE, &folder, "parent").await;
+    parent
+        .start(json!({ "task": "work", "name": "flaky", "backend": BARE }))
+        .await
+        .done();
+    let flaky = world.child_of(&parent, "flaky").await;
+
+    // It reports an error and runs on: a notice that says it reported one.
+    world.type_line(&flaky, "/report error It broke.").await;
+    let standing = eventually("the reported error to stand", async || {
+        let standing = error_notices(&world).await;
+        (!standing.is_empty()).then_some(standing)
+    })
+    .await;
+    assert_eq!(standing.len(), 1, "{standing:?}");
+    assert_eq!(standing[0].cause, Some(NoticeCause::Report));
+    assert_eq!(standing[0].child_id, Some(flaky.id()));
+    assert_eq!(standing[0].text, "flaky reported an error: It broke.");
+
+    // It works again: the notice goes.
+    world.type_line(&flaky, "/report working").await;
+    eventually(
+        "the report's notice to go once it works again",
+        async || error_notices(&world).await.is_empty().then_some(()),
+    )
+    .await;
+
+    // It reports another and exits cleanly: the report still stands, until
+    // its parent resumes it.
+    world.type_line(&flaky, "/report error Broke again.").await;
+    eventually("the second report to stand", async || {
+        (error_notices(&world).await.len() == 1).then_some(())
+    })
+    .await;
+    world.type_line(&flaky, "/exit").await;
+    world.ended("flaky to exit", &[flaky.id()]).await;
+    let standing = error_notices(&world).await;
+    assert_eq!(standing.len(), 1, "{standing:?}");
+    assert_eq!(standing[0].cause, Some(NoticeCause::Report));
+    parent
+        .start(json!({ "task": "carry on", "resume": "flaky" }))
+        .await
+        .done();
+    eventually("the report's notice to go once it is resumed", async || {
+        error_notices(&world).await.is_empty().then_some(())
+    })
+    .await;
     host.stop(HostStopReason::Stop).await;
 }
 

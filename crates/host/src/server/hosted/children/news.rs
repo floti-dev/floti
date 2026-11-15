@@ -33,7 +33,7 @@ use std::time::Duration;
 
 use floti_protocol::channels::common::ChildReport;
 use floti_protocol::channels::sessions::{
-    SessionActivity, SessionActivityState, SessionsOverview, StandingNotice,
+    NoticeCause, SessionActivity, SessionActivityState, SessionsOverview, StandingNotice,
 };
 use tokio::sync::{broadcast, watch};
 use tokio::time::Instant;
@@ -72,6 +72,9 @@ pub(super) struct Seen {
     /// after a dialog), with a report or without: what a person typed before
     /// it is spent.
     pub turn_ended: bool,
+    /// The child reports working or idle again after its program reported
+    /// an error: the error is behind it.
+    pub recovered: bool,
 }
 
 /// The rules for one child, a pure state machine over what passes see.
@@ -144,6 +147,8 @@ impl Tracker {
             let before = std::mem::replace(&mut self.activity, now.activity);
             seen.turn_ended = now.activity == Some(SessionActivity::Idle)
                 && (working(before) || before == Some(SessionActivity::Waiting));
+            seen.recovered = before == Some(SessionActivity::Error)
+                && (working(now.activity) || now.activity == Some(SessionActivity::Idle));
             match now.activity {
                 Some(SessionActivity::Busy | SessionActivity::Shell) if !working(before) => {
                     self.reported_this_turn = reported_between;
@@ -399,6 +404,7 @@ impl Hosted {
         let mut moved = false;
         let mut noticed = false;
         let mut turns_ended: Vec<SessionId> = Vec::new();
+        let mut recovered: Vec<SessionId> = Vec::new();
         let mut idle_since: Vec<(SessionId, u64)> = Vec::new();
         {
             let mut watched = desk.watched();
@@ -491,6 +497,9 @@ impl Hosted {
                 } else if watched.needs_you.remove(&id).is_some() {
                     noticed = true;
                 }
+                if seen.recovered {
+                    recovered.push(id);
+                }
                 if seen.turn_ended {
                     turns_ended.push(id);
                 } else if state.activity == Some(SessionActivity::Idle)
@@ -525,6 +534,9 @@ impl Hosted {
             .filter_map(|(id, since)| self.sessions.get(id).map(|session| (session, since)))
         {
             spent |= session.idle_since(since);
+        }
+        for child in recovered {
+            self.notices_of_recovered(child);
         }
         for (child, kind, facts) in events {
             if kind == EventKind::Error {
@@ -580,7 +592,8 @@ impl Hosted {
     }
 
     /// Child `child`'s program reported an error: a notice stands until it is
-    /// dismissed or the parent ends.
+    /// dismissed, the parent ends, or the child reports working or idle again
+    /// or is resumed.
     fn program_error_noticed(&self, child: SessionId, facts: &Facts) {
         let link = match rows::link_of(&self.ledger.store(), child) {
             Ok(Some(link)) => link,
@@ -594,7 +607,7 @@ impl Hosted {
             Some(message) => format!("{} reported an error: {message}", link.name),
             None => format!("{} reported an error.", link.name),
         };
-        self.error_noticed(&link, Some(child), &text);
+        self.error_noticed(&link, Some(child), &text, NoticeCause::Report);
     }
 
     /// Writes `facts` as an event of child `child` into its parent's inbox,
@@ -710,7 +723,10 @@ impl Hosted {
                     }
                 };
                 self.write_news_to(&ended.link, Some(child), EventKind::Ended, &facts);
+                // A command that failed (a test run, a build) is its parent's
+                // to deal with, from the news above: no notice stands for it.
                 if ended.stopped_by.is_none()
+                    && !ended.command
                     && let Some(code) = ended.exit_code.filter(|code| *code != 0)
                 {
                     self.error_noticed(
@@ -720,6 +736,7 @@ impl Hosted {
                             "{} ended in error: it exited with code {code}.",
                             ended.link.name
                         ),
+                        NoticeCause::Ended,
                     );
                 }
             }
@@ -746,6 +763,7 @@ impl Hosted {
             link,
             None,
             &format!("{} could not be started: {reason}", link.name),
+            NoticeCause::Launch,
         );
         self.write_news_to(
             link,
@@ -1045,6 +1063,31 @@ mod tests {
                 }
             )]
         );
+    }
+
+    #[test]
+    fn a_child_that_reports_working_or_idle_after_an_error_has_recovered_and_one_that_waits_has_not()
+     {
+        for (after, recovered) in [
+            (Some(Busy), true),
+            (Some(SessionActivity::Shell), true),
+            (Some(SessionActivity::Idle), true),
+            (Some(SessionActivity::Waiting), false),
+            (None, false),
+        ] {
+            let mut tracker = Tracker::default();
+            tracker.observe(&at(Some(Busy)));
+            assert!(!tracker.observe(&at(Some(SessionActivity::Error))).recovered);
+            assert_eq!(
+                tracker.observe(&at(after)).recovered,
+                recovered,
+                "{after:?}"
+            );
+        }
+        // Going from working to idle with no error before is no recovery.
+        let mut tracker = Tracker::default();
+        tracker.observe(&at(Some(Busy)));
+        assert!(!tracker.observe(&at(Some(SessionActivity::Idle))).recovered);
     }
 
     fn done_report(since_ms: u64, message: &str) -> ReportedStatus {

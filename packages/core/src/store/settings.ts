@@ -23,6 +23,7 @@ import {
   DEFAULT_SETTINGS,
   DENSITY_MODES,
   LOCAL_HOST_KEY,
+  NOTICES_SEEN_HOSTS_MAX,
   PANE_GAP,
   PINNED_PROJECTS_MAX,
   PROJECT_SHELL_HEIGHT_PCT,
@@ -676,6 +677,30 @@ export const SETTING_VALIDATORS: SettingValidators = {
     if (value === null) return null
     if (typeof value !== 'string') return 'must be an ISO 8601 string or null'
     return Number.isFinite(Date.parse(value)) ? null : 'must be an ISO 8601 instant'
+  },
+
+  /**
+   * The newest notice shown, per host: a host key (as `quitSessions` keys
+   * them) to an instant. Written by the window, so a value that is not one is
+   * a bug in this build.
+   */
+  noticesSeen: (value) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return `expected an object of hosts to instants, got ${describe(value)}`
+    }
+    const entries = Object.entries(value as Record<string, unknown>)
+    if (entries.length > NOTICES_SEEN_HOSTS_MAX) {
+      return `expected at most ${String(NOTICES_SEEN_HOSTS_MAX)} hosts, got ${String(entries.length)}`
+    }
+    for (const [host, since] of entries) {
+      if (host.trim() === '' || host.length > QUIT_SESSIONS_HOST_KEY_MAX) {
+        return `expected a host key, got ${JSON.stringify(host)}`
+      }
+      if (since === null || timestampProblem(since) !== null) {
+        return `expected an ISO timestamp for ${host}, got ${describe(since)}`
+      }
+    }
+    return null
   },
 
   /**

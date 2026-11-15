@@ -13,7 +13,8 @@ const limit: StandingNotice = {
   text: 'lead has made 16 starts, the most it may.',
   since: '2026-11-06T10:05:00Z',
   limit: 'starts',
-  allowMore: 16
+  allowMore: 16,
+  cause: null
 }
 
 /** A host's notices store as `host/notices.ts` keeps it, driven by the test. */

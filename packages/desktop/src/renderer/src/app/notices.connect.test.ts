@@ -6,19 +6,21 @@ import {
   type PaneLayout,
   type PlaceScope
 } from '@helm/core/types'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { FakeConnection, fakeReach, reconnectingReach } from '../../../../test/fake-connection'
 import type * as P from '../../../shared/host/protocol'
 import { awayTitle } from './attentionView'
 import { createNoticesAdapter, type NoticesAdapter } from './host/notices'
+import { createSeenMarks, type SeenStorage } from './host/noticesSeen'
 import { needsYouToasts } from './needsYou'
 import { createHostNotices } from './useNotices'
 
 /**
  * The window's whole path from the host's answer to what it draws: the adapter
  * over the connection, the store that joins the hosts, and the rules for the
- * toasts. A window that connects to a host holding notices lists them under
- * While you were away every time it connects, and toasts only what began after.
+ * toasts. A window that connects to a host holding notices lists under While
+ * you were away those this device has not shown before, and toasts only what
+ * began after it connected.
  */
 
 const UNREACHABLE = 'No local host answered on its socket.'
@@ -86,18 +88,31 @@ describe('a window that connects to a host holding notices', () => {
     there.stop()
   })
 
-  it('S15: lists them again in a page that opens afterwards, each page with its own adapter', async () => {
-    for (const opened of [1, 2, 3]) {
+  it('S15: lists them in the first page that opens, and in none that opens afterwards on the same device, each page with its own adapter', async () => {
+    let kept: Readonly<Record<string, string>> = {}
+    const device: SeenStorage = {
+      read: () => Promise.resolve(kept),
+      write: (marks) => {
+        kept = marks
+        return Promise.resolve()
+      }
+    }
+    // Each page after the first is also given one that began after the page
+    // before it closed: only that one is news to it.
+    const later = [standing(5, '2026-11-07T11:00:00Z'), standing(6, '2026-11-07T12:00:00Z')]
+    for (const [opened, listed, away] of [
+      [1, [...BEFORE, AFTER], ['needs-you-2', 'needs-you-3', 'needs-you-4']],
+      [2, [...BEFORE, AFTER, later[0]!], ['needs-you-5']],
+      [3, [...BEFORE, AFTER, ...later], ['needs-you-6']]
+    ] as const) {
       const connection = new FakeConnection()
       const link = fakeReach(connection, UNREACHABLE)
-      const there = window(createNoticesAdapter(link))
+      const there = window(createNoticesAdapter(link, undefined, createSeenMarks(device).forHost(LOCAL_HOST_KEY)))
       await link.connect()
-      connection.snapshot('notices:changed', [...BEFORE, AFTER])
-      expect({ opened, away: there.away(), toasts: there.toasts() }).toEqual({
-        opened,
-        away: ['needs-you-2', 'needs-you-3', 'needs-you-4'],
-        toasts: []
-      })
+      connection.snapshot('notices:changed', [...listed])
+      await vi.waitFor(() => expect(there.away()).toEqual(away))
+      expect({ opened, toasts: there.toasts() }).toEqual({ opened, toasts: [] })
+      await vi.waitFor(() => expect(kept[LOCAL_HOST_KEY]).toBe(listed.at(-1)?.since))
       there.stop()
     }
   })
@@ -133,7 +148,8 @@ const ended = (row: number, childId: number, since: string): P.StandingNotice =>
   childId,
   childName: `worker-${String(childId)}`,
   text: `worker-${String(childId)} ended in error: it exited with code 1.`,
-  since
+  since,
+  cause: 'ended'
 })
 
 describe('a window on a host on another computer whose connection is cut while the children there keep running', () => {

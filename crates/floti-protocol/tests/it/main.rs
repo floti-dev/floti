@@ -21,6 +21,7 @@ mod major_3_0;
 mod major_4_0;
 mod minor_2_2;
 mod minor_2_3;
+mod minor_4_1;
 mod noise;
 mod previous_minor;
 mod version_negotiation;

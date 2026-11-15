@@ -317,7 +317,8 @@ describe('settings', () => {
       quitSessions: { local: 'keep' },
       hosts: [{ id: 'h1', name: 'build-box', transport: { kind: 'ssh', target: 'you@build-box' } }],
       profilesCopiedToHostAt: '2026-10-29T08:00:00.000Z',
-      pluginsCopiedToHostAt: '2026-10-30T08:00:00.000Z'
+      pluginsCopiedToHostAt: '2026-10-30T08:00:00.000Z',
+      noticesSeen: { local: '2026-11-14T20:28:05.253Z', h1: '2026-11-14T23:15:23.444Z' }
     } satisfies AppSettings
 
     writeSettings(store, written)
@@ -891,6 +892,19 @@ describe('settings validation', () => {
       bad: ['soon', '', 1794560000000, {}]
     },
     {
+      key: 'noticesSeen',
+      good: [{}, { local: '2026-11-14T20:28:05.253Z' }, { local: '2026-11-14T20:28:05Z', 'h-build': '2026-11-14T23:15:23.444Z' }],
+      bad: [
+        null,
+        [],
+        '2026-11-14T20:28:05.253Z',
+        { local: null },
+        { local: 'soon' },
+        { '': '2026-11-14T20:28:05.253Z' },
+        Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`h${String(i)}`, '2026-11-14T20:28:05.253Z']))
+      ]
+    },
+    {
       key: 'terminalFontFamily',
       good: [null, 'Consolas', 'Cascadia Mono', 'MesloLGS NF'],
       bad: [
@@ -1358,7 +1372,8 @@ const DEFAULT_SETTINGS_SHAPE = (dir: string): typeof DEFAULT_SETTINGS => ({
   hosts: [{ id: 'h1', name: 'build-box', transport: { kind: 'ssh', target: 'you@build-box' } }],
   profilesCopiedToHostAt: null,
   pluginsCopiedToHostAt: null,
-  upgradeNoteSeenAt: null
+  upgradeNoteSeenAt: null,
+  noticesSeen: {}
 })
 
 describe('pinned projects', () => {

@@ -1,8 +1,9 @@
 //! Standing notices: what the host keeps for a person who is not looking.
 //!
 //! A notice stands on the host while it holds. A child that needs a person
-//! stands until it no longer does; a start the host refused, and a child that
-//! ended in error, stand until a client dismisses them or the parent ends.
+//! stands until it no longer does; a start the host refused, and an agent
+//! child's error, stand until a client dismisses them, the parent ends or the
+//! error's cause goes (see [`NoticeCause`]).
 //! Every client that connects is sent the whole list on `notices:changed`, so
 //! the same notices are listed on whichever device the user is at.
 
@@ -46,8 +47,24 @@ pub enum NoticeKind {
     NeedsYou,
     /// A parent's start was refused by a limit.
     Limit,
-    /// A child ended in error, or its launch failed.
+    /// An agent child ended in error, could not start, or reported an error
+    /// while it ran on; its `cause` says which.
     Error,
+}
+
+/// What an error notice is about. Each one goes when its cause does, as well
+/// as on a dismissal or when the parent ends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum NoticeCause {
+    /// The child's program exited with an error and nobody stopped it. It
+    /// goes when the child is resumed.
+    Ended,
+    /// The child could not be started. It goes when the child is resumed.
+    Launch,
+    /// The child's program reported an error and ran on. It goes when the
+    /// child reports working or idle again, or is resumed.
+    Report,
 }
 
 /// The limit that refused a start.
@@ -101,6 +118,11 @@ pub struct StandingNotice {
     #[serde(default)]
     #[ts(type = "number | null", optional = nullable)]
     pub allow_more: Option<u32>,
+    /// What an error notice is about; none for any other kind. A host on 4.0
+    /// sent none, and an error notice without one ended in error.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub cause: Option<NoticeCause>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

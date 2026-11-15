@@ -437,6 +437,8 @@ pub(super) struct Ended {
     /// Who ended it, when the host did rather than its program finishing on
     /// its own.
     pub stopped_by: Option<records::StoppedBy>,
+    /// Whether it is a command child, not an agent.
+    pub command: bool,
 }
 
 /// The link and ending of child `id`, when it is a child with a parent.
@@ -445,7 +447,8 @@ pub(super) fn ended_of(store: &Store, id: SessionId) -> Result<Option<Ended>> {
         .connection()
         .query_row(
             &format!(
-                "SELECT {LINK_COLUMNS}, exit_code, stopped, stopped_by FROM sessions WHERE id = ?1 \
+                "SELECT {LINK_COLUMNS}, exit_code, stopped, stopped_by, command IS NOT NULL \
+                 FROM sessions WHERE id = ?1 \
                  AND child_name IS NOT NULL AND parent_session_id IS NOT NULL"
             ),
             [id.0],
@@ -453,6 +456,7 @@ pub(super) fn ended_of(store: &Store, id: SessionId) -> Result<Option<Ended>> {
                 let stopped: bool = row.get(4)?;
                 let stopped_by: Option<String> = row.get(5)?;
                 Ok(Ended {
+                    command: row.get(6)?,
                     link: link_row(row)?,
                     // The column holds the code as the OS gave it (a `u32`).
                     // Windows reports an NTSTATUS such as 0xC0000005 that
@@ -578,6 +582,7 @@ mod tests {
         let ended = ended_of(&store.lock().unwrap(), child).unwrap().unwrap();
         assert_eq!(ended.exit_code, Some(-1_073_741_819));
         assert_eq!(ended.stopped_by, None);
+        assert!(ended.command, "a command child reads as one");
     }
 
     #[test]

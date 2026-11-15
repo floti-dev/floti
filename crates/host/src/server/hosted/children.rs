@@ -880,6 +880,8 @@ impl Hosted {
             .map(|row| row.id)
             .collect();
         self.unkeep(&earlier);
+        // Whatever it ended, failed to start or reported with is behind it.
+        self.notices_of_resumed(parent, name);
         Ok(ChildStarted {
             name: name.clone(),
             backend: backend_id_text(&backend_id),

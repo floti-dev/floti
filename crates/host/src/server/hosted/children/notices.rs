@@ -9,15 +9,20 @@
 //! - *limit*: a start a limit refused. A row in `notices`, kept across a
 //!   restart until a client dismisses it or its parent ends. A new refusal by
 //!   the same limit for the same parent replaces the old one;
-//! - *error*: a launch that failed, or a child that ended in error. A row in
-//!   `notices` kept the same way.
+//! - *error*: an agent child that ended in error, could not start, or
+//!   reported an error while it ran on, its `cause` saying which. A row in
+//!   `notices` kept the same way, which also goes when its cause does: a
+//!   reported error when the child reports working or idle again, and every
+//!   error of a child when that child is resumed. A command child's exit is
+//!   its parent's business alone: the parent hears the code and the last
+//!   lines as news, and no notice stands for it.
 //!
 //! The list goes to every client on `notices:changed` (the features module
 //! serves it); dismissing is for every client, and so is allowing more starts.
 
 use std::io;
 
-use floti_protocol::channels::sessions::{NoticeKind, NoticeLimit, StandingNotice};
+use floti_protocol::channels::sessions::{NoticeCause, NoticeKind, NoticeLimit, StandingNotice};
 use rusqlite::params;
 
 use super::rows;
@@ -67,6 +72,29 @@ pub(super) fn needs_you(
         since,
         limit: None,
         allow_more: None,
+        cause: None,
+    }
+}
+
+/// The word a notice's row keeps in `cause`.
+fn cause_word(cause: NoticeCause) -> &'static str {
+    match cause {
+        NoticeCause::Ended => "ended",
+        NoticeCause::Launch => "launch",
+        NoticeCause::Report => "report",
+    }
+}
+
+/// What an error notice's row says in `cause`, or for a row written before
+/// the cause was kept, what it was then: a launch that failed names no child,
+/// and one that names a child ended in error.
+fn cause_of(word: Option<&str>, child: Option<i64>) -> NoticeCause {
+    match word {
+        Some("launch") => NoticeCause::Launch,
+        Some("report") => NoticeCause::Report,
+        Some("ended") => NoticeCause::Ended,
+        _ if child.is_none() => NoticeCause::Launch,
+        _ => NoticeCause::Ended,
     }
 }
 
@@ -156,16 +184,29 @@ pub(super) fn record_limit(
     Ok(())
 }
 
-/// Records that a child of `parent` called `child_name` ended in error or
-/// never started, in place of an earlier notice about the same child.
+/// What an error notice says: the child it is about and why it stands.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ChildError<'a> {
+    pub child: Option<SessionId>,
+    pub child_name: &'a str,
+    pub text: &'a str,
+    pub cause: NoticeCause,
+}
+
+/// Records that a child of `parent` ended in error, never started or reported
+/// an error, in place of an earlier notice about the same child.
 pub(super) fn record_error(
     store: &Store,
     parent: SessionId,
     parent_name: &str,
-    child: Option<SessionId>,
-    child_name: &str,
-    text: &str,
+    error: ChildError<'_>,
 ) -> Result<()> {
+    let ChildError {
+        child,
+        child_name,
+        text,
+        cause,
+    } = error;
     let child = child.map(|child| child.0);
     store
         .connection()
@@ -179,8 +220,15 @@ pub(super) fn record_error(
         .connection()
         .execute(
             "INSERT INTO notices (kind, parent_session_id, parent_name, child_session_id, \
-             child_name, text) VALUES ('error', ?1, ?2, ?3, ?4, ?5)",
-            params![parent.0, parent_name, child, child_name, text],
+             child_name, text, cause) VALUES ('error', ?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                parent.0,
+                parent_name,
+                child,
+                child_name,
+                text,
+                cause_word(cause)
+            ],
         )
         .map_err(sql("record an error notice"))?;
     Ok(())
@@ -192,25 +240,26 @@ pub(super) fn stored(store: &Store) -> Result<Vec<StandingNotice>> {
         .connection()
         .prepare(
             "SELECT id, kind, parent_session_id, parent_name, child_session_id, child_name, \
-             text, limit_kind, allow_more, since FROM notices ORDER BY id",
+             text, limit_kind, allow_more, since, cause FROM notices ORDER BY id",
         )
         .map_err(sql("read the notices"))?;
     let rows = select
         .query_map([], |row| {
             let kind: String = row.get(1)?;
             let limit: Option<String> = row.get(7)?;
+            let child: Option<i64> = row.get(4)?;
+            let cause: Option<String> = row.get(10)?;
+            let limited = kind == "limit";
             Ok(StandingNotice {
                 id: stored_id(row.get(0)?),
-                kind: if kind == "limit" {
+                kind: if limited {
                     NoticeKind::Limit
                 } else {
                     NoticeKind::Error
                 },
                 parent_id: id_number(SessionId(row.get(2)?)),
                 parent_name: row.get(3)?,
-                child_id: row
-                    .get::<_, Option<i64>>(4)?
-                    .map(|id| id_number(SessionId(id))),
+                child_id: child.map(|id| id_number(SessionId(id))),
                 child_name: row.get(5)?,
                 text: row.get(6)?,
                 since: row.get(9)?,
@@ -221,6 +270,7 @@ pub(super) fn stored(store: &Store) -> Result<Vec<StandingNotice>> {
                 allow_more: row
                     .get::<_, Option<i64>>(8)?
                     .and_then(|more| u32::try_from(more).ok()),
+                cause: (!limited).then(|| cause_of(cause.as_deref(), child)),
             })
         })
         .and_then(Iterator::collect::<rusqlite::Result<Vec<_>>>)
@@ -238,6 +288,39 @@ pub(super) fn remove_for_parent(store: &Store, parent: SessionId) -> Result<bool
         )
         .map(|removed| removed > 0)
         .map_err(sql("remove the notices of a session that ended"))
+}
+
+/// Removes the error child `child` reported while it ran on, which it no
+/// longer reports. Whether one went.
+pub(super) fn remove_report_of(store: &Store, child: SessionId) -> Result<bool> {
+    store
+        .connection()
+        .execute(
+            "DELETE FROM notices WHERE kind = 'error' AND cause = 'report' \
+             AND child_session_id = ?1",
+            [child.0],
+        )
+        .map(|removed| removed > 0)
+        .map_err(sql("remove the error a child no longer reports"))
+}
+
+/// Removes the errors of `parent`'s child called `child_name`, which has been
+/// resumed: whatever it ended, failed to start or reported with is behind it.
+/// Names match as a resume finds them, whatever their case. Whether any went.
+pub(super) fn remove_for_resumed(
+    store: &Store,
+    parent: SessionId,
+    child_name: &str,
+) -> Result<bool> {
+    store
+        .connection()
+        .execute(
+            "DELETE FROM notices WHERE kind = 'error' AND parent_session_id = ?1 \
+             AND child_name = ?2 COLLATE NOCASE",
+            params![parent.0, child_name],
+        )
+        .map(|removed| removed > 0)
+        .map_err(sql("remove the errors of a child that was resumed"))
 }
 
 /// Removes the notices whose parent is not running: the parents that ended
@@ -358,19 +441,52 @@ impl Hosted {
         refusal.text.to_owned()
     }
 
-    /// A child of `link`'s parent ended in error, or never started: the
-    /// notice stands until it is dismissed or the parent ends.
-    pub(super) fn error_noticed(&self, link: &rows::Link, child: Option<SessionId>, text: &str) {
+    /// An agent child of `link`'s parent ended in error, never started or
+    /// reported an error: the notice stands until it is dismissed, the parent
+    /// ends or its cause goes.
+    pub(super) fn error_noticed(
+        &self,
+        link: &rows::Link,
+        child: Option<SessionId>,
+        text: &str,
+        cause: NoticeCause,
+    ) {
         let store = self.ledger.store();
         let parent = rows::label_of(&store, link.parent)
             .ok()
             .flatten()
             .unwrap_or_default();
-        if let Err(err) = record_error(&store, link.parent, &parent, child, &link.name, text) {
+        let error = ChildError {
+            child,
+            child_name: &link.name,
+            text,
+            cause,
+        };
+        if let Err(err) = record_error(&store, link.parent, &parent, error) {
             log_line!("floti host: {err}");
         }
         drop(store);
         self.children.news.notices_moved();
+    }
+
+    /// Child `child` reports working or idle again after it reported an
+    /// error: that error's notice goes.
+    pub(super) fn notices_of_recovered(&self, child: SessionId) {
+        match remove_report_of(&self.ledger.store(), child) {
+            Ok(true) => self.children.news.notices_moved(),
+            Ok(false) => {}
+            Err(err) => log_line!("floti host: {err}"),
+        }
+    }
+
+    /// `parent`'s child called `child_name` has been resumed: the errors that
+    /// stood for it go.
+    pub(super) fn notices_of_resumed(&self, parent: SessionId, child_name: &str) {
+        match remove_for_resumed(&self.ledger.store(), parent, child_name) {
+            Ok(true) => self.children.news.notices_moved(),
+            Ok(false) => {}
+            Err(err) => log_line!("floti host: {err}"),
+        }
     }
 
     /// Session `session` has ended: the notices under it go with it.
@@ -385,4 +501,157 @@ impl Hosted {
 
 fn sql(action: &'static str) -> impl Fn(rusqlite::Error) -> Error {
     move |err| Error::io(action, io::Error::other(err))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testkit::TestDirs;
+
+    const LEAD: SessionId = SessionId(10);
+
+    fn store() -> (TestDirs, Store) {
+        let dirs = TestDirs::new();
+        let store = Store::open(&dirs.data).unwrap();
+        (dirs, store)
+    }
+
+    fn error<'a>(
+        child: Option<i64>,
+        child_name: &'a str,
+        text: &'a str,
+        cause: NoticeCause,
+    ) -> ChildError<'a> {
+        ChildError {
+            child: child.map(SessionId),
+            child_name,
+            text,
+            cause,
+        }
+    }
+
+    /// The standing errors, as (child name, cause).
+    fn errors(store: &Store) -> Vec<(String, Option<NoticeCause>)> {
+        stored(store)
+            .unwrap()
+            .into_iter()
+            .map(|notice| (notice.child_name.unwrap_or_default(), notice.cause))
+            .collect()
+    }
+
+    #[test]
+    fn an_error_keeps_its_cause_and_a_newer_error_for_the_same_child_replaces_it() {
+        let (_dirs, store) = store();
+        let failed = error(
+            None,
+            "ghost",
+            "ghost could not be started: no program.",
+            NoticeCause::Launch,
+        );
+        record_error(&store, LEAD, "lead", failed).unwrap();
+        let reported = error(
+            Some(11),
+            "worker",
+            "worker reported an error: it broke.",
+            NoticeCause::Report,
+        );
+        record_error(&store, LEAD, "lead", reported).unwrap();
+        assert_eq!(
+            errors(&store),
+            [
+                ("ghost".to_owned(), Some(NoticeCause::Launch)),
+                ("worker".to_owned(), Some(NoticeCause::Report)),
+            ]
+        );
+        let ended = error(
+            Some(11),
+            "worker",
+            "worker ended in error: it exited with code 1.",
+            NoticeCause::Ended,
+        );
+        record_error(&store, LEAD, "lead", ended).unwrap();
+        assert_eq!(
+            errors(&store),
+            [
+                ("ghost".to_owned(), Some(NoticeCause::Launch)),
+                ("worker".to_owned(), Some(NoticeCause::Ended)),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_error_written_before_causes_were_kept_reads_as_a_launch_without_a_child_and_an_ending_with_one()
+     {
+        let (_dirs, store) = store();
+        for child in [None, Some(11)] {
+            store
+                .connection()
+                .execute(
+                    "INSERT INTO notices (kind, parent_session_id, parent_name, \
+                     child_session_id, child_name, text) VALUES ('error', 10, 'lead', ?1, 'w', 'x')",
+                    [child],
+                )
+                .unwrap();
+        }
+        let causes: Vec<_> = errors(&store).into_iter().map(|(_, cause)| cause).collect();
+        assert_eq!(
+            causes,
+            [Some(NoticeCause::Launch), Some(NoticeCause::Ended)]
+        );
+    }
+
+    #[test]
+    fn a_child_that_works_again_loses_only_its_reported_error() {
+        let (_dirs, store) = store();
+        let reported = error(Some(11), "a", "a reported an error.", NoticeCause::Report);
+        record_error(&store, LEAD, "lead", reported).unwrap();
+        let ended = error(Some(12), "b", "b ended in error.", NoticeCause::Ended);
+        record_error(&store, LEAD, "lead", ended).unwrap();
+        assert!(!remove_report_of(&store, SessionId(12)).unwrap());
+        assert!(remove_report_of(&store, SessionId(11)).unwrap());
+        assert_eq!(errors(&store), [("b".to_owned(), Some(NoticeCause::Ended))]);
+    }
+
+    #[test]
+    fn a_resumed_child_loses_every_error_of_its_name_under_its_parent_whatever_the_case() {
+        let (_dirs, store) = store();
+        let launch = error(
+            None,
+            "Worker",
+            "Worker could not be started.",
+            NoticeCause::Launch,
+        );
+        record_error(&store, LEAD, "lead", launch).unwrap();
+        let report = error(
+            Some(11),
+            "worker",
+            "worker reported an error.",
+            NoticeCause::Report,
+        );
+        record_error(&store, LEAD, "lead", report).unwrap();
+        let other = error(
+            Some(12),
+            "other",
+            "other ended in error.",
+            NoticeCause::Ended,
+        );
+        record_error(&store, LEAD, "lead", other).unwrap();
+        let elsewhere = error(
+            Some(13),
+            "worker",
+            "worker ended in error.",
+            NoticeCause::Ended,
+        );
+        record_error(&store, SessionId(20), "other lead", elsewhere).unwrap();
+
+        assert!(remove_for_resumed(&store, LEAD, "WORKER").unwrap());
+        assert_eq!(
+            errors(&store),
+            [
+                ("other".to_owned(), Some(NoticeCause::Ended)),
+                ("worker".to_owned(), Some(NoticeCause::Ended)),
+            ]
+        );
+        assert!(!remove_for_resumed(&store, LEAD, "worker").unwrap());
+    }
 }

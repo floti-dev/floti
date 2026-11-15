@@ -1,7 +1,8 @@
 name: h214 targeted tests
 
-# Temporary, for one branch: runs only the tests the branch changed, once, on
-# Linux. Removed before the branch is handed over.
+# Temporary, for one branch: writes the generated files the branch needs and
+# runs only the tests the branch changed, once, on Linux. Removed before the
+# branch is handed over.
 on:
   push:
     branches: [agent/h214]
@@ -11,6 +12,36 @@ permissions:
   contents: read
 
 jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Migration for the notices' cause
+        run: |
+          if [ ! -f packages/core/drizzle/0033_notice_causes.sql ]; then
+            pnpm --filter @helm/core exec drizzle-kit generate --name notice_causes
+            node packages/core/scripts/embed-migrations.mjs
+          fi
+      - name: Protocol files
+        run: cargo run -p floti-protocol --bin generate
+      - name: The generated changes as a patch
+        run: |
+          git add -A
+          git diff --cached --binary > generated.patch
+          git diff --cached --stat
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generated
+          path: generated.patch
+
   vitest:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -27,3 +58,13 @@ jobs:
         run: >-
           pnpm exec vitest run
           packages/desktop/src/renderer/src/app/notices.connect.test.ts
+          packages/desktop/src/renderer/src/app/host/notices.test.ts
+          packages/desktop/src/renderer/src/app/host/noticesSeen.test.ts
+          packages/desktop/src/renderer/src/app/host/hostBridges.test.ts
+          packages/desktop/src/renderer/src/app/hostTabs.test.tsx
+          packages/desktop/src/renderer/src/app/attentionView.test.ts
+          packages/desktop/src/renderer/src/app/needsYou.test.ts
+          packages/desktop/src/renderer/src/app/needsYou.hook.test.tsx
+          packages/desktop/src/renderer/src/app/useNotices.test.ts
+          packages/core/src/store/store.test.ts
+          packages/ui/src/components/SettingsPane.test.tsx
