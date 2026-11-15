@@ -8,7 +8,7 @@ import { build } from 'esbuild'
 import { afterEach, describe, expect, it } from 'vitest'
 import { PATIENCE } from '../../../test/patience'
 import { treeKill } from '../src/main/treekill'
-import type { FirstRun, SecondRun } from './sign-ins/report'
+import type { Ended, FirstRun, SecondRun } from './sign-ins/report'
 
 /**
  * Sign-ins across a restart, in real Electron.
@@ -17,7 +17,9 @@ import type { FirstRun, SecondRun } from './sign-ins/report'
  * `main/browserCookies.ts` and run by the Electron binary from
  * `node_modules`, twice, on one user-data folder under the run's root: the
  * first run signs in on a loopback page, the second reads the partition back.
- * Its windows are hidden, and every Electron process ends with the test.
+ * Its windows are hidden, and every Electron process ends with the test: the
+ * fixture exits once the process that owns it is gone, which the last test
+ * shows.
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -53,16 +55,32 @@ async function fixtureApp(root: string): Promise<string> {
   return app
 }
 
-/** Runs the fixture once and returns its report, bounded by the shared patience. */
-async function run<T>(app: string, userData: string, mode: 'first' | 'second', root: string): Promise<T> {
-  const result = join(root, `${mode}.json`)
-  const env: NodeJS.ProcessEnv = { ...process.env, SIGN_INS_MODE: mode, SIGN_INS_RESULT: result }
+type Mode = 'first' | 'second' | 'linger'
+
+/**
+ * Starts the fixture, owned by `owner` (this process unless a test says
+ * otherwise): the fixture ends once its owner is gone, however it ends, and
+ * ends itself after the patience in any case.
+ */
+function start(
+  app: string,
+  userData: string,
+  mode: Mode,
+  result: string,
+  owner: number = process.pid
+): { child: ChildProcess; exited: Promise<number | null> } {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    SIGN_INS_MODE: mode,
+    SIGN_INS_RESULT: result,
+    SIGN_INS_OWNER: String(owner)
+  }
   delete env['ELECTRON_RUN_AS_NODE']
   const child = spawn(ELECTRON, [app, `--user-data-dir=${userData}`], { env, stdio: ['ignore', 'ignore', 'pipe'] })
   running.add(child)
   let stderr = ''
   child.stderr?.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
-  const code = await new Promise<number | null>((resolve, reject) => {
+  const exited = new Promise<number | null>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`the ${mode} run did not exit within ${String(PATIENCE)} ms\n${stderr}`))
     }, PATIENCE)
@@ -72,13 +90,20 @@ async function run<T>(app: string, userData: string, mode: 'first' | 'second', r
     })
     child.once('exit', (exitCode) => {
       clearTimeout(timer)
+      running.delete(child)
       resolve(exitCode)
     })
   })
-  running.delete(child)
-  const report = JSON.parse(readFileSync(result, 'utf8')) as T | { error: string }
-  if (typeof report === 'object' && report !== null && 'error' in report) {
-    throw new Error(`the ${mode} run failed: ${report.error}\n${stderr}`)
+  return { child, exited }
+}
+
+/** Runs the fixture to its end and returns its report. */
+async function run<T>(app: string, userData: string, mode: 'first' | 'second', root: string): Promise<T> {
+  const result = join(root, `${mode}.json`)
+  const code = await start(app, userData, mode, result).exited
+  const report = JSON.parse(readFileSync(result, 'utf8')) as T | Ended
+  if (typeof report === 'object' && report !== null && ('error' in report || 'ended' in report)) {
+    throw new Error(`the ${mode} run did not finish: ${JSON.stringify(report)}`)
   }
   expect(code, `the ${mode} run's exit code`).toBe(0)
   return report as T
@@ -107,6 +132,18 @@ describe('sign-ins in the browser partition, in real Electron', () => {
       // Set with no same-site policy, which Electron's `cookies.set` keeps as `lax`.
       expect(restarted.cookies.hostPrefixed).toMatchObject({ secure: true, hostOnly: true, sameSite: 'lax' })
       expect(restarted.cookies.signedOut).toEqual({ present: false })
+      // Removed as the keeper undoes a rewrite: exactly that cookie, and not
+      // the one of the same name on the parent path.
+      expect(restarted.cookies.twinDeep).toEqual({ present: false })
+      expect(restarted.cookies.twinRoot).toMatchObject({ present: true, valueMatches: true, session: false })
+
+      // How the store announced the page's cookie and its rewrite, which is
+      // what the keeper checks a rewrite against.
+      expect(signedIn.keptChanges).toEqual([
+        { cause: 'inserted', removed: false, session: true },
+        { cause: 'overwrite', removed: true, session: true },
+        { cause: 'inserted-no-value-change-overwrite', removed: false, session: false }
+      ])
 
       // The user agent, as the page and its server saw it.
       expect(signedIn.appName).toBe(APP_NAME)
@@ -118,5 +155,27 @@ describe('sign-ins in the browser partition, in real Electron', () => {
     },
     // Two Electron starts, each bounded by the patience, and a bundle.
     3 * PATIENCE
+  )
+
+  it(
+    'ends the fixture once the process that owns it is gone',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'sign ins '))
+      const userData = join(root, 'user data')
+      mkdirSync(userData)
+      const app = await fixtureApp(root)
+      const result = join(root, 'linger.json')
+      // A stand-in for the test's worker: a process that runs until it is ended.
+      const owner = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)'], { stdio: 'ignore' })
+      running.add(owner)
+      owner.once('exit', () => running.delete(owner))
+      if (owner.pid === undefined) throw new Error('the stand-in owner did not start')
+      const { exited } = start(app, userData, 'linger', result, owner.pid)
+      // Lingering, the fixture writes nothing until it ends.
+      owner.kill()
+      expect(await exited).toBe(1)
+      expect(JSON.parse(readFileSync(result, 'utf8'))).toEqual({ ended: 'owner' })
+    },
+    2 * PATIENCE
   )
 })

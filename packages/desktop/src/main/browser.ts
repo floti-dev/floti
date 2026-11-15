@@ -19,7 +19,7 @@ import {
   type AppSettings,
   type BrowserReach
 } from '@helm/core'
-import { flushCookies, keepSignIns } from './browserCookies'
+import { flushCookies, keepSignIns, type CookieKeeper } from './browserCookies'
 import { TITLEBAR_HEIGHT } from './chrome'
 import { browserKeyCommand, COMMANDS_FOR_THE_WINDOW, COMMANDS_THAT_REPEAT } from '../shared/browserKeys'
 import {
@@ -571,6 +571,8 @@ interface InternalHost {
 // ---------------------------------------------------------------------------
 
 let configured: Session | null = null
+/** What keeps the partition's session cookies, installed with it. */
+let keeper: CookieKeeper | null = null
 
 /**
  * The browser profile, configured once.
@@ -591,7 +593,7 @@ let configured: Session | null = null
 export function browserSession(): Session {
   if (configured !== null) return configured
   const partition = session.fromPartition(BROWSER_PARTITION)
-  keepSignIns(partition, app.getName())
+  keeper = keepSignIns(partition, app.getName())
 
   /*
    * Two permissions, for the page somebody is in, and nothing else.
@@ -658,11 +660,14 @@ export function browserSession(): Session {
 }
 
 /**
- * Writes the browser partition's cookies to disk, for a quit. Nothing to do
- * when the partition was never opened.
+ * Writes the browser partition's cookies to disk, for a quit, once the
+ * session cookies being kept have landed: a sign-in finished just before the
+ * quit is in the store before it is written. Nothing to do when the partition
+ * was never opened.
  */
 export function flushBrowserCookies(): Promise<void> {
-  return configured === null ? Promise.resolve() : flushCookies(configured.cookies)
+  if (configured === null || keeper === null) return Promise.resolve()
+  return flushCookies(configured.cookies, keeper.settled())
 }
 
 /** What a page in the Browser tab may be granted. See `browserSession`. */

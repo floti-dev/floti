@@ -14,9 +14,11 @@ import {
 } from './browserCookies'
 
 /**
- * The cookie store, played the way Chromium plays it: a cookie that replaces
- * another is announced as the old one's removal (cause `overwrite`) and then
- * the new one's addition, and `set` is announced the same way. A test can
+ * The cookie store, played the way Chromium plays it (measured on Electron
+ * 43.3.0 by `test/browser-sign-ins.test.ts`): a cookie that replaces another
+ * is announced as the old one's removal (cause `overwrite`) and then the new
+ * one's addition (cause `inserted-no-value-change-overwrite` when the value is
+ * the same), and `set` is announced the same way. A test can
  * hold the store's answer to `get`, to act while a rewrite is pending.
  */
 class FakeStore extends EventEmitter {
@@ -26,6 +28,9 @@ class FakeStore extends EventEmitter {
   holdAnswers = false
   private waiting: Array<() => void> = []
   failSets = false
+  /** When set, `set` waits for the test to call `land`. */
+  holdSets = false
+  private landing: Array<() => void> = []
 
   get(filter: CookiesGetFilter): Promise<Cookie[]> {
     const read = (): Cookie[] => [...this.held.values()].filter((cookie) => cookie.name === filter.name)
@@ -43,11 +48,41 @@ class FakeStore extends EventEmitter {
   set(details: CookiesSetDetails): Promise<void> {
     this.sets.push(details)
     if (this.failSets) return Promise.reject(new Error('refused'))
+    if (!this.holdSets) {
+      this.apply(details)
+      return Promise.resolve()
+    }
+    return new Promise((resolve) =>
+      this.landing.push(() => {
+        this.apply(details)
+        resolve()
+      })
+    )
+  }
+
+  /** Lets every held `set` reach the store, in the order they were sent. */
+  land(): void {
+    const landing = this.landing
+    this.landing = []
+    for (const apply of landing) apply()
+  }
+
+  /** A set as Chromium applies it: one already expired removes the cookie it matches and adds nothing. */
+  private apply(details: CookiesSetDetails): void {
     const host = new URL(details.url).hostname
+    const domain = details.domain ?? host
+    if (details.expirationDate !== undefined && details.expirationDate * 1000 < NOW) {
+      const key = `${domain}|${details.path ?? '/'}|${details.name ?? ''}`
+      const old = this.held.get(key)
+      if (old === undefined) return
+      this.held.delete(key)
+      this.emit('changed', {}, old, 'expired-overwrite', true)
+      return
+    }
     this.put({
       name: details.name ?? '',
       value: details.value ?? '',
-      domain: details.domain ?? host,
+      domain,
       hostOnly: details.domain === undefined,
       path: details.path ?? '/',
       secure: details.secure ?? false,
@@ -56,7 +91,6 @@ class FakeStore extends EventEmitter {
       ...(details.expirationDate === undefined ? {} : { expirationDate: details.expirationDate }),
       sameSite: details.sameSite ?? 'unspecified'
     })
-    return Promise.resolve()
   }
 
   flushStore(): Promise<void> {
@@ -69,7 +103,8 @@ class FakeStore extends EventEmitter {
     const old = this.held.get(key)
     if (old !== undefined) this.emit('changed', {}, old, 'overwrite', true)
     this.held.set(key, cookie)
-    this.emit('changed', {}, cookie, 'inserted', false)
+    const cause = old?.value === cookie.value ? 'inserted-no-value-change-overwrite' : 'inserted'
+    this.emit('changed', {}, cookie, cause, false)
   }
 
   /** A page removing a cookie: signing out. */
@@ -169,6 +204,81 @@ describe('keeping session cookies', () => {
     expect(store.sets).toEqual([])
   })
 
+  it('removes the rewrite again when the sign-out reaches the store between its check and its set', async () => {
+    const store = new FakeStore()
+    store.holdSets = true
+    keepSessionCookies(jarOf(store), () => NOW)
+    const cookie = sessionCookie()
+    store.put(cookie)
+    await settle()
+    // The check passed and the rewrite is on its way; the site's removal gets
+    // to the store first, and the rewrite then lands on nothing.
+    expect(store.sets).toHaveLength(1)
+    store.remove(cookie)
+    store.land()
+    await settle()
+    // The rewrite's addition came with no removal of the session cookie
+    // before it, so it is removed again.
+    store.land()
+    await settle()
+    expect(store.held.size).toBe(0)
+    expect(store.sets[1]).toMatchObject({ name: 'sid', value: '', expirationDate: 1, path: '/' })
+    expect(store.sets[1]).not.toHaveProperty('domain')
+  })
+
+  it('puts a newer value back when the site sets one between the check and the set', async () => {
+    const store = new FakeStore()
+    store.holdSets = true
+    keepSessionCookies(jarOf(store), () => NOW)
+    store.put(sessionCookie({ value: 'old' }))
+    await settle()
+    store.put(sessionCookie({ value: 'new' }))
+    store.land()
+    await settle()
+    store.land()
+    await settle()
+    store.land()
+    await settle()
+    // The old rewrite, the newer value put back, then the newer value kept.
+    expect(store.sets.map((set) => [set.value, set.expirationDate])).toEqual([
+      ['old', DAYS_OUT],
+      ['new', undefined],
+      ['new', DAYS_OUT]
+    ])
+    expect(store.held.get('app.example.com|/|sid')).toMatchObject({ value: 'new', session: false })
+  })
+
+  it('puts a newer cookie with an expiry back as it was', async () => {
+    const store = new FakeStore()
+    store.holdSets = true
+    keepSessionCookies(jarOf(store), () => NOW)
+    store.put(sessionCookie({ value: 'old' }))
+    await settle()
+    store.put(sessionCookie({ value: 'lasting', session: false, expirationDate: DAYS_OUT + 999 }))
+    store.land()
+    await settle()
+    store.land()
+    await settle()
+    expect(store.sets.at(-1)).toMatchObject({ value: 'lasting', expirationDate: DAYS_OUT + 999 })
+    expect(store.held.get('app.example.com|/|sid')).toMatchObject({ value: 'lasting', expirationDate: DAYS_OUT + 999 })
+  })
+
+  it('settles once every rewrite it started has landed', async () => {
+    const store = new FakeStore()
+    store.holdSets = true
+    const keeper = keepSessionCookies(jarOf(store), () => NOW)
+    store.put(sessionCookie())
+    await settle()
+    let settled = false
+    void keeper.settled().then(() => (settled = true))
+    await settle()
+    expect(settled).toBe(false)
+    store.land()
+    await settle()
+    expect(settled).toBe(true)
+    expect(store.held.get('app.example.com|/|sid')).toMatchObject({ session: false })
+  })
+
   it('does not set a cookie the store no longer holds', async () => {
     const store = new FakeStore()
     store.holdAnswers = true
@@ -251,8 +361,7 @@ describe('keeping session cookies', () => {
 
   it('stops when undone', async () => {
     const store = new FakeStore()
-    const undo = keepSessionCookies(jarOf(store), () => NOW)
-    undo()
+    keepSessionCookies(jarOf(store), () => NOW).stop()
     store.put(sessionCookie())
     await settle()
     expect(store.sets).toEqual([])
@@ -281,6 +390,27 @@ describe('flushing the cookie store', () => {
     const flushStore = vi.fn(() => Promise.resolve())
     await flushCookies({ flushStore })
     expect(flushStore).toHaveBeenCalledTimes(1)
+  })
+
+  it('writes the store only once the rewrites it waits for have settled', async () => {
+    const flushStore = vi.fn(() => Promise.resolve())
+    let settle: () => void = () => undefined
+    const flushing = flushCookies({ flushStore }, new Promise<void>((resolve) => (settle = resolve)))
+    await Promise.resolve()
+    expect(flushStore).not.toHaveBeenCalled()
+    settle()
+    await flushing
+    expect(flushStore).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives up within the same deadline when the rewrites never settle', async () => {
+    vi.useFakeTimers()
+    let done = false
+    void flushCookies({ flushStore: () => Promise.resolve() }, new Promise<void>(() => undefined)).then(
+      () => (done = true)
+    )
+    await vi.advanceTimersByTimeAsync(COOKIE_FLUSH_DEADLINE_MS)
+    expect(done).toBe(true)
   })
 
   it('resolves when the store fails or throws', async () => {
