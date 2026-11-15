@@ -1080,7 +1080,10 @@ overrides the gate; keep it.
   last screen." ("Ended. This window saw none of its screen." when it ended before any reached this window) and there is no Stop. The Mode row says the mode in lower case ("manual").
 
   **A child that needs a person has a toast, and a window that connects to a
-  host with notices standing has While you were away.** Both are cards on
+  host has While you were away, which lists the standing notices this device
+  has not shown before.** A notice this device was given once, before a
+  dropped connection or a restart, is not listed again; it stays in the
+  notices until it is dismissed or its cause goes. Both are cards on
   `surface-raised` with a `border-strong` hairline, `rounded-well` and no
   shadow, the toast 330px wide and the list 372px (each no wider than the room left of the panes, less the 8px inset and the 4px gutter, so a narrow sidebar
   makes them narrower and not cut off), drawn in one stack at the window's left edge, 8px in and
@@ -1096,7 +1099,8 @@ overrides the gate; keep it.
   a card gets no toast: its warn edge says it. While you were away on the
   host's name has its close button in the header and a hairline-topped row for
   each notice: a `warn` dot (`danger` for an error), what it is about in 12.5px
-  `fg`, the sentence in 11.5px `fg-muted`, and Peek and Open as tab for a child that
+  `fg` (for an error, what happened: "worker-2 ended in error", "worker-2
+  couldn’t start" or "worker-2 reported an error"), the sentence in 11.5px `fg-muted`, and Peek and Open as tab for a child that
   needs you or Dismiss for a refused start or an error. Its close button closes
   it in this window only. The frames draw the stack at the right edge; here it is
   at the left so that it cannot sit under a browser view. Each away row reads

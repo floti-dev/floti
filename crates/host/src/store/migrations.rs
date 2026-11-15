@@ -90,6 +90,7 @@ pub static MIGRATIONS: &[Migration] = drizzle_migrations![
     "0030_agent_versions",
     "0031_launched_as",
     "0032_workspaces_were_harnesses",
+    "0033_notice_causes",
 ];
 
 /// What opening a database applied.

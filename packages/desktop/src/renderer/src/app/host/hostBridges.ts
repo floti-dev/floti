@@ -10,6 +10,7 @@ import { createProfilesAdapter } from './profiles'
 import type { RemoteHostsStore } from './remoteHosts'
 import { createRouter, type HostAdapter } from './router'
 import { createNoticesAdapter, type NoticesStore } from './notices'
+import { createSeenMarks, type SeenMarks, type SeenStorage } from './noticesSeen'
 import { createWorktreesAdapter } from './worktrees'
 import { createAgentsAdapter } from './agents'
 import { createSessionsAdapters, type SessionsAdapters, type WindowFront } from './sessions'
@@ -65,6 +66,16 @@ export interface HostBridgeDeps {
   storage: Pick<Storage, 'getItem' | 'setItem'> | null
   onFocus?: (listener: () => void) => void
   log: (line: string) => void
+  /** What this device has shown of each host's notices; kept in memory alone when none is given. */
+  seen?: SeenMarks
+}
+
+/** Where every host's seen notices are kept: this device's own settings, through the preload's bridge, never a host. */
+export function ownSeenStorage(own: HelmBridge): SeenStorage {
+  return {
+    read: () => Promise.resolve().then(async () => (await own.invoke('ownSettings:read')).noticesSeen),
+    write: (noticesSeen) => Promise.resolve().then(() => own.invoke('ownSettings:write', { noticesSeen }))
+  }
 }
 
 /** Where this PC's host's terminal tabs are kept across a reload, as they always were. */
@@ -149,7 +160,7 @@ export function createHostBridge(
     ...(local ? {} : { hostName: deps.name }),
     log: deps.log
   })
-  const notices = createNoticesAdapter(link, deps.log)
+  const notices = createNoticesAdapter(link, deps.log, deps.seen?.forHost(host))
   const adapters: HostAdapter[] = [
     createHistoryAdapter(link, deps.log),
     workspace,
@@ -199,16 +210,19 @@ export function createHostBridges(deps: HostBridgesDeps): HostBridges {
       createPageLink({ bridge: deps.own, capabilities: WINDOW_CAPABILITIES, host, retries: false, log: deps.log }))
   const listeners = new Set<(bridge: HostBridge) => void>()
   const bridges = new Map<string, HostBridge>()
+  // One store of every host's mark, so a write for one host keeps the others'.
+  const seen = deps.seen ?? createSeenMarks(ownSeenStorage(deps.own), deps.log)
 
   const add = (bridge: HostBridge): HostBridge => {
     bridges.set(bridge.host, bridge)
     for (const listener of [...listeners]) listener(bridge)
     return bridge
   }
-  add(createHostBridge(LOCAL_HOST_KEY, deps.localLink, { ...deps, name: () => deps.nameOf(LOCAL_HOST_KEY) }))
+  add(createHostBridge(LOCAL_HOST_KEY, deps.localLink, { ...deps, seen, name: () => deps.nameOf(LOCAL_HOST_KEY) }))
 
   const hostBridge = (host: string): HostBridge =>
-    bridges.get(host) ?? add(createHostBridge(host, remoteLink(host), { ...deps, name: () => deps.nameOf(host) }))
+    bridges.get(host) ??
+    add(createHostBridge(host, remoteLink(host), { ...deps, seen, name: () => deps.nameOf(host) }))
 
   return {
     bridgeFor: (host) => hostBridge(host).helm,

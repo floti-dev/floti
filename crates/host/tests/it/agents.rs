@@ -4730,7 +4730,8 @@ async fn a_command_without_a_name_is_named_after_its_program_and_made_unique_amo
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_command_child_ends_with_its_exit_code_and_its_parent_is_told_the_last_40_lines() {
+async fn a_command_child_ends_with_its_exit_code_and_its_parent_is_told_the_last_40_lines_and_no_notice_stands_for_it()
+ {
     let world = World::new();
     let host = world.host().await;
     let folder = world.project("exits");
@@ -4779,7 +4780,64 @@ async fn a_command_child_ends_with_its_exit_code_and_its_parent_is_told_the_last
         .await;
         assert!(told.contains("Its last lines:"), "{told}");
         assert!(told.contains("line 3"), "{told}");
+
+        // A command that failed is its parent's business: no notice stands
+        // for a person. The exit of `quiet`, heard after the failed one's,
+        // is the barrier: the host has long finished with `tests`'s end.
+        let standing: i64 = world
+            .db()
+            .query_row("SELECT count(*) FROM notices", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(standing, 0, "no notice for a command that exited 3");
     }
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_command_child_that_cannot_start_is_its_parents_news_and_raises_no_notice() {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("gone folder");
+    let script = command_script(&world);
+    let parent = world.session(CLAUDE, &folder, "parent").await;
+    // The folder the parent's record says it works in, where a command runs,
+    // is not there any more.
+    let gone = world.outside("moved away").join("not here");
+    world
+        .db()
+        .execute(
+            "UPDATE sessions SET cwd = ?1 WHERE id = ?2",
+            rusqlite::params![text(&gone), i64::try_from(parent.id()).unwrap()],
+        )
+        .unwrap();
+    let started = world
+        .shell(
+            &parent,
+            &run_script("--name tests", &script, "--count 1 --code 0"),
+        )
+        .await;
+    assert_ne!(started.code, Some(0), "{started:?}");
+
+    // Its parent hears it never ran.
+    let news = eventually("the failed launch to reach its parent", async || {
+        let waited = world.shell(&parent, "floti agent wait --json").await;
+        let answer: Value = serde_json::from_str(waited.stdout.trim()).ok()?;
+        answer["news"]
+            .as_array()?
+            .iter()
+            .find(|news| news["child"] == "tests")
+            .cloned()
+    })
+    .await;
+    assert_eq!(news["event"], "error", "{news}");
+    assert_eq!(news["state"], "launch", "{news}");
+
+    // The news is written last, so a notice would stand by now: none does.
+    let standing: i64 = world
+        .db()
+        .query_row("SELECT count(*) FROM notices", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(standing, 0, "no notice for a command that never ran");
     host.stop(HostStopReason::Stop).await;
 }
 

@@ -21,6 +21,7 @@ const notice = (overrides: Partial<StandingNotice> = {}): StandingNotice => ({
   since: '2026-11-07T14:41:00.000Z',
   limit: 'starts',
   allowMore: 16,
+  cause: null,
   ...overrides
 })
 
@@ -39,11 +40,25 @@ describe('what the notices say', () => {
   it('S15: titles each notice by what it is about', () => {
     expect(awayTitle(notice({ kind: 'needs-you', childId: 4, childName: 'worker-2' }))).toBe('worker-2 needs you')
     expect(awayTitle(notice())).toBe('api-refactor was refused a start')
-    expect(awayTitle(notice({ kind: 'error', childId: 5, childName: 'docs-check' }))).toBe('docs-check ended in error')
+    expect(awayTitle(notice({ kind: 'error', childId: 5, childName: 'docs-check', cause: 'ended' }))).toBe(
+      'docs-check ended in error'
+    )
     expect(awayDetail(notice({ kind: 'needs-you', childName: 'worker-2', text: 'permission prompt' }))).toMatch(
       /^Waiting on a permission prompt since \d\d:\d\d\. Started by api-refactor, which was told and carried on\.$/
     )
     expect(awayDetail(notice())).toBe('The limit of 4 starts per parent holds.')
+  })
+
+  it('titles an error by what happened: an ending, a launch that failed, or a report from a child that ran on', () => {
+    const error = (cause: StandingNotice['cause'], childName: string | null = 'docs-check') =>
+      awayTitle(notice({ kind: 'error', childId: childName === null ? null : 5, childName, limit: null, cause }))
+    expect(error('ended')).toBe('docs-check ended in error')
+    expect(error('launch')).toBe('docs-check couldn’t start')
+    expect(error('report')).toBe('docs-check reported an error')
+    // From a host that kept no cause: an ending, as it always was.
+    expect(error(null)).toBe('docs-check ended in error')
+    // A child with no name is said as its parent.
+    expect(error('launch', null)).toBe('api-refactor couldn’t start')
   })
 
   it('S15: Peek and Open as tab for a child that needs you, Dismiss for a refused start or an error', () => {

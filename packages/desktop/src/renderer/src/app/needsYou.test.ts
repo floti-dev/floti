@@ -35,6 +35,7 @@ const waiting = (childId: number, over: Partial<StandingNotice> = {}): StandingN
   since: '2026-11-06T10:00:00Z',
   limit: null,
   allowMore: null,
+  cause: null,
   ...over
 })
 

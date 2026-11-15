@@ -210,6 +210,20 @@ until the user updates the rule.
   `server/features/sessions.rs`): a stopped session and every child's end,
   however it came, raise no OS notification; a child that needs a person
   raises its needs-you notice.
+- An agent child's error stands as a notice for a person (`notices` in
+  `floti.db`, sent on `notices:changed`): it exited non-zero with nobody
+  stopping it, it could not start, or its program reported an error while it
+  ran on, which protocol 4.1's optional `cause` says (`ended`, `launch`,
+  `report`) and the window titles by ("ended in error", "couldn’t start",
+  "reported an error"). A reported error goes when the child reports working
+  or idle again, a failed launch goes when a child of that name starts under
+  that parent, every error of a child goes when its parent resumes it, and
+  every notice under a parent goes when the parent ends. A command child's
+  exit or failed launch raises none: its parent hears it as news. A
+  device lists as While you were away only the notices that stood when it
+  connected and began after the newest one it had shown of that host
+  (`noticesSeen` in `helm.db`), so a dropped connection or a restart lists
+  nothing it showed already.
 - Kept belongs to the host: `kept` on the child's row in `floti.db`, written
   with `stopped_by` by the first stop (`records::record_stopping`): true for
   `agents_stop` with `keep` (`floti agent stop --keep`) and for a person's

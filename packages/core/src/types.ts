@@ -1995,6 +1995,18 @@ export interface AppSettings {
    * the next start. Helm's own plugin records are never changed by the copy.
    */
   pluginsCopiedToHostAt: string | null
+  /**
+   * The newest notice this device has shown of each host's, by host key
+   * (`LOCAL_HOST_KEY`, or a remote host's id in `hosts`): the `since` of the
+   * newest one it was given, ISO 8601, in the host's clock.
+   *
+   * State, beside `paneLayout` and not in the settings pane. While you were
+   * away lists, at each connect and after a restart, only the notices that
+   * began after this: what the device has already shown is not news again
+   * however often its connection drops. Kept on this device, never in a host:
+   * each device has seen what it has seen. Bounded by `NOTICES_SEEN_HOSTS_MAX`.
+   */
+  noticesSeen: Readonly<Record<string, string>>
 }
 
 /** What quitting Helm does to the sessions it started on a host. */
@@ -2028,6 +2040,9 @@ export const BROWSER_RECENT_URLS_MAX = 10
  * has. Past this the oldest entries are dropped.
  */
 export const BROWSER_PROJECT_URLS_MAX = 200
+
+/** How many hosts' seen notices a device keeps: more hosts than anybody connects to, as a ceiling on a value rewritten whole. */
+export const NOTICES_SEEN_HOSTS_MAX = 64
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
@@ -2102,7 +2117,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   quitSessions: {},
   hosts: [],
   profilesCopiedToHostAt: null,
-  pluginsCopiedToHostAt: null
+  pluginsCopiedToHostAt: null,
+  noticesSeen: {}
 }
 
 // ---------------------------------------------------------------------------
@@ -2666,6 +2682,9 @@ export type NoticeKind = 'needs-you' | 'limit' | 'error'
 /** The limit that refused a parent's start. */
 export type NoticeLimit = 'children' | 'sessions' | 'depth' | 'starts'
 
+/** What an error notice is about: an exit in error, a launch that failed, or an error a running child reported. */
+export type NoticeCause = 'ended' | 'launch' | 'report'
+
 /**
  * Something the host keeps for a person who is not looking: a child waiting on
  * them (until it stops), a start a limit refused or a child that ended in
@@ -2690,6 +2709,8 @@ export interface StandingNotice {
   limit: NoticeLimit | null
   /** For the starts limit, how many more starts Allow adds for this parent. */
   allowMore: number | null
+  /** What an error notice is about; null for any other kind. */
+  cause: NoticeCause | null
 }
 
 /**

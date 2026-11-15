@@ -32,8 +32,8 @@ use floti_protocol::channels::common::SessionRecord;
 use floti_protocol::channels::host::HostStopReason;
 use floti_protocol::channels::sessions::{
     AllowMoreStarts, AllowMoreStartsRequest, CloseSessionRequest, DismissNotice,
-    DismissNoticeRequest, NoticeKind, NoticeLimit, SessionClose, SessionList, SessionStart,
-    StandingNotice, StartSessionRequest,
+    DismissNoticeRequest, NoticeCause, NoticeKind, NoticeLimit, SessionClose, SessionList,
+    SessionStart, StandingNotice, StartSessionRequest,
 };
 use floti_protocol::channels::workspace::{HostSettingsPatch, WriteSettings};
 use floti_protocol::{BackendId, Message, PROTOCOL_VERSION, ProtocolVersion};
@@ -771,6 +771,7 @@ async fn a_refused_start_and_a_child_that_ended_in_error_stand_across_a_restart_
     assert_eq!(error.child_id, Some(one.id()));
     assert_eq!(error.child_name.as_deref(), Some("one"));
     assert!(error.text.contains("code 3"), "{error:?}");
+    assert_eq!(error.cause, Some(NoticeCause::Ended));
     let limit = of_kind(&standing, NoticeKind::Limit)[0].clone();
 
     // A launch that fails leaves one, naming the child that never ran.
@@ -790,6 +791,8 @@ async fn a_refused_start_and_a_child_that_ended_in_error_stand_across_a_restart_
         .clone();
     assert_eq!(ghost.child_id, None);
     assert!(ghost.text.contains("could not be started"), "{ghost:?}");
+    assert_eq!(ghost.cause, Some(NoticeCause::Launch));
+    assert_eq!(limit.cause, None, "only an error has a cause");
 
     // The host goes down and comes back with the sessions the keeper held:
     // the notices stand as they were.
@@ -830,6 +833,98 @@ async fn a_refused_start_and_a_child_that_ended_in_error_stand_across_a_restart_
         })
         .await;
     second.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agent_child_that_ended_in_error_keeps_its_notice_until_it_is_resumed() {
+    let world = World::new();
+    let host = world.host().await;
+    let parent = world.session(&world.project("resumed"), "parent").await;
+    parent
+        .start(json!({ "task": "work", "name": "one" }))
+        .await
+        .done();
+    let one = world.child_of(&parent, "one").await;
+    // A prompt records its conversation, which a resume reopens.
+    world.type_line(&one, "remember this").await;
+    world.type_line(&one, "/crash").await;
+    let standing = world
+        .notices_where("an error notice to stand", |notices| {
+            of_kind(notices, NoticeKind::Error).len() == 1
+        })
+        .await;
+    assert_eq!(
+        of_kind(&standing, NoticeKind::Error)[0].cause,
+        Some(NoticeCause::Ended)
+    );
+
+    // Resumed by its parent, whatever the case of the name it gives.
+    parent
+        .start(json!({ "task": "try again", "resume": "ONE" }))
+        .await
+        .done();
+    world
+        .notices_where("the error notice to go once it is resumed", |notices| {
+            of_kind(notices, NoticeKind::Error).is_empty()
+        })
+        .await;
+    // It runs on as the resumed child, so nothing stands for it again.
+    let resumed: String = world
+        .db()
+        .query_row(
+            "SELECT status FROM sessions WHERE child_name = 'one' ORDER BY id DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("the resumed child's row");
+    assert_eq!(resumed, "running");
+    assert!(
+        of_kind(&world.notices().await, NoticeKind::Error).is_empty(),
+        "the resumed child left no notice"
+    );
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_child_that_could_not_start_keeps_its_notice_until_a_child_of_its_name_starts() {
+    let world = World::new();
+    let host = world.host().await;
+    let parent = world.session(&world.project("restarted"), "parent").await;
+    let other = world.session(&world.project("elsewhere"), "other").await;
+    for under in [&parent, &other] {
+        under
+            .start(json!({ "task": "work", "name": "ghost", "backend": MISSING }))
+            .await
+            .refused();
+    }
+    let standing = world
+        .notices_where("both launch failures to stand", |notices| {
+            of_kind(notices, NoticeKind::Error).len() == 2
+        })
+        .await;
+    assert!(
+        of_kind(&standing, NoticeKind::Error)
+            .iter()
+            .all(|notice| notice.cause == Some(NoticeCause::Launch)),
+        "{standing:?}"
+    );
+
+    // A child of that name starts under the parent: its failed launch goes,
+    // and the other parent's stays.
+    parent
+        .start(json!({ "task": "work", "name": "Ghost" }))
+        .await
+        .done();
+    world.child_of(&parent, "Ghost").await;
+    let left = world
+        .notices_where("the started child's failed launch to go", |notices| {
+            of_kind(notices, NoticeKind::Error).len() == 1
+        })
+        .await;
+    let left = of_kind(&left, NoticeKind::Error);
+    assert_eq!(left[0].parent_id, other.id(), "{left:?}");
+    assert_eq!(left[0].cause, Some(NoticeCause::Launch));
+    host.stop(HostStopReason::Stop).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

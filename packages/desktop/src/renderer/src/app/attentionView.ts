@@ -41,15 +41,25 @@ export function clockTime(iso: string): string {
   return `${two(at.getHours())}:${two(at.getMinutes())}`
 }
 
-/** What a standing notice is about, in a few words. */
+/** What a standing notice is about, in a few words: for an error, what happened to the child. */
 export function awayTitle(notice: StandingNotice): string {
   switch (notice.kind) {
     case 'needs-you':
       return `${notice.childName ?? 'A session'} needs you`
     case 'limit':
       return `${notice.parentName} was refused a start`
-    case 'error':
-      return `${notice.childName ?? notice.parentName} ended in error`
+    case 'error': {
+      const child = notice.childName ?? notice.parentName
+      switch (notice.cause) {
+        case 'launch':
+          return `${child} couldn’t start`
+        case 'report':
+          return `${child} reported an error`
+        case 'ended':
+        case null:
+          return `${child} ended in error`
+      }
+    }
   }
 }
 

@@ -255,5 +255,11 @@ export const MIGRATIONS: readonly EmbeddedMigration[] = [
       "CREATE INDEX `projects_workspace_idx` ON `projects` (`workspace_path`);",
       "UPDATE `projects` SET `kind` = 'workspace' WHERE `kind` = 'harness';"
     ]
+  },
+  {
+    "tag": "0033_notice_causes",
+    "statements": [
+      "ALTER TABLE `notices` ADD `cause` text;"
+    ]
   }
 ]

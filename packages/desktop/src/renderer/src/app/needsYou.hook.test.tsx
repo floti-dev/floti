@@ -29,7 +29,8 @@ const waiting = (childId: number, since = '2026-11-06T10:00:00Z'): StandingNotic
   text: 'permission prompt',
   since,
   limit: null,
-  allowMore: null
+  allowMore: null,
+  cause: null
 })
 
 const hostWith = (notices: StandingNotice[], atConnect: StandingNotice[] = []): HostAttention<ChildMember>[] => [

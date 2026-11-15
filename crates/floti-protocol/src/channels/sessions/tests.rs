@@ -709,6 +709,7 @@ fn notice(kind: NoticeKind) -> StandingNotice {
         since: "2026-11-06T10:00:00Z".into(),
         limit: None,
         allow_more: None,
+        cause: None,
     }
 }
 
@@ -725,7 +726,10 @@ fn standing_notices_and_their_two_requests_round_trip_over_cbor() {
             allow_more: Some(16),
             ..notice(NoticeKind::Limit)
         },
-        notice(NoticeKind::Error),
+        StandingNotice {
+            cause: Some(NoticeCause::Report),
+            ..notice(NoticeKind::Error)
+        },
     ]);
     state::<NoticesChanged>(vec![]);
     exchange::<DismissNotice>(DismissNoticeRequest { id: "n-1".into() }, ());
@@ -754,6 +758,21 @@ fn a_notice_names_its_kind_and_limit_the_way_the_clients_read_them() {
     }
     assert_eq!(serde_json::to_value(NoticeKind::Limit).unwrap(), "limit");
     assert_eq!(serde_json::to_value(NoticeKind::Error).unwrap(), "error");
+    for (cause, said) in [
+        (NoticeCause::Ended, "ended"),
+        (NoticeCause::Launch, "launch"),
+        (NoticeCause::Report, "report"),
+    ] {
+        assert_eq!(serde_json::to_value(cause).unwrap(), said);
+    }
+}
+
+#[test]
+fn an_error_notice_from_a_host_on_4_0_reads_with_no_cause() {
+    let mut wire = serde_json::to_value(notice(NoticeKind::Error)).unwrap();
+    wire.as_object_mut().unwrap().remove("cause");
+    let read: StandingNotice = serde_json::from_value(wire).unwrap();
+    assert_eq!(read.cause, None);
 }
 
 #[test]

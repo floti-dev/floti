@@ -476,8 +476,8 @@ export const agentVersions = sqliteTable(
 
 /**
  * What the host keeps standing for a person who is not looking: a start a
- * limit refused and a child that ended in error, until a client dismisses
- * them or the parent ends. Only the Floti host writes it. A child that needs
+ * limit refused and an agent child's error, until a client dismisses them, the
+ * parent ends or the error's cause goes. Only the Floti host writes it. A child that needs
  * a person is a notice too, but it follows the child's activity and is not
  * kept here: it goes when the child stops waiting, and a restart reads it
  * afresh.
@@ -504,6 +504,13 @@ export const notices = sqliteTable(
     limitKind: text('limit_kind', { enum: ['children', 'sessions', 'depth', 'starts'] }),
     /** For the starts limit, how many more starts Allow adds. */
     allowMore: integer('allow_more'),
+    /**
+     * For an error, what it is about: an exit in error, a launch that failed,
+     * or an error the child reported while it ran on. Null on a row written
+     * before it was kept: one with a child ended in error, one without could
+     * not start.
+     */
+    cause: text('cause', { enum: ['ended', 'launch', 'report'] }),
     since: text('since').notNull().default(now)
   },
   (t) => [index('notices_parent_idx').on(t.parentSessionId)]

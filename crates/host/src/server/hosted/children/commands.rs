@@ -144,7 +144,7 @@ impl Hosted {
         let launched = match launched {
             Ok(launched) => launched,
             Err(reason) => {
-                self.launch_failed(
+                self.command_launch_failed(
                     &rows::Link {
                         name: name.clone(),
                         parent,
