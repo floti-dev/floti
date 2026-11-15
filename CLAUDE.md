@@ -180,8 +180,11 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - `~/.claude/sessions` keeps a `<pid>.<sha256>.key` credential beside every
   `<pid>.json`. The host's Claude Code status reader
   (`agent/claude_code/status.rs`) reads `.json` files only; never widen it.
-- Nothing reads the `persist:helm-browser` partition, which holds the user's
-  cookies and logins; the only call on what it stores is `clearStorageData`.
+- The `persist:helm-browser` partition holds the user's cookies and logins.
+  Cookies are handled only in main (`main/browserCookies.ts`), which keeps
+  session cookies by setting them again with an expiry; no cookie's name or
+  value is logged or sent to the renderer, the host or an agent tool. The
+  only other call on what it stores is `clearStorageData`.
 - The plugin secret store (`crates/host/src/plugins/secrets`) is the one place
   Floti keeps a secret of the user's, and only one the user typed into it:
   sealed by this OS's store, refused when it cannot be, never sent to any

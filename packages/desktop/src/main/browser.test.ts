@@ -13,6 +13,7 @@ import {
   browserWindowOpen,
   createBrowserHost,
   exemptedWebContents,
+  flushBrowserCookies,
   type BrowserHost,
   type BrowserOpener
 } from './browser'
@@ -851,6 +852,32 @@ describe('browser host - security posture', () => {
     b.view.closeItself()
     expect(exemptedWebContents()).toEqual([])
     expect(browserWillNavigate(b.wc.id, 'http://localhost:3001/')).toBe(false)
+  })
+
+  it('sends a user agent without the Electron token and the app name, with the Chrome version unchanged', () => {
+    const h = workspace()
+    openTab(h)
+    expect(partition().userAgent).toBe(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.212 Safari/537.36'
+    )
+  })
+
+  it('keeps session cookies with one listener on the partition, however many tabs open', () => {
+    const h = workspace()
+    openTab(h)
+    openTab(h)
+    expect(partition().cookies.listenerCount('changed')).toBe(1)
+  })
+
+  it('writes the cookie store to disk when a page stops loading, and on a quit', async () => {
+    const h = workspace()
+    const { wc } = openTab(h, 'http://localhost:3000/')
+    const cookies = partition().cookies
+    const before = cookies.flushed
+    wc.emit('did-stop-loading')
+    expect(cookies.flushed).toBe(before + 1)
+    await flushBrowserCookies()
+    expect(cookies.flushed).toBe(before + 2)
   })
 
   it('accepts a self-signed certificate on loopback and hands every other verdict back to Chromium', () => {

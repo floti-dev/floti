@@ -243,6 +243,15 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   permissions, reach rule and exemption registry. A popup shows its host in
   its title bar and is never an agent's: an agent page's opens are more of its
   pages.
+- Sign-ins survive a restart. `browserSession()` installs `keepSignIns`
+  (`main/browserCookies.ts`): every cookie a page sets without an expiry is set
+  again with one 30 days out. A change to the cookie cancels a rewrite still
+  pending, and a rewrite that reached the store after the cookie changed is
+  undone, which the order of the store's change events shows. The partition's
+  user agent is Electron's without its `Electron/` token and the app's name,
+  so Google's sign-in accepts it. The cookie store is written to disk after
+  each page load and, awaited, in the held `before-quit` round trip, once the
+  rewrites in flight have landed (`flushBrowserCookies`, bounded at 2 s).
 - A view can lose its web contents (a page that called `window.close()`). Reach
   them only through `contentsOf` in `browser.ts`. `registerIpc` wraps every
   send handler, because a throw there is an uncaught main-process exception.

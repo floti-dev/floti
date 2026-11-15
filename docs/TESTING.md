@@ -409,7 +409,10 @@ vitest runs five projects (`vitest.config.ts`):
 - **desktop** - main-process services, in Node. `vi.mock('electron')` with
   `test/electron.ts` stands in for Electron; ptys are real and run the fake
   `claude`. The faked app's folders are in the run's root (below).
-  `sessions.test.ts` is the example.
+  `sessions.test.ts` is the example. What only Chromium can show runs the
+  real Electron binary instead, hidden, on a fixture main script bundled with
+  the shipped module and a user-data folder under the run's root:
+  `test/browser-sign-ins.test.ts`, for the cookie store across a restart.
 - **sdk** - the plugin SDK in `packages/plugin-sdk/test`: its validator,
   schema and command in Node, the package as npm publishes it, and its React
   and Vue helpers in jsdom against the fake bridge in `test/bridge.ts`.
