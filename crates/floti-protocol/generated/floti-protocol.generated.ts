@@ -1,7 +1,7 @@
 // Generated from the floti-protocol crate by `cargo run -p floti-protocol --bin generate`. Do not edit.
 
 /** The protocol version these declarations describe. */
-export const PROTOCOL_VERSION = { major: 4, minor: 0 } as const;
+export const PROTOCOL_VERSION = { major: 4, minor: 1 } as const;
 
 /** The link version of the session keeper a host of this build takes back. */
 export const KEEPER_LINK_VERSION = 1;
@@ -2193,6 +2193,12 @@ export type Message = { "type": "hello" } & Hello | { "type": "welcome" } & Welc
 export type Millis = number;
 
 /**
+ * What an error notice is about. Each one goes when its cause does, as well
+ * as on a dismissal or when the parent ends.
+ */
+export type NoticeCause = "ended" | "launch" | "report";
+
+/**
  * What a notice is about.
  */
 export type NoticeKind = "needs-you" | "limit" | "error";
@@ -3664,7 +3670,12 @@ limit?: NoticeLimit | null,
  * For a starts limit, how many more starts Allow adds for this parent:
  * the starts setting's value.
  */
-allowMore?: number | null, };
+allowMore?: number | null, 
+/**
+ * What an error notice is about; none for any other kind. A host on 4.0
+ * sent none, and an error notice without one ended in error.
+ */
+cause?: NoticeCause | null, };
 
 /**
  * A new session with everything it is launched with, short of Floti's

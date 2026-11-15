@@ -5804,6 +5804,26 @@
       "format": "double",
       "type": "number"
     },
+    "NoticeCause": {
+      "description": "What an error notice is about. Each one goes when its cause does, as well\nas on a dismissal or when the parent ends.",
+      "oneOf": [
+        {
+          "const": "ended",
+          "description": "The child's program exited with an error and nobody stopped it. It\ngoes when the child is resumed.",
+          "type": "string"
+        },
+        {
+          "const": "launch",
+          "description": "The child could not be started. It goes when the child is resumed.",
+          "type": "string"
+        },
+        {
+          "const": "report",
+          "description": "The child's program reported an error and ran on. It goes when the\nchild reports working or idle again, or is resumed.",
+          "type": "string"
+        }
+      ]
+    },
     "NoticeKind": {
       "description": "What a notice is about.",
       "oneOf": [
@@ -5819,7 +5839,7 @@
         },
         {
           "const": "error",
-          "description": "A child ended in error, or its launch failed.",
+          "description": "An agent child ended in error, could not start, or reported an error\nwhile it ran on; its `cause` says which.",
           "type": "string"
         }
       ]
@@ -9800,6 +9820,18 @@
             "null"
           ]
         },
+        "cause": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NoticeCause"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What an error notice is about; none for any other kind. A host on 4.0\nsent none, and an error notice without one ended in error."
+        },
         "childId": {
           "default": null,
           "description": "The child a needs-you or error notice is about, or none for a refused\nstart.",
@@ -13171,5 +13203,5 @@
   ],
   "x-defaultInitialCredit": 262144,
   "x-maxFrameLen": 16777216,
-  "x-protocolVersion": "4.0"
+  "x-protocolVersion": "4.1"
 }
