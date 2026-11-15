@@ -260,6 +260,49 @@ describe('BrowserPane - the address bar', () => {
     expect(props.onNavigate).toHaveBeenCalledWith('vite app')
   })
 
+  it('steps on from the row the pointer is on', async () => {
+    const user = userEvent.setup()
+    renderPane()
+    await user.click(address())
+    await screen.findByRole('listbox')
+    fireEvent.mouseMove(screen.getAllByRole('option')[1]!)
+    await user.keyboard('{ArrowDown}')
+    expect(screen.getAllByRole('option').map((row) => row.getAttribute('aria-selected'))).toEqual(['false', 'false', 'true'])
+    expect(address().value).toBe(RECENT[2])
+  })
+
+  /** Main's answers: the real ranking, except that the one for '' (the bar opened on the page) never comes. */
+  const nothingForEmpty = () =>
+    vi.fn((text: string) => (text === '' ? new Promise<BrowserSuggestions>(() => undefined) : suggestFrom(HISTORY)(text)))
+
+  it('shows none of the rows typed for before when the bar is left and opened again', async () => {
+    const user = userEvent.setup()
+    renderPane({ onSuggest: nothingForEmpty() })
+    await user.clear(address())
+    await user.type(address(), 'docs')
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(2))
+
+    // Nothing completes `docs`, so one Escape puts the address back and leaves the bar.
+    await user.keyboard('{Escape}')
+    expect(document.activeElement).not.toBe(address())
+    await user.click(address())
+    // The bar shows the page and its answer has not come: nothing is listed.
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('shows none of the rows typed for before when the bar is opened again after Enter', async () => {
+    const user = userEvent.setup()
+    const props = renderPane({ onSuggest: nothingForEmpty() })
+    await user.clear(address())
+    await user.type(address(), 'docs')
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(2))
+    await user.keyboard('{Enter}')
+    expect(props.onNavigate).toHaveBeenCalledWith('docs')
+
+    await user.click(address())
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
   it('removes the highlighted page from history with Shift+Delete', async () => {
     const user = userEvent.setup()
     const props = renderPane()

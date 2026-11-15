@@ -275,13 +275,23 @@ export function BrowserPane({
   /** What the bar holds: the row the keys are on, what is typed and its completion, or the page. */
   const barValue = chosen !== undefined ? rowText(chosen) : (completed ?? typed)
 
+  /**
+   * The list closes and forgets its rows, so the bar opened again shows
+   * nothing until the answer for what it then holds arrives, never the rows
+   * for what was typed before.
+   */
+  const closeSuggestions = (): void => {
+    setSuggesting(false)
+    setSuggestions(null)
+    setHighlight(NO_HIGHLIGHT)
+  }
+
   /** Send the page where the bar says, and keep saying it until main has answered. */
   const go = (input: string): void => {
     const turn = ++submissions.current
     setSubmitted(input)
     setDraft(null)
-    setSuggesting(false)
-    setHighlight(NO_HIGHLIGHT)
+    closeSuggestions()
     const answered = (): void => {
       if (submissions.current === turn) setSubmitted(null)
     }
@@ -371,10 +381,13 @@ export function BrowserPane({
     go(row.kind === 'page' ? row.url : row.text)
   }
 
-  /** Move the keys' highlight through the rows, and back to what was typed past either end. */
+  /**
+   * Move the keys' highlight through the rows, from the row the keys or the
+   * pointer are on, and back to what was typed past either end.
+   */
   const step = (by: 1 | -1): void => {
     if (rows.length === 0) return
-    const next = (highlight.by === 'keys' ? highlight.index : -1) + by
+    const next = highlight.index + by
     setHighlight({ index: next < -1 ? rows.length - 1 : next >= rows.length ? -1 : next, by: 'keys' })
   }
 
@@ -648,10 +661,7 @@ export function BrowserPane({
             // that keeps the caret here, so it never needed the list to outlive
             // the blur, and a delayed close outlived the blur Enter makes: back in
             // the bar within it, the list opened, then shut under the click.
-            onBlur={() => {
-              setSuggesting(false)
-              setHighlight(NO_HIGHLIGHT)
-            }}
+            onBlur={closeSuggestions}
             onKeyDown={(event) => {
               if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                 event.preventDefault()

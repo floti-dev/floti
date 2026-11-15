@@ -26,7 +26,8 @@ the pane.
 
 Edit `core/src/store/schema.ts`, then run `pnpm db:generate`. The generated SQL
 is embedded in the bundle, so skipping that step ships code that expects a
-column its migrations never create.
+column its migrations never create. A new migration's tag is also appended to
+`MIGRATIONS` in `crates/host/src/store/migrations.rs`, which the host embeds.
 
 ## Cutting a release
 
