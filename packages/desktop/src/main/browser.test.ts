@@ -3,9 +3,11 @@ import type { BrowserWindow, BrowserWindowConstructorOptions, WebContents } from
 import { DEFAULT_SETTINGS, type AppSettings } from '@helm/core'
 import {
   FakeBrowserWindow,
+  FakeIncomingMessage,
   FakeWebContents,
   FakeWebContentsView,
   fakeBrowser,
+  type FakeRoute,
   type FakeSession
 } from '../../test/browser-electron'
 import {
@@ -17,7 +19,13 @@ import {
   type BrowserHost,
   type BrowserOpener
 } from './browser'
-import type { BrowserCommandEvent, BrowserConsoleEntry, BrowserOpened, BrowserState } from '../shared/ipc'
+import type {
+  BrowserCommandEvent,
+  BrowserConsoleEntry,
+  BrowserFavicon,
+  BrowserOpened,
+  BrowserState
+} from '../shared/ipc'
 
 vi.mock('electron', async () => ({
   ...(await import('../../test/electron')).electronFake(),
@@ -48,6 +56,8 @@ interface Workspace {
   opened: BrowserOpened[]
   closed: number[]
   commands: BrowserCommandEvent[]
+  /** Every `browser:favicon` the host sent, in order. */
+  favicons: BrowserFavicon[]
 }
 
 let current: Workspace | null = null
@@ -63,6 +73,7 @@ function workspace(patch: Partial<AppSettings> = {}, platform: NodeJS.Platform =
   const opened: BrowserOpened[] = []
   const closed: number[] = []
   const commands: BrowserCommandEvent[] = []
+  const favicons: BrowserFavicon[] = []
   const host = createBrowserHost({
     platform,
     window: () => window as unknown as BrowserWindow,
@@ -75,6 +86,7 @@ function workspace(patch: Partial<AppSettings> = {}, platform: NodeJS.Platform =
     onClosed: (id) => closed.push(id),
     onCommand: (command) => commands.push(command),
     onLogged: (_id: number, _entry: BrowserConsoleEntry) => undefined,
+    onFavicon: (favicon) => favicons.push(favicon),
     sessionOpener: (session) => SESSIONS.get(session) ?? null,
     shareTargets: () => [...SESSIONS].map(([session, opener]) => ({ session, name: opener.name }))
   })
@@ -87,7 +99,8 @@ function workspace(patch: Partial<AppSettings> = {}, platform: NodeJS.Platform =
     },
     opened,
     closed,
-    commands
+    commands,
+    favicons
   }
   return current
 }
@@ -1454,5 +1467,156 @@ describe('browser host - popups and pages that close themselves', () => {
     expect(FakeWebContentsView.created.at(-1)!.webContents).toBe(guest)
     guest.commit('http://127.0.0.1:8080/popup')
     await vi.advanceTimersByTimeAsync(1000)
+  })
+})
+
+describe("browser host - a page's icon", () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+  const PNG_URL = `data:image/png;base64,${Buffer.from(PNG).toString('base64')}`
+  const image = (): FakeRoute => ({ headers: { 'content-type': 'image/png' }, chunks: [PNG] })
+  const net = fakeBrowser.net
+
+  /** The network answers these addresses with an image, and refuses the rest. */
+  const serve = (...urls: string[]): void => {
+    for (const url of urls) net.routes.set(url, image())
+  }
+
+  afterEach(() => net.reset())
+
+  it('fetches the icon a page names through the browser partition, with its cookies, and sends it once', async () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/', { title: 'App' })
+    serve('http://localhost:3000/favicon.ico')
+    wc.reportFavicons(['http://localhost:3000/favicon.ico'])
+    await vi.waitFor(() => expect(h.favicons).toEqual([{ id, icon: PNG_URL }]))
+    expect(net.asked).toEqual(['http://localhost:3000/favicon.ico'])
+    expect(net.requests[0]!.options).toMatchObject({
+      session: partition(),
+      redirect: 'manual',
+      useSessionCookies: true
+    })
+
+    // The same icon again - the page re-reporting it on another page of the
+    // site - is no change, so nothing is sent; and a second tab on the site
+    // gets it without a second fetch.
+    wc.commit('http://localhost:3000/about')
+    wc.reportFavicons(['http://localhost:3000/favicon.ico'])
+    const other = openTab(h, 'http://localhost:3000/')
+    other.wc.commit('http://localhost:3000/')
+    other.wc.reportFavicons(['http://localhost:3000/favicon.ico'])
+    await vi.waitFor(() => expect(h.favicons).toHaveLength(2))
+    expect(h.favicons).toEqual([
+      { id, icon: PNG_URL },
+      { id: other.id, icon: PNG_URL }
+    ])
+    expect(net.asked).toEqual(['http://localhost:3000/favicon.ico'])
+  })
+
+  it('never fetches an icon the reach rule refuses', async () => {
+    const h = workspace({ browserReach: 'local' })
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/')
+    serve('https://cdn.example.com/icon.png', 'http://localhost:3000/icon.png')
+    wc.reportFavicons(['https://cdn.example.com/icon.png'])
+    // The barrier: a later report the reach allows has landed, so the first is done.
+    wc.reportFavicons(['http://localhost:3000/icon.png'])
+    await vi.waitFor(() => expect(h.favicons).toEqual([{ id, icon: PNG_URL }]))
+    expect(net.asked).toEqual(['http://localhost:3000/icon.png'])
+  })
+
+  it('follows an icon that redirects within reach, and never asks for a hop out of it', async () => {
+    const h = workspace({ browserReach: 'local' })
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/')
+    net.routes.set('http://localhost:3000/favicon.ico', { redirect: 'http://127.0.0.1:4000/icon.png' })
+    serve('http://127.0.0.1:4000/icon.png')
+    wc.reportFavicons(['http://localhost:3000/favicon.ico'])
+    await vi.waitFor(() => expect(h.favicons).toEqual([{ id, icon: PNG_URL }]))
+    expect(net.asked).toEqual(['http://localhost:3000/favicon.ico', 'http://127.0.0.1:4000/icon.png'])
+
+    const away = openTab(h, 'http://localhost:5173/')
+    away.wc.commit('http://localhost:5173/')
+    net.routes.set('http://localhost:5173/favicon.ico', { redirect: 'https://cdn.example.com/icon.png' })
+    serve('https://cdn.example.com/icon.png')
+    away.wc.reportFavicons(['http://localhost:5173/favicon.ico'])
+    // The barrier: a later report on that tab, within reach, has landed.
+    serve('http://localhost:5173/icon.png')
+    away.wc.reportFavicons(['http://localhost:5173/icon.png'])
+    await vi.waitFor(() => expect(h.favicons.at(-1)).toEqual({ id: away.id, icon: PNG_URL }))
+    expect(net.asked).not.toContain('https://cdn.example.com/icon.png')
+  })
+
+  it("holds an agent's tab to the agent's reach", async () => {
+    const h = workspace({ browserReach: 'web', browserMcpLocalOnly: true })
+    const { id, wc } = await openAgentTab(h, SESSIONS.get(7)!, 'http://localhost:4000/')
+    vi.useRealTimers()
+    serve('https://cdn.example.com/icon.png', 'http://localhost:4000/icon.png')
+    wc.reportFavicons(['https://cdn.example.com/icon.png'])
+    wc.reportFavicons(['http://localhost:4000/icon.png'])
+    await vi.waitFor(() => expect(h.favicons).toEqual([{ id, icon: PNG_URL }]))
+    expect(net.asked).toEqual(['http://localhost:4000/icon.png'])
+
+    // The user's own tab, under the same settings, may have the internet's icon.
+    const mine = openTab(h, 'https://example.com/')
+    mine.wc.commit('https://example.com/')
+    mine.wc.reportFavicons(['https://cdn.example.com/icon.png'])
+    await vi.waitFor(() => expect(h.favicons.at(-1)).toEqual({ id: mine.id, icon: PNG_URL }))
+    expect(net.asked).toEqual(['http://localhost:4000/icon.png', 'https://cdn.example.com/icon.png'])
+  })
+
+  it('clears the icon when the page goes to another site, and keeps it on the same one', async () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/')
+    serve('http://localhost:3000/favicon.ico')
+    wc.reportFavicons(['http://localhost:3000/favicon.ico'])
+    await vi.waitFor(() => expect(h.favicons).toHaveLength(1))
+
+    wc.commit('http://localhost:3000/next')
+    expect(h.favicons).toHaveLength(1)
+    wc.commit('http://localhost:5173/')
+    expect(h.favicons).toEqual([
+      { id, icon: PNG_URL },
+      { id, icon: null }
+    ])
+  })
+
+  it('drops an icon that lands after its page went to another site', async () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/')
+    net.routes.set('http://localhost:3000/favicon.ico', { hang: true })
+    wc.reportFavicons(['http://localhost:3000/favicon.ico'])
+    await vi.waitFor(() => expect(net.asked).toEqual(['http://localhost:3000/favicon.ico']))
+    wc.commit('http://localhost:5173/')
+
+    // A second tab still on the old site reports the same icon, so it waits on
+    // the same fetch - and hears the answer after the first tab did.
+    const other = openTab(h, 'http://localhost:3000/')
+    other.wc.commit('http://localhost:3000/')
+    other.wc.reportFavicons(['http://localhost:3000/favicon.ico'])
+    const request = net.requests[0]!
+    const response = new FakeIncomingMessage(200, { 'content-type': 'image/png' })
+    request.emit('response', response)
+    response.emit('data', Buffer.from(PNG))
+    response.emit('end')
+    await vi.waitFor(() => expect(h.favicons).toEqual([{ id: other.id, icon: PNG_URL }]))
+    expect(h.favicons.some((favicon) => favicon.id === id)).toBe(false)
+  })
+
+  it('sends null when a page with an icon names none it may have', async () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/')
+    serve('http://localhost:3000/favicon.ico')
+    wc.reportFavicons(['http://localhost:3000/favicon.ico'])
+    await vi.waitFor(() => expect(h.favicons).toHaveLength(1))
+    wc.reportFavicons(['file:///C:/icon.png'])
+    await vi.waitFor(() => expect(h.favicons).toHaveLength(2))
+    expect(h.favicons).toEqual([
+      { id, icon: PNG_URL },
+      { id, icon: null }
+    ])
   })
 })

@@ -644,6 +644,18 @@ overrides the gate; keep it.
   What is dropped is what something else on screen already says: the scope
   switcher names the scope the path spells out. Nothing that is *only* here is
   ever dropped.
+- **Browser pane**: while the page in front loads, a **loading line** runs
+  along the address bar's bottom hairline: 2px of `accent`, a third of the
+  bar's width, crossing it every 1.2s (`animate-load`), drawn over the hairline
+  so it takes no height and the page never moves. It is indeterminate, because
+  Electron says a page is loading and not how far it has got. A 2px line is the
+  accent's mark, as the selection bar is, and not a fill: a third of the bar's
+  width, shown only while a load runs. With reduced motion it holds still
+  across the whole bar. A page's tab in the Browser tab's strip shows a 13px
+  spinner while its page loads (a quarter arc turning on a faint ring, in the
+  tab's icon colour), then the site's icon, and the globe for a site with none
+  or with one that does not decode. The icon is the site's own picture and the one thing in a
+  tab Floti does not colour.
 - **Empty states** (`EmptyState`): the destination's icon in a 36px well, a
   title saying what is empty in 13px/500, one sentence in `fg-subtle`, and the
   way on as a button where there is one. In a detail region it centres; at the

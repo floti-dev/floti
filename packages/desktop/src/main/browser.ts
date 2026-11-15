@@ -1,5 +1,6 @@
 import {
   app,
+  net,
   session,
   shell,
   WebContentsView,
@@ -21,12 +22,14 @@ import {
 } from '@helm/core'
 import { flushCookies, keepSignIns, writeCookies, type CookieKeeper } from './browserCookies'
 import { TITLEBAR_HEIGHT } from './chrome'
+import { createFavicons } from './favicons'
 import { browserKeyCommand, COMMANDS_FOR_THE_WINDOW, COMMANDS_THAT_REPEAT } from '../shared/browserKeys'
 import {
   BROWSER_TABS_MAX,
   type BrowserAvailability,
   type BrowserCommandEvent,
   type BrowserConsoleEntry,
+  type BrowserFavicon,
   type BrowserOpened,
   type BrowserShare,
   type BrowserState
@@ -314,6 +317,16 @@ interface View {
   fullscreen: (() => void) | null
   /** Where the pane last put this view, and whether it showed. Fullscreen puts it back here. */
   placed: { x: number; y: number; width: number; height: number; visible: boolean } | null
+  /** The page's icon as the window last heard it (`browser:favicon`), or null. */
+  icon: string | null
+  /** The origin of the page `icon` came from. A navigation to another origin clears the icon. */
+  iconOrigin: string | null
+  /**
+   * Counts the icon reports and the navigations that clear one, so an icon
+   * fetched for a page that has since gone elsewhere, or reported again, is
+   * dropped when it lands.
+   */
+  iconTurn: number
 }
 
 export interface BrowserHost {
@@ -461,6 +474,8 @@ export interface BrowserHostOptions {
   /** Every session `sessionOpener` answers for. */
   shareTargets: () => BrowserShare[]
   onLogged: (id: number, entry: BrowserConsoleEntry) => void
+  /** A page's icon changed. Only on a change, never with every announce. */
+  onFavicon: (favicon: BrowserFavicon) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -730,6 +745,16 @@ function refusedAddress(input: string): string | null {
   return typed === '' ? null : typed
 }
 
+/** The origin of a URL, or null for one that has none (`about:blank`, a typo). */
+function originOf(url: string): string | null {
+  try {
+    const { origin } = new URL(url)
+    return origin === 'null' ? null : origin
+  } catch {
+    return null
+  }
+}
+
 function hostOf(url: string): string {
   if (url === '') return ''
   try {
@@ -836,6 +861,27 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
   const availability: BrowserAvailability = options.availability ?? { available: true }
 
   const viewFor = (id: number): View | null => views.get(id) ?? null
+
+  /** Every rule a tab's navigations answer to: the pane's reach, and an agent's on a tab a session opened. */
+  const restrictionsFor = (entry: View): BrowserReach[] =>
+    entry.openedBy === null ? [reach()] : agentReach(reach(), settings().browserMcpLocalOnly)
+
+  /**
+   * Icons, fetched through the browser partition with its cookies, as the
+   * page's own request for its icon would be. Every redirect stops for the
+   * reach check (`favicons.ts`). One cache per window.
+   */
+  const favicons = createFavicons({
+    request: (url) => net.request({ url, session: browserSession(), redirect: 'manual', useSessionCookies: true })
+  })
+
+  /** Tell the window a page's icon, when it is a different one. */
+  const setIcon = (entry: View, icon: string | null, origin: string | null): void => {
+    entry.iconOrigin = icon === null ? null : origin
+    if (entry.icon === icon) return
+    entry.icon = icon
+    options.onFavicon({ id: entry.id, icon })
+  }
 
   /**
    * A view **and** the web contents behind it, or null if either is missing.
@@ -1179,7 +1225,10 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       sharedWith: null,
       agentInput: 0,
       fullscreen: null,
-      placed: null
+      placed: null,
+      icon: null,
+      iconOrigin: null,
+      iconTurn: 0
     }
     views.set(entry.id, entry)
 
@@ -1268,6 +1317,14 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
      */
     wc.on('did-navigate', (_event, url, httpResponseCode) => {
       entry.pending = null
+      // Another site's page is not this one's icon, and one still being
+      // fetched for the old site is dropped when it lands. The same site keeps
+      // its icon until the new page reports one, so moving around a site does
+      // not flash the globe between pages.
+      if (originOf(url) !== entry.iconOrigin) {
+        entry.iconTurn += 1
+        setIcon(entry, null, null)
+      }
       if (!grounded) {
         grounded = true
         view.setBackgroundColor('#ffffff')
@@ -1283,6 +1340,24 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       remember(entry, url)
       announce(entry)
     })
+    /*
+     * The page's icon. Chromium names candidates, best first, and fetches
+     * nothing for us; `favicons` picks one the tab's reach allows and fetches
+     * it through the partition. An icon that lands after the page reported
+     * another, or went to another site, is dropped.
+     */
+    wc.on('page-favicon-updated', (_event, candidates) => {
+      entry.iconTurn += 1
+      const turn = entry.iconTurn
+      const origin = originOf(wc.getURL())
+      void favicons
+        .iconFor(candidates, (url) => browserReachAllows(url, ...restrictionsFor(entry)).allowed)
+        .then((icon) => {
+          if (entry.iconTurn !== turn || !views.has(entry.id)) return
+          setIcon(entry, icon, origin)
+        })
+    })
+
     wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
       if (isMainFrame) {
         // Only the pending navigation arriving (a hash on the same page) ends

@@ -235,6 +235,35 @@ describe('useBrowsers - the mirror of what main holds', () => {
   })
 })
 
+describe("useBrowsers - each page's icon", () => {
+  const ICON = 'data:image/png;base64,aWNvbg=='
+
+  it('holds the icon main sent for a page, until it changes, clears or the page closes', () => {
+    const { result } = renderHook(() => useBrowsers([]))
+    act(() => {
+      bridge.emit('browser:opened', opened(5))
+      bridge.emit('browser:opened', opened(6))
+    })
+    expect(result.current.icons.size).toBe(0)
+
+    act(() => bridge.emit('browser:favicon', { id: 5, icon: ICON }))
+    expect(result.current.icons.get(5)).toBe(ICON)
+    expect(result.current.icons.has(6)).toBe(false)
+
+    act(() => bridge.emit('browser:favicon', { id: 5, icon: null }))
+    expect(result.current.icons.has(5)).toBe(false)
+
+    act(() => {
+      bridge.emit('browser:favicon', { id: 5, icon: ICON })
+      bridge.emit('browser:favicon', { id: 6, icon: ICON })
+    })
+    // Closed by main, and closed from the window.
+    act(() => bridge.emit('browser:closed', { id: 5 }))
+    act(() => result.current.close(6))
+    expect(result.current.icons.size).toBe(0)
+  })
+})
+
 describe('useBrowsers - the Browser tab strip', () => {
   it('puts a page beside the page that opened it, in front unless it was a middle click', () => {
     const { result } = renderHook(() => useBrowsers([]))

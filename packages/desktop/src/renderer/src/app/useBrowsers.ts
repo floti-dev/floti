@@ -55,6 +55,15 @@ const CLOSED_PAGES_MAX = 25
 
 const NO_STILLS: ReadonlyMap<number, string> = new Map()
 
+/** The icons with one page's set, or (`null`) dropped. The same map when that changes nothing. */
+function withIcon(icons: ReadonlyMap<number, string>, id: number, icon: string | null): ReadonlyMap<number, string> {
+  if ((icons.get(id) ?? null) === icon) return icons
+  const next = new Map(icons)
+  if (icon === null) next.delete(id)
+  else next.set(id, icon)
+  return next
+}
+
 /** A picture decoded before it is drawn, so the frame it is first painted in already has it. */
 function decoded(url: string): Promise<void> {
   const image = new Image()
@@ -100,6 +109,8 @@ export interface BrowserPanesState {
   /** A picture of each page whose view is standing down for something drawn over it. */
   stills: ReadonlyMap<number, string>
   entries: Map<number, ConsoleEntry[]>
+  /** Each page's icon as a `data:` URL, for those that have one (`browser:favicon`). */
+  icons: ReadonlyMap<number, string>
   open: (request: { url?: string; project?: string | null }) => Promise<BrowserState | null>
   close: (id: number) => void
   /**
@@ -168,6 +179,7 @@ const AVAILABLE: BrowserAvailability = { available: true }
 export function useBrowsers(recent: readonly string[]): BrowserPanesState {
   const [views, setViews] = useState<Map<number, BrowserState>>(() => new Map())
   const [entries, setEntries] = useState<Map<number, ConsoleEntry[]>>(() => new Map())
+  const [icons, setIcons] = useState<ReadonlyMap<number, string>>(() => new Map())
   const [error, setError] = useState<string | null>(null)
   const [availability, setAvailability] = useState<BrowserAvailability>(AVAILABLE)
   const [strip, setStrip] = useState<PageStrip>(EMPTY_STRIP)
@@ -339,7 +351,11 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
         return next
       })
       setStrip((current) => removePage(current, id))
+      setIcons((current) => withIcon(current, id, null))
       rects.current.delete(id)
+    })
+    const offFavicon = helm.on('browser:favicon', ({ id, icon }) => {
+      setIcons((current) => withIcon(current, id, icon))
     })
     const offLogged = helm.on('browser:logged', ({ id, entry }) => {
       setEntries((current) => {
@@ -356,6 +372,7 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
       offOpened()
       offClosed()
       offLogged()
+      offFavicon()
     }
   }, [])
 
@@ -459,6 +476,7 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
       next.delete(id)
       return next
     })
+    setIcons((current) => withIcon(current, id, null))
     setStrip((current) => removePage(current, id))
     rects.current.delete(id)
   }, [])
@@ -601,6 +619,7 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
     reopen,
     stills,
     entries,
+    icons,
     open,
     close,
     navigate,
