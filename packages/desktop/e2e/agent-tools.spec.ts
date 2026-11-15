@@ -212,11 +212,16 @@ test('the user shares a page with a session, which reads and drives it until the
     expect((await tool('browser_click', { selector: 'button' })).isError).toBe(false)
     expect((await tool('browser_wait_for', { text: 'Ready now', timeout: PATIENCE / 1000 })).text).toMatch(/^"Ready now" appeared after /)
 
-    // The wheel turns the right way, by as much as it was asked to.
+    // The wheel turns the right way, by as much as it was asked to, from
+    // wherever the click above left the page: a tool aimed at an element
+    // centres it first, which scrolls the page in a short window.
+    const top = Number(await evaluate('Math.round(window.scrollY)'))
     const scrolled = await tool('browser_scroll', { dy: 600 })
-    expect(scrolled.text).toMatch(/^Scrolled the page down 600px\. It is at 600 of \d+ down/)
-    expect(await evaluate('Math.round(window.scrollY)')).toBe('600')
-    expect((await tool('browser_scroll', { dy: -600 })).text).toMatch(/^Scrolled the page up 600px\. It is at 0 of /)
+    expect(scrolled.text).toMatch(new RegExp(`^Scrolled the page down 600px\\. It is at ${String(top + 600)} of \\d+ down`))
+    expect(await evaluate('Math.round(window.scrollY)')).toBe(String(top + 600))
+    expect((await tool('browser_scroll', { dy: -600 })).text).toMatch(
+      new RegExp(`^Scrolled the page up 600px\\. It is at ${String(top)} of `)
+    )
 
     // Away and back again.
     expect((await tool('browser_navigate', { url: `${pages.origin}/agent` })).text).toContain('title: Agent fixture')

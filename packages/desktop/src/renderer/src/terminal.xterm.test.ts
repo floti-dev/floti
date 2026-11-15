@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/xterm'
+import { screenText } from './terminal'
 
 /**
  * The real xterm, opened in jsdom, for the parts of it Helm reaches that have
@@ -7,6 +8,9 @@ import { Terminal } from '@xterm/xterm'
  * through xterm's own viewport and renderer, and leaves a terminal alone when
  * they are not where it looks. An xterm that moved them would bring the dead
  * scrollbar back with nothing failing, so this is what fails instead.
+ *
+ * And the parts whose meaning only the real buffer shows: which rows xterm
+ * wrapped, which the terminal inspector (`screenText`) undoes.
  */
 
 const opened: Terminal[] = []
@@ -43,5 +47,15 @@ describe('the xterm Floti builds on', () => {
     expect(typeof core?._viewport?.queueSync).toBe('function')
     expect(typeof core?._renderService?.dimensions?.css?.canvas?.height).toBe('number')
     expect(typeof term.onRender).toBe('function')
+  })
+
+  it('reads a line wider than the terminal back whole, with the lines around it kept apart', async () => {
+    const term = new Terminal({ cols: 10, rows: 5 })
+    opened.push(term)
+    // Ten columns: its first row ends on the space after "ab".
+    const long = 'cwd=C:\\ab long\\path'
+    await new Promise<void>((resolve) => term.write(`before\r\n${long}\r\nafter`, resolve))
+
+    expect(screenText(term)).toBe(`before\n${long}\nafter\n`)
   })
 })

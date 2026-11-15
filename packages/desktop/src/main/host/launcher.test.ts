@@ -9,6 +9,7 @@ import {
   HOST_START_DEADLINE_MS,
   LocalHostError,
   LocalHostRefusedError,
+  LONGEST_SOCKET_NAME,
   SOCKET_PATH_MAX,
   carriedFloti,
   clientFolder,
@@ -312,8 +313,8 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
         env: {},
         tmpdir: () => '/var/folders/ab/cdefgh/T'
       })['FLOTI_RUNTIME_DIR']!
-      expect(mac).toMatch(/^\/var\/folders\/ab\/cdefgh\/T\/floti-[0-9a-f]{12}$/)
-      expect(Buffer.byteLength(`${mac}/floti.sock`)).toBeLessThanOrEqual(SOCKET_PATH_MAX)
+      expect(mac).toMatch(/^\/var\/folders\/ab\/cdefgh\/T\/floti-[0-9a-f]{6}$/)
+      expect(Buffer.byteLength(`${mac}/${LONGEST_SOCKET_NAME}`)).toBeLessThanOrEqual(SOCKET_PATH_MAX)
       const linux = hostEnvironment(deep, {
         platform: 'linux',
         env: { XDG_RUNTIME_DIR: '/run/user/1000' },
@@ -324,18 +325,32 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
         { ...deep, dataDir: `${deep.dataDir}-2` },
         { platform: 'linux', env: {}, tmpdir: () => '/tmp' }
       )['FLOTI_RUNTIME_DIR']
-      expect(other).toMatch(/^\/tmp\/floti-[0-9a-f]{12}$/)
-      expect(other!.slice(-12)).not.toBe(mac.slice(-12))
+      expect(other).toMatch(/^\/tmp\/floti-[0-9a-f]{6}$/)
+      expect(other!.slice(-6)).not.toBe(mac.slice(-6))
 
       // A Mac's own temp folder, as long as macOS makes it, with a test run's
-      // folder inside it, as every test's `tmpdir()` is: the socket still fits.
+      // folder inside it, as every test's `tmpdir()` is: the keeper's socket,
+      // the longest, still fits.
       const nested = '/var/folders/76/wrkg31yx61g_4sqkvq4bnt_40000gn/T/helm-test-run-AbC123'
       const run = hostEnvironment(
         { ...WIN_PLACES, dataDir: `${nested}/helm world-XyZ789/app/helm-data` },
         { platform: 'darwin', env: {}, tmpdir: () => nested }
       )['FLOTI_RUNTIME_DIR']!
       expect(run.startsWith(`${nested}/`)).toBe(true)
-      expect(Buffer.byteLength(`${run}/floti.sock`)).toBeLessThanOrEqual(SOCKET_PATH_MAX)
+      expect(Buffer.byteLength(`${run}/${LONGEST_SOCKET_NAME}`)).toBeLessThanOrEqual(SOCKET_PATH_MAX)
+    })
+
+    it('moves the socket folder out of a data directory where the host’s own socket would fit but its keeper’s would not', () => {
+      // `<dataDir>/host/run/` leaves room for `floti.sock` and not for the
+      // keeper's socket beside it, which every session needs.
+      const dataDir = `/Users/me/${'d'.repeat(103 - '/Users/me/'.length - '/host/run/floti.sock'.length)}`
+      expect(Buffer.byteLength(`${dataDir}/host/run/floti.sock`)).toBe(SOCKET_PATH_MAX)
+      const runtime = hostEnvironment(
+        { ...WIN_PLACES, dataDir },
+        { platform: 'darwin', env: {}, tmpdir: () => '/var/folders/ab/cdefgh/T' }
+      )['FLOTI_RUNTIME_DIR']!
+      expect(runtime).toMatch(/^\/var\/folders\/ab\/cdefgh\/T\/floti-[0-9a-f]{6}$/)
+      expect(Buffer.byteLength(`${runtime}/keeper-0123abcd.sock`)).toBeLessThanOrEqual(SOCKET_PATH_MAX)
     })
 
     it('leaves out what running from an AppImage put in the environment, since the host outlives the mount', () => {

@@ -150,6 +150,12 @@ export interface TerminalReport {
    * way to read what a terminal shows without a screenshot.
    */
   lines: string[]
+  /**
+   * The same rows as the program wrote them: a row xterm wrapped because it
+   * was wider than the terminal is joined to the row before it, so a long
+   * path reads whole however narrow the pane is.
+   */
+  text: string
 }
 
 export function describeTerminal(key: string, host: TerminalHost): TerminalReport {
@@ -167,8 +173,26 @@ export function describeTerminal(key: string, host: TerminalHost): TerminalRepor
     rows: host.term.rows,
     screen: box ? { width: box.width, height: box.height } : null,
     attached: host.element.isConnected,
-    lines: visibleLines(host.term)
+    lines: visibleLines(host.term),
+    text: screenText(host.term)
   }
+}
+
+/** What `TerminalReport.text` says: the rows on screen with xterm's wraps undone. */
+export function screenText(term: Terminal): string {
+  const buffer = term.buffer.active
+  const end = buffer.viewportY + term.rows
+  let text = ''
+  for (let y = buffer.viewportY; y < end; y++) {
+    const line = buffer.getLine(y)
+    if (line === undefined) break
+    if (y > buffer.viewportY && !line.isWrapped) text += '\n'
+    // A row that runs on into the next keeps its trailing spaces: the wrap
+    // may have fallen on a space the program wrote.
+    const runsOn = y + 1 < end && buffer.getLine(y + 1)?.isWrapped === true
+    text += line.translateToString(!runsOn)
+  }
+  return text
 }
 
 function visibleLines(term: Terminal): string[] {

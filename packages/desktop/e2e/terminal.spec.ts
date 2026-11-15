@@ -12,7 +12,8 @@ import { expect, test, typeLine } from './helm'
 /** What the window's terminal inspector says of a shell; see `describeShellTerminals`. */
 interface ShellReport {
   path: string
-  lines: string[]
+  /** The rows as the shell wrote them, a row xterm wrapped joined to the one before. */
+  text: string
 }
 
 async function shells(window: Page): Promise<ShellReport[]> {
@@ -56,7 +57,7 @@ test('a terminal tab runs a plain shell in the chosen folder, one per tab, endin
 
   await typeLine(pane, 'node -e "console.log(\'cwd=\' + process.cwd())"')
   await expect
-    .poll(async () => (await tabShells(window)).flatMap((shell) => shell.lines).join('\n'))
+    .poll(async () => (await tabShells(window)).map((shell) => shell.text).join('\n'))
     .toContain(`cwd=${world.projects.alpha}`)
   // Nothing about it is a session.
   await expect(window.locator('[data-status-sessions="none"]')).toBeVisible()
@@ -81,7 +82,7 @@ test('a terminal tab runs a plain shell in the chosen folder, one per tab, endin
   const projectText = async (): Promise<string> =>
     (await shells(window))
       .filter((shell) => shell.path.toLowerCase() === world.projects.alpha.toLowerCase())
-      .flatMap((shell) => shell.lines)
+      .map((shell) => shell.text)
       .join('\n')
   await window.getByRole('button', { name: 'alpha main' }).click()
   await expect(pane.getByRole('textbox', { name: 'Terminal input' })).toBeAttached()
