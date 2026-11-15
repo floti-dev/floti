@@ -893,6 +893,99 @@ describe('sessions over the window’s own connection', () => {
       expect(second.streams).toEqual([])
     })
 
+    it('asks the host how each running session its list no longer names ended, and tells one that exited or was stopped while the window was away as the host’s row says, never as lost', async () => {
+      const w = await shownWorld()
+      w.link.lose({ planned: false, restarts: false })
+      await settle()
+
+      // 7 exited by itself and its parent stopped 9 while the connection was down; the host lists running sessions only.
+      const second = new FakeConnection()
+        .answer('session:list', () => [row({ id: 8, status: 'exited', exitCode: 0 })])
+        .answer('session:endings', ({ ids }) =>
+          ids.map((id) =>
+            id === 7
+              ? {
+                  id,
+                  status: 'exited' as const,
+                  endedAt: '2026-10-29T10:06:00.000Z',
+                  durationMs: 360_000,
+                  exitCode: 2,
+                  endedBy: 'exited' as const
+                }
+              : {
+                  id,
+                  status: 'exited' as const,
+                  endedAt: '2026-10-29T10:07:00.000Z',
+                  durationMs: 420_000,
+                  exitCode: null,
+                  stopped: true,
+                  endedBy: 'parent' as const
+                }
+          )
+        )
+      await w.link.reconnect(second)
+      await settle()
+
+      expect(second.payloads('session:endings')).toEqual([{ ids: [7, 9] }])
+      expect(
+        w.exits.map((record) => [record.id, record.status, record.exitCode, record.stopped === true, record.endedBy])
+      ).toEqual([
+        [7, 'exited', 2, false, 'exited'],
+        [9, 'exited', null, true, 'parent']
+      ])
+      expect(w.exits.map((record) => [record.endedAt, record.durationMs, record.cwd])).toEqual([
+        ['2026-10-29T10:06:00.000Z', 360_000, ROW.cwd],
+        ['2026-10-29T10:07:00.000Z', 420_000, '/work dir/api']
+      ])
+      const listed = await ask(w.adapters, 'session:list')
+      expect(listed.filter((record) => record.status === 'lost')).toEqual([])
+      expect(second.streams).toEqual([])
+    })
+
+    it('tells a session the host no longer lists as lost only when its row says lost or the host holds no row for it', async () => {
+      const w = await shownWorld()
+      w.link.lose({ planned: false, restarts: true })
+      await settle()
+
+      // 9 went with a keeper the new host could not take back; the host has no row for 7.
+      const second = new FakeConnection()
+        .answer('session:list', () => [row({ id: 8, status: 'exited', exitCode: 0 })])
+        .answer('session:endings', ({ ids }) =>
+          ids.flatMap((id) =>
+            id === 9 ? [{ id, status: 'lost' as const, endedAt: null, durationMs: null, exitCode: null }] : []
+          )
+        )
+      await w.link.reconnect(second)
+      await settle()
+      expect(w.exits.map((record) => [record.id, record.status, record.exitCode])).toEqual([
+        [7, 'lost', null],
+        [9, 'lost', null]
+      ])
+    })
+
+    it('leaves a session the host says still runs, though its list did not name it, for the next list to carry', async () => {
+      const w = await shownWorld()
+      w.link.lose({ planned: false, restarts: false })
+      await settle()
+
+      // 7 was listed late; 9 exited by itself.
+      const second = new FakeConnection()
+        .answer('session:list', () => [row({ id: 8, status: 'exited', exitCode: 0 })])
+        .answer('session:endings', ({ ids }) =>
+          ids.map((id) =>
+            id === 7
+              ? { id, status: 'running' as const, endedAt: null, durationMs: null, exitCode: null }
+              : { id, status: 'exited' as const, endedAt: '2026-10-29T10:07:00.000Z', durationMs: 1, exitCode: 0 }
+          )
+        )
+      await w.link.reconnect(second)
+      await settle()
+
+      expect(w.exits.map((record) => [record.id, record.status])).toEqual([[9, 'exited']])
+      const listed = await ask(w.adapters, 'session:list')
+      expect(listed.find((record) => record.id === 7)?.status).toBe('running')
+    })
+
     it('shows a session lost when the host says so while it stays connected, its keeper gone', async () => {
       const w = await shownWorld()
 
