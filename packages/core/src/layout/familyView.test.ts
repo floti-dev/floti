@@ -70,6 +70,14 @@ const ended = (id: number, parentId: number): FamilyMember => ({
   kept: true
 })
 
+/** A child that was running when the host that ran it went away: an ended child its parent's tab still holds. */
+const lostChild = (id: number, parentId: number): FamilyMember => ({
+  id,
+  status: 'lost',
+  parentId,
+  parentName: 'lead'
+})
+
 /** A parent, 1, running three children, 2 to 4. */
 const FAMILY = [running(1), running(2, 1), running(3, 1), running(4, 1)]
 const ROOM = (): boolean => true
@@ -330,9 +338,9 @@ describe('two devices attached to one host', () => {
     expect(familiesHere(shrunk, FAMILY).get(1)?.map((child) => child.id)).toEqual([2, 3, 4])
   })
 
-  it('leave what the other device saved byte for byte as it was when one shrinks, closes an ended child or opens one as a tab', () => {
+  it('leave what the other device saved byte for byte as it was when one shrinks, closes a lost child or opens one as a tab', () => {
     const parent = paneId(session(1))
-    const family = [...FAMILY.slice(0, 3), ended(4, 1)]
+    const family = [...FAMILY.slice(0, 3), lostChild(4, 1)]
     const there = layoutOf(row([g(session(1), HISTORY), g(SETTINGS)]), 0)
     const savedThere = JSON.stringify(toSaved(there))
 
@@ -384,8 +392,8 @@ describe('pressing a child’s row in the Sessions tree', () => {
     expect(familyOf(pressed.layout, parent).order[0]).toBe(4)
   })
 
-  it('shows an ended child’s last screen and takes it back into a family view that closed it', () => {
-    const done = [...FAMILY.slice(0, 3), ended(4, 1)]
+  it('shows a lost child’s last screen and takes it back into a family view that closed it', () => {
+    const done = [...FAMILY.slice(0, 3), lostChild(4, 1)]
     const closed = closeFamilyChild(behind, parent, 4)
     const pressed = pressSessionRow(closed, done, 4, LOCAL_HOST_KEY, scope(3))
     const state = familyOf(pressed.layout, parent)
