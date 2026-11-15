@@ -22,6 +22,10 @@ import type { PageBridge } from './launcher'
  *   host on purpose (Stop host, or a quit), and whether Helm starts a new host
  *   in place of this one, so a page tells a crash from a stop and says what
  *   comes next.
+ * - When main's link finds its host no longer answering (`drop`), every
+ *   bridge is ended and each page told at once, as if it had ended by itself,
+ *   rather than when a transport that went dead notices, which can take
+ *   minutes.
  */
 
 /** A Helm page, as much of its web contents as this needs. */
@@ -37,6 +41,8 @@ export interface PageLinksDeps {
   appVersion: string
   /** The computer's name, for the page's `hello`, as main's gives it. */
   deviceName?: string
+  /** What the log calls the host: the local host when absent. */
+  name?: string
   /** Whether a web contents is one of Helm's own pages. */
   isHelmPage: (id: number) => boolean
   /** Settles once main's own link has connected; rejects with the sentence saying why it could not. */
@@ -61,12 +67,19 @@ export interface PageLinks {
   send(pageId: number, connection: number, bytes: Uint8Array): void
   /** The page closed `connection`. */
   close(pageId: number, connection: number): void
+  /**
+   * Main's link found the host no longer answering: ends every bridge, with
+   * its processes where it has `kill`, and tells each page at once that its
+   * connection ended with `why`, as a bridge that ended by itself does. Pages
+   * may open again after it.
+   */
+  drop(why: string): void
   /** Ends every bridge and resolves once each has exited. Nothing opens after it. */
   stop(): Promise<void>
 }
 
 interface Open {
-  page: number
+  page: HelmPage
   bridge: PageBridge
 }
 
@@ -85,8 +98,18 @@ export function createPageLinks(deps: PageLinksDeps): PageLinks {
     const entry = open.get(connection)
     if (entry === undefined) return
     open.delete(connection)
-    if (byPage.get(entry.page) === connection) byPage.delete(entry.page)
+    if (byPage.get(entry.page.id) === connection) byPage.delete(entry.page.id)
     entry.bridge.end()
+  }
+
+  /** `connection`'s bridge ended without the page closing it: the page is told how. */
+  const ended = (connection: number, why: string | null): void => {
+    const entry = open.get(connection)
+    if (entry === undefined) return
+    open.delete(connection)
+    if (byPage.get(entry.page.id) === connection) byPage.delete(entry.page.id)
+    if (why !== null) deps.log(`host: a page’s connection to ${deps.name ?? 'the local host'} ended`)
+    entry.page.send('hostLink:ended', { connection, why, ...deps.howEnded() })
   }
 
   const pageGone = (pageId: number): void => {
@@ -123,14 +146,8 @@ export function createPageLinks(deps: PageLinksDeps): PageLinks {
       const bridge = deps.openBridge((bytes) => {
         if (open.has(connection)) page.send('hostLink:data', { connection, bytes })
       })
-      open.set(connection, { page: page.id, bridge })
-      void bridge.ended.then((why) => {
-        if (!open.has(connection)) return
-        open.delete(connection)
-        if (byPage.get(page.id) === connection) byPage.delete(page.id)
-        if (why !== null) deps.log('host: a page’s connection to the local host ended')
-        page.send('hostLink:ended', { connection, why, ...deps.howEnded() })
-      })
+      open.set(connection, { page, bridge })
+      void bridge.ended.then((why) => ended(connection, why))
       return {
         connection,
         appVersion: deps.appVersion,
@@ -140,14 +157,23 @@ export function createPageLinks(deps: PageLinksDeps): PageLinks {
 
     send(pageId, connection, bytes) {
       const entry = open.get(connection)
-      if (entry === undefined || entry.page !== pageId) return
+      if (entry === undefined || entry.page.id !== pageId) return
       entry.bridge.write(bytes)
     },
 
     close(pageId, connection) {
       const entry = open.get(connection)
-      if (entry === undefined || entry.page !== pageId) return
+      if (entry === undefined || entry.page.id !== pageId) return
       end(connection)
+    },
+
+    drop(why) {
+      for (const [connection, entry] of [...open]) {
+        ended(connection, why)
+        // A dead transport would wait out its socket for minutes; its processes end now.
+        if (entry.bridge.kill !== undefined) entry.bridge.kill()
+        else entry.bridge.end()
+      }
     },
 
     async stop() {

@@ -5,7 +5,7 @@ import type { RemoteHostStates } from '../../shared/ipc'
 import type { LocalHost, PageBridge } from './launcher'
 import type { HelmPage } from './page-link'
 import { createPageLinks, routePageLinks } from './page-link'
-import { createRemoteHostLinks, type RemoteHostLinksDeps } from './remote'
+import { WAKE_CHECK_MS, WAKE_DEAD_LINE, createRemoteHostLinks, type RemoteHostLinksDeps } from './remote'
 import { RECONNECT_FIRST_MS, RECONNECT_MOST_MS } from '../../shared/host/reconnect'
 import { KEY_CHANGED_LINE, RemoteHostError } from './remote-launcher'
 
@@ -28,6 +28,8 @@ interface PendingStart {
 interface FakeBridge extends PageBridge {
   host: RemoteHost
   written: Uint8Array[]
+  /** Whether its processes were ended at once (`kill`), rather than its input closed. */
+  killed: boolean
   ended: Promise<string | null>
   endWith(why: string | null): void
 }
@@ -40,6 +42,7 @@ function world() {
   const recorded: string[][] = []
   const told: RemoteHostStates[] = []
   const log: string[] = []
+  const wakeListeners: Array<() => void> = []
   const timers = new Map<number, () => void>()
   const waits = new Map<number, number>()
   let nextTimer = 1
@@ -57,7 +60,12 @@ function world() {
         write(bytes) {
           bridge.written.push(bytes)
         },
+        killed: false,
         end: () => end(null),
+        kill() {
+          bridge.killed = true
+          end(null)
+        },
         ended: new Promise((resolve) => {
           end = resolve
         }),
@@ -71,6 +79,7 @@ function world() {
       return Promise.resolve()
     },
     changed: (states) => told.push(states),
+    onWake: (listener) => wakeListeners.push(listener),
     hostsChanged: (hosts) => recorded.push(hosts.map((host) => host.name)),
     isHelmPage: () => true,
     appVersion: '2.4.0',
@@ -108,6 +117,20 @@ function world() {
       timers.clear()
       waits.clear()
       for (const run of due) run()
+    },
+    /** Fires the timers waiting `ms` now, leaving every other. */
+    fireTimersOf(ms: number) {
+      const due = [...waits].filter(([, wait]) => wait === ms).map(([id]) => id)
+      for (const id of due) {
+        const run = timers.get(id)
+        timers.delete(id)
+        waits.delete(id)
+        run?.()
+      }
+    },
+    /** The computer wakes, or its screen is unlocked. */
+    wake() {
+      for (const listener of wakeListeners) listener()
     },
     waitingTimers: () => timers.size,
     /** How long each timer waiting now waits, oldest first. */
@@ -502,5 +525,169 @@ describe('the links to hosts on other computers', () => {
     await vi.waitFor(() => expect(w.forgotten).toEqual([BUILD.id]))
     expect(local.closed).toBe(true)
     expect(w.state(BUILD)).toBeUndefined()
+  })
+})
+
+describe('after the computer wakes', () => {
+  /** A host's connection whose `host:ping` never comes back, as over an ssh that died while the computer slept. */
+  const silentHost = (): FakeConnection =>
+    hostWith().answer('host:ping', () => new Promise<null>(() => undefined) as unknown as null)
+
+  it('a host that does not answer within 3 s is let go of, its pages hear it ended, and it reconnects as after a drop', async () => {
+    const w = world()
+    w.links.sync([BUILD])
+    const first = silentHost()
+    const local = fakeLocalHost(first, false)
+    w.startFor(BUILD).resolve(local)
+    await settle()
+    const window = page()
+    await w.links.pageLinks(BUILD.id)?.open(window)
+
+    // A resume and an unlock fire together: one check, not two.
+    w.wake()
+    w.wake()
+    await settle()
+    expect(first.payloads('host:ping')).toEqual([null])
+    expect(w.waitsNow()).toEqual([WAKE_CHECK_MS])
+    // Until the deadline nothing changes.
+    expect(w.state(BUILD)).toEqual({ state: 'connected', version: 'test' })
+    expect(local.closed).toBe(false)
+
+    w.fireTimersOf(WAKE_CHECK_MS)
+    await settle()
+
+    // Not live any more: retrying, which the window draws as reconnecting.
+    expect(w.state(BUILD)).toEqual({ state: 'retrying' })
+    expect(local.closed).toBe(true)
+    expect(w.links.connection(BUILD.id)).toBeNull()
+    // The dead bridges' processes are ended now, main's and the page's, not when ssh gives up.
+    expect(local.killed).toBe(true)
+    expect(w.bridges[0]?.killed).toBe(true)
+    expect(w.log).toContain('host: a page’s connection to build-box ended')
+    // The page hears at once an end that is no stop, and its bridge is ended.
+    expect(window.sent.at(-1)).toEqual({
+      channel: 'hostLink:ended',
+      payload: { connection: 1, why: WAKE_DEAD_LINE, planned: false, restarts: false }
+    })
+    await expect(w.bridges[0]?.ended).resolves.toBeNull()
+    // Nothing was asked of the host that ends anything.
+    expect(first.payloads('host:quit')).toEqual([])
+
+    // It tries again after the first short wait, as after any drop, and is connected again.
+    expect(w.waitsNow()).toEqual([RECONNECT_FIRST_MS])
+    w.fireTimers()
+    const second = hostWith()
+    w.startFor(BUILD).resolve(fakeLocalHost(second, false))
+    await settle()
+    expect(w.starts).toHaveLength(2)
+    expect(w.state(BUILD)).toEqual({ state: 'connected', version: 'test' })
+    expect(w.links.connection(BUILD.id)).toBe(second.asConnection())
+    // The page opens again on the new connection.
+    await expect(w.links.pageLinks(BUILD.id)?.open(window)).resolves.toEqual({ connection: 2, appVersion: '2.4.0' })
+  })
+
+  it('a host that answers, even with a refusal, is left as it is, while one that does not is reconnected beside it', async () => {
+    const w = world()
+    w.links.sync([BUILD, LAB, FAR])
+    const build = hostWith().answer('host:ping', () => null)
+    const buildLocal = fakeLocalHost(build, false)
+    w.startFor(BUILD).resolve(buildLocal)
+    // A host too old to know host:ping answers with an error: it answered.
+    const lab = hostWith().answer('host:ping', () => {
+      throw new Error('unknown channel host:ping')
+    })
+    const labLocal = fakeLocalHost(lab, false)
+    w.startFor(LAB).resolve(labLocal)
+    const far = silentHost()
+    const farLocal = fakeLocalHost(far, false)
+    w.startFor(FAR).resolve(farLocal)
+    await settle()
+    const window = page()
+    await w.links.pageLinks(BUILD.id)?.open(window)
+
+    w.wake()
+    await settle()
+    // The two that answered have no deadline left running; only far-away's waits.
+    expect(w.waitsNow()).toEqual([WAKE_CHECK_MS])
+    w.fireTimersOf(WAKE_CHECK_MS)
+    await settle()
+
+    expect(w.state(BUILD)).toEqual({ state: 'connected', version: 'test' })
+    expect(w.state(LAB)).toEqual({ state: 'connected', version: 'test' })
+    expect(w.links.connection(BUILD.id)).toBe(build.asConnection())
+    expect(w.links.connection(LAB.id)).toBe(lab.asConnection())
+    expect(buildLocal.closed).toBe(false)
+    expect(labLocal.closed).toBe(false)
+    expect(buildLocal.killed).toBe(false)
+    expect(w.bridges[0]?.killed).toBe(false)
+    expect(window.sent.filter((sent) => sent.channel === 'hostLink:ended')).toEqual([])
+    expect(w.starts.filter((start) => start.host.id !== FAR.id)).toHaveLength(2)
+
+    expect(w.state(FAR)).toEqual({ state: 'retrying' })
+    expect(farLocal.closed).toBe(true)
+
+    // The next wake checks again.
+    w.wake()
+    await settle()
+    expect(build.payloads('host:ping')).toHaveLength(2)
+  })
+
+  it('a host waiting to try again tries at once', async () => {
+    const w = world()
+    w.links.sync([BUILD])
+    const unreachable = 'ssh: connect to host build-box port 22: Network is unreachable'
+    w.startFor(BUILD).reject(new RemoteHostError(unreachable))
+    await settle()
+    for (let tries = 0; tries < 6; tries += 1) {
+      w.fireTimers()
+      w.startFor(BUILD).reject(new RemoteHostError(unreachable))
+      await settle()
+    }
+    expect(w.waitsNow()).toEqual([RECONNECT_FIRST_MS * 64])
+
+    w.wake()
+    expect(w.starts).toHaveLength(8)
+    expect(w.waitsNow()).toEqual([])
+    const build = silentHost()
+    w.startFor(BUILD).resolve(fakeLocalHost(build, false))
+    await settle()
+    expect(w.state(BUILD)).toEqual({ state: 'connected', version: 'test' })
+  })
+
+  it('while Floti quits, a wake checks nothing, and a check already waiting lets go of nothing', async () => {
+    const w = world()
+    w.links.sync([BUILD])
+    const build = silentHost()
+    const buildLocal = fakeLocalHost(build, false)
+    w.startFor(BUILD).resolve(buildLocal)
+    await settle()
+    // build-box's page bridge is slow to exit, so the quit waits on it with main's link still connected.
+    await w.links.pageLinks(BUILD.id)?.open(page())
+    const slow = w.bridges[0]!
+    slow.end = () => undefined
+
+    // build-box's check is waiting when the quit begins.
+    w.wake()
+    await settle()
+    expect(build.payloads('host:ping')).toHaveLength(1)
+    const quit = w.links.quit(() => false)
+    await settle()
+    expect(w.links.connection(BUILD.id)).toBe(build.asConnection())
+
+    // Its deadline passes mid-quit: nothing is let go of, so nothing reconnects.
+    w.fireTimersOf(WAKE_CHECK_MS)
+    await settle()
+    expect(buildLocal.killed).toBe(false)
+    expect(w.state(BUILD)).toEqual({ state: 'connected', version: 'test' })
+    expect(w.waitsNow()).not.toContain(RECONNECT_FIRST_MS)
+    // Another wake mid-quit asks nothing.
+    w.wake()
+    await settle()
+    expect(build.payloads('host:ping')).toHaveLength(1)
+
+    slow.endWith(null)
+    await quit
+    expect(build.payloads('host:quit')).toEqual([{ end: false }])
+    expect(w.starts).toHaveLength(1)
   })
 })

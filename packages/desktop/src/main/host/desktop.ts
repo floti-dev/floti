@@ -1,4 +1,4 @@
-import { app, type BrowserWindow } from 'electron'
+import { app, powerMonitor, type BrowserWindow } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream, existsSync } from 'node:fs'
@@ -321,6 +321,11 @@ export function createDesktopRemoteHosts(options: {
       localFloti.after(() => recordDoctorHosts(places(), programs, doctorHosts(hosts, folderOf))).catch((error: unknown) => {
         options.log(`host: floti doctor was not told this device's hosts (${(error as Error).message})`)
       })
+    },
+    // A transport that died while the computer slept is found at once, not when ssh notices.
+    onWake: (listener) => {
+      powerMonitor.on('resume', listener)
+      powerMonitor.on('unlock-screen', listener)
     },
     isHelmPage: options.isHelmPage,
     appVersion: app.getVersion(),
