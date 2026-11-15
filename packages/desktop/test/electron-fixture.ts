@@ -18,13 +18,18 @@ import { treeKill } from '../src/main/treekill'
  * exit code or signal and ends with its stderr, so a failure on a runner says
  * why Electron did not get as far as the report.
  *
- * A test calls `endFixtures()` after each test: every process started here, a
- * fixture, its display server or a stand-in, ends with the test that started
- * it.
+ * Every process started here ends with the test that started it, even when
+ * the test's worker dies: a fixture watches its owner, and a fixture's display
+ * server is watched by a keeper of its own (below). A test also calls
+ * `endFixtures()` after each test, which ends whatever is still running.
  *
  * On Linux with no display (a CI runner), each fixture gets a private Xvfb,
  * which picks a free display number itself (`-displayfd`), so fixtures running
- * side by side never race for one; it ends when its fixture does. Chromium's
+ * side by side never race for one. It runs with `-terminate`, so it exits
+ * once its last client, the fixture, disconnects, and under `XVFB_KEEPER`,
+ * which ends it once the test's worker is gone, as the fixture ends with its
+ * owner: that covers the moment between Xvfb being ready and the fixture
+ * connecting, and a fixture that dies before it connects. Chromium's
  * headless Ozone platform is no substitute: Electron 43 crashes on it once a
  * window loads a page. The OS sandbox stays on, as Floti's does: where the OS
  * refuses it, Electron aborts at start and the error shows Chromium's own line
@@ -71,6 +76,47 @@ export async function bundleFixture(root: string, entry: string, name: string, p
 /** Appends `chunk` to `text`, keeping the last `STDERR_TAIL` characters. */
 const tailOf = (text: string, chunk: Buffer): string => (text + chunk.toString()).slice(-STDERR_TAIL)
 
+/**
+ * Runs Xvfb with the arguments after the owner's pid, passing fd 3 through for
+ * `-displayfd`, and exits when Xvfb does. It ends Xvfb with SIGTERM, which
+ * lets Xvfb remove its lock file, when it is sent SIGTERM itself or once the
+ * owner is gone, polled as the fixtures poll theirs (signal 0 sends nothing;
+ * EPERM means the owner runs as somebody else).
+ */
+const XVFB_KEEPER = `
+const { spawn } = require('node:child_process')
+const rest = process.argv.slice(1)
+if (rest[0] === '--') rest.shift()
+const [owner, ...args] = rest
+const server = spawn('Xvfb', args, { stdio: ['ignore', 'ignore', 'inherit', 3] })
+server.on('error', (error) => {
+  console.error(`${String(error)} (Xvfb is in the xvfb package)`)
+  process.exit(127)
+})
+server.on('exit', (code, signal) => process.exit(code ?? (signal === null ? 0 : 1)))
+const end = () => server.kill('SIGTERM')
+process.on('SIGTERM', end)
+setInterval(() => {
+  try {
+    process.kill(Number(owner), 0)
+  } catch (error) {
+    if (error.code !== 'EPERM') end()
+  }
+}, 250)
+`
+
+/** Settles once `child` has exited, at once if it already has, or after the patience. */
+function exitOf(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve()
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, PATIENCE)
+    child.once('exit', () => {
+      clearTimeout(timer)
+      resolve()
+    })
+  })
+}
+
 /** What the fixture's environment needs for a display, and the server started for it, if any. */
 interface Display {
   env: Record<string, string>
@@ -83,13 +129,15 @@ const hasDisplay = (): boolean =>
 
 /**
  * A display for one fixture: nothing where there is one already, and on Linux
- * without one a private Xvfb, ready once it has written its display number to
- * fd 3. Rejects naming Xvfb, with its stderr, if it cannot start.
+ * without one a private Xvfb under its keeper, ready once Xvfb has written its
+ * display number to fd 3. Rejects naming Xvfb, with its stderr, if it cannot
+ * start.
  */
 function displayFor(label: string): Promise<Display> {
   if (hasDisplay()) return Promise.resolve({ env: {}, server: null })
   return new Promise((resolve, reject) => {
-    const server = spawn('Xvfb', ['-displayfd', '3', '-nolisten', 'tcp', '-screen', '0', '1280x800x24'], {
+    const xvfb = ['-displayfd', '3', '-terminate', '-nolisten', 'tcp', '-screen', '0', '1280x800x24']
+    const server = spawn(process.execPath, ['-e', XVFB_KEEPER, '--', String(process.pid), ...xvfb], {
       stdio: ['ignore', 'ignore', 'pipe', 'pipe']
     })
     track(server)
@@ -101,7 +149,7 @@ function displayFor(label: string): Promise<Display> {
       reject(new Error(`the ${label} has no display, and Xvfb ${why}\n--- its stderr ---\n${stderr.trimEnd()}`))
     }
     const timer = setTimeout(() => fail(`gave no display within ${String(PATIENCE)} ms`), PATIENCE)
-    const failed = (error: Error): void => fail(`did not start (${error.message}; it is in the xvfb package)`)
+    const failed = (error: Error): void => fail(`did not start (${error.message})`)
     const exited = (code: number | null, signal: NodeJS.Signals | null): void =>
       fail(`exited (${signal ?? `exit code ${String(code)}`})`)
     server.once('error', failed)
@@ -186,16 +234,20 @@ export function startFixture(
       const timer = setTimeout(() => {
         void failure(`did not exit within ${String(PATIENCE)} ms`).then(reject)
       }, PATIENCE)
+      // Its display ends with it, before it counts as ended, so `endFixtures`
+      // finds nothing to kill and Xvfb has removed its lock file.
+      const endDisplay = (): Promise<void> => {
+        if (display.server === null) return Promise.resolve()
+        display.server.kill('SIGTERM')
+        return exitOf(display.server)
+      }
       child.once('error', (error) => {
         clearTimeout(timer)
-        display.server?.kill()
-        reject(error)
+        void endDisplay().then(() => reject(error))
       })
       child.once('exit', (code, signal) => {
         clearTimeout(timer)
-        // Its display ends with it; SIGTERM lets Xvfb remove its lock file.
-        display.server?.kill()
-        resolve({ code, signal })
+        void endDisplay().then(() => resolve({ code, signal }))
       })
     })
 

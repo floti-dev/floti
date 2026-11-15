@@ -337,7 +337,7 @@ the host tests, on every runner. Around a command it runs it, then lists each
 test temp folder (`helm-test-run-*`, a vitest or Playwright run's root,
 `floti test *`, `helm world-*`, `helm-test-posix-*`) the
 command left in the temp folder and each process of a kind tests start
-(`floti*`, Node, shells, `conhost`) that the command started and is still
+(`floti*`, Node, shells, `conhost`, Electron, Xvfb) that the command started and is still
 running, with its pid, name and command line. It exits with the command's
 status when the command failed, 1 when it left anything, and 0 otherwise.
 It reports only what appeared while the command ran, so other sessions and
@@ -416,7 +416,8 @@ vitest runs five projects (`vitest.config.ts`):
   store across a restart, and `test/browser-favicons.test.ts`, for
   `net.request` at a redirect. A fixture that fails shows its exit code or
   signal and the end of its stderr. On Linux with no display each fixture
-  gets a private Xvfb (the `xvfb` package), and its OS sandbox stays on. Where the
+  gets a private Xvfb (the `xvfb` package), which exits when the fixture
+  disconnects or the test's worker is gone, and its OS sandbox stays on. Where the
   OS refuses the sandbox (Ubuntu 23.10 and later refuse unprivileged user
   namespaces, and an install leaves `chrome-sandbox` unprivileged), Electron
   aborts naming the helper; the Linux CI job makes `chrome-sandbox` root's

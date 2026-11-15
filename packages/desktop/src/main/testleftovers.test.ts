@@ -267,6 +267,19 @@ describe('what the leftover check selects', () => {
     expect(pids(leftovers.processes)).toEqual([12, 70])
   })
 
+  it('reports a real-Electron fixture and the Xvfb it ran on, once their test is gone', () => {
+    const after = [...BEFORE, row(43, 1, 'electron', 11), row(44, 1, 'xvfb', 12), row(50, 30, 'node', 20)]
+    const leftovers = selectLeftovers({
+      before: { processes: BEFORE, folders: [] },
+      after: { processes: after, folders: [] },
+      self: 50,
+      tmp: TMP,
+      places: PLACES,
+      inspect: inspector({ 43: { marked: true }, 44: { marked: true } })
+    })
+    expect(pids(leftovers.processes)).toEqual([43, 44])
+  })
+
   it('never reports a tool cache or a process of a kind tests do not start', () => {
     const leftovers = selectLeftovers({
       before: { processes: BEFORE, folders: [] },

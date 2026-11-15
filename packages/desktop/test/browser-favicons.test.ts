@@ -31,7 +31,7 @@ async function run(root: string, userData: string): Promise<FaviconsReport> {
   return reportOf<FaviconsReport>(startFixture(app, userData, env, 'fixture'), result)
 }
 
-describe('favicons over Electronâ€™s network, in real Electron', () => {
+describe('favicons over Electron’s network, in real Electron', () => {
   it(
     'follows a redirect to an address in reach, and never asks for one out of it',
     async () => {
