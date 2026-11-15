@@ -81,7 +81,9 @@ jobs:
       # an install leaves owned by the runner: Electron aborts with "The SUID
       # sandbox helper binary was found, but is not configured correctly".
       # Owned by root with mode 4755, as Chromium asks, it starts sandboxed.
-      - name: Let Electron start sandboxed (Linux)
+      # With no display, each of those tests starts a private Xvfb for its
+      # fixture; the step installs Xvfb where the image lacks it.
+      - name: Let Electron start sandboxed, on a virtual display (Linux)
         if: runner.os == 'Linux'
         # The first require downloads the binary where the install did not,
         # and says so on stdout; the second only prints the path.
@@ -90,6 +92,7 @@ jobs:
           helper="$(dirname "$(node -p "require('electron')")")/chrome-sandbox"
           sudo chown root:root "$helper"
           sudo chmod 4755 "$helper"
+          command -v Xvfb >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q xvfb; }
 
       # What is running and which test temp folders exist before the check, so
       # the step after it reports only what the check left (docs/TESTING.md).

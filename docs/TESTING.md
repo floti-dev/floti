@@ -415,8 +415,8 @@ vitest runs five projects (`vitest.config.ts`):
   `test/electron-fixture.ts`: `test/browser-sign-ins.test.ts`, for the cookie
   store across a restart, and `test/browser-favicons.test.ts`, for
   `net.request` at a redirect. A fixture that fails shows its exit code or
-  signal and the end of its stderr. On Linux it runs on Chromium's headless
-  Ozone platform, so it needs no display, with its OS sandbox on. Where the
+  signal and the end of its stderr. On Linux with no display each fixture
+  gets a private Xvfb (the `xvfb` package), and its OS sandbox stays on. Where the
   OS refuses the sandbox (Ubuntu 23.10 and later refuse unprivileged user
   namespaces, and an install leaves `chrome-sandbox` unprivileged), Electron
   aborts naming the helper; the Linux CI job makes `chrome-sandbox` root's
