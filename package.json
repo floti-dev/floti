@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "Portable desktop shell on top of Claude Code",
   "author": "Cole Taylor",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",

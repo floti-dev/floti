@@ -32,7 +32,7 @@ export const WINGET_MANIFEST_VERSION = '1.10.0'
 /** One line about floti, for Homebrew's `desc` and winget's ShortDescription. */
 export const DESCRIPTION = 'Host for Claude Code sessions, reached from any computer over SSH'
 
-const LICENSE = 'MIT'
+const LICENSE = 'Apache-2.0'
 const REPO = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/
 const SHA256 = /^[0-9a-f]{64}$/
 

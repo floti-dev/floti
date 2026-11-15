@@ -7,7 +7,7 @@
   "//desktopName": "The Linux menu entry floti add desktop writes, named by the app ID (design I11): Electron names the window's app_id and WM_CLASS after it, which is how a Linux desktop ties the running window to the entry's name and icon.",
   "desktopName": "dev.floti.desktop.desktop",
   "author": "Cole Taylor",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "private": true,
   "main": "./out/main/index.js",
   "scripts": {

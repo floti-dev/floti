@@ -18,7 +18,7 @@
 # an install under that ID left.
 appId: dev.floti.desktop
 productName: Floti
-copyright: MIT licensed - see LICENSE
+copyright: Apache License 2.0 - see LICENSE
 
 # The package name the packaged copy carries, which electron-builder names the
 # default install directory after (`sanitizeFileName(metadata.name)` for a

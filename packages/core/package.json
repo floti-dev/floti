@@ -2,7 +2,7 @@
   "name": "@helm/core",
   "version": "0.0.1",
   "description": "Headless Floti logic: discovery, store, launch. Never imports Electron.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "//exports": "`./types` is the only entry point safe to import for its *values* from the renderer. The package root reaches node:fs through launch/ and store/, and a value import of it from a browser bundle fails at rollup rather than at typecheck. Types themselves are erased, so `import type` from the root is fine anywhere.",
