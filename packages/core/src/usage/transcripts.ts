@@ -1,8 +1,7 @@
 /**
  * The shape of token usage, as an earlier Helm read it out of Claude Code's
- * transcripts into `helm.db` (`store/usage.ts`). The local host reads usage now;
- * `helm.db` keeps what was indexed, which the copy into the host carries
- * (`store/copy.ts`).
+ * transcripts into `helm.db` (`store/usage.ts`). `helm.db` keeps what was
+ * indexed, which the copy into the host carries (`store/copy.ts`).
  */
 
 /** One assistant message's tokens, priced separately by class. */

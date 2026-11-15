@@ -1,7 +1,7 @@
 //! ISO 8601 instants, as Claude Code writes them, to epoch milliseconds.
 //!
-//! Transcripts write `2026-08-10T08:10:00.721Z`; the cached usage figures
-//! write `2026-08-10T08:10:00.721285+00:00`. Anything that does not parse is
+//! Transcripts write `2026-08-10T08:10:00.721Z`; other records can carry an
+//! offset and microseconds, `2026-08-10T08:10:00.721285+00:00`. Anything that does not parse is
 //! `None` rather than a guess.
 
 /// `text` as epoch milliseconds, or `None` when it is not an instant.

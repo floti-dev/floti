@@ -562,7 +562,7 @@ fn a_test_that_fails_while_its_floti_host_runs_leaves_neither_the_host_nor_its_f
 }
 
 // ---------------------------------------------------------------------------
-// The executable's home: the agent folder it reads, and its local day
+// The executable's home: the agent folder it reads
 // ---------------------------------------------------------------------------
 
 fn iso(ms: u64) -> String {
