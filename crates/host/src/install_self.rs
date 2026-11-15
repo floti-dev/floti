@@ -48,7 +48,7 @@
 use std::fs::File;
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 
 use crate::platform::folders::UserEnv;
 use crate::platform::launcher::{Native as NativeLauncher, ProgramLauncher};
@@ -101,35 +101,15 @@ impl InstallSystem for NativeSystem {
 
     fn setup(&self, floti: &Path) -> Result<u8, String> {
         let mut command = Command::new(floti);
-        command
-            .args(SETUP_ARGS)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        NativeLauncher.windowless(&mut command);
-        let mut child = command
-            .spawn()
-            .map_err(|err| format!("could not run {} setup: {err}", floti.display()))?;
-        // Relayed as it comes: a program with no window of its own cannot
-        // write to this process's console.
-        let relays = [
-            child.stdout.take().map(|mut from| {
-                std::thread::spawn(move || std::io::copy(&mut from, &mut std::io::stdout()))
-            }),
-            child.stderr.take().map(|mut from| {
-                std::thread::spawn(move || std::io::copy(&mut from, &mut std::io::stderr()))
-            }),
-        ];
-        let status = child
-            .wait()
-            .map_err(|err| format!("could not run {} setup: {err}", floti.display()))?;
-        for relay in relays.into_iter().flatten() {
-            let _ = relay.join();
-        }
-        Ok(status
-            .code()
-            .and_then(|code| u8::try_from(code).ok())
-            .unwrap_or(1))
+        command.args(SETUP_ARGS);
+        run_relayed(&mut command)
+            .map(|status| {
+                status
+                    .code()
+                    .and_then(|code| u8::try_from(code).ok())
+                    .unwrap_or(1)
+            })
+            .map_err(|err| format!("could not run {} setup: {err}", floti.display()))
     }
 
     fn version_of(&self, floti: &Path) -> Option<String> {
@@ -143,6 +123,32 @@ impl InstallSystem for NativeSystem {
     fn native_cpu(&self) -> &'static str {
         NativeStandalone.native_cpu()
     }
+}
+
+/// Runs `command` with no window and its output piped, relaying that output
+/// to this process's own, and answers its exit status.
+pub fn run_relayed(command: &mut Command) -> io::Result<ExitStatus> {
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    NativeLauncher.windowless(command);
+    let mut child = command.spawn()?;
+    // Relayed as it comes: a program with no window of its own cannot
+    // write to this process's console.
+    let relays = [
+        child.stdout.take().map(|mut from| {
+            std::thread::spawn(move || std::io::copy(&mut from, &mut std::io::stdout()))
+        }),
+        child.stderr.take().map(|mut from| {
+            std::thread::spawn(move || std::io::copy(&mut from, &mut std::io::stderr()))
+        }),
+    ];
+    let status = child.wait()?;
+    for relay in relays.into_iter().flatten() {
+        let _ = relay.join();
+    }
+    Ok(status)
 }
 
 /// The version a `floti version` line names: `floti 3.0.0 protocol 3.0

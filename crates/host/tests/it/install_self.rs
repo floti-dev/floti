@@ -6,17 +6,23 @@
 //! Nothing here installs anything on this computer, changes its `PATH` or
 //! runs setup: every file is under the test's temporary tree, the `PATH`
 //! and setup are a [`FakeSystem`] that records what it was asked, and the
-//! running copy is the test's fake program, ended with the test.
+//! running copy is the test's fake program, ended with the test. Where setup
+//! is run the way install-self runs it, the program run is the fake program,
+//! which prints its report and exits.
 
 use std::cell::RefCell;
 use std::env::consts::EXE_SUFFIX;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
 
-use floti_host::install_self::{ARM64_BUILD, Install, InstallSystem, install_self};
+use floti_host::install_self::{
+    ARM64_BUILD, Install, InstallSystem, SETUP_ARGS, install_self, run_relayed,
+};
 use floti_host::platform::standalone::{Native, Standalone};
 use floti_host::platform::user_path::{Added, TakesEffect};
-use floti_host::testkit::TestDirs;
+use floti_host::testkit::{PATIENCE, TestDirs};
 
 /// What the fake computer was asked, and how it answers.
 #[derive(Default)]
@@ -30,6 +36,9 @@ struct FakeSystem {
     setups: RefCell<Vec<PathBuf>>,
     /// This computer's own CPU; x64 when it says none.
     cpu: Option<&'static str>,
+    /// A program setup is really run from, the way install-self runs it,
+    /// in place of the installed floti; none answers `setup_code`.
+    setup_program: Option<PathBuf>,
 }
 
 impl InstallSystem for FakeSystem {
@@ -54,7 +63,15 @@ impl InstallSystem for FakeSystem {
 
     fn setup(&self, floti: &Path) -> Result<u8, String> {
         self.setups.borrow_mut().push(floti.to_path_buf());
-        Ok(self.setup_code)
+        let Some(program) = &self.setup_program else {
+            return Ok(self.setup_code);
+        };
+        let status = run_relayed(Command::new(program).args(SETUP_ARGS))
+            .map_err(|why| format!("could not run {}: {why}", program.display()))?;
+        Ok(status
+            .code()
+            .and_then(|code| u8::try_from(code).ok())
+            .unwrap_or(1))
     }
 
     fn version_of(&self, _floti: &Path) -> Option<String> {
@@ -176,6 +193,102 @@ fn a_first_install_puts_floti_and_its_node_in_the_users_folder_on_path_and_runs_
     );
     assert!(ran.out.contains("on your PATH"), "{}", ran.out);
     assert!(ran.err.is_empty(), "{}", ran.err);
+}
+
+/// What the copy of this test binary that
+/// [`install_self_run_with_its_output_piped_ends_and_passes_setups_output_on`]
+/// starts is told: the floti to install, and the folder to put it in.
+const PIPED_SOURCE_VAR: &str = "FLOTI_TEST_INSTALL_SELF_SOURCE";
+const PIPED_FOLDER_VAR: &str = "FLOTI_TEST_INSTALL_SELF_FOLDER";
+
+/// Not a test on its own: install-self as `floti install-self` runs it,
+/// holding its standard output and error for the whole run
+/// (`install_self::run`), with setup really run, from the fake program,
+/// which prints its report. Started in a copy of this test binary by the
+/// test below.
+#[test]
+#[ignore = "run by install_self_run_with_its_output_piped_ends_and_passes_setups_output_on"]
+fn piped_install_self() {
+    let var = |name: &str| -> PathBuf {
+        std::env::var_os(name)
+            .unwrap_or_else(|| panic!("{name} is not set"))
+            .into()
+    };
+    let (source, folder) = (var(PIPED_SOURCE_VAR), var(PIPED_FOLDER_VAR));
+    let system = FakeSystem {
+        on_path: true,
+        setup_program: Some(env!("CARGO_BIN_EXE_floti-fake-program").into()),
+        ..FakeSystem::default()
+    };
+    let install = Install {
+        source: &source,
+        version: "3.0.0",
+        folder: &folder,
+        force: false,
+    };
+    let mut out = std::io::stdout().lock();
+    let mut err = std::io::stderr().lock();
+    let code = install_self(&install, &Native, &system, &mut out, &mut err);
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn install_self_run_with_its_output_piped_ends_and_passes_setups_output_on() {
+    // As the desktop's installer runs it (nsExec): standard output and error
+    // pipes that are read to the end.
+    let dirs = TestDirs::new();
+    let source = carried(&dirs, b"floti 3.0.0").floti;
+    let folder = dirs.folder("bin");
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "install_self::piped_install_self",
+            "--exact",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env(PIPED_SOURCE_VAR, &source)
+        .env(PIPED_FOLDER_VAR, &folder)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let read = |mut from: Box<dyn Read + Send>| {
+        std::thread::spawn(move || {
+            let mut text = String::new();
+            let _ = from.read_to_string(&mut text);
+            text
+        })
+    };
+    let out = read(Box::new(child.stdout.take().unwrap()));
+    let err = read(Box::new(child.stderr.take().unwrap()));
+    let deadline = Instant::now() + PATIENCE;
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "install-self with its output piped was still running {PATIENCE:?} after it started\n{}\n{}",
+                out.join().unwrap(),
+                err.join().unwrap()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    let (out, err) = (out.join().unwrap(), err.join().unwrap());
+    assert!(status.success(), "{status}\n{out}\n{err}");
+    assert!(
+        out.contains(&format!(
+            "floti is at {}.",
+            folder.join(floti_name()).display()
+        )),
+        "{out}"
+    );
+    // The fake program's report, naming the arguments setup was run with.
+    assert!(out.contains(r#"["setup","--no-desktop"]"#), "{out}");
 }
 
 #[test]
