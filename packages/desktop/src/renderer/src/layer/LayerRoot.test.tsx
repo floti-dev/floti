@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { BrowserLayerReport, BrowserLayerShow, EventPayload } from '../../../shared/ipc'
+import type { BrowserLayerMenu, BrowserLayerReport, BrowserLayerShow, EventPayload } from '../../../shared/ipc'
 import { LayerRoot } from './LayerRoot'
 
 /**
@@ -36,20 +36,21 @@ function fakeMain(): {
   }
 }
 
+const MENU: BrowserLayerMenu = {
+  kind: 'menu',
+  label: 'Browser',
+  role: 'menu',
+  stayOpen: false,
+  entries: [
+    { kind: 'heading', id: 'zoom-heading', label: 'Zoom 100%' },
+    { kind: 'item', id: 'zoom-in', label: 'Zoom in', hint: 'Ctrl =' },
+    { kind: 'item', id: 'zoom-out', label: 'Zoom out', disabled: true },
+    { kind: 'item', id: 'devtools', label: 'Open DevTools', hint: 'F12' }
+  ]
+}
 const SHOW: NonNullable<BrowserLayerShow> = {
   turn: 4,
-  content: {
-    kind: 'menu',
-    label: 'Browser',
-    role: 'menu',
-    stayOpen: false,
-    entries: [
-      { kind: 'heading', id: 'zoom-heading', label: 'Zoom 100%' },
-      { kind: 'item', id: 'zoom-in', label: 'Zoom in', hint: 'Ctrl =' },
-      { kind: 'item', id: 'zoom-out', label: 'Zoom out', disabled: true },
-      { kind: 'item', id: 'devtools', label: 'Open DevTools', hint: 'F12' }
-    ]
-  },
+  content: MENU,
   look: { vars: { '--helm-surface-raised': '#202124', '--helm-radius': '6px' }, kind: 'dark', data: { theme: 'night', density: 'compact' } }
 }
 
@@ -128,12 +129,50 @@ describe('LayerRoot', () => {
     render(<LayerRoot bridge={main.bridge} />)
     main.show(SHOW)
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' })
-    main.show({ ...SHOW, content: { ...SHOW.content, label: 'Browser' } })
+    main.show({ ...SHOW, content: { ...MENU, label: 'Browser' } })
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Enter' })
     expect(main.reports.at(-2)).toEqual({ turn: 4, pick: 'devtools' })
 
     main.show({ ...SHOW, turn: 5 })
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Enter' })
     expect(main.reports.at(-2)).toEqual({ turn: 5, pick: 'zoom-in' })
+  })
+})
+
+describe('LayerRoot - the address suggestions', () => {
+  const SUGGESTIONS: NonNullable<BrowserLayerShow> = {
+    turn: 7,
+    content: {
+      kind: 'suggestions',
+      rows: [
+        { kind: 'search', text: 'docs', engine: 'Google' },
+        { kind: 'page', url: 'http://localhost:3000/docs', title: 'Docs' }
+      ],
+      highlighted: 1
+    },
+    look: SHOW.look
+  }
+
+  it('draws the rows with the highlight it is sent, and never takes the keyboard', () => {
+    const main = fakeMain()
+    const before = document.activeElement
+    render(<LayerRoot bridge={main.bridge} />)
+    main.show(SUGGESTIONS)
+    const options = screen.getAllByRole('option')
+    expect(options.map((option) => option.getAttribute('aria-selected'))).toEqual(['false', 'true'])
+    expect(document.activeElement).toBe(before)
+  })
+
+  it("reports the pointer's pick on the press, and its hover, by row", () => {
+    const main = fakeMain()
+    render(<LayerRoot bridge={main.bridge} />)
+    main.show(SUGGESTIONS)
+    const [search] = screen.getAllByRole('option')
+    fireEvent.mouseMove(search!)
+    fireEvent.mouseDown(search!, { button: 0 })
+    expect(main.reports.slice(1)).toEqual([
+      { turn: 7, hover: 0 },
+      { turn: 7, row: 0 }
+    ])
   })
 })

@@ -4,14 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { overlayOpen } from '../lib/overlay'
 import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
 import { placePopup, POPUP_MARGIN } from '../lib/popup'
-import {
-  Menu,
-  type LayerMenu,
-  type LayerMenuClosed,
-  type LayerRect,
-  type MenuEntry,
-  type MenuLayerPort
-} from './Menu'
+import type { LayerMenu, LayerMenuClosed, LayerRect, MenuLayerPort } from '../lib/menuLayer'
+import { Menu, type MenuEntry } from './Menu'
 
 /**
  * A menu drawn in the browser's menu layer: the window measures and places it,
@@ -43,6 +37,9 @@ function fakePort(): { port: MenuLayerPort; opened: Opened[] } {
   return {
     opened,
     port: {
+      openSuggestions: () => {
+        throw new Error('a menu opens no suggestions')
+      },
       open: (menu, rect, on) => {
         const record: Opened = { menu, rect, on, updates: [], closed: 0 }
         opened.push(record)

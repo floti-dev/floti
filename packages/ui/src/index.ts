@@ -76,17 +76,21 @@ export {
   MENU_FRAME,
   MenuList,
   layerEntries,
-  type LayerMenu,
-  type LayerMenuClosed,
-  type LayerMenuEntry,
-  type LayerRect,
   type MenuAnchor,
   type MenuEntry,
-  type MenuLayerHandle,
-  type MenuLayerPort,
   type MenuListProps,
   type MenuProps
 } from './components/Menu'
+export type {
+  LayerMenu,
+  LayerMenuClosed,
+  LayerMenuEntry,
+  LayerRect,
+  LayerSuggestions,
+  MenuLayerHandle,
+  MenuLayerPort,
+  SuggestionsLayerHandle
+} from './lib/menuLayer'
 export {
   ConfirmSessionDialog,
   type ConfirmChild,

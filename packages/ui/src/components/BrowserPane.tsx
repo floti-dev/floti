@@ -5,7 +5,8 @@ import { cn } from '../lib/cn'
 import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
 import { isMac, shortcutLabel } from '../lib/platform'
 import { SEGMENT_ON } from '../lib/segmented'
-import { BrowserSuggestions } from './BrowserSuggestions'
+import type { MenuLayerPort, SuggestionsLayerHandle } from '../lib/menuLayer'
+import { BrowserSuggestionsLayer } from './BrowserSuggestionsLayer'
 import { ConsolePanel, type ConsoleEntry } from './ConsolePanel'
 import {
   AgentIcon,
@@ -109,18 +110,13 @@ export interface BrowserPaneProps {
   consoleOpen: boolean
   onToggleConsole: () => void
   /**
-   * The pane is drawing something over where the view is, and the view has to
-   * stand down for it.
-   *
-   * The suggestions hang below the address bar and therefore over
-   * the page, and a native view paints above **all** renderer DOM - so without
-   * this the dropdown is drawn and then covered, which is what the first capture
-   * of this pane showed: a list clipped to the few pixels above the view's top
-   * edge. The same answer the tab drag gets, for the same reason: it is
-   * transient, the user is looking straight at it, and the page keeps running
-   * behind it.
+   * The browser's menu layer: a view above the page where the More and Share
+   * menus and the address suggestions are drawn. They hang over the page, and
+   * a native view paints above all of the window's DOM, so drawn in the window
+   * they would be covered; drawn in the layer, the page keeps running and
+   * painting behind them and nothing stands down.
    */
-  onCovering: (covering: boolean) => void
+  layer: MenuLayerPort
   /**
    * The suggestions for what is typed, from the browser's history ('' for the
    * pages visited last). Ranked in main; nothing leaves the machine.
@@ -195,7 +191,7 @@ export function BrowserPane({
   onEvaluate,
   consoleOpen,
   onToggleConsole,
-  onCovering,
+  layer,
   onSuggest,
   onForget,
   onClearHistory,
@@ -319,29 +315,9 @@ export function BrowserPane({
     onFocusRequestDone()
   }, [focusRequest, onFocusRequestDone])
 
-  /**
-   * The dropdown is over the page, so the page stands down while it is up.
-   *
-   * An effect rather than a call beside each `setSuggesting`, because the thing
-   * being synchronised is an **external system** - a native view in another
-   * process - with a piece of React state, which is what an effect is for. The
-   * cleanup covers the case the call sites cannot: unmounting the pane with the
-   * dropdown open, where nothing would otherwise ever say it had closed.
-   *
-   * **It runs when the list opens or closes, and on nothing else.** The
-   * callback is an effect event, so a caller passing a new function on every
-   * render does not re-run it - which it did, and every re-run was a "closed"
-   * then an "open". Standing down waits for a picture of the page, and the
-   * picture arriving re-renders the pane, so the view came back every time it
-   * was about to go: it never left, and a click meant for the list landed on
-   * the page under it.
-   */
   const showingList = suggesting && rows.length > 0
-  const cover = useEffectEvent((covering: boolean) => onCovering(covering))
-  useEffect(() => {
-    cover(showingList)
-    return () => cover(false)
-  }, [showingList])
+  /** The suggestions open in the menu layer, for the bar to say it lost the keyboard. */
+  const suggestionsLayer = useRef<SuggestionsLayerHandle | null>(null)
 
   /*
    * The suggestions for what is typed, asked whenever it changes while the
@@ -657,11 +633,15 @@ export function BrowserPane({
             // somebody makes when they want it. A probe that drove the click and
             // nothing else is what caught this.
             onClick={() => setSuggesting(true)}
-            // At once, not after a delay. A suggestion is chosen on a mouse-down
-            // that keeps the caret here, so it never needed the list to outlive
-            // the blur, and a delayed close outlived the blur Enter makes: back in
-            // the bar within it, the list opened, then shut under the click.
-            onBlur={closeSuggestions}
+            // Not after a delay: a delayed close outlived the blur Enter makes:
+            // back in the bar within it, the list opened, then shut under the
+            // click. With the list up, the menu layer decides: a press on the
+            // list takes the keyboard for a moment and hands it straight back,
+            // and that blur is no close; any other closes it (`onClosed`).
+            onBlur={() => {
+              if (suggestionsLayer.current !== null) suggestionsLayer.current.blurred()
+              else closeSuggestions()
+            }}
             onKeyDown={(event) => {
               if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                 event.preventDefault()
@@ -723,18 +703,19 @@ export function BrowserPane({
             </button>
           )}
           {showingList && (
-            <div className="absolute left-0 right-0 top-full z-30 mt-1">
-              <BrowserSuggestions
-                id={listId}
-                rows={rows}
-                highlighted={highlight.index}
-                onPick={(index) => {
-                  const row = rows[index]
-                  if (row !== undefined) pick(row)
-                }}
-                onHover={(index) => setHighlight({ index, by: 'pointer' })}
-              />
-            </div>
+            <BrowserSuggestionsLayer
+              layer={layer}
+              handleRef={suggestionsLayer}
+              id={listId}
+              rows={rows}
+              highlighted={highlight.index}
+              onPick={(index) => {
+                const row = rows[index]
+                if (row !== undefined) pick(row)
+              }}
+              onHover={(index) => setHighlight({ index, by: 'pointer' })}
+              onClosed={closeSuggestions}
+            />
           )}
         </div>
 
@@ -830,6 +811,7 @@ export function BrowserPane({
           at={{ below: shareMenu.at }}
           anchorRef={shareRef}
           minWidth={200}
+          layer={layer}
           onSelect={chooseShare}
           onDismiss={() => setShareMenu(null)}
         />
@@ -842,6 +824,7 @@ export function BrowserPane({
           at={{ below: menuAt }}
           anchorRef={moreRef}
           minWidth={220}
+          layer={layer}
           onSelect={choose}
           onDismiss={() => setMenuAt(null)}
         />

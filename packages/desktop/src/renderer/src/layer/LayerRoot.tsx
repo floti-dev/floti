@@ -1,17 +1,19 @@
 import { useEffect, useState, type JSX } from 'react'
-import { MENU_FRAME, MenuList } from '@helm/ui'
+import { BrowserSuggestions, MENU_FRAME, MenuList } from '@helm/ui'
 import type { BrowserLayerShow, HelmBridge } from '../../../shared/ipc'
 import { applyLook } from '../app/theme'
 
 /**
- * What the menu layer draws: nothing, or the one menu main last sent, filling
- * the page. The page is exactly the menu's rectangle (main sizes the view to
+ * What the menu layer draws: nothing, or the one menu or suggestions list
+ * main last sent, filling the page. The page is exactly the menu's rectangle (main sizes the view to
  * it), so the list is drawn edge to edge with the popup recipe's frame, and
  * the window's theme and shape are painted first, from the look that came
  * with it.
  *
- * The menu takes the keys as soon as it is drawn; a pick and a close go back
- * to main on the turn they happened in.
+ * A menu takes the keys as soon as it is drawn; a pick and a close go back
+ * to main on the turn they happened in. The suggestions never take them -
+ * the address bar keeps the keyboard and sends the highlight - so only the
+ * pointer's pick and hover go back, by row.
  */
 export function LayerRoot({ bridge }: { bridge: Pick<HelmBridge, 'on' | 'send'> }): JSX.Element | null {
   const [show, setShow] = useState<BrowserLayerShow>(null)
@@ -28,6 +30,17 @@ export function LayerRoot({ bridge }: { bridge: Pick<HelmBridge, 'on' | 'send'> 
 
   if (show === null) return null
   const { turn, content } = show
+  if (content.kind === 'suggestions') {
+    return (
+      <BrowserSuggestions
+        id="layer-suggestions"
+        rows={content.rows}
+        highlighted={content.highlighted}
+        onPick={(row) => bridge.send('browser:layer-report', { turn, row })}
+        onHover={(hover) => bridge.send('browser:layer-report', { turn, hover })}
+      />
+    )
+  }
   return (
     <MenuList
       // A new menu starts on its own first row; new content for the same one keeps the row.

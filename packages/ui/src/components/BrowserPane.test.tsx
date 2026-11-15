@@ -8,6 +8,8 @@ import {
   type BrowserSearch,
   type BrowserSuggestions
 } from '@helm/core/types'
+import { overlayOpen } from '../lib/overlay'
+import { fakeMenuLayer, type FakeMenuLayer } from '../lib/menuLayer.testkit'
 import { BrowserPane, type BrowserPaneProps, type BrowserPaneState } from './BrowserPane'
 
 const STATE: BrowserPaneState = {
@@ -59,10 +61,13 @@ const suggestFrom =
  */
 let space = { x: 16, y: 120, width: 1200, height: 600 }
 let resized: Array<() => void> = []
+/** The menu layer the pane draws its menus and suggestions in. */
+let layer: FakeMenuLayer = fakeMenuLayer()
 
 beforeEach(() => {
   space = { x: 16, y: 120, width: 1200, height: 600 }
   resized = []
+  layer = fakeMenuLayer()
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
     const max = Number.parseFloat(this.style.maxWidth)
     const width = Number.isFinite(max) ? Math.min(space.width, max) : space.width
@@ -105,7 +110,7 @@ function renderPane(overrides: Partial<BrowserPaneProps> = {}): BrowserPaneProps
     onEvaluate: vi.fn(() => Promise.resolve({ ok: true, value: '', error: null })),
     consoleOpen: false,
     onToggleConsole: vi.fn(),
-    onCovering: vi.fn(),
+    layer,
     onSuggest: vi.fn(suggestFrom(HISTORY)),
     onForget: vi.fn(),
     onClearHistory: vi.fn(),
@@ -145,7 +150,7 @@ async function openMenu(user: ReturnType<typeof userEvent.setup>): Promise<HTMLE
 const lastCall = <T,>(fn: unknown): T => (fn as { mock: { calls: T[][] } }).mock.calls.at(-1)![0]!
 
 describe('BrowserPane - the address bar', () => {
-  it('opens the pages visited last on a click, newest first, and the view stands down until Escape', async () => {
+  it('opens the pages visited last on a click, newest first, over the page in the menu layer until Escape', async () => {
     const user = userEvent.setup()
     const props = renderPane()
     expect(screen.queryByRole('listbox')).toBeNull()
@@ -154,11 +159,14 @@ describe('BrowserPane - the address bar', () => {
     await screen.findByRole('listbox')
     expect(props.onSuggest).toHaveBeenLastCalledWith('')
     expect(listed()).toEqual(RECENT)
-    expect(lastCall<boolean>(props.onCovering)).toBe(true)
+    expect(layer.suggestions?.content.rows.map((row) => (row.kind === 'page' ? row.url : row.text))).toEqual(RECENT)
+    // Hung from the bar, as wide as it: jsdom's boxes are all the emulated space.
+    expect(layer.suggestions?.rect).toEqual(space)
+    expect(overlayOpen()).toBe(false)
 
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('listbox')).toBeNull()
-    expect(lastCall<boolean>(props.onCovering)).toBe(false)
+    expect(layer.suggestions).toBeNull()
   })
 
   it('filters the suggestions as you type, best match first', async () => {
@@ -332,28 +340,24 @@ describe('BrowserPane - the address bar', () => {
     expect(props.onClearHistory).toHaveBeenCalledTimes(1)
   })
 
-  it('says the list is open once, however often the pane is drawn while it is', async () => {
+  it('opens the list in the layer once, however often the pane is drawn, and sends it again only when it changes', async () => {
     const user = userEvent.setup()
-    const first = vi.fn()
-    const props = renderPane({ onCovering: first })
+    const props = renderPane()
     await user.click(address())
     await screen.findByRole('listbox')
-    const opened = [...first.mock.calls]
-    expect(opened.at(-1)).toEqual([true])
+    expect(layer.suggestionsOpened).toBe(1)
+    const updates = layer.suggestions!.updates
 
-    // The window draws the pane again with a new callback - a still of the
-    // page arriving does exactly this - and the list is still open.
-    const next = vi.fn()
-    redraw(<BrowserPane {...props} onCovering={next} />)
-    redraw(<BrowserPane {...props} onCovering={next} still="data:image/png;base64,cGFnZQ==" />)
-    expect(first.mock.calls).toEqual(opened)
-    expect(next).not.toHaveBeenCalled()
-    expect(screen.getByRole('listbox')).toBeTruthy()
+    // The window draws the pane again with new callbacks, and a still arriving.
+    redraw(<BrowserPane {...props} onNavigate={vi.fn()} />)
+    redraw(<BrowserPane {...props} onNavigate={vi.fn()} still="data:image/png;base64,cGFnZQ==" />)
+    expect(layer.suggestionsOpened).toBe(1)
+    expect(layer.suggestions!.updates).toBe(updates)
 
-    // Closing it is said to the callback the pane has now.
-    await user.keyboard('{Escape}')
-    expect(lastCall<boolean>(next)).toBe(false)
-    expect(next).not.toHaveBeenCalledWith(true)
+    // The keys move the highlight: sent, and the list stays the one open.
+    await user.keyboard('{ArrowDown}')
+    expect(layer.suggestions!.content.highlighted).toBe(0)
+    expect(layer.suggestionsOpened).toBe(1)
   })
 
   it('opens nothing over the page when there is nothing to list', async () => {
@@ -363,17 +367,67 @@ describe('BrowserPane - the address bar', () => {
     await waitFor(() => expect(props.onSuggest).toHaveBeenCalledWith(''))
     await act(async () => undefined)
     expect(screen.queryByRole('listbox')).toBeNull()
-    expect(props.onCovering).not.toHaveBeenCalledWith(true)
+    expect(layer.suggestionsOpened).toBe(0)
   })
 
-  it('goes to a suggested page when one is chosen', async () => {
+  it('goes to a suggested page when one is chosen in the layer', async () => {
     const user = userEvent.setup()
     const props = renderPane()
     await user.click(address())
     await screen.findByRole('listbox')
-    await user.click(screen.getAllByRole('option')[1]!)
+    act(() => layer.suggestions!.pick(1))
     expect(props.onNavigate).toHaveBeenCalledWith('http://localhost:5173/')
     expect(screen.queryByRole('listbox')).toBeNull()
+    expect(layer.suggestions).toBeNull()
+  })
+
+  it('keeps the list and the pick when a press on it takes the keyboard from the bar for a moment', async () => {
+    const user = userEvent.setup()
+    const props = renderPane()
+    await user.click(address())
+    await screen.findByRole('listbox')
+    // The press lands in the layer: the bar blurs, and main says it was the list's.
+    act(() => {
+      layer.suggestions!.press()
+      fireEvent.blur(address())
+    })
+    expect(layer.blurs).toBe(1)
+    expect(screen.getByRole('listbox')).toBeTruthy()
+    act(() => layer.suggestions!.pick(2))
+    expect(props.onNavigate).toHaveBeenCalledWith('https://example.com/docs')
+  })
+
+  it('closes the list when the bar loses the keyboard anywhere else', async () => {
+    const user = userEvent.setup()
+    renderPane()
+    await user.click(address())
+    await screen.findByRole('listbox')
+    act(() => address().blur())
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(layer.suggestions).toBeNull()
+  })
+
+  it("highlights the row the layer's pointer is on, without putting it in the bar", async () => {
+    const user = userEvent.setup()
+    renderPane()
+    await user.click(address())
+    await screen.findByRole('listbox')
+    act(() => layer.suggestions!.hover(1))
+    expect(layer.suggestions!.content.highlighted).toBe(1)
+    expect(screen.getAllByRole('option')[1]!.getAttribute('aria-selected')).toBe('true')
+    expect(address().value).toBe(STATE.url)
+    expect(address().getAttribute('aria-activedescendant')).toBeNull()
+  })
+
+  it("names the keys' row to assistive technology from the list the window keeps", async () => {
+    const user = userEvent.setup()
+    renderPane()
+    await user.click(address())
+    await screen.findByRole('listbox')
+    await user.keyboard('{ArrowDown}{ArrowDown}')
+    expect(address().getAttribute('aria-activedescendant')).toBe(screen.getAllByRole('option')[1]!.id)
+    expect(address().getAttribute('aria-controls')).toBe(screen.getByRole('listbox').id)
+    expect(layer.suggestions!.content.highlighted).toBe(1)
   })
 
   it('stays open when the bar is clicked again just after Enter, however long it is then left', async () => {
@@ -396,7 +450,7 @@ describe('BrowserPane - the address bar', () => {
         vi.advanceTimersByTime(60_000)
       })
       expect(screen.getByRole('listbox')).toBeTruthy()
-      expect(lastCall<boolean>(props.onCovering)).toBe(true)
+      expect(layer.suggestions).not.toBeNull()
     } finally {
       vi.useRealTimers()
     }
@@ -869,5 +923,51 @@ describe('BrowserPane - the loading line', () => {
   it('is not there for a page that is not loading', () => {
     renderPane()
     expect(line()).toBeNull()
+  })
+})
+
+describe('BrowserPane - the menus in the menu layer', () => {
+  it('opens More over the page in the layer, drawn from the button, with nothing standing down', async () => {
+    const user = userEvent.setup()
+    renderPane()
+    await openMenu(user)
+    expect(layer.menus).toHaveLength(1)
+    expect(layer.menus[0]!.menu.label).toBe('Browser')
+    expect(overlayOpen()).toBe(false)
+  })
+
+  it('closes on a second press of its button and stays closed', async () => {
+    const user = userEvent.setup()
+    renderPane()
+    await openMenu(user)
+    await user.click(screen.getByRole('button', { name: 'More' }))
+    await act(async () => undefined)
+    expect(screen.queryByRole('menu', { name: 'Browser' })).toBeNull()
+    expect(layer.menus.filter((menu) => menu.open)).toHaveLength(0)
+    expect(layer.menus).toHaveLength(1)
+  })
+
+  it('closes when a press anywhere else takes the keyboard from it, and Escape gives it back to the button', async () => {
+    const user = userEvent.setup()
+    renderPane()
+    await openMenu(user)
+    await user.click(address())
+    await act(async () => undefined)
+    expect(screen.queryByRole('menu', { name: 'Browser' })).toBeNull()
+
+    const more = screen.getByRole('button', { name: 'More' })
+    await openMenu(user)
+    await user.keyboard('{Escape}')
+    await act(async () => undefined)
+    expect(screen.queryByRole('menu', { name: 'Browser' })).toBeNull()
+    expect(document.activeElement).toBe(more)
+  })
+
+  it('opens Share in the layer too', async () => {
+    const user = userEvent.setup()
+    renderPane()
+    await user.click(screen.getByRole('button', { name: 'Share with a session' }))
+    await screen.findByRole('menu', { name: 'Share' })
+    expect(layer.menus.map((menu) => menu.menu.label)).toEqual(['Share'])
   })
 })

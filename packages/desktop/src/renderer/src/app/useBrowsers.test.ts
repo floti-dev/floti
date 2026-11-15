@@ -139,8 +139,8 @@ describe('useBrowsers - whether the native view paints', () => {
       const { result } = renderHook(() => useBrowsers())
       act(() => result.current.sendBounds(3, RECT, true))
       bridge.clearRecords()
-      act(() => result.current.setSuppressed('address-list', true))
-      act(() => result.current.setSuppressed('address-list', false))
+      act(() => result.current.setSuppressed('pane-resize', true))
+      act(() => result.current.setSuppressed('pane-resize', false))
       await act(async () => {
         answer(still(3))
         // The still's whole chain, and every timer either cover set.
@@ -171,7 +171,7 @@ describe('useBrowsers - whether the native view paints', () => {
     expect(bounds().map((sent) => sent['id'])).not.toContain(9)
   })
 
-  it('takes every view off the screen for a tab drag or the address dropdown, and back after', async () => {
+  it('takes every view off the screen for a tab drag, and back after', async () => {
     const { result } = renderHook(() => useBrowsers())
     act(() => {
       result.current.sendBounds(3, RECT, true)
@@ -193,16 +193,16 @@ describe('useBrowsers - whether the native view paints', () => {
     ])
   })
 
-  it('holds each reason on its own, so the dropdown closing does not end a drag', async () => {
+  it('holds each reason on its own, so a divider drag ending does not end a tab drag', async () => {
     const { result } = renderHook(() => useBrowsers())
     act(() => result.current.sendBounds(3, RECT, true))
     act(() => result.current.setSuppressed('tab-drag', true))
     await waitFor(() => expect(bounds().at(-1)?.visible).toBe(false))
-    act(() => result.current.setSuppressed('address-list', true))
+    act(() => result.current.setSuppressed('pane-resize', true))
     bridge.clearRecords()
 
-    // A browser pane mounting says its list is not open: the drag still holds the view down.
-    act(() => result.current.setSuppressed('address-list', false))
+    // The divider let go: the tab drag still holds the view down.
+    act(() => result.current.setSuppressed('pane-resize', false))
     expect(bounds()).toEqual([])
     act(() => result.current.setSuppressed('tab-drag', false))
     expect(bounds().map((sent) => sent['visible'])).toEqual([true])
@@ -431,6 +431,38 @@ describe('useBrowsers - the menu layer', () => {
     act(() => bridge.emit('browser:layer-event', { turn: 2, closed: 'escape' }))
     bridge.clearRecords()
     act(() => closedByLayer!.close())
+    expect(bridge.sent('browser:layer')).toEqual([])
+  })
+
+  it('opens the suggestions in the layer, passes on picks and hovers by index, and asks main about a blur', () => {
+    const { result } = renderHook(() => useBrowsers())
+    bridge.clearRecords()
+    const on = { pick: vi.fn(), hover: vi.fn(), closed: vi.fn() }
+    const rows = [{ kind: 'page' as const, url: 'http://localhost:3000/', title: 'Dev server' }]
+    let handle: ReturnType<typeof result.current.menuLayer.openSuggestions> | null = null
+    act(() => {
+      handle = result.current.menuLayer.openSuggestions({ kind: 'suggestions', rows, highlighted: -1 }, AT, on)
+    })
+    expect(bridge.sent('browser:layer')).toMatchObject([
+      { open: { turn: 1, rect: AT, content: { kind: 'suggestions', rows, highlighted: -1 } } }
+    ])
+    act(() => {
+      bridge.emit('browser:layer-event', { turn: 1, hover: 0 })
+      bridge.emit('browser:layer-event', { turn: 1, row: 0 })
+    })
+    expect(on.hover).toHaveBeenCalledWith(0)
+    expect(on.pick).toHaveBeenCalledWith(0)
+
+    act(() => handle!.blurred())
+    expect(bridge.sent('browser:layer').at(-1)).toEqual({ blurred: { turn: 1 } })
+    act(() => bridge.emit('browser:layer-event', { turn: 1, closed: 'blur' }))
+    expect(on.closed).toHaveBeenCalledWith('blur')
+    // Closed by main: the bar's later close and blur say nothing more.
+    bridge.clearRecords()
+    act(() => {
+      handle!.blurred()
+      handle!.close()
+    })
     expect(bridge.sent('browser:layer')).toEqual([])
   })
 })

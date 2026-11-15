@@ -5418,11 +5418,9 @@ export function App(): JSX.Element {
                   onEvaluate={(source) => browsers.evaluate(view.id, source)}
                   consoleOpen={consolePages.has(view.id)}
                   onToggleConsole={() => toggleConsole(view.id)}
-                  // The address dropdown hangs over the page; the view stands
-                  // down for it, the same way it does for a tab drag.
-                  onCovering={(covering) =>
-                    browsers.setSuppressed("address-list", covering)
-                  }
+                  // The bar's menus and suggestions hang over the page, drawn
+                  // in the menu layer above it: nothing stands down for them.
+                  layer={browsers.menuLayer}
                 />
               </div>
             )}

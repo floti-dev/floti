@@ -34,6 +34,12 @@ import { TITLEBAR_HEIGHT } from './chrome'
  * is added or raised (`raise`, called from `browser.ts`), the layer is added
  * again after it.
  *
+ * **The suggestions** are drawn the same way but never hold the keyboard:
+ * the address bar keeps it and sends each change, and the layer reports the
+ * row the pointer picks or is on. A press on the list hands the keyboard
+ * straight back (see the `focus` listener), and the bar's blur closes the list
+ * only when the keyboard went anywhere else (`blurred`).
+ *
  * **Closing.** A pick or Escape in a menu closes it from the layer; a click
  * anywhere else - the page or the window's chrome - takes the keyboard from
  * the layer, and that blur closes it. Each is reported to the window on
@@ -107,6 +113,12 @@ interface Open {
   content: BrowserLayerContent
   look: BrowserLayerLook
   zoom: number
+  /**
+   * Suggestions only: a press on the list took the keyboard from the bar,
+   * and it was handed straight back. The blur the bar then reports is that
+   * press's, not a close.
+   */
+  pressed: boolean
 }
 
 export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
@@ -154,6 +166,19 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
     contents.on('blur', () => {
       if (layer === made && open?.content.kind === 'menu') closed('blur')
     })
+    /*
+     * The suggestions never hold the keyboard: the bar does. A press on the
+     * list still gives the layer focus (Chromium focuses the view a press
+     * lands in), so it goes straight back to the window, whose bar takes it
+     * back, and the bar's blur that press caused is not a close (`blurred`).
+     * Measured on 43.3.0: the layer's `focus` arrives here before the
+     * window's report of the bar's blur, and before the press's own pick.
+     */
+    contents.on('focus', () => {
+      if (layer !== made || open?.content.kind !== 'suggestions') return
+      open.pressed = true
+      win.webContents.focus()
+    })
     // A page that loads again (a reload in development) or dies is not listening.
     contents.on('did-start-navigation', (details: { isMainFrame: boolean; isSameDocument: boolean }) => {
       if (details.isMainFrame && !details.isSameDocument) made.ready = false
@@ -190,6 +215,12 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
         if (open?.turn === payload.close.turn) hide()
         return
       }
+      if ('blurred' in payload) {
+        if (open?.turn !== payload.blurred.turn || open.content.kind !== 'suggestions') return
+        if (open.pressed) open.pressed = false
+        else closed('blur')
+        return
+      }
       const current = ensure()
       if (current === null) return
       const { win, view } = current
@@ -202,7 +233,7 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
         return
       }
       const fresh = open?.turn !== turn
-      open = { turn, content, look, zoom }
+      open = { turn, content, look, zoom, pressed: !fresh && open !== null && open.pressed }
       // The page draws at the window's scale, so the menu is the size the window measured.
       view.webContents.setZoomFactor(zoom)
       show()
@@ -222,6 +253,8 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
       }
       if (open === null || payload.turn !== open.turn) return
       if ('pick' in payload) options.onEvent({ turn: payload.turn, pick: payload.pick })
+      else if ('row' in payload) options.onEvent({ turn: payload.turn, row: payload.row })
+      else if ('hover' in payload) options.onEvent({ turn: payload.turn, hover: payload.hover })
       else closed(payload.closed)
     },
 

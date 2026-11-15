@@ -339,8 +339,21 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   first restores what was typed, and Shift+Delete forgets a page
   (`browser:forget`). The More menu's Clear browsing history empties it
   (`browser:clearHistory`). `BrowserSuggestions` draws the list from props
-  alone; while it is open the views stand down behind a still
-  (`setSuppressed('address-list')`).
+  alone, and is drawn in the menu layer.
+- The suggestions in the menu layer never hold the keyboard: the bar keeps
+  it and sends each change of rows or highlight, and the layer reports the
+  pointer's pick (on the press) and hover by row. A press on the list still
+  gives the layer focus, as Chromium focuses the view a press lands in; main
+  sees the layer's `focus`, hands the keyboard straight back to the window
+  and marks the press, so the bar's blur, which the bar reports as
+  `blurred` rather than closing, keeps the list, and the press's pick follows.
+  Any other blur closes it (`closed: 'blur'`). The window keeps the same list
+  where it hangs from the bar, transparent and taking no pointer: the layer's
+  rectangle is measured from it, and it is the listbox the bar's
+  `aria-controls` and `aria-activedescendant` point into, so assistive
+  technology follows the keys' highlight by the option ids it always had.
+  The list moves with the bar on a resize or a pane move rather than
+  closing.
 - Stop (`browser:stop`, `stop` in `browser.ts`) stops the load and any quiet
   reconnect. The reload button turns into Stop while a page loads. Escape
   stops a load from the bar when nothing is typed. In a page, main takes

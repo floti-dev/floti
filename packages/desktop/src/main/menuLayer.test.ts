@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, WebContentsView } from 'electron'
-import { DEFAULT_SETTINGS, type AppSettings } from '@helm/core'
+import { DEFAULT_SETTINGS, openBrowserHistory, openStore, type AppSettings } from '@helm/core'
 import { FakeBrowserWindow, FakeWebContentsView, type FakeWebContents } from '../../test/browser-electron'
 import { createBrowserHost } from './browser'
 import { TITLEBAR_HEIGHT } from './chrome'
@@ -131,8 +131,11 @@ describe('the menu layer - above every page', () => {
 
   it('is raised above each page the browser adds, and above a page that goes fullscreen', () => {
     const r = rig()
-    let settings: AppSettings = { ...DEFAULT_SETTINGS, browserRecentUrls: [], browserProjectUrls: {} }
+    let settings: AppSettings = { ...DEFAULT_SETTINGS, browserProjectUrls: {} }
+    const store = openStore({ file: ':memory:' })
     const browsers = createBrowserHost({
+      history: openBrowserHistory(store),
+      onFavicon: () => undefined,
       platform: 'win32',
       window: () => r.window as unknown as BrowserWindow,
       settings: () => settings,
@@ -161,6 +164,7 @@ describe('the menu layer - above every page', () => {
     expect(r.window.children.at(-2)).toBe(firstView)
     expect(r.window.children.at(-1)).toBe(r.view())
     browsers.shutdown()
+    store.close()
   })
 
   it('makes one layer per window, and a new one for a new window', () => {
@@ -312,5 +316,75 @@ describe('the menu layer - closing', () => {
     expect(r.layer.isLayer(r.window.webContents.id)).toBe(false)
     r.layer.destroy()
     expect(r.layer.isLayer(r.contents().id)).toBe(false)
+  })
+})
+
+describe('the menu layer - the address suggestions', () => {
+  const SUGGESTIONS = {
+    kind: 'suggestions' as const,
+    rows: [
+      { kind: 'search' as const, text: 'docs', engine: 'Google' },
+      { kind: 'page' as const, url: 'http://localhost:3000/docs', title: 'Docs' }
+    ],
+    highlighted: -1
+  }
+  const suggesting = (): Rig => {
+    const r = rig()
+    r.layer.raise()
+    r.layer.report({ ready: true })
+    r.layer.request({ open: { turn: 3, rect: RECT, content: SUGGESTIONS, look: LOOK } })
+    return r
+  }
+
+  it('draws them over the page and leaves the keyboard in the bar', () => {
+    const r = suggesting()
+    expect(r.view().visible).toBe(true)
+    expect(r.contents().focused).toBe(0)
+    expect(shown(r).at(-1)).toEqual({ turn: 3, content: SUGGESTIONS, look: LOOK })
+  })
+
+  it("passes on the pointer's pick and hover, by row", () => {
+    const r = suggesting()
+    r.layer.report({ turn: 3, hover: 1 })
+    r.layer.report({ turn: 3, row: 1 })
+    expect(r.events).toEqual([
+      { turn: 3, hover: 1 },
+      { turn: 3, row: 1 }
+    ])
+  })
+
+  it('hands the keyboard straight back to the window when a press on the list takes it, and that blur is no close', () => {
+    const r = suggesting()
+    r.contents().emit('focus')
+    expect(r.window.webContents.focused).toBe(1)
+    // The layer losing the keys again is nothing to the suggestions.
+    r.contents().emit('blur')
+    r.layer.request({ blurred: { turn: 3 } })
+    expect(r.view().visible).toBe(true)
+    expect(r.events).toEqual([])
+
+    // The next blur is the bar's own: the keyboard went somewhere else.
+    r.layer.request({ blurred: { turn: 3 } })
+    expect(r.view().visible).toBe(false)
+    expect(r.events).toEqual([{ turn: 3, closed: 'blur' }])
+  })
+
+  it('keeps a press that came before new rows, and ignores a blur for a turn that is over', () => {
+    const r = suggesting()
+    r.contents().emit('focus')
+    r.layer.request({ open: { turn: 3, rect: RECT, content: { ...SUGGESTIONS, highlighted: 0 }, look: LOOK } })
+    r.layer.request({ blurred: { turn: 2 } })
+    r.layer.request({ blurred: { turn: 3 } })
+    expect(r.view().visible).toBe(true)
+  })
+
+  it('takes no blur report for a menu, which closes on its own blur', () => {
+    const r = rig()
+    r.layer.raise()
+    r.layer.request(open(1))
+    r.layer.request({ blurred: { turn: 1 } })
+    expect(r.view().visible).toBe(true)
+    r.contents().emit('focus')
+    expect(r.window.webContents.focused).toBe(0)
   })
 })

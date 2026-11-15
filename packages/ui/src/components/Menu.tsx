@@ -5,6 +5,13 @@ import { cn } from '../lib/cn'
 import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
 import { placePopup, usePopup, type PopupAnchor } from '../lib/popup'
 import { CheckIcon } from './icons'
+import type {
+  LayerMenu,
+  LayerMenuEntry,
+  LayerRect,
+  MenuLayerHandle,
+  MenuLayerPort
+} from '../lib/menuLayer'
 
 /**
  * A list that drops from a control or opens at the pointer: a choice of one
@@ -54,50 +61,6 @@ export type MenuEntry =
 
 /** Where the menu opens: at a point (a right-click), or under a control. */
 export type MenuAnchor = PopupAnchor
-
-/** A row the menu layer can draw: a `MenuEntry` with nothing that cannot cross a process. */
-export type LayerMenuEntry =
-  | Omit<Extract<MenuEntry, { kind: 'item' }>, 'icon'>
-  | Extract<MenuEntry, { kind: 'separator' | 'heading' }>
-
-/** A menu, as data the menu layer draws. */
-export interface LayerMenu {
-  kind: 'menu'
-  label: string
-  role: 'menu' | 'listbox'
-  stayOpen: boolean
-  entries: LayerMenuEntry[]
-}
-
-/** Why the menu layer closed: a key, a pick, or a click anywhere else. */
-export type LayerMenuClosed = 'escape' | 'blur' | 'pick'
-
-/** A rectangle in the window's CSS pixels. */
-export interface LayerRect {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-/** One menu open in the layer: new content or a new place for it, or gone. */
-export interface MenuLayerHandle {
-  update: (menu: LayerMenu, rect: LayerRect) => void
-  close: () => void
-}
-
-/**
- * Where a menu is drawn when it is not in the window: the browser's menu
- * layer, a view above the page (`main/menuLayer.ts`). The window keeps what
- * each row does; the layer says which row was picked, by its id.
- */
-export interface MenuLayerPort {
-  open: (
-    menu: LayerMenu,
-    rect: LayerRect,
-    on: { pick: (id: string) => void; closed: (why: LayerMenuClosed) => void }
-  ) => MenuLayerHandle
-}
 
 export interface MenuProps {
   /** The menu's accessible name. */

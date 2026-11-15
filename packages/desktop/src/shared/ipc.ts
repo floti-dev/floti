@@ -72,6 +72,7 @@ import type {
   SecretsState
 } from '@helm/core'
 import type {
+  BrowserSuggestion,
   BrowserSuggestions,
   HostAddOutcome,
   HostAddRequest,
@@ -717,7 +718,18 @@ export interface BrowserLayerMenu {
   entries: BrowserLayerMenuEntry[]
 }
 
-export type BrowserLayerContent = BrowserLayerMenu
+/**
+ * The address suggestions for the layer to draw: `BrowserSuggestions`' rows
+ * and the row the bar's keys or the pointer are on (-1 for none). The bar
+ * keeps the keyboard; the layer never takes it.
+ */
+export interface BrowserLayerSuggestions {
+  kind: 'suggestions'
+  rows: BrowserSuggestion[]
+  highlighted: number
+}
+
+export type BrowserLayerContent = BrowserLayerMenu | BrowserLayerSuggestions
 
 /**
  * The window's theme and shape as painted, for the layer to paint the same:
@@ -746,6 +758,12 @@ export interface BrowserLayerRect {
 export type BrowserLayerRequest =
   | { open: { turn: number; rect: BrowserLayerRect; content: BrowserLayerContent; look: BrowserLayerLook } }
   | { close: { turn: number } }
+  /**
+   * The address bar lost the keyboard while its suggestions were up. Main
+   * closes them (`closed: 'blur'`) unless the press that took the keyboard was
+   * on the list, which it has already handed back to the window.
+   */
+  | { blurred: { turn: number } }
 
 /** Why the layer closed of its own accord. A close the window asked for is not reported. */
 export type BrowserLayerClosed = 'escape' | 'blur' | 'pick'
@@ -753,6 +771,8 @@ export type BrowserLayerClosed = 'escape' | 'blur' | 'pick'
 /** Main to the window: what happened in the layer, on the turn it happened in. */
 export type BrowserLayerEvent =
   | { turn: number; pick: string }
+  | { turn: number; row: number }
+  | { turn: number; hover: number }
   | { turn: number; closed: BrowserLayerClosed }
 
 /**
@@ -770,6 +790,10 @@ export type BrowserLayerShow = {
 export type BrowserLayerReport =
   | { ready: true }
   | { turn: number; pick: string }
+  /** A suggestion picked with the pointer, by index. */
+  | { turn: number; row: number }
+  /** The pointer moved onto a suggestion. */
+  | { turn: number; hover: number }
   | { turn: number; closed: 'escape' | 'pick' }
 
 /**
