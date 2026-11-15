@@ -333,6 +333,36 @@ describe('browser host - the address being loaded', () => {
     expect(stateOf(h, id).pendingUrl).toBeNull()
   })
 
+  it("never moves the pending address to a redirect of a page's own navigation", () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/typed')
+    wc.redirect('http://evil.example/', { initiator: 'http://localhost:3000/' })
+    expect(stateOf(h, id).pendingUrl).toBe('http://localhost:3000/typed')
+  })
+
+  it("keeps the address being loaded while the old page moves within itself, and drops it when the load lands in-page", () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/')
+    h.host.navigate(id, 'http://localhost:4000/next')
+
+    // A router's pushState or a scroll-spy's hash on the page being left.
+    wc.navigateInPage('http://localhost:3000/#section-2')
+    expect(stateOf(h, id)).toMatchObject({ url: 'http://localhost:3000/#section-2', pendingUrl: 'http://localhost:4000/next' })
+
+    // A load that is itself an in-page move ends when it lands.
+    h.host.navigate(id, 'http://localhost:3000/#top')
+    wc.navigateInPage('http://localhost:3000/#top')
+    expect(stateOf(h, id).pendingUrl).toBeNull()
+  })
+
+  it('keeps the address being loaded when back or forward have nowhere to go', () => {
+    const h = workspace()
+    const { id } = openTab(h, 'http://localhost:3000/first')
+    expect(h.host.back(id)?.pendingUrl).toBe('http://localhost:3000/first')
+    expect(h.host.forward(id)?.pendingUrl).toBe('http://localhost:3000/first')
+  })
+
   it('leaves a load that failed with its address in the bar and nothing pending', () => {
     const h = workspace()
     const { id, wc } = openTab(h, 'http://nowhere.invalid/')

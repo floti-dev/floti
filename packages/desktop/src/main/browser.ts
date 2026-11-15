@@ -1216,11 +1216,13 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       entry.pending = null
       announce(entry)
     })
-    // A redirect of the pending load is where it is going now. A page's own
-    // navigation cleared the pending address when it started, so it never
-    // gets here.
+    // A redirect of the pending load is where it is going now. Only a
+    // browser-started navigation's redirect moves it: a page's own navigation
+    // cleared the pending address when it started, and its redirect is never
+    // a reason to put an address in the bar.
     wc.on('did-redirect-navigation', (details) => {
       if (entry.pending === null || !details.isMainFrame || details.isSameDocument) return
+      if (details.initiator != null) return
       entry.pending = details.url
       announce(entry)
     })
@@ -1260,7 +1262,10 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     })
     wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
       if (isMainFrame) {
-        entry.pending = null
+        // Only the pending navigation arriving (a hash on the same page) ends
+        // it. The old page's `pushState` or hash change - a router, a
+        // scroll-spy - while the new one loads is not that load committing.
+        if (entry.pending !== null && sameAddress(url, entry.pending)) entry.pending = null
         remember(entry, url)
       }
       announce(entry)
@@ -1816,18 +1821,24 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     back(id) {
       const entry = viewFor(id)
       if (entry === null) return null
-      entry.pending = null
       const wc = contentsOf(entry)
-      if (wc !== null && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack()
+      // Pending is replaced only when a navigation starts: with nowhere to go
+      // back to, the load in flight is still the one the bar shows.
+      if (wc !== null && wc.navigationHistory.canGoBack()) {
+        entry.pending = null
+        wc.navigationHistory.goBack()
+      }
       return announce(entry)
     },
 
     forward(id) {
       const entry = viewFor(id)
       if (entry === null) return null
-      entry.pending = null
       const wc = contentsOf(entry)
-      if (wc !== null && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward()
+      if (wc !== null && wc.navigationHistory.canGoForward()) {
+        entry.pending = null
+        wc.navigationHistory.goForward()
+      }
       return announce(entry)
     },
 

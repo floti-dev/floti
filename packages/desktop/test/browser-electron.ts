@@ -255,15 +255,25 @@ export class FakeWebContents extends EventEmitter {
     })
   }
 
-  /** The server answered the navigation in flight with a redirect to `url`. */
-  redirect(url: string): void {
+  /**
+   * The server answered the navigation in flight with a redirect to `url`.
+   * `initiator` is the frame that started that navigation, absent for one the
+   * browser started.
+   */
+  redirect(url: string, options: { initiator?: string } = {}): void {
     this.emit('did-redirect-navigation', {
       ...electronEvent(),
       url,
       isMainFrame: true,
       isSameDocument: false,
-      initiator: undefined
+      initiator: options.initiator === undefined ? undefined : { url: options.initiator }
     })
+  }
+
+  /** The page moved within itself - `pushState`, a hash change: `did-navigate-in-page`. */
+  navigateInPage(url: string): void {
+    this.url = url
+    this.emit('did-navigate-in-page', electronEvent(), url, true)
   }
 
   /**
