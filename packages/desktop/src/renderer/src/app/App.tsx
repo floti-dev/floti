@@ -355,7 +355,7 @@ import {
   type FamilyScope,
 } from "./hostTabs";
 import { familyCapacity, useFamilyRoomOf } from "./familyRooms";
-import { removeKept, stopChild } from "./familyActions";
+import { stopChild } from "./familyActions";
 import { FamilyTab, type FamilyKid } from "./FamilyTab";
 import { useUpdate } from "./useUpdate";
 import { useOwnDataCopy } from "./useOwnDataCopy";
@@ -3438,6 +3438,12 @@ export function App(): JSX.Element {
   );
 
   const visibleIds = new Set(visible.map(paneId));
+  /**
+   * The sessions on `host` whose tab is in front on screen: one that ended
+   * keeps its row in the tree while it is, so the end is seen.
+   */
+  const onScreenOn = (host: string): Set<number> =>
+    new Set(visible.flatMap((ref) => (isSessionOn(ref, host) ? [ref.id] : [])));
   // What a row press reads of the panes: which children peek rather than bring a place forward.
   const peekScope = {
     layout: open,
@@ -3482,15 +3488,20 @@ export function App(): JSX.Element {
           id === frontId ? "focused" : visibleIds.has(id) ? "visible" : null,
         notice: limitNotices.get(LOCAL_HOST_KEY)?.get(session.id),
         peeks: peeksOnPress(LOCAL_HOST_KEY, sessions, session.id, peekScope),
-        ...(session.kept === true ? { kept: true } : {}),
         ...agentRow(session),
         ...commandRow(session),
       };
     };
 
     // A child is drawn under its parent whatever folder it runs in; every
-    // other session is listed under the folder it runs in.
-    for (const { session, row } of treeEntries(sessions, rowOf)) {
+    // other session is listed under the folder it runs in. One that ended is
+    // listed while its tab is in front on screen, and a lost one stays as the
+    // restore offer (`inSessionTree`).
+    for (const { session, row } of treeEntries(
+      sessions,
+      rowOf,
+      onScreenOn(LOCAL_HOST_KEY),
+    )) {
       const key = (session.projectPath ?? session.cwd).toLowerCase();
       if (known.has(key)) add(key, row);
       else
@@ -3526,7 +3537,8 @@ export function App(): JSX.Element {
    * Each host on another computer, under its name after this PC: its folders
    * as its own scan found them, and its sessions under the folder each runs
    * in. One running there is listed whether or not it has a tab here; one that
-   * ended is listed while its tab is.
+   * exited is listed while its tab is in front on screen here, and one lost is
+   * listed while it has a tab here or its parent runs.
    */
   const treeHosts: TreeHost[] = listedHosts.map((host) => {
     const work = hostWork.byHost.get(host.id);
@@ -3538,10 +3550,9 @@ export function App(): JSX.Element {
       ),
     );
     const tabbed = sessionTabIds(open, host.id);
-    // Listed: running, or ended with a tab here, or ended and a child of one
-    // that runs. Of the ended children, only a kept one is drawn
-    // (`inFamilyTree`), and it stays under its parent after its family view
-    // has closed it. A child whose parent is not among them stands on its own,
+    // Listed: running, or exited while its tab is in front on screen here
+    // (`inSessionTree`, in `treeEntries`), or lost with a tab here or a parent
+    // that runs. A child whose parent is not among them stands on its own,
     // naming the parent.
     const hosted = work?.sessions ?? [];
     const running = new Set(
@@ -3551,7 +3562,7 @@ export function App(): JSX.Element {
     );
     const listed = hosted.filter(
       (session) =>
-        (session.status === "running" ||
+        (session.status !== "lost" ||
           tabbed.has(session.id) ||
           (isChild(session) && running.has(session.parentId as number))) &&
         sessionAt({ id: session.id, host: host.id }) !== null,
@@ -3570,12 +3581,15 @@ export function App(): JSX.Element {
           id === frontId ? "focused" : visibleIds.has(id) ? "visible" : null,
         notice: limitNotices.get(host.id)?.get(session.id),
         peeks: peeksOnPress(host.id, hosted, session.id, peekScope),
-        ...(session.kept === true ? { kept: true } : {}),
         ...agentRow(session),
         ...commandRow(session),
       };
     };
-    for (const { session, row } of treeEntries(listed, rowOf)) {
+    for (const { session, row } of treeEntries(
+      listed,
+      rowOf,
+      onScreenOn(host.id),
+    )) {
       const key = (session.projectPath ?? session.cwd).toLowerCase();
       if (known.has(key)) {
         const rows = byPath.get(key);
@@ -3893,23 +3907,6 @@ export function App(): JSX.Element {
     [showChild, openSessions],
   );
 
-  /**
-   * Remove on a kept child's row, and Remove stopped children on its
-   * parent's, on `host`: the rows named, by their tree ids, as the host's
-   * sessions. The host stops keeping them, and every device's tree follows.
-   */
-  const removeTreeSessions = (host: string, rowIds: readonly string[]): void => {
-    const named = new Set(rowIds);
-    const there =
-      host === LOCAL_HOST_KEY
-        ? sessions
-        : (hostWork.byHost.get(host)?.sessions ?? []);
-    const ids = there
-      .filter((each) => named.has(paneId(sessionRef(each.id, host))))
-      .map((each) => each.id);
-    void removeKept(host, ids);
-  };
-
   /** A host's older floti or floti too old, pressed in the tree or the Sessions page: its yes-first update, in Settings > Hosts. */
   const updateFlotiOn = (id: string): void => {
     openSettings("hosts");
@@ -3951,7 +3948,6 @@ export function App(): JSX.Element {
     onRelist: (host: string) => hostWork.relist(host),
     onAddHost: () => setAddingHost(true),
     onUpdateFloti: (host: string) => updateFlotiOn(host),
-    onRemoveSessions: removeTreeSessions,
   };
 
   /** Helm's live sessions by what they are doing, for the status bar. */
@@ -6126,7 +6122,6 @@ export function App(): JSX.Element {
             onLaunch={(project) => void launch(project)}
             launchingPath={launchingPath}
             onOpenSession={openTreeSession}
-            onRemoveSessions={(ids) => removeTreeSessions(LOCAL_HOST_KEY, ids)}
             onAddRoot={launcher.addRoot}
             reveal={treeReveal}
             hostActions={treeHostActions}

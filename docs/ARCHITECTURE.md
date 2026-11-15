@@ -83,9 +83,13 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   screen, dimmed with input off, and Floti starts a new host if a desktop
   started the one that died, then reconnects. The new host's list decides
   each: a session or shell it still runs is carried again from its redraw, and
-  nothing is resumed. One it lists lost, or that is lost while it stays (its
-  keeper died), comes back through the host's restore offer, which the window
-  asks for again then; a lost shell, as a new shell in its folder.
+  nothing is resumed. A session the window held running that the list no
+  longer names is asked after (`session:endings`, protocol 4.1), and told as
+  its row says it ended: exited or stopped meanwhile, or lost. A host before
+  4.1 cannot say, and such a session reads as lost. One lost, or that is lost
+  while it stays (its keeper died), comes back through the host's restore
+  offer, which the window asks for again then; a lost shell, as a new shell in
+  its folder.
 - The host stops on the OS's stop requests (`StopSignals`,
   `crates/host/src/platform/startup`). Ctrl+C, and on macOS and Linux SIGTERM
   and SIGHUP, are a plain stop, which records every session as stopped by
@@ -188,17 +192,22 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   started to outlive it; its button counts what it ends (End 4 sessions).
   Close tab, keep running in the tab's menu ends nothing, and puts a child
   back in its parent's family view.
-- A child that has exited is drawn in the Sessions tree and its parent's
-  family view only while it is kept and its parent runs (`inFamilyTree` in
-  `core/layout/family.ts`): its parent stopped it with `keep`, or a person
-  stopped it. Any other ended child (one that exited by itself, one its parent
-  stopped without `keep`, one that ended with its parent) leaves both at once,
-  stays in History and is still its parent's to resume, and its parent still
-  hears how it ended. When a parent ends, its kept children leave with it, and
-  a running child started to outlive it stays as a top-level row naming it. A
-  kept child's row has Remove and its parent's row has Remove stopped
-  children, which ask nothing and send `session:remove`: the host clears
-  `kept` and every device's tree follows.
+- A session that has exited, by itself or stopped, has no row in the
+  Sessions tree on any device, a kept child and a command child included
+  (`inSessionTree` in `core/layout/family.ts`). One whose tab is in front of a
+  pane on screen when it ends keeps its row until the user moves away from it,
+  so the end is seen; its tab stays until it is closed. A lost session (its
+  host died or restarted under it) keeps its row as the restore offer. Every
+  ended session is still in History, and a kept child is still its parent's to
+  resume by name, which gives it a row again. Each device applies the rule to
+  the host's rows, because which tab is in front is the device's own.
+- A child that has exited is drawn in its parent's family view only while it
+  is kept and its parent runs (`inFamilyTree`): its parent stopped it with
+  `keep`, or a person stopped it. Any other ended child (one that exited by
+  itself, one its parent stopped without `keep`, one that ended with its
+  parent) leaves it at once, and its parent still hears how it ended. When a
+  parent ends, its kept children leave with it, and a running child started
+  to outlive it stays as a top-level row naming it.
 
 ## Live sessions
 

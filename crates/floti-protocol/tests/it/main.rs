@@ -24,5 +24,6 @@ mod minor_2_3;
 mod minor_4_1;
 mod noise;
 mod previous_minor;
+mod session_endings;
 mod version_negotiation;
 mod version_record;

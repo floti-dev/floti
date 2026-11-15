@@ -39,7 +39,7 @@ use ts_rs::TS;
 
 use crate::backend::{BackendId, WorkspacePart};
 use crate::channel::Catalogue;
-use crate::channels::common::{PermissionMode, SessionRecord};
+use crate::channels::common::{EndedBy, PermissionMode, SessionRecord, SessionStatus};
 
 mod history;
 mod notices;
@@ -71,6 +71,7 @@ pub fn declare(catalogue: &mut Catalogue) {
         .request::<SessionRestore>()
         .request::<SessionClose>()
         .request::<SessionList>()
+        .request::<SessionEndings>()
         .request::<SessionRename>()
         .request::<SessionRemove>()
         .request::<SessionResize>()
@@ -131,9 +132,19 @@ request_channel! {
 
 request_channel! {
     /// The sessions the host is running now, then each stopped child a
-    /// running parent kept (`kept`), which every client draws under its
-    /// parent.
+    /// running parent kept (`kept`), which every client's family view of the
+    /// parent draws.
     SessionList = "session:list", () => Vec<SessionRecord>
+}
+
+request_channel! {
+    /// How each session named ended, from the host's records: a client that
+    /// held sessions running while it could not reach the host asks this for
+    /// those `session:list` no longer names, and tells an exit or a stop from
+    /// a session lost with the host that ran it. A session still running
+    /// reads `running`; one the host holds no row for is left out. Status
+    /// fields only. Added in 4.1.
+    SessionEndings = "session:endings", SessionEndingsRequest => Vec<SessionEnding>
 }
 
 request_channel! {
@@ -142,9 +153,9 @@ request_channel! {
 }
 
 request_channel! {
-    /// A person's Remove on stopped children their parents kept: each named
+    /// Stops keeping stopped children their parents kept: each named
     /// session that is a kept child stops being kept, so it leaves every
-    /// client's Sessions tree and family view. It ends nothing and deletes
+    /// client's family view. It ends nothing and deletes
     /// nothing: the child stays in History, and its parent can still resume
     /// it. A session named that is not a kept child is left as it is.
     /// Answers how many it took out. Added in 2.2.
@@ -543,6 +554,55 @@ pub struct RenameSessionRequest {
     #[ts(type = "number")]
     pub id: u64,
     pub label: Option<String>,
+}
+
+/// The sessions a client asks how they ended, by row id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionEndingsRequest {
+    #[ts(type = "number[]")]
+    pub ids: Vec<u64>,
+}
+
+/// How one session ended, as its row holds it: the status fields of its
+/// [`SessionRecord`] and nothing else.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionEnding {
+    #[ts(type = "number")]
+    pub id: u64,
+    /// `exited` for a session that exited or was stopped, `lost` for one that
+    /// was running when the host that ran it went away, `running` for one
+    /// that still runs.
+    pub status: SessionStatus,
+    /// ISO 8601, or null while running and for a lost session.
+    pub ended_at: Option<String>,
+    #[ts(type = "number | null")]
+    pub duration_ms: Option<u64>,
+    /// As [`SessionRecord::exit_code`].
+    pub exit_code: Option<i32>,
+    /// Whether the host ended it itself, as [`SessionRecord::stopped`].
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub stopped: bool,
+    /// Who ended it, as [`SessionRecord::ended_by`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ended_by: Option<EndedBy>,
+}
+
+impl From<&SessionRecord> for SessionEnding {
+    fn from(record: &SessionRecord) -> Self {
+        Self {
+            id: record.id,
+            status: record.status,
+            ended_at: record.ended_at.clone(),
+            duration_ms: record.duration_ms,
+            exit_code: record.exit_code,
+            stopped: record.stopped,
+            ended_by: record.ended_by,
+        }
+    }
 }
 
 /// The stopped children a person removes, by row id.

@@ -48,3 +48,12 @@ jobs:
         run: >-
           pnpm exec vitest run
           packages/desktop/src/renderer/src/app/host/sessions.test.ts
+          packages/desktop/src/renderer/src/app/treeFamilies.test.ts
+          packages/desktop/src/renderer/src/app/familyActions.test.ts
+          packages/desktop/src/shared/host/records/index.test.ts
+          packages/core/src/layout/family.test.ts
+          packages/core/src/layout/familyView.test.ts
+          packages/core/src/layout/childPlace.test.ts
+          packages/ui/src/components/SessionTree.family.test.tsx
+          packages/ui/src/components/SessionTree.status.test.tsx
+          packages/ui/src/components/SessionTree.hosts.test.tsx

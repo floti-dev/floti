@@ -30,7 +30,7 @@ use floti_protocol::channels::sessions::{
     AlreadyRunning, CloseSessionRequest, HistorySession, LaunchProfileRequest,
     LaunchSessionRequest, LaunchedProfile, LaunchedSession, Profile, PtermOpenRequest, PtermOpened,
     RenameSessionRequest, RestorableSession, RestoreOffer, RestoreSessionsRequest,
-    RestoreSessionsResult, RestoredSession, ResumeSessionRequest, ResumedSession,
+    RestoreSessionsResult, RestoredSession, ResumeSessionRequest, ResumedSession, SessionEnding,
     SessionResizeRequest, SessionToRestore, StartSessionRequest, UnrestoredSession,
 };
 use floti_protocol::noise::PublicKey;
@@ -536,6 +536,16 @@ impl Hosted {
             .iter()
             .chain(&kept)
             .map(|id| self.record(*id).map_err(|err| err.to_string()))
+            .collect()
+    }
+
+    /// How each session in `ids` ended, from its row: exited (by itself or
+    /// stopped), lost with the host that ran it, or still running. A session
+    /// with no row here is left out, and so is one whose row cannot be read.
+    pub fn endings(&self, ids: &[u64]) -> Vec<SessionEnding> {
+        ids.iter()
+            .filter_map(|id| records::read_record(&self.ledger.store(), SessionId(*id)).ok())
+            .map(|record| SessionEnding::from(&record))
             .collect()
     }
 

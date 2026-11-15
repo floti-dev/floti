@@ -33,6 +33,7 @@ const DECLARED: &[(&str, ChannelKind, Option<Capability>)] = &[
     ("session:restore", REQUEST, None),
     ("session:close", REQUEST, None),
     ("session:list", REQUEST, None),
+    ("session:endings", REQUEST, None),
     ("session:rename", REQUEST, None),
     ("session:remove", REQUEST, None),
     ("session:resize", REQUEST, Some(Capability::Terminal)),
@@ -565,6 +566,30 @@ fn session_requests_and_answers_round_trip_over_cbor() {
         CloseSessionResult { closed: false },
     );
     exchange::<SessionList>((), vec![record(1), command_child(2)]);
+    exchange::<SessionEndings>(
+        SessionEndingsRequest { ids: vec![1, 12, 14] },
+        vec![
+            SessionEnding::from(&record(12)),
+            SessionEnding {
+                id: 14,
+                status: SessionStatus::Lost,
+                ended_at: None,
+                duration_ms: None,
+                exit_code: None,
+                stopped: false,
+                ended_by: None,
+            },
+            SessionEnding {
+                id: 1,
+                status: SessionStatus::Exited,
+                ended_at: Some("2026-10-27T11:00:00Z".into()),
+                duration_ms: Some(10),
+                exit_code: Some(0),
+                stopped: true,
+                ended_by: Some(EndedBy::Parent),
+            },
+        ],
+    );
     exchange::<SessionRename>(
         RenameSessionRequest {
             id: 12,

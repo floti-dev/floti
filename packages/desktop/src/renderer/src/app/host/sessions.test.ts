@@ -587,19 +587,6 @@ describe('sessions over the window’s own connection', () => {
     expect(removed).not.toHaveProperty('kept')
   })
 
-  it('asks the host to remove the children named and stops keeping them here at once', async () => {
-    const connection = new FakeConnection()
-    const stopped = { id: 12, name: 'mapper', parentId: 7, parentName: 'app', status: 'exited' as const, kept: true }
-    const { adapters } = world({ connection, listed: [row({ id: 7, name: 'app' }), row(stopped)] })
-    await ask(adapters, 'session:list')
-    connection.answer('session:remove', () => ({ removed: 1 }))
-
-    await expect(ask(adapters, 'session:remove', { ids: [12, 99] })).resolves.toEqual({ removed: 1 })
-
-    expect(connection.payloads('session:remove')).toEqual([{ ids: [12, 99] }])
-    expect((await ask(adapters, 'session:list')).find((each) => each.id === 12)).not.toHaveProperty('kept')
-  })
-
   it('opens a session it had no tab for on a new stream that starts with its screen, and lets it go again when its tab closes and it keeps running', async () => {
     const { adapters, connection } = world({ listed: [row(), row({ id: 9, name: 'api' })] })
     const data = hear(adapters, 'session:data')

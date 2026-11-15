@@ -231,10 +231,11 @@ until the user updates the rule.
   stop and keeps nothing; false for every other end, and never for a session
   with no parent. `session:list` gives the running sessions, then each kept
   child of a running parent, with protocol 2.2's optional `kept` (set only on
-  a child that has exited). Resuming a kept child clears it on every earlier
-  row of its name, and `session:remove` clears it on the rows it names that
-  are kept children and passes over any other; each clear moves the activity
-  publication, so every client lists again.
+  a child that has exited), which the parent's family view reads; the Sessions
+  tree draws no exited session. Resuming a kept child clears it on every
+  earlier row of its name, and `session:remove` clears it on the rows it names
+  that are kept children and passes over any other; each clear moves the
+  activity publication, so every client lists again.
 
 ### Sending to a child
 
