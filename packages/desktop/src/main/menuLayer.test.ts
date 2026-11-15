@@ -79,6 +79,9 @@ function rigContents(view: FakeWebContentsView | null): FakeWebContents {
   return contents
 }
 
+/** After the callbacks already queued for the loop's next turn (`setImmediate`) have run. */
+const nextTurn = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+
 const open = (turn: number, rect = RECT, content: BrowserLayerMenu = MENU): BrowserLayerRequest => ({
   open: { turn, rect, content, look: LOOK }
 })
@@ -353,38 +356,49 @@ describe('the menu layer - the address suggestions', () => {
     ])
   })
 
-  it('hands the keyboard straight back to the window when a press on the list takes it, and that blur is no close', () => {
+  it('hands the keyboard straight back to the window when a press on the list takes it, and that blur is no close', async () => {
     const r = suggesting()
     r.contents().emit('focus')
-    expect(r.window.webContents.focused).toBe(1)
+    // On the next turn of the loop, once Chromium has placed the press's focus.
+    expect(r.window.webContents.focused).toBe(0)
+    await nextTurn()
     // The layer losing the keys again is nothing to the suggestions.
     r.contents().emit('blur')
+    // The bar's blur is reported before the window has the keyboard again.
+    r.window.webContents.hasFocus = false
+    r.layer.request({ blurred: { turn: 3 } })
+    expect(r.view().visible).toBe(true)
+    // Then it has, and a blur reported now is answered by where the keyboard is.
+    r.window.webContents.hasFocus = true
+    r.window.webContents.emit('focus')
     r.layer.request({ blurred: { turn: 3 } })
     expect(r.view().visible).toBe(true)
     expect(r.events).toEqual([])
 
-    // The next blur is the bar's own: the keyboard went somewhere else.
+    // The keyboard went to the page.
+    r.window.webContents.hasFocus = false
+    r.layer.request({ blurred: { turn: 3 } })
+    expect(r.events).toEqual([{ turn: 3, closed: 'blur' }])
+  })
+
+  it('closes them when the bar loses the keyboard to anything but the list, and ignores a blur for a turn that is over', () => {
+    const r = suggesting()
+    r.window.webContents.hasFocus = false
+    r.layer.request({ blurred: { turn: 2 } })
+    expect(r.view().visible).toBe(true)
     r.layer.request({ blurred: { turn: 3 } })
     expect(r.view().visible).toBe(false)
     expect(r.events).toEqual([{ turn: 3, closed: 'blur' }])
   })
 
-  it('keeps a press that came before new rows, and ignores a blur for a turn that is over', () => {
-    const r = suggesting()
-    r.contents().emit('focus')
-    r.layer.request({ open: { turn: 3, rect: RECT, content: { ...SUGGESTIONS, highlighted: 0 }, look: LOOK } })
-    r.layer.request({ blurred: { turn: 2 } })
-    r.layer.request({ blurred: { turn: 3 } })
-    expect(r.view().visible).toBe(true)
-  })
-
-  it('takes no blur report for a menu, which closes on its own blur', () => {
+  it('takes no blur report for a menu, which closes on its own blur', async () => {
     const r = rig()
     r.layer.raise()
     r.layer.request(open(1))
     r.layer.request({ blurred: { turn: 1 } })
     expect(r.view().visible).toBe(true)
     r.contents().emit('focus')
+    await nextTurn()
     expect(r.window.webContents.focused).toBe(0)
   })
 })

@@ -37,8 +37,8 @@ import { TITLEBAR_HEIGHT } from './chrome'
  * **The suggestions** are drawn the same way but never hold the keyboard:
  * the address bar keeps it and sends each change, and the layer reports the
  * row the pointer picks or is on. A press on the list hands the keyboard
- * straight back (see the `focus` listener), and the bar's blur closes the list
- * only when the keyboard went anywhere else (`blurred`).
+ * straight back (see the `focus` listener), and a blur the bar reports closes
+ * the list only when the keyboard is not back in the window (`blurred`).
  *
  * **Closing.** A pick or Escape in a menu closes it from the layer; a click
  * anywhere else - the page or the window's chrome - takes the keyboard from
@@ -106,6 +106,11 @@ interface Layer {
   view: WebContentsView
   /** Whether the page has said it is listening. Until then what it should draw waits here. */
   ready: boolean
+  /**
+   * A press on the suggestions took the keyboard and it is on its way back
+   * to the window: from the layer's `focus` until the window's.
+   */
+  handingBack: boolean
 }
 
 interface Open {
@@ -113,12 +118,6 @@ interface Open {
   content: BrowserLayerContent
   look: BrowserLayerLook
   zoom: number
-  /**
-   * Suggestions only: a press on the list took the keyboard from the bar,
-   * and it was handed straight back. The blur the bar then reports is that
-   * press's, not a close.
-   */
-  pressed: boolean
 }
 
 export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
@@ -160,7 +159,7 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
     // Clear where the menu does not draw: the corners of its rounded edge.
     view.setBackgroundColor('#00000000')
     view.setVisible(false)
-    const made: Layer = { win, view, ready: false }
+    const made: Layer = { win, view, ready: false, handingBack: false }
     const contents = view.webContents
     // A click anywhere else takes the keyboard from a menu, and closes it.
     contents.on('blur', () => {
@@ -169,15 +168,24 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
     /*
      * The suggestions never hold the keyboard: the bar does. A press on the
      * list still gives the layer focus (Chromium focuses the view a press
-     * lands in), so it goes straight back to the window, whose bar takes it
-     * back, and the bar's blur that press caused is not a close (`blurred`).
-     * Measured on 43.3.0: the layer's `focus` arrives here before the
-     * window's report of the bar's blur, and before the press's own pick.
+     * lands in), so it goes straight back to the window. Measured on 43.3.0
+     * in the dev app, all within 4ms: the window's `blur`, the layer's
+     * `focus`, the bar's blur, the window's `focus`, the bar's focus, and the
+     * press's pick after. The bar reports its blur (`blurred`) before the
+     * window has the keyboard again, so a blur that arrives while it is on
+     * its way back is that press's, and keeps the list.
      */
     contents.on('focus', () => {
       if (layer !== made || open?.content.kind !== 'suggestions') return
-      open.pressed = true
-      win.webContents.focus()
+      made.handingBack = true
+      // Not inside this event: Chromium is still placing the press's focus,
+      // and a focus asked for here was measured to be lost about half the time.
+      setImmediate(() => {
+        if (!win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.focus()
+      })
+    })
+    win.webContents.on('focus', () => {
+      made.handingBack = false
     })
     // A page that loads again (a reload in development) or dies is not listening.
     contents.on('did-start-navigation', (details: { isMainFrame: boolean; isSameDocument: boolean }) => {
@@ -217,8 +225,9 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
       }
       if ('blurred' in payload) {
         if (open?.turn !== payload.blurred.turn || open.content.kind !== 'suggestions') return
-        if (open.pressed) open.pressed = false
-        else closed('blur')
+        // A press on the list, the keyboard on its way back or back already.
+        // Anywhere else closes the list.
+        if (!alive(layer) || (!layer.handingBack && !layer.win.webContents.isFocused())) closed('blur')
         return
       }
       const current = ensure()
@@ -233,7 +242,7 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
         return
       }
       const fresh = open?.turn !== turn
-      open = { turn, content, look, zoom, pressed: !fresh && open !== null && open.pressed }
+      open = { turn, content, look, zoom }
       // The page draws at the window's scale, so the menu is the size the window measured.
       view.webContents.setZoomFactor(zoom)
       show()

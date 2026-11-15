@@ -187,6 +187,7 @@ describe('Menu in the menu layer', () => {
   it('closes when a click elsewhere takes the keys from the layer', () => {
     const { opened, onDismiss, setOpen } = renderBar()
     setOpen(true)
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false)
     act(() => opened[0]!.on.closed('blur'))
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
@@ -199,6 +200,35 @@ describe('Menu in the menu layer', () => {
     act(() => opened[0]!.on.closed('blur'))
     fireEvent.pointerUp(more)
     expect(onDismiss).not.toHaveBeenCalled()
+  })
+
+  it('waits for the press when the blur reaches the window first, and leaves a press on its control to its click', () => {
+    const { opened, onDismiss, setOpen } = renderBar()
+    setOpen(true)
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+    act(() => opened[0]!.on.closed('blur'))
+    expect(onDismiss).not.toHaveBeenCalled()
+    const more = screen.getByRole('button', { name: 'More' })
+    fireEvent.pointerDown(more)
+    fireEvent.pointerUp(more)
+    expect(onDismiss).not.toHaveBeenCalled()
+  })
+
+  it('closes when the press the blur waited for is anywhere else', () => {
+    const { opened, onDismiss, setOpen } = renderBar()
+    setOpen(true)
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+    act(() => opened[0]!.on.closed('blur'))
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Elsewhere' }))
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes at once on a blur that took the keyboard out of the window, to the page or another program', () => {
+    const { opened, onDismiss, setOpen } = renderBar()
+    setOpen(true)
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+    act(() => opened[0]!.on.closed('blur'))
+    expect(onDismiss).toHaveBeenCalledTimes(1)
   })
 
   it('closes after all when that press is let go somewhere else, since no click is coming', () => {

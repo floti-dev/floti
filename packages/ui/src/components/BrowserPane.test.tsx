@@ -68,6 +68,8 @@ beforeEach(() => {
   space = { x: 16, y: 120, width: 1200, height: 600 }
   resized = []
   layer = fakeMenuLayer()
+  // The window holds the keyboard unless a test says it went elsewhere.
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
     const max = Number.parseFloat(this.style.maxWidth)
     const width = Number.isFinite(max) ? Math.min(space.width, max) : space.width
@@ -381,12 +383,13 @@ describe('BrowserPane - the address bar', () => {
     expect(layer.suggestions).toBeNull()
   })
 
-  it('keeps the list and the pick when a press on it takes the keyboard from the bar for a moment', async () => {
+  it('keeps the list and the pick when a press on it takes the keyboard from the window for a moment', async () => {
     const user = userEvent.setup()
     const props = renderPane()
     await user.click(address())
     await screen.findByRole('listbox')
-    // The press lands in the layer: the bar blurs, and main says it was the list's.
+    // The press lands in the layer: the window loses the keyboard, and main hands it straight back.
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false)
     act(() => {
       layer.suggestions!.press()
       fireEvent.blur(address())
@@ -397,12 +400,26 @@ describe('BrowserPane - the address bar', () => {
     expect(props.onNavigate).toHaveBeenCalledWith('https://example.com/docs')
   })
 
-  it('closes the list when the bar loses the keyboard anywhere else', async () => {
+  it('closes the list when the window loses the keyboard to anything else, as the layer judges', async () => {
     const user = userEvent.setup()
     renderPane()
     await user.click(address())
     await screen.findByRole('listbox')
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false)
     act(() => address().blur())
+    expect(layer.blurs).toBe(1)
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(layer.suggestions).toBeNull()
+  })
+
+  it('closes the list itself when focus moves within the window, asking the layer nothing', async () => {
+    const user = userEvent.setup()
+    renderPane()
+    await user.click(address())
+    await screen.findByRole('listbox')
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+    await user.click(screen.getByRole('button', { name: 'Find in page' }))
+    expect(layer.blurs).toBe(0)
     expect(screen.queryByRole('listbox')).toBeNull()
     expect(layer.suggestions).toBeNull()
   })

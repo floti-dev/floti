@@ -635,11 +635,13 @@ export function BrowserPane({
             onClick={() => setSuggesting(true)}
             // Not after a delay: a delayed close outlived the blur Enter makes:
             // back in the bar within it, the list opened, then shut under the
-            // click. With the list up, the menu layer decides: a press on the
-            // list takes the keyboard for a moment and hands it straight back,
-            // and that blur is no close; any other closes it (`onClosed`).
+            // click. Focus moving within the window closes the list here. The
+            // window losing the keyboard while the list is up is the menu
+            // layer's to judge: a press on the list takes it for a moment and
+            // hands it straight back, which is no close; anywhere else closes
+            // it (`onClosed`).
             onBlur={() => {
-              if (suggestionsLayer.current !== null) suggestionsLayer.current.blurred()
+              if (suggestionsLayer.current !== null && !document.hasFocus()) suggestionsLayer.current.blurred()
               else closeSuggestions()
             }}
             onKeyDown={(event) => {

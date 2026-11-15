@@ -16,8 +16,9 @@ import type {
  * A menu is drawn as the layer page draws it (`MenuList`, taking the keys),
  * in a container of its own, so a test finds and clicks it by role as a person
  * would; a pick, Escape or a press anywhere else closes it as main does. The
- * blur a press elsewhere causes reaches the window after that press, as it
- * does from main, so it is delivered once the press's own listeners have run.
+ * blur a press elsewhere causes reaches the window before that press does, as
+ * measured from main in the dev app, so it is delivered ahead of the press's
+ * own listeners.
  *
  * The suggestions are not drawn here - the window keeps its own copy of the
  * list for assistive technology, which a test reads - but what the window
@@ -35,12 +36,12 @@ export interface FakeMenuLayer extends MenuLayerPort {
     /** The layer reports the pointer picking a row. */
     pick: (index: number) => void
     hover: (index: number) => void
-    /** A press on the list: the keyboard leaves the bar and comes straight back, and the list stays. */
+    /** A press on the list: main hands the keyboard straight back to the window. */
     press: () => void
   } | null
   /** How many times the suggestions were opened. */
   readonly suggestionsOpened: number
-  /** How many times the bar said it lost the keyboard while the suggestions were up. */
+  /** How many times the bar said the window lost the keyboard while the suggestions were up. */
   readonly blurs: number
 }
 
@@ -98,11 +99,11 @@ export function fakeMenuLayer(): FakeMenuLayer {
             className={MENU_FRAME}
           />
         )
-      // A press anywhere but the layer takes the keyboard from it: its blur
-      // arrives once that press has been handled.
+      // A press anywhere but the layer takes the keyboard from it, and its
+      // blur arrives first.
       const elsewhere = (event: PointerEvent): void => {
         if (event.target instanceof Node && container.contains(event.target)) return
-        queueMicrotask(() => closed('blur'))
+        closed('blur')
       }
       document.addEventListener('pointerdown', elsewhere, true)
       draw()
@@ -118,7 +119,8 @@ export function fakeMenuLayer(): FakeMenuLayer {
     },
 
     openSuggestions(content, rect, on) {
-      let pressed = false
+      // Where main finds the keyboard when the bar reports a blur: back in the window only after a press on the list.
+      let backInWindow = false
       const state = {
         content,
         rect,
@@ -126,7 +128,7 @@ export function fakeMenuLayer(): FakeMenuLayer {
         pick: (index: number) => on.pick(index),
         hover: (index: number) => on.hover(index),
         press: () => {
-          pressed = true
+          backInWindow = true
         }
       }
       suggestions = state
@@ -142,10 +144,7 @@ export function fakeMenuLayer(): FakeMenuLayer {
         blurred: () => {
           if (!open()) return
           blurs += 1
-          if (pressed) {
-            pressed = false
-            return
-          }
+          if (backInWindow) return
           suggestions = null
           on.closed('blur')
         },

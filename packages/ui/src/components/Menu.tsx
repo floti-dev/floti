@@ -180,7 +180,9 @@ export function layerEntries(entries: readonly MenuEntry[]): LayerMenuEntry[] {
  * panes move: a menu left floating over a layout that moved points at nothing.
  * Not when the window loses focus - the layer taking the keys is exactly that.
  * A click on the control that opened it blurs the layer too, and that control's
- * own click is what closes the menu, so that blur is not a dismissal.
+ * own click is what closes the menu, so that blur is not a dismissal. The blur
+ * reaches the window before the press that caused it, so a blur that leaves
+ * the window holding the keyboard waits for that press to say where it was.
  */
 function LayeredMenu({
   label,
@@ -206,8 +208,13 @@ function LayeredMenu({
   })
   useFocusReturns()
 
-  /** Whether a press on the opening control is under way, and whether the layer blurred during it. */
-  const press = useRef({ down: false, blurred: false })
+  /**
+   * The press in the window that took the keyboard from the layer: whether
+   * one on the opening control is under way, whether the layer blurred during
+   * it, and whether a blur came first and the press it is for has not yet
+   * reached the window (`awaiting`).
+   */
+  const press = useRef({ down: false, blurred: false, awaiting: false })
 
   /** The rectangle the layer draws the menu in, measured from the hidden copy. */
   const measure = (): LayerRect | null => {
@@ -225,9 +232,18 @@ function LayeredMenu({
     const opened = layer.open(latest.current.menu, rect, {
       pick: (id) => latest.current.onSelect(id),
       closed: (why) => {
-        if (why === 'blur' && press.current.down) {
-          press.current.blurred = true
-          return
+        if (why === 'blur') {
+          if (press.current.down) {
+            press.current.blurred = true
+            return
+          }
+          // The keyboard came to the window: a press in it took it, and that
+          // press arrives after the blur it caused (measured in the dev app:
+          // 2ms after). Whether it is on the opening control decides.
+          if (document.hasFocus()) {
+            press.current.awaiting = true
+            return
+          }
         }
         latest.current.onDismiss()
       }
@@ -267,27 +283,36 @@ function LayeredMenu({
 
   useEffect(() => {
     const away = (): void => latest.current.onDismiss()
+    const onAnchor = (event: Event): boolean =>
+      event.target instanceof Node && anchorRef?.current?.contains(event.target) === true
     const down = (event: PointerEvent): void => {
-      const onAnchor = event.target instanceof Node && anchorRef?.current?.contains(event.target) === true
-      press.current = { down: onAnchor, blurred: false }
+      const { awaiting } = press.current
+      press.current = { down: onAnchor(event), blurred: awaiting, awaiting: false }
+      // The press the blur was waiting for, somewhere other than the control.
+      if (awaiting && !press.current.down) latest.current.onDismiss()
     }
     // Released off the control that was pressed: no click is coming to close
     // the menu, so a blur the press caused closes it now.
     const up = (event: PointerEvent): void => {
       const { down: wasDown, blurred } = press.current
-      press.current = { down: false, blurred: false }
-      const onAnchor = event.target instanceof Node && anchorRef?.current?.contains(event.target) === true
-      if (wasDown && blurred && !onAnchor) latest.current.onDismiss()
+      press.current = { down: false, blurred: false, awaiting: false }
+      if (wasDown && blurred && !onAnchor(event)) latest.current.onDismiss()
+    }
+    // The keyboard came back to the window without a press: a key closes it.
+    const key = (): void => {
+      if (press.current.awaiting) latest.current.onDismiss()
     }
     window.addEventListener('resize', away)
     window.addEventListener(PANES_MOVED_EVENT, away)
     document.addEventListener('pointerdown', down, true)
     document.addEventListener('pointerup', up, true)
+    document.addEventListener('keydown', key, true)
     return () => {
       window.removeEventListener('resize', away)
       window.removeEventListener(PANES_MOVED_EVENT, away)
       document.removeEventListener('pointerdown', down, true)
       document.removeEventListener('pointerup', up, true)
+      document.removeEventListener('keydown', key, true)
     }
   }, [anchorRef])
 

@@ -344,10 +344,12 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   it and sends each change of rows or highlight, and the layer reports the
   pointer's pick (on the press) and hover by row. A press on the list still
   gives the layer focus, as Chromium focuses the view a press lands in; main
-  sees the layer's `focus`, hands the keyboard straight back to the window
-  and marks the press, so the bar's blur, which the bar reports as
-  `blurred` rather than closing, keeps the list, and the press's pick follows.
-  Any other blur closes it (`closed: 'blur'`). The window keeps the same list
+  sees the layer's `focus` and hands the keyboard straight back to the
+  window, and the press's pick follows. Measured in the dev app, the bar then
+  sees no blur at all, or a blur and a focus in the same millisecond. Focus
+  moving within the window closes the list in the window; the window losing
+  the keyboard is reported as `blurred`, and main closes the list
+  (`closed: 'blur'`) unless the keyboard is back in the window by then. The window keeps the same list
   where it hangs from the bar, transparent and taking no pointer: the layer's
   rectangle is measured from it, and it is the listbox the bar's
   `aria-controls` and `aria-activedescendant` point into, so assistive

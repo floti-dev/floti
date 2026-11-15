@@ -75,10 +75,10 @@ export interface LayerSuggestions {
 export interface SuggestionsLayerHandle {
   update: (content: LayerSuggestions, rect: LayerRect) => void
   /**
-   * The address bar lost the keyboard. The layer closes the list
-   * (`closed('blur')`) unless the press that took the keyboard was on the list
-   * itself, in which case the keyboard goes straight back to the bar and the
-   * pick that press makes follows.
+   * The window lost the keyboard while the bar had it. The layer closes the
+   * list (`closed('blur')`) unless the keyboard is back in the window: a press
+   * on the list takes it for a moment and main hands it straight back, and
+   * the pick that press makes follows.
    */
   blurred: () => void
   close: () => void
