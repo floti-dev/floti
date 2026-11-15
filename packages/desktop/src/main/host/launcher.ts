@@ -114,6 +114,8 @@ export interface HostPlaces {
 
 /** A child process, as much of one as this needs; `child_process.spawn` returns one. */
 export interface HostChild {
+  /** Its process id; absent when it never started. */
+  readonly pid?: number | undefined
   readonly stdin: Writable | null
   readonly stdout: Readable | null
   readonly stderr: Readable | null
@@ -172,6 +174,13 @@ export interface LocalHost {
    * has exited. The host is never stopped here: it decides its own exit.
    */
   close(): Promise<void>
+  /**
+   * Ends the bridge and every process it started on this computer at once,
+   * for a connection that stopped answering, whose transport could otherwise
+   * wait out a dead socket for minutes. Only a remote host's bridge has it:
+   * those processes are this device's own, and the host is on the other end.
+   */
+  kill?(): void
 }
 
 /** Why the desktop could not reach the local host, as one sentence that says the setting can be turned off. */
@@ -757,6 +766,8 @@ export interface PageBridge {
   write(bytes: Uint8Array): void
   /** Closes the bridge's standard input, which ends its connection. */
   end(): void
+  /** Ends the bridge and every process it started on this computer at once, as `LocalHost.kill`; a remote host's bridge only. */
+  kill?(): void
   /** Settles once the bridge has exited: null when it closed, or the sentence saying why it failed. */
   readonly ended: Promise<string | null>
 }

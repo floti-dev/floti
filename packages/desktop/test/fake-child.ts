@@ -9,6 +9,8 @@ import { PROTOCOL_VERSION } from '../src/main/host/protocol'
  * launchers that spawn `floti`, the local host's and a remote host's.
  */
 export class FakeChild extends EventEmitter implements HostChild {
+  private static lastPid = 4000
+  readonly pid = (FakeChild.lastPid += 1)
   readonly stdin = new PassThrough()
   readonly stdout = new PassThrough()
   readonly stderr = new PassThrough()

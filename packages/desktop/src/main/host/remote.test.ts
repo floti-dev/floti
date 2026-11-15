@@ -28,6 +28,8 @@ interface PendingStart {
 interface FakeBridge extends PageBridge {
   host: RemoteHost
   written: Uint8Array[]
+  /** Whether its processes were ended at once (`kill`), rather than its input closed. */
+  killed: boolean
   ended: Promise<string | null>
   endWith(why: string | null): void
 }
@@ -58,7 +60,12 @@ function world() {
         write(bytes) {
           bridge.written.push(bytes)
         },
+        killed: false,
         end: () => end(null),
+        kill() {
+          bridge.killed = true
+          end(null)
+        },
         ended: new Promise((resolve) => {
           end = resolve
         }),
@@ -553,6 +560,10 @@ describe('after the computer wakes', () => {
     expect(w.state(BUILD)).toEqual({ state: 'retrying' })
     expect(local.closed).toBe(true)
     expect(w.links.connection(BUILD.id)).toBeNull()
+    // The dead bridges' processes are ended now, main's and the page's, not when ssh gives up.
+    expect(local.killed).toBe(true)
+    expect(w.bridges[0]?.killed).toBe(true)
+    expect(w.log).toContain('host: a page’s connection to build-box ended')
     // The page hears at once an end that is no stop, and its bridge is ended.
     expect(window.sent.at(-1)).toEqual({
       channel: 'hostLink:ended',
@@ -607,6 +618,8 @@ describe('after the computer wakes', () => {
     expect(w.links.connection(LAB.id)).toBe(lab.asConnection())
     expect(buildLocal.closed).toBe(false)
     expect(labLocal.closed).toBe(false)
+    expect(buildLocal.killed).toBe(false)
+    expect(w.bridges[0]?.killed).toBe(false)
     expect(window.sent.filter((sent) => sent.channel === 'hostLink:ended')).toEqual([])
     expect(w.starts.filter((start) => start.host.id !== FAR.id)).toHaveLength(2)
 
@@ -619,7 +632,7 @@ describe('after the computer wakes', () => {
     expect(build.payloads('host:ping')).toHaveLength(2)
   })
 
-  it('a host waiting to try again tries at once, and a wake after Floti quits checks nothing', async () => {
+  it('a host waiting to try again tries at once', async () => {
     const w = world()
     w.links.sync([BUILD])
     const unreachable = 'ssh: connect to host build-box port 22: Network is unreachable'
@@ -639,10 +652,42 @@ describe('after the computer wakes', () => {
     w.startFor(BUILD).resolve(fakeLocalHost(build, false))
     await settle()
     expect(w.state(BUILD)).toEqual({ state: 'connected', version: 'test' })
+  })
 
-    await w.links.quit(() => false)
+  it('while Floti quits, a wake checks nothing, and a check already waiting lets go of nothing', async () => {
+    const w = world()
+    w.links.sync([BUILD])
+    const build = silentHost()
+    const buildLocal = fakeLocalHost(build, false)
+    w.startFor(BUILD).resolve(buildLocal)
+    await settle()
+    // build-box's page bridge is slow to exit, so the quit waits on it with main's link still connected.
+    await w.links.pageLinks(BUILD.id)?.open(page())
+    const slow = w.bridges[0]!
+    slow.end = () => undefined
+
+    // build-box's check is waiting when the quit begins.
     w.wake()
     await settle()
-    expect(build.payloads('host:ping')).toEqual([])
+    expect(build.payloads('host:ping')).toHaveLength(1)
+    const quit = w.links.quit(() => false)
+    await settle()
+    expect(w.links.connection(BUILD.id)).toBe(build.asConnection())
+
+    // Its deadline passes mid-quit: nothing is let go of, so nothing reconnects.
+    w.fireTimersOf(WAKE_CHECK_MS)
+    await settle()
+    expect(buildLocal.killed).toBe(false)
+    expect(w.state(BUILD)).toEqual({ state: 'connected', version: 'test' })
+    expect(w.waitsNow()).not.toContain(RECONNECT_FIRST_MS)
+    // Another wake mid-quit asks nothing.
+    w.wake()
+    await settle()
+    expect(build.payloads('host:ping')).toHaveLength(1)
+
+    slow.endWith(null)
+    await quit
+    expect(build.payloads('host:quit')).toEqual([{ end: false }])
+    expect(w.starts).toHaveLength(1)
   })
 })

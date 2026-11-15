@@ -41,6 +41,8 @@ export interface PageLinksDeps {
   appVersion: string
   /** The computer's name, for the page's `hello`, as main's gives it. */
   deviceName?: string
+  /** What the log calls the host: the local host when absent. */
+  name?: string
   /** Whether a web contents is one of Helm's own pages. */
   isHelmPage: (id: number) => boolean
   /** Settles once main's own link has connected; rejects with the sentence saying why it could not. */
@@ -66,9 +68,10 @@ export interface PageLinks {
   /** The page closed `connection`. */
   close(pageId: number, connection: number): void
   /**
-   * Main's link found the host no longer answering: ends every bridge and
-   * tells each page at once that its connection ended with `why`, as a bridge
-   * that ended by itself does. Pages may open again after it.
+   * Main's link found the host no longer answering: ends every bridge, with
+   * its processes where it has `kill`, and tells each page at once that its
+   * connection ended with `why`, as a bridge that ended by itself does. Pages
+   * may open again after it.
    */
   drop(why: string): void
   /** Ends every bridge and resolves once each has exited. Nothing opens after it. */
@@ -105,7 +108,7 @@ export function createPageLinks(deps: PageLinksDeps): PageLinks {
     if (entry === undefined) return
     open.delete(connection)
     if (byPage.get(entry.page.id) === connection) byPage.delete(entry.page.id)
-    if (why !== null) deps.log('host: a page’s connection to the local host ended')
+    if (why !== null) deps.log(`host: a page’s connection to ${deps.name ?? 'the local host'} ended`)
     entry.page.send('hostLink:ended', { connection, why, ...deps.howEnded() })
   }
 
@@ -167,8 +170,9 @@ export function createPageLinks(deps: PageLinksDeps): PageLinks {
     drop(why) {
       for (const [connection, entry] of [...open]) {
         ended(connection, why)
-        // Its bridge exits whenever its transport notices; nothing waits for it.
-        entry.bridge.end()
+        // A dead transport would wait out its socket for minutes; its processes end now.
+        if (entry.bridge.kill !== undefined) entry.bridge.kill()
+        else entry.bridge.end()
       }
     },
 

@@ -17,6 +17,7 @@ import {
   type PageBridge
 } from './launcher'
 import type { RestartState } from './protocol'
+import { treeKill } from '../treekill'
 
 /**
  * Reaches a host on another computer, through the `floti` program:
@@ -163,6 +164,23 @@ export function remoteBridgeArgs(
  */
 export type RemoteLauncherDeps = Pick<LauncherDeps, 'platform' | 'env' | 'exists' | 'spawn' | 'appVersion' | 'log'> & {
   programs?: TransportPrograms | undefined
+  /** Ends a process and everything it started (`treeKill`, not waiting); a test passes its own. */
+  treeKill?: ((pid: number) => void) | undefined
+}
+
+/**
+ * Ends a bridge and everything it started on this computer: its ssh or
+ * command, and a ProxyCommand under that ssh. They are this device's own
+ * processes; the host is on the other end of the transport and is not one.
+ */
+function endBridgeTree(deps: Pick<RemoteLauncherDeps, 'treeKill'>, child: HostChild): void {
+  closeInput(child)
+  if (child.pid === undefined) {
+    child.kill()
+    return
+  }
+  const kill = deps.treeKill ?? ((pid: number) => treeKill(pid, false))
+  kill(child.pid)
 }
 
 export interface RemoteTarget {
@@ -342,6 +360,10 @@ async function connectRemote(
         await exited
       })()
       return closing
+    },
+    kill: () => {
+      connection.close()
+      endBridgeTree(deps, child)
     }
   }
 }
@@ -425,6 +447,7 @@ export function openRemotePageBridge(
       if (open()) stdin?.write(bytes)
     },
     end: () => closeInput(child),
+    kill: () => endBridgeTree(deps, child),
     ended: exited.then(async (exit) => {
       if (exit.error === undefined && exit.code === BRIDGE_EXIT.closed) return null
       await said.ended

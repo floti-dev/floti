@@ -134,8 +134,10 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   answer within 3 s, a refusal included, leaves the link alone. With none,
   the transport died while the computer slept, which ssh can take minutes to
   notice: main ends that host's page bridges, telling each page at once that
-  its connection ended without a stop, lets go of its own connection, and
-  reconnects as after any drop, so the host shows as reconnecting until it
+  its connection ended without a stop, lets go of its own connection, ends
+  each of those bridges with every process it started on this computer
+  (`treeKill`, so a ProxyCommand under ssh goes too; the host is on the
+  other end and is never one), and reconnects as after any drop, so the host shows as reconnecting until it
   is back. A host already waiting to try again tries at once. Nothing is
   added to the transport and nothing branches on the OS.
 - The link starts nothing itself. `floti connect`, which the transport runs

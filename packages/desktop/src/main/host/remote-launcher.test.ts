@@ -334,3 +334,32 @@ describe('asking a remote host what a restart would end', () => {
     expect(error.lastLine).toBe('ssh: connect to host build-box port 22: Connection refused')
   })
 })
+
+describe('a bridge whose connection stopped answering', () => {
+  it('main’s and a page’s are ended with every process they started, by their own process ids, and nothing else', async () => {
+    const w = world([connects, () => undefined])
+    const ended: number[] = []
+    // The tree kill ends the fake bridge it names, as ending its tree would.
+    w.deps.treeKill = (pid) => {
+      ended.push(pid)
+      w.spawned.find((child) => child.pid === pid)?.kill()
+    }
+    const host = await startRemoteHost(PLACES, w.deps, { folder: FOLDER, transport: SSH, deviceName: 'my laptop' })
+    const page = openRemotePageBridge(PLACES, w.deps, { folder: FOLDER, transport: SSH }, () => undefined)
+    const [main, pageChild] = w.spawned
+    expect(ended).toEqual([])
+
+    host.kill?.()
+    expect(ended).toEqual([main?.pid])
+    await main?.inputClosed()
+    // The connection ends at once, not when the transport notices.
+    await expect(host.connection.ended).resolves.toBe('The connection to the local host was closed.')
+    expect(pageChild?.running).toBe(true)
+
+    page.kill?.()
+    expect(ended).toEqual([main?.pid, pageChild?.pid])
+    await pageChild?.inputClosed()
+    await page.ended
+    expect(pageChild?.running).toBe(false)
+  })
+})

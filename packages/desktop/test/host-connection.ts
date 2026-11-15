@@ -5,16 +5,24 @@ import type { FakeConnection } from './fake-connection'
 
 export { FakeConnection, FakeStream, fakeReach, type SentRequest } from './fake-connection'
 
-/** A `LocalHost` over `connection`, recording whether it was closed. */
-export function fakeLocalHost(connection: FakeConnection, startedHost = true): LocalHost & { closed: boolean } {
+/** A `LocalHost` over `connection`, recording whether it was closed and whether its bridge's processes were ended. */
+export function fakeLocalHost(
+  connection: FakeConnection,
+  startedHost = true
+): LocalHost & { closed: boolean; killed: boolean } {
   const local = {
     connection: connection.asConnection(),
     startedHost,
     closed: false,
+    killed: false,
     close: () => {
       local.closed = true
       connection.close()
       return Promise.resolve()
+    },
+    kill: () => {
+      local.killed = true
+      connection.close()
     }
   }
   return local

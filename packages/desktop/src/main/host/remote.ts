@@ -26,8 +26,9 @@ import type { WslKeepAwake } from './wsl-awake'
  *   check per connection at a time. Any answer within `WAKE_CHECK_MS`, even
  *   a refusal, leaves the link as it is. No answer means the transport died
  *   while the computer slept, which ssh may take minutes to notice: the
- *   host's page bridges and main's link are let go of, and it reconnects as
- *   after any drop. A host already waiting to try again tries at once.
+ *   host's page bridges and main's link are let go of, their processes ended
+ *   at once (a ProxyCommand under ssh too, never the host), and it reconnects
+ *   as after any drop. A host already waiting to try again tries at once.
  * - Adding a host is connecting to it: its first connection pins the key it
  *   proves, through the user's own login, and nothing is approved there. A
  *   host that later proves another key is `keyChanged` until it is removed
@@ -232,6 +233,7 @@ export function createRemoteHostLinks(deps: RemoteHostLinksDeps): RemoteHostLink
     entry.pages = createPageLinks({
       appVersion: deps.appVersion,
       ...(deps.deviceName !== undefined ? { deviceName: deps.deviceName } : {}),
+      name: host.name,
       isHelmPage: deps.isHelmPage,
       // A page connects only while main is connected; it never makes main try.
       ready: () =>

@@ -92,10 +92,11 @@ export interface HostLink {
   reconnectNow(): void
   /**
    * The connection there is now stopped answering (a remote host's link
-   * after the computer woke, `remote.ts`): lets go of it and its bridge
-   * without a word to the host, and the link connects again as after any
-   * connection that ended without a stop, so `endedOnPurpose` stays false.
-   * Does nothing with no connection, or once quit or released.
+   * after the computer woke, `remote.ts`): lets go of it without a word to
+   * the host and ends its bridge's processes at once (`LocalHost.kill`, where
+   * the bridge has it), and the link connects again as after any connection
+   * that ended without a stop, so `endedOnPurpose` stays false. Does nothing
+   * with no connection, or once quit or released.
    */
   drop(): void
   /**
@@ -388,6 +389,8 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
       host.close().catch((error: unknown) => {
         deps.log(`host: the bridge to ${name} did not close (${(error as Error).message})`)
       })
+      // A dead transport would wait out its socket for minutes; its processes end now.
+      host.kill?.()
     }
   }
 
