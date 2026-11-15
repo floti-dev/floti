@@ -544,7 +544,8 @@ impl Hosted {
     /// with no row here is left out, and so is one whose row cannot be read.
     pub fn endings(&self, ids: &[u64]) -> Vec<SessionEnding> {
         ids.iter()
-            .filter_map(|id| records::read_record(&self.ledger.store(), SessionId(*id)).ok())
+            .filter_map(|id| session_id(*id))
+            .filter_map(|id| records::read_record(&self.ledger.store(), id).ok())
             .map(|record| SessionEnding::from(&record))
             .collect()
     }
