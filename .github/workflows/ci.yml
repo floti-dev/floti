@@ -83,7 +83,10 @@ jobs:
       # Owned by root with mode 4755, as Chromium asks, it starts sandboxed.
       - name: Let Electron start sandboxed (Linux)
         if: runner.os == 'Linux'
+        # The first require downloads the binary where the install did not,
+        # and says so on stdout; the second only prints the path.
         run: |
+          node -e "require('electron')" >/dev/null
           helper="$(dirname "$(node -p "require('electron')")")/chrome-sandbox"
           sudo chown root:root "$helper"
           sudo chmod 4755 "$helper"
