@@ -61,12 +61,17 @@ impl InstallSystem for FakeSystem {
         })
     }
 
-    fn setup(&self, floti: &Path) -> Result<u8, String> {
+    fn setup(
+        &self,
+        floti: &Path,
+        out: &mut dyn std::io::Write,
+        err: &mut dyn std::io::Write,
+    ) -> Result<u8, String> {
         self.setups.borrow_mut().push(floti.to_path_buf());
         let Some(program) = &self.setup_program else {
             return Ok(self.setup_code);
         };
-        let status = run_relayed(Command::new(program).args(SETUP_ARGS))
+        let status = run_relayed(Command::new(program).args(SETUP_ARGS), out, err)
             .map_err(|why| format!("could not run {}: {why}", program.display()))?;
         Ok(status
             .code()
