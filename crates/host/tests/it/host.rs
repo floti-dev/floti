@@ -41,9 +41,9 @@ use floti_protocol::channels::plugins::{
 use floti_protocol::channels::sessions::{
     CloseSessionRequest, HistoryRefresh, LaunchSessionRequest, ProfileDelete, ProfileExport,
     ProfileImport, ProfileList, ProfilePin, ProfileSave, ProfilesChanged, PtermExit, PtermExited,
-    PtermOpen, PtermOpenRequest, PtermStreamOpen, ReadUsage, RestoreSessionsRequest, SessionClose,
+    PtermOpen, PtermOpenRequest, PtermStreamOpen, RestoreSessionsRequest, SessionClose,
     SessionExit, SessionLaunch, SessionList, SessionRestorable, SessionRestore, SessionStart,
-    SessionToRestore, StartSessionRequest, UsageSnapshot,
+    SessionToRestore, StartSessionRequest,
 };
 use floti_protocol::channels::workspace;
 use floti_protocol::message::ErrorCode;
@@ -51,7 +51,6 @@ use floti_protocol::{
     BackendId, Catalogue, ChannelKind, EventChannel, Knowable, Message, RequestChannel,
 };
 use jiff::Timestamp;
-use jiff::tz::TimeZone;
 use serde_json::{Value, json};
 
 const TERMINAL: &[&str] = &["terminal"];
@@ -221,7 +220,7 @@ fn floti_host_command(dirs: &TestDirs) -> Command {
         .env(RUNTIME_DIR_VAR, &dirs.runtime)
         // The home the host finds the agent's folder in: `HOME` on macOS and
         // Linux, `USERPROFILE` on Windows. Never the real one, whose history
-        // and usage are the user's.
+        // is the user's.
         .env("HOME", &dirs.home)
         .env("USERPROFILE", &dirs.home)
         .env_remove("CLAUDE_CONFIG_DIR")
@@ -566,9 +565,6 @@ fn a_test_that_fails_while_its_floti_host_runs_leaves_neither_the_host_nor_its_f
 // The executable's home: the agent folder it reads, and its local day
 // ---------------------------------------------------------------------------
 
-/// US Eastern as a POSIX rule, which needs no time zone database on any OS.
-const EASTERN: &str = "EST5EDT,M3.2.0,M11.1.0";
-
 fn iso(ms: u64) -> String {
     Timestamp::from_millisecond(i64::try_from(ms).unwrap())
         .unwrap()
@@ -636,19 +632,6 @@ async fn stop_executable(client: &mut TestClient, mut host: HostProcess) {
     assert!(wait_exit(&mut host).success());
 }
 
-/// Runs the executable with `dirs` and `TZ` set to `zone`, reads usage once
-/// and stops it. Claude Code's reading of it.
-async fn claude_usage_from_executable(dirs: &TestDirs, zone: &str) -> UsageSnapshot {
-    let host = HostProcess::spawn(floti_host_command(dirs).env("TZ", zone));
-    let mut client = TestClient::connect(&binary_endpoint(dirs), &[]).await;
-    let readings = client.request::<ReadUsage>(&()).await.expect("read usage");
-    stop_executable(&mut client, host).await;
-    readings
-        .into_iter()
-        .find(|reading| reading.backend == BackendId::claude_code())
-        .expect("Claude Code declares usage")
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn the_executable_reads_only_the_agent_folder_under_its_home() {
     let dirs = TestDirs::new();
@@ -669,74 +652,7 @@ async fn the_executable_reads_only_the_agent_folder_under_its_home() {
     // The one conversation under the test home, and nothing of the user's.
     assert_eq!(summary.sessions, 1, "{summary:?}");
     assert_eq!(summary.prompts, 1, "{summary:?}");
-
-    let readings = client.request::<ReadUsage>(&()).await.expect("read usage");
-    let files: Vec<&str> = readings
-        .iter()
-        .filter(|reading| reading.backend == BackendId::claude_code())
-        .map(|reading| reading.file.as_str())
-        .collect();
-    assert_eq!(
-        files,
-        vec![dirs.home.join(".claude.json").to_string_lossy()],
-        "{readings:?}"
-    );
     stop_executable(&mut client, host).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn the_executable_estimates_today_from_local_midnight_in_its_own_zone() {
-    let dirs = TestDirs::new();
-    let midnight = u64::try_from(
-        Timestamp::now()
-            .to_zoned(TimeZone::posix(EASTERN).unwrap())
-            .start_of_day()
-            .unwrap()
-            .timestamp()
-            .as_millisecond(),
-    )
-    .unwrap();
-    // One message at local midnight, which is today's, and one the
-    // millisecond before, which is the day before's.
-    claude_conversation(
-        &dirs.home,
-        &dirs.folder("a project"),
-        &[midnight - 1, midnight],
-    );
-
-    let reading = claude_usage_from_executable(&dirs, EASTERN).await;
-    let spend = reading
-        .spend
-        .expect("a host that knows its zone estimates the spend");
-    assert_eq!(spend.today.messages, 1, "{spend:?}");
-    assert_eq!(spend.week.messages, 2, "{spend:?}");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn the_executable_leaves_the_spend_out_when_it_cannot_tell_its_zone() {
-    let dirs = TestDirs::new();
-    let now = now_ms();
-    claude_conversation(&dirs.home, &dirs.folder("a project"), &[now - 60_000]);
-    std::fs::write(
-        dirs.home.join(".claude.json"),
-        json!({
-            "numStartups": 1,
-            "cachedUsageUtilization": {
-                "fetchedAtMs": now - 60_000,
-                "utilization": { "limits": [
-                    { "kind": "session", "group": "session", "percent": 51,
-                      "resets_at": iso(now + 3_600_000) },
-                ]},
-            },
-        })
-        .to_string(),
-    )
-    .unwrap();
-
-    let reading = claude_usage_from_executable(&dirs, "Not/A_Zone").await;
-    assert_eq!(reading.spend, None, "{reading:?}");
-    assert_eq!(reading.limits.len(), 1, "{reading:?}");
-    assert_eq!(reading.problem, None, "{reading:?}");
 }
 
 // ---------------------------------------------------------------------------

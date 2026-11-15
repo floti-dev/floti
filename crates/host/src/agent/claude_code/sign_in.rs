@@ -6,17 +6,30 @@
 //! with a user id, which a login kept in a keychain still leaves behind.
 //! A config folder that cannot be read is Unknown, never "no".
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use floti_protocol::Knowable;
 use serde_json::Value;
 
-use super::usage::claude_config_file;
 use crate::agent::SignIn;
 
 /// The sentence for "no": what to run to sign in.
 pub const NOT_SIGNED_IN: &str =
     "Claude Code is not signed in. Run claude in a terminal and sign in.";
+
+/// The file Claude Code keeps its own state in: `.claude.json` inside the
+/// config folder when it is there, otherwise beside it, where the CLI keeps
+/// it for the default `~/.claude`.
+fn claude_config_file(config_dir: &Path) -> PathBuf {
+    let inside = config_dir.join(".claude.json");
+    if inside.exists() {
+        return inside;
+    }
+    match config_dir.parent() {
+        Some(parent) => parent.join(".claude.json"),
+        None => inside,
+    }
+}
 
 pub(super) fn signed_in(config_dir: &Path, api_key_set: bool) -> SignIn {
     let yes = |signal: &str| SignIn {

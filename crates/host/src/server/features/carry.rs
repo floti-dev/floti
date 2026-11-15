@@ -5,7 +5,7 @@
 //! Each batch is merged ([`crate::carry`]) in one transaction over the shared
 //! store, held only for that batch, so History, the session list and every
 //! other request are answered between batches. A batch that changed what
-//! History, the archive or usage read tells their subscribers. The host's
+//! History or the archive read tells their subscribers. The host's
 //! log says how many rows each batch merged, never what they hold.
 
 use std::sync::{Arc, MutexGuard};
@@ -80,11 +80,6 @@ impl Feature for Carry {
                 let merged = carry::merge_usage(self.store().connection(), &request.rows)
                     .map_err(|err| err.to_string())?;
                 said(merged, "usage rows");
-                if merged.added > 0
-                    && let Err(err) = self.history.usage_changed()
-                {
-                    log_line!("floti host: {err}");
-                }
                 Ok(merged)
             })
             .handle::<CarryConversations>(|request| {
