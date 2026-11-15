@@ -13,6 +13,7 @@ import { appCommandBrowserCommand } from '../shared/browserKeys'
 import {
   addPluginFolder,
   cleanStaleMcpConfigs,
+  openBrowserHistory,
   pluginThemeOf,
   quitEndsSessions,
   writeSetting,
@@ -600,6 +601,7 @@ function startApp(options: AppOptions = {}): void {
       // on its own channel.
       emit(win, 'ownSettings:changed', next)
     },
+    history: openBrowserHistory(services.store),
     onChanged: (state) => emit(win, 'browser:changed', state),
     onOpened: (opened) => emit(win, 'browser:opened', opened),
     onClosed: (id) => emit(win, 'browser:closed', { id }),

@@ -72,6 +72,7 @@ import type {
   SecretsState
 } from '@helm/core'
 import type {
+  BrowserSuggestions,
   HostAddOutcome,
   HostAddRequest,
   HostCheck,
@@ -1648,6 +1649,13 @@ export interface IpcRequests {
   'browser:share': { request: { id: number; session: number | null }; response: BrowserState | null }
   /** Whether the pane runs here, decided once at start (`BrowserAvailability`). */
   'browser:availability': { request: void; response: BrowserAvailability }
+  /**
+   * The address bar's suggestions for what is typed: ranked in main over its
+   * copy of the history (`suggestBrowserAddresses`), with the inline
+   * completion. Nothing leaves the machine while typing; the answer names the
+   * text it is for, so a bar that has moved on drops it.
+   */
+  'browser:suggest': { request: { text: string }; response: BrowserSuggestions }
 
   /**
    * Plugins (`main/plugins/host.ts`). The list is all the window draws plugins
@@ -1960,6 +1968,10 @@ export interface IpcSends {
   'browser:bounds': BrowserBounds
   /** Stop the page's load, and any quiet reconnect. Main announces the state. */
   'browser:stop': { id: number }
+  /** Forget one page from the browser's history: Shift+Delete on a suggestion. */
+  'browser:forget': { url: string }
+  /** Forget the browser's whole history: the More menu's Clear browsing history. */
+  'browser:clearHistory': void
 
   /** A plugin page aborted a call it made - a fetch's `AbortSignal`, a page that went away. */
   'plugins:cancel': { callId: string }
@@ -2382,6 +2394,7 @@ export const REQUEST_CHANNELS = Object.keys({
   'browser:shareTargets': true,
   'browser:share': true,
   'browser:availability': true,
+  'browser:suggest': true,
   'plugins:list': true,
   'plugins:add': true,
   'plugins:remove': true,
@@ -2421,6 +2434,8 @@ export const SEND_CHANNELS = Object.keys({
   'probe:res': true,
   'browser:bounds': true,
   'browser:stop': true,
+  'browser:forget': true,
+  'browser:clearHistory': true,
   'plugins:cancel': true,
   'plugins:answer': true,
   'plugins:backgroundState': true,

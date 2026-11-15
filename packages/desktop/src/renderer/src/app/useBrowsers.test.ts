@@ -55,13 +55,13 @@ beforeEach(() => {
 
 describe('useBrowsers - whether the native view paints', () => {
   it('reports where the placeholder is and that the view should paint', () => {
-    const { result } = renderHook(() => useBrowsers([]))
+    const { result } = renderHook(() => useBrowsers())
     act(() => result.current.sendBounds(3, RECT, true))
     expect(bounds()).toEqual([{ id: 3, ...RECT, visible: true }])
   })
 
   it('stands every view down behind a still of itself while a dialog is up, subscribed once however often it renders', async () => {
-    const { result, rerender } = renderHook(() => useBrowsers([]))
+    const { result, rerender } = renderHook(() => useBrowsers())
     act(() => {
       result.current.sendBounds(3, RECT, true)
       result.current.sendBounds(4, { ...RECT, x: 940 }, true)
@@ -101,7 +101,7 @@ describe('useBrowsers - whether the native view paints', () => {
     vi.useFakeTimers()
     try {
       bridge.answer('browser:snapshot', () => new Promise<string | null>(() => undefined))
-      const { result } = renderHook(() => useBrowsers([]))
+      const { result } = renderHook(() => useBrowsers())
       act(() => result.current.sendBounds(3, RECT, true))
       bridge.clearRecords()
       act(() => result.current.setSuppressed('tab-drag', true))
@@ -118,7 +118,7 @@ describe('useBrowsers - whether the native view paints', () => {
     vi.useFakeTimers()
     try {
       bridge.answer('browser:snapshot', () => new Promise<string | null>(() => undefined))
-      const { result, unmount } = renderHook(() => useBrowsers([]))
+      const { result, unmount } = renderHook(() => useBrowsers())
       act(() => result.current.sendBounds(3, RECT, true))
       // Covered and uncovered: one timer to stand down, one to take the still away.
       act(() => result.current.setSuppressed('tab-drag', true))
@@ -136,7 +136,7 @@ describe('useBrowsers - whether the native view paints', () => {
     try {
       let answer: (url: string | null) => void = () => undefined
       bridge.answer('browser:snapshot', () => new Promise<string | null>((resolve) => (answer = resolve)))
-      const { result } = renderHook(() => useBrowsers([]))
+      const { result } = renderHook(() => useBrowsers())
       act(() => result.current.sendBounds(3, RECT, true))
       bridge.clearRecords()
       act(() => result.current.setSuppressed('address-list', true))
@@ -155,7 +155,7 @@ describe('useBrowsers - whether the native view paints', () => {
   })
 
   it('stands a view down when its tab goes behind another, and puts it back where it was', () => {
-    const { result } = renderHook(() => useBrowsers([]))
+    const { result } = renderHook(() => useBrowsers())
     act(() => result.current.sendBounds(3, RECT, true))
     bridge.clearRecords()
 
@@ -172,7 +172,7 @@ describe('useBrowsers - whether the native view paints', () => {
   })
 
   it('takes every view off the screen for a tab drag or the address dropdown, and back after', async () => {
-    const { result } = renderHook(() => useBrowsers([]))
+    const { result } = renderHook(() => useBrowsers())
     act(() => {
       result.current.sendBounds(3, RECT, true)
       result.current.sendBounds(4, RECT, true)
@@ -194,7 +194,7 @@ describe('useBrowsers - whether the native view paints', () => {
   })
 
   it('holds each reason on its own, so the dropdown closing does not end a drag', async () => {
-    const { result } = renderHook(() => useBrowsers([]))
+    const { result } = renderHook(() => useBrowsers())
     act(() => result.current.sendBounds(3, RECT, true))
     act(() => result.current.setSuppressed('tab-drag', true))
     await waitFor(() => expect(bounds().at(-1)?.visible).toBe(false))
@@ -211,7 +211,7 @@ describe('useBrowsers - whether the native view paints', () => {
 
 describe('useBrowsers - the mirror of what main holds', () => {
   it('adds a tab main opened and drops one main closed, rectangle and all', () => {
-    const { result } = renderHook(() => useBrowsers([]))
+    const { result } = renderHook(() => useBrowsers())
     act(() => bridge.emit('browser:opened', opened(5)))
     expect([...result.current.views.keys()]).toEqual([5])
     act(() => result.current.sendBounds(5, RECT, true))
@@ -224,7 +224,7 @@ describe('useBrowsers - the mirror of what main holds', () => {
   })
 
   it('puts a failed call on the tab problem line rather than nowhere', async () => {
-    const { result } = renderHook(() => useBrowsers([]))
+    const { result } = renderHook(() => useBrowsers())
     act(() => bridge.emit('browser:opened', opened(5)))
     bridge.answer('browser:navigate', () => {
       throw new Error('the main process said no')
@@ -266,7 +266,7 @@ describe("useBrowsers - each page's icon", () => {
 
 describe('useBrowsers - the Browser tab strip', () => {
   it('puts a page beside the page that opened it, in front unless it was a middle click', () => {
-    const { result } = renderHook(() => useBrowsers([]))
+    const { result } = renderHook(() => useBrowsers())
     act(() => {
       bridge.emit('browser:opened', opened(1))
       bridge.emit('browser:opened', opened(2))
@@ -284,7 +284,7 @@ describe('useBrowsers - the Browser tab strip', () => {
   })
 
   it('hands the front back to the opener when a page in front closes itself', () => {
-    const { result } = renderHook(() => useBrowsers([]))
+    const { result } = renderHook(() => useBrowsers())
     act(() => {
       bridge.emit('browser:opened', opened(1))
       bridge.emit('browser:opened', opened(2))
@@ -299,7 +299,7 @@ describe('useBrowsers - the Browser tab strip', () => {
   it('brings back the last page closed by hand where it was, and never one that closed itself', async () => {
     let next = 20
     bridge.answer('browser:open', ({ url }) => ({ state: { ...view(next++), url: url ?? '' }, problem: null }))
-    const { result } = renderHook(() => useBrowsers([]))
+    const { result } = renderHook(() => useBrowsers())
     act(() => {
       bridge.emit('browser:opened', opened(1))
       bridge.emit('browser:opened', { ...opened(2), state: { ...view(2), url: 'http://localhost:3000/two' } })
@@ -330,7 +330,7 @@ describe('useBrowsers - the Browser tab strip', () => {
 
   it('adopts what main holds after a reload, and closes every page with the tab', () => {
     bridge.answer('browser:state', () => [view(7), view(8)])
-    const { result } = renderHook(() => useBrowsers([]))
+    const { result } = renderHook(() => useBrowsers())
     return waitFor(() => expect(result.current.pages).toEqual([7, 8])).then(() => {
       expect(result.current.active).toBe(8)
       act(() => result.current.move(8, 0))
@@ -339,5 +339,24 @@ describe('useBrowsers - the Browser tab strip', () => {
       expect(result.current.pages).toEqual([])
       expect(bridge.invoked('browser:close').map((call) => call.id).sort()).toEqual([7, 8])
     })
+  })
+})
+
+describe('useBrowsers - the address bar’s history', () => {
+  it('asks main for suggestions for the text, and sends forgetting one page or all of them', async () => {
+    const answer = {
+      text: 'loc',
+      rows: [{ kind: 'page' as const, url: 'http://localhost:3000/', title: 'Dev server' }],
+      completion: { url: 'http://localhost:3000/', rest: 'alhost:3000' }
+    }
+    bridge.answer('browser:suggest', ({ text }) => ({ ...answer, text }))
+    const { result } = renderHook(() => useBrowsers())
+
+    await expect(result.current.suggest('loc')).resolves.toEqual(answer)
+
+    act(() => result.current.forget('http://localhost:3000/'))
+    act(() => result.current.clearHistory())
+    expect(bridge.sent('browser:forget')).toEqual([{ url: 'http://localhost:3000/' }])
+    expect(bridge.sent('browser:clearHistory')).toHaveLength(1)
   })
 })

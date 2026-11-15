@@ -510,7 +510,8 @@ export function registerIpc(ctx: IpcContext): void {
     'browser:snapshot': ({ id }) => ctx.browsers.snapshot(id),
     'browser:shareTargets': () => ctx.browsers.shareTargets(),
     'browser:availability': () => ctx.browsers.availability,
-    'browser:share': ({ id, session }) => ctx.browsers.share(id, session)
+    'browser:share': ({ id, session }) => ctx.browsers.share(id, session),
+    'browser:suggest': ({ text }) => ctx.browsers.suggest(text)
   }
 
   const sends: SendHandlers = {
@@ -535,6 +536,12 @@ export function registerIpc(ctx: IpcContext): void {
     'browser:bounds': (payload) => ctx.browsers.bounds(payload),
     'browser:stop': ({ id }) => {
       ctx.browsers.stop(id)
+    },
+    'browser:forget': ({ url }) => {
+      ctx.browsers.forget(url)
+    },
+    'browser:clearHistory': () => {
+      ctx.browsers.clearHistory()
     },
 
     // A remote host's report goes to that host's plugins only.

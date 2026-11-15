@@ -430,6 +430,12 @@ export class FakeWebContents extends EventEmitter {
     })
   }
 
+  /** The page set its title after it arrived: `page-title-updated`. */
+  sayTitle(title: string): void {
+    this.title = title
+    this.emit('page-title-updated', electronEvent(), title)
+  }
+
   /** The page moved within itself - `pushState`, a hash change: `did-navigate-in-page`. */
   navigateInPage(url: string): void {
     this.url = url

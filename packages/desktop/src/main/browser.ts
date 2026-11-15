@@ -13,12 +13,14 @@ import {
 import {
   agentReach,
   BROWSER_PROJECT_URLS_MAX,
-  BROWSER_RECENT_URLS_MAX,
   browserReachAllows,
   isLoopbackUrl,
   resolveBrowserAddress,
+  suggestBrowserAddresses,
   type AppSettings,
-  type BrowserReach
+  type BrowserHistory,
+  type BrowserReach,
+  type BrowserSuggestions
 } from '@helm/core'
 import { flushCookies, keepSignIns, writeCookies, type CookieKeeper } from './browserCookies'
 import { TITLEBAR_HEIGHT } from './chrome'
@@ -350,6 +352,12 @@ export interface BrowserHost {
   stopFind(id: number): void
   zoom(id: number, level: number): BrowserState | null
   clearStorage(id: number): Promise<BrowserState | null>
+  /** The address bar's suggestions for what is typed, ranked over the history in memory. */
+  suggest(text: string): BrowserSuggestions
+  /** Forget one page from the history (Shift+Delete on a suggestion). */
+  forget(url: string): void
+  /** Forget the whole history (the More menu's Clear browsing history). */
+  clearHistory(): void
   /** The page as a picture (a PNG data URL), for the window to show while the view stands down. */
   snapshot(id: number): Promise<string | null>
   entries(id: number): BrowserConsoleEntry[]
@@ -445,8 +453,14 @@ export interface BrowserHostOptions {
   window: () => BrowserWindow | null
   /** Read through a function: the reach posture can change while a view is open. */
   settings: () => AppSettings
-  /** Writes the remembered addresses. Main owns them, like the view. */
+  /** Writes the remembered per-project addresses. Main owns them, like the view. */
   writeSettings: (patch: Partial<AppSettings>) => void
+  /**
+   * Where the pages the user visits are recorded, for the address bar's
+   * suggestions. Main owns it, like the view: it is the side that knows a
+   * navigation committed.
+   */
+  history: BrowserHistory
   onChanged: (state: BrowserState) => void
   /** A page the window did not ask for: a page's `window.open`, or an agent's. */
   onOpened: (opened: BrowserOpened) => void
@@ -955,27 +969,33 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
    * knows a navigation *succeeded*: the renderer only ever sees what it asked
    * for, and a redirect, a retry that finally connected, or a `window.open`
    * would all be missing from a list the window kept.
+   *
+   * The history records only the user's pages. A page an agent opened is the
+   * agent's work, not somewhere the user went, and its addresses do not belong
+   * in the user's suggestions. A page the user shared with an agent is still
+   * the user's.
    */
-  const remember = (entry: View, url: string): void => {
-    const current = settings()
-    const recent = [url, ...current.browserRecentUrls.filter((seen) => seen !== url)].slice(
-      0,
-      BROWSER_RECENT_URLS_MAX
-    )
-    const patch: Partial<AppSettings> = { browserRecentUrls: recent }
-    if (entry.project !== null) {
-      const key = entry.project.toLowerCase()
-      const projects = { ...current.browserProjectUrls, [key]: url }
-      const keys = Object.keys(projects)
-      if (keys.length > BROWSER_PROJECT_URLS_MAX) {
-        for (const stale of keys.slice(0, keys.length - BROWSER_PROJECT_URLS_MAX)) {
-          delete projects[stale]
-        }
+  const remember = (entry: View, url: string, title: string | null): void => {
+    if (entry.openedBy === null) {
+      try {
+        options.history.visit(url, title)
+      } catch {
+        // The history is a convenience; a write that fails never fails the
+        // navigation the user asked for.
       }
-      patch.browserProjectUrls = projects
+    }
+    if (entry.project === null) return
+    const current = settings()
+    const key = entry.project.toLowerCase()
+    const projects = { ...current.browserProjectUrls, [key]: url }
+    const keys = Object.keys(projects)
+    if (keys.length > BROWSER_PROJECT_URLS_MAX) {
+      for (const stale of keys.slice(0, keys.length - BROWSER_PROJECT_URLS_MAX)) {
+        delete projects[stale]
+      }
     }
     try {
-      options.writeSettings(patch)
+      options.writeSettings({ browserProjectUrls: projects })
     } catch {
       // A remembered address is a convenience. A validator refusing one is a
       // bug worth fixing and never a reason to fail the navigation the user
@@ -1258,7 +1278,16 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     // within 30 seconds, and a crash in between would lose them.
     wc.on('did-stop-loading', () => writeCookies(browserSession().cookies))
 
-    wc.on('page-title-updated', () => announce(entry))
+    wc.on('page-title-updated', (_event, title) => {
+      if (entry.openedBy === null) {
+        try {
+          options.history.retitle(wc.getURL(), title)
+        } catch {
+          // As in `remember`: never the page's problem.
+        }
+      }
+      announce(entry)
+    })
     wc.on('did-start-loading', () => announce(entry))
     // A load can end with nothing committed and no failure reported - a 204,
     // a response turned into a download, `stop()` - and then only this says
@@ -1337,7 +1366,9 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       entry.problem = null
       entry.refused = null
       entry.find = null
-      remember(entry, url)
+      // No title yet: the document has only just committed, and the title it
+      // says arrives on `page-title-updated`.
+      remember(entry, url, null)
       announce(entry)
     })
     /*
@@ -1364,7 +1395,10 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
         // it. The old page's `pushState` or hash change - a router, a
         // scroll-spy - while the new one loads is not that load committing.
         if (entry.pending !== null && sameAddress(url, entry.pending)) entry.pending = null
-        remember(entry, url)
+        // The same document, so its title is already said; `getTitle` falls
+        // back to the address for a page without one, which is no title.
+        const title = wc.getTitle()
+        remember(entry, url, title === url ? null : title)
       }
       announce(entry)
     })
@@ -2057,6 +2091,18 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
         line: 0
       })
       return announce(entry)
+    },
+
+    suggest(text) {
+      return suggestBrowserAddresses(options.history.entries(), text, settings().browserSearch)
+    },
+
+    forget(url) {
+      options.history.remove(url)
+    },
+
+    clearHistory() {
+      options.history.clear()
     },
 
     /*

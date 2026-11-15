@@ -157,9 +157,9 @@ export function agentReach(reach: BrowserReach, mcpLocalOnly: boolean): BrowserR
  * request nobody asked for; it searches now because a browser that refuses a
  * phrase does not feel like one, and the person typing it did ask. What keeps
  * the old reasoning true is everything around it: nothing is sent while
- * typing (there are no suggestions), the results address goes through the
- * same reach rule as any other, and `off` is one setting away for anybody who
- * wants the refusal back. A link or a remembered address is never searched -
+ * typing (the suggestions come from the browser's own history, ranked on
+ * this machine), the results address goes through the same reach rule as any
+ * other, and `off` is one setting away for anybody who wants the refusal back. A link or a remembered address is never searched -
  * only the address bar passes `search`.
  */
 export function resolveBrowserAddress(
