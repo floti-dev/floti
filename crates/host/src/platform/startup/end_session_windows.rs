@@ -132,6 +132,26 @@ impl Handshake {
     }
 }
 
+/// The shutdown level the host asks for: the top of the range Windows keeps
+/// for applications (0x100 to 0x3FF). Windows ends processes from the highest
+/// level to the lowest, and every process starts at 0x280 with no order
+/// within a level, so without it the keeper and the sessions' processes
+/// could be ended before the host hears the session ending, while its
+/// records are still open.
+pub(super) const SHUTDOWN_LEVEL: u32 = 0x3FF;
+
+/// Asks Windows to tell this process the session is ending before the
+/// processes at the default level ([`SHUTDOWN_LEVEL`]): the host then ends
+/// its own sessions, its records frozen, before Windows reaches them.
+pub(super) fn ask_to_be_ended_first() -> io::Result<()> {
+    use windows_sys::Win32::System::Threading::SetProcessShutdownParameters;
+    // SAFETY: plain values; no flags.
+    if unsafe { SetProcessShutdownParameters(SHUTDOWN_LEVEL, 0) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
 /// The window, as an address: a window handle may be used from any thread,
 /// though only its own thread runs its messages. Dropped by the last of
 /// [`EndSession`] and its [`Stopped`] handles, so it outlives whichever of
@@ -157,10 +177,17 @@ pub(super) struct EndSession {
 }
 
 impl EndSession {
-    /// Makes the window on a thread of its own, and returns once it is made.
-    /// A window that cannot be made is logged, and the host runs on without
-    /// it: it then hears no sign-out, as before, and nothing else changes.
+    /// Asks Windows to end the host before the programs it runs
+    /// ([`ask_to_be_ended_first`]), then makes the window on a thread of its
+    /// own, and returns once it is made. Either failing is logged, and the
+    /// host runs on: without the window it hears no sign-out, as before, and
+    /// nothing else changes.
     pub(super) fn start() -> Self {
+        if let Err(err) = ask_to_be_ended_first() {
+            log_line!(
+                "floti host: Windows may end its sessions before it hears the session ending: {err}"
+            );
+        }
         let (sender, ends) = unbounded_channel();
         let handshake = Arc::new(Handshake::default());
         let window = match make_on_own_thread(sender, Arc::clone(&handshake)) {
@@ -459,6 +486,17 @@ mod tests {
         started.recv().unwrap();
         handshake.finish();
         assert!(waiter.join().unwrap());
+    }
+
+    #[test]
+    fn the_host_asks_windows_to_end_it_before_the_programs_it_runs() {
+        use windows_sys::Win32::System::Threading::GetProcessShutdownParameters;
+        ask_to_be_ended_first().unwrap();
+        let (mut level, mut flags) = (0u32, u32::MAX);
+        // SAFETY: two places for the answer.
+        let read = unsafe { GetProcessShutdownParameters(&mut level, &mut flags) };
+        assert_ne!(read, 0, "{}", io::Error::last_os_error());
+        assert_eq!((level, flags), (0x3FF, 0));
     }
 
     #[test]

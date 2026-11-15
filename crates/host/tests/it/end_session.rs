@@ -8,9 +8,11 @@
 //! Each test plays Windows for one real host with a fake agent running in a
 //! shell session. It finds the host's window by its class and the host's
 //! process and sends both messages as Windows does (`SendMessageTimeoutW`).
-//! Once `WM_ENDSESSION` has returned it kills the session's processes, as
-//! Windows would. It checks that the session's row is still `running`, that
-//! the host exits, and that the next host offers the session for restore.
+//! When `WM_ENDSESSION` returns, after which Windows may end anything, the
+//! session's shell and the fake agent must be gone already, ended by the host
+//! with its records frozen, so a window that returns early fails every time.
+//! It checks that the session's row is still `running`, that the host exits,
+//! and that the next host offers the session for restore.
 //!
 //! A host with no console is the one Floti starts; one with a console is
 //! `floti host` run in a terminal. macOS and Linux tell a process with a
@@ -22,7 +24,7 @@ use std::time::{Duration, Instant};
 
 use floti_host::fake_agent;
 use floti_host::platform::process_table::{self, ProcessTable};
-use floti_host::platform::process_tree::{Ending, Native as NativeTree, ProcessTree};
+use floti_host::platform::process_tree::{Native as NativeTree, ProcessTree};
 use floti_host::platform::startup::{self, SessionEnd, SessionMessage};
 use floti_host::testkit::{
     FakeAgent, HostProcess, PATIENCE, TestClient, TestDirs, record_test_host,
@@ -90,9 +92,8 @@ struct Session {
     id: u64,
     /// The session's shell, its root process.
     shell: u32,
-    /// What started the shell, so a later look can tell it is still the
-    /// same process.
-    shell_parent: u32,
+    /// The fake agent, running in the shell.
+    fake: u32,
 }
 
 /// Starts a shell session through `client` and runs the fake agent in it.
@@ -130,45 +131,22 @@ async fn a_session_running_the_fake_agent(
         );
         tokio::time::sleep(LOOK_AGAIN).await;
     };
-    let shell = process(fake)
-        .expect("the fake agent is in the process table")
-        .1;
-    let shell_parent = process(shell)
-        .expect("the session's shell is in the process table")
-        .1;
+    let shell = parent_of(fake).expect("the fake agent is in the process table");
     Session {
         id: session.id,
         shell,
-        shell_parent,
+        fake,
     }
 }
 
-/// Process `pid`'s row in the process table, as its pid and its parent's.
-fn process(pid: u32) -> Option<(u32, u32)> {
+/// The process that started process `pid`, as the process table says.
+fn parent_of(pid: u32) -> Option<u32> {
     process_table::Native
         .processes()
         .expect("read the process table")
         .into_iter()
         .find(|row| row.pid == pid)
-        .map(|row| (row.pid, row.parent_pid))
-}
-
-/// Kills the session's shell and the fake agent in it, as Windows ends every
-/// process of a session that is ending, when they still run: a host that
-/// froze its records has ended them already. A shell whose id now names
-/// another process is left alone.
-async fn kill_as_windows_would(session: &Session) {
-    if process(session.shell) == Some((session.shell, session.shell_parent)) {
-        let _ = NativeTree.end_tree(session.shell, Ending::Forced);
-    }
-    let deadline = Instant::now() + PATIENCE;
-    while NativeTree.is_alive(session.shell) == Knowable::Known(true) {
-        assert!(
-            Instant::now() < deadline,
-            "the session's shell was still running {PATIENCE:?} after it was killed"
-        );
-        tokio::time::sleep(LOOK_AGAIN).await;
-    }
+        .map(|row| row.parent_pid)
 }
 
 /// Each session's status and who stopped it, from the host's database.
@@ -251,22 +229,14 @@ async fn the_session_ends(start: Start, why: SessionEnd, said: &str) {
     );
 
     send(window, SessionMessage::Ends(why), END_SESSION_SEND).await;
-    // From here Windows may end the host at any moment, and ends the
-    // session's processes too.
-    kill_as_windows_would(&session).await;
-    // The host goes, or records the session's end, whichever comes first.
-    let deadline = Instant::now() + PATIENCE;
-    while NativeTree.is_alive(host_pid) == Knowable::Known(true)
-        && rows(&dirs.data)
-            .iter()
-            .all(|(status, _)| status == "running")
-    {
-        assert!(
-            Instant::now() < deadline,
-            "the host neither exited nor recorded the session's end within {PATIENCE:?}"
-        );
-        tokio::time::sleep(LOOK_AGAIN).await;
-    }
+    // From here Windows may end the host at any moment, and ends whatever
+    // of the session still runs: the host has ended it already, with its
+    // records frozen, so no end of it can be recorded.
+    assert_eq!(
+        [session.shell, session.fake].map(|pid| NativeTree.is_alive(pid)),
+        [Knowable::Known(false), Knowable::Known(false)],
+        "the session's shell and the fake agent are gone when WM_ENDSESSION returns"
+    );
     assert_eq!(
         rows(&dirs.data),
         [("running".to_owned(), None)],

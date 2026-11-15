@@ -122,10 +122,9 @@ gets skipped.
   same host. From an administrator's SSH login while you are signed in at
   that PC, it starts nothing and says to open Floti on that PC instead.
 - On Windows, the sessions running when you sign out, shut down or restart
-  are offered for restore the next time Floti opens, every time. Before,
-  whether a session came back depended on the order Windows ended things in.
-  While the host stops, Windows lists Floti as "Floti is saving its
-  sessions", for at most 20 seconds.
+  are offered for restore the next time Floti opens. While the host stops,
+  Windows lists Floti as "Floti is saving its sessions", for at most 20
+  seconds.
 - On macOS and Linux, installing floti now puts it on your PATH: when
   `~/.local/bin` is not on it already, one line marked `# added by floti`
   goes at the end of the startup file your shell reads (`~/.zshenv` for zsh,

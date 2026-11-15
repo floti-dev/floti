@@ -93,9 +93,12 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   and its console closing. Windows tells a process that has loaded user32, as
   floti has, that the user is signing out, the computer is shutting down or
   Restart Manager is closing it only through its top-level windows, never
-  with the console's logoff and shutdown events, and then ends the host, its
-  keeper and its sessions' processes in no set order. So every Windows host,
-  with or without a console or `--desktop`, keeps a hidden top-level window
+  with the console's logoff and shutdown events, and it ends processes from
+  the highest shutdown level to the lowest, in no set order within one level,
+  where every process starts at 0x280. So every Windows host, with or without
+  a console or `--desktop`, asks for the top of the applications' range
+  (0x3FF, `SetProcessShutdownParameters`), so it is told before its keeper
+  and its sessions' processes are ended, and keeps a hidden top-level window
   of its own (class `FlotiHostEndSession`, `end_session_windows.rs`) on a
   thread of its own from its start to the end of its stop. It answers
   `WM_QUERYENDSESSION` yes at once, so it never holds up a sign-out. On
@@ -106,7 +109,10 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   restore once. It returns only once `run_host` says the stop is over
   (`HostStopped`), or after 20 s: once it returns, Windows may end the
   process at any moment. The notification area's window is not used for
-  this: it exists only for a host a desktop started.
+  this: it exists only for a host a desktop started. A host started over SSH
+  runs in a non-interactive window station and may get no `WM_ENDSESSION`;
+  there it is simply ended, as before, and whether a session is offered for
+  restore depends on the order Windows ends things in.
 
 ## Hosts on other computers
 
