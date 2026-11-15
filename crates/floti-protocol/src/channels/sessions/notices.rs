@@ -60,7 +60,8 @@ pub enum NoticeCause {
     /// The child's program exited with an error and nobody stopped it. It
     /// goes when the child is resumed.
     Ended,
-    /// The child could not be started. It goes when the child is resumed.
+    /// The child could not be started. It goes when a child of its name
+    /// starts under the same parent, or it is resumed.
     Launch,
     /// The child's program reported an error and ran on. It goes when the
     /// child reports working or idle again, or is resumed.

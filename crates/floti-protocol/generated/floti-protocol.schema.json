@@ -5814,7 +5814,7 @@
         },
         {
           "const": "launch",
-          "description": "The child could not be started. It goes when the child is resumed.",
+          "description": "The child could not be started. It goes when a child of its name\nstarts under the same parent, or it is resumed.",
           "type": "string"
         },
         {

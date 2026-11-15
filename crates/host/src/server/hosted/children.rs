@@ -595,6 +595,8 @@ impl Hosted {
 
         self.end_with_gone_parent(parent, outlive, launched.session.id)?;
         self.child_launched(launched.session.id, keeps_records);
+        // A start of that name that failed before is behind it.
+        self.launch_notices_of_started(parent, &name);
         Ok(ChildStarted {
             name,
             backend: backend_id_text(&backend_id),

@@ -757,7 +757,8 @@ impl Hosted {
         desk.bump();
     }
 
-    /// A child of `parent` could not be started: `reason` is news for it.
+    /// An agent child of `parent` could not be started: `reason` is news for
+    /// it, and a notice stands for the person until that child starts.
     pub(super) fn launch_failed(&self, link: &rows::Link, reason: &str) {
         self.error_noticed(
             link,
@@ -765,6 +766,17 @@ impl Hosted {
             &format!("{} could not be started: {reason}", link.name),
             NoticeCause::Launch,
         );
+        self.launch_failed_news(link, reason);
+    }
+
+    /// A command child of `parent` could not be started: `reason` is news for
+    /// it, and its parent's alone, as a command's exit is. No notice stands.
+    pub(super) fn command_launch_failed(&self, link: &rows::Link, reason: &str) {
+        self.launch_failed_news(link, reason);
+    }
+
+    /// The parent's news that its child named by `link` never ran.
+    fn launch_failed_news(&self, link: &rows::Link, reason: &str) {
         self.write_news_to(
             link,
             None,

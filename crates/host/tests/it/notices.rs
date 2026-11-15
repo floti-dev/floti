@@ -886,6 +886,48 @@ async fn an_agent_child_that_ended_in_error_keeps_its_notice_until_it_is_resumed
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_child_that_could_not_start_keeps_its_notice_until_a_child_of_its_name_starts() {
+    let world = World::new();
+    let host = world.host().await;
+    let parent = world.session(&world.project("restarted"), "parent").await;
+    let other = world.session(&world.project("elsewhere"), "other").await;
+    for under in [&parent, &other] {
+        under
+            .start(json!({ "task": "work", "name": "ghost", "backend": MISSING }))
+            .await
+            .refused();
+    }
+    let standing = world
+        .notices_where("both launch failures to stand", |notices| {
+            of_kind(notices, NoticeKind::Error).len() == 2
+        })
+        .await;
+    assert!(
+        of_kind(&standing, NoticeKind::Error)
+            .iter()
+            .all(|notice| notice.cause == Some(NoticeCause::Launch)),
+        "{standing:?}"
+    );
+
+    // A child of that name starts under the parent: its failed launch goes,
+    // and the other parent's stays.
+    parent
+        .start(json!({ "task": "work", "name": "Ghost" }))
+        .await
+        .done();
+    world.child_of(&parent, "Ghost").await;
+    let left = world
+        .notices_where("the started child's failed launch to go", |notices| {
+            of_kind(notices, NoticeKind::Error).len() == 1
+        })
+        .await;
+    let left = of_kind(&left, NoticeKind::Error);
+    assert_eq!(left[0].parent_id, other.id(), "{left:?}");
+    assert_eq!(left[0].cause, Some(NoticeCause::Launch));
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_notice_left_under_a_parent_that_is_not_running_is_gone_when_the_host_starts() {
     let world = World::new();
     let first = world.host().await;

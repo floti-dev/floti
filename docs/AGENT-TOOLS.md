@@ -216,9 +216,10 @@ until the user updates the rule.
   ran on, which protocol 4.1's optional `cause` says (`ended`, `launch`,
   `report`) and the window titles by ("ended in error", "couldn’t start",
   "reported an error"). A reported error goes when the child reports working
-  or idle again, every error of a child goes when its parent resumes it, and
+  or idle again, a failed launch goes when a child of that name starts under
+  that parent, every error of a child goes when its parent resumes it, and
   every notice under a parent goes when the parent ends. A command child's
-  exit raises none: its parent hears the code and the last lines as news. A
+  exit or failed launch raises none: its parent hears it as news. A
   device lists as While you were away only the notices that stood when it
   connected and began after the newest one it had shown of that host
   (`noticesSeen` in `helm.db`), so a dropped connection or a restart lists

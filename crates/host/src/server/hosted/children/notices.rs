@@ -12,10 +12,11 @@
 //! - *error*: an agent child that ended in error, could not start, or
 //!   reported an error while it ran on, its `cause` saying which. A row in
 //!   `notices` kept the same way, which also goes when its cause does: a
-//!   reported error when the child reports working or idle again, and every
-//!   error of a child when that child is resumed. A command child's exit is
-//!   its parent's business alone: the parent hears the code and the last
-//!   lines as news, and no notice stands for it.
+//!   reported error when the child reports working or idle again, a failed
+//!   launch when a child of that name starts under that parent, and every
+//!   error of a child when that child is resumed. A command child's exit or
+//!   failed launch is its parent's business alone: the parent hears it as
+//!   news, and no notice stands for it.
 //!
 //! The list goes to every client on `notices:changed` (the features module
 //! serves it); dismissing is for every client, and so is allowing more starts.
@@ -304,6 +305,24 @@ pub(super) fn remove_report_of(store: &Store, child: SessionId) -> Result<bool> 
         .map_err(sql("remove the error a child no longer reports"))
 }
 
+/// Removes the failed launches of `parent`'s child called `child_name`, which
+/// has now started, whatever the case of the name. A row from before causes
+/// were kept is a launch when it names no child. Whether any went.
+pub(super) fn remove_launches_of(
+    store: &Store,
+    parent: SessionId,
+    child_name: &str,
+) -> Result<bool> {
+    store
+        .connection()
+        .execute(
+            "DELETE FROM notices WHERE kind = 'error' AND parent_session_id = ?1              AND child_name = ?2 COLLATE NOCASE              AND (cause = 'launch' OR (cause IS NULL AND child_session_id IS NULL))",
+            params![parent.0, child_name],
+        )
+        .map(|removed| removed > 0)
+        .map_err(sql("remove the failed launches of a child that started"))
+}
+
 /// Removes the errors of `parent`'s child called `child_name`, which has been
 /// resumed: whatever it ended, failed to start or reported with is behind it.
 /// Names match as a resume finds them, whatever their case. Whether any went.
@@ -479,6 +498,16 @@ impl Hosted {
         }
     }
 
+    /// `parent`'s child called `child_name` has started: a failed launch of
+    /// that name that stood goes.
+    pub(super) fn launch_notices_of_started(&self, parent: SessionId, child_name: &str) {
+        match remove_launches_of(&self.ledger.store(), parent, child_name) {
+            Ok(true) => self.children.news.notices_moved(),
+            Ok(false) => {}
+            Err(err) => log_line!("floti host: {err}"),
+        }
+    }
+
     /// `parent`'s child called `child_name` has been resumed: the errors that
     /// stood for it go.
     pub(super) fn notices_of_resumed(&self, parent: SessionId, child_name: &str) {
@@ -610,6 +639,50 @@ mod tests {
         assert!(!remove_report_of(&store, SessionId(12)).unwrap());
         assert!(remove_report_of(&store, SessionId(11)).unwrap());
         assert_eq!(errors(&store), [("b".to_owned(), Some(NoticeCause::Ended))]);
+    }
+
+    #[test]
+    fn a_child_that_starts_loses_only_the_failed_launches_of_its_name_under_its_parent() {
+        let (_dirs, store) = store();
+        let launch = error(
+            None,
+            "Worker",
+            "Worker could not be started.",
+            NoticeCause::Launch,
+        );
+        record_error(&store, LEAD, "lead", launch).unwrap();
+        let ended = error(
+            Some(11),
+            "worker",
+            "worker ended in error.",
+            NoticeCause::Ended,
+        );
+        record_error(&store, LEAD, "lead", ended).unwrap();
+        let elsewhere = error(
+            None,
+            "worker",
+            "worker could not be started.",
+            NoticeCause::Launch,
+        );
+        record_error(&store, SessionId(20), "other lead", elsewhere).unwrap();
+        // A launch kept before causes were: it names no child.
+        store
+            .connection()
+            .execute(
+                "INSERT INTO notices (kind, parent_session_id, parent_name, child_name, text)                  VALUES ('error', 10, 'lead', 'WORKER', 'WORKER could not be started.')",
+                [],
+            )
+            .unwrap();
+
+        assert!(remove_launches_of(&store, LEAD, "worker").unwrap());
+        assert_eq!(
+            errors(&store),
+            [
+                ("worker".to_owned(), Some(NoticeCause::Ended)),
+                ("worker".to_owned(), Some(NoticeCause::Launch)),
+            ]
+        );
+        assert!(!remove_launches_of(&store, LEAD, "worker").unwrap());
     }
 
     #[test]
