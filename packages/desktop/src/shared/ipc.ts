@@ -527,8 +527,19 @@ export type BrowserAvailability = { available: true } | { available: false; comm
 
 export interface BrowserState {
   id: number
-  /** Where it actually is, which is not always where it was asked to go. */
+  /**
+   * Where it actually is, which is not always where it was asked to go: the
+   * last committed address (`getURL()`). Agent tools read this one.
+   */
   url: string
+  /**
+   * The address being loaded, from the bar or an agent's open or navigate,
+   * until that navigation commits, fails, is stopped or is superseded; null
+   * otherwise. What the address bar shows meanwhile. Never set by a link, a
+   * form or a page navigating itself, so a page cannot put an address in the
+   * bar before it is there.
+   */
+  pendingUrl: string | null
   /**
    * The address this tab was asked for and refused, while it has loaded
    * nothing (`url` is empty), or null. The address bar shows it and the tab
@@ -1924,6 +1935,8 @@ export interface IpcSends {
    * the next frame's bounds supersede this one's.
    */
   'browser:bounds': BrowserBounds
+  /** Stop the page's load, and any quiet reconnect. Main announces the state. */
+  'browser:stop': { id: number }
 
   /** A plugin page aborted a call it made - a fetch's `AbortSignal`, a page that went away. */
   'plugins:cancel': { callId: string }
@@ -2378,6 +2391,7 @@ export const SEND_CHANNELS = Object.keys({
   'pluginWindow:answer': true,
   'probe:res': true,
   'browser:bounds': true,
+  'browser:stop': true,
   'plugins:cancel': true,
   'plugins:answer': true,
   'plugins:backgroundState': true,

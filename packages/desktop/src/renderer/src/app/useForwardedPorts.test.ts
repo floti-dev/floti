@@ -13,6 +13,7 @@ const forward = (local: number): ForwardedPort => ({ host: 'build-box', session:
 const page = (url: string): BrowserState => ({
   id: 1,
   url,
+  pendingUrl: null,
   refusedUrl: null,
   title: 'Dev server',
   host: new URL(url).host,

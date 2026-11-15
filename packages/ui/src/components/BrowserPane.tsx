@@ -5,13 +5,26 @@ import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
 import { shortcutLabel } from '../lib/platform'
 import { SEGMENT_ON } from '../lib/segmented'
 import { ConsolePanel, type ConsoleEntry } from './ConsolePanel'
-import { AgentIcon, BackIcon, ExternalIcon, ForwardIcon, MoreIcon, RefreshIcon, SearchIcon, ShareIcon } from './icons'
+import {
+  AgentIcon,
+  BackIcon,
+  CloseIcon,
+  ExternalIcon,
+  ForwardIcon,
+  MoreIcon,
+  RefreshIcon,
+  SearchIcon,
+  ShareIcon
+} from './icons'
 import { Menu, type MenuEntry } from './Menu'
 
 /** Everything the pane knows about the view behind it. Mirrors `BrowserState`. */
 export interface BrowserPaneState {
   id: number
+  /** The committed address. */
   url: string
+  /** The address being loaded from the bar or an agent, until it commits, fails or is stopped. */
+  pendingUrl: string | null
   /** The address the tab was asked for and refused, while it has loaded nothing. */
   refusedUrl: string | null
   title: string
@@ -68,10 +81,17 @@ export interface BrowserPaneProps {
    * three of the four.
    */
   onBounds: (rect: { x: number; y: number; width: number; height: number }) => void
-  onNavigate: (input: string) => void
+  /**
+   * Send the page somewhere. When it returns a promise, the bar keeps what was
+   * entered until it settles - the moment main's answer, with the address being
+   * loaded, is in `state` - so no frame shows the old address in between.
+   */
+  onNavigate: (input: string) => void | Promise<void>
   onBack: () => void
   onForward: () => void
   onReload: (hard: boolean) => void
+  /** Stop the page's load. */
+  onStop: () => void
   onDevTools: () => void
   onOpenExternal: (url: string) => void
   onFind: (query: string, forward: boolean) => void
@@ -149,6 +169,7 @@ export function BrowserPane({
   onBack,
   onForward,
   onReload,
+  onStop,
   onDevTools,
   onOpenExternal,
   onFind,
@@ -182,10 +203,33 @@ export function BrowserPane({
    * that can disagree.
    */
   const [draft, setDraft] = useState<string | null>(null)
-  /** What the address bar says when nobody is typing: the page's address, or the one refused before any loaded. */
+  /**
+   * What was entered, from Enter until main has answered. Main's answer
+   * carries the address being loaded (`pendingUrl`); until it is here, this is
+   * the only thing that knows where the page is going, and without it the bar
+   * would show the old address - or nothing, on a new tab - in between.
+   * `submissions` makes sure only the newest answer clears it.
+   */
+  const [submitted, setSubmitted] = useState<string | null>(null)
+  const submissions = useRef(0)
+  /** The page's committed address, or the one refused before any loaded. */
   const address = state.url !== '' ? state.url : (state.refusedUrl ?? '')
-  const typed = draft ?? address
+  /** What the address bar says when nobody is typing: where the page is going, or where it is. */
+  const shown = submitted ?? state.pendingUrl ?? address
+  const typed = draft ?? shown
   const [suggesting, setSuggesting] = useState(false)
+
+  /** Send the page where the bar says, and keep saying it until main has answered. */
+  const go = (input: string): void => {
+    const turn = ++submissions.current
+    setSubmitted(input)
+    setDraft(null)
+    setSuggesting(false)
+    const answered = (): void => {
+      if (submissions.current === turn) setSubmitted(null)
+    }
+    void Promise.resolve(onNavigate(input)).then(answered, answered)
+  }
   const [consoleOpen, setConsoleOpen] = useState(false)
   const [finding, setFinding] = useState(false)
   const [findQuery, setFindQuery] = useState('')
@@ -418,16 +462,23 @@ export function BrowserPane({
           >
             <ForwardIcon width={14} height={14} />
           </BarButton>
-          {/* Shift-click is the hard reload, which is the binding every browser
-              already has - and the title says so, because a modifier nobody is
-              told about is a feature nobody has. */}
-          <BarButton
-            label={state.loading ? 'Stop loading' : 'Reload (hold Shift to ignore the cache)'}
-            onClick={(event) => onReload(event.shiftKey)}
-            data-browser="reload"
-          >
-            <RefreshIcon width={14} height={14} className={state.loading ? 'animate-pulse' : ''} />
-          </BarButton>
+          {/* Stop while the page loads, reload once it has, in one place, as
+              every browser has it. Shift-click is the hard reload, which is the
+              binding every browser already has - and the title says so, because
+              a modifier nobody is told about is a feature nobody has. */}
+          {state.loading ? (
+            <BarButton label="Stop loading" onClick={onStop} data-browser="stop">
+              <CloseIcon width={14} height={14} />
+            </BarButton>
+          ) : (
+            <BarButton
+              label="Reload (hold Shift to ignore the cache)"
+              onClick={(event) => onReload(event.shiftKey)}
+              data-browser="reload"
+            >
+              <RefreshIcon width={14} height={14} />
+            </BarButton>
+          )}
         </div>
 
         <div className="relative flex min-w-0 flex-1 items-center">
@@ -458,6 +509,9 @@ export function BrowserPane({
             onBlur={() => setSuggesting(false)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
+                // With something typed, Escape puts the address back; with
+                // nothing typed, it stops a load, as it does in the page.
+                if (draft === null && state.loading) onStop()
                 setDraft(null)
                 setSuggesting(false)
                 addressRef.current?.blur()
@@ -465,10 +519,8 @@ export function BrowserPane({
               }
               if (event.key !== 'Enter') return
               event.preventDefault()
-              setSuggesting(false)
-              setDraft(null)
               addressRef.current?.blur()
-              onNavigate(typed)
+              go(typed)
             }}
             className={cn(
               'min-w-0 flex-1 rounded-well border border-border bg-surface-sunken py-1 pl-2',
@@ -514,9 +566,7 @@ export function BrowserPane({
                     // closes the list before the choice is made.
                     onMouseDown={(event) => {
                       event.preventDefault()
-                      setDraft(null)
-                      setSuggesting(false)
-                      onNavigate(url)
+                      go(url)
                     }}
                     className="block w-full truncate px-2 py-1 text-left font-mono text-[11px] text-fg-muted transition-colors hover:bg-hover hover:text-fg"
                   >

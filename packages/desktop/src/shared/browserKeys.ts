@@ -31,6 +31,7 @@ export type BrowserCommand =
   | 'zoom-out'
   | 'zoom-reset'
   | 'devtools'
+  | 'stop'
 
 /** A key press, in the shape both Electron's `Input` and a DOM event can give. */
 export interface BrowserKey {
@@ -63,6 +64,16 @@ export const COMMANDS_FOR_THE_WINDOW: ReadonlySet<BrowserCommand> = new Set<Brow
 ])
 
 /**
+ * The commands read only with the caret in the page. Escape stops a load
+ * there, and main takes it only while the page is loading
+ * (`before-input-event`), so a page keeps its own Escape otherwise. In Floti's
+ * chrome Escape belongs to the focused field - the address bar puts its
+ * address back or stops a load, the find field closes - so the window never
+ * takes it as a command.
+ */
+export const COMMANDS_FOR_THE_PAGE_ONLY: ReadonlySet<BrowserCommand> = new Set<BrowserCommand>(['stop'])
+
+/**
  * The commands a held key repeats. Holding Ctrl+= zooms on; holding Ctrl+W
  * does not close every page in the strip.
  */
@@ -79,6 +90,10 @@ export const COMMANDS_THAT_REPEAT: ReadonlySet<BrowserCommand> = new Set<Browser
  * other the Windows one.
  */
 export function browserKeyCommand(press: BrowserKey, platform: string): BrowserCommand | null {
+  // Escape alone stops a load in every browser on every OS.
+  if (press.key === 'Escape') {
+    return press.control || press.shift || press.alt || press.meta ? null : 'stop'
+  }
   return platform === 'darwin' ? macCommand(press) : windowsCommand(press)
 }
 

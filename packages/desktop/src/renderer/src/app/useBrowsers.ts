@@ -102,10 +102,16 @@ export interface BrowserPanesState {
   entries: Map<number, ConsoleEntry[]>
   open: (request: { url?: string; project?: string | null }) => Promise<BrowserState | null>
   close: (id: number) => void
-  navigate: (id: number, input: string) => void
+  /**
+   * Send a page somewhere. Settles once main has answered and its state is
+   * held here - for the address bar, which keeps what was entered until then.
+   */
+  navigate: (id: number, input: string) => Promise<void>
   back: (id: number) => void
   forward: (id: number) => void
   reload: (id: number, hard: boolean) => void
+  /** Stop the page's load. Main announces the state it leaves. */
+  stop: (id: number) => void
   devtools: (id: number) => void
   find: (id: number, query: string, forward: boolean) => void
   stopFind: (id: number) => void
@@ -475,12 +481,11 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
   )
 
   const navigate = useCallback(
-    (id: number, input: string) => {
-      void helm
+    (id: number, input: string): Promise<void> =>
+      helm
         .invoke('browser:navigate', { id, input })
         .then(remember)
-        .catch(failed(id, 'navigate'))
-    },
+        .catch(failed(id, 'navigate')),
     [remember, failed]
   )
 
@@ -505,6 +510,7 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
     },
     [remember, failed]
   )
+  const stop = useCallback((id: number) => helm.send('browser:stop', { id }), [])
   const devtools = useCallback(
     (id: number) => {
       void helm
@@ -601,6 +607,7 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
     back,
     forward,
     reload,
+    stop,
     devtools,
     find,
     stopFind,

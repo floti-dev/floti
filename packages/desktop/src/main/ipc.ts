@@ -533,6 +533,9 @@ export function registerIpc(ctx: IpcContext): void {
     },
 
     'browser:bounds': (payload) => ctx.browsers.bounds(payload),
+    'browser:stop': ({ id }) => {
+      ctx.browsers.stop(id)
+    },
 
     // A remote host's report goes to that host's plugins only.
     'plugins:backgroundState': ({ plugin, revision, state, error, host }) =>
