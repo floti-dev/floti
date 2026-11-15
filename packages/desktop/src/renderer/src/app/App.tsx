@@ -344,6 +344,7 @@ import { HostProfiles } from "./HostProfiles";
 import { useTemplates } from "./useTemplates";
 import { useThemes } from "./useThemes";
 import { useBrowsers } from "./useBrowsers";
+import { useBrowserPointerCommands } from "./useBrowserPointerCommands";
 import { useShells } from "./useShells";
 import { treeLaunchNotice, type TreeLaunchFailure } from "./launchNotice";
 import {
@@ -2921,31 +2922,7 @@ export function App(): JSX.Element {
       window.removeEventListener("keydown", onKeyDown, { capture: true });
   }, [browserInFront, frontPage, runBrowserCommand]);
 
-  /**
-   * The mouse's back and forward buttons. Windows and Linux deliver them to the
-   * window, and main sends where the pointer was; the page in front goes back or
-   * forward when that is over the Browser tab - its view, strip or bar. A page an
-   * agent drives in the background is never the one in front. macOS has no such
-   * event; the Browser tab's own `onMouseUp` below reads the buttons there.
-   */
-  useEffect(
-    () =>
-      helm.on("browser:pointerCommand", ({ command, at }) => {
-        if (!browserInFront || frontPage === null) return;
-        const tab = document.querySelector("[data-browser-tab]");
-        if (tab === null) return;
-        const box = tab.getBoundingClientRect();
-        if (
-          at.x < box.left ||
-          at.x >= box.right ||
-          at.y < box.top ||
-          at.y >= box.bottom
-        )
-          return;
-        runBrowserCommand(frontPage, command);
-      }),
-    [browserInFront, frontPage, runBrowserCommand],
-  );
+  useBrowserPointerCommands(browserShown, frontPage, runBrowserCommand);
 
   /**
    * Ctrl+W and Ctrl+F4 close the page in front of a plugin's strip, as they
