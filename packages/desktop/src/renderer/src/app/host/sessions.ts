@@ -16,6 +16,7 @@ import type { HostConnection, HostSubscription } from '../../../../shared/host/c
 import type * as P from '../../../../shared/host/protocol'
 import {
   activityFromHost,
+  endedFromHost,
   historySessionFromHost,
   launchedFromHost,
   launchedProfileFromHost,
@@ -63,11 +64,12 @@ import { createTerminalsAdapter, type ShellShelf } from './terminals'
  * connection, so a tab keeps its last screen and its keys reach nothing, under
  * the host-stopped notice. Once the link has reconnected, the new host's list
  * is the word on each: one still running is carried again on a new stream,
- * which starts with the host's redraw of its screen as it is now; one that
- * exited meanwhile, or went with its keeper, is told on `session:exit` as the
- * host lists it. Nothing is resumed here: the host offers back only what it
- * lost, and the window asks for that offer after each reconnect and each
- * session lost at runtime.
+ * which starts with the host's redraw of its screen as it is now. One the
+ * list no longer names (it exited or was stopped meanwhile, or went with its
+ * keeper) is asked after (`session:endings`) and told on `session:exit` as
+ * the host's records say it ended: exited, or lost only when it was. Nothing
+ * is resumed here: the host offers back only what it lost, and the window asks
+ * for that offer after each reconnect and each session lost at runtime.
  */
 
 /** Whether the window is in front, and word when that changes. */
@@ -211,11 +213,13 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
 
   /**
    * Adopts what the host lists. A session running here that the host lists
-   * ended (it exited while the window had no host, or went with its keeper) is
-   * told as ended. With `whole`, the list is a new host's word on every
-   * session, so one running here that it does not list at all is lost.
+   * ended is told as ended. Answers the sessions held here as running that
+   * the list does not name at all, which a connection's first list asks the
+   * host after (`settle`): the host lists only running sessions and kept
+   * children, so one missing from it may have exited, been stopped or been
+   * lost while the window had no host.
    */
-  const adoptAll = (rows: readonly P.SessionRecord[], whole: boolean): void => {
+  const adoptAll = (rows: readonly P.SessionRecord[]): SessionRecord[] => {
     const listed = new Set<number>()
     for (const row of rows) {
       const record = sessionFromHost(row)
@@ -241,9 +245,36 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
     for (const [id, record] of records) {
       if (!listed.has(id)) records.set(id, unlistedOf(record))
     }
-    if (!whole) return
-    for (const record of [...records.values()]) {
-      if (isRunning(record) && !listed.has(record.id)) ended({ ...record, status: 'lost', exitCode: null })
+    return [...records.values()].filter((record) => isRunning(record) && !listed.has(record.id))
+  }
+
+  /**
+   * Tells how each of `gone`, held here as running and not named by a new
+   * connection's first list, ended, by the host's records: exited (by itself
+   * or stopped) as the row says, lost only when the row says lost or the host
+   * holds no row for it. A host before protocol 4.1 cannot say, and every one
+   * reads as lost, as it did. One the host says still runs is left for the
+   * next list, and one told ended meanwhile is not told again.
+   */
+  const settle = async (connection: HostConnection, gone: readonly SessionRecord[]): Promise<void> => {
+    if (gone.length === 0) return
+    let byId = new Map<number, P.SessionEnding>()
+    try {
+      const endings = await connection.request('session:endings', { ids: gone.map((record) => record.id) })
+      byId = new Map(endings.map((ending) => [ending.id, ending]))
+    } catch (error) {
+      log(`host: session:endings failed (${(error as Error).message}); the sessions it named read as lost`)
+    }
+    for (const { id } of gone) {
+      const known = records.get(id)
+      if (known === undefined || !isRunning(known)) continue
+      const ending = byId.get(id)
+      if (ending?.status === 'running') continue
+      ended(
+        ending === undefined || ending.status === 'lost'
+          ? { ...known, status: 'lost', exitCode: null }
+          : endedFromHost(known, ending)
+      )
     }
   }
 
@@ -305,7 +336,7 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
           relistAgain = false
           const connection = current
           if (connection === null) return
-          adoptAll(await connection.request('session:list', null), false)
+          adoptAll(await connection.request('session:list', null))
         } while (relistAgain)
       } catch (error) {
         log(`host: session:list failed (${(error as Error).message})`)
@@ -383,8 +414,8 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
       })
     ]
     listed = connection.request('session:list', null).then(
-      (rows) => {
-        adoptAll(rows, true)
+      async (rows) => {
+        await settle(connection, adoptAll(rows))
         sendFocus()
       },
       (error: unknown) => log(`host: session:list failed (${(error as Error).message})`)
@@ -553,15 +584,6 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
             (error: unknown) => log(`host: session:rename failed (${(error as Error).message})`)
           )
         return renamed
-      },
-      'session:remove': async (req) => {
-        const answer = await (await host()).request('session:remove', { ids: req.ids })
-        // Taken out here at once; the host's activity moves, and every other window relists.
-        for (const id of req.ids) {
-          const known = records.get(id)
-          if (known !== undefined) records.set(id, unlistedOf(known))
-        }
-        return answer
       }
     },
     sends: {

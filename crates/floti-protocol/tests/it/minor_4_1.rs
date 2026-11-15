@@ -1,8 +1,9 @@
 //! A client on 4.0 still reads what a host on 4.1 sends: protocol 4.1 adds a
 //! standing notice's `cause` (what an error notice is about: an exit in
 //! error, a launch that failed or an error the child reported while it ran
-//! on), and changes nothing else. A 4.1 notice is a 4.0 notice with a field
-//! the older reader ignores.
+//! on) and `session:endings` (how sessions a client held running ended,
+//! which a 4.0 client never asks), and changes nothing else. A 4.1 notice is
+//! a 4.0 notice with a field the older reader ignores.
 
 use floti_protocol::channel::{from_payload, to_payload};
 use floti_protocol::channels::sessions::{NoticeCause, NoticeKind, StandingNotice};
@@ -28,15 +29,30 @@ fn record_of(version: ProtocolVersion) -> Value {
 }
 
 #[test]
-fn protocol_4_1_adds_only_a_notices_optional_cause_and_its_type() {
+fn protocol_4_1_adds_only_a_notices_optional_cause_the_session_endings_request_and_their_types() {
     assert!(PROTOCOL_VERSION >= V4_1);
     let found = differences(&record_text(V4_0), &record_text(V4_1)).unwrap();
     assert_eq!(
         found,
         vec![
             Difference {
+                part: Part::Channel,
+                name: "session:endings".to_owned(),
+                change: Change::Added,
+            },
+            Difference {
                 part: Part::Type,
                 name: "NoticeCause".to_owned(),
+                change: Change::Added,
+            },
+            Difference {
+                part: Part::Type,
+                name: "SessionEnding".to_owned(),
+                change: Change::Added,
+            },
+            Difference {
+                part: Part::Type,
+                name: "SessionEndingsRequest".to_owned(),
                 change: Change::Added,
             },
             Difference {
@@ -45,6 +61,10 @@ fn protocol_4_1_adds_only_a_notices_optional_cause_and_its_type() {
                 change: Change::Changed,
             },
         ]
+    );
+    assert_eq!(
+        record_of(V4_1)["channels"]["session:endings"]["kind"],
+        "request"
     );
     let (before, after) = (record_of(V4_0), record_of(V4_1));
     let mut notice = after["types"]["StandingNotice"].clone();

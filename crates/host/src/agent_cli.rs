@@ -3,8 +3,8 @@
 //! `floti agent start --task <text>` starts an agent of the session's own and
 //! prints its name; `floti agent send <name> <text>` types a turn into it;
 //! `floti agent read <name>` prints its screen as plain text;
-//! `floti agent stop <name>` ends it, and `--keep` keeps it as a stopped
-//! child to resume later; `floti agent wait` prints the news its
+//! `floti agent stop <name>` ends it, and `--keep` marks it as one to resume
+//! later (it leaves the user's window either way); `floti agent wait` prints the news its
 //! agents have for the session, and `--background` says it runs as a
 //! background command. Each is the `agents_start`, `agents_send`,
 //! `agents_read`, `agents_stop` or `agents_wait` tool called over the same
@@ -170,7 +170,7 @@ pub struct Wait {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Stop {
     pub child: String,
-    /// Keep it in the user's window as a stopped child, to resume it later.
+    /// Mark it as one to resume later. It leaves the user's window either way.
     pub keep: bool,
     pub json: bool,
 }

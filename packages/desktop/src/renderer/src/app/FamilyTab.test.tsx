@@ -85,7 +85,7 @@ function session(id: number, fields: Partial<SessionRecord> = {}): SessionRecord
 const LEAD = session(1, { name: 'lead' })
 const child = (id: number, name: string, fields: Partial<SessionRecord> = {}): SessionRecord =>
   session(id, { name, parentId: 1, parentName: 'lead', ...fields })
-/** A child the user stopped, at 14:52 where the test runs, which stays under its parent kept. */
+/** A child the user stopped, at 14:52 where the test runs, which the host keeps for its parent to resume. */
 const stopped = (id: number, name: string): SessionRecord =>
   child(id, name, {
     status: 'exited',
@@ -94,6 +94,9 @@ const stopped = (id: number, name: string): SessionRecord =>
     stopped: true,
     endedAt: new Date(2026, 9, 29, 14, 52).toISOString()
   })
+/** A child that was running when the host that ran it went away. */
+const lost = (id: number, name: string, fields: Partial<SessionRecord> = {}): SessionRecord =>
+  child(id, name, { status: 'lost', exitCode: null, endedAt: null, ...fields })
 
 const TAB = paneId(sessionRef(1))
 const START: PaneLayout = fromSaved({ root: { panes: [sessionRef(1)] as SavedPane[], activeId: null }, focused: 0 })
@@ -377,39 +380,31 @@ describe('a parent’s tab with children', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('S9: a child the user stopped, once they agreed, shrinks to a header reading Stopped by you and the time', async () => {
+  it('S9: a child the user stopped leaves the family view once the host lists it stopped, kept or not, and the next child takes its card', async () => {
     const onStop = vi.fn(() => Promise.resolve(true))
     const view = mount(WIDE, [LEAD, child(2, 'reviewer'), child(3, 'tester')], { onStop })
 
     await userEvent.click(within(card(view.container, 'reviewer')).getByRole('button', { name: 'Stop reviewer' }))
     view.list([LEAD, stopped(2, 'reviewer'), child(3, 'tester')], { onStop })
 
-    const header = view.container.querySelector('[data-family-header="ended"]')!
-    expect(header.querySelector('[data-family-status]')!.textContent).toBe('Stopped by you · 14:52')
+    expect(cardNames(view.container)).toEqual(['tester'])
+    expect(headerNames(view.container)).toEqual([])
+    expect(view.container.querySelector('[data-family-header="ended"]')).toBeNull()
+    view.list([LEAD, { ...stopped(2, 'reviewer'), kept: false }, child(3, 'tester')], { onStop })
+    expect(headerNames(view.container)).toEqual([])
   })
 
-  it('S9: a child whose Stop the user declined, and that was stopped by another, reads Stopped and the time', async () => {
-    const onStop = vi.fn(() => Promise.resolve(false))
-    const view = mount(WIDE, [LEAD, child(2, 'reviewer'), child(3, 'tester')], { onStop })
-
-    await userEvent.click(within(card(view.container, 'reviewer')).getByRole('button', { name: 'Stop reviewer' }))
-    view.list([LEAD, stopped(2, 'reviewer'), child(3, 'tester')], { onStop })
-
-    const header = view.container.querySelector('[data-family-header="ended"]')!
-    expect(header.querySelector('[data-family-status]')!.textContent).toBe('Stopped · 14:52')
-  })
-
-  it('S9: a child that was stopped shrinks to a header reading Stopped and the time, with Close and no terminal', () => {
+  it('S9: a child lost with its host shrinks to a header reading Lost, with no Close, no Stop and no terminal', () => {
     const view = mount(WIDE, [LEAD, child(2, 'reviewer'), child(3, 'tester')])
-    view.list([LEAD, stopped(2, 'reviewer'), child(3, 'tester')])
+    view.list([LEAD, lost(2, 'reviewer'), child(3, 'tester')])
 
     expect(cardNames(view.container)).toEqual(['tester'])
     expect(headerNames(view.container)).toEqual(['reviewer'])
-    const header = view.container.querySelector('[data-family-header="ended"]')!
-    expect(header.querySelector('[data-family-status]')!.textContent).toBe('Stopped · 14:52')
+    const header = view.container.querySelector<HTMLElement>('[data-family-header="ended"]')!
+    expect(header.querySelector('[data-family-status]')!.textContent).toBe('Lost')
     expect(header.querySelector('[data-family-dot]')!.getAttribute('data-family-dot')).toBe('ended')
-    expect(within(header as HTMLElement).getByRole('button', { name: 'Close reviewer' })).toBeTruthy()
-    expect(within(header as HTMLElement).queryByRole('button', { name: /Stop reviewer/ })).toBeNull()
+    expect(within(header).queryByRole('button', { name: 'Close reviewer' })).toBeNull()
+    expect(within(header).queryByRole('button', { name: /Stop reviewer/ })).toBeNull()
     // Its terminal is kept for the last screen, but no card holds it.
     expect(view.container.querySelector('[data-family-cards]')!.contains(getTerminal(2)!.element)).toBe(false)
   })
@@ -488,65 +483,20 @@ describe('a parent’s tab with children', () => {
       }
     })
 
-    it('S25 S27: shrinks to an ended header with the glyph in fg-subtle reading exited 0 and the time, with Close', () => {
-      const view = mount(WIDE, [LEAD, child(3, 'tests', { command: 'pnpm test' })])
-      view.list([LEAD, exited(3, 'tests', 0)])
-
-      const header = view.container.querySelector<HTMLElement>('[data-family-header="ended"]')!
-      expect(header.querySelector('[data-family-status]')!.textContent).toBe('exited 0 · 14:52')
-      expect(header.querySelector('[data-family-command="ended"]')!.className).toContain('text-fg-subtle')
-      expect(header.querySelector('[data-family-dot]')).toBeNull()
-      expect(within(header).getByRole('button', { name: 'Close tests' })).toBeTruthy()
-      expect(within(header).queryByRole('button', { name: /Stop tests/ })).toBeNull()
-    })
-
-    it('S25 S27: a command that failed has the glyph in danger and reads exited with its code', () => {
-      const view = mount(WIDE, [LEAD, child(3, 'tests', { command: 'pnpm test' })])
-      view.list([LEAD, exited(3, 'tests', 137)])
-
-      const header = view.container.querySelector<HTMLElement>('[data-family-header="ended"]')!
-      expect(header.querySelector('[data-family-status]')!.textContent).toBe('exited 137 · 14:52')
-      expect(header.querySelector('[data-family-command="failed"]')!.className).toContain('text-danger')
-    })
-
-    it('S37: a command that crashed with a wrapped code reads exited -1073741819 · 14:52, its glyph in danger and saying so', () => {
-      const view = mount(WIDE, [LEAD, child(3, 'tests', { command: 'pnpm test' })])
-      view.list([LEAD, exited(3, 'tests', -1073741819)])
-
-      const header = view.container.querySelector<HTMLElement>('[data-family-header="ended"]')!
-      expect(header.querySelector('[data-family-status]')!.textContent).toBe('exited -1073741819 · 14:52')
-      expect(header.textContent).not.toContain('2147483647')
-      expect(header.querySelector('[data-family-command="failed"]')!.className).toContain('text-danger')
-      expect(header.querySelector('[data-family-command]')!.getAttribute('title')).toBe('exited -1073741819')
-    })
-
-    it('S25 S27: a command the host ended reads Stopped with the glyph in fg-subtle, not the number the system gave it', () => {
-      const view = mount(WIDE, [LEAD, child(3, 'tests', { command: 'pnpm test' })])
-      view.list([
-        LEAD,
-        child(3, 'tests', {
-          command: 'pnpm test',
-          status: 'exited',
-          kept: true,
-          exitCode: 2147483647,
-          stopped: true,
-          endedAt: new Date(2026, 9, 29, 14, 52).toISOString()
-        })
-      ])
-
-      const header = view.container.querySelector<HTMLElement>('[data-family-header="ended"]')!
-      expect(header.querySelector('[data-family-status]')!.textContent).toBe('Stopped · 14:52')
-      expect(header.querySelector('[data-family-command="ended"]')!.className).toContain('text-fg-subtle')
-      expect(header.querySelector('[data-family-command]')!.getAttribute('title')).toBe('stopped')
-    })
-
-    it('S33: its glyph says running while it runs and exited <code> once it exited, as the header does', () => {
-      const view = mount(WIDE, [LEAD, child(3, 'tests', { command: 'pnpm test' })])
+    it('S25 S27 S33: says running while it runs, and leaves the family view once it exited, whatever its code or whoever ended it', () => {
+      const view = mount(WIDE, [LEAD, child(2, 'reviewer'), child(3, 'tests', { command: 'pnpm test' })])
       expect(card(view.container, 'tests').querySelector('[data-family-command]')!.getAttribute('title')).toBe('running')
-      view.list([LEAD, exited(3, 'tests', 137)])
 
-      const header = view.container.querySelector<HTMLElement>('[data-family-header="ended"]')!
-      expect(header.querySelector('[data-family-command]')!.getAttribute('title')).toBe('exited 137')
+      for (const ended of [
+        exited(3, 'tests', 0),
+        exited(3, 'tests', 137),
+        exited(3, 'tests', -1073741819),
+        { ...exited(3, 'tests', 2147483647), stopped: true }
+      ]) {
+        view.list([LEAD, child(2, 'reviewer'), ended])
+        expect(cardNames(view.container)).toEqual(['reviewer'])
+        expect(headerNames(view.container)).toEqual([])
+      }
     })
 
     it('S25: a command child shrunk to a header keeps its glyph in the dot’s place and has no tag', () => {
@@ -566,9 +516,9 @@ describe('a parent’s tab with children', () => {
     })
   })
 
-  it('S17: leaves every ended child’s header its row, though the pane had room for a card for each child', () => {
+  it('S17: leaves every lost child’s header its row, though the pane had room for a card for each child', () => {
     const view = mount(WIDE, [LEAD, child(2, 'reviewer'), child(3, 'worker'), child(4, 'tester'), child(5, 'docs')])
-    view.list([LEAD, stopped(2, 'reviewer'), stopped(3, 'worker'), child(4, 'tester'), child(5, 'docs')])
+    view.list([LEAD, lost(2, 'reviewer'), lost(3, 'worker'), child(4, 'tester'), child(5, 'docs')])
 
     expect(cardNames(view.container)).toEqual(['tester', 'docs'])
     expect(headerNames(view.container)).toEqual(['reviewer', 'worker'])
@@ -625,12 +575,12 @@ describe('a parent’s tab with children', () => {
     expect(cardNames(container).sort()).toEqual(['reviewer', 'tester'])
   })
 
-  it('S18: pressing an ended child’s header shows its last screen with no input, and Close takes it out of the family view', async () => {
-    const sessions = [LEAD, stopped(2, 'reviewer'), child(3, 'tester')]
+  it('S18: pressing a lost child’s header shows its last screen with no input and no Close, and pressing it again shrinks it back', async () => {
+    const sessions = [LEAD, lost(2, 'reviewer'), child(3, 'tester')]
     const { container, list } = mount(WIDE, sessions)
     expect(cardNames(container)).toEqual(['tester'])
 
-    await userEvent.click(within(container).getByRole('button', { name: /^Show reviewer, Stopped/ }))
+    await userEvent.click(within(container).getByRole('button', { name: /^Show reviewer, Lost/ }))
     expect(cardNames(container)).toEqual(['reviewer', 'tester'])
     const screenCard = card(container, 'reviewer')
     expect(screenCard.querySelector('[data-family-header="screen"]')).not.toBeNull()
@@ -639,13 +589,14 @@ describe('a parent’s tab with children', () => {
     expect(getTerminal(2)!.term.options).toMatchObject({ disableStdin: true, cursorBlink: false })
     expect(within(screenCard).queryByRole('button', { name: /^Stop/ })).toBeNull()
     expect(within(screenCard).queryByRole('button', { name: /^Open/ })).toBeNull()
+    expect(within(screenCard).queryByRole('button', { name: 'Close reviewer' })).toBeNull()
 
-    await userEvent.click(within(screenCard).getByRole('button', { name: 'Close reviewer' }))
+    await userEvent.click(within(screenCard).getByRole('button', { name: /^Shrink reviewer/ }))
     expect(cardNames(container)).toEqual(['tester'])
-    expect(headerNames(container)).toEqual([])
-    // Its row is the Sessions tree's: the host still lists it, and a new list changes nothing here.
+    expect(headerNames(container)).toEqual(['reviewer'])
+    // A new list changes nothing here.
     list(sessions)
-    expect(headerNames(container)).toEqual([])
+    expect(headerNames(container)).toEqual(['reviewer'])
   })
 
   it('Close on a running card takes the child out of the family view without stopping it, and the next child takes its card', async () => {
@@ -845,8 +796,9 @@ describe('a parent’s tab with children', () => {
 
     view.list([LEAD, stopped(2, 'alpha'), child(3, 'beta'), child(4, 'gamma'), child(5, 'delta')])
     unchanged()
-    await userEvent.click(within(view.container).getByRole('button', { name: /^Show alpha, Stopped/ }))
-    await userEvent.click(within(card(view.container, 'alpha')).getByRole('button', { name: 'Close alpha' }))
+    view.list([LEAD, lost(2, 'alpha'), child(3, 'beta'), child(4, 'gamma'), child(5, 'delta')])
+    unchanged()
+    await userEvent.click(within(view.container).getByRole('button', { name: /^Show alpha, Lost/ }))
     unchanged()
 
     view.list([LEAD, stopped(2, 'alpha'), child(3, 'beta')])
@@ -984,20 +936,15 @@ describe('a child’s report note', () => {
     })
   })
 
-  it('has no note on a header or on an ended child’s last screen', async () => {
-    const ended = child(3, 'tester', {
-      status: 'exited',
-      kept: true,
-      exitCode: null,
-      stopped: true,
-      endedAt: new Date(2026, 9, 29, 14, 52).toISOString(),
+  it('has no note on a header or on a lost child’s last screen', async () => {
+    const ended = lost(3, 'tester', {
       lastReport: { state: 'done', text: REPORT, at: '2026-11-06T10:00:00.000Z' }
     })
     const { container } = mount(SHORT, [LEAD, reported(2, 'reviewer', 'done'), reported(4, 'worker', 'done'), ended])
     expect(container.querySelectorAll('[data-family-note]')).toHaveLength(cardNames(container).length)
     expect(container.querySelector('[data-family-header="header"] [data-family-note]')).toBeNull()
 
-    await userEvent.click(within(container).getByRole('button', { name: /^Show tester, Stopped/ }))
+    await userEvent.click(within(container).getByRole('button', { name: /^Show tester, Lost/ }))
     expect(noteOf(container, 'tester')).toBeNull()
   })
 })

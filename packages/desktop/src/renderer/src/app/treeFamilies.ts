@@ -56,7 +56,9 @@ export interface TreeEntry<T> {
 /**
  * The Sessions tree's rows for `sessions`: each child's row nested under its
  * parent's, in whatever folder either runs, and one entry for every other
- * session - the ones the caller lists under the folder each runs in.
+ * session - the ones the caller lists under the folder each runs in. A session
+ * that has exited has a row only while its tab is in front on screen here
+ * (`onScreen`, by row id; `inSessionTree`).
  *
  * A child whose parent has ended (or is not listed) is such an entry too, and
  * its row names the parent, because the row that held it is no longer there.
@@ -65,7 +67,8 @@ export interface TreeEntry<T> {
  */
 export function treeEntries<T extends FamilyMember>(
   sessions: readonly T[],
-  rowOf: (session: T) => TreeSession
+  rowOf: (session: T) => TreeSession,
+  onScreen: ReadonlySet<number> = new Set()
 ): TreeEntry<T>[] {
   const build = (family: FamilyRow<T>): TreeSession => {
     const nested = family.children.map(build)
@@ -75,7 +78,7 @@ export function treeEntries<T extends FamilyMember>(
       ...(family.parentName !== null ? { parentName: family.parentName } : {})
     }
   }
-  return sessionFamilies(sessions).map((family) => ({ session: family.session, row: build(family) }))
+  return sessionFamilies(sessions, onScreen).map((family) => ({ session: family.session, row: build(family) }))
 }
 
 /** What a press on a session's row in the tree reads and changes of this window. */

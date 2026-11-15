@@ -78,11 +78,11 @@ describe('where a child is on screen here', () => {
     }
   })
 
-  it('is nowhere for a child whose parent’s tab is not open here, and a chip for an ended child with no family view', () => {
+  it('is nowhere for a child whose parent’s tab is not open here, or that has exited, kept or not', () => {
     const away = windowOf({ kind: 'settings' })
     expect(childPlace(away, FAMILY, LOCAL_HOST_KEY, 3, scope())).toBe('nowhere')
-    const done = [session(1), { ...session(2, 1), status: 'exited', kept: true }]
-    expect(childPlace(layout(), done, LOCAL_HOST_KEY, 2, scope({ roomOf: () => false }))).toBe('chip')
+    const kept = [session(1), { ...session(2, 1), status: 'exited', kept: true }]
+    expect(childPlace(layout(), kept, LOCAL_HOST_KEY, 2, scope({ roomOf: () => false }))).toBe('nowhere')
     const left = [session(1), { ...session(2, 1), status: 'exited' }]
     expect(childPlace(layout(), left, LOCAL_HOST_KEY, 2, scope({ roomOf: () => false }))).toBe('nowhere')
   })
@@ -136,7 +136,7 @@ describe('the chips a parent’s crumb holds', () => {
     expect(crumbChips(layout(), FAMILY, LOCAL_HOST_KEY, 9, scope({ roomOf: () => false }), stateOf)).toEqual([])
   })
 
-  it('draws a command child as a terminal glyph, holds an ended child, and leaves out a child with a tab of its own', () => {
+  it('draws a command child as a terminal glyph, holds no child that has exited, kept or not, and leaves out a child with a tab of its own', () => {
     const family = [
       session(1),
       session(2, 1, { command: 'npm test' }),
@@ -146,26 +146,21 @@ describe('the chips a parent’s crumb holds', () => {
     ]
     const own = openTab(layout(), sessionRef(3))
     const chips = crumbChips(own, family, LOCAL_HOST_KEY, 1, scope({ roomOf: () => false }), () => 'running')
-    expect(chips.map((chip) => [chip.child.id, chip.mark.glyph])).toEqual([
-      [2, 'command'],
-      [4, 'dot']
-    ])
+    expect(chips.map((chip) => [chip.child.id, chip.mark.glyph])).toEqual([[2, 'command']])
   })
 
-  it('S26: shows an agent’s dot and each command’s glyph in its own tone: one running, one exited 0 and one failed', () => {
+  it('S26: shows an agent’s dot and a running command’s glyph in its own tone, and no chip for a command that exited, whatever its code', () => {
     const family = [
       session(1),
       session(2, 1),
       session(3, 1, { command: 'pnpm dev' }),
       session(4, 1, { command: 'pnpm lint', status: 'exited', exitCode: 0, kept: true }),
-      session(5, 1, { command: 'pnpm test', status: 'exited', exitCode: 1, kept: true })
+      session(5, 1, { command: 'pnpm test', status: 'exited', exitCode: 1 })
     ]
     const chips = crumbChips(layout(), family, LOCAL_HOST_KEY, 1, scope({ roomOf: () => false }), () => 'busy')
     expect(chips.map((chip) => [chip.child.id, chip.mark])).toEqual([
       [2, { glyph: 'dot', state: 'busy' }],
-      [3, { glyph: 'command', state: 'running' }],
-      [4, { glyph: 'command', state: 'ended' }],
-      [5, { glyph: 'command', state: 'failed' }]
+      [3, { glyph: 'command', state: 'running' }]
     ])
   })
 

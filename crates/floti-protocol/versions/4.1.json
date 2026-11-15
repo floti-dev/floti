@@ -1262,6 +1262,19 @@
         "$ref": "#/$defs/SessionStreamOpen"
       }
     },
+    "session:endings": {
+      "capability": null,
+      "kind": "request",
+      "request": {
+        "$ref": "#/$defs/SessionEndingsRequest"
+      },
+      "response": {
+        "items": {
+          "$ref": "#/$defs/SessionEnding"
+        },
+        "type": "array"
+      }
+    },
     "session:exit": {
       "capability": null,
       "event": {
@@ -10069,6 +10082,73 @@
         "detail",
         "confirmLabel",
         "sessionNames"
+      ],
+      "type": "object"
+    },
+    "SessionEnding": {
+      "properties": {
+        "durationMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "endedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "endedBy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EndedBy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exitCode": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/SessionStatus"
+        },
+        "stopped": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "SessionEndingsRequest": {
+      "properties": {
+        "ids": {
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "ids"
       ],
       "type": "object"
     },

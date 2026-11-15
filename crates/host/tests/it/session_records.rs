@@ -17,9 +17,10 @@ use floti_host::platform::socket::Endpoint;
 use floti_host::server::HostConfig;
 use floti_host::testkit::{PATIENCE, RunningHost, TestClient, TestDirs};
 use floti_protocol::channel::{from_payload, to_payload};
-use floti_protocol::channels::common::{SessionRecord, SessionStatus};
+use floti_protocol::channels::common::{EndedBy, SessionRecord, SessionStatus};
 use floti_protocol::channels::host::HostStopReason;
 use floti_protocol::channels::sessions::{
+    CloseSessionRequest, SessionClose, SessionEnding, SessionEndings, SessionEndingsRequest,
     SessionExit, SessionList, SessionStart, StartSessionRequest,
 };
 use floti_protocol::record::{records, records_dir};
@@ -314,6 +315,117 @@ async fn a_client_on_this_minor_lists_a_command_child_with_its_command_and_once_
     assert_eq!(exited.exit_code, Some(3));
     assert_eq!(exited.command.as_deref(), Some("pnpm test --filter core"));
     assert_eq!(exited.parent_id, Some(lead));
+
+    host.stop(HostStopReason::Stop).await;
+}
+
+/// Marks session `id`'s row lost, as a host's start marks a row that was
+/// still running when the host that owned it went away.
+fn make_lost(data: &Path, id: u64) {
+    let store = rusqlite::Connection::open(data.join("floti.db")).expect("open floti.db");
+    store.busy_timeout(PATIENCE).expect("wait for the host");
+    let changed = store
+        .execute(
+            "UPDATE sessions SET status = 'lost', ended_at = NULL, duration_ms = NULL, exit_code = NULL WHERE id = ?1",
+            rusqlite::params![id as i64],
+        )
+        .expect("mark the row lost");
+    assert_eq!(changed, 1, "the row is there");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_client_asks_how_sessions_it_held_running_ended_and_hears_exited_stopped_lost_or_running_from_the_rows()
+ {
+    const EXITS: u64 = 4;
+    let dirs = TestDirs::new();
+    let agent = fake_agent!(&dirs);
+    let endpoint = dirs.endpoint();
+    let host = RunningHost::start(HostConfig {
+        run: Default::default(),
+        folders: dirs.folders(),
+        endpoint: endpoint.clone(),
+        backends: vec![Arc::new(agent.backend(["--fake-tick=100"])) as Arc<dyn AgentBackend>],
+        inherited_env: std::env::vars_os().collect(),
+    });
+
+    let mut client = TestClient::connect(&endpoint, TERMINAL).await;
+    client.subscribe_quietly(EXITS, SessionExit::NAME).await;
+    let folder = dirs.folder("a project");
+    let running = start_in(&mut client, &folder).await;
+    let exited = start_in(&mut client, &folder).await;
+    let stopped = start_in(&mut client, &folder).await;
+    let lost = start_in(&mut client, &folder).await;
+
+    // One exits by itself with a code, one a person stops, and one is ended
+    // and then its row read as a host's start leaves a session lost with it.
+    client.attach(1, exited).await;
+    client.type_into(1, b"/exit 3\r").await;
+    client
+        .event_on(
+            EXITS,
+            "the session that exits by itself",
+            |ended: &Value| ended["id"] == exited,
+        )
+        .await;
+    for id in [stopped, lost] {
+        client
+            .request::<SessionClose>(&CloseSessionRequest { id, force: true })
+            .await
+            .expect("the session closes");
+        client
+            .event_on(EXITS, "the session a person stops", |ended: &Value| {
+                ended["id"] == id
+            })
+            .await;
+    }
+    make_lost(&dirs.data, lost);
+
+    // None of the three is listed any more; asked how they ended, the host
+    // answers from their rows, in the order asked, and leaves out a session it
+    // has no row for.
+    let listed: Vec<u64> = client
+        .request::<SessionList>(&())
+        .await
+        .unwrap()
+        .iter()
+        .map(|record| record.id)
+        .collect();
+    assert_eq!(listed, vec![running]);
+    let endings = client
+        .request::<SessionEndings>(&SessionEndingsRequest {
+            ids: vec![exited, stopped, lost, running, 999_999],
+        })
+        .await
+        .expect("the host answers how they ended");
+    let ending = |id: u64| -> &SessionEnding {
+        endings
+            .iter()
+            .find(|ending| ending.id == id)
+            .unwrap_or_else(|| panic!("session {id} has an ending"))
+    };
+    assert_eq!(
+        endings.iter().map(|ending| ending.id).collect::<Vec<_>>(),
+        vec![exited, stopped, lost, running]
+    );
+
+    let by_itself = ending(exited);
+    assert_eq!(by_itself.status, SessionStatus::Exited);
+    assert_eq!(by_itself.exit_code, Some(3));
+    assert!(!by_itself.stopped);
+    assert_eq!(by_itself.ended_by, Some(EndedBy::Exited));
+    assert!(by_itself.ended_at.is_some());
+
+    let by_a_person = ending(stopped);
+    assert_eq!(by_a_person.status, SessionStatus::Exited);
+    assert!(by_a_person.stopped);
+    assert_eq!(by_a_person.ended_by, Some(EndedBy::Person));
+
+    let with_its_host = ending(lost);
+    assert_eq!(with_its_host.status, SessionStatus::Lost);
+    assert_eq!(with_its_host.exit_code, None);
+    assert_eq!(with_its_host.ended_at, None);
+
+    assert_eq!(ending(running).status, SessionStatus::Running);
 
     host.stop(HostStopReason::Stop).await;
 }

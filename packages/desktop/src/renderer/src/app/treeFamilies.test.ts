@@ -103,13 +103,11 @@ describe('commandRow', () => {
     expect(commandRow(record({ command: '' }))).toBeNull()
   })
 
-  it('carries the mark into the row a command child is nested as under its parent', () => {
+  it('carries the mark into the row a command child is nested as under its parent, ended while its tab is in front', () => {
     const entries = treeEntries(
-      [
-        session(1, 'api-refactor', '/work/helm'),
-        record({ command: 'pnpm test', status: 'exited', exitCode: 1, kept: true })
-      ],
-      (listed) => ({ ...rowOf(listed), ...commandRow(listed) })
+      [session(1, 'api-refactor', '/work/helm'), record({ command: 'pnpm test', status: 'exited', exitCode: 1 })],
+      (listed) => ({ ...rowOf(listed), ...commandRow(listed) }),
+      new Set([3])
     )
     const nested = entries[0]?.row.nested ?? []
     expect(nested).toHaveLength(1)
@@ -128,6 +126,25 @@ describe('commandRow', () => {
 })
 
 describe('treeEntries', () => {
+  it('lists no session that has exited or was stopped, a kept child included, unless its tab is in front on screen, and keeps a lost one', () => {
+    const sessions = [
+      session(1, 'api-refactor', 'C:\\work\\helm'),
+      session(2, 'mapper', 'C:\\work\\helm', { parentId: 1, parentName: 'api-refactor', status: 'exited', kept: true }),
+      session(3, 'docs pass', 'C:\\work\\helm', { status: 'exited', stopped: true }),
+      session(4, 'review', 'C:\\work\\helm', { status: 'exited', exitCode: 0 }),
+      session(5, 'notes', 'C:\\work\\helm', { status: 'lost' })
+    ]
+
+    const away = treeEntries(sessions, rowOf)
+    expect(away.map((entry) => entry.session.id)).toEqual([1, 5])
+    expect(away[0]?.row.nested).toBeUndefined()
+
+    // Looking at 4 and the kept child 2 when they ended: their rows stay until the user moves away.
+    const watching = treeEntries(sessions, rowOf, new Set([2, 4]))
+    expect(watching.map((entry) => entry.session.id)).toEqual([1, 4, 5])
+    expect(ids(watching[0]?.row.nested)).toEqual(['session:2'])
+  })
+
   it('S18: nests a child under its parent whatever folder either runs in', () => {
     const entries = treeEntries(
       [
@@ -156,7 +173,8 @@ describe('treeEntries', () => {
         session(1, 'api-refactor', 'C:\\work\\helm', { status: 'exited' }),
         session(2, 'worker', 'C:\\work\\trackr', { parentId: 1, parentName: 'api-refactor' })
       ],
-      rowOf
+      rowOf,
+      new Set([1])
     )
     expect(entries.map((entry) => entry.session.id)).toEqual([1, 2])
     const worker = entries[1]?.row

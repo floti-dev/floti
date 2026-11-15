@@ -9111,6 +9111,80 @@
       ],
       "type": "object"
     },
+    "SessionEnding": {
+      "description": "How one session ended, as its row holds it: the status fields of its\n[`SessionRecord`] and nothing else.",
+      "properties": {
+        "durationMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "endedAt": {
+          "description": "ISO 8601, or null while running and for a lost session.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "endedBy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EndedBy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Who ended it, as [`SessionRecord::ended_by`]."
+        },
+        "exitCode": {
+          "description": "As [`SessionRecord::exit_code`].",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/SessionStatus",
+          "description": "`exited` for a session that exited or was stopped, `lost` for one that\nwas running when the host that ran it went away, `running` for one\nthat still runs."
+        },
+        "stopped": {
+          "description": "Whether the host ended it itself, as [`SessionRecord::stopped`].",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "SessionEndingsRequest": {
+      "description": "The sessions a client asks how they ended, by row id.",
+      "properties": {
+        "ids": {
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "ids"
+      ],
+      "type": "object"
+    },
     "SessionFocusRequest": {
       "properties": {
         "ids": {
@@ -9324,7 +9398,7 @@
           "type": "integer"
         },
         "kept": {
-          "description": "Whether this child, stopped, stays under its parent in every client's\nSessions tree and family view: its parent stopped it with `keep`, or a\nperson stopped it. Any other ended child leaves them. Cleared when the\nchild is resumed and when a person removes it (`session:remove`). Set\nonly on a child that has exited; absent reads false, as it does from a\nhost before protocol 2.2.",
+          "description": "Whether the host keeps this stopped child for its parent to resume:\nits parent stopped it with `keep`, or a person stopped it. Clients\ndraw no child that has exited, kept or not. Cleared when the child is\nresumed and when a client removes it (`session:remove`). Set only on a\nchild that has exited; absent reads false, as it does from a host\nbefore protocol 2.2.",
           "type": "boolean"
         },
         "label": {
@@ -12718,6 +12792,20 @@
       "name": "session:data",
       "open": {
         "$ref": "#/$defs/SessionStreamOpen"
+      }
+    },
+    {
+      "capability": null,
+      "kind": "request",
+      "name": "session:endings",
+      "request": {
+        "$ref": "#/$defs/SessionEndingsRequest"
+      },
+      "response": {
+        "items": {
+          "$ref": "#/$defs/SessionEnding"
+        },
+        "type": "array"
       }
     },
     {

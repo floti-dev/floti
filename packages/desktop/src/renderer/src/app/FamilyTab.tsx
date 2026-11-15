@@ -217,11 +217,9 @@ export function FamilyTab({
         onStop={shape === 'card' ? () => stop(child.id) : undefined}
         // A running card's Close puts the child away without stopping it: its
         // chip in this tab's crumb and its row in the tree show it from then on.
-        onClose={
-          shape === 'card' || shape === 'screen' || shape === 'ended'
-            ? () => arrange((layout) => closeFamilyChild(layout, tab, child.id))
-            : undefined
-        }
+        // An ended child has none: one that exited has left the view already,
+        // and a lost one goes with the restore offer.
+        onClose={shape === 'card' ? () => arrange((layout) => closeFamilyChild(layout, tab, child.id)) : undefined}
       />
     )
   }

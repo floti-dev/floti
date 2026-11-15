@@ -3293,6 +3293,39 @@ endingIds?: Array<number>,
  */
 outlivingIds?: Array<number>, };
 
+/**
+ * How one session ended, as its row holds it: the status fields of its
+ * [`SessionRecord`] and nothing else.
+ */
+export type SessionEnding = { id: number, 
+/**
+ * `exited` for a session that exited or was stopped, `lost` for one that
+ * was running when the host that ran it went away, `running` for one
+ * that still runs.
+ */
+status: SessionStatus, 
+/**
+ * ISO 8601, or null while running and for a lost session.
+ */
+endedAt: string | null, durationMs: number | null, 
+/**
+ * As [`SessionRecord::exit_code`].
+ */
+exitCode: number | null, 
+/**
+ * Whether the host ended it itself, as [`SessionRecord::stopped`].
+ */
+stopped?: boolean, 
+/**
+ * Who ended it, as [`SessionRecord::ended_by`].
+ */
+endedBy?: EndedBy, };
+
+/**
+ * The sessions a client asks how they ended, by row id.
+ */
+export type SessionEndingsRequest = { ids: number[], };
+
 export type SessionFocusRequest = { 
 /**
  * The sessions on screen: the front tab of each pane showing one.
@@ -3452,12 +3485,12 @@ stopped?: boolean,
  */
 endedBy?: EndedBy, 
 /**
- * Whether this child, stopped, stays under its parent in every client's
- * Sessions tree and family view: its parent stopped it with `keep`, or a
- * person stopped it. Any other ended child leaves them. Cleared when the
- * child is resumed and when a person removes it (`session:remove`). Set
- * only on a child that has exited; absent reads false, as it does from a
- * host before protocol 2.2.
+ * Whether the host keeps this stopped child for its parent to resume:
+ * its parent stopped it with `keep`, or a person stopped it. Clients
+ * draw no child that has exited, kept or not. Cleared when the child is
+ * resumed and when a client removes it (`session:remove`). Set only on a
+ * child that has exited; absent reads false, as it does from a host
+ * before protocol 2.2.
  */
 kept?: boolean, 
 /**
@@ -4380,6 +4413,7 @@ export interface RequestChannels {
   "secrets:save": { request: SecretInput; response: SecretsState; capability: null };
   "session:close": { request: CloseSessionRequest; response: CloseSessionResult; capability: null };
   "session:confirmed": { request: SessionConfirmAnswer; response: null; capability: null };
+  "session:endings": { request: SessionEndingsRequest; response: Array<SessionEnding>; capability: null };
   "session:focus": { request: SessionFocusRequest; response: null; capability: null };
   "session:launch": { request: LaunchSessionRequest; response: LaunchedSession; capability: null };
   "session:list": { request: null; response: Array<SessionRecord>; capability: null };
@@ -4571,6 +4605,7 @@ export const CHANNELS = [
   { name: "session:confirm", kind: "event", capability: null },
   { name: "session:confirmed", kind: "request", capability: null },
   { name: "session:data", kind: "stream", capability: "terminal" },
+  { name: "session:endings", kind: "request", capability: null },
   { name: "session:exit", kind: "event", capability: null },
   { name: "session:focus", kind: "request", capability: null },
   { name: "session:launch", kind: "request", capability: null },

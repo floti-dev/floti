@@ -249,7 +249,7 @@ const SMALL_BUTTON =
  * On a card it carries the state dot, the name, the agent as a tag, the state
  * and for how long, then Open as tab, Stop and Close. A command child has the terminal
  * glyph where the dot would be and "command" where the agent would be. Shrunk it is the dot, the name
- * and the state; ended it says how and when with Close. Pressing the words
+ * and the state; ended it says how and when. Pressing the words
  * is the header's one action, and the buttons are beside it, never inside it.
  */
 export function ChildHeader({

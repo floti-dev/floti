@@ -93,6 +93,25 @@ export function sessionFromHost(record: P.SessionRecord): SessionRecord {
   }
 }
 
+/**
+ * `record`, a session the window held running, as it ended by the host's
+ * word (`session:endings`): its status, end, duration, exit code and who
+ * stopped it are the host's; the rest of the row is the window's. A session
+ * that ended is no longer kept and has no report.
+ */
+export function endedFromHost(record: SessionRecord, ending: P.SessionEnding): SessionRecord {
+  const { stopped: _stopped, endedBy: _endedBy, kept: _kept, lastReport: _lastReport, ...rest } = record
+  return {
+    ...rest,
+    status: ending.status,
+    endedAt: ending.endedAt,
+    durationMs: ending.durationMs,
+    exitCode: ending.exitCode,
+    ...(ending.stopped === true ? { stopped: true } : {}),
+    ...(ending.endedBy == null ? {} : { endedBy: ending.endedBy })
+  }
+}
+
 export function launchedFromHost(launched: P.LaunchedSession): LaunchedSession {
   return {
     session: sessionFromHost(launched.session),

@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   commandState,
-  familyTreeMembers,
   foldedState,
   inFamilyTree,
+  inSessionTree,
   isCommandChild,
-  keptBelow,
   mostPressingState,
   resolveFamilyPress,
   SESSION_URGENCY,
@@ -67,11 +66,10 @@ describe('sessionFamilies', () => {
   })
 
   it('draws a child whose parent has ended as a top-level row marked with the parent’s name', () => {
-    const rows = sessionFamilies([
-      running(1, 'a', { status: 'exited' }),
-      child(2, 'b', 1, 'lead'),
-      child(3, 'c', 2, 'reviewer')
-    ])
+    const rows = sessionFamilies(
+      [running(1, 'a', { status: 'exited' }), child(2, 'b', 1, 'lead'), child(3, 'c', 2, 'reviewer')],
+      new Set([1])
+    )
     expect(drawn(rows)).toEqual(['1', '2 (of lead)', '  3'])
   })
 
@@ -97,35 +95,44 @@ describe('sessionFamilies', () => {
     expect(drawn(rows)).toEqual(['1 (of itself)'])
   })
 
-  it('keeps a kept child under a parent that still runs, stopped', () => {
-    const rows = sessionFamilies([running(1, 'a'), child(2, 'a', 1, 'lead', { status: 'exited', kept: true })])
-    expect(drawn(rows)).toEqual(['1', '  2'])
-  })
-
-  it('draws no row for a child that has exited and is not kept, whatever ended it', () => {
+  it('draws no row for a session that has exited, a kept child and a command child included, and keeps the running and the lost', () => {
     const rows = sessionFamilies([
       running(1, 'a'),
-      child(2, 'a', 1, 'lead', { status: 'exited' }),
-      child(3, 'a', 1, 'lead', { status: 'exited', kept: false }),
-      child(4, 'a', 1, 'lead')
+      child(2, 'a', 1, 'lead', { status: 'exited', kept: true }),
+      child(3, 'a', 1, 'lead', { status: 'exited' }),
+      child(4, 'a', 1, 'lead', { status: 'exited', command: 'pnpm test', exitCode: 1 }),
+      child(5, 'a', 1, 'lead'),
+      running(6, 'a', { status: 'exited' }),
+      running(7, 'a', { status: 'lost' }),
+      child(8, 'a', 1, 'lead', { status: 'lost' })
     ])
-    expect(drawn(rows)).toEqual(['1', '  4'])
+    expect(drawn(rows)).toEqual(['1', '  5', '  8', '7'])
   })
 
-  it('draws no row for a kept child once its parent has ended, and keeps the running child started to outlive it', () => {
-    const rows = sessionFamilies([
-      running(1, 'a', { status: 'exited' }),
+  it('keeps the row of a session that exited while its tab is in front on screen, until it is not', () => {
+    const sessions = [
+      running(1, 'a'),
       child(2, 'a', 1, 'lead', { status: 'exited', kept: true }),
-      child(3, 'a', 1, 'lead')
-    ])
-    expect(drawn(rows)).toEqual(['1', '3 (of lead)'])
+      running(3, 'a', { status: 'exited' })
+    ]
+    expect(drawn(sessionFamilies(sessions, new Set([2, 3])))).toEqual(['1', '  2', '3'])
+    expect(drawn(sessionFamilies(sessions, new Set([3])))).toEqual(['1', '3'])
+    expect(drawn(sessionFamilies(sessions))).toEqual(['1'])
+  })
+})
+
+describe('inSessionTree', () => {
+  it('holds a running or lost session whatever is on screen, and an exited one only while its tab is in front', () => {
+    const none = new Set<number>()
+    expect(inSessionTree(running(1, 'a'), none)).toBe(true)
+    expect(inSessionTree(running(1, 'a', { status: 'lost' }), none)).toBe(true)
+    expect(inSessionTree(running(1, 'a', { status: 'exited' }), none)).toBe(false)
+    expect(inSessionTree(child(2, 'a', 1, 'lead', { status: 'exited', kept: true }), none)).toBe(false)
+    expect(inSessionTree(running(1, 'a', { status: 'exited' }), new Set([1]))).toBe(true)
   })
 })
 
 describe('inFamilyTree', () => {
-  const byId = (sessions: readonly Listed[]): Map<number, Listed> =>
-    new Map(sessions.map((session) => [session.id, session]))
-
   it('keeps every session a person started and every running or lost child', () => {
     const sessions = [
       running(1, 'a', { status: 'exited' }),
@@ -133,45 +140,13 @@ describe('inFamilyTree', () => {
       child(3, 'a', 2, 'lead'),
       child(4, 'a', 2, 'lead', { status: 'lost' })
     ]
-    expect(sessions.map((session) => inFamilyTree(byId(sessions), session))).toEqual([true, true, true, true])
+    expect(sessions.map((session) => inFamilyTree(session))).toEqual([true, true, true, true])
   })
 
-  it('keeps an exited child only while it is kept and its parent is listed and running', () => {
-    const lead = running(1, 'a')
-    const kept = child(2, 'a', 1, 'lead', { status: 'exited', kept: true })
-    const dropped = child(3, 'a', 1, 'lead', { status: 'exited' })
-    const orphan = child(4, 'a', 9, 'gone', { status: 'exited', kept: true })
-    const looped = child(5, 'a', 5, 'itself', { status: 'exited', kept: true })
-    const all = byId([lead, kept, dropped, orphan, looped])
-    expect(inFamilyTree(all, kept)).toBe(true)
-    expect(inFamilyTree(all, dropped)).toBe(false)
-    expect(inFamilyTree(all, orphan)).toBe(false)
-    expect(inFamilyTree(all, looped)).toBe(false)
-    expect(inFamilyTree(byId([{ ...lead, status: 'exited' }, kept]), kept)).toBe(false)
-  })
-
-  it('leaves the order of the sessions that stay as it was given', () => {
-    const sessions = [
-      child(3, 'a', 1, 'lead', { status: 'exited' }),
-      running(1, 'a'),
-      child(2, 'a', 1, 'lead', { status: 'exited', kept: true })
-    ]
-    expect(familyTreeMembers(sessions).map((session) => session.id)).toEqual([1, 2])
-  })
-})
-
-describe('keptBelow', () => {
-  it('names the kept children under a row at any depth, and none of the running ones', () => {
-    const [lead] = sessionFamilies([
-      running(1, 'a'),
-      child(2, 'a', 1, 'lead', { status: 'exited', kept: true }),
-      child(3, 'a', 1, 'lead'),
-      child(4, 'a', 3, 'middle', { status: 'exited', kept: true }),
-      child(5, 'a', 3, 'middle')
-    ])
-    expect(keptBelow(lead!)).toEqual([2, 4])
-    expect(keptBelow(lead!.children[1]!)).toEqual([4])
-    expect(keptBelow(lead!.children[0]!)).toEqual([])
+  it('keeps no child that has exited, kept or not, a command child included', () => {
+    expect(inFamilyTree(child(2, 'a', 1, 'lead', { status: 'exited', kept: true }))).toBe(false)
+    expect(inFamilyTree(child(3, 'a', 1, 'lead', { status: 'exited' }))).toBe(false)
+    expect(inFamilyTree(child(4, 'a', 1, 'lead', { status: 'exited', command: 'pnpm test', exitCode: 0 }))).toBe(false)
   })
 })
 

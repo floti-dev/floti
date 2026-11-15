@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from '@helm/core'
 import type * as P from '../protocol'
 import { historyPageFromHost, historySessionFromHost } from './history'
-import { profileFromHost, sessionFromHost, settingsWithHost, splitSettingsPatch } from './index'
+import { endedFromHost, profileFromHost, sessionFromHost, settingsWithHost, splitSettingsPatch } from './index'
 
 const hostSession = (patch: Partial<P.SessionRecord> = {}): P.SessionRecord => ({
   id: 9,
@@ -236,6 +236,55 @@ const hostProfile = (patch: Partial<P.Profile> = {}): P.Profile => ({
   createdAt: '2026-10-29T09:00:00.000Z',
   updatedAt: '2026-10-29T09:00:00.000Z',
   ...patch
+})
+
+describe('how a session the window held running ended, by the host’s word', () => {
+  const held = sessionFromHost(
+    hostSession({
+      id: 4,
+      label: 'docs pass',
+      parentId: 2,
+      parentName: 'lead',
+      kept: true,
+      lastReport: { state: 'done', text: 'Written', at: '2026-11-05T09:30:00.000Z' }
+    })
+  )
+
+  it('takes its status, end, duration, exit code and who stopped it from the host, and keeps the rest of the row', () => {
+    const ended = endedFromHost(held, {
+      id: 4,
+      status: 'exited',
+      endedAt: '2026-11-05T10:00:00.000Z',
+      durationMs: 3_600_000,
+      exitCode: null,
+      stopped: true,
+      endedBy: 'parent'
+    })
+    expect(ended).toMatchObject({
+      id: 4,
+      label: 'docs pass',
+      parentName: 'lead',
+      status: 'exited',
+      endedAt: '2026-11-05T10:00:00.000Z',
+      durationMs: 3_600_000,
+      exitCode: null,
+      stopped: true,
+      endedBy: 'parent'
+    })
+    // An end is no longer a kept child's, and a report its turn made is gone with it.
+    expect(ended).not.toHaveProperty('kept')
+    expect(ended).not.toHaveProperty('lastReport')
+  })
+
+  it('says nothing of a stop or who made it where the host says none', () => {
+    const ended = endedFromHost(
+      { ...held, stopped: true, endedBy: 'person' },
+      { id: 4, status: 'exited', endedAt: '2026-11-05T10:00:00.000Z', durationMs: 1, exitCode: 3 }
+    )
+    expect(ended).toMatchObject({ status: 'exited', exitCode: 3 })
+    expect(ended).not.toHaveProperty('stopped')
+    expect(ended).not.toHaveProperty('endedBy')
+  })
 })
 
 describe('a host profile, as the window reads it', () => {
