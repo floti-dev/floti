@@ -44,6 +44,7 @@ import {
   browserWillNavigate,
   browserWindowOpen,
   createBrowserHost,
+  flushBrowserCookies,
   type BrowserHost
 } from './browser'
 import { createBrowserMcp, type BrowserMcpHost } from './browser-mcp'
@@ -793,11 +794,14 @@ function startApp(options: AppOptions = {}): void {
         desktopHost.resources.stop()
         desktopHost.sessions.shutdown()
         // Every page's bridge ends first, so none is left running; each host is
-        // then told by its own setting, or the quit question's answer.
+        // then told by its own setting, or the quit question's answer. The
+        // browser's cookies are written to disk in the same wait, while its
+        // views are still open, so the newest sign-in survives the quit.
         const answer = quitGate.answer()
         void Promise.all([
           pageLinks.stop().then(() => desktopHost.link.quit({ end: quitEnds(answer, settingEnds()) })),
-          remoteHosts.quit((id) => quitEnds(answer, remoteEnds(id)))
+          remoteHosts.quit((id) => quitEnds(answer, remoteEnds(id))),
+          flushBrowserCookies()
         ])
           .finally(() => {
             hostStop = 'stopped'

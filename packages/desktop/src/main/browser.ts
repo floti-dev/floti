@@ -19,6 +19,7 @@ import {
   type AppSettings,
   type BrowserReach
 } from '@helm/core'
+import { flushCookies, keepSignIns } from './browserCookies'
 import { TITLEBAR_HEIGHT } from './chrome'
 import { browserKeyCommand, COMMANDS_FOR_THE_WINDOW, COMMANDS_THAT_REPEAT } from '../shared/browserKeys'
 import {
@@ -53,7 +54,8 @@ import {
  * `persist:helm-browser` puts cookies and localStorage under the app's own data
  * directory - which moves with `PORTABLE_EXECUTABLE_DIR`, so a check's browser
  * profile lands in the check's directory and a portable install keeps its
- * profile on the stick. Helm reads nothing out of it. It is configured exactly
+ * profile on the stick. Main keeps its session cookies across a restart and
+ * reads nothing else out of it (`browserSession()`). It is configured exactly
  * once, in `browserSession()`, because a posture applied per view is a posture
  * a future view can be created without.
  *
@@ -578,13 +580,18 @@ let configured: Session | null = null
  * all deny, and a posture that depends on which ones do is a posture that
  * changes with the runtime.
  *
- * **Helm reads nothing out of this partition.** No cookie, no localStorage, no
- * credential of any kind. The one thing it ever does to it is
- * `clearStorageData`, from a button in the pane, and that is a write.
+ * **Cookies are handled in main and nowhere else.** `keepSignIns`
+ * (`browserCookies.ts`) keeps session cookies across a restart by setting each
+ * again with an expiry 30 days out, and gives the partition a user agent
+ * without Electron's and the app's tokens. No cookie's name or value is
+ * logged or sent to the renderer, the host or an agent tool, and nothing reads
+ * localStorage or any other credential. The only other call on what the
+ * partition stores is `clearStorageData`, from a button in the pane.
  */
 export function browserSession(): Session {
   if (configured !== null) return configured
   const partition = session.fromPartition(BROWSER_PARTITION)
+  keepSignIns(partition, app.getName())
 
   /*
    * Two permissions, for the page somebody is in, and nothing else.
@@ -648,6 +655,14 @@ export function browserSession(): Session {
 
   configured = partition
   return partition
+}
+
+/**
+ * Writes the browser partition's cookies to disk, for a quit. Nothing to do
+ * when the partition was never opened.
+ */
+export function flushBrowserCookies(): Promise<void> {
+  return configured === null ? Promise.resolve() : flushCookies(configured.cookies)
 }
 
 /** What a page in the Browser tab may be granted. See `browserSession`. */
@@ -1185,6 +1200,9 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     // agent's view is primed and then hidden instead - see `primeAgentView`.
     view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
     view.setVisible(false)
+    // A load just set its sign-in cookies; Chromium alone would write them
+    // within 30 seconds, and a crash in between would lose them.
+    wc.on('did-stop-loading', () => void flushCookies(browserSession().cookies))
 
     wc.on('page-title-updated', () => announce(entry))
     wc.on('did-start-loading', () => announce(entry))

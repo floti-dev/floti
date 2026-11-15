@@ -35,8 +35,40 @@ export interface FakeKey {
   isAutoRepeat?: boolean
 }
 
+/**
+ * The partition's cookie store, holding nothing. It counts flushes and records
+ * what was set; `main/browserCookies.test.ts` plays the store's side itself.
+ */
+export class FakeCookies extends EventEmitter {
+  flushed = 0
+  readonly sets: Array<Record<string, unknown>> = []
+  get(): Promise<never[]> {
+    return Promise.resolve([])
+  }
+  set(details: Record<string, unknown>): Promise<void> {
+    this.sets.push(details)
+    return Promise.resolve()
+  }
+  flushStore(): Promise<void> {
+    this.flushed += 1
+    return Promise.resolve()
+  }
+}
+
+/** Electron's default user agent as the app gets it: the app's token and Electron's included. */
+export const ELECTRON_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Floti/0.0.0-test Chrome/150.0.7871.212 Electron/43.3.0 Safari/537.36'
+
 /** The handlers `browserSession()` installs, kept so a test can call them. */
 export class FakeSession extends EventEmitter {
+  readonly cookies = new FakeCookies()
+  userAgent = ELECTRON_USER_AGENT
+  getUserAgent(): string {
+    return this.userAgent
+  }
+  setUserAgent(agent: string): void {
+    this.userAgent = agent
+  }
   permissionRequest: ((contents: unknown, permission: string, callback: (granted: boolean) => void) => void) | null =
     null
   permissionCheck: ((...args: unknown[]) => boolean) | null = null
