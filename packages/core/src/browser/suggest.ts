@@ -43,13 +43,16 @@ export interface BrowserSuggestions {
 
 const SCHEME = /^([a-z][a-z0-9+.-]*):\/\//i
 
+/** An address without its scheme or `www.`, and nothing else changed. */
+const bareAddress = (text: string): string => text.trim().replace(SCHEME, '').replace(/^www\./i, '')
+
 /**
  * An address the way a person types it: no scheme, no `www.`, and no lone
  * trailing slash on a bare host. `https://www.example.com/` is `example.com`;
  * `http://localhost:3000/app/` keeps its path as it is.
  */
 export function typedAddress(url: string): string {
-  const bare = url.trim().replace(SCHEME, '').replace(/^www\./i, '')
+  const bare = bareAddress(url)
   return /^[^/?#]+\/$/.test(bare) ? bare.slice(0, -1) : bare
 }
 
@@ -73,14 +76,21 @@ function atWordStart(hay: string, needle: string): boolean {
   return false
 }
 
-/** 0 for an address that starts with the text, 1 for a word start, 2 for anywhere; null for no match. */
-function tierOf(entry: BrowserHistoryEntry, query: string, scheme: string | null): 0 | 1 | 2 | null {
+/**
+ * How well an entry matches: 0 for the address exactly as typed, 1 for an
+ * address that starts with the text, 2 for a word start in the host or title,
+ * 3 for the text anywhere in the address or title; null for no match.
+ */
+type Tier = 0 | 1 | 2 | 3
+
+function tierOf(entry: BrowserHistoryEntry, query: string, scheme: string | null): Tier | null {
   const address = typedAddress(entry.url).toLowerCase()
   const title = entry.title.toLowerCase()
   const schemeFits = scheme === null || entry.url.toLowerCase().startsWith(`${scheme}://`)
-  if (schemeFits && address.startsWith(query)) return 0
-  if (atWordStart(hostOf(entry.url), query) || atWordStart(title, query)) return 1
-  if (entry.url.toLowerCase().includes(query) || title.includes(query)) return 2
+  if (schemeFits && address === query) return 0
+  if (schemeFits && address.startsWith(query)) return 1
+  if (atWordStart(hostOf(entry.url), query) || atWordStart(title, query)) return 2
+  if (entry.url.toLowerCase().includes(query) || title.includes(query)) return 3
   return null
 }
 
@@ -90,20 +100,21 @@ const byUse = (a: BrowserHistoryEntry, b: BrowserHistoryEntry): number =>
 
 /**
  * The history entries matching `text`, best first: an address that starts
- * with it (after the scheme and `www.`), then a word in the host or title that
- * starts with it, then the text anywhere in the address or title. Ties go to
- * the page visited more, then the one visited last.
+ * with it (after the scheme and `www.`), the one that is exactly it first,
+ * then a word in the host or title that starts with it, then the text
+ * anywhere in the address or title. Ties go to the page visited more, then the
+ * one visited last.
  *
  * Empty text matches nothing; `rankBrowserHistory` is for typed text.
  */
 export function rankBrowserHistory(
   entries: readonly BrowserHistoryEntry[],
   text: string
-): Array<{ entry: BrowserHistoryEntry; tier: 0 | 1 | 2 }> {
+): Array<{ entry: BrowserHistoryEntry; tier: Tier }> {
   const query = typedAddress(text).toLowerCase()
   if (query === '') return []
   const scheme = schemeOf(text)
-  const ranked: Array<{ entry: BrowserHistoryEntry; tier: 0 | 1 | 2 }> = []
+  const ranked: Array<{ entry: BrowserHistoryEntry; tier: Tier }> = []
   for (const entry of entries) {
     const tier = tierOf(entry, query, scheme)
     if (tier !== null) ranked.push({ entry, tier })
@@ -119,13 +130,18 @@ export function rankBrowserHistory(
  */
 export function inlineCompletion(text: string, entry: BrowserHistoryEntry): string | null {
   if (text.trim() === '' || /\s/.test(text)) return null
-  const typed = typedAddress(text)
+  // What was typed exactly as typed, slash and all: the rest is shown right
+  // after it, so the two have to line up character for character.
+  const typed = bareAddress(text).toLowerCase()
   if (typed === '') return null
   const scheme = schemeOf(text)
   if (scheme !== null && !entry.url.toLowerCase().startsWith(`${scheme}://`)) return null
-  const address = typedAddress(entry.url)
-  if (!address.toLowerCase().startsWith(typed.toLowerCase())) return null
-  return address.slice(typed.length)
+  // The address as a person types it, or with its lone slash when that is
+  // what was typed (`example.com/` for `https://example.com/`).
+  for (const address of [typedAddress(entry.url), bareAddress(entry.url)]) {
+    if (address.toLowerCase().startsWith(typed)) return address.slice(typed.length)
+  }
+  return null
 }
 
 /** Whether Enter on `text` searches for it rather than opening an address. */
@@ -157,7 +173,7 @@ export function suggestBrowserAddresses(
 
   const ranked = rankBrowserHistory(entries, text)
   const top = ranked[0]
-  const rest = top !== undefined && top.tier === 0 ? inlineCompletion(text, top.entry) : null
+  const rest = top !== undefined && top.tier <= 1 ? inlineCompletion(text, top.entry) : null
   const completion = top !== undefined && rest !== null ? { url: top.entry.url, rest } : null
   const engine = browserSearchName(search)
   const searchRow: BrowserSuggestion[] =

@@ -35,7 +35,7 @@ const page = (url: string): BrowserState => ({
 /** The window's Browser tab and the forwarded ports, wired as App wires them. */
 function renderWindow() {
   return renderHook(() => {
-    const browsers = useBrowsers([])
+    const browsers = useBrowsers()
     const ports = useForwardedPorts((request) => void browsers.open(request))
     return { browsers, ports }
   })

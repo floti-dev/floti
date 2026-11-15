@@ -66,9 +66,21 @@ describe('rankBrowserHistory', () => {
   it('matches a word in the title wherever it starts', () => {
     const history = [page('https://a.test/', 'The Rust Book'), page('https://b.test/', 'Trusted types')]
     expect(rankBrowserHistory(history, 'rust').map(({ entry, tier }) => [entry.url, tier])).toEqual([
-      ['https://a.test/', 1],
-      ['https://b.test/', 2]
+      ['https://a.test/', 2],
+      ['https://b.test/', 3]
     ])
+  })
+
+  it('puts the address exactly as typed before a longer one it starts, however often that was visited', () => {
+    const history = [page('http://localhost:3000/app', '', 9, 20), page('http://localhost:3000/', '', 1, 10)]
+    expect(urls(rankBrowserHistory(history, 'localhost:3000'))).toEqual([
+      'http://localhost:3000/',
+      'http://localhost:3000/app'
+    ])
+    expect(suggestBrowserAddresses(history, 'http://localhost:3000/', 'off').completion).toEqual({
+      url: 'http://localhost:3000/',
+      rest: ''
+    })
   })
 
   it('matches nothing for text that is empty once stripped, or found nowhere', () => {
@@ -88,6 +100,12 @@ describe('inlineCompletion', () => {
 
   it('is empty for the whole address, so Enter still goes to the page as it was visited', () => {
     expect(inlineCompletion('example.com', page('https://example.com/'))).toBe('')
+    expect(inlineCompletion('example.com/', page('https://example.com/'))).toBe('')
+  })
+
+  it('lines up with a trailing slash that was typed', () => {
+    expect(inlineCompletion('localhost:3000/', page('http://localhost:3000/app'))).toBe('app')
+    expect(inlineCompletion('www.example.com/d', page('https://www.example.com/docs'))).toBe('ocs')
   })
 
   it('is null when the text does not start the address, is a phrase, or names another scheme', () => {

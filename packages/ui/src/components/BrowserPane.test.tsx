@@ -1,7 +1,13 @@
 import type { JSX } from 'react'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  suggestBrowserAddresses,
+  type BrowserHistoryEntry,
+  type BrowserSearch,
+  type BrowserSuggestions
+} from '@helm/core/types'
 import { BrowserPane, type BrowserPaneProps, type BrowserPaneState } from './BrowserPane'
 
 const STATE: BrowserPaneState = {
@@ -31,7 +37,19 @@ const TARGETS = [
   { session: 2, name: 'beta' }
 ]
 
-const RECENT = ['http://localhost:3000/b', 'http://localhost:5173/', 'https://example.com/docs']
+/** The browser's history, newest first: what main would rank the suggestions from. */
+const HISTORY: BrowserHistoryEntry[] = [
+  { url: 'http://localhost:3000/b', title: 'Dev server B', visits: 1, lastVisit: 30 },
+  { url: 'http://localhost:5173/', title: 'Vite app', visits: 4, lastVisit: 20 },
+  { url: 'https://example.com/docs', title: 'Example docs', visits: 2, lastVisit: 10 }
+]
+const RECENT = HISTORY.map((entry) => entry.url)
+
+/** Main's answer to `browser:suggest`, ranked by the real ranking over `HISTORY`. */
+const suggestFrom =
+  (history: readonly BrowserHistoryEntry[], engine: BrowserSearch = 'google') =>
+  (text: string): Promise<BrowserSuggestions> =>
+    Promise.resolve(suggestBrowserAddresses(history, text, engine))
 
 /**
  * jsdom does no layout, so the placeholder's box is emulated: the space the
@@ -88,7 +106,9 @@ function renderPane(overrides: Partial<BrowserPaneProps> = {}): BrowserPaneProps
     consoleOpen: false,
     onToggleConsole: vi.fn(),
     onCovering: vi.fn(),
-    recent: RECENT,
+    onSuggest: vi.fn(suggestFrom(HISTORY)),
+    onForget: vi.fn(),
+    onClearHistory: vi.fn(),
     focusRequest: null,
     onFocusRequestDone: vi.fn(),
     searchEngine: 'Google',
@@ -105,7 +125,16 @@ function renderPane(overrides: Partial<BrowserPaneProps> = {}): BrowserPaneProps
 /** Draws the pane rendered last again, as the window does on any change of its own. */
 let redraw: (ui: JSX.Element) => void = () => undefined
 
-const address = (): HTMLInputElement => screen.getByRole('textbox', { name: 'Address' })
+const address = (): HTMLInputElement => screen.getByRole('combobox', { name: 'Address' })
+
+/** The suggestions as they are listed: a page's address, or the Search row's text. */
+const listed = (): string[] =>
+  screen
+    .getAllByRole('option')
+    .map((row) => row.getAttribute('data-browser-suggestion-url') ?? row.textContent ?? '')
+
+/** The part of the bar that is selected: the inline completion, right after typing. */
+const selected = (): string => address().value.slice(address().selectionStart ?? 0, address().selectionEnd ?? 0)
 
 /** The overflow menu, opened. */
 async function openMenu(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
@@ -116,19 +145,148 @@ async function openMenu(user: ReturnType<typeof userEvent.setup>): Promise<HTMLE
 const lastCall = <T,>(fn: unknown): T => (fn as { mock: { calls: T[][] } }).mock.calls.at(-1)![0]!
 
 describe('BrowserPane - the address bar', () => {
-  it('opens the recent addresses on a click, in order, and the view stands down until Escape', async () => {
+  it('opens the pages visited last on a click, newest first, and the view stands down until Escape', async () => {
     const user = userEvent.setup()
     const props = renderPane()
-    expect(screen.queryByRole('list')).toBeNull()
+    expect(screen.queryByRole('listbox')).toBeNull()
 
     await user.click(address())
-    const list = screen.getByRole('list')
-    expect(within(list).getAllByRole('button').map((button) => button.textContent)).toEqual(RECENT)
+    await screen.findByRole('listbox')
+    expect(props.onSuggest).toHaveBeenLastCalledWith('')
+    expect(listed()).toEqual(RECENT)
     expect(lastCall<boolean>(props.onCovering)).toBe(true)
 
     await user.keyboard('{Escape}')
-    expect(screen.queryByRole('list')).toBeNull()
+    expect(screen.queryByRole('listbox')).toBeNull()
     expect(lastCall<boolean>(props.onCovering)).toBe(false)
+  })
+
+  it('filters the suggestions as you type, best match first', async () => {
+    const user = userEvent.setup()
+    const props = renderPane()
+    await user.clear(address())
+    await user.type(address(), 'docs')
+    await waitFor(() => expect(listed()).toEqual(['Search Google fordocs', 'https://example.com/docs']))
+    expect(props.onSuggest).toHaveBeenLastCalledWith('docs')
+
+    await user.clear(address())
+    await user.type(address(), 'vite app')
+    await waitFor(() => expect(listed()).toEqual(['Search Google forvite app', 'http://localhost:5173/']))
+  })
+
+  it('offers no Search row with searching off', async () => {
+    const user = userEvent.setup()
+    renderPane({ onSuggest: vi.fn(suggestFrom(HISTORY, 'off')), searchEngine: null })
+    await user.clear(address())
+    await user.type(address(), 'vite app')
+    await waitFor(() => expect(listed()).toEqual(['http://localhost:5173/']))
+  })
+
+  it('completes the top match inline, selected, and Backspace takes the completion away', async () => {
+    const user = userEvent.setup()
+    renderPane()
+    await user.clear(address())
+    await user.type(address(), 'local')
+    // Both dev servers start with it; the one visited more is the top match.
+    await waitFor(() => expect(address().value).toBe('localhost:5173'))
+    expect(selected()).toBe('host:5173')
+
+    // Typing on along the completion keeps it, one letter shorter.
+    await user.keyboard('h')
+    expect(address().value).toBe('localhost:5173')
+    expect(selected()).toBe('ost:5173')
+
+    await user.keyboard('{Backspace}')
+    expect(address().value).toBe('localh')
+    // It stays away while the answer for what is left comes back.
+    await waitFor(() => expect(listed()[0]).toBe('http://localhost:5173/'))
+    expect(address().value).toBe('localh')
+  })
+
+  it('opens the completed page as it was visited on Enter, scheme and all', async () => {
+    const user = userEvent.setup()
+    const props = renderPane()
+    await user.clear(address())
+    await user.type(address(), 'exa')
+    await waitFor(() => expect(address().value).toBe('example.com/docs'))
+    await user.keyboard('{Enter}')
+    expect(props.onNavigate).toHaveBeenCalledWith('https://example.com/docs')
+  })
+
+  it('moves through the rows with the arrows, opens the one Enter is pressed on, and Escape restores what was typed', async () => {
+    const user = userEvent.setup()
+    const props = renderPane()
+    await user.clear(address())
+    await user.type(address(), 'o')
+    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(1))
+    const rows = listed()
+
+    await user.keyboard('{ArrowDown}{ArrowDown}')
+    expect(screen.getAllByRole('option')[1]?.getAttribute('aria-selected')).toBe('true')
+    expect(address().value).toBe(rows[1])
+    expect(address().getAttribute('aria-activedescendant')).toBe(screen.getAllByRole('option')[1]?.id)
+
+    await user.keyboard('{Escape}')
+    expect(address().value).toBe('o')
+    expect(screen.getByRole('listbox')).toBeTruthy()
+
+    await user.keyboard('{ArrowUp}')
+    expect(address().value).toBe(rows.at(-1))
+    await user.keyboard('{Enter}')
+    expect(props.onNavigate).toHaveBeenCalledWith(rows.at(-1))
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('searches for what was typed from the Search row', async () => {
+    const user = userEvent.setup()
+    const props = renderPane()
+    await user.clear(address())
+    await user.type(address(), 'vite app')
+    await waitFor(() => expect(listed()[0]).toBe('Search Google forvite app'))
+    await user.keyboard('{ArrowDown}{Enter}')
+    expect(props.onNavigate).toHaveBeenCalledWith('vite app')
+  })
+
+  it('only highlights a row under the pointer, leaving the bar and Enter with what was typed', async () => {
+    const user = userEvent.setup()
+    const props = renderPane()
+    await user.clear(address())
+    await user.type(address(), 'vite app')
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(2))
+    fireEvent.mouseMove(screen.getAllByRole('option')[1]!)
+    expect(screen.getAllByRole('option')[1]?.getAttribute('aria-selected')).toBe('true')
+    expect(address().value).toBe('vite app')
+    await user.keyboard('{Enter}')
+    expect(props.onNavigate).toHaveBeenCalledWith('vite app')
+  })
+
+  it('removes the highlighted page from history with Shift+Delete', async () => {
+    const user = userEvent.setup()
+    const props = renderPane()
+    await user.click(address())
+    await screen.findByRole('listbox')
+    await user.keyboard('{ArrowDown}{ArrowDown}{Shift>}{Delete}{/Shift}')
+    expect(props.onForget).toHaveBeenCalledWith('http://localhost:5173/')
+    expect(listed()).toEqual(['http://localhost:3000/b', 'https://example.com/docs'])
+    // The highlight stays where it was, on the row that took its place.
+    expect(address().value).toBe('https://example.com/docs')
+  })
+
+  it('removes nothing with Shift+Delete when no page is highlighted', async () => {
+    const user = userEvent.setup()
+    const props = renderPane()
+    await user.click(address())
+    await screen.findByRole('listbox')
+    await user.keyboard('{Shift>}{Delete}{/Shift}')
+    expect(props.onForget).not.toHaveBeenCalled()
+  })
+
+  it('clears the browsing history from the More menu', async () => {
+    const user = userEvent.setup()
+    const props = renderPane()
+    const menu = await openMenu(user)
+    await user.click(within(menu).getByRole('menuitem', { name: 'Clear browsing history' }))
+    expect(props.onClearHistory).toHaveBeenCalledTimes(1)
   })
 
   it('says the list is open once, however often the pane is drawn while it is', async () => {
@@ -136,6 +294,7 @@ describe('BrowserPane - the address bar', () => {
     const first = vi.fn()
     const props = renderPane({ onCovering: first })
     await user.click(address())
+    await screen.findByRole('listbox')
     const opened = [...first.mock.calls]
     expect(opened.at(-1)).toEqual([true])
 
@@ -146,7 +305,7 @@ describe('BrowserPane - the address bar', () => {
     redraw(<BrowserPane {...props} onCovering={next} still="data:image/png;base64,cGFnZQ==" />)
     expect(first.mock.calls).toEqual(opened)
     expect(next).not.toHaveBeenCalled()
-    expect(screen.getByRole('list')).toBeTruthy()
+    expect(screen.getByRole('listbox')).toBeTruthy()
 
     // Closing it is said to the callback the pane has now.
     await user.keyboard('{Escape}')
@@ -156,19 +315,22 @@ describe('BrowserPane - the address bar', () => {
 
   it('opens nothing over the page when there is nothing to list', async () => {
     const user = userEvent.setup()
-    const props = renderPane({ recent: [] })
+    const props = renderPane({ onSuggest: vi.fn(suggestFrom([])) })
     await user.click(address())
-    expect(screen.queryByRole('list')).toBeNull()
+    await waitFor(() => expect(props.onSuggest).toHaveBeenCalledWith(''))
+    await act(async () => undefined)
+    expect(screen.queryByRole('listbox')).toBeNull()
     expect(props.onCovering).not.toHaveBeenCalledWith(true)
   })
 
-  it('goes to a recent address when one is chosen', async () => {
+  it('goes to a suggested page when one is chosen', async () => {
     const user = userEvent.setup()
     const props = renderPane()
     await user.click(address())
-    await user.click(within(screen.getByRole('list')).getByRole('button', { name: 'http://localhost:5173/' }))
+    await screen.findByRole('listbox')
+    await user.click(screen.getAllByRole('option')[1]!)
     expect(props.onNavigate).toHaveBeenCalledWith('http://localhost:5173/')
-    expect(screen.queryByRole('list')).toBeNull()
+    expect(screen.queryByRole('listbox')).toBeNull()
   })
 
   it('stays open when the bar is clicked again just after Enter, however long it is then left', async () => {
@@ -181,13 +343,16 @@ describe('BrowserPane - the address bar', () => {
       expect(document.activeElement).not.toBe(address())
 
       // Back in the bar before anything the Enter set going has run out.
-      act(() => address().focus())
-      fireEvent.click(address())
-      expect(screen.getByRole('list')).toBeTruthy()
+      await act(async () => {
+        address().focus()
+        fireEvent.click(address())
+        await Promise.resolve()
+      })
+      expect(screen.getByRole('listbox')).toBeTruthy()
       act(() => {
         vi.advanceTimersByTime(60_000)
       })
-      expect(screen.getByRole('list')).toBeTruthy()
+      expect(screen.getByRole('listbox')).toBeTruthy()
       expect(lastCall<boolean>(props.onCovering)).toBe(true)
     } finally {
       vi.useRealTimers()
@@ -199,8 +364,9 @@ describe('BrowserPane - the address bar', () => {
     const props = renderPane()
     expect(address().value).toBe('http://localhost:3000/')
     await user.clear(address())
-    await user.type(address(), 'localhost:5173{Enter}')
-    expect(props.onNavigate).toHaveBeenCalledWith('localhost:5173')
+    // An address the history has never seen, so nothing completes it.
+    await user.type(address(), 'localhost:4000{Enter}')
+    expect(props.onNavigate).toHaveBeenCalledWith('localhost:4000')
     expect(address().value).toBe('http://localhost:3000/')
   })
 
@@ -244,12 +410,13 @@ describe('BrowserPane - the address bar', () => {
     expect(address().value).toBe(search)
   })
 
-  it('keeps a recent address chosen in the bar until the address being loaded arrives', async () => {
+  it('keeps a suggested page chosen in the bar until the address being loaded arrives', async () => {
     const onNavigate = vi.fn(() => new Promise<void>(() => undefined))
     const user = userEvent.setup()
     renderPane({ onNavigate })
     await user.click(address())
-    await user.click(within(screen.getByRole('list')).getByRole('button', { name: 'http://localhost:5173/' }))
+    await screen.findByRole('listbox')
+    await user.click(screen.getAllByRole('option')[1]!)
     expect(address().value).toBe('http://localhost:5173/')
   })
 
@@ -483,6 +650,7 @@ describe('BrowserPane - the controls', () => {
       'Phone390 px',
       'Open consoleCtrl Shift J',
       'Open DevToolsF12',
+      'Clear browsing history',
       'Clear cookies and site data'
     ])
     expect(within(menu).getByRole('menuitemcheckbox', { name: /Full/ }).getAttribute('aria-checked')).toBe('true')

@@ -294,6 +294,26 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   address, clears it and never sets it, so a page cannot put an address in
   the bar before it is there. From Enter until main answers, the bar keeps
   what was typed.
+- The address bar suggests from the browser's history, the `browser_history`
+  table in `helm.db`: the newest 500 pages by last visit, with title and visit
+  count. Main owns it (`openBrowserHistory`, read once into memory): `remember`
+  records a visit when a page the user has commits (http or https, a real
+  response, or a move within the page), and `page-title-updated` keeps its
+  title. A page an agent opened is never recorded. `browser:suggest` ranks in
+  main (`suggestBrowserAddresses` in `@helm/core`): the address exactly as
+  typed, then an address starting with the text (after the scheme and
+  `www.`), then a word start in the host or title, then a substring; ties by
+  visits, then recency; at most 8 rows. With nothing typed it lists the pages
+  visited last. When Enter would search, a "Search <engine> for" row comes
+  first, after the top page when that page completes inline. The completion
+  is selected after the caret; a deletion holds it back, so Backspace removes
+  it, and Enter on it opens the page as visited. In the bar the arrows move
+  the highlight (the row's address shows in the bar), Enter opens it, Escape
+  first restores what was typed, and Shift+Delete forgets a page
+  (`browser:forget`). The More menu's Clear browsing history empties it
+  (`browser:clearHistory`). `BrowserSuggestions` draws the list from props
+  alone; while it is open the views stand down behind a still
+  (`setSuppressed('address-list')`).
 - Stop (`browser:stop`, `stop` in `browser.ts`) stops the load and any quiet
   reconnect. The reload button turns into Stop while a page loads. Escape
   stops a load from the bar when nothing is typed. In a page, main takes

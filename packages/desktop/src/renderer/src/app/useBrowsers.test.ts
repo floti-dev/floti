@@ -239,7 +239,7 @@ describe("useBrowsers - each page's icon", () => {
   const ICON = 'data:image/png;base64,aWNvbg=='
 
   it('holds the icon main sent for a page, until it changes, clears or the page closes', () => {
-    const { result } = renderHook(() => useBrowsers([]))
+    const { result } = renderHook(() => useBrowsers())
     act(() => {
       bridge.emit('browser:opened', opened(5))
       bridge.emit('browser:opened', opened(6))
