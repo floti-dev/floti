@@ -85,6 +85,8 @@ function renderPane(overrides: Partial<BrowserPaneProps> = {}): BrowserPaneProps
     onZoom: vi.fn(),
     onClearStorage: vi.fn(),
     onEvaluate: vi.fn(() => Promise.resolve({ ok: true, value: '', error: null })),
+    consoleOpen: false,
+    onToggleConsole: vi.fn(),
     onCovering: vi.fn(),
     recent: RECENT,
     focusRequest: null,
@@ -479,6 +481,7 @@ describe('BrowserPane - the controls', () => {
       'Full',
       'Tablet820 px',
       'Phone390 px',
+      'Open consoleCtrl Shift J',
       'Open DevToolsF12',
       'Clear cookies and site data'
     ])
@@ -555,11 +558,31 @@ describe('BrowserPane - the controls', () => {
     expect(screen.queryByRole('textbox', { name: 'Find in page' })).toBeNull()
   })
 
-  it("has a console that evaluates in the page", async () => {
+  it('draws no console row, count or filter while the console is closed, errors included', () => {
+    renderPane({ state: { ...STATE, errors: 3 }, entries: [{ level: 'error', message: 'boom', source: 'a.js', line: 1 }] })
+    expect(screen.queryByRole('button', { name: /^Console/ })).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Evaluate JavaScript in the page' })).toBeNull()
+    expect(screen.queryByText('Console')).toBeNull()
+  })
+
+  it('has a console that evaluates in the page, open, with a close button', async () => {
     const user = userEvent.setup()
-    renderPane()
-    await user.click(screen.getByRole('button', { name: /^Console/ }))
+    const props = renderPane({ consoleOpen: true })
     expect(screen.getByRole('textbox', { name: 'Evaluate JavaScript in the page' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /^Console/ }))
+    expect(props.onToggleConsole).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens and closes the console from the More menu, which names the key', async () => {
+    const user = userEvent.setup()
+    const props = renderPane()
+    const item = within(await openMenu(user)).getByRole('menuitem', { name: /Open console/ })
+    expect(item.textContent).toContain('Ctrl Shift J')
+    await user.click(item)
+    expect(props.onToggleConsole).toHaveBeenCalledTimes(1)
+    cleanup()
+    renderPane({ consoleOpen: true })
+    expect(within(await openMenu(user)).getByRole('menuitem', { name: /Close console/ })).toBeTruthy()
   })
 })
 

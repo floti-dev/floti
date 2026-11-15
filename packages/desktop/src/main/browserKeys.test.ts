@@ -37,7 +37,8 @@ describe('browserKeyCommand on Windows and Linux', () => {
     [press('-', { control: true }), 'zoom-out'],
     [press('0', { control: true }), 'zoom-reset'],
     [press('F12'), 'devtools'],
-    [press('I', { control: true, shift: true }), 'devtools']
+    [press('I', { control: true, shift: true }), 'devtools'],
+    [press('J', { control: true, shift: true }), 'console']
   ]
 
   it('maps the bindings every browser on Windows has, unchanged', () => {
@@ -87,7 +88,9 @@ describe('browserKeyCommand on macOS', () => {
       // Option changes the character the key types; the physical key decides.
       [press('ˆ', { meta: true, alt: true, code: 'KeyI' }), 'devtools'],
       [press('Dead', { meta: true, alt: true, code: 'KeyI' }), 'devtools'],
-      [press('i', { meta: true, alt: true }), 'devtools']
+      [press('i', { meta: true, alt: true }), 'devtools'],
+      [press('∆', { meta: true, alt: true, code: 'KeyJ' }), 'console'],
+      [press('j', { meta: true, alt: true }), 'console']
     ]
     for (const [key, command] of table) expect(browserKeyCommand(key, 'darwin'), JSON.stringify(key)).toBe(command)
   })
@@ -115,7 +118,9 @@ describe('browserKeyCommand on macOS', () => {
       press('c', { meta: true }),
       press('ArrowLeft', { meta: true }),
       press('i', { meta: true, alt: true, shift: true }),
-      press('w', { meta: true, alt: true })
+      press('w', { meta: true, alt: true }),
+      press('j', { meta: true, alt: true, shift: true }),
+      press('J', { control: true, shift: true })
     ]
     for (const key of theirs) expect(browserKeyCommand(key, 'darwin'), JSON.stringify(key)).toBeNull()
   })
