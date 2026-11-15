@@ -62,7 +62,7 @@ test('a session drives a browser tab of its own through its tools, and loses the
 
     // The user opens a tab of their own.
     await window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name: 'Browser', exact: true }).click()
-    const address = window.getByRole('textbox', { name: 'Address' })
+    const address = window.getByRole('combobox', { name: 'Address' })
     await address.fill(`${pages.origin}/user`)
     await address.press('Enter')
     await expect(window.getByRole('tab', { name: 'User page' })).toBeVisible()
@@ -176,7 +176,7 @@ test('the user shares a page with a session, which reads and drives it until the
 
     // The user's page, not yet shared: listed, and closed to the session.
     await window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name: 'Browser', exact: true }).click()
-    const address = window.getByRole('textbox', { name: 'Address' })
+    const address = window.getByRole('combobox', { name: 'Address' })
     await address.fill(`${pages.origin}/shared`)
     await address.press('Enter')
     const pageTab = window.getByRole('tab', { name: /^Shared page/ })

@@ -85,6 +85,6 @@ test('a pane’s + opens a session, a profile session or a browser tab in that p
   await second.getByRole('button', { name: 'New tab' }).click()
   await window.getByRole('menu', { name: 'New tab' }).getByRole('menuitem', { name: 'Browser tab' }).click()
   await expect(second.getByRole('tab', { name: 'New tab' })).toHaveAttribute('aria-selected', 'true')
-  await expect(second.getByRole('textbox', { name: 'Address' })).toBeFocused()
+  await expect(second.getByRole('combobox', { name: 'Address' })).toBeFocused()
   await expect(first.getByRole('tab', { name: 'New tab' })).toHaveCount(0)
 })

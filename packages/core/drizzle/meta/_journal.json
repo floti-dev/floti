@@ -239,6 +239,13 @@
       "when": 1794707957167,
       "tag": "0033_notice_causes",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1794780749620,
+      "tag": "0034_browser_history",
+      "breakpoints": true
     }
   ]
 }

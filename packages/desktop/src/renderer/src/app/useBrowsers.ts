@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { subscribeOverlay, overlayOpen, type ConsoleEntry } from '@helm/ui'
+import type { BrowserSuggestions } from '@helm/core/types'
 import type { BrowserAvailability, BrowserShare, BrowserState } from '../../../shared/ipc'
 import { helm } from './bridge'
 import {
@@ -161,8 +162,15 @@ export interface BrowserPanesState {
    * end was never heard was still holding every view down.
    */
   setSuppressed: (reason: SuppressReason, suppressed: boolean) => void
-  /** The last addresses any view visited, newest first. */
-  recent: string[]
+  /**
+   * The address bar's suggestions for what is typed, from the history main
+   * keeps. Nothing leaves the machine; the answer names the text it is for.
+   */
+  suggest: (text: string) => Promise<BrowserSuggestions>
+  /** Forget one page from the history: Shift+Delete on a suggestion. */
+  forget: (url: string) => void
+  /** Forget the whole history: the More menu's Clear browsing history. */
+  clearHistory: () => void
   /** The last problem `browser:open` refused with, for the strip to report. */
   error: string | null
   dismissError: () => void
@@ -176,7 +184,7 @@ export interface BrowserPanesState {
 
 const AVAILABLE: BrowserAvailability = { available: true }
 
-export function useBrowsers(recent: readonly string[]): BrowserPanesState {
+export function useBrowsers(): BrowserPanesState {
   const [views, setViews] = useState<Map<number, BrowserState>>(() => new Map())
   const [entries, setEntries] = useState<Map<number, ConsoleEntry[]>>(() => new Map())
   const [icons, setIcons] = useState<ReadonlyMap<number, string>>(() => new Map())
@@ -566,6 +574,9 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
     [remember, failed]
   )
   const shareTargets = useCallback(() => helm.invoke('browser:shareTargets'), [])
+  const suggest = useCallback((text: string) => helm.invoke('browser:suggest', { text }), [])
+  const forget = useCallback((url: string) => helm.send('browser:forget', { url }), [])
+  const clearHistory = useCallback(() => helm.send('browser:clearHistory'), [])
   const share = useCallback(
     (id: number, session: number | null) => {
       void helm.invoke('browser:share', { id, session }).then(remember).catch(failed(id, 'share'))
@@ -638,7 +649,9 @@ export function useBrowsers(recent: readonly string[]): BrowserPanesState {
     sendBounds,
     setShowing,
     setSuppressed,
-    recent: [...recent],
+    suggest,
+    forget,
+    clearHistory,
     error,
     dismissError: () => setError(null),
     availability

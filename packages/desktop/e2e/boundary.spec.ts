@@ -195,7 +195,7 @@ test('plugin pages of both versions, a version 1 background page, a tool called 
   const fixture = await startBrowserFixture()
   try {
     await destination(helm, 'Browser').click()
-    const address = window.getByRole('textbox', { name: 'Address' })
+    const address = window.getByRole('combobox', { name: 'Address' })
     await address.fill(`${fixture.http}/`)
     await address.press('Enter')
     await expect(window.getByRole('tab', { name: /^Helm fixture one/ })).toBeVisible()

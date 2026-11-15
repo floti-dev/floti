@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, BrowserWindowConstructorOptions, WebContents } from 'electron'
-import { DEFAULT_SETTINGS, type AppSettings } from '@helm/core'
+import { DEFAULT_SETTINGS, openBrowserHistory, openStore, type AppSettings, type BrowserHistory, type Store } from '@helm/core'
 import {
   FakeBrowserWindow,
   FakeIncomingMessage,
@@ -58,7 +58,14 @@ interface Workspace {
   commands: BrowserCommandEvent[]
   /** Every `browser:favicon` the host sent, in order. */
   favicons: BrowserFavicon[]
+  /** The history the host records into, on a database in memory. */
+  history: BrowserHistory
+  store: Store
 }
+
+/** The history's addresses, newest first. */
+const historyOf = (h: Workspace): string[] =>
+  [...h.history.entries()].sort((a, b) => b.lastVisit - a.lastVisit || b.visits - a.visits).map((entry) => entry.url)
 
 let current: Workspace | null = null
 
@@ -68,8 +75,12 @@ let current: Workspace | null = null
  * tests happen to run on.
  */
 function workspace(patch: Partial<AppSettings> = {}, platform: NodeJS.Platform = 'win32'): Workspace {
-  let settings: AppSettings = { ...DEFAULT_SETTINGS, browserRecentUrls: [], browserProjectUrls: {}, ...patch }
+  let settings: AppSettings = { ...DEFAULT_SETTINGS, browserProjectUrls: {}, ...patch }
   const window = new FakeBrowserWindow()
+  const store = openStore({ file: ':memory:' })
+  // A clock that moves a millisecond per visit, so newest-first is the order the visits were made.
+  let clock = 0
+  const history = openBrowserHistory(store, { now: () => ++clock })
   const opened: BrowserOpened[] = []
   const closed: number[] = []
   const commands: BrowserCommandEvent[] = []
@@ -81,6 +92,7 @@ function workspace(patch: Partial<AppSettings> = {}, platform: NodeJS.Platform =
     writeSettings: (next) => {
       settings = { ...settings, ...next }
     },
+    history,
     onChanged: () => undefined,
     onOpened: (page) => opened.push(page),
     onClosed: (id) => closed.push(id),
@@ -100,13 +112,16 @@ function workspace(patch: Partial<AppSettings> = {}, platform: NodeJS.Platform =
     opened,
     closed,
     commands,
-    favicons
+    favicons,
+    history,
+    store
   }
   return current
 }
 
 afterEach(() => {
   current?.host.shutdown()
+  current?.store.close()
   current = null
   vi.useRealTimers()
 })
@@ -141,7 +156,7 @@ const partition = (): FakeSession => {
 }
 
 describe('browser host - navigation and the address bar', () => {
-  it('remembers an address only once a page has arrived there, newest first, ten at most', () => {
+  it('records a page in the history only once it has arrived there, counting visits, newest first', () => {
     const h = workspace()
     const { id, wc } = openTab(h)
     expect(wc.loads).toEqual([])
@@ -149,24 +164,66 @@ describe('browser host - navigation and the address bar', () => {
     h.host.navigate(id, 'localhost:3000')
     expect(wc.loads).toEqual(['http://localhost:3000/'])
     // Asked for is not arrived.
-    expect(h.settings().browserRecentUrls).toEqual([])
+    expect(historyOf(h)).toEqual([])
     // Nor is an error page, which Chromium commits like any other navigation.
     wc.failLoad(-105, 'ERR_NAME_NOT_RESOLVED', 'http://localhost:3000/')
-    expect(h.settings().browserRecentUrls).toEqual([])
+    expect(historyOf(h)).toEqual([])
 
+    wc.commit('http://localhost:3000/', { title: 'Dev server' })
+    expect(h.history.entries()).toEqual([
+      { url: 'http://localhost:3000/', title: 'Dev server', visits: 1, lastVisit: expect.any(Number) }
+    ])
+
+    wc.commit('http://localhost:3000/docs')
     wc.commit('http://localhost:3000/')
-    expect(h.settings().browserRecentUrls).toEqual(['http://localhost:3000/'])
+    expect(historyOf(h)).toEqual(['http://localhost:3000/', 'http://localhost:3000/docs'])
+    expect(h.history.entries().find((entry) => entry.url === 'http://localhost:3000/')?.visits).toBe(2)
+  })
 
-    const pages = Array.from({ length: 11 }, (_, n) => `http://localhost:3000/page-${String(n)}`)
-    for (const url of pages) wc.commit(url)
-    expect(h.settings().browserRecentUrls).toEqual(pages.slice(1).reverse())
+  it('takes the title a page says after it arrives, and a move within the page with the title it has', () => {
+    const h = workspace()
+    const { wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/')
+    wc.sayTitle('Inbox')
+    wc.navigateInPage('http://localhost:3000/#mail')
+    const titles = Object.fromEntries(h.history.entries().map((entry) => [entry.url, entry.title]))
+    expect(titles).toEqual({ 'http://localhost:3000/': 'Inbox', 'http://localhost:3000/#mail': 'Inbox' })
+  })
 
-    // A revisit moves to the front rather than appearing twice.
-    wc.commit(pages[5]!)
-    const recent = h.settings().browserRecentUrls
-    expect(recent[0]).toBe(pages[5])
-    expect(recent).toHaveLength(10)
-    expect(new Set(recent).size).toBe(10)
+  it('never records a page an agent opened, nor its title', async () => {
+    const h = workspace()
+    const { wc } = await openAgentTab(h, SESSIONS.get(7)!, 'http://localhost:4000/')
+    wc.commit('http://localhost:4000/next', { title: 'The agent’s page' })
+    wc.navigateInPage('http://localhost:4000/next#more')
+    expect(h.history.entries()).toEqual([])
+  })
+
+  it('suggests from the history, and forgets one page or all of them', () => {
+    const h = workspace({ browserSearch: 'bing' })
+    const { wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/', { title: 'Dev server' })
+    wc.commit('https://example.com/', { title: 'Example Domain' })
+
+    expect(h.host.suggest('local')).toEqual({
+      text: 'local',
+      // A word would search, so its Search row follows the page Enter opens.
+      rows: [
+        { kind: 'page', url: 'http://localhost:3000/', title: 'Dev server' },
+        { kind: 'search', text: 'local', engine: 'Bing' }
+      ],
+      completion: { url: 'http://localhost:3000/', rest: 'host:3000' }
+    })
+    expect(h.host.suggest('example domain').rows).toEqual([
+      { kind: 'search', text: 'example domain', engine: 'Bing' },
+      { kind: 'page', url: 'https://example.com/', title: 'Example Domain' }
+    ])
+
+    h.host.forget('http://localhost:3000/')
+    expect(h.host.suggest('local').rows).toEqual([{ kind: 'search', text: 'local', engine: 'Bing' }])
+    expect(historyOf(h)).toEqual(['https://example.com/'])
+
+    h.host.clearHistory()
+    expect(h.host.suggest('').rows).toEqual([])
   })
 
   it("opens a tab beside a project on that project's last address, and one beside none empty", () => {
@@ -494,7 +551,7 @@ describe('browser host - a dev server that is not up yet', () => {
     expect(waiting.problem).toContain('Waiting for')
     expect(waiting.problem).toContain(url)
     expect(waiting.retryingUntil).toBe(start + 30_000)
-    expect(h.settings().browserRecentUrls).toEqual([])
+    expect(historyOf(h)).toEqual([])
 
     // The backoff: a third of a second, then twice that.
     vi.advanceTimersByTime(299)
@@ -515,7 +572,7 @@ describe('browser host - a dev server that is not up yet', () => {
     expect(loaded.problem).toBeNull()
     expect(loaded.retryingUntil).toBeNull()
     expect(loaded.title).toBe('Dev server')
-    expect(h.settings().browserRecentUrls).toEqual([url])
+    expect(historyOf(h)).toEqual([url])
     vi.advanceTimersByTime(60_000)
     expect(wc.loads).toHaveLength(3)
   })

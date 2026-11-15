@@ -40,6 +40,22 @@ export {
 } from './browser/reach'
 
 /**
+ * The address bar's suggestions, re-exported for the same reason: the bar
+ * draws them and applies the inline completion. `browser/suggest.ts` imports
+ * only `reach.ts`.
+ */
+export {
+  BROWSER_SUGGESTIONS_MAX,
+  inlineCompletion,
+  rankBrowserHistory,
+  suggestBrowserAddresses,
+  typedAddress,
+  type BrowserHistoryEntry,
+  type BrowserSuggestion,
+  type BrowserSuggestions
+} from './browser/suggest'
+
+/**
  * An agent file as the Agents page edits it, re-exported for the same
  * reason: the page's form reads and writes its draft with it on every edit.
  * `agents/agentFile.ts` imports nothing.
@@ -1800,16 +1816,6 @@ export interface AppSettings {
    */
   restoreWithoutAsking: boolean
   /**
-   * The last URLs a browser pane visited, newest first.
-   *
-   * The address bar's dropdown and nothing more elaborate - no history page, no
-   * manager, no search over it (see the milestone's "explicitly out"). State
-   * rather than a preference, so it sits beside `paneLayout` and is
-   * deliberately absent from the settings pane. Bounded by
-   * `BROWSER_RECENT_URLS_MAX`.
-   */
-  browserRecentUrls: string[]
-  /**
    * The last URL a browser pane was on, per project directory.
    *
    * Also state. It is what makes opening a browser beside a project cheap: the
@@ -1979,9 +1985,6 @@ export function quitEndsSessions(settings: Pick<AppSettings, 'quitSessions'>, ho
   return quitChoice(settings, host) === 'end'
 }
 
-/** How many addresses the dropdown offers. Ten, and no manager behind it. */
-export const BROWSER_RECENT_URLS_MAX = 10
-
 /**
  * How many projects keep a remembered URL.
  *
@@ -2042,7 +2045,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // beside a pane that is not would be a surprise rather than a posture.
   browserMcpLocalOnly: false,
   restoreWithoutAsking: false,
-  browserRecentUrls: [],
   browserProjectUrls: {},
   // On, because the collision this exists to prevent - two sessions in one
   // working tree - happens to somebody who never went looking for a setting,

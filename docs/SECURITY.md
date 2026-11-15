@@ -53,7 +53,9 @@ together. The agent tools listener's token and origin rules are in
   browser. Every permission is denied but clipboard writing and fullscreen,
   and those only to a page in the Browser tab that has the keyboard. Only the
   address bar searches, on Enter, with the engine in `browserSearch` (`off`
-  refuses); nothing is sent while typing.
+  refuses); nothing is sent while typing. Its suggestions are ranked in main
+  from the history in `helm.db` (`browser_history`), which records only the
+  pages the user has, never a page an agent opened.
 - No web page runs without Chromium's OS sandbox. A Linux Floti started with
   `--no-sandbox` (an AppImage's AppRun adds it where user namespaces are
   refused) opens no browser view and gives no session the browser tools, and

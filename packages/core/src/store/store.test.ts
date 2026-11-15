@@ -305,7 +305,6 @@ describe('settings', () => {
       browserMcp: false,
       browserMcpLocalOnly: true,
       restoreWithoutAsking: true,
-      browserRecentUrls: ['http://localhost:3000/', 'https://example.com/docs'],
       browserProjectUrls: { [join(dir, 'alpha').toLowerCase()]: 'http://localhost:5173/' },
       sessionMcp: false,
       sessionAgents: false,
@@ -1145,24 +1144,6 @@ describe('settings validation', () => {
       bad: ['yes', '', 0, true, {}]
     },
     {
-      // The interesting rejections are the ones that would put a row in the
-      // dropdown that does nothing when clicked: a bare word, a relative path,
-      // and `file:` - which the pane refuses to navigate to, so it must not be
-      // offered one either.
-      key: 'browserRecentUrls',
-      good: [[], ['http://localhost:3000/'], ['https://example.com/a', 'http://127.0.0.1:8080/b']],
-      bad: [
-        null,
-        'http://localhost:3000/',
-        ['localhost:3000'],
-        ['file:///C:/tmp/x.html'],
-        ['/docs'],
-        [''],
-        [42],
-        Array.from({ length: 11 }, (_, i) => `http://localhost:${String(3000 + i)}/`)
-      ]
-    },
-    {
       key: 'browserProjectUrls',
       good: [
         {},
@@ -1301,7 +1282,6 @@ describe('settings validation', () => {
       browserMcp: false,
       browserMcpLocalOnly: true,
       restoreWithoutAsking: true,
-      browserRecentUrls: ['http://localhost:3000/'],
       browserProjectUrls: { [join(dir, 'alpha').toLowerCase()]: 'http://localhost:5173/' },
       sessionMcp: false,
       sessionAgents: false,
@@ -1357,7 +1337,6 @@ const DEFAULT_SETTINGS_SHAPE = (dir: string): typeof DEFAULT_SETTINGS => ({
   browserMcp: false,
   browserMcpLocalOnly: true,
   restoreWithoutAsking: true,
-  browserRecentUrls: ['http://localhost:3000/'],
   browserProjectUrls: { [join(dir, 'alpha').toLowerCase()]: 'http://localhost:5173/' },
   sessionMcp: false,
   sessionAgents: false,

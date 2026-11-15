@@ -654,7 +654,7 @@ test('a plugin page opens a link in the Browser tab from a click, held to the re
     await expect(ui.getByRole('tab', { name: /Helm fixture two/ })).toHaveAttribute('aria-selected', 'true')
     // Main had taken the link by now, so it took it before this.
     const opened = await helm.app.evaluate(() => Date.now())
-    await expect(ui.getByRole('textbox', { name: 'Address' })).toHaveValue(`${fixture.httpsLoopback}/two`)
+    await expect(ui.getByRole('combobox', { name: 'Address' })).toHaveValue(`${fixture.httpsLoopback}/two`)
     await expect(item.locator('[data-sample-link-error]')).toHaveCount(0)
 
     // "This machine only" refuses it on its own tab, as it would a typed address.

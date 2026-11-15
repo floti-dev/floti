@@ -1,9 +1,11 @@
 import type { JSX, RefObject } from 'react'
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react'
+import type { BrowserSuggestion, BrowserSuggestions as Suggestions } from '@helm/core/types'
 import { cn } from '../lib/cn'
 import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
 import { isMac, shortcutLabel } from '../lib/platform'
 import { SEGMENT_ON } from '../lib/segmented'
+import { BrowserSuggestions } from './BrowserSuggestions'
 import { ConsolePanel, type ConsoleEntry } from './ConsolePanel'
 import {
   AgentIcon,
@@ -110,7 +112,7 @@ export interface BrowserPaneProps {
    * The pane is drawing something over where the view is, and the view has to
    * stand down for it.
    *
-   * The recent-address dropdown hangs below the address bar and therefore over
+   * The suggestions hang below the address bar and therefore over
    * the page, and a native view paints above **all** renderer DOM - so without
    * this the dropdown is drawn and then covered, which is what the first capture
    * of this pane showed: a list clipped to the few pixels above the view's top
@@ -119,8 +121,15 @@ export interface BrowserPaneProps {
    * behind it.
    */
   onCovering: (covering: boolean) => void
-  /** The last addresses visited, newest first. The dropdown, and nothing more. */
-  recent: readonly string[]
+  /**
+   * The suggestions for what is typed, from the browser's history ('' for the
+   * pages visited last). Ranked in main; nothing leaves the machine.
+   */
+  onSuggest: (text: string) => Promise<Suggestions>
+  /** Forget one page from the history: Shift+Delete on its row. */
+  onForget: (url: string) => void
+  /** Forget the whole history: the More menu's Clear browsing history. */
+  onClearHistory: () => void
   /**
    * Somewhere the caret should go: the address bar (Ctrl+L, a new page) or
    * the find field (Ctrl+F). A request rather than a counter, answered once
@@ -187,7 +196,9 @@ export function BrowserPane({
   consoleOpen,
   onToggleConsole,
   onCovering,
-  recent,
+  onSuggest,
+  onForget,
+  onClearHistory,
   focusRequest,
   onFocusRequestDone,
   searchEngine,
@@ -227,13 +238,60 @@ export function BrowserPane({
   const shown = submitted ?? state.pendingUrl ?? address
   const typed = draft ?? shown
   const [suggesting, setSuggesting] = useState(false)
+  /** The newest answer to `onSuggest`, for the text it names. */
+  const [suggestions, setSuggestions] = useState<Suggestions | null>(null)
+  /**
+   * The row the keys or the pointer are on. Only the keys put a row's address
+   * in the bar and make it what Enter opens; the pointer only highlights it.
+   */
+  const [highlight, setHighlight] = useState<Highlight>(NO_HIGHLIGHT)
+  /**
+   * Whether the inline completion is held back: after a deletion, so
+   * Backspace takes the completion away rather than it coming straight back,
+   * and after Escape restored what was typed.
+   */
+  const [holdCompletion, setHoldCompletion] = useState(false)
+  const listId = useId()
+  /** What the suggestions are asked for: what is typed, or nothing while the bar shows the page. */
+  const query = draft ?? ''
+  const rows: readonly BrowserSuggestion[] = suggestions?.rows ?? []
+  const chosen = highlight.by === 'keys' ? rows[highlight.index] : undefined
+  /**
+   * The completion shown after the caret, only while the list is up. It is
+   * the newest answer's, carried forward while what is typed still runs along
+   * it, so typing the next letter of a completed address does not drop the
+   * completion for the moment until main answers again.
+   */
+  const completion = ((): Suggestions['completion'] => {
+    if (!suggesting || holdCompletion || chosen !== undefined || draft === null) return null
+    if (suggestions === null || suggestions.completion === null) return null
+    const { text, completion: answered } = suggestions
+    const full = text + answered.rest
+    if (draft.length < text.length || !full.toLowerCase().startsWith(draft.toLowerCase())) return null
+    return { url: answered.url, rest: full.slice(draft.length) }
+  })()
+  /** What is typed with its completion after it, or null when none is shown. */
+  const completed = completion !== null && draft !== null ? draft + completion.rest : null
+  /** What the bar holds: the row the keys are on, what is typed and its completion, or the page. */
+  const barValue = chosen !== undefined ? rowText(chosen) : (completed ?? typed)
+
+  /**
+   * The list closes and forgets its rows, so the bar opened again shows
+   * nothing until the answer for what it then holds arrives, never the rows
+   * for what was typed before.
+   */
+  const closeSuggestions = (): void => {
+    setSuggesting(false)
+    setSuggestions(null)
+    setHighlight(NO_HIGHLIGHT)
+  }
 
   /** Send the page where the bar says, and keep saying it until main has answered. */
   const go = (input: string): void => {
     const turn = ++submissions.current
     setSubmitted(input)
     setDraft(null)
-    setSuggesting(false)
+    closeSuggestions()
     const answered = (): void => {
       if (submissions.current === turn) setSubmitted(null)
     }
@@ -278,12 +336,74 @@ export function BrowserPane({
    * was about to go: it never left, and a click meant for the list landed on
    * the page under it.
    */
-  const showingList = suggesting && recent.length > 0
+  const showingList = suggesting && rows.length > 0
   const cover = useEffectEvent((covering: boolean) => onCovering(covering))
   useEffect(() => {
     cover(showingList)
     return () => cover(false)
   }, [showingList])
+
+  /*
+   * The suggestions for what is typed, asked whenever it changes while the
+   * bar has the caret. An answer that arrives after the text moved on is
+   * dropped; the rows on screen stay until the next one lands, so the list
+   * does not blink on every keystroke.
+   */
+  const suggest = useEffectEvent((text: string) => onSuggest(text))
+  useEffect(() => {
+    if (!suggesting) return
+    let current = true
+    suggest(query).then(
+      (answer) => {
+        if (current && answer.text === query) setSuggestions(answer)
+      },
+      () => undefined
+    )
+    return () => {
+      current = false
+    }
+  }, [suggesting, query])
+
+  /*
+   * The completion is selected, so the next character typed replaces it and
+   * Backspace removes it. Keyed on what is shown, so it is selected once as
+   * it appears and a caret the user has moved since is left where it is.
+   */
+  const completedFrom = draft?.length ?? 0
+  useLayoutEffect(() => {
+    if (completed === null) return
+    addressRef.current?.setSelectionRange(completedFrom, completed.length)
+  }, [completed, completedFrom])
+
+  /** Open what a row offers: its page, or a search for what was typed. */
+  const pick = (row: BrowserSuggestion): void => {
+    addressRef.current?.blur()
+    go(row.kind === 'page' ? row.url : row.text)
+  }
+
+  /**
+   * Move the keys' highlight through the rows, from the row the keys or the
+   * pointer are on, and back to what was typed past either end.
+   */
+  const step = (by: 1 | -1): void => {
+    if (rows.length === 0) return
+    const next = highlight.index + by
+    setHighlight({ index: next < -1 ? rows.length - 1 : next >= rows.length ? -1 : next, by: 'keys' })
+  }
+
+  /** Shift+Delete on a page's row: it leaves the history and the list at once. */
+  const forgetChosen = (): boolean => {
+    if (chosen === undefined || chosen.kind !== 'page' || suggestions === null) return false
+    onForget(chosen.url)
+    const left = suggestions.rows.filter((row) => row !== chosen)
+    setSuggestions({
+      ...suggestions,
+      rows: left,
+      completion: suggestions.completion?.url === chosen.url ? null : suggestions.completion
+    })
+    setHighlight(left.length === 0 ? NO_HIGHLIGHT : { index: Math.min(highlight.index, left.length - 1), by: 'keys' })
+    return true
+  }
 
   /**
    * The rectangle, measured and reported.
@@ -376,6 +496,12 @@ export function BrowserPane({
     },
     {
       kind: 'item',
+      id: 'clear-history',
+      label: 'Clear browsing history',
+      title: 'Every page the address bar suggests'
+    },
+    {
+      kind: 'item',
       id: 'clear-storage',
       label: 'Clear cookies and site data',
       title: "Every site's, in Floti's browser: you will be signed out of all of them"
@@ -455,6 +581,10 @@ export function BrowserPane({
     else if (id === 'console') onToggleConsole()
     else if (id === 'devtools') onDevTools()
     else if (id === 'clear-storage') onClearStorage()
+    else if (id === 'clear-history') {
+      onClearHistory()
+      setSuggestions(null)
+    }
     else if (id.startsWith('width:')) setWidth(BROWSER_WIDTHS.find(([label]) => `width:${label}` === id)?.[1] ?? null)
   }
 
@@ -462,7 +592,7 @@ export function BrowserPane({
     <div data-pane="browser" className="flex h-full min-h-0 flex-col">
       <div
         data-browser-bar
-        data-browser-recent-count={recent.length}
+        data-browser-suggestion-count={showingList ? rows.length : 0}
         className="flex min-h-strip shrink-0 items-center gap-2 border-b border-border px-2 py-1"
       >
         <div className="flex shrink-0 items-center gap-0.5">
@@ -500,20 +630,30 @@ export function BrowserPane({
           <input
             ref={addressRef}
             data-browser-address
-            value={typed}
+            value={barValue}
             spellCheck={false}
             placeholder={
               searchEngine === null ? 'Address, or a port number' : `Search ${searchEngine} or type an address`
             }
             aria-label="Address"
+            role="combobox"
+            aria-autocomplete="both"
+            aria-expanded={showingList}
+            aria-controls={showingList ? listId : undefined}
+            aria-activedescendant={chosen === undefined ? undefined : `${listId}-${String(highlight.index)}`}
             onChange={(event) => {
               setDraft(event.target.value)
               setSuggesting(true)
+              setHighlight(NO_HIGHLIGHT)
+              // A deletion holds the completion back, so Backspace takes it
+              // away; typing on brings it back.
+              const input = (event.nativeEvent as Partial<InputEvent>).inputType
+              setHoldCompletion(input?.startsWith('delete') === true)
             }}
             onFocus={() => setSuggesting(true)}
             // And on the click itself, not only on the focus it causes.
             // Clicking a bar that already has the caret fires no focus event, so
-            // focus alone would leave the dropdown shut for exactly the gesture
+            // focus alone would leave the list shut for exactly the gesture
             // somebody makes when they want it. A probe that drove the click and
             // nothing else is what caught this.
             onClick={() => setSuggesting(true)}
@@ -521,11 +661,28 @@ export function BrowserPane({
             // that keeps the caret here, so it never needed the list to outlive
             // the blur, and a delayed close outlived the blur Enter makes: back in
             // the bar within it, the list opened, then shut under the click.
-            onBlur={() => setSuggesting(false)}
+            onBlur={closeSuggestions}
             onKeyDown={(event) => {
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault()
+                if (!showingList) setSuggesting(true)
+                else step(event.key === 'ArrowDown' ? 1 : -1)
+                return
+              }
+              if (event.key === 'Delete' && event.shiftKey) {
+                if (forgetChosen()) event.preventDefault()
+                return
+              }
               if (event.key === 'Escape') {
-                // With something typed, Escape puts the address back; with
-                // nothing typed, it stops a load, as it does in the page.
+                // First what was typed comes back, from a row the keys are on
+                // or from a completion. Then, with something typed, Escape puts
+                // the address back; with nothing typed, it stops a load, as it
+                // does in the page.
+                if (chosen !== undefined || completion !== null) {
+                  setHighlight(NO_HIGHLIGHT)
+                  setHoldCompletion(true)
+                  return
+                }
                 if (draft === null && state.loading) onStop()
                 setDraft(null)
                 setSuggesting(false)
@@ -534,8 +691,13 @@ export function BrowserPane({
               }
               if (event.key !== 'Enter') return
               event.preventDefault()
+              if (chosen !== undefined) {
+                pick(chosen)
+                return
+              }
               addressRef.current?.blur()
-              go(typed)
+              // A completed address opens as the page was visited, scheme and all.
+              go(completion !== null ? completion.url : typed)
             }}
             className={cn(
               'min-w-0 flex-1 rounded-well border border-border bg-surface-sunken py-1 pl-2',
@@ -561,35 +723,18 @@ export function BrowserPane({
             </button>
           )}
           {showingList && (
-            <ul
-              data-browser-recent
-              className={cn(
-                'absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-auto',
-                // No shadow. DESIGN.md allows exactly one, on a modal over a
-                // dimmed backdrop, and this is neither - the stronger hairline
-                // and the surface against the canvas are the elevation.
-                'rounded-raised border border-border-strong bg-surface py-1'
-              )}
-            >
-              {recent.map((url) => (
-                <li key={url}>
-                  <button
-                    type="button"
-                    data-browser-recent-url={url}
-                    // `onMouseDown` rather than `onClick`, with the default
-                    // prevented: the bar keeps the caret, so its blur never
-                    // closes the list before the choice is made.
-                    onMouseDown={(event) => {
-                      event.preventDefault()
-                      go(url)
-                    }}
-                    className="block w-full truncate px-2 py-1 text-left font-mono text-[11px] text-fg-muted transition-colors hover:bg-hover hover:text-fg"
-                  >
-                    {url}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div className="absolute left-0 right-0 top-full z-30 mt-1">
+              <BrowserSuggestions
+                id={listId}
+                rows={rows}
+                highlighted={highlight.index}
+                onPick={(index) => {
+                  const row = rows[index]
+                  if (row !== undefined) pick(row)
+                }}
+                onHover={(index) => setHighlight({ index, by: 'pointer' })}
+              />
+            </div>
           )}
         </div>
 
@@ -865,3 +1010,14 @@ function BarButton({
 
 /** Chromium's zoom *level* is logarithmic; what a person reads is a percentage. */
 const zoomPercent = (level: number): string => `${String(Math.round(1.2 ** level * 100))}%`
+
+/** A suggestion row the keys or the pointer are on; index -1 is none. */
+interface Highlight {
+  index: number
+  by: 'keys' | 'pointer'
+}
+
+const NO_HIGHLIGHT: Highlight = { index: -1, by: 'keys' }
+
+/** What the bar holds while the keys are on a row: the page's address, or the text a search is for. */
+const rowText = (row: BrowserSuggestion): string => (row.kind === 'page' ? row.url : row.text)

@@ -21,7 +21,7 @@ test.afterAll(async () => {
   await fixture.close()
 })
 
-const address = (ui: Page): Locator => ui.getByRole('textbox', { name: 'Address' })
+const address = (ui: Page): Locator => ui.getByRole('combobox', { name: 'Address' })
 
 /** The Browser tab's own strip of pages. */
 const pages = (ui: Page): Locator => ui.getByRole('tablist', { name: 'Browser tabs' })
@@ -377,21 +377,20 @@ test('the address list and the menu: the page stands down for each, the list kee
   })
 
   await address(ui).click()
-  const list = ui.locator('[data-browser-recent]')
+  const list = ui.locator('[data-browser-suggestions]')
   await expect(list).toBeVisible()
   await expect.poll(() => viewsShown(helm)).toEqual([false])
   // And it stays down while the list is open. The page is a native view over
   // the window, so a view that came back for a moment would be under the
   // pointer instead of the list, and a person's click would go to the page.
-  // (Playwright clicks the window's own document and cannot tell.) A key
-  // typed renders the pane again with the list still open, which is what
-  // once brought the view back.
-  await address(ui).press('End')
-  await address(ui).press('x')
-  await expect(address(ui)).toHaveValue(`${find}x`)
+  // (Playwright clicks the window's own document and cannot tell.) Typing
+  // renders the pane again with the list still open, which is what once
+  // brought the view back; the fixture's origin starts both pages' addresses.
+  await address(ui).fill(fixture.http)
+  await expect(list.locator(`[data-browser-suggestion-url="${two}"]`)).toBeVisible()
   await expect(list).toBeVisible()
 
-  await list.locator(`[data-browser-recent-url="${two}"]`).click()
+  await list.locator(`[data-browser-suggestion-url="${two}"]`).click()
   await expect(list).toHaveCount(0)
   await expect(address(ui)).toHaveValue(two)
   await expect.poll(() => viewsShown(helm)).toEqual([true])

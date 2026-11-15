@@ -869,3 +869,29 @@ export const secrets = sqliteTable('secrets', {
   createdAt: text('created_at').notNull().default(now),
   updatedAt: text('updated_at').notNull().default(now)
 })
+
+/**
+ * The pages the browser pane has been to, for the address bar's suggestions.
+ *
+ * Owned by main, which records a visit when a page the user has (never one an
+ * agent opened) commits a navigation, and keeps the newest
+ * `BROWSER_HISTORY_MAX` by `last_visit`. Read once at start into memory: the
+ * bar asks on every keystroke, and the answer is ranked there
+ * (`browser/suggest.ts`), so nothing is read from disk or sent anywhere while
+ * typing.
+ *
+ * Migration 0034 seeded it from the `browserRecentUrls` setting it replaces
+ * and removed that setting.
+ */
+export const browserHistory = sqliteTable(
+  'browser_history',
+  {
+    url: text('url').primaryKey(),
+    /** The page's title, or '' until it has said one. */
+    title: text('title').notNull().default(''),
+    visits: integer('visits').notNull().default(1),
+    /** Milliseconds since the epoch. */
+    lastVisit: integer('last_visit').notNull()
+  },
+  (t) => [index('browser_history_last_visit_idx').on(t.lastVisit)]
+)

@@ -980,13 +980,11 @@ export function App(): JSX.Element {
   const templates = useTemplates();
   const shells = useShells();
   /**
-   * The browser pane's views, which live in the main process. The recent-address
-   * list is main's to write - it is the side that knows a navigation succeeded -
-   * so it arrives on `settings:changed` like any other setting.
+   * The browser pane's views, which live in the main process, as does the
+   * history the address bar suggests from: main is the side that knows a
+   * navigation succeeded.
    */
-  const browsers = useBrowsers(
-    settings?.browserRecentUrls ?? DEFAULT_SETTINGS.browserRecentUrls,
-  );
+  const browsers = useBrowsers();
   const browserViews = browsers.views;
 
   /**
@@ -5389,7 +5387,9 @@ export function App(): JSX.Element {
                   key={view.id}
                   state={view}
                   entries={browsers.entries.get(view.id) ?? EMPTY_CONSOLE}
-                  recent={browsers.recent}
+                  onSuggest={browsers.suggest}
+                  onForget={browsers.forget}
+                  onClearHistory={browsers.clearHistory}
                   focusRequest={
                     browserFocus?.page === view.id ? browserFocus.what : null
                   }
