@@ -7,6 +7,7 @@ import {
   cookieUrl,
   flushCookies,
   keepSessionCookies,
+  writeCookies,
   keepSignIns,
   keptCookie,
   SESSION_COOKIE_DAYS,
@@ -411,6 +412,21 @@ describe('flushing the cookie store', () => {
     )
     await vi.advanceTimersByTimeAsync(COOKIE_FLUSH_DEADLINE_MS)
     expect(done).toBe(true)
+  })
+
+  it('writes after a load without a timer, and never throws', () => {
+    vi.useFakeTimers()
+    const flushStore = vi.fn(() => Promise.reject(new Error('gone')))
+    writeCookies({ flushStore })
+    expect(flushStore).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(() =>
+      writeCookies({
+        flushStore: () => {
+          throw new Error('destroyed')
+        }
+      })
+    ).not.toThrow()
   })
 
   it('resolves when the store fails or throws', async () => {

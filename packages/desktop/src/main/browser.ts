@@ -19,7 +19,7 @@ import {
   type AppSettings,
   type BrowserReach
 } from '@helm/core'
-import { flushCookies, keepSignIns, type CookieKeeper } from './browserCookies'
+import { flushCookies, keepSignIns, writeCookies, type CookieKeeper } from './browserCookies'
 import { TITLEBAR_HEIGHT } from './chrome'
 import { browserKeyCommand, COMMANDS_FOR_THE_WINDOW, COMMANDS_THAT_REPEAT } from '../shared/browserKeys'
 import {
@@ -1207,7 +1207,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     view.setVisible(false)
     // A load just set its sign-in cookies; Chromium alone would write them
     // within 30 seconds, and a crash in between would lose them.
-    wc.on('did-stop-loading', () => void flushCookies(browserSession().cookies))
+    wc.on('did-stop-loading', () => writeCookies(browserSession().cookies))
 
     wc.on('page-title-updated', () => announce(entry))
     wc.on('did-start-loading', () => announce(entry))

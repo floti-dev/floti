@@ -875,7 +875,7 @@ describe('browser host - security posture', () => {
     const cookies = partition().cookies
     const before = cookies.flushed
     wc.emit('did-stop-loading')
-    await vi.waitFor(() => expect(cookies.flushed).toBe(before + 1))
+    expect(cookies.flushed).toBe(before + 1)
     await flushBrowserCookies()
     expect(cookies.flushed).toBe(before + 2)
   })

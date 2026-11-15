@@ -231,6 +231,18 @@ export function flushCookies(
 }
 
 /**
+ * Asks for the cookie store to be written to disk, and waits for nothing: for
+ * after a page load, where nobody is held up by it. Never throws.
+ */
+export function writeCookies(jar: Pick<CookieJar, 'flushStore'>): void {
+  try {
+    jar.flushStore().catch(() => undefined)
+  } catch {
+    // A partition going away has nothing left to write.
+  }
+}
+
+/**
  * The user agent the browser partition sends: Electron's own without the
  * `Electron/<version>` token and the app's `<name>/<version>` token, which
  * Google's sign-in refuses. Everything else, the Chrome version included, is
