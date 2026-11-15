@@ -1,0 +1,29 @@
+name: h214 targeted tests
+
+# Temporary, for one branch: runs only the tests the branch changed, once, on
+# Linux. Removed before the branch is handed over.
+on:
+  push:
+    branches: [agent/h214]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vitest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Targeted tests
+        run: >-
+          pnpm exec vitest run
+          packages/desktop/src/renderer/src/app/notices.connect.test.ts
