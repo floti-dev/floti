@@ -35,7 +35,8 @@
 //!    startup file the user's shell reads, the one `floti doctor` names, and
 //!    it says which. Setup, run next, finds it there and adds nothing.
 //! 4. `floti setup --no-desktop`, run from the installed floti, so the host
-//!    registered to start at sign-in is that one; its lines are its own.
+//!    registered to start at sign-in is that one; its lines are its own,
+//!    passed on as they come to install-self's standard output and error.
 //!    The desktop app that runs install-self is there already, so setup
 //!    neither asks about it nor installs one.
 //!
@@ -48,7 +49,8 @@
 use std::fs::File;
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
+use std::sync::mpsc;
 
 use crate::platform::folders::UserEnv;
 use crate::platform::launcher::{Native as NativeLauncher, ProgramLauncher};
@@ -70,9 +72,10 @@ pub trait InstallSystem {
     /// Puts `folder` on the user's `PATH`, and answers what was changed.
     fn add_to_path(&self, folder: &Path) -> Result<Added, String>;
 
-    /// Runs `floti setup --no-desktop` from `floti`, and answers its exit
-    /// status.
-    fn setup(&self, floti: &Path) -> Result<u8, String>;
+    /// Runs `floti setup --no-desktop` from `floti`, writing what it prints
+    /// on its standard output to `out` and on its standard error to `err`,
+    /// and answers its exit status.
+    fn setup(&self, floti: &Path, out: &mut dyn Write, err: &mut dyn Write) -> Result<u8, String>;
 
     /// The version the floti at `floti` says (`floti version`), or `None`
     /// when it says none.
@@ -99,37 +102,17 @@ impl InstallSystem for NativeSystem {
         NativeUserPath.add(&self.env, folder)
     }
 
-    fn setup(&self, floti: &Path) -> Result<u8, String> {
+    fn setup(&self, floti: &Path, out: &mut dyn Write, err: &mut dyn Write) -> Result<u8, String> {
         let mut command = Command::new(floti);
-        command
-            .args(SETUP_ARGS)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        NativeLauncher.windowless(&mut command);
-        let mut child = command
-            .spawn()
-            .map_err(|err| format!("could not run {} setup: {err}", floti.display()))?;
-        // Relayed as it comes: a program with no window of its own cannot
-        // write to this process's console.
-        let relays = [
-            child.stdout.take().map(|mut from| {
-                std::thread::spawn(move || std::io::copy(&mut from, &mut std::io::stdout()))
-            }),
-            child.stderr.take().map(|mut from| {
-                std::thread::spawn(move || std::io::copy(&mut from, &mut std::io::stderr()))
-            }),
-        ];
-        let status = child
-            .wait()
-            .map_err(|err| format!("could not run {} setup: {err}", floti.display()))?;
-        for relay in relays.into_iter().flatten() {
-            let _ = relay.join();
-        }
-        Ok(status
-            .code()
-            .and_then(|code| u8::try_from(code).ok())
-            .unwrap_or(1))
+        command.args(SETUP_ARGS);
+        run_relayed(&mut command, out, err)
+            .map(|status| {
+                status
+                    .code()
+                    .and_then(|code| u8::try_from(code).ok())
+                    .unwrap_or(1)
+            })
+            .map_err(|err| format!("could not run {} setup: {err}", floti.display()))
     }
 
     fn version_of(&self, floti: &Path) -> Option<String> {
@@ -143,6 +126,88 @@ impl InstallSystem for NativeSystem {
     fn native_cpu(&self) -> &'static str {
         NativeStandalone.native_cpu()
     }
+}
+
+/// Runs `command` with no window, its standard input empty, writing what it
+/// prints on standard output to `out` and on standard error to `err` as it
+/// comes, and answers its exit status once it has exited and its output has
+/// ended.
+///
+/// It is relayed because a program with no window of its own cannot write to
+/// this process's console. The writing is done on the calling thread, into
+/// the writers it was given, never by another thread into this process's
+/// own standard output: `floti install-self` holds that, and its standard
+/// error, for its whole run, so a thread writing there waits for them as long
+/// as install-self waits for the thread. The two pipes are read on threads of
+/// their own, so a program filling one while nothing reads it never stalls.
+pub fn run_relayed(
+    command: &mut Command,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> io::Result<ExitStatus> {
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    NativeLauncher.windowless(command);
+    let mut child = command.spawn()?;
+    let (sender, chunks) = mpsc::channel();
+    let readers = [
+        child
+            .stdout
+            .take()
+            .map(|from| read_chunks(from, Stream::Out, sender.clone())),
+        child
+            .stderr
+            .take()
+            .map(|from| read_chunks(from, Stream::Err, sender.clone())),
+    ];
+    drop(sender);
+    // Ends once both pipes have ended and their readers dropped their senders.
+    for (stream, chunk) in chunks {
+        let into: &mut dyn Write = match stream {
+            Stream::Out => &mut *out,
+            Stream::Err => &mut *err,
+        };
+        // A writer that refuses is no reason to stop reading: the program
+        // would stall on a full pipe.
+        let _ = into.write_all(&chunk).and_then(|()| into.flush());
+    }
+    for reader in readers.into_iter().flatten() {
+        let _ = reader.join();
+    }
+    child.wait()
+}
+
+/// Which of a program's outputs a chunk came from.
+#[derive(Clone, Copy)]
+enum Stream {
+    Out,
+    Err,
+}
+
+/// Reads `from` to its end on a thread of its own, sending each chunk read,
+/// with the stream it came from, to `sender`.
+fn read_chunks(
+    mut from: impl Read + Send + 'static,
+    stream: Stream,
+    sender: mpsc::Sender<(Stream, Vec<u8>)>,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        let mut buffer = [0u8; 8192];
+        loop {
+            match from.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(read) => {
+                    if sender.send((stream, buffer[..read].to_vec())).is_err() {
+                        break;
+                    }
+                }
+                Err(why) if why.kind() == ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+        }
+    })
 }
 
 /// The version a `floti version` line names: `floti 3.0.0 protocol 3.0
@@ -267,7 +332,7 @@ pub fn install_self(
             true
         }
     };
-    let code = match system.setup(&floti) {
+    let code = match system.setup(&floti, out, err) {
         Ok(code) => code,
         Err(why) => {
             let _ = writeln!(err, "floti install-self: {why}");
