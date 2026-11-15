@@ -114,19 +114,21 @@ export const test = base.extend<{
 
 interface TerminalReport {
   key: string
-  lines: string[]
+  /** The rows as the program wrote them, a row xterm wrapped joined to the one before. */
+  text: string
   attached: boolean
 }
 
 /**
  * What a session's terminal shows, read through the window's read-only
- * terminal inspector, since xterm paints to a canvas.
+ * terminal inspector, since xterm paints to a canvas. A line wider than the
+ * pane reads whole, as the program wrote it.
  */
 export async function terminalText(window: Page, sessionId: number): Promise<string> {
   const sessions = await window.evaluate(
     () => (window as unknown as { __helmTerminals: () => { sessions: TerminalReport[] } }).__helmTerminals().sessions
   )
-  return sessions.find((s) => s.key === String(sessionId))?.lines.join('\n') ?? ''
+  return sessions.find((s) => s.key === String(sessionId))?.text ?? ''
 }
 
 /** The session id behind a session tab, which Helm keys its terminals by. */
