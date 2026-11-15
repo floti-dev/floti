@@ -21,6 +21,13 @@ import type { WslKeepAwake } from './wsl-awake'
  * - A link that drops (its ssh or command ended) sends nothing and ends
  *   nothing: the host keeps every session, and the window dims that host's
  *   rows until it is back.
+ * - When the computer wakes or its screen is unlocked, each connected host is
+ *   asked `host:ping`, Floti's own round trip over its own link, at most one
+ *   check per connection at a time. Any answer within `WAKE_CHECK_MS`, even
+ *   a refusal, leaves the link as it is. No answer means the transport died
+ *   while the computer slept, which ssh may take minutes to notice: the
+ *   host's page bridges and main's link are let go of, and it reconnects as
+ *   after any drop. A host already waiting to try again tries at once.
  * - Adding a host is connecting to it: its first connection pins the key it
  *   proves, through the user's own login, and nothing is approved there. A
  *   host that later proves another key is `keyChanged` until it is removed
@@ -39,6 +46,12 @@ import type { WslKeepAwake } from './wsl-awake'
  *   nobody was signed in there starts at the next sign-in, which is no
  *   failure.
  */
+
+/** How long a host has to answer `host:ping` after the computer wakes before its link counts as dead. */
+export const WAKE_CHECK_MS = 3_000
+
+/** What a page whose bridge was let go of after a wake hears as the reason. */
+export const WAKE_DEAD_LINE = 'The connection did not answer after the computer woke.'
 
 /** Where a failed attempt leaves a host: what its line says, read for what the window offers. */
 export function failedState(error: Error, startsAtSignIn: boolean): RemoteHostConnection {
@@ -139,6 +152,12 @@ export interface RemoteHostLinksDeps {
    * connects or a host is removed.
    */
   wsl?: Pick<WslKeepAwake, 'activity' | 'connected' | 'forget'>
+  /**
+   * Calls its listener each time the computer wakes from sleep or its screen
+   * is unlocked (Electron's `powerMonitor` `resume` and `unlock-screen`),
+   * when each host's link is checked.
+   */
+  onWake?: (listener: () => void) => void
   log: (line: string) => void
   setTimeout: (run: () => void, ms: number) => unknown
   clearTimeout: (timer: unknown) => void
@@ -169,6 +188,8 @@ export function createRemoteHostLinks(deps: RemoteHostLinksDeps): RemoteHostLink
   let quitting = false
   /** The hosts as `hostsChanged` was last told them, as JSON; null before the first `sync`. */
   let recorded: string | null = null
+  /** The connections a wake's `host:ping` is waiting on: a second wake starts no second check. */
+  const checking = new WeakSet<HostConnection>()
 
   const tell = (): void => deps.changed(Object.fromEntries(states))
 
@@ -254,6 +275,44 @@ export function createRemoteHostLinks(deps: RemoteHostLinksDeps): RemoteHostLink
     entry.link.keepConnected()
     return entry
   }
+
+  /**
+   * After a wake: asks a connected host `host:ping` and lets go of its link
+   * when nothing comes back within `WAKE_CHECK_MS`; a host waiting to try
+   * again tries at once.
+   */
+  const checkAwake = (entry: Entry): void => {
+    const connection = entry.link.current()
+    if (connection === null) {
+      entry.link.reconnectNow()
+      return
+    }
+    if (checking.has(connection)) return
+    checking.add(connection)
+    let timer: unknown = null
+    // Any answer, a refusal included, is a link that works; an end is a drop already under way.
+    const answered = connection.request('host:ping', null).then(
+      () => true,
+      () => true
+    )
+    const deadline = new Promise<false>((resolve) => {
+      timer = deps.setTimeout(() => resolve(false), WAKE_CHECK_MS)
+    })
+    void Promise.race([answered, deadline]).then((alive) => {
+      deps.clearTimeout(timer)
+      checking.delete(connection)
+      if (alive || quitting || entries.get(entry.host.id) !== entry || entry.link.current() !== connection) return
+      deps.log(`host: ${entry.host.name} did not answer within ${WAKE_CHECK_MS} ms of the computer waking; connecting again`)
+      // The pages first, so each hears the end before main's link says it is back.
+      entry.pages.drop(WAKE_DEAD_LINE)
+      entry.link.drop()
+    })
+  }
+
+  deps.onWake?.(() => {
+    if (quitting) return
+    for (const entry of entries.values()) checkAwake(entry)
+  })
 
   const forget = (entry: Entry, removeFolder: boolean): void => {
     entries.delete(entry.host.id)

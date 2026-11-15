@@ -128,6 +128,16 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   nothing is approved or typed on the host. A drop ends nothing there;
   Remove ends the link and removes the host's client folder, and ends
   nothing on the host.
+- When the computer wakes or its screen is unlocked (`powerMonitor`
+  `resume` and `unlock-screen`), main asks each connected host `host:ping`
+  over its own link, one check per connection at a time (`remote.ts`). Any
+  answer within 3 s, a refusal included, leaves the link alone. With none,
+  the transport died while the computer slept, which ssh can take minutes to
+  notice: main ends that host's page bridges, telling each page at once that
+  its connection ended without a stop, lets go of its own connection, and
+  reconnects as after any drop, so the host shows as reconnecting until it
+  is back. A host already waiting to try again tries at once. Nothing is
+  added to the transport and nothing branches on the OS.
 - The link starts nothing itself. `floti connect`, which the transport runs
   on the host's computer, starts the host there when none answers, as the
   OS's startup rule says (`HostStartup::on_connect` in

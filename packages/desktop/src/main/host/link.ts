@@ -91,6 +91,14 @@ export interface HostLink {
    */
   reconnectNow(): void
   /**
+   * The connection there is now stopped answering (a remote host's link
+   * after the computer woke, `remote.ts`): lets go of it and its bridge
+   * without a word to the host, and the link connects again as after any
+   * connection that ended without a stop, so `endedOnPurpose` stays false.
+   * Does nothing with no connection, or once quit or released.
+   */
+  drop(): void
+  /**
    * The user asked, and agreed to the count: stops the host (`host:stop`
    * with the plain-stop reason), so every session in it ends and is recorded
    * as ended, then lets go of the connection and its bridge. Resolves once
@@ -369,6 +377,17 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
       }
       retryWait = RECONNECT_FIRST_MS
       link.keepConnected()
+    },
+
+    drop() {
+      const host = local
+      if (stopping !== null || host === null) return
+      deps.log(`host: letting go of the connection to ${name}, which stopped answering`)
+      // Closing ends the connection first, so the end `connect` waits on runs
+      // at once and tries again, whatever the bridge's transport takes to exit.
+      host.close().catch((error: unknown) => {
+        deps.log(`host: the bridge to ${name} did not close (${(error as Error).message})`)
+      })
     }
   }
 
