@@ -1,6 +1,6 @@
 {
   "name": "@helm/desktop",
-  "version": "2.4.1-preview.12",
+  "version": "3.0.0-preview.1",
   "description": "Floti's desktop: the Electron main process, preload and renderer.",
   "//productName": "Electron derives app.getName() - the app menu's name, and %APPDATA%\\<name>, which paths.ts moves to Floti's own data folder - from this file. Without productName a scoped package name names the app @helm/desktop. electron-builder sets the same value for packaged builds.",
   "productName": "Floti",
