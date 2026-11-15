@@ -22,10 +22,12 @@
 //     step summary.
 //
 //   node release.mjs desktop-sums <folder> <version>
-//     writes `Floti-<version>-SHA256SUMS` into <folder>: the SHA-256 of each of
+//     writes `Floti-<version>-desktop-SHA256SUMS` into <folder>: the SHA-256 of each of
 //     the five desktop files there, in sha256sum's format, which `floti add
 //     desktop` checks a download against. The app carries floti's own list,
-//     so that list cannot hold the app; this one is the desktop files'.
+//     so that list cannot hold the app; this one is the desktop files'. Its
+//     name says `desktop` because floti's is `floti-<version>-SHA256SUMS`,
+//     and GitHub's asset names ignore case.
 
 import { createHash } from 'node:crypto'
 import { createReadStream, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -140,13 +142,17 @@ export function desktopFileNames(version) {
   ]
 }
 
-/** `Floti-<version>-SHA256SUMS`: the SHA-256 of each desktop file, signed like every file. */
+/**
+ * `Floti-<version>-desktop-SHA256SUMS`: the SHA-256 of each desktop file,
+ * signed like every file. Not `Floti-<version>-SHA256SUMS`: floti's list is
+ * `floti-<version>-SHA256SUMS`, and GitHub's asset names ignore case.
+ */
 export function desktopSumsName(version) {
-  return `Floti-${version}-SHA256SUMS`
+  return `Floti-${version}-desktop-SHA256SUMS`
 }
 
 /**
- * Writes `Floti-<version>-SHA256SUMS` into `folder`, listing each of the five
+ * Writes `Floti-<version>-desktop-SHA256SUMS` into `folder`, listing each of the five
  * desktop files there, sorted, and returns its path. A desktop file missing
  * from `folder` is an error.
  */

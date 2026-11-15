@@ -558,10 +558,17 @@ remote, runs the checks, builds floti for its five targets, builds the Windows
 artefacts on a clean `windows-latest` runner, the macOS ones on `macos-latest`
 and the Linux one on `ubuntu-latest`, packs the protocol types, signs every
 file, and publishes one GitHub release with twenty-six files attached: the
-five desktop files and their SHA-256 list (`Floti-<version>-SHA256SUMS`, which
-`floti add desktop` checks a download against), the protocol types, the five
-floti files and their SHA-256 list, and a minisign signature beside each of
-those thirteen.
+five desktop files and their SHA-256 list (`Floti-<version>-desktop-SHA256SUMS`,
+which `floti add desktop` checks a download against), the protocol types, the
+five floti files and their SHA-256 list, and a minisign signature beside each
+of those thirteen.
+
+GitHub's release asset names ignore case, and it refuses a file whose name
+equals one already uploaded, after the draft is made. So no two files of a
+release may have names equal ignoring case: the desktop list says `desktop`
+because floti's is `floti-<version>-SHA256SUMS`, and `scripts/release.mjs
+check` refuses a folder holding such a pair, in `assemble`, `sign` and
+`publish`.
 
 The desktop files are named `Floti-<version>-*` from 3.0; releases before
 that named them `Helm-<version>-*`, and keep those names. None is published
@@ -572,7 +579,9 @@ that it is a plain file name) and its signature's as that name with
 (`desktop_file`, `desktop_sums_name` in `crates/host/src/add.rs`) only for
 the release of the floti running it. So a 2.4 floti updates to 3.0 by the
 names the 3.0 manifest gives, and adds the desktop from its own 2.4
-release's `Helm-*` files.
+release's `Helm-*` files, its list `Helm-<version>-SHA256SUMS` among them.
+Nothing reads a later release's desktop list, so the list took its 3.0 name
+`Floti-<version>-desktop-SHA256SUMS` with no old name kept beside it.
 
 A stable release
 then updates the Homebrew formula and opens the winget pull request ("Homebrew
@@ -587,7 +596,7 @@ after them and finishes green.
 | `check`, `floti` | `ci.yml` and `floti.yml`, called. |
 | `protocol` | The crate's `generated_files` test, then `floti-protocol-<version>.tar.gz`. |
 | `release-windows`, `release-mac`, `release-linux` | One desktop build each, verified from the inside and handed on as a workflow artifact. None publishes anything. |
-| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s, writes and checks the desktop files' SHA-256 list (`scripts/release.mjs desktop-sums`), checks that the folder holds exactly the thirteen files to sign (`scripts/release.mjs check --unsigned`), and uploads them as `release-unsigned`. Writes floti.dev's install scripts and, for a stable release, `update.json` (`scripts/floti-dev.mjs`) as `floti-dev-unsigned`. |
+| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s, writes and checks the desktop files' SHA-256 list (`scripts/release.mjs desktop-sums`), checks that the folder holds exactly the thirteen files to sign, no two with names equal ignoring case (`scripts/release.mjs check --unsigned`), and uploads them as `release-unsigned`. Writes floti.dev's install scripts and, for a stable release, `update.json` (`scripts/floti-dev.mjs`) as `floti-dev-unsigned`. |
 | `sign` | The only job that reads the signing key, in the `release` environment (a prerequisite: "The release environment"). Signs every file, and `update.json` with the comment `floti update.json`, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-six files with their SHA-256s in the run's summary and uploads them as `release-files`, and floti.dev's files as `floti-dev`. Never runs in a dry run. |
 | `sign-dry-run` | A dry run's `sign`: the same signing and checks, with a key pair made in the run. Runs only in a dry run. |
 | `publish` | The only job with write access. Attests every file in `release-files`, then creates the release from them, publishes it and confirms it. Never runs in a dry run. |
@@ -1302,7 +1311,7 @@ it:
 **Which release.** The release that is floti's own version, preview or
 stable, at `https://github.com/floti-dev/floti/releases/download/v<version>/`;
 `update.json` plays no part. Its desktop files are listed with their
-SHA-256s in `Floti-<version>-SHA256SUMS` ("Releasing"): floti's own list
+SHA-256s in `Floti-<version>-desktop-SHA256SUMS` ("Releasing"): floti's own list
 cannot hold the app, because the app carries it. A version with no published
 release (a development build), and a release made before the list existed,
 each says so in one line and installs nothing. A release with no desktop file
@@ -1310,7 +1319,7 @@ for this computer (Windows on Arm, Linux on Arm) says so too.
 
 **The checks.** The list's signature is fetched first and must verify with
 the key built into floti, with the trusted comment `floti <version>
-Floti-<version>-SHA256SUMS`; a signature by another key is refused before the
+Floti-<version>-desktop-SHA256SUMS`; a signature by another key is refused before the
 list is fetched. Then the desktop file downloads into `add` in Floti's data
 folder and is checked against its own signature and its SHA-256 in the list
 before anything runs, as `floti update` checks a file ("floti update", "The
