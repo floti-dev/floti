@@ -2182,6 +2182,25 @@ async fn a_childs_reported_error_stands_as_a_report_until_it_works_again_or_is_r
         error_notices(&world).await.is_empty().then_some(())
     })
     .await;
+    // It runs on as the resumed child: a row of its own under the same name.
+    let (resumed, status): (i64, String) = world
+        .db()
+        .query_row(
+            "SELECT id, status FROM sessions WHERE child_name = 'flaky' ORDER BY id DESC LIMIT 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("the resumed child's row");
+    assert_ne!(
+        u64::try_from(resumed).unwrap(),
+        flaky.id(),
+        "a resume is a new row"
+    );
+    assert_eq!(status, "running");
+    assert!(
+        error_notices(&world).await.is_empty(),
+        "the resumed child left no notice"
+    );
     host.stop(HostStopReason::Stop).await;
 }
 

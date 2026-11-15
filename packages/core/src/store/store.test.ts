@@ -203,7 +203,9 @@ describe('the upgrade note as the database opens', () => {
       earlierHelmDatabase(earlier)
 
       const first = openAsMain(earlier)
-      expect(first.migrations.applied).toEqual([RENAME])
+      // The rename and every migration after it.
+      const fromRename = MIGRATIONS.slice(MIGRATIONS.findIndex((migration) => migration.tag === RENAME))
+      expect(first.migrations.applied).toEqual(fromRename.map((migration) => migration.tag))
       expect(readSettings(first).upgradeNoteSeenAt).toBeNull()
       first.close()
 

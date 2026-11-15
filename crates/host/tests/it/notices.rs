@@ -845,6 +845,8 @@ async fn an_agent_child_that_ended_in_error_keeps_its_notice_until_it_is_resumed
         .await
         .done();
     let one = world.child_of(&parent, "one").await;
+    // A prompt records its conversation, which a resume reopens.
+    world.type_line(&one, "remember this").await;
     world.type_line(&one, "/crash").await;
     let standing = world
         .notices_where("an error notice to stand", |notices| {
@@ -866,6 +868,20 @@ async fn an_agent_child_that_ended_in_error_keeps_its_notice_until_it_is_resumed
             of_kind(notices, NoticeKind::Error).is_empty()
         })
         .await;
+    // It runs on as the resumed child, so nothing stands for it again.
+    let resumed: String = world
+        .db()
+        .query_row(
+            "SELECT status FROM sessions WHERE child_name = 'one' ORDER BY id DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("the resumed child's row");
+    assert_eq!(resumed, "running");
+    assert!(
+        of_kind(&world.notices().await, NoticeKind::Error).is_empty(),
+        "the resumed child left no notice"
+    );
     host.stop(HostStopReason::Stop).await;
 }
 
