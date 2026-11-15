@@ -122,7 +122,7 @@ describe('browserKeyCommand on macOS', () => {
 })
 
 describe('Escape', () => {
-  it('is Stop on every OS when pressed alone, and the page's with any modifier', () => {
+  it("is Stop on every OS when pressed alone, and the page's with any modifier", () => {
     for (const platform of ['win32', 'linux', 'darwin']) {
       expect(browserKeyCommand(press('Escape'), platform), platform).toBe('stop')
       for (const mods of [{ shift: true }, { control: true }, { alt: true }, { meta: true }]) {

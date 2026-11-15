@@ -229,10 +229,9 @@ describe('useBrowsers - the mirror of what main holds', () => {
     bridge.answer('browser:navigate', () => {
       throw new Error('the main process said no')
     })
-    act(() => result.current.navigate(5, 'localhost:3000'))
-    await waitFor(() =>
-      expect(result.current.views.get(5)?.problem).toBe('Floti could not navigate this tab: the main process said no')
-    )
+    // Settles once the failure is on the tab: what the address bar waits on.
+    await act(() => result.current.navigate(5, 'localhost:3000'))
+    expect(result.current.views.get(5)?.problem).toBe('Floti could not navigate this tab: the main process said no')
   })
 })
 
