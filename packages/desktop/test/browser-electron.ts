@@ -104,10 +104,26 @@ export class FakeWebContents extends EventEmitter {
   isDestroyed(): boolean {
     return this.destroyed
   }
+  /**
+   * Electron starts the navigation inside the call: `did-start-navigation`, with
+   * no initiator, is raised before `loadURL` returns (measured on 43.3.0).
+   */
   loadURL(url: string): Promise<void> {
     this.loads.push(url)
-    this.loading = true
+    this.startNavigation(url)
     return Promise.resolve()
+  }
+  /** How many times Helm stopped a load. */
+  stopped = 0
+  /**
+   * `stop()` on 43.3.0: the load ends with `did-stop-loading` and nothing else -
+   * no `did-fail-load` - and `getURL()` stays at the page that was there.
+   */
+  stop(): void {
+    this.stopped += 1
+    if (!this.loading) return
+    this.loading = false
+    this.emit('did-stop-loading')
   }
   reload(): void {
     this.reloads.push('ordinary')
@@ -212,9 +228,51 @@ export class FakeWebContents extends EventEmitter {
   failLoad(code: number, description: string, url: string, options: { errorPage?: boolean } = {}): void {
     this.loading = false
     this.emit('did-fail-load', electronEvent(), code, description, url, true)
-    if (options.errorPage === false) return
-    this.url = url
-    this.emit('did-navigate', electronEvent(), url, -1)
+    if (options.errorPage !== false) {
+      this.url = url
+      this.emit('did-navigate', electronEvent(), url, -1)
+    }
+    this.emit('did-stop-loading')
+  }
+
+  /**
+   * A main-frame navigation starting. `initiator` is the address of the frame
+   * that started it - a link clicked, a form sent, a script setting
+   * `location` - and absent for one the browser started (`loadURL`, back,
+   * forward), as Electron reports it.
+   */
+  startNavigation(
+    url: string,
+    options: { initiator?: string; sameDocument?: boolean; mainFrame?: boolean } = {}
+  ): void {
+    this.loading = true
+    this.emit('did-start-navigation', {
+      ...electronEvent(),
+      url,
+      isMainFrame: options.mainFrame ?? true,
+      isSameDocument: options.sameDocument ?? false,
+      initiator: options.initiator === undefined ? undefined : { url: options.initiator }
+    })
+  }
+
+  /** The server answered the navigation in flight with a redirect to `url`. */
+  redirect(url: string): void {
+    this.emit('did-redirect-navigation', {
+      ...electronEvent(),
+      url,
+      isMainFrame: true,
+      isSameDocument: false,
+      initiator: undefined
+    })
+  }
+
+  /**
+   * A load that ended with nothing committed: a 204, or a response turned into
+   * a download. Only `did-stop-loading` says so (measured on 43.3.0).
+   */
+  endWithoutCommit(): void {
+    this.loading = false
+    this.emit('did-stop-loading')
   }
 
   /**

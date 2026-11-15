@@ -7,6 +7,7 @@ import { BrowserPane, type BrowserPaneProps, type BrowserPaneState } from './Bro
 const STATE: BrowserPaneState = {
   id: 7,
   url: 'http://localhost:3000/',
+  pendingUrl: null,
   refusedUrl: null,
   title: 'Dev server',
   host: 'localhost:3000',
@@ -76,6 +77,7 @@ function renderPane(overrides: Partial<BrowserPaneProps> = {}): BrowserPaneProps
     onBack: vi.fn(),
     onForward: vi.fn(),
     onReload: vi.fn(),
+    onStop: vi.fn(),
     onDevTools: vi.fn(),
     onOpenExternal: vi.fn(),
     onFind: vi.fn(),
@@ -190,7 +192,7 @@ describe('BrowserPane - the address bar', () => {
     }
   })
 
-  it("goes where Enter says, and then shows the page's own address again", async () => {
+  it("goes where Enter says, and with nothing loading shows the page's own address again", async () => {
     const user = userEvent.setup()
     const props = renderPane()
     expect(address().value).toBe('http://localhost:3000/')
@@ -198,6 +200,78 @@ describe('BrowserPane - the address bar', () => {
     await user.type(address(), 'localhost:5173{Enter}')
     expect(props.onNavigate).toHaveBeenCalledWith('localhost:5173')
     expect(address().value).toBe('http://localhost:3000/')
+  })
+
+  it('shows the address being loaded over the page it replaces, until the page commits', () => {
+    const props = renderPane({ state: { ...STATE, loading: true, pendingUrl: 'http://localhost:5173/' } })
+    expect(address().value).toBe('http://localhost:5173/')
+    redraw(<BrowserPane {...props} state={{ ...STATE, url: 'http://localhost:5173/' }} />)
+    expect(address().value).toBe('http://localhost:5173/')
+  })
+
+  it('shows the address being loaded on a new tab, which has no address of its own yet', () => {
+    renderPane({ state: { ...STATE, url: '', loading: true, pendingUrl: 'http://localhost:5173/' } })
+    expect(address().value).toBe('http://localhost:5173/')
+  })
+
+  it('never shows the old address between Enter and the address being loaded arriving', async () => {
+    const search = 'https://www.google.com/search?q=cats%20and%20dogs'
+    let answer: () => void = () => undefined
+    const onNavigate = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          answer = resolve
+        })
+    )
+    const user = userEvent.setup()
+    const props = renderPane({ onNavigate })
+    await user.clear(address())
+    await user.type(address(), 'cats and dogs{Enter}')
+    expect(onNavigate).toHaveBeenCalledWith('cats and dogs')
+
+    // Main has not answered: whatever redraws the pane, the bar says what was sent.
+    redraw(<BrowserPane {...props} />)
+    expect(address().value).toBe('cats and dogs')
+
+    // Main's answer: the results page is loading. From then on the bar says that.
+    redraw(<BrowserPane {...props} state={{ ...STATE, loading: true, pendingUrl: search }} />)
+    await act(async () => answer())
+    expect(address().value).toBe(search)
+
+    redraw(<BrowserPane {...props} state={{ ...STATE, url: search }} />)
+    expect(address().value).toBe(search)
+  })
+
+  it('keeps a recent address chosen in the bar until the address being loaded arrives', async () => {
+    const onNavigate = vi.fn(() => new Promise<void>(() => undefined))
+    const user = userEvent.setup()
+    renderPane({ onNavigate })
+    await user.click(address())
+    await user.click(within(screen.getByRole('list')).getByRole('button', { name: 'http://localhost:5173/' }))
+    expect(address().value).toBe('http://localhost:5173/')
+  })
+
+  it('stops a load on Escape with nothing typed, and with something typed only puts the address back', async () => {
+    const user = userEvent.setup()
+    const props = renderPane({ state: { ...STATE, loading: true, pendingUrl: 'http://localhost:5173/' } })
+
+    await user.click(address())
+    await user.type(address(), '/x')
+    await user.keyboard('{Escape}')
+    expect(props.onStop).not.toHaveBeenCalled()
+    expect(address().value).toBe('http://localhost:5173/')
+
+    await user.click(address())
+    await user.keyboard('{Escape}')
+    expect(props.onStop).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops nothing on Escape when nothing is loading', async () => {
+    const user = userEvent.setup()
+    const props = renderPane()
+    await user.click(address())
+    await user.keyboard('{Escape}')
+    expect(props.onStop).not.toHaveBeenCalled()
   })
 
   it('shows the address a tab was refused before any page loaded, and opens it in your own browser', async () => {
@@ -279,6 +353,21 @@ describe('BrowserPane - the controls', () => {
     await user.click(reload)
     await user.keyboard('{/Shift}')
     expect(vi.mocked(props.onReload).mock.calls).toEqual([[false], [true]])
+  })
+
+  it('stops a load from the reload button while the page loads, and reloads once it has', async () => {
+    const user = userEvent.setup()
+    const props = renderPane({ state: { ...STATE, loading: true, pendingUrl: 'http://localhost:5173/' } })
+    expect(screen.queryByRole('button', { name: 'Reload (hold Shift to ignore the cache)' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Stop loading' }))
+    expect(props.onStop).toHaveBeenCalledTimes(1)
+    expect(props.onReload).not.toHaveBeenCalled()
+
+    redraw(<BrowserPane {...props} state={STATE} />)
+    expect(screen.queryByRole('button', { name: 'Stop loading' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Reload (hold Shift to ignore the cache)' }))
+    expect(props.onReload).toHaveBeenCalledWith(false)
+    expect(props.onStop).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a slim bar: zoom, width, DevTools and clearing data are in the menu, not on it', () => {

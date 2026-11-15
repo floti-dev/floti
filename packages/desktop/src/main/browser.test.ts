@@ -286,6 +286,156 @@ function openTabFor(h: Workspace, project: string | null): { id: number; wc: Fak
   return { id: state.id, wc: FakeWebContentsView.created.at(-1)!.webContents! }
 }
 
+describe('browser host - the address being loaded', () => {
+  it('says what a new tab is loading until the page commits, while its committed address stays empty', () => {
+    const h = workspace()
+    const { id, wc } = openTab(h)
+
+    const asked = h.host.navigate(id, 'localhost:3000')
+    expect(asked?.pendingUrl).toBe('http://localhost:3000/')
+    expect(asked?.url).toBe('')
+    expect(stateOf(h, id).pendingUrl).toBe('http://localhost:3000/')
+
+    wc.commit('http://localhost:3000/')
+    expect(stateOf(h, id)).toMatchObject({ url: 'http://localhost:3000/', pendingUrl: null })
+  })
+
+  it("says the search results address for a phrase, and the new address over an open page's", () => {
+    const h = workspace({ browserSearch: 'duckduckgo' })
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/')
+
+    h.host.navigate(id, 'cats and dogs')
+    const searching = stateOf(h, id)
+    expect(searching.pendingUrl).toBe(wc.loads.at(-1))
+    expect(searching.pendingUrl).toContain('cats%20and%20dogs')
+    expect(searching.url).toBe('http://localhost:3000/')
+  })
+
+  it('says what a tab opened at an address is loading, from the strip and from an agent', () => {
+    const h = workspace()
+    expect(openTab(h, 'http://localhost:3000/').id).toBeGreaterThan(0)
+    expect(h.host.states().at(-1)?.pendingUrl).toBe('http://localhost:3000/')
+
+    void h.host.openFor(SESSIONS.get(7)!, 'http://localhost:4000/')
+    const agents = h.host.states().at(-1)!
+    expect(agents.pendingUrl).toBe('http://localhost:4000/')
+    // An agent's tools read the committed address, which is still nothing.
+    expect(agents.url).toBe('')
+  })
+
+  it('follows a redirect of the address being loaded', () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/login')
+    wc.redirect('http://localhost:3000/home')
+    expect(stateOf(h, id).pendingUrl).toBe('http://localhost:3000/home')
+    wc.commit('http://localhost:3000/home')
+    expect(stateOf(h, id).pendingUrl).toBeNull()
+  })
+
+  it('leaves a load that failed with its address in the bar and nothing pending', () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://nowhere.invalid/')
+    wc.failLoad(-105, 'ERR_NAME_NOT_RESOLVED', 'http://nowhere.invalid/')
+    expect(stateOf(h, id)).toMatchObject({ url: 'http://nowhere.invalid/', pendingUrl: null })
+  })
+
+  it('drops the pending address when a load ends with nothing committed, as a 204 does', () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/')
+    h.host.navigate(id, 'http://localhost:3000/empty')
+    wc.endWithoutCommit()
+    expect(stateOf(h, id)).toMatchObject({ url: 'http://localhost:3000/', pendingUrl: null })
+  })
+
+  it('shows the newer address when a second load replaces the first', () => {
+    const h = workspace()
+    const { id } = openTab(h, 'http://localhost:3000/a')
+    h.host.navigate(id, 'http://localhost:3000/b')
+    expect(stateOf(h, id).pendingUrl).toBe('http://localhost:3000/b')
+  })
+
+  it("never shows where a link or the page's own script is taking it before it commits", () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/')
+
+    // A link clicked on a page that is not loading anything Floti asked for.
+    wc.startNavigation('http://localhost:3000/linked', { initiator: 'http://localhost:3000/' })
+    expect(stateOf(h, id).pendingUrl).toBeNull()
+    wc.commit('http://localhost:3000/linked')
+
+    // And a page navigating itself while an address typed in the bar loads:
+    // the typed address is superseded, and the page's is not shown in its place.
+    h.host.navigate(id, 'http://localhost:3000/typed')
+    expect(stateOf(h, id).pendingUrl).toBe('http://localhost:3000/typed')
+    wc.startNavigation('http://evil.example/', { initiator: 'http://localhost:3000/linked' })
+    expect(stateOf(h, id)).toMatchObject({ url: 'http://localhost:3000/linked', pendingUrl: null })
+  })
+
+  it('drops the pending address for a navigation to somewhere else, and ignores frames and in-page moves', () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/')
+    h.host.navigate(id, 'http://localhost:3000/next')
+
+    wc.startNavigation('http://ads.example/frame', { mainFrame: false })
+    wc.startNavigation('http://localhost:3000/#top', { sameDocument: true })
+    expect(stateOf(h, id).pendingUrl).toBe('http://localhost:3000/next')
+
+    // A navigation the browser started for somewhere else replaces the one asked for.
+    wc.startNavigation('http://localhost:2000/')
+    expect(stateOf(h, id).pendingUrl).toBeNull()
+  })
+
+  it('drops the pending address on back, forward and reload, which load something else', () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/a')
+    wc.commit('http://localhost:3000/a')
+    h.host.navigate(id, 'http://localhost:3000/b')
+    wc.commit('http://localhost:3000/b')
+
+    h.host.navigate(id, 'http://localhost:3000/c')
+    expect(h.host.back(id)?.pendingUrl).toBeNull()
+
+    h.host.navigate(id, 'http://localhost:3000/c')
+    expect(h.host.reload(id, false)?.pendingUrl).toBeNull()
+  })
+
+  it('stops a load: the page stops, nothing is pending and the bar is back on the committed address', () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    wc.commit('http://localhost:3000/')
+    h.host.navigate(id, 'http://localhost:3000/slow')
+    expect(stateOf(h, id).loading).toBe(true)
+
+    const stopped = h.host.stop(id)
+    expect(wc.stopped).toBe(1)
+    expect(stopped).toMatchObject({ url: 'http://localhost:3000/', pendingUrl: null, loading: false })
+    expect(stateOf(h, id)).toMatchObject({ pendingUrl: null, loading: false })
+  })
+
+  it('stops the quiet reconnect too, so a stopped tab does not start loading again', () => {
+    vi.useFakeTimers()
+    const h = workspace()
+    const url = 'http://localhost:5173/'
+    const { id, wc } = openTab(h, url)
+    wc.failLoad(-102, 'ERR_CONNECTION_REFUSED', url)
+    expect(stateOf(h, id).retryingUntil).not.toBeNull()
+
+    h.host.stop(id)
+    expect(stateOf(h, id)).toMatchObject({ retryingUntil: null, problem: null })
+    vi.advanceTimersByTime(60_000)
+    expect(wc.loads).toEqual([url])
+  })
+
+  it('answers null for a tab that is not there', () => {
+    const h = workspace()
+    expect(h.host.stop(99)).toBeNull()
+  })
+})
+
 describe('browser host - a dev server that is not up yet', () => {
   it('retries a refused connection on its own and connects once the server answers', () => {
     vi.useFakeTimers()
@@ -788,6 +938,39 @@ describe('browser host - the keyboard inside a page', () => {
     expect(wc.press({ key: 'w', control: true, isAutoRepeat: true })).toBe(true)
     expect(wc.press({ key: '=', control: true, isAutoRepeat: true })).toBe(true)
     expect(h.commands.slice(3)).toEqual([{ id, command: 'zoom-in' }])
+  })
+
+  it('takes Escape to stop a page while it loads, and leaves the page its Escape otherwise', () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+
+    // Loading: Escape is the browser's.
+    expect(wc.press({ key: 'Escape' })).toBe(true)
+    expect(h.commands).toEqual([{ id, command: 'stop' }])
+    // It stops the page where it is; the keyboard stays there.
+    expect(h.window.webContents.focused).toBe(0)
+    expect(wc.press({ key: 'Escape', shift: true })).toBe(false)
+
+    // Loaded: a dialog, a menu or a game in the page has its Escape.
+    wc.commit('http://localhost:3000/')
+    expect(wc.press({ key: 'Escape' })).toBe(false)
+    expect(h.commands).toHaveLength(1)
+  })
+
+  it('takes Escape to stop a loading page on macOS too', () => {
+    const h = workspace({}, 'darwin')
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    expect(wc.press({ key: 'Escape' })).toBe(true)
+    expect(h.commands).toEqual([{ id, command: 'stop' }])
+  })
+
+  it('leaves Escape to a page that has the whole screen, even while it loads', () => {
+    const h = workspace()
+    const { id, wc } = openTab(h, 'http://localhost:3000/')
+    h.host.bounds({ id, x: 0, y: 100, width: 800, height: 500, visible: true })
+    wc.enterFullscreen()
+    expect(wc.press({ key: 'Escape' })).toBe(false)
+    expect(h.commands).toEqual([])
   })
 
   it("takes the Mac's Cmd chords on macOS, and leaves the page its Ctrl chords and Option's characters", () => {

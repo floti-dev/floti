@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { browserKeyCommand, type BrowserKey } from '../shared/browserKeys'
+import {
+  browserKeyCommand,
+  COMMANDS_FOR_THE_PAGE_ONLY,
+  COMMANDS_FOR_THE_WINDOW,
+  COMMANDS_THAT_REPEAT,
+  type BrowserKey
+} from '../shared/browserKeys'
 
 /** A press, unmodified unless said. */
 const press = (key: string, mods: Partial<Omit<BrowserKey, 'key'>> = {}): BrowserKey => ({
@@ -53,7 +59,8 @@ describe('browserKeyCommand on Windows and Linux', () => {
       press('ArrowLeft'),
       press('ArrowLeft', { alt: true, shift: true }),
       press('a', { control: true }),
-      press('Escape'),
+      press('Escape', { shift: true }),
+      press('Escape', { control: true }),
       press('F12', { shift: true }),
       press('w', { control: true, shift: true })
     ]
@@ -111,5 +118,22 @@ describe('browserKeyCommand on macOS', () => {
       press('w', { meta: true, alt: true })
     ]
     for (const key of theirs) expect(browserKeyCommand(key, 'darwin'), JSON.stringify(key)).toBeNull()
+  })
+})
+
+describe('Escape', () => {
+  it('is Stop on every OS when pressed alone, and the page's with any modifier', () => {
+    for (const platform of ['win32', 'linux', 'darwin']) {
+      expect(browserKeyCommand(press('Escape'), platform), platform).toBe('stop')
+      for (const mods of [{ shift: true }, { control: true }, { alt: true }, { meta: true }]) {
+        expect(browserKeyCommand(press('Escape', mods), platform), `${platform} ${JSON.stringify(mods)}`).toBeNull()
+      }
+    }
+  })
+
+  it("is read only in the page: in Floti's chrome the focused field has it, and it neither repeats nor moves the keyboard", () => {
+    expect(COMMANDS_FOR_THE_PAGE_ONLY.has('stop')).toBe(true)
+    expect(COMMANDS_FOR_THE_WINDOW.has('stop')).toBe(false)
+    expect(COMMANDS_THAT_REPEAT.has('stop')).toBe(false)
   })
 })
