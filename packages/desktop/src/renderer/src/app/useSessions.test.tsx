@@ -152,6 +152,23 @@ describe('useSessions', () => {
     expect(bridge.invoked('session:list')).toHaveLength(2)
   })
 
+  it('says why the first list failed, never listed, and lists when asked again', async () => {
+    bridge.answer('session:list', () => {
+      throw new Error("Error invoking remote method 'session:list': Error: This PC’s host did not answer.")
+    })
+    const { result } = await mounted()
+    await waitFor(() => expect(result.current.listError).toBe('This PC’s host did not answer.'))
+    expect(result.current.listed).toBe(false)
+
+    hosting = [record(1)]
+    bridge.answer('session:list', () => hosting)
+    act(() => result.current.relist())
+    expect(result.current.listError).toBeNull()
+    await waitFor(() => expect(result.current.listed).toBe(true))
+    expect(result.current.sessions.map((s) => s.id)).toEqual([1])
+    expect(result.current.listError).toBeNull()
+  })
+
   it('keeps an ended session’s tab where it was, with the row main sent', async () => {
     hosting = [record(1), record(2), record(3)]
     const { result } = await mounted()

@@ -29,12 +29,16 @@ export interface HostWorkspace {
   activity: ReadonlyMap<number, SessionActivityState>
   /** Whether it has listed its sessions yet: until then, a saved tab is not a session that has gone. */
   listed: boolean
+  /** Why its last listing of its sessions failed, until one succeeds or `relist` asks again. */
+  listError: string | undefined
 }
 
 export interface HostWorkspaces {
   /** Each host on another computer read so far, by id. */
   byHost: ReadonlyMap<string, HostWorkspace>
   rescan: (host: string) => void
+  /** Lists its sessions again: Try again, after a listing failed. */
+  relist: (host: string) => void
   togglePin: (host: string, path: string) => void
   /** A session this window started or renamed there, as the host answered; before it lists it. */
   adopt: (host: string, record: SessionRecord) => void
@@ -49,7 +53,8 @@ const EMPTY: HostWorkspace = {
   pinnedProjects: [],
   sessions: [],
   activity: new Map(),
-  listed: false
+  listed: false,
+  listError: undefined
 }
 
 /**
@@ -82,12 +87,20 @@ export function useHostWorkspaces(
       void bridgesRef.current(host)
         .invoke('session:list')
         .then(
-          (rows) => patch(host, (current) => ({ ...current, sessions: rows, listed: true })),
+          (rows) => patch(host, (current) => ({ ...current, sessions: rows, listed: true, listError: undefined })),
           // Not listed: a host that cannot be reached has not said there are none.
-          () => undefined
+          // Why is kept, so the sidebar says Unknown rather than loading for ever.
+          (error: unknown) => patch(host, (current) => ({ ...current, listError: readable(error) }))
         )
     },
     [patch]
+  )
+  const relistNow = useCallback(
+    (host: string) => {
+      patch(host, (current) => ({ ...current, listError: undefined }))
+      relist(host)
+    },
+    [patch, relist]
   )
 
   // A running child's report and a running session's title are listed with its
@@ -217,14 +230,15 @@ export function useHostWorkspaces(
         (error: unknown) => patch(host, (current) => ({ ...current, scanError: readable(error) }))
       )
       rescan(host)
-      relist(host)
+      // What a listing cut off by the last drop said is not this connection's answer.
+      relistNow(host)
       void bridge.invoke('session:activity').then(
         (states) => patch(host, (current) => ({ ...current, activity: new Map(states.map((state) => [state.id, state])) })),
         () => undefined
       )
     }
     read.current = now
-  }, [connectedKey, patch, rescan, relist])
+  }, [connectedKey, patch, rescan, relistNow])
 
   const togglePin = useCallback(
     (host: string, path: string) => {
@@ -257,5 +271,5 @@ export function useHostWorkspaces(
     [patch]
   )
 
-  return { byHost, rescan, togglePin, adopt, forget }
+  return { byHost, rescan, relist: relistNow, togglePin, adopt, forget }
 }

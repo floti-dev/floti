@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Project, SessionActivityState, SessionRecord } from '@helm/core'
 import { isCommandChild, withListed } from '@helm/core/types'
 import { helm } from './bridge'
+import { readable } from './errors'
 import { disposeTerminal, estimateGrid } from './terminals'
 
 /**
@@ -26,6 +27,10 @@ export interface SessionsState {
    * not a session that has gone: nothing has said which sessions there are.
    */
   listed: boolean
+  /** Why the first list failed, until one succeeds or `relist` asks again; null otherwise. */
+  listError: string | null
+  /** Asks for the first list again: Try again, after it failed. */
+  relist: () => void
   /**
    * What each live session is doing, keyed by session id.
    *
@@ -71,6 +76,13 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
   const [sessions, setSessions] = useState<SessionRecord[]>([])
   const [listed, setListed] = useState(false)
   const listedRef = useRef(false)
+  const [listError, setListError] = useState<string | null>(null)
+  // Each Try again asks for the first list once more.
+  const [listAttempt, setListAttempt] = useState(0)
+  const relist = useCallback(() => {
+    setListError(null)
+    setListAttempt((attempt) => attempt + 1)
+  }, [])
   // The sessions this window closed, whose exit may still be on its way.
   const closedRef = useRef(new Set<number>())
   const [activity, setActivity] = useState<Map<number, SessionActivityState>>(new Map())
@@ -159,9 +171,13 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
         listedRef.current = true
         setSessions((current) => (current.length > 0 ? current : rows))
         setListed(true)
+        setListError(null)
       },
       // Not listed: a host that cannot be reached has not said there are none.
-      () => undefined
+      // Why is kept, so the sidebar says Unknown rather than loading for ever.
+      (error: unknown) => {
+        if (live) setListError(readable(error))
+      }
     )
     // Adopted with them, for the same reason: an idle session publishes nothing
     // until somebody types at it, so a strip waiting for the next push would sit
@@ -175,7 +191,7 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
     return () => {
       live = false
     }
-  }, [reconnects])
+  }, [reconnects, listAttempt])
 
   const launch = useCallback(
     async (project: Project, paneSize: HTMLElement | null): Promise<number | null> => {
@@ -250,6 +266,8 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
   return {
     sessions,
     listed,
+    listError,
+    relist,
     activity,
     launchError,
     dismissLaunchError,

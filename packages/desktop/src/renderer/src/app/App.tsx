@@ -337,6 +337,7 @@ import { LocalProjectPane } from "./LocalProjectPane";
 import { sessionActivityIn } from "./useAgentWorktrees";
 import { useSetup } from "./useSetup";
 import { useHostWorkspaces } from "./useHostWorkspaces";
+import { treeHostPhase } from "./treeHostPhase";
 import { HostProfiles } from "./HostProfiles";
 import { useTemplates } from "./useTemplates";
 import { useThemes } from "./useThemes";
@@ -3589,7 +3590,10 @@ export function App(): JSX.Element {
     return {
       id: host.id,
       name: host.name,
-      connected: connectedHostIds.includes(host.id),
+      phase: treeHostPhase(host, remoteView[host.id]?.connection ?? null, {
+        listed: work?.listed ?? false,
+        listError: work?.listError,
+      }),
       floti: hostFlotiVerdict(remoteView[host.id]?.connection ?? null),
       discovery: work?.discovery ?? null,
       scanning: work?.scanning ?? false,
@@ -3943,6 +3947,8 @@ export function App(): JSX.Element {
       showLauncher(host === LOCAL_HOST_KEY ? frontFolder : null, host),
     onNewWorkspace: (host: string) => setup.openDialog("new", host),
     onRescan: rescanOn,
+    onReconnect: (host: string) => remoteHostLinks.reconnect(host),
+    onRelist: (host: string) => hostWork.relist(host),
     onAddHost: () => setAddingHost(true),
     onUpdateFloti: (host: string) => updateFlotiOn(host),
     onRemoveSessions: removeTreeSessions,
@@ -6106,6 +6112,9 @@ export function App(): JSX.Element {
             discovery={discovery}
             scanning={launcher.scanning}
             scanError={launcher.scanError}
+            sessionsListed={sessionsListed}
+            sessionsListError={sessionState.listError}
+            onRelistSessions={sessionState.relist}
             selectedPath={front?.kind === "project" ? front.path : null}
             pinnedPaths={
               settings?.pinnedProjects ?? DEFAULT_SETTINGS.pinnedProjects

@@ -26,6 +26,8 @@ const discovery = (roots: string[], workspace: string, repos: string[]): Discove
   durationMs: 1
 })
 
+const TIMED_OUT = 'ssh: connect to host build-box port 22: Connection timed out'
+
 const THIS_PC = discovery(['C:\\work'], 'C:\\work\\my-work', ['C:\\work\\my-work\\repos\\notes'])
 const BUILD_BOX = discovery(['/home/you/work'], '/home/you/work/infra', ['/home/you/work/infra/repos/api'])
 
@@ -42,7 +44,7 @@ const session = (id: string, label: string): TreeSession => ({
 const buildBox = (overrides: Partial<TreeHost> = {}): TreeHost => ({
   id: 'h1',
   name: 'build-box',
-  connected: true,
+  phase: { kind: 'live' },
   discovery: BUILD_BOX,
   scanning: false,
   pinnedPaths: [],
@@ -140,19 +142,236 @@ describe('SessionTree with hosts on other computers', () => {
     expect(within(group(view.container, 'h1')).queryByTitle('/home/you/work/infra/repos/api')).toBeNull()
   })
 
-  it('says build-box is retrying while it is not connected, keeps its rows dimmed, and shows them live once it is back', () => {
-    const { view, rerender } = renderTree({ hosts: [buildBox({ connected: false })], hostActions: actions() })
+  it('says build-box is reconnecting after a drop, keeps its last rows dimmed, and shows them live once it is back', () => {
+    const { view, rerender } = renderTree({ hosts: [buildBox({ phase: { kind: 'reconnecting' } })], hostActions: actions() })
     const remote = (): HTMLElement => group(view.container, 'h1')
-    expect(remote().querySelector('[data-host-header]')?.getAttribute('data-host-state')).toBe('retrying')
-    expect(within(remote()).getByText('retrying')).toBeTruthy()
+    const header = (): HTMLElement => remote().querySelector('[data-host-header]') as HTMLElement
+    expect(header().getAttribute('data-host-state')).toBe('reconnecting')
+    const word = within(header()).getByText('reconnecting')
+    expect(word.className).toContain('text-warn')
+    expect(word.getAttribute('title')).toBe('The connection to build-box dropped; trying again. Its sessions there run on.')
+    expect(remote().querySelector('[data-host-phase="reconnecting"]')?.textContent).toBe('Reconnecting to build-box…')
     expect(remote().querySelector('[data-host-rows]')?.getAttribute('data-host-rows')).toBe('dimmed')
     expect(within(remote()).getByTitle('/home/you/work/infra/repos/api')).toBeTruthy()
     expect(within(remote()).getByRole('button', { name: /^deploy, / })).toBeTruthy()
 
-    rerender({ hosts: [buildBox({ connected: true })] })
-    expect(remote().querySelector('[data-host-header]')?.getAttribute('data-host-state')).toBe('connected')
-    expect(within(remote()).queryByText('retrying')).toBeNull()
+    rerender({ hosts: [buildBox({ phase: { kind: 'live' } })] })
+    expect(header().getAttribute('data-host-state')).toBe('live')
+    expect(header().querySelector('[data-host-phase-word]')).toBeNull()
+    expect(remote().querySelector('[data-host-phase]')).toBeNull()
     expect(remote().querySelector('[data-host-rows]')?.getAttribute('data-host-rows')).toBe('live')
+  })
+
+  it('says build-box is connecting before anything is heard from it, with no empty state under it', () => {
+    const { view } = renderTree({
+      hosts: [buildBox({ phase: { kind: 'connecting' }, discovery: null, sessionsByPath: new Map() })],
+      hostActions: actions()
+    })
+    const remote = group(view.container, 'h1')
+    const header = remote.querySelector('[data-host-header]') as HTMLElement
+    expect(header.getAttribute('data-host-state')).toBe('connecting')
+    expect(within(header).getByText('connecting').className).toContain('text-fg-subtle')
+    expect(remote.querySelector('[data-host-phase="connecting"]')?.textContent).toBe('Connecting to build-box…')
+    expect(remote.querySelector('[data-empty-state]')).toBeNull()
+    expect(within(remote).queryByText(/No workspaces on/)).toBeNull()
+    expect(within(remote).queryByText('Scanning…')).toBeNull()
+  })
+
+  it('says why a connecting host waits when there is more to say', () => {
+    const { view } = renderTree({
+      hosts: [
+        buildBox({
+          phase: { kind: 'connecting', note: 'Its floti starts when somebody next signs in there.' },
+          discovery: null,
+          sessionsByPath: new Map()
+        })
+      ],
+      hostActions: actions()
+    })
+    const remote = group(view.container, 'h1')
+    expect(remote.querySelector('[data-host-phase="connecting"]')?.textContent).toBe(
+      'Connecting to build-box…Its floti starts when somebody next signs in there.'
+    )
+    expect(within(remote).getByText('connecting').getAttribute('title')).toBe(
+      'Connecting to build-box: Its floti starts when somebody next signs in there.'
+    )
+  })
+
+  it('says build-box’s sessions are loading once connected, over the projects it has cached, with no empty state', () => {
+    const { view, rerender } = renderTree({
+      hosts: [buildBox({ phase: { kind: 'loading' }, sessionsByPath: new Map() })],
+      hostActions: actions()
+    })
+    const remote = (): HTMLElement => group(view.container, 'h1')
+    const header = (): HTMLElement => remote().querySelector('[data-host-header]') as HTMLElement
+    expect(header().getAttribute('data-host-state')).toBe('loading')
+    expect(within(header()).getByText('loading').getAttribute('title')).toBe('Connected to build-box; reading its sessions')
+    expect(remote().querySelector('[data-host-phase="loading"]')?.textContent).toBe('Loading sessions…')
+    // What it has read of its folders is real and stays readable.
+    expect(remote().querySelector('[data-host-rows]')?.getAttribute('data-host-rows')).toBe('live')
+    expect(within(remote()).getByTitle('/home/you/work/infra/repos/api')).toBeTruthy()
+
+    // A host whose folders hold nothing still says loading, never that it has nothing.
+    const empty: DiscoveryResult = { ...BUILD_BOX, workspaces: [], projects: [] }
+    rerender({ hosts: [buildBox({ phase: { kind: 'loading' }, discovery: empty, sessionsByPath: new Map() })] })
+    expect(remote().querySelector('[data-host-phase="loading"]')).not.toBeNull()
+    expect(remote().querySelector('[data-empty-state]')).toBeNull()
+
+    rerender({ hosts: [buildBox({ phase: { kind: 'live' }, discovery: empty, sessionsByPath: new Map() })] })
+    expect(remote().querySelector('[data-host-phase]')).toBeNull()
+    expect(remote().querySelector('[data-empty-state="host-empty:h1"]')).not.toBeNull()
+  })
+
+  it('says build-box can’t be reached yet in its place, that Floti keeps trying, with its link’s last line and Try again', async () => {
+    const hostActions = { ...actions(), onReconnect: vi.fn() }
+    const { view } = renderTree({
+      hosts: [
+        buildBox({
+          phase: { kind: 'unreachable', failure: { reason: 'Can’t reach build-box', lastLine: TIMED_OUT, retrying: true } },
+          discovery: null,
+          sessionsByPath: new Map()
+        })
+      ],
+      hostActions
+    })
+    const remote = group(view.container, 'h1')
+    const header = remote.querySelector('[data-host-header]') as HTMLElement
+    expect(header.getAttribute('data-host-state')).toBe('unreachable')
+    const word = within(header).getByText('unreachable')
+    expect(word.className).toContain('text-danger')
+    expect(word.getAttribute('title')).toBe('Can’t reach build-box. Floti keeps trying.')
+    const line = remote.querySelector('[data-host-phase="unreachable"]') as HTMLElement
+    // All of the line is the plain fg-subtle of "Scanning…".
+    expect(line.className).toContain('text-fg-subtle')
+    expect(line.querySelector('.text-fg-muted')).toBeNull()
+    expect(line.querySelector('[data-host-reason]')?.textContent).toBe('Can’t reach build-box. Floti keeps trying.')
+    expect(line.querySelector('[data-host-last-line]')?.textContent).toBe(TIMED_OUT)
+    expect(remote.querySelector('[data-empty-state]')).toBeNull()
+    await userEvent.click(within(line).getByRole('button', { name: 'Try again' }))
+    expect(hostActions.onReconnect).toHaveBeenCalledWith('h1')
+    expect(hostActions.onRescan).not.toHaveBeenCalled()
+  })
+
+  it('offers no Try again, and does not say Floti keeps trying, where only the user can fix what stops a host', () => {
+    const { view } = renderTree({
+      hosts: [
+        buildBox({
+          phase: {
+            kind: 'unreachable',
+            failure: { reason: 'build-box proved another key than the one this PC pinned for it', retrying: false }
+          }
+        })
+      ],
+      hostActions: { ...actions(), onReconnect: vi.fn() }
+    })
+    const remote = group(view.container, 'h1')
+    const line = remote.querySelector('[data-host-phase="unreachable"]') as HTMLElement
+    expect(line.querySelector('[data-host-reason]')?.textContent).toBe(
+      'build-box proved another key than the one this PC pinned for it.'
+    )
+    expect(line.querySelector('[data-host-last-line]')).toBeNull()
+    expect(within(line).queryByRole('button', { name: 'Try again' })).toBeNull()
+    // The line is not inside the dimmed rows: it is what the host says now.
+    expect(line.closest('[data-host-rows]')).toBeNull()
+    expect(remote.querySelector('[data-host-rows]')?.getAttribute('data-host-rows')).toBe('dimmed')
+    expect(within(remote).getByRole('button', { name: /^deploy, / })).toBeTruthy()
+  })
+
+  it('keeps saying build-box is reconnecting while its retries fail after it was live, with why, its last line and Try again', async () => {
+    const hostActions = { ...actions(), onReconnect: vi.fn() }
+    const { view } = renderTree({
+      hosts: [
+        buildBox({
+          phase: {
+            kind: 'reconnecting',
+            failure: { reason: 'Can’t reach build-box', lastLine: TIMED_OUT, retrying: true }
+          }
+        })
+      ],
+      hostActions
+    })
+    const remote = group(view.container, 'h1')
+    const header = remote.querySelector('[data-host-header]') as HTMLElement
+    expect(header.getAttribute('data-host-state')).toBe('reconnecting')
+    expect(within(header).queryByText('unreachable')).toBeNull()
+    expect(within(header).getByText('reconnecting').className).toContain('text-warn')
+    const line = remote.querySelector('[data-host-phase="reconnecting"]') as HTMLElement
+    expect(line.className).toContain('text-fg-subtle')
+    expect(within(line).getByText('Reconnecting to build-box…')).toBeTruthy()
+    expect(line.querySelector('[data-host-reason]')?.textContent).toBe('Can’t reach build-box.')
+    expect(line.querySelector('[data-host-last-line]')?.textContent).toBe(TIMED_OUT)
+    expect(remote.querySelector('[data-host-rows]')?.getAttribute('data-host-rows')).toBe('dimmed')
+    await userEvent.click(within(line).getByRole('button', { name: 'Try again' }))
+    expect(hostActions.onReconnect).toHaveBeenCalledWith('h1')
+  })
+
+  it('says Unknown, never loading for ever, when build-box’s sessions could not be listed, and Try again lists them again', async () => {
+    const hostActions = { ...actions(), onRelist: vi.fn(), onReconnect: vi.fn() }
+    const { view } = renderTree({
+      hosts: [buildBox({ phase: { kind: 'unknown', reason: 'The request timed out.' }, sessionsByPath: new Map() })],
+      hostActions
+    })
+    const remote = group(view.container, 'h1')
+    const header = remote.querySelector('[data-host-header]') as HTMLElement
+    expect(header.getAttribute('data-host-state')).toBe('unknown')
+    expect(within(header).getByText('unknown').className).toContain('text-warn')
+    expect(remote.querySelector('[data-host-phase="loading"]')).toBeNull()
+    const unknown = remote.querySelector('[data-empty-state="host-unlisted:h1"]') as HTMLElement
+    expect(within(unknown).getByText('Unknown')).toBeTruthy()
+    expect(within(unknown).getByText('Floti could not list the sessions on build-box. The request timed out.')).toBeTruthy()
+    // Its folders are real and stay readable.
+    expect(remote.querySelector('[data-host-rows]')?.getAttribute('data-host-rows')).toBe('live')
+    await userEvent.click(within(unknown).getByRole('button', { name: 'Try again' }))
+    expect(hostActions.onRelist).toHaveBeenCalledWith('h1')
+    expect(hostActions.onReconnect).not.toHaveBeenCalled()
+  })
+
+  it('says Unknown for this PC when its sessions could not be listed, and Try again lists them again', async () => {
+    const onRelistSessions = vi.fn()
+    const none: DiscoveryResult = { ...THIS_PC, roots: [], workspaces: [], projects: [] }
+    const { view } = renderTree({
+      discovery: none,
+      sessionsByPath: new Map(),
+      sessionsListed: false,
+      sessionsListError: 'This PC’s host did not answer.',
+      onRelistSessions
+    })
+    expect(view.container.querySelector('[data-host-phase="loading"]')).toBeNull()
+    const unknown = view.container.querySelector('[data-empty-state="host-unlisted:local"]') as HTMLElement
+    expect(within(unknown).getByText('Floti could not list the sessions on This PC. This PC’s host did not answer.')).toBeTruthy()
+    expect(screen.queryByText('No folders are being scanned yet.')).toBeNull()
+    await userEvent.click(within(unknown).getByRole('button', { name: 'Try again' }))
+    expect(onRelistSessions).toHaveBeenCalledOnce()
+  })
+
+  it('says this PC’s sessions are loading until its host has listed them, in its group and with no host groups', () => {
+    const { view, rerender } = renderTree({
+      hosts: [buildBox()],
+      hostActions: actions(),
+      sessionsListed: false,
+      sessionsByPath: new Map()
+    })
+    const local = (): HTMLElement => group(view.container, 'local')
+    expect(local().querySelector('[data-host-header]')?.getAttribute('data-host-state')).toBe('loading')
+    expect(local().querySelector('[data-host-phase="loading"]')?.textContent).toBe('Loading sessions…')
+
+    rerender({ sessionsListed: true })
+    expect(local().querySelector('[data-host-header]')?.getAttribute('data-host-state')).toBe('live')
+    expect(local().querySelector('[data-host-phase]')).toBeNull()
+
+    rerender({ hosts: [], hostActions: undefined, sessionsListed: false })
+    expect(view.container.querySelector('[data-host-phase="loading"]')?.textContent).toBe('Loading sessions…')
+  })
+
+  it('shows this PC’s no-folders state only once its sessions are listed', () => {
+    const none: DiscoveryResult = { ...THIS_PC, roots: [], workspaces: [], projects: [] }
+    const { view, rerender } = renderTree({ discovery: none, sessionsByPath: new Map(), sessionsListed: false })
+    expect(view.container.querySelector('[data-host-phase="loading"]')).not.toBeNull()
+    expect(screen.queryByText('No folders are being scanned yet.')).toBeNull()
+
+    rerender({ sessionsListed: true })
+    expect(view.container.querySelector('[data-host-phase]')).toBeNull()
+    expect(screen.getByText('No folders are being scanned yet.')).toBeTruthy()
   })
 
   it('says on build-box’s header that its floti is older, with both versions, and a press starts its update', async () => {
@@ -165,26 +384,30 @@ describe('SessionTree with hosts on other computers', () => {
     const older = within(header).getByRole('button', { name: 'older floti: update floti on build-box' })
     expect(older.textContent).toBe('older floti')
     expect(older.getAttribute('title')).toBe('It runs floti 2.4.0; this Floti carries 2.5.0. Press to update floti on build-box.')
-    expect(header.getAttribute('data-host-state')).toBe('connected')
+    expect(header.getAttribute('data-host-state')).toBe('live')
     await userEvent.click(older)
     expect(hostActions.onUpdateFloti).toHaveBeenCalledWith('h1')
   })
 
-  it('says a floti too old or newer in place of retrying, and offers no update for a newer one', () => {
+  it('says a floti too old or newer in place of its phase’s word, and offers no update for a newer one', () => {
     const hostActions = { ...actions(), onUpdateFloti: vi.fn() }
+    const refused = {
+      kind: 'unreachable',
+      failure: { reason: 'build-box’s floti is too old for this Floti', retrying: false }
+    } as const
     const { view, rerender } = renderTree({
-      hosts: [buildBox({ connected: false, floti: { verdict: 'tooOld', host: '3.1', client: '3.2' } })],
+      hosts: [buildBox({ phase: refused, floti: { verdict: 'tooOld', host: '3.1', client: '3.2' } })],
       hostActions
     })
     const header = (): HTMLElement => group(view.container, 'h1').querySelector('[data-host-header]') as HTMLElement
-    expect(within(header()).queryByText('retrying')).toBeNull()
+    expect(header().querySelector('[data-host-phase-word]')).toBeNull()
     expect(within(header()).getByRole('button', { name: 'floti too old: update floti on build-box' })).toBeTruthy()
 
-    rerender({ hosts: [buildBox({ connected: false, floti: { verdict: 'newer', host: '4.0', client: '3.2' } })] })
+    rerender({ hosts: [buildBox({ phase: refused, floti: { verdict: 'newer', host: '4.0', client: '3.2' } })] })
     const newer = within(header()).getByText('newer floti')
     expect(newer.tagName).toBe('SPAN')
     expect(newer.getAttribute('title')).toBe('It speaks protocol 4.0; this Floti speaks 3.2. Update Floti on this PC.')
-    expect(within(header()).queryByText('retrying')).toBeNull()
+    expect(header().querySelector('[data-host-phase-word]')).toBeNull()
   })
 
   it('offers New session, New workspace and Rescan on each host header, under the pointer and in its right-click menu', async () => {
