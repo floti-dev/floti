@@ -14,12 +14,21 @@
  *   before it is asked for, so a page on a local dev server cannot make main
  *   fetch something its tab is refused, and an agent's local-only tab cannot
  *   reach the internet through its icon.
- * - **Through the browser partition** (`fetch` is the partition's
- *   `session.fetch`): the request carries the page's own cookies and proxy, as
- *   the page's own request for the icon would, and nothing of the app's.
+ * - **Through the browser partition**: the request (`request`, which is
+ *   `net.request` on the partition's session) carries the page's own cookies
+ *   and proxy, as the page's own request for the icon would, and nothing of
+ *   the app's.
  * - **Only a small image.** An `image/*` answer up to `FAVICON_BYTES_MAX`, read
  *   no further than the cap, so a page naming a huge file costs one cancelled
  *   read.
+ *
+ * Redirects are why this is `net.request` and not `session.fetch`. The hop has
+ * to be checked before it is followed, which takes `redirect: 'manual'`; and
+ * there `session.fetch` never hands back the 3xx - its request cancels the
+ * redirect and the fetch rejects - so a check written against a 3xx answer
+ * never runs and every redirected icon is lost. `net.request` raises
+ * `redirect` with the address it is going to, and goes there only if
+ * `followRedirect()` is called inside that event.
  */
 
 /** The largest icon taken, in bytes. A favicon is a few kilobytes; a 512px PNG touch icon fits. */
@@ -29,10 +38,10 @@ export const FAVICON_BYTES_MAX = 64 * 1024
 export const FAVICON_CACHE_MAX = 128
 
 /** Redirect hops followed, each checked against the reach rule. */
-const FAVICON_REDIRECTS_MAX = 3
+export const FAVICON_REDIRECTS_MAX = 3
 
 /** How long one icon may take. A hanging server must not hold a request open for ever. */
-const FAVICON_TIMEOUT_MS = 10_000
+export const FAVICON_TIMEOUT_MS = 10_000
 
 /** A `data:` icon a page declared, used as is when it is a small image. */
 const DATA_IMAGE = /^data:image\/[a-z0-9.+-]+(;[a-z0-9=._+-]+)*,/i
@@ -43,11 +52,35 @@ const DATA_ICON_CHARS_MAX = Math.ceil(FAVICON_BYTES_MAX / 3) * 4 + 128
 /** A media type an icon may have: an image, by its bare name. */
 const IMAGE_TYPE = /^image\/[a-z0-9.+-]+$/
 
-/** The partition's `fetch`, as far as this module uses it. */
-export type FaviconFetch = (
-  url: string,
-  init: { redirect: 'manual'; signal: AbortSignal }
-) => Promise<Response>
+/** The part of Electron's `IncomingMessage` read here. */
+export interface IconResponse {
+  statusCode: number
+  headers: Record<string, string | string[]>
+  on(event: 'data', listener: (chunk: Buffer) => void): this
+  on(event: 'end', listener: () => void): this
+  on(event: 'error', listener: (error: Error) => void): this
+  on(event: 'aborted', listener: () => void): this
+}
+
+/** The part of Electron's `ClientRequest` used here. */
+export interface IconRequest {
+  on(
+    event: 'redirect',
+    listener: (statusCode: number, method: string, redirectUrl: string, responseHeaders: Record<string, string[]>) => void
+  ): this
+  on(event: 'response', listener: (response: IconResponse) => void): this
+  on(event: 'error', listener: (error: Error) => void): this
+  on(event: 'abort', listener: () => void): this
+  followRedirect(): void
+  abort(): void
+  end(): void
+}
+
+/**
+ * Starts a GET for `url` that stops at every redirect: `net.request` with
+ * `redirect: 'manual'` on the browser partition's session.
+ */
+export type IconRequester = (url: string) => IconRequest
 
 export interface Favicons {
   /**
@@ -61,7 +94,7 @@ export interface Favicons {
 }
 
 export interface FaviconOptions {
-  fetch: FaviconFetch
+  request: IconRequester
   bytesMax?: number
   cacheMax?: number
 }
@@ -99,61 +132,77 @@ export function createFavicons(options: FaviconOptions): Favicons {
     }
   }
 
-  /** The bytes of a response, or null once they pass the cap. Reads no further than it. */
-  const readCapped = async (response: Response): Promise<Uint8Array | null> => {
-    if (response.body === null) {
-      const whole = new Uint8Array(await response.arrayBuffer())
-      return whole.byteLength > bytesMax ? null : whole
-    }
-    const reader = response.body.getReader()
-    const chunks: Uint8Array[] = []
-    let total = 0
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      total += value.byteLength
-      if (total > bytesMax) {
-        await reader.cancel().catch(() => undefined)
-        return null
-      }
-      chunks.push(value)
-    }
-    const bytes = new Uint8Array(total)
-    let at = 0
-    for (const chunk of chunks) {
-      bytes.set(chunk, at)
-      at += chunk.byteLength
-    }
-    return bytes
-  }
-
   /** Fetch one icon address, following redirects only to addresses `allows`. */
-  const fetchIcon = async (url: string, allows: (url: string) => boolean): Promise<string> => {
-    const signal = AbortSignal.timeout(FAVICON_TIMEOUT_MS)
-    let at = url
-    for (let hop = 0; hop <= FAVICON_REDIRECTS_MAX; hop += 1) {
-      if (!isHttp(at) || !allows(at)) throw new NoIcon(true)
-      const response = await options.fetch(at, { redirect: 'manual', signal })
-      if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get('location')
-        if (location === null) throw new NoIcon(true)
-        at = resolve(location, at)
-        continue
+  const fetchIcon = (url: string, allows: (url: string) => boolean): Promise<string> =>
+    new Promise<string>((resolve, reject) => {
+      if (!isHttp(url) || !allows(url)) {
+        reject(new NoIcon(true))
+        return
       }
-      // A fetch that followed a redirect on its own landed somewhere unchecked.
-      // Whatever it brought back is not used.
-      if (response.url !== '' && response.url !== at && !allows(response.url)) throw new NoIcon(true)
-      if (!response.ok) throw new NoIcon(true)
-      const type = imageType(response.headers.get('content-type'))
-      if (type === null) throw new NoIcon(true)
-      const declared = Number(response.headers.get('content-length') ?? '0')
-      if (declared > bytesMax) throw new NoIcon(true)
-      const bytes = await readCapped(response)
-      if (bytes === null || bytes.byteLength === 0) throw new NoIcon(true)
-      return `data:${type};base64,${Buffer.from(bytes).toString('base64')}`
-    }
-    throw new NoIcon(true)
-  }
+      const request = options.request(url)
+      let settled = false
+      const settle = (then: () => void): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        then()
+      }
+      /** No icon. The request is abandoned, so nothing more is read or followed. */
+      const fail = (final: boolean): void => {
+        if (settled) return
+        settle(() => reject(new NoIcon(final)))
+        request.abort()
+      }
+      const timer = setTimeout(() => fail(false), FAVICON_TIMEOUT_MS)
+
+      let hops = 0
+      // Followed only from inside this event, and only to an address the
+      // tab could go to: not following is how the hop is never asked for.
+      request.on('redirect', (_statusCode, _method, redirectUrl) => {
+        hops += 1
+        if (settled || hops > FAVICON_REDIRECTS_MAX || !isHttp(redirectUrl) || !allows(redirectUrl)) {
+          fail(true)
+          return
+        }
+        request.followRedirect()
+      })
+      request.on('response', (response) => {
+        if (settled) return
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          fail(true)
+          return
+        }
+        const type = imageType(header(response.headers, 'content-type'))
+        const declared = Number(header(response.headers, 'content-length') ?? '0')
+        if (type === null || declared > bytesMax) {
+          fail(true)
+          return
+        }
+        const chunks: Buffer[] = []
+        let total = 0
+        response.on('data', (chunk) => {
+          if (settled) return
+          total += chunk.byteLength
+          if (total > bytesMax) {
+            fail(true)
+            return
+          }
+          chunks.push(chunk)
+        })
+        response.on('end', () => {
+          if (total === 0) {
+            fail(true)
+            return
+          }
+          settle(() => resolve(`data:${type};base64,${Buffer.concat(chunks, total).toString('base64')}`))
+        })
+        response.on('error', () => fail(false))
+        response.on('aborted', () => fail(false))
+      })
+      request.on('error', () => fail(false))
+      request.on('abort', () => fail(false))
+      request.end()
+    })
 
   return {
     iconFor(candidates, allows) {
@@ -169,7 +218,8 @@ export function createFavicons(options: FaviconOptions): Favicons {
       if (known !== undefined) return known
       const icon: Promise<string | null> = fetchIcon(chosen, allows).catch((err: unknown) => {
         // A refusal, a wrong type or a size over the cap is the answer for that
-        // address. A failed connection is not: the next report asks again.
+        // address. A failed connection or a timeout is not: the next report
+        // asks again.
         if (!(err instanceof NoIcon && err.final) && cache.get(chosen) === icon) cache.delete(chosen)
         return null
       })
@@ -188,18 +238,16 @@ function isHttp(url: string): boolean {
   }
 }
 
-/** A `Location` header against the address that sent it. Unparseable is "nowhere", which no reach allows. */
-function resolve(location: string, base: string): string {
-  try {
-    return new URL(location, base).href
-  } catch {
-    return ''
-  }
+/** One response header, by its lower-case name, joined if it came more than once. */
+function header(headers: Record<string, string | string[]>, name: string): string | null {
+  const value = headers[name]
+  if (value === undefined) return null
+  return Array.isArray(value) ? value.join(', ') : value
 }
 
 /** The image type of a `Content-Type`, without parameters, or null for anything else. */
-function imageType(header: string | null): string | null {
-  if (header === null) return null
-  const type = header.split(';')[0]!.trim().toLowerCase()
+function imageType(value: string | null): string | null {
+  if (value === null) return null
+  const type = value.split(';')[0]!.trim().toLowerCase()
   return IMAGE_TYPE.test(type) ? type : null
 }

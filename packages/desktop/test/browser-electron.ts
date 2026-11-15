@@ -92,14 +92,128 @@ export class FakeSession extends EventEmitter {
     this.cleared += 1
     return Promise.resolve()
   }
-  /** Every address fetched through this partition, in order. */
-  readonly fetched: string[] = []
-  /** What a fetch answers. Refused unless a test says otherwise: no test reaches a network. */
-  answerFetch: (url: string) => Response | Promise<Response> = () =>
-    Promise.reject(new Error('browserElectronFake: no network in tests'))
-  fetch(url: string): Promise<Response> {
-    this.fetched.push(url)
-    return Promise.resolve().then(() => this.answerFetch(url))
+}
+
+/**
+ * How the fake network answers one address: a redirect to `redirect`, or a
+ * response. `chunks` is the body in pieces, `endless` a body that never ends
+ * until the request is abandoned, `hang` an answer that never comes, `refuse`
+ * a connection that fails.
+ */
+export interface FakeRoute {
+  redirect?: string
+  status?: number
+  headers?: Record<string, string>
+  chunks?: Uint8Array[]
+  endless?: number
+  hang?: boolean
+  refuse?: boolean
+}
+
+/** Electron's `IncomingMessage`, as far as a body goes. */
+export class FakeIncomingMessage extends EventEmitter {
+  constructor(
+    readonly statusCode: number,
+    readonly headers: Record<string, string | string[]>
+  ) {
+    super()
+  }
+}
+
+/**
+ * Electron's `ClientRequest` with `redirect: 'manual'` (measured on 43.3.0):
+ * a redirect raises `redirect` with the address it is going to, and the
+ * request goes there only if `followRedirect()` is called inside that event;
+ * otherwise the redirect is cancelled and the request fails with an `error`.
+ * It never answers with a 3xx response.
+ */
+export class FakeNetRequest extends EventEmitter {
+  /** Whether `followRedirect` was called during the `redirect` being raised. */
+  private following = false
+  aborted = false
+  /** How many body chunks were delivered, for a test about where reading stops. */
+  delivered = 0
+
+  constructor(
+    readonly options: { url: string; session?: unknown; redirect?: string; useSessionCookies?: boolean },
+    private readonly net: FakeNet
+  ) {
+    super()
+  }
+
+  followRedirect(): void {
+    this.following = true
+  }
+  abort(): void {
+    if (this.aborted) return
+    this.aborted = true
+    queueMicrotask(() => this.emit('abort'))
+  }
+  end(): void {
+    this.go(this.options.url)
+  }
+
+  private go(url: string): void {
+    queueMicrotask(() => {
+      if (this.aborted) return
+      this.net.asked.push(url)
+      const route = this.net.routes.get(url)
+      if (route === undefined || route.refuse === true) {
+        this.emit('error', new Error('net::ERR_CONNECTION_REFUSED'))
+        return
+      }
+      if (route.hang === true) return
+      if (route.redirect !== undefined) {
+        const to = new URL(route.redirect, url).href
+        this.following = false
+        this.emit('redirect', route.status ?? 302, 'GET', to, { location: [to] })
+        if (this.aborted) return
+        if (!this.following) {
+          this.emit('error', new Error('Redirect was cancelled'))
+          return
+        }
+        this.go(to)
+        return
+      }
+      const response = new FakeIncomingMessage(route.status ?? 200, route.headers ?? {})
+      this.emit('response', response)
+      const deliver = (chunk: Uint8Array): void => {
+        this.delivered += 1
+        response.emit('data', Buffer.from(chunk))
+      }
+      if (route.endless !== undefined) {
+        // At most a thousand pieces: a reader that never stops fails its test
+        // here rather than hanging it.
+        for (let piece = 0; piece < 1000 && !this.aborted; piece += 1) deliver(new Uint8Array(route.endless))
+        return
+      }
+      for (const chunk of route.chunks ?? []) {
+        if (this.aborted) return
+        deliver(chunk)
+      }
+      if (!this.aborted) response.emit('end')
+    })
+  }
+}
+
+/** Electron's `net`, answering from routes a test sets, and recording every address asked for. */
+export class FakeNet {
+  readonly routes = new Map<string, FakeRoute>()
+  /** Every address the network was asked for, redirect hops included, in order. */
+  readonly asked: string[] = []
+  readonly requests: FakeNetRequest[] = []
+
+  request(options: { url: string; session?: unknown; redirect?: string; useSessionCookies?: boolean }): FakeNetRequest {
+    const request = new FakeNetRequest(options, this)
+    this.requests.push(request)
+    return request
+  }
+
+  /** Back to no routes and nothing asked. */
+  reset(): void {
+    this.routes.clear()
+    this.asked.length = 0
+    this.requests.length = 0
   }
 }
 
@@ -488,12 +602,18 @@ export const fakeBrowser = {
   partitions: new Map<string, FakeSession>(),
   views: FakeWebContentsView.created,
   /** Addresses handed to the system browser through `shell.openExternal`. */
-  openedExternally: [] as string[]
+  openedExternally: [] as string[],
+  /** `net.request`, answered from routes a test sets. */
+  net: new FakeNet()
 }
 
 export function browserElectronFake(): Record<string, unknown> {
   return {
     WebContentsView: FakeWebContentsView,
+    net: {
+      request: (options: { url: string; session?: unknown; redirect?: string }) => fakeBrowser.net.request(options),
+      fetch: () => Promise.reject(new Error('browserElectronFake: no network in tests'))
+    },
     session: {
       fromPartition(name: string): FakeSession {
         let found = fakeBrowser.partitions.get(name)

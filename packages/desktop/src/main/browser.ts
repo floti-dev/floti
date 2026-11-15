@@ -1,5 +1,6 @@
 import {
   app,
+  net,
   session,
   shell,
   WebContentsView,
@@ -865,8 +866,14 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
   const restrictionsFor = (entry: View): BrowserReach[] =>
     entry.openedBy === null ? [reach()] : agentReach(reach(), settings().browserMcpLocalOnly)
 
-  /** Icons, fetched through the browser partition. One cache per window. */
-  const favicons = createFavicons({ fetch: (url, init) => browserSession().fetch(url, init) })
+  /**
+   * Icons, fetched through the browser partition with its cookies, as the
+   * page's own request for its icon would be. Every redirect stops for the
+   * reach check (`favicons.ts`). One cache per window.
+   */
+  const favicons = createFavicons({
+    request: (url) => net.request({ url, session: browserSession(), redirect: 'manual', useSessionCookies: true })
+  })
 
   /** Tell the window a page's icon, when it is a different one. */
   const setIcon = (entry: View, icon: string | null, origin: string | null): void => {
