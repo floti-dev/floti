@@ -411,8 +411,16 @@ vitest runs five projects (`vitest.config.ts`):
   `claude`. The faked app's folders are in the run's root (below).
   `sessions.test.ts` is the example. What only Chromium can show runs the
   real Electron binary instead, hidden, on a fixture main script bundled with
-  the shipped module and a user-data folder under the run's root:
-  `test/browser-sign-ins.test.ts`, for the cookie store across a restart.
+  the shipped module and a user-data folder under the run's root, through
+  `test/electron-fixture.ts`: `test/browser-sign-ins.test.ts`, for the cookie
+  store across a restart, and `test/browser-favicons.test.ts`, for
+  `net.request` at a redirect. A fixture that fails shows its exit code or
+  signal and the end of its stderr. On Linux it runs on Chromium's headless
+  Ozone platform, so it needs no display, with its OS sandbox on. Where the
+  OS refuses the sandbox (Ubuntu 23.10 and later refuse unprivileged user
+  namespaces, and an install leaves `chrome-sandbox` unprivileged), Electron
+  aborts naming the helper; the Linux CI job makes `chrome-sandbox` root's
+  with mode 4755 before the check, and so can a developer on such a system.
 - **sdk** - the plugin SDK in `packages/plugin-sdk/test`: its validator,
   schema and command in Node, the package as npm publishes it, and its React
   and Vue helpers in jsdom against the fake bridge in `test/bridge.ts`.
@@ -447,6 +455,7 @@ Helpers for the desktop project live in `packages/desktop/test/`:
 | `world.ts` | a temporary home, data directory, fake CLIs and two git projects |
 | `electron.ts` | the `electron` module, with windows, dialogs and the network inert |
 | `browser-electron.ts` | WebContentsView, its web contents and the browser partition, whose events the test raises |
+| `electron-fixture.ts` | a fixture main script bundled and run on the real Electron binary, and its report |
 | `hosted.ts` | a session host running in a world |
 | `history-fixture.ts` | `history.jsonl` and transcripts written as the CLI writes them |
 | `overlay-world.ts` | a workspace with overlays, and shims held by live or exited processes |

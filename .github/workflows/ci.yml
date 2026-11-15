@@ -73,6 +73,21 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # Chromium will not start without its OS sandbox, and the desktop tests
+      # that run the real Electron binary (packages/desktop/test/electron-
+      # fixture.ts) keep it on, as Floti does. The runner's Ubuntu refuses
+      # unprivileged user namespaces to programs without an AppArmor profile,
+      # so Chromium falls back to the setuid helper beside the binary, which
+      # an install leaves owned by the runner: Electron aborts with "The SUID
+      # sandbox helper binary was found, but is not configured correctly".
+      # Owned by root with mode 4755, as Chromium asks, it starts sandboxed.
+      - name: Let Electron start sandboxed (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          helper="$(dirname "$(node -p "require('electron')")")/chrome-sandbox"
+          sudo chown root:root "$helper"
+          sudo chmod 4755 "$helper"
+
       # What is running and which test temp folders exist before the check, so
       # the step after it reports only what the check left (docs/TESTING.md).
       - name: Snapshot processes and temp folders

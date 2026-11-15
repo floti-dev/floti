@@ -19,9 +19,18 @@ import { treeKill } from '../src/main/treekill'
  *
  * A test calls `endFixtures()` after each test: every process started here, a
  * fixture or a stand-in, ends with the test that started it.
+ *
+ * On Linux the fixture runs on Chromium's headless Ozone platform, so it needs
+ * no display server (a CI runner has none) and never shows a window where
+ * there is one. Its OS sandbox stays on, as Floti's does: where the OS refuses
+ * it, Electron aborts at start and the error shows Chromium's own line saying
+ * so (docs/TESTING.md has the fix; the Linux CI job applies it).
  */
 
 const ELECTRON = createRequire(import.meta.url)('electron') as string
+
+/** Chromium's switches for the fixture on this OS: on Linux, no display server. */
+const PLATFORM_SWITCHES: readonly string[] = process.platform === 'linux' ? ['--ozone-platform=headless'] : []
 
 /** How much of a fixture's stderr a failure shows: its end, where a fatal error is. */
 const STDERR_TAIL = 16_384
@@ -88,7 +97,7 @@ export function startFixture(
 ): Fixture {
   const environment: NodeJS.ProcessEnv = { ...process.env, ...env }
   delete environment['ELECTRON_RUN_AS_NODE']
-  const child = spawn(ELECTRON, [app, `--user-data-dir=${userData}`], {
+  const child = spawn(ELECTRON, [app, `--user-data-dir=${userData}`, ...PLATFORM_SWITCHES], {
     env: environment,
     stdio: ['ignore', 'ignore', 'pipe']
   })
