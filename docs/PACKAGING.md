@@ -1872,4 +1872,4 @@ session.
 
 ## License
 
-MIT. `LICENSE` at the repository root.
+Apache License 2.0. `LICENSE` and `NOTICE` at the repository root; the plugin SDK ships its own copies of both.

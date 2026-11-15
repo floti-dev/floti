@@ -15,7 +15,7 @@
     "url": "git+https://github.com/floti-dev/floti.git",
     "directory": "packages/plugin-sdk"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Cole Taylor",
   "//publish": "Published to npm by release.yml when this version is not on the registry yet. It has no build step: the folder is the package, and `files` is what ships.",
   "type": "module",
@@ -26,7 +26,8 @@
     "bin",
     "src",
     "template",
-    "helm-plugin.schema.json"
+    "helm-plugin.schema.json",
+    "NOTICE"
   ],
   "types": "./src/types.d.ts",
   "exports": {

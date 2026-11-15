@@ -73,12 +73,13 @@ afterAll(() => {
 })
 
 describe(`${NAME} as published`, () => {
-  it('ships the runtime files, the template and the licence, and none of its own tests', () => {
+  it('ships the runtime files, the template, the licence and its notice, and none of its own tests', () => {
     const sdk = JSON.parse(readFileSync(join(SDK_DIR, 'package.json'), 'utf8')) as { name: string; private?: boolean }
     expect(sdk.name).toBe(NAME)
     expect(sdk.private).toBeUndefined()
 
     expect(packed).toContain('LICENSE')
+    expect(packed).toContain('NOTICE')
     expect(packed).toContain('README.md')
     expect(packed).toContain('bin/helm-plugin.mjs')
     expect(packed).toContain('helm-plugin.schema.json')
@@ -95,8 +96,9 @@ describe(`${NAME} as published`, () => {
     // Imported by the framework helpers, and no export of its own.
     expect(packed).toContain('src/bridge.js')
     expect(packed.filter((file) => file.startsWith('test/') || file === 'tsconfig.json')).toEqual([])
-    // The repository's licence, not a copy that has drifted from it.
+    // The repository's licence and notice, not copies that have drifted from them.
     expect(readFileSync(join(SDK_DIR, 'LICENSE'), 'utf8')).toBe(readFileSync(join(SDK_DIR, '..', '..', 'LICENSE'), 'utf8'))
+    expect(readFileSync(join(SDK_DIR, 'NOTICE'), 'utf8')).toBe(readFileSync(join(SDK_DIR, '..', '..', 'NOTICE'), 'utf8'))
   })
 
   it('creates a plugin through npm exec, which installs the SDK, then checks it with its own copy', () => {

@@ -100,7 +100,7 @@ describe('the Homebrew formula', () => {
     expect(formula).toMatch(/^# Written by the release workflow of floti-dev\/floti/)
     expect(formula).toContain('\nclass Floti < Formula\n')
     expect(formula).toContain(`\n  desc "${DESCRIPTION}"\n`)
-    expect(formula).toContain('\n  homepage "https://github.com/floti-dev/floti"\n  license "MIT"\n')
+    expect(formula).toContain('\n  homepage "https://github.com/floti-dev/floti"\n  license "Apache-2.0"\n')
     expect(formula.endsWith('\nend\n')).toBe(true)
     // Homebrew's own rules for a description: no article first, no full stop, at most 80 characters.
     expect(DESCRIPTION).not.toMatch(/^(A|An|The|Floti)\b/i)
@@ -154,7 +154,7 @@ describe('the Homebrew formula', () => {
   it('writes a preview version out, which the URL does not give whole', () => {
     const preview = '2.4.1-preview.11'
     const text = homebrewFormula({ sums: sums(preview), version: preview, repo: REPO })
-    expect(text).toContain('\n  homepage "https://github.com/floti-dev/floti"\n  version "2.4.1-preview.11"\n  license "MIT"\n')
+    expect(text).toContain('\n  homepage "https://github.com/floti-dev/floti"\n  version "2.4.1-preview.11"\n  license "Apache-2.0"\n')
     expect(text.match(/^\s*version /gm)).toHaveLength(1)
     expect(text).toContain(`url "${url('linux-arm64', preview)}"`)
   })
@@ -218,7 +218,7 @@ describe('the winget manifests', () => {
     expect(locale.get('PackageName')).toBe('Floti')
     expect(locale.get('Publisher')).toBe('Floti')
     expect(locale.get('Moniker')).toBe('floti')
-    expect(locale.get('License')).toBe('MIT')
+    expect(locale.get('License')).toBe('Apache-2.0')
     expect(locale.get('ShortDescription')).toBe(DESCRIPTION)
     expect(locale.get('PackageUrl')).toBe('https://github.com/floti-dev/floti')
     expect(locale.get('LicenseUrl')).toBe('https://github.com/floti-dev/floti/blob/v3.0.0/LICENSE')
