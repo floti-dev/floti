@@ -721,7 +721,7 @@ fn stopped_answer(stopped: &ChildStopped) -> CallToolResult {
     }
     if stopped.kept {
         text.push_str(&format!(
-            " {} is kept: it stays under you as a stopped agent until you resume it or the user removes it.",
+            " {} is kept: it has left the user's window, and you can resume it by name.",
             stopped.name
         ));
     } else {

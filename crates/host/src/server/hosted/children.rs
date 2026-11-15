@@ -302,8 +302,8 @@ pub(crate) struct ChildStopped {
     pub name: String,
     /// The names of the agents below it that ended with it.
     pub also: Vec<String>,
-    /// Whether it stays under its parent as a stopped row until it is
-    /// resumed or a person removes it.
+    /// Whether it was kept, as one its parent expects to resume. It leaves
+    /// every client's window either way.
     pub kept: bool,
 }
 
@@ -995,9 +995,9 @@ impl Hosted {
     }
 
     /// Ends `parent`'s running child called `name` and every agent below it.
-    /// With `keep` the child stays under its parent as a stopped row, in every
-    /// client, until it is resumed or a person removes it; without, it leaves
-    /// them at once. The agents below it are never kept. A name that is not
+    /// With `keep` the child is recorded as kept, as one its parent expects
+    /// to resume; kept or not, it leaves every client's window at once and its
+    /// parent can resume it by name. The agents below it are never kept. A name that is not
     /// one of `parent`'s running children is not found: nothing else is
     /// looked at.
     ///
