@@ -90,7 +90,7 @@ if (rest[0] === '--') rest.shift()
 const [owner, ...args] = rest
 const server = spawn('Xvfb', args, { stdio: ['ignore', 'ignore', 'inherit', 3] })
 server.on('error', (error) => {
-  console.error(`${String(error)} (Xvfb is in the xvfb package)`)
+  console.error(String(error) + ' (Xvfb is in the xvfb package)')
   process.exit(127)
 })
 server.on('exit', (code, signal) => process.exit(code ?? (signal === null ? 0 : 1)))
