@@ -5,7 +5,7 @@
 
 use tokio::signal::unix::{Signal, SignalKind, signal};
 
-use super::Account;
+use super::{Account, StopRequest};
 use crate::{Error, Result};
 
 pub(super) fn account() -> Account {
@@ -54,14 +54,28 @@ impl Signals {
         })
     }
 
-    pub(super) async fn recv(&mut self) -> &'static str {
-        tokio::select! {
+    pub(super) async fn recv(&mut self) -> StopRequest {
+        let what = tokio::select! {
             _ = self.interrupt.recv() => "Ctrl+C",
             _ = self.terminate.recv() => "SIGTERM",
             _ = self.hangup.recv() => "SIGHUP",
+        };
+        // SIGTERM is also what `systemctl stop` and `launchctl` send, so it
+        // does not say the session is ending.
+        StopRequest {
+            what,
+            session_ending: false,
         }
     }
+
+    pub(super) fn stopped(&self) -> Stopped {
+        Stopped
+    }
 }
+
+/// Nothing waits on the host's stop here: SIGTERM leaves it the time it
+/// takes, until launchd or systemd gives up on it.
+pub(super) struct Stopped;
 
 /// Makes `command` a process [`interrupt`] can reach. Any process can be
 /// signalled, so there is nothing to do.
@@ -92,4 +106,29 @@ fn send(pid: u32, signal: libc::c_int) -> std::io::Result<()> {
         return Err(std::io::Error::last_os_error());
     }
     Ok(())
+}
+
+/// Makes `command` start with no console. macOS and Linux give no process
+/// one, so there is nothing to do.
+#[cfg(any(test, feature = "testkit"))]
+pub fn without_console(_command: &mut std::process::Command) {}
+
+/// The windows a process made for the OS to tell it the session is ending:
+/// macOS and Linux tell a process with a signal, so it has none to find.
+#[cfg(any(test, feature = "testkit"))]
+pub fn top_level_windows(_pid: u32, _class: &str) -> floti_protocol::Knowable<Vec<isize>> {
+    floti_protocol::Knowable::Unknown
+}
+
+/// macOS and Linux send no window messages when the session ends.
+#[cfg(any(test, feature = "testkit"))]
+pub fn send_session_message(
+    _window: isize,
+    _message: super::SessionMessage,
+    _within: std::time::Duration,
+) -> std::io::Result<isize> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "this OS sends no window messages when the session ends",
+    ))
 }

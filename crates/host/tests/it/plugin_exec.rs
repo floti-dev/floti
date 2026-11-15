@@ -282,9 +282,24 @@ async fn ended(pids: &[u32]) {
         if running.is_empty() {
             return;
         }
-        assert!(started.elapsed() < PATIENCE, "still running: {running:?}");
+        assert!(
+            started.elapsed() < PATIENCE,
+            "still running, with the state Linux gives each (Z: exited, not reaped): {:?}",
+            running
+                .iter()
+                .map(|pid| (pid, linux_state(*pid)))
+                .collect::<Vec<_>>()
+        );
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
+}
+
+/// Process `pid`'s state letter from `/proc/<pid>/stat`, where there is one:
+/// on Linux, `Z` for a process that has exited and not been reaped, which
+/// still answers to its pid.
+fn linux_state(pid: u32) -> Option<char> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    stat.rsplit_once(") ")?.1.chars().next()
 }
 
 fn with_pid_file<'a>(args: &mut Vec<&'a str>, path: &'a str) {

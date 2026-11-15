@@ -1,14 +1,16 @@
 //! The host's place in the user's sign-in on Windows: whether it runs as a
 //! service account or elevated, whether the user has a desktop session, and
-//! the console events that stop it (Ctrl+C, Ctrl+Break, the console closing,
-//! signing out and shutting down).
+//! what stops it: the console's events (Ctrl+C, Ctrl+Break, the console
+//! closing) and the session ending, signing out or shutting down, which its
+//! end-session window hears
+//! ([`end_session_windows`](super::end_session_windows)).
 
 use std::ffi::c_void;
 use std::io;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
 use std::ptr;
 
-use tokio::signal::windows::{CtrlBreak, CtrlC, CtrlClose, CtrlLogoff, CtrlShutdown};
+use tokio::signal::windows::{CtrlBreak, CtrlC, CtrlClose};
 use windows_sys::Win32::Foundation::{HANDLE, LocalFree};
 use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
 use windows_sys::Win32::Security::{
@@ -16,7 +18,9 @@ use windows_sys::Win32::Security::{
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
-use super::Account;
+use super::end_session_windows::EndSession;
+pub(super) use super::end_session_windows::Stopped;
+use super::{Account, StopRequest};
 use crate::{Error, Result};
 
 /// The machine's Windows build number, from `RtlGetVersion`, which answers
@@ -200,13 +204,18 @@ pub(super) fn desktop_session() -> io::Result<bool> {
     Ok(found)
 }
 
-/// The console events that stop the host, registered while this lives.
+/// What stops the host, listened for while this lives: the console's events,
+/// for `floti host` run in a terminal, and the end-session window.
+///
+/// The console's logoff and shutdown events are not among them: Windows
+/// sends those only to a console process that has not loaded user32 or
+/// gdi32, and floti loads user32, so signing out and shutting down reach the
+/// host as window messages, with or without a console.
 pub(super) struct Signals {
     ctrl_c: CtrlC,
     ctrl_break: CtrlBreak,
     close: CtrlClose,
-    logoff: CtrlLogoff,
-    shutdown: CtrlShutdown,
+    end_session: EndSession,
 }
 
 impl Signals {
@@ -216,19 +225,28 @@ impl Signals {
             ctrl_c: tokio::signal::windows::ctrl_c().map_err(failed)?,
             ctrl_break: tokio::signal::windows::ctrl_break().map_err(failed)?,
             close: tokio::signal::windows::ctrl_close().map_err(failed)?,
-            logoff: tokio::signal::windows::ctrl_logoff().map_err(failed)?,
-            shutdown: tokio::signal::windows::ctrl_shutdown().map_err(failed)?,
+            end_session: EndSession::start(),
         })
     }
 
-    pub(super) async fn recv(&mut self) -> &'static str {
+    pub(super) async fn recv(&mut self) -> StopRequest {
+        let asked = |what| StopRequest {
+            what,
+            session_ending: false,
+        };
         tokio::select! {
-            _ = self.ctrl_c.recv() => "Ctrl+C",
-            _ = self.ctrl_break.recv() => "Ctrl+Break",
-            _ = self.close.recv() => "the console closing",
-            _ = self.logoff.recv() => "signing out",
-            _ = self.shutdown.recv() => "the computer shutting down",
+            _ = self.ctrl_c.recv() => asked("Ctrl+C"),
+            _ = self.ctrl_break.recv() => asked("Ctrl+Break"),
+            _ = self.close.recv() => asked("the console closing"),
+            Some(what) = self.end_session.recv() => StopRequest {
+                what,
+                session_ending: true,
+            },
         }
+    }
+
+    pub(super) fn stopped(&self) -> Stopped {
+        self.end_session.stopped()
     }
 }
 
@@ -264,4 +282,84 @@ pub fn interrupt(pid: u32) -> io::Result<()> {
 #[cfg(any(test, feature = "testkit"))]
 pub fn terminate(pid: u32) -> io::Result<()> {
     interrupt(pid)
+}
+
+/// Makes `command` start with no console at all, as Floti starts a host
+/// (`DETACHED_PROCESS`), in a process group of its own as [`stoppable`]
+/// gives it.
+#[cfg(any(test, feature = "testkit"))]
+pub fn without_console(command: &mut std::process::Command) {
+    use std::os::windows::process::CommandExt;
+    use windows_sys::Win32::System::Threading::{CREATE_NEW_PROCESS_GROUP, DETACHED_PROCESS};
+    command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+}
+
+/// The top-level windows of class `class` that process `pid` made, as
+/// addresses: what a test sends Windows' session messages to.
+#[cfg(any(test, feature = "testkit"))]
+pub fn top_level_windows(pid: u32, class: &str) -> floti_protocol::Knowable<Vec<isize>> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowExW, GetWindowThreadProcessId};
+    let class: Vec<u16> = class.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut found = Vec::new();
+    let mut after = ptr::null_mut();
+    loop {
+        // SAFETY: top-level windows (no parent) of a nul-terminated class,
+        // after the last one found.
+        after = unsafe { FindWindowExW(ptr::null_mut(), after, class.as_ptr(), ptr::null()) };
+        if after.is_null() {
+            return floti_protocol::Knowable::Known(found);
+        }
+        let mut owner = 0u32;
+        // SAFETY: a window just found, and a place for its process id.
+        unsafe { GetWindowThreadProcessId(after, &mut owner) };
+        if owner == pid {
+            found.push(after as isize);
+        }
+    }
+}
+
+/// Sends `window` `message` as Windows does when the session ends, and
+/// returns its answer, failing when it has not answered within `within`.
+#[cfg(any(test, feature = "testkit"))]
+pub fn send_session_message(
+    window: isize,
+    message: super::SessionMessage,
+    within: std::time::Duration,
+) -> io::Result<isize> {
+    use super::{SessionEnd, SessionMessage};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        ENDSESSION_CLOSEAPP, ENDSESSION_LOGOFF, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
+        WM_ENDSESSION, WM_QUERYENDSESSION,
+    };
+    let flags = |why: SessionEnd| -> isize {
+        match why {
+            SessionEnd::SignOut => ENDSESSION_LOGOFF as usize as isize,
+            SessionEnd::Shutdown => 0,
+            SessionEnd::CloseApp => ENDSESSION_CLOSEAPP as isize,
+        }
+    };
+    let (id, wparam, lparam) = match message {
+        SessionMessage::Query(why) => (WM_QUERYENDSESSION, 0, flags(why)),
+        SessionMessage::Ends(why) => (WM_ENDSESSION, 1, flags(why)),
+        SessionMessage::DoesNotEnd(why) => (WM_ENDSESSION, 0, flags(why)),
+    };
+    let ms = u32::try_from(within.as_millis()).unwrap_or(u32::MAX);
+    let mut answer = 0usize;
+    // SAFETY: a window handle, which a stale one fails; the answer is
+    // written to `answer`.
+    let sent = unsafe {
+        SendMessageTimeoutW(
+            window as windows_sys::Win32::Foundation::HWND,
+            id,
+            wparam,
+            lparam,
+            SMTO_ABORTIFHUNG,
+            ms,
+            &mut answer,
+        )
+    };
+    if sent == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(answer as isize)
 }
