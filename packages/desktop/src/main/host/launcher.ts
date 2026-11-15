@@ -81,6 +81,13 @@ export const HOST_RETRY_MS = RECONNECT_FIRST_MS
  */
 export const SOCKET_PATH_MAX = 103
 
+/**
+ * The longest name of a socket the host puts in its runtime folder: its
+ * keeper's, `keeper-<8 hex>.sock` (`keeper_endpoint` in the host's
+ * `keeper/mod.rs`). Its own `floti.sock` and `floti.relay` are shorter.
+ */
+export const LONGEST_SOCKET_NAME = 'keeper-00000000.sock'
+
 /** Where this Helm keeps its data and finds its programs. */
 export interface HostPlaces {
   appMode: AppMode
@@ -391,25 +398,25 @@ export function nodeOnPath(deps: Pick<LauncherDeps, 'platform' | 'env'> & Partia
 }
 
 /**
- * The folder the host's socket goes in. Inside Helm's data directory when the
- * socket's path fits macOS's and Linux's limit there; otherwise a folder of its
- * own, named from the data directory, in the user's runtime folder or temp
+ * The folder the host's sockets go in. Inside Helm's data directory when the
+ * longest of them fits macOS's and Linux's limit there; otherwise a folder of
+ * its own, named from the data directory, in the user's runtime folder or temp
  * folder, which on both is the user's own. Windows names a pipe from the
  * folder instead, so any folder does.
  *
- * The name is short because macOS's temp folder already takes about half the
- * limit (`/var/folders/<2>/<28>/T/`), and a test run's own folder sits inside
- * it: twelve hex characters of the hash still tell one data directory from
- * another.
+ * The name is short because macOS's temp folder already takes nearly half the
+ * limit (`/var/folders/<2>/<30>/T`), and a test run's own folder sits inside
+ * it, leaving twelve bytes for the name beside the keeper's socket: six hex
+ * characters of the hash still tell one data directory from another.
  */
 function runtimeFolder(dataDir: string, deps: Pick<LauncherDeps, 'platform' | 'env' | 'tmpdir'>): string {
   const paths = pathsFor(deps.platform)
   const inside = paths.join(dataDir, 'host', 'run')
   if (deps.platform === 'win32') return inside
-  if (Buffer.byteLength(paths.join(inside, 'floti.sock')) <= SOCKET_PATH_MAX) return inside
+  if (Buffer.byteLength(paths.join(inside, LONGEST_SOCKET_NAME)) <= SOCKET_PATH_MAX) return inside
   const runtime = deps.env['XDG_RUNTIME_DIR']
   const base = runtime !== undefined && paths.isAbsolute(runtime) ? runtime : deps.tmpdir()
-  const name = `floti-${createHash('sha256').update(dataDir).digest('hex').slice(0, 12)}`
+  const name = `floti-${createHash('sha256').update(dataDir).digest('hex').slice(0, 6)}`
   return paths.join(base, name)
 }
 
