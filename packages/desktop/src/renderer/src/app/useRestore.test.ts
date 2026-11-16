@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RestoreOffer, SessionRecord } from '@helm/core'
 import type { LaunchedSession, RestoreSessionsResult } from '../../../shared/ipc'
 import { bridge } from './bridge.testkit'
-import { restoredPairs, restoreReport, useOpenOnFailedRead, useRestore } from './useRestore'
+import { EMPTY_LAYOUT, openTab, reconcile, type PaneLayout, type PaneRef } from '@helm/core/types'
+import { restoredPairs, restoreReport, restoreTabKept, useOpenOnFailedRead, useRestore } from './useRestore'
 
 vi.mock('./bridge', () => import('./bridge.testkit'))
 
@@ -248,5 +249,51 @@ describe('useOpenOnFailedRead', () => {
     rerender({ unread: null, ready: true })
     rerender({ unread: 'Again.', ready: true })
     expect(open).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('the Restore tab in the layout', () => {
+  /** A saved layout with the Restore tab in it, reconciled as the window does with the tab's keep rule. */
+  const reconciled = (state: Parameters<typeof restoreTabKept>[0]): PaneLayout =>
+    reconcile(
+      openTab(EMPTY_LAYOUT, { kind: 'restore' }),
+      (ref: PaneRef) => ref.kind !== 'restore' || restoreTabKept(state),
+      []
+    )
+  const hasRestore = (layout: PaneLayout): boolean =>
+    layout.groups.some((group) => group.tabs.some((tab) => tab.kind === 'restore'))
+
+  it('keeps a saved Restore tab while this PC’s host cannot be used, so the next save does not drop it', () => {
+    expect(hasRestore(reconciled({ offer: null, unread: null, answered: true, hostWaiting: true }))).toBe(true)
+  })
+
+  it('keeps it while the first read still waits for the host, before anything says the host cannot be used', () => {
+    expect(hasRestore(reconciled({ offer: null, unread: null, answered: false, hostWaiting: false }))).toBe(true)
+  })
+
+  it('drops it once a read answered with nothing left to show, and keeps it for an offer or a failed read', () => {
+    expect(hasRestore(reconciled({ offer: null, unread: null, answered: true, hostWaiting: false }))).toBe(false)
+    expect(hasRestore(reconciled({ offer: OFFER, unread: null, answered: true, hostWaiting: false }))).toBe(true)
+    expect(hasRestore(reconciled({ offer: null, unread: 'Unreadable.', answered: true, hostWaiting: false }))).toBe(true)
+  })
+})
+
+describe('whether the offer has been answered', () => {
+  it('is false while the first read waits for the host, and true once it answers', async () => {
+    let answer: (offer: RestoreOffer | null) => void = () => undefined
+    bridge.answer(
+      'session:restorable',
+      () =>
+        new Promise<RestoreOffer | null>((resolve) => {
+          answer = resolve
+        })
+    )
+    const { result } = renderHook(() => useRestore())
+    expect(result.current.answered).toBe(false)
+    await act(async () => {
+      answer(null)
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(result.current.answered).toBe(true))
   })
 })

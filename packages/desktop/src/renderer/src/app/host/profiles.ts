@@ -3,7 +3,7 @@ import type { HostConnection, HostSubscription } from '../../../../shared/host/c
 import type * as P from '../../../../shared/host/protocol'
 import { profileFromHost } from '../../../../shared/host/records'
 import type { HelmBridge } from '../../../../shared/ipc'
-import type { HostReach } from './history'
+import { forAction, type HostReach } from './history'
 import type { HostAdapter } from './router'
 
 /**
@@ -38,6 +38,8 @@ export function createProfilesAdapter({ link, own, log = () => undefined }: Prof
   let subscription: HostSubscription | null = null
 
   const host = (): Promise<HostConnection> => link.connection()
+  /** For what a person starts: fails at once, with a short sentence, while this PC's host cannot be used. */
+  const act = forAction(link)
   const take = (listed: readonly P.Profile[]): void => {
     const profiles = listed.map(profileFromHost)
     for (const listener of listeners) listener(profiles)
@@ -57,22 +59,22 @@ export function createProfilesAdapter({ link, own, log = () => undefined }: Prof
       'profile:list': async () => (await (await host()).request('profile:list', null)).map(profileFromHost),
 
       'profile:save': async (request) => {
-        const saved = await (await host()).request('profile:save', { id: request.id ?? null, draft: request.draft })
+        const saved = await (await act()).request('profile:save', { id: request.id ?? null, draft: request.draft })
         return { profile: saved.profile === null ? null : profileFromHost(saved.profile), problems: saved.problems }
       },
 
       // An id the host does not list is refused here, with nothing sent.
       'profile:delete': async ({ id }) => {
-        const connection = await host()
+        const connection = await act()
         const known = (await connection.request('profile:list', null)).some((p) => p.id === id)
         if (!known) return { deleted: false }
         return { deleted: (await connection.request('profile:delete', { id })).deleted }
       },
 
-      'profile:pin': async ({ ids }) => (await (await host()).request('profile:pin', { ids })).map(profileFromHost),
+      'profile:pin': async ({ ids }) => (await (await act()).request('profile:pin', { ids })).map(profileFromHost),
 
       'profile:export': async ({ id }) => {
-        const document = await (await host()).request('profile:export', { id })
+        const document = await (await act()).request('profile:export', { id })
         return own.invoke('profileDialog:export', { fileName: document.fileName, yaml: document.yaml })
       },
 
@@ -80,7 +82,7 @@ export function createProfilesAdapter({ link, own, log = () => undefined }: Prof
         const chosen = await own.invoke('profileDialog:import')
         if (chosen.cancelled) return { profile: null, cancelled: true }
         if ('error' in chosen) return { profile: null, cancelled: false, error: chosen.error }
-        const imported = await (await host()).request('profile:import', { fileName: chosen.fileName, yaml: chosen.yaml })
+        const imported = await (await act()).request('profile:import', { fileName: chosen.fileName, yaml: chosen.yaml })
         return {
           profile: imported.profile === null ? null : profileFromHost(imported.profile),
           cancelled: false,

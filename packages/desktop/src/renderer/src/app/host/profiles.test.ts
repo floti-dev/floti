@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Profile } from '@helm/core/types'
-import { FakeConnection, fakeReach } from '../../../../../test/fake-connection'
+import { FakeConnection, fakeReach, unusableReach } from '../../../../../test/fake-connection'
 import type * as P from '../../../../shared/host/protocol'
 import type {
   HelmBridge,
@@ -9,6 +9,7 @@ import type {
   RequestPayload,
   RequestResult
 } from '../../../../shared/ipc'
+import { HOST_UNUSABLE_FOR_ACTIONS } from './link'
 import { createProfilesAdapter } from './profiles'
 import type { HostAdapter } from './router'
 
@@ -170,5 +171,19 @@ describe('the window’s profiles over its own connection', () => {
       renamedTo: 'imported (2)'
     })
     expect(renamed.connection.payloads('profile:import')).toEqual([{ fileName: 'taken.yaml', yaml: 'name: imported\n' }])
+  })
+})
+
+describe('a profile action while this PC’s host cannot be used', () => {
+  it('fails at once with the short sentence, sends nothing, and reaches the host once it can be used', async () => {
+    const connection = new FakeConnection()
+      .answer('profile:list', () => [profile(4, 'helm')])
+      .answer('profile:delete', () => ({ deleted: true }))
+    const link = unusableReach(connection, HOST_UNUSABLE_FOR_ACTIONS)
+    const adapter = createProfilesAdapter({ link, own: { invoke: () => Promise.reject(new Error('unused')) } as never })
+    await expect(ask(adapter, 'profile:delete', { id: 4 })).rejects.toThrow(HOST_UNUSABLE_FOR_ACTIONS)
+    expect(connection.payloads('profile:delete')).toEqual([])
+    link.makeUsable()
+    await expect(ask(adapter, 'profile:delete', { id: 4 })).resolves.toEqual({ deleted: true })
   })
 })

@@ -335,6 +335,7 @@ import { useLiveSessions } from "./useLiveSessions";
 import { useNewSession } from "./useNewSession";
 import {
   restoredPairs,
+  restoreTabKept,
   useOpenOnFailedRead,
   useRestore,
 } from "./useRestore";
@@ -887,11 +888,19 @@ export function App(): JSX.Element {
   const {
     offer: restoreOffer,
     unread: restoreUnread,
+    answered: restoreAnswered,
     retry: retryRestore,
     dismissUnread: dismissRestoreUnread,
     restore: restoreLost,
     dismiss: dismissRestore,
   } = restoreState;
+  /** Whether the Restore tab stays: it has something to show, or waits for the host (`restoreTabKept`). */
+  const restoreTabShown = restoreTabKept({
+    offer: restoreOffer,
+    unread: restoreUnread,
+    answered: restoreAnswered,
+    hostWaiting: localHostWaiting,
+  });
   /**
    * The host History, Files, Agents and Settings > Plugins each show:
    * kept in this window only and sent to no host, This PC until switched. A
@@ -1191,9 +1200,9 @@ export function App(): JSX.Element {
       // saved tab is kept rather than taken for a session that has gone.
       if (ref.kind === "session")
         return !sessionsListed || sessionsById.has(ref.id);
-      // Answered, it has nothing left to show; a read that failed says so.
-      if (ref.kind === "restore")
-        return restoreOffer !== null || restoreUnread !== null;
+      // Answered, it has nothing left to show; a read that failed says so,
+      // and one that waits for the host says that.
+      if (ref.kind === "restore") return restoreTabShown;
       // Kept while the list is still being read, so a restored tab is not
       // dropped before its plugin has had a chance to load.
       if (ref.kind === "plugin") {
@@ -1220,8 +1229,7 @@ export function App(): JSX.Element {
       browserViews,
       sessionsById,
       sessionsListed,
-      restoreOffer,
-      restoreUnread,
+      restoreTabShown,
       plugins,
       pluginState.list,
       settingsLoaded,
@@ -4285,7 +4293,7 @@ export function App(): JSX.Element {
         ];
       }
       case "restore":
-        return restoreOffer === null && restoreUnread === null
+        return !restoreTabShown
           ? []
           : [
               {
@@ -5477,15 +5485,15 @@ export function App(): JSX.Element {
         return renderPluginPages(ref);
       case "restore":
         if (restoreOffer === null && restoreUnread === null)
-          // It fills in by itself once the host answers.
-          return localHostWaiting ? (
+          // Kept only while it waits for the host; it fills in once it answers.
+          return (
             <RestoreWaitingPane
               hostName={LOCAL_HOST_NAME}
               onNotNow={() =>
                 commit((current) => closeTab(current, "restore"))
               }
             />
-          ) : null;
+          );
         if (restoreOffer === null)
           return restoreUnread === null ? null : (
             <RestoreUnreadPane

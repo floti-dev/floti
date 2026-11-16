@@ -5,6 +5,7 @@ import { PROTOCOL_VERSION, type Message } from '../../../../shared/host/protocol
 import { RECONNECT_FIRST_MS } from '../../../../shared/host/reconnect'
 import type { EventChannel, EventPayload, HostLinkOpened } from '../../../../shared/ipc'
 import {
+  HOST_UNUSABLE_FOR_ACTIONS,
   WINDOW_CAPABILITIES,
   createPageLink,
   type HostEnd,
@@ -499,6 +500,30 @@ describe('a Floti page’s own connection to the local host', () => {
     w.usability.set(null)
     w.main.release()
     await expect(w.link.connectionIfUsable()).resolves.toBe(await w.link.connection())
+  })
+
+  it('an action fails at once with the short sentence while this PC’s host cannot be used, or as soon as main says so, and is the connection once it can be', async () => {
+    const w = world()
+    w.usability.set({ sentence: REFUSED_SENTENCE, refused: REFUSED_VERSIONS })
+    await expect(w.link.connectionForAction()).rejects.toThrow(HOST_UNUSABLE_FOR_ACTIONS)
+    expect(w.main.openCount).toBe(0)
+
+    w.usability.set(null)
+    w.main.holdOpens = true
+    const asked = w.link.connectionForAction()
+    await settle()
+    w.usability.set({ sentence: UNREACHABLE })
+    await expect(asked).rejects.toThrow(HOST_UNUSABLE_FOR_ACTIONS)
+
+    w.usability.set(null)
+    w.main.release()
+    await expect(w.link.connectionForAction()).resolves.toBe(await w.link.connection())
+  })
+
+  it('an action is told main’s own word when main says nothing will connect, not the notice’s', async () => {
+    const w = world()
+    w.main.answer = () => ({ unreachable: 'Floti is quitting.' })
+    await expect(w.link.connectionForAction()).rejects.toThrow('Floti is quitting.')
   })
 
   it('takes a connection the page closed itself for no loss of the host', async () => {

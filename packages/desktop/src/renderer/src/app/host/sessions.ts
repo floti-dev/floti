@@ -28,7 +28,7 @@ import { createHostResources } from '../../../../shared/host/resources'
 import { createTerminalStreams } from '../../../../shared/host/streams'
 import type { HelmBridge, SessionConfirmRequest, StartSessionRequest } from '../../../../shared/ipc'
 import { createLocalEvents } from './events'
-import type { HostReach } from './history'
+import { forAction, type HostReach } from './history'
 import type { HostAdapter } from './router'
 import { createTerminalsAdapter, type ShellShelf } from './terminals'
 
@@ -151,6 +151,8 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
   const log = deps.log ?? (() => undefined)
   const hostName = deps.hostName ?? (() => LOCAL_HOST_NAME)
   const host = (): Promise<HostConnection> => link.connection()
+  /** For what a person starts: fails at once, with a short sentence, while this PC's host cannot be used. */
+  const act = forAction(link)
 
   let current: HostConnection | null = null
   link.onConnected((connection) => {
@@ -425,7 +427,7 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
   /** A session with no profile and nothing composed. */
   async function startPlain(req: StartSessionRequest): Promise<SessionRecord> {
     const row = await (
-      await host()
+      await act()
     ).request('session:start', {
       cwd: req.cwd,
       projectPath: req.projectPath ?? null,
@@ -458,7 +460,7 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
       'session:launch': async (req) => {
         const launched = launchedFromHost(
           await (
-            await host()
+            await act()
           ).request('session:launch', launchRequestToHost(req))
         )
         adopt(launched.session)
@@ -466,14 +468,14 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
       },
       'profile:launch': async (req) => {
         const launched = launchedProfileFromHost(
-          await (await host()).request('profile:launch', { profileId: req.profileId, cols: req.cols, rows: req.rows })
+          await (await act()).request('profile:launch', { profileId: req.profileId, cols: req.cols, rows: req.rows })
         )
         adopt(launched.session)
         return launched
       },
       'history:resume': async (req) => {
         const resumed = await (
-          await host()
+          await act()
         ).request('history:resume', {
           sessionId: req.sessionId,
           ...(req.agent == null ? {} : { agent: req.agent }),
@@ -495,7 +497,7 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
         return offerFromHost(offer, await own.invoke('windowSessions:lostLayout'))
       },
       'session:restore': async (req) => {
-        const result = await (await host()).request('session:restore', { sessions: req.sessions })
+        const result = await (await act()).request('session:restore', { sessions: req.sessions })
         const restored = result.restored.map(({ from, launched }) => {
           const mapped = launchedFromHost(launched)
           adopt(mapped.session)
@@ -539,7 +541,7 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
         const now = records.get(req.id)
         if (now === undefined) return { closed: true }
         // Asked already, so the host is told not to ask again.
-        if (isRunning(now)) await (await host()).request('session:close', { id: req.id, force: true })
+        if (isRunning(now)) await (await act()).request('session:close', { id: req.id, force: true })
         // Ended, and still on screen where it was ended: its row follows on
         // `session:exit`, and the window forgets it when it is closed there.
         if (req.keep === true) return { closed: true }
@@ -575,7 +577,7 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
         // Answered at once, as Helm's own rename is; the host's row follows.
         const renamed: SessionRecord = { ...entry, label }
         records.set(req.id, renamed)
-        void host()
+        void act()
           .then((connection) => connection.request('session:rename', { id: req.id, label }))
           .then(
             (row) => {

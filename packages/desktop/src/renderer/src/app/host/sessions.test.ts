@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FakeConnection, fakeReach, reconnectingReach } from '../../../../../test/fake-connection'
+import { FakeConnection, fakeReach, reconnectingReach, unusableReach } from '../../../../../test/fake-connection'
 import { CLAUDE_CODE_BACKEND } from '../../../../shared/host/backend'
 import { HostRefusedError, type HostConnection } from '../../../../shared/host/client'
 import type * as P from '../../../../shared/host/protocol'
@@ -15,6 +15,7 @@ import type {
   SessionConfirmRequest
 } from '../../../../shared/ipc'
 import type { HostAdapter } from './router'
+import { HOST_UNUSABLE_FOR_ACTIONS } from './link'
 import { createSessionsAdapters } from './sessions'
 
 const UNREACHABLE = 'No local host answered on its socket.'
@@ -1405,6 +1406,49 @@ describe('plain terminals over the window’s own connection', () => {
         shells: [{ id: 4, path: '/work dir/app', shell: 'pwsh' }]
       })
       expect(second.payloads('pterm:open')).toEqual([])
+    })
+  })
+})
+
+describe('actions while this PC’s host cannot be used', () => {
+  function unusableWorld() {
+    const connection = new FakeConnection()
+      .answer('session:list', () => [])
+      .answer('session:start', () => row())
+      .answer('session:restore', () => ({ restored: [], failed: [] }))
+    const link = unusableReach(connection, HOST_UNUSABLE_FOR_ACTIONS)
+    const bridge = ownBridge()
+    const adapters = createSessionsAdapters({
+      link,
+      own: bridge.own,
+      front: { focused: () => true, onChange: () => undefined },
+      shelf: null
+    })
+    return { connection, link, adapters }
+  }
+
+  it('a launch fails at once with the short sentence, sends nothing, and launches once the host can be used', async () => {
+    const w = unusableWorld()
+    await expect(ask(w.adapters, 'session:start', { cwd: '/work dir/alpha', cols: 80, rows: 24 })).rejects.toThrow(
+      HOST_UNUSABLE_FOR_ACTIONS
+    )
+    expect(w.connection.payloads('session:start')).toEqual([])
+    w.link.makeUsable()
+    await expect(ask(w.adapters, 'session:start', { cwd: '/work dir/alpha', cols: 80, rows: 24 })).resolves.toMatchObject({
+      id: row().id
+    })
+  })
+
+  it('a Restore pressed fails at once with the short sentence, and restores once the host can be used', async () => {
+    const w = unusableWorld()
+    await expect(ask(w.adapters, 'session:restore', { sessions: [{ id: 4, cols: 80, rows: 24 }] })).rejects.toThrow(
+      HOST_UNUSABLE_FOR_ACTIONS
+    )
+    expect(w.connection.payloads('session:restore')).toEqual([])
+    w.link.makeUsable()
+    await expect(ask(w.adapters, 'session:restore', { sessions: [{ id: 4, cols: 80, rows: 24 }] })).resolves.toEqual({
+      restored: [],
+      failed: []
     })
   })
 })

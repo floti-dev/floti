@@ -31,8 +31,19 @@ export interface HostReach {
   connection(): Promise<HostConnection>
   /** As `connection()`, but rejecting rather than waiting while this PC's host cannot be used (`PageLink.connectionIfUsable`). */
   connectionIfUsable?(): Promise<HostConnection>
+  /** As `connection()`, but failing at once with a short sentence while this PC's host cannot be used (`PageLink.connectionForAction`). */
+  connectionForAction?(): Promise<HostConnection>
   onConnected(listener: (connection: HostConnection) => void): void
 }
+
+/**
+ * The connection for an action a person started: it fails at once while this
+ * PC's host cannot be used, where a read would wait (`connectionForAction`).
+ */
+export const forAction =
+  (link: HostReach) =>
+  (): Promise<HostConnection> =>
+    link.connectionForAction?.() ?? link.connection()
 
 type Pushed = 'history:changed' | 'archive:changed'
 
@@ -44,6 +55,7 @@ export function createHistoryAdapter(link: HostReach, log: (line: string) => voi
   let subscriptions: HostSubscription[] = []
 
   const host = (): Promise<HostConnection> => link.connection()
+  const act = forAction(link)
   const tell = <K extends Pushed>(channel: K, payload: EventPayload<K>): void => {
     for (const listener of listeners[channel]) listener(payload)
   }
@@ -80,7 +92,7 @@ export function createHistoryAdapter(link: HostReach, log: (line: string) => voi
       'history:projects': async () => (await host()).request('history:projects', null),
       'history:refresh': async () => historySummaryFromHost(await (await host()).request('history:refresh', null)),
       'history:rename': async ({ sessionId, name }) => {
-        const renamed = await (await host()).request('history:rename', { sessionId, name })
+        const renamed = await (await act()).request('history:rename', { sessionId, name })
         return renamed === null ? null : historySessionFromHost(renamed)
       },
       'archive:conversation': async ({ sessionId }) => (await host()).request('archive:conversation', { sessionId }),

@@ -76,6 +76,15 @@ export interface PageLink {
    */
   connectionIfUsable(): Promise<HostConnection>
   /**
+   * The connection for something a person started (a launch, a write, a
+   * restore): as `connectionIfUsable`, but while this PC's host cannot be
+   * used it rejects with one short sentence pointing at the window's notice
+   * (`HOST_UNUSABLE_FOR_ACTIONS`), so the click reports where its action
+   * reports rather than waiting silently. Once the host can be used it is
+   * the connection again.
+   */
+  connectionForAction(): Promise<HostConnection>
+  /**
    * Called on every connect, before `connection()` resolves, so a channel
    * subscribed here is subscribed before anything is asked of the host.
    */
@@ -130,6 +139,9 @@ export interface PageLinkDeps {
   /** This PC's host only: main's word on whether it can be used, which `connectionIfUsable` and `onRefused` hear. */
   usability?: HostUsability
 }
+
+/** What an action a person started answers while this PC's host cannot be used; the notice says why. */
+export const HOST_UNUSABLE_FOR_ACTIONS = 'This PC’s host can’t be used right now; see the notice above.'
 
 /** A page bridge that failed after main had opened it: this PC's host's link waits and tries again. */
 class BridgeFailedError extends Error {}
@@ -382,6 +394,13 @@ export function createPageLink(deps: PageLinkDeps): PageLink {
 
     onRefused(listener) {
       refusedListeners.push(listener)
+    },
+
+    connectionForAction() {
+      return link.connectionIfUsable().catch((error: unknown) => {
+        // Main's own word that nothing comes (Floti quitting) is said as it is.
+        throw deps.usability?.get() == null ? error : new Error(HOST_UNUSABLE_FOR_ACTIONS)
+      })
     },
 
     reconnectNow() {

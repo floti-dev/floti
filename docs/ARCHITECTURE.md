@@ -84,7 +84,9 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   retry or the notice's Try again (`hostLink:reconnect`) connects again, so a
   waiting window starts no connect and no `floti host` of its own. Reads that
   answer with what Floti keeps itself (its own settings, its build) answer
-  without the host meanwhile. A remote host keeps its own state in its tree
+  without the host meanwhile, and what a person starts (a launch, a write, a
+  restore) fails at once with one short sentence pointing at the notice
+  (`connectionForAction`). A saved Restore tab stays while it waits. A remote host keeps its own state in its tree
   header. An update of floti on another host runs
   `floti update` there where that floti has it (over the host's connection
   with `update:install`, or over its login), which relaunches the host

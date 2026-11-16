@@ -255,3 +255,41 @@ export function fakeReach(
   }
   return reach
 }
+
+/**
+ * This PC's page link while its host cannot be used, until `makeUsable`: a
+ * read (`connection`) waits, a read with its own answer (`connectionIfUsable`)
+ * and an action a person started (`connectionForAction`) fail at once, the
+ * action with `actionSentence`, the short sentence the window shows. Once
+ * usable, all three are the connection.
+ */
+export function unusableReach(
+  connection: FakeConnection,
+  actionSentence: string
+): {
+  connection(): Promise<HostConnection>
+  connectionIfUsable(): Promise<HostConnection>
+  connectionForAction(): Promise<HostConnection>
+  onConnected(listener: (connection: HostConnection) => void): void
+  makeUsable(): void
+} {
+  const listeners: Array<(connection: HostConnection) => void> = []
+  let usable = false
+  let connected: (connection: HostConnection) => void = () => undefined
+  const attempt = new Promise<HostConnection>((resolve) => {
+    connected = resolve
+  })
+  return {
+    connection: () => attempt,
+    connectionIfUsable: () => (usable ? attempt : Promise.reject(new Error('This PC’s host refused this Floti.'))),
+    connectionForAction: () => (usable ? attempt : Promise.reject(new Error(actionSentence))),
+    onConnected(listener) {
+      listeners.push(listener)
+    },
+    makeUsable() {
+      usable = true
+      for (const listener of listeners) listener(connection.asConnection())
+      connected(connection.asConnection())
+    }
+  }
+}
