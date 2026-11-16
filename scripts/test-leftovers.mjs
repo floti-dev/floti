@@ -57,10 +57,24 @@ export const TEST_FOLDER_PREFIXES = ['helm-test-run-', 'floti test ', 'helm worl
 
 /**
  * The kinds of process tests start: every `floti*` binary of crates/host, Node
- * (the fake agents, vitest's workers), shells, and the console host Windows
- * gives a console program. Names are as `processName` normalises them.
+ * (the fake agents, vitest's workers), shells, the console host Windows gives
+ * a console program, and the real-Electron fixtures' Electron and the Xvfb
+ * each runs on where Linux has no display. Names are as `processName`
+ * normalises them.
  */
-const TEST_PROCESS_NAMES = new Set(['node', 'sh', 'bash', 'dash', 'zsh', 'cmd', 'powershell', 'pwsh', 'conhost'])
+const TEST_PROCESS_NAMES = new Set([
+  'node',
+  'sh',
+  'bash',
+  'dash',
+  'zsh',
+  'cmd',
+  'powershell',
+  'pwsh',
+  'conhost',
+  'electron',
+  'xvfb'
+])
 
 /**
  * The processes that adopt an orphan on macOS and Linux: init (pid 1, and the

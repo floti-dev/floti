@@ -12,6 +12,7 @@ import {
   type SecondRun
 } from './report'
 import { flushCookies, forgottenCookie, keepSignIns } from '../../src/main/browserCookies'
+import { COOKIES } from './cookies'
 
 /**
  * Not a test: the Electron main script `browser-sign-ins.test.ts` bundles and
@@ -29,21 +30,13 @@ import { flushCookies, forgottenCookie, keepSignIns } from '../../src/main/brows
  * It ends with the test that started it: once the test's process is gone,
  * however that ends, and in any case after `PATIENCE`. What it reports names each cookie by its role and
  * says only whether its value is the one the page set: no cookie's name or
- * value leaves this file. No window is shown, and any failure is written to
+ * value (`cookies.ts`) is in its report or its output. No window is shown, and any failure is written to
  * the report and ends the process rather than raising Electron's error dialog.
  */
 
 const MODE = process.env['SIGN_INS_MODE']
 const RESULT = process.env['SIGN_INS_RESULT'] ?? ''
 
-/** The cookies the page sets, by role. */
-const COOKIES: Record<CookieRole, { name: string; value: string; path: string; attributes: string }> = {
-  kept: { name: 'probe-session', value: 'signed-in', path: '/', attributes: 'HttpOnly; SameSite=Lax' },
-  hostPrefixed: { name: '__Host-probe', value: 'host-only', path: '/', attributes: 'Secure' },
-  signedOut: { name: 'probe-signed-out', value: 'until-sign-out', path: '/', attributes: '' },
-  twinRoot: { name: 'probe-twin', value: 'root', path: '/', attributes: '' },
-  twinDeep: { name: 'probe-twin', value: 'deep', path: '/deep', attributes: '' }
-}
 const ROLES = Object.keys(COOKIES) as CookieRole[]
 
 const report = (body: FirstRun | SecondRun | Ended): void => {
