@@ -10,8 +10,8 @@
 // it out through the functions it is handed, so a test drives it with fakes.
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { existsSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 
 /** The most jobs a build here may use (`CLAUDE.local.md`: builds are kept small on this machine). */
 export const BUILD_JOBS = 4
@@ -73,9 +73,9 @@ export function compareVersions(a, b) {
 }
 
 /**
- * Whether the dev host has to be built, and why. `found` is what the floti at
- * the path is there, `output` what `floti version` printed (`null` when it did
- * not run); `client` is `{ protocol, version }`.
+ * Whether the dev host has to be built, and why. `exists` is whether the file
+ * is there, `output` what `floti version` printed (`null` when it did not
+ * run); `client` is `{ protocol, version }`.
  */
 export function decideBuild({ exists, output, client }) {
   if (!exists) return { build: true, reason: 'there is no host build yet' }
@@ -96,6 +96,70 @@ export function decideBuild({ exists, output, client }) {
   return { build: false, reason: `floti ${found.version} protocol ${String(found.protocol.major)}.${String(found.protocol.minor)} is current` }
 }
 
+/**
+ * The copies of the host a build writes: `debug/floti` and the file cargo
+ * links it to, `debug/deps/floti`. On Windows a running host or keeper holds
+ * both open, and a held executable can be renamed but not overwritten or
+ * deleted, so a build over it fails with "Access is denied".
+ */
+export function hostFiles(path) {
+  const debug = dirname(path)
+  const name = path.slice(debug.length + 1)
+  return [path, join(debug, 'deps', name)]
+}
+
+/** The name `path` is renamed to, in its own folder, until nothing runs it: `floti.exe.old-<stamp>`. */
+export function asidePath(path, stamp) {
+  return `${path}.old-${String(stamp)}`
+}
+
+/** Whether `name` is a copy put aside from the host file `base`. */
+export function isAside(name, base) {
+  return name.startsWith(`${base}.old-`) && /^\d+$/.test(name.slice(base.length + 5))
+}
+
+/**
+ * Renames the host files that are there aside, in their own folders, the way
+ * `install-self` does for the installed app: a host or keeper running from
+ * one keeps running from the renamed copy, and the build writes new files.
+ * Answers the paths moved; throws saying which could not be moved.
+ */
+export function moveAside({ path, exists, rename, stamp }) {
+  const moved = []
+  for (const file of hostFiles(path)) {
+    if (!exists(file)) continue
+    try {
+      rename(file, asidePath(file, stamp))
+    } catch (error) {
+      throw new Error(`could not move ${file} aside to build over it: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    moved.push(file)
+  }
+  return moved
+}
+
+/**
+ * Deletes the copies an earlier build put aside, skipping any still in use
+ * (its delete is refused). Answers how many it deleted.
+ */
+export function sweepAsides({ path, list, remove }) {
+  let removed = 0
+  for (const file of hostFiles(path)) {
+    const folder = dirname(file)
+    const base = file.slice(folder.length + 1)
+    for (const name of list(folder)) {
+      if (!isAside(name, base)) continue
+      try {
+        remove(join(folder, name))
+        removed += 1
+      } catch {
+        // Still running: it is tried again at the next check.
+      }
+    }
+  }
+  return removed
+}
+
 /** The environment a host build runs with: at most `BUILD_JOBS` jobs, fewer when the caller asked for fewer. */
 export function buildEnv(env) {
   const asked = Number(env.CARGO_BUILD_JOBS)
@@ -109,14 +173,21 @@ export function buildEnv(env) {
  * that cannot connect.
  *
  * `read(path)` answers a file's text, `exists(path)` whether it is there,
- * `version(path)` what `floti version` printed (or `null`), `build(env)` runs the
+ * `version(path)` what `floti version` printed (or `null`), `list(folder)` the
+ * names in a folder, `rename(from, to)` and `remove(path)` change the disk,
+ * `now()` a number that makes names of this run's own, `build(env)` runs the
  * build and answers its exit status, `say(line)` shows a line.
+ *
+ * Copies put aside by an earlier build are deleted first, at every check. A
+ * build that is needed moves the host files aside before it starts.
  */
-export function ensureDevHost({ repoRoot, env, platform, read, exists, version, build, say }) {
+export function ensureDevHost({ repoRoot, env, platform, read, exists, version, list, rename, remove, now, build, say }) {
   const protocol = clientProtocol(read(join(repoRoot, 'crates', 'floti-protocol', 'generated', 'floti-protocol.generated.ts')))
   const app = JSON.parse(read(join(repoRoot, 'packages', 'desktop', 'package.json')))
   if (protocol === null) throw new Error("the client's protocol version could not be read from the generated declarations")
   const path = devHostPath({ repoRoot, env, platform })
+  const swept = sweepAsides({ path, list, remove })
+  if (swept > 0) say(`removed ${String(swept)} old host cop${swept === 1 ? 'y' : 'ies'} no longer in use`)
   const present = exists(path)
   const decision = decideBuild({
     exists: present,
@@ -128,6 +199,8 @@ export function ensureDevHost({ repoRoot, env, platform, read, exists, version, 
     return { built: false, reason: decision.reason }
   }
   say(`host ${path}: ${decision.reason}; building it (cargo build -p floti-host --bin floti, ${buildEnv(env).CARGO_BUILD_JOBS} jobs)`)
+  const moved = moveAside({ path, exists, rename, stamp: now() })
+  if (moved.length > 0) say(`a running host keeps running from ${String(moved.length)} renamed cop${moved.length === 1 ? 'y' : 'ies'} (.old-*); they are deleted once nothing runs them`)
   const status = build(buildEnv(env))
   if (status !== 0) {
     throw new Error(`the host build failed (cargo exited ${String(status)}), so there is no host for the window to connect to`)
@@ -144,6 +217,16 @@ export function ensureDevHostForReal({ env = process.env, platform = process.pla
     platform,
     read: (path) => readFileSync(path, 'utf8'),
     exists: existsSync,
+    list: (folder) => {
+      try {
+        return readdirSync(folder)
+      } catch {
+        return []
+      }
+    },
+    rename: renameSync,
+    remove: (path) => rmSync(path),
+    now: () => Date.now(),
     version: (path) => {
       const ran = spawnSync(path, ['version'], { encoding: 'utf8', windowsHide: true, timeout: 20_000 })
       return ran.status === 0 && typeof ran.stdout === 'string' ? ran.stdout : null

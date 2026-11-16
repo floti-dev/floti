@@ -1,13 +1,18 @@
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  asidePath,
   buildEnv,
   clientProtocol,
   compareVersions,
   decideBuild,
   devHostPath,
   ensureDevHost,
-  parseVersionLine
+  hostFiles,
+  isAside,
+  moveAside,
+  parseVersionLine,
+  sweepAsides
 } from '../scripts/dev-host.mjs'
 
 /**
@@ -80,20 +85,90 @@ describe('the pieces it reads', () => {
   })
 })
 
+describe('the copies put aside', () => {
+  const host = join('/t', 'debug', 'floti.exe')
+  const deps = join('/t', 'debug', 'deps', 'floti.exe')
+
+  it('names a copy beside its file and recognises only its own', () => {
+    expect(asidePath(host, 7)).toBe(`${host}.old-7`)
+    expect(hostFiles(host)).toEqual([host, deps])
+    expect(isAside('floti.exe.old-1731700000000', 'floti.exe')).toBe(true)
+    expect(isAside('floti.exe.old-', 'floti.exe')).toBe(false)
+    expect(isAside('floti.exe.old-x', 'floti.exe')).toBe(false)
+    expect(isAside('floti.exe', 'floti.exe')).toBe(false)
+    expect(isAside('floti-3f2a.exe.old-5', 'floti.exe')).toBe(false)
+  })
+
+  it('moves both names aside, in their own folders, and only those that are there', () => {
+    const renamed: [string, string][] = []
+    const moved = moveAside({
+      path: host,
+      exists: (file) => file === host || file === deps,
+      rename: (from, to) => renamed.push([from, to]),
+      stamp: 9
+    })
+    expect(moved).toEqual([host, deps])
+    expect(renamed).toEqual([
+      [host, `${host}.old-9`],
+      [deps, `${deps}.old-9`]
+    ])
+    const only: [string, string][] = []
+    moveAside({ path: host, exists: (file) => file === host, rename: (from, to) => only.push([from, to]), stamp: 9 })
+    expect(only).toEqual([[host, `${host}.old-9`]])
+  })
+
+  it('says which file could not be moved', () => {
+    expect(() =>
+      moveAside({
+        path: host,
+        exists: () => true,
+        rename: () => {
+          throw new Error('EPERM')
+        },
+        stamp: 1
+      })
+    ).toThrow(/could not move .*floti\.exe aside to build over it: EPERM/)
+  })
+
+  it('deletes leftover copies and skips one still in use', () => {
+    const folders: Record<string, string[]> = {
+      [join('/t', 'debug')]: ['floti.exe', 'floti.exe.old-1', 'floti.exe.old-2', 'floti.pdb'],
+      [join('/t', 'debug', 'deps')]: ['floti.exe', 'floti.exe.old-1', 'floti-abc.exe.old-1']
+    }
+    const removed: string[] = []
+    const count = sweepAsides({
+      path: host,
+      list: (folder) => folders[folder] ?? [],
+      remove: (file) => {
+        if (file === `${host}.old-2`) throw new Error('EBUSY: in use')
+        removed.push(file)
+      }
+    })
+    expect(removed).toEqual([`${host}.old-1`, `${deps}.old-1`])
+    expect(count).toBe(2)
+  })
+})
+
 describe('ensureDevHost', () => {
   const GENERATED = 'export const PROTOCOL_VERSION = { major: 4, minor: 1 } as const;'
   const files: Record<string, string> = {
     'generated.ts': GENERATED,
     'package.json': JSON.stringify({ version: '3.0.0-preview.1' })
   }
+  const host = join('/t', 'debug', 'floti.exe')
+  const deps = join('/t', 'debug', 'deps', 'floti.exe')
 
-  function world(hostOutput: string | null, buildStatus = 0) {
+  /** A disk of host files, what `floti version` answers, and a build that fakes cargo. */
+  function world(hostOutput: string | null, options: { buildStatus?: number; disk?: string[]; renameFails?: boolean } = {}) {
     const said: string[] = []
     const builds: Record<string, string | undefined>[] = []
-    const present = hostOutput !== undefined
+    const disk = new Set(options.disk ?? (hostOutput === null ? [] : [host, deps]))
+    const order: string[] = []
     return {
       said,
       builds,
+      disk,
+      order,
       run: () =>
         ensureDevHost({
           repoRoot: '/repo',
@@ -104,11 +179,23 @@ describe('ensureDevHost', () => {
             if (found === undefined) throw new Error(`unexpected read ${path}`)
             return found[1]
           },
-          exists: () => present && hostOutput !== 'absent',
-          version: () => (hostOutput === 'absent' ? null : hostOutput),
+          exists: (path) => disk.has(path),
+          version: () => hostOutput,
+          list: (folder) => [...disk].filter((file) => dirname(file) === folder).map((file) => basename(file)),
+          rename: (from, to) => {
+            if (options.renameFails === true) throw new Error('EACCES')
+            order.push('rename')
+            disk.delete(from)
+            disk.add(to)
+          },
+          remove: (path) => {
+            disk.delete(path)
+          },
+          now: () => 42,
           build: (env) => {
+            order.push('build')
             builds.push(env)
-            return buildStatus
+            return options.buildStatus ?? 0
           },
           say: (text) => said.push(text)
         })
@@ -122,20 +209,41 @@ describe('ensureDevHost', () => {
     expect(w.builds[0]).toMatchObject({ CARGO_BUILD_JOBS: '4', CARGO_TARGET_DIR: '/t' })
   })
 
-  it('builds when there is no host', () => {
-    const w = world('absent')
-    expect(w.run().built).toBe(true)
+  it('moves a running host aside before it builds, so the build writes over nothing that is held', () => {
+    const w = world(line('2.4.1-preview.11', '3.1'))
+    w.run()
+    expect(w.order).toEqual(['rename', 'rename', 'build'])
+    expect(w.disk).toEqual(new Set([`${host}.old-42`, `${deps}.old-42`]))
   })
 
-  it('does not build a current host', () => {
+  it('builds when there is no host, with nothing to move aside', () => {
+    const w = world(null)
+    expect(w.run().built).toBe(true)
+    expect(w.order).toEqual(['build'])
+  })
+
+  it('does not build, or move anything, for a current host', () => {
     const w = world(line('3.0.0-preview.1', '4.1'))
     expect(w.run()).toMatchObject({ built: false })
     expect(w.builds).toEqual([])
+    expect(w.order).toEqual([])
+  })
+
+  it('deletes the copies an earlier build left at every check, even when no build is needed', () => {
+    const w = world(line('3.0.0-preview.1', '4.1'), { disk: [host, deps, `${host}.old-1`, `${deps}.old-1`] })
+    w.run()
+    expect(w.disk).toEqual(new Set([host, deps]))
+    expect(w.said.some((text) => text.includes('removed 2 old host copies'))).toBe(true)
   })
 
   it('fails with the build failure, so no window opens, when the build fails', () => {
-    const w = world(line('2.4.1-preview.11', '3.1'), 101)
+    const w = world(line('2.4.1-preview.11', '3.1'), { buildStatus: 101 })
     expect(() => w.run()).toThrow(/host build failed \(cargo exited 101\)/)
   })
-})
 
+  it('stops before building, saying what failed, when a running copy cannot be moved aside', () => {
+    const w = world(line('2.4.1-preview.11', '3.1'), { renameFails: true })
+    expect(() => w.run()).toThrow(/could not move .* aside to build over it: EACCES/)
+    expect(w.builds).toEqual([])
+  })
+})
