@@ -1114,7 +1114,10 @@ async fn wait_host_exit_with_an_argument_it_does_not_take_exits_with_the_usage_s
     )
     .await;
     // What a floti from before the command answers too: the desktop then starts as it always has.
-    assert_eq!(waited.status.code(), Some(BridgeExit::Usage.code()));
+    assert_eq!(
+        waited.status.code(),
+        Some(i32::from(BridgeExit::Usage.code()))
+    );
 }
 
 // ---------------------------------------------------------------------------
