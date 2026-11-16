@@ -903,6 +903,25 @@ overrides the gate; keep it.
   The rail sits outside the sidebar's `aside` on purpose: it is a column of
   titled buttons, and inside the `aside` every "first project row" selector
   would land on it.
+- **Start-up** (`StartupSteps`): from the window's first frame until its
+  layout arrives, the panes' place holds one island, as the welcome page is,
+  saying what Floti is doing: a caps label "Starting Floti" over the steps of
+  main's connect to this PC's host (`hostLink:step`). Preparing floti and
+  connecting are always listed; starting the host, or updating it to floti
+  `<version>`, once it is the step. A step done takes a `success` check, the
+  one under way the page tab's spinner (still under reduced motion) and `fg`
+  text, a step to come a faint ring in `fg-subtle`. A step that has run 4 s
+  says what it waits on and the seconds so far in mono ("Waiting for floti
+  host to start · 6 s"), so a slow start reads as slow, not hung. `ready`
+  keeps the view up until the layout is there, so the window goes from the
+  steps to its panes with no empty pane between. A host that refused this
+  Floti or cannot be reached is the host notice's to say; the steps step
+  aside for it, through main's retries too. Where there are then no panes to
+  draw, the island says only "Waiting for this PC's host…" and "Your projects
+  and sessions show here once it answers." (`StartupWaiting`), never the
+  welcome page, which would offer folders the host cannot read. This PC's
+  group in the tree says connecting meanwhile, with "Preparing floti." or
+  "Starting its host." under it, and waiting while the host cannot be used.
 - **Panes**: islands split any way across the window, as VS Code splits its
   editors - side by side, one above the other, and either inside the other -
   each a tab strip, a crumb row for a session's or a file's tab, and its body.
@@ -1298,9 +1317,10 @@ overrides the gate; keep it.
   all there is. It is the "Unknown, never nothing" rule again: a host still
   connecting and a host with nothing on it would otherwise look the same, and
   only one of them means its sessions are not coming. A listing that fails
-  says Unknown rather than loading for ever. This PC's group says "loading" and
-  "Loading sessions…", or Unknown, the same way until its own host has listed
-  its sessions.
+  says Unknown rather than loading for ever. This PC's group says "connecting"
+  until its own host answers (with why it waits while floti is prepared or its
+  host started), then "loading" and "Loading sessions…", or Unknown, the same
+  way until that host has listed its sessions.
 
   **Files and the rest are destinations on the rail, not rows here.** Each
   of those views owns its own picker, so its way in carries none. They were

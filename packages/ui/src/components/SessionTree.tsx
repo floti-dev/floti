@@ -105,6 +105,16 @@ const LOADING: TreeHostPhase = { kind: 'loading' }
 const UPDATING: TreeHostPhase = { kind: 'updating' }
 const WAITING: TreeHostPhase = { kind: 'waiting' }
 
+/** A start-up step of this PC's host before it answers (`SessionTreeProps.localHostStarting`). */
+export type LocalStartupStep = 'preparing' | 'connecting' | 'starting'
+
+/** What this PC's group says in each start-up step: connecting, and why it waits where there is more to say. */
+const STARTING_PHASE: Record<LocalStartupStep, TreeHostPhase> = {
+  preparing: { kind: 'connecting', note: 'Preparing floti.' },
+  connecting: { kind: 'connecting' },
+  starting: { kind: 'connecting', note: 'Starting its host.' }
+}
+
 /**
  * A host on another computer, as the tree lists it under its own header after
  * this PC's group: its own workspaces, projects and running sessions, read from
@@ -180,6 +190,13 @@ export interface SessionTreeProps {
    * the host; the window's notice says why.
    */
   localHostWaiting?: boolean | undefined
+  /**
+   * The start-up step main's link to this PC's host is in before it answers:
+   * until its sessions are listed, its group says it is connecting, and why
+   * it waits while floti is prepared or its host started. Null or absent once
+   * it has answered.
+   */
+  localHostStarting?: LocalStartupStep | null | undefined
   /** The project whose page is in front of the focused pane. */
   selectedPath: string | null
   /**
@@ -397,6 +414,7 @@ export function SessionTree({
   onRelistSessions,
   localHostUpdating = false,
   localHostWaiting = false,
+  localHostStarting = null,
   selectedPath,
   pinnedPaths,
   onTogglePin,
@@ -436,7 +454,9 @@ export function SessionTree({
       ? WAITING
       : sessionsListError !== null
       ? { kind: 'unknown', reason: sessionsListError }
-      : LOADING
+      : localHostStarting !== null
+        ? STARTING_PHASE[localHostStarting]
+        : LOADING
   const local = (
     <>
       <PhaseLine phase={localPhase} name={localName} id={localKey} onRelist={onRelistSessions} />

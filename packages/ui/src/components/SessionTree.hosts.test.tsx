@@ -415,6 +415,43 @@ describe('SessionTree with hosts on other computers', () => {
     expect(local().querySelector('[data-host-phase]')).toBeNull()
   })
 
+  it('says this PC’s host is connecting, and why it waits, through each start-up step until its sessions are listed', () => {
+    const { view, rerender } = renderTree({
+      hosts: [buildBox()],
+      hostActions: actions(),
+      sessionsListed: false,
+      localHostStarting: 'preparing',
+      sessionsByPath: new Map()
+    })
+    const local = (): HTMLElement => group(view.container, 'local')
+    const state = (): string | null | undefined =>
+      local().querySelector('[data-host-header]')?.getAttribute('data-host-state')
+    const line = (): string | null | undefined => local().querySelector('[data-host-phase="connecting"]')?.textContent
+    expect(state()).toBe('connecting')
+    expect(line()).toBe('Connecting to This PC…Preparing floti.')
+
+    rerender({ localHostStarting: 'connecting' })
+    expect(state()).toBe('connecting')
+    expect(line()).toBe('Connecting to This PC…')
+
+    rerender({ localHostStarting: 'starting' })
+    expect(line()).toBe('Connecting to This PC…Starting its host.')
+
+    // A host that cannot be used says it waits, through main's retries, never connecting or reading its sessions.
+    rerender({ localHostStarting: 'connecting', localHostWaiting: true })
+    expect(state()).toBe('waiting')
+    expect(local().querySelector('[data-host-phase="connecting"]')).toBeNull()
+
+    // Answered: its sessions load, then are listed.
+    rerender({ localHostStarting: null })
+    expect(state()).toBe('loading')
+    expect(local().querySelector('[data-host-phase="loading"]')?.textContent).toBe('Loading sessions…')
+
+    rerender({ sessionsListed: true })
+    expect(state()).toBe('live')
+    expect(local().querySelector('[data-host-phase]')).toBeNull()
+  })
+
   it('shows this PC’s no-folders state only once its sessions are listed', () => {
     const none: DiscoveryResult = { ...THIS_PC, roots: [], workspaces: [], projects: [] }
     const { view, rerender } = renderTree({ discovery: none, sessionsByPath: new Map(), sessionsListed: false })
