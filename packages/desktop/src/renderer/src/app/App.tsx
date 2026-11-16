@@ -205,6 +205,7 @@ import {
   ConsoleIcon,
   TitleBar,
   VersionBanner,
+  claudeBanner,
   OwnDataBanner,
   HostNotice,
   WelcomePane,
@@ -4774,6 +4775,7 @@ export function App(): JSX.Element {
         <div className="min-h-0 flex-1">
           <SetupPane
             status={setup.status}
+            statusError={setup.statusError}
             roots={settings?.scanRoots ?? []}
             suggestions={setup.suggestions}
             suggestionsError={setup.suggestionsError}
@@ -5017,6 +5019,7 @@ export function App(): JSX.Element {
         },
       }}
       status={setup.status}
+      statusError={setup.statusError}
       checking={setup.checking}
       onRecheck={setup.recheck}
       onLocateClaude={setup.locateClaude}
@@ -5848,12 +5851,7 @@ export function App(): JSX.Element {
 
   // A fact about the machine that qualifies the whole window: the CLI is
   // missing, or it is a version outside what this build was measured against.
-  const versionWarning =
-    setup.status !== null &&
-    !setup.bannerDismissed &&
-    (setup.status.path === null ||
-      setup.status.version === null ||
-      !setup.status.tested);
+  const bannerKind = setup.bannerDismissed ? null : claudeBanner(setup.status);
 
   const toggleView = (view: SidebarView): void => {
     if (sidebarShown && sidebarView === view) {
@@ -6550,8 +6548,9 @@ export function App(): JSX.Element {
       sidebar={sidebar}
       banner={
         <>
-          {versionWarning && setup.status ? (
+          {bannerKind !== null && setup.status ? (
             <VersionBanner
+              kind={bannerKind}
               version={setup.status.version}
               range={setup.status.testedRange}
               error={setup.status.error}

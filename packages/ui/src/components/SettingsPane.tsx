@@ -100,6 +100,8 @@ export interface SettingsPaneProps {
   section: SettingsSectionId
   /** What Helm found out about the CLI. Null until the first read lands. */
   status: SetupClaudeStatus | null
+  /** Why the status could not be read, when it could not: shown as Unknown, never as not found. */
+  statusError?: string | null
   /** A status read the user asked for, so it gets a spinner. */
   checking: boolean
   onRecheck: () => void
@@ -354,6 +356,7 @@ const NOTHING = '-'
 export function SettingsPane({
   section,
   status,
+  statusError = null,
   checking,
   onRecheck,
   onLocateClaude,
@@ -469,7 +472,9 @@ export function SettingsPane({
                       tone={status === null ? 'todo' : found ? (status.tested ? 'ok' : 'warn') : 'warn'}
                       text={
                         status === null
-                          ? 'Looking…'
+                          ? statusError === null
+                            ? 'Looking…'
+                            : `Unknown: ${statusError}`
                           : found
                             ? overridden
                               ? 'Set by you'

@@ -136,6 +136,7 @@ export {
   type SettingsDevicesHost
 } from './components/DevicesSettings'
 export { VersionBanner, type VersionBannerProps } from './components/VersionBanner'
+export { claudeBanner, type ClaudeBannerKind } from './lib/claudeBanner'
 export { OwnDataBanner, type OwnDataBannerProps } from './components/OwnDataBanner'
 export { HostLostBanner, type HostLostBannerProps } from './components/HostLostBanner'
 export { HostNotice, type HostNoticeProps, type HostNoticeState } from './components/HostNotice'

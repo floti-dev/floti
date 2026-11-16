@@ -1,8 +1,11 @@
 import type { JSX } from 'react'
 import { cn } from '../lib/cn'
+import type { ClaudeBannerKind } from '../lib/claudeBanner'
 import { CloseIcon, WarnIcon } from './icons'
 
 export interface VersionBannerProps {
+  /** Why the banner is up; only `missing` offers Locate claude. */
+  kind: ClaudeBannerKind
   /** The version that was found, raw. */
   version: string | null
   /** The range this build was tested against. */
@@ -28,6 +31,7 @@ export interface VersionBannerProps {
  * still true.
  */
 export function VersionBanner({
+  kind,
   version,
   range,
   error,
@@ -47,18 +51,22 @@ export function VersionBanner({
     >
       <WarnIcon width={13} height={13} className="shrink-0" />
       <span className="min-w-0 flex-1 truncate">
-        {version === null
-          ? (error ?? 'The claude CLI was not found. Sessions cannot launch until it is.')
-          : `claude ${version} is outside the range Floti was tested against (${range.min} up to ${range.max}). Nothing is blocked; if a launch misbehaves, suspect this first.`}
+        {kind === 'outside-range'
+          ? `claude ${version ?? ''} is outside the range Floti was tested against (${range.min} up to ${range.max}). Nothing is blocked; if a launch misbehaves, suspect this first.`
+          : kind === 'unanswered'
+            ? (error ?? 'The claude CLI was found but did not report its version.')
+            : (error ?? 'The claude CLI was not found. Sessions cannot launch until it is.')}
       </span>
-      <button
-        type="button"
-        data-version-banner-locate
-        onClick={onLocate}
-        className="shrink-0 rounded px-1.5 py-0.5 underline-offset-2 hover:underline"
-      >
-        Locate claude…
-      </button>
+      {kind === 'missing' && (
+        <button
+          type="button"
+          data-version-banner-locate
+          onClick={onLocate}
+          className="shrink-0 rounded px-1.5 py-0.5 underline-offset-2 hover:underline"
+        >
+          Locate claude…
+        </button>
+      )}
       <button
         type="button"
         onClick={onDismiss}
