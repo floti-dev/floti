@@ -74,6 +74,9 @@ export interface TreeHostFailure {
  * - `connecting`: nothing heard from it yet, or retrying before it was ever
  *   live. `note` says why it waits, where there is more to say.
  * - `loading`: connected, and its sessions not listed yet.
+ * - `updating`: this PC's host only: Floti is restarting it onto its own
+ *   floti, which is newer; its sessions carry over and are listed once the
+ *   new host answers.
  * - `unknown`: connected, and listing its sessions failed (`reason`): it says
  *   Unknown and offers Try again, never loading for ever.
  * - `live`: connected and listed. The only phase whose group may say it has
@@ -87,6 +90,7 @@ export interface TreeHostFailure {
 export type TreeHostPhase =
   | { kind: 'connecting'; note?: string | undefined }
   | { kind: 'loading' }
+  | { kind: 'updating' }
   | { kind: 'unknown'; reason: string }
   | { kind: 'live' }
   | { kind: 'reconnecting'; failure?: TreeHostFailure | undefined }
@@ -94,6 +98,7 @@ export type TreeHostPhase =
 
 const LIVE: TreeHostPhase = { kind: 'live' }
 const LOADING: TreeHostPhase = { kind: 'loading' }
+const UPDATING: TreeHostPhase = { kind: 'updating' }
 
 /**
  * A host on another computer, as the tree lists it under its own header after
@@ -158,6 +163,12 @@ export interface SessionTreeProps {
   sessionsListError?: string | null | undefined
   /** That Unknown's Try again: lists this PC's sessions again. */
   onRelistSessions?: (() => void) | undefined
+  /**
+   * Floti is restarting this PC's host onto its own, newer floti. Until its
+   * sessions are listed, its group says the host is updating, not loading
+   * or Unknown.
+   */
+  localHostUpdating?: boolean | undefined
   /** The project whose page is in front of the focused pane. */
   selectedPath: string | null
   /**
@@ -373,6 +384,7 @@ export function SessionTree({
   sessionsListed = true,
   sessionsListError = null,
   onRelistSessions,
+  localHostUpdating = false,
   selectedPath,
   pinnedPaths,
   onTogglePin,
@@ -406,7 +418,9 @@ export function SessionTree({
 
   const localPhase: TreeHostPhase = sessionsListed
     ? LIVE
-    : sessionsListError !== null
+    : localHostUpdating
+      ? UPDATING
+      : sessionsListError !== null
       ? { kind: 'unknown', reason: sessionsListError }
       : LOADING
   const local = (
@@ -587,6 +601,7 @@ function hostRowsDimmed(phase: TreeHostPhase): boolean {
 const PHASE_LOOK: Record<TreeHostPhase['kind'], { dot: string; word: string | null; tone: string }> = {
   connecting: { dot: 'border-fg-subtle', word: 'connecting', tone: 'text-fg-subtle' },
   loading: { dot: 'border-success', word: 'loading', tone: 'text-fg-subtle' },
+  updating: { dot: 'border-fg-subtle', word: 'updating', tone: 'text-fg-subtle' },
   unknown: { dot: 'border-success', word: 'unknown', tone: 'text-warn' },
   live: { dot: 'border-success', word: null, tone: '' },
   reconnecting: { dot: 'border-warn', word: 'reconnecting', tone: 'text-warn' },
@@ -600,6 +615,8 @@ function phaseTitle(phase: TreeHostPhase, name: string): string {
       return phase.note === undefined ? `Connecting to ${name}` : `Connecting to ${name}: ${phase.note}`
     case 'loading':
       return `Connected to ${name}; reading its sessions`
+    case 'updating':
+      return `Floti is updating the host on ${name}. Its sessions carry over.`
     case 'unknown':
       return `Floti could not list the sessions on ${name}. ${phase.reason}`
     case 'live':
@@ -832,6 +849,13 @@ function PhaseLine({
       return (
         <p data-host-phase="loading" className={line}>
           Loading sessions&hellip;
+        </p>
+      )
+    case 'updating':
+      return (
+        <p data-host-phase="updating" className={line}>
+          Updating the host on {name}&hellip;
+          <span className="block">Its sessions carry over.</span>
         </p>
       )
     case 'unknown':

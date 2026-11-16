@@ -386,6 +386,54 @@ export function localHostVersions(
     : null
 }
 
+/**
+ * What Floti does about this PC's host when it is behind (`hostUpdatePlan`):
+ * restart it onto the floti a restart starts, whose version is `to`, or
+ * restart nothing, saying why in `sentence`.
+ */
+export type HostUpdatePlan = { kind: 'restart'; to: string } | { kind: 'cannot'; sentence: string }
+
+/**
+ * Whether restarting this PC's host onto `target` (the floti a restart
+ * starts, at `path`, with what its `floti version` printed, or null when it
+ * could not be run) gives this Floti a host it can use. Only a floti whose
+ * protocol accepts this Floti's hello (`clientProtocol`, by the host's own
+ * rule, `judgeProtocol`) is restarted onto. A refusal that says this Floti is
+ * the side to update is never answered with a restart, and a version line
+ * that does not read is a floti that cannot be judged, so nothing restarts.
+ */
+export function hostUpdatePlan(
+  refused: { host: ProtocolVersionNumbers; client: ProtocolVersionNumbers; update: 'host' | 'client' } | null,
+  target: { path: string; versionLine: string | null },
+  clientProtocol: ProtocolVersionNumbers
+): HostUpdatePlan {
+  const ours = formatProtocol(clientProtocol)
+  if (refused?.update === 'client') {
+    return {
+      kind: 'cannot',
+      sentence: `This PC’s host speaks Floti protocol ${formatProtocol(refused.host)}, newer than this Floti’s ${ours}, so restarting it would not help. Update Floti on this PC.`
+    }
+  }
+  const found = target.versionLine === null ? null : parseVersionLine(target.versionLine)
+  if (found === null) {
+    const why = target.versionLine === null ? 'could not be run to say' : 'did not say'
+    return {
+      kind: 'cannot',
+      sentence: `Floti did not restart this PC’s host: the floti at ${target.path} ${why} which protocol it speaks.`
+    }
+  }
+  const judged = judgeProtocol(found.protocolNumbers, clientProtocol)
+  if (judged === 'ok') return { kind: 'restart', to: found.version }
+  const named = `Floti did not restart this PC’s host: the floti at ${target.path} is ${found.version} and speaks protocol ${found.protocol}`
+  return {
+    kind: 'cannot',
+    sentence:
+      judged === 'tooOld'
+        ? `${named}, older than this Floti’s ${ours}, so a host it starts would refuse this Floti too. Put a floti that speaks protocol ${ours} there.`
+        : `${named}, newer than this Floti’s ${ours}, so a host it starts would refuse this Floti. Update Floti on this PC.`
+  }
+}
+
 /** `floti 2.4.0`, or `Floti protocol 2.0` for a side named by its protocol. */
 function sideName(side: string): string {
   return side.startsWith('protocol ') ? `Floti ${side}` : `floti ${side}`

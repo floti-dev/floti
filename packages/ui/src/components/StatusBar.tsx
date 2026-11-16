@@ -78,6 +78,12 @@ export interface StatusHostItem {
    * which says what to do.
    */
   versions?: LocalHostVersions | null | undefined;
+  /**
+   * This PC's host only: Floti is restarting it onto its own, newer floti.
+   * The item says the host is updating in place of anything else, with no
+   * warning tone and no action: it needs nothing from the user.
+   */
+  updating?: boolean | undefined;
   /** Starts Restart host to update, which asks before anything happens. */
   onRestart?: (() => void) | undefined;
   /** Opens the setting where what quitting does there is set. */
@@ -248,6 +254,25 @@ export function StatusBar({
           away || host.id === LOCAL_HOST_KEY
             ? null
             : (host.roundTripMs ?? null);
+        if (host.updating === true) {
+          return (
+            <Fragment key={host.id}>
+              <Divider />
+              <span
+                data-status-host="updating"
+                data-status-host-id={host.id}
+                title={`Floti is updating the host on ${host.name} to its own floti. Its sessions carry over.`}
+                className="flex shrink-0 items-center gap-1.5"
+              >
+                <span
+                  aria-hidden
+                  className="size-1.5 rounded-full border-[1.5px] border-fg-subtle"
+                />
+                {host.name} · updating host&hellip;
+              </span>
+            </Fragment>
+          );
+        }
         const versions = away ? null : (host.versions ?? null);
         if (versions !== null) {
           const restart =

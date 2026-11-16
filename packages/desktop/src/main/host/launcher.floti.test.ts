@@ -6,9 +6,19 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, inject, it } from 'vitest'
 import { PATIENCE } from '../../../../../test/patience'
 import { RUN_ROOT } from '../../../../../test/run-root'
-import { FLOTI_PLACES, endStartedProcesses, flotiAvailable, runFloti, startFlotiHost, startedProcesses } from '../../../test/floti-host'
+import {
+  FLOTI,
+  FLOTI_PLACES,
+  endStartedProcesses,
+  flotiAvailable,
+  runFloti,
+  startFlotiHost,
+  startedProcesses
+} from '../../../test/floti-host'
 import {
   LocalHostRefusedError,
+  connectUpdatingLocalHost,
+  flotiBinary,
   fromBeforeRestart,
   hostEnvironment,
   oldHostOffer,
@@ -228,6 +238,84 @@ describe.runIf(flotiAvailable)('this PC’s host and this Floti on either versio
     await after.connection.request('host:stop', { reason: 'stop' })
     await world.startedHosts[0]
     await after.close()
+  })
+})
+
+describe.runIf(flotiAvailable)('this PC’s host older than this Floti, updated by itself', { timeout: PATIENCE * 4 }, () => {
+  it('restarts an older host onto this checkout’s floti with no question, and the new host gives its terminal back', async () => {
+    const older = { major: PROTOCOL_VERSION.major - 1, minor: 9 }
+    const world = await hostWorld('updated by itself', `${older.major}.${older.minor}`)
+    const data = world.env['FLOTI_DATA_DIR']!
+    const old = await startFlotiHost(world.env)
+    // A Floti of that host's release reaches it and opens a terminal.
+    const before = await startLocalHost(world.places, world.deps(older))
+    const folder = await mkdtemp(join(inject(RUN_ROOT), 'terminal folder '))
+    const opened = await before.connection.request('pterm:open', {
+      path: folder,
+      cols: 100,
+      rows: 30,
+      shell: null,
+      separate: true
+    })
+    const first = screen(before.connection, opened.id)
+    const marker = 'floti-updated-by-itself-marker'
+    first.stream.write(new TextEncoder().encode(`echo ${marker}\r`))
+    await expect.poll(() => first.text(), { timeout: PATIENCE }).toContain(marker)
+
+    const steps: string[] = []
+    const asked: string[] = []
+    const after = await connectUpdatingLocalHost(world.places, world.deps(), {
+      startHost: true,
+      versionOf: async (binary) => {
+        asked.push(binary)
+        // The old host has refused this Floti by now; the host the restart
+        // starts greets with the protocol `floti version` names, as a real
+        // newer floti does (a testkit host reads its greeting from this file).
+        await rm(join(data, 'floti-test-host-protocol'))
+        return (await runFloti(['version'], world.env)).stdout
+      },
+      step: (step) => steps.push(step.step)
+    })
+    await old.exited
+    await before.close()
+
+    expect(asked).toEqual([FLOTI])
+    expect(flotiBinary(world.places, world.deps())).toBe(FLOTI)
+    expect(steps).toEqual(['connecting', 'updating', 'starting'])
+    expect(after.startedHost).toBe(true)
+    expect(after.connection.welcome.protocol).toEqual({ major: PROTOCOL_VERSION.major, minor: PROTOCOL_VERSION.minor })
+    // The same terminal, taken back from the keeper, its screen drawn again.
+    const second = screen(after.connection, opened.id)
+    await expect.poll(() => second.text(), { timeout: PATIENCE }).toContain(marker)
+    expect(second.closed()).toBeNull()
+
+    expect(world.startedHosts).toHaveLength(1)
+    await after.connection.request('host:stop', { reason: 'stop' })
+    await world.startedHosts[0]
+    await after.close()
+  })
+
+  it('restarts nothing when the floti a restart starts speaks the old protocol too, and the refusal names it', async () => {
+    const older = { major: PROTOCOL_VERSION.major - 1, minor: 9 }
+    const world = await hostWorld('cannot update', `${older.major}.${older.minor}`)
+    const old = await startFlotiHost(world.env)
+    const error = await refusedWith(
+      connectUpdatingLocalHost(world.places, world.deps(), {
+        startHost: true,
+        // What a floti built at the host's release would print.
+        versionOf: async () => `floti 2.4.1-preview.11 protocol ${older.major}.${older.minor} windows x64`,
+        step: () => undefined
+      })
+    )
+    expect(error.refused.update).toBe('host')
+    expect(error.message).toContain(
+      `Floti did not restart this PC’s host: the floti at ${FLOTI} is 2.4.1-preview.11 and speaks protocol ${older.major}.${older.minor}`
+    )
+    // The old host still runs, never asked to restart.
+    expect(await localHostRestartFrame(world.places, world.deps(), false)).not.toBeNull()
+    expect(world.startedHosts).toHaveLength(0)
+    old.kill()
+    await old.exited
   })
 })
 

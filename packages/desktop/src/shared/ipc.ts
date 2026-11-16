@@ -849,6 +849,33 @@ export interface RefusedVersions {
   update: 'host' | 'client'
 }
 
+/**
+ * What main's link to this PC's host is doing, as it begins each step of a
+ * connect (`main/host/desktop.ts`), published on `hostLink:step` and answered
+ * by `hostLink:currentStep`. `since` is main's clock, in milliseconds, when
+ * the step began; how a long step is worded is the window's.
+ *
+ * - `preparing`: putting this run's floti in place (`ensureLocalFloti`).
+ * - `connecting`: bridging to a host that may be running.
+ * - `starting`: nothing answered; starting `floti host`.
+ * - `updating`: restarting a host older than this Floti onto this run's
+ *   floti, `from` the side the host's refusal named (`protocol 3.1`, or a
+ *   floti version) `to` that floti's version. Its sessions carry over through
+ *   the keeper. It lasts until the new host is reached or the update fails.
+ * - `ready`: connected.
+ * - `refused`: the host refused this Floti and was not, or could not be,
+ *   updated: the sentence to show and the versions it named.
+ * - `unreachable`: no host could be reached or started, saying why.
+ */
+export type LocalHostStep =
+  | { step: 'preparing'; since: number }
+  | { step: 'connecting'; since: number }
+  | { step: 'starting'; since: number }
+  | { step: 'updating'; since: number; from: string | null; to: string }
+  | { step: 'ready'; since: number }
+  | { step: 'refused'; since: number; sentence: string; versions: RefusedVersions }
+  | { step: 'unreachable'; since: number; reason: string }
+
 
 
 /**
@@ -916,6 +943,12 @@ export interface IpcRequests {
    * to it is connected.
    */
   'hostLink:open': { request: { host: string } | undefined; response: HostLinkOpened }
+  /**
+   * What main's link to this PC's host is doing now (`LocalHostStep`); null
+   * before its first connect began. Each step after it arrives on
+   * `hostLink:step`.
+   */
+  'hostLink:currentStep': { request: void; response: LocalHostStep | null }
 
   /** Where each host on another computer stands with this device; changes arrive on `remoteHosts:changed`. */
   'remoteHosts:read': { request: void; response: RemoteHostStates }
@@ -2327,6 +2360,8 @@ export interface IpcEvents {
 
   /** The host's protocol bytes on a page's own connection, as its bridge wrote them. */
   'hostLink:data': { connection: number; bytes: Uint8Array }
+  /** Main's link to this PC's host began a step of its connect (`LocalHostStep`). */
+  'hostLink:step': LocalHostStep
   /**
    * A page's connection ended on the bridge's side: null when it closed, or
    * the sentence saying why. `planned` when main's link ended the host on
@@ -2387,6 +2422,7 @@ export interface HelmBridge {
 export const REQUEST_CHANNELS = Object.keys({
   'app:info': true,
   'hostLink:open': true,
+  'hostLink:currentStep': true,
   'remoteHosts:read': true,
   'remoteHosts:check': true,
   'remoteHosts:install': true,
@@ -2629,5 +2665,6 @@ export const EVENT_CHANNELS = Object.keys({
   'secrets:changed': true,
   'plugins:theme': true,
   'hostLink:data': true,
+  'hostLink:step': true,
   'hostLink:ended': true
 } satisfies Record<EventChannel, true>) as EventChannel[]

@@ -363,6 +363,29 @@ describe('SessionTree with hosts on other computers', () => {
     expect(view.container.querySelector('[data-host-phase="loading"]')?.textContent).toBe('Loading sessions…')
   })
 
+  it('says this PC’s host is updating, not loading or Unknown, while Floti restarts it, and lists its sessions once it is back', () => {
+    const { view, rerender } = renderTree({
+      hosts: [buildBox()],
+      hostActions: actions(),
+      sessionsListed: false,
+      sessionsListError: 'This PC’s host did not answer.',
+      localHostUpdating: true,
+      sessionsByPath: new Map()
+    })
+    const local = (): HTMLElement => group(view.container, 'local')
+    const header = local().querySelector('[data-host-header]') as HTMLElement
+    expect(header.getAttribute('data-host-state')).toBe('updating')
+    expect(local().querySelector('[data-host-phase="updating"]')?.textContent).toBe(
+      'Updating the host on This PC…Its sessions carry over.'
+    )
+    expect(view.container.querySelector('[data-empty-state="host-unlisted:local"]')).toBeNull()
+    expect(view.container.querySelector('[data-host-phase="loading"]')).toBeNull()
+
+    rerender({ sessionsListed: true, sessionsListError: null, localHostUpdating: false })
+    expect(local().querySelector('[data-host-header]')?.getAttribute('data-host-state')).toBe('live')
+    expect(local().querySelector('[data-host-phase]')).toBeNull()
+  })
+
   it('shows this PC’s no-folders state only once its sessions are listed', () => {
     const none: DiscoveryResult = { ...THIS_PC, roots: [], workspaces: [], projects: [] }
     const { view, rerender } = renderTree({ discovery: none, sessionsByPath: new Map(), sessionsListed: false })

@@ -426,9 +426,10 @@ the installed app has moved it.
   so neither electron-builder's own check, which force-stops every process
   run from inside the install folder, nor the previous version's
   uninstaller, which does the same, reaches them. A running `floti.exe`
-  there is renamed aside rather than replaced, and keeps running until
-  Floti's Restart host to update hands its sessions to the new host through
-  the keeper.
+  there is renamed aside rather than replaced, and keeps running until the
+  new Floti reaches it: a host older than Floti is restarted onto the new
+  floti with no question, once that floti says it speaks Floti's protocol,
+  and the keeper hands its sessions to the new host.
 - **Once, it stops a host from inside the old install, after saying what
   that ends.** A Helm from before this ran its host from
   `resources\floti.exe` inside the install folder, and the previous
