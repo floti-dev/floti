@@ -11,6 +11,10 @@ pnpm dev --fresh    # no database: the first-run state
 pnpm dev --drive    # a remote debugging port for drive-dev.mjs, and only the fake agents
 ```
 
+- Before it opens a window, `pnpm dev` checks the floti in `CARGO_TARGET_DIR`
+  (else `target/`) and runs `cargo build -p floti-host --bin floti` (at most 4
+  jobs) when it is missing or older than the client in protocol or version. A
+  failed build stops it with cargo's error and opens nothing.
 - The data directory is `%LOCALAPPDATA%\Helm\dev\helm-data`, seeded each launch
   from a `VACUUM INTO` copy of the real database. Anything changed in dev,
   settings included, is gone at the next launch. A second `pnpm dev` gets

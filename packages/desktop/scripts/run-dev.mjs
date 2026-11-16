@@ -47,7 +47,18 @@ import { cpSync, existsSync, lstatSync, readdirSync, readFileSync, rmSync, statS
 import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
+import { ensureDevHostForReal } from './dev-host.mjs'
 import { isolate, isolatedRoot, realDataDir } from './isolate.mjs'
+
+// The window connects to the floti in the cargo target folder, which nothing
+// else builds: build it when it is missing or older than this client, before
+// anything is set up, and open no window when that fails.
+try {
+  ensureDevHostForReal()
+} catch (error) {
+  console.error(`\n${error instanceof Error ? error.message : String(error)}`)
+  process.exit(1)
+}
 
 const desktopDir = resolve(import.meta.dirname, '..')
 const require = createRequire(import.meta.url)
