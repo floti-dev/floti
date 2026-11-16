@@ -228,6 +228,8 @@ function ClaudeStep({
   onLocateClaude: () => void
 }): JSX.Element {
   const found = status !== null && status.path !== null && status.version !== null
+  // Found but silent: it was located and did not report a version. Not "not found".
+  const silent = status !== null && status.path !== null && status.version === null
   const tone = status === null ? 'todo' : found ? (status.tested ? 'ok' : 'warn') : 'warn'
 
   return (
@@ -242,9 +244,16 @@ function ClaudeStep({
             : `Unknown: ${statusError}`
           : found
             ? `${status.version ?? ''} · ${status.path ?? ''}`
-            : (status.error ?? 'Not found.')
+            : silent
+              ? (status.error ?? 'Found, but it did not report its version.')
+              : (status.error ?? 'Not found.')
       }
     >
+      {status !== null && statusError !== null && (
+        <p data-setup-status-error className="mb-3 text-[12px] text-warn">
+          Could not check again: {statusError}
+        </p>
+      )}
       {found && !status.tested && (
         <p
           data-setup-version-warning
@@ -256,7 +265,7 @@ function ClaudeStep({
           suspect.
         </p>
       )}
-      {status !== null && !found && (
+      {status !== null && !found && !silent && (
         <p className="mb-3 text-[12px] text-fg-muted">
           Install it from{' '}
           <span className="font-mono text-[11px]">https://claude.com/claude-code</span>, then check

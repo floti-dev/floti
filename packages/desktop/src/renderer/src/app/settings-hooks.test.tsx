@@ -218,9 +218,9 @@ describe('useSetup', () => {
 
     await vi.waitFor(() => expect(result.current.suggestionsError).toBe(unreachable), { timeout: PATIENCE })
     expect(result.current.suggestions).toEqual([])
-    await vi.waitFor(() => expect(result.current.status?.error).toBe(unreachable), { timeout: PATIENCE })
-    // Nothing found and nothing known: not "not signed in", not a version.
-    expect(result.current.status).toMatchObject({ path: null, version: null, auth: 'unknown', authSignal: unreachable })
+    await vi.waitFor(() => expect(result.current.statusError).toBe(unreachable), { timeout: PATIENCE })
+    // Could not look: no status at all, not a "not found" one.
+    expect(result.current.status).toBeNull()
 
     act(() => result.current.openDialog('new'))
     await vi.waitFor(() => expect(result.current.templateProblems).toEqual([unreachable]), { timeout: PATIENCE })

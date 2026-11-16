@@ -479,9 +479,16 @@ export function SettingsPane({
                             ? overridden
                               ? 'Set by you'
                               : 'Found on this machine'
-                            : (status.error ?? 'Not found.')
+                            : status.path !== null
+                              ? (status.error ?? 'Found, but it did not report its version.')
+                              : (status.error ?? 'Not found.')
                       }
                     />
+                    {status !== null && statusError !== null && (
+                      <p data-settings-status-error className="mt-2 text-[11.5px] text-warn">
+                        Could not check again: {statusError}
+                      </p>
+                    )}
                     <dl className="mt-2.5 space-y-1.5">
                       <Fact label="Path">
                         <span data-settings-claude-path title={status?.path ?? ''}>
