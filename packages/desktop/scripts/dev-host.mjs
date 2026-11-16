@@ -131,7 +131,9 @@ export function moveAside({ path, exists, rename, stamp }) {
     try {
       rename(file, asidePath(file, stamp))
     } catch (error) {
-      throw new Error(`could not move ${file} aside to build over it: ${error instanceof Error ? error.message : String(error)}`)
+      throw new Error(`could not move ${file} aside to build over it: ${error instanceof Error ? error.message : String(error)}`, {
+        cause: error
+      })
     }
     moved.push(file)
   }
