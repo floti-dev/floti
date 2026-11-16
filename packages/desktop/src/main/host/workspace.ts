@@ -15,6 +15,7 @@ import type * as P from './protocol'
 import {
   cachedProjectsFromHost,
   claudeStatusFromHost,
+  NO_CLAUDE_BACKEND,
   discoveryFromHost,
   gitStatesFromHost,
   scanStatusFromHost,
@@ -235,7 +236,12 @@ export function createHostWorkspace({
   })
 
   /** Setup's reading of Claude Code, out of the host's one per backend. */
-  const claude = (status: P.SetupStatus): ClaudeStatus => claudeStatusFromHost(status.backends[CLAUDE_CODE_BACKEND])
+  const claude = (status: P.SetupStatus): ClaudeStatus => {
+    const found = claudeStatusFromHost(status.backends[CLAUDE_CODE_BACKEND])
+    // A host with no Claude Code backend did not look: a failed read, not a missing claude.
+    if (found === null) throw new Error(NO_CLAUDE_BACKEND)
+    return found
+  }
 
   const workspace: HostWorkspace = {
     overlay,

@@ -352,30 +352,20 @@ export function scanStatusFromHost(status: P.ScanStatus): ScanStatus {
 
 const AUTH: Record<'true' | 'false', ClaudeAuth> = { true: 'authenticated', false: 'unauthenticated' }
 
+/** Why a host's answer says nothing about Claude Code: it has no such backend to ask. */
+export const NO_CLAUDE_BACKEND = 'The local host has no Claude Code backend, so whether Claude Code is installed is unknown.'
+
 /**
  * What the host found of Claude Code, in the setup pane's words. A host with
- * no Claude Code backend has found nothing about it, which is Unknown - not
- * "not installed" - with the sentence that says why, and has no tested range
- * to give: the range is the host's backend's (`TESTED_VERSIONS`), and Helm
- * keeps none of its own.
+ * no Claude Code backend did not look, so there is no status: null, which is
+ * Unknown - never "not installed" - and has no tested range to give either:
+ * the range is the host's backend's (`TESTED_VERSIONS`), and Helm keeps none
+ * of its own. Callers turn null into a failed read carrying `NO_CLAUDE_BACKEND`.
  */
-export function claudeStatusFromHost(status: P.BackendStatus | undefined): ClaudeStatus {
-  if (status === undefined) {
-    const why = 'The local host has no Claude Code backend, so whether Claude Code is installed is unknown.'
-    return {
-      path: null,
-      source: null,
-      version: null,
-      semver: null,
-      tested: false,
-      testedRange: { min: '', max: '' },
-      configDir: '',
-      configDirExists: false,
-      auth: 'unknown',
-      authSignal: why,
-      error: why
-    }
-  }
+export function claudeStatusFromHost(status: P.BackendStatus): ClaudeStatus
+export function claudeStatusFromHost(status: P.BackendStatus | undefined): ClaudeStatus | null
+export function claudeStatusFromHost(status: P.BackendStatus | undefined): ClaudeStatus | null {
+  if (status === undefined) return null
   return {
     path: status.path,
     source: status.source,

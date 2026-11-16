@@ -453,16 +453,8 @@ describe('the workspace through the local host', () => {
     expect((await w.workspace.setupStatus()).auth).toBe('unauthenticated')
 
     w.connection.answer('setup:status', () => ({ backends: {} }))
-    const unknown = await w.workspace.setupStatus()
-    // No backend, no range: the range is the host's backend's, never Helm's own.
-    expect(unknown).toMatchObject({
-      path: null,
-      version: null,
-      tested: false,
-      testedRange: { min: '', max: '' },
-      auth: 'unknown'
-    })
-    expect(unknown.error).toMatch(/no Claude Code backend/)
+    // No backend means the host did not look: a failed read, never a status that says not found.
+    await expect(w.workspace.setupStatus()).rejects.toThrow(/no Claude Code backend/)
   })
 
   it('keeps a picked executable in Floti’s Settings only once the host checked and kept it', async () => {

@@ -33,30 +33,15 @@ const MINIMAL = 'minimal'
 
 const sentence = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
-/**
- * What the pane shows when Claude Code's status could not be read at all -
- * the local host out of reach: nothing found and nothing known, with the
- * sentence that says why in the places the pane says why.
- */
-export function unreadableStatus(err: unknown): ClaudeStatus {
-  const why = sentence(err)
-  return {
-    path: null,
-    source: null,
-    version: null,
-    semver: null,
-    tested: false,
-    testedRange: { min: '', max: '' },
-    configDir: '',
-    configDirExists: false,
-    auth: 'unknown',
-    authSignal: why,
-    error: why
-  }
-}
-
 export interface SetupState {
+  /**
+   * What the host last answered about Claude Code. Null until it has answered:
+   * a read that failed leaves it as it was, because "could not look" is not an
+   * answer, and in particular not "not found".
+   */
   status: ClaudeStatus | null
+  /** Why the last read failed, for the pane's Unknown; null once one succeeded. */
+  statusError: string | null
   checking: boolean
   suggestions: string[]
   /** Why the suggestions could not be looked for; null when they were. */
@@ -123,6 +108,7 @@ export function useSetup(
   onWorkspaceCreated?: (path: string, host: string) => void
 ): SetupState {
   const [status, setStatus] = useState<ClaudeStatus | null>(null)
+  const [statusError, setStatusError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null)
@@ -141,14 +127,21 @@ export function useSetup(
   const [template, setTemplate] = useState(MINIMAL)
   const [templatePreview, setTemplatePreview] = useState<TemplatePreview | null>(null)
 
+  /** A host answer replaces what was known; a failure only says it could not look. */
+  const answered = useCallback((next: ClaudeStatus) => {
+    setStatus(next)
+    setStatusError(null)
+  }, [])
+  const failed = useCallback((err: unknown) => setStatusError(sentence(err)), [])
+
   /** The button. Shows a spinner, because the user asked and is waiting. */
   const recheck = useCallback(() => {
     setChecking(true)
     void helm
       .invoke('setup:status')
-      .then(setStatus, (err: unknown) => setStatus(unreadableStatus(err)))
+      .then(answered, failed)
       .finally(() => setChecking(false))
-  }, [])
+  }, [answered, failed])
 
   useEffect(() => {
     void helm.invoke('roots:suggest').then(
@@ -173,16 +166,16 @@ export function useSetup(
     let cancelled = false
     void helm.invoke('setup:status').then(
       (next) => {
-        if (!cancelled) setStatus(next)
+        if (!cancelled) answered(next)
       },
       (err: unknown) => {
-        if (!cancelled) setStatus(unreadableStatus(err))
+        if (!cancelled) failed(err)
       }
     )
     return () => {
       cancelled = true
     }
-  }, [settings?.claudePath])
+  }, [settings?.claudePath, answered, failed])
 
   const locateClaude = useCallback(() => {
     setChecking(true)
@@ -190,15 +183,15 @@ export function useSetup(
       .invoke('setup:locateClaude')
       .then(
         (next) => {
-          setStatus(next)
+          answered(next)
           // A newly picked CLI is a reason to look at the banner again, whether it
           // fixed the warning or introduced one.
           setBannerDismissed(false)
         },
-        (err: unknown) => setStatus(unreadableStatus(err))
+        failed
       )
       .finally(() => setChecking(false))
-  }, [])
+  }, [answered, failed])
 
   const acceptSuggestion = useCallback(
     (path: string) => {
@@ -378,6 +371,7 @@ export function useSetup(
 
   return {
     status,
+    statusError,
     checking,
     suggestions,
     suggestionsError,

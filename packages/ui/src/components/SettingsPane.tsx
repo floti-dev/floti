@@ -100,6 +100,8 @@ export interface SettingsPaneProps {
   section: SettingsSectionId
   /** What Helm found out about the CLI. Null until the first read lands. */
   status: SetupClaudeStatus | null
+  /** Why the status could not be read, when it could not: shown as Unknown, never as not found. */
+  statusError?: string | null
   /** A status read the user asked for, so it gets a spinner. */
   checking: boolean
   onRecheck: () => void
@@ -354,6 +356,7 @@ const NOTHING = '-'
 export function SettingsPane({
   section,
   status,
+  statusError = null,
   checking,
   onRecheck,
   onLocateClaude,
@@ -469,14 +472,23 @@ export function SettingsPane({
                       tone={status === null ? 'todo' : found ? (status.tested ? 'ok' : 'warn') : 'warn'}
                       text={
                         status === null
-                          ? 'Looking…'
+                          ? statusError === null
+                            ? 'Looking…'
+                            : `Unknown: ${statusError}`
                           : found
                             ? overridden
                               ? 'Set by you'
                               : 'Found on this machine'
-                            : (status.error ?? 'Not found.')
+                            : status.path !== null
+                              ? (status.error ?? 'Found, but it did not report its version.')
+                              : (status.error ?? 'Not found.')
                       }
                     />
+                    {status !== null && statusError !== null && (
+                      <p data-settings-status-error className="mt-2 text-[11.5px] text-warn">
+                        Could not check again: {statusError}
+                      </p>
+                    )}
                     <dl className="mt-2.5 space-y-1.5">
                       <Fact label="Path">
                         <span data-settings-claude-path title={status?.path ?? ''}>

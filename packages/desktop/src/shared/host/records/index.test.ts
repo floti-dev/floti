@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from '@helm/core'
 import type * as P from '../protocol'
 import { historyPageFromHost, historySessionFromHost } from './history'
-import { endedFromHost, profileFromHost, sessionFromHost, settingsWithHost, splitSettingsPatch } from './index'
+import { claudeStatusFromHost, endedFromHost, profileFromHost, sessionFromHost, settingsWithHost, splitSettingsPatch } from './index'
 
 const hostSession = (patch: Partial<P.SessionRecord> = {}): P.SessionRecord => ({
   id: 9,
@@ -21,6 +21,12 @@ const hostSession = (patch: Partial<P.SessionRecord> = {}): P.SessionRecord => (
   durationMs: null,
   exitCode: null,
   ...patch
+})
+
+describe('what the host found of Claude Code, as the window reads it', () => {
+  it('answers null, not a status, for a host with no Claude Code backend', () => {
+    expect(claudeStatusFromHost(undefined)).toBeNull()
+  })
 })
 
 describe('what a session’s agent called it, as the window reads it', () => {

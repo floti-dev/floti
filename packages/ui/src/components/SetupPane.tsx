@@ -24,6 +24,8 @@ export interface SetupClaudeStatus {
 
 export interface SetupPaneProps {
   status: SetupClaudeStatus | null
+  /** Why the status could not be read, when it could not: shown as Unknown, never as not found. */
+  statusError?: string | null
   /** Scan roots chosen so far. The pane finishes when there is at least one. */
   roots: string[]
   /** Directories discovery can justify suggesting. Often empty, which is fine. */
@@ -59,6 +61,7 @@ export interface SetupPaneProps {
  */
 export function SetupPane({
   status,
+  statusError = null,
   roots,
   suggestions,
   suggestionsError = null,
@@ -86,12 +89,13 @@ export function SetupPane({
 
         <ClaudeStep
           status={status}
+          statusError={statusError}
           checking={checking}
           onRecheck={onRecheck}
           onLocateClaude={onLocateClaude}
         />
 
-        <AuthStep status={status} />
+        <AuthStep status={status} statusError={statusError} />
 
         <Step
           n={3}
@@ -212,16 +216,20 @@ export function SetupPane({
 
 function ClaudeStep({
   status,
+  statusError,
   checking,
   onRecheck,
   onLocateClaude
 }: {
   status: SetupClaudeStatus | null
+  statusError: string | null
   checking: boolean
   onRecheck: () => void
   onLocateClaude: () => void
 }): JSX.Element {
   const found = status !== null && status.path !== null && status.version !== null
+  // Found but silent: it was located and did not report a version. Not "not found".
+  const silent = status !== null && status.path !== null && status.version === null
   const tone = status === null ? 'todo' : found ? (status.tested ? 'ok' : 'warn') : 'warn'
 
   return (
@@ -231,12 +239,21 @@ function ClaudeStep({
       tone={tone}
       detail={
         status === null
-          ? 'Looking…'
+          ? statusError === null
+            ? 'Looking…'
+            : `Unknown: ${statusError}`
           : found
             ? `${status.version ?? ''} · ${status.path ?? ''}`
-            : (status.error ?? 'Not found.')
+            : silent
+              ? (status.error ?? 'Found, but it did not report its version.')
+              : (status.error ?? 'Not found.')
       }
     >
+      {status !== null && statusError !== null && (
+        <p data-setup-status-error className="mb-3 text-[12px] text-warn">
+          Could not check again: {statusError}
+        </p>
+      )}
       {found && !status.tested && (
         <p
           data-setup-version-warning
@@ -248,7 +265,7 @@ function ClaudeStep({
           suspect.
         </p>
       )}
-      {!found && (
+      {status !== null && !found && !silent && (
         <p className="mb-3 text-[12px] text-fg-muted">
           Install it from{' '}
           <span className="font-mono text-[11px]">https://claude.com/claude-code</span>, then check
@@ -268,7 +285,13 @@ function ClaudeStep({
   )
 }
 
-function AuthStep({ status }: { status: SetupClaudeStatus | null }): JSX.Element {
+function AuthStep({
+  status,
+  statusError
+}: {
+  status: SetupClaudeStatus | null
+  statusError: string | null
+}): JSX.Element {
   const auth = status?.auth ?? 'unknown'
   return (
     <Step
@@ -277,7 +300,9 @@ function AuthStep({ status }: { status: SetupClaudeStatus | null }): JSX.Element
       tone={auth === 'authenticated' ? 'ok' : auth === 'unknown' ? 'todo' : 'warn'}
       detail={
         status === null
-          ? 'Looking…'
+          ? statusError === null
+            ? 'Looking…'
+            : 'Unknown.'
           : auth === 'authenticated'
             ? status.authSignal
             : auth === 'unknown'

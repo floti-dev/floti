@@ -981,3 +981,26 @@ describe('updateOutcome', () => {
   })
 })
 
+
+describe('SettingsPane Claude CLI status when it could not be read', () => {
+  it('says Unknown with the reason, never Not found, while nothing has answered', () => {
+    renderPane({ status: null, statusError: 'host unreachable' })
+    const claude = group('Claude CLI')
+    expect(within(claude).getByText('Unknown: host unreachable')).toBeTruthy()
+    expect(within(claude).queryByText('Not found.')).toBeNull()
+  })
+
+  it('keeps the last answer and adds the failure of a later check beside it', () => {
+    renderPane({ status: DISCOVERED, statusError: 'host unreachable' })
+    const claude = group('Claude CLI')
+    expect(within(claude).getByText('Found on this machine')).toBeTruthy()
+    expect(within(claude).getByText('Could not check again: host unreachable')).toBeTruthy()
+  })
+
+  it('says a claude that was found but did not report a version was found', () => {
+    renderPane({ status: { ...DISCOVERED, version: null, semver: null, tested: false } })
+    const claude = group('Claude CLI')
+    expect(within(claude).getByText('Found, but it did not report its version.')).toBeTruthy()
+    expect(within(claude).queryByText('Not found.')).toBeNull()
+  })
+})
