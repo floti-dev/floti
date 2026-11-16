@@ -260,6 +260,14 @@ function refusedSide(refused: RefusedVersions | null): string | null {
 export const localHostSteps: LocalHostSteps = createLocalHostSteps(() => Date.now())
 
 /**
+ * The flotis an automatic restart already failed to make usable in this run
+ * (`connectUpdatingLocalHost`): none is restarted onto again, so a host that
+ * refuses this Helm after its update is not restarted, keeper and all, on
+ * every later connect.
+ */
+const failedUpdateTargets = new Set<string>()
+
+/**
  * Restart host to update applies the plan an update by itself does: a floti
  * that cannot serve this Helm is never restarted onto, and the question
  * fails with the sentence that says so, before anything is asked of the host.
@@ -498,7 +506,8 @@ export function createLocalHostLink(settings: () => HostSettingsPatch, log: (lin
         const host = await connectUpdatingLocalHost(places(), launcherDeps(log), {
           startHost,
           versionOf: flotiVersionLine,
-          step: (step) => localHostSteps.begin(step)
+          step: (step) => localHostSteps.begin(step),
+          failedTargets: failedUpdateTargets
         })
         localRefusal = null
         localHostSteps.begin({ step: 'ready' })

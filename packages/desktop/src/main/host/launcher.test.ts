@@ -14,6 +14,7 @@ import {
   carriedFloti,
   clientFolder,
   connectUpdatingLocalHost,
+  failedTargetKey,
   desktopArgs,
   desktopProgram,
   flotiBinary,
@@ -904,6 +905,7 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
     const versionsAsked: string[] = []
     const connecting = connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
       startHost: true,
+      failedTargets: new Set(),
       versionOf: async (binary) => {
         versionsAsked.push(binary)
         return 'floti 2.5.0 protocol 2.1 windows x64\n'
@@ -938,6 +940,7 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
     const heard = steps()
     const error = await connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
       startHost: true,
+      failedTargets: new Set(),
       versionOf: async () => 'floti 2.4.0 protocol 2.0 windows x64',
       step: heard.step
     }).then(
@@ -960,6 +963,7 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
     let asked = false
     const error = await connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
       startHost: false,
+      failedTargets: new Set(),
       versionOf: async () => {
         asked = true
         return 'floti 2.5.0 protocol 2.1 windows x64'
@@ -985,6 +989,7 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
     })
     const connecting = connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
       startHost: true,
+      failedTargets: new Set(),
       versionOf: async () => 'floti 2.5.0 protocol 2.1 windows x64',
       step: () => undefined
     }).then(
@@ -1000,5 +1005,51 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
     )
     // One restart frame, never a second.
     expect(world.programs()).toHaveLength(4)
+  })
+
+  it('never restarts again onto a floti whose restart did not take in this run, and later connects get the refusal', async () => {
+    const failedTargets = new Set<string>()
+    const asked: string[] = []
+    const world = new World({
+      bridges: [
+        refusesAsOlder,
+        answersRestart({ hostVersion: '2.4.0', sessions: 1, keeperLink: KEEPER_LINK_VERSION }, asked),
+        exits(3),
+        refusesAsOlder,
+        // A later connect: a page opening, a retry.
+        refusesAsOlder,
+        refusesAsOlder
+      ]
+    })
+    const connect = (versionLine: string) =>
+      connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
+        startHost: true,
+        failedTargets,
+        versionOf: async () => versionLine,
+        step: () => undefined
+      }).then(
+        () => null,
+        (caught: unknown) => caught
+      )
+    const first = connect('floti 2.5.0 protocol 2.1 windows x64')
+    await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(1)
+    world.timers[0]!()
+    expect(await first).toBeInstanceOf(LocalHostRefusedError)
+    expect(failedTargets.size).toBe(1)
+
+    const later = await connect('floti 2.5.0 protocol 2.1 windows x64')
+    expect(later).toBeInstanceOf(LocalHostRefusedError)
+    expect((later as LocalHostRefusedError).refused.update).toBe('host')
+    expect((later as Error).message).toMatch(
+      /Update the host\. Floti restarted this PC’s host onto floti 2\.5\.0 once already, and the host it started refused this Floti too, so it was not restarted again\.$/
+    )
+    // The later connect only bridged: no restart frame, no host started, the keeper left where it is.
+    expect(asked).toEqual(['restart'])
+    expect(world.programs()).toHaveLength(5)
+    expect(world.timers).toHaveLength(1)
+
+    // A different floti in the same place (a new build) is a new target, and would be tried.
+    expect(failedTargets.has(failedTargetKey(flotiBinary(WIN_PLACES, world.deps()), 'floti 2.5.0 protocol 2.1 windows x64'))).toBe(true)
+    expect(failedTargets.has(failedTargetKey(flotiBinary(WIN_PLACES, world.deps()), 'floti 2.5.1 protocol 2.1 windows x64'))).toBe(false)
   })
 })

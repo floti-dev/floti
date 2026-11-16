@@ -138,8 +138,10 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - The host owns process lifetime. Every session's and plain terminal's pty and
   process tree is held by the session keeper (`floti keeper`,
   `crates/host/src/keeper`), so a host that crashes takes no session with it.
-  Floti never stops the host on its own. What quitting, stopping and
-  reconnecting end is in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+  Floti never stops the host on its own, except to restart an older local
+  host onto a floti that speaks its protocol, whose keeper carries the
+  sessions over. What quitting, stopping and reconnecting end is in
+  [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - Nothing Floti runs in the background shows a window. On Windows nothing
   starts the host at sign-in; every host start goes through
   `process_tree::start_detached` (no console), and every console program the

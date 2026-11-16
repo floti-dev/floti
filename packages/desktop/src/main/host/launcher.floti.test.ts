@@ -266,6 +266,7 @@ describe.runIf(flotiAvailable)('this PC’s host older than this Floti, updated 
     const asked: string[] = []
     const after = await connectUpdatingLocalHost(world.places, world.deps(), {
       startHost: true,
+      failedTargets: new Set(),
       versionOf: async (binary) => {
         asked.push(binary)
         // The old host has refused this Floti by now; the host the restart
@@ -302,6 +303,7 @@ describe.runIf(flotiAvailable)('this PC’s host older than this Floti, updated 
     const error = await refusedWith(
       connectUpdatingLocalHost(world.places, world.deps(), {
         startHost: true,
+        failedTargets: new Set(),
         // What a floti built at the host's release would print.
         versionOf: async () => `floti 2.4.1-preview.11 protocol ${older.major}.${older.minor} windows x64`,
         step: () => undefined

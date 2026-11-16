@@ -49,7 +49,9 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   A quit is held until every host has been told, so a reopen in that wait
   (macOS's `activate`) opens no window in the quitting process; Floti calls
   `app.relaunch()` as the quit finishes and a fresh Floti starts once the old
-  one has exited (`main/reopen.ts`). Floti never stops the host on its own: its deliberate quit sends `host:quit`
+  one has exited (`main/reopen.ts`). Floti never stops the host on its own,
+  except to restart an older local host onto a floti that speaks its
+  protocol, whose keeper carries the sessions over: its deliberate quit sends `host:quit`
   and lets go, only Settings' Stop host (after saying how many sessions it
   ends) sends `host:stop`, and a host Floti started (`floti host --desktop`)
   exits by itself once it runs nothing and no client is attached. Installing
