@@ -304,11 +304,13 @@ interface View {
    */
   parked: boolean
   /**
-   * How many of an agent's key events are being delivered right now.
-   * `sendInputEvent` raises `before-input-event` synchronously (measured on
-   * Electron 43.3.0), so a key an agent presses arrives while this is above
-   * zero - and it is the page's, never a Browser tab command: an agent pressing
-   * Ctrl+T must not open the user a page, nor Ctrl+W close one.
+   * How many of an agent's input events are being delivered right now.
+   * `sendInputEvent` raises `before-input-event` and `before-mouse-event`
+   * synchronously (both measured on Electron 43.3.0), so a key an agent
+   * presses or a click it makes arrives while this is above zero. A key is
+   * then the page's, never a Browser tab command: an agent pressing Ctrl+T
+   * must not open the user a page, nor Ctrl+W close one. A click is no press
+   * of the user's: it leaves the address suggestions open.
    */
   agentInput: number
   /**
@@ -497,8 +499,9 @@ export interface BrowserHostOptions {
    */
   onViewRaised?: () => void
   /**
-   * A mouse press reached a page, whoever's it is. The menu layer closes the
-   * address suggestions on it (`menuLayer.ts`).
+   * A person's mouse press reached a page, whoever's page it is; never an
+   * agent's click. The menu layer closes the address suggestions on it
+   * (`menuLayer.ts`).
    */
   onPagePress?: () => void
 }
@@ -1146,7 +1149,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     entry.view.setVisible(placed.visible)
   }
 
-  /** An agent's key events, delivered so that none of them is read as a Browser tab key. */
+  /** An agent's input events, delivered so that none of them is read as the user's key or press. */
   const asAgent = (entry: View, send: () => void): void => {
     entry.agentInput += 1
     try {
@@ -1516,8 +1519,9 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       options.onCommand({ id: entry.id, command })
     })
 
+    // A person's press in the page; an agent's click (`agentInput`) is not one.
     wc.on('before-mouse-event', (_event, mouse) => {
-      if (mouse.type === 'mouseDown') options.onPagePress?.()
+      if (mouse.type === 'mouseDown' && entry.agentInput === 0) options.onPagePress?.()
     })
 
     wc.on('enter-html-full-screen', () => enterFullscreen(entry))
@@ -2343,9 +2347,11 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       // The move first. A page that only reacts on hover - a menu, a control
       // that arms itself - has had no pointer over it at all otherwise, and a
       // press arriving out of nowhere is not the sequence a person produces.
-      wc.sendInputEvent({ type: 'mouseMove', x: at.x, y: at.y })
-      wc.sendInputEvent({ type: 'mouseDown', ...at })
-      wc.sendInputEvent({ type: 'mouseUp', ...at })
+      asAgent(live.entry, () => {
+        wc.sendInputEvent({ type: 'mouseMove', x: at.x, y: at.y })
+        wc.sendInputEvent({ type: 'mouseDown', ...at })
+        wc.sendInputEvent({ type: 'mouseUp', ...at })
+      })
       await settle()
     },
 

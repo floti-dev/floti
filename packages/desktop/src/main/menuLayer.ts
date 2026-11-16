@@ -81,7 +81,7 @@ export interface MenuLayer {
    */
   raise(): void
   /**
-   * A mouse press reached one of the browser's pages. It closes the
+   * A person's mouse press reached one of the browser's pages. It closes the
    * suggestions, whose keyboard is the bar's and so need not move for the
    * press to land (a page that takes no focus, a posted click). A menu is left
    * to its own blur, which reads where the press put the keyboard.
@@ -267,6 +267,7 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
       if (layer === made) {
         layer = null
         open = null
+        ended = null
       }
     })
     win.contentView.addChildView(view)

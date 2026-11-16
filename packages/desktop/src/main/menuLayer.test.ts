@@ -386,6 +386,17 @@ describe('the menu layer - closing', () => {
     expect(r.view().visible).toBe(true)
   })
 
+  it('forgets the turn it closed when the window closes', () => {
+    const r = opened()
+    r.layer.report({ turn: 1, closed: 'escape' })
+    r.window.emit('closed')
+    // A layer made for the window there is next draws that window's turn 1.
+    r.layer.raise()
+    r.layer.report({ ready: true })
+    r.layer.request(open(1))
+    expect(r.view().visible).toBe(true)
+  })
+
   it("ignores what the page says about a turn that is not the open one's", () => {
     const r = opened()
     r.layer.request(open(2))
@@ -523,6 +534,25 @@ describe('the menu layer - the address suggestions', () => {
     expect(r.events).toEqual([{ turn: 3, closed: 'blur' }])
     // The keyboard stays where it was: in the bar, or wherever the press puts it.
     expect(r.window.webContents.focused).toBe(0)
+    browsers.shutdown()
+    store.close()
+  })
+
+  it("leaves them open when an agent clicks in a page: only a person's press closes them", () => {
+    const r = rig()
+    const { browsers, store } = browsersBeside(r)
+    const tab = browsers.open({ url: 'http://localhost:3000/' }).state!
+    const page = FakeWebContentsView.created.find((view) => view !== r.view() && r.window.children.includes(view))!
+    r.layer.report({ ready: true })
+    r.layer.request({ open: { turn: 3, rect: RECT, content: SUGGESTIONS, look: LOOK } })
+    // The click is delivered before `pointer` first waits.
+    void browsers.pointer(tab.id, 10, 10)
+    expect(page.webContents!.inputs.map((input) => input.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
+    expect(r.view().visible).toBe(true)
+    expect(r.events).toEqual([])
+    // The person's own press, after it, still closes them.
+    page.webContents!.emit('before-mouse-event', {}, { type: 'mouseDown', x: 10, y: 10 })
+    expect(r.events).toEqual([{ turn: 3, closed: 'blur' }])
     browsers.shutdown()
     store.close()
   })
