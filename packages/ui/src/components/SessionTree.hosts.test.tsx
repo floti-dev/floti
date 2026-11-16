@@ -386,6 +386,30 @@ describe('SessionTree with hosts on other computers', () => {
     expect(local().querySelector('[data-host-phase]')).toBeNull()
   })
 
+  it('says this PC’s group waits for its host while the host cannot be used, and fills in once it answers', () => {
+    const { view, rerender } = renderTree({
+      hosts: [buildBox()],
+      hostActions: actions(),
+      sessionsListed: false,
+      localHostWaiting: true,
+      sessionsByPath: new Map()
+    })
+    const local = (): HTMLElement => group(view.container, 'local')
+    const header = local().querySelector('[data-host-header]') as HTMLElement
+    expect(header.getAttribute('data-host-state')).toBe('waiting')
+    expect(header.textContent).toContain('waiting')
+    expect(local().querySelector('[data-host-phase="waiting"]')?.textContent).toBe(
+      'Waiting for the host on This PC…Its sessions show here once it answers.'
+    )
+    // The notice says why, once: the tree repeats no refusal and offers no fix of its own.
+    expect(view.container.querySelector('[data-empty-state="host-unlisted:local"]')).toBeNull()
+    expect(within(local()).queryByRole('button', { name: 'Try again' })).toBeNull()
+
+    rerender({ sessionsListed: true, localHostWaiting: false })
+    expect(local().querySelector('[data-host-header]')?.getAttribute('data-host-state')).toBe('live')
+    expect(local().querySelector('[data-host-phase]')).toBeNull()
+  })
+
   it('shows this PC’s no-folders state only once its sessions are listed', () => {
     const none: DiscoveryResult = { ...THIS_PC, roots: [], workspaces: [], projects: [] }
     const { view, rerender } = renderTree({ discovery: none, sessionsByPath: new Map(), sessionsListed: false })

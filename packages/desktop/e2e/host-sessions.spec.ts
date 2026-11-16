@@ -205,7 +205,7 @@ test('when the host Floti started dies, Floti starts a new host and reconnects, 
     const seen: string[] = []
     ;(window as unknown as { __hostStopped: string[] }).__hostStopped = seen
     new MutationObserver(() => {
-      const banner = document.querySelector('[data-host-stopped-banner]')
+      const banner = document.querySelector('[data-host-notice="lost"]')
       const text = banner?.textContent ?? null
       if (text !== null && seen.at(-1) !== text) seen.push(text)
     }).observe(document.body, { childList: true, subtree: true, characterData: true })
@@ -221,7 +221,7 @@ test('when the host Floti started dies, Floti starts a new host and reconnects, 
       return hosts.length === 1 && hosts[0] !== host
     })
     .toBe(true)
-  await expect(window.locator('[data-host-stopped-banner]')).toHaveCount(0)
+  await expect(window.locator('[data-host-notice="lost"]')).toHaveCount(0)
   expect(await window.evaluate(() => (window as unknown as { __hostStopped: string[] }).__hostStopped)).toEqual([
     'This PC’s host stopped. Starting it again…'
   ])

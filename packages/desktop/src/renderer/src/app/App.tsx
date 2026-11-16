@@ -186,6 +186,7 @@ import {
   RepoIcon,
   RestorePane,
   RestoreUnreadPane,
+  RestoreWaitingPane,
   SaveAsTemplateDialog,
   HistoryPalette,
   SessionsPane,
@@ -205,7 +206,7 @@ import {
   TitleBar,
   VersionBanner,
   OwnDataBanner,
-  HostStoppedBanner,
+  HostNotice,
   WelcomePane,
   type LaunchChoice,
   type PaneDropZone,
@@ -288,12 +289,14 @@ import {
   seenHostVersion,
   localHostConnection,
   localHostStep,
+  localHostUsable,
   reconnectLocalHost,
   remoteHosts as remoteHostLinks,
   updates,
 } from "./bridge";
 import { useDevicesSettings } from "./useDevicesSettings";
 import { useLocalHostStep } from "./host/localHostStep";
+import { localHostNotice, useLocalHostUsable } from "./host/localHostUsable";
 import { useForwardedPorts } from "./useForwardedPorts";
 import { LOCAL_HOST_NAME } from "./host/sessions";
 import { ProjectColumn } from "./ProjectColumn";
@@ -795,6 +798,10 @@ export function App(): JSX.Element {
   );
   /** Whether main is restarting this PC's host onto this run's floti, which the status bar and the tree say. */
   const localHostUpdating = useLocalHostStep(localHostStep)?.step === "updating";
+  /** Whether this PC's host can be used: the one notice says why not, and what waits on it says it waits. */
+  const localUsable = useLocalHostUsable(localHostUsable);
+  const localHostWaiting = localUsable.unusable !== null;
+  const hostNotice = localHostNotice(localUsable, hostLink.lost);
   /** Which of this PC's host and this Helm is behind, while they differ (`localHostVersions`). */
   const localVersions =
     seenLocalVersion === null || info === null
@@ -4864,7 +4871,6 @@ export function App(): JSX.Element {
             quitEnds: quitEndsSessions(currentSettings),
             versions: localVersions,
             updating: localHostUpdating,
-            onRestart: askRestartHost,
             onOpen: () =>
               openSettings(localVersions === null ? "sessions" : "hosts"),
           },
@@ -5470,6 +5476,16 @@ export function App(): JSX.Element {
       case "plugin-pages":
         return renderPluginPages(ref);
       case "restore":
+        if (restoreOffer === null && restoreUnread === null)
+          // It fills in by itself once the host answers.
+          return localHostWaiting ? (
+            <RestoreWaitingPane
+              hostName={LOCAL_HOST_NAME}
+              onNotNow={() =>
+                commit((current) => closeTab(current, "restore"))
+              }
+            />
+          ) : null;
         if (restoreOffer === null)
           return restoreUnread === null ? null : (
             <RestoreUnreadPane
@@ -6152,6 +6168,7 @@ export function App(): JSX.Element {
             sessionsListed={sessionsListed}
             sessionsListError={sessionState.listError}
             localHostUpdating={localHostUpdating}
+            localHostWaiting={localHostWaiting}
             onRelistSessions={sessionState.relist}
             selectedPath={front?.kind === "project" ? front.path : null}
             pinnedPaths={
@@ -6540,10 +6557,12 @@ export function App(): JSX.Element {
               onDismiss={ownData.dismiss}
             />
           ) : null}
-          {hostLink.lost !== null ? (
-            <HostStoppedBanner
+          {hostNotice !== null ? (
+            <HostNotice
               hostName={LOCAL_HOST_NAME}
-              restarting={hostLink.lost.restarts}
+              notice={hostNotice}
+              onTryAgain={reconnectLocalHost}
+              onUpdateFloti={() => openSettings("hosts")}
             />
           ) : null}
         </>

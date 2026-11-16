@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { RestorableSession, RestoreOffer } from '@helm/core/types'
-import { RestorePane, RestoreUnreadPane, type RestorePaneProps } from './RestorePane'
+import { RestorePane, RestoreUnreadPane, RestoreWaitingPane, type RestorePaneProps } from './RestorePane'
 
 const NOW = new Date(2026, 9, 2, 13, 0, 0).getTime()
 const EARLIER = NOW - 20 * 60_000
@@ -209,6 +209,16 @@ describe('when what was running could not be read', () => {
     expect(pane.textContent).not.toContain('Resume')
     await userEvent.click(button('Try again'))
     expect(onTryAgain).toHaveBeenCalledTimes(1)
+    await userEvent.click(button('Not now'))
+    expect(onNotNow).toHaveBeenCalledTimes(1)
+  })
+
+  it('says it waits for a host that cannot be used, with no error and nothing to retry, and Not now sets it aside', async () => {
+    const onNotNow = vi.fn()
+    render(<RestoreWaitingPane hostName="this PC’s host" onNotNow={onNotNow} />)
+    const pane = screen.getByRole('region', { name: 'Waiting for this PC’s host' })
+    expect(pane.textContent).toContain('What was running when it stopped shows here once it answers.')
+    expect(pane.textContent).not.toMatch(/Could not|Try again|protocol/)
     await userEvent.click(button('Not now'))
     expect(onNotNow).toHaveBeenCalledTimes(1)
   })

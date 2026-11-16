@@ -29,6 +29,8 @@ import type { HostAdapter } from './router'
 /** As much of a page's link as an adapter needs. */
 export interface HostReach {
   connection(): Promise<HostConnection>
+  /** As `connection()`, but rejecting rather than waiting while this PC's host cannot be used (`PageLink.connectionIfUsable`). */
+  connectionIfUsable?(): Promise<HostConnection>
   onConnected(listener: (connection: HostConnection) => void): void
 }
 

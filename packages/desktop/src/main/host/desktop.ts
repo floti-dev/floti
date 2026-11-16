@@ -293,7 +293,9 @@ export function createLocalPageLinks(
     appVersion: app.getVersion(),
     deviceName: hostname(),
     isHelmPage,
-    ready: () => link.connection(),
+    // A page's connection waits through a host that cannot be used, on the
+    // link's one connect: a page open never starts a connect of its own.
+    ready: () => link.usable(),
     howEnded: () => ({
       planned: link.endedOnPurpose(),
       restarts: link.restartsHost(),
@@ -535,6 +537,9 @@ export function createLocalHostLink(settings: () => HostSettingsPatch, log: (lin
       }
     },
     settings,
+    // A host that refuses this Floti or cannot be reached is tried again on
+    // the link's own waits; the window's reads wait for it meanwhile.
+    retryFailedConnects: true,
     log,
     setTimeout: (run, ms) => setTimeout(run, ms),
     clearTimeout: (timer) => clearTimeout(timer as NodeJS.Timeout)

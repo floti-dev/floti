@@ -376,4 +376,24 @@ describe('the window’s workspace over its own connection', () => {
       hostLogFile: null
     })
   })
+
+  it('answers with Floti’s own settings and build, and saves its own half, while this PC’s host cannot be used and every host read waits', async () => {
+    const own = ownBridge({ theme: 'dark' })
+    // This PC's link: every read waits for the host, but one with its own answer is told why at once.
+    const adapter = createWorkspaceAdapter({
+      link: {
+        connection: () => new Promise(() => undefined),
+        connectionIfUsable: () => Promise.reject(new Error(UNREACHABLE)),
+        onConnected: () => undefined
+      },
+      own: own.bridge
+    })
+    await expect(ask(adapter, 'settings:read')).resolves.toMatchObject({ theme: 'dark' })
+    await expect(ask(adapter, 'app:info')).resolves.toEqual({ ...BUILD, hostLogFile: null })
+    await expect(ask(adapter, 'settings:write', { theme: 'light' })).resolves.toMatchObject({ theme: 'light' })
+    let scanned = false
+    void ask(adapter, 'discovery:cached').then(() => (scanned = true))
+    await settle()
+    expect(scanned).toBe(false)
+  })
 })

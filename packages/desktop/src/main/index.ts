@@ -689,7 +689,8 @@ function startApp(options: AppOptions = {}): void {
       stop: () => desktopHost.link.stopHost(),
       restartAsk: () => askLocalHostRestart((line) => console.log(line)),
       restart: () => desktopHost.link.restartHost(),
-      step: () => localHostSteps.current()
+      step: () => localHostSteps.current(),
+      reconnect: () => desktopHost.link.reconnectNow()
     },
     window: () => win,
     ...(options.chooseDirectory !== undefined ? { chooseDirectory: options.chooseDirectory } : {}),

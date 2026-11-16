@@ -27,8 +27,8 @@ import type { HostAdapter } from './router'
  * the `claude` Helm picked, which main tells the host - stays with Helm's main
  * process on the client-only `ownSettings:*`, whose write does what main does
  * with it. The window is answered Helm's half with the host's laid over; while
- * the host cannot be reached it is Helm's own, so the window still paints and
- * the sidebar says why from its own refused read.
+ * this PC's host cannot be used it is Helm's own, so the window still paints
+ * its tabs and saves their layout, and the window's notice says why.
  *
  * The pickers are the window's own: `path:chooseFile` for the `claude`
  * program, whose choice the host checks before Helm keeps it.
@@ -41,7 +41,10 @@ import type { HostAdapter } from './router'
  * Every request goes through `link.connection()`, which joins the first
  * connect while it is in flight, so a read asked before the window has reached
  * the host gets the host's answer, never an empty one first; with no host each
- * rejects with the link's sentence, never an empty list in its place.
+ * rejects with the link's sentence, never an empty list in its place; this
+ * PC's link waits through a host that cannot be used instead. What Helm keeps
+ * itself (its settings, its build) is answered without the host meanwhile
+ * (`hostIfUsable`).
  */
 
 type Pushed = 'settings:changed' | 'discovery:updated' | 'scan:status' | 'git:updated'
@@ -92,6 +95,8 @@ export function createWorkspaceAdapter({
   let subscriptions: HostSubscription[] = []
 
   const host = (): Promise<HostConnection> => link.connection()
+  /** The host for a read that answers with Helm's own half without it: no wait while this PC's host cannot be used. */
+  const hostIfUsable = (): Promise<HostConnection> => link.connectionIfUsable?.() ?? link.connection()
   /** The settings last told, which a listener that comes later hears at once. */
   let toldSettings: AppSettings | null = null
   const tell = <K extends Pushed>(channel: K, payload: EventPayload<K>): void => {
@@ -110,7 +115,7 @@ export function createWorkspaceAdapter({
   /** Resolves once the host's settings are known, or the host could not be reached for them. */
   const hostKnown = (): Promise<void> => {
     if (hostSettings !== null) return Promise.resolve()
-    hostAsked ??= host()
+    hostAsked ??= hostIfUsable()
       .then((connection) => connection.request('settings:read', null))
       .then(
         (read) => {
@@ -236,7 +241,7 @@ export function createWorkspaceAdapter({
         const build = await own.invoke('ownApp:info')
         let hostLogFile: string | null = null
         try {
-          hostLogFile = (await (await host()).request('app:info', null)).logFile
+          hostLogFile = (await (await hostIfUsable()).request('app:info', null)).logFile
         } catch (error) {
           log(`host: the host's log file could not be read (${(error as Error).message})`)
         }
@@ -247,7 +252,7 @@ export function createWorkspaceAdapter({
         const settings = await ownSettings()
         let connection: HostConnection
         try {
-          connection = await host()
+          connection = await hostIfUsable()
         } catch {
           return settings
         }

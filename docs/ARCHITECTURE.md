@@ -72,7 +72,20 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   (preparing, connecting, starting, updating, ready, refused, unreachable)
   on the client-only `hostLink:step`, answers the one under way on
   `hostLink:currentStep`, and the window keeps it in one store
-  (`renderer/src/app/host/localHostStep.ts`). An update of floti on another host runs
+  (`renderer/src/app/host/localHostStep.ts`). A local host that refuses the
+  desktop and was not updated, or that cannot be reached, is said once: the
+  window's one notice (`HostNotice` in the banner slot, read from
+  `localHostUsable.ts`) gives the sentence and the action as a button (Try
+  again, or Update Floti for a host newer than the desktop), and the
+  Sessions pane and the Restore tab say they wait for the host. The window's
+  reads wait rather than fail: main answers a page's `hostLink:open` only
+  once its own link has a host (`HostLink.usable`), main's link tries a failed
+  connect again on its own backoff (`retryFailedConnects`), and only that
+  retry or the notice's Try again (`hostLink:reconnect`) connects again, so a
+  waiting window starts no connect and no `floti host` of its own. Reads that
+  answer with what Floti keeps itself (its own settings, its build) answer
+  without the host meanwhile. A remote host keeps its own state in its tree
+  header. An update of floti on another host runs
   `floti update` there where that floti has it (over the host's connection
   with `update:install`, or over its login), which relaunches the host
   through the keeper, so it ends no session the new host takes back

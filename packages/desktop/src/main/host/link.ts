@@ -34,6 +34,16 @@ import type { HostSettingsPatch } from './protocol'
  * and which says so in `app:info`); any other host is waited for, never
  * replaced. Every `onConnected` listener runs again on the new connection.
  *
+ * This PC's host's link also tries again after a connect that failed
+ * (`retryFailedConnects`): a host that refuses this Floti or cannot be
+ * reached is tried on the same waits, and nothing else connects while it
+ * waits. `usable()` is what a page's connection waits on: every page open
+ * joins the one connect in flight or waits for the next that succeeds, so a
+ * window whose reads wait through a host that cannot be used starts no
+ * connect, and no host, of its own. Main's own readers asking `connection()`
+ * meanwhile are answered at once with why the last connect failed. Only the
+ * retry schedule and Reconnect now (the window's Try again) connect again.
+ *
  * A host on another computer is reached by a link of its own
  * (`remote.ts`), made with the same function: its `start` never starts a
  * host, it writes none of Helm's settings there (this PC's `claude` and shell
@@ -49,6 +59,15 @@ export const HOST_STOP_DEADLINE_MS = 10_000
 export interface HostLink {
   /** The connection, connecting first when there is none. Rejects with the sentence to show. */
   connection(): Promise<HostConnection>
+  /**
+   * The connection once the host can be used, for a page's connection to
+   * wait on: the one there is, the connect in flight, or, while the link
+   * waits to try again, the next connect that succeeds, without starting
+   * one. It connects only when nothing is in flight or waiting (the first
+   * connect, or after a stop). Rejects only once Floti quits. A link without
+   * `retryFailedConnects` answers as `connection()` does.
+   */
+  usable(): Promise<HostConnection>
   /** The connection there is now, or null. */
   current(): HostConnection | null
   /** Settles once the attempt in flight has, without starting one. */
@@ -138,6 +157,13 @@ export interface HostLinkDeps {
   settings?: () => HostSettingsPatch
   /** What the log calls the host: the local host when absent. */
   name?: string
+  /**
+   * This PC's host: a connect that fails is tried again after the same
+   * waits as a connection that ended, and while the link waits,
+   * `connection()` answers with why the last one failed rather than
+   * connecting, and `usable()` waits for the next that succeeds.
+   */
+  retryFailedConnects?: boolean
   /** Hears why each connect attempt failed, before any retry is scheduled. */
   onAttemptFailed?: (error: Error) => void
   /**
@@ -169,6 +195,30 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
   let mayStart = true
   let retryTimer: unknown = null
   let retryWait = RECONNECT_FIRST_MS
+  /** Why the last connect failed, until one succeeds or the user's restart connects afresh (`retryFailedConnects`). */
+  let lastFailure: Error | null = null
+  /** What every `usable()` asked during a wait shares: settled by the next connect that succeeds, or by a quit. */
+  let nextUsable: { promise: Promise<HostConnection>; resolve: (connection: HostConnection) => void; reject: (error: Error) => void } | null = null
+
+  const waitForUsable = (): Promise<HostConnection> => {
+    if (nextUsable === null) {
+      let resolve: (connection: HostConnection) => void = () => undefined
+      let reject: (error: Error) => void = () => undefined
+      const promise = new Promise<HostConnection>((done, fail) => {
+        resolve = done
+        reject = fail
+      })
+      nextUsable = { promise, resolve, reject }
+    }
+    return nextUsable.promise
+  }
+
+  const usableNow = (connection: HostConnection): void => {
+    lastFailure = null
+    const waiting = nextUsable
+    nextUsable = null
+    waiting?.resolve(connection)
+  }
 
   /** Tries to connect again after a wait, until it connects or Helm quits. */
   const scheduleRetry = (): void => {
@@ -265,12 +315,34 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
     connection() {
       if (stopping !== null) return Promise.reject(new Error('Floti is quitting.'))
       if (restartGate !== null) return restartGate.then(() => link.connection())
-      attempt ??= connect().catch((error: unknown) => {
-        attempt = null
-        deps.onAttemptFailed?.(error as Error)
-        throw error
-      })
+      // Waiting to try again after a failed connect: only the wait connects.
+      if (attempt === null && lastFailure !== null && retryTimer !== null) return Promise.reject(lastFailure)
+      attempt ??= connect().then(
+        (connection) => {
+          usableNow(connection)
+          return connection
+        },
+        (error: unknown) => {
+          attempt = null
+          deps.onAttemptFailed?.(error as Error)
+          if (deps.retryFailedConnects === true) {
+            lastFailure = error as Error
+            scheduleRetry()
+          }
+          throw error
+        }
+      )
       return attempt
+    },
+
+    usable() {
+      if (deps.retryFailedConnects !== true) return link.connection()
+      if (stopping !== null) return Promise.reject(new Error('Floti is quitting.'))
+      if (restartGate !== null) return restartGate.then(() => link.usable())
+      // A failed attempt has scheduled its retry by now, so asking again waits for it.
+      if (attempt !== null) return attempt.catch(() => link.usable())
+      if (retryTimer !== null) return waitForUsable()
+      return link.connection().catch(() => link.usable())
     },
 
     current: () => local?.connection ?? null,
@@ -326,6 +398,8 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
         local = null
         attempt = null
         mayStart = true
+        // The user's restart connects afresh, whatever the wait says.
+        lastFailure = null
       } catch (error) {
         restartingHost = false
         // A host that went all the same is connected to again, as after a crash.
@@ -400,6 +474,9 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
       deps.clearTimeout(retryTimer)
       retryTimer = null
     }
+    const waiting = nextUsable
+    nextUsable = null
+    waiting?.reject(new Error('Floti is quitting.'))
     stopping ??= (async () => {
       if (attempt !== null) await bounded(attempt)
       const host = local

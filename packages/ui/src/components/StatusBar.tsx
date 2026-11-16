@@ -72,10 +72,9 @@ export interface StatusHostItem {
    */
   roundTripMs?: number | null | undefined;
   /**
-   * This PC's host only: which of it and this Helm is behind. An older host,
-   * one on protocol 1.x included, says so and pressing it offers Restart host
-   * to update (`onRestart`); a Helm behind its host opens Settings > Hosts,
-   * which says what to do.
+   * This PC's host only: which of it and this Helm is behind, said in warning
+   * tone; pressing it opens Settings > Hosts, which says what to do. A host
+   * that cannot be used says so in the window's notice, with its action.
    */
   versions?: LocalHostVersions | null | undefined;
   /**
@@ -84,8 +83,6 @@ export interface StatusHostItem {
    * warning tone and no action: it needs nothing from the user.
    */
   updating?: boolean | undefined;
-  /** Starts Restart host to update, which asks before anything happens. */
-  onRestart?: (() => void) | undefined;
   /** Opens the setting where what quitting does there is set. */
   onOpen: () => void;
 }
@@ -275,10 +272,6 @@ export function StatusBar({
         }
         const versions = away ? null : (host.versions ?? null);
         if (versions !== null) {
-          const restart =
-            versions.older === "host" && host.onRestart !== undefined
-              ? host.onRestart
-              : null;
           return (
             <Fragment key={host.id}>
               <Divider />
@@ -288,11 +281,8 @@ export function StatusBar({
                   versions.older === "host" ? "older" : "update-helm"
                 }
                 data-status-host-id={host.id}
-                onClick={restart ?? host.onOpen}
-                title={
-                  localHostVersionsSentence(versions) +
-                  (restart !== null ? " Asks first." : " Opens Settings.")
-                }
+                onClick={host.onOpen}
+                title={`${localHostVersionsSentence(versions)} Opens Settings.`}
                 className="-mx-1 flex shrink-0 items-center gap-1.5 rounded px-1 text-warn transition-colors hover:bg-hover"
               >
                 <span
@@ -300,11 +290,7 @@ export function StatusBar({
                   className="size-1.5 rounded-full border-[1.5px] border-warn"
                 />
                 {host.name} ·{" "}
-                {versions.older === "helm"
-                  ? "update Floti"
-                  : restart !== null
-                    ? "older host · Restart host to update"
-                    : "older host"}
+                {versions.older === "helm" ? "update Floti" : "older host"}
               </button>
             </Fragment>
           );

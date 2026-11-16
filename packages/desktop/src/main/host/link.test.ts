@@ -4,7 +4,7 @@ import { FakeConnection, fakeLocalHost } from '../../../test/host-connection'
 import type { HostConnection } from '../../shared/host/client'
 import type * as P from '../../shared/host/protocol'
 import { RECONNECT_MOST_MS } from '../../shared/host/reconnect'
-import { HOST_RETRY_MS, LocalHostError, LocalHostRefusedError } from './launcher'
+import { HOST_RETRY_MS, LocalHostError, LocalHostRefusedError, type LocalHost } from './launcher'
 import { HOST_STOP_DEADLINE_MS, createHostLink } from './link'
 import { hostSettingsFor } from './sessions'
 
@@ -544,5 +544,149 @@ describe('the link to the local host', () => {
       terminalShell: 'pwsh.exe'
     })
     expect(hostSettingsFor(base, null)).toEqual({ terminalShell: null })
+  })
+})
+
+describe('while this PC’s host cannot be used', () => {
+  const REFUSED = new LocalHostRefusedError(
+    'This client speaks Floti protocol 4.1 and the host speaks 3.1. Update the host.',
+    { host: { major: 3, minor: 1 }, client: { major: 4, minor: 1 }, update: 'host' }
+  )
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 30; i++) await Promise.resolve()
+  }
+
+  /** A link to a host that refuses this Floti until `usable` is set, counting every connect. */
+  function refusingWorld() {
+    const timers = steppedTimers()
+    const connection = new FakeConnection()
+    const state = { starts: 0, usable: false }
+    const link = createHostLink({
+      start: (): Promise<LocalHost> => {
+        state.starts += 1
+        return state.usable ? Promise.resolve(fakeLocalHost(connection)) : Promise.reject(REFUSED)
+      },
+      retryFailedConnects: true,
+      log: () => undefined,
+      ...timers
+    })
+    return {
+      timers,
+      connection,
+      link,
+      get starts() {
+        return state.starts
+      },
+      set usable(next: boolean) {
+        state.usable = next
+      }
+    }
+  }
+
+  it('AC5: page opens wait on the one connect in flight and the next that succeeds, and start no connect of their own', async () => {
+    const w = refusingWorld()
+    const opens = [w.link.usable(), w.link.usable(), w.link.usable()]
+    await settle()
+    // One connect, refused; the link waits to try again on its own schedule.
+    expect(w.starts).toBe(1)
+    expect(w.timers.pending()).toEqual([HOST_RETRY_MS])
+
+    // More opens while it waits start nothing.
+    opens.push(w.link.usable(), w.link.usable())
+    await settle()
+    expect(w.starts).toBe(1)
+
+    // The retry is refused too: still one connect per try, and nobody was answered.
+    let answered = 0
+    for (const open of opens) void open.then(() => (answered += 1))
+    w.timers.fireAll()
+    await settle()
+    expect(w.starts).toBe(2)
+    expect(answered).toBe(0)
+    expect(w.timers.pending()).toEqual([HOST_RETRY_MS * 2])
+
+    // The next try reaches a host that welcomes this Floti: every open has it.
+    w.usable = true
+    w.timers.fireAll()
+    await settle()
+    expect(w.starts).toBe(3)
+    const reached = await Promise.all(opens)
+    expect(new Set(reached)).toEqual(new Set([w.connection.asConnection()]))
+    expect(w.timers.pending()).toEqual([])
+  })
+
+  it('AC5: main’s own readers are told why at once while the link waits, and connect nothing', async () => {
+    const w = refusingWorld()
+    await expect(w.link.connection()).rejects.toBe(REFUSED)
+    expect(w.starts).toBe(1)
+    await expect(w.link.connection()).rejects.toBe(REFUSED)
+    await expect(w.link.connection()).rejects.toBe(REFUSED)
+    expect(w.starts).toBe(1)
+  })
+
+  it('AC5: Try again connects at once from the wait, and the next wait starts from the first', async () => {
+    const w = refusingWorld()
+    const open = w.link.usable()
+    await settle()
+    w.timers.fireAll()
+    await settle()
+    expect(w.starts).toBe(2)
+    expect(w.timers.pending()).toEqual([HOST_RETRY_MS * 2])
+
+    w.link.reconnectNow()
+    await settle()
+    expect(w.starts).toBe(3)
+    expect(w.timers.pending()).toEqual([HOST_RETRY_MS])
+
+    w.usable = true
+    w.link.reconnectNow()
+    await settle()
+    expect(w.starts).toBe(4)
+    await expect(open).resolves.toBe(w.connection.asConnection())
+  })
+
+  it('answers a page open at once once connected, and connects for the first open when nothing has tried yet', async () => {
+    const w = refusingWorld()
+    w.usable = true
+    const first = await w.link.usable()
+    expect(await w.link.usable()).toBe(first)
+    expect(w.starts).toBe(1)
+  })
+
+  it('tells every waiting page open that Floti is quitting, and tries no more', async () => {
+    const w = refusingWorld()
+    const open = w.link.usable()
+    await settle()
+    await w.link.quit({ end: false })
+    await expect(open).rejects.toThrow('Floti is quitting.')
+    await expect(w.link.usable()).rejects.toThrow('Floti is quitting.')
+    expect(w.timers.pending()).toEqual([])
+    expect(w.starts).toBe(1)
+  })
+
+  it('a user’s restart connects afresh from the wait, and every waiting open has the new host', async () => {
+    const timers = steppedTimers()
+    const carried = new FakeConnection()
+    let oldHost = true
+    let starts = 0
+    const link = createHostLink({
+      start: () => {
+        starts += 1
+        return oldHost ? Promise.reject(REFUSED) : Promise.resolve(fakeLocalHost(carried))
+      },
+      restart: () => {
+        oldHost = false
+        return Promise.resolve(null)
+      },
+      retryFailedConnects: true,
+      log: () => undefined,
+      ...timers
+    })
+    const open = link.usable()
+    await settle()
+    expect(starts).toBe(1)
+    await link.restartHost()
+    expect(starts).toBe(2)
+    await expect(open).resolves.toBe(carried.asConnection())
   })
 })

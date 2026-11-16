@@ -11,6 +11,7 @@ import {
 import { createHostState, type HostStateStore } from './host/hostState'
 import { createSeenHostVersion, type SeenHostVersionStore } from './host/hostVersions'
 import { createLocalHostStep, type LocalHostStepStore } from './host/localHostStep'
+import { createLocalHostUsable, usabilityOf, type LocalHostUsableStore } from './host/localHostUsable'
 import { WINDOW_CAPABILITIES, createPageLink } from './host/link'
 import { createRemoteHosts, type RemoteHostsStore } from './host/remoteHosts'
 import type { HostAdapter } from './host/router'
@@ -24,11 +25,26 @@ declare global {
 
 const log = (line: string): void => console.warn(line)
 
+/** What main's link to this PC's host is doing: connecting, starting, updating it, ready (`host/localHostStep.ts`). */
+export const localHostStep: LocalHostStepStore = createLocalHostStep(window.helm, log)
+
+/**
+ * Whether this PC's host can be used, from main's steps, kept through main's
+ * retries: what the window's one notice, the Sessions pane and the Restore
+ * tab say while it cannot be (`host/localHostUsable.ts`).
+ */
+export const localHostUsable: LocalHostUsableStore = createLocalHostUsable(localHostStep)
+
 /**
  * This window's own connection to the local host, used only while sessions
- * run there (`host/link.ts`).
+ * run there (`host/link.ts`). Its reads wait while the host cannot be used.
  */
-const link = createPageLink({ bridge: window.helm, capabilities: WINDOW_CAPABILITIES, log })
+const link = createPageLink({
+  bridge: window.helm,
+  capabilities: WINDOW_CAPABILITIES,
+  usability: usabilityOf(localHostUsable),
+  log
+})
 
 /** What the window calls each host on another computer: its name in the `hosts` setting, learnt from main. */
 const hostNames = new Map<string, string>()
@@ -77,9 +93,6 @@ export const hostState: HostStateStore = createHostState(link)
 
 /** The floti version this PC's host last named, or the versions it refused this Helm with (`host/hostVersions.ts`). */
 export const seenHostVersion: SeenHostVersionStore = createSeenHostVersion(link)
-
-/** What main's link to this PC's host is doing: connecting, starting, updating it, ready (`host/localHostStep.ts`). */
-export const localHostStep: LocalHostStepStore = createLocalHostStep(window.helm, log)
 
 /**
  * Each host on another computer this device added: where main's link to it

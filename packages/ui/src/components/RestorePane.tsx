@@ -291,6 +291,53 @@ export function RestoreUnreadPane({
   )
 }
 
+export interface RestoreWaitingPaneProps {
+  /** The host whose answer it waits for, as the window names it ("this PC’s host"). */
+  hostName: string
+  onNotNow: () => void
+}
+
+/**
+ * The restore page while the host that would say what was running cannot be
+ * used (it refused this Floti, or could not be reached): it waits, and fills
+ * in by itself once the host answers. Why the host cannot be used is the
+ * window's notice's to say, once.
+ */
+export function RestoreWaitingPane({ hostName, onNotNow }: RestoreWaitingPaneProps): JSX.Element {
+  const headingId = useId()
+  return (
+    <div
+      data-restore-pane
+      data-restore-waiting
+      aria-labelledby={headingId}
+      role="region"
+      className="h-full overflow-auto px-6"
+    >
+      <div className="mx-auto w-full max-w-[560px] pt-24 pb-10">
+        <div className="mb-1.5 flex items-center gap-2.5">
+          <HistoryIcon width={20} height={20} className="shrink-0 text-fg-subtle" />
+          <h1 id={headingId} className="m-0 text-[18px] font-medium tracking-[-0.01em] text-fg">
+            Waiting for {hostName}
+          </h1>
+        </div>
+        <p className="mt-0 mb-[18px] ml-[30px] leading-normal text-fg-muted">
+          What was running when it stopped shows here once it answers. Not now keeps this at the top of History
+          (Ctrl+H).
+        </p>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onNotNow}
+            className="rounded-well border border-border-strong px-3.5 py-1.5 text-[12.5px] text-fg transition-colors hover:bg-hover"
+          >
+            Not now
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Row({
   session,
   on,

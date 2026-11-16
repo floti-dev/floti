@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { EventPayload } from '../../shared/ipc'
-import type { PageBridge } from './launcher'
+import { FakeConnection, fakeLocalHost } from '../../../test/host-connection'
+import { HOST_RETRY_MS, LocalHostRefusedError, type PageBridge } from './launcher'
+import { createHostLink } from './link'
 import { FOREIGN_PAGE, createPageLinks, type HelmPage, type PageLinksDeps } from './page-link'
 
 class FakeBridge implements PageBridge {
@@ -177,6 +179,61 @@ describe('each Floti page’s own connection to the local host', () => {
     await w.links.stop()
     expect(w.bridges.map((b) => b.endedByHelm)).toEqual([true, true])
     expect(await w.links.open(new FakePage(WINDOW))).toEqual({ unreachable: 'Floti is quitting.' })
+    expect(w.bridges).toHaveLength(2)
+  })
+})
+
+describe('page opens while this PC’s host cannot be used', () => {
+  it('AC5: every page open waits on main’s link, starts no connect or host of its own, and is answered once a retry reaches a host', async () => {
+    const timers = new Map<number, () => void>()
+    let nextTimer = 1
+    let starts = 0
+    let usable = false
+    const link = createHostLink({
+      start: () => {
+        starts += 1
+        return usable
+          ? Promise.resolve(fakeLocalHost(new FakeConnection()))
+          : Promise.reject(
+              new LocalHostRefusedError('This client speaks Floti protocol 4.1 and the host speaks 3.1. Update the host.', {
+                host: { major: 3, minor: 1 },
+                client: { major: 4, minor: 1 },
+                update: 'host'
+              })
+            )
+      },
+      retryFailedConnects: true,
+      log: () => undefined,
+      setTimeout: (run, ms) => {
+        expect(ms).toBe(HOST_RETRY_MS)
+        const id = nextTimer++
+        timers.set(id, run)
+        return id
+      },
+      clearTimeout: (timer) => void timers.delete(timer as number)
+    })
+    // Main's first connect at start-up is refused.
+    await expect(link.connection()).rejects.toThrow('Update the host.')
+    expect(starts).toBe(1)
+
+    const w = world({ ready: () => link.usable() })
+    const window = new FakePage(WINDOW)
+    const background = new FakePage(BACKGROUND)
+    // The window opens, its reads open again after a reload, the plugin window opens too.
+    const opened = [w.links.open(window), w.links.open(background), w.links.open(new FakePage(WINDOW))]
+    for (let i = 0; i < 30; i++) await Promise.resolve()
+    expect(starts).toBe(1)
+    expect(w.bridges).toEqual([])
+
+    // Main's own retry reaches a host that welcomes this Floti.
+    usable = true
+    const due = [...timers.values()]
+    timers.clear()
+    for (const run of due) run()
+    const answers = await Promise.all(opened)
+    expect(starts).toBe(2)
+    // The window's first open was ended by its second; the others each have a bridge.
+    expect(answers.map((answer) => 'connection' in answer)).toEqual([false, true, true])
     expect(w.bridges).toHaveLength(2)
   })
 })
