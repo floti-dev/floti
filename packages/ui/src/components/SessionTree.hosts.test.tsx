@@ -392,6 +392,9 @@ describe('SessionTree with hosts on other computers', () => {
       hostActions: actions(),
       sessionsListed: false,
       localHostWaiting: true,
+      // Floti's own settings came without the host; its folders were never read.
+      discovery: null,
+      pinnedPaths: ['C:\\work\\my-work\\repos\\notes'],
       sessionsByPath: new Map()
     })
     const local = (): HTMLElement => group(view.container, 'local')
@@ -404,8 +407,10 @@ describe('SessionTree with hosts on other computers', () => {
     // The notice says why, once: the tree repeats no refusal and offers no fix of its own.
     expect(view.container.querySelector('[data-empty-state="host-unlisted:local"]')).toBeNull()
     expect(within(local()).queryByRole('button', { name: 'Try again' })).toBeNull()
+    // Could not look is not nothing there: no pin is called gone before the folders are read.
+    expect(within(local()).queryByText('folder gone')).toBeNull()
 
-    rerender({ sessionsListed: true, localHostWaiting: false })
+    rerender({ sessionsListed: true, localHostWaiting: false, discovery: THIS_PC })
     expect(local().querySelector('[data-host-header]')?.getAttribute('data-host-state')).toBe('live')
     expect(local().querySelector('[data-host-phase]')).toBeNull()
   })

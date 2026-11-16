@@ -1097,7 +1097,8 @@ function HostTree({
     }))
     .filter((group) => group.root !== null || group.members.length > 0)
 
-  const shownPins = pins.filter(
+  // Before the folders are read, a pin cannot be said gone: could not look is not nothing there.
+  const shownPins = discovery === null ? [] : pins.filter(
     (pin) =>
       matchesText(pin.name, query) ||
       matchesText(pin.path, query) ||
