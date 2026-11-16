@@ -13,6 +13,8 @@ import {
   SOCKET_PATH_MAX,
   carriedFloti,
   clientFolder,
+  connectUpdatingLocalHost,
+  failedTargetKey,
   desktopArgs,
   desktopProgram,
   flotiBinary,
@@ -860,5 +862,194 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       expect(line).not.toContain('0123abcd')
       expect(line).not.toContain('floti bridge:')
     }
+  })
+})
+
+describe('a local host older than this Floti, updated by itself', { timeout: PATIENCE }, () => {
+  /** This Floti's protocol in these tests, one minor past the host's. */
+  const OURS = { major: 2, minor: 1 }
+  /** A host on protocol 2.0, which refuses this Floti's hello saying to update the host. */
+  const refusesAsOlder: Program = (child) => {
+    child.stdin.once('data', () => {
+      child.stdout.write(
+        encodeFrame({
+          type: 'refused',
+          host: { major: 2, minor: 0 },
+          client: OURS,
+          update: 'host',
+          message: 'This client speaks Floti protocol 2.1 and the host speaks 2.0. Update the host.'
+        })
+      )
+    })
+    child.stdin.once('end', () => child.exit(6)).resume()
+  }
+  const steps = (): { said: string[]; step: (step: { step: string }) => void } => {
+    const said: string[] = []
+    return { said, step: (step) => said.push(JSON.stringify(step)) }
+  }
+  const folder = clientFolder(WIN_PLACES, 'win32')
+
+  it('restarts the host onto the floti that speaks this Floti’s protocol, with no question, and connects to the new one', async () => {
+    const asked: string[] = []
+    const world = new World({
+      bridges: [
+        refusesAsOlder,
+        answersRestart({ hostVersion: '2.4.0', sessions: 2, keeperLink: KEEPER_LINK_VERSION }, asked),
+        // The old host has gone: nothing answers the ask, nor the next bridge, and the new host is started.
+        exits(3),
+        exits(3),
+        connects
+      ]
+    })
+    const heard = steps()
+    const versionsAsked: string[] = []
+    const connecting = connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
+      startHost: true,
+      failedTargets: new Set(),
+      versionOf: async (binary) => {
+        versionsAsked.push(binary)
+        return 'floti 2.5.0 protocol 2.1 windows x64\n'
+      },
+      step: heard.step
+    })
+    await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(1)
+    world.timers[0]!()
+    const local = await connecting
+    expect(local.startedHost).toBe(true)
+    await local.close()
+    // The floti asked is the one the restart starts.
+    expect(versionsAsked).toEqual([flotiBinary(WIN_PLACES, world.deps())])
+    expect(asked).toEqual(['restart'])
+    expect(world.programs()).toEqual([
+      `bridge ${folder}`,
+      `bridge ${folder}`,
+      `bridge ${folder}`,
+      `bridge ${folder}`,
+      HOST_PROGRAM,
+      `bridge ${folder}`
+    ])
+    expect(heard.said).toEqual([
+      JSON.stringify({ step: 'connecting' }),
+      JSON.stringify({ step: 'updating', from: 'protocol 2.0', to: '2.5.0' }),
+      JSON.stringify({ step: 'starting' })
+    ])
+  })
+
+  it('restarts nothing onto a floti that speaks the old protocol, and the refusal names that floti', async () => {
+    const world = new World({ bridges: [refusesAsOlder] })
+    const heard = steps()
+    const error = await connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
+      startHost: true,
+      failedTargets: new Set(),
+      versionOf: async () => 'floti 2.4.0 protocol 2.0 windows x64',
+      step: heard.step
+    }).then(
+      () => null,
+      (caught: unknown) => caught
+    )
+    expect(error).toBeInstanceOf(LocalHostRefusedError)
+    expect((error as LocalHostRefusedError).refused.update).toBe('host')
+    const binary = flotiBinary(WIN_PLACES, world.deps())
+    expect((error as Error).message).toContain('2.1 and the host speaks 2.0. Update the host.')
+    expect((error as Error).message).toContain(
+      `Floti did not restart this PC’s host: the floti at ${binary} is 2.4.0 and speaks protocol 2.0, older than this Floti’s 2.1`
+    )
+    expect(world.programs()).toEqual([`bridge ${folder}`])
+    expect(heard.said).toEqual([JSON.stringify({ step: 'connecting' })])
+  })
+
+  it('only reports the refusal of a host it waits for rather than replaces', async () => {
+    const world = new World({ bridges: [refusesAsOlder] })
+    let asked = false
+    const error = await connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
+      startHost: false,
+      failedTargets: new Set(),
+      versionOf: async () => {
+        asked = true
+        return 'floti 2.5.0 protocol 2.1 windows x64'
+      },
+      step: () => undefined
+    }).then(
+      () => null,
+      (caught: unknown) => caught
+    )
+    expect(error).toBeInstanceOf(LocalHostRefusedError)
+    expect(asked).toBe(false)
+    expect(world.programs()).toEqual([`bridge ${folder}`])
+  })
+
+  it('restarts once: a host that still refuses after it is reported refused, saying the restart did not take', async () => {
+    const world = new World({
+      bridges: [
+        refusesAsOlder,
+        answersRestart({ hostVersion: '2.4.0', sessions: 0, keeperLink: KEEPER_LINK_VERSION }),
+        exits(3),
+        refusesAsOlder
+      ]
+    })
+    const connecting = connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
+      startHost: true,
+      failedTargets: new Set(),
+      versionOf: async () => 'floti 2.5.0 protocol 2.1 windows x64',
+      step: () => undefined
+    }).then(
+      () => null,
+      (caught: unknown) => caught
+    )
+    await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(1)
+    world.timers[0]!()
+    const error = await connecting
+    expect(error).toBeInstanceOf(LocalHostRefusedError)
+    expect((error as Error).message).toMatch(
+      /Floti restarted this PC’s host onto floti 2\.5\.0, and the host it started refused this Floti too\.$/
+    )
+    // One restart frame, never a second.
+    expect(world.programs()).toHaveLength(4)
+  })
+
+  it('never restarts again onto a floti whose restart did not take in this run, and later connects get the refusal', async () => {
+    const failedTargets = new Set<string>()
+    const asked: string[] = []
+    const world = new World({
+      bridges: [
+        refusesAsOlder,
+        answersRestart({ hostVersion: '2.4.0', sessions: 1, keeperLink: KEEPER_LINK_VERSION }, asked),
+        exits(3),
+        refusesAsOlder,
+        // A later connect: a page opening, a retry.
+        refusesAsOlder,
+        refusesAsOlder
+      ]
+    })
+    const connect = (versionLine: string) =>
+      connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
+        startHost: true,
+        failedTargets,
+        versionOf: async () => versionLine,
+        step: () => undefined
+      }).then(
+        () => null,
+        (caught: unknown) => caught
+      )
+    const first = connect('floti 2.5.0 protocol 2.1 windows x64')
+    await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(1)
+    world.timers[0]!()
+    expect(await first).toBeInstanceOf(LocalHostRefusedError)
+    expect(failedTargets.size).toBe(1)
+
+    const later = await connect('floti 2.5.0 protocol 2.1 windows x64')
+    expect(later).toBeInstanceOf(LocalHostRefusedError)
+    expect((later as LocalHostRefusedError).refused.update).toBe('host')
+    expect((later as Error).message).toMatch(
+      /Update the host\. Floti restarted this PC’s host onto floti 2\.5\.0 once already, and the host it started refused this Floti too, so it was not restarted again\.$/
+    )
+    // The later connect only bridged: no restart frame, no host started, the keeper left where it is.
+    expect(asked).toEqual(['restart'])
+    expect(world.programs()).toHaveLength(5)
+    expect(world.timers).toHaveLength(1)
+
+    // A different floti in the same place (a new build) is a new target, and would be tried.
+    expect(failedTargets.has(failedTargetKey(flotiBinary(WIN_PLACES, world.deps()), 'floti 2.5.0 protocol 2.1 windows x64'))).toBe(true)
+    expect(failedTargets.has(failedTargetKey(flotiBinary(WIN_PLACES, world.deps()), 'floti 2.5.1 protocol 2.1 windows x64'))).toBe(false)
   })
 })

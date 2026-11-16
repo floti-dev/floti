@@ -14,7 +14,8 @@ import { carriedFloti, standaloneFloti, type HostPlaces, type LauncherDeps } fro
  * runs `floti install-self` from the floti it carries, which puts that one
  * and its Node there, puts the folder on the user's PATH where the OS keeps
  * it (Windows), and runs `floti setup` from there; a host already running
- * keeps running and is taken over by Restart host to update. A floti there
+ * keeps running, and the link restarts it onto the new floti by itself when
+ * it refuses this Helm as older (`connectUpdatingLocalHost`). A floti there
  * that is as new or newer, such as one `floti update` replaced, is left as
  * it is. Then the app uses it for everything it runs (`useStandalone`).
  * When it cannot be put there, the app says so in its log and runs the floti

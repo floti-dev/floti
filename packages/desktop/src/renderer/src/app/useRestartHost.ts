@@ -28,7 +28,9 @@ const messageOf = (error: unknown): string =>
 /**
  * Restart host to update, on the user's click only: what it ends is asked of
  * the host first and said in the question, Cancel changes nothing, and only
- * the confirm restarts it. Helm never restarts the host on its own.
+ * the confirm restarts it. A host that refuses this Floti as older is
+ * restarted by main itself, inside its connect; this is the button for the
+ * rest (a host that welcomed this Floti with an older floti).
  */
 export function useRestartHost(deps: RestartHostDeps): RestartHost {
   const { ask: askHost, restart, onError } = deps;

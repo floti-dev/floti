@@ -8,6 +8,7 @@ import {
   FLOTI_UPDATE_SINCE,
   hasFlotiUpdate,
   hostFlotiOlder,
+  hostUpdatePlan,
   flotiUpdateWorkingLine,
   olderHostSentence,
   parseProtocol,
@@ -370,5 +371,62 @@ describe('what is said of this PC’s host’s version', () => {
       'This PC’s host runs Floti protocol 1.4, older than the Floti protocol 2.0 this Floti carries. Restart host to update keeps every session and terminal running in its tab.'
     )
     expect(sentence).not.toMatch(/History|notification-area|Stop host/)
+  })
+})
+
+describe('whether Floti restarts this PC’s host onto the floti it would start', () => {
+  const ours = { major: 4, minor: 1 }
+  const older = { host: { major: 3, minor: 1 }, client: ours, update: 'host' as const }
+  const path = '/opt/floti tools/floti'
+
+  it('restarts an older host onto a floti that speaks this Floti’s protocol, or the one after it', () => {
+    expect(hostUpdatePlan(older, { path, versionLine: 'floti 3.0.0-preview.1 protocol 4.1 windows x64' }, ours)).toEqual({
+      kind: 'restart',
+      to: '3.0.0-preview.1'
+    })
+    expect(hostUpdatePlan(older, { path, versionLine: 'floti 3.1.0 protocol 4.2 windows x64\n' }, ours)).toEqual({
+      kind: 'restart',
+      to: '3.1.0'
+    })
+    // The manual restart of a host that welcomed this Floti, with an older floti, follows the same rule.
+    expect(hostUpdatePlan(null, { path, versionLine: 'floti 3.0.0 protocol 4.1 linux arm64' }, ours)).toEqual({
+      kind: 'restart',
+      to: '3.0.0'
+    })
+  })
+
+  it('restarts nothing onto a floti that speaks the old protocol, naming its path, version and protocol', () => {
+    const plan = hostUpdatePlan(older, { path, versionLine: 'floti 2.4.1-preview.11 protocol 3.1 windows x64' }, ours)
+    expect(plan).toEqual({
+      kind: 'cannot',
+      sentence:
+        'Floti did not restart this PC’s host: the floti at /opt/floti tools/floti is 2.4.1-preview.11 and speaks protocol 3.1, older than this Floti’s 4.1, so a host it starts would refuse this Floti too. Put a floti that speaks protocol 4.1 there.'
+    })
+  })
+
+  it('restarts nothing onto a floti too far ahead, and says to update Floti', () => {
+    const plan = hostUpdatePlan(older, { path, versionLine: 'floti 4.0.0 protocol 5.0 windows x64' }, ours)
+    expect(plan.kind).toBe('cannot')
+    expect(plan.kind === 'cannot' && plan.sentence).toMatch(/is 4\.0\.0 and speaks protocol 5\.0, newer than this Floti’s 4\.1.*Update Floti on this PC\.$/)
+  })
+
+  it('restarts nothing when the floti could not be run, or its version line does not read', () => {
+    expect(hostUpdatePlan(older, { path, versionLine: null }, ours)).toEqual({
+      kind: 'cannot',
+      sentence: `Floti did not restart this PC’s host: the floti at ${path} could not be run to say which protocol it speaks.`
+    })
+    expect(hostUpdatePlan(older, { path, versionLine: 'floti 2.4.1' }, ours)).toEqual({
+      kind: 'cannot',
+      sentence: `Floti did not restart this PC’s host: the floti at ${path} did not say which protocol it speaks.`
+    })
+  })
+
+  it('never restarts a host the refusal says is newer than this Floti', () => {
+    const newer = { host: { major: 4, minor: 3 }, client: ours, update: 'client' as const }
+    const plan = hostUpdatePlan(newer, { path, versionLine: 'floti 3.0.0 protocol 4.1 windows x64' }, ours)
+    expect(plan).toEqual({
+      kind: 'cannot',
+      sentence: 'This PC’s host speaks Floti protocol 4.3, newer than this Floti’s 4.1, so restarting it would not help. Update Floti on this PC.'
+    })
   })
 })

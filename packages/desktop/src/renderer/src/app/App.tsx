@@ -287,11 +287,13 @@ import {
   hostState,
   seenHostVersion,
   localHostConnection,
+  localHostStep,
   reconnectLocalHost,
   remoteHosts as remoteHostLinks,
   updates,
 } from "./bridge";
 import { useDevicesSettings } from "./useDevicesSettings";
+import { useLocalHostStep } from "./host/localHostStep";
 import { useForwardedPorts } from "./useForwardedPorts";
 import { LOCAL_HOST_NAME } from "./host/sessions";
 import { ProjectColumn } from "./ProjectColumn";
@@ -791,6 +793,8 @@ export function App(): JSX.Element {
     seenHostVersion.subscribe,
     seenHostVersion.get,
   );
+  /** Whether main is restarting this PC's host onto this run's floti, which the status bar and the tree say. */
+  const localHostUpdating = useLocalHostStep(localHostStep)?.step === "updating";
   /** Which of this PC's host and this Helm is behind, while they differ (`localHostVersions`). */
   const localVersions =
     seenLocalVersion === null || info === null
@@ -4859,6 +4863,7 @@ export function App(): JSX.Element {
             name: LOCAL_HOST_LABEL,
             quitEnds: quitEndsSessions(currentSettings),
             versions: localVersions,
+            updating: localHostUpdating,
             onRestart: askRestartHost,
             onOpen: () =>
               openSettings(localVersions === null ? "sessions" : "hosts"),
@@ -6146,6 +6151,7 @@ export function App(): JSX.Element {
             scanError={launcher.scanError}
             sessionsListed={sessionsListed}
             sessionsListError={sessionState.listError}
+            localHostUpdating={localHostUpdating}
             onRelistSessions={sessionState.relist}
             selectedPath={front?.kind === "project" ? front.path : null}
             pinnedPaths={

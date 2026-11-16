@@ -23,12 +23,15 @@ import { createHostFiles, type HostFiles } from './files'
 import { withBrowserAvailability } from '../browser-sandbox'
 import type { BrowserAvailability } from '../../shared/ipc'
 import {
+  LocalHostError,
   LocalHostRefusedError,
   carriedFloti,
+  connectUpdatingLocalHost,
   desktopProgram,
   withoutAppImage,
   fromBeforeRestart,
   localHostRestartFrame,
+  localHostUpdatePlan,
   oldHostOffer,
   openPageBridge,
   restartLocalHost,
@@ -42,6 +45,7 @@ import {
   type SpawnOptions
 } from './launcher'
 import { createHostLink, type HostLink } from './link'
+import { createLocalHostSteps, type LocalHostSteps } from './local-host-step'
 import { createLocalFloti, ensureLocalFloti, type Ran } from './local-floti'
 import { createOwnDataCopy, type OwnDataCopy } from './own-data'
 import { createPageLinks, type PageLinks } from './page-link'
@@ -221,10 +225,57 @@ let localRefusal: RefusedVersions | null = null
  * not asked: its offer names its protocol, gives no count and ends none.
  */
 export async function askLocalHostRestart(log: (line: string) => void): Promise<LocalHostRestartOffer> {
+  await updatePlanOrThrow(log)
   if (fromBeforeRestart(localRefusal)) return oldHostOffer(localRefusal)
   const state = await localHostRestartFrame(places(), launcherDeps(log), false)
   if (state === null) throw new Error('No local host answered on its socket, so there is nothing to restart.')
   return restartOffer(state)
+}
+
+/**
+ * What `floti version` printed for the floti at `binary`, or null when it
+ * could not be run or did not exit cleanly: what an update asks of the floti
+ * a restart would start before it restarts anything (`hostUpdatePlan`).
+ */
+async function flotiVersionLine(binary: string): Promise<string | null> {
+  if (!existsSync(binary)) return null
+  try {
+    const ran = await runProgram(binary, ['version'])
+    return ran.code === 0 ? ran.stdout : null
+  } catch {
+    return null
+  }
+}
+
+/** The side a refusal named for this PC's host, as an update says where it is from. */
+function refusedSide(refused: RefusedVersions | null): string | null {
+  return refused === null ? null : `protocol ${String(refused.host.major)}.${String(refused.host.minor)}`
+}
+
+/**
+ * What main's link to this PC's host is doing, step by step
+ * (`local-host-step.ts`): `hostLink:currentStep` answers it and the window
+ * hears each on `hostLink:step`.
+ */
+export const localHostSteps: LocalHostSteps = createLocalHostSteps(() => Date.now())
+
+/**
+ * The flotis an automatic restart already failed to make usable in this run
+ * (`connectUpdatingLocalHost`): none is restarted onto again, so a host that
+ * refuses this Helm after its update is not restarted, keeper and all, on
+ * every later connect.
+ */
+const failedUpdateTargets = new Set<string>()
+
+/**
+ * Restart host to update applies the plan an update by itself does: a floti
+ * that cannot serve this Helm is never restarted onto, and the question
+ * fails with the sentence that says so, before anything is asked of the host.
+ */
+async function updatePlanOrThrow(log: (line: string) => void): Promise<string> {
+  const plan = await localHostUpdatePlan(places(), launcherDeps(log), localRefusal, flotiVersionLine)
+  if (plan.kind === 'cannot') throw new LocalHostError(plan.sentence)
+  return plan.to
 }
 
 /**
@@ -439,22 +490,50 @@ export function createDesktopRemoteInstaller(
 /**
  * A link to the local host for this run of Helm: its folders inside this run's
  * data directory (`hostEnvironment`), `floti` from where this build carries it,
- * and a host started when none answers.
+ * and a host started when none answers. A host older than this Helm is
+ * restarted onto this run's floti inside the connect, with no question, when
+ * that floti speaks this Helm's protocol (`connectUpdatingLocalHost`). Each
+ * step is published on `localHostSteps`.
  */
 export function createLocalHostLink(settings: () => HostSettingsPatch, log: (line: string) => void): HostLink {
+  let prepared = false
   return createHostLink({
     start: async ({ startHost }) => {
+      if (!prepared) localHostSteps.begin({ step: 'preparing' })
       await localFloti.ready()
+      prepared = true
       try {
-        const host = await connectLocalHost(log, startHost)
+        const host = await connectUpdatingLocalHost(places(), launcherDeps(log), {
+          startHost,
+          versionOf: flotiVersionLine,
+          step: (step) => localHostSteps.begin(step),
+          failedTargets: failedUpdateTargets
+        })
         localRefusal = null
+        localHostSteps.begin({ step: 'ready' })
         return host
       } catch (error) {
-        if (error instanceof LocalHostRefusedError) localRefusal = error.refused
+        if (error instanceof LocalHostRefusedError) {
+          localRefusal = error.refused
+          localHostSteps.begin({ step: 'refused', sentence: error.message, versions: error.refused })
+        } else {
+          localHostSteps.begin({ step: 'unreachable', reason: (error as Error).message })
+        }
         throw error
       }
     },
-    restart: () => restartLocalHost(places(), launcherDeps(log), localRefusal),
+    restart: async () => {
+      const before = localHostSteps.current()
+      try {
+        const to = await updatePlanOrThrow(log)
+        localHostSteps.begin({ step: 'updating', from: refusedSide(localRefusal), to })
+        return await restartLocalHost(places(), launcherDeps(log), localRefusal)
+      } catch (error) {
+        // Nothing was restarted, or the host could not be asked: the link stands where it stood.
+        localHostSteps.restore(before)
+        throw error
+      }
+    },
     settings,
     log,
     setTimeout: (run, ms) => setTimeout(run, ms),

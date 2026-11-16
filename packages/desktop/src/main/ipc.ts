@@ -34,6 +34,7 @@ import type {
   EventPayload,
   IpcRequests,
   LocalHostRestartOffer,
+  LocalHostStep,
   OwnAppInfo,
   RequestChannel,
   SendChannel,
@@ -203,8 +204,10 @@ export interface LocalHostControl {
   stop(): Promise<void>
   /** What restarting it on the floti this Helm carries would end, asked without changing anything. */
   restartAsk(): Promise<LocalHostRestartOffer>
-  /** Restarts it on the floti this Helm carries and connects to the new host; on the user's click only. */
+  /** Restarts it on the floti this Helm carries and connects to the new host, on the user's click. */
   restart(): Promise<void>
+  /** What main's link to it is doing now (`hostLink:currentStep`); null before its first connect began. */
+  step(): LocalHostStep | null
 }
 
 /**
@@ -297,6 +300,7 @@ export function registerIpc(ctx: IpcContext): void {
       return ctx.pageLinks.open(helmPageOf(event.sender), payload?.host ?? null)
     },
 
+    'hostLink:currentStep': () => ctx.localHost.step(),
     'remoteHosts:read': () => ctx.remoteHosts.states(),
     'remoteHosts:check': (target) => {
       if ('host' in target) {

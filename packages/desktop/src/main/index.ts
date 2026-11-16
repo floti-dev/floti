@@ -64,6 +64,7 @@ import {
   createDesktopRemoteHosts,
   createDesktopRemoteInstaller,
   createLocalPageLinks,
+  localHostSteps,
   readDesktopSshHosts,
   readDesktopWslDistros,
   type DesktopHost
@@ -476,6 +477,9 @@ function startApp(options: AppOptions = {}): void {
   }
   // An artifact frame keeps the window's scheme, answered from the host's bytes.
   serveArtifactsFrom((url) => desktopHost.files.artifactBytes(url))
+  // The window hears each step of the local host's connect as it begins; one
+  // that loads later asks for the step under way (`hostLink:currentStep`).
+  localHostSteps.onStep((step) => emit(win, 'hostLink:step', step))
   void desktopHost.link.connection().catch((err: unknown) => {
     console.warn(err instanceof Error ? err.message : String(err))
   })
@@ -684,7 +688,8 @@ function startApp(options: AppOptions = {}): void {
       },
       stop: () => desktopHost.link.stopHost(),
       restartAsk: () => askLocalHostRestart((line) => console.log(line)),
-      restart: () => desktopHost.link.restartHost()
+      restart: () => desktopHost.link.restartHost(),
+      step: () => localHostSteps.current()
     },
     window: () => win,
     ...(options.chooseDirectory !== undefined ? { chooseDirectory: options.chooseDirectory } : {}),

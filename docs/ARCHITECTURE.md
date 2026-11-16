@@ -49,15 +49,30 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   A quit is held until every host has been told, so a reopen in that wait
   (macOS's `activate`) opens no window in the quitting process; Floti calls
   `app.relaunch()` as the quit finishes and a fresh Floti starts once the old
-  one has exited (`main/reopen.ts`). Floti never stops the host on its own: its deliberate quit sends `host:quit`
+  one has exited (`main/reopen.ts`). Floti never stops the host on its own,
+  except to restart an older local host onto a floti that speaks its
+  protocol, whose keeper carries the sessions over: its deliberate quit sends `host:quit`
   and lets go, only Settings' Stop host (after saying how many sessions it
   ends) sends `host:stop`, and a host Floti started (`floti host --desktop`)
   exits by itself once it runs nothing and no client is attached. Installing
   the desktop app stops no host: the installed app runs floti from the user's
   own folder, outside its install (`floti install-self`, PACKAGING.md's
   "floti in your own folder"), and a running copy there is renamed aside, so
-  the old host runs on until Restart host to update hands its sessions to the
-  new one through the keeper. An update of floti on another host runs
+  the old host runs on until the new desktop reaches it. A host that refuses
+  the desktop's `hello` as older (`update: 'host'`) is restarted onto the
+  floti the desktop runs, with no question, inside main's connect
+  (`connectUpdatingLocalHost` in `main/host/launcher.ts`), once `floti
+  version` there says it speaks a protocol the `hello` is accepted by
+  (`hostUpdatePlan` in `@helm/core`); the keeper hands its sessions to the
+  new host. At most one such restart runs per connect, and a floti that
+  cannot serve is never restarted onto: the refusal names it instead. Every
+  read the window makes waits on that connect, so none fails while the host
+  restarts. Restart host to update, the same restart on the user's click,
+  applies the same check. Main publishes each step of the connect
+  (preparing, connecting, starting, updating, ready, refused, unreachable)
+  on the client-only `hostLink:step`, answers the one under way on
+  `hostLink:currentStep`, and the window keeps it in one store
+  (`renderer/src/app/host/localHostStep.ts`). An update of floti on another host runs
   `floti update` there where that floti has it (over the host's connection
   with `update:install`, or over its login), which relaunches the host
   through the keeper, so it ends no session the new host takes back

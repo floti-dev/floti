@@ -4,8 +4,15 @@ import type { Readable, Writable } from 'node:stream'
 import { RECONNECT_FIRST_MS } from '../../shared/host/reconnect'
 import { unreachable } from '../../shared/host/sentences'
 import { HostRefusedError, connectHost, restartFrame, streamTransport, type HostConnection } from './client'
-import { KEEPER_LINK_VERSION, type ProtocolVersion, type RestartState, type UpdateSide } from './protocol'
-import type { AppMode, LocalHostRestartOffer } from '../../shared/ipc'
+import { hostUpdatePlan, type HostUpdatePlan } from '@helm/core/types'
+import {
+  KEEPER_LINK_VERSION,
+  PROTOCOL_VERSION,
+  type ProtocolVersion,
+  type RestartState,
+  type UpdateSide
+} from './protocol'
+import type { AppMode, LocalHostRestartOffer, LocalHostStep } from '../../shared/ipc'
 
 /**
  * Finds the local host and connects the desktop to it, through the `floti`
@@ -490,7 +497,14 @@ type BridgeAttempt = { connection: HostConnection; exited: Promise<Exit>; child:
 export async function startLocalHost(
   places: HostPlaces,
   deps: LauncherDeps,
-  { startHost: mayStart = true }: { startHost?: boolean } = {}
+  {
+    startHost: mayStart = true,
+    starting
+  }: {
+    startHost?: boolean
+    /** Called as a host is started because none answered. */
+    starting?: () => void
+  } = {}
 ): Promise<LocalHost> {
   const binary = flotiBinary(places, deps)
   if (!deps.exists(binary)) {
@@ -556,6 +570,7 @@ export async function startLocalHost(
         : 'host: no host key pinned and none to learn yet; starting one'
     )
     const unpinned = attempt
+    starting?.()
     try {
       // A host still ending its sessions does not answer but holds the
       // folders; one that answers and only refuses Helm is not waited for.
@@ -688,7 +703,8 @@ export function oldHostOffer(refused: RefusedVersions): LocalHostRestartOffer {
  * ends that host's process alone, as a crash would, leaving its session
  * keeper running, and exits once it has gone. Nothing is sent to the host
  * that it could handle: no restart frame, no protocol-1.0 `hello` and no
- * `host:stop`. Only ever on the user's click. Rejects with the sentence to
+ * `host:stop`. Only on the user's click, or in an update the link runs by
+ * itself (`connectUpdatingLocalHost`). Rejects with the sentence to
  * show, its one line on standard error in it, when nothing was ended.
  */
 export async function endOldLocalHost(
@@ -738,7 +754,9 @@ export async function endOldLocalHost(
  * until no host answers on the socket, trying every `HOST_RETRY_MS` up to the
  * start deadline, and resolves with the host's answer. Either way the caller
  * then starts the floti this Helm carries, which takes the sessions over when
- * it speaks the keeper's link. Only ever on the user's click.
+ * it speaks the keeper's link. On the user's click, or by the link itself
+ * for a host that refused this Helm as older, once the floti a restart
+ * starts is known to speak this Helm's protocol (`connectUpdatingLocalHost`).
  */
 export async function restartLocalHost(
   places: HostPlaces,
@@ -759,6 +777,105 @@ export async function restartLocalHost(
     await new Promise<void>((resolve) => deps.setTimeout(resolve, HOST_RETRY_MS))
     const still = await localHostRestartFrame(places, deps, false).catch(() => 'failed' as const)
     if (still === null) return state
+  }
+}
+
+/** A step of the local host's connect as the launcher says it; the link adds when it began. */
+export type LocalHostStepSaid = LocalHostStep extends infer Step
+  ? Step extends LocalHostStep
+    ? Omit<Step, 'since'>
+    : never
+  : never
+
+/**
+ * Whether restarting the local host onto the floti a restart starts
+ * (`flotiBinary`) gives this Helm a host it can use (`hostUpdatePlan`), asked
+ * of that floti's `floti version` (`versionOf`, null when it could not be
+ * run). `refused` is the host's last refusal, null for a host that welcomed
+ * this Helm with an older floti.
+ */
+export async function localHostUpdatePlan(
+  places: HostPlaces,
+  deps: Pick<LauncherDeps, 'platform' | 'env' | 'protocol'>,
+  refused: RefusedVersions | null,
+  versionOf: (binary: string) => Promise<string | null>
+): Promise<HostUpdatePlan> {
+  const path = flotiBinary(places, deps)
+  return hostUpdatePlan(refused, { path, versionLine: await versionOf(path) }, deps.protocol ?? PROTOCOL_VERSION)
+}
+
+/** How `connectUpdatingLocalHost` remembers a floti a restart failed to make usable: its path and what `floti version` printed. */
+export function failedTargetKey(path: string, versionLine: string | null): string {
+  return JSON.stringify([path, versionLine])
+}
+
+/**
+ * Connects to the local host as `startLocalHost` does, and updates a host
+ * older than this Helm by itself: when the host refuses the `hello` saying to
+ * update the host, and the floti a restart starts speaks this Helm's
+ * protocol (`localHostUpdatePlan`), it restarts the host onto that floti
+ * (`restartLocalHost`; the keeper carries every session over) and connects
+ * to the host it starts, all inside this one connect, so whatever waits on
+ * the connection waits through the update instead of failing. At most one
+ * restart per call: a host that still refuses after it is reported refused,
+ * saying the restart did not take, and that floti (its path and its
+ * `floti version` line) goes into `failedTargets`, which the caller keeps for
+ * the rest of the run: a later connect refused by a host is answered with
+ * the refusal instead of restarting onto it again, since every restart hands
+ * the keeper over. When the floti cannot serve, nothing is
+ * restarted and the refusal says which floti it is and why. With
+ * `startHost` false (a host Helm waits for rather than replaces) a refusal is
+ * only reported. `step` hears each step as it begins; `ready`, `refused` and
+ * `unreachable` are the caller's to say, from how this settles.
+ */
+export async function connectUpdatingLocalHost(
+  places: HostPlaces,
+  deps: LauncherDeps,
+  options: {
+    startHost: boolean
+    versionOf: (binary: string) => Promise<string | null>
+    step: (step: LocalHostStepSaid) => void
+    /** The flotis a restart already failed to make usable in this run, by `failedTargetKey`. */
+    failedTargets: Set<string>
+  }
+): Promise<LocalHost> {
+  const starting = (): void => options.step({ step: 'starting' })
+  options.step({ step: 'connecting' })
+  let refusal: LocalHostRefusedError
+  try {
+    return await startLocalHost(places, deps, { startHost: options.startHost, starting })
+  } catch (error) {
+    if (!(error instanceof LocalHostRefusedError) || error.refused.update !== 'host' || !options.startHost) throw error
+    refusal = error
+  }
+  const path = flotiBinary(places, deps)
+  const versionLine = await options.versionOf(path)
+  const plan = hostUpdatePlan(refusal.refused, { path, versionLine }, deps.protocol ?? PROTOCOL_VERSION)
+  const target = failedTargetKey(path, versionLine)
+  if (plan.kind === 'restart' && options.failedTargets.has(target)) {
+    deps.log(`host: the local host is older than this Floti; floti ${plan.to} did not take once in this run, so it is not restarted again`)
+    throw new LocalHostRefusedError(
+      `${refusal.message} Floti restarted this PC’s host onto floti ${plan.to} once already, and the host it started refused this Floti too, so it was not restarted again.`,
+      refusal.refused
+    )
+  }
+  if (plan.kind === 'cannot') {
+    deps.log(`host: the local host is older than this Floti and was not restarted (${plan.sentence})`)
+    throw new LocalHostRefusedError(`${refusal.message} ${plan.sentence}`, refusal.refused)
+  }
+  const { host } = refusal.refused
+  deps.log(`host: the local host speaks protocol ${String(host.major)}.${String(host.minor)}; restarting it onto floti ${plan.to}`)
+  options.step({ step: 'updating', from: `protocol ${String(host.major)}.${String(host.minor)}`, to: plan.to })
+  await restartLocalHost(places, deps, refusal.refused)
+  try {
+    return await startLocalHost(places, deps, { startHost: true, starting })
+  } catch (error) {
+    if (!(error instanceof LocalHostRefusedError)) throw error
+    options.failedTargets.add(target)
+    throw new LocalHostRefusedError(
+      `${error.message} Floti restarted this PC’s host onto floti ${plan.to}, and the host it started refused this Floti too.`,
+      error.refused
+    )
   }
 }
 

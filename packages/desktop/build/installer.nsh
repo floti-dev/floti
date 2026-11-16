@@ -34,8 +34,10 @@
 ; %LOCALAPPDATA%\Programs\Floti\bin, outside the install folder, which
 ; electron-builder's check below and the old version's uninstaller both
 ; leave alone (they stop every process run from inside $INSTDIR). The host
-; keeps running from the copy renamed aside until Helm's Restart host to
-; update hands its sessions to the new host through the keeper.
+; keeps running from the copy renamed aside until the new Floti reaches it:
+; a host older than Floti is restarted onto the new floti by Floti itself,
+; with no question (`connectUpdatingLocalHost` in
+; `src/main/host/launcher.ts`), and the keeper hands its sessions over.
 ;
 ; Except once: a Helm from before this ran its host from
 ; `$INSTDIR\resources\floti.exe`, and the old version's uninstaller, which

@@ -10,6 +10,7 @@ import {
 } from './host/hostBridges'
 import { createHostState, type HostStateStore } from './host/hostState'
 import { createSeenHostVersion, type SeenHostVersionStore } from './host/hostVersions'
+import { createLocalHostStep, type LocalHostStepStore } from './host/localHostStep'
 import { WINDOW_CAPABILITIES, createPageLink } from './host/link'
 import { createRemoteHosts, type RemoteHostsStore } from './host/remoteHosts'
 import type { HostAdapter } from './host/router'
@@ -76,6 +77,9 @@ export const hostState: HostStateStore = createHostState(link)
 
 /** The floti version this PC's host last named, or the versions it refused this Helm with (`host/hostVersions.ts`). */
 export const seenHostVersion: SeenHostVersionStore = createSeenHostVersion(link)
+
+/** What main's link to this PC's host is doing: connecting, starting, updating it, ready (`host/localHostStep.ts`). */
+export const localHostStep: LocalHostStepStore = createLocalHostStep(window.helm, log)
 
 /**
  * Each host on another computer this device added: where main's link to it

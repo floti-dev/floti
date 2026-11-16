@@ -234,6 +234,35 @@ describe("StatusBar: the hosts sessions run in", () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
+  it("says this PC’s host is updating while Floti restarts it, in place of the older host and its restart, with no warning and no action", () => {
+    const onOpen = vi.fn();
+    const onRestart = vi.fn();
+    renderBar({
+      hosts: [
+        {
+          id: "local",
+          name: "This PC",
+          quitEnds: true,
+          versions: { older: "host", host: "protocol 3.1", helm: "protocol 4.1", beforeRestart: false },
+          updating: true,
+          onRestart,
+          onOpen,
+        },
+      ],
+    });
+    expect(screen.queryByRole("button", { name: /This PC/ })).toBeNull();
+    const item = document.querySelector('[data-status-host-id="local"]') as HTMLElement;
+    expect(item.getAttribute("data-status-host")).toBe("updating");
+    expect(item.textContent).toBe("This PC · updating host…");
+    expect(item.getAttribute("title")).toBe(
+      "Floti is updating the host on This PC to its own floti. Its sessions carry over.",
+    );
+    expect(item.className).not.toContain("text-warn");
+    item.click();
+    expect(onRestart).not.toHaveBeenCalled();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
   it("S8: a Floti behind its host says to update Floti", () => {
     renderBar({
       hosts: [
