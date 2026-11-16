@@ -9,6 +9,7 @@ import {
   HOST_START_DEADLINE_MS,
   LocalHostError,
   LocalHostRefusedError,
+  NothingToRestart,
   LONGEST_SOCKET_NAME,
   SOCKET_PATH_MAX,
   carriedFloti,
@@ -60,6 +61,21 @@ const exits =
 const listens: Program = (child) => {
   child.stdout.write('Floti host is listening at \\\\.\\pipe\\floti-1f2e.\r\n')
   child.stdout.write('Floti host said something after, with key 0123abcd.\n')
+}
+
+/** `floti wait-host-exit` with no host holding the folders: it exits 0 at once. */
+const foldersFree: Program = (child) => queueMicrotask(() => child.exit(0))
+
+/** `floti wait-host-exit` run on a floti from before it: the usage line, and the usage status. */
+const cannotWait: Program = (child) => {
+  child.stderr.write('usage: floti host [--desktop <program>]\n')
+  queueMicrotask(() => child.exit(2))
+}
+
+/** `floti wait-host-exit` whose host never let go of the folders. */
+const stillHeld: Program = (child) => {
+  child.stderr.write('floti wait-host-exit: the host had not let go of its data folder within 30s.\n')
+  queueMicrotask(() => child.exit(1))
 }
 
 const SOCKET_TOO_LONG = 'could not listen on /var/folders/x/T/floti-1f2e/floti.sock: path must be shorter than SUN_LEN'
@@ -510,35 +526,64 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     expect(desktopProgram(WIN_EXE, true, { platform: 'win32', env: { APPIMAGE: appImage } })).toBe(WIN_EXE)
   })
 
-  it('waits out a host that is still exiting with the folders, then starts one and connects', async () => {
-    const world = new World({ bridges: [exits(3), connects], hosts: [foldersHeld, foldersHeld, listens] })
+  it('waits for a host that is still exiting to let go of the folders, then starts one more and connects', async () => {
+    // A host stopped or killed a moment ago: it no longer answers, and lets go of its folders once it has ended.
+    let letGo: () => void = () => undefined
+    const world = new World({
+      bridges: [exits(3), connects],
+      hosts: [
+        foldersHeld,
+        (child) => {
+          letGo = () => child.exit(0)
+        },
+        listens
+      ]
+    })
     const starting = startLocalHost(WIN_PLACES, world.deps())
 
-    // Each try sets its listening deadline, then the wait before the next try.
-    await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(2)
-    expect(world.programs()).toEqual([`bridge ${WIN_PLACES.dataDir}\\host-client`, HOST_PROGRAM])
-    world.timers[1]!()
-    await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(4)
-    world.timers[3]!()
+    await expect.poll(() => world.programs().at(-1), { timeout: PATIENCE }).toBe('wait-host-exit')
+    // No host is started while it waits: each would only find the folders held.
+    expect(world.programs().filter((program) => program === HOST_PROGRAM)).toHaveLength(1)
+    letGo()
 
     const local = await starting
     expect(local.startedHost).toBe(true)
     expect(world.programs()).toEqual([
       `bridge ${WIN_PLACES.dataDir}\\host-client`,
       HOST_PROGRAM,
-      HOST_PROGRAM,
+      'wait-host-exit',
       HOST_PROGRAM,
       `bridge ${WIN_PLACES.dataDir}\\host-client`
     ])
     expect(world.log.filter((line) => line.includes('waiting for it to exit'))).toHaveLength(1)
+    // Only the started hosts' listening deadlines: nothing waits on a timer between tries.
+    expect(world.timers).toHaveLength(2)
     await local.close()
   })
 
-  it('stops waiting for the folders once the start deadline has passed, and says so', async () => {
+  it('says another host still had the folders when they were still held at the start deadline', async () => {
+    const world = new World({ bridges: [exits(3)], hosts: [foldersHeld, stillHeld] })
+    expect(await refusal(startLocalHost(WIN_PLACES, world.deps()))).toBe(
+      `Another local host still had Floti's host folders: the host had not let go of its data folder within 30s${END}`
+    )
+    expect(world.programs()).toEqual([`bridge ${WIN_PLACES.dataDir}\\host-client`, HOST_PROGRAM, 'wait-host-exit'])
+  })
+
+  it('starts no third host when another took the folders while it waited', async () => {
+    const world = new World({ bridges: [exits(3)], hosts: [foldersHeld, foldersFree, foldersHeld] })
+    expect(await refusal(startLocalHost(WIN_PLACES, world.deps()))).toBe(`Another local host is running on Floti's host folders${END}`)
+    expect(world.programs().filter((program) => program === HOST_PROGRAM)).toHaveLength(2)
+  })
+
+  it('with a floti that cannot wait, tries again until the start deadline, and says so', async () => {
     const tries = Math.ceil(HOST_START_DEADLINE_MS / HOST_RETRY_MS) + 1
-    const world = new World({ bridges: [exits(3)], hosts: Array.from({ length: tries }, () => foldersHeld) })
+    const world = new World({
+      bridges: [exits(3)],
+      hosts: [foldersHeld, cannotWait, ...Array.from({ length: tries - 1 }, () => foldersHeld)]
+    })
     const starting = refusal(startLocalHost(WIN_PLACES, world.deps()))
 
+    // Each try sets its listening deadline, then the wait before the next try.
     for (let waited = 1; waited < tries; waited += 1) {
       await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(waited * 2)
       world.timers[waited * 2 - 1]!()
@@ -546,7 +591,8 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     expect(await starting).toBe(
       `Another local host still had Floti's host folders after ${HOST_START_DEADLINE_MS / 1000} seconds${END}`
     )
-    expect(world.programs()).toHaveLength(1 + tries)
+    expect(world.programs()).toHaveLength(2 + tries)
+    expect(world.programs()[2]).toBe('wait-host-exit')
   })
 
   it('S6: starts the host when Floti has pinned no host key and none has started, then pins the key of the one it started at its first connection', async () => {
@@ -788,7 +834,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       expect(await localHostRestartFrame(WIN_PLACES, world.deps(), false)).toBeNull()
     })
 
-    it('S12: restarts the host, then waits until no host answers before the new one is started', async () => {
+    it('S12: restarts the host, then waits until no host answers and none holds its folders before the new one is started', async () => {
       const asked: string[] = []
       const world = new World({
         bridges: [
@@ -796,7 +842,8 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
           // Still exiting: it answers one more ask, then is gone.
           answersRestart({ hostVersion: '2.4.0', sessions: 1, keeperLink: KEEPER_LINK_VERSION }, asked),
           exits(3)
-        ]
+        ],
+        hosts: [foldersFree]
       })
       const restarting = restartLocalHost(WIN_PLACES, world.deps())
       await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(1)
@@ -805,8 +852,38 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       world.timers[1]!()
       expect((await restarting)?.hostVersion).toBe('2.4.0')
       expect(asked).toEqual(['restart', 'restartAsk'])
-      // Only bridges: the new host is the link's to start.
-      expect(world.programs().every((program) => program.startsWith('bridge '))).toBe(true)
+      // Bridges, then the wait for the folders: the new host is the link's to start.
+      const folder = clientFolder(WIN_PLACES, 'win32')
+      expect(world.programs()).toEqual([`bridge ${folder}`, `bridge ${folder}`, `bridge ${folder}`, 'wait-host-exit'])
+      const waiter = world.spawned[3]!
+      expect(waiter.command).toBe(flotiBinary(WIN_PLACES, world.deps()))
+      expect(waiter.options.env).toEqual(hostEnvironment(WIN_PLACES, world.deps()))
+      expect(waiter.options.windowsHide).toBe(true)
+    })
+
+    it('a floti from before floti wait-host-exit is not waited on, and the restart goes on as before', async () => {
+      const world = new World({
+        bridges: [answersRestart({ hostVersion: '2.4.0', sessions: 0, keeperLink: KEEPER_LINK_VERSION }), exits(3)],
+        hosts: [cannotWait]
+      })
+      const restarting = restartLocalHost(WIN_PLACES, world.deps())
+      await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(1)
+      world.timers[0]!()
+      expect((await restarting)?.hostVersion).toBe('2.4.0')
+      expect(world.programs().at(-1)).toBe('wait-host-exit')
+    })
+
+    it('fails saying why when the old host never lets go of its folders', async () => {
+      const world = new World({
+        bridges: [answersRestart({ hostVersion: '2.4.0', sessions: 0, keeperLink: KEEPER_LINK_VERSION }), exits(3)],
+        hosts: [stillHeld]
+      })
+      const restarting = refusal(restartLocalHost(WIN_PLACES, world.deps()))
+      await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(1)
+      world.timers[0]!()
+      expect(await restarting).toContain(
+        'This PC’s host was asked to restart and did not let go of its folders: the host had not let go of its data folder within 30s.'
+      )
     })
 
     const OLD_HOST = {
@@ -891,14 +968,22 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
 
   it('restarts the host onto the floti that speaks this Floti’s protocol, with no question, and connects to the new one', async () => {
     const asked: string[] = []
+    // The old host stops answering before it lets go of its folders.
+    let letGo: () => void = () => undefined
     const world = new World({
       bridges: [
         refusesAsOlder,
         answersRestart({ hostVersion: '2.4.0', sessions: 2, keeperLink: KEEPER_LINK_VERSION }, asked),
-        // The old host has gone: nothing answers the ask, nor the next bridge, and the new host is started.
+        // The old host has gone from the socket: nothing answers the ask, nor the next bridge, and the new host is started.
         exits(3),
         exits(3),
         connects
+      ],
+      hosts: [
+        (child) => {
+          letGo = () => child.exit(0)
+        },
+        listens
       ]
     })
     const heard = steps()
@@ -914,6 +999,10 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
     })
     await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(1)
     world.timers[0]!()
+    // No host is started while the old one still holds the folders: each would only find them held.
+    await expect.poll(() => world.programs().at(-1), { timeout: PATIENCE }).toBe('wait-host-exit')
+    expect(world.programs()).not.toContain(HOST_PROGRAM)
+    letGo()
     const local = await connecting
     expect(local.startedHost).toBe(true)
     await local.close()
@@ -924,6 +1013,7 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
       `bridge ${folder}`,
       `bridge ${folder}`,
       `bridge ${folder}`,
+      'wait-host-exit',
       `bridge ${folder}`,
       HOST_PROGRAM,
       `bridge ${folder}`
@@ -933,6 +1023,95 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
       JSON.stringify({ step: 'updating', from: 'protocol 2.0', to: '2.5.0' }),
       JSON.stringify({ step: 'starting' })
     ])
+  })
+
+  it('starts the new host in the same connect when the host that refused has gone by itself before it could be restarted', async () => {
+    const world = new World({
+      bridges: [
+        refusesAsOlder,
+        // A host Floti started stops once nothing runs and no client is attached: nothing answers the restart.
+        exits(3),
+        exits(3),
+        connects
+      ],
+      hosts: [foldersFree, listens]
+    })
+    const heard = steps()
+    const local = await connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
+      startHost: true,
+      failedTargets: new Set(),
+      versionOf: async () => 'floti 2.5.0 protocol 2.1 windows x64',
+      step: heard.step
+    })
+    expect(local.startedHost).toBe(true)
+    await local.close()
+    expect(world.programs()).toEqual([
+      `bridge ${folder}`,
+      `bridge ${folder}`,
+      'wait-host-exit',
+      `bridge ${folder}`,
+      HOST_PROGRAM,
+      `bridge ${folder}`
+    ])
+    expect(heard.said).toEqual([
+      JSON.stringify({ step: 'connecting' }),
+      JSON.stringify({ step: 'updating', from: 'protocol 2.0', to: '2.5.0' }),
+      JSON.stringify({ step: 'starting' })
+    ])
+  })
+
+  it('starts the new host in the same connect when a protocol-1.x host that refused has gone before floti end-old-host reached it', async () => {
+    const refusesAsProtocol1: Program = (child) => {
+      child.stdin.once('data', () => {
+        child.stdout.write(
+          encodeFrame({
+            type: 'refused',
+            host: { major: 1, minor: 4 },
+            client: OURS,
+            update: 'host',
+            message: 'This client speaks Floti protocol 2.1 and the host speaks 1.4. Update the host.'
+          })
+        )
+      })
+      child.stdin.once('end', () => child.exit(6)).resume()
+    }
+    const world = new World({
+      bridges: [refusesAsProtocol1, exits(3), connects],
+      hosts: [
+        (child) => {
+          child.stderr.write('floti end-old-host: no host answered at \\\\.\\pipe\\floti-1f2e: not found\n')
+          queueMicrotask(() => child.exit(3))
+        },
+        foldersFree,
+        listens
+      ]
+    })
+    const local = await connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
+      startHost: true,
+      failedTargets: new Set(),
+      versionOf: async () => 'floti 2.5.0 protocol 2.1 windows x64',
+      step: () => undefined
+    })
+    expect(local.startedHost).toBe(true)
+    await local.close()
+    expect(world.programs()).toEqual([
+      `bridge ${folder}`,
+      `end-old-host ${folder}`,
+      'wait-host-exit',
+      `bridge ${folder}`,
+      HOST_PROGRAM,
+      `bridge ${folder}`
+    ])
+  })
+
+  it('Restart host to update still says there was nothing to restart when no host answers', async () => {
+    const world = new World({ bridges: [exits(3)] })
+    const error = await restartLocalHost(WIN_PLACES, world.deps()).then(
+      () => null,
+      (caught: unknown) => caught
+    )
+    expect(error).toBeInstanceOf(NothingToRestart)
+    expect((error as Error).message).toContain('No local host answered on its socket, so there was nothing to restart')
   })
 
   it('restarts nothing onto a floti that speaks the old protocol, and the refusal names that floti', async () => {
@@ -985,7 +1164,8 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
         answersRestart({ hostVersion: '2.4.0', sessions: 0, keeperLink: KEEPER_LINK_VERSION }),
         exits(3),
         refusesAsOlder
-      ]
+      ],
+      hosts: [foldersFree]
     })
     const connecting = connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
       startHost: true,
@@ -1004,7 +1184,7 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
       /Floti restarted this PC’s host onto floti 2\.5\.0, and the host it started refused this Floti too\.$/
     )
     // One restart frame, never a second.
-    expect(world.programs()).toHaveLength(4)
+    expect(world.programs()).toHaveLength(5)
   })
 
   it('never restarts again onto a floti whose restart did not take in this run, and later connects get the refusal', async () => {
@@ -1019,7 +1199,8 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
         // A later connect: a page opening, a retry.
         refusesAsOlder,
         refusesAsOlder
-      ]
+      ],
+      hosts: [foldersFree]
     })
     const connect = (versionLine: string) =>
       connectUpdatingLocalHost(WIN_PLACES, world.deps({ protocol: OURS }), {
@@ -1045,7 +1226,7 @@ describe('a local host older than this Floti, updated by itself', { timeout: PAT
     )
     // The later connect only bridged: no restart frame, no host started, the keeper left where it is.
     expect(asked).toEqual(['restart'])
-    expect(world.programs()).toHaveLength(5)
+    expect(world.programs()).toHaveLength(6)
     expect(world.timers).toHaveLength(1)
 
     // A different floti in the same place (a new build) is a new target, and would be tried.
