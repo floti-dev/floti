@@ -20,15 +20,29 @@ function Panel(props: Omit<ConsolePanelProps, 'open' | 'onToggle'> & { startOpen
 const toggle = (): HTMLElement => screen.getByRole('button', { name: /^Console/ })
 
 describe('ConsolePanel', () => {
-  it('counts errors and warnings on its chip, and starts clean', () => {
+  it('counts errors as errors and warnings as warnings on its chip, and starts clean', () => {
     const { rerender } = render(<ConsolePanel name="browser" entries={[]} open={false} onToggle={vi.fn()} />)
     expect(screen.getByRole('button', { name: /^Console\s*clean$/ })).toBe(toggle())
 
     rerender(<ConsolePanel name="browser" entries={[LOG]} open={false} onToggle={vi.fn()} />)
     expect(screen.getByRole('button', { name: /^Console\s*1$/ })).toBe(toggle())
 
+    rerender(<ConsolePanel name="browser" entries={[LOG, WARNING, WARNING, WARNING, WARNING]} open={false} onToggle={vi.fn()} />)
+    expect(screen.getByRole('button', { name: /^Console\s*4 warnings$/ })).toBe(toggle())
+
     rerender(<ConsolePanel name="browser" entries={[LOG, WARNING, ERROR]} open={false} onToggle={vi.fn()} />)
+    expect(screen.getByRole('button', { name: /^Console\s*1 error, 1 warning$/ })).toBe(toggle())
+
+    rerender(<ConsolePanel name="browser" entries={[ERROR, ERROR]} open={false} onToggle={vi.fn()} />)
     expect(screen.getByRole('button', { name: /^Console\s*2 errors$/ })).toBe(toggle())
+  })
+
+  it('agrees with its own Errors filter: warnings alone leave it empty', async () => {
+    const user = userEvent.setup()
+    render(<Panel name="browser" entries={[WARNING, WARNING]} startOpen />)
+    expect(toggle().textContent).not.toMatch(/error/)
+    await user.click(screen.getByRole('button', { name: 'Errors' }))
+    expect(screen.queryByText('careful now')).toBeNull()
   })
 
   it('opens from the chip, shows what was logged, and closes again', async () => {

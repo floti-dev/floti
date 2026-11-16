@@ -25,6 +25,34 @@ const LOGGED: ArtifactConsoleEntry[] = [
   { level: 'error', message: 'axis data missing', source: 'helm-content://artifact/abc/report.html', line: 30 }
 ]
 
+/** The artifact viewer showing REPORT with what its frame logged. */
+function renderArtifact(logged: ArtifactConsoleEntry[]): void {
+  render(
+    <ContentDocumentPane
+      file={REPORT}
+      document={null}
+      preview={null}
+      previewPending={false}
+      mode="read"
+      artifactUrl="helm-content://artifact/abc/report.html"
+      artifactConsole={logged}
+      snapshots={[]}
+      saving={false}
+      error={null}
+      external={null}
+      highlight={null}
+      onSave={vi.fn()}
+      onReload={vi.fn()}
+      onRestore={vi.fn()}
+      onDirtyChange={vi.fn()}
+      onDraftChange={vi.fn()}
+      onOpenPath={vi.fn()}
+      onOpenWikilink={vi.fn()}
+      onOpenExternal={vi.fn()}
+    />
+  )
+}
+
 /**
  * An HTML artifact's console: the count in the frame's header is the toggle,
  * and the panel it opens is the browser pane's, read-only.
@@ -32,30 +60,7 @@ const LOGGED: ArtifactConsoleEntry[] = [
 describe('ContentDocumentPane - the artifact console', () => {
   it('opens from the count in the header, shows what the frame logged, and offers no input line', async () => {
     const user = userEvent.setup()
-    render(
-      <ContentDocumentPane
-        file={REPORT}
-        document={null}
-        preview={null}
-        previewPending={false}
-        mode="read"
-        artifactUrl="helm-content://artifact/abc/report.html"
-        artifactConsole={LOGGED}
-        snapshots={[]}
-        saving={false}
-        error={null}
-        external={null}
-        highlight={null}
-        onSave={vi.fn()}
-        onReload={vi.fn()}
-        onRestore={vi.fn()}
-        onDirtyChange={vi.fn()}
-        onDraftChange={vi.fn()}
-        onOpenPath={vi.fn()}
-        onOpenWikilink={vi.fn()}
-        onOpenExternal={vi.fn()}
-      />
-    )
+    renderArtifact(LOGGED)
     const count = screen.getByRole('button', { name: '1 console error' })
     expect(count.getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByText('axis data missing')).toBeNull()
@@ -69,5 +74,17 @@ describe('ContentDocumentPane - the artifact console', () => {
 
     await user.click(count)
     expect(screen.queryByText('axis data missing')).toBeNull()
+  })
+
+  it('counts warnings as warnings, not errors', () => {
+    const warning = { level: 'warning', message: 'deprecated api', source: 'helm-content://artifact/abc/report.html', line: 3 }
+    renderArtifact([warning, warning])
+    expect(screen.getByRole('button', { name: '2 console warnings' })).toBeTruthy()
+  })
+
+  it('names both when there are errors and warnings', () => {
+    const warning = { level: 'warning', message: 'deprecated api', source: 'helm-content://artifact/abc/report.html', line: 3 }
+    renderArtifact([...LOGGED, warning])
+    expect(screen.getByRole('button', { name: '1 console error, 1 warning' })).toBeTruthy()
   })
 })
