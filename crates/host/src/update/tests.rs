@@ -638,14 +638,25 @@ fn a_tampered_manifest_is_refused_before_anything_is_downloaded() {
 }
 
 #[test]
-fn a_manifest_that_is_not_there_is_nothing_published_not_a_network_failure() {
+fn a_manifest_that_is_not_there_is_nothing_published_and_no_failure() {
     let world = World::new();
-    let err = world.update(&world.installs(false), 0, None).error();
+    let run = world.update(&world.installs(false), 0, None);
     assert!(
-        matches!(&err, UpdateError::NothingPublished { file, .. } if file == "update.json"),
-        "{err}"
+        matches!(run.result, Ok(Outcome::NothingPublished)),
+        "{:?}\n{}",
+        run.result,
+        run.out
     );
+    assert!(
+        run.out.contains(super::NOTHING_PUBLISHED_LINE),
+        "{}",
+        run.out
+    );
+    assert!(!run.out.contains("Nothing was updated"), "{}", run.out);
     assert_eq!(world.binary(), b"old floti");
+    // `floti update` exits 0 on it, `--floti-only` too: it is no failure.
+    assert_eq!(super::exit_status(Ok(Outcome::NothingPublished), false), 0);
+    assert_eq!(super::exit_status(Ok(Outcome::NothingPublished), true), 0);
 }
 
 #[test]

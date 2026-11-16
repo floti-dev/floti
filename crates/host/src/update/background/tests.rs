@@ -111,10 +111,6 @@ fn the_network_and_the_disk_are_tried_again_soon_and_a_bad_release_is_not() {
         },
     ];
     let later = [
-        UpdateError::NothingPublished {
-            file: "update.json".into(),
-            url: "https://floti.dev/update.json".into(),
-        },
         UpdateError::BadSignature {
             file: "floti".into(),
         },

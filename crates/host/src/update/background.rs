@@ -388,7 +388,7 @@ pub fn check_now(data: &Path, binary: &Path) -> Checked {
         }) => Checked::Replaced { version },
         Ok(super::Outcome::Updated { version, .. }) => Checked::UpToDate { newest: version },
         Ok(super::Outcome::UpToDate { newest, .. }) => Checked::UpToDate { newest },
-        Err(UpdateError::NothingPublished { .. }) => Checked::NothingPublished,
+        Ok(super::Outcome::NothingPublished) => Checked::NothingPublished,
         Err(err) => Checked::Failed {
             soon: retries_soon(&err),
             why: super::failure_line(&err),
