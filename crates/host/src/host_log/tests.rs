@@ -151,3 +151,16 @@ fn the_limit_is_five_mebibytes_unless_a_test_build_is_given_one() {
     fs::write(dirs.data.join(TEST_LOG_LIMIT_MARKER), "300").unwrap();
     assert_eq!(log_limit(&dirs.data), 300);
 }
+
+#[test]
+fn the_start_line_stamps_utc_and_a_local_offset_never_reaches_it() {
+    let started: jiff::Timestamp = "2026-11-16T02:51:13.5Z".parse().unwrap();
+    let line = super::start_line(started);
+    assert!(
+        line.contains(" started at 2026-11-16T02:51:13.5Z, process "),
+        "{line}"
+    );
+    // The same moment given as Mountain time is still stamped in UTC.
+    let local: jiff::Timestamp = "2026-11-15T19:51:13.5-07:00".parse().unwrap();
+    assert_eq!(super::start_line(local), line);
+}

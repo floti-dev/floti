@@ -318,6 +318,18 @@ fn a_release_that_failed_its_checks_was_read_and_says_why() {
     );
 }
 
+#[test]
+fn nothing_published_yet_is_not_told_to_the_window_as_a_failure() {
+    let mut fx = standalone();
+    fx.updates.teller()(Told::Checked {
+        at: at(T0),
+        checked: Checked::NothingPublished,
+    });
+    let state = fx.drain().pop().unwrap();
+    assert_eq!(state.checked_at, Some(at(T0).to_string()));
+    assert_eq!(state.failed, None);
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_check_now_is_answered_once_the_background_check_has_ended() {
     let fx = standalone();

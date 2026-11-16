@@ -253,6 +253,26 @@ async fn a_check_that_could_not_reach_the_release_is_tried_again_an_hour_later_a
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_manifest_not_published_yet_is_a_reached_check_looked_at_again_the_next_day() {
+    let mut run = Run::start(
+        true,
+        vec![Checked::NothingPublished, Checked::NothingPublished],
+    );
+    assert_eq!(run.next_check().await, (at(T0), None));
+    assert_eq!(run.next_check().await, (at(T0 + DAY), Some(at(T0))));
+}
+
+#[test]
+fn nothing_published_is_said_once_per_run() {
+    let mut said = false;
+    let first = nothing_published_line(&mut said).expect("the first check says it");
+    assert!(first.contains("nothing to update yet"), "{first}");
+    assert!(!first.contains("failed"), "{first}");
+    assert_eq!(nothing_published_line(&mut said), None);
+    assert_eq!(nothing_published_line(&mut said), None);
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_release_that_failed_its_checks_is_looked_at_again_the_next_day() {
     let mut run = Run::start(
         true,

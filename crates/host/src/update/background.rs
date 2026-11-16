@@ -102,6 +102,9 @@ pub enum Checked {
     UpToDate { newest: String },
     /// A newer floti is in place: the host relaunches on it.
     Replaced { version: String },
+    /// The manifest is not there (404): no release has been published yet.
+    /// Not a failure: the next look waits the day.
+    NothingPublished,
     /// It failed, with the line saying why. `soon` when it could not reach
     /// the release, so it is tried again after [`RETRY_AFTER`]; otherwise the
     /// release itself failed and the next look waits the day.
@@ -123,7 +126,7 @@ impl Checked {
         match self {
             Self::UpToDate { newest } => Some(newest),
             Self::Replaced { version } => Some(version),
-            Self::Failed { .. } => None,
+            Self::NothingPublished | Self::Failed { .. } => None,
         }
     }
 }
@@ -229,6 +232,7 @@ where
     C: Fn() -> Checked + Clone + Send + 'static,
 {
     let mut tried = None;
+    let mut said_nothing_published = false;
     let mut waiting: Vec<Ask> = Vec::new();
     // Once every sender is gone no ask can come, and `recv` would answer
     // `None` at once on every turn.
@@ -277,6 +281,11 @@ where
                         );
                         return Ended::Relaunch;
                     }
+                    Checked::NothingPublished => {
+                        if let Some(line) = nothing_published_line(&mut said_nothing_published) {
+                            log_line!("{line}");
+                        }
+                    }
                     Checked::Failed { why, .. } => {
                         log_line!("floti host: the update check failed: {why}");
                     }
@@ -297,6 +306,18 @@ where
             },
         }
     }
+}
+
+/// The line saying no release has been published yet, once per host run:
+/// `said` keeps whether it was said, and every check after the first says
+/// nothing.
+fn nothing_published_line(said: &mut bool) -> Option<&'static str> {
+    if std::mem::replace(said, true) {
+        return None;
+    }
+    Some(
+        "floti host: nothing to update yet: no release has been published; it is looked for again at the next check.",
+    )
 }
 
 /// Sleeps for `wait`, or never with none.
@@ -367,6 +388,7 @@ pub fn check_now(data: &Path, binary: &Path) -> Checked {
         }) => Checked::Replaced { version },
         Ok(super::Outcome::Updated { version, .. }) => Checked::UpToDate { newest: version },
         Ok(super::Outcome::UpToDate { newest, .. }) => Checked::UpToDate { newest },
+        Ok(super::Outcome::NothingPublished) => Checked::NothingPublished,
         Err(err) => Checked::Failed {
             soon: retries_soon(&err),
             why: super::failure_line(&err),

@@ -112,7 +112,7 @@ use crate::platform::process_tree::{self, ProcessTree};
 use crate::platform::standalone::{self, Standalone};
 use crate::version::{FLOTI_VERSION, cpu_name, os_name};
 use manifest::{FileEntry, Release};
-use network::{Network, get_whole};
+use network::{FetchError, Network, get_whole};
 use release_file::{fetch_refusal, fetch_signature};
 use run_file::RunLock;
 use signature::{MANIFEST_COMMENT, check_whole};
@@ -223,7 +223,14 @@ pub enum Outcome {
         floti: bool,
         desktop: Option<String>,
     },
+    /// The manifest is not there (404): no release has been published yet.
+    /// Not a failure.
+    NothingPublished,
 }
+
+/// What an update says when the manifest is not there.
+pub const NOTHING_PUBLISHED_LINE: &str =
+    "There is nothing to update yet: no release has been published.";
 
 /// How asking this computer's host to start the new floti in its place went.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -351,7 +358,10 @@ impl Updater<'_> {
             .chosen_channel
             .clone()
             .unwrap_or_else(|| channel::remembered(&self.data));
-        let manifest = self.manifest()?;
+        let Some(manifest) = self.manifest()? else {
+            self.say(NOTHING_PUBLISHED_LINE);
+            return Ok(Outcome::NothingPublished);
+        };
         let release = manifest::release(&manifest, &channel, &self.target)?;
         if self.chosen_channel.is_some() {
             channel::remember(&self.data, &channel)?;
@@ -628,9 +638,13 @@ impl Updater<'_> {
     }
 
     /// The manifest, its signature checked.
-    fn manifest(&self) -> Result<Vec<u8>, UpdateError> {
-        let bytes = get_whole(self.network, &self.manifest_url, MANIFEST_LIMIT)
-            .map_err(|err| fetch_refusal(MANIFEST_FILE, &self.manifest_url, err))?;
+    /// `None` when it is not there (404): nothing has been published yet.
+    fn manifest(&self) -> Result<Option<Vec<u8>>, UpdateError> {
+        let bytes = match get_whole(self.network, &self.manifest_url, MANIFEST_LIMIT) {
+            Ok(bytes) => bytes,
+            Err(FetchError::NotFound) => return Ok(None),
+            Err(other) => return Err(fetch_refusal(MANIFEST_FILE, &self.manifest_url, other)),
+        };
         let signature = fetch_signature(self.network, MANIFEST_FILE, &self.manifest_url)?;
         check_whole(
             self.key,
@@ -639,7 +653,7 @@ impl Updater<'_> {
             MANIFEST_FILE,
             MANIFEST_COMMENT,
         )?;
-        Ok(bytes)
+        Ok(Some(bytes))
     }
 
     /// Where the new floti is written: beside the running one, under a
