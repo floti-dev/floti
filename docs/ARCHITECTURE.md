@@ -288,7 +288,10 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   Escape or a click anywhere else (the page or Floti's chrome, which blurs the
   layer) closes it; main hides it, gives the keyboard back to the window if
   the layer had it, and tells the window on `browser:layer-event`, and the
-  window returns focus to the control that opened the menu. For a blur, main
+  window returns focus to the control that opened the menu. A turn main
+  closed takes no more content: until the window hears, it can still send
+  that turn again (a pick that changes its own menu, as Open console, a zoom
+  step or a width does), and that send must not show the layer again. For a blur, main
   reads where the keyboard went once Chromium has placed it: Floti's own
   window by a press on its page (`window`, a `before-mouse-event` press while
   the menu was open), or anywhere else (`blur`: the browser's page, another

@@ -48,6 +48,14 @@ import { TITLEBAR_HEIGHT } from './chrome'
  * asked for is not reported back. Closing hides the layer and, if the layer
  * held the keyboard, gives it back to the window, which returns it to the
  * control that opened the menu.
+ *
+ * **A closed turn stays closed.** The window hears of a close a moment after
+ * it happens, and until then it can still send that turn new content: a pick
+ * that changes the menu it was made in (Open console relabels its own row,
+ * a zoom step its heading, a width its check) sends the menu again before the
+ * pick's close arrives. A turn this closed of its own accord takes no more
+ * content, so that send cannot show the layer again over the page with rows
+ * nobody is listening to.
  */
 
 export interface MenuLayerOptions {
@@ -133,6 +141,12 @@ interface Open {
 export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
   let layer: Layer | null = null
   let open: Open | null = null
+  /**
+   * The last turn the layer closed of its own accord, which the window may
+   * still send content for until it hears. Cleared when the window's page
+   * loads again, since it counts its turns from the start.
+   */
+  let ended: number | null = null
 
   const alive = (candidate: Layer | null): candidate is Layer =>
     candidate !== null && !candidate.win.isDestroyed() && !candidate.view.webContents.isDestroyed()
@@ -171,6 +185,7 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
   const closed = (why: BrowserLayerClosed): void => {
     if (open === null) return
     const { turn } = open
+    ended = turn
     hide()
     options.onEvent({ turn, closed: why })
   }
@@ -201,6 +216,9 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
     })
     win.webContents.on('before-mouse-event', (_event: unknown, mouse: { type: string }) => {
       if (layer === made && open !== null && mouse.type === 'mouseDown') open.windowPressed = true
+    })
+    win.webContents.on('did-start-navigation', (details: { isMainFrame: boolean; isSameDocument: boolean }) => {
+      if (layer === made && details.isMainFrame && !details.isSameDocument) ended = null
     })
     /*
      * The suggestions never hold the keyboard: the bar does. A press on the
@@ -279,6 +297,8 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
       if (current === null) return
       const { win, view } = current
       const { turn, rect, content, look } = payload.open
+      // Sent before the window heard this turn had closed.
+      if (turn === ended) return
       const zoom = win.webContents.getZoomFactor()
       const area = win.getContentBounds()
       const bounds = layerBounds(rect, zoom, area)
