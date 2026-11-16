@@ -64,7 +64,9 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   (`connectUpdatingLocalHost` in `main/host/launcher.ts`), once `floti
   version` there says it speaks a protocol the `hello` is accepted by
   (`hostUpdatePlan` in `@helm/core`); the keeper hands its sessions to the
-  new host. At most one such restart runs per connect, and a floti that
+  new host. A restarting host stops answering on its socket before it lets
+  go of its data folder, so the desktop waits for that too (`floti
+  wait-host-exit`) and then starts the one new host. At most one such restart runs per connect, and a floti that
   cannot serve is never restarted onto: the refusal names it instead. Every
   read the window makes waits on that connect, so none fails while the host
   restarts. Restart host to update, the same restart on the user's click,

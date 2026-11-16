@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, inject, it } from 'vitest'
+import { readProcessTable } from '../../../../../scripts/test-leftovers.mjs'
 import { PATIENCE } from '../../../../../test/patience'
 import { RUN_ROOT } from '../../../../../test/run-root'
 import {
@@ -40,9 +41,49 @@ import { PROTOCOL_VERSION, type ProtocolVersion } from './protocol'
  * test's own folders. Every host here is one the test started.
  */
 
+/** The host environment of each world made in the test under way. */
+const worlds: NodeJS.ProcessEnv[] = []
+
 // Every host here, the ones Helm's start path started included, was spawned
-// by this test and is ended by its own pid.
-afterEach(endStartedProcesses)
+// by this test and is ended by its own pid. A session keeper outlives the
+// host that started it, by design, and is handed from host to host, so each
+// keeper still running on a world's folders is ended too, with the terminals
+// in it, whether or not the test got as far as stopping its last host.
+afterEach(async () => {
+  endStartedProcesses()
+  await endKeepers(worlds.splice(0))
+})
+
+/**
+ * Ends every session keeper running on the folders of `envs`, found by its
+ * command line (`floti keeper <data folder> <runtime folder>`), and waits
+ * until each has exited: a keeper ends its sessions' trees with itself.
+ */
+async function endKeepers(envs: NodeJS.ProcessEnv[]): Promise<void> {
+  const folders = envs.filter((env) => existsSync(join(env['FLOTI_LOG_DIR']!, 'keeper.log'))).map((env) => env['FLOTI_DATA_DIR']!)
+  if (folders.length === 0) return
+  const keepers = (readProcessTable() ?? []).filter(
+    ({ name, commandLine }) =>
+      name === 'floti' && commandLine !== null && / keeper /.test(commandLine) && folders.some((data) => commandLine.includes(data))
+  )
+  for (const { pid } of keepers) {
+    try {
+      process.kill(pid)
+    } catch {
+      // It exited on its own since the table was read.
+    }
+  }
+  await expect.poll(() => keepers.filter(({ pid }) => alive(pid)), { timeout: PATIENCE }).toEqual([])
+}
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
 
 async function hostWorld(label: string, hostProtocol?: string) {
   const root = await mkdtemp(join(inject(RUN_ROOT), `${label} `))
@@ -53,6 +94,7 @@ async function hostWorld(label: string, hostProtocol?: string) {
   }
   const programs = { platform: process.platform, env: process.env, tmpdir, exists: existsSync }
   const env = hostEnvironment(places, programs)
+  worlds.push(env)
   if (hostProtocol !== undefined) {
     // The host makes its own data folder, owner-only, on its first start; the
     // protocol it greets with is written there once it has.

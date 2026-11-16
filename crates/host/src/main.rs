@@ -23,7 +23,10 @@
 //! host to update for this PC's host and that host speaks protocol 1.x: only
 //! when the host refuses this floti's hello naming protocol 1.x, it ends that
 //! host's process alone, as a crash would, leaving its session keeper
-//! running for the next host to take back. `floti doctor` checks that each host
+//! running for the next host to take back. `floti wait-host-exit` is what
+//! Helm runs after it has asked this PC's host to restart for an update: it
+//! waits until no host holds the host's data folder, so the one host Helm
+//! starts next finds it free. `floti doctor` checks that each host
 //! this device uses answers, this computer's through its socket and each on
 //! another computer through its own ssh or command, and prints one line per
 //! host: its floti version and round trip, or the last line ssh or the
@@ -84,6 +87,7 @@
 
 mod end_old_host;
 mod update_stop;
+mod wait_host_exit;
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -98,7 +102,7 @@ use floti_host::keep_awake::run_keep_awake;
 use floti_host::version;
 use floti_host::{ALREADY_RUNNING_EXIT, DesktopCommand, Error, HostOptions, log_line};
 
-const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...] [--after <pid>]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger] [--desktop | --no-desktop]\n       floti install-self [--force]\n       floti add [desktop]\n       floti update [--channel <name>] [--from-desktop | --floti-only]\n       floti uninstall [--purge]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop [--keep] [--json] <name>\n       floti session title <text>";
+const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...] [--after <pid>]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger] [--desktop | --no-desktop]\n       floti install-self [--force]\n       floti add [desktop]\n       floti update [--channel <name>] [--from-desktop | --floti-only]\n       floti uninstall [--purge]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti wait-host-exit\n       floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop [--keep] [--json] <name>\n       floti session title <text>";
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
@@ -150,6 +154,7 @@ fn main() -> ExitCode {
             Some(folder) => ExitCode::from(end_old_host::run(&folder)),
             None => usage(),
         },
+        ["wait-host-exit"] => ExitCode::from(wait_host_exit::run()),
         ["add", ..] => ExitCode::from(floti_host::add::run(&args[1..])),
         ["update", ..] => match floti_host::update::parse(&args[1..]) {
             Some(options) => ExitCode::from(floti_host::update::run(

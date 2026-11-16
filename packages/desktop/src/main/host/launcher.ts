@@ -223,6 +223,18 @@ export class LocalHostRefusedError extends LocalHostError {
   }
 }
 
+/**
+ * A restart that found no local host answering: the host it was for has
+ * already gone. Restart host to update says so; the update the link runs by
+ * itself starts the new host instead (`connectUpdatingLocalHost`).
+ */
+export class NothingToRestart extends LocalHostError {
+  override name = 'NothingToRestart'
+  constructor() {
+    super(unreachable('No local host answered on its socket, so there was nothing to restart'))
+  }
+}
+
 export function pathsFor(platform: NodeJS.Platform): typeof posix {
   return platform === 'win32' ? win32 : posix
 }
@@ -714,13 +726,31 @@ export async function endOldLocalHost(
   const binary = flotiBinary(places, deps)
   if (!deps.exists(binary)) throw failure(`Floti could not find the local host program at ${binary}`)
   deps.log('host: ending the local host on protocol 1.x for an update, leaving its session keeper running')
-  const child = deps.spawn(binary, ['end-old-host', clientFolder(places, deps.platform)], {
-    env: hostEnvironment(places, deps),
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true
-  })
+  // Its one line on standard error says why it ended nothing.
+  const { exit, said } = await runToEnd(
+    deps.spawn(binary, ['end-old-host', clientFolder(places, deps.platform)], {
+      env: hostEnvironment(places, deps),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
+    })
+  )
+  if (exit.error !== undefined) throw couldNotRun(binary, exit.error)
+  if (exit.code === 0) return
+  if (exit.code === BRIDGE_EXIT.unreachable) throw new NothingToRestart()
+  const why = said.replace(/^floti end-old-host: /, '').trim()
+  deps.log(`host: floti end-old-host ended nothing (${describeExit(exit)})`)
+  throw new LocalHostError(
+    `This PC’s host was not restarted: ${why === '' ? `floti end-old-host exited with status ${String(exit.code)}.` : why}`
+  )
+}
+
+/**
+ * A program run to its end, nothing it prints on standard output read: how it
+ * exited and what it wrote on standard error, which is read to its end
+ * unless the program could not be run at all.
+ */
+async function runToEnd(child: HostChild): Promise<{ exit: Exit; said: string }> {
   const exited = exitOf(child)
-  // It prints nothing on standard output; its one line on standard error says why it ended nothing.
   child.stdout?.resume()
   let said = ''
   const { stderr } = child
@@ -736,25 +766,55 @@ export async function endOldLocalHost(
           stderr.once('close', () => resolve())
         })
   const exit = await exited
+  if (exit.error === undefined) await heard
+  return { exit, said }
+}
+
+/**
+ * Waits until no host holds this computer's host folders, through `floti
+ * wait-host-exit` from the floti a restart starts. A host that takes
+ * `restart` stops answering on its socket first and lets go of its data
+ * folder last, once its store is released, which can take seconds; a host
+ * started before then only finds the folders held and exits, and the start
+ * after a restart would start one every `HOST_RETRY_MS` until it let go. A
+ * floti from before that command (it exits with the usage status) is not
+ * waited on, and the start after it tries again as it always has. Rejects
+ * with the sentence to show when the old host did not let go.
+ */
+async function waitForHostFolders(places: HostPlaces, deps: LauncherDeps): Promise<void> {
+  const binary = flotiBinary(places, deps)
+  // Its one line on standard error says why it stopped waiting.
+  const { exit, said } = await runToEnd(
+    deps.spawn(binary, ['wait-host-exit'], {
+      env: hostEnvironment(places, deps),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
+    })
+  )
   if (exit.error !== undefined) throw couldNotRun(binary, exit.error)
-  await heard
   if (exit.code === 0) return
-  const why = said.replace(/^floti end-old-host: /, '').trim()
-  deps.log(`host: floti end-old-host ended nothing (${describeExit(exit)})`)
+  if (exit.code === BRIDGE_EXIT.usage) {
+    deps.log('host: this floti cannot wait for the old host to let go of its folders; the new host is started as before')
+    return
+  }
+  const why = said.replace(/^floti wait-host-exit: /, '').trim()
+  deps.log(`host: floti wait-host-exit stopped waiting (${describeExit(exit)})`)
   throw new LocalHostError(
-    `This PC’s host was not restarted: ${why === '' ? `floti end-old-host exited with status ${String(exit.code)}.` : why}`
+    `This PC’s host was asked to restart and did not let go of its folders: ${why === '' ? `floti wait-host-exit exited with status ${String(exit.code)}.` : why}`
   )
 }
 
 /**
  * Restarts the local host for an update. A host whose last refusal named
  * protocol 1.x (`fromBeforeRestart`) is ended as a crash would end it
- * (`endOldLocalHost`). Any other is sent `restart`, which leaves every
- * session running in its keeper when it has one and exits; this then waits
- * until no host answers on the socket, trying every `HOST_RETRY_MS` up to the
- * start deadline, and resolves with the host's answer. Either way the caller
- * then starts the floti this Helm carries, which takes the sessions over when
- * it speaks the keeper's link. On the user's click, or by the link itself
+ * (`endOldLocalHost`), which waits until it has let go of its folders. Any
+ * other is sent `restart`, which leaves every session running in its keeper
+ * when it has one and exits; this then waits until no host answers on the
+ * socket, trying every `HOST_RETRY_MS` up to the start deadline, then until
+ * it has let go of its folders (`waitForHostFolders`), and resolves with the
+ * host's answer. Either way the caller then starts the floti this Helm
+ * carries, which takes the sessions over when it speaks the keeper's link,
+ * and starts one host, since none holds the folders. On the user's click, or by the link itself
  * for a host that refused this Helm as older, once the floti a restart
  * starts is known to speak this Helm's protocol (`connectUpdatingLocalHost`).
  */
@@ -768,7 +828,7 @@ export async function restartLocalHost(
     return null
   }
   const state = await localHostRestartFrame(places, deps, true)
-  if (state === null) throw failure('No local host answered on its socket, so there was nothing to restart')
+  if (state === null) throw new NothingToRestart()
   deps.log(`host: restarting the local host on floti ${state.hostVersion} for an update`)
   for (let waited = 0; ; waited += HOST_RETRY_MS) {
     if (waited >= HOST_START_DEADLINE_MS) {
@@ -776,7 +836,10 @@ export async function restartLocalHost(
     }
     await new Promise<void>((resolve) => deps.setTimeout(resolve, HOST_RETRY_MS))
     const still = await localHostRestartFrame(places, deps, false).catch(() => 'failed' as const)
-    if (still === null) return state
+    if (still === null) {
+      await waitForHostFolders(places, deps)
+      return state
+    }
   }
 }
 
@@ -866,7 +929,16 @@ export async function connectUpdatingLocalHost(
   const { host } = refusal.refused
   deps.log(`host: the local host speaks protocol ${String(host.major)}.${String(host.minor)}; restarting it onto floti ${plan.to}`)
   options.step({ step: 'updating', from: `protocol ${String(host.major)}.${String(host.minor)}`, to: plan.to })
-  await restartLocalHost(places, deps, refusal.refused)
+  try {
+    await restartLocalHost(places, deps, refusal.refused)
+  } catch (error) {
+    if (!(error instanceof NothingToRestart)) throw error
+    // It went by itself since it refused (a host Floti started stops once
+    // nothing runs and no client is attached): the new one is started all
+    // the same, once the old one has let go of its folders.
+    deps.log('host: the local host had gone before it could be restarted; starting the new one')
+    await waitForHostFolders(places, deps)
+  }
   try {
     return await startLocalHost(places, deps, { startHost: true, starting })
   } catch (error) {
