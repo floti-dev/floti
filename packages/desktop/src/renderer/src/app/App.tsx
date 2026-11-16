@@ -198,6 +198,10 @@ import {
   Sidebar,
   shortcutLabel,
   SidebarAction,
+  StartupSteps,
+  StartupWaiting,
+  startupView,
+  startupTreeStep,
   StatusBar,
   TabBar,
   TemplateManager,
@@ -798,8 +802,10 @@ export function App(): JSX.Element {
     seenHostVersion.subscribe,
     seenHostVersion.get,
   );
+  /** Where main's link to this PC's host stands: the start-up view, the status bar and the tree say it. */
+  const localStep = useLocalHostStep(localHostStep);
   /** Whether main is restarting this PC's host onto this run's floti, which the status bar and the tree say. */
-  const localHostUpdating = useLocalHostStep(localHostStep)?.step === "updating";
+  const localHostUpdating = localStep?.step === "updating";
   /** Whether this PC's host can be used: the one notice says why not, and what waits on it says it waits. */
   const localUsable = useLocalHostUsable(localHostUsable);
   const localHostWaiting = localUsable.unusable !== null;
@@ -6175,6 +6181,7 @@ export function App(): JSX.Element {
             sessionsListError={sessionState.listError}
             localHostUpdating={localHostUpdating}
             localHostWaiting={localHostWaiting}
+            localHostStarting={startupTreeStep(localStep)}
             onRelistSessions={sessionState.relist}
             selectedPath={front?.kind === "project" ? front.path : null}
             pinnedPaths={
@@ -6481,6 +6488,12 @@ export function App(): JSX.Element {
   );
 
   const empty = open.groups.length === 1 && open.groups[0]!.tabs.length === 0;
+  /** The start-up steps, or a wait for a host that cannot be used, in place of the panes (`startupView`). */
+  const startup = startupView(localStep, {
+    layoutArrived: settingsLoaded,
+    layoutEmpty: empty,
+    hostUnusable: localHostWaiting,
+  });
 
   /**
    * One line over the panes, for what a launch composed and anything that went
@@ -6590,7 +6603,16 @@ export function App(): JSX.Element {
       }
     >
       <div className="relative h-full w-full">
-        {empty ? (
+        {/* From the first frame until the layout arrives: what Floti is doing, never empty panes. */}
+        {startup === "steps" ? (
+          <div className="h-full w-full">
+            <StartupSteps step={localStep} />
+          </div>
+        ) : startup === "waiting" ? (
+          <div className="h-full w-full">
+            <StartupWaiting hostName={LOCAL_HOST_NAME} />
+          </div>
+        ) : empty ? (
           <div className="h-full w-full">
             <WelcomePane
               roots={settings?.scanRoots ?? []}

@@ -204,6 +204,7 @@ export {
   type TreeHost,
   type TreeHostActions,
   type TreeHostFailure,
+  type LocalStartupStep,
   type TreeHostPhase,
   type TreeNotice,
   type TreeNoticeActions,
@@ -234,6 +235,17 @@ export {
   type SessionsPaneRemoteSession
 } from './components/SessionsPane'
 export { Sidebar, SidebarAction, type SidebarProps } from './components/Sidebar'
+export {
+  StartupSteps,
+  StartupWaiting,
+  startupView,
+  startupTreeStep,
+  LONG_STEP_MS,
+  type StartupStep,
+  type StartupStepsProps,
+  type StartupView,
+  type StartupWaitingProps
+} from './components/StartupSteps'
 export { StatusBar, type StatusBarProps, type StatusHostItem, type StatusPluginItem } from './components/StatusBar'
 export { TabBar, type Tab, type TabBarProps, type TabIndicator } from './components/TabBar'
 export { SESSION_STATE_LABEL, type SessionState } from './lib/sessionstate'

@@ -72,7 +72,10 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   (preparing, connecting, starting, updating, ready, refused, unreachable)
   on the client-only `hostLink:step`, answers the one under way on
   `hostLink:currentStep`, and the window keeps it in one store
-  (`renderer/src/app/host/localHostStep.ts`). A local host that refuses the
+  (`renderer/src/app/host/localHostStep.ts`). Until the window's layout
+  arrives, the main area shows those steps in place of empty panes
+  (`StartupSteps`), stepping aside while the host cannot be used, when
+  an empty layout shows a wait (`StartupWaiting`) instead of the welcome page. A local host that refuses the
   desktop and was not updated, or that cannot be reached, is said once: the
   window's one notice (`HostNotice` in the banner slot, read from
   `localHostUsable.ts`) gives the sentence and the action as a button (Try
