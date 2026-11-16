@@ -13,11 +13,16 @@
 //! on standard error, as one line, and exits [`BridgeExit::Failed`]'s status.
 
 use std::io::Write;
+use std::time::Duration;
 
 use floti_host::bridge::BridgeExit;
 use floti_host::platform::folders::{self, UserEnv};
 
-use crate::update_stop::host_exited;
+use crate::update_stop::host_exited_within;
+
+/// How long it waits: the desktop's own deadline for a host it starts to
+/// say it is listening (`HOST_START_DEADLINE_MS` in its launcher).
+const DEADLINE: Duration = Duration::from_secs(30);
 
 /// Waits until no host holds this computer's host folders, and answers the
 /// exit status.
@@ -30,7 +35,7 @@ pub fn run() -> u8 {
         Err(err) => return failed(&format!("could not start: {err}")),
     };
     let waited = match folders::resolve(&UserEnv::from_process()) {
-        Ok(folders) => runtime.block_on(host_exited(&folders.data)),
+        Ok(folders) => runtime.block_on(host_exited_within(&folders.data, DEADLINE)),
         Err(err) => Err(err.to_string()),
     };
     // A wait that ran out may still be blocked on the lock.

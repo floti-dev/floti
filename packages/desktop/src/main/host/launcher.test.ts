@@ -66,6 +66,18 @@ const listens: Program = (child) => {
 /** `floti wait-host-exit` with no host holding the folders: it exits 0 at once. */
 const foldersFree: Program = (child) => queueMicrotask(() => child.exit(0))
 
+/** `floti wait-host-exit` run on a floti from before it: the usage line, and the usage status. */
+const cannotWait: Program = (child) => {
+  child.stderr.write('usage: floti host [--desktop <program>]\n')
+  queueMicrotask(() => child.exit(2))
+}
+
+/** `floti wait-host-exit` whose host never let go of the folders. */
+const stillHeld: Program = (child) => {
+  child.stderr.write('floti wait-host-exit: the host had not let go of its data folder within 30s.\n')
+  queueMicrotask(() => child.exit(1))
+}
+
 const SOCKET_TOO_LONG = 'could not listen on /var/folders/x/T/floti-1f2e/floti.sock: path must be shorter than SUN_LEN'
 const FROM_SSH = 'The Floti host starts at your sign-in, not from an SSH session, so it was not started.'
 
@@ -514,35 +526,64 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     expect(desktopProgram(WIN_EXE, true, { platform: 'win32', env: { APPIMAGE: appImage } })).toBe(WIN_EXE)
   })
 
-  it('waits out a host that is still exiting with the folders, then starts one and connects', async () => {
-    const world = new World({ bridges: [exits(3), connects], hosts: [foldersHeld, foldersHeld, listens] })
+  it('waits for a host that is still exiting to let go of the folders, then starts one more and connects', async () => {
+    // A host stopped or killed a moment ago: it no longer answers, and lets go of its folders once it has ended.
+    let letGo: () => void = () => undefined
+    const world = new World({
+      bridges: [exits(3), connects],
+      hosts: [
+        foldersHeld,
+        (child) => {
+          letGo = () => child.exit(0)
+        },
+        listens
+      ]
+    })
     const starting = startLocalHost(WIN_PLACES, world.deps())
 
-    // Each try sets its listening deadline, then the wait before the next try.
-    await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(2)
-    expect(world.programs()).toEqual([`bridge ${WIN_PLACES.dataDir}\\host-client`, HOST_PROGRAM])
-    world.timers[1]!()
-    await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(4)
-    world.timers[3]!()
+    await expect.poll(() => world.programs().at(-1), { timeout: PATIENCE }).toBe('wait-host-exit')
+    // No host is started while it waits: each would only find the folders held.
+    expect(world.programs().filter((program) => program === HOST_PROGRAM)).toHaveLength(1)
+    letGo()
 
     const local = await starting
     expect(local.startedHost).toBe(true)
     expect(world.programs()).toEqual([
       `bridge ${WIN_PLACES.dataDir}\\host-client`,
       HOST_PROGRAM,
-      HOST_PROGRAM,
+      'wait-host-exit',
       HOST_PROGRAM,
       `bridge ${WIN_PLACES.dataDir}\\host-client`
     ])
     expect(world.log.filter((line) => line.includes('waiting for it to exit'))).toHaveLength(1)
+    // Only the started hosts' listening deadlines: nothing waits on a timer between tries.
+    expect(world.timers).toHaveLength(2)
     await local.close()
   })
 
-  it('stops waiting for the folders once the start deadline has passed, and says so', async () => {
+  it('says another host still had the folders when they were still held at the start deadline', async () => {
+    const world = new World({ bridges: [exits(3)], hosts: [foldersHeld, stillHeld] })
+    expect(await refusal(startLocalHost(WIN_PLACES, world.deps()))).toBe(
+      `Another local host still had Floti's host folders: the host had not let go of its data folder within 30s${END}`
+    )
+    expect(world.programs()).toEqual([`bridge ${WIN_PLACES.dataDir}\\host-client`, HOST_PROGRAM, 'wait-host-exit'])
+  })
+
+  it('starts no third host when another took the folders while it waited', async () => {
+    const world = new World({ bridges: [exits(3)], hosts: [foldersHeld, foldersFree, foldersHeld] })
+    expect(await refusal(startLocalHost(WIN_PLACES, world.deps()))).toBe(`Another local host is running on Floti's host folders${END}`)
+    expect(world.programs().filter((program) => program === HOST_PROGRAM)).toHaveLength(2)
+  })
+
+  it('with a floti that cannot wait, tries again until the start deadline, and says so', async () => {
     const tries = Math.ceil(HOST_START_DEADLINE_MS / HOST_RETRY_MS) + 1
-    const world = new World({ bridges: [exits(3)], hosts: Array.from({ length: tries }, () => foldersHeld) })
+    const world = new World({
+      bridges: [exits(3)],
+      hosts: [foldersHeld, cannotWait, ...Array.from({ length: tries - 1 }, () => foldersHeld)]
+    })
     const starting = refusal(startLocalHost(WIN_PLACES, world.deps()))
 
+    // Each try sets its listening deadline, then the wait before the next try.
     for (let waited = 1; waited < tries; waited += 1) {
       await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(waited * 2)
       world.timers[waited * 2 - 1]!()
@@ -550,7 +591,8 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     expect(await starting).toBe(
       `Another local host still had Floti's host folders after ${HOST_START_DEADLINE_MS / 1000} seconds${END}`
     )
-    expect(world.programs()).toHaveLength(1 + tries)
+    expect(world.programs()).toHaveLength(2 + tries)
+    expect(world.programs()[2]).toBe('wait-host-exit')
   })
 
   it('S6: starts the host when Floti has pinned no host key and none has started, then pins the key of the one it started at its first connection', async () => {
@@ -822,12 +864,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     it('a floti from before floti wait-host-exit is not waited on, and the restart goes on as before', async () => {
       const world = new World({
         bridges: [answersRestart({ hostVersion: '2.4.0', sessions: 0, keeperLink: KEEPER_LINK_VERSION }), exits(3)],
-        hosts: [
-          (child) => {
-            child.stderr.write('usage: floti host [--desktop <program>]\n')
-            queueMicrotask(() => child.exit(2))
-          }
-        ]
+        hosts: [cannotWait]
       })
       const restarting = restartLocalHost(WIN_PLACES, world.deps())
       await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(1)
@@ -839,18 +876,13 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     it('fails saying why when the old host never lets go of its folders', async () => {
       const world = new World({
         bridges: [answersRestart({ hostVersion: '2.4.0', sessions: 0, keeperLink: KEEPER_LINK_VERSION }), exits(3)],
-        hosts: [
-          (child) => {
-            child.stderr.write('floti wait-host-exit: the host agreed to stop but had not exited within 60s.\n')
-            queueMicrotask(() => child.exit(1))
-          }
-        ]
+        hosts: [stillHeld]
       })
       const restarting = refusal(restartLocalHost(WIN_PLACES, world.deps()))
       await expect.poll(() => world.timers.length, { timeout: PATIENCE }).toBe(1)
       world.timers[0]!()
       expect(await restarting).toContain(
-        'This PC’s host was asked to restart and did not let go of its folders: the host agreed to stop but had not exited within 60s.'
+        'This PC’s host was asked to restart and did not let go of its folders: the host had not let go of its data folder within 30s.'
       )
     })
 

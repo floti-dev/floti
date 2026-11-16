@@ -480,6 +480,11 @@ fn kind_of(message: &Message) -> &'static str {
 /// Waits until the host whose data folder is `data` has let go of its lock,
 /// which it holds for as long as it runs, then lets go of it too.
 pub async fn host_exited(data: &Path) -> Result<(), String> {
+    host_exited_within(data, HOST_EXIT_DEADLINE).await
+}
+
+/// [`host_exited`], waiting at most `deadline`.
+pub async fn host_exited_within(data: &Path, deadline: Duration) -> Result<(), String> {
     let path = data.join(LOCK_FILE);
     let file = match File::options().read(true).open(&path) {
         Ok(file) => file,
@@ -487,12 +492,12 @@ pub async fn host_exited(data: &Path) -> Result<(), String> {
         Err(err) => return Err(format!("could not open {}: {err}", path.display())),
     };
     let locked = tokio::task::spawn_blocking(move || file.lock());
-    match tokio::time::timeout(HOST_EXIT_DEADLINE, locked).await {
+    match tokio::time::timeout(deadline, locked).await {
         Ok(Ok(Ok(()))) => Ok(()),
         Ok(Ok(Err(err))) => Err(format!("could not lock {}: {err}", path.display())),
         Ok(Err(err)) => Err(format!("the wait for the host to exit failed: {err}")),
         Err(_) => Err(format!(
-            "the host agreed to stop but had not exited within {HOST_EXIT_DEADLINE:?}."
+            "the host had not let go of its data folder within {deadline:?}."
         )),
     }
 }

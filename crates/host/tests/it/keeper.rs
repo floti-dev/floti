@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use floti_host::agent::AgentBackend;
+use floti_host::bridge::BridgeExit;
 use floti_host::client::ClientKeys;
 use floti_host::fake_agent;
 use floti_host::keeper::{KEEPER_LOG, TEST_KEEPER_LINK_VERSION, TEST_KEEPER_VERSION};
@@ -867,17 +868,26 @@ async fn helm_client(dirs: &TestDirs) -> PathBuf {
 async fn end_old_host(dirs: &TestDirs, folder: &Path) -> Output {
     let mut command = dirs.floti_command(env!("CARGO_BIN_EXE_floti"));
     command.arg("end-old-host").arg(folder);
-    let mut child = command.spawn().expect("run floti end-old-host");
+    to_end(
+        command.spawn().expect("run floti end-old-host"),
+        "floti end-old-host",
+    )
+    .await
+}
+
+/// Waits for `child`, a floti command named `what`, to end, for at most
+/// [`PATIENCE`], and reads what it wrote.
+async fn to_end(mut child: Child, what: &str) -> Output {
     let deadline = Instant::now() + PATIENCE;
-    while child.try_wait().expect("poll floti end-old-host").is_none() {
+    while child.try_wait().expect("poll a floti command").is_none() {
         if Instant::now() >= deadline {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("floti end-old-host did not end within {PATIENCE:?}");
+            panic!("{what} did not end within {PATIENCE:?}");
         }
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    child.wait_with_output().expect("read floti end-old-host")
+    child.wait_with_output().expect("read a floti command")
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1035,6 +1045,76 @@ async fn s15_end_old_host_ends_nothing_for_a_host_of_this_protocol() {
         .stop(HostStopReason::Stop)
         .await;
     until("the session ended", || !alive(pid)).await;
+}
+
+// ---------------------------------------------------------------------------
+// `floti wait-host-exit`: what the desktop runs before it starts a host on
+// folders another host still holds; it waits until none holds them
+// ---------------------------------------------------------------------------
+
+/// Starts `floti wait-host-exit` with `args` over `dirs`' folders.
+fn wait_host_exit(dirs: &TestDirs, args: &[&str]) -> Child {
+    let mut command = dirs.floti_command(env!("CARGO_BIN_EXE_floti"));
+    command.arg("wait-host-exit").args(args);
+    command.spawn().expect("run floti wait-host-exit")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn wait_host_exit_waits_while_a_host_holds_the_folders_and_ends_once_it_has_gone() {
+    let dirs = TestDirs::new();
+    let agent = fake_agent!(&dirs);
+    let mut host = KillableHost::start(&dirs, &agent);
+    // Answering, so it holds the data folder's lock, taken before it listens.
+    let mut client = TestClient::connect(&dirs.floti_endpoint(), TERMINAL).await;
+
+    let mut waiter = wait_host_exit(&dirs, &[]);
+    // A round trip to the host after the waiter started: it is still waiting.
+    client.request::<SessionList>(&()).await.unwrap();
+    assert!(
+        waiter
+            .try_wait()
+            .expect("poll floti wait-host-exit")
+            .is_none(),
+        "it waits while the host runs"
+    );
+    drop(client);
+
+    host.kill();
+    let waited = to_end(waiter, "floti wait-host-exit").await;
+    assert_eq!(
+        waited.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&waited.stderr)
+    );
+    // The killed host's keeper, if it started one, ends with a deliberate stop.
+    in_process(&dirs, &agent, &[])
+        .stop(HostStopReason::Stop)
+        .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn wait_host_exit_ends_at_once_when_no_host_holds_the_folders() {
+    let dirs = TestDirs::new();
+    let waited = to_end(wait_host_exit(&dirs, &[]), "floti wait-host-exit").await;
+    assert_eq!(
+        waited.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&waited.stderr)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn wait_host_exit_with_an_argument_it_does_not_take_exits_with_the_usage_status() {
+    let dirs = TestDirs::new();
+    let waited = to_end(
+        wait_host_exit(&dirs, &["--now"]),
+        "floti wait-host-exit --now",
+    )
+    .await;
+    // What a floti from before the command answers too: the desktop then starts as it always has.
+    assert_eq!(waited.status.code(), Some(BridgeExit::Usage.code()));
 }
 
 // ---------------------------------------------------------------------------
