@@ -112,7 +112,7 @@ use crate::platform::process_tree::{self, ProcessTree};
 use crate::platform::standalone::{self, Standalone};
 use crate::version::{FLOTI_VERSION, cpu_name, os_name};
 use manifest::{FileEntry, Release};
-use network::{Network, get_whole};
+use network::{FetchError, Network, get_whole};
 use release_file::{fetch_refusal, fetch_signature};
 use run_file::RunLock;
 use signature::{MANIFEST_COMMENT, check_whole};
@@ -143,6 +143,8 @@ pub enum UpdateError {
         url: String,
         reason: String,
     },
+    #[error("no update has been published yet ({file} is not at {url}).")]
+    NothingPublished { file: String, url: String },
     #[error("{file} has no signature ({file}.minisig is not there).")]
     MissingSignature { file: String },
     #[error("{file} does not match its signature.")]
@@ -629,8 +631,16 @@ impl Updater<'_> {
 
     /// The manifest, its signature checked.
     fn manifest(&self) -> Result<Vec<u8>, UpdateError> {
-        let bytes = get_whole(self.network, &self.manifest_url, MANIFEST_LIMIT)
-            .map_err(|err| fetch_refusal(MANIFEST_FILE, &self.manifest_url, err))?;
+        let bytes = get_whole(self.network, &self.manifest_url, MANIFEST_LIMIT).map_err(|err| {
+            match err {
+                // Nothing published yet is no failure of the network or the release.
+                FetchError::NotFound => UpdateError::NothingPublished {
+                    file: MANIFEST_FILE.to_owned(),
+                    url: self.manifest_url.to_string(),
+                },
+                other => fetch_refusal(MANIFEST_FILE, &self.manifest_url, other),
+            }
+        })?;
         let signature = fetch_signature(self.network, MANIFEST_FILE, &self.manifest_url)?;
         check_whole(
             self.key,

@@ -227,6 +227,12 @@ impl Shared {
                         state.checked_at = Some(at.to_string());
                         state.failed = None;
                     }
+                    // The manifest was reached: nothing is published yet, and
+                    // nothing failed.
+                    Checked::NothingPublished => {
+                        state.checked_at = Some(at.to_string());
+                        state.failed = None;
+                    }
                     // Kept off the update running, not a failure of the release.
                     Checked::Failed { .. } if state.installing.is_some() => {}
                     Checked::Failed { why, soon } => {

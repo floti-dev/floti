@@ -638,6 +638,17 @@ fn a_tampered_manifest_is_refused_before_anything_is_downloaded() {
 }
 
 #[test]
+fn a_manifest_that_is_not_there_is_nothing_published_not_a_network_failure() {
+    let world = World::new();
+    let err = world.update(&world.installs(false), 0, None).error();
+    assert!(
+        matches!(&err, UpdateError::NothingPublished { file, .. } if file == "update.json"),
+        "{err}"
+    );
+    assert_eq!(world.binary(), b"old floti");
+}
+
+#[test]
 fn a_missing_signature_stops_the_update_and_says_so() {
     let world = World::new();
     let release = Published::new("2.1.0");
