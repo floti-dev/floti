@@ -344,12 +344,17 @@ export class FakeWebContents extends EventEmitter {
     }
   }
   /**
-   * Electron raises `before-input-event` for a key sent this way, synchronously
-   * (measured on 43.3.0), so the fake does too - which is what lets a test see
-   * that an agent's Ctrl+W is the page's.
+   * Electron raises `before-input-event` for a key and `before-mouse-event`
+   * for the pointer sent this way, synchronously (both measured on 43.3.0), so
+   * the fake does too - which is what lets a test see that an agent's Ctrl+W
+   * is the page's, and that its click is no press of the user's.
    */
   sendInputEvent(event: { type: string; keyCode?: string; modifiers?: string[] } & Record<string, unknown>): void {
     this.inputs.push({ ...event })
+    if (event.type.startsWith('mouse')) {
+      this.emit('before-mouse-event', {}, { ...event })
+      return
+    }
     if ((event.type !== 'keyDown' && event.type !== 'keyUp') || event.keyCode === undefined) return
     const mods = event.modifiers ?? []
     const shift = mods.includes('shift')

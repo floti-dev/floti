@@ -288,7 +288,10 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   Escape or a click anywhere else (the page or Floti's chrome, which blurs the
   layer) closes it; main hides it, gives the keyboard back to the window if
   the layer had it, and tells the window on `browser:layer-event`, and the
-  window returns focus to the control that opened the menu. For a blur, main
+  window returns focus to the control that opened the menu. A turn main
+  closed takes no more content: until the window hears, it can still send
+  that turn again (a pick that changes its own menu, as Open console, a zoom
+  step or a width does), and that send must not show the layer again. For a blur, main
   reads where the keyboard went once Chromium has placed it: Floti's own
   window by a press on its page (`window`, a `before-mouse-event` press while
   the menu was open), or anywhere else (`blur`: the browser's page, another
@@ -361,7 +364,10 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   sees no blur at all, or a blur and a focus in the same millisecond. Focus
   moving within the window closes the list in the window; the window losing
   the keyboard is reported as `blurred`, and main closes the list
-  (`closed: 'blur'`) unless the keyboard is back in the window by then. The window keeps the same list
+  (`closed: 'blur'`) unless the keyboard is back in the window by then. A
+  person's mouse press in a page closes the list too (`before-mouse-event` on
+  the page, `pagePressed`), whether or not the keyboard left the bar; an
+  agent's click (`agentInput`) does not. The window keeps the same list
   where it hangs from the bar, transparent and taking no pointer: the layer's
   rectangle is measured from it, and it is the listbox the bar's
   `aria-controls` and `aria-activedescendant` point into, so assistive

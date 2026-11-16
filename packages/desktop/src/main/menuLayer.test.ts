@@ -86,6 +86,32 @@ const open = (turn: number, rect = RECT, content: BrowserLayerMenu = MENU): Brow
   open: { turn, rect, content, look: LOOK }
 })
 
+/** The browser's pages in the rig's window, wired to its layer as `index.ts` wires them. */
+function browsersBeside(r: Rig): { browsers: ReturnType<typeof createBrowserHost>; store: ReturnType<typeof openStore> } {
+  let settings: AppSettings = { ...DEFAULT_SETTINGS, browserProjectUrls: {} }
+  const store = openStore({ file: ':memory:' })
+  const browsers = createBrowserHost({
+    history: openBrowserHistory(store),
+    onFavicon: () => undefined,
+    platform: 'win32',
+    window: () => r.window as unknown as BrowserWindow,
+    settings: () => settings,
+    writeSettings: (next) => {
+      settings = { ...settings, ...next }
+    },
+    onChanged: () => undefined,
+    onOpened: () => undefined,
+    onClosed: () => undefined,
+    onCommand: () => undefined,
+    onLogged: () => undefined,
+    sessionOpener: () => null,
+    shareTargets: () => [],
+    onViewRaised: () => r.layer.raise(),
+    onPagePress: () => r.layer.pagePressed()
+  })
+  return { browsers, store }
+}
+
 /** What the layer page has been told to draw, in order. */
 const shown = (r: Rig): unknown[] =>
   r.contents().sent.filter((m) => m.channel === 'browser:layer-show').map((m) => m.payload)
@@ -134,26 +160,7 @@ describe('the menu layer - above every page', () => {
 
   it('is raised above each page the browser adds, and above a page that goes fullscreen', () => {
     const r = rig()
-    let settings: AppSettings = { ...DEFAULT_SETTINGS, browserProjectUrls: {} }
-    const store = openStore({ file: ':memory:' })
-    const browsers = createBrowserHost({
-      history: openBrowserHistory(store),
-      onFavicon: () => undefined,
-      platform: 'win32',
-      window: () => r.window as unknown as BrowserWindow,
-      settings: () => settings,
-      writeSettings: (next) => {
-        settings = { ...settings, ...next }
-      },
-      onChanged: () => undefined,
-      onOpened: () => undefined,
-      onClosed: () => undefined,
-      onCommand: () => undefined,
-      onLogged: () => undefined,
-      sessionOpener: () => null,
-      shareTargets: () => [],
-      onViewRaised: () => r.layer.raise()
-    })
+    const { browsers, store } = browsersBeside(r)
     const first = browsers.open({ url: 'http://localhost:3000/' }).state!
     const firstView = FakeWebContentsView.created.find((view) => view !== r.view() && r.window.children.includes(view))
     expect(r.window.children.at(-1)).toBe(r.view())
@@ -343,6 +350,53 @@ describe('the menu layer - closing', () => {
     expect(r.events).toEqual([])
   })
 
+  it('draws nothing more for a turn it closed, though the window sends that turn new content before it hears', async () => {
+    const r = opened()
+    // More > Open console: the pick, then the close, while the window,
+    // acting on the pick, relabels the row and sends the menu again.
+    r.layer.report({ turn: 1, pick: 'devtools' })
+    r.layer.report({ turn: 1, closed: 'pick' })
+    r.contents().hasFocus = false
+    const relabelled: BrowserLayerMenu = {
+      ...MENU,
+      entries: [MENU.entries[0]!, { kind: 'item', id: 'devtools', label: 'Close DevTools' }]
+    }
+    r.layer.request(open(1, RECT, relabelled))
+    expect(r.view().visible).toBe(false)
+    expect(shown(r).at(-1)).toBeNull()
+    expect(r.contents().focused).toBe(1)
+    // Its blur is no second close.
+    r.contents().emit('blur')
+    await nextTurn()
+    expect(r.events).toEqual([
+      { turn: 1, pick: 'devtools' },
+      { turn: 1, closed: 'pick' }
+    ])
+    // The next menu opens.
+    r.layer.request(open(2))
+    expect(r.view().visible).toBe(true)
+    expect(shown(r).at(-1)).toEqual({ turn: 2, content: MENU, look: LOOK })
+  })
+
+  it('opens a turn again after the window loads again and counts its turns from the start', () => {
+    const r = opened()
+    r.layer.report({ turn: 1, closed: 'escape' })
+    r.window.webContents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
+    r.layer.request(open(1))
+    expect(r.view().visible).toBe(true)
+  })
+
+  it('forgets the turn it closed when the window closes', () => {
+    const r = opened()
+    r.layer.report({ turn: 1, closed: 'escape' })
+    r.window.emit('closed')
+    // A layer made for the window there is next draws that window's turn 1.
+    r.layer.raise()
+    r.layer.report({ ready: true })
+    r.layer.request(open(1))
+    expect(r.view().visible).toBe(true)
+  })
+
   it("ignores what the page says about a turn that is not the open one's", () => {
     const r = opened()
     r.layer.request(open(2))
@@ -454,6 +508,64 @@ describe('the menu layer - the address suggestions', () => {
     r.layer.request({ blurred: { turn: 3 } })
     expect(r.view().visible).toBe(false)
     expect(r.events).toEqual([{ turn: 3, closed: 'blur' }])
+  })
+
+  it('draws no more of them once closed, though the bar sends that turn new rows before it hears', () => {
+    const r = suggesting()
+    r.window.webContents.hasFocus = false
+    r.layer.request({ blurred: { turn: 3 } })
+    r.layer.request({ open: { turn: 3, rect: RECT, content: { ...SUGGESTIONS, highlighted: 1 }, look: LOOK } })
+    expect(r.view().visible).toBe(false)
+    expect(shown(r).at(-1)).toBeNull()
+  })
+
+  it('closes them on a press in a page, though the bar keeps the keyboard', () => {
+    const r = rig()
+    const { browsers, store } = browsersBeside(r)
+    browsers.open({ url: 'http://localhost:3000/' })
+    const page = FakeWebContentsView.created.find((view) => view !== r.view() && r.window.children.includes(view))!
+    r.layer.report({ ready: true })
+    r.layer.request({ open: { turn: 3, rect: RECT, content: SUGGESTIONS, look: LOOK } })
+    page.webContents!.emit('before-mouse-event', {}, { type: 'mouseMove', x: 10, y: 10 })
+    page.webContents!.emit('before-mouse-event', {}, { type: 'mouseUp', x: 10, y: 10 })
+    expect(r.view().visible).toBe(true)
+    page.webContents!.emit('before-mouse-event', {}, { type: 'mouseDown', x: 10, y: 10 })
+    expect(r.view().visible).toBe(false)
+    expect(r.events).toEqual([{ turn: 3, closed: 'blur' }])
+    // The keyboard stays where it was: in the bar, or wherever the press puts it.
+    expect(r.window.webContents.focused).toBe(0)
+    browsers.shutdown()
+    store.close()
+  })
+
+  it("leaves them open when an agent clicks in a page: only a person's press closes them", () => {
+    const r = rig()
+    const { browsers, store } = browsersBeside(r)
+    const tab = browsers.open({ url: 'http://localhost:3000/' }).state!
+    const page = FakeWebContentsView.created.find((view) => view !== r.view() && r.window.children.includes(view))!
+    r.layer.report({ ready: true })
+    r.layer.request({ open: { turn: 3, rect: RECT, content: SUGGESTIONS, look: LOOK } })
+    // The click is delivered before `pointer` first waits.
+    void browsers.pointer(tab.id, 10, 10)
+    expect(page.webContents!.inputs.map((input) => input.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
+    expect(r.view().visible).toBe(true)
+    expect(r.events).toEqual([])
+    // The person's own press, after it, still closes them.
+    page.webContents!.emit('before-mouse-event', {}, { type: 'mouseDown', x: 10, y: 10 })
+    expect(r.events).toEqual([{ turn: 3, closed: 'blur' }])
+    browsers.shutdown()
+    store.close()
+  })
+
+  it('leaves a menu to its own blur on a press in a page', () => {
+    const r = rig()
+    r.layer.raise()
+    r.layer.report({ ready: true })
+    r.layer.request(open(1))
+    r.contents().hasFocus = true
+    r.layer.pagePressed()
+    expect(r.view().visible).toBe(true)
+    expect(r.events).toEqual([])
   })
 
   it('takes no blur report for a menu, which closes on its own blur', async () => {

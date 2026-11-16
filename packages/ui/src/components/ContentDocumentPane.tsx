@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ConfigSnapshotMeta, ContentDocument, ContentFile, EditorHighlight, RenderedMarkdown } from '@helm/core'
 import { cn } from '../lib/cn'
 import { CodeEditor, type EditorStatus } from './CodeEditor'
-import { ConsolePanel } from './ConsolePanel'
+import { ConsolePanel, consoleCounts, plural } from './ConsolePanel'
 import { formatAge, formatBytes, formatMoment } from '../lib/time'
 // The rendered body and the frontmatter chips are shared with the config
 // console, which opens the same markdown out of a `.claude` tree.
@@ -507,7 +507,7 @@ function ArtifactFrame({
     return () => window.removeEventListener('message', onMessage)
   }, [onOpenWikilink])
 
-  const errors = entries.filter((entry) => entry.level === 'error' || entry.level === 'warning')
+  const counts = consoleCounts(entries)
   const [consoleOpen, setConsoleOpen] = useState(false)
 
   return (
@@ -531,18 +531,22 @@ function ArtifactFrame({
         */}
         <button
           type="button"
-          data-artifact-console={errors.length}
+          data-artifact-console={counts.errors}
           onClick={() => setConsoleOpen((current) => !current)}
           aria-expanded={consoleOpen}
           title={consoleOpen ? "Hide what the artifact logged" : "Show what the artifact logged"}
           className={cn(
             'rounded-well px-1.5 py-0.5 text-[11px] tabular-nums transition-colors hover:bg-hover',
-            errors.length > 0 ? 'text-danger' : 'text-fg-subtle hover:text-fg'
+            counts.errors > 0 ? 'text-danger' : counts.warnings > 0 ? 'text-warn' : 'text-fg-subtle hover:text-fg'
           )}
         >
-          {errors.length === 0
-            ? 'console clean'
-            : `${String(errors.length)} console error${errors.length === 1 ? '' : 's'}`}
+          {counts.errors > 0 && counts.warnings > 0
+            ? `${plural(counts.errors, 'console error')}, ${plural(counts.warnings, 'warning')}`
+            : counts.errors > 0
+              ? plural(counts.errors, 'console error')
+              : counts.warnings > 0
+                ? plural(counts.warnings, 'console warning')
+                : 'console clean'}
         </button>
       </div>
 

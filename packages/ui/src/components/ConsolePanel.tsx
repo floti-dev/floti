@@ -46,8 +46,8 @@ export interface ConsolePanelProps {
 }
 
 /**
- * The console panel: a collapsed chip that counts errors, and a scroll of
- * entries under it.
+ * The console panel: a chip that counts errors and warnings, each as what it
+ * is, and a scroll of entries under it.
  *
  * **One component, two places, and the second one is a bug being fixed on the
  * way past.** The content viewer has captured what an HTML artifact writes to
@@ -85,10 +85,7 @@ export function ConsolePanel({
   >([])
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const errors = useMemo(
-    () => entries.filter((entry) => LEVEL[entry.level] === 'error' || LEVEL[entry.level] === 'warning'),
-    [entries]
-  )
+  const counts = useMemo(() => consoleCounts(entries), [entries])
 
   const shown = useMemo(() => {
     if (filter === 'all') return entries
@@ -132,7 +129,8 @@ export function ConsolePanel({
       data-console={name}
       data-console-open={open ? 'true' : 'false'}
       data-console-entries={entries.length}
-      data-console-errors={errors.length}
+      data-console-errors={counts.errors}
+      data-console-warnings={counts.warnings}
       className="flex min-h-0 shrink-0 flex-col border-t border-border bg-surface"
     >
       <div className="flex h-8 shrink-0 items-center gap-2 px-3">
@@ -149,18 +147,18 @@ export function ConsolePanel({
         >
           <ConsoleIcon width={12} height={12} className="shrink-0" />
           <span>Console</span>
-          <span
-            data-console-chip={name}
-            className={cn(
-              'tabular-nums',
-              errors.length > 0 ? 'text-danger' : 'text-fg-subtle'
+          <span data-console-chip={name} className="tabular-nums text-fg-subtle">
+            {counts.errors > 0 || counts.warnings > 0 ? (
+              <>
+                {counts.errors > 0 && <span className="text-danger">{plural(counts.errors, 'error')}</span>}
+                {counts.errors > 0 && counts.warnings > 0 && ', '}
+                {counts.warnings > 0 && <span className="text-warn">{plural(counts.warnings, 'warning')}</span>}
+              </>
+            ) : entries.length > 0 ? (
+              String(entries.length)
+            ) : (
+              'clean'
             )}
-          >
-            {errors.length > 0
-              ? `${String(errors.length)} error${errors.length === 1 ? '' : 's'}`
-              : entries.length > 0
-                ? `${String(entries.length)}`
-                : 'clean'}
           </span>
         </button>
 
@@ -330,6 +328,21 @@ const LEVEL: Record<string, 'error' | 'warning' | 'log'> = {
   '0': 'log',
   '1': 'log'
 }
+
+/** How many entries are errors and how many warnings, read as the filters read them. */
+export function consoleCounts(entries: readonly Pick<ConsoleEntry, 'level'>[]): { errors: number; warnings: number } {
+  let errors = 0
+  let warnings = 0
+  for (const entry of entries) {
+    const level = LEVEL[entry.level]
+    if (level === 'error') errors += 1
+    else if (level === 'warning') warnings += 1
+  }
+  return { errors, warnings }
+}
+
+/** "1 error", "3 warnings". */
+export const plural = (count: number, noun: string): string => `${String(count)} ${noun}${count === 1 ? '' : 's'}`
 
 const FILTERS: Array<[ConsoleFilter, string]> = [
   ['all', 'All'],
