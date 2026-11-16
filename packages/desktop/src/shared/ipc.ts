@@ -949,6 +949,12 @@ export interface IpcRequests {
    * `hostLink:step`.
    */
   'hostLink:currentStep': { request: void; response: LocalHostStep | null }
+  /**
+   * The window's Try again on this PC's host: while main's link waits to try
+   * again, it drops the wait and connects now. Nothing else connects while
+   * the host cannot be used, page opens included; they wait on that connect.
+   */
+  'hostLink:reconnect': { request: void; response: void }
 
   /** Where each host on another computer stands with this device; changes arrive on `remoteHosts:changed`. */
   'remoteHosts:read': { request: void; response: RemoteHostStates }
@@ -2423,6 +2429,7 @@ export const REQUEST_CHANNELS = Object.keys({
   'app:info': true,
   'hostLink:open': true,
   'hostLink:currentStep': true,
+  'hostLink:reconnect': true,
   'remoteHosts:read': true,
   'remoteHosts:check': true,
   'remoteHosts:install': true,

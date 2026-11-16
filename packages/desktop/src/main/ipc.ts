@@ -208,6 +208,8 @@ export interface LocalHostControl {
   restart(): Promise<void>
   /** What main's link to it is doing now (`hostLink:currentStep`); null before its first connect began. */
   step(): LocalHostStep | null
+  /** The window's Try again: main's link drops its wait and connects now (`hostLink:reconnect`). */
+  reconnect(): void
 }
 
 /**
@@ -301,6 +303,9 @@ export function registerIpc(ctx: IpcContext): void {
     },
 
     'hostLink:currentStep': () => ctx.localHost.step(),
+    'hostLink:reconnect': () => {
+      ctx.localHost.reconnect()
+    },
     'remoteHosts:read': () => ctx.remoteHosts.states(),
     'remoteHosts:check': (target) => {
       if ('host' in target) {

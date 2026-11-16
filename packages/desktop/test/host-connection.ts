@@ -49,6 +49,9 @@ export function fakeLink(
       })()
       return attempt
     },
+    usable(): Promise<HostConnection> {
+      return link.connection()
+    },
     current: () => (connected && connection !== null ? connection.asConnection() : null),
     settled: () => (attempt === null ? Promise.resolve() : attempt.then(() => undefined)),
     onConnected(listener: (connection: HostConnection) => void | Promise<void>) {
@@ -83,6 +86,7 @@ export function reconnectingLink(first: FakeConnection): HostLink & { reconnect(
   }
   return {
     connection: () => (attempt ??= connect()),
+    usable: () => (attempt ??= connect()),
     current: () => current.asConnection(),
     settled: () => Promise.resolve(),
     onConnected: (listener) => {

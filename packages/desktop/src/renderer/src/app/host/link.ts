@@ -19,8 +19,15 @@ import type { HelmBridge, HostLinkOpened, RefusedVersions } from '../../../../sh
  *
  * Every caller joins one connect attempt, so a read asked before the first
  * connect has settled waits for it rather than answering that there is
- * nothing there. When the host cannot be reached it rejects with the sentence
- * saying why.
+ * nothing there. This PC's host's link holds that attempt while the host
+ * cannot be used - it refuses this Floti, or cannot be reached - and it
+ * resolves on the next connect that succeeds: main answers the page's open
+ * only once its own link has a host (`HostLink.usable`), and only main's
+ * retry schedule or the window's Try again (`reconnectNow`) connects again,
+ * so waiting reads start no connect, and no host, of their own. The window
+ * says why once, from main's steps; a read that has something of its own to
+ * show meanwhile asks `connectionIfUsable` instead. A host on another
+ * computer's link rejects with the sentence saying why.
  *
  * When the host's side ends the connection, main says whether it ended the
  * host on purpose (Stop host, or a quit) and whether Helm starts a new one,
@@ -33,13 +40,12 @@ import type { HelmBridge, HostLinkOpened, RefusedVersions } from '../../../../sh
  * once: main holds the connect until the new host is up.
  *
  * A host that refuses this Helm's `hello` names both protocol versions and
- * the side to update; the link rejects with that sentence, as a
- * `HostRefusedError` carrying the versions, and tells its `onRefused`
- * listeners, so the window can say which side is older and offer what fits.
- * A link that connects again by itself tries a refusing host again with the
- * same waits, so the page connects once main reaches a host that welcomes it
- * (the carried floti's, after Restart host to update); Reconnect now drops
- * the wait.
+ * the side to update. The link tells its `onRefused` listeners, so the
+ * window can say which side is older: this PC's link from main's word that
+ * its host cannot be used (`usability`), or from a page bridge refused after
+ * main connected, which it tries again after the same waits. A host on
+ * another computer's link rejects with that sentence, as a
+ * `HostRefusedError` carrying the versions.
  */
 
 /** What the app window says it can do: draw terminals, show files and draw plugins' pages. */
@@ -56,8 +62,28 @@ export interface HostEnd {
 }
 
 export interface PageLink {
-  /** The connection, connecting first when there is none. Rejects with the sentence to show. */
+  /**
+   * The connection, connecting first when there is none. This PC's host's
+   * link waits through a host that cannot be used; any other rejects with the
+   * sentence to show.
+   */
   connection(): Promise<HostConnection>
+  /**
+   * The connection as `connection()` gives it, but rejecting with main's
+   * sentence, rather than waiting, while this PC's host cannot be used: for a
+   * read that has something of its own to answer meanwhile (Floti's own
+   * settings). The same as `connection()` for a link with no `usability`.
+   */
+  connectionIfUsable(): Promise<HostConnection>
+  /**
+   * The connection for something a person started (a launch, a write, a
+   * restore): as `connectionIfUsable`, but while this PC's host cannot be
+   * used it rejects with one short sentence pointing at the window's notice
+   * (`HOST_UNUSABLE_FOR_ACTIONS`), so the click reports where its action
+   * reports rather than waiting silently. Once the host can be used it is
+   * the connection again.
+   */
+  connectionForAction(): Promise<HostConnection>
   /**
    * Called on every connect, before `connection()` resolves, so a channel
    * subscribed here is subscribed before anything is asked of the host.
@@ -68,14 +94,30 @@ export interface PageLink {
   /** Called each time the host refused this Helm's `hello`, with the versions it named. */
   onRefused?(listener: (refused: RefusedVersions) => void): void
   /**
-   * The user's Reconnect now: a link waiting to connect again drops the wait
-   * and connects at once, and the next wait starts from the first again. A
-   * link that is connected or connecting does nothing, and one that does not
-   * connect by itself (`retries: false`, a remote host's) has no wait to
-   * drop: it is told when to connect, once main's own link is back. Nothing
-   * from before the drop is sent again.
+   * The user's Reconnect now, or Try again: a link waiting to connect again
+   * drops the wait and connects at once, and the next wait starts from the
+   * first again. This PC's host's link also asks main's link to drop its own
+   * wait (`hostLink:reconnect`), which is what connects while that host
+   * cannot be used. A link that is connected or connecting does nothing
+   * else, and one that does not connect by itself (`retries: false`, a remote
+   * host's) has no wait to drop: it is told when to connect, once main's own
+   * link is back. Nothing from before the drop is sent again.
    */
   reconnectNow(): void
+}
+
+/** Why this PC's host cannot be used, as main last said it: the sentence, and the versions a refusal named. */
+export interface HostUnusable {
+  sentence: string
+  refused?: RefusedVersions
+}
+
+/** Main's word on whether this PC's host can be used (`hostLink:step`), as the page link reads it. */
+export interface HostUsability {
+  /** Why it cannot be used now, or null while it can be, or before anything failed. */
+  get(): HostUnusable | null
+  /** Calls `listener` on every change; returns the unsubscribe. */
+  subscribe(listener: () => void): () => void
 }
 
 export interface PageLinkDeps {
@@ -94,7 +136,19 @@ export interface PageLinkDeps {
    * to connect instead, once main's own link to that host is back.
    */
   retries?: boolean
+  /** This PC's host only: main's word on whether it can be used, which `connectionIfUsable` and `onRefused` hear. */
+  usability?: HostUsability
 }
+
+/** What an action a person started answers while this PC's host cannot be used; the notice says why. */
+export const HOST_UNUSABLE_FOR_ACTIONS = 'This PC’s host can’t be used right now; see the notice above.'
+
+/** A page bridge that failed after main had opened it: this PC's host's link waits and tries again. */
+class BridgeFailedError extends Error {}
+
+/** What a read that does not wait is answered with while this PC's host cannot be used. */
+const unusableError = (why: HostUnusable): Error =>
+  why.refused === undefined ? new Error(why.sentence) : new HostRefusedError(why.sentence, why.refused)
 
 /**
  * A byte transport over this page's `hostLink:*` channels, for one
@@ -151,6 +205,24 @@ export function createPageLink(deps: PageLinkDeps): PageLink {
   let attempt: Promise<HostConnection> | null = null
   let retryTimer: unknown = null
   let retryWait = RECONNECT_FIRST_MS
+  /** This PC's host's link: its connect waits through a host that cannot be used, on main's one connect. */
+  const holds = deps.retries !== false && deps.host === undefined
+  /** Ends a held connect's wait before it tries again, at once (Reconnect now). */
+  let wakeHold: (() => void) | null = null
+
+  /** A held connect's wait before it tries again: the link's next wait, or until Reconnect now. */
+  const holdWait = (): Promise<void> =>
+    new Promise((resolve) => {
+      const wait = retryWait
+      retryWait = nextReconnectWait(retryWait)
+      const wake = (): void => {
+        clearTimer(timer)
+        wakeHold = null
+        resolve()
+      }
+      const timer = setTimer(wake, wait)
+      wakeHold = wake
+    })
 
   /** Connects again after a wait, and again after a longer one each time that fails. */
   const scheduleRetry = (): void => {
@@ -220,7 +292,7 @@ export function createPageLink(deps: PageLinkDeps): PageLink {
         if (error.refused !== null) refusedWith(error.refused)
         throw new HostRefusedError(unreachable(error.message), error.refused)
       }
-      throw new Error((error as Error).message, { cause: error })
+      throw new BridgeFailedError((error as Error).message, { cause: error })
     }
     for (const listener of listeners) {
       try {
@@ -232,14 +304,24 @@ export function createPageLink(deps: PageLinkDeps): PageLink {
     return connection
   }
 
+  // Main's word that this PC's host refused this Floti, told once per refusal.
+  let toldUnusable: HostUnusable | null = null
+  deps.usability?.subscribe(() => {
+    const why = deps.usability?.get() ?? null
+    if (why === toldUnusable) return
+    toldUnusable = why
+    if (why?.refused !== undefined) refusedWith(why.refused)
+  })
+
   const link: PageLink = {
     connection() {
       if (attempt !== null) return attempt
-      let end: HostEnd | null = null
-      const made: Promise<HostConnection> = connect((how) => {
-        end = how
-      }).then(
-        (connection) => {
+      let made: Promise<HostConnection> | null = null
+      const once = (): Promise<HostConnection> => {
+        let end: HostEnd | null = null
+        return connect((how) => {
+          end = how
+        }).then((connection) => {
           retryWait = RECONNECT_FIRST_MS
           // Once it ends, the next caller connects again; a host that went
           // without a stop is connected to again without waiting for one.
@@ -248,17 +330,58 @@ export function createPageLink(deps: PageLinkDeps): PageLink {
             if (end !== null) hostEnded(end)
           })
           return connection
-        },
-        (error: unknown) => {
-          if (attempt === made) attempt = null
-          // A refusing host is tried again, as main's link tries it, so the
-          // page connects once main has a host that speaks its protocol.
-          if (error instanceof HostRefusedError && deps.retries !== false) scheduleRetry()
-          throw error
+        })
+      }
+      /**
+       * Main answers this PC's host's open once its own link has a host, so
+       * the attempt waits there. A bridge refused or failed after that (the
+       * host went in between) is tried again after the link's waits, and the
+       * attempt holds; only main's own answer that nothing comes (Floti is
+       * quitting, the page went) ends it.
+       */
+      const held = async (): Promise<HostConnection> => {
+        for (;;) {
+          try {
+            return await once()
+          } catch (error) {
+            if (!(error instanceof HostRefusedError || error instanceof BridgeFailedError)) throw error
+            deps.log?.(`host: this PC’s host could not be used yet (${error.message}); waiting for it`)
+            await holdWait()
+          }
         }
-      )
-      attempt = made
-      return made
+      }
+      const tried: Promise<HostConnection> = (holds ? held() : once()).catch((error: unknown) => {
+        if (attempt === tried) attempt = null
+        throw error
+      })
+      made = tried
+      attempt = tried
+      return tried
+    },
+
+    connectionIfUsable() {
+      const usability = deps.usability
+      if (usability === undefined) return link.connection()
+      const why = usability.get()
+      if (why !== null) return Promise.reject(unusableError(why))
+      return new Promise<HostConnection>((resolve, reject) => {
+        const stop = usability.subscribe(() => {
+          const now = usability.get()
+          if (now === null) return
+          stop()
+          reject(unusableError(now))
+        })
+        link.connection().then(
+          (connection) => {
+            stop()
+            resolve(connection)
+          },
+          (error: unknown) => {
+            stop()
+            reject(error as Error)
+          }
+        )
+      })
     },
 
     onConnected(listener) {
@@ -273,7 +396,24 @@ export function createPageLink(deps: PageLinkDeps): PageLink {
       refusedListeners.push(listener)
     },
 
+    connectionForAction() {
+      return link.connectionIfUsable().catch((error: unknown) => {
+        // Main's own word that nothing comes (Floti quitting) is said as it is.
+        throw deps.usability?.get() == null ? error : new Error(HOST_UNUSABLE_FOR_ACTIONS)
+      })
+    },
+
     reconnectNow() {
+      if (holds) {
+        // While this PC's host cannot be used, main's link is what connects.
+        deps.bridge.invoke('hostLink:reconnect').catch((error: unknown) => {
+          deps.log?.(`host: Try again did not reach Floti (${(error as Error).message})`)
+        })
+        if (wakeHold !== null) {
+          retryWait = RECONNECT_FIRST_MS
+          wakeHold()
+        }
+      }
       if (attempt !== null || retryTimer === null) return
       clearTimer(retryTimer)
       retryTimer = null

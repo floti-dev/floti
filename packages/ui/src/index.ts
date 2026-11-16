@@ -138,7 +138,7 @@ export {
 export { VersionBanner, type VersionBannerProps } from './components/VersionBanner'
 export { OwnDataBanner, type OwnDataBannerProps } from './components/OwnDataBanner'
 export { HostLostBanner, type HostLostBannerProps } from './components/HostLostBanner'
-export { HostStoppedBanner, type HostStoppedBannerProps } from './components/HostStoppedBanner'
+export { HostNotice, type HostNoticeProps, type HostNoticeState } from './components/HostNotice'
 export { HostSwitch, type HostChoice, type HostSwitchProps } from './components/HostSwitch'
 export { ShellLostBar, type ShellLostBarProps } from './components/ShellLostBar'
 export { GitChip, type GitChipProps } from './components/GitChip'
@@ -253,9 +253,11 @@ export { TitleBar } from './components/TitleBar'
 export {
   RestorePane,
   RestoreUnreadPane,
+  RestoreWaitingPane,
   type RestorePaneProps,
   type RestorePick,
-  type RestoreUnreadPaneProps
+  type RestoreUnreadPaneProps,
+  type RestoreWaitingPaneProps
 } from './components/RestorePane'
 export { WelcomePane, type WelcomePaneProps } from './components/WelcomePane'
 export * from './components/icons'

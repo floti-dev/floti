@@ -12,7 +12,7 @@ import {
   splitSettingsPatch
 } from '../../../../shared/host/records'
 import type { ClaudeStatus, EventPayload, HelmBridge } from '../../../../shared/ipc'
-import type { HostReach } from './history'
+import { forAction, type HostReach } from './history'
 import type { HostAdapter } from './router'
 
 /**
@@ -27,8 +27,8 @@ import type { HostAdapter } from './router'
  * the `claude` Helm picked, which main tells the host - stays with Helm's main
  * process on the client-only `ownSettings:*`, whose write does what main does
  * with it. The window is answered Helm's half with the host's laid over; while
- * the host cannot be reached it is Helm's own, so the window still paints and
- * the sidebar says why from its own refused read.
+ * this PC's host cannot be used it is Helm's own, so the window still paints
+ * its tabs and saves their layout, and the window's notice says why.
  *
  * The pickers are the window's own: `path:chooseFile` for the `claude`
  * program, whose choice the host checks before Helm keeps it.
@@ -41,7 +41,10 @@ import type { HostAdapter } from './router'
  * Every request goes through `link.connection()`, which joins the first
  * connect while it is in flight, so a read asked before the window has reached
  * the host gets the host's answer, never an empty one first; with no host each
- * rejects with the link's sentence, never an empty list in its place.
+ * rejects with the link's sentence, never an empty list in its place; this
+ * PC's link waits through a host that cannot be used instead. What Helm keeps
+ * itself (its settings, its build) is answered without the host meanwhile
+ * (`hostIfUsable`).
  */
 
 type Pushed = 'settings:changed' | 'discovery:updated' | 'scan:status' | 'git:updated'
@@ -92,6 +95,10 @@ export function createWorkspaceAdapter({
   let subscriptions: HostSubscription[] = []
 
   const host = (): Promise<HostConnection> => link.connection()
+  /** The host for a read that answers with Helm's own half without it: no wait while this PC's host cannot be used. */
+  const hostIfUsable = (): Promise<HostConnection> => link.connectionIfUsable?.() ?? link.connection()
+  /** For what a person starts: fails at once, with a short sentence, while this PC's host cannot be used. */
+  const act = forAction(link)
   /** The settings last told, which a listener that comes later hears at once. */
   let toldSettings: AppSettings | null = null
   const tell = <K extends Pushed>(channel: K, payload: EventPayload<K>): void => {
@@ -110,7 +117,7 @@ export function createWorkspaceAdapter({
   /** Resolves once the host's settings are known, or the host could not be reached for them. */
   const hostKnown = (): Promise<void> => {
     if (hostSettings !== null) return Promise.resolve()
-    hostAsked ??= host()
+    hostAsked ??= hostIfUsable()
       .then((connection) => connection.request('settings:read', null))
       .then(
         (read) => {
@@ -236,7 +243,7 @@ export function createWorkspaceAdapter({
         const build = await own.invoke('ownApp:info')
         let hostLogFile: string | null = null
         try {
-          hostLogFile = (await (await host()).request('app:info', null)).logFile
+          hostLogFile = (await (await hostIfUsable()).request('app:info', null)).logFile
         } catch (error) {
           log(`host: the host's log file could not be read (${(error as Error).message})`)
         }
@@ -247,7 +254,7 @@ export function createWorkspaceAdapter({
         const settings = await ownSettings()
         let connection: HostConnection
         try {
-          connection = await host()
+          connection = await hostIfUsable()
         } catch {
           return settings
         }
@@ -264,7 +271,7 @@ export function createWorkspaceAdapter({
         const settings =
           Object.keys(split.own).length > 0 ? await own.invoke('ownSettings:write', split.own) : await ownSettings()
         if (Object.keys(split.host).length === 0) return settled(settings)
-        hostSettings = await (await host()).request('settings:write', split.host)
+        hostSettings = await (await act()).request('settings:write', split.host)
         return settled(settings)
       },
 
@@ -273,8 +280,8 @@ export function createWorkspaceAdapter({
         discoveryFromHost(await (await host()).request('discovery:scan', { includeGit: request?.includeGit ?? true })),
 
       'roots:suggest': async () => (await host()).request('roots:suggest', null),
-      'roots:accept': async ({ path }) => (await host()).request('roots:accept', { path }),
-      'roots:remove': async ({ path }) => (await host()).request('roots:remove', { path }),
+      'roots:accept': async ({ path }) => (await act()).request('roots:accept', { path }),
+      'roots:remove': async ({ path }) => (await act()).request('roots:remove', { path }),
 
       'setup:status': async () => claude(await (await host()).request('setup:status', null)),
       // The picker is the window's own; the host checks what it chose, and
@@ -283,17 +290,18 @@ export function createWorkspaceAdapter({
       'setup:locateClaude': async () => {
         // The picker browses this PC, and the `claude` Helm keeps is this PC's.
         if (remote !== undefined) throw new Error(ownSettingsElsewhere(remote.name()))
+        // Said before the picker opens: a choice nobody could check would be lost.
+        const connection = await act()
         const { path } = await own.invoke('path:chooseFile', { title: 'Locate the claude executable' })
-        const connection = await host()
         if (path === null) return claude(await connection.request('setup:status', null))
         const status = await connection.request('setup:locateBackend', { backend: CLAUDE_CODE_BACKEND, path })
         if (status.error === null && status.installed) settled(await own.invoke('ownSettings:write', { claudePath: path }))
         return claudeStatusFromHost(status)
       },
-      'setup:complete': async () => adoptHost(await (await host()).request('setup:complete', null)),
+      'setup:complete': async () => adoptHost(await (await act()).request('setup:complete', null)),
 
       'workspace:create': async (request) =>
-        (await host()).request('workspace:create', {
+        (await act()).request('workspace:create', {
           mode: request.mode,
           dir: request.dir,
           name: request.name ?? null,
@@ -305,12 +313,12 @@ export function createWorkspaceAdapter({
         (await host()).request('template:preview', { template, mode: mode ?? null }),
       'template:detail': async ({ template }) => (await host()).request('template:detail', { template }),
       'template:create': async ({ name, label, description }) =>
-        (await host()).request('template:create', { name, label: label ?? null, description: description ?? null }),
-      'template:rename': async (request) => (await host()).request('template:rename', request),
-      'template:delete': async ({ template }) => (await host()).request('template:delete', { template }),
-      'template:metadata': async (request) => (await host()).request('template:metadata', request),
-      'template:substitute': async (request) => (await host()).request('template:substitute', request),
-      'template:import': async (request) => (await host()).request('template:import', request),
+        (await act()).request('template:create', { name, label: label ?? null, description: description ?? null }),
+      'template:rename': async (request) => (await act()).request('template:rename', request),
+      'template:delete': async ({ template }) => (await act()).request('template:delete', { template }),
+      'template:metadata': async (request) => (await act()).request('template:metadata', request),
+      'template:substitute': async (request) => (await act()).request('template:substitute', request),
+      'template:import': async (request) => (await act()).request('template:import', request),
       'template:folderPreview': async (request) => (await host()).request('template:folderPreview', request),
       'template:fromFolder': async (request) => (await host()).request('template:fromFolder', request)
     },

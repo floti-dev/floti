@@ -4,7 +4,15 @@ import { FrameDecoder, encodeFrame } from '../../../../shared/host/frame'
 import { PROTOCOL_VERSION, type Message } from '../../../../shared/host/protocol'
 import { RECONNECT_FIRST_MS } from '../../../../shared/host/reconnect'
 import type { EventChannel, EventPayload, HostLinkOpened } from '../../../../shared/ipc'
-import { WINDOW_CAPABILITIES, createPageLink, type HostEnd, type PageLinkDeps } from './link'
+import {
+  HOST_UNUSABLE_FOR_ACTIONS,
+  WINDOW_CAPABILITIES,
+  createPageLink,
+  type HostEnd,
+  type HostUnusable,
+  type HostUsability,
+  type PageLinkDeps
+} from './link'
 
 const UNREACHABLE = 'No local host answered on its socket.'
 
@@ -21,6 +29,16 @@ class FakeMain {
   readonly requests: Array<{ connection: number; channel: string }> = []
   /** Whether the host answers requests; when false they wait, as on a link that is about to drop. */
   answers = true
+  /** How many times the page asked main's link to drop its wait (`hostLink:reconnect`). */
+  reconnects = 0
+  /** Every open the page made, answered or still held by main. */
+  openCount = 0
+  /**
+   * Whether main holds each open until its own link has a host, as it does
+   * while this PC's host cannot be used; `release` answers them.
+   */
+  holdOpens = false
+  private readonly heldOpens: Array<() => void> = []
   private next = 1
   private readonly listeners = new Map<string, Set<(payload: never) => void>>()
   private readonly decoders = new Map<number, FrameDecoder>()
@@ -28,7 +46,21 @@ class FakeMain {
 
   readonly bridge: PageLinkDeps['bridge'] = {
     invoke: ((channel: string) => {
+      if (channel === 'hostLink:reconnect') {
+        this.reconnects += 1
+        return Promise.resolve()
+      }
       if (channel !== 'hostLink:open') return Promise.reject(new Error(`unexpected ${channel}`))
+      this.openCount += 1
+      if (this.holdOpens) {
+        return new Promise<HostLinkOpened>((resolve) => {
+          this.heldOpens.push(() => {
+            const opened = this.answer()
+            this.opens.push(opened)
+            resolve(opened)
+          })
+        })
+      }
       const opened = this.answer()
       this.opens.push(opened)
       return Promise.resolve(opened)
@@ -53,6 +85,12 @@ class FakeMain {
       this.listeners.set(channel, set)
       return () => set.delete(listener)
     }) as PageLinkDeps['bridge']['on']
+  }
+
+  /** Main's link has a host: every held open is answered, and opens are answered at once from now on. */
+  release(): void {
+    this.holdOpens = false
+    for (const answer of this.heldOpens.splice(0)) answer()
   }
 
   /** Whether the host welcomes the hello; otherwise the bridge ends with `why`, or the host refuses it. */
@@ -122,16 +160,40 @@ async function settle(): Promise<void> {
   for (let i = 0; i < 30; i++) await Promise.resolve()
 }
 
-function world() {
+/** Main's word on this PC's host, set by the test. */
+function usabilityStore() {
+  let why: HostUnusable | null = null
+  const listeners = new Set<() => void>()
+  const store: HostUsability & { set(next: HostUnusable | null): void } = {
+    get: () => why,
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    set(next) {
+      why = next
+      for (const listener of [...listeners]) listener()
+    }
+  }
+  return store
+}
+
+/** This PC's host's page link by default; a host on another computer's with `remote`. */
+function world(options: { remote?: boolean } = {}) {
   const main = new FakeMain()
   const timers = steppedTimers()
+  const usability = usabilityStore()
   const link = createPageLink({
     bridge: main.bridge,
     capabilities: WINDOW_CAPABILITIES,
+    ...(options.remote === true ? { host: 'build-box', retries: false } : { usability }),
     ...timers
   })
-  return { main, link, timers }
+  return { main, link, timers, usability }
 }
+
+const REFUSED_VERSIONS = { host: { major: 3, minor: 1 }, client: { major: 4, minor: 1 }, update: 'host' as const }
+const REFUSED_SENTENCE = 'This client speaks Floti protocol 4.1 and the host speaks 3.1. Update the host.'
 
 describe('a Floti page’s own connection to the local host', () => {
   it('connects on its first open, saying what the window can do', async () => {
@@ -164,7 +226,7 @@ describe('a Floti page’s own connection to the local host', () => {
     expect(await a.request('history:summary', null)).toBe('answered')
   })
 
-  it('S5: rejects with the sentence saying what failed when the host cannot be reached, never answering empty', async () => {
+  it('S5: rejects with main’s sentence when main answers that nothing will connect, never answering empty', async () => {
     const w = world()
     w.main.answer = () => ({ unreachable: UNREACHABLE })
     await expect(w.link.connection()).rejects.toThrow(UNREACHABLE)
@@ -173,15 +235,15 @@ describe('a Floti page’s own connection to the local host', () => {
     expect(w.main.opens).toHaveLength(2)
   })
 
-  it('rejects with the bridge’s sentence when it ends before the host welcomed the page', async () => {
-    const w = world()
+  it('a remote host’s link rejects with the bridge’s sentence when it ends before the host welcomed the page', async () => {
+    const w = world({ remote: true })
     const why = 'The local host did not prove the key Floti expected, so Floti did not connect to it.'
     w.main.welcome = { why }
     await expect(w.link.connection()).rejects.toThrow(why)
   })
 
-  it('S5: rejects with the host’s refusal of the hello ending at its cause, naming no setting', async () => {
-    const w = world()
+  it('S5: a remote host’s link rejects with the host’s refusal of the hello ending at its cause, naming no setting', async () => {
+    const w = world({ remote: true })
     w.main.welcome = {
       refused: {
         type: 'refused',
@@ -331,59 +393,137 @@ describe('a Floti page’s own connection to the local host', () => {
     expect(connects).toBe(2)
   })
 
-  it('S7: a refusal from this PC’s host keeps both versions and the side to update, from main or the host', async () => {
+  it('S7: a refusal of this PC’s host keeps both versions and the side to update, told once from main’s word and again from the host', async () => {
     const w = world()
     const refusals: unknown[] = []
     w.link.onRefused?.((refused) => refusals.push(refused))
-    const versions = { host: { major: 2, minor: 0 }, client: { major: 2, minor: 1 }, update: 'host' as const }
 
-    // Main's own link was refused.
-    w.main.answer = () => ({ unreachable: 'This client speaks Floti protocol 2.1 and the host speaks 2.0.', refused: versions })
-    const fromMain = await w.link.connection().then(
-      () => null,
-      (error: unknown) => error
-    )
-    expect((fromMain as HostRefusedError).refused).toEqual(versions)
+    // Main's own link was refused: its step says so, once, whatever else changes.
+    w.usability.set({ sentence: REFUSED_SENTENCE, refused: REFUSED_VERSIONS })
+    w.usability.set(w.usability.get())
+    expect(refusals).toEqual([REFUSED_VERSIONS])
+    // A host that cannot be reached is no refusal.
+    w.usability.set({ sentence: UNREACHABLE })
+    expect(refusals).toEqual([REFUSED_VERSIONS])
 
-    // The page's own hello was refused.
-    w.main.answer = () => ({ connection: 5, appVersion: '2.9.0' })
-    w.main.welcome = {
-      refused: {
-        type: 'refused',
-        ...versions,
-        message: 'This client speaks Floti protocol 2.1 and the host speaks 2.0. Update the host.'
-      }
-    }
-    const fromHost = await w.link.connection().then(
-      () => null,
-      (error: unknown) => error
-    )
-    expect(fromHost).toBeInstanceOf(HostRefusedError)
-    expect((fromHost as HostRefusedError).refused).toEqual(versions)
-    expect(refusals).toEqual([versions, versions])
+    // The page's own hello was refused, after main had a host.
+    w.main.welcome = { refused: { type: 'refused', ...REFUSED_VERSIONS, message: REFUSED_SENTENCE } }
+    void w.link.connection()
+    await settle()
+    expect(refusals).toEqual([REFUSED_VERSIONS, REFUSED_VERSIONS])
   })
 
-  it('S15: a host that refused the page is tried again with the link’s waits, and Reconnect now connects at once to the host that replaced it', async () => {
+  it('AC5: while this PC’s host cannot be used every read waits on one open main holds, and none starts another', async () => {
+    const w = world()
+    w.main.holdOpens = true
+    const reads = [w.link.connection(), w.link.connection(), w.link.connection()]
+    await settle()
+    reads.push(w.link.connection(), w.link.connection())
+    await settle()
+    expect(w.main.openCount).toBe(1)
+    expect(w.timers.pending()).toEqual([])
+    let answered = 0
+    for (const read of reads) void read.then(() => (answered += 1))
+    await settle()
+    expect(answered).toBe(0)
+
+    // Main's link reaches a host that welcomes this Floti.
+    w.main.release()
+    const connections = await Promise.all(reads)
+    expect(new Set(connections).size).toBe(1)
+    expect(w.main.openCount).toBe(1)
+  })
+
+  it('AC5: a page bridge refused after main connected holds the reads and tries again after the link’s waits; Try again asks main and tries at once', async () => {
     const w = world()
     let connects = 0
     w.link.onConnected(() => (connects += 1))
-    const versions = { host: { major: 1, minor: 4 }, client: { major: 2, minor: 0 }, update: 'host' as const }
-    // This PC's host speaks protocol 1.4 and refuses this Helm.
-    w.main.answer = () => ({ unreachable: 'This client speaks Floti protocol 2.0 and the host speaks 1.4.', refused: versions })
-    await expect(w.link.connection()).rejects.toBeInstanceOf(HostRefusedError)
+    w.main.welcome = { refused: { type: 'refused', ...REFUSED_VERSIONS, message: REFUSED_SENTENCE } }
+    let settled = false
+    const read = w.link.connection()
+    void read.then(
+      () => (settled = true),
+      () => (settled = true)
+    )
+    await settle()
+    expect(settled).toBe(false)
     expect(w.timers.pending()).toEqual([RECONNECT_FIRST_MS])
     w.timers.fireAll()
     await settle()
-    expect(w.main.opens).toHaveLength(2)
+    expect(w.main.openCount).toBe(2)
     expect(w.timers.pending()).toEqual([RECONNECT_FIRST_MS * 2])
+    // Reads asked meanwhile join the held attempt.
+    void w.link.connection()
+    await settle()
+    expect(w.main.openCount).toBe(2)
 
-    // Restart host to update ended it, and main has the carried floti's host.
-    w.main.answer = () => ({ connection: 7, appVersion: '2.9.0' })
+    // The host that replaced it welcomes this Floti; Try again tries at once.
+    w.main.welcome = true
     w.link.reconnectNow()
     await settle()
+    expect(w.main.reconnects).toBe(1)
+    expect(w.main.openCount).toBe(3)
     expect(connects).toBe(1)
-    expect(w.main.opens).toHaveLength(3)
+    expect(settled).toBe(true)
     expect(w.timers.pending()).toEqual([])
+  })
+
+  it('Try again on this PC’s host asks main’s link to drop its wait; a remote host’s asks nothing of main', () => {
+    const local = world()
+    local.link.reconnectNow()
+    expect(local.main.reconnects).toBe(1)
+    const remote = world({ remote: true })
+    remote.link.reconnectNow()
+    expect(remote.main.reconnects).toBe(0)
+  })
+
+  it('a read with something of its own to show is told why at once while this PC’s host cannot be used, or as soon as main says so', async () => {
+    const w = world()
+    w.usability.set({ sentence: REFUSED_SENTENCE, refused: REFUSED_VERSIONS })
+    const refused = await w.link.connectionIfUsable().then(
+      () => null,
+      (error: unknown) => error
+    )
+    expect(refused).toBeInstanceOf(HostRefusedError)
+    expect((refused as HostRefusedError).message).toBe(REFUSED_SENTENCE)
+    expect(w.main.openCount).toBe(0)
+
+    // Connecting when it asked, and main then finds no host.
+    w.usability.set(null)
+    w.main.holdOpens = true
+    const asked = w.link.connectionIfUsable()
+    await settle()
+    w.usability.set({ sentence: UNREACHABLE })
+    await expect(asked).rejects.toThrow(UNREACHABLE)
+
+    // Usable: it is the connection.
+    w.usability.set(null)
+    w.main.release()
+    await expect(w.link.connectionIfUsable()).resolves.toBe(await w.link.connection())
+  })
+
+  it('an action fails at once with the short sentence while this PC’s host cannot be used, or as soon as main says so, and is the connection once it can be', async () => {
+    const w = world()
+    w.usability.set({ sentence: REFUSED_SENTENCE, refused: REFUSED_VERSIONS })
+    await expect(w.link.connectionForAction()).rejects.toThrow(HOST_UNUSABLE_FOR_ACTIONS)
+    expect(w.main.openCount).toBe(0)
+
+    w.usability.set(null)
+    w.main.holdOpens = true
+    const asked = w.link.connectionForAction()
+    await settle()
+    w.usability.set({ sentence: UNREACHABLE })
+    await expect(asked).rejects.toThrow(HOST_UNUSABLE_FOR_ACTIONS)
+
+    w.usability.set(null)
+    w.main.release()
+    await expect(w.link.connectionForAction()).resolves.toBe(await w.link.connection())
+  })
+
+  it('an action is told main’s own word when main says nothing will connect, not the notice’s', async () => {
+    const w = world()
+    w.main.answer = () => ({ unreachable: 'Floti is quitting.' })
+    await expect(w.link.connectionForAction()).rejects.toThrow('Floti is quitting.')
   })
 
   it('takes a connection the page closed itself for no loss of the host', async () => {

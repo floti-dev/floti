@@ -182,9 +182,8 @@ describe("StatusBar: the hosts sessions run in", () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it("S9: says this PC’s host runs an older floti, naming both versions, and a press offers Restart host to update", () => {
+  it("S9: says this PC’s host runs an older floti, naming both versions, and a press opens Settings", () => {
     const onOpen = vi.fn();
-    const onRestart = vi.fn();
     renderBar({
       hosts: [
         {
@@ -192,24 +191,21 @@ describe("StatusBar: the hosts sessions run in", () => {
           name: "This PC",
           quitEnds: true,
           versions: { older: "host", host: "2.4.0", helm: "2.4.1", beforeRestart: false },
-          onRestart,
           onOpen,
         },
       ],
     });
     const item = screen.getByRole("button", {
-      name: "This PC · older host · Restart host to update",
+      name: "This PC · older host",
     });
     expect(item.getAttribute("data-status-host")).toBe("older");
     expect(item.getAttribute("title")).toContain("floti 2.4.0, older than the floti 2.4.1");
     item.click();
-    expect(onRestart).toHaveBeenCalledTimes(1);
-    expect(onOpen).not.toHaveBeenCalled();
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it("S17: a host on protocol 1.x names both versions and a press offers Restart host to update, which keeps every session running", () => {
+  it("S17: a host on protocol 1.x names both versions, and that a restart keeps every session running", () => {
     const onOpen = vi.fn();
-    const onRestart = vi.fn();
     renderBar({
       hosts: [
         {
@@ -217,26 +213,23 @@ describe("StatusBar: the hosts sessions run in", () => {
           name: "This PC",
           quitEnds: true,
           versions: { older: "host", host: "protocol 1.4", helm: "protocol 2.0", beforeRestart: true },
-          onRestart,
           onOpen,
         },
       ],
     });
     const item = screen.getByRole("button", {
-      name: "This PC · older host · Restart host to update",
+      name: "This PC · older host",
     });
     const title = item.getAttribute("title") ?? "";
     expect(title).toContain("Floti protocol 1.4, older than the Floti protocol 2.0");
     expect(title).toContain("keeps every session and terminal running");
     expect(title).not.toMatch(/History|notification-area|Stop host/);
     item.click();
-    expect(onRestart).toHaveBeenCalledTimes(1);
-    expect(onOpen).not.toHaveBeenCalled();
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it("says this PC’s host is updating while Floti restarts it, in place of the older host and its restart, with no warning and no action", () => {
+  it("says this PC’s host is updating while Floti restarts it, in place of the older host, with no warning and no action", () => {
     const onOpen = vi.fn();
-    const onRestart = vi.fn();
     renderBar({
       hosts: [
         {
@@ -245,7 +238,6 @@ describe("StatusBar: the hosts sessions run in", () => {
           quitEnds: true,
           versions: { older: "host", host: "protocol 3.1", helm: "protocol 4.1", beforeRestart: false },
           updating: true,
-          onRestart,
           onOpen,
         },
       ],
@@ -259,7 +251,6 @@ describe("StatusBar: the hosts sessions run in", () => {
     );
     expect(item.className).not.toContain("text-warn");
     item.click();
-    expect(onRestart).not.toHaveBeenCalled();
     expect(onOpen).not.toHaveBeenCalled();
   });
 
@@ -281,7 +272,7 @@ describe("StatusBar: the hosts sessions run in", () => {
 
   it("S10: with the same floti there is no offer", () => {
     renderBar({
-      hosts: [{ id: "local", name: "This PC", quitEnds: true, versions: null, onRestart: vi.fn(), onOpen: vi.fn() }],
+      hosts: [{ id: "local", name: "This PC", quitEnds: true, versions: null, onOpen: vi.fn() }],
     });
     expect(screen.getByRole("button", { name: "This PC · quit ends sessions" })).toBeTruthy();
     expect(screen.queryByText(/Restart host to update/)).toBeNull();

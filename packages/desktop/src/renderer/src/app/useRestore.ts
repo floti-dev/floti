@@ -24,6 +24,8 @@ export interface RestoreState {
    * read answered, with an offer or with none, and before the first answers.
    */
   unread: string | null
+  /** Whether a read of the offer has answered or failed yet: false while the first still waits for the host. */
+  answered: boolean
   /** True while a read asked for with `retry` is under way. */
   retrying: boolean
   /** Reads the offer again after a read failed. */
@@ -108,6 +110,7 @@ export function restoredPairs(result: RestoreSessionsResult): Map<number, number
 export function useRestore(reconnects = 0): RestoreState {
   const [offer, setOffer] = useState<RestoreOffer | null>(null)
   const [unread, setUnread] = useState<string | null>(null)
+  const [answered, setAnswered] = useState(false)
   /** How many times `retry` asked: each asks the host again. */
   const [retries, setRetries] = useState(0)
   const [retrying, setRetrying] = useState(false)
@@ -140,7 +143,9 @@ export function useRestore(reconnects = 0): RestoreState {
         if (live) setUnread(readable(err))
       })
       .finally(() => {
-        if (live) setRetrying(false)
+        if (!live) return
+        setRetrying(false)
+        setAnswered(true)
       })
     return () => {
       live = false
@@ -183,6 +188,7 @@ export function useRestore(reconnects = 0): RestoreState {
   return {
     offer,
     unread,
+    answered,
     retrying,
     retry,
     dismissUnread: useCallback(() => setUnread(null), []),
@@ -192,6 +198,23 @@ export function useRestore(reconnects = 0): RestoreState {
     report,
     dismissReport: useCallback(() => setReport(null), [])
   }
+}
+
+/**
+ * Whether the Restore tab stays in the layout: while it has an offer or a
+ * failed read to show, and while it waits - for the first read to answer, or
+ * for this PC's host while it cannot be used, when it says so
+ * (`RestoreWaitingPane`). Only once a read has answered with nothing left to
+ * show does it go, so a saved Restore tab survives a start against a host
+ * that refuses this Floti.
+ */
+export function restoreTabKept(state: {
+  offer: RestoreOffer | null
+  unread: string | null
+  answered: boolean
+  hostWaiting: boolean
+}): boolean {
+  return state.offer !== null || state.unread !== null || !state.answered || state.hostWaiting
 }
 
 /**

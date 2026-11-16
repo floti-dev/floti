@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS, type AppSettings } from '@helm/core/types'
-import { FakeConnection, fakeReach } from '../../../../../test/fake-connection'
+import { FakeConnection, fakeReach, unusableReach } from '../../../../../test/fake-connection'
 import type * as P from '../../../../shared/host/protocol'
 import type {
   EventChannel,
@@ -12,6 +12,7 @@ import type {
   RequestResult
 } from '../../../../shared/ipc'
 import type { HostAdapter } from './router'
+import { HOST_UNUSABLE_FOR_ACTIONS } from './link'
 import { createWorkspaceAdapter } from './workspace'
 
 const HUB = '/work dir/hub'
@@ -375,5 +376,70 @@ describe('the window’s workspace over its own connection', () => {
       ...BUILD,
       hostLogFile: null
     })
+  })
+
+  it('answers with Floti’s own settings and build, and saves its own half, while this PC’s host cannot be used and every host read waits', async () => {
+    const own = ownBridge({ theme: 'dark' })
+    // This PC's link: every read waits for the host, but one with its own answer is told why at once.
+    const adapter = createWorkspaceAdapter({
+      link: {
+        connection: () => new Promise(() => undefined),
+        connectionIfUsable: () => Promise.reject(new Error(UNREACHABLE)),
+        onConnected: () => undefined
+      },
+      own: own.bridge
+    })
+    await expect(ask(adapter, 'settings:read')).resolves.toMatchObject({ theme: 'dark' })
+    await expect(ask(adapter, 'app:info')).resolves.toEqual({ ...BUILD, hostLogFile: null })
+    await expect(ask(adapter, 'settings:write', { theme: 'light' })).resolves.toMatchObject({ theme: 'light' })
+    let scanned = false
+    void ask(adapter, 'discovery:cached').then(() => (scanned = true))
+    await settle()
+    expect(scanned).toBe(false)
+  })
+})
+
+describe('actions while this PC’s host cannot be used', () => {
+  function unusableWorld() {
+    const connection = new FakeConnection()
+      .answer('settings:read', () => hostSettings())
+      .answer('settings:write', (patch) => hostSettings(patch))
+      .answer('template:create', () => ({ ok: true }) as never)
+      .answer('setup:status', () => ({ backends: { 'claude-code': backend() } }))
+      .answer('setup:locateBackend', () => backend())
+    const own = ownBridge({ theme: 'dark' })
+    const link = unusableReach(connection, HOST_UNUSABLE_FOR_ACTIONS)
+    const adapter = createWorkspaceAdapter({ link, own: own.bridge })
+    return { connection, own, link, adapter }
+  }
+
+  it('writing the host’s half of the settings fails at once with the short sentence, and is written once the host can be used', async () => {
+    const w = unusableWorld()
+    await expect(ask(w.adapter, 'settings:write', { scanRoots: [HUB] })).rejects.toThrow(HOST_UNUSABLE_FOR_ACTIONS)
+    expect(w.connection.payloads('settings:write')).toEqual([])
+    // Floti's own half needs no host.
+    await expect(ask(w.adapter, 'settings:write', { theme: 'light' })).resolves.toMatchObject({ theme: 'light' })
+    w.link.makeUsable()
+    await expect(ask(w.adapter, 'settings:write', { scanRoots: [HUB] })).resolves.toMatchObject({ scanRoots: [HUB] })
+  })
+
+  it('a template action fails at once with the short sentence, and reaches the host once it can be used', async () => {
+    const w = unusableWorld()
+    await expect(ask(w.adapter, 'template:create', { name: 'starter' })).rejects.toThrow(HOST_UNUSABLE_FOR_ACTIONS)
+    expect(w.connection.payloads('template:create')).toEqual([])
+    w.link.makeUsable()
+    await ask(w.adapter, 'template:create', { name: 'starter' })
+    expect(w.connection.payloads('template:create')).toHaveLength(1)
+  })
+
+  it('Locate claude fails at once with the short sentence and opens no picker, and opens it once the host can be used', async () => {
+    const w = unusableWorld()
+    w.own.picks.push(PICKED)
+    await expect(ask(w.adapter, 'setup:locateClaude')).rejects.toThrow(HOST_UNUSABLE_FOR_ACTIONS)
+    // The picker was never opened: what it would have answered is still waiting.
+    expect(w.own.picks).toEqual([PICKED])
+    w.link.makeUsable()
+    await expect(ask(w.adapter, 'setup:locateClaude')).resolves.toMatchObject({ path: PICKED })
+    expect(w.own.picks).toEqual([])
   })
 })

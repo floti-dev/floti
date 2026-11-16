@@ -77,6 +77,9 @@ export interface TreeHostFailure {
  * - `updating`: this PC's host only: Floti is restarting it onto its own
  *   floti, which is newer; its sessions carry over and are listed once the
  *   new host answers.
+ * - `waiting`: this PC's host only: it cannot be used (it refused this
+ *   Floti, or could not be reached), which the window's one notice says;
+ *   its sessions are listed by themselves once it answers.
  * - `unknown`: connected, and listing its sessions failed (`reason`): it says
  *   Unknown and offers Try again, never loading for ever.
  * - `live`: connected and listed. The only phase whose group may say it has
@@ -91,6 +94,7 @@ export type TreeHostPhase =
   | { kind: 'connecting'; note?: string | undefined }
   | { kind: 'loading' }
   | { kind: 'updating' }
+  | { kind: 'waiting' }
   | { kind: 'unknown'; reason: string }
   | { kind: 'live' }
   | { kind: 'reconnecting'; failure?: TreeHostFailure | undefined }
@@ -99,6 +103,7 @@ export type TreeHostPhase =
 const LIVE: TreeHostPhase = { kind: 'live' }
 const LOADING: TreeHostPhase = { kind: 'loading' }
 const UPDATING: TreeHostPhase = { kind: 'updating' }
+const WAITING: TreeHostPhase = { kind: 'waiting' }
 
 /**
  * A host on another computer, as the tree lists it under its own header after
@@ -169,6 +174,12 @@ export interface SessionTreeProps {
    * or Unknown.
    */
   localHostUpdating?: boolean | undefined
+  /**
+   * This PC's host cannot be used: it refused this Floti, or could not be
+   * reached. Until its sessions are listed, its group says it is waiting for
+   * the host; the window's notice says why.
+   */
+  localHostWaiting?: boolean | undefined
   /** The project whose page is in front of the focused pane. */
   selectedPath: string | null
   /**
@@ -385,6 +396,7 @@ export function SessionTree({
   sessionsListError = null,
   onRelistSessions,
   localHostUpdating = false,
+  localHostWaiting = false,
   selectedPath,
   pinnedPaths,
   onTogglePin,
@@ -420,6 +432,8 @@ export function SessionTree({
     ? LIVE
     : localHostUpdating
       ? UPDATING
+      : localHostWaiting
+      ? WAITING
       : sessionsListError !== null
       ? { kind: 'unknown', reason: sessionsListError }
       : LOADING
@@ -602,6 +616,7 @@ const PHASE_LOOK: Record<TreeHostPhase['kind'], { dot: string; word: string | nu
   connecting: { dot: 'border-fg-subtle', word: 'connecting', tone: 'text-fg-subtle' },
   loading: { dot: 'border-success', word: 'loading', tone: 'text-fg-subtle' },
   updating: { dot: 'border-fg-subtle', word: 'updating', tone: 'text-fg-subtle' },
+  waiting: { dot: 'border-fg-subtle', word: 'waiting', tone: 'text-fg-subtle' },
   unknown: { dot: 'border-success', word: 'unknown', tone: 'text-warn' },
   live: { dot: 'border-success', word: null, tone: '' },
   reconnecting: { dot: 'border-warn', word: 'reconnecting', tone: 'text-warn' },
@@ -617,6 +632,8 @@ function phaseTitle(phase: TreeHostPhase, name: string): string {
       return `Connected to ${name}; reading its sessions`
     case 'updating':
       return `Floti is updating the host on ${name}. Its sessions carry over.`
+    case 'waiting':
+      return `Waiting for the host on ${name}; its sessions show once it answers`
     case 'unknown':
       return `Floti could not list the sessions on ${name}. ${phase.reason}`
     case 'live':
@@ -858,6 +875,13 @@ function PhaseLine({
           <span className="block">Its sessions carry over.</span>
         </p>
       )
+    case 'waiting':
+      return (
+        <p data-host-phase="waiting" className={line}>
+          Waiting for the host on {name}&hellip;
+          <span className="block">Its sessions show here once it answers.</span>
+        </p>
+      )
     case 'unknown':
       return (
         <div data-host-phase="unknown">
@@ -1073,7 +1097,8 @@ function HostTree({
     }))
     .filter((group) => group.root !== null || group.members.length > 0)
 
-  const shownPins = pins.filter(
+  // Before the folders are read, a pin cannot be said gone: could not look is not nothing there.
+  const shownPins = discovery === null ? [] : pins.filter(
     (pin) =>
       matchesText(pin.name, query) ||
       matchesText(pin.path, query) ||
