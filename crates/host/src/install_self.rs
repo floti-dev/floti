@@ -11,8 +11,8 @@
 //!
 //! 1. floti: copied beside the one there under a name of its own, then put
 //!    in its place ([`Standalone::replace`]): a copy there that is running,
-//!    such as the host, keeps running, and is taken over by Restart host to
-//!    update, never ended here. A copy there that is this one byte for byte
+//!    such as the host, keeps running, never ended here; the desktop
+//!    restarts it onto the new floti when it refuses the desktop as older. A copy there that is this one byte for byte
 //!    is left as it is, and so is one that says a newer version than this
 //!    one (`floti update` put it there), with its Node, unless `--force`
 //!    asks for this one. Copies an earlier install or update put aside are
