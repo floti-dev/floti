@@ -364,7 +364,9 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   sees no blur at all, or a blur and a focus in the same millisecond. Focus
   moving within the window closes the list in the window; the window losing
   the keyboard is reported as `blurred`, and main closes the list
-  (`closed: 'blur'`) unless the keyboard is back in the window by then. The window keeps the same list
+  (`closed: 'blur'`) unless the keyboard is back in the window by then. A
+  mouse press in a page closes the list too (`before-mouse-event` on the
+  page, `pagePressed`), whether or not the keyboard left the bar. The window keeps the same list
   where it hangs from the bar, transparent and taking no pointer: the layer's
   rectangle is measured from it, and it is the listbox the bar's
   `aria-controls` and `aria-activedescendant` point into, so assistive

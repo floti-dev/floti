@@ -106,7 +106,8 @@ function browsersBeside(r: Rig): { browsers: ReturnType<typeof createBrowserHost
     onLogged: () => undefined,
     sessionOpener: () => null,
     shareTargets: () => [],
-    onViewRaised: () => r.layer.raise()
+    onViewRaised: () => r.layer.raise(),
+    onPagePress: () => r.layer.pagePressed()
   })
   return { browsers, store }
 }
@@ -505,6 +506,36 @@ describe('the menu layer - the address suggestions', () => {
     r.layer.request({ open: { turn: 3, rect: RECT, content: { ...SUGGESTIONS, highlighted: 1 }, look: LOOK } })
     expect(r.view().visible).toBe(false)
     expect(shown(r).at(-1)).toBeNull()
+  })
+
+  it('closes them on a press in a page, though the bar keeps the keyboard', () => {
+    const r = rig()
+    const { browsers, store } = browsersBeside(r)
+    browsers.open({ url: 'http://localhost:3000/' })
+    const page = FakeWebContentsView.created.find((view) => view !== r.view() && r.window.children.includes(view))!
+    r.layer.report({ ready: true })
+    r.layer.request({ open: { turn: 3, rect: RECT, content: SUGGESTIONS, look: LOOK } })
+    page.webContents!.emit('before-mouse-event', {}, { type: 'mouseMove', x: 10, y: 10 })
+    page.webContents!.emit('before-mouse-event', {}, { type: 'mouseUp', x: 10, y: 10 })
+    expect(r.view().visible).toBe(true)
+    page.webContents!.emit('before-mouse-event', {}, { type: 'mouseDown', x: 10, y: 10 })
+    expect(r.view().visible).toBe(false)
+    expect(r.events).toEqual([{ turn: 3, closed: 'blur' }])
+    // The keyboard stays where it was: in the bar, or wherever the press puts it.
+    expect(r.window.webContents.focused).toBe(0)
+    browsers.shutdown()
+    store.close()
+  })
+
+  it('leaves a menu to its own blur on a press in a page', () => {
+    const r = rig()
+    r.layer.raise()
+    r.layer.report({ ready: true })
+    r.layer.request(open(1))
+    r.contents().hasFocus = true
+    r.layer.pagePressed()
+    expect(r.view().visible).toBe(true)
+    expect(r.events).toEqual([])
   })
 
   it('takes no blur report for a menu, which closes on its own blur', async () => {

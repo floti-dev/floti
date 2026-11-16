@@ -619,6 +619,7 @@ function startApp(options: AppOptions = {}): void {
   const browsers: BrowserHost = createBrowserHost({
     window: () => win,
     onViewRaised: () => menuLayer.raise(),
+    onPagePress: () => menuLayer.pagePressed(),
     settings: () => services.settings,
     writeSettings: (patch) => {
       const next = updateSettings(services, patch)

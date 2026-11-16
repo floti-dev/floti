@@ -496,6 +496,11 @@ export interface BrowserHostOptions {
    * every page.
    */
   onViewRaised?: () => void
+  /**
+   * A mouse press reached a page, whoever's it is. The menu layer closes the
+   * address suggestions on it (`menuLayer.ts`).
+   */
+  onPagePress?: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -1509,6 +1514,10 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
         if (win !== null && !win.isDestroyed()) win.webContents.focus()
       }
       options.onCommand({ id: entry.id, command })
+    })
+
+    wc.on('before-mouse-event', (_event, mouse) => {
+      if (mouse.type === 'mouseDown') options.onPagePress?.()
     })
 
     wc.on('enter-html-full-screen', () => enterFullscreen(entry))

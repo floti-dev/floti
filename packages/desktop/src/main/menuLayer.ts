@@ -80,6 +80,13 @@ export interface MenuLayer {
    * wait for one to load.
    */
   raise(): void
+  /**
+   * A mouse press reached one of the browser's pages. It closes the
+   * suggestions, whose keyboard is the bar's and so need not move for the
+   * press to land (a page that takes no focus, a posted click). A menu is left
+   * to its own blur, which reads where the press put the keyboard.
+   */
+  pagePressed(): void
   /** Whether these web contents are the layer page's. */
   isLayer(contentsId: number): boolean
   /** Closes the layer's page. Called from `before-quit`, beside the browser views. */
@@ -340,6 +347,10 @@ export function createMenuLayer(options: MenuLayerOptions): MenuLayer {
       const current = ensure()
       if (current === null) return
       current.win.contentView.addChildView(current.view)
+    },
+
+    pagePressed() {
+      if (open?.content.kind === 'suggestions') closed('blur')
     },
 
     isLayer(contentsId) {
