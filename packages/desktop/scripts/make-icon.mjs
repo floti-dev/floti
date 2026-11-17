@@ -47,13 +47,18 @@ function croppedSource() {
 const page = (body) =>
   `<!doctype html><html><head><style>html,body{margin:0;background:transparent}img{display:block}</style></head><body>${body}</body></html>`
 
-/** Chrome, then Edge, then the Chromium Playwright installs, whichever starts first. */
+/**
+ * Chrome, then Edge, then the Chromium Playwright installs: the first that is
+ * installed. Any other failure to start is a real one and is thrown.
+ */
 async function launch() {
   for (const channel of ['chrome', 'msedge']) {
     try {
       return await chromium.launch({ channel })
-    } catch {
-      // Not installed; try the next.
+    } catch (error) {
+      // Playwright's own wording for a channel with no browser on this machine.
+      const missing = error instanceof Error && /distribution '[^']+' is not (found|supported)/.test(error.message)
+      if (!missing) throw error
     }
   }
   return chromium.launch()
@@ -156,10 +161,14 @@ try {
   const tab = await (await browser.newContext({ deviceScaleFactor: 1 })).newPage()
   const source = croppedSource()
 
-  /** The mark rendered `size` pixels square, its art `fill` of that and centred. */
+  /**
+   * The mark rendered `size` pixels square, its art about `fill` of that and
+   * centred. The inset is a whole number of pixels, so the circle's edge is
+   * not smeared across half of one (`fill` of 64 would put it 6.25px in).
+   */
   async function render(size, fill = 1) {
-    const art = size * fill
-    const at = (size - art) / 2
+    const at = Math.round((size * (1 - fill)) / 2)
+    const art = size - 2 * at
     await tab.setViewportSize({ width: size, height: size })
     await tab.setContent(
       page(

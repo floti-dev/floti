@@ -864,7 +864,10 @@ overrides the gate; keep it.
   the text token of where it sits - `accent` in the title bar (20px) and in
   the New workspace and profile dialogs' headers (16px), `fg-subtle` at 35%
   opacity as the welcome pane's 192px watermark. Never under 16px: below it
-  the shields and waves close up. The app icon is the colour mark in its
+  the shields and waves close up. A filled mark in accent is a glyph, not a
+  flood: at 20px it lays about 146px² of ink, under the 256 a checked 16px
+  checkbox fills solid, so it sits on the near side of §1's line as the
+  `busy` dot does. The app icon is the colour mark in its
   circle (slate, sky and ember), the same for every theme because the
   taskbar is not Floti's to theme. Those three colours are the artwork's,
   kept with it in `assets/brand/`, and are not tokens: no component draws

@@ -35,7 +35,8 @@ export function WelcomePane({
             with more force here: "Floti" set above the Floti mark says the name
             twice to someone already looking at the app.
 
-            Hairline weight, because this is the empty state of the workspace
+            A faint silhouette - the solid ship at 35% of `fg-subtle`, about the
+            hairline's value - because this is the empty state of the workspace
             column and the one thing on it that must read is the sentence saying
             what to do next. A watermark that wins that contest has become a
             splash screen.

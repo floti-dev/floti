@@ -1,9 +1,21 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { FLOTI_MARK_PATH } from './flotiMark'
 import { FlotiMarkIcon } from './icons'
 
+const spaced = (d: string): string => d.replace(/\s+/g, ' ').trim()
+
 describe('FlotiMarkIcon', () => {
+  it('draws the path of the brand source, so the two cannot drift apart', () => {
+    const source = readFileSync(join(import.meta.dirname, '../../../../assets/brand/mark-black.svg'), 'utf8')
+    const paths = [...source.matchAll(/<path\b[^>]*\sd="([^"]*)"/g)].map((m) => m[1]!)
+
+    expect(paths).toHaveLength(1)
+    expect(spaced(FLOTI_MARK_PATH)).toBe(spaced(paths[0]!))
+  })
+
   it('is the mark as one path, filled with the colour of the text around it, on the art cropped square', () => {
     const { container } = render(<FlotiMarkIcon />)
     const svg = container.querySelector('svg')!
