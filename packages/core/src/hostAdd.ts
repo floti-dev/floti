@@ -19,13 +19,13 @@ import type { HostFailureCause } from './hostFailure'
 import type { AgentStatus } from './hostAgents'
 import type { HostSystem, HostTransport, RemoteHost } from './hosts'
 
-/** What the dialog asks main to add, once the check said floti there can talk to this Helm. */
+/** What the dialog asks main to add, once the check said floti there can talk to this desktop. */
 export interface HostAddRequest {
   /** The attempt the dialog minted at Connect, which `remoteHosts:cancelAdd` stops. */
   attempt: string
   name: string
   transport: HostTransport
-  /** The full path of the floti Helm installed there, when it did. */
+  /** The full path of the floti the desktop installed there, when it did. */
   floti?: string | undefined
   /** That computer's OS and CPU, as the check or the install found them. */
   system?: HostSystem | undefined
@@ -38,7 +38,7 @@ export interface HostAddRequest {
  *   hosts. `version` is the floti version its welcome named, and `agents`
  *   what its `setup:status` said of each agent there, or null with `agentsError`
  *   when it could not say.
- * - `failed`: nothing was added, and nothing of it is left in Helm's data.
+ * - `failed`: nothing was added, and nothing of it is left in Floti's data.
  *   `lastLine` is the last line ssh, the command or floti wrote, unedited.
  * - `cancelled`: the user stopped it; nothing was added or left.
  */

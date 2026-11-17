@@ -1390,7 +1390,7 @@ describe('pinned projects', () => {
 })
 
 /**
- * The session log an earlier version of Helm wrote while it ran sessions in its
+ * The session log an earlier version wrote while it ran sessions in the desktop's
  * own process. Nothing writes it now; a row it left claiming to be running is
  * marked lost once, at the next start, and the rest stay as they were.
  */

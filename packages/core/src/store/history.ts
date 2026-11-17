@@ -528,7 +528,7 @@ export function readHistorySession(store: Store, sessionId: string): HistorySess
 /**
  * Names a session by hand, or clears the name it was given.
  *
- * The one write in this file that is not derived from a file Helm does not own,
+ * The one write in this file that is not derived from a file Floti does not own,
  * and it goes to `history_names` rather than to a column on `history_sessions`
  * for the reason that table's comment gives: the aggregate is rebuilt in full,
  * and anything authored that lived on it would last until the next pass.

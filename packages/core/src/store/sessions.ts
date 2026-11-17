@@ -4,8 +4,8 @@ import type { Store } from './db'
 import { sessions } from './schema'
 
 /**
- * The session log: one row per `claude` process an earlier version of Helm ran
- * in its own process. Nothing writes it now; sessions run in the local host,
+ * The session log: one row per `claude` process an earlier version ran
+ * in the desktop's own process. Nothing writes it now; sessions run in the local host,
  * which keeps its own. A row that earlier version left claiming to be running
  * is marked lost once, at the next start (`reconcileRunningSessions`).
  */

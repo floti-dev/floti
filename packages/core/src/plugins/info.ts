@@ -8,7 +8,7 @@ import type { PanelActionSpec, SettingSpec, SettingValue, StatusItem } from '@fl
  * pages can take it as it is. Types only.
  */
 
-/** A sidebar panel: Helm's header, the plugin's page. */
+/** A sidebar panel: Floti's header, the plugin's page. */
 export interface PluginPanelInfo {
   title: string
   /** `floti-plugin://<id>/<path>`: the plugin's own origin. */
@@ -24,7 +24,7 @@ export interface PluginTabInfo {
 export type PluginServiceState = 'stopped' | 'starting' | 'running' | 'crashed' | 'failed'
 
 export interface PluginServiceInfo {
-  /** `node`: run by Helm's own Node. `command`: any program. */
+  /** `node`: run by Floti's own Node. `command`: any program. */
   kind: 'command' | 'node'
   command: string
   start: 'enable' | 'demand'
@@ -57,7 +57,7 @@ export type PluginSecretState = 'ready' | 'missing' | 'not-allowed'
 export interface PluginInfo {
   /** The folder, as registered. The key Settings acts on. */
   path: string
-  /** Null when the manifest did not say one Helm could read. */
+  /** Null when the manifest did not say one Floti could read. */
   id: string | null
   name: string
   version: string | null
@@ -80,7 +80,7 @@ export interface PluginInfo {
   settings: SettingSpec[]
   /** The values the page shows: what the user set, else the manifest's default, else null. */
   settingValues: Record<string, SettingValue>
-  /** The origins `helm.fetch` may reach, canonical. */
+  /** The origins `floti.fetch` may reach, canonical. */
   network: string[]
   secrets: Array<{ key: string; state: PluginSecretState }>
   exec: Array<{ name: string; command: string; args: string[] }>
@@ -91,13 +91,13 @@ export interface PluginInfo {
   agent: PluginAgentInfo | null
   /** Its pages may ask to start a Claude Code session, which the user confirms each time. */
   startsSessions: boolean
-  /** Its pages may see Helm's sessions: names, folders, and whether each is working. */
+  /** Its pages may see Floti's sessions: names, folders, and whether each is working. */
   seesSessions: boolean
   status: StatusItem | null
   badge: number | null
 }
 
-/** What a plugin offers the Claude Code sessions Helm starts. */
+/** What a plugin offers the Claude Code sessions Floti starts. */
 export interface PluginAgentInfo {
   /** The user's switch: whether new sessions are offered these tools. */
   enabled: boolean

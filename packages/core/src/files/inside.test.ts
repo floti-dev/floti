@@ -40,7 +40,7 @@ function shortPath(path: string): string | null {
 let root: string
 
 beforeEach(() => {
-  // A space in the path, as every Helm fixture has: quoting is where paths break.
+  // A space in the path, as every Floti fixture has: quoting is where paths break.
   root = mkdtempSync(join(tmpdir(), 'floti inside-'))
 })
 

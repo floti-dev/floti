@@ -157,7 +157,7 @@ describe('resolveBrowserAddress', () => {
    * `localhost:3000` is the single most common thing anybody types here, and
    * `new URL` reads it as the scheme `localhost:` with an opaque path - which
    * is correct and is exactly wrong for an address bar. The refusal that shape
-   * produced was "Helm's browser opens http and https pages only, and this is
+   * produced was "Floti's browser opens http and https pages only, and this is
    * localhost", which is a sentence that makes no sense to read.
    */
   it('reads host:port as a host and a port, not as a scheme', () => {

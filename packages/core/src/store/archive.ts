@@ -251,8 +251,8 @@ function archivedBytes(store: Store): number {
  * they are reading. The ceiling is adjustable; this rule is not.
  *
  * The dropped session keeps its row. `state = 'evicted'` is what lets the pane
- * say "Helm had this and dropped it to stay under your limit" rather than "this
- * was reaped before Helm ever saw it", which are different facts about the same
+ * say "Floti had this and dropped it to stay under your limit" rather than "this
+ * was reaped before Floti ever saw it", which are different facts about the same
  * missing conversation - and it is what stops the next pass archiving it again.
  */
 export function evictToCeiling(store: Store, maxBytes: number): Eviction {

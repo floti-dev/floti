@@ -5,7 +5,7 @@
  * (`store/copy.ts`).
  */
 
-/** One line of `history.jsonl`, after the fields Helm uses have been checked. */
+/** One line of `history.jsonl`, after the fields Floti uses have been checked. */
 export interface HistoryLine {
   sessionId: string
   project: string
