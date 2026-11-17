@@ -307,7 +307,7 @@ needs macOS;
 
 `pnpm verify:linux-artifact` is the Linux counterpart. It extracts the AppImage
 a person downloads with the AppImage's own runtime (`--appimage-extract`, no
-FUSE) and checks the app inside: an x64 Linux `helm`; better-sqlite3's
+FUSE) and checks the app inside: an x64 Linux `floti-desktop`; better-sqlite3's
 prebuild, node-pty's compiled addon and koffi's Linux package unpacked beside
 the asar; a `floti` and `floti-SHA256SUMS` byte for byte the ones it is given
 (`--floti`, `--sums`; by default `dist-host/`'s), floti executable; the pinned
@@ -540,18 +540,16 @@ because floti's is `floti-<version>-SHA256SUMS`, and `scripts/release.mjs
 check` refuses a folder holding such a pair, in `assemble`, `sign` and
 `publish`.
 
-The desktop files are named `Floti-<version>-*` from 3.0; releases before
-that named them `Helm-<version>-*`, and keep those names. None is published
-under both, because no released floti derives a later release's desktop file
-name: `floti update` takes each file's name from the manifest (it checks only
+The desktop files are named `Floti-<version>-*`. No released floti derives
+a later release's desktop file name: `floti update` takes each file's name from the manifest (it checks only
 that it is a plain file name) and its signature's as that name with
 `.minisig` after it, and `floti add desktop` derives the names
 (`desktop_file`, `desktop_sums_name` in `crates/host/src/add.rs`) only for
-the release of the floti running it. So a 2.4 floti updates to 3.0 by the
-names the 3.0 manifest gives, and adds the desktop from its own 2.4
-release's `Helm-*` files, its list `Helm-<version>-SHA256SUMS` among them.
-Nothing reads a later release's desktop list, so the list took its 3.0 name
-`Floti-<version>-desktop-SHA256SUMS` with no old name kept beside it.
+the release of the floti running it. So a floti updates to a later release
+by the names that release's manifest gives, and adds the desktop from its own
+release's files, its list `Floti-<version>-desktop-SHA256SUMS` among them.
+Nothing reads a later release's desktop list, so a release can rename its
+files without keeping the old names beside them.
 
 A stable release
 then updates the Homebrew formula and opens the winget pull request ("Homebrew

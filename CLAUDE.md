@@ -117,9 +117,9 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - A value import into the browser bundle comes from `@floti/core/types`, never
   the package root. This fails at rollup, not at typecheck.
 - Every channel a Floti page uses is declared in `shared/ipc.ts`. The preload
-  exposes three generic functions; a feature adds a channel, not a bridge
-  method. `term:*` (the spike page's single pty) and `session:*` (the host's
-  sessions) never mix.
+  exposes three generic functions on `window.desktop`; a feature adds a
+  channel, not a bridge method. `term:*` (the spike page's single pty) and
+  `session:*` (the host's sessions) never mix.
 - A host channel added to `shared/ipc.ts` is also declared in
   `crates/floti-protocol`, or listed there as client-only with a reason
   (`channels/boundary.rs`), and the generated files are rewritten with
@@ -330,8 +330,8 @@ request.
 - The plugin SDK publishes to npm on its own version: a bump in
   `packages/plugin-sdk/package.json` merged to `main`. A change to the SDK
   reaches plugin authors only with that bump.
-- Work is tracked in the ClickUp list "Helm - Claude Code Shell"
-  (`901114291892`). Nothing in the repository refers to a task by id.
+- Work is tracked outside the repository. Nothing in the repository refers to
+  a task by id.
 - Machine-specific facts go in `CLAUDE.local.md` (gitignored). No personal path
   or name may appear anywhere in the repository; `pnpm packaging-check
   --only=audit` checks that, when asked for.
