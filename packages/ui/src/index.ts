@@ -102,8 +102,6 @@ export { DeleteProfileDialog, type DeleteProfileDialogProps } from './components
 export type { SetupClaudeStatus } from './lib/claudeStatus'
 export {
   AgentsStep,
-  FirstSessionStep,
-  FIRST_MESSAGE_PLACEHOLDER,
   HostStep,
   TourStep,
   WelcomeStep,
@@ -111,7 +109,6 @@ export {
   WALKTHROUGH_STEP_COUNT,
   workspaceStepReady,
   type AgentsStepProps,
-  type FirstSessionStepProps,
   type HostStepProps,
   type TourStepProps,
   type WalkthroughAgent,

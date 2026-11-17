@@ -2,10 +2,10 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { openStore, readSettings } from '@floti/core'
 import { seedSettings } from '../test/world'
-import { claudeRunIn, expect, test as base } from './desktop'
+import { expect, test as base } from './desktop'
 
 /**
- * The guided first run, from a first start to a running fake-agent session.
+ * The guided first run, from a first start to the shell's home screen.
  *
  * The world starts as a first start leaves it: nothing to scan, no setup
  * stamp, the walkthrough at step 1 (`settleWalkthrough`) and the fake
@@ -24,9 +24,7 @@ const test = base.extend({
   }
 })
 
-const FIRST_MESSAGE = 'Read AGENTS.md and tell me what this workspace is for.'
-
-test('a first start walks from Welcome to a running session in a new Starter workspace', async ({ desktop, world }) => {
+test('a first start walks from Welcome to the home screen with a new Starter workspace selected', async ({ desktop, world }) => {
   const { app } = desktop
   const setup = desktop.window
   await desktop.app.evaluate(({ dialog }, folder) => {
@@ -58,29 +56,24 @@ test('a first start walks from Welcome to a running session in a new Starter wor
   const shellOpens = app.waitForEvent('window')
   await setup.getByRole('button', { name: 'Create workspace' }).click()
 
-  // The setup window hands over: the shell opens with steps 5 and 6 in its main area.
+  // The setup window hands over: the shell opens with step 5 in its main area.
   const shell = await shellOpens
   const workspace = join(world.projectsDir, 'my-work')
   expect(existsSync(join(workspace, 'workspace.yaml'))).toBe(true)
   expect(existsSync(join(workspace, 'AGENTS.md'))).toBe(true)
   await expect.poll(() => setup.isClosed()).toBe(true)
   await expect(shell.getByRole('heading', { name: 'Around the window' })).toBeVisible()
+  await expect(shell.getByText('Step 5 of 5')).toBeVisible()
   await shell.getByRole('button', { name: 'Continue' }).click()
 
-  // Step 6: start Claude Code in my-work with a first message.
-  await expect(shell.getByRole('heading', { name: 'Your first session' })).toBeVisible()
-  await expect(shell.getByText('Start an agent in my-work.')).toBeVisible()
-  await shell.getByRole('textbox', { name: /First message/ }).fill(FIRST_MESSAGE)
-  await shell.getByRole('button', { name: 'Start session' }).click()
-  await expect(shell.getByRole('tab', { name: 'my-work, ready' })).toBeVisible()
-
-  const run = await claudeRunIn(world, workspace)
-  expect(run.openingPrompt).toBe(FIRST_MESSAGE)
-
-  // Done: the walkthrough is not due again, and the workspace is in the launcher.
-  await expect(shell.getByRole('heading', { name: 'Your first session' })).toBeHidden()
+  // Done: the home screen, with no tab open and no session started, and the
+  // workspace selected in the sidebar.
+  await expect(shell.getByRole('heading', { name: 'Around the window' })).toBeHidden()
+  await expect(shell.locator('[data-welcome-pane]')).toBeVisible()
+  await expect(shell.getByRole('tab', { name: /my-work/ })).toHaveCount(0)
+  await expect(shell.getByTitle(workspace, { exact: true }).and(shell.locator('[aria-current="true"]'))).toBeVisible()
   await expect(shell.getByRole('button', { name: 'Start a session in my-work' })).toBeAttached()
-  // Read beside the running app: main wrote it as step 6 finished.
+  // Read beside the running app: the walkthrough is not due again.
   const store = openStore({ file: join(world.dataDir, 'desktop.db') })
   try {
     expect(readSettings(store).walkthrough).toBeNull()

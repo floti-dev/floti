@@ -867,10 +867,11 @@ describe('settings validation', () => {
     },
     {
       key: 'walkthrough',
-      good: [null, { step: 1, workspace: null }, { step: 6, workspace: 'C:\\Users\\you\\Projects\\my-work' }],
+      good: [null, { step: 1, workspace: null }, { step: 5, workspace: 'C:\\Users\\you\\Projects\\my-work' }],
       bad: [
         {},
         { step: 0, workspace: null },
+        { step: 6, workspace: null },
         { step: 7, workspace: null },
         { step: '2', workspace: null },
         { step: 3 },

@@ -2054,14 +2054,7 @@ agent?: string,
  * flag, as `permissionMode` does. Absent, the profile's and the agent's
  * apply, as they did for a client before 2.3.
  */
-chosen?: LaunchChoices, 
-/**
- * The session's first message, passed to the agent at launch as its
- * opening prompt, as a profile's is, and never typed. Present and not
- * blank, it replaces the profile's; a resume takes none. A host before
- * it ignores the field and starts the session with no first message.
- */
-openingPrompt?: string, cols: number, rows: number, };
+chosen?: LaunchChoices, cols: number, rows: number, };
 
 /**
  * What a session was launched with, as its launch composed it.

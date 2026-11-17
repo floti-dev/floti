@@ -3269,7 +3269,6 @@ fn launch_request(folder: &Path, agent: Option<&str>) -> LaunchSessionRequest {
         backend: None,
         agent: agent.map(str::to_owned),
         chosen: None,
-        opening_prompt: None,
         cols: 80,
         rows: 24,
     }

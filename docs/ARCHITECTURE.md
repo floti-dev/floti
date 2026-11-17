@@ -158,7 +158,7 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
 A first start is one with no data folder: the open that creates `desktop.db`
 (`settleWalkthrough` in core) writes the `walkthrough` setting at step 1. A
 database that was there before has its migrations applied already, so it
-opens the shell. `walkthrough` is the step (1 to 6) and the workspace step 4 chose, kept in `desktop.db` on this device; null
+opens the shell. `walkthrough` is the step (1 to 5) and the workspace step 4 chose, kept in `desktop.db` on this device; null
 means it is not showing.
 
 - Steps 1 to 4 run in a setup window of their own, before the shell exists:
@@ -173,11 +173,12 @@ means it is not showing.
   main opens the shell (or brings the open one forward with the settings the
   setup window wrote) and only then closes the setup window, so the app is
   never left with no window.
-- Steps 5 and 6 run in the shell's main area (`setup/ShellWalkthrough.tsx`),
-  with the workspace selected in the sidebar. Step 6 starts the session with
-  its first message as the launch's `openingPrompt` (protocol 4.2), passed to
-  the agent as its opening prompt and never typed; starting it or skipping
-  sets `walkthrough` to null.
+- Step 5, the last, runs in the shell's main area
+  (`setup/ShellWalkthrough.tsx`), with the workspace selected in the sidebar.
+  Continue or Skip sets `walkthrough` to null and leaves the shell on its home
+  screen, the main area with no tab open, with that workspace still selected
+  until a tab opens. The walkthrough starts no session; the first one starts
+  the way every later one does.
 - Closing either window leaves the step where it was, so the next start
   resumes there. Settings > General's Show the walkthrough sends
   `walkthrough:open`: main writes step 1 and opens the setup window beside

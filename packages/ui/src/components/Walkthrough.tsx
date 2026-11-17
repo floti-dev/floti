@@ -22,9 +22,10 @@ import {
 } from './icons'
 
 /**
- * The guided first run (Floti Onboarding, "Guided first run"): six steps from
- * the install to a running session. Steps 1 to 4 are drawn in the setup
- * window, before the shell exists, and 5 and 6 in the shell's main area.
+ * The guided first run (Floti Onboarding, "Guided first run"): five steps from
+ * the install to the shell's home screen. Steps 1 to 4 are drawn in the setup
+ * window, before the shell exists, and 5 in the shell's main area. It starts
+ * no session: the first one starts the way every later one does.
  *
  * Every screen is a title, at most one short line and its choices. What a
  * step checks, writes and never touches is the desktop's business and not
@@ -33,7 +34,7 @@ import {
  */
 
 /** How many steps there are. */
-export const WALKTHROUGH_STEP_COUNT = 6
+export const WALKTHROUGH_STEP_COUNT = 5
 
 const ghostButton = 'rounded-well px-2 py-1.5 text-[12px] text-fg-muted transition-colors hover:text-fg'
 
@@ -48,7 +49,7 @@ function StepFrame({
   foot
 }: {
   step: number
-  /** The label over the title: `Step 3 of 6`, unless the step says more. */
+  /** The label over the title: `Step 3 of 5`, unless the step says more. */
   label?: string
   title: string
   lead?: ReactNode
@@ -258,8 +259,7 @@ export function WelcomeStep({ onSkipSetup, onGetStarted }: WelcomeStepProps): JS
     >
       <p className="mb-2 text-[15px] text-fg">Be the captain of your fleet.</p>
       <p className="text-[13px] text-fg-muted">
-        Run your coding agents side by side, on this PC or your other computers. A few steps and your first one is
-        running.
+        Run your coding agents side by side, on this PC or your other computers. A few steps and you’re ready.
       </p>
     </StepFrame>
   )
@@ -734,100 +734,6 @@ export function TourStep({ onSkip, onBack, onContinue }: TourStepProps): JSX.Ele
           </li>
         ))}
       </ul>
-    </StepFrame>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Step 6
-// ---------------------------------------------------------------------------
-
-/** The first message's placeholder, which is also a fair first message. */
-export const FIRST_MESSAGE_PLACEHOLDER = 'Read AGENTS.md and tell me what this workspace is for.'
-
-export interface FirstSessionStepProps {
-  /** Where the session starts: its name for the line, or null when there is no workspace to start in. */
-  workspace: string | null
-  /** The agents installed on this PC, to pick from. */
-  agents: readonly { id: string; name: string }[]
-  agent: string | null
-  onAgent: (id: string) => void
-  message: string
-  onMessage: (message: string) => void
-  problems: readonly string[]
-  busy: boolean
-  onSkip: () => void
-  onBack: () => void
-  onStart: () => void
-}
-
-export function FirstSessionStep({
-  workspace,
-  agents,
-  agent,
-  onAgent,
-  message,
-  onMessage,
-  problems,
-  busy,
-  onSkip,
-  onBack,
-  onStart
-}: FirstSessionStepProps): JSX.Element {
-  const ready = workspace !== null && agent !== null && !busy
-  return (
-    <StepFrame
-      step={6}
-      title="Your first session"
-      lead={workspace === null ? 'Add a workspace from the sidebar to start one.' : `Start an agent in ${workspace}.`}
-      foot={
-        <Foot
-          onSkip={onSkip}
-          onBack={onBack}
-          primary={
-            <>
-              <TerminalIcon width={13} height={13} />
-              Start session
-            </>
-          }
-          primaryReady={ready}
-          onPrimary={onStart}
-        />
-      }
-    >
-      <div className="grid gap-3">
-        <label className="flex flex-col gap-[5px]">
-          <span className={dialogLabel}>Agent</span>
-          <select
-            data-walkthrough-agent-select
-            value={agent ?? ''}
-            disabled={agents.length === 0}
-            onChange={(event) => onAgent(event.target.value)}
-            className={dialogInput}
-          >
-            {agents.length === 0 && <option value="">No agent is installed</option>}
-            {agents.map((choice) => (
-              <option key={choice.id} value={choice.id}>
-                {choice.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-[5px]">
-          <span className={dialogLabel}>
-            First message <span className="font-normal tracking-normal normal-case">· optional</span>
-          </span>
-          <textarea
-            data-walkthrough-first-message
-            value={message}
-            onChange={(event) => onMessage(event.target.value)}
-            placeholder={FIRST_MESSAGE_PLACEHOLDER}
-            rows={2}
-            className={cn(dialogInput, 'h-[52px] resize-none py-1.5 leading-[1.45]')}
-          />
-        </label>
-        <Problems problems={problems} />
-      </div>
     </StepFrame>
   )
 }

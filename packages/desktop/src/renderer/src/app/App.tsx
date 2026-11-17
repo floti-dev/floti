@@ -350,7 +350,8 @@ import { LocalProjectPane } from "./LocalProjectPane";
 import { sessionActivityIn } from "./useAgentWorktrees";
 import { useSetup } from "./useSetup";
 import { addHostActions, hostInstall } from "./hostActions";
-import { ShellWalkthrough, type FirstSessionRequest } from "./setup/ShellWalkthrough";
+import { ShellWalkthrough } from "./setup/ShellWalkthrough";
+import { useWalkthroughHome } from "./setup/useWalkthroughHome";
 import { useWalkthroughReveal } from "./setup/useWalkthroughReveal";
 import { useHostWorkspaces } from "./useHostWorkspaces";
 import { treeHostPhase } from "./treeHostPhase";
@@ -2403,31 +2404,12 @@ export function App(): JSX.Element {
     open.focused,
   ]);
 
-  /** Whether steps 5 and 6 of the walkthrough hold the main area. */
+  /** Whether step 5 of the walkthrough holds the main area. */
   const walkthroughShown = walkthroughInShell(settings?.walkthrough ?? null);
-  /**
-   * Step 6's session: started in the workspace step 4 made, on this PC's
-   * host, with its first message as the opening prompt, and put in a tab.
-   */
-  const startFirstSession = useCallback(
-    async (request: FirstSessionRequest): Promise<void> => {
-      const { cols, rows } = estimateGrid(bodyRefs.current.get(open.focused) ?? null);
-      const launched = await bridgeFor(LOCAL_HOST_KEY).invoke("session:launch", {
-        cwd: request.cwd,
-        projectPath: request.cwd,
-        profileId: null,
-        permissionMode: null,
-        resume: null,
-        backend: request.backend,
-        ...(request.openingPrompt === "" ? {} : { openingPrompt: request.openingPrompt }),
-        cols,
-        rows,
-      });
-      sessionState.adopt(launched.session);
-      placeSession(launched.session.id, false, undefined, LOCAL_HOST_KEY);
-    },
-    [open.focused, sessionState, placeSession],
-  );
+  /** No tab is open anywhere: the home screen, in place of the panes. */
+  const empty = open.groups.length === 1 && open.groups[0]!.tabs.length === 0;
+  /** The workspace a finished walkthrough leaves selected on the home screen. */
+  const walkthroughHome = useWalkthroughHome(empty);
   // The workspace the walkthrough chose is brought into view in the tree as
   // the shell opens on it, as a click on its tab would.
   useWalkthroughReveal(
@@ -2437,14 +2419,6 @@ export function App(): JSX.Element {
       revealCount.current += 1;
       setTreeReveal({ seq: revealCount.current, kind: "project", path });
     },
-  );
-  /** The walkthrough is over: the workspace it chose stays selected, as its page when no session took the place. */
-  const finishWalkthrough = useCallback(
-    (workspace: string | null, started: boolean) => {
-      if (workspace !== null && !started)
-        openPane({ kind: "project", path: workspace });
-    },
-    [openPane],
   );
 
   /** The sessions a lost tab's Restore asked for, ticked when the Restore sessions tab opens. */
@@ -6178,7 +6152,7 @@ export function App(): JSX.Element {
                 ? settings.walkthrough.workspace
                 : front?.kind === "project"
                   ? front.path
-                  : null
+                  : walkthroughHome.selected
             }
             pinnedPaths={
               settings?.pinnedProjects ?? DEFAULT_SETTINGS.pinnedProjects
@@ -6489,7 +6463,6 @@ export function App(): JSX.Element {
     </>
   );
 
-  const empty = open.groups.length === 1 && open.groups[0]!.tabs.length === 0;
   /** The start-up steps, or a wait for a host that cannot be used, in place of the panes (`startupView`). */
   const startup = startupView(localStep, {
     layoutArrived: settingsLoaded,
@@ -6619,10 +6592,8 @@ export function App(): JSX.Element {
             <ShellWalkthrough
               walkthrough={settings.walkthrough}
               bridge={desktop}
-              hostReady={localStep?.step === "ready"}
               write={writeSettings}
-              start={startFirstSession}
-              onDone={finishWalkthrough}
+              onDone={walkthroughHome.finish}
             />
           </div>
         ) : empty ? (

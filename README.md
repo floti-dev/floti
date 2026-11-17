@@ -80,7 +80,7 @@ and GitHub build attestations.
 ## Getting started
 
 The first time Floti opens, a short walkthrough checks Claude Code, sets up a
-workspace and starts your first session. `floti doctor` checks Claude Code
+workspace and shows you around the window. `floti doctor` checks Claude Code
 from a terminal.
 
 To add a server or WSL distro later, open **Settings → Hosts**. Floti reaches
