@@ -520,11 +520,12 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   either (`agent/workspace.rs`). Everything that shows what a folder holds
   reads both: the scan's inventory (`workspace/discovery/inventory.rs`, its
   `agentsMd` and `agentsDir` since protocol 4.2), the project pane, the config
-  scopes (a folder with either shape's files is a scope that exists) and the
-  effective view, which lists an overlay's `.agents/skills` and every
-  `AGENTS.md` a launch loads. A skill folder in both skills folders counts and
-  lists once, from `.claude/skills`, as a launch takes it. None of them writes
-  into the folder.
+  scopes (a folder with either shape's files is a scope that exists) and their
+  trees (a scope's `AGENTS.md`, kind `agents-md`, and its `.agents/skills`,
+  which a template import copies to the same place), and the effective view,
+  which lists an overlay's `.agents/skills` and every `AGENTS.md` a launch
+  loads. A skill folder in both skills folders counts and lists once, from
+  `.claude/skills`, as a launch takes it. None of them writes into the folder.
 
 ## Processes and ports
 
