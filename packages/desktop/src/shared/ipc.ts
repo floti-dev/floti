@@ -1276,11 +1276,11 @@ export interface IpcRequests {
    * the README, in docs/PACKAGING.md and in SPEC 5. If it moves again, all four
    * move together - CLAUDE.md says so, and the reason is that four copies of a
    * claim about what an app does to the network is four chances to ship a lie.
-   * The first sentence replaced "the only outbound connection Helm's own
+   * The first sentence replaced "the only outbound connection the app's own
    * process opens" when the browser pane landed, because a browser makes that
    * false.
    *
-   * What Helm *contacts* and where it *listens* are stated apart. A listener
+   * What Floti *contacts* and where it *listens* are stated apart. A listener
    * on loopback contacts nothing, so the agent tools' endpoint (the host's,
    * `crates/host/src/agent_tools`, serving the browser tools, the
    * session-awareness tools, the child-session tools and each plugin's on one
