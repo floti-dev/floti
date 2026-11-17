@@ -123,6 +123,11 @@ file it cannot read out of the install without failing it. So
 (`ELECTRON_BUILDER_7Z_FILTER`), and `verify-artifact.mjs` fails an artefact
 with any file packed with a filter 19.00 cannot read.
 
+On Windows `floti.exe` carries the app's icon, `build/icon.ico`, as its icon
+resource, so Explorer, the taskbar and Task Manager show the colour circle
+for it: `crates/host/build.rs` compiles `crates/host/floti.rc` into it for a
+Windows target, and builds for macOS and Linux have no resource step.
+
 ### floti for every host
 
 Every release also carries `floti` on its own, for each computer a host can run

@@ -1,0 +1,7 @@
+// floti.exe's resources, compiled in by build.rs for a Windows target only.
+//
+// The icon is the desktop app's, so Explorer, the taskbar and Task Manager
+// show the same colour circle for floti.exe as for the app. Explorer shows a
+// program's first icon group; this is its only one. The path is relative to
+// this file's folder, which is where build.rs runs the resource compiler.
+1 ICON "../../packages/desktop/build/icon.ico"

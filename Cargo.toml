@@ -37,6 +37,10 @@ comrak = { version = "0.59", default-features = false }
 deno_core = "=0.413.0"
 # The error type a plugin isolate's ops throw: the version deno_core uses.
 deno_error = "=0.7.1"
+# floti.exe's icon resource. embed-resource drives the toolchain's own
+# resource compiler (rc.exe on MSVC) and links the result into the named
+# binary, rather than writing the resource itself.
+embed-resource = "3.0"
 floti-protocol = { path = "crates/floti-protocol" }
 getrandom = "0.4"
 # The agent tools listener's HTTP: HTTP/1.1 only, on loopback, with no TLS.
@@ -59,6 +63,9 @@ junction = "1.4"
 libc = "0.2"
 # Recursive folder watching for the Files view, on each OS's own events.
 notify = "8"
+# Reads the PE resources of the built floti.exe, for the test that it
+# carries the app's icon. A dev-dependency only.
+object = { version = "0.41", default-features = false, features = ["read_core", "pe"] }
 portable-pty = "0.9"
 # floti.fetch's transport: rustls with ring (no C toolchain beyond the
 # compiler, and a static Linux binary), the system proxy, and no cookies,
