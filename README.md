@@ -126,14 +126,6 @@ and, on macOS and Linux, starts the host at each sign-in. On Windows the host
 starts when the app or a connection needs it. Where there's a display, setup
 also offers to install the desktop app.
 
-On macOS and Linux, Homebrew installs floti too, without the desktop app. It
-trusts the tap first, because Homebrew loads no formula from a tap it doesn't
-trust:
-
-```sh
-brew trust floti-dev/tap && brew install floti-dev/tap/floti
-```
-
 ### The desktop app
 
 `floti add desktop` installs the app of floti's own version for your user,
