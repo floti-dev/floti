@@ -187,8 +187,8 @@ describe('secret', () => {
 describe('outside Floti', () => {
   it('imports without a bridge, says what is wrong on subscribe, and recovers once there is one', () => {
     removeBridge()
-    expect(() => settings.subscribe(() => undefined)).toThrow('window.floti and window.helm are both missing')
-    expect(() => theme.subscribe(() => undefined)).toThrow('window.floti and window.helm are both missing')
+    expect(() => settings.subscribe(() => undefined)).toThrow('window.floti is missing')
+    expect(() => theme.subscribe(() => undefined)).toThrow('window.floti is missing')
 
     fake = installBridge()
     expect(watch(settings).values).toEqual([null])
@@ -196,14 +196,10 @@ describe('outside Floti', () => {
   })
 })
 
-describe.each([
-  ['a version 2 page', 'floti'],
-  ['a version 1 page', 'helm']
-] as const)('S5: in %s, the stores use window.%s', (_page, name) => {
+describe('S5: the stores use window.floti', () => {
   it('read and follow that bridge', async () => {
-    fake = installBridge(name)
-    expect(Object.keys(globalThis)).toContain(name)
-    expect(Object.keys(globalThis)).not.toContain(name === 'floti' ? 'helm' : 'floti')
+    fake = installBridge()
+    expect(Object.keys(globalThis)).toContain('floti')
 
     const themes = watch(theme)
     const values = watch(settings)

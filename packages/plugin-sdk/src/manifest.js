@@ -17,49 +17,25 @@
  */
 
 /**
- * The bridge versions this SDK speaks, and what `helm-plugin validate`
- * accepts: 1, whose pages get `window.helm` and whose background is a page a
- * window frames, and 2, whose pages get `window.floti` and whose background
- * is a module the host runs in an isolate of its own.
+ * The plugin API versions this SDK speaks, and what `helm-plugin validate`
+ * accepts: 2, whose pages get `window.floti` and whose background is a module
+ * the host runs in an isolate of its own.
  */
-export const SUPPORTED_API_VERSIONS = Object.freeze([1, 2])
+export const SUPPORTED_API_VERSIONS = Object.freeze([2])
+
+/** What a plugin's background is: a module Floti's host runs in an isolate of its own. */
+const BACKGROUND_EXTENSIONS = Object.freeze(['.js', '.mjs'])
 
 /**
- * Where a plugin's background code is, by bridge version: a page Helm frames
- * at 1, a module Floti's host runs in an isolate of its own at 2.
- *
- * @type {Readonly<Record<number, readonly string[]>>}
- */
-const BACKGROUND_EXTENSIONS = Object.freeze({ 1: Object.freeze(['.html']), 2: Object.freeze(['.js', '.mjs']) })
-
-/** @type {Readonly<Record<number, string>>} */
-const BACKGROUND_KINDS = Object.freeze({ 1: 'page', 2: 'module' })
-
-/**
- * What `background` must be, said for the manifest's own version first and
- * then for the other, so an author who wrote the other kind sees which version
- * takes it.
- *
- * @param {number} apiVersion
- * @returns {string}
- */
-function backgroundRule(apiVersion) {
-  const takes = (/** @type {number} */ version) =>
-    `a ${(BACKGROUND_EXTENSIONS[version] ?? []).join(' or ')} ${BACKGROUND_KINDS[version] ?? 'file'} at apiVersion ${String(version)}`
-  const others = Object.keys(BACKGROUND_EXTENSIONS)
-    .map(Number)
-    .filter((version) => version !== apiVersion)
-  return `background must be ${[apiVersion, ...others].map(takes).join(', and ')}`
-}
-
-/**
- * The versions, as a sentence says them: `1`, `1 and 2`, `1, 2 and 3`.
+ * The versions a refusal names: `only apiVersion 2`, or `apiVersion 2 and 3`
+ * for a caller that runs more than one.
  *
  * @param {readonly number[]} versions
  */
-function versionList(versions) {
+function versionsRun(versions) {
   const said = versions.map(String)
-  return said.length < 2 ? said.join('') : `${said.slice(0, -1).join(', ')} and ${said[said.length - 1] ?? ''}`
+  if (said.length < 2) return `only apiVersion ${said.join('')}`
+  return `apiVersion ${said.slice(0, -1).join(', ')} and ${said[said.length - 1] ?? ''}`
 }
 
 /** A plugin's id: the host of its origin, which a standard scheme lower-cases. */
@@ -313,17 +289,17 @@ export function manifestFiles(manifest) {
  * plugin author fixes them in one pass.
  *
  * `options.apiVersions` is for a host that names the versions it runs, as
- * Floti's host does with `[1, 2]`, and changes how a version it does not run
- * is refused. Left out, it is `SUPPORTED_API_VERSIONS`. Version 2 reads every
- * field as version 1 does, except that `background` is a `.js` or `.mjs`
- * module rather than a page.
+ * Floti's host does with `[2]`, and changes how a version it does not run is
+ * refused. Left out, it is `SUPPORTED_API_VERSIONS`. A version this SDK does
+ * not speak is refused whatever the host names.
  *
  * @param {unknown} value the parsed `helm-plugin.json`
  * @param {import('./manifest').ValidateOptions} [options]
  * @returns {import('./manifest').ManifestResult}
  */
 export function validateManifest(value, options = {}) {
-  const versions = options.apiVersions ?? SUPPORTED_API_VERSIONS
+  // A version the caller names that this SDK does not speak is not run either.
+  const versions = (options.apiVersions ?? SUPPORTED_API_VERSIONS).filter((version) => SUPPORTED_API_VERSIONS.includes(version))
   /** @type {string[]} */
   const errors = []
   /** @type {string[]} */
@@ -339,19 +315,14 @@ export function validateManifest(value, options = {}) {
   }
 
   const apiVersion = value['apiVersion']
-  if (typeof apiVersion !== 'number' || !versions.includes(apiVersion) || BACKGROUND_EXTENSIONS[apiVersion] === undefined) {
-    // Said first and on its own: a plugin from a newer Helm fails every other
-    // check for reasons that are not its fault.
+  if (typeof apiVersion !== 'number' || !versions.includes(apiVersion)) {
+    // Said first and on its own: a plugin written for another version fails
+    // every other check for reasons that are not its fault. The host's
+    // sentence is asserted word for word by its own tests
+    // (crates/host/src/plugins/manifest.rs).
     const said = apiVersion === undefined ? 'apiVersion is missing' : `apiVersion ${JSON.stringify(apiVersion)} is not supported`
-    // The host's sentence is asserted word for word by its own tests
-    // (crates/host/src/plugins/manifest.rs), so it keeps its comma list.
-    const message =
-      options.apiVersions === undefined
-        ? apiVersion === undefined
-          ? `${said}; this Floti supports ${versionList(versions)}`
-          : `${said} by this Floti, which supports ${versionList(versions)}`
-        : `${said}: this host runs apiVersion ${versions.join(', ')} plugins`
-    return { ok: false, errors: [message], warnings }
+    const runner = options.apiVersions === undefined ? 'this Floti' : 'this host'
+    return { ok: false, errors: [`${said}: ${runner} runs ${versionsRun(versions)} plugins`], warnings }
   }
 
   const id = value['id']
@@ -491,9 +462,9 @@ export function validateManifest(value, options = {}) {
   const background = optionalEntry(
     value['background'],
     'background',
-    BACKGROUND_EXTENSIONS[apiVersion] ?? ['.html'],
+    BACKGROUND_EXTENSIONS,
     fail,
-    backgroundRule(apiVersion)
+    'background must be a .js or .mjs module'
   )
 
   // --- commands
@@ -627,7 +598,7 @@ export function validateManifest(value, options = {}) {
     else {
       const instructions = optionalText(rawAgent['instructions'], 'agent.instructions', AGENT_TEXT_MAX, fail)
       const tools = readTools(rawAgent['tools'], typeof id === 'string' && ID_PATTERN.test(id) ? id : null, fail)
-      // The background (a page at version 1, a module at 2) is the only code a
+      // The background module is the only code a
       // plugin has running whenever a session might call: panels and tabs come
       // and go with the screen.
       if (background === null && value['background'] === undefined) {
@@ -643,7 +614,7 @@ export function validateManifest(value, options = {}) {
   return {
     ok: true,
     manifest: {
-      apiVersion: /** @type {1 | 2} */ (apiVersion),
+      apiVersion: /** @type {2} */ (apiVersion),
       id,
       name,
       version,

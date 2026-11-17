@@ -61,8 +61,7 @@ import type {
   HelmTheme,
   PluginParams,
   SettingValue,
-  SurfaceKind,
-  ToolSession
+  SurfaceKind
 } from '@floti-dev/plugin-sdk'
 import type {
   PluginInfo,
@@ -1085,12 +1084,6 @@ export interface IpcRequests {
    * ever on the user's click; Helm never restarts the host on its own.
    */
   'windowSessions:restartHost': { request: void; response: void }
-  /**
-   * What the hidden plugin host window has reported of the background pages
-   * it runs, which Settings lays over the
-   * host's list. Main alone hears those reports.
-   */
-  'pluginBackground:states': { request: void; response: PluginBackgroundReport[] }
 
   /** Rows from the last scan, for painting before a fresh one finishes. */
   'discovery:cached': { request: void; response: CachedProject[] }
@@ -1281,9 +1274,9 @@ export interface IpcRequests {
    * first alone.
    *
    * Plugins did move the first sentence, by its last clause: a plugin's
-   * background page can fetch with nobody pressing anything, so the sentence
-   * says whose initiative that is - the plugin the user added - and how far it
-   * reaches: the origins in its manifest, through `helm.fetch` (the host's
+   * background can fetch with nobody pressing anything, so the sentence says
+   * whose initiative that is - the plugin the user added - and how far it
+   * reaches: the origins in its manifest, through `floti.fetch` (the host's
    * `plugins/net`), every redirect hop checked again. A plugin's programs and
    * service run with the user's rights and are not confined, and a service
    * listens on loopback for its own plugin; the four places say both.
@@ -1853,7 +1846,7 @@ export interface IpcRequests {
    * gone or the session could not start.
    */
   'plugins:session': { request: { requestId: string; start: boolean; cols: number; rows: number }; response: SessionRecord | null }
-  /** A Quick Open command with no tab, for the plugin's background page. */
+  /** A Quick Open command with no tab, for the plugin's background. */
   'plugins:command': { request: { plugin: string; id: string }; response: void }
   /** Memory and CPU per plugin. Asked while a plugin's settings page is open, never polled otherwise. */
   'plugins:metrics': { request: void; response: PluginMetrics[] }
@@ -1873,25 +1866,12 @@ export interface IpcRequests {
 }
 
 /**
- * The scheme a version 1 plugin's pages are served on:
- * `helm-plugin://<id>/<path>` for This PC's,
- * `helm-plugin://<id>.<host label>/<path>` for a remote host's, an origin per
- * host and plugin (`shared/plugins/origin.ts`). Such a page gets `window.helm`.
+ * The scheme a plugin's pages are served on: `floti-plugin://<id>/<path>`
+ * for This PC's, `floti-plugin://<id>.<host label>/<path>` for a remote
+ * host's, an origin per host and plugin (`shared/plugins/origin.ts`). Such a
+ * page gets `window.floti`.
  */
-export const PLUGIN_SCHEME = 'helm-plugin'
-
-/**
- * The scheme a version 2 plugin's pages are served on, laid out as
- * `helm-plugin`'s. The host writes it into a version 2 plugin's page URLs, so
- * the scheme is how a client tells the versions apart; such a page gets
- * `window.floti`.
- */
-export const FLOTI_PLUGIN_SCHEME = 'floti-plugin'
-
-/** Both plugin page schemes, version 1's first. */
-export const PLUGIN_SCHEMES = [PLUGIN_SCHEME, FLOTI_PLUGIN_SCHEME] as const
-
-export type PluginScheme = (typeof PLUGIN_SCHEMES)[number]
+export const PLUGIN_SCHEME = 'floti-plugin'
 
 // What the window draws of a plugin, and of the secrets: in core so the ui
 // package's Settings pages can be typed by them (`core/plugins/info.ts`).
@@ -1931,7 +1911,7 @@ export interface PluginCallRequest {
 
 export type PluginCallOutcome = { ok: true; value: unknown } | { ok: false; code: HelmErrorCode; message: string }
 
-/** What `helm.fetch` sends across: a `Request`, taken apart. */
+/** What `floti.fetch` sends across: a `Request`, taken apart. */
 export interface PluginFetchRequest {
   url: string
   method: string
@@ -1992,9 +1972,8 @@ export type PluginUiRequest =
   | { kind: 'link'; plugin: string; url: string }
 
 /**
- * An event for a plugin's pages. Each Helm page framing the plugin delivers it
- * to its own frames: the window to panels and tabs, the background host to the
- * background page.
+ * An event for a plugin's pages, which the window delivers to the panels and
+ * tabs it frames. One `to` the background is for the host's own engine.
  */
 export interface PluginDelivery {
   plugin: string
@@ -2002,42 +1981,6 @@ export interface PluginDelivery {
   event: 'settings' | 'secrets' | 'command' | 'sessions' | 'channel'
   data: unknown
   to: 'all' | 'background'
-}
-
-/** A session called one of a plugin's tools: main to the background host, for the plugin's background page. */
-export interface PluginToolCall {
-  /** Main's, for the answer and a cancel to name the call by. */
-  id: string
-  plugin: string
-  /** A tool the manifest declares; main checked. */
-  name: string
-  args: Record<string, unknown>
-  session: ToolSession
-  /** The remote host whose session called, answered only by that host's background page; absent for This PC's. */
-  host?: string
-}
-
-/**
- * The most a plugin's tool may answer with, in characters: the session's
- * context is what it fills, and it crosses three processes to get there. The
- * bridge refuses past it and main checks again.
- */
-export const PLUGIN_TOOL_ANSWER_MAX_CHARS = 1_000_000
-
-/** The background page's answer, or the background host's word that there is no page to give one. */
-export type PluginToolOutcome = { id: string; ok: true; text: string } | { id: string; ok: false; message: string }
-
-/**
- * What the hidden plugin host window saw of one background page it runs,
- * under plugin API v1, for the read of the plugin it was started from.
- */
-export interface PluginBackgroundReport {
-  plugin: string
-  revision: number
-  state: 'running' | 'crashed'
-  error: string | null
-  /** The remote host whose plugin's page this is, each run in a frame on that host's origin; absent for This PC's. */
-  host?: string
 }
 
 /** The kind of theme on screen - what `.dark` on `<html>` says. */
@@ -2139,17 +2082,6 @@ export interface IpcSends {
   'plugins:cancel': { callId: string }
   /** The secret dialog a plugin asked for has closed; main answers the plugin's call. */
   'plugins:answer': { requestId: string }
-  /** The background host's word on a background page: it connected, or it crashed. */
-  'plugins:backgroundState': PluginBackgroundReport
-  /** A tool call answered, from the background host. Main takes it from that window only. */
-  'plugins:toolResult': PluginToolOutcome
-  /**
-   * What a background page asked that only Helm's window can draw (one of the plugin's tabs, a secret dialog), from
-   * the hidden plugin host window, for main to hand the window.
-   */
-  'pluginWindow:ask': PluginUiRequest
-  /** A secret dialog the hidden window handed over has closed, from the window, for main to tell the hidden window. */
-  'pluginWindow:answer': { requestId: string }
 
   /** A Helm page's protocol bytes, for its bridge to the host. One-way: frames have their own replies. */
   'hostLink:send': { connection: number; bytes: Uint8Array }
@@ -2185,8 +2117,6 @@ export interface IpcEvents {
    * here, or in its peek, as a press on its row in the Sessions tree does.
    */
   'windowSessions:showChild': { host: string; id: number }
-  /** What the hidden plugin host window reports of the background pages it runs. */
-  'pluginBackground:changed': PluginBackgroundReport[]
   /** Where the copy of Helm's own database into the local host stands, after each change. */
   'ownData:changed': OwnDataCopyState
   /**
@@ -2199,10 +2129,6 @@ export interface IpcEvents {
   'remoteHosts:installProgress': { id: string; line: string }
   /** Every port forwarded to this PC now, whole, after each change. */
   'forwards:changed': ForwardedPort[]
-  /** A background page's ask for the window, from the hidden window through main. */
-  'pluginWindow:asked': PluginUiRequest
-  /** The window closed a secret dialog the hidden window handed it. */
-  'pluginWindow:answered': { requestId: string }
   /** The host's agents folder changed: the names whose files came, went or changed. Watched only while listened to. */
   'agents:changed': { names: string[] }
   /** The whole list after any write, so every surface showing profiles agrees
@@ -2352,10 +2278,6 @@ export interface IpcEvents {
   'plugins:ui': PluginUiRequest
   /** An event for a plugin's pages; see `PluginDelivery`. */
   'plugins:deliver': PluginDelivery
-  /** A session called a plugin's tool. To the background host only, answered on `plugins:toolResult`. */
-  'plugins:tool': PluginToolCall
-  /** Nobody waits for that call's answer any more. */
-  'plugins:toolCancel': { id: string }
   /** The secrets list moved - a save, a removal - from any window. No values, ever. */
   'secrets:changed': SecretsState
   /**
@@ -2454,7 +2376,6 @@ export const REQUEST_CHANNELS = Object.keys({
   'windowSessions:stopHost': true,
   'windowSessions:restartAsk': true,
   'windowSessions:restartHost': true,
-  'pluginBackground:states': true,
   'discovery:cached': true,
   'discovery:scan': true,
   'roots:suggest': true,
@@ -2600,8 +2521,6 @@ export const SEND_CHANNELS = Object.keys({
   'windowSessions:notify': true,
   'windowSessions:needsYou': true,
   'windowSessions:quitConfirmed': true,
-  'pluginWindow:ask': true,
-  'pluginWindow:answer': true,
   'probe:res': true,
   'browser:bounds': true,
   'browser:stop': true,
@@ -2611,8 +2530,6 @@ export const SEND_CHANNELS = Object.keys({
   'browser:layer-report': true,
   'plugins:cancel': true,
   'plugins:answer': true,
-  'plugins:backgroundState': true,
-  'plugins:toolResult': true,
   'hostLink:send': true,
   'hostLink:close': true
 } satisfies Record<SendChannel, true>) as SendChannel[]
@@ -2626,13 +2543,10 @@ export const EVENT_CHANNELS = Object.keys({
   'windowSessions:quitConfirm': true,
   'windowSessions:activate': true,
   'windowSessions:showChild': true,
-  'pluginBackground:changed': true,
   'ownData:changed': true,
   'remoteHosts:changed': true,
   'remoteHosts:installProgress': true,
   'forwards:changed': true,
-  'pluginWindow:asked': true,
-  'pluginWindow:answered': true,
   'agents:changed': true,
   'profiles:changed': true,
   'theme:changed': true,
@@ -2667,8 +2581,6 @@ export const EVENT_CHANNELS = Object.keys({
   'plugins:changed': true,
   'plugins:ui': true,
   'plugins:deliver': true,
-  'plugins:tool': true,
-  'plugins:toolCancel': true,
   'secrets:changed': true,
   'plugins:theme': true,
   'hostLink:data': true,

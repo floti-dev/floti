@@ -40,8 +40,7 @@ Usage:
 
   helm-plugin validate [folder]
       Checks the plugin in [folder] (default: this folder) as Floti does when
-      it loads it: the manifest, at apiVersion 1 or 2, and every file it
-      names. Exits 1 on errors.
+      it loads it: the manifest, at apiVersion 2, and every file it names. Exits 1 on errors.
 
   helm-plugin --help
 `

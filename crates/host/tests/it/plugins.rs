@@ -79,23 +79,18 @@ const PLUGINS_CHANGED: u64 = 1;
 /// The capability a client that draws plugin pages declares.
 const PLUGIN_PAGES: &str = "pluginPages";
 
-/// A version 1 plugin as today's Helm runs it: a panel, a background page
-/// and a tool, in `id`'s folder.
-fn helm_plugin(id: &str) -> String {
+/// A plugin with a panel, a background module and a tool, in `id`'s folder.
+fn board_plugin(id: &str) -> String {
     format!(
-        r#"{{ "apiVersion": 1, "id": "{id}", "name": "Board", "version": "1.4.0",
-            "background": "background.html",
+        r#"{{ "apiVersion": 2, "id": "{id}", "name": "Board", "version": "1.4.0",
+            "background": "bg.js",
             "panels": {{ "main": {{ "title": "Main", "entry": "panel/index.html" }} }},
             "agent": {{ "tools": {{ "find": {{ "description": "Finds a card." }} }} }} }}"#
     )
 }
 
-const HELM_PLUGIN_FILES: &[(&str, &str)] = &[
-    (
-        "background.html",
-        "<!doctype html><script src=\"bg.js\"></script>",
-    ),
-    ("bg.js", "helm.on('command', () => {})"),
+const BOARD_FILES: &[(&str, &str)] = &[
+    ("bg.js", "floti.on('command', () => {})"),
     ("panel/index.html", "<!doctype html><p>first</p>"),
     ("src/panel.ts", "export {}"),
 ];
@@ -434,13 +429,30 @@ async fn a_wrong_manifest_is_registered_and_listed_with_what_is_wrong_and_runs_n
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_version_1_plugin_loads_with_its_background_page_listed_for_the_client_and_a_version_2_one_runs_its_script_on_the_host()
+async fn an_api_version_1_plugin_is_refused_naming_version_2_and_a_plugin_runs_its_script_on_the_host()
  {
     let mut world = HostWorld::start().await;
-    let old = world
+    let old = world.dirs.plugin_folder(
+        "old plugin",
+        r#"{ "apiVersion": 1, "id": "old", "name": "Old", "background": "bg.html" }"#,
+        &[("bg.html", "<!doctype html>")],
+    );
+    let refused = only(&world.add(&old).await.plugins).clone();
+    assert_eq!(
+        refused.error.as_deref(),
+        Some("apiVersion 1 is not supported: this host runs only apiVersion 2 plugins")
+    );
+    assert_eq!(
+        (refused.id.as_deref(), refused.background.as_ref()),
+        (Some("old"), None),
+        "nothing of it is listed or run"
+    );
+
+    let board = world
         .dirs
-        .plugin_folder("helm plugin", &helm_plugin("board"), HELM_PLUGIN_FILES);
-    let plugin = only(&world.add(&old).await.plugins).clone();
+        .plugin_folder("board plugin", &board_plugin("board"), BOARD_FILES);
+    let listed = world.add(&board).await.plugins;
+    let plugin = &listed[1];
     assert_eq!(plugin.error, None, "{plugin:#?}");
     assert_eq!(
         (plugin.id.as_deref(), plugin.name.as_str()),
@@ -448,26 +460,10 @@ async fn a_version_1_plugin_loads_with_its_background_page_listed_for_the_client
     );
     assert_eq!(
         plugin.panels["main"].url,
-        "helm-plugin://board/panel/index.html"
+        "floti-plugin://board/panel/index.html"
     );
     let background = plugin.background.as_ref().unwrap();
-    assert_eq!(background.url, "helm-plugin://board/background.html");
-    assert_eq!(
-        background.state,
-        PluginBackgroundState::Stopped,
-        "the client frames it; the host runs nothing for it"
-    );
-    assert!(plugin.agent.as_ref().is_some_and(|agent| agent.enabled));
-
-    let new = world.dirs.plugin_folder(
-        "floti plugin",
-        &manifest("script", "Script", r#""background": "bg.mjs""#),
-        &[("bg.mjs", "export {}")],
-    );
-    let listed = world.add(&new).await.plugins;
-    let background = listed[1].background.as_ref().unwrap();
-    assert_eq!(listed[1].error, None);
-    assert_eq!(background.url, "floti-plugin://script/bg.mjs");
+    assert_eq!(background.url, "floti-plugin://board/bg.js");
     assert!(
         matches!(
             background.state,
@@ -475,14 +471,11 @@ async fn a_version_1_plugin_loads_with_its_background_page_listed_for_the_client
         ),
         "{background:#?}"
     );
-    assert_eq!(
-        listed[0].background.as_ref().unwrap().state,
-        PluginBackgroundState::Stopped
-    );
+    assert!(plugin.agent.as_ref().is_some_and(|agent| agent.enabled));
 
     world.restart().await;
     let listed = world.list().await;
-    assert_eq!(listed[0].error, None, "it still loads after a restart");
+    assert_eq!(listed[1].error, None, "it still loads after a restart");
     world.stop().await;
 }
 
@@ -493,10 +486,10 @@ async fn any_device_adds_removes_and_switches_a_plugin_and_each_switch_is_stored
     let mut world = HostWorld::start().await;
     let kept = world
         .dirs
-        .plugin_folder("kept plugin", &helm_plugin("kept"), HELM_PLUGIN_FILES);
+        .plugin_folder("kept plugin", &board_plugin("kept"), BOARD_FILES);
     let other = world
         .dirs
-        .plugin_folder("other plugin", &helm_plugin("other"), HELM_PLUGIN_FILES);
+        .plugin_folder("other plugin", &board_plugin("other"), BOARD_FILES);
     world.add(&kept).await;
     // A device the host has never seen switches its tools off; the desktop
     // does the rest.
@@ -535,7 +528,7 @@ async fn a_page_file_is_served_from_a_plugin_that_is_on_and_nothing_outside_its_
     let mut world = HostWorld::start().await;
     let folder = world
         .dirs
-        .plugin_folder("pages plugin", &helm_plugin("pages"), HELM_PLUGIN_FILES);
+        .plugin_folder("pages plugin", &board_plugin("pages"), BOARD_FILES);
     std::fs::write(world.dirs.root().join("beside.txt"), "not the plugin's").unwrap();
     let plugin = only(&world.add(&folder).await.plugins).clone();
 
@@ -591,10 +584,9 @@ async fn a_page_file_is_served_from_a_plugin_that_is_on_and_nothing_outside_its_
 async fn an_edited_page_file_reads_the_folder_again_and_is_served_at_the_new_revision_as_reload_does()
  {
     let mut world = HostWorld::start().await;
-    let folder =
-        world
-            .dirs
-            .plugin_folder("watched plugin", &helm_plugin("watched"), HELM_PLUGIN_FILES);
+    let folder = world
+        .dirs
+        .plugin_folder("watched plugin", &board_plugin("watched"), BOARD_FILES);
     let added = only(&world.add(&folder).await.plugins).clone();
     let (mut subscriber, _) = world.watcher().await;
 
@@ -624,11 +616,11 @@ async fn an_edited_page_file_reads_the_folder_again_and_is_served_at_the_new_rev
         "{log:#?}"
     );
 
-    // Reload in Settings does the same.
-    std::fs::write(folder.join("bg.js"), "// third").unwrap();
+    // Reload in Settings does the same, for a file the manifest does not name.
+    std::fs::write(folder.join("src").join("panel.ts"), "// third").unwrap();
     let reloaded = world.reload(&folder).await;
     assert!(only(&reloaded).revision > only(&read_again).revision);
-    let page = world.file("watched", "bg.js").await;
+    let page = world.file("watched", "src/panel.ts").await;
     assert_eq!(
         (page.body.0.as_slice(), page.revision),
         (b"// third".as_slice(), only(&reloaded).revision)
@@ -664,7 +656,7 @@ async fn what_a_service_run_on_the_node_it_was_handed_prints_reaches_its_plugins
     .await;
     let folder = world.dirs.plugin_folder(
         "talking plugin",
-        r#"{ "apiVersion": 1, "id": "talker", "name": "Talker",
+        r#"{ "apiVersion": 2, "id": "talker", "name": "Talker",
             "service": { "node": "service.mjs", "start": "enable" } }"#,
         &[
             ("service.mjs", TALKING_SERVICE),

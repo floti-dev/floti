@@ -102,12 +102,9 @@ describe('the Vue composables', () => {
   })
 })
 
-describe.each([
-  ['a version 2 page', 'floti'],
-  ['a version 1 page', 'helm']
-] as const)('S5: in %s, the Vue composables use window.%s', (_page, name) => {
+describe('S5: the Vue composables use window.floti', () => {
   it('follow that bridge', async () => {
-    fake = installBridge(name)
+    fake = installBridge()
     const scope = effectScope()
     const actions: string[] = []
     const { theme, settings } = scope.run(() => {

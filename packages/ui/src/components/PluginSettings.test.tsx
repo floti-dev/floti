@@ -148,14 +148,14 @@ describe('PluginPage: what it is', () => {
     ])
   })
 
-  it('says how its background page is, a crash with its reason as a clause', () => {
+  it('says how its background is, a crash with its reason as a clause', () => {
     renderPage({
       plugin: plugin({
-        background: { url: 'helm-plugin://sample/bg.html', state: 'crashed', error: 'The page ended unexpectedly.' }
+        background: { url: 'floti-plugin://sample/bg.js', state: 'crashed', error: 'The module ended unexpectedly.' }
       })
     })
     expect(document.querySelector('[data-plugin-background="crashed"]')?.textContent).toBe(
-      'Its background page stopped: the page ended unexpectedly. Reload starts it again.'
+      'Its background stopped: the module ended unexpectedly. Reload starts it again.'
     )
   })
 

@@ -13,9 +13,8 @@ import type {
  * Where each of the window's calls goes.
  *
  * A channel `boundary.rs` lists as client-only stays on the preload's bridge
- * (the browser pane, clipboard, window, theme, dialogs), and so does a
- * host-internal one (a plugin's background page and what runs it). Every
- * channel a host adapter takes goes to the host over this page's own
+ * (the browser pane, clipboard, window, theme, dialogs). Every channel a host
+ * adapter takes goes to the host over this page's own
  * connection, in the protocol's types. Any other channel is refused at once:
  * main has no handler for it, and a host feature is never asked of main.
  */
@@ -37,8 +36,6 @@ export interface RouterDeps {
   adapters: readonly HostAdapter[]
   /** Whether `boundary.rs` lists a channel as client-only. */
   clientOnly: (channel: string) => boolean
-  /** Whether `boundary.rs` lists a channel as host-internal: between a background page and what runs it. */
-  hostInternal: (channel: string) => boolean
   /** Told of a refused send or listener, which has nowhere to fail. */
   log?: (line: string) => void
 }
@@ -80,10 +77,10 @@ export function routedChannels(adapters: readonly HostAdapter[], clientOnly: (ch
   return new Set([...routes.requests.keys(), ...routes.sends.keys(), ...routes.events.keys()])
 }
 
-export function createRouter({ own, adapters, clientOnly, hostInternal, log }: RouterDeps): HelmBridge {
+export function createRouter({ own, adapters, clientOnly, log }: RouterDeps): HelmBridge {
   const routes = merge(adapters, clientOnly)
   /** A channel that stays on the preload's bridge. */
-  const ownAlways = (channel: string): boolean => clientOnly(channel) || hostInternal(channel)
+  const ownAlways = (channel: string): boolean => clientOnly(channel)
   const refuse = (channel: string, what: string): void =>
     (log ?? console.warn)(`${what} ${refusedSentence(channel)}`)
   const ownInvoke = own.invoke as (channel: string, payload?: unknown) => Promise<unknown>

@@ -130,7 +130,7 @@ describe(`${NAME} as published`, () => {
           `import { checkPluginFolder } from '${NAME}/folder'`,
           `import schema from '${NAME}/helm-plugin.schema.json' with { type: 'json' }`,
           `import pkg from '${NAME}/package.json' with { type: 'json' }`,
-          // No framework and no window.helm here: the stores import, and read nothing until subscribed.
+          // No framework and no window.floti here: the stores import, and read nothing until subscribed.
           `import { secret, settings } from '${NAME}/stores'`,
           `console.log(typeof validateManifest, checkPluginFolder('.').ok, typeof schema.properties, pkg.name, typeof settings.subscribe, typeof secret)`
         ].join('\n')

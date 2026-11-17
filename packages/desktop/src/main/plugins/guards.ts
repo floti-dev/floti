@@ -11,11 +11,11 @@ import { formatPluginOrigin, parsePluginOrigin } from '../../shared/plugins/orig
  */
 
 /**
- * `helm-plugin://<id>` for This PC's plugin, `helm-plugin://<id>.<label>` for
- * a remote host's (`shared/plugins/origin.ts`), the same on `floti-plugin`
- * for a version 2 plugin's, or null for anything on neither scheme. Each
- * scheme, host and plugin is an origin of its own, so the rules below keep a
- * frame on its own scheme and host's plugin as well as its own plugin.
+ * `floti-plugin://<id>` for This PC's plugin, `floti-plugin://<id>.<label>`
+ * for a remote host's (`shared/plugins/origin.ts`), or null for anything not
+ * on the plugin scheme. Each host and plugin is an origin of its own, so the
+ * rules below keep a frame on its own host's plugin as well as its own
+ * plugin.
  */
 export function pluginOriginOf(url: string | null | undefined): string | null {
   // Node gives a scheme it does not know an opaque origin, so the origin is

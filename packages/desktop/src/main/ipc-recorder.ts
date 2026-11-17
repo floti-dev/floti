@@ -13,8 +13,8 @@ import { app, ipcMain, type IpcMainEvent, type IpcMainInvokeEvent, type WebConte
 
 export const RECORD_IPC_ENV = 'HELM_RECORD_IPC'
 
-/** Which page used a channel: Helm's window, the plugins' background window, or another page. */
-export type RecordedPage = 'window' | 'background' | 'other'
+/** Which page used a channel: the desktop's window, or another page. */
+export type RecordedPage = 'window' | 'other'
 
 export interface RecordedChannel {
   channel: string
@@ -36,7 +36,6 @@ function pageOf(contents: WebContents | null | undefined): RecordedPage {
   } catch {
     return 'other'
   }
-  if (path.endsWith('/plugin-host.html')) return 'background'
   if (path.endsWith('/index.html') || path === '/') return 'window'
   return 'other'
 }

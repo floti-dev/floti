@@ -1,6 +1,5 @@
 import { agentReach, browserReachAllows, resolveBrowserAddress, type AppSettings } from '@helm/core'
 import type { BrowserHost, BrowserOpener } from './browser'
-import type { ToolAnswer as PluginToolAnswer, ToolServer } from './plugins/tools'
 import { pairTools, type ToolSpec, type ToolTable } from './tool-table'
 import type { BrowserConsoleEntry, BrowserState } from '../shared/ipc'
 import browserToolTable from '../../../../crates/host/src/server/browser_tools.json'
@@ -98,25 +97,6 @@ export interface BrowserMcpOptions {
   browsers: BrowserHost
   /** Read through a function: both reach settings can change while a tab is open. */
   settings: () => AppSettings
-}
-
-/**
- * What a session is told about a plugin's tools before the plugin's own words,
- * offered to the local host as it is.
- */
-export function pluginInstructions(server: ToolServer): string {
-  const provenance = `These tools come from "${server.name}", a plugin the user added to Floti, the app hosting this session. The plugin answers every call; Floti passes it on.`
-  return server.instructions === null ? provenance : `${provenance}\n\n${server.instructions}`
-}
-
-/**
- * The tool result a session reads for a plugin's answer: its text, or why
- * there is none as an error, for a call the local host relays.
- */
-export function pluginToolResult(answer: PluginToolAnswer): BrowserToolResult {
-  return answer.ok
-    ? { content: [{ type: 'text', text: answer.text }] }
-    : { content: [{ type: 'text', text: answer.message }], isError: true }
 }
 
 // ---------------------------------------------------------------------------

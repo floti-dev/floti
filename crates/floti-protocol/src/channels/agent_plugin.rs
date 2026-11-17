@@ -1,15 +1,10 @@
 //! Plugin tools a client answers: `agentPlugin:*`.
 //!
-//! A plugin's background page may run in a client rather than in the host
-//! (Helm's window runs its plugins). The host still serves the plugin's
-//! tools to the sessions it runs, so the client offers them on
-//! `agentPlugin:offer`, each server as a session should read it; the host
-//! carries each call to that client as an event on `agentPlugin:call`, the
-//! client answers it on `agentPlugin:answer`, and a call the session stopped
-//! waiting for is withdrawn on `agentPlugin:cancel`.
-//!
-//! No capability is needed: a call goes only to the connection that offered
-//! the server it is for, and only that connection may answer it.
+//! Declared and unused. Every plugin's background module runs in the host,
+//! which serves its tools itself, so no client sends on these channels and
+//! the host answers an offer or an answer with nothing and emits no event on
+//! them. They stay declared so the protocol version does not change.
+//! [`AgentPluginCaller`] is what a plugin's tool call names its session by.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

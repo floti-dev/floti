@@ -1,20 +1,17 @@
 /**
- * The contract between a plugin and the Helm or Floti running it, at
- * apiVersion 1 and 2.
+ * The contract between a plugin and the Floti running it, at apiVersion 2.
  *
- * Types only. Everything here describes something the running Helm provides:
- * the bridge it injects into every page a plugin serves (`window.helm` at
- * version 1, `window.floti` at 2), the `floti` global a version 2 background
- * module runs with, and the manifest it reads from `helm-plugin.json`. A
- * plugin never carries a copy of the runtime, so it cannot carry a stale one -
- * `apiVersion` in the manifest is what ties a plugin to the Helm it was built
- * against.
+ * Types only. Everything here describes something the running Floti provides:
+ * the bridge it injects into every page a plugin serves (`window.floti`), the
+ * `floti` global a background module runs with, and the manifest it reads
+ * from `helm-plugin.json`. A plugin never carries a copy of the runtime, so it
+ * cannot carry a stale one - `apiVersion` in the manifest is what ties a
+ * plugin to the Floti it was built against.
  *
  * `import type { FlotiBridge } from '@floti-dev/plugin-sdk'`, and add
  * `/// <reference types="@floti-dev/plugin-sdk/global" />` once to have
- * `window.floti` and `window.helm` typed in every page. A version 2 background
- * module references `@floti-dev/plugin-sdk/background` instead, for
- * the `floti` it runs with.
+ * `window.floti` typed in every page. A background module references
+ * `@floti-dev/plugin-sdk/background` instead, for the `floti` it runs with.
  */
 
 // ---------------------------------------------------------------------------
@@ -22,11 +19,10 @@
 // ---------------------------------------------------------------------------
 
 /**
- * The bridge versions this SDK describes. 1: pages get `window.helm`, and the
- * background is a page a window frames. 2: pages get `window.floti`, and the
- * background is a module the host runs in an isolate of its own.
+ * The plugin API versions this SDK describes. 2: pages get `window.floti`,
+ * and the background is a module the host runs in an isolate of its own.
  */
-export type ApiVersion = 1 | 2
+export type ApiVersion = 2
 
 /**
  * `helm-plugin.json`, at the root of a plugin's folder. Every surface is
@@ -39,7 +35,7 @@ export interface PluginManifest {
   /** For editors: `"./node_modules/@floti-dev/plugin-sdk/helm-plugin.schema.json"`. Ignored by Helm. */
   $schema?: string
   apiVersion: ApiVersion
-  /** Lower-case letters, digits and dashes. The plugin's origin is `helm-plugin://<id>` at version 1 and `floti-plugin://<id>` at 2. */
+  /** Lower-case letters, digits and dashes. The plugin's origin is `floti-plugin://<id>`. */
   id: string
   name: string
   version?: string
@@ -52,32 +48,32 @@ export interface PluginManifest {
   tabs?: Record<string, TabSpec>
   /**
    * Code that runs from the moment the plugin is enabled, with no surface
-   * open. At version 1 a `.html` page a window frames; at version 2 a `.js` or
-   * `.mjs` module the host runs, with `floti` as `FlotiBackground` describes it.
+   * open: a `.js` or `.mjs` module the host runs, with `floti` as
+   * `FlotiBackground` describes it.
    */
   background?: string
   /** Entries in the command palette (Ctrl+Shift+P, or Cmd+Shift+P on macOS). */
   commands?: CommandSpec[]
   /** A settings page Helm draws for the plugin. */
   settings?: SettingSpec[]
-  /** The origins `helm.fetch` may reach: `https://api.example.com`, `https://*.example.com`, `http://127.0.0.1:8080`. */
+  /** The origins `floti.fetch` may reach: `https://api.example.com`, `https://*.example.com`, `http://127.0.0.1:8080`. */
   network?: string[]
   /** The secret keys the plugin uses as `{{key}}`. The user stores the values in Settings > Secrets. */
   secrets?: string[]
-  /** Programs `helm.exec` may run, by the name the plugin calls them. */
+  /** Programs `floti.exec` may run, by the name the plugin calls them. */
   exec?: Record<string, ExecSpec>
   /** A long-running process Helm starts, supervises and stops. */
   service?: ServiceSpec | null
   /**
    * Tools Helm offers the Claude Code sessions it starts, answered by the
-   * background with `tools.handle` (`helm` at version 1, `floti` at 2).
+   * background with `floti.tools.handle`.
    * Needs `background`.
    */
   agent?: AgentSpec
   /**
    * What its pages may do with the Claude Code sessions Helm hosts. `start`:
-   * ask to start one with `helm.sessions.start`, which Helm shows to the user,
-   * who starts it or not. `list`: see them with `helm.sessions.list` and the
+   * ask to start one with `floti.sessions.start`, which Floti shows to the user,
+   * who starts it or not. `list`: see them with `floti.sessions.list` and the
    * `sessions` event.
    */
   sessions?: Array<'start' | 'list'>
@@ -121,7 +117,7 @@ export interface PanelActionSpec {
 }
 
 export interface TabSpec {
-  /** The tab's title until the page sets its own with `helm.surface.setTitle`. */
+  /** The tab's title until the page sets its own with `floti.surface.setTitle`. */
   title: string
   entry: string
 }
@@ -137,7 +133,7 @@ export interface CommandSpec {
 export type SettingSpec = TextSetting | NumberSetting | ToggleSetting | SelectSetting | SecretSetting
 
 interface SettingBase {
-  /** How the plugin reads it: `(await helm.settings.get())[key]`. */
+  /** How the plugin reads it: `(await floti.settings.get())[key]`. */
   key: string
   label: string
   description?: string
@@ -189,7 +185,7 @@ export type ExecSpec = string | { command: string; args?: string[]; env?: Record
  * It is given `HELM_SERVICE_PORT` to listen on, on 127.0.0.1, and
  * `HELM_SERVICE_TOKEN`, which every request from Helm carries as the
  * `Helm-Service-Token` header. The plugin reaches it as
- * `helm.fetch('service:/path')`.
+ * `floti.fetch('service:/path')`.
  */
 export interface ServiceSpec {
   command?: string
@@ -392,7 +388,7 @@ export interface HelmEvents {
   action: { id: string }
   /**
    * A session started, ended, was renamed or changed what it is doing. Every
-   * session, as `helm.sessions.list` answers. Needs `"list"` in `sessions`.
+   * session, as `floti.sessions.list` answers. Needs `"list"` in `sessions`.
    */
   sessions: PluginSession[]
 }
@@ -451,10 +447,8 @@ export interface ToolCall {
 export type ToolHandler = (args: Record<string, unknown>, call: ToolCall) => unknown
 
 /**
- * Everything a plugin page can ask of Helm, at either version: `window.helm`
- * at version 1 (`HelmBridge`) and `window.floti` at 2 (`FlotiBridge`) have
- * these same calls. Examples below say `helm.`; a version 2 page says
- * `floti.`.
+ * Everything a plugin page can ask of Floti: the calls `window.floti`
+ * (`FlotiBridge`) has.
  *
  * Present before any of the page's own scripts run. Calls made before the
  * connection to Helm is up are queued, not dropped.
@@ -508,7 +502,7 @@ export interface PluginBridge {
      * `preview: true` opens it as the preview, the way a single click opens a
      * file in Helm: the next tab opened as a preview takes its place, so
      * clicking through a list does not leave a tab per item. The user keeps it
-     * by double-clicking its tab, and the page by `helm.surface.keep()`.
+     * by double-clicking its tab, and the page by `floti.surface.keep()`.
      * Opened without it, the tab stays, and opening the preview that way keeps
      * it. A plugin with `pageStrip` has a preview of its own among its pages;
      * one without shares the pane's with Helm's files. Helm before 2.3.2 ignores
@@ -526,7 +520,7 @@ export interface PluginBridge {
      * it. Call it once the user starts changing something in the page, as an
      * editor keeps a file once it is edited. No effect on a tab that already
      * stays, or outside a tab. Helm before 2.3.2 does not have it: check
-     * `helm.surface.keep` before calling it in a plugin that runs on both.
+     * `floti.surface.keep` before calling it in a plugin that runs on both.
      */
     keep(): void
   }
@@ -582,21 +576,12 @@ export interface PluginBridge {
   on<K extends keyof HelmEvents>(event: K, listener: (data: HelmEvents[K]) => void): () => void
 }
 
-/** `window.helm`: the bridge a version 1 page gets. */
-export interface HelmBridge extends PluginBridge {
-  readonly apiVersion: 1
-}
-
-/**
- * `window.floti`: the bridge a version 2 page gets. The same calls as
- * `window.helm`, under the name the version 2 runtime gives them, on the
- * page's `floti-plugin://<id>/` origin.
- */
+/** `window.floti`: the bridge every plugin page gets, on its `floti-plugin://<id>/` origin. */
 export interface FlotiBridge extends PluginBridge {
   readonly apiVersion: 2
 }
 
-/** What a version 2 background module hears, by event name: what is not about a page on screen. */
+/** What a background module hears, by event name: what is not about a page on screen. */
 export type BackgroundEvents = Pick<HelmEvents, 'settings' | 'secrets' | 'command' | 'sessions'>
 
 /**

@@ -38,7 +38,7 @@ function Panel(): JSX.Element {
     }
   }, [options, token, reads])
 
-  // The background page refreshed: read the list again.
+  // The background refreshed: read the list again.
   useEffect(() => {
     const channel = new BroadcastChannel(CHANNEL)
     channel.onmessage = (event: MessageEvent) => {

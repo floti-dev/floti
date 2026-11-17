@@ -31,14 +31,7 @@ export {
   historySessionFromHost,
   historySummaryFromHost
 } from './history'
-export {
-  deliveryFromHost,
-  isBackgroundPage,
-  logFromHost,
-  pluginFromHost,
-  uiFromHost,
-  withBackgroundReports
-} from './plugins'
+export { deliveryFromHost, logFromHost, pluginFromHost, uiFromHost } from './plugins'
 
 /**
  * The host's rows and states in the window's vocabulary. Nothing here reaches

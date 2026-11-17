@@ -759,24 +759,16 @@ fn start_background_update(features: &Features, data: PathBuf, binary: PathBuf, 
 }
 
 /// The host's agent tools: the listener with its families switched as the
-/// settings say, following every change to them and to the plugins' offers,
+/// settings say, following every change to them and to the plugins' tools,
 /// answering from the sessions, the activity pass and the processes-and-ports
 /// pass, given to every launch from now on, and revoking each session's token
 /// as it ends.
 fn start_agent_tools(hosted: &Arc<Hosted>, features: &Features) -> Result<Arc<HostAgentTools>> {
     let tools = Arc::new(HostAgentTools::new(
         Arc::clone(features.browser()),
-        Arc::clone(features.plugin_tools()),
         Arc::clone(features.host_plugin_tools()),
     ));
-    // An offer taken away, or a plugin of the host's own switched off, can
-    // leave nothing to serve: the port goes then.
-    let offers = Arc::downgrade(&tools);
-    features.plugin_tools().on_change(move || {
-        if let Some(tools) = offers.upgrade() {
-            tools.settle();
-        }
-    });
+    // A plugin switched off can leave nothing to serve: the port goes then.
     let own_plugins = Arc::downgrade(&tools);
     features.host_plugin_tools().on_change(move || {
         if let Some(tools) = own_plugins.upgrade() {

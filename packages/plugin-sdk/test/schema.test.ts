@@ -49,7 +49,7 @@ describe('the schema names what the validator names', () => {
   })
 
   it('lists the same enums', () => {
-    expect(prop('apiVersion')['enum']).toEqual([...SUPPORTED_API_VERSIONS])
+    expect([prop('apiVersion')['const']]).toEqual([...SUPPORTED_API_VERSIONS])
     const action = ((prop('panels')['additionalProperties'] as Schema)['properties'] as Record<string, Schema>)['actions'] as Schema
     expect(((action['items'] as Schema)['properties'] as Record<string, Schema>)['icon']?.['enum']).toEqual([...PANEL_ACTION_ICONS])
     const setting = defs['setting'] as Schema
@@ -102,7 +102,7 @@ describe('the schema names what the validator names', () => {
 describe('the schema and the validator agree on manifests', () => {
   const FULL = {
     $schema: './node_modules/@floti-dev/plugin-sdk/helm-plugin.schema.json',
-    apiVersion: 1,
+    apiVersion: 2,
     id: 'full',
     name: 'Full',
     version: '2.0.0-beta.1',
@@ -111,7 +111,7 @@ describe('the schema and the validator agree on manifests', () => {
     rail: { title: 'Full', panel: 'main' },
     panels: { main: { title: 'Main', entry: 'dist/main.html', actions: [{ id: 'go', title: 'Go', icon: 'eye' }] } },
     tabs: { run: { title: 'Run', entry: 'dist/run.html' } },
-    background: 'dist/bg.html',
+    background: 'dist/bg.mjs',
     commands: [
       { id: 'run', title: 'Open a run', tab: 'run' },
       { id: 'sync', title: 'Sync now' }
@@ -145,8 +145,8 @@ describe('the schema and the validator agree on manifests', () => {
     ['the smallest manifest', MINIMAL],
     ['a manifest with every field', FULL],
     ['a command service', { ...MINIMAL, service: { command: 'srv', start: 'demand' } }],
-    ['a version 2 manifest with a background module', { ...MINIMAL, apiVersion: 2, background: 'dist/background.mjs' }],
-    ['a version 2 manifest with a .js background', { ...MINIMAL, apiVersion: 2, background: 'background/main.js' }],
+    ['a manifest with a background module', { ...MINIMAL, background: 'dist/background.mjs' }],
+    ['a manifest with a .js background', { ...MINIMAL, background: 'background/main.js' }],
     ['no service', { ...MINIMAL, service: null }]
   ]
 
@@ -159,13 +159,13 @@ describe('the schema and the validator agree on manifests', () => {
 
   const invalid: Array<[string, Record<string, unknown>]> = [
     ['an unknown field (a warning in Floti)', { ...MINIMAL, tab: {} }],
+    ['apiVersion 1', { ...MINIMAL, apiVersion: 1 }],
     ['apiVersion 3', { ...MINIMAL, apiVersion: 3 }],
-    ['a version 2 background page', { ...MINIMAL, apiVersion: 2, background: 'bg.html' }],
-    ['a version 1 background module', { ...MINIMAL, apiVersion: 1, background: 'bg.mjs' }],
-    ['a version 2 background outside the folder', { ...MINIMAL, apiVersion: 2, background: '../bg.mjs' }],
+    ['a background page', { ...MINIMAL, background: 'bg.html' }],
+    ['a background outside the folder', { ...MINIMAL, background: '../bg.mjs' }],
     ['no apiVersion', { id: 'x', name: 'X' }],
     ['an id with capitals', { ...MINIMAL, id: 'Minimal' }],
-    ['no name', { apiVersion: 1, id: 'x' }],
+    ['no name', { apiVersion: 2, id: 'x' }],
     ['a blank name', { ...MINIMAL, name: '   ' }],
     ['a name too long', { ...MINIMAL, name: 'n'.repeat(61) }],
     ['a description too long', { ...MINIMAL, description: 'd'.repeat(301) }],
@@ -173,7 +173,7 @@ describe('the schema and the validator agree on manifests', () => {
     ['a panel key with capitals', { ...MINIMAL, panels: { Main: { title: 'M', entry: 'm.html' } } }],
     ['a panel with no entry', { ...MINIMAL, panels: { main: { title: 'M' } } }],
     ['an action icon Floti lacks', { ...MINIMAL, panels: { main: { title: 'M', entry: 'm.html', actions: [{ id: 'a', title: 'A', icon: 'rocket' }] } } }],
-    ['a command with no title', { ...MINIMAL, background: 'bg.html', commands: [{ id: 'go' }] }],
+    ['a command with no title', { ...MINIMAL, background: 'bg.mjs', commands: [{ id: 'go' }] }],
     ['a setting of an unknown type', { ...MINIMAL, settings: [{ key: 'a', label: 'A', type: 'colour' }] }],
     ['a select with no options', { ...MINIMAL, settings: [{ key: 'a', label: 'A', type: 'select', options: [] }] }],
     ['a toggle with a string default', { ...MINIMAL, settings: [{ key: 'a', label: 'A', type: 'toggle', default: 'yes' }] }],
@@ -190,15 +190,15 @@ describe('the schema and the validator agree on manifests', () => {
     ['a service with neither kind', { ...MINIMAL, service: {} }],
     ['a python node service', { ...MINIMAL, service: { node: 'srv.py' } }],
     ['a service start Floti lacks', { ...MINIMAL, service: { node: 'srv.mjs', start: 'boot' } }],
-    ['an agent with no tools', { ...MINIMAL, background: 'bg.html', agent: { instructions: 'x' } }],
-    ['a tool name with capitals', { ...MINIMAL, background: 'bg.html', agent: { tools: { Go: { description: 'Go.' } } } }],
-    ['a tool with no description', { ...MINIMAL, background: 'bg.html', agent: { tools: { go: {} } } }],
-    ['a tool read-only in words', { ...MINIMAL, background: 'bg.html', agent: { tools: { go: { description: 'Go.', readOnly: 'yes' } } } }],
+    ['an agent with no tools', { ...MINIMAL, background: 'bg.mjs', agent: { instructions: 'x' } }],
+    ['a tool name with capitals', { ...MINIMAL, background: 'bg.mjs', agent: { tools: { Go: { description: 'Go.' } } } }],
+    ['a tool with no description', { ...MINIMAL, background: 'bg.mjs', agent: { tools: { go: {} } } }],
+    ['a tool read-only in words', { ...MINIMAL, background: 'bg.mjs', agent: { tools: { go: { description: 'Go.', readOnly: 'yes' } } } }],
     [
       'a tool whose arguments are not an object',
-      { ...MINIMAL, background: 'bg.html', agent: { tools: { go: { description: 'Go.', inputSchema: { type: 'array' } } } } }
+      { ...MINIMAL, background: 'bg.mjs', agent: { tools: { go: { description: 'Go.', inputSchema: { type: 'array' } } } } }
     ],
-    ['blank instructions', { ...MINIMAL, background: 'bg.html', agent: { instructions: ' ', tools: { go: { description: 'Go.' } } } }]
+    ['blank instructions', { ...MINIMAL, background: 'bg.mjs', agent: { instructions: ' ', tools: { go: { description: 'Go.' } } } }]
   ]
 
   it.each(invalid)('both refuse %s', (_what, manifest) => {
@@ -253,7 +253,7 @@ describe('the schema and the validator agree on manifests', () => {
    */
   it.each([
     ['a rail naming no panel', { ...MINIMAL, rail: { title: 'R', panel: 'missing' } }],
-    ['a command naming no tab', { ...MINIMAL, background: 'bg.html', commands: [{ id: 'a', title: 'A', tab: 'x' }] }],
+    ['a command naming no tab', { ...MINIMAL, background: 'bg.mjs', commands: [{ id: 'a', title: 'A', tab: 'x' }] }],
     ['a command nothing receives', { ...MINIMAL, commands: [{ id: 'a', title: 'A' }] }],
     ['an undeclared secret', { ...MINIMAL, exec: { git: { command: 'git', env: { T: '{{token}}' } } } }],
     ['a secret setting for an undeclared key', { ...MINIMAL, settings: [{ key: 'a', label: 'A', type: 'secret', secret: 'token' }] }],
@@ -261,15 +261,15 @@ describe('the schema and the validator agree on manifests', () => {
     ['a wildcard over an address', { ...MINIMAL, network: ['https://*.127.0.0.1'] }],
     ['a port past 65535', { ...MINIMAL, network: ['http://127.0.0.1:70000'] }],
     ['a wildcard inside a host', { ...MINIMAL, network: ['https://api.*.example.com'] }],
-    ['a repeated command id', { ...MINIMAL, background: 'bg.html', commands: [{ id: 'a', title: 'A' }, { id: 'a', title: 'B' }] }],
-    ['tools with no background page', { ...MINIMAL, agent: { tools: { go: { description: 'Go.' } } } }],
-    ['an empty tools object', { ...MINIMAL, background: 'bg.html', agent: { tools: {} } }],
+    ['a repeated command id', { ...MINIMAL, background: 'bg.mjs', commands: [{ id: 'a', title: 'A' }, { id: 'a', title: 'B' }] }],
+    ['tools with no background', { ...MINIMAL, agent: { tools: { go: { description: 'Go.' } } } }],
+    ['an empty tools object', { ...MINIMAL, background: 'bg.mjs', agent: { tools: {} } }],
     [
       'a tool name a session would see past 64 characters',
       {
         ...MINIMAL,
         id: 'a-plugin-with-a-rather-long-id',
-        background: 'bg.html',
+        background: 'bg.mjs',
         agent: { tools: { list_every_single_thing: { description: 'Go.' } } }
       }
     ]

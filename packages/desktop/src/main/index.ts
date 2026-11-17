@@ -26,7 +26,7 @@ import {
 import { delimiter, isAbsolute, join } from 'node:path'
 import { homedir } from 'node:os'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { emit, emitToContents, pushTheme, registerIpc } from './ipc'
+import { emit, pushTheme, registerIpc } from './ipc'
 import { createClipboardText } from './clipboard'
 import { appMode, dataDir, finishDataMove, initDataDir, mcpConfigDir, themesDir } from './paths'
 import { createThemeService } from './themes'
@@ -34,10 +34,9 @@ import { activePty, killPty, spawnPty, windowsBuildNumber } from './pty'
 import { adoptExistingProfile, createServices, updateSettings, type Services } from './services'
 import { createFilesService, filesRoots } from './files'
 import { attachArtifactConsole, CONTENT_SCHEME, registerContentProtocol, serveArtifactsFrom } from './content'
-import { PLUGIN_SCHEMES } from '../shared/ipc'
+import { PLUGIN_SCHEME } from '../shared/ipc'
 import { createPluginHost } from './plugins/host'
 import { registerHostPluginProtocol } from './plugins/protocol'
-import { createBackgroundHost } from './plugins/background'
 import { guardPluginFrames, installPluginPermissions } from './plugins/guards'
 // The plugin runtime: served to every plugin page under `/__helm/`, so no
 // plugin carries a copy of its own (see `main/plugins/protocol.ts`).
@@ -166,14 +165,13 @@ protocol.registerSchemesAsPrivileged([
     scheme: CONTENT_SCHEME,
     privileges: { standard: true, secure: true, supportFetchAPI: false, corsEnabled: false }
   },
-  // A plugin's pages: an origin per plugin (`helm-plugin://<id>` at version 1,
-  // `floti-plugin://<id>` at version 2), secure so its storage and module
-  // scripts work, and no fetch - its network goes through Helm. See
-  // `main/plugins/protocol.ts`.
-  ...PLUGIN_SCHEMES.map((scheme) => ({
-    scheme,
+  // A plugin's pages: an origin per plugin (`floti-plugin://<id>`), secure
+  // so its storage and module scripts work, and no fetch - its network goes
+  // through the host. See `main/plugins/protocol.ts`.
+  {
+    scheme: PLUGIN_SCHEME,
     privileges: { standard: true, secure: true, supportFetchAPI: false, corsEnabled: false }
-  }))
+  }
 ])
 
 /**
@@ -404,24 +402,18 @@ function startApp(options: AppOptions = {}): void {
   let browserMcp: BrowserMcpHost | null = null
   /*
    * The host keeps the plugin registry - the folders, their switches,
-   * settings, services and page files - and Helm keeps what concerns its own
-   * pages: the runtime, the theme, the frames, and the hidden window
-   * background pages run in, which the host's list opens.
+   * settings, services, backgrounds and page files - and the desktop keeps
+   * what concerns its own pages: the runtime, the theme and the frames.
    */
-  /** What hears that the background host's renderer died; the host's plugins, once they exist. */
-  let pluginBackgroundGone = (_reason: string): void => undefined
-  const pluginBackground = createBackgroundHost({ onGone: (reason) => pluginBackgroundGone(reason) })
-
   const plugins = createPluginHost({
     window: () => win,
     theme: () => pluginThemeOf(windowTheme(), services.settings),
     bridge: pluginBridge,
-    stylesheet: pluginStylesheet,
-    background: pluginBackground
+    stylesheet: pluginStylesheet
   })
   // Asked only once a page loads, which is after the desktop host below exists.
   // Each origin from its own host's files: This PC's from the local host, a
-  // remote host's (`<scheme>://<id>.<label>/`) from that host only.
+  // remote host's (`floti-plugin://<id>.<label>/`) from that host only.
   registerHostPluginProtocol((label) => {
     const hosted = label === null ? desktopHost.plugins : desktopHost.remotePlugins.byLabel(label)
     if (hosted === null) return null
@@ -467,14 +459,8 @@ function startApp(options: AppOptions = {}): void {
         ? async (request) => ((await checkConfirm(request)) ? 'end' : 'cancel')
         : quitConfirm(() => win),
     browserTools: () => browserMcp,
-    runPluginTool: (request, signal) => plugins.runTool(request, signal),
-    pluginBackground,
     browserAvailability: browserPane
   })
-  pluginBackgroundGone = (reason) => {
-    desktopHost.plugins.backgroundGone(reason)
-    desktopHost.remotePlugins.backgroundGone(reason)
-  }
   // An artifact frame keeps the window's scheme, answered from the host's bytes.
   serveArtifactsFrom((url) => desktopHost.files.artifactBytes(url))
   // The window hears each step of the local host's connect as it begins; one
@@ -493,12 +479,10 @@ function startApp(options: AppOptions = {}): void {
   // notifications over its own connection (`renderer/src/app/host/sessions.ts`).
 
   /*
-   * Each Helm page's own connection to the local host: the window, and the
-   * hidden window plugins' background pages run in. No other page - a plugin
+   * The window's own connection to the local host. No other page - a plugin
    * frame, an artifact frame, a page in the Browser tab - may open one.
    */
-  const isHelmPage = (id: number): boolean =>
-    (win !== null && !win.isDestroyed() && win.webContents.id === id) || pluginBackground.contents()?.id === id
+  const isHelmPage = (id: number): boolean => win !== null && !win.isDestroyed() && win.webContents.id === id
   // One counter for every host's page connections, so a number names one.
   let nextPageConnection = 1
   const nextConnection = (): number => nextPageConnection++
@@ -522,11 +506,7 @@ function startApp(options: AppOptions = {}): void {
   const remoteHosts: RemoteHostLinks = createDesktopRemoteHosts({
     isHelmPage,
     nextConnection,
-    // The hidden plugin window hears it too: it runs each connected host's background pages.
-    changed: (states) => {
-      emit(win, 'remoteHosts:changed', states)
-      emitToContents(pluginBackground.contents(), 'remoteHosts:changed', states)
-    },
+    changed: (states) => emit(win, 'remoteHosts:changed', states),
     plugins: desktopHost.remotePlugins,
     forwards,
     localLink: desktopHost.link,
@@ -677,10 +657,7 @@ function startApp(options: AppOptions = {}): void {
     files,
     themes,
     plugins,
-    hostPlugins: desktopHost.plugins,
-    remotePlugins: desktopHost.remotePlugins,
     ownData: desktopHost.ownData,
-    pluginBackground: () => pluginBackground.contents(),
     localHost: {
       sessionCount: async () => {
         const rows = await (await desktopHost.link.connection()).request('session:list', null)
@@ -782,9 +759,6 @@ function startApp(options: AppOptions = {}): void {
     if (boundsTimer) clearTimeout(boundsTimer)
     boundsTimer = null
     win = null
-    // The background host is a window too, and a hidden one would keep the
-    // app alive after its only visible window closed.
-    plugins.shutdown()
   })
 
   // A reopen while the quit below is underway opens no window in this process;
@@ -821,7 +795,6 @@ function startApp(options: AppOptions = {}): void {
       if (hostStop === 'running') {
         hostStop = 'stopping'
         desktopHost.browserRelay.stop()
-        desktopHost.pluginRelay.stop()
         desktopHost.profiles.shutdown()
         desktopHost.plugins.shutdown()
         desktopHost.remotePlugins.shutdown()
@@ -851,8 +824,6 @@ function startApp(options: AppOptions = {}): void {
     if (boundsTimer) clearTimeout(boundsTimer)
     boundsTimer = null
     persistBounds()
-    // The hidden plugin window and the frames go with the window.
-    plugins.shutdown()
     activity.stop()
     /*
      * The browser views die here too, and it is the same argument.
