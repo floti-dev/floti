@@ -7,7 +7,7 @@ import { bridgeFor, desktop } from './bridge'
  * React.
  *
  * Moving an iframe reloads it. `appendChild` of a connected node removes it
- * first, and a frame that leaves the document loses its page. Helm moves panes
+ * first, and a frame that leaves the document loses its page. The desktop moves panes
  * all the time - a tab switch unmounts the page in front, a tab dragged to
  * another pane renders under another parent, putting the sidebar away
  * unmounts it - and each of those would restart the plugin with its state

@@ -10,7 +10,7 @@ import type { BrowserLayerLook } from '../../../shared/ipc'
  *
  * Inline on `<html>` rather than a stylesheet of `[data-theme]` blocks: a user
  * theme is data that arrives at runtime, and the built-ins arriving the same
- * way means there is one path, not one for Helm's themes and another for
+ * way means there is one path, not one for the desktop's themes and another for
  * everybody else's. Every value was parsed and re-spelled by core
  * (`formatColor`), so nothing here is text a theme file typed.
  */

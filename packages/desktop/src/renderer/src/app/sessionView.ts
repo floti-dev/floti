@@ -13,7 +13,7 @@ import { commandWord } from './treeFamilies'
  * What a session's dot says.
  *
  * How the session *ended* outranks what it last said it was doing: a row that
- * has exited is a fact Helm established, and the registry's last word about a
+ * has exited is a fact the desktop established, and the registry's last word about a
  * dead process is by definition out of date.
  *
  * While it runs, the session's own answer is preferred and `running` is the

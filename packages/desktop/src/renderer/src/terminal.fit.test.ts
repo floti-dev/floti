@@ -5,7 +5,7 @@ import { createTerminal } from './terminal'
  * The pane a terminal sits in, and the fit the addon would make of it.
  *
  * xterm and its addons are stood in for: jsdom does no layout, so the real
- * FitAddon has nothing to measure. What is under test is Helm's own rule
+ * FitAddon has nothing to measure. What is under test is the desktop's own rule
  * around it - when a fit may happen and when the pty is told - and the
  * stand-in fits the way the addon does, a grid of whatever the box holds and
  * never less than one cell, which is how a hidden 0x0 pane becomes a 1-row

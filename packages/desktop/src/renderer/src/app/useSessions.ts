@@ -18,7 +18,7 @@ import { disposeTerminal, estimateGrid } from './terminals'
 
 export interface SessionsState {
   /**
-   * Helm's sessions, in tab-strip order: every one this PC's host runs, and
+   * The desktop's sessions, in tab-strip order: every one this PC's host runs, and
    * those this window started. Which have a tab is the layout's.
    */
   sessions: SessionRecord[]
@@ -36,7 +36,7 @@ export interface SessionsState {
    *
    * Held apart from `sessions` rather than folded into the row, because these
    * are two different kinds of fact with two different lifetimes: a row is what
-   * the database holds about a session and changes when Helm changes it, and
+   * the database holds about a session and changes when the desktop changes it, and
    * this is a reading of a file another program writes, which moves several
    * times a minute. Merging them would put a new `SessionRecord` object on
    * every poll, and every consumer of a session row would re-render for a dot.
@@ -56,7 +56,7 @@ export interface SessionsState {
   /** Asks main to end and forget it. Main may ask the user first. */
   close: (id: number) => Promise<boolean>
   /**
-   * Helm's own label for a tab. Null clears it, and the tab goes back to the
+   * The desktop's own label for a tab. Null clears it, and the tab goes back to the
    * name the CLI was given - which this never changes.
    */
   rename: (id: number, label: string | null) => Promise<void>

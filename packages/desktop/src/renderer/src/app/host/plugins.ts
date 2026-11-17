@@ -29,7 +29,7 @@ import type { HostAdapter } from './router'
  * opening one of the plugin's tabs, and opening a link in the Browser tab,
  * which the window opens through `browser:open` and the reach rule. A call the
  * host cannot be reached for settles in the page as unavailable, with the
- * link's sentence, and nowhere in Helm's chrome.
+ * link's sentence, and nowhere in the desktop's chrome.
  *
  * Every read goes through `link.connection()`, so one asked before the first
  * connect waits for it, and one asked when the host cannot be reached rejects

@@ -45,7 +45,7 @@ import { createTerminalsAdapter, type ShellShelf } from './terminals'
  *
  * Asked in the window: the question before a running session's tab is closed,
  * after which the host is told to end it without asking again; a question the
- * host asks for another client's close; and main's question before Helm quits
+ * host asks for another client's close; and main's question before the desktop quits
  * with sessions running, which main sends on `windowSessions:quitConfirm`
  * because it is main that holds the quit.
  *
@@ -574,7 +574,7 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
         if (entry === undefined) throw new Error('That session is not running in the local host.')
         const trimmed = req.label?.trim()
         const label = trimmed === undefined || trimmed === '' ? null : trimmed
-        // Answered at once, as Helm's own rename is; the host's row follows.
+        // Answered at once, as the desktop's own rename is; the host's row follows.
         const renamed: SessionRecord = { ...entry, label }
         records.set(req.id, renamed)
         void act()

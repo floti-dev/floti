@@ -127,7 +127,7 @@ class FakeMain {
     for (const listener of this.listeners.get(channel) ?? []) (listener as (payload: EventPayload<K>) => void)(payload)
   }
 
-  /** The bridge ends, as main says when it exits: by default the host went without a stop, and Helm starts another. */
+  /** The bridge ends, as main says when it exits: by default the host went without a stop, and the desktop starts another. */
   end(connection: number, why: string | null, how: HostEnd = { planned: false, restarts: true }): void {
     queueMicrotask(() => this.emit('hostLink:ended', { connection, why, ...how }))
   }

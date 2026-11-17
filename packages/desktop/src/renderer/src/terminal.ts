@@ -131,7 +131,7 @@ export function applyPrefs(host: TerminalHost, prefs: TerminalPrefs): void {
  *
  * `screen` is the measured box of xterm's own screen element, so a driver can
  * divide by `cols`/`rows` and compare the cell size against a measurement it
- * made itself rather than against anything Helm computed.
+ * made itself rather than against anything the desktop computed.
  */
 export interface TerminalReport {
   key: string
@@ -501,7 +501,7 @@ function attachKeyBindings(term: Terminal, container: HTMLElement, hooks: Termin
   }
 
   /**
-   * "Helm has dealt with this keystroke." Both halves, and the second one is
+   * "the desktop has dealt with this keystroke." Both halves, and the second one is
    * the half that was missing.
    *
    * Returning `false` from a custom key event handler only stops **xterm's**
@@ -510,7 +510,7 @@ function attachKeyBindings(term: Terminal, container: HTMLElement, hooks: Termin
    * reaches its own `cancel(event, true)` - so the keydown's default action
    * still stands, and Blink's built-in editing key-binding table performs the
    * native command inside the renderer, on top of whatever the branch here
-   * already did. Every branch below is a keystroke Helm answers itself, so
+   * already did. Every branch below is a keystroke the desktop answers itself, so
    * every one of them has to cancel that.
    *
    * Both halves of ClickUp 868m0egkt are that second write, measured on
@@ -519,7 +519,7 @@ function attachKeyBindings(term: Terminal, container: HTMLElement, hooks: Termin
    *  - **Paste doubled.** One Ctrl+V with a 17-character clipboard produced a
    *    native `paste` event at xterm's own helper textarea at +0.7ms - xterm
    *    listens for `paste` on the textarea *and* on the element - and then
-   *    Helm's `clipboard:read` at +2.3ms. Two `onData` calls, 34 bytes at the
+   *    the desktop's `clipboard:read` at +2.3ms. Two `onData` calls, 34 bytes at the
    *    pty, the text on screen twice; with bracketed paste on, two complete
    *    envelopes, so a composer receives the paste twice. 3/3, deterministic.
    *    Ctrl+Shift+V is the same event: Chromium reads it as
@@ -544,12 +544,12 @@ function attachKeyBindings(term: Terminal, container: HTMLElement, hooks: Termin
    * **None of this is an xterm bug, and that is the sentence worth keeping.**
    * `rightClickHandler` is inert in stock xterm: its `_keyDown` translates
    * Ctrl+C itself and ends at `cancel(event, true)`, so Chromium never runs its
-   * editing command and nothing ever reads that textarea. Helm's early
+   * editing command and nothing ever reads that textarea. The desktop's early
    * `return false` is the only reason the native Copy runs at all. Within one
    * keystroke, whether it fires is decided by nothing but whether this handler
    * returned false - which is why Ctrl+C with **no** selection was always
    * correct, since that case falls through to xterm and is cancelled there.
-   * The asymmetry is Helm's own, so the remedy is Helm's own.
+   * The asymmetry is the desktop's own, so the remedy is the desktop's own.
    *
    * `pnpm fidelity` C5 and C7 are the regression. Both are counts rather than
    * substring matches, because a doubled stream contains a correct one.
@@ -573,10 +573,10 @@ function attachKeyBindings(term: Terminal, container: HTMLElement, hooks: Termin
     // textarea, and unlike the clipboard chords that has never produced a
     // second write: xterm's `_inputEvent` fires a data event only for
     // `inputType === 'insertText'`, so the resulting `input` event is dropped.
-    // It is cancelled anyway, for the reason the branch exists at all - Helm
+    // It is cancelled anyway, for the reason the branch exists at all - the desktop
     // emitted the sequence, so the keystroke is spent - and because "harmless"
     // there rests on Blink's editing table and on that one filter in xterm,
-    // neither of which Helm controls, while the cost of the accumulating
+    // neither of which the desktop controls, while the cost of the accumulating
     // newlines is a textarea nothing here ever reads. Latent, not measured.
     if (
       e.shiftKey &&
@@ -613,7 +613,7 @@ function attachKeyBindings(term: Terminal, container: HTMLElement, hooks: Termin
     // Ctrl+Shift+C and Ctrl+Shift+V: Chromium binds an editing command to the
     // second of these (PasteAndMatchStyle) and, as measured, nothing to the
     // first. They are cancelled alike regardless, because which chords Blink
-    // has a command for is not a fact about Helm and is not one to encode here.
+    // has a command for is not a fact about the desktop and is not one to encode here.
     if (mod && e.shiftKey && e.code === 'KeyC') {
       void copy()
       return handled(e)

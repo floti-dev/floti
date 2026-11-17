@@ -43,7 +43,7 @@ function fnv1a64(text: string): string {
 
 /**
  * The label a remote host's plugins are served under. A host id that is a
- * DNS label already (the ids Helm mints are lower-case UUIDs) is its own
+ * DNS label already (the ids the desktop mints are lower-case UUIDs) is its own
  * label; any other is `h` and a hash of it, which only ever holds what a
  * DNS label may. A label never names this PC.
  */

@@ -136,7 +136,7 @@ export function useSetup(
    * Read on mount, and again whenever the chosen CLI changes - however it
    * changed. The picker is one way; a settings write is another, and a banner
    * that only updated for the first would describe a version that is no longer
-   * the one Helm would launch.
+   * the one desktop would launch.
    *
    * No spinner here: nobody asked for this one, and `checking` is about a
    * button someone is looking at.
@@ -233,7 +233,7 @@ export function useSetup(
       setTemplatePreview(null)
       setDialog(mode)
       // Read on open rather than at mount: a template is a directory somebody
-      // can add while Helm is running, and a list fetched once at startup would
+      // can add while the desktop is running, and a list fetched once at startup would
       // be stale for the rest of the session.
       refreshTemplates()
     },

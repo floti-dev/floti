@@ -21,7 +21,7 @@ export class PluginCallError extends Error {
 /** The answer to a bridge call, as it crosses IPC. */
 export type CallOutcome = { ok: true; value: unknown } | { ok: false; code: FlotiErrorCode; message: string }
 
-/** Anything thrown under a call, as the outcome the page gets. A fault that is Helm's own is said as one. */
+/** Anything thrown under a call, as the outcome the page gets. A fault that is the desktop's own is said as one. */
 export function failure(error: unknown): CallOutcome {
   if (error instanceof PluginCallError) return { ok: false, code: error.code, message: error.message }
   if (error instanceof Error && error.name === 'AbortError') return { ok: false, code: 'aborted', message: 'the call was cancelled' }

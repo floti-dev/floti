@@ -4,11 +4,11 @@ import type { PluginUiRequest } from '../ipc'
 import { PluginCallError } from './errors'
 
 /**
- * The bridge calls that concern only the page on screen, answered by the Helm
+ * The bridge calls that concern only the page on screen, answered by the desktop
  * that draws it wherever its plugin's other calls are answered: opening one of
  * the plugin's tabs, and opening an `https` link in the Browser tab.
  *
- * With Helm keeping its plugins (`host.ts`) and with the local host keeping
+ * With the desktop keeping its plugins (`host.ts`) and with the local host keeping
  * them (`host/plugins.ts`), these are the same checks: a tab the manifest
  * declares with params a tab can carry, and a link that is an `https` address,
  * from a panel or a tab, one a second per plugin. Each is handed to the window
@@ -116,7 +116,7 @@ function readLink(value: unknown): string {
   return url.href
 }
 
-/** `helm.tabs.open`'s options. Absent, a tab has the manifest's title and stays. */
+/** `floti.tabs.open`'s options. Absent, a tab has the manifest's title and stays. */
 function readTabOptions(value: unknown): { title: string | null; preview: boolean } {
   if (value === undefined || value === null) return { title: null, preview: false }
   if (typeof value !== 'object') throw new PluginCallError('invalid', 'tab options must be an object')

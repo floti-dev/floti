@@ -442,7 +442,7 @@ const desktopHighlight = (
 /**
  * What each build mode is called on the status bar, and null for the one that
  * needs no word. `dev-live` is the dev build with **no data directory of its
- * own**, sharing `%APPDATA%\Helm` with the installed app, and the chip that says
+ * own**, sharing `%LOCALAPPDATA%\Floti\desktop` with the installed app, and the chip that says
  * so is the only thing on screen that distinguishes it from an ordinary
  * `pnpm dev`.
  */
@@ -759,7 +759,7 @@ export function App(): JSX.Element {
   /** The project a session is starting in, from its page or its `+`. */
   const [launchingPath, setLaunchingPath] = useState<string | null>(null);
   /**
-   * The row the sessions pane has open, by pid - the one key a session Helm
+   * The row the sessions pane has open, by pid - the one key a session the desktop
    * does not host also has. Held here rather than in the pane because a pane
    * can be thrown away and rebuilt at will, and a selection that unmounted with
    * it would drop whenever somebody looked at another tab.
@@ -786,7 +786,7 @@ export function App(): JSX.Element {
   const localUsable = useLocalHostUsable(localHostUsable);
   const localHostWaiting = localUsable.unusable !== null;
   const hostNotice = localHostNotice(localUsable, hostLink.lost);
-  /** Which of this PC's host and this Helm is behind, while they differ (`localHostVersions`). */
+  /** Which of this PC's host and this desktop is behind, while they differ (`localHostVersions`). */
   const localVersions =
     seenLocalVersion === null || info === null
       ? null
@@ -940,7 +940,7 @@ export function App(): JSX.Element {
   const ownData = useOwnDataCopy();
   const themes = useThemes();
   /*
-   * Every live session on the machine, and what Helm's own are holding. Held
+   * Every live session on the machine, and what the desktop's own are holding. Held
    * here rather than inside the sessions pane because the tree and the launch
    * warning need it whether or not that pane has ever been opened.
    */
@@ -1441,7 +1441,7 @@ export function App(): JSX.Element {
 
   /**
    * What the window does with what a plugin page says to it: a key the page
-   * did not take is pressed again here, on its frame, so Helm's shortcuts work
+   * did not take is pressed again here, on its frame, so the desktop's shortcuts work
    * from inside a plugin as from anywhere else; a tab's title goes on its tab,
    * or on its page in a plugin's strip. Set once - the relay outlives renders,
    * and `commit` is stable.
@@ -2501,7 +2501,7 @@ export function App(): JSX.Element {
       setRestoreChosen(null);
       commit((current) => {
         // A session lost with its host while its tab was open comes back in
-        // that tab; one lost with Helm goes back where the saved layout had
+        // that tab; one lost with the desktop goes back where the saved layout had
         // it; one neither names still opens here: it was asked for.
         const inPlace = replaceSessionTabs(closeTab(current, "restore"), pairs);
         const elsewhere = new Map(
@@ -2931,10 +2931,10 @@ export function App(): JSX.Element {
   );
 
   /**
-   * The browser's keys with the caret in Helm's own chrome, only while the
+   * The browser's keys with the caret in the desktop's own chrome, only while the
    * Browser tab is in front of the focused pane (`shared/browserKeys.ts` has
    * the list). In capture so a focused terminal does not eat them - but gated,
-   * because Ctrl+L is *clear the screen* in every shell Helm hosts and
+   * because Ctrl+L is *clear the screen* in every shell the desktop hosts and
    * stealing it from a session would be a worse bug than not having the
    * shortcut. A menu or a dialog open has the keys to itself.
    */
@@ -2972,7 +2972,7 @@ export function App(): JSX.Element {
   /**
    * Ctrl+W and Ctrl+F4 close the page in front of a plugin's strip, as they
    * close the Browser tab's - while that plugin's tab is in front of the
-   * focused pane, with the caret in Helm's chrome or in the page, which
+   * focused pane, with the caret in the desktop's chrome or in the page, which
    * forwards a key it did not take. Gated as the browser's keys are, and never
    * taken from a terminal.
    */
@@ -3181,13 +3181,13 @@ export function App(): JSX.Element {
 
   /**
    * The folder a note is saved, snapshotted and wikilinked as part of: the
-   * deepest one Helm knows that holds it. A README under a workspace's
-   * `repos/helm` belongs to `helm` - the workspace's own write guard refuses
+   * deepest one the desktop knows that holds it. A README under a workspace's
+   * `repos/app` belongs to `app` - the workspace's own write guard refuses
    * `repos/` outright, for exactly that reason.
    */
   const scopeOf = useCallback(
     (ref: FileRef): string => {
-      // The folders Helm knows are the Files view's host's.
+      // The folders the desktop knows are the Files view's host's.
       if (hostOf(ref) !== files.host) return ref.root;
       const lower = ref.path.toLowerCase();
       let best = ref.root;
@@ -3418,7 +3418,7 @@ export function App(): JSX.Element {
    * focused terminal. Ctrl+Shift+Tab is not bound by Claude Code; Shift+Tab
    * alone is (it cycles permission modes) and is deliberately left alone.
    *
-   * On macOS the split is Cmd+\, as Helm's other shortcuts are, but the ring
+   * On macOS the split is Cmd+\, as the desktop's other shortcuts are, but the ring
    * stays Ctrl+Tab: Cmd+Tab is the system's app switcher, and Ctrl+Tab is how
    * every Mac browser cycles its tabs.
    */
@@ -3460,7 +3460,7 @@ export function App(): JSX.Element {
 
   const now = useNow(30_000);
 
-  /** Each of Helm's sessions' registry record, for how long it has been in its state. */
+  /** Each of the desktop's sessions' registry record, for how long it has been in its state. */
   const liveByHostSessionId = useMemo(() => {
     const map = new Map<number, LiveSession>();
     for (const live of machineSessions.sessions) {
@@ -3487,9 +3487,9 @@ export function App(): JSX.Element {
   /**
    * The tree's sessions, under the project each is running in.
    *
-   * Helm's own are matched on the project they were launched against, falling
+   * The desktop's own are matched on the project they were launched against, falling
    * back to their working directory; ended ones stay, because their tab does -
-   * the scrollback is the record of what happened. Sessions Helm did not start
+   * the scrollback is the record of what happened. Sessions the desktop did not start
    * are matched with core's `liveSessionsIn`, the comparison the launch warning
    * uses, so the tree and the warning cannot disagree about whether two paths
    * are one folder.
@@ -3971,7 +3971,7 @@ export function App(): JSX.Element {
         return;
       }
       // Somebody else's session has no tab; its row in the sessions pane is
-      // where what Helm can know about it is.
+      // where what the desktop can know about it is.
       setSelectedLivePid(Number(id.slice("pid:".length)));
       openSessions();
     },
@@ -4021,7 +4021,7 @@ export function App(): JSX.Element {
     onUpdateFloti: (host: string) => updateFlotiOn(host),
   };
 
-  /** Helm's live sessions by what they are doing, for the status bar. */
+  /** The desktop's live sessions by what they are doing, for the status bar. */
   const running = sessions.filter((session) => session.status === "running");
   const waiting = running.filter((session) => stateOf(session) === "waiting");
   const statusCounts = countSessionStates(running, stateOf);
@@ -4037,7 +4037,7 @@ export function App(): JSX.Element {
 
   /**
    * The machine-wide line under the tree: how many sessions are running on
-   * this machine and how many of them are not Helm's - the half that changes
+   * this machine and how many of them are not the desktop's - the half that changes
    * what somebody does next, and the reason the listing behind it exists.
    */
   const sessionsSummaryLine = ((): string => {
@@ -4651,7 +4651,7 @@ export function App(): JSX.Element {
   /**
    * Rendered by both branches below: main holds the window's `close` open on
    * this promise, so a branch that did not draw the dialog would be a branch
-   * Helm could not quit from until the fallback timer ran out.
+   * the desktop could not quit from until the fallback timer ran out.
    */
   const confirmDialog =
     confirmRequest !== null ? (
@@ -4920,7 +4920,7 @@ export function App(): JSX.Element {
         openRemoteSession(host.id, Number(key.slice(host.id.length + 1))),
       onEndSession: (key: string) =>
         closeRemoteSession(host.id, Number(key.slice(host.id.length + 1))),
-      // A floti too old or newer than this Helm, with both versions, or a
+      // A floti too old or newer than this desktop, with both versions, or a
       // connected one older than it; too old and older offer the same
       // yes-first update Settings > Hosts does.
       floti: hostFlotiVerdict(connection),
@@ -5154,7 +5154,7 @@ export function App(): JSX.Element {
       // Main checks, installs and updates floti there, after the yes the
       // window asks for; the window never says what to run.
       hostInstall={hostInstall}
-      // The path Helm installed floti at there, which every line run there
+      // The path the desktop installed floti at there, which every line run there
       // starts with from now on.
       onHostInstalled={(id, floti, system) =>
         writeSettings({

@@ -15,7 +15,7 @@ import type { HostAdapter } from './router'
  * each list to the window, so whichever client wrote, every place that lists
  * profiles shows the change.
  *
- * The file dialogs stay Helm's, on the user's own machine (`profileDialog:*`):
+ * The file dialogs stay the desktop's, on the user's own machine (`profileDialog:*`):
  * it saves the document `profile:export` answers where its save dialog says,
  * and hands `profile:import` the file its open dialog chose and read. The
  * question before `profile:delete` is the window's own (`DeleteProfileDialog`),
@@ -28,7 +28,7 @@ import type { HostAdapter } from './router'
 
 export interface ProfilesAdapterDeps {
   link: HostReach
-  /** The preload's bridge, for Helm's own dialogs. */
+  /** The preload's bridge, for the desktop's own dialogs. */
   own: Pick<DesktopBridge, 'invoke'>
   log?: (line: string) => void
 }

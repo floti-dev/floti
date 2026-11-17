@@ -15,7 +15,7 @@ import { resourcesFromHost } from './records'
  *
  * A read goes through `link.connection()`, which joins the first connect while
  * it is in flight, and then waits for that connection's first set, so a window
- * that asks before Helm has reached the host gets the host's answer, never an
+ * that asks before the desktop has reached the host gets the host's answer, never an
  * empty one first. When the host cannot be reached the read rejects with the
  * link's sentence, and when the connection ends the window is told the empty
  * set: a hosted session with no entry paints Unknown, never "nothing there".

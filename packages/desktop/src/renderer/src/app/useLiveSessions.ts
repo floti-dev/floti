@@ -4,7 +4,7 @@ import { desktop } from './bridge'
 import { readable } from './errors'
 
 /**
- * Every live Claude Code session on the machine, and what Helm's own are
+ * Every live Claude Code session on the machine, and what the desktop's own are
  * holding.
  *
  * Two facts with two different costs, so two channels and two lifetimes.
@@ -35,7 +35,7 @@ export interface LiveSessionsState {
   error: string | null
   /** Reads the registry again: an Unknown's Try again. */
   retry: () => void
-  /** What each hosted session is holding, by Helm's session row id. */
+  /** What each hosted session is holding, by the desktop's session row id. */
   resources: Map<number, SessionResources>
   /**
    * Ask main to run the resource pass while this is true.

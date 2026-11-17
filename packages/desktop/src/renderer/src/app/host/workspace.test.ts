@@ -98,7 +98,7 @@ const HOST_INFO = {
   desktop: true
 } as unknown as P.AppInfo
 
-/** Helm's main process as the window's bridge reaches it: its own settings, build and picker. */
+/** The desktop's main process as the window's bridge reaches it: its own settings, build and picker. */
 function ownBridge(patch: Partial<AppSettings> = {}) {
   let settings: AppSettings = { ...DEFAULT_SETTINGS, ...patch }
   const writes: Array<Partial<AppSettings>> = []
@@ -130,7 +130,7 @@ function ownBridge(patch: Partial<AppSettings> = {}) {
     bridge: bridge as unknown as Pick<DesktopBridge, 'invoke' | 'on'>,
     writes,
     picks,
-    /** Main changed Helm's own settings, as the browser pane's history does. */
+    /** Main changed the desktop's own settings, as the browser pane's history does. */
     change: (next: Partial<AppSettings>) => {
       settings = { ...settings, ...next }
       for (const listener of listeners) listener(settings)
@@ -290,7 +290,7 @@ describe('the window’s workspace over its own connection', () => {
     await expect(ask(adapter, 'discovery:cached')).rejects.toThrow(UNREACHABLE)
     await expect(ask(adapter, 'roots:suggest')).rejects.toThrow(UNREACHABLE)
     await expect(ask(adapter, 'template:list')).rejects.toThrow(UNREACHABLE)
-    // The window still paints with Helm's own settings.
+    // The window still paints with the desktop's own settings.
     await expect(ask(adapter, 'settings:read')).resolves.toMatchObject({ theme: 'dark' })
     listen()
     await settle()

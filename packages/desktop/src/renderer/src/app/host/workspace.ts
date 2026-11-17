@@ -24,15 +24,15 @@ import type { HostAdapter } from './router'
  *
  * The settings are split by who keeps them. The host's half (`HostSettings`'s
  * scan roots, pins and setup stamp) is read and written over the protocol.
- * Helm's own half - the window, theme, terminal and browser preferences, and
- * the `claude` Helm picked, which main tells the host - stays with Helm's main
+ * The desktop's own half - the window, theme, terminal and browser preferences, and
+ * the `claude` the desktop picked, which main tells the host - stays with the desktop's main
  * process on the client-only `ownSettings:*`, whose write does what main does
- * with it. The window is answered Helm's half with the host's laid over; while
- * this PC's host cannot be used it is Helm's own, so the window still paints
+ * with it. The window is answered the desktop's half with the host's laid over; while
+ * this PC's host cannot be used it is the desktop's own, so the window still paints
  * its tabs and saves their layout, and the window's notice says why.
  *
  * The pickers are the window's own: `path:chooseFile` for the `claude`
- * program, whose choice the host checks before Helm keeps it.
+ * program, whose choice the host checks before the desktop keeps it.
  *
  * The first listener starts the window's first scan, as main did when the
  * window said it had painted; a host that cannot be reached says why on
@@ -43,7 +43,7 @@ import type { HostAdapter } from './router'
  * connect while it is in flight, so a read asked before the window has reached
  * the host gets the host's answer, never an empty one first; with no host each
  * rejects with the link's sentence, never an empty list in its place; this
- * PC's link waits through a host that cannot be used instead. What Helm keeps
+ * PC's link waits through a host that cannot be used instead. What the desktop keeps
  * itself (its settings, its build) is answered without the host meanwhile
  * (`hostIfUsable`).
  */
@@ -52,7 +52,7 @@ type Pushed = 'settings:changed' | 'discovery:updated' | 'scan:status' | 'git:up
 
 export interface WorkspaceAdapterDeps {
   link: HostReach
-  /** The preload's bridge, for Helm's own settings, build and pickers. */
+  /** The preload's bridge, for the desktop's own settings, build and pickers. */
   own: Pick<DesktopBridge, 'invoke' | 'on'>
   /** Calls `listener` whenever the window comes to the front. */
   onFocus?: (listener: () => void) => void
@@ -96,7 +96,7 @@ export function createWorkspaceAdapter({
   let subscriptions: HostSubscription[] = []
 
   const host = (): Promise<HostConnection> => link.connection()
-  /** The host for a read that answers with Helm's own half without it: no wait while this PC's host cannot be used. */
+  /** The host for a read that answers with the desktop's own half without it: no wait while this PC's host cannot be used. */
   const hostIfUsable = (): Promise<HostConnection> => link.connectionIfUsable?.() ?? link.connection()
   /** For what a person starts: fails at once, with a short sentence, while this PC's host cannot be used. */
   const act = forAction(link)
@@ -109,8 +109,8 @@ export function createWorkspaceAdapter({
 
   const ownSettings = async (): Promise<AppSettings> => (mine ??= await own.invoke('ownSettings:read'))
   /**
-   * Tells every listener Helm's settings with the host's laid over once the
-   * host's are known: read first when they are not yet, and Helm's alone only
+   * Tells every listener the desktop's settings with the host's laid over once the
+   * host's are known: read first when they are not yet, and the desktop's alone only
    * when the host cannot be reached. Told before then, the window would take
    * the host's half (its scan roots among them) for empty.
    */
@@ -141,7 +141,7 @@ export function createWorkspaceAdapter({
       if (mine !== null) tell('settings:changed', settingsWithHost(mine, hostSettings))
     })
   }
-  /** Helm's settings with the host's laid over, told to every listener. */
+  /** The desktop's settings with the host's laid over, told to every listener. */
   const settled = (settings: AppSettings): AppSettings => {
     mine = settings
     tellSettled()
@@ -149,7 +149,7 @@ export function createWorkspaceAdapter({
   }
   const adoptHost = async (next: P.HostSettings): Promise<AppSettings> => {
     hostSettings = next
-    // Helm's half as it is when the answer lands, not when it was asked for.
+    // The desktop's half as it is when the answer lands, not when it was asked for.
     await ownSettings()
     return settled(mine ?? (await ownSettings()))
   }
@@ -271,7 +271,7 @@ export function createWorkspaceAdapter({
       'settings:write': async (patch) => {
         const split = splitSettingsPatch(patch)
         if (remote !== undefined && Object.keys(split.own).length > 0) throw new Error(ownSettingsElsewhere(remote.name()))
-        // A write of Helm's half alone answers with the host's laid over, so
+        // A write of the desktop's half alone answers with the host's laid over, so
         // the host's are read first when they are not known yet.
         if (Object.keys(split.host).length === 0) await hostKnown()
         const settings =
@@ -291,10 +291,10 @@ export function createWorkspaceAdapter({
 
       'setup:status': async () => claude(await (await host()).request('setup:status', null)),
       // The picker is the window's own; the host checks what it chose, and
-      // only a program it kept becomes Helm's, which main tells the host on
+      // only a program it kept becomes the desktop's, which main tells the host on
       // every connect from then on.
       'setup:locateClaude': async () => {
-        // The picker browses this PC, and the `claude` Helm keeps is this PC's.
+        // The picker browses this PC, and the `claude` the desktop keeps is this PC's.
         if (remote !== undefined) throw new Error(ownSettingsElsewhere(remote.name()))
         // Said before the picker opens: a choice nobody could check would be lost.
         const connection = await act()

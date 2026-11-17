@@ -30,7 +30,7 @@ import type { DesktopBridge, HostLinkOpened, RefusedVersions } from '../../../..
  * computer's link rejects with the sentence saying why.
  *
  * When the host's side ends the connection, main says whether it ended the
- * host on purpose (Stop host, or a quit) and whether Helm starts a new one,
+ * host on purpose (Stop host, or a quit) and whether the desktop starts a new one,
  * and the link tells its `onEnded` listeners. After an end on purpose the
  * next caller connects again. After any other end - a host that crashed or
  * was killed - the link connects again by itself, waiting as main's link
@@ -39,7 +39,7 @@ import type { DesktopBridge, HostLinkOpened, RefusedVersions } from '../../../..
  * of the host. After a Restart host to update the link connects again at
  * once: main holds the connect until the new host is up.
  *
- * A host that refuses this Helm's `hello` names both protocol versions and
+ * A host that refuses this desktop's `hello` names both protocol versions and
  * the side to update. The link tells its `onRefused` listeners, so the
  * window can say which side is older: this PC's link from main's word that
  * its host cannot be used (`usability`), or from a page bridge refused after
@@ -55,7 +55,7 @@ export const WINDOW_CAPABILITIES: readonly Capability[] = ['terminal', 'files', 
 export interface HostEnd {
   /** Main's link ended the host on purpose: a stop or a quit, which is no crash. */
   planned: boolean
-  /** Helm starts a new host in place of this one, rather than waiting for it to answer again. */
+  /** The desktop starts a new host in place of this one, rather than waiting for it to answer again. */
   restarts: boolean
   /** The user's Restart host to update ended it; the page connects to the new host at once. */
   restarting?: boolean
@@ -91,7 +91,7 @@ export interface PageLink {
   onConnected(listener: (connection: HostConnection) => void): void
   /** Called each time the host's side ends the connection, saying how. */
   onEnded(listener: (end: HostEnd) => void): void
-  /** Called each time the host refused this Helm's `hello`, with the versions it named. */
+  /** Called each time the host refused this desktop's `hello`, with the versions it named. */
   onRefused?(listener: (refused: RefusedVersions) => void): void
   /**
    * The user's Reconnect now, or Try again: a link waiting to connect again

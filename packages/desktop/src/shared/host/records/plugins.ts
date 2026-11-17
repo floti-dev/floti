@@ -10,7 +10,7 @@ import type * as P from '../protocol'
  */
 
 /**
- * A plugin as the host lists it, in the shape Helm's window draws. A remote
+ * A plugin as the host lists it, in the shape the desktop's window draws. A remote
  * host's page and background URLs are moved onto that host's own origin for
  * the plugin (`shared/plugins/origin.ts`), so its pages never share an origin,
  * or storage, with This PC's copy of the same plugin. This PC's stay as the
