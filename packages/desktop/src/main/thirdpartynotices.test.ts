@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { describe, expect, inject, it } from 'vitest'
 import { RUN_ROOT } from '../../../../test/run-root'
@@ -333,7 +333,7 @@ describe('the npm packages the desktop app carries', () => {
     const packages = npmClosure(desktop)
     expect(packages.map((each) => `${each.name}@${each.version}`)).toEqual(['drizzle-orm@0.45.2', 'react@19.2.8', 'scheduler@0.27.0'])
     expect(packages[0]).toMatchObject({ license: 'Apache-2.0', repository: 'git+https://github.com/drizzle-team/drizzle-orm.git', authors: [] })
-    expect(packages[2]).toMatchObject({ authors: ['Meta'], dir: join(root, 'node_modules', 'react', 'node_modules', 'scheduler') })
+    expect(packages[2]).toMatchObject({ authors: ['Meta'], dir: join(realpathSync(root), 'node_modules', 'react', 'node_modules', 'scheduler') })
   })
 
   it('refuses an install that lacks a dependency', () => {
