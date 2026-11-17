@@ -185,7 +185,11 @@ means it is not showing.
   the shell.
 - The agents step reads each backend's own check (`setup:status`), which
   decides a sign-in from its artefacts existing and never opens one; Unknown
-  stays Unknown. The host step writes this PC's `quitSessions` and opens the
+  stays Unknown. A Not installed row offers its install line and Locate…,
+  which is Settings' `setup:locateClaude`: the picker, the host's check of
+  the picked file, and `claudePath` kept only when it passes. A file that
+  fails leaves the row Not installed with the host's sentence under it. The
+  host step writes this PC's `quitSessions` and opens the
   add-a-host dialog as Settings does.
 
 ## Hosts on other computers

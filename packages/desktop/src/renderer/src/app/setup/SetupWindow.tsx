@@ -21,7 +21,7 @@ import {
   type WalkthroughQuit,
   type WorkspaceChoice
 } from '@floti/ui'
-import type { DesktopBridge } from '../../../../shared/ipc'
+import type { ClaudeStatus, DesktopBridge } from '../../../../shared/ipc'
 import { addHostActions } from '../hostActions'
 import { atStep, claudeAgent, stepAfter, stepBefore, WALKTHROUGH_DONE } from './walkthrough'
 import type { LocalHostStepStore } from '../host/localHostStep'
@@ -183,18 +183,27 @@ function AgentsScreen({
   const [agents, setAgents] = useState<WalkthroughAgent[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
+  const [locateProblem, setLocateProblem] = useState<string | null>(null)
+  /** The error of the status the row was last drawn from: how a cancelled pick is told from a failed one. */
+  const shownError = useRef<string | null>(null)
+  const locating = useRef(false)
+
+  /** Draws the row from a status; one that turned installed has nothing left to say about a pick. */
+  const show = useCallback(
+    (status: ClaudeStatus) => {
+      const agent = claudeAgent(status, windows)
+      setAgents([agent])
+      setError(null)
+      shownError.current = status.error
+      if (agent.installed === true) setLocateProblem(null)
+    },
+    [windows]
+  )
 
   /** One read of the backend's own check. Could not look: said as Unknown, and what was known stays. */
   const read = useCallback(
-    () =>
-      bridge.invoke('setup:status').then(
-        (status) => {
-          setAgents([claudeAgent(status, windows)])
-          setError(null)
-        },
-        (err: unknown) => setError(sentence(err))
-      ),
-    [bridge, windows]
+    () => bridge.invoke('setup:status').then(show, (err: unknown) => setError(sentence(err))),
+    [bridge, show]
   )
 
   // Read on arrival, with no spinner: nobody asked yet.
@@ -208,6 +217,31 @@ function AgentsScreen({
     void read().finally(() => setChecking(false))
   }, [read])
 
+  /**
+   * Locate…: the picker and the host's check of the picked file, which keeps
+   * it as `claudePath` only when it passes (`setup:locateClaude`, as Settings
+   * does). A cancel answers the current status and a failed pick that status
+   * with the check's sentence in place of its error, so a pick that did not
+   * pass is one whose error is not the one already drawn.
+   */
+  const locate = useCallback(() => {
+    if (locating.current) return
+    locating.current = true
+    void bridge
+      .invoke('setup:locateClaude')
+      .then(
+        (status) => {
+          const kept = claudeAgent(status, windows).installed === true
+          if (!kept && status.error !== null && status.error !== shownError.current) setLocateProblem(status.error)
+          else show(status)
+        },
+        (err: unknown) => setLocateProblem(sentence(err))
+      )
+      .finally(() => {
+        locating.current = false
+      })
+  }, [bridge, show, windows])
+
   return (
     <AgentsStep
       agents={agents}
@@ -215,6 +249,8 @@ function AgentsScreen({
       checking={checking}
       onCheckAgain={check}
       onCopy={(text) => void bridge.invoke('clipboard:write', text).catch(() => undefined)}
+      onLocate={locate}
+      locateProblem={locateProblem}
       onSkip={onSkip}
       onBack={onBack}
       onContinue={onContinue}
