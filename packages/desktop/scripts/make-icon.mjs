@@ -1,90 +1,30 @@
 /**
- * Draws the ship's-wheel icon and packs it into `build/icon.ico` for Windows
- * and `build/icon.icns` for macOS.
+ * Rasterises the brand's colour mark (`assets/brand/mark-colour-circle.svg`,
+ * cropped to its circle) into `build/icon-<size>.png`, `icon.png`, `icon.ico`
+ * and `icon.icns`, and writes `preview.png`: 16 to 48px magnified on a dark and
+ * a light taskbar, since a transparent icon is only ever seen on one of them.
  *
- * Run with `pnpm icon`. Both packs are committed, so this is not part of the
- * build - run it when the artwork changes and commit the result.
+ * Each size is rendered from the vector at its own resolution by a headless
+ * Chrome (Edge, then Playwright's own Chromium, when Chrome is not installed).
+ * The ICO and ICNS are packed here, with nothing beyond Node.
  *
- * ## Why it draws rather than renders a file
- *
- * There is no rasteriser on this machine to lean on. ImageMagick is not
- * installed, and on Windows `convert` resolves to the filesystem tool in
- * System32 rather than to ImageMagick even when it is. Electron carries a
- * browser engine and was the obvious candidate, but `capturePage()` fails with
- * `UnknownVizError` headlessly here, with or without hardware acceleration -
- * and an ESM main script deadlocks on `app.whenReady()` before reaching it, so
- * that route costs a CommonJS entry point as well. This script runs under plain
- * `node`, which is why it can stay ESM like the others in this directory.
- *
- * So the shapes are signed distance fields evaluated per pixel, which
- * anti-aliases better than a supersampled scanline fill and needs nothing
- * outside `node:zlib`.
- *
- * ## Why it is one drawing at every size
- *
- * A 16px icon downscaled from 256 turns to mush, and 16px is the size Windows
- * shows most often - the taskbar, the title bar, Explorer's list view. So every
- * size is drawn at its own resolution, with a floor of one device pixel on
- * every stroke so nothing thins out to nothing.
- *
- * It is the same drawing at each of them, though, and that is what the
- * proportions are for. A wheel at 16px is a rim, a hub and handles, and the
- * rim has to be most of it: the first version drew a small rim with long
- * knobbed handles, which at 256 is a fine ship's wheel and at 16 to 20 is a
- * snowflake, and the 2026-08 fix for that - four spokes below 24px - read as
- * a crosshair. A rim at two thirds of the radius, short round-capped handles
- * and a hollow hub stay a wheel from 16px up, so no size needs a drawing of
- * its own. `build/preview.png` shows 16 through 48 magnified, so this is a
- * thing that can be looked at rather than assumed.
- *
- * `HelmMarkIcon` (packages/ui) draws the same wheel as a vector, from the
- * same `wheel.json`. Its spokes are thinner than the rim and handles so the
- * hub's ring stays open between them; at the rim's weight they close it into
- * a blot.
- *
- * ## Why there is no tile behind it
- *
- * The wheel is the icon, on a transparent ground, as VS Code's mark is. It
- * used to sit on a navy rounded square, which on the taskbar read as a generic
- * app tile with a picture on it rather than as Helm. Without the tile the
- * wheel fills the icon, and it is drawn in the purple the title-bar mark
- * wears, so the window and the taskbar button show the same thing.
- * `build/preview.png` shows it on a dark and a light taskbar, since a
- * transparent icon is only ever seen on one of the two.
- *
- * When real artwork replaces this, none of the above applies - export a
- * 1024px PNG from a vector tool and use an icon generator. See the README of
- * this directory or ask; this file is a placeholder's scaffolding, not a
- * pipeline anyone should have to maintain.
+ * Run with `pnpm icon` when the artwork changes and commit the result; it is
+ * not part of the build.
  */
-import { deflateSync } from 'node:zlib'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-// The wheel on the 16-unit grid `HelmMarkIcon` draws on: radii from the
-// centre, widths across. One file for both, so the two cannot drift apart.
-import WHEEL from '../../ui/src/components/wheel.json' with { type: 'json' }
+import { chromium } from '@playwright/test'
 
-const BUILD = join(dirname(fileURLToPath(import.meta.url)), '..', 'build')
+const HERE = dirname(fileURLToPath(import.meta.url))
+const BUILD = join(HERE, '..', 'build')
+const SOURCE = join(HERE, '..', '..', '..', 'assets', 'brand', 'mark-colour-circle.svg')
 
 /** 256 must be present - electron-builder rejects an icon without it. */
 const SIZES = [16, 24, 32, 48, 64, 128, 256]
 
-/**
- * Nocturne's `accent` (core/theme/themes.ts), the colour the title-bar mark is
- * drawn in out of the box. Fixed rather than following the theme: there is one
- * icon file for every user, and the taskbar is not themed by Helm.
- */
-const PURPLE = [0x91, 0x84, 0xd9]
-
-/**
- * The 16-unit box as a share of the icon: the handles' caps end 18px inside a
- * 256 icon's edge. The pixel snapping below was tuned at this share. At the
- * whole box, 24 and 32px land on the wrong side of a rounding - a two-pixel
- * spoke and a hub with no hole - and close up into a cross, and the 16px
- * handles run off the edge.
- */
-const FILL = 0.92
+/** The circle's bounds in the artboard (getBBox), so it fills the icon edge to edge. */
+const CROP = '23.2 23.8 243 243'
 
 /**
  * The share of the canvas a macOS app icon's artwork takes. Apple's icon grid
@@ -93,169 +33,46 @@ const FILL = 0.92
  * the canvas the way the Windows icon does stands visibly larger than the icons
  * beside it.
  */
-const MAC_FILL = FILL * (824 / 1024)
+const MAC_FILL = 824 / 1024
 
-// ---------------------------------------------------------------------------
-// Signed distance fields. Negative inside, positive outside, in pixels.
-// ---------------------------------------------------------------------------
+/** The source with its viewBox cropped to the circle, as a data URL. */
+function croppedSource() {
+  const svg = readFileSync(SOURCE, 'utf8')
+  const cropped = svg.replace(/(<svg\b[^>]*?\sviewBox=")[^"]*(")/, `$1${CROP}$2`)
+  if (cropped === svg) throw new Error(`${SOURCE} has no viewBox on its <svg> to crop`)
+  return `data:image/svg+xml;base64,${Buffer.from(cropped).toString('base64')}`
+}
 
-const sdCircle = (px, py, cx, cy, r) => Math.hypot(px - cx, py - cy) - r
+/** A page showing `body`, with no margin and no background of its own. */
+const page = (body) =>
+  `<!doctype html><html><head><style>html,body{margin:0;background:transparent}img{display:block}</style></head><body>${body}</body></html>`
 
-/** A line segment with round caps - the shape a round-capped stroke makes. */
-function sdCapsule(px, py, ax, ay, bx, by, r) {
-  const pax = px - ax
-  const pay = py - ay
-  const bax = bx - ax
-  const bay = by - ay
-  const denom = bax * bax + bay * bay
-  const h = denom === 0 ? 0 : Math.max(0, Math.min(1, (pax * bax + pay * bay) / denom))
-  return Math.hypot(pax - bax * h, pay - bay * h) - r
+/** Chrome, then Edge, then the Chromium Playwright installs, whichever starts first. */
+async function launch() {
+  for (const channel of ['chrome', 'msedge']) {
+    try {
+      return await chromium.launch({ channel })
+    } catch {
+      // Not installed; try the next.
+    }
+  }
+  return chromium.launch()
 }
 
 /**
- * Coverage from a distance, anti-aliased across one pixel.
- *
- * Clamped rather than smoothstepped: a linear ramp across the boundary keeps
- * thin strokes at their intended weight, where smoothstep visibly thins them.
+ * A screenshot's PNG, checked to be what an ICO or ICNS entry has to be: 8-bit
+ * RGBA, `size` pixels square. An entry of another kind packs without complaint
+ * and then shows as a blank square on the taskbar.
  */
-const coverage = (d) => Math.max(0, Math.min(1, 0.5 - d))
-
-// ---------------------------------------------------------------------------
-// The mark
-// ---------------------------------------------------------------------------
-
-function draw(size, fill = FILL) {
-  const px = new Uint8Array(size * size * 4)
-  const unit = (size * fill) / 16
-
-  // Up to 48px the drawing is snapped to the pixel grid. Every width is a
-  // whole number of pixels, the centre sits where the spokes' width needs it -
-  // on a pixel's centre for an odd width, on the line between two for an even
-  // one - and each ring's radius puts its line on whole pixels where it crosses
-  // the axes. Unsnapped, a one-pixel upright spoke is two half-strength pixels
-  // and a small wheel is a smudge. Half a pixel off centre is invisible; the
-  // smudge is not.
-  const snap = unit < 3
-  /**
-   * A width in pixels, never under `floor`. The rim and handles take a floor
-   * of two: they are the outline, and the outline is what is left of a wheel
-   * at 16px. At one pixel the diagonal handles are a single pixel each, lost
-   * against the rim, and what is left is a crosshair in a circle.
-   */
-  const width = (w, floor = 1) => (snap ? Math.max(floor, Math.round(w * unit)) : Math.max(w * unit, floor))
-  const spokeWidth = width(WHEEL.spokeWidth)
-  const c = snap && Math.round(spokeWidth) % 2 === 1 ? size / 2 - 0.5 : size / 2
-  const radius = (r, w) => {
-    if (!snap) return r * unit
-    // Where the ring's line should fall: a pixel's centre for an odd width,
-    // the line between two for an even one.
-    const target = w % 2 === 1 ? 0.5 : 0
-    return Math.round(c + r * unit - target) + target - c
-  }
-
-  const rimWidth = width(WHEEL.rimWidth, 2)
-  const hubWidth = width(WHEEL.hubWidth)
-  const rimR = radius(WHEEL.rim, rimWidth)
-  const hubR = radius(WHEEL.hub, hubWidth)
-  const rimHalf = rimWidth / 2
-  const hubHalf = hubWidth / 2
-  const spokeHalf = spokeWidth / 2
-  const handleHalf = width(WHEEL.handleWidth, 2) / 2
-
-  // Eight spokes need room between them inside the rim, or the diagonals and
-  // the rim close into four solid corners - which is the 16px wheel. Where the
-  // clear space between two spokes halfway out is under two pixels, only the
-  // upright and level spokes are drawn inside; all eight handles still are,
-  // and they are what say "wheel" from outside.
-  const gap = (2 * Math.PI * ((hubR + rimR) / 2)) / 8 - spokeWidth
-  const inner = gap < 2 ? 4 : 8
-
-  // Each spoke runs from the hub's ring to the rim, and its handle on from the
-  // rim to a round cap - two widths, so they are two capsules.
-  const spokes = Array.from({ length: 8 }, (_, n) => {
-    const a = (n * 2 * Math.PI) / 8
-    const at = (r) => [c + r * Math.cos(a), c + r * Math.sin(a)]
-    return { inside: inner === 8 || n % 2 === 0, hub: at(hubR), rim: at(rimR), end: at(WHEEL.handleEnd * unit) }
-  })
-
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const cx = x + 0.5
-      const cy = y + 0.5
-
-      let ink = 0
-      for (const { inside, hub, rim, end } of spokes) {
-        if (inside) ink = Math.max(ink, coverage(sdCapsule(cx, cy, hub[0], hub[1], rim[0], rim[1], spokeHalf)))
-        ink = Math.max(ink, coverage(sdCapsule(cx, cy, rim[0], rim[1], end[0], end[1], handleHalf)))
-      }
-      // A ring is the circle's distance folded about its own edge.
-      ink = Math.max(ink, coverage(Math.abs(sdCircle(cx, cy, c, c, rimR)) - rimHalf))
-      ink = Math.max(ink, coverage(Math.abs(sdCircle(cx, cy, c, c, hubR)) - hubHalf))
-
-      // One colour on a transparent ground: the coverage is the alpha.
-      const i = (y * size + x) * 4
-      px.set(PURPLE, i)
-      px[i + 3] = Math.round(ink * 255)
-    }
-  }
-
-  return px
-}
-
-// ---------------------------------------------------------------------------
-// PNG
-// ---------------------------------------------------------------------------
-
-const CRC_TABLE = (() => {
-  const t = new Int32Array(256)
-  for (let n = 0; n < 256; n++) {
-    let c = n
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
-    t[n] = c
-  }
-  return t
-})()
-
-function crc32(buf) {
-  let c = -1
-  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8)
-  return (c ^ -1) >>> 0
-}
-
-function chunk(type, data) {
-  const len = Buffer.alloc(4)
-  len.writeUInt32BE(data.length, 0)
-  const body = Buffer.concat([Buffer.from(type, 'ascii'), data])
-  const crc = Buffer.alloc(4)
-  crc.writeUInt32BE(crc32(body), 0)
-  return Buffer.concat([len, body, crc])
-}
-
-function encodePng(px, width, height = width) {
-  const ihdr = Buffer.alloc(13)
-  ihdr.writeUInt32BE(width, 0)
-  ihdr.writeUInt32BE(height, 4)
-  ihdr.writeUInt8(8, 8) // bit depth
-  ihdr.writeUInt8(6, 9) // truecolour with alpha
-  ihdr.writeUInt8(0, 10)
-  ihdr.writeUInt8(0, 11)
-  ihdr.writeUInt8(0, 12)
-
-  // One filter byte per scanline; filter 0 (None) compresses fine at this size.
-  const stride = width * 4
-  const raw = Buffer.alloc(height * (stride + 1))
-  for (let y = 0; y < height; y++) {
-    const at = y * (stride + 1)
-    raw[at] = 0
-    Buffer.from(px.buffer, px.byteOffset + y * stride, stride).copy(raw, at + 1)
-  }
-
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', ihdr),
-    chunk('IDAT', deflateSync(raw, { level: 9 })),
-    chunk('IEND', Buffer.alloc(0))
-  ])
+function checkedPng(png, size) {
+  const ok =
+    png.toString('ascii', 12, 16) === 'IHDR' &&
+    png.readUInt32BE(16) === size &&
+    png.readUInt32BE(20) === size &&
+    png[24] === 8 &&
+    png[25] === 6
+  if (!ok) throw new Error(`the ${String(size)}px render is not an 8-bit RGBA PNG of that size`)
+  return png
 }
 
 // ---------------------------------------------------------------------------
@@ -313,17 +130,16 @@ const ICNS_TYPES = [
 ]
 
 /**
- * The pixel sizes taken from the Windows drawings rather than drawn on the
- * macOS grid. At 16 and 32px the inset would leave the wheel 12 and 24px
- * across, under the floors its pixel snapping was tuned for, and those sizes
- * appear only in Finder's list and sidebar, where every icon is drawn full.
+ * The pixel sizes taken from the Windows images rather than rendered on the
+ * macOS grid: they appear only in Finder's list and sidebar, where every icon
+ * is drawn full, and the inset would leave the ship 13 and 26px across.
  */
 const ICNS_FROM_WINDOWS = new Set([16, 32])
 
 function buildIcns(pngBySize) {
   const elements = ICNS_TYPES.map(([type, size]) => {
     const png = pngBySize.get(size)
-    if (png === undefined) throw new Error(`no ${String(size)}px drawing for icns type ${type}`)
+    if (png === undefined) throw new Error(`no ${String(size)}px image for icns type ${type}`)
     const header = Buffer.alloc(8)
     header.write(type, 0, 'ascii')
     header.writeUInt32BE(8 + png.length, 4)
@@ -335,75 +151,67 @@ function buildIcns(pngBySize) {
   return Buffer.concat([header, ...elements])
 }
 
-const entries = SIZES.map((size) => {
-  const png = encodePng(draw(size), size)
-  writeFileSync(join(BUILD, `icon-${String(size)}.png`), png)
-  process.stdout.write(`  ${String(size).padStart(3)}px  ${String(png.length).padStart(6)} bytes\n`)
-  return { size, png }
-})
+const browser = await launch()
+try {
+  const tab = await (await browser.newContext({ deviceScaleFactor: 1 })).newPage()
+  const source = croppedSource()
 
-/**
- * The small sizes, nearest-neighbour magnified, on a dark taskbar and a light
- * one.
- *
- * Not shipped - it exists so the sizes that actually get looked at can be
- * looked at. Judging a 16px icon by opening the 256px one is how the small
- * version ended up reading as a flower, and an icon with no ground of its own
- * has to hold up on both of the grounds Windows puts under it.
- */
-function writePreview() {
+  /** The mark rendered `size` pixels square, its art `fill` of that and centred. */
+  async function render(size, fill = 1) {
+    const art = size * fill
+    const at = (size - art) / 2
+    await tab.setViewportSize({ width: size, height: size })
+    await tab.setContent(
+      page(
+        `<img src="${source}" style="position:absolute;left:${String(at)}px;top:${String(at)}px;width:${String(art)}px;height:${String(art)}px">`
+      )
+    )
+    const png = await tab.screenshot({ omitBackground: true, clip: { x: 0, y: 0, width: size, height: size } })
+    return checkedPng(png, size)
+  }
+
+  const entries = []
+  for (const size of SIZES) {
+    const png = await render(size)
+    writeFileSync(join(BUILD, `icon-${String(size)}.png`), png)
+    process.stdout.write(`  ${String(size).padStart(3)}px  ${String(png.length).padStart(6)} bytes\n`)
+    entries.push({ size, png })
+  }
+
+  writeFileSync(join(BUILD, 'icon.ico'), buildIco(entries))
+  // electron-builder's Linux target and the runtime window icon both want a PNG.
+  writeFileSync(join(BUILD, 'icon.png'), entries[entries.length - 1].png)
+  process.stdout.write(`icon.ico written with ${String(entries.length)} sizes\n`)
+
+  const macPngs = new Map()
+  for (const [, size] of ICNS_TYPES) {
+    if (macPngs.has(size)) continue
+    const fromWindows = ICNS_FROM_WINDOWS.has(size) ? entries.find((e) => e.size === size) : undefined
+    macPngs.set(size, fromWindows?.png ?? (await render(size, MAC_FILL)))
+  }
+  writeFileSync(join(BUILD, 'icon.icns'), buildIcns(macPngs))
+  process.stdout.write(`icon.icns written with ${String(ICNS_TYPES.length)} images\n`)
+
+  // Not shipped: the sizes that actually get looked at, magnified nearest
+  // neighbour from the PNGs just packed, on Windows 11's dark and light
+  // taskbars. Every scale is a whole number, so each pixel stays square.
   const shown = [16, 24, 32, 48]
-  // Windows 11's taskbar, dark and light.
-  const grounds = [
-    [0x20, 0x20, 0x20],
-    [0xf3, 0xf3, 0xf3]
-  ]
-  const zoom = 8
+  const cell = 48 * 8
   const pad = 12
-  const cell = 48 * zoom
-  const w = shown.length * cell + (shown.length + 1) * pad
-  const h = grounds.length * cell + (grounds.length + 1) * pad
-  const out = new Uint8Array(w * h * 4)
-
-  grounds.forEach((ground, row) => {
-    const top = row * (cell + pad)
-    for (let y = top; y < top + cell + 2 * pad; y++) {
-      for (let x = 0; x < w; x++) out.set([...ground, 0xff], (y * w + x) * 4)
-    }
-    shown.forEach((size, n) => {
-      const src = draw(size)
-      const scale = (48 * zoom) / size
-      const ox = pad + n * (cell + pad)
-      const oy = top + pad
-      for (let y = 0; y < cell; y++) {
-        for (let x = 0; x < cell; x++) {
-          const sx = Math.min(size - 1, Math.floor(x / scale))
-          const sy = Math.min(size - 1, Math.floor(y / scale))
-          const si = (sy * size + sx) * 4
-          const di = ((oy + y) * w + (ox + x)) * 4
-          const alpha = src[si + 3] / 255
-          for (let ch = 0; ch < 3; ch++) {
-            out[di + ch] = Math.round(src[si + ch] * alpha + ground[ch] * (1 - alpha))
-          }
-        }
-      }
+  const width = shown.length * cell + (shown.length + 1) * pad
+  const height = 2 * (cell + 2 * pad)
+  const images = shown
+    .map((size) => {
+      const png = entries.find((e) => e.size === size).png
+      return `<img src="data:image/png;base64,${png.toString('base64')}" width="${String(cell)}" height="${String(cell)}" style="image-rendering:pixelated">`
     })
-  })
-
-  writeFileSync(join(BUILD, 'preview.png'), encodePng(out, w, h))
+    .join('')
+  const row = (ground) =>
+    `<div style="display:flex;gap:${String(pad)}px;padding:${String(pad)}px;background:${ground}">${images}</div>`
+  await tab.setViewportSize({ width, height })
+  await tab.setContent(page(row('#202020') + row('#f3f3f3')))
+  writeFileSync(join(BUILD, 'preview.png'), await tab.screenshot({ clip: { x: 0, y: 0, width, height } }))
+  process.stdout.write('preview.png written\n')
+} finally {
+  await browser.close()
 }
-
-writeFileSync(join(BUILD, 'icon.ico'), buildIco(entries))
-writePreview()
-// electron-builder's Linux target and the runtime window icon both want a PNG.
-writeFileSync(join(BUILD, 'icon.png'), entries[entries.length - 1].png)
-process.stdout.write(`icon.ico written with ${String(entries.length)} sizes\n`)
-
-const macPngs = new Map()
-for (const [, size] of ICNS_TYPES) {
-  if (macPngs.has(size)) continue
-  const fromWindows = ICNS_FROM_WINDOWS.has(size) ? entries.find((e) => e.size === size) : undefined
-  macPngs.set(size, fromWindows?.png ?? encodePng(draw(size, MAC_FILL), size))
-}
-writeFileSync(join(BUILD, 'icon.icns'), buildIcns(macPngs))
-process.stdout.write(`icon.icns written with ${String(ICNS_TYPES.length)} images\n`)

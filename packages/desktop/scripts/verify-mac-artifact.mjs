@@ -12,7 +12,7 @@
 //   the build picked up a certificate from somewhere;
 // - Info.plist names an icon file, and that file is `build/icon.icns`, byte for
 //   byte. Finder and the Dock draw the bundle's icon from exactly that, so this
-//   is the check that the app shows Helm's wheel rather than Electron's atom;
+//   is the check that the app shows Floti's mark rather than Electron's atom;
 // - it does not pin itself to the light appearance, which would keep the
 //   `system` theme from ever following macOS into dark mode;
 // - its native modules are unpacked beside the asar, as on Windows: a module

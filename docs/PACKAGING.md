@@ -291,10 +291,10 @@ copy under `app.asar.unpacked`. `afterPack` runs before signing, so the
 signature covers the file as changed. Neither rebuilds anything, and both do
 nothing on Windows and Linux.
 
-The icon is `build/icon.icns`, packed by `pnpm icon` from the same drawing as
-the .ico and committed beside it. Its large sizes sit on Apple's icon grid (the
-artwork in the middle 824px of 1024) so the wheel stands the size of the icons
-around it in the Dock.
+The icon is `build/icon.icns`, rendered by `pnpm icon` from the same artwork
+as the .ico (`assets/brand/mark-colour-circle.svg`) and committed beside it.
+Its large sizes sit on Apple's icon grid (the artwork in the middle 824px of
+1024) so the mark stands the size of the icons around it in the Dock.
 
 `pnpm verify:mac-artifact` opens the dmg and the zip a person downloads and
 checks the Floti.app in each: an arm64 executable, a signature that verifies and

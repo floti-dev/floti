@@ -985,7 +985,7 @@ function startSpike(): void {
 
 /**
  * Gives the dev app id a Start Menu shortcut of Helm's own, so the dev window's
- * taskbar button carries the ship's wheel rather than Electron's atom.
+ * taskbar button carries Floti's mark rather than Electron's atom.
  *
  * A taskbar button's icon comes from the shortcut that declares its app id, not
  * from the window. Electron writes that shortcut itself the first time a toast
