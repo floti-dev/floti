@@ -446,8 +446,15 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   `~/.config/floti` is not there and Helm's is; the host moves Helm's folder there, once,
   at its first start as Floti); otherwise the folder holding `templatesDir` in
   `paths.ts` (`helm-data/templates` when portable). The host reads and seeds them at
-  its start. The shipped README and example are written only when the
-  directory is absent, and nothing there is ever overwritten. The in-app
+  its start. The shipped README is written only when the directory is absent,
+  and nothing there is ever overwritten or removed. Starter
+  (`workspace/templates/workspace.rs`, id `starter`) is the one template Floti
+  ships: code, not a folder, listed first and chosen in the picker, writing
+  `workspace.yaml`, an empty `repos/` and an `AGENTS.md`
+  (`templates/starter/AGENTS.md`) with the workspace's name filled in. A
+  manifest recording `template: minimal`, the id of the scaffold before it,
+  lists, opens and launches as any other, and a request for `minimal` makes
+  Starter. The in-app
   Templates manager makes templates (from a folder too, `template:fromFolder`),
   renames, imports, fills (`template:substitute`) and deletes them and edits
   their label and description; it has no file editor.
@@ -455,8 +462,9 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   workspaces had while they were called harnesses
   (`discovery/scan.rs`, `WORKSPACE_MANIFESTS`). Discovery, launches and
   overlays read either the same way, `workspace.yaml` first when both are
-  there. `workspace:create` writes `workspace.yaml` only, refuses a folder
-  that has either, and a template cannot supply either. Nothing renames or
+  there. `workspace:create` writes `workspace.yaml` itself, refuses a folder
+  that has either, and a template cannot supply either; converting a folder
+  writes that manifest and nothing else. Nothing renames or
   rewrites a `harness.yaml`.
 - Someone upgrading sees once, over their sessions, that harnesses are now
   called workspaces and nothing in their folders changed
