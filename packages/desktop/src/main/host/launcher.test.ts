@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PATIENCE } from '../../../../../test/patience'
+import { RUN_ROOT_PREFIX } from '../../../../../test/run-root'
 import { FakeChild, answersRestart, connects, type Program } from '../../../test/fake-child'
 import { FrameDecoder, encodeFrame } from './frame'
 import { KEEPER_LINK_VERSION } from './protocol'
@@ -324,7 +325,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
 
       const deep = {
         ...WIN_PLACES,
-        dataDir: `/private/var/folders/ab/T/floti-test-run/world with a space ${'x'.repeat(60)}/floti-data`
+        dataDir: `/private/var/folders/ab/T/floti-test-AbC123/world with a space ${'x'.repeat(60)}/floti-data`
       }
       const mac = hostEnvironment(deep, {
         platform: 'darwin',
@@ -349,7 +350,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       // A Mac's own temp folder, as long as macOS makes it, with a test run's
       // folder inside it, as every test's `tmpdir()` is: the keeper's socket,
       // the longest, still fits.
-      const nested = '/var/folders/76/wrkg31yx61g_4sqkvq4bnt_40000gn/T/floti-test-run-AbC123'
+      const nested = `/var/folders/76/wrkg31yx61g_4sqkvq4bnt_40000gn/T/${RUN_ROOT_PREFIX}AbC123`
       const run = hostEnvironment(
         { ...WIN_PLACES, dataDir: `${nested}/floti world-XyZ789/app/floti-data` },
         { platform: 'darwin', env: {}, tmpdir: () => nested }

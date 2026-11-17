@@ -8,9 +8,12 @@ export const RUN_ROOT = 'testRunRoot'
 
 /**
  * What a run's root is named: the leftover check (`scripts/test-leftovers.mjs`)
- * lists a folder with this prefix that a run left behind.
+ * lists a folder with this prefix that a run left behind. Short, because on
+ * macOS the root sits in a temp folder that already takes nearly half of a
+ * socket path's limit, and a host a test starts puts the keeper's socket
+ * under it (`launcher.test.ts` measures that against this prefix).
  */
-export const RUN_ROOT_PREFIX = 'floti-test-run-'
+export const RUN_ROOT_PREFIX = 'floti-test-'
 
 /** The variables `os.tmpdir()` reads: `TMPDIR` on macOS and Linux, `TEMP` and `TMP` on Windows. */
 const TEMP_VARS = ['TMPDIR', 'TEMP', 'TMP'] as const

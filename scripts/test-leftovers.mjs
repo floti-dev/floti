@@ -53,7 +53,7 @@ export const MARK_VARIABLE = 'TEST_LEFTOVERS_MARK'
  * `pnpm test:posix`'s mirror. Rust's tempfile uses the same temp folder as
  * `os.tmpdir()`.
  */
-export const TEST_FOLDER_PREFIXES = ['floti-test-run-', 'floti test ', 'floti world-', 'floti-test-posix-']
+export const TEST_FOLDER_PREFIXES = ['floti-test-', 'floti test ', 'floti world-', 'floti-test-posix-']
 
 /**
  * The kinds of process tests start: every `floti*` binary of crates/host, Node

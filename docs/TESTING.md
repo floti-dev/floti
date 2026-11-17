@@ -334,7 +334,7 @@ node scripts/test-leftovers.mjs cargo nextest run --workspace   # the same aroun
 
 `scripts/test-leftovers.mjs` is the check CI runs after `pnpm check` and after
 the host tests, on every runner. Around a command it runs it, then lists each
-test temp folder (`floti-test-run-*`, a vitest or Playwright run's root,
+test temp folder (`floti-test-*`, a vitest or Playwright run's root,
 `floti test *`, `floti world-*`, `floti-test-posix-*`) the
 command left in the temp folder and each process of a kind tests start
 (`floti*`, Node, shells, `conhost`, Electron, Xvfb) that the command started and is still
@@ -430,7 +430,7 @@ vitest runs five projects (`vitest.config.ts`):
 
 Every project runs one global setup, `test/run-root.ts`, set in the root
 config, which every project extends. It makes the run's root, a
-`floti-test-run-*` folder in the OS temp folder, and points `TMPDIR`, `TEMP` and
+`floti-test-*` folder in the OS temp folder, and points `TMPDIR`, `TEMP` and
 `TMP` at it before any worker starts; the workers are forked with that
 environment, so every temp folder a test, the code under test or a process
 either starts makes is in the root, by construction, a world (`createWorld`)
