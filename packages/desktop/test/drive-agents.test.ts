@@ -84,6 +84,16 @@ describe('the agents a driven dev window runs', () => {
     expect(settingsIn(dataDir).claudePath).toBe(drive.agents[0]?.program)
   })
 
+  it('leaves the upgrade note seen and the walkthrough started in a first-run database it makes', () => {
+    const { root, dataDir } = devRun()
+
+    prepareDriveAgents(root, dataDir, { fresh: true })
+
+    const settings = settingsIn(dataDir)
+    expect(settings.upgradeNoteSeenAt).not.toBeNull()
+    expect(settings.walkthrough).not.toBeNull()
+  })
+
   it('keeps what the fakes wrote across launches, and starts it over when fresh', () => {
     const { root, dataDir } = devRun()
     const first = prepareDriveAgents(root, dataDir, { fresh: false })
