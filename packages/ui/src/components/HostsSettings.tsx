@@ -552,7 +552,10 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
           })
           return
         }
-        const words = describeInstallFailure(outcome.step, hostName, offer.folder)
+        const words = describeInstallFailure(outcome.step, hostName, offer.folder, {
+          said: outcome.said,
+          version: offer.version
+        })
         show({ step: 'problem', title: words.title, line: outcome.lastLine, fix: words.fix })
       },
       (error: unknown) =>
