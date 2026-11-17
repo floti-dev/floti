@@ -1,55 +1,55 @@
 /*
- * Helm's primitives, for plugin pages (DESIGN.md "Plugin surfaces").
+ * Floti's primitives, for plugin pages (DESIGN.md "Plugin surfaces").
  *
- * Served at `/__helm/helm.css` on every plugin origin and linked at the top of
+ * Served at `/__floti/floti.css` on every plugin origin and linked at the top of
  * every page's `<head>`, before the plugin's own styles. The colours are the
- * twenty-seven theme tokens the bridge writes onto `<html>` as `--helm-*` and
+ * twenty-seven theme tokens the bridge writes onto `<html>` as `--floti-*` and
  * rewrites when the theme changes, so a page drawn with these classes follows
- * Helm without a reload; `--helm-radius` and `data-density` arrive the same
+ * Floti without a reload; `--floti-radius` and `data-density` arrive the same
  * way, so corners and row height follow their settings too.
  *
- * Everything is in the `helm` layer, and the statement below orders it:
+ * Everything is in the `floti` layer, and the statement below orders it:
  *
  * - **Unlayered plugin CSS wins over all of it**, whatever its specificity,
  *   because unlayered rules outrank every layer.
  * - **A Tailwind page gets the order it would want**: its preflight (`base`)
- *   is under the primitives, so `.helm-button` is not reset to a bare button,
- *   and its utilities are over them, so `class="helm-button px-4"` takes the
- *   padding. Naming Tailwind's layers here is what places `helm` between them;
+ *   is under the primitives, so `.floti-button` is not reset to a bare button,
+ *   and its utilities are over them, so `class="floti-button px-4"` takes the
+ *   padding. Naming Tailwind's layers here is what places `floti` between them;
  *   the plugin's own `@layer` statement later cannot reorder layers already
  *   declared. On a page without Tailwind the four names are empty layers.
  */
-@layer theme, base, helm, components, utilities;
+@layer theme, base, floti, components, utilities;
 
-@layer helm {
+@layer floti {
   :root {
-    --helm-font-sans: 'Inter var', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
-    --helm-font-mono: 'Cascadia Mono', 'SF Mono', Menlo, Consolas, ui-monospace, monospace;
+    --floti-font-sans: 'Inter var', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --floti-font-mono: 'Cascadia Mono', 'SF Mono', Menlo, Consolas, ui-monospace, monospace;
     /* The corner scale (DESIGN.md "Shape"): rows and cards at the radius,
      * controls one pixel rounder so they read as separate from their panel. */
-    --helm-radius-well: calc(var(--helm-radius, 3px) + 1px);
+    --floti-radius-well: calc(var(--floti-radius, 3px) + 1px);
     /* Density: how tightly repeated rows pack. Text and controls never move. */
-    --helm-row-y: 6px;
-    --helm-line: 26px;
-    accent-color: var(--helm-accent);
+    --floti-row-y: 6px;
+    --floti-line: 26px;
+    accent-color: var(--floti-accent);
   }
 
   :root[data-density='compact'] {
-    --helm-row-y: 3px;
-    --helm-line: 22px;
+    --floti-row-y: 3px;
+    --floti-line: 22px;
   }
 
   :where(html, body) {
     height: 100%;
   }
 
-  /* A plugin surface sits inside one of Helm's islands, so its ground is the
+  /* A plugin surface sits inside one of Floti's islands, so its ground is the
    * island's surface, edge to edge, and it draws no island of its own. */
   :where(body) {
     margin: 0;
-    background: var(--helm-surface);
-    color: var(--helm-fg);
-    font-family: var(--helm-font-sans);
+    background: var(--floti-surface);
+    color: var(--floti-fg);
+    font-family: var(--floti-font-sans);
     font-size: 13px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
@@ -70,27 +70,27 @@
   }
 
   ::selection {
-    background: var(--helm-accent-soft);
+    background: var(--floti-accent-soft);
   }
 
   :where(:focus-visible) {
-    outline: 2px solid var(--helm-accent);
+    outline: 2px solid var(--floti-accent);
     outline-offset: 2px;
   }
 
   /* A field's accent border is its focus mark; a ring on top reads as two. */
   :where(input:not([type='checkbox'], [type='radio']), textarea, select):focus-visible {
     outline: none;
-    border-color: var(--helm-accent);
+    border-color: var(--floti-accent);
   }
 
   /* Chromium's default scrollbar is a light grey slab that ignores the theme. */
   :where(*) {
     scrollbar-width: thin;
-    scrollbar-color: var(--helm-border-strong) transparent;
+    scrollbar-color: var(--floti-border-strong) transparent;
   }
 
-  /* Every select opens its list as Helm's menus do (DESIGN.md "Select"):
+  /* Every select opens its list as Floti's menus do (DESIGN.md "Select"):
    * `base-select` hands the list to CSS and keeps the keyboard native. */
   :where(select),
   ::picker(select) {
@@ -102,16 +102,16 @@
   }
 
   :where(select)::picker-icon {
-    color: var(--helm-fg-subtle);
+    color: var(--floti-fg-subtle);
   }
 
   ::picker(select) {
     margin-block: 4px;
     padding: 4px;
-    border: 1px solid var(--helm-border-strong);
-    border-radius: var(--helm-radius-well);
-    background: var(--helm-surface-raised);
-    color: var(--helm-fg);
+    border: 1px solid var(--floti-border-strong);
+    border-radius: var(--floti-radius-well);
+    background: var(--floti-surface-raised);
+    color: var(--floti-fg);
     box-shadow: none;
     max-block-size: min(360px, 60vh);
   }
@@ -119,25 +119,25 @@
   :where(select) option {
     min-block-size: 28px;
     padding: 0 8px;
-    border-radius: var(--helm-radius);
+    border-radius: var(--floti-radius);
     background: transparent;
-    color: var(--helm-fg);
+    color: var(--floti-fg);
     font-size: 12px;
   }
 
   :where(select) option:hover,
   :where(select) option:focus-visible {
-    background: var(--helm-hover);
+    background: var(--floti-hover);
     outline: none;
   }
 
   :where(select) option:checked {
-    background: var(--helm-accent-soft);
+    background: var(--floti-accent-soft);
   }
 
   :where(select) option:checked:hover,
   :where(select) option:checked:focus-visible {
-    background: var(--helm-accent-soft-hover);
+    background: var(--floti-accent-soft-hover);
   }
 
   :where(select) option::checkmark {
@@ -145,13 +145,13 @@
   }
 
   :where(select) option:disabled {
-    color: var(--helm-fg-subtle);
+    color: var(--floti-fg-subtle);
   }
 
   /* ------------------------------------------------------------------------
    * Buttons (DESIGN.md "Controls"). The accent outlines, never fills.
    * ---------------------------------------------------------------------- */
-  .helm-button {
+  .floti-button {
     display: inline-flex;
     flex-shrink: 0;
     align-items: center;
@@ -159,10 +159,10 @@
     gap: 6px;
     height: 28px;
     padding: 0 10px;
-    border: 1px solid var(--helm-border-strong);
-    border-radius: var(--helm-radius-well);
+    border: 1px solid var(--floti-border-strong);
+    border-radius: var(--floti-radius-well);
     background: transparent;
-    color: var(--helm-fg);
+    color: var(--floti-fg);
     font: inherit;
     font-size: 12px;
     line-height: 1;
@@ -170,51 +170,51 @@
     transition: background-color 120ms, color 120ms, border-color 120ms;
   }
 
-  .helm-button:hover:not(:disabled) {
-    background: var(--helm-hover);
+  .floti-button:hover:not(:disabled) {
+    background: var(--floti-hover);
   }
 
-  .helm-button[data-variant='primary'] {
-    border-color: var(--helm-accent);
-    color: var(--helm-accent-text);
+  .floti-button[data-variant='primary'] {
+    border-color: var(--floti-accent);
+    color: var(--floti-accent-text);
   }
 
-  .helm-button[data-variant='primary']:hover:not(:disabled) {
-    background: var(--helm-accent-soft);
+  .floti-button[data-variant='primary']:hover:not(:disabled) {
+    background: var(--floti-accent-soft);
   }
 
-  .helm-button[data-variant='ghost'] {
+  .floti-button[data-variant='ghost'] {
     border-color: transparent;
-    color: var(--helm-fg-muted);
+    color: var(--floti-fg-muted);
   }
 
-  .helm-button[data-variant='ghost']:hover:not(:disabled) {
-    color: var(--helm-fg);
+  .floti-button[data-variant='ghost']:hover:not(:disabled) {
+    color: var(--floti-fg);
   }
 
-  .helm-button[data-variant='danger'] {
-    border-color: color-mix(in srgb, var(--helm-danger) 45%, transparent);
-    color: var(--helm-danger);
+  .floti-button[data-variant='danger'] {
+    border-color: color-mix(in srgb, var(--floti-danger) 45%, transparent);
+    color: var(--floti-danger);
   }
 
-  .helm-button[data-variant='danger']:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--helm-danger) 10%, transparent);
+  .floti-button[data-variant='danger']:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--floti-danger) 10%, transparent);
   }
 
   /* Disabled keeps its outline at reduced opacity; it never swaps to a grey fill. */
-  .helm-button:disabled,
-  .helm-icon-button:disabled {
+  .floti-button:disabled,
+  .floti-icon-button:disabled {
     opacity: 0.45;
   }
 
-  .helm-button svg,
-  .helm-icon-button svg {
+  .floti-button svg,
+  .floti-icon-button svg {
     width: 14px;
     height: 14px;
     flex-shrink: 0;
   }
 
-  .helm-icon-button {
+  .floti-icon-button {
     display: inline-grid;
     flex-shrink: 0;
     place-items: center;
@@ -222,46 +222,46 @@
     height: 24px;
     padding: 0;
     border: 0;
-    border-radius: var(--helm-radius-well);
+    border-radius: var(--floti-radius-well);
     background: transparent;
-    color: var(--helm-fg-subtle);
+    color: var(--floti-fg-subtle);
     transition: background-color 120ms, color 120ms;
   }
 
-  .helm-icon-button:hover:not(:disabled) {
-    background: var(--helm-hover);
-    color: var(--helm-fg);
+  .floti-icon-button:hover:not(:disabled) {
+    background: var(--floti-hover);
+    color: var(--floti-fg);
   }
 
-  .helm-icon-button[aria-pressed='true'] {
-    color: var(--helm-accent-text);
+  .floti-icon-button[aria-pressed='true'] {
+    color: var(--floti-accent-text);
   }
 
   /* ------------------------------------------------------------------------
    * Fields: a sunken well. Hover strengthens the hairline, focus makes it the
    * accent, and the fill never changes under the pointer.
    * ---------------------------------------------------------------------- */
-  .helm-input,
-  .helm-select,
-  .helm-textarea {
+  .floti-input,
+  .floti-select,
+  .floti-textarea {
     width: 100%;
     min-width: 0;
-    border: 1px solid var(--helm-border);
-    border-radius: var(--helm-radius-well);
-    background: var(--helm-surface-sunken);
-    color: var(--helm-fg);
+    border: 1px solid var(--floti-border);
+    border-radius: var(--floti-radius-well);
+    background: var(--floti-surface-sunken);
+    color: var(--floti-fg);
     font: inherit;
     font-size: 12px;
     transition: border-color 120ms;
   }
 
-  .helm-input,
-  .helm-select {
+  .floti-input,
+  .floti-select {
     height: 28px;
     padding: 0 8px;
   }
 
-  .helm-textarea {
+  .floti-textarea {
     display: block;
     min-height: 64px;
     padding: 6px 8px;
@@ -269,30 +269,30 @@
     resize: vertical;
   }
 
-  .helm-input::placeholder,
-  .helm-textarea::placeholder {
-    color: var(--helm-fg-subtle);
+  .floti-input::placeholder,
+  .floti-textarea::placeholder {
+    color: var(--floti-fg-subtle);
   }
 
-  .helm-input:hover:not(:disabled, :focus-visible),
-  .helm-select:hover:not(:disabled, :focus-visible),
-  .helm-textarea:hover:not(:disabled, :focus-visible) {
-    border-color: var(--helm-border-strong);
+  .floti-input:hover:not(:disabled, :focus-visible),
+  .floti-select:hover:not(:disabled, :focus-visible),
+  .floti-textarea:hover:not(:disabled, :focus-visible) {
+    border-color: var(--floti-border-strong);
   }
 
-  .helm-input:disabled,
-  .helm-select:disabled,
-  .helm-textarea:disabled {
-    color: var(--helm-fg-subtle);
+  .floti-input:disabled,
+  .floti-select:disabled,
+  .floti-textarea:disabled {
+    color: var(--floti-fg-subtle);
   }
 
-  .helm-input[aria-invalid='true'],
-  .helm-select[aria-invalid='true'],
-  .helm-textarea[aria-invalid='true'] {
-    border-color: color-mix(in srgb, var(--helm-danger) 60%, transparent);
+  .floti-input[aria-invalid='true'],
+  .floti-select[aria-invalid='true'],
+  .floti-textarea[aria-invalid='true'] {
+    border-color: color-mix(in srgb, var(--floti-danger) 60%, transparent);
   }
 
-  .helm-select {
+  .floti-select {
     padding-right: 4px;
   }
 
@@ -300,7 +300,7 @@
    * Lists. A row is the action: it carries no buttons. Selection is the soft
    * accent plus a 2px bar down the left edge, never a solid fill.
    * ---------------------------------------------------------------------- */
-  .helm-list {
+  .floti-list {
     display: flex;
     flex-direction: column;
     gap: 1px;
@@ -309,39 +309,39 @@
     list-style: none;
   }
 
-  .helm-row {
+  .floti-row {
     position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
-    padding: var(--helm-row-y) 8px;
+    padding: var(--floti-row-y) 8px;
     border: 0;
-    border-radius: var(--helm-radius-well);
+    border-radius: var(--floti-radius-well);
     background: transparent;
-    color: var(--helm-fg);
+    color: var(--floti-fg);
     font: inherit;
     text-align: left;
     text-decoration: none;
   }
 
-  :is(button, a).helm-row {
+  :is(button, a).floti-row {
     width: 100%;
   }
 
-  .helm-row:is(button, a, [role='option'], [role='button'], [tabindex]):hover {
-    background: var(--helm-hover);
+  .floti-row:is(button, a, [role='option'], [role='button'], [tabindex]):hover {
+    background: var(--floti-hover);
   }
 
-  .helm-row:is([aria-selected='true'], [aria-current]:not([aria-current='false'])) {
-    background: var(--helm-accent-soft);
+  .floti-row:is([aria-selected='true'], [aria-current]:not([aria-current='false'])) {
+    background: var(--floti-accent-soft);
   }
 
-  .helm-row:is([aria-selected='true'], [aria-current]:not([aria-current='false'])):hover {
-    background: var(--helm-accent-soft-hover);
+  .floti-row:is([aria-selected='true'], [aria-current]:not([aria-current='false'])):hover {
+    background: var(--floti-accent-soft-hover);
   }
 
-  .helm-row:is([aria-selected='true'], [aria-current]:not([aria-current='false']))::before {
+  .floti-row:is([aria-selected='true'], [aria-current]:not([aria-current='false']))::before {
     content: '';
     position: absolute;
     top: 6px;
@@ -349,7 +349,7 @@
     left: 0;
     width: 2px;
     border-radius: 9999px;
-    background: var(--helm-accent);
+    background: var(--floti-accent);
   }
 
   /* ------------------------------------------------------------------------
@@ -357,8 +357,8 @@
    * chip is the one outlined pill, for the single word that is a thing's
    * whole status; a dot is the same tone at 6px.
    * ---------------------------------------------------------------------- */
-  .helm-chip,
-  .helm-state {
+  .floti-chip,
+  .floti-state {
     display: inline-flex;
     flex-shrink: 0;
     align-items: center;
@@ -369,72 +369,72 @@
     white-space: nowrap;
   }
 
-  .helm-chip {
-    --helm-tone: var(--helm-fg-subtle);
-    color: var(--helm-tone);
+  .floti-chip {
+    --floti-tone: var(--floti-fg-subtle);
+    color: var(--floti-tone);
   }
 
-  .helm-state {
-    --helm-tone: var(--helm-fg-muted);
-    --helm-tone-edge: var(--helm-border-strong);
+  .floti-state {
+    --floti-tone: var(--floti-fg-muted);
+    --floti-tone-edge: var(--floti-border-strong);
     padding: 0 7px;
-    border: 1px solid var(--helm-tone-edge);
+    border: 1px solid var(--floti-tone-edge);
     border-radius: 9999px;
-    color: var(--helm-tone);
+    color: var(--floti-tone);
   }
 
-  .helm-dot {
-    --helm-tone: var(--helm-fg-subtle);
+  .floti-dot {
+    --floti-tone: var(--floti-fg-subtle);
     display: inline-block;
     flex-shrink: 0;
     width: 6px;
     height: 6px;
     border-radius: 9999px;
-    background: var(--helm-tone);
+    background: var(--floti-tone);
   }
 
-  :is(.helm-chip, .helm-state, .helm-dot)[data-tone='accent'] {
-    --helm-tone: var(--helm-accent-text);
-    --helm-tone-edge: color-mix(in srgb, var(--helm-accent) 40%, transparent);
+  :is(.floti-chip, .floti-state, .floti-dot)[data-tone='accent'] {
+    --floti-tone: var(--floti-accent-text);
+    --floti-tone-edge: color-mix(in srgb, var(--floti-accent) 40%, transparent);
   }
 
-  .helm-dot[data-tone='accent'] {
-    --helm-tone: var(--helm-accent);
+  .floti-dot[data-tone='accent'] {
+    --floti-tone: var(--floti-accent);
   }
 
-  :is(.helm-chip, .helm-state, .helm-dot)[data-tone='success'] {
-    --helm-tone: var(--helm-success);
-    --helm-tone-edge: color-mix(in srgb, var(--helm-success) 40%, transparent);
+  :is(.floti-chip, .floti-state, .floti-dot)[data-tone='success'] {
+    --floti-tone: var(--floti-success);
+    --floti-tone-edge: color-mix(in srgb, var(--floti-success) 40%, transparent);
   }
 
-  :is(.helm-chip, .helm-state, .helm-dot)[data-tone='warn'] {
-    --helm-tone: var(--helm-warn);
-    --helm-tone-edge: color-mix(in srgb, var(--helm-warn) 40%, transparent);
+  :is(.floti-chip, .floti-state, .floti-dot)[data-tone='warn'] {
+    --floti-tone: var(--floti-warn);
+    --floti-tone-edge: color-mix(in srgb, var(--floti-warn) 40%, transparent);
   }
 
-  :is(.helm-chip, .helm-state, .helm-dot)[data-tone='danger'] {
-    --helm-tone: var(--helm-danger);
-    --helm-tone-edge: color-mix(in srgb, var(--helm-danger) 40%, transparent);
+  :is(.floti-chip, .floti-state, .floti-dot)[data-tone='danger'] {
+    --floti-tone: var(--floti-danger);
+    --floti-tone-edge: color-mix(in srgb, var(--floti-danger) 40%, transparent);
   }
 
   /* A tag: the hairline pill for neutral ones, the soft accent for a kind. */
-  .helm-tag {
+  .floti-tag {
     display: inline-flex;
     flex-shrink: 0;
     align-items: center;
     padding: 0 7px;
-    border: 1px solid var(--helm-border-strong);
+    border: 1px solid var(--floti-border-strong);
     border-radius: 9999px;
-    color: var(--helm-fg-muted);
+    color: var(--floti-fg-muted);
     font-size: 11px;
     line-height: 15px;
     white-space: nowrap;
   }
 
-  .helm-tag[data-tone='accent'] {
+  .floti-tag[data-tone='accent'] {
     border-color: transparent;
-    background: var(--helm-accent-soft);
-    color: var(--helm-accent-text);
+    background: var(--floti-accent-soft);
+    color: var(--floti-accent-text);
   }
 
   /* ------------------------------------------------------------------------
@@ -447,53 +447,53 @@
    * one the floors are measured at (core `HUE_TINT_ALPHA`).
    * ---------------------------------------------------------------------- */
   :root {
-    --helm-hue-tint: 10%;
+    --floti-hue-tint: 10%;
   }
 
   :root.dark {
-    --helm-hue-tint: 14%;
+    --floti-hue-tint: 14%;
   }
 
   [data-hue='blue'] {
-    --helm-hue: var(--helm-hue-blue);
+    --floti-hue: var(--floti-hue-blue);
   }
 
   [data-hue='teal'] {
-    --helm-hue: var(--helm-hue-teal);
+    --floti-hue: var(--floti-hue-teal);
   }
 
   [data-hue='green'] {
-    --helm-hue: var(--helm-hue-green);
+    --floti-hue: var(--floti-hue-green);
   }
 
   [data-hue='amber'] {
-    --helm-hue: var(--helm-hue-amber);
+    --floti-hue: var(--floti-hue-amber);
   }
 
   [data-hue='orange'] {
-    --helm-hue: var(--helm-hue-orange);
+    --floti-hue: var(--floti-hue-orange);
   }
 
   [data-hue='red'] {
-    --helm-hue: var(--helm-hue-red);
+    --floti-hue: var(--floti-hue-red);
   }
 
   [data-hue='pink'] {
-    --helm-hue: var(--helm-hue-pink);
+    --floti-hue: var(--floti-hue-pink);
   }
 
   [data-hue='violet'] {
-    --helm-hue: var(--helm-hue-violet);
+    --floti-hue: var(--floti-hue-violet);
   }
 
-  :is(.helm-chip, .helm-dot)[data-hue] {
-    --helm-tone: var(--helm-hue);
+  :is(.floti-chip, .floti-dot)[data-hue] {
+    --floti-tone: var(--floti-hue);
   }
 
-  .helm-tag[data-hue] {
+  .floti-tag[data-hue] {
     border-color: transparent;
-    background: color-mix(in srgb, var(--helm-hue) var(--helm-hue-tint), transparent);
-    color: var(--helm-hue);
+    background: color-mix(in srgb, var(--floti-hue) var(--floti-hue-tint), transparent);
+    color: var(--floti-hue);
   }
 
   /* ------------------------------------------------------------------------
@@ -501,18 +501,18 @@
    * ---------------------------------------------------------------------- */
 
   /* A page's bar: a row along its top with a hairline under it. */
-  .helm-bar {
+  .floti-bar {
     display: flex;
     flex-shrink: 0;
     align-items: center;
     gap: 6px;
     min-height: 40px;
     padding: 6px 10px;
-    border-bottom: 1px solid var(--helm-border);
+    border-bottom: 1px solid var(--floti-border);
   }
 
   /* A divider inside the surface fades at its ends, a crease and not a wall. */
-  .helm-rule {
+  .floti-rule {
     height: 1px;
     flex-shrink: 0;
     border: 0;
@@ -520,15 +520,15 @@
     background: linear-gradient(
       90deg,
       transparent,
-      var(--helm-border-strong) 20%,
-      var(--helm-border-strong) 80%,
+      var(--floti-border-strong) 20%,
+      var(--floti-border-strong) 80%,
       transparent
     );
   }
 
   /* The caps label over a section. The one place weight goes past 500. */
-  .helm-caps {
-    color: var(--helm-fg-subtle);
+  .floti-caps {
+    color: var(--floti-fg-subtle);
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.07em;
@@ -537,21 +537,21 @@
   }
 
   /* A row's second line, a hint, a timestamp. */
-  .helm-meta {
-    color: var(--helm-fg-muted);
+  .floti-meta {
+    color: var(--floti-fg-muted);
     font-size: 11px;
   }
 
   /* Machine data: a path, a hash, a size, a command. */
-  .helm-mono {
-    font-family: var(--helm-font-mono);
+  .floti-mono {
+    font-family: var(--floti-font-mono);
     font-size: 11.5px;
     font-variant-numeric: tabular-nums;
   }
 
   /* What a page or list says when it has nothing to show: an icon in a small
    * well, what is empty, one sentence, and the way on. */
-  .helm-empty {
+  .floti-empty {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -561,38 +561,38 @@
     text-align: center;
   }
 
-  .helm-empty > .helm-empty-icon {
+  .floti-empty > .floti-empty-icon {
     display: grid;
     place-items: center;
     width: 36px;
     height: 36px;
     margin-bottom: 12px;
-    border: 1px solid var(--helm-border);
-    border-radius: var(--helm-radius-well);
-    background: var(--helm-surface-raised);
-    color: var(--helm-fg-subtle);
+    border: 1px solid var(--floti-border);
+    border-radius: var(--floti-radius-well);
+    background: var(--floti-surface-raised);
+    color: var(--floti-fg-subtle);
   }
 
-  .helm-empty > .helm-empty-icon svg {
+  .floti-empty > .floti-empty-icon svg {
     width: 18px;
     height: 18px;
   }
 
-  .helm-empty > .helm-empty-title {
+  .floti-empty > .floti-empty-title {
     margin: 0;
-    color: var(--helm-fg);
+    color: var(--floti-fg);
     font-size: 13px;
     font-weight: 500;
   }
 
-  .helm-empty > .helm-empty-text {
+  .floti-empty > .floti-empty-text {
     margin: 4px 0 0;
-    color: var(--helm-fg-subtle);
+    color: var(--floti-fg-subtle);
     font-size: 12px;
     line-height: 1.6;
   }
 
-  .helm-empty > .helm-empty-actions {
+  .floti-empty > .floti-empty-actions {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
@@ -605,7 +605,7 @@
  * Outside the layer, because Chromium ignores these pseudo-elements on any
  * element whose `scrollbar-width` or `scrollbar-color` is set and they only
  * paint where the standard properties are left at `auto` - which a plugin that
- * resets them gets. Kept to the same shape as Helm's own bars.
+ * resets them gets. Kept to the same shape as Floti's own bars.
  */
 ::-webkit-scrollbar {
   width: 10px;
@@ -619,10 +619,10 @@
 ::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 6px;
-  background-color: var(--helm-border-strong);
+  background-color: var(--floti-border-strong);
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--helm-fg-subtle);
+  background-color: var(--floti-fg-subtle);
 }

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HelmTheme } from '@floti-dev/plugin-sdk'
+import type { FlotiTheme } from '@floti-dev/plugin-sdk'
 import type { HelmBridge, PluginCallOutcome, PluginCallRequest, PluginDelivery } from '../../../shared/ipc'
-import { CONNECT, HELLO, type ConnectMessage, type HelmMessage } from '../../plugin-runtime/wire'
+import { CONNECT, HELLO, type ConnectMessage, type FlotiMessage } from '../../plugin-runtime/wire'
 import { CRASH_GRACE_MS, LOAD_GRACE_MS, createPluginRelay, type PluginRelay, type SurfaceSpec } from './relay'
 
 /**
- * The Helm half of every plugin frame, against a page the test plays.
+ * The Floti half of every plugin frame, against a page the test plays.
  *
  * jsdom has no MessageChannel, and a real one would not let a test end the
  * page's side the way a crashed process does, so the channel is a small fake:
@@ -119,9 +119,9 @@ const spec = (overrides: Partial<SurfaceSpec> = {}): SurfaceSpec => ({
   ...overrides
 })
 
-const THEME: HelmTheme = {
+const THEME: FlotiTheme = {
   kind: 'dark',
-  tokens: { bg: '#000' } as HelmTheme['tokens'],
+  tokens: { bg: '#000' } as FlotiTheme['tokens'],
   radius: 4,
   density: 'compact'
 }
@@ -164,7 +164,7 @@ function open(overrides: Partial<SurfaceSpec> = {}): HTMLIFrameElement {
 }
 
 /** What a page received on its port, as messages. */
-const got = (port: FakePort): HelmMessage[] => port.received as HelmMessage[]
+const got = (port: FakePort): FlotiMessage[] => port.received as FlotiMessage[]
 
 describe('the frame', () => {
   it('is made sandboxed, named with its context, on its URL, and loading', () => {
@@ -172,7 +172,7 @@ describe('the frame', () => {
     expect(element.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin allow-forms')
     expect(element.getAttribute('allow')).toBe('clipboard-write')
     expect(element.referrerPolicy).toBe('no-referrer')
-    expect(element.name).toBe('helm:{"plugin":"sample","surface":"panel","name":"main","params":{"id":"2"}}')
+    expect(element.name).toBe('floti:{"plugin":"sample","surface":"panel","name":"main","params":{"id":"2"}}')
     expect(element.getAttribute('src')).toBe('floti-plugin://sample/dist/panels/main.html')
     expect(element.dataset['pluginFrame']).toBe('panel:sample/main')
     expect(relay.state('panel:sample/main')).toEqual({ kind: 'loading' })
@@ -251,7 +251,7 @@ describe('calls', () => {
   })
 
   it.each([
-    ['sessions.start', { cwd: 'C:\\work', prompt: 'work on HELM-2' }],
+    ['sessions.start', { cwd: 'C:\\work', prompt: 'work on FLOTI-2' }],
     ['open', 'https://github.com/owner/repo/pull/7']
   ])('that put something in front of the user (%s) go to main only while the user has just acted', async (method, arg) => {
     const { port } = connect(open())

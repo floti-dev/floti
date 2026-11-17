@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { FlotiBridge, HelmContext, HelmError, HelmTheme } from '@floti-dev/plugin-sdk'
+import type { FlotiBridge, FlotiContext, FlotiError, FlotiTheme } from '@floti-dev/plugin-sdk'
 import { BUILTIN_THEMES, PALETTE_HUES, pluginThemeOf, resolveTheme, type ThemeKind } from '@helm/core/types'
 import type { PluginFetchRequest, PluginFetchResponse } from '../../shared/ipc'
 import { installBridge } from './bridge'
@@ -8,13 +8,13 @@ import { PATIENCE } from '../../../../../test/patience'
 
 /**
  * `window.floti`, as a plugin page gets it: installed into a real jsdom frame
- * whose parent plays the Helm page framing it. The parent is reached as the
+ * whose parent plays the desktop page framing it. The parent is reached as the
  * frame's own `parent`: jsdom hands a frame a window proxy that is not the
  * object vitest puts on `globalThis.window`.
  *
- * The port Helm hands over is a small fake (jsdom has no MessageChannel):
- * `helmSide` is the relay's end, so what the page sent is `helmSide.received`
- * and what Helm answers is `helmSide.postMessage`.
+ * The port Floti hands over is a small fake (jsdom has no MessageChannel):
+ * `desktopSide` is the relay's end, so what the page sent is `desktopSide.received`
+ * and what Floti answers is `desktopSide.postMessage`.
  */
 
 class FakePort {
@@ -32,24 +32,24 @@ class FakePort {
   close(): void {}
 }
 
-function channel(): { helmSide: FakePort; pageSide: FakePort } {
-  const helmSide = new FakePort()
+function channel(): { desktopSide: FakePort; pageSide: FakePort } {
+  const desktopSide = new FakePort()
   const pageSide = new FakePort()
-  helmSide.peer = pageSide
-  pageSide.peer = helmSide
-  return { helmSide, pageSide }
+  desktopSide.peer = pageSide
+  pageSide.peer = desktopSide
+  return { desktopSide, pageSide }
 }
 
-const THEME: HelmTheme = {
+const THEME: FlotiTheme = {
   kind: 'dark',
-  tokens: { bg: '#101010', fg: '#eeeeee', accent: '#3366ff' } as HelmTheme['tokens'],
+  tokens: { bg: '#101010', fg: '#eeeeee', accent: '#3366ff' } as FlotiTheme['tokens'],
   radius: 4,
   density: 'compact'
 }
 
-const LIGHT: HelmTheme = { ...THEME, kind: 'light', tokens: { bg: '#ffffff' } as HelmTheme['tokens'], radius: 2, density: 'comfortable' }
+const LIGHT: FlotiTheme = { ...THEME, kind: 'light', tokens: { bg: '#ffffff' } as FlotiTheme['tokens'], radius: 2, density: 'comfortable' }
 
-const PANEL: HelmContext = { plugin: 'sample', surface: 'panel', name: 'main', params: {} }
+const PANEL: FlotiContext = { plugin: 'sample', surface: 'panel', name: 'main', params: {} }
 
 interface Page {
   win: Window & { floti: FlotiBridge }
@@ -64,7 +64,7 @@ afterEach(() => {
 })
 
 /** A frame with the bridge installed, as the desktop serves a page: named with its context, booted with a theme. */
-function page(context: HelmContext | null = PANEL, boot: string | null = JSON.stringify({ theme: THEME })): Page {
+function page(context: FlotiContext | null = PANEL, boot: string | null = JSON.stringify({ theme: THEME })): Page {
   const frame = document.createElement('iframe')
   document.body.appendChild(frame)
   const win = frame.contentWindow as Window & { floti: FlotiBridge }
@@ -87,9 +87,9 @@ function message(win: Window, init: { data: unknown; source: unknown; ports?: un
   return event
 }
 
-/** Helm answering HELLO: CONNECT, from the parent, with the page's port. */
-function connect(win: Window, extra: Partial<{ context: HelmContext; theme: HelmTheme | null; visible: boolean; mac: boolean }> = {}): FakePort {
-  const { helmSide, pageSide } = channel()
+/** Floti answering HELLO: CONNECT, from the parent, with the page's port. */
+function connect(win: Window, extra: Partial<{ context: FlotiContext; theme: FlotiTheme | null; visible: boolean; mac: boolean }> = {}): FakePort {
+  const { desktopSide, pageSide } = channel()
   win.dispatchEvent(
     message(win, {
       data: { type: CONNECT, context: PANEL, theme: null, visible: false, ...extra },
@@ -97,7 +97,7 @@ function connect(win: Window, extra: Partial<{ context: HelmContext; theme: Helm
       ports: [pageSide]
     })
   )
-  return helmSide
+  return desktopSide
 }
 
 const sent = (port: FakePort): FrameMessage[] => port.received as FrameMessage[]
@@ -163,9 +163,9 @@ describe('installing', () => {
   it('paints the boot theme onto <html> before the page has run', () => {
     const { win, floti } = page()
     const root = win.document.documentElement
-    expect(root.style.getPropertyValue('--helm-bg')).toBe('#101010')
-    expect(root.style.getPropertyValue('--helm-accent')).toBe('#3366ff')
-    expect(root.style.getPropertyValue('--helm-radius')).toBe('4px')
+    expect(root.style.getPropertyValue('--floti-bg')).toBe('#101010')
+    expect(root.style.getPropertyValue('--floti-accent')).toBe('#3366ff')
+    expect(root.style.getPropertyValue('--floti-radius')).toBe('4px')
     expect(root.dataset['density']).toBe('compact')
     expect(root.dataset['theme']).toBe('dark')
     expect(root.classList.contains('dark')).toBe(true)
@@ -205,7 +205,7 @@ describe('the port', () => {
     // No port.
     win.dispatchEvent(message(win, { data: { type: CONNECT, context: PANEL, theme: null, visible: false }, source: win.parent }))
     void floti.settings.get()
-    expect(stranger.helmSide.received).toEqual([])
+    expect(stranger.desktopSide.received).toEqual([])
     const first = connect(win)
     const second = connect(win)
     void floti.status.set(null)
@@ -234,14 +234,14 @@ describe('calls', () => {
     await expect(settings).resolves.toEqual({ limit: 20 })
   })
 
-  it('reject with a HelmError carrying the code', async () => {
+  it('reject with a FlotiError carrying the code', async () => {
     const { win, floti } = page()
     const port = connect(win)
     const ran = floti.exec('nope', ['a'])
     expect(sent(port).at(-1)).toEqual({ t: 'call', id: 1, method: 'exec', args: ['nope', ['a'], {}] })
     answer(port, { ok: false, code: 'not-declared', message: '"nope" is not one of the programs' })
-    const error = (await ran.catch((failure: unknown) => failure)) as HelmError
-    expect(error.name).toBe('HelmError')
+    const error = (await ran.catch((failure: unknown) => failure)) as FlotiError
+    expect(error.name).toBe('FlotiError')
     expect(error.code).toBe('not-declared')
     expect(error.message).toBe('"nope" is not one of the programs')
   })
@@ -392,7 +392,7 @@ describe('events', () => {
     ['secrets', { token: 'ready' }],
     ['command', { id: 'refresh' }],
     ['action', { id: 'add' }],
-    ['sessions', [{ id: 'a1b2', name: 'HELM-3', state: 'running' }]]
+    ['sessions', [{ id: 'a1b2', name: 'FLOTI-3', state: 'running' }]]
   ] as const)('pass Floti’s %s event to the page as it came', (name, data) => {
     const { win, floti } = page()
     const port = connect(win)
@@ -411,13 +411,13 @@ describe('events', () => {
     expect(seen).toEqual(['light:light'])
     const root = win.document.documentElement
     expect(root.classList.contains('dark')).toBe(false)
-    expect(root.style.getPropertyValue('--helm-bg')).toBe('#ffffff')
-    expect(root.style.getPropertyValue('--helm-radius')).toBe('2px')
+    expect(root.style.getPropertyValue('--floti-bg')).toBe('#ffffff')
+    expect(root.style.getPropertyValue('--floti-radius')).toBe('2px')
     expect(floti.theme).toEqual(LIGHT)
   })
 
-  it('carry the palette onto <html> as --helm-hue-<name> in the theme on screen, and rewrite it in place on a change', () => {
-    const themeFor = (kind: ThemeKind, id: string): HelmTheme =>
+  it('carry the palette onto <html> as --floti-hue-<name> in the theme on screen, and rewrite it in place on a change', () => {
+    const themeFor = (kind: ThemeKind, id: string): FlotiTheme =>
       pluginThemeOf(
         resolveTheme({ preference: kind, systemDark: kind === 'dark', themeDark: id, themeLight: id, accentColor: null }, BUILTIN_THEMES),
         { cornerRadius: 3, density: 'comfortable' }
@@ -425,8 +425,8 @@ describe('events', () => {
     const nocturne = themeFor('dark', 'nocturne')
     const { win, floti } = page(PANEL, JSON.stringify({ theme: nocturne }))
     const root = win.document.documentElement
-    const painted = (): string[] => PALETTE_HUES.map((hue) => root.style.getPropertyValue(`--helm-hue-${hue}`))
-    const listed = (theme: HelmTheme): string[] => PALETTE_HUES.map((hue) => theme.tokens[`hue-${hue}`])
+    const painted = (): string[] => PALETTE_HUES.map((hue) => root.style.getPropertyValue(`--floti-hue-${hue}`))
+    const listed = (theme: FlotiTheme): string[] => PALETTE_HUES.map((hue) => theme.tokens[`hue-${hue}`])
     expect(painted()).toEqual(listed(nocturne))
     expect(listed(floti.theme)).toEqual(listed(nocturne))
 
@@ -541,7 +541,7 @@ describe('tools', () => {
 
 describe('BroadcastChannel, relayed through the local host', () => {
   /** A page drawn from the host's files: its boot says its channels are relayed. */
-  const hosted = (context: HelmContext = PANEL): Page => page(context, JSON.stringify({ theme: THEME, channels: 'host' }))
+  const hosted = (context: FlotiContext = PANEL): Page => page(context, JSON.stringify({ theme: THEME, channels: 'host' }))
   type Channel = { postMessage(message: unknown): void; close(): void; onmessage: ((event: MessageEvent) => void) | null }
   const open = (win: Window, name: string): Channel =>
     new (win as unknown as { BroadcastChannel: new (name: string) => Channel }).BroadcastChannel(name)

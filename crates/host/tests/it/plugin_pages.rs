@@ -3,7 +3,7 @@
 //! asks on `plugins:ui` and delivers on `plugins:deliver`.
 //!
 //! Each test runs a host over its own folders, with the fake agent as its
-//! only backend, and connects clients to it as Helm's window would: with
+//! only backend, and connects clients to it as the desktop's window would: with
 //! `pluginPages`, listening on `plugins:deliver` and `plugins:ui`. The plugin
 //! is written into the test's folder, and its program is the fake in
 //! `testkit/fake_program.rs`.
@@ -45,7 +45,7 @@ const DELIVER: u64 = 10;
 const UI: u64 = 11;
 const CHANGED: u64 = 12;
 
-/// What Helm's window says it can do.
+/// What the desktop's window says it can do.
 const WINDOW: &[&str] = &["pluginPages", "terminal"];
 
 const PLUGIN: &str = "board";
@@ -94,7 +94,7 @@ impl World {
         }
     }
 
-    /// Helm's window on the testkit's device, listening for what the
+    /// the desktop's window on the testkit's device, listening for what the
     /// host sends plugin pages.
     async fn window(&self) -> TestClient {
         listening(TestClient::connect(&self.endpoint, WINDOW).await).await

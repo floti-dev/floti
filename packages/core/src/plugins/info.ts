@@ -119,7 +119,7 @@ export interface PluginMetrics {
 
 export interface PluginLogLine {
   at: string
-  stream: 'out' | 'err' | 'helm'
+  stream: 'out' | 'err' | 'floti'
   text: string
 }
 

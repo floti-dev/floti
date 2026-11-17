@@ -64,7 +64,7 @@ function world(options: Options = {}) {
   const idOf = (path: string): string => path.split('\\').pop()!.replace(/\s+/g, '-')
   connection.answer('plugins:list', () => [...hosted])
   connection.answer('plugins:add', ({ path }) => {
-    if (path.includes('broken')) return { path, error: 'There is no helm-plugin.json in that folder.', plugins: [...hosted] }
+    if (path.includes('broken')) return { path, error: 'There is no floti-plugin.json in that folder.', plugins: [...hosted] }
     hosted.push(hostPlugin({ path, id: idOf(path), name: idOf(path), settingValues: {} }))
     return { path, error: null, plugins: [...hosted] }
   })
@@ -263,7 +263,7 @@ describe('plugins in the local host', () => {
       ])
       expect(w.logged).toEqual([
         'host: the setting “gone” of C:\\plugins\\quiet was not copied into the local host (quiet has no setting "gone".)',
-        'host: the plugin folder C:\\plugins\\broken was not copied into the local host (There is no helm-plugin.json in that folder.)'
+        'host: the plugin folder C:\\plugins\\broken was not copied into the local host (There is no floti-plugin.json in that folder.)'
       ])
       expect(w.marks).toEqual([1])
     })

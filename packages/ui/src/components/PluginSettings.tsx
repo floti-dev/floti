@@ -110,8 +110,8 @@ export function PluginsPage({
         title="Plugins"
         hint={
           remoteHost === undefined
-            ? 'Folders that hold a helm-plugin.json. Each runs in a process of its own and reaches only the hosts, programs and secrets its manifest declares.'
-            : `Folders on ${remoteHost} that hold a helm-plugin.json. Each runs there, in a process of its own, and reaches only the hosts, programs and secrets its manifest declares.`
+            ? 'Folders that hold a floti-plugin.json. Each runs in a process of its own and reaches only the hosts, programs and secrets its manifest declares.'
+            : `Folders on ${remoteHost} that hold a floti-plugin.json. Each runs there, in a process of its own, and reaches only the hosts, programs and secrets its manifest declares.`
         }
       >
         {remoteHost !== undefined && typing !== null && (
@@ -820,8 +820,8 @@ function PluginLog({ log }: { log: PluginLogLine[] | null }): JSX.Element {
           <span
             className={cn(
               'min-w-0 flex-1',
-              // What Helm noted recedes; what the plugin printed is the log.
-              line.stream === 'err' ? 'text-danger' : line.stream === 'helm' ? 'text-fg-subtle' : 'text-fg-muted'
+              // What Floti noted recedes; what the plugin printed is the log.
+              line.stream === 'err' ? 'text-danger' : line.stream === 'floti' ? 'text-fg-subtle' : 'text-fg-muted'
             )}
           >
             {line.text}

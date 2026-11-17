@@ -269,7 +269,7 @@ export function PaneGrid({ root, maximized, gap, panes, onResize, onResizing }: 
             <span
               className={cn(
                 'rounded-full bg-border-strong transition-colors group-hover:bg-accent',
-                upright ? 'h-10 w-[min(3px,var(--helm-gap))]' : 'h-[min(3px,var(--helm-gap))] w-10'
+                upright ? 'h-10 w-[min(3px,var(--floti-gap))]' : 'h-[min(3px,var(--floti-gap))] w-10'
               )}
             />
           </div>

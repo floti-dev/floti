@@ -22,7 +22,7 @@ function endWithScope(off) {
  * A store's value as a ref, kept current until the scope ends.
  *
  * @template T
- * @param {import('./stores').HelmStore<T>} store
+ * @param {import('./stores').FlotiStore<T>} store
  * @returns {Readonly<import('vue').Ref<T>>}
  */
 function refOf(store) {
@@ -38,21 +38,21 @@ function refOf(store) {
 /**
  * Calls `listener` on every `event` until the scope ends.
  *
- * @template {keyof import('./types').HelmEvents} K
+ * @template {keyof import('./types').FlotiEvents} K
  * @param {K} event
- * @param {(data: import('./types').HelmEvents[K]) => void} listener
+ * @param {(data: import('./types').FlotiEvents[K]) => void} listener
  */
-export function useHelmEvent(event, listener) {
+export function useFlotiEvent(event, listener) {
   endWithScope(bridge().on(event, (data) => listener(data)))
 }
 
 /**
- * Helm's theme. The tokens are on the page as CSS variables already; this is
+ * Floti's theme. The tokens are on the page as CSS variables already; this is
  * for code that needs the values.
  *
- * @returns {Readonly<import('vue').Ref<import('./types').HelmTheme>>}
+ * @returns {Readonly<import('vue').Ref<import('./types').FlotiTheme>>}
  */
-export function useHelmTheme() {
+export function useFlotiTheme() {
   return refOf(theme)
 }
 
@@ -62,7 +62,7 @@ export function useHelmTheme() {
  *
  * @returns {Readonly<import('vue').Ref<boolean>>}
  */
-export function useHelmVisible() {
+export function useFlotiVisible() {
   return refOf(visible)
 }
 
@@ -71,7 +71,7 @@ export function useHelmVisible() {
  *
  * @returns {Readonly<import('vue').Ref<Record<string, import('./types').SettingValue> | null>>}
  */
-export function useHelmSettings() {
+export function useFlotiSettings() {
   return refOf(settings)
 }
 

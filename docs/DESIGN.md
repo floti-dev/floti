@@ -30,7 +30,7 @@ edges, text, accent and status, and the eight hues of the categorical palette. S
 so every component maps 1:1 whichever is on screen. Themes are **data**, not
 CSS: the three built-ins are `BUILTIN_THEMES` in `core/theme/themes.ts`, a
 user's are JSON files, and the renderer paints the one on screen onto `<html>`
-as `--helm-*` custom properties before React's first frame. `theme.css`
+as `--floti-*` custom properties before React's first frame. `theme.css`
 declares no palette at all; a second copy of the default there would be the
 copy that drifts.
 
@@ -119,7 +119,7 @@ plugin's project colour is one of them; a note's tag is one of them.
   something, it is not a palette colour.
 - **Named, never a value.** A thing stores the name (`"blue"`) and is drawn
   through the token - `text-hue-blue` in a component, `data-hue="blue"` or
-  `var(--helm-hue-blue)` in a plugin - so it is the right shade in every theme
+  `var(--floti-hue-blue)` in a plugin - so it is the right shade in every theme
   and in every theme a user writes. A stored hex is a colour that is right in
   one theme.
 - **Never floods.** Like the accent, a hue is text, a 6px dot, a 2px mark or a
@@ -191,11 +191,11 @@ Three settings, all custom properties on `<html>` that `applyShape` writes, so
 every gutter, corner and dense row in the app moves with them and nothing has
 to be told:
 
-- **Gap** (`paneGap`, 2-12px, default **6**) - `--helm-gap`, the
+- **Gap** (`paneGap`, 2-12px, default **6**) - `--floti-gap`, the
   `gutter` spacing token. A divider handle *is* the gutter it sits in (its row
   is `h-gutter` / `w-gutter`) and keeps an 8px hit target through a `::before`
   whatever the gap is.
-- **Corner radius** (`cornerRadius`, 0-8px, default **3**) - `--helm-radius`.
+- **Corner radius** (`cornerRadius`, 0-8px, default **3**) - `--floti-radius`.
   It is one knob, not five, because the relation is fixed:
 
   - `rounded-island` = radius - panes on the canvas
@@ -216,9 +216,9 @@ to be told:
   the default `rounded-well`, and it does not follow the setting. The window's
   1px edge is the theme's `border` composited over `bg` (`main/chrome.ts`), so
   it is a hairline like every other rather than the OS accent colour.
-- **Density** (`comfortable` / `compact`) - `--helm-row-y` (a list row's
-  vertical padding, `py-row`: 6px / 3px), `--helm-line` (one line of the
-  sidebar tree, `h-line`: 26px / 22px) and `--helm-strip` (a pane's tab strip,
+- **Density** (`comfortable` / `compact`) - `--floti-row-y` (a list row's
+  vertical padding, `py-row`: 6px / 3px), `--floti-line` (one line of the
+  sidebar tree, `h-line`: 26px / 22px) and `--floti-strip` (a pane's tab strip,
   `h-strip`: 36px / 32px). Text size and controls' own padding never change
   with it; density is how tightly the repeated things pack, not a zoom.
 
@@ -1480,27 +1480,27 @@ a website inside it.
   may use it, with the asking plugin and its hosts ticked, then Save. It is the
   only way a value gets in, and the value never comes back out to any page.
 
-**The primitives.** Every plugin page gets `/__helm/helm.css`, linked before
+**The primitives.** Every plugin page gets `/__floti/floti.css`, linked before
 its own styles. The theme arrives as CSS variables on `<html>` - the
-twenty-seven roles as `--helm-<role>` (`--helm-surface`, `--helm-fg-muted`,
-`--helm-accent-soft`, ..., and the palette as `--helm-hue-blue` to
-`--helm-hue-violet`), `--helm-radius`, `data-density` and `data-theme`
+twenty-seven roles as `--floti-<role>` (`--floti-surface`, `--floti-fg-muted`,
+`--floti-accent-soft`, ..., and the palette as `--floti-hue-blue` to
+`--floti-hue-violet`), `--floti-radius`, `data-density` and `data-theme`
 for light and dark - and is rewritten in place when the theme changes, so a
 page never reloads for it. The classes are Floti's controls by another name:
 
 | class | is |
 |---|---|
-| `.helm-button` | the 28px secondary button; `data-variant="primary"` is the accent outline with `accent-text`, never a fill; `ghost`, `danger` |
-| `.helm-icon-button` | a 24px icon button; `aria-pressed="true"` for a toggle that is on |
-| `.helm-input`, `.helm-select`, `.helm-textarea` | the field well; `aria-invalid="true"` for a field in error |
-| `.helm-list`, `.helm-row` | a list and its rows at the density's height; `aria-selected` or `aria-current` is the selected row's `accent-soft` and 2px bar |
-| `.helm-chip`, `.helm-state`, `.helm-dot` | a chip carried by its tone alone, a state in a hairline outline of its tone, a 6px status dot; `data-tone` picks the tone, `data-hue="blue"` (any palette name) draws a chip or dot in that hue instead |
-| `.helm-tag` | a label pill in outline; `data-tone="accent"` is `accent-soft` behind `accent-text`; `data-hue="<name>"` is a palette tag, the hue's tint behind its text |
-| `.helm-bar`, `.helm-rule` | a page's bar of controls over a hairline, a divider that fades at its ends |
-| `.helm-caps`, `.helm-meta`, `.helm-mono` | the caps label, secondary text, machine data |
-| `.helm-empty` | the empty state, with `-icon`, `-title`, `-text` and `-actions` |
+| `.floti-button` | the 28px secondary button; `data-variant="primary"` is the accent outline with `accent-text`, never a fill; `ghost`, `danger` |
+| `.floti-icon-button` | a 24px icon button; `aria-pressed="true"` for a toggle that is on |
+| `.floti-input`, `.floti-select`, `.floti-textarea` | the field well; `aria-invalid="true"` for a field in error |
+| `.floti-list`, `.floti-row` | a list and its rows at the density's height; `aria-selected` or `aria-current` is the selected row's `accent-soft` and 2px bar |
+| `.floti-chip`, `.floti-state`, `.floti-dot` | a chip carried by its tone alone, a state in a hairline outline of its tone, a 6px status dot; `data-tone` picks the tone, `data-hue="blue"` (any palette name) draws a chip or dot in that hue instead |
+| `.floti-tag` | a label pill in outline; `data-tone="accent"` is `accent-soft` behind `accent-text`; `data-hue="<name>"` is a palette tag, the hue's tint behind its text |
+| `.floti-bar`, `.floti-rule` | a page's bar of controls over a hairline, a divider that fades at its ends |
+| `.floti-caps`, `.floti-meta`, `.floti-mono` | the caps label, secondary text, machine data |
+| `.floti-empty` | the empty state, with `-icon`, `-title`, `-text` and `-actions` |
 
-They live in the CSS layer `helm`, ordered `theme, base, helm, components,
+They live in the CSS layer `floti`, ordered `theme, base, floti, components,
 utilities`, so a plugin's own unlayered CSS beats them and a Tailwind page's
 utilities do too. A plugin may style itself however it likes; the primitives
 are how it looks like Floti without trying, and every rule in this file -

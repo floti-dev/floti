@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, effectScope, h, nextTick, ref } from 'vue'
-import { useHelmEvent, useHelmSettings, useHelmTheme, useHelmVisible, useSecret } from '../src/vue.js'
+import { useFlotiEvent, useFlotiSettings, useFlotiTheme, useFlotiVisible, useSecret } from '../src/vue.js'
 import { installBridge, removeBridge, LIGHT, type FakeBridge } from './bridge'
 
 /** The Vue composables, over the stores, in a mounted component and in a bare effect scope. */
@@ -28,11 +28,11 @@ describe('the Vue composables', () => {
     const actions: string[] = []
     const Panel = defineComponent({
       setup() {
-        const settings = useHelmSettings()
-        const visible = useHelmVisible()
-        const theme = useHelmTheme()
+        const settings = useFlotiSettings()
+        const visible = useFlotiVisible()
+        const theme = useFlotiTheme()
         const [token, requestToken] = useSecret('github-token')
-        useHelmEvent('action', ({ id }) => actions.push(id))
+        useFlotiEvent('action', ({ id }) => actions.push(id))
         return () => [
           h('p', { 'data-testid': 'settings' }, settings.value === null ? 'reading' : String(settings.value['query'])),
           h('p', { 'data-testid': 'visible' }, visible.value ? 'shown' : 'hidden'),
@@ -95,7 +95,7 @@ describe('the Vue composables', () => {
 
   it('work outside an effect scope without a warning, for as long as the page lasts', () => {
     const warn = vi.spyOn(console, 'warn')
-    const visible = useHelmVisible()
+    const visible = useFlotiVisible()
     fake.emit('visibility', true)
     expect(visible.value).toBe(true)
     expect(warn).not.toHaveBeenCalled()
@@ -108,8 +108,8 @@ describe('S5: the Vue composables use window.floti', () => {
     const scope = effectScope()
     const actions: string[] = []
     const { theme, settings } = scope.run(() => {
-      useHelmEvent('action', ({ id }) => actions.push(id))
-      return { theme: useHelmTheme(), settings: useHelmSettings() }
+      useFlotiEvent('action', ({ id }) => actions.push(id))
+      return { theme: useFlotiTheme(), settings: useFlotiSettings() }
     })!
     await fake.settingsReads[0]!.answer({ query: 'is:open' })
     fake.emit('theme', LIGHT)

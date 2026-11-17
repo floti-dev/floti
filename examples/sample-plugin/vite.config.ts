@@ -10,7 +10,7 @@ const src = fileURLToPath(new URL('./src', import.meta.url))
  * background is not a page: it is the ES module `dist/background/main.js`,
  * which the host runs in an isolate of its own.
  *
- * `base: './'` keeps every asset URL relative, because Helm serves the folder
+ * `base: './'` keeps every asset URL relative, because Floti serves the folder
  * at `floti-plugin://<id>/` and a root-relative `/assets/...` would resolve
  * against nothing the plugin owns. The same holds for the background module's
  * imports: the host lets a background import only its plugin's own files, by

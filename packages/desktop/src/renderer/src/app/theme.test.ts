@@ -21,15 +21,15 @@ describe('applyTheme', () => {
     expect(root.classList.contains('dark')).toBe(true)
     expect(root.style.colorScheme).toBe('dark')
     // The canvas the body is painted with, and a glyph colour, from Graphite's palette.
-    expect(root.style.getPropertyValue('--helm-bg')).toBe('#25282e')
-    expect(root.style.getPropertyValue('--helm-fg-muted')).toBe('#a0a6b0')
-    expect(root.style.getPropertyValue('--helm-shadow')).toBe('0 1px 2px black')
+    expect(root.style.getPropertyValue('--floti-bg')).toBe('#25282e')
+    expect(root.style.getPropertyValue('--floti-fg-muted')).toBe('#a0a6b0')
+    expect(root.style.getPropertyValue('--floti-shadow')).toBe('0 1px 2px black')
 
     applyTheme(stateOf('daylight'))
     expect(root.dataset['theme']).toBe('daylight')
     expect(root.classList.contains('dark')).toBe(false)
     expect(root.style.colorScheme).toBe('light')
-    expect(root.style.getPropertyValue('--helm-bg')).toBe('#e6e8ee')
+    expect(root.style.getPropertyValue('--floti-bg')).toBe('#e6e8ee')
   })
 })
 
@@ -39,7 +39,7 @@ describe('applyTheme: the categorical palette', () => {
     applyTheme(state)
     const root = document.documentElement
     for (const hue of PALETTE_HUES) {
-      expect(root.style.getPropertyValue(`--helm-hue-${hue}`), hue).toBe(state.applied.tokens[hueToken(hue)])
+      expect(root.style.getPropertyValue(`--floti-hue-${hue}`), hue).toBe(state.applied.tokens[hueToken(hue)])
     }
   })
 })
@@ -48,13 +48,13 @@ describe('applyShape', () => {
   it('puts the gap, the corner radius and the density on <html>', () => {
     applyShape({ paneGap: 9, cornerRadius: 5, density: 'compact' })
     const root = document.documentElement
-    expect(root.style.getPropertyValue('--helm-gap')).toBe('9px')
-    expect(root.style.getPropertyValue('--helm-radius')).toBe('5px')
+    expect(root.style.getPropertyValue('--floti-gap')).toBe('9px')
+    expect(root.style.getPropertyValue('--floti-radius')).toBe('5px')
     expect(root.dataset['density']).toBe('compact')
 
     applyShape({ paneGap: 2, cornerRadius: 0, density: 'comfortable' })
-    expect(root.style.getPropertyValue('--helm-gap')).toBe('2px')
-    expect(root.style.getPropertyValue('--helm-radius')).toBe('0px')
+    expect(root.style.getPropertyValue('--floti-gap')).toBe('2px')
+    expect(root.style.getPropertyValue('--floti-radius')).toBe('0px')
     expect(root.dataset['density']).toBe('comfortable')
   })
 })

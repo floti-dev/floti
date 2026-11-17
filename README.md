@@ -191,12 +191,12 @@ into a workspace writes only `workspace.yaml`.
   Ctrl+Shift+F by what it says, and the markdown and HTML artifacts Claude
   writes opened rendered - with wikilinks, an editor beside a live preview for
   notes, and a sandboxed frame for artifacts.
-- **Plugins** - a folder with a `helm-plugin.json` adds a rail icon and panel,
+- **Plugins** - a folder with a `floti-plugin.json` adds a rail icon and panel,
   tabs, a status bar item, commands for Ctrl+Shift+P and a settings page, all
   drawn in Floti's theme. Each runs in a process of its own, so one that hangs
   or crashes takes nothing else with it. Add one in **Settings → Plugins**;
   [the SDK](packages/plugin-sdk/README.md), `@floti-dev/plugin-sdk` on
-  npm, has `helm-plugin create`, `helm-plugin validate` and the authoring
+  npm, has `floti-plugin create`, `floti-plugin validate` and the authoring
   guide.
 
 ### The version guard warns; it never gates
@@ -307,7 +307,7 @@ packages/
 ├── core/      # shared: types.ts, store/ (desktop.db), layout/, theme/ - ZERO electron imports
 ├── ui/        # React components
 ├── desktop/   # Electron main + preload + renderer + pty host
-└── plugin-sdk/ # the manifest validator, the bridge's types, the helm-plugin CLI
+└── plugin-sdk/ # the manifest validator, the bridge's types, the floti-plugin CLI
 ```
 
 Stack: Electron, TypeScript strict, React + Vite, Tailwind, xterm.js + node-pty,

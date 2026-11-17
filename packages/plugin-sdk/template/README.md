@@ -5,13 +5,13 @@ the panel opens, and a background module that counts the tabs on the rail
 icon. Plain HTML and JavaScript, so there is nothing to build.
 
 ```
-helm-plugin.json    the manifest
+floti-plugin.json    the manifest
 icon.svg            the rail icon, drawn in the rail's own colours
 pages/panel.*       the sidebar panel
 pages/tab.*         the tab
 pages/style.css     layout; colours and controls come from Floti
 background/main.js  the background module, run by the host with no page open
-package.json        the SDK, for the manifest schema and helm-plugin validate
+package.json        the SDK, for the manifest schema and floti-plugin validate
 ```
 
 ## Run it
@@ -45,7 +45,7 @@ npm run validate
 
 says what Floti would say about the manifest and the files it names, without
 starting Floti. `npm install` also puts the SDK where the manifest's `$schema`
-points, so your editor completes and checks `helm-plugin.json`. Floti itself
+points, so your editor completes and checks `floti-plugin.json`. Floti itself
 needs neither: it runs the plugin from this folder as it is.
 
 The authoring guide is the README of `@floti-dev/plugin-sdk`, in

@@ -122,8 +122,8 @@ describe('useLauncher', () => {
     expect(result.current.settings?.density).toBe('compact')
     const root = document.documentElement
     expect(root.dataset['density']).toBe('compact')
-    expect(root.style.getPropertyValue('--helm-gap')).toBe('9px')
-    expect(root.style.getPropertyValue('--helm-radius')).toBe('5px')
+    expect(root.style.getPropertyValue('--floti-gap')).toBe('9px')
+    expect(root.style.getPropertyValue('--floti-radius')).toBe('5px')
   })
 
   it('takes the settings as soon as they are read, without waiting on the app info', async () => {

@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 // @ts-check
 /**
- * `helm-plugin`: make a plugin, and check one the way Helm will.
+ * `floti-plugin`: make a plugin, and check one the way Floti will.
  *
- *   helm-plugin create <folder> [--id <id>] [--name <name>]
- *   helm-plugin validate [folder]
+ *   floti-plugin create <folder> [--id <id>] [--name <name>]
+ *   floti-plugin validate [folder]
  *
  * Plain JavaScript and Node's own modules only, so it runs as published -
- * through npx, from a plugin's own node_modules, or from a clone of Helm -
+ * through npx, from a plugin's own node_modules, or from a clone of Floti -
  * with nothing to build first.
- * `validate` runs the validator Helm itself runs (`src/manifest.js`), plus the
- * checks Helm makes on the folder when it loads it (`src/folder.js`).
+ * `validate` runs the validator Floti itself runs (`src/manifest.js`), plus the
+ * checks Floti makes on the folder when it loads it (`src/folder.js`).
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
@@ -27,10 +27,10 @@ const TEMPLATE_ID = 'my-plugin'
 const TEMPLATE_NAME = 'My plugin'
 const NAME_MAX = 60
 
-const USAGE = `helm-plugin - make a Floti plugin, and check one
+const USAGE = `floti-plugin - make a Floti plugin, and check one
 
 Usage:
-  helm-plugin create <folder> [--id <id>] [--name <name>]
+  floti-plugin create <folder> [--id <id>] [--name <name>]
       Writes a new apiVersion 2 plugin into <folder>, which must be new or
       empty: a rail icon, a sidebar panel, a tab and a background module, in
       plain HTML and JavaScript.
@@ -38,11 +38,11 @@ Usage:
               (default: made from the folder's name)
       --name  what Floti calls it (default: made from the id)
 
-  helm-plugin validate [folder]
+  floti-plugin validate [folder]
       Checks the plugin in [folder] (default: this folder) as Floti does when
       it loads it: the manifest, at apiVersion 2, and every file it names. Exits 1 on errors.
 
-  helm-plugin --help
+  floti-plugin --help
 `
 
 /** @param {string} text */
@@ -128,13 +128,13 @@ function walk(dir, prefix = '') {
  * path - run through npx, that is a cache folder that can be emptied at any
  * time - and never a URL, so an editor needs no network to check a manifest.
  */
-const SCHEMA_REFERENCE = `./node_modules/${PACKAGE.name}/helm-plugin.schema.json`
+const SCHEMA_REFERENCE = `./node_modules/${PACKAGE.name}/floti-plugin.schema.json`
 
 /**
  * The new plugin's `package.json`: the SDK as a development dependency, which
- * is where its schema, types and `helm-plugin` come from. Private, so an
+ * is where its schema, types and `floti-plugin` come from. Private, so an
  * `npm publish` in the wrong folder cannot put the plugin on npm. No version:
- * the manifest's is the one Helm shows.
+ * the manifest's is the one Floti shows.
  *
  * @param {string} id
  */
@@ -142,7 +142,7 @@ function packageJson(id) {
   return {
     name: id,
     private: true,
-    scripts: { validate: 'helm-plugin validate' },
+    scripts: { validate: 'floti-plugin validate' },
     devDependencies: { [PACKAGE.name]: `^${PACKAGE.version}` }
   }
 }
@@ -157,22 +157,22 @@ const GITIGNORE = 'node_modules/\n'
 function create(argv) {
   const { positional, options, problem } = parse(argv, ['id', 'name'])
   if (problem !== null) {
-    err(`helm-plugin create: ${problem}`)
+    err(`floti-plugin create: ${problem}`)
     return 1
   }
   const [folder, extra] = positional
   if (folder === undefined || extra !== undefined) {
-    err('helm-plugin create: give one folder to create the plugin in. See helm-plugin --help.')
+    err('floti-plugin create: give one folder to create the plugin in. See floti-plugin --help.')
     return 1
   }
   const target = resolve(folder)
   if (existsSync(target)) {
     if (!statSync(target).isDirectory()) {
-      err(`helm-plugin create: ${target} is a file, not a folder.`)
+      err(`floti-plugin create: ${target} is a file, not a folder.`)
       return 1
     }
     if (readdirSync(target).length > 0) {
-      err(`helm-plugin create: ${target} is not empty. Create a plugin in a new or empty folder.`)
+      err(`floti-plugin create: ${target} is not empty. Create a plugin in a new or empty folder.`)
       return 1
     }
   }
@@ -180,13 +180,13 @@ function create(argv) {
   const id = options.get('id') ?? idFrom(basename(target))
   if (!ID_PATTERN.test(id)) {
     err(
-      `helm-plugin create: "${id}" cannot be a plugin id. An id is 1-63 lower-case letters, digits and dashes, starting with a letter or digit. Pass one with --id.`
+      `floti-plugin create: "${id}" cannot be a plugin id. An id is 1-63 lower-case letters, digits and dashes, starting with a letter or digit. Pass one with --id.`
     )
     return 1
   }
   const name = (options.get('name') ?? nameFrom(id)).trim()
   if (name === '' || name.length > NAME_MAX) {
-    err(`helm-plugin create: a name is 1-${String(NAME_MAX)} characters.`)
+    err(`floti-plugin create: a name is 1-${String(NAME_MAX)} characters.`)
     return 1
   }
 
@@ -237,11 +237,11 @@ function create(argv) {
 function validate(argv) {
   const { positional, problem } = parse(argv, [])
   if (problem !== null) {
-    err(`helm-plugin validate: ${problem}`)
+    err(`floti-plugin validate: ${problem}`)
     return 1
   }
   if (positional.length > 1) {
-    err('helm-plugin validate: give at most one folder. See helm-plugin --help.')
+    err('floti-plugin validate: give at most one folder. See floti-plugin --help.')
     return 1
   }
   const folder = positional[0] ?? process.cwd()
@@ -278,7 +278,7 @@ function main(argv) {
       err(USAGE)
       return 1
     default:
-      err(`helm-plugin: unknown command "${command}". See helm-plugin --help.`)
+      err(`floti-plugin: unknown command "${command}". See floti-plugin --help.`)
       return 1
   }
 }

@@ -21,6 +21,6 @@ describe('palette tag classes', () => {
 
   it('have a Tailwind colour for every hue', () => {
     const css = readFileSync(join(import.meta.dirname, '../styles/theme.css'), 'utf8')
-    for (const hue of PALETTE_HUES) expect(css).toContain(`--color-hue-${hue}: var(--helm-hue-${hue});`)
+    for (const hue of PALETTE_HUES) expect(css).toContain(`--color-hue-${hue}: var(--floti-hue-${hue});`)
   })
 })

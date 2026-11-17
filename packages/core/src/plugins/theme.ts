@@ -1,4 +1,4 @@
-import type { HelmTheme, PaletteHue as SdkPaletteHue, ThemeTokenName } from '@floti-dev/plugin-sdk'
+import type { FlotiTheme, PaletteHue as SdkPaletteHue, ThemeTokenName } from '@floti-dev/plugin-sdk'
 import type { AppSettings } from '../types'
 import { THEME_TOKENS, type AppliedTheme, type PaletteHue, type ThemeToken } from '../theme/themes'
 
@@ -24,8 +24,8 @@ void sdkNamesTheHues
 export function pluginThemeOf(
   applied: AppliedTheme,
   settings: Pick<AppSettings, 'cornerRadius' | 'density'>
-): HelmTheme {
-  const tokens = {} as HelmTheme['tokens']
+): FlotiTheme {
+  const tokens = {} as FlotiTheme['tokens']
   for (const token of THEME_TOKENS) tokens[token] = applied.tokens[token]
   return { kind: applied.kind, tokens, radius: settings.cornerRadius, density: settings.density }
 }

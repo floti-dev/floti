@@ -1572,7 +1572,7 @@ import { childScript, watchOwner } from './common.mjs'
 watchOwner(process.cwd(), () => process.exit(0))
 spawn(process.execPath, ['-e', childScript(process.cwd())], { stdio: 'ignore' })
 createServer((request, response) => response.end('ok'))
-  .listen(Number(process.env.HELM_SERVICE_PORT), '127.0.0.1')
+  .listen(Number(process.env.FLOTI_SERVICE_PORT), '127.0.0.1')
 ";
 
 /// A host that is killed takes a plugin's service with it, as a stop does:

@@ -1,4 +1,4 @@
-import type { HelmContext, HelmTheme, PluginParams, SurfaceKind } from '@floti-dev/plugin-sdk'
+import type { FlotiContext, FlotiTheme, PluginParams, SurfaceKind } from '@floti-dev/plugin-sdk'
 import { pluginThemeOf } from '@helm/core/types'
 import { isMac } from '@helm/ui'
 import { LOCAL_HOST_KEY } from '@helm/core/types'
@@ -14,7 +14,7 @@ import {
   HELLO,
   contextName,
   type ConnectMessage,
-  type HelmMessage,
+  type FlotiMessage,
   type KeyInit
 } from '../../plugin-runtime/wire'
 
@@ -24,7 +24,7 @@ import {
  * The window runs one for the plugins' panels and tabs, and its own code
  * talks to a plugin no other way. A relay makes the frame,
  * answers its `HELLO` with a port of its own, carries its bridge calls to main
- * and the answers back, and hands it Helm's events: the theme, its visibility,
+ * and the answers back, and hands it Floti's events: the theme, its visibility,
  * and what main delivers for its plugin.
  *
  * What it trusts is decided here, once. A frame is known by its element, not
@@ -35,7 +35,7 @@ import {
  *
  * It also decides when a frame has failed, because a plugin page that died
  * says nothing: a load with no `HELLO` (the page is missing, or is not a page
- * Helm served), and a port that closed with no new `HELLO` behind it (the
+ * Floti served), and a port that closed with no new `HELLO` behind it (the
  * page's process ended). Either is a state the surface draws, with Reload.
  */
 
@@ -48,7 +48,7 @@ const QUEUE_MAX = 64
 const METHOD_MAX = 64
 const TITLE_MAX = 120
 /**
- * Calls that put something of Helm's in front of the user - its dialog, a
+ * Calls that put something of Floti's in front of the user - its dialog, a
  * page in the Browser tab - so only the user can cause one: each is let through only while this page has transient
  * activation. A click or key press in a plugin's frame activates the page
  * framing it too (Chromium's user activation v2), so this is a check the page
@@ -83,7 +83,7 @@ export type FrameState =
   | { kind: 'failed'; reason: 'load' | 'crash'; message: string }
 
 export interface RelayHooks {
-  /** A Helm shortcut pressed inside the page, which the page did not take. */
+  /** A Floti shortcut pressed inside the page, which the page did not take. */
   key?: (spec: SurfaceSpec, element: HTMLIFrameElement, key: KeyInit) => void
   /** The page named its surface, or gave the name back (null). */
   title?: (spec: SurfaceSpec, title: string | null) => void
@@ -123,7 +123,7 @@ interface Frame {
   hellosAtLoad: number
   /** In-flight calls of the current connection: the page's id to the call id main knows. */
   calls: Map<number, string>
-  queue: HelmMessage[]
+  queue: FlotiMessage[]
   visible: boolean
   timer: ReturnType<typeof setTimeout> | null
 }
@@ -146,7 +146,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
   const frames = new Map<string, Frame>()
   const listeners = new Set<() => void>()
   let serials = 0
-  let theme: HelmTheme | null = null
+  let theme: FlotiTheme | null = null
   let destroyed = false
 
   const notify = (): void => {
@@ -214,7 +214,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
     }
   }
 
-  const post = (frame: Frame, message: HelmMessage, transfer: Transferable[] = []): void => {
+  const post = (frame: Frame, message: FlotiMessage, transfer: Transferable[] = []): void => {
     if (frame.port !== null) {
       frame.port.postMessage(message, transfer)
       return
@@ -224,7 +224,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
     if (frame.queue.length > QUEUE_MAX) frame.queue.splice(0, frame.queue.length - QUEUE_MAX)
   }
 
-  const contextOf = (spec: SurfaceSpec): HelmContext => ({
+  const contextOf = (spec: SurfaceSpec): FlotiContext => ({
     plugin: spec.plugin,
     surface: spec.surface,
     name: spec.name,
@@ -293,7 +293,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
 
   const onLoad = (frame: Frame): void => {
     if (frames.get(frame.spec.key) !== frame) return
-    // A page Helm served said HELLO from the top of its <head>, which is
+    // A page Floti served said HELLO from the top of its <head>, which is
     // before this event in any page that has a bridge at all. The grace is
     // for the two arriving in either order.
     const check = (): void => {
@@ -407,7 +407,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
   }
 
   // ---------------------------------------------------------------------------
-  // What Helm sends
+  // What Floti sends
   // ---------------------------------------------------------------------------
 
   const event = (frame: Frame, name: string, data: unknown): void => {
@@ -437,11 +437,11 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
 
   const make = (spec: SurfaceSpec): Frame => {
     const element = win.document.createElement('iframe')
-    // Its own origin keeps it out of Helm's page; the sandbox takes away what
-    // an origin alone would still allow: navigating Helm, popups, modal
+    // Its own origin keeps it out of the desktop's page; the sandbox takes away what
+    // an origin alone would still allow: navigating Floti, popups, modal
     // dialogs, downloads. `allow-same-origin` keeps that origin - and its
     // storage - rather than an opaque one, which is safe because it is not
-    // Helm's.
+    // Floti's.
     element.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms')
     element.setAttribute('allow', 'clipboard-write')
     element.referrerPolicy = 'no-referrer'

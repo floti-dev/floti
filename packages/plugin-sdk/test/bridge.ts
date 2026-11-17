@@ -1,4 +1,4 @@
-import type { HelmEvents, HelmTheme, PluginBridge, SecretState, SettingValue } from '../src/types'
+import type { FlotiEvents, FlotiTheme, PluginBridge, SecretState, SettingValue } from '../src/types'
 
 /**
  * A page bridge the framework helpers' tests drive: `window.floti`, as a
@@ -21,13 +21,13 @@ export interface FakeBridge {
   readonly settingsReads: Array<Pending<Record<string, SettingValue>>>
   readonly stateReads: Array<Call<SecretState>>
   readonly requests: Array<Call<SecretState>>
-  emit<K extends keyof HelmEvents>(event: K, data: HelmEvents[K]): void
+  emit<K extends keyof FlotiEvents>(event: K, data: FlotiEvents[K]): void
   /** How many listeners `event` has. */
-  listeners(event: keyof HelmEvents): number
+  listeners(event: keyof FlotiEvents): number
 }
 
-export const DARK: HelmTheme = { kind: 'dark', tokens: {} as HelmTheme['tokens'], radius: 6, density: 'comfortable' }
-export const LIGHT: HelmTheme = { kind: 'light', tokens: {} as HelmTheme['tokens'], radius: 6, density: 'compact' }
+export const DARK: FlotiTheme = { kind: 'dark', tokens: {} as FlotiTheme['tokens'], radius: 6, density: 'comfortable' }
+export const LIGHT: FlotiTheme = { kind: 'light', tokens: {} as FlotiTheme['tokens'], radius: 6, density: 'compact' }
 
 function pending<T>(): { promise: Promise<T>; call: Pending<T> } {
   let resolve: (value: T) => void = () => undefined
@@ -50,7 +50,7 @@ export function installBridge(): FakeBridge {
   removeBridge()
   let theme = DARK
   let visible = false
-  const listeners = new Map<keyof HelmEvents, Set<(data: never) => void>>()
+  const listeners = new Map<keyof FlotiEvents, Set<(data: never) => void>>()
   const settingsReads: Array<Pending<Record<string, SettingValue>>> = []
   const stateReads: Array<Call<SecretState>> = []
   const requests: Array<Call<SecretState>> = []
@@ -61,7 +61,7 @@ export function installBridge(): FakeBridge {
     return promise
   }
 
-  const helm = {
+  const floti = {
     get theme() {
       return theme
     },
@@ -80,7 +80,7 @@ export function installBridge(): FakeBridge {
       state: (key: string) => keyed(stateReads, key),
       request: (key: string) => keyed(requests, key)
     },
-    on<K extends keyof HelmEvents>(event: K, listener: (data: HelmEvents[K]) => void) {
+    on<K extends keyof FlotiEvents>(event: K, listener: (data: FlotiEvents[K]) => void) {
       const set = listeners.get(event) ?? new Set()
       set.add(listener as (data: never) => void)
       listeners.set(event, set)
@@ -89,14 +89,14 @@ export function installBridge(): FakeBridge {
       }
     }
   }
-  ;(globalThis as { floti?: PluginBridge }).floti = helm as unknown as PluginBridge
+  ;(globalThis as { floti?: PluginBridge }).floti = floti as unknown as PluginBridge
 
   return {
     settingsReads,
     stateReads,
     requests,
     emit(event, data) {
-      if (event === 'theme') theme = data as HelmTheme
+      if (event === 'theme') theme = data as FlotiTheme
       if (event === 'visibility') visible = data as boolean
       for (const listener of [...(listeners.get(event) ?? [])]) (listener as (value: typeof data) => void)(data)
     },

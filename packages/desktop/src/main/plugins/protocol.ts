@@ -11,11 +11,11 @@ import { MIME } from '../content'
  * every page `window.floti`.
  *
  * The host names the plugin, so every plugin is its own **origin**: the
- * browser keeps it out of Helm's page and out of every other plugin's, gives
+ * browser keeps it out of the desktop's page and out of every other plugin's, gives
  * it storage of its own, and stamps its `postMessage`s with an origin it
  * cannot forge. That origin is the plugin's identity everywhere.
  *
- * Under `/__helm/` on every origin Helm serves its runtime - the bridge and
+ * Under `/__floti/` on every origin Floti serves its runtime - the bridge and
  * the primitives stylesheet - so a plugin never ships a copy of either and
  * never runs a stale one. Every HTML page the plugin serves gets the two
  * injected at the top of its `<head>`, before its own styles and scripts:
@@ -28,7 +28,7 @@ import { MIME } from '../content'
  *
  * Its own origin for script, style, images and fonts, and no network of any
  * kind: `connect-src 'none'` closes fetch, XHR, WebSocket and EventSource, so
- * `helm.fetch` - where the host list and the secrets are - is the only way out.
+ * `floti.fetch` - where the host list and the secrets are - is the only way out.
  * No inline script, because a built plugin has none and an injected one is the
  * commonest way a page that renders remote data goes wrong.
  */
@@ -61,7 +61,7 @@ const RUNTIME_PATH = `/${RESERVED_PREFIX}`
 const HEADERS = {
   'content-security-policy': PLUGIN_CSP,
   'x-content-type-options': 'nosniff',
-  // A plugin under development is rebuilt underneath a running Helm.
+  // A plugin under development is rebuilt underneath a running Floti.
   'cache-control': 'no-store'
 }
 
@@ -123,7 +123,7 @@ function parse(requestUrl: string): Parsed {
 
 function runtimeAsset(name: string, runtime: PluginRuntime): Response {
   if (name === 'bridge.js') return asset(runtime.bridge(), 'text/javascript; charset=utf-8')
-  if (name === 'helm.css') return asset(runtime.css(), 'text/css; charset=utf-8')
+  if (name === 'floti.css') return asset(runtime.css(), 'text/css; charset=utf-8')
   return new Response('Not found', { status: 404 })
 }
 
@@ -195,15 +195,15 @@ function asset(body: string, type: string): Response {
 /**
  * The runtime's two tags, at the top of the document's `<head>`.
  *
- * The page's first theme rides on the script tag (`data-helm-boot`), so the
+ * The page's first theme rides on the script tag (`data-floti-boot`), so the
  * bridge can paint it before anything else draws and the bridge itself stays
  * the same bytes for every page.
  */
 export function injectRuntime(html: string, boot: string): string {
   const attribute = boot.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/</g, '&lt;')
   const tags =
-    `<link rel="stylesheet" href="${RUNTIME_PATH}helm.css">` +
-    `<script src="${RUNTIME_PATH}bridge.js" data-helm-boot='${attribute}'></script>`
+    `<link rel="stylesheet" href="${RUNTIME_PATH}floti.css">` +
+    `<script src="${RUNTIME_PATH}bridge.js" data-floti-boot='${attribute}'></script>`
   const head = /<head(?:\s[^>]*)?>/i.exec(html)
   if (head !== null) return insertAt(html, head.index + head[0].length, tags)
   const root = /<html(?:\s[^>]*)?>/i.exec(html)

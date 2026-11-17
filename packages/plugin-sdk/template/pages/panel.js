@@ -17,7 +17,7 @@ function openTab() {
   const row = document.createElement('li')
   const button = document.createElement('button')
   button.type = 'button'
-  button.className = 'helm-row'
+  button.className = 'floti-row'
   button.textContent = title
   const n = count
   button.addEventListener('click', () => void floti.tabs.open('page', { n }, { title: `Page ${n}` }))

@@ -132,7 +132,7 @@ function isLinkChord(event: MouseEvent): boolean {
  * only when a click would follow it (`terminalLinks.css`). Without the chord a
  * click on a link goes to the program, and a hand there would say otherwise.
  */
-export const LINK_CHORD_CLASS = 'helm-link-chord'
+export const LINK_CHORD_CLASS = 'floti-link-chord'
 
 let chordHeld: boolean | null = null
 

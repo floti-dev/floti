@@ -57,8 +57,8 @@ import type {
   WriteConfigResult
 } from '@helm/core'
 import type {
-  HelmErrorCode,
-  HelmTheme,
+  FlotiErrorCode,
+  FlotiTheme,
   PluginParams,
   SettingValue,
   SurfaceKind
@@ -1814,7 +1814,7 @@ export interface IpcRequests {
   'plugins:list': { request: void; response: PluginInfo[] }
   /**
    * Settings > Plugins, "Add plugin folder": the native picker, then the folder
-   * registered and read. A folder with no `helm-plugin.json` is refused; one
+   * registered and read. A folder with no `floti-plugin.json` is refused; one
    * whose manifest is wrong is registered and shown with what is wrong, so it
    * can be fixed in place and reloaded. With `path`, that folder and no
    * picker: a folder on a host on another computer is typed, as the picker
@@ -1910,7 +1910,7 @@ export interface PluginCallRequest {
   callId: string
 }
 
-export type PluginCallOutcome = { ok: true; value: unknown } | { ok: false; code: HelmErrorCode; message: string }
+export type PluginCallOutcome = { ok: true; value: unknown } | { ok: false; code: FlotiErrorCode; message: string }
 
 /** What `floti.fetch` sends across: a `Request`, taken apart. */
 export interface PluginFetchRequest {
@@ -2285,7 +2285,7 @@ export interface IpcEvents {
    * The theme as plugin pages see it, after any change to the colours or the
    * shape settings. To both Helm pages that frame plugins, which pass it on.
    */
-  'plugins:theme': HelmTheme
+  'plugins:theme': FlotiTheme
 
   /** The host's protocol bytes on a page's own connection, as its bridge wrote them. */
   'hostLink:data': { connection: number; bytes: Uint8Array }

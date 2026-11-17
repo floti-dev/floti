@@ -1,13 +1,13 @@
 # Writing a Floti plugin
 
 `@floti-dev/plugin-sdk` holds the types, the manifest validator and schema,
-helpers for any framework and the `helm-plugin` command for building Floti plugins. The runtime
+helpers for any framework and the `floti-plugin` command for building Floti plugins. The runtime
 itself - the bridge (`window.floti`), the theme and the primitives stylesheet - comes from the Floti that runs the
 plugin, so a plugin never ships a copy of it.
 
 ## What a plugin is
 
-A plugin is a folder on your computer with a `helm-plugin.json` at its root.
+A plugin is a folder on your computer with a `floti-plugin.json` at its root.
 You register the folder in Floti, and Floti reads the manifest and serves the
 folder to its pages.
 
@@ -15,7 +15,7 @@ folder to its pages.
   `floti-plugin://<id>/<path>`. That origin is the plugin's identity: its
   storage, its messages and its permissions are its own, and no other plugin
   or Floti page shares them.
-- Its pages run in a process of their own, separate from Helm's window. A
+- Its pages run in a process of their own, separate from the desktop's window. A
   plugin that loops forever or crashes takes down its own pages and nothing
   else.
 - A page has no network access and no access to the computer. It asks Floti,
@@ -27,16 +27,39 @@ folder to its pages.
 ## API versions
 
 `apiVersion` in the manifest says which plugin API the plugin was written
-against. Floti runs version 2, and `helm-plugin create` writes it: a page's
+against. Floti runs version 2, and `floti-plugin create` writes it: a page's
 bridge is `window.floti`, on the page's `floti-plugin://<id>/` origin, and
 `background` is a `.js` or `.mjs` module the host runs in an isolate. A
 manifest with any other `apiVersion` is refused, and Settings says that
 Floti runs only version 2.
-5. Run `npm run validate`, which checks the manifest at the version it names.
 
-Nothing else changes: the manifest's other fields, the tool server
-(`floti-plugin-<id>`), the service's `HELM_SERVICE_PORT`, `HELM_SERVICE_TOKEN`
-and `HELM_PLUGIN_ID`, settings and secrets all stay as they are.
+## What breaks in 2.0.0
+
+2.0.0 is for Floti 3.0 and later, and gives every name the plugin surface has
+to Floti. A plugin built against 1.x changes these, all at once, and runs
+`npm run validate` after:
+
+- **The manifest file** is `floti-plugin.json`. A folder that holds only the
+  old file has no manifest, and Floti refuses it as it refuses any folder
+  without one. The schema is `floti-plugin.schema.json`, so the manifest's
+  `$schema` is `./node_modules/@floti-dev/plugin-sdk/floti-plugin.schema.json`.
+- **The command** is `floti-plugin`: `floti-plugin validate` in the plugin's
+  `validate` script.
+- **The page's CSS**: the stylesheet is `/__floti/floti.css`, in the layer
+  `floti` (declared as `theme, base, floti, components, utilities`), the
+  primitives are `floti-button`, `floti-row` and the rest, and the theme's
+  variables are `--floti-<token>`, `--floti-radius` and `--floti-hue-<name>`.
+  The reserved path a plugin's files may not use is `__floti/`.
+- **The service** is given `FLOTI_SERVICE_PORT`, `FLOTI_SERVICE_TOKEN` and
+  `FLOTI_PLUGIN_ID`, and Floti's requests carry the token as the
+  `Floti-Service-Token` header.
+- **The exports** are `FlotiContext`, `FlotiTheme`, `FlotiEvents`,
+  `FlotiStore`, `FlotiError` and `FlotiErrorCode`, and the React and Vue hooks
+  are `useFlotiEvent`, `useFlotiTheme`, `useFlotiVisible` and
+  `useFlotiSettings`. A failed call rejects with an error named `FlotiError`.
+- **apiVersion 1 is gone**: the validator accepts version 2 only.
+
+The tool server (`floti-plugin-<id>`), settings and secrets stay as they are.
 
 ## Quick start
 
@@ -56,7 +79,7 @@ Floti:
 
 The new plugin's `package.json` has this SDK as a development dependency.
 `npm install` puts it in the plugin's `node_modules`, where the manifest's
-`$schema` points, and `npm run validate` then runs `helm-plugin validate`. It
+`$schema` points, and `npm run validate` then runs `floti-plugin validate`. It
 checks a plugin the way Floti does when it loads it - the manifest, then every
 file the manifest names - and exits 1 when Floti would refuse it:
 
@@ -88,17 +111,17 @@ Settings > Plugins > the plugin > **Reload** reads the folder again by hand.
 
 ## The manifest
 
-`helm-plugin.json`. Every surface is optional; a plugin with none loads and
+`floti-plugin.json`. Every surface is optional; a plugin with none loads and
 does nothing. For editor completion, `$schema` points at the SDK's schema in
-the plugin's `node_modules`, as `helm-plugin create` writes it:
+the plugin's `node_modules`, as `floti-plugin create` writes it:
 
 ```json
-{ "$schema": "./node_modules/@floti-dev/plugin-sdk/helm-plugin.schema.json" }
+{ "$schema": "./node_modules/@floti-dev/plugin-sdk/floti-plugin.schema.json" }
 ```
 
 Paths (`icon`, every `entry`, `background`, `service.node`) are relative to the
 plugin folder and may not leave it, through `..` or a link. Nothing may live
-under `__helm/`, where Floti serves its runtime.
+under `__floti/`, where Floti serves its runtime.
 
 | field | what it is |
 | --- | --- |
@@ -132,7 +155,7 @@ Floti warns about a top-level field it does not know, and loads the plugin
 anyway. Everything else it refuses, and lists every problem at once:
 
 ```
-helm-plugin.json: rail.panel must name one of the panels - "main" is not one
+floti-plugin.json: rail.panel must name one of the panels - "main" is not one
 ```
 
 ## Surfaces
@@ -218,8 +241,7 @@ input.oninput = () => floti.surface.keep()
 
 With `pageStrip`, the preview is one of the plugin's pages and replaces only
 another of its pages. Without it, a tab shares the pane's one preview with
-Floti's files. Floti before 2.3.2 ignores `preview` and has no `surface.keep`, so a
-plugin that runs on both checks `floti.surface.keep` before calling it.
+Floti's files.
 
 ### Background
 
@@ -379,7 +401,7 @@ Events:
 
 | event | data |
 | --- | --- |
-| `theme` | The new `HelmTheme`. The page's CSS variables have already changed. |
+| `theme` | The new `FlotiTheme`. The page's CSS variables have already changed. |
 | `visibility` | Whether the surface is now on screen. |
 | `settings` | Every setting's value, after the user changed one. |
 | `secrets` | Every declared key's state, after one was stored, permitted or removed. |
@@ -576,9 +598,9 @@ One long-running process, started and stopped by Floti:
 - `node` is a script in the plugin folder, run by the Node inside Floti - the
   user needs no Node install. `command` is any program instead. Each takes
   `args` and `env`.
-- It is given `HELM_SERVICE_PORT` to listen on, on `127.0.0.1`,
-  `HELM_SERVICE_TOKEN`, and `HELM_PLUGIN_ID`. Every request from Floti carries
-  the token as the `Helm-Service-Token` header; answer anything without it with
+- It is given `FLOTI_SERVICE_PORT` to listen on, on `127.0.0.1`,
+  `FLOTI_SERVICE_TOKEN`, and `FLOTI_PLUGIN_ID`. Every request from Floti carries
+  the token as the `Floti-Service-Token` header; answer anything without it with
   401.
 - `start: "demand"` (the default) starts it on the first `service:` request;
   `"enable"` starts it with the plugin. It has 20 seconds to start listening.
@@ -596,12 +618,12 @@ One long-running process, started and stopped by Floti:
 import { createServer } from 'node:http'
 
 createServer((req, res) => {
-  if (req.headers['helm-service-token'] !== process.env.HELM_SERVICE_TOKEN) {
+  if (req.headers['floti-service-token'] !== process.env.FLOTI_SERVICE_TOKEN) {
     res.writeHead(401).end()
     return
   }
   res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true }))
-}).listen(Number(process.env.HELM_SERVICE_PORT), '127.0.0.1')
+}).listen(Number(process.env.FLOTI_SERVICE_PORT), '127.0.0.1')
 ```
 
 Its output goes to the plugin's log in Settings.
@@ -658,11 +680,8 @@ floti.tools.handle('create_item', async (args, { session, signal }) => {
   together. 2000 characters at most, as is each `description`.
 - Tool names are lower-case letters, digits, `_` and `-`, starting with a
   letter. A session calls `list_items` as `mcp__floti-plugin-<id>__list_items`,
-  and that whole name may be 64 characters at most. The prefix was
-  `helm-plugin-` before 1.6.0, one character shorter, so a name that was
-  exactly 64 characters then is 65 now and is refused until the tool's name
-  or the plugin's id is one character shorter; `helm-plugin validate` names
-  the length and the limit.
+  and that whole name may be 64 characters at most; `floti-plugin validate`
+  names the length and the limit.
 - `inputSchema` is JSON Schema with `type: "object"`; without one a tool takes
   no arguments. Floti passes it to the session as written and does **not** check
   a call's arguments against it, so a handler treats them as untrusted input.
@@ -781,17 +800,17 @@ link.addEventListener('click', (event) => {
 Floti injects its primitives stylesheet at the top of every page's `<head>`,
 before the plugin's own styles, and writes the theme onto `<html>`:
 
-- `--helm-<token>` for each of the theme's colours: `bg`, `surface`,
+- `--floti-<token>` for each of the theme's colours: `bg`, `surface`,
   `surface-raised`, `surface-sunken`, `hover`, `active`, `border`,
   `border-strong`, `fg`, `fg-muted`, `fg-subtle`, `accent`, `accent-fg`,
   `accent-soft`, `accent-soft-hover`, `accent-text`, `success`, `warn`,
   `danger`, and the categorical palette, `hue-blue`, `hue-teal`, `hue-green`,
   `hue-amber`, `hue-orange`, `hue-red`, `hue-pink` and `hue-violet`;
-- `--helm-radius` (the corner setting) and `--helm-radius-well` (one pixel
+- `--floti-radius` (the corner setting) and `--floti-radius-well` (one pixel
   rounder, for controls);
-- `--helm-row-y` and `--helm-line`, which follow the density setting, and
+- `--floti-row-y` and `--floti-line`, which follow the density setting, and
   `data-density="comfortable|compact"`;
-- `--helm-font-sans` and `--helm-font-mono`;
+- `--floti-font-sans` and `--floti-font-mono`;
 - `data-theme="dark|light"`, a `dark` class for dark themes, and
   `color-scheme`, so native controls match.
 
@@ -805,39 +824,39 @@ no order or status: projects, tags, the series of a chart. Never use it for a
 status (that is `data-tone`), a selection or emphasis. Store the hue's name
 (`PaletteHue`: `"blue"`, `"teal"`, `"green"`, `"amber"`, `"orange"`, `"red"`,
 `"pink"`, `"violet"`), never a colour value, and draw it with `data-hue` or
-`var(--helm-hue-<name>)`, so it is the right shade in every theme. A hue is
+`var(--floti-hue-<name>)`, so it is the right shade in every theme. A hue is
 never a filled area, and never the only thing telling two items apart: they
 differ in their names too.
 
 ```html
-<span class="helm-tag" data-hue="blue">Website</span>
-<span class="helm-dot" data-hue="orange"></span>
+<span class="floti-tag" data-hue="blue">Website</span>
+<span class="floti-dot" data-hue="orange"></span>
 ```
 
 The primitives, so a plugin looks like the rest of Floti without copying it:
 
 | class | what it is |
 | --- | --- |
-| `helm-button` | A button. `data-variant="primary"` (outlined in the accent), `"ghost"`, `"danger"`. |
-| `helm-icon-button` | A 24px icon button. `aria-pressed="true"` for a toggled one. |
-| `helm-input`, `helm-select`, `helm-textarea` | Fields in Floti's sunken well. `aria-invalid="true"` marks one wrong. |
-| `helm-list`, `helm-row` | A list and its rows. `aria-selected="true"` or `aria-current` marks the chosen row. |
-| `helm-chip` | A borderless count or status, in a tone: `data-tone="accent|success|warn|danger"`. `data-hue="<name>"` draws it in a palette hue instead. |
-| `helm-state` | The one outlined pill: a single word that is a thing's whole status. Takes `data-tone`. |
-| `helm-dot` | A 6px dot in a tone, or in a palette hue with `data-hue="<name>"`. |
-| `helm-tag` | A hairline pill; `data-tone="accent"` for a kind; `data-hue="<name>"` for a palette tag, the hue's tint behind its text. |
-| `helm-bar` | A row along the top of a page, with a hairline under it. |
-| `helm-rule` | A divider that fades at its ends. |
-| `helm-caps` | The small capitals label over a section. |
-| `helm-meta` | A row's second line, a hint, a time. |
-| `helm-mono` | Machine data: a path, a hash, a size. |
-| `helm-empty` | An empty state, with `helm-empty-icon`, `helm-empty-title`, `helm-empty-text` and `helm-empty-actions` inside. |
+| `floti-button` | A button. `data-variant="primary"` (outlined in the accent), `"ghost"`, `"danger"`. |
+| `floti-icon-button` | A 24px icon button. `aria-pressed="true"` for a toggled one. |
+| `floti-input`, `floti-select`, `floti-textarea` | Fields in Floti's sunken well. `aria-invalid="true"` marks one wrong. |
+| `floti-list`, `floti-row` | A list and its rows. `aria-selected="true"` or `aria-current` marks the chosen row. |
+| `floti-chip` | A borderless count or status, in a tone: `data-tone="accent|success|warn|danger"`. `data-hue="<name>"` draws it in a palette hue instead. |
+| `floti-state` | The one outlined pill: a single word that is a thing's whole status. Takes `data-tone`. |
+| `floti-dot` | A 6px dot in a tone, or in a palette hue with `data-hue="<name>"`. |
+| `floti-tag` | A hairline pill; `data-tone="accent"` for a kind; `data-hue="<name>"` for a palette tag, the hue's tint behind its text. |
+| `floti-bar` | A row along the top of a page, with a hairline under it. |
+| `floti-rule` | A divider that fades at its ends. |
+| `floti-caps` | The small capitals label over a section. |
+| `floti-meta` | A row's second line, a hint, a time. |
+| `floti-mono` | Machine data: a path, a hash, a size. |
+| `floti-empty` | An empty state, with `floti-empty-icon`, `floti-empty-title`, `floti-empty-text` and `floti-empty-actions` inside. |
 
-The primitives are in a CSS layer named `helm`, so **any unlayered CSS in the
+The primitives are in a CSS layer named `floti`, so **any unlayered CSS in the
 plugin wins over them**, whatever its specificity. For Tailwind, the layer
-order is declared as `theme, base, helm, components, utilities`: Tailwind's
+order is declared as `theme, base, floti, components, utilities`: Tailwind's
 reset does not undo the primitives, and its utilities override them, so
-`class="helm-button px-4"` gets the padding.
+`class="floti-button px-4"` gets the padding.
 
 ## Frameworks
 
@@ -851,7 +870,7 @@ anywhere, and React hooks and Vue composables built on them. Each is optional.
 
 | store | value |
 | --- | --- |
-| `theme` | The current `HelmTheme`. |
+| `theme` | The current `FlotiTheme`. |
 | `visible` | Whether the surface is on screen. |
 | `settings` | Every setting's value: null until read, then kept current. |
 | `secret(key)` | A declared key's state, `ready` or `missing`: null until read. `request()` opens Floti's dialog for adding the key and resolves with the state once it closes. The same key is always the same store. |
@@ -892,7 +911,7 @@ The stores are Svelte stores, so there is no Svelte entry. Read them with `$`:
 </script>
 
 {#if $token === 'missing'}
-  <button class="helm-button" onclick={() => token.request()}>Add token</button>
+  <button class="floti-button" onclick={() => token.request()}>Add token</button>
 {:else if $settings !== null}
   <!-- ... -->
 {/if}
@@ -907,19 +926,19 @@ module `fromStore(settings).current` reads one as state.
 
 ```vue
 <script setup>
-import { useHelmEvent, useHelmSettings, useHelmTheme, useHelmVisible, useSecret } from '@floti-dev/plugin-sdk/vue'
+import { useFlotiEvent, useFlotiSettings, useFlotiTheme, useFlotiVisible, useSecret } from '@floti-dev/plugin-sdk/vue'
 
-const settings = useHelmSettings() // null until read, then kept current
-const visible = useHelmVisible()
-const theme = useHelmTheme()
+const settings = useFlotiSettings() // null until read, then kept current
+const visible = useFlotiVisible()
+const theme = useFlotiTheme()
 const [token, requestToken] = useSecret('github-token') // 'ready' | 'missing' | null
-useHelmEvent('action', ({ id }) => {
+useFlotiEvent('action', ({ id }) => {
   if (id === 'refresh') reload()
 })
 </script>
 
 <template>
-  <button v-if="token === 'missing'" class="helm-button" @click="requestToken()">Add token</button>
+  <button v-if="token === 'missing'" class="floti-button" @click="requestToken()">Add token</button>
 </template>
 ```
 
@@ -931,17 +950,17 @@ Each subscription ends with the `setup()` or `effectScope()` it was made in.
 `@floti-dev/plugin-sdk/react` has hooks:
 
 ```tsx
-import { useHelmEvent, useHelmSettings, useHelmTheme, useHelmVisible, useSecret } from '@floti-dev/plugin-sdk/react'
+import { useFlotiEvent, useFlotiSettings, useFlotiTheme, useFlotiVisible, useSecret } from '@floti-dev/plugin-sdk/react'
 
 function Panel() {
-  const settings = useHelmSettings() // null until read, then kept current
-  const visible = useHelmVisible()
-  const theme = useHelmTheme()
+  const settings = useFlotiSettings() // null until read, then kept current
+  const visible = useFlotiVisible()
+  const theme = useFlotiTheme()
   const [token, requestToken] = useSecret('github-token') // 'ready' | 'missing' | null
-  useHelmEvent('action', ({ id }) => {
+  useFlotiEvent('action', ({ id }) => {
     if (id === 'refresh') reload()
   })
-  if (token === 'missing') return <button className="helm-button" onClick={() => void requestToken()}>Add token</button>
+  if (token === 'missing') return <button className="floti-button" onClick={() => void requestToken()}>Add token</button>
   // ...
 }
 ```
@@ -952,7 +971,7 @@ stores need neither, and nothing else in the SDK needs them.
 ## TypeScript
 
 ```ts
-import type { FlotiBridge, FlotiBackground, HelmContext, PluginManifest } from '@floti-dev/plugin-sdk'
+import type { FlotiBridge, FlotiBackground, FlotiContext, PluginManifest } from '@floti-dev/plugin-sdk'
 ```
 
 `FlotiBridge` is a page's bridge; `ApiVersion` is `2`. For the pages, once in

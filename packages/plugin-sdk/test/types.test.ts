@@ -23,7 +23,7 @@ const TSC = join(dirname(require.resolve('typescript/package.json')), 'bin', 'ts
 let root: string
 
 beforeAll(() => {
-  root = realpathSync.native(mkdtempSync(join(tmpdir(), 'helm sdk types-')))
+  root = realpathSync.native(mkdtempSync(join(tmpdir(), 'floti sdk types-')))
   mkdirSync(join(root, 'node_modules', '@floti-dev'), { recursive: true })
   // The SDK as installed: a junction on Windows, which needs no elevation, and a symlink elsewhere.
   symlinkSync(SDK_DIR, join(root, 'node_modules', '@floti-dev', 'plugin-sdk'), 'junction')

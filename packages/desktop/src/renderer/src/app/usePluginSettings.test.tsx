@@ -124,7 +124,7 @@ describe('usePluginSettings - secrets', () => {
 describe('usePluginSettings - folders and settings', () => {
   it('says why a folder was not added, and forgets it once one is', async () => {
     const results = [
-      { path: 'C:\\somewhere', error: 'C:\\somewhere holds no helm-plugin.json', plugins: [] as PluginInfo[] },
+      { path: 'C:\\somewhere', error: 'C:\\somewhere holds no floti-plugin.json', plugins: [] as PluginInfo[] },
       { path: SAMPLE, error: null, plugins: [] as PluginInfo[] }
     ]
     bridge.answer('plugins:add', () => results.shift() ?? { path: null, error: null, plugins: [] })
@@ -134,7 +134,7 @@ describe('usePluginSettings - folders and settings', () => {
 
     act(() => result.current.add())
     await settle()
-    expect(result.current.addError).toBe('C:\\somewhere holds no helm-plugin.json')
+    expect(result.current.addError).toBe('C:\\somewhere holds no floti-plugin.json')
 
     act(() => result.current.add())
     await settle()

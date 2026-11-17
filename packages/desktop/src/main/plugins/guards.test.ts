@@ -4,8 +4,8 @@ import type { WebContents } from 'electron'
 
 /**
  * The two guards main holds a plugin frame to: a frame on a plugin's origin
- * stays on it, only a Helm page that frames plugins puts one there, and a
- * plugin page gets the clipboard write and no other permission. Helm's own
+ * stays on it, only a desktop page that frames plugins puts one there, and a
+ * plugin page gets the clipboard write and no other permission. Floti's own
  * pages and every non-plugin navigation are left as they were.
  */
 
@@ -37,7 +37,7 @@ describe('pluginOriginOf', () => {
     ['floti-plugin://sample.build-box/dist/panel.html', 'floti-plugin://sample.build-box'],
     ['https://example.com/', null],
     ['http://localhost:5173/', null],
-    ['helm-content://abc/x.html', null],
+    ['floti-content://abc/x.html', null],
     ['', null],
     [null, null],
     [undefined, null]
@@ -51,7 +51,7 @@ describe('pluginNavigationAllowed', () => {
     target: 'floti-plugin://sample/dist/other.html',
     frameOrigin: 'floti-plugin://sample',
     initiatorOrigin: 'floti-plugin://sample',
-    initiatorIsHelm: false,
+    initiatorIsDesktop: false,
     framesPlugins: true
   }
 
@@ -64,17 +64,17 @@ describe('pluginNavigationAllowed', () => {
     ['a plugin frame to about:blank', { target: 'about:blank' }, false],
     [
       'Floti putting a fresh frame on a plugin page',
-      { frameOrigin: 'http://localhost:5173', initiatorOrigin: 'http://localhost:5173', initiatorIsHelm: true },
+      { frameOrigin: 'http://localhost:5173', initiatorOrigin: 'http://localhost:5173', initiatorIsDesktop: true },
       true
     ],
     [
       'Floti reloading a plugin frame onto another plugin it made it for',
-      { target: 'floti-plugin://other/x.html', initiatorIsHelm: true },
+      { target: 'floti-plugin://other/x.html', initiatorIsDesktop: true },
       true
     ],
     [
       'a page that does not frame plugins putting a frame on the scheme',
-      { frameOrigin: 'https://example.com', initiatorOrigin: 'https://example.com', initiatorIsHelm: true, framesPlugins: false },
+      { frameOrigin: 'https://example.com', initiatorOrigin: 'https://example.com', initiatorIsDesktop: true, framesPlugins: false },
       false
     ],
     [
@@ -103,7 +103,7 @@ describe('the same plugin on two hosts', () => {
         target,
         frameOrigin: origin,
         initiatorOrigin: origin,
-        initiatorIsHelm: false,
+        initiatorIsDesktop: false,
         framesPlugins: true
       })
     expect(from(ours, `${theirs}/dist/panel.html`)).toBe(false)

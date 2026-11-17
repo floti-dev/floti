@@ -1,5 +1,5 @@
 import type { BrowserWindow, WebContents } from 'electron'
-import type { HelmTheme } from '@floti-dev/plugin-sdk'
+import type { FlotiTheme } from '@floti-dev/plugin-sdk'
 import type { PluginRuntime } from './protocol'
 
 /**
@@ -17,15 +17,15 @@ export interface PluginHostOptions {
   /** The app's window: the page that frames plugins. */
   window: () => BrowserWindow | null
   /** The theme a page paints first; it is kept current from the window after that. */
-  theme: () => HelmTheme
-  /** The bridge script and primitives stylesheet, as served under `/__helm/`. */
+  theme: () => FlotiTheme
+  /** The bridge script and primitives stylesheet, as served under `/__floti/`. */
   bridge: string
   stylesheet: string
 }
 
 export interface PluginHost {
   /** A theme or shape change, for the window that frames plugins. */
-  pushTheme(theme: HelmTheme): void
+  pushTheme(theme: FlotiTheme): void
   /** Whether a web contents is the desktop page that frames plugins: the window. */
   framesPlugins(contentsId: number): boolean
   runtime: PluginRuntime

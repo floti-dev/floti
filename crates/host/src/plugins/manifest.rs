@@ -1,8 +1,8 @@
-//! A plugin's `helm-plugin.json`, read by the SDK's own validator.
+//! A plugin's `floti-plugin.json`, read by the SDK's own validator.
 //!
 //! The validator is `packages/plugin-sdk/src/manifest.js`, embedded as it is
 //! and run in a base isolate, so what this host accepts is what
-//! `helm-plugin validate` accepts and what it says when it refuses is what
+//! `floti-plugin validate` accepts and what it says when it refuses is what
 //! the author already reads. The host passes `apiVersions: [2]`: a plugin's
 //! `background` is a `.js` or `.mjs` module, which the host runs in its own
 //! engine, and a manifest of any other version is refused.
@@ -24,7 +24,7 @@ use serde::Deserialize;
 use super::engine::{IsolateOptions, base_runtime, evaluate_to_string};
 
 /// The manifest's file name in a plugin folder.
-pub const MANIFEST_FILE: &str = "helm-plugin.json";
+pub const MANIFEST_FILE: &str = "floti-plugin.json";
 
 const VALIDATOR: &str = include_str!("../../../../packages/plugin-sdk/src/manifest.js");
 

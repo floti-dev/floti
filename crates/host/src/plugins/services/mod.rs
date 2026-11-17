@@ -9,11 +9,11 @@
 //! has no Node running.
 //!
 //! Every service is HTTP on loopback. It is told a free port on 127.0.0.1
-//! (`HELM_SERVICE_PORT`), a token minted for this run (`HELM_SERVICE_TOKEN`)
-//! and its plugin's id (`HELM_PLUGIN_ID`), with its declared environment,
+//! (`FLOTI_SERVICE_PORT`), a token minted for this run (`FLOTI_SERVICE_TOKEN`)
+//! and its plugin's id (`FLOTI_PLUGIN_ID`), with its declared environment,
 //! secrets filled as `floti.exec` fills them, over the user's environment
 //! less the host's own variables. A fetch reaches it with the token in
-//! `Helm-Service-Token`. The token is never logged, listed or put in an
+//! `Floti-Service-Token`. The token is never logged, listed or put in an
 //! error, and nothing that holds it prints it in `Debug`.
 //!
 //! What a service prints goes to its plugin's log ([`output`]), with the

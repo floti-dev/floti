@@ -1,9 +1,9 @@
 {
   "name": "@floti-dev/plugin-sdk",
-  "version": "1.6.0",
+  "version": "2.0.0",
   "description": "Types, the manifest schema and helpers for building Floti plugins. The runtime - the window.floti bridge, theme tokens and primitives stylesheet - comes from the running Floti.",
   "keywords": [
-    "helm-plugin",
+    "floti-plugin",
     "claude-code",
     "plugin",
     "sdk"
@@ -26,7 +26,7 @@
     "bin",
     "src",
     "template",
-    "helm-plugin.schema.json",
+    "floti-plugin.schema.json",
     "NOTICE"
   ],
   "types": "./src/types.d.ts",
@@ -60,11 +60,11 @@
       "types": "./src/vue.d.ts",
       "default": "./src/vue.js"
     },
-    "./helm-plugin.schema.json": "./helm-plugin.schema.json",
+    "./floti-plugin.schema.json": "./floti-plugin.schema.json",
     "./package.json": "./package.json"
   },
   "bin": {
-    "helm-plugin": "bin/helm-plugin.mjs"
+    "floti-plugin": "bin/floti-plugin.mjs"
   },
   "publishConfig": {
     "access": "public"

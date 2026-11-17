@@ -106,8 +106,8 @@ describe('PluginsPage', () => {
   })
 
   it('says why the last folder picked was not added', () => {
-    render(<PluginsPage plugins={[]} addError="That folder holds no helm-plugin.json." onAdd={vi.fn()} onOpen={vi.fn()} />)
-    expect(screen.getByText('That folder holds no helm-plugin.json.')).toBeTruthy()
+    render(<PluginsPage plugins={[]} addError="That folder holds no floti-plugin.json." onAdd={vi.fn()} onOpen={vi.fn()} />)
+    expect(screen.getByText('That folder holds no floti-plugin.json.')).toBeTruthy()
   })
 })
 
@@ -404,7 +404,7 @@ describe('PluginPage: its log', () => {
     rerender(<PluginPage {...pageProps({ log: [] })} />)
     expect(group('plugin-log').textContent).toContain('Nothing yet.')
     const log: PluginLogLine[] = [
-      { at: '2026-10-05T16:14:46.000Z', stream: 'helm', text: 'reloaded from Settings' },
+      { at: '2026-10-05T16:14:46.000Z', stream: 'floti', text: 'reloaded from Settings' },
       { at: '2026-10-05T16:14:47.000Z', stream: 'out', text: 'listening on 51384' },
       { at: '2026-10-05T16:14:48.000Z', stream: 'err', text: 'it broke' }
     ]

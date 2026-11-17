@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, WebContents } from 'electron'
-import type { HelmTheme } from '@floti-dev/plugin-sdk'
+import type { FlotiTheme } from '@floti-dev/plugin-sdk'
 import type { PluginHost } from './host'
 
 vi.mock('electron', async () => (await import('../../../test/electron')).electronFake())
@@ -17,7 +17,7 @@ const { createPluginHost } = await import('./host')
 let sent: Array<{ channel: string; payload: unknown }>
 let host: PluginHost
 
-const THEME: HelmTheme = { kind: 'dark', tokens: {} as HelmTheme['tokens'], radius: 3, density: 'comfortable' }
+const THEME: FlotiTheme = { kind: 'dark', tokens: {} as FlotiTheme['tokens'], radius: 3, density: 'comfortable' }
 
 const fakeWindow = {
   isDestroyed: () => false,
@@ -53,7 +53,7 @@ describe('the page that frames plugins', () => {
   })
 
   it('is told about a theme change', () => {
-    const light: HelmTheme = { ...THEME, kind: 'light' }
+    const light: FlotiTheme = { ...THEME, kind: 'light' }
     host.pushTheme(light)
     expect(sent).toEqual([{ channel: 'plugins:theme', payload: light }])
   })

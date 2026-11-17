@@ -1,5 +1,5 @@
 /**
- * Just enough of JSON Schema 2020-12 to run `helm-plugin.schema.json` against
+ * Just enough of JSON Schema 2020-12 to run `floti-plugin.schema.json` against
  * a manifest: the keywords that schema uses, and nothing else. A keyword it
  * does not know fails loudly, so the schema cannot grow a rule this quietly
  * skips.

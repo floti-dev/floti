@@ -14,7 +14,7 @@ import { secret, settings, theme, visible } from './stores.js'
  * no `this` and is the same function every render, so React holds it as it is.
  *
  * @template T
- * @param {import('./stores').HelmStore<T>} store
+ * @param {import('./stores').FlotiStore<T>} store
  * @returns {T}
  */
 function useStore(store) {
@@ -24,11 +24,11 @@ function useStore(store) {
 /**
  * Calls `listener` on every `event`, always the latest `listener` passed.
  *
- * @template {keyof import('./types').HelmEvents} K
+ * @template {keyof import('./types').FlotiEvents} K
  * @param {K} event
- * @param {(data: import('./types').HelmEvents[K]) => void} listener
+ * @param {(data: import('./types').FlotiEvents[K]) => void} listener
  */
-export function useHelmEvent(event, listener) {
+export function useFlotiEvent(event, listener) {
   const latest = useRef(listener)
   useEffect(() => {
     latest.current = listener
@@ -37,12 +37,12 @@ export function useHelmEvent(event, listener) {
 }
 
 /**
- * Helm's theme, re-rendering when it changes. The tokens are on the page as
+ * Floti's theme, re-rendering when it changes. The tokens are on the page as
  * CSS variables already; this is for code that needs the values.
  *
- * @returns {import('./types').HelmTheme}
+ * @returns {import('./types').FlotiTheme}
  */
-export function useHelmTheme() {
+export function useFlotiTheme() {
   return useStore(theme)
 }
 
@@ -52,7 +52,7 @@ export function useHelmTheme() {
  *
  * @returns {boolean}
  */
-export function useHelmVisible() {
+export function useFlotiVisible() {
   return useStore(visible)
 }
 
@@ -61,7 +61,7 @@ export function useHelmVisible() {
  *
  * @returns {Record<string, import('./types').SettingValue> | null}
  */
-export function useHelmSettings() {
+export function useFlotiSettings() {
   return useStore(settings)
 }
 

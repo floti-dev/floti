@@ -29,7 +29,7 @@ const MENU: BrowserLayerMenu = {
     { kind: 'item', id: 'devtools', label: 'Open DevTools' }
   ]
 }
-const LOOK: BrowserLayerLook = { vars: { '--helm-bg': '#101010' }, kind: 'dark', data: { theme: 'night' } }
+const LOOK: BrowserLayerLook = { vars: { '--floti-bg': '#101010' }, kind: 'dark', data: { theme: 'night' } }
 const RECT = { x: 600, y: 80, width: 220, height: 300 }
 
 interface Rig {

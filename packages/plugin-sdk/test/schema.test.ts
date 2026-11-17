@@ -21,22 +21,22 @@ import { MINIMAL, SAMPLE, SDK_DIR, TEMPLATE } from './fixtures'
 import { schemaErrors } from './jsonschema'
 
 /**
- * `helm-plugin.schema.json` is for an editor, and the validator is what Helm
+ * `floti-plugin.schema.json` is for an editor, and the validator is what Floti
  * runs. They must say the same thing, so this holds the one to the other: the
  * same names, enums, patterns and limits, and the same verdict on real
- * manifests - "the schema accepts it" meaning "Helm loads it with nothing to
+ * manifests - "the schema accepts it" meaning "Floti loads it with nothing to
  * warn about".
  */
 
 type Schema = Record<string, unknown>
-const schema = JSON.parse(readFileSync(join(SDK_DIR, 'helm-plugin.schema.json'), 'utf8')) as Schema
+const schema = JSON.parse(readFileSync(join(SDK_DIR, 'floti-plugin.schema.json'), 'utf8')) as Schema
 const properties = schema['properties'] as Record<string, Schema>
 const defs = schema['$defs'] as Record<string, Schema>
 const prop = (name: string): Schema => properties[name] as Schema
 const agentTools = (): Schema => (prop('agent')['properties'] as Record<string, Schema>)['tools'] as Schema
 
-/** Helm loads it, and says nothing about it. */
-const helmAccepts = (manifest: unknown): boolean => {
+/** Floti loads it, and says nothing about it. */
+const flotiAccepts = (manifest: unknown): boolean => {
   const result = validateManifest(manifest)
   return result.ok && result.warnings.length === 0
 }
@@ -101,7 +101,7 @@ describe('the schema names what the validator names', () => {
 
 describe('the schema and the validator agree on manifests', () => {
   const FULL = {
-    $schema: './node_modules/@floti-dev/plugin-sdk/helm-plugin.schema.json',
+    $schema: './node_modules/@floti-dev/plugin-sdk/floti-plugin.schema.json',
     apiVersion: 2,
     id: 'full',
     name: 'Full',
@@ -202,7 +202,7 @@ describe('the schema and the validator agree on manifests', () => {
   ]
 
   it.each(invalid)('both refuse %s', (_what, manifest) => {
-    expect(helmAccepts(manifest)).toBe(false)
+    expect(flotiAccepts(manifest)).toBe(false)
     expect(schemaErrors(schema, manifest)).not.toEqual([])
   })
 
@@ -211,7 +211,7 @@ describe('the schema and the validator agree on manifests', () => {
     ['./dist\\a.HTML', true],
     ['dist//a.html', true],
     ['a.html/', true],
-    ['__helm.html', true],
+    ['__floti.html', true],
     ['a..b.html', true],
     ['..x/a.html', true],
     ['../a.html', false],
@@ -219,14 +219,14 @@ describe('the schema and the validator agree on manifests', () => {
     ['/a.html', false],
     ['\\a.html', false],
     ['C:a.html', false],
-    ['__helm/a.html', false],
-    ['./__helm/a.html', false],
+    ['__floti/a.html', false],
+    ['./__floti/a.html', false],
     [' a.html', false],
     ['a.htm', false],
     ['a.html/x', false]
   ])('both judge the page path %j the same way (%s)', (entry, expected) => {
     const manifest = { ...MINIMAL, tabs: { a: { title: 'A', entry } } }
-    expect(helmAccepts(manifest)).toBe(expected)
+    expect(flotiAccepts(manifest)).toBe(expected)
     expect(schemaErrors(schema, manifest).length === 0).toBe(expected)
   })
 
@@ -241,14 +241,14 @@ describe('the schema and the validator agree on manifests', () => {
     ['ws://api.example.com', false]
   ])('both judge the origin %j the same way (%s)', (origin, expected) => {
     const manifest = { ...MINIMAL, network: [origin] }
-    expect(helmAccepts(manifest)).toBe(expected)
+    expect(flotiAccepts(manifest)).toBe(expected)
     expect(schemaErrors(schema, manifest).length === 0).toBe(expected)
   })
 
   /**
    * What only the validator can say, because it reads one field against
    * another or reads a value the way a URL parser does. The schema accepts
-   * these and Helm does not; `helm-plugin validate` is where an author hears
+   * these and Floti does not; `floti-plugin validate` is where an author hears
    * about them.
    */
   it.each([
@@ -274,7 +274,7 @@ describe('the schema and the validator agree on manifests', () => {
       }
     ]
   ])('leaves %s to the validator', (_what, manifest) => {
-    expect(helmAccepts(manifest)).toBe(false)
+    expect(flotiAccepts(manifest)).toBe(false)
     expect(schemaErrors(schema, manifest)).toEqual([])
   })
 })

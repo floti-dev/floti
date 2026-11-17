@@ -43,13 +43,13 @@ export function installSample(world: World, server: SampleServer, folder = 'samp
   for (const part of ['dist', 'programs', 'service', 'icon.svg']) {
     cpSync(join(source, part), join(dir, part), { recursive: true })
   }
-  const manifest = JSON.parse(readFileSync(join(source, 'helm-plugin.json'), 'utf8')) as {
+  const manifest = JSON.parse(readFileSync(join(source, 'floti-plugin.json'), 'utf8')) as {
     network: string[]
     settings: Array<{ key: string; default?: unknown }>
   }
   manifest.network = [server.url]
   for (const setting of manifest.settings) if (setting.key === 'server') setting.default = server.url
-  writeFileSync(join(dir, 'helm-plugin.json'), JSON.stringify(manifest, null, 2))
+  writeFileSync(join(dir, 'floti-plugin.json'), JSON.stringify(manifest, null, 2))
   if (register) registerPlugin(world, dir)
   return dir
 }
