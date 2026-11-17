@@ -129,7 +129,7 @@ export interface TreeHost {
   name: string
   /** Where the window stands with it, which its header and the top of its group say. */
   phase: TreeHostPhase
-  /** Its floti against this Helm's, which its header says in place of its phase's word; null or absent when there is nothing to say. */
+  /** Its floti against this desktop's, which its header says in place of its phase's word; null or absent when there is nothing to say. */
   floti?: HostFlotiVerdict | null | undefined
   discovery: DiscoveryResult | null
   scanning: boolean
@@ -207,9 +207,9 @@ export interface SessionTreeProps {
    */
   pinnedPaths: readonly string[]
   onTogglePin: (path: string) => void
-  /** Lower-cased project path -> the sessions running there, Helm's and not. */
+  /** Lower-cased project path -> the sessions running there, Floti's and not. */
   sessionsByPath: ReadonlyMap<string, readonly TreeSession[]>
-  /** Helm's sessions whose folder is no project the scan found. */
+  /** Floti's sessions whose folder is no project the scan found. */
   elsewhere: readonly TreeSession[]
   onSelect: (project: Project) => void
   onLaunch: (project: Project) => void
@@ -397,7 +397,7 @@ function ancestorsOf(levels: Iterable<readonly TreeSession[]>, id: string): stri
  * line with a terminal button under the pointer. Pinned projects sit above the workspace
  * groups, as they always have, and a session whose folder is no project the
  * scan found is listed at the bottom rather than not at all - every session
- * Helm hosts has a row somewhere.
+ * Floti hosts has a row somewhere.
  *
  * What is folded is local and absent-means-open, for the reason the workspace
  * groups always were: a project that gains a session after this render should
@@ -687,7 +687,7 @@ function failureSentence(failure: TreeHostFailure): string {
  * A host's header row: a ring dot in its phase's tone, its name - a remote
  * host's in mono, as the machine data it is - and its phase's word at the
  * right ("connecting", "loading", "reconnecting", "unreachable"; nothing once
- * live), or, for a floti that is not this Helm's, what it is
+ * live), or, for a floti that is not this desktop's, what it is
  * (`HostFlotiLabel`). Under the pointer it offers New session, New workspace
  * and Rescan, which its right-click menu offers too.
  */
@@ -776,10 +776,10 @@ function HostHeader({
 }
 
 /**
- * What a host header says about a floti that is not this Helm's, as the
+ * What a host header says about a floti that is not this desktop's, as the
  * Sessions page says it, with both versions in its tooltip. An older floti or
  * one too old is a button that starts its update in Settings > Hosts; a newer
- * one is updated by updating Helm on this PC.
+ * one is updated by updating the desktop on this PC.
  */
 function HostFlotiLabel({
   name,

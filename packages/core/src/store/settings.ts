@@ -121,7 +121,7 @@ const boundedInteger = (bounds: { min: number; max: number }) => {
  * checked at the point it is saved rather than at the point it is painted.
  *
  * A comma is refused too, and that one is about meaning rather than safety:
- * this setting names *one* family, which Helm puts in front of the default
+ * this setting names *one* family, which Floti puts in front of the default
  * stack. A stack typed in here would look like it replaced the default and
  * would not.
  */
@@ -547,7 +547,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
   /**
    * Null means "find one"; anything else is an absolute path, for the same
    * reason `claudePath` is. A bare `pwsh.exe` would be resolved against the
-   * PATH of whatever launched Helm, so the setting would name different
+   * PATH of whatever launched Floti, so the setting would name different
    * programs on different launches.
    */
   terminalShell: (value) => {
@@ -675,7 +675,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
   hosts: (value) => remoteHostsProblem(value),
 
   /**
-   * An instant Helm wrote, checked anyway: a value `Date.parse` cannot read
+   * An instant the desktop wrote, checked anyway: a value `Date.parse` cannot read
    * would make every comparison against it NaN, and NaN fails every `>`.
    */
   profilesCopiedToHostAt: (value) => {
@@ -684,7 +684,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
     return Number.isFinite(Date.parse(value)) ? null : 'must be an ISO 8601 instant'
   },
 
-  /** An instant Helm wrote, checked as `profilesCopiedToHostAt` is. */
+  /** An instant the desktop wrote, checked as `profilesCopiedToHostAt` is. */
   pluginsCopiedToHostAt: (value) => {
     if (value === null) return null
     if (typeof value !== 'string') return 'must be an ISO 8601 string or null'

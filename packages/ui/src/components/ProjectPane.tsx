@@ -44,7 +44,7 @@ export interface ProjectPaneProps {
   /** Why the last launch failed, if it did. */
   launchError?: string | null | undefined
   /**
-   * The live sessions whose working directory is this folder - Helm's own and
+   * The live sessions whose working directory is this folder - Floti's own and
    * everybody else's.
    *
    * Reduced by the window with `liveSessionsIn`, which is `samePath`'s
@@ -70,7 +70,7 @@ export interface ProjectPaneProps {
   /**
    * Takes this folder out of the scan roots. Passed **only for a project whose
    * own path is a root**, which is the whole of what can be removed: a repo
-   * found inside a scanned folder is not something Helm was told about, and
+   * found inside a scanned folder is not something Floti was told about, and
    * offering to remove it would be offering to remove its parent.
    *
    * Absent for every other project, so the panel below is absent too rather
@@ -478,9 +478,9 @@ function AgentWorktreeRow({
  * without reading. A warning that is simply *true* on screen costs nothing to
  * ignore deliberately and cannot be clicked through by habit.
  *
- * **It names them, and it says which ones are not Helm's.** "A session is
+ * **It names them, and it says which ones are not Floti's.** "A session is
  * running here" is not actionable; "cart work is running here, and one session
- * outside Helm" tells somebody whether the thing in the way is a tab they can
+ * outside Floti" tells somebody whether the thing in the way is a tab they can
  * look at or a terminal they have to go and find. The second half is the whole
  * reason the listing behind it is machine-wide.
  *
@@ -557,7 +557,7 @@ function Panel({
 }
 
 /**
- * The panel for a folder that is one of Helm's scan roots, and its way out.
+ * The panel for a folder that is one of Floti's scan roots, and its way out.
  *
  * The bug this answers was two bugs in one report: adding a folder listed its
  * subdirectories instead of itself, and *nothing anywhere could undo the add*.
@@ -596,7 +596,7 @@ function ScannedFolder({
             // A secondary button that finds the danger tone under the pointer,
             // rather than a Danger button (DESIGN.md 4) resting in it. The tone
             // is a warning about what the click does, and what this one does is
-            // reversible in two clicks and touches nothing outside Helm - a
+            // reversible in two clicks and touches nothing outside Floti - a
             // control that shouts at rest would be overstating its own stakes.
             'flex shrink-0 items-center gap-2 rounded-well border border-border-strong px-3 py-1.5',
             'text-[12px] text-fg transition-colors',

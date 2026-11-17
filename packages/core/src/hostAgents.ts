@@ -38,7 +38,7 @@ export interface AgentFix {
   login: string
 }
 
-/** Each backend Helm knows, by its id (`CLAUDE_CODE_BACKEND` in the desktop). */
+/** Each backend Floti knows, by its id (`CLAUDE_CODE_BACKEND` in the desktop). */
 export const AGENT_FIXES: Readonly<Record<string, AgentFix>> = {
   'claude-code': {
     name: 'Claude Code',

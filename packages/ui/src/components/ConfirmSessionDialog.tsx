@@ -16,7 +16,7 @@ export interface ConfirmChild {
 
 export interface ConfirmSessionDialogProps {
   /**
-   * Ending one tab's session, ending sessions because Helm is quitting, or
+   * Ending one tab's session, ending sessions because Floti is quitting, or
    * stopping this PC's host, which ends every session in it.
    */
   kind: 'close-session' | 'quit' | 'stop-host' | 'restart-host'
@@ -132,7 +132,7 @@ const LIST_LIMIT = 6
  *
  * This was `dialog.showMessageBox` until it wasn't. A native message box is a
  * Win32 window: system typeface, system ground, a blue circled "i", and no
- * amount of configuration makes it a Helm island. It also said less than it
+ * amount of configuration makes it a Floti island. It also said less than it
  * could - it named one session and never the others a quit was about to end.
  *
  * Cancel is the default. The destructive button has to be chosen deliberately,

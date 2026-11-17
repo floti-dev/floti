@@ -26,7 +26,7 @@ export interface RestorePaneProps {
   preselected?: readonly number[]
   /**
    * The host the sessions went with, as the window names it ("this PC’s
-   * host"), when they ran in one; absent when they went with Helm.
+   * host"), when they ran in one; absent when they went with the desktop.
    */
   lostWith?: string
 }
@@ -74,7 +74,7 @@ function lastSaid(at: number, now: number): string {
 }
 
 /**
- * What a crash took, offered back: every session Helm, or the host they ran
+ * What a crash took, offered back: every session the desktop, or the host they ran
  * in, was running when it stopped, ticked, and the one button that reopens
  * them where they were.
  *
@@ -84,7 +84,7 @@ function lastSaid(at: number, now: number): string {
  * button.
  *
  * A session that cannot come back is listed anyway, unticked and greyed with
- * the reason - one quietly missing from the list would read as Helm having
+ * the reason - one quietly missing from the list would read as the desktop having
  * forgotten it.
  */
 export function RestorePane({
@@ -226,14 +226,14 @@ export interface RestoreUnreadPaneProps {
   retrying: boolean
   onTryAgain: () => void
   onNotNow: () => void
-  /** As `RestorePaneProps.lostWith`: the host the sessions went with, absent when they went with Helm. */
+  /** As `RestorePaneProps.lostWith`: the host the sessions went with, absent when they went with the desktop. */
   lostWith?: string
 }
 
 /**
  * The restore page when what was running could not be read. Could not look
  * is never said as nothing to restore: after a crash, an offer that silently
- * vanished would read as Helm having forgotten every session.
+ * vanished would read as the desktop having forgotten every session.
  */
 export function RestoreUnreadPane({
   message,

@@ -1042,7 +1042,7 @@ fn files_under(folder: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     found
 }
 
-/// Connects a new client folder through `transport` the way Helm does,
+/// Connects a new client folder through `transport` the way the desktop does,
 /// learning the host's key the first time, then connects again with the key
 /// pinned, and returns the folder.
 async fn connect_twice_as_the_desktop_does(

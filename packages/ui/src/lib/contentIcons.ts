@@ -11,7 +11,7 @@ import { ArtifactIcon, CommandIcon, DocIcon, SlidersIcon } from '../components/i
  * `source` is the chevron, because a script is a thing that runs rather than a
  * thing that is read - it is the one kind the pane gained in this split and the
  * one most worth telling apart at a glance. `text` and `binary` share the page:
- * a page is the honest glyph for "a file, and Helm has nothing more to say
+ * a page is the honest glyph for "a file, and Floti has nothing more to say
  * about it", and a binary is already told apart by being greyed and by wearing
  * its extension.
  *

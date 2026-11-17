@@ -26,7 +26,7 @@ import { CheckIcon, CodeIcon, CopyIcon, DocIcon, FolderIcon, WarnIcon, WrapIcon 
 export interface FileViewProps {
   /** The file as last read, or null while the first read is in flight. */
   view: FileViewData | null
-  /** The read itself failed - the folder is not one Helm knows, or main threw. */
+  /** The read itself failed - the folder is not one Floti knows, or main threw. */
   error: string | null
   wrap: boolean
   onWrapChange: (wrap: boolean) => void

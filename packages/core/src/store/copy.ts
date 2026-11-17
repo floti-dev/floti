@@ -4,7 +4,7 @@ import { decodeBody } from './archive'
 import type { Store } from './db'
 
 /**
- * Read-only pages over what only Helm's own database holds, for copying it into
+ * Read-only pages over what only the desktop's own database holds, for copying it into
  * a local host's database.
  *
  * The host rebuilds most of `desktop.db` from Claude Code's tree on its own: the

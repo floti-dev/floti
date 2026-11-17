@@ -131,7 +131,7 @@ pub const CONFIG_DIR_VAR: &str = "FLOTI_CONFIG_DIR";
 pub const RUNTIME_DIR_VAR: &str = "FLOTI_RUNTIME_DIR";
 
 /// Set (to anything) by a client that starts a host whose config folder may
-/// be another host's to write, such as a development or check run of Helm
+/// be another host's to write, such as a development or check run of the desktop
 /// beside the installed one: that host reads its config folder and writes
 /// nothing in it.
 pub const CONFIG_READ_ONLY_VAR: &str = "FLOTI_CONFIG_READ_ONLY";

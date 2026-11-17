@@ -1089,7 +1089,7 @@ async fn s15_a_host_a_desktop_started_keeps_running_while_a_session_runs_and_exi
     drop(first);
 
     // Its client left with a session running: the host stays, and the next
-    // client finds the session there, as Helm's next start does.
+    // client finds the session there, as the desktop's next start does.
     let mut later = TestClient::connect(&endpoint, TERMINAL).await;
     assert_eq!(
         later

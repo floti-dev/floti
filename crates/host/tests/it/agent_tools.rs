@@ -1419,14 +1419,14 @@ fn profile(world: &World, name: &str, root: &Path, overlay: &Path) -> u64 {
 // floti-browser: carried to the attached window with a browser pane
 // ---------------------------------------------------------------------------
 
-/// What Helm's window declares: a terminal and a browser pane.
+/// What the desktop's window declares: a terminal and a browser pane.
 const BROWSER: &[&str] = &["terminal", "browser"];
 
 /// The subscription a browser client hears calls on.
 const CALLS: u64 = 40;
 
 impl World {
-    /// A client with a browser pane listening for browser tool calls: Helm's
+    /// A client with a browser pane listening for browser tool calls: the desktop's
     /// window, as far as the host can tell.
     async fn browser_client(&self) -> TestClient {
         let mut client = TestClient::connect(&self.endpoint, BROWSER).await;

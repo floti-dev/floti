@@ -45,23 +45,23 @@ import { Action, Divider, Group, Select } from './SettingsKit'
  * (`connection`); null while it has said nothing.
  *
  * A host whose floti is too old or missing offers to update or install it,
- * and so does a connected one whose floti is older than this Helm's (naming
+ * and so does a connected one whose floti is older than this desktop's (naming
  * both versions). Where the floti there has `floti update`, Update floti
  * runs it at once, over the host's connection or its login, and shows it
  * running: the floti it replaces, the version it installs where that is
  * known and any sessions it ends go on its first line, and it ends no
  * session its session keeper hands to the new host. An install (floti
- * missing, too old for `floti update`, or Update from this Helm's floti)
+ * missing, too old for `floti update`, or Update from this desktop's floti)
  * says first what it does and where, and how many sessions it ends, and is
  * done only after the user's yes. A link that cannot connect says why the way the dialog does
  * (`classifyHostFailure`), with the last line written there, unedited.
  *
- * Above them, while this PC's host and this Helm are on different floti
+ * Above them, while this PC's host and this desktop are on different floti
  * versions, a notice says which is behind, naming both. An older host, one on
  * protocol 1.x included, is offered Restart host to update, which says what
  * it ends before anything happens; for a 1.x host it says every session and
- * terminal keeps running in its tab. A Helm behind its host is told to update
- * Helm. Nothing is restarted without the user's click.
+ * terminal keeps running in its tab. A desktop behind its host is told to update
+ * the desktop. Nothing is restarted without the user's click.
  */
 
 /** What Settings > Hosts asks the desktop to check, install and cancel on a host's computer. */
@@ -78,7 +78,7 @@ export interface HostInstallActions {
 /** One remote host as Settings > Hosts draws it. */
 export interface SettingsHost {
   host: RemoteHost
-  /** What quitting Helm does to the sessions it started there (`quitChoice`). */
+  /** What quitting the desktop does to the sessions it started there (`quitChoice`). */
   quit: QuitSessions
   /** Where this device's link to it stands, or null while nothing has been heard. */
   connection: RemoteHostConnection | null
@@ -98,7 +98,7 @@ export interface HostsSettingsProps {
   updateRequest?: { id: string; nonce: number } | null | undefined
   /** Reconnect now on a host that is not connected: its link tries at once rather than after the wait. */
   onReconnect?: ((id: string) => void) | undefined
-  /** This PC's host, while it and this Helm are on different versions; null or absent otherwise. */
+  /** This PC's host, while it and this desktop are on different versions; null or absent otherwise. */
   localHost?: { versions: LocalHostVersions; onRestart: () => void } | null | undefined
 }
 
@@ -113,7 +113,7 @@ const CONNECTION_CHIP: Record<RemoteHostConnection['state'], { tone: ChipTone; l
   startsAtSignIn: { tone: 'neutral', label: 'Starts at next sign-in' }
 }
 
-/** A connected host whose floti is older than this Helm's. */
+/** A connected host whose floti is older than this desktop's. */
 const OLDER_CHIP: { tone: ChipTone; label: string } = { tone: 'warn', label: 'Older floti' }
 
 export function HostsSettings({
@@ -283,7 +283,7 @@ function HostRow({
   )
 }
 
-/** This PC's host and this Helm on different versions: which is behind, and what to do. */
+/** This PC's host and this desktop on different versions: which is behind, and what to do. */
 function LocalHostNotice({
   versions,
   onRestart
@@ -400,7 +400,7 @@ function failureOf(host: RemoteHost, lastLine: string): ReturnType<typeof classi
 
 /**
  * The line to try by hand in a terminal, where ssh or the command can ask for
- * what it needs: Helm never answers it, and changes nothing of ssh's setup.
+ * what it needs: the desktop never answers it, and changes nothing of ssh's setup.
  */
 function TryByHand({ host }: { host: RemoteHost }): JSX.Element {
   return (
@@ -422,7 +422,7 @@ type FlowStage =
   | { step: 'offer'; id: string; host: string; offer: InstallOffer }
   | { step: 'working'; id: string; offer: InstallOffer; line: string | null }
   | { step: 'problem'; title: string; line: string | null; fix: string }
-  /** A `floti update` that ended without Helm seeing floti replaced; `install` offers an install instead. */
+  /** A `floti update` that ended without the desktop seeing floti replaced; `install` offers an install instead. */
   | { step: 'notice'; title: string; line: string | null; fix: string; install: boolean }
 
 interface InstallFlow {

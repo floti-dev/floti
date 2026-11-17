@@ -1,7 +1,7 @@
 /**
  * The keyboard's one platform question, answered in the window.
  *
- * Helm's own shortcuts are Ctrl chords on Windows and Linux and Cmd chords on
+ * Floti's own shortcuts are Ctrl chords on Windows and Linux and Cmd chords on
  * macOS, where Cmd is what every app uses and Ctrl belongs to the terminal's
  * program. Everything in the window that binds a shortcut or names one asks
  * here, so a chord and the hint that names it cannot disagree.
@@ -40,9 +40,9 @@ export interface ModifierState {
 }
 
 /**
- * Whether a press holds Helm's shortcut modifier and not the other one: Cmd
+ * Whether a press holds Floti's shortcut modifier and not the other one: Cmd
  * without Ctrl on macOS, Ctrl without Cmd (the Windows key) elsewhere. On a
- * Mac a Ctrl chord is never Helm's, so Ctrl+letter in a terminal reaches the
+ * Mac a Ctrl chord is never Floti's, so Ctrl+letter in a terminal reaches the
  * program.
  */
 export function hasPrimaryModifier(event: ModifierState, mac: boolean = isMac()): boolean {
@@ -62,7 +62,7 @@ export interface ShortcutLabelOptions {
 }
 
 /**
- * A shortcut's name as Helm shows it: `⇧⌘F` on macOS, in Apple's modifier
+ * A shortcut's name as Floti shows it: `⇧⌘F` on macOS, in Apple's modifier
  * order (Option, Shift, Command), and `Ctrl+Shift+F` elsewhere.
  */
 export function shortcutLabel(key: string, options: ShortcutLabelOptions = {}): string {

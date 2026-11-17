@@ -4,8 +4,8 @@ import { CopyIcon, GlobeIcon } from './icons'
 
 export interface BrowserOffProps {
   /**
-   * The one command that gives this Helm Chromium's sandbox, or null when
-   * Helm could not write one for this computer.
+   * The one command that gives this desktop Chromium's sandbox, or null when
+   * Floti could not write one for this computer.
    */
   command: string | null
   /** Puts the command on the clipboard; true once it is there. */
@@ -18,7 +18,7 @@ const BUTTON =
   'flex h-7 items-center gap-1.5 rounded-well border border-border-strong px-2.5 text-[12px] text-fg transition-colors hover:bg-hover'
 
 /**
- * What the Browser tab shows instead of a page when Helm runs without
+ * What the Browser tab shows instead of a page when Floti runs without
  * Chromium's sandbox (DESIGN.md 5, "Empty states"): the pane's icon, what is
  * off, one sentence on why, and the way on - the command that turns the
  * sandbox on, in mono because it is machine text, with a button to copy it.

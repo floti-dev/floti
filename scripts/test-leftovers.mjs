@@ -134,7 +134,7 @@ export function processName(raw) {
  *   folder or the checkout, as `places` names them);
  * - reaching any other ancestor of the check that was there before means that
  *   ancestor started it beside the check (vitest's other workers around the
- *   check's own test, Helm's other sessions around a check run in one of its
+ *   check's own test, Floti's other sessions around a check run in one of its
  *   terminals), and it is not reported: what the step started descends from
  *   the check, or was orphaned and adopted by a reaper.
  *

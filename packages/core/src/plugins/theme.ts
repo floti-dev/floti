@@ -5,7 +5,7 @@ import { THEME_TOKENS, type AppliedTheme, type PaletteHue, type ThemeToken } fro
 /**
  * The SDK's names for the theme's colours and palette are the ones core
  * paints, no more and no fewer: a plugin author reads `ThemeTokenName`, and a
- * name there Helm never writes would be a variable that is always unset.
+ * name there Floti never writes would be a variable that is always unset.
  */
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
 const sdkNamesTheTokens: Same<ThemeToken, ThemeTokenName> = true

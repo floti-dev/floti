@@ -34,26 +34,26 @@ import {
 import { PAGE_BAR, PAGE_LIST_BESIDE } from "../lib/page";
 
 /**
- * Every live Claude Code session on this machine, and what Helm's own are
+ * Every live Claude Code session on this machine, and what Floti's own are
  * holding.
  *
  * ## The scope split, which falls out rather than being imposed
  *
  * **Listing is machine-wide.** A `claude` started in Windows Terminal registers
- * beside anything Helm hosts, and it collides with a working tree exactly as
+ * beside anything Floti hosts, and it collides with a working tree exactly as
  * hard as a tab does. Leaving it out would make this pane answer the one
  * question it exists for - "is anybody else in this repository" - wrongly, and
  * quietly. Same rule `browser_tabs` established from the other side: listing is
  * not driving.
  *
- * **Detail is Helm's own.** Branch, argv, the process tree, the ports: Helm has
+ * **Detail is Floti's own.** Branch, argv, the process tree, the ports: Floti has
  * none of that for a session it did not spawn, so the degradation needs no
  * special case. A foreign row carries what the registry recorded and says so;
  * there is nothing to hide because there is nothing to know.
  *
- * ## Why a process tree belongs in Helm at all
+ * ## Why a process tree belongs in Floti at all
  *
- * Because Helm spawned the pty, so the tree under it is **Helm's own process
+ * Because Floti spawned the pty, so the tree under it is **Floti's own process
  * tree** - not a reading of anybody's conversation. Nothing here parses session
  * output. What it buys is the answer metadata cannot give: that a session has a
  * container up and a dev server on 5173, which is what stops the next agent
@@ -66,7 +66,7 @@ import { PAGE_BAR, PAGE_LIST_BESIDE } from "../lib/page";
  * line. A pass that failed says **unknown**; a pass that succeeded over a
  * childless session says so in those words. The alternative - an empty list for
  * both - would tell somebody a session is holding nothing at exactly the moment
- * Helm had failed to ask.
+ * Floti had failed to ask.
  *
  * A pass is also a **sample** and says so on screen. Long-lived children are
  * the point here; a `rg` that started and finished between two passes was never
@@ -82,7 +82,7 @@ export interface SessionsPaneProps {
   /** When main last read the registry, epoch ms. Null before the first answer. */
   readAtMs: number | null;
   /**
-   * Helm's own rows, by session id - the detail half for a hosted session.
+   * Floti's own rows, by session id - the detail half for a hosted session.
    *
    * Passed in rather than duplicated onto `LiveSession`: this is the same row
    * the tab strip is drawn from, and a second copy of a session's argv would be
@@ -142,10 +142,10 @@ export interface SessionsPaneHost {
   sessions: readonly SessionsPaneRemoteSession[];
   /**
    * Its floti refused this device's hello (P6): too old, which Update floti
-   * fixes there, or newer, which updating Helm on this PC fixes. `host` is the
-   * protocol its floti speaks and `client` this Helm's. `older` is a
-   * connected host whose floti is older than this Helm's, which Update floti
-   * fixes too: `host` is its floti version and `client` this Helm's.
+   * fixes there, or newer, which updating the desktop on this PC fixes. `host` is the
+   * protocol its floti speaks and `client` this desktop's. `older` is a
+   * connected host whose floti is older than this desktop's, which Update floti
+   * fixes too: `host` is its floti version and `client` this desktop's.
    */
   floti?: HostFlotiVerdict | null | undefined;
   /** Starts the yes-first update of its floti, in Settings > Hosts. */
@@ -300,7 +300,7 @@ export function SessionsPane({
    * The same collision the launch warning is about, seen from the list rather
    * than from the launch button. Counted over every session whoever started it,
    * because two sessions in one working tree is the same problem whether or not
-   * Helm started both.
+   * Floti started both.
    */
   const crowded = new Set<string>();
   const seenDirs = new Set<string>();
@@ -1454,7 +1454,7 @@ function Group({
   );
 }
 
-/** Helm has nothing to say here, and says that rather than painting a zero. */
+/** Floti has nothing to say here, and says that rather than painting a zero. */
 function Unknown({ children }: { children: ReactNode }): JSX.Element {
   return <span className="text-[11px] text-fg-subtle italic">{children}</span>;
 }

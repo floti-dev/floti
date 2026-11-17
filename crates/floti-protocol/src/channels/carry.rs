@@ -1,6 +1,6 @@
 //! A client's own data, carried into the host once: `carry:*`.
 //!
-//! Helm kept some things in its own database before the host ran its
+//! The desktop kept some things in its own database before the host ran its
 //! sessions, and the host cannot rebuild them from the agent's files:
 //! conversations it archived whose transcripts the agent has since deleted,
 //! their usage, and the names given to sessions in History. The client reads

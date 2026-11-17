@@ -94,7 +94,7 @@ const tabId = (id: number): string => `page:${String(id)}`
  * The Browser tab's own strip of pages.
  *
  * The pane's `TabBar`, so a page tab looks, closes, middle-clicks and
- * reorders exactly like every other tab in Helm - and a strip of its own,
+ * reorders exactly like every other tab in Floti - and a strip of its own,
  * inside the Browser tab, so pages never sit among the sessions. That was the
  * complaint: a sign-in that opened four pages left four tabs between the
  * sessions somebody was working in.

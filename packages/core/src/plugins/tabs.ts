@@ -115,7 +115,7 @@ export function pluginPagesId(plugin: string): string {
 
 /**
  * A plugin's place on the rail, as `railHidden` and `data-rail` name it.
- * Prefixed so a plugin can never take the id of one of Helm's own destinations.
+ * Prefixed so a plugin can never take the id of one of Floti's own destinations.
  */
 export type PluginRailId = `plugin:${string}`
 

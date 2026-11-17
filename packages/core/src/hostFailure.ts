@@ -12,7 +12,7 @@
  * is not on this PC, or that the login printed text before floti's own line.
  * A line it does not know falls back to `transportFix`.
  *
- * Every fix points at the user's own setup and never changes it: Helm runs
+ * Every fix points at the user's own setup and never changes it: Floti runs
  * ssh in batch mode, answers no prompt, accepts no host key and edits no ssh
  * config. Where the fix names the line to run by hand, it is the transport as
  * the user gave it (`ssh build-box`).
@@ -35,9 +35,9 @@ export type HostFailureCause =
   | { kind: 'loginOutput' }
   /** The host proved another key than the one this device pinned for it. */
   | { kind: 'keyChanged' }
-  /** Its floti is newer than this Helm: by version from the check, or by protocol from a refused hello. */
+  /** Its floti is newer than this desktop: by version from the check, or by protocol from a refused hello. */
   | { kind: 'newer'; host: string; ours: string; by: 'version' | 'protocol' }
-  /** Its floti is too old for this Helm, by protocol. */
+  /** Its floti is too old for this desktop, by protocol. */
   | { kind: 'tooOld'; host: string; ours: string }
   /** There is no floti build for that computer; `system` is its OS and CPU, as it said them. */
   | { kind: 'noBuild'; system: string }
@@ -53,7 +53,7 @@ export type HostFailureCause =
     }
 
 export interface HostFailureInput {
-  /** The host's name in Helm. */
+  /** The host's name in Floti. */
   name: string
   transport: HostTransport
   /** The last line written, shown unedited. */

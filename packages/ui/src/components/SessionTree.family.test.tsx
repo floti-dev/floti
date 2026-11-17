@@ -94,7 +94,7 @@ const indentOf = (id: number): number => Number.parseFloat(rowOf(id).style.paddi
 const guides = (id: number): string[] =>
   [...rowOf(id).querySelectorAll('[data-session-guide]')].map((each) => each.getAttribute('data-session-guide') ?? '')
 
-/** api-refactor in helm, with a reviewer and two workers it started in other folders. */
+/** api-refactor in floti, with a reviewer and two workers it started in other folders. */
 const family = (): ReadonlyMap<string, readonly TreeSession[]> =>
   new Map([
     [

@@ -12,7 +12,7 @@ import {
 
 /**
  * `profiles` and `config_snapshots` are not read by any surface yet - they exist
- * so that profiles and the versions an earlier Helm took start from a
+ * so that profiles and the versions taken later start from a
  * migrated schema rather than a schema change on a database that already holds
  * a user's data.
  */
@@ -97,7 +97,7 @@ export const projects = sqliteTable(
 )
 
 /**
- * A copy of a config file taken immediately before Helm overwrites it.
+ * A copy of a config file taken immediately before Floti overwrites it.
  * Content is stored inline: `.claude` files are small, and a snapshot that
  * depends on the file still being on disk is not a snapshot.
  */
@@ -121,7 +121,7 @@ export const configSnapshots = sqliteTable(
 )
 
 /**
- * Every hosted `claude` process Helm has spawned, with how it ended.
+ * Every hosted `claude` process Floti has spawned, with how it ended.
  *
  * Written on spawn rather than on exit: a row that exists only once a process
  * has terminated cannot answer "what is running right now", and it loses the
@@ -135,7 +135,7 @@ export const sessions = sqliteTable(
     /** Passed to the CLI as `-n`; what `/resume` shows later. */
     name: text('name').notNull(),
     /**
-     * What Helm calls this session on screen. Null means "no label, use `name`".
+     * What Floti calls this session on screen. Null means "no label, use `name`".
      *
      * A SECOND COLUMN, AND THE DIVERGENCE IS THE POINT. `name` was handed to a
      * process that is already running - it is in that session's argv, it is what
@@ -145,12 +145,12 @@ export const sessions = sqliteTable(
      *
      * The consequence is deliberate and one-directional: a session the user
      * renamed to "PR review" is still `dev 2` in `/resume`. That is the honest
-     * shape. Helm's tab is Helm's own label for a conversation, `/resume`'s row
+     * shape. Floti's tab is Floti's own label for a conversation, `/resume`'s row
      * is Claude Code's, and the alternative - passing a rename back to the CLI -
      * is not available for a process that was spawned an hour ago, so the only
      * way to keep the two identical would be to refuse to rename at all.
      *
-     * Nothing derives this from what the session printed (CLAUDE.md "Helm
+     * Nothing derives this from what the session printed (CLAUDE.md "Floti
      * renders nothing for a live session"): it is null until a person types
      * something into the tab.
      */
@@ -185,7 +185,7 @@ export const sessions = sqliteTable(
     /** JSON array of the argv after the executable. */
     argv: text('argv', { mode: 'json' }).$type<string[]>().notNull().default([]),
     /**
-     * The Claude Code conversation id, **assigned by Helm at launch** through
+     * The Claude Code conversation id, **assigned by Floti at launch** through
      * `--session-id` rather than discovered afterwards.
      *
      * A column rather than something derived from `argv`, which already carries
@@ -519,7 +519,7 @@ export const notices = sqliteTable(
 /**
  * Every prompt `~/.claude/history.jsonl` has ever recorded, on any project.
  *
- * A mirror of a file Helm does not own, kept in SQLite so it can be searched
+ * A mirror of a file Floti does not own, kept in SQLite so it can be searched
  * and grouped rather than re-parsed per keystroke. `seq` is submission order,
  * assigned by the indexer as lines arrive - the file has no id of its own, and
  * the timestamp is not unique enough to order by on its own.
@@ -684,7 +684,7 @@ export const usageIndex = sqliteTable('usage_index', {
  * (744 sessions recorded, 68 transcripts surviving, 2026-08-08).
  *
  * `state` is what makes "we had this and dropped it to stay under your limit" a
- * different sentence from "this was reaped before Helm ever saw it". An evicted
+ * different sentence from "this was reaped before Floti ever saw it". An evicted
  * row keeps every figure it had - the message count, the bytes, when it was
  * captured - and loses only its messages, so the surface can say which happened
  * and the archive cannot re-capture what the ceiling just threw away.
@@ -808,7 +808,7 @@ export const appSettings = sqliteTable('app_settings', {
 })
 
 /**
- * The plugin folders Helm loads, registered by path (Settings > Plugins).
+ * The plugin folders Floti loads, registered by path (Settings > Plugins).
  *
  * Only the folder and its switches. Everything a plugin *is* - its id, its
  * surfaces, what it may reach - is read from its `floti-plugin.json` at every
@@ -816,7 +816,7 @@ export const appSettings = sqliteTable('app_settings', {
  * a stale copy of its own manifest. The path is the key because it is what the
  * user chose; the id belongs to the folder's contents and can change under it.
  *
- * `toolsEnabled` is whether the sessions Helm starts are offered the tools the
+ * `toolsEnabled` is whether the sessions Floti starts are offered the tools the
  * manifest declares. On by default: adding a plugin that declares them is
  * asking for them, and Settings is where they are turned off.
  */
@@ -847,7 +847,7 @@ export const pluginSettings = sqliteTable(
 
 /**
  * Secrets the user stored for plugins (Settings > Secrets), Postman-style:
- * a key a plugin references as `{{key}}`, and the value Helm puts there.
+ * a key a plugin references as `{{key}}`, and the value Floti puts there.
  *
  * `value` is ciphertext from Electron's `safeStorage` - DPAPI, bound to the
  * Windows user - and nothing else is ever written to it: when encryption is

@@ -8,7 +8,7 @@ import { cn } from "../lib/cn";
 
 export interface StatusBarProps {
   /**
-   * Helm's own live sessions, by what they are doing. `error` counts those
+   * Floti's own live sessions, by what they are doing. `error` counts those
    * whose program reports an error. `idle` counts every other session that is
    * alive and not working or waiting - one that has handed back with a
    * background task still running, and one that has not said anything yet, as
@@ -44,7 +44,7 @@ export interface StatusBarProps {
   /** Each plugin's item, in the order the plugins were added. Pressing one opens its panel. */
   plugins?: readonly StatusPluginItem[] | undefined;
   /**
-   * The hosts sessions run in and what quitting Helm does on each, this PC
+   * The hosts sessions run in and what quitting the desktop does on each, this PC
    * first. Pressing one opens the setting that decides.
    */
   hosts?: readonly StatusHostItem[] | undefined;
@@ -55,7 +55,7 @@ export interface StatusHostItem {
   id: string;
   /** What the bar calls the host: "This PC" for this PC's own. */
   name: string;
-  /** Whether quitting Helm ends the sessions it started there. */
+  /** Whether quitting the desktop ends the sessions it started there. */
   quitEnds: boolean;
   /** The link to the host ended and is trying again by itself. Nothing there ended. */
   retrying?: boolean | undefined;
@@ -72,7 +72,7 @@ export interface StatusHostItem {
    */
   roundTripMs?: number | null | undefined;
   /**
-   * This PC's host only: which of it and this Helm is behind, said in warning
+   * This PC's host only: which of it and this desktop is behind, said in warning
    * tone; pressing it opens Settings > Hosts, which says what to do. A host
    * that cannot be used says so in the window's notice, with its action.
    */

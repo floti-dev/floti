@@ -130,7 +130,7 @@ export interface ThemesSeedResult {
 
 /**
  * Creates the directory and its README, only when the directory is absent -
- * the rule the templates folder is seeded by, for the same reason: Helm
+ * the rule the templates folder is seeded by, for the same reason: Floti
  * keeps no
  * record of what it wrote, so it cannot tell an edited file from an untouched
  * one, and the only safe time to write is when there is nothing there.
@@ -152,7 +152,7 @@ export function seedThemesDir(dir: string): ThemesSeedResult {
 /**
  * Writes `theme` as a new file in `dir` and returns its path: `<id>-copy.json`,
  * or `-copy-2` and on while that is taken. `wx`, so an existing file is never
- * overwritten even by a race with another Helm.
+ * overwritten even by a race with another desktop.
  */
 export function writeThemeCopy(dir: string, theme: ThemeDefinition): string {
   mkdirSync(dir, { recursive: true })

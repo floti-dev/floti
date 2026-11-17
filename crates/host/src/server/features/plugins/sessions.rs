@@ -52,7 +52,7 @@ struct Known {
     since: Option<u64>,
 }
 
-/// 128 random bits as 32 lowercase hex digits, the shape Helm's own plugin
+/// 128 random bits as 32 lowercase hex digits, the shape the desktop's own plugin
 /// host gives a session's id.
 fn minted_id() -> String {
     let mut bytes = [0u8; 16];

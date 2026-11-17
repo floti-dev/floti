@@ -50,7 +50,7 @@ pub enum DesktopChoice {
 /// What setup says to an answer that is neither yes nor no.
 pub const ANSWER_AGAIN_LINE: &str = "Answer y or n.";
 
-/// The question, about `app` (`the Helm desktop app`).
+/// The question, about `app` (`the Floti desktop app`).
 pub fn question(app: &str) -> String {
     format!("Install {app} as well? [Y/n] ")
 }
@@ -94,7 +94,7 @@ pub struct Situation {
     pub not_offered: Option<String>,
     /// Whether setup can ask ([`can_ask`]).
     pub terminal: bool,
-    /// What the question calls the app: `the Helm desktop app`.
+    /// What the question calls the app: `the Floti desktop app`.
     pub app: String,
 }
 

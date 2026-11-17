@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /**
- * Every backend with a fake in this folder that Helm can be pointed at: the
+ * Every backend with a fake in this folder that Floti can be pointed at: the
  * program name an install gives it and the script that stands in for it.
  */
 export const FAKE_AGENTS = Object.freeze({

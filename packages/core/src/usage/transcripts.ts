@@ -1,5 +1,5 @@
 /**
- * The shape of token usage, as an earlier Helm read it out of Claude Code's
+ * The shape of token usage, as it was read out of Claude Code's
  * transcripts into `desktop.db` (`store/usage.ts`). `desktop.db` keeps what was
  * indexed, which the copy into the host carries (`store/copy.ts`).
  */

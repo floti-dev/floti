@@ -255,7 +255,7 @@ export interface SessionRecord {
    * `/resume` later (SPEC 4.1, and the session index reads these rows). Never
    * rewritten - a rename writes `label`. See the column comment in `schema.ts`. */
   name: string
-  /** What Helm calls it on screen, or null for "use `name`". `sessionLabel`. */
+  /** What Floti calls it on screen, or null for "use `name`". `sessionLabel`. */
   label: string | null
   /**
    * What the session is doing, in its agent's words (`session_title`): one
@@ -277,7 +277,7 @@ export interface SessionRecord {
   /**
    * The Claude Code conversation id this session is having, or null.
    *
-   * **Assigned, not discovered.** Helm mints a uuid and hands it over in argv
+   * **Assigned, not discovered.** Floti mints a uuid and hands it over in argv
    * (`--session-id`), so the row and the conversation agree from the first
    * instant rather than from whenever something managed to read one out of the
    * other. A resumed session carries the id it resumed, because that is the
@@ -399,8 +399,8 @@ export interface ChildReport {
 /**
  * What a live Claude Code session says it is doing.
  *
- * These four are the CLI's own vocabulary, not Helm's: they are the enum its
- * registry validator accepts, and Helm neither adds to it nor collapses it.
+ * These four are the CLI's own vocabulary, not Floti's: they are the enum its
+ * registry validator accepts, and Floti neither adds to it nor collapses it.
  * Confirmed against **2.1.238** by driving a real session through every one of
  * them and keeping the records - see `packages/core/src/registry/registry.ts`
  * for what each one was provoked with.
@@ -429,7 +429,7 @@ export interface SessionRegistryEntry {
   file: string
   /**
    * The pid Claude Code registered under - **its own**, which is not always the
-   * one Helm holds. Through a `.cmd` shim the pty is `cmd.exe` and `claude.exe`
+   * one Floti holds. Through a `.cmd` shim the pty is `cmd.exe` and `claude.exe`
    * is its child, so the two differ; measured, pty 23496 against registry 4068.
    */
   pid: number
@@ -457,7 +457,7 @@ export interface SessionRegistryEntry {
    * one this build does not recognise**.
    *
    * Those two are deliberately the same value here and are told apart by
-   * `rawStatus`: both mean "Helm has nothing to say", which is the only honest
+   * `rawStatus`: both mean "Floti has nothing to say", which is the only honest
    * answer to a status it cannot interpret. A CLI that renames one of the four
    * therefore degrades to painting what the tab painted before this existed,
    * never to a guess.
@@ -487,7 +487,7 @@ export interface SessionRegistryEntry {
 }
 
 /**
- * What one of Helm's own sessions is doing, ready for the tab.
+ * What one of Floti's own sessions is doing, ready for the tab.
  *
  * Null activity is the ordinary state, not an error: a session whose registry
  * record has not appeared yet, whose process cannot be proved alive, or that is
@@ -495,7 +495,7 @@ export interface SessionRegistryEntry {
  * painted before any of this existed.
  */
 export interface SessionActivityState {
-  /** Helm's own session row id. */
+  /** Floti's own session row id. */
   id: number
   /**
    * From the backend's own records where it keeps them, or else from the
@@ -569,7 +569,7 @@ export interface RestoreOffer {
   sessions: RestorableSession[]
   /**
    * How many more the record calls lost whose conversation is still running -
-   * in another Helm, or a terminal. Left alone, because reopening one would be
+   * in another desktop window, or a terminal. Left alone, because reopening one would be
    * a second process on one conversation.
    */
   elsewhere: number
@@ -582,13 +582,13 @@ export interface RestoreOffer {
 /**
  * One live Claude Code session on this machine, whoever started it.
  *
- * **Listing is machine-wide; detail is Helm's own.** The registry Claude Code
- * keeps is not Helm's - a `claude` in Windows Terminal writes a record beside
- * anything Helm hosts - and a listing that only showed Helm's own would answer
+ * **Listing is machine-wide; detail is Floti's own.** The registry Claude Code
+ * keeps is not Floti's - a `claude` in Windows Terminal writes a record beside
+ * anything Floti hosts - and a listing that only showed Floti's own would answer
  * "is anybody working in this tree" wrongly in exactly the case somebody gets
  * hurt by it. So every record is listed, and the fields below are the whole of
  * what a record carries. Everything richer - branch, profile, overlays, argv,
- * the process tree, the ports - hangs off `hostSessionId`, because Helm has
+ * the process tree, the ports - hangs off `hostSessionId`, because Floti has
  * none of it for a session it did not spawn. That degradation needs no special
  * case: it is simply what is knowable.
  *
@@ -597,10 +597,10 @@ export interface RestoreOffer {
  */
 export interface LiveSession {
   /**
-   * Helm's own session row id, or null for a session Helm does not host.
+   * Floti's own session row id, or null for a session Floti does not host.
    *
    * The whole of the hosted/not distinction, and it is a join key rather than a
-   * flag: everything Helm knows beyond the record is reached through it.
+   * flag: everything Floti knows beyond the record is reached through it.
    */
   hostSessionId: number | null
   /**
@@ -618,14 +618,14 @@ export interface LiveSession {
    * False is an ordinary state rather than an error, and there are two measured
    * ways into it: the second between spawn and registration, and a session
    * sitting on the workspace-trust prompt, which registers only after the
-   * startup gates. A Helm session in that state is listed anyway - Helm knows
+   * startup gates. A Floti session in that state is listed anyway - Floti knows
    * its own processes are running - carrying what its row says and nothing the
    * record would have added.
    */
   registered: boolean
-  /** The working directory. From the record, or from Helm's row. */
+  /** The working directory. From the record, or from Floti's row. */
   cwd: string | null
-  /** What it is called: the `-n` name, or Helm's own label for a hosted one. */
+  /** What it is called: the `-n` name, or Floti's own label for a hosted one. */
   name: string | null
   activity: SessionActivity | null
   /** The CLI's own sentence for a `waiting` session, verbatim, or a reported block's kind in words. */
@@ -650,7 +650,7 @@ export interface LiveSession {
   version: string | null
   /** `cli` for an interactive run, `sdk-cli` for a `-p` one. */
   entrypoint: string | null
-  /** Epoch ms the session registered at, or Helm's own start time. */
+  /** Epoch ms the session registered at, or Floti's own start time. */
   startedAtMs: number | null
   /** The conversation id the registry is reporting under. */
   claudeSessionId: string | null
@@ -667,11 +667,11 @@ export interface SessionsOverview {
 /**
  * One process in a session's tree.
  *
- * **Helm spawned the pty, so the tree under it is Helm's own process tree**,
+ * **Floti spawned the pty, so the tree under it is Floti's own process tree**,
  * not a reading of anybody's conversation. That is the whole argument for this
  * being in scope: nothing here parses session output or infers anything from
  * what a model said - it asks the operating system what the children of a
- * process Helm started are, which is a question Helm is entitled to ask about
+ * process Floti started are, which is a question Floti is entitled to ask about
  * its own children and about nothing else.
  */
 export interface SessionProcess {
@@ -683,7 +683,7 @@ export interface SessionProcess {
    * The full command line, or null where the host would not give it up.
    *
    * Null is routine rather than exceptional and it is **not** an error: on this
-   * machine 159 of 277 processes refused one to an unelevated query. Helm makes
+   * machine 159 of 277 processes refused one to an unelevated query. Floti makes
    * no elevation assumption anywhere, so a process it may not open is a process
    * reported as unknown - never one that fails the pass.
    */
@@ -722,25 +722,25 @@ export interface SessionPort {
 }
 
 /**
- * What one session Helm hosts is currently holding.
+ * What one session Floti hosts is currently holding.
  *
  * Every field that can be unknown is nullable, and the rule the whole shape is
  * built on is that **"could not look" and "nothing there" are different
  * claims**. A pass that could not enumerate processes leaves `processes` null,
  * and the pane says so; a pass that enumerated and found the session childless
  * leaves it `[]`. A surface that merged them would tell somebody a session is
- * holding nothing at the exact moment Helm had failed to ask.
+ * holding nothing at the exact moment Floti had failed to ask.
  */
 export interface SessionResources {
-  /** Helm's own session row id. */
+  /** Floti's own session row id. */
   id: number
   /**
-   * The pty's pid: the root of the tree, and provably Helm's own child.
+   * The pty's pid: the root of the tree, and provably Floti's own child.
    *
    * Deliberately the pty's rather than the registry record's. Through a `.cmd`
    * shim those differ - the pty is `cmd.exe` and `claude.exe` is beneath it -
    * and the pty's is the one that roots *everything the session started*,
-   * including the shim itself. It is also the one Helm holds without asking
+   * including the shim itself. It is also the one Floti holds without asking
    * anybody.
    */
   rootPid: number
@@ -796,7 +796,7 @@ export function sessionLabel(session: Pick<SessionRecord, 'name' | 'label'>): st
  * One prompt a person submitted, as `~/.claude/history.jsonl` recorded it.
  *
  * This file is Claude Code's own, shared by every session on the machine and
- * appended to whether or not Helm is running. Helm reads it and never writes
+ * appended to whether or not Floti is running. Floti reads it and never writes
  * to it.
  */
 export interface HistoryPrompt {
@@ -840,7 +840,7 @@ export interface HistorySession {
    */
   title: string
   /**
-   * True when no prompt survived cleaning and `title` is Helm's own words for
+   * True when no prompt survived cleaning and `title` is Floti's own words for
    * an empty record - "Image only", "No prompt recorded". A stand-in is not
    * something to draw in the same weight as a sentence somebody wrote.
    */
@@ -875,7 +875,7 @@ export interface HistorySession {
   /** False when the recorded working directory is no longer there. */
   projectExists: boolean
   /**
-   * What Helm's own archive holds for this session, or null when it has never
+   * What Floti's own archive holds for this session, or null when it has never
    * held anything.
    *
    * The third fact about a session, alongside the transcript and the folder,
@@ -971,12 +971,12 @@ export function historyTitle(session: Pick<HistorySession, 'title' | 'label' | '
 // ---------------------------------------------------------------------------
 
 /**
- * What Helm's archive holds for a session.
+ * What Floti's archive holds for a session.
  *
  * Two values and no third for "never captured", which is the absence of a row.
  * The distinction that has to survive every refactor is `'evicted'` against
  * null: "we had this conversation and dropped it to stay under your limit" and
- * "this was reaped before Helm ever saw it" are different facts about the same
+ * "this was reaped before Floti ever saw it" are different facts about the same
  * missing text, and only one of them is something the user chose.
  */
 export type ArchiveSessionState = 'archived' | 'evicted'
@@ -994,7 +994,7 @@ export interface ArchiveMessage {
  * One archived conversation.
  *
  * `messages` is empty for an evicted one, and the row is still returned: the
- * pane has something to say about a conversation Helm dropped, and nothing to
+ * pane has something to say about a conversation Floti dropped, and nothing to
  * say about one it never had.
  */
 export interface ArchivedConversation {
@@ -1074,7 +1074,7 @@ export interface HistorySummary {
  *
  * `prompts` is the historic behaviour and the default: a substring of a prompt
  * or a project path, matched with `LIKE`. `messages` is the archive - every
- * word of every conversation Helm captured, through FTS5.
+ * word of every conversation Floti captured, through FTS5.
  *
  * Two scopes rather than one box that searches both, and that is a decision.
  * They answer different questions and return wildly different counts, and the
@@ -1240,7 +1240,7 @@ export interface LaunchAgents {
 }
 
 /**
- * A saved launch composition - the core object everything in Helm is organised
+ * A saved launch composition - the core object everything in Floti is organised
  * around (SPEC 3).
  *
  * `overlays` are composed into the session as plugins, so their skills, agents
@@ -1294,7 +1294,7 @@ export type ProfileDraft = Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>
  * How an overlay shim carries a source folder: a junction on Windows, which
  * needs no elevation; a directory symlink on macOS and Linux; `copy` when the
  * filesystem under the shim can make neither. Read from the stamp of a shim an
- * earlier version of Helm built.
+ * earlier version built.
  */
 export type OverlayLinkMode = 'junction' | 'symlink' | 'copy'
 
@@ -1363,7 +1363,7 @@ export const PROJECT_SHELL_HEIGHT_PCT = { min: 10, max: 50, default: 30 } as con
 /**
  * The limits on a family of agents, each a whole number inside the range the
  * host accepts: the host refuses a limit outside it, and a write it refused
- * would drop every other setting sent with it, so Helm keeps to the same range.
+ * would drop every other setting sent with it, so Floti keeps to the same range.
  * The defaults are the design's: four children running at once per parent,
  * eight agent-started sessions per host, two levels deep and sixteen starts in
  * a parent's life.
@@ -1389,7 +1389,7 @@ export const RAIL_DESTINATIONS = ['sessions', 'profiles', 'agents', 'files', 'br
 
 export type RailDestination = (typeof RAIL_DESTINATIONS)[number]
 
-/** Anything `railHidden` may name: one of Helm's destinations, or a plugin's rail icon. */
+/** Anything `railHidden` may name: one of Floti's destinations, or a plugin's rail icon. */
 export type RailItemId = RailDestination | PluginRailId
 
 /**
@@ -1398,7 +1398,7 @@ export type RailItemId = RailDestination | PluginRailId
  * A gigabyte by default, and both halves of that are deliberate. Unbounded is
  * not an option: `desktop.db` is the user's file, and a feature that grows it
  * without limit is one they find out about from their disk rather than from
- * Helm. A gigabyte is enormous for what this actually stores - the conversation
+ * Floti. A gigabyte is enormous for what this actually stores - the conversation
  * text out of one 3.9 MB transcript on this machine is 54 KB before
  * compression, a 71x difference, because tool traffic is not archived - so on
  * any ordinary machine the ceiling is a guard rail rather than a budget.
@@ -1416,7 +1416,7 @@ export const TRANSCRIPT_ARCHIVE_BYTES = {
 } as const
 
 /**
- * A shell Helm found on this machine, offered in the shell pickers.
+ * A shell Floti found on this machine, offered in the shell pickers.
  *
  * `path` is what gets launched and what gets stored, and it is absolute for the
  * same reason `claudePath` is: a bare `pwsh.exe` means whatever the process's
@@ -1430,7 +1430,7 @@ export interface DetectedShell {
   name: string
   /** A human label - "PowerShell 7". */
   label: string
-  /** The arguments Helm would launch it with, from the per-shell table. */
+  /** The arguments Floti would launch it with, from the per-shell table. */
   args: string[]
 }
 
@@ -1459,7 +1459,7 @@ export type WorkspaceTab =
   /**
    * A file, read beside the session changing it. `root` is the project it was
    * opened from - what the view is scoped to, what its path is shown relative
-   * to, and the folder Helm checks it is still inside before reading a byte.
+   * to, and the folder Floti checks it is still inside before reading a byte.
    */
   | { kind: 'file'; root: string; path: string; host?: string }
   /**
@@ -1517,7 +1517,7 @@ export function isProjectPinned(pinned: readonly string[], path: string): boolea
 
 /**
  * Whether `path` is itself one of the scanned folders - the whole of what
- * "remove this folder from Helm" can act on. A project found *inside* a root
+ * "remove this folder from Floti" can act on. A project found *inside* a root
  * is not one: removing it would mean removing its parent.
  */
 export function isScanRoot(roots: readonly string[], path: string): boolean {
@@ -1535,7 +1535,7 @@ export function isScanRoot(roots: readonly string[], path: string): boolean {
  *
  * Case folding and nothing else, for the same reason. Trailing separators,
  * `resolve` and short-name expansion are all ways for two readings of one path
- * to disagree, and this comparison is between a path Helm holds and a path
+ * to disagree, and this comparison is between a path Floti holds and a path
  * Claude Code wrote into its own record - two writers, so the risk of a second
  * normalisation is a warning that silently stops appearing.
  *
@@ -1624,7 +1624,7 @@ export interface AppSettings {
    * (`layout/panes.ts`).
    *
    * State rather than a preference, so it sits beside `windowBounds` and not in
-   * the settings pane - it is something Helm remembers, not something anyone
+   * the settings pane - it is something Floti remembers, not something anyone
    * chose. Null means nothing has been written yet, which is not the same as an
    * empty layout: a user who closed every tab gets an empty window back.
    *
@@ -1668,7 +1668,7 @@ export interface AppSettings {
    * A `claude` executable the user picked by hand, for the machine where it is
    * not on PATH and not in the usual install directory. Null means "find it".
    *
-   * A path, never a credential: Helm locates the CLI and hands it a pty, and
+   * A path, never a credential: Floti locates the CLI and hands it a pty, and
    * signing in stays entirely between the user and `claude`.
    */
   claudePath: string | null
@@ -1691,10 +1691,10 @@ export interface AppSettings {
   /** Lines of history a terminal pane keeps. Bounded by `TERMINAL_SCROLLBACK`. */
   terminalScrollback: number
   /**
-   * The executable new project shells are opened with, or null to let Helm
+   * The executable new project shells are opened with, or null to let Floti
    * detect one. An absolute path, for the reason `DetectedShell.path` gives.
    *
-   * Project shells only. A Claude session is not a shell - Helm hands the
+   * Project shells only. A Claude session is not a shell - Floti hands the
    * `claude` executable its own pty and this setting never reaches it.
    */
   terminalShell: string | null
@@ -1763,7 +1763,7 @@ export interface AppSettings {
    *
    * The host keeps it (`HostSettings.updateCheck`, `HOST_WORKSPACE_KEYS`):
    * what the window shows is the host's value, laid over this one, and a
-   * change goes to the host. Helm's own row is what this device had before
+   * change goes to the host. The desktop's own row is what this device had before
    * the host kept it: a `false` there is written to the host once, on the
    * next connect, and the row goes back to its default.
    *
@@ -1794,10 +1794,10 @@ export interface AppSettings {
    */
   browserSearch: BrowserSearch
   /**
-   * Whether Helm serves its browser tools to the sessions it hosts.
+   * Whether Floti serves its browser tools to the sessions it hosts.
    *
    * On by default, because the stated purpose is that Claude can open things in
-   * Helm: a session that cannot reach the pane beside it is a pane the user has
+   * Floti: a session that cannot reach the pane beside it is a pane the user has
    * to drive twice. Off is a real off - `main/browser-mcp.ts` never binds a
    * port, no token exists, and no `--mcp-config` reaches any argv - so the app
    * has no inbound listener at all, which is the state it was in before M17.
@@ -1842,7 +1842,7 @@ export interface AppSettings {
   browserProjectUrls: Record<string, string>
 
   /**
-   * Whether Helm tells a session it hosts what the other sessions are doing.
+   * Whether Floti tells a session it hosts what the other sessions are doing.
    *
    * **A second setting rather than `browserMcp`'s, and the reasoning is the
    * decision.** The two are served by one listener, on one port, under one
@@ -1886,7 +1886,7 @@ export interface AppSettings {
    * every other session follows.
    *
    * Told to the host on every connect and every change, and the host serves the
-   * tools - Helm's own process serves none. On by default, because the design
+   * tools - the desktop's own process serves none. On by default, because the design
    * keeps the tools' reach to the caller's own children, bounds them with the
    * four limits below, and a capability that has to be found first is one most
    * sessions never get.
@@ -1916,7 +1916,7 @@ export interface AppSettings {
   showChildrenInParentTab: boolean
 
   /**
-   * What quitting Helm does to the sessions it started on a host, by host:
+   * What quitting the desktop does to the sessions it started on a host, by host:
    * `end` them or `keep` them running there. This PC's host is keyed
    * `LOCAL_HOST_KEY` and ends them when it has no entry; a remote host is keyed
    * by its id in `hosts` and keeps them running when it has none
@@ -1938,26 +1938,26 @@ export interface AppSettings {
    */
   hosts: readonly RemoteHost[]
   /**
-   * When Helm's saved profiles were copied into the local host, ISO 8601, or
+   * When the desktop's saved profiles were copied into the local host, ISO 8601, or
    * null while they never have been.
    *
    * Internal state, like `lastUpdateCheckAt`, and not in the settings pane.
-   * Profiles live in the host; the first time Helm connects to one it copies
+   * Profiles live in the host; the first time the desktop connects to one it copies
    * the ones an earlier version kept in desktop.db into it, once, and this is
    * what keeps a profile deleted in the host afterwards from being copied back
-   * on the next start. Helm's own profiles are never changed by the copy.
+   * on the next start. The desktop's own profiles are never changed by the copy.
    */
   profilesCopiedToHostAt: string | null
   /**
-   * When Helm's plugin folders were copied into the local host, ISO 8601, or
+   * When the desktop's plugin folders were copied into the local host, ISO 8601, or
    * null while they never have been.
    *
    * Internal state, like `profilesCopiedToHostAt`, and not in the settings
-   * pane. Plugins are registered in the host; the first time Helm connects to
+   * pane. Plugins are registered in the host; the first time the desktop connects to
    * one it copies its folders, their on/off and tools switches and their
    * setting values into it, once (never a secret),
    * and this keeps a plugin removed in the host afterwards from coming back on
-   * the next start. Helm's own plugin records are never changed by the copy.
+   * the next start. The desktop's own plugin records are never changed by the copy.
    */
   pluginsCopiedToHostAt: string | null
   /**
@@ -2006,13 +2006,13 @@ export function walkthroughInShell(walkthrough: Walkthrough | null): boolean {
   return walkthrough !== null && walkthrough.step > WALKTHROUGH_SETUP_LAST
 }
 
-/** What quitting Helm does to the sessions it started on a host. */
+/** What quitting the desktop does to the sessions it started on a host. */
 export type QuitSessions = 'end' | 'keep'
 
 export const QUIT_SESSIONS: readonly QuitSessions[] = ['end', 'keep']
 
 /**
- * What quitting Helm does to the sessions it started on `host`: what the
+ * What quitting the desktop does to the sessions it started on `host`: what the
  * setting says, and otherwise End for this PC's own host and Keep them running
  * for a host on another computer, whose sessions are usually long work meant
  * to outlive the laptop that started them.
@@ -2021,7 +2021,7 @@ export function quitChoice(settings: Pick<AppSettings, 'quitSessions'>, host: st
   return settings.quitSessions[host] ?? (host === LOCAL_HOST_KEY ? 'end' : 'keep')
 }
 
-/** Whether quitting Helm ends the sessions it started on `host` (`quitChoice`). */
+/** Whether quitting the desktop ends the sessions it started on `host` (`quitChoice`). */
 export function quitEndsSessions(settings: Pick<AppSettings, 'quitSessions'>, host: string = LOCAL_HOST_KEY): boolean {
   return quitChoice(settings, host) === 'end'
 }
@@ -2104,7 +2104,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   agentStartsPerParent: AGENT_STARTS_PER_PARENT.default,
   agentCommandsPerParent: AGENT_COMMANDS_PER_PARENT.default,
   showChildrenInParentTab: true,
-  // Empty: this PC's host then ends the sessions Helm started when it quits,
+  // Empty: this PC's host then ends the sessions the desktop started when it quits,
   // which is what a session on your own computer usually wants, and a host on
   // another computer keeps them running (`quitChoice`).
   quitSessions: {},
@@ -2172,7 +2172,7 @@ export interface ConfigFile {
   mtimeMs: number
   /** `description:` from the frontmatter, when there is one. */
   description: string | null
-  /** True for a file Helm will not offer to edit as text. */
+  /** True for a file Floti will not offer to edit as text. */
   binary: boolean
 }
 
@@ -2268,7 +2268,7 @@ export type EffectiveSource = 'user' | 'cwd' | 'overlay'
  * One skill, command, agent or workflow as a session would actually address it.
  *
  * The namespace is *predicted*, not observed: the platform prefixes everything
- * an overlay contributes with the plugin's manifest name (Spike A), and Helm
+ * an overlay contributes with the plugin's manifest name (Spike A), and Floti
  * chooses that name when it synthesises the shim - so `<overlay>:<skill>` is
  * decidable before anything is launched. Cross-overlay collisions are therefore
  * impossible, and two overlays defining the same skill both appear, each under
@@ -2417,7 +2417,7 @@ export interface ContentRoot {
 }
 
 /**
- * What Helm will do with a file.
+ * What Floti will do with a file.
  *
  * `markdown` is rendered, `html` goes to the sandboxed frame, `data`, `text`
  * and `source` are shown as source, and `binary` is listed but not opened. The
@@ -2514,7 +2514,7 @@ export interface ContentDirListing {
   /** How many of `entries` are ignored, so a header can count them. */
   ignored: number
   /**
-   * What decided the ignores: the repository's own rules, or Helm's built-in
+   * What decided the ignores: the repository's own rules, or Floti's built-in
    * list where there is no git to ask.
    */
   ignoreSource: ContentIgnoreReason
@@ -2941,7 +2941,7 @@ export interface FolderEntry {
   truncated: boolean
   /** Ticked when the dialog opens. */
   included: boolean
-  /** Set when Helm will not copy it whatever the user ticks, and why. */
+  /** Set when Floti will not copy it whatever the user ticks, and why. */
   refused: string | null
   /** A link. Never followed, never copied. */
   link: boolean

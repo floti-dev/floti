@@ -2,7 +2,7 @@ import type { ThemePreference } from '../types'
 import { contrastRatio, formatColor, mix, parseColor, withAlpha, type Rgba } from './color'
 
 /**
- * Themes: what one is, the three Helm ships, and how a file becomes one.
+ * Themes: what one is, the three Floti ships, and how a file becomes one.
  *
  * A theme is the twenty-seven colours the chrome is painted with and nothing
  * else: nineteen roles - grounds, edges, text, accent, status - and the eight
@@ -87,7 +87,7 @@ export function hueToken(hue: PaletteHue): `hue-${PaletteHue}` {
 /**
  * How much of a hue a palette tag's tint is, over the island: the weight the
  * built-ins give their accent tint, per kind. The primitives (`floti.css`) and
- * Helm's own tags (`ui/lib/hues.ts`) mix at these, and the floors are measured
+ * Floti's own tags (`ui/lib/hues.ts`) mix at these, and the floors are measured
  * on the result.
  */
 export const HUE_TINT_ALPHA: Readonly<Record<ThemeKind, number>> = { dark: 0.14, light: 0.1 }
@@ -203,7 +203,7 @@ const SHADOW: Record<ThemeKind, string> = {
 }
 
 /**
- * The three Helm ships.
+ * The three Floti ships.
  *
  * **Nocturne** is v1's dark ramp exactly, values measured into DESIGN.md over
  * many rounds (the hover step, `accent-soft-hover`, the 4.5:1 floors), so the

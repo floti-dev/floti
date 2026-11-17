@@ -43,7 +43,7 @@ fn config(dirs: &TestDirs, agent: &FakeAgent) -> HostConfig {
     }
 }
 
-/// Helm's client folder, with a device key of its own. The host key is
+/// The desktop's client folder, with a device key of its own. The host key is
 /// pinned once the host has made one ([`pin_host`]).
 fn desktop_client(dirs: &TestDirs) -> PathBuf {
     let folder = dirs.root().join("Floti data").join("host-client");
