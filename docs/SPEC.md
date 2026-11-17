@@ -1158,7 +1158,7 @@ README, [PACKAGING.md](PACKAGING.md) and the network posture comment in
 `shared/ipc.ts`, and CLAUDE.md's rule that all four move together stays.
 
 Plugins (2026-10-05) moved it by one clause, for the same reason and in the
-same way: a plugin's background page can fetch with nobody pressing anything,
+same way: a plugin's background can fetch with nobody pressing anything,
 so leaving the sentence alone would have been the old false claim again. The
 clause names the limit rather than hiding the fact - the user added the
 plugin, and its pages reach only what its manifest lists.
@@ -1184,7 +1184,7 @@ about the user's own `gh`: Helm no longer runs it.
   typed into it.
 - **A plugin you added reaches the hosts its manifest names**, and its pages
   reach nothing else. A plugin page has no network of its own
-  (`connect-src 'none'`); `floti.fetch` (`helm.fetch` at version 1) sends its requests from the local
+  (`connect-src 'none'`); `floti.fetch` sends its requests from the local
   host, only to an origin the manifest lists, taking redirects one hop at a
   time so each hop is checked against the same list, and a URL a server
   supplied is never searched for placeholders. A plugin never holds a secret:

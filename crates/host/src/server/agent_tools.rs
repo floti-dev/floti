@@ -18,13 +18,11 @@
 //! setting and given to a launch only while a client with a browser pane is
 //! attached; floti-sessions ([`SessionTools`]), on the `sessionMcp` setting;
 //! floti-agents ([`FlotiAgents`]), on the `sessionAgents` setting, given to
-//! every launch whoever is attached unless its profile turns it off; and `floti-plugin-<id>` for each plugin with its tools on: for a version 2
-//! plugin, whose background module runs in the host's engine, served by the
-//! host itself from its manifest with no client attached
-//! ([`HostPluginFamilies`]), given to every launch while the plugin is on;
-//! for a version 1 plugin, each tool server a client offers
-//! ([`PluginFamilies`]), given to a launch only while that client is
-//! attached. A client's offer naming a version 2 plugin is passed over.
+//! every launch whoever is attached unless its profile turns it off; and
+//! `floti-plugin-<id>` for each plugin with its tools on, whose background
+//! module runs in the host's engine, served by the host itself from its
+//! manifest with no client attached ([`HostPluginFamilies`]), given to every
+//! launch while the plugin is on.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -34,10 +32,10 @@ use floti_protocol::channels::workspace::HostSettings;
 use tokio::sync::broadcast::{self, error::RecvError};
 
 use super::browser_tools::BrowserTools;
-use super::features::{BrowserRelay, PluginRelay};
+use super::features::BrowserRelay;
 use super::floti_agents::FlotiAgents;
 use super::hosted::Hosted;
-use super::plugin_tools::{HostPluginFamilies, HostPluginTools, PluginFamilies};
+use super::plugin_tools::{HostPluginFamilies, HostPluginTools};
 use super::records::ExitNotice;
 use super::session_tools::{SessionTools, SessionsWorld};
 use crate::Result;
@@ -70,15 +68,10 @@ struct Held {
 
 impl HostAgentTools {
     /// The listener with every family, each off until [`Self::follow`] reads
-    /// the settings, the browser tools carried through `relay`, the version
-    /// 2 plugins' answered by the host through `hosted`, and the version 1
-    /// plugins' carried to clients through `plugins`. Call it inside the
+    /// the settings, the browser tools carried through `relay`, and the
+    /// plugins' answered by the host through `hosted`. Call it inside the
     /// host's runtime.
-    pub fn new(
-        relay: Arc<BrowserRelay>,
-        plugins: Arc<PluginRelay>,
-        hosted: Arc<HostPluginTools>,
-    ) -> Self {
+    pub fn new(relay: Arc<BrowserRelay>, hosted: Arc<HostPluginTools>) -> Self {
         let browser = Arc::new(BrowserTools::new(relay));
         let sessions = Arc::new(SessionTools::new());
         let agents = Arc::new(FlotiAgents::new());
@@ -87,16 +80,10 @@ impl HostAgentTools {
             Arc::clone(&sessions) as Arc<dyn ToolFamily>,
             Arc::clone(&agents) as Arc<dyn ToolFamily>,
         ];
-        // The host's own first: a client's server of the same name is
-        // passed over.
-        let sources: Vec<Arc<dyn FamilySource>> = vec![
-            Arc::new(HostPluginFamilies::new(hosted)),
-            Arc::new(PluginFamilies::new(plugins)),
-        ];
         Self {
             listener: AgentToolsListener::with_source(
                 families,
-                Some(Arc::new(sources) as Arc<dyn FamilySource>),
+                Some(Arc::new(HostPluginFamilies::new(hosted)) as Arc<dyn FamilySource>),
             ),
             browser,
             sessions,
@@ -293,7 +280,6 @@ mod tests {
         let events = Arc::new(super::super::events::Events::new());
         HostAgentTools::new(
             Arc::new(BrowserRelay::new(&events)),
-            Arc::new(PluginRelay::new(&events)),
             Arc::new(HostPluginTools::new(|_| None)),
         )
     }

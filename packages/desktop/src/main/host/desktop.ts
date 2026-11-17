@@ -14,8 +14,6 @@ import { emit } from '../ipc'
 import { appMode, dataDir, templatesDir } from '../paths'
 import type { Confirm, QuitConfirm } from './session-host'
 import type { BrowserMcpHost } from '../browser-mcp'
-import type { BackgroundHost } from '../plugins/background'
-import type { ToolAnswer, ToolCallRequest } from '../plugins/tools'
 import { nativeProfileDialogs } from '../profiles'
 import { updateSettings, type Services } from '../services'
 import { createBrowserToolRelay, type BrowserToolRelay } from './browser-tools'
@@ -58,10 +56,8 @@ import { createWslKeepAwake } from './wsl-awake'
 import { listWslDistros } from './wsl-distros'
 import { KEEPER_LINK_VERSION, PROTOCOL_VERSION } from './protocol'
 import { RELEASES_DOWNLOAD } from '../update'
-import type { LocalHostRestartOffer, PluginBackgroundReport, RemoteHostStates } from '../../shared/ipc'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
-import { createBackgroundNeeds, createRemotePlugins, type RemotePlugins } from './remote-plugins'
-import { createPluginToolRelay, type PluginToolRelay } from './plugin-tools'
+import type { LocalHostRestartOffer, RemoteHostStates } from '../../shared/ipc'
+import { createRemotePlugins, type RemotePlugins } from './remote-plugins'
 import { createHostPlugins, type HostPlugins } from './plugins'
 import { createHostProfiles, type HostProfiles } from './profiles'
 import { createHostResources, type HostResources } from './resources'
@@ -79,16 +75,12 @@ export interface DesktopHost extends HostSessions {
   link: HostLink
   /** Answers the browser tool calls the host relays from its sessions. */
   browserRelay: BrowserToolRelay
-  /** Offers the host Helm's plugin tool servers and answers the calls it relays to them. */
-  pluginRelay: PluginToolRelay
   /** Helm's saved profiles, which live in the host while sessions run there. */
   profiles: HostProfiles
   /** Plugin folders, switches, settings, secrets and page files, which the host keeps while sessions run there. */
   plugins: HostPlugins
-  /** Each remote host's plugins and tool relay, attached to its main link (`remote-plugins.ts`). */
+  /** Each remote host's plugins, attached to its main link (`remote-plugins.ts`). */
   remotePlugins: RemotePlugins
-  /** What the hidden window has reported of every host's background pages, each remote one naming its host. */
-  pluginReports(): PluginBackgroundReport[]
   /**
    * Discovery, scan roots, workspaces, setup, templates and the host's half of
    * the settings, which the host keeps while sessions run there.
@@ -110,10 +102,6 @@ export interface DesktopHostDeps {
   confirmQuit: QuitConfirm
   /** Helm's browser tools, which answer the calls; null until they exist. */
   browserTools: () => BrowserMcpHost | null
-  /** Hands a session's call to a plugin's tool to its background page, in the background host. */
-  runPluginTool: (request: ToolCallRequest, signal: AbortSignal) => Promise<ToolAnswer>
-  /** The hidden window plugins' background pages run in, which the host's list opens and closes. */
-  pluginBackground: BackgroundHost
   /** Whether the browser pane runs here; while it does not, no session is given the browser tools. */
   browserAvailability: BrowserAvailability
 }
@@ -316,7 +304,7 @@ export function createDesktopRemoteHosts(options: {
   isHelmPage: (id: number) => boolean
   nextConnection: () => number
   changed: (states: RemoteHostStates) => void
-  /** Each host's plugins and tool relay, on its main link. */
+  /** Each host's plugins, on its main link. */
   plugins: RemotePlugins
   /** The ports of each host's sessions forwarded to this PC, which close with their sessions. */
   forwards: PortForwards
@@ -552,8 +540,6 @@ export function createDesktopHost({
   confirm,
   confirmQuit,
   browserTools,
-  runPluginTool,
-  pluginBackground,
   browserAvailability
 }: DesktopHostDeps): DesktopHost {
   const log = (line: string): void => console.log(line)
@@ -598,13 +584,6 @@ export function createDesktopHost({
     run: (opener, tool, args) => browserTools()?.runBrowserTool(opener, tool, args) ?? null,
     log
   })
-  // The host's list says which plugins offer tools; their background pages answer.
-  const pluginRelay: PluginToolRelay = createPluginToolRelay({
-    link,
-    servers: () => hostPlugins.toolServers(),
-    call: (request, signal) => hostPlugins.callTool(request, signal),
-    log
-  })
   const profiles = createHostProfiles({
     link,
     dialogs: nativeProfileDialogs(window),
@@ -618,17 +597,8 @@ export function createDesktopHost({
     writeFile: (path, text) => writeFile(path, text, 'utf8'),
     log
   })
-  // One hidden window for every host's background pages: open while any needs it.
-  const backgroundNeeds = createBackgroundNeeds(pluginBackground)
-  const pluginReports = (): PluginBackgroundReport[] => [...hostPlugins.reports(), ...remotePlugins.reports()]
-  // The window lays these over each host's list, which it reads itself.
-  const reportsChanged = (): void => send('pluginBackground:changed', pluginReports())
   const hostPlugins: HostPlugins = createHostPlugins({
     link,
-    reportsChanged,
-    runTool: runPluginTool,
-    onToolsChanged: () => pluginRelay.offer(),
-    background: backgroundNeeds.forHost(LOCAL_HOST_KEY),
     copyOwn: {
       folders: () => readPluginFolders(services.store),
       settings: (plugin) => readPluginSettings(services.store, plugin),
@@ -639,12 +609,7 @@ export function createDesktopHost({
     },
     log
   })
-  const remotePlugins = createRemotePlugins({
-    runTool: runPluginTool,
-    background: backgroundNeeds,
-    reportsChanged,
-    log
-  })
+  const remotePlugins = createRemotePlugins({ log })
   // Kept for the artifact frames main answers from the host's bytes.
   const files = createHostFiles({ link, emit: toNoWindow, log })
   // Kept for the session tools' detail; the window reads its own.
@@ -656,11 +621,9 @@ export function createDesktopHost({
     ...hosted,
     link,
     browserRelay,
-    pluginRelay,
     profiles,
     plugins: hostPlugins,
     remotePlugins,
-    pluginReports,
     workspace,
     files,
     resources,

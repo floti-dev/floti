@@ -1,5 +1,5 @@
 import { LOCAL_HOST_KEY } from '@helm/core/types'
-import { isClientOnly, isHostInternal } from '../../../../shared/host/protocol'
+import { isClientOnly } from '../../../../shared/host/protocol'
 import type { HelmBridge } from '../../../../shared/ipc'
 import { createCompositionAdapter } from './composition'
 import { createFilesAdapter } from './files'
@@ -96,18 +96,8 @@ export const pickerOnThisPc = (host: string): string =>
  * Everything else is the preload's bridge.
  */
 export function remoteOwn(own: HelmBridge, name: () => string): HelmBridge {
-  const silentEvents = new Set<string>([
-    'pluginWindow:asked',
-    'pluginWindow:answered',
-    'windowSessions:quitConfirm',
-    'windowSessions:activate'
-  ])
-  const droppedSends = new Set<string>([
-    'windowSessions:notify',
-    'windowSessions:quitConfirmed',
-    'pluginWindow:ask',
-    'pluginWindow:answer'
-  ])
+  const silentEvents = new Set<string>(['windowSessions:quitConfirm', 'windowSessions:activate'])
+  const droppedSends = new Set<string>(['windowSessions:notify', 'windowSessions:quitConfirmed'])
   const answered: Record<string, () => Promise<unknown>> = {
     // The lost layout is this PC's host's sessions'.
     'windowSessions:lostLayout': () => Promise.resolve(null),
@@ -178,7 +168,6 @@ export function createHostBridge(
     own: deps.own,
     adapters,
     clientOnly: isClientOnly,
-    hostInternal: isHostInternal,
     log: deps.log
   })
   return { host, helm, link, sessions, notices: notices.store, workspace, adapters }

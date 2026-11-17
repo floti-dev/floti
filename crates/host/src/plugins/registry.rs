@@ -13,9 +13,7 @@
 //! - An enabled folder is watched for the files its manifest names
 //!   ([`watch`](super::watch)), once [`Registry::watch_folders`] says so; a
 //!   change to one reads it again, as Reload does.
-//! - A version 1 plugin's background page is listed, never started here: a
-//!   client frames it. Only a version 2 background script runs in the
-//!   host's engine.
+//! - A plugin's background script runs in the host's engine.
 //! - Removing one forgets its settings and deletes, of the secrets only it
 //!   could use, only those the client chose.
 //!
@@ -44,10 +42,9 @@ use tokio::sync::watch;
 use floti_protocol::Payload;
 use floti_protocol::channels::plugins::{
     PLUGIN_CHANNEL_POST, PluginAddResult, PluginBackgroundState, PluginChannelMessage,
-    PluginCommandEvent, PluginDelivery, PluginDeliveryTarget, PluginErrorCode, PluginFile,
-    PluginInfo, PluginLogLine, PluginLogStream, PluginMetrics, PluginPageSecretState,
-    PluginSecretState, PluginSession, PluginSettingSpec, PluginSettingValue, PluginStatusItem,
-    PluginStatusTone, PluginSurfaceKind,
+    PluginDelivery, PluginDeliveryTarget, PluginErrorCode, PluginFile, PluginInfo, PluginLogLine,
+    PluginLogStream, PluginMetrics, PluginPageSecretState, PluginSecretState, PluginSession,
+    PluginSettingSpec, PluginSettingValue, PluginStatusItem, PluginStatusTone, PluginSurfaceKind,
 };
 
 use super::background::{
@@ -348,8 +345,7 @@ impl Entry {
         }
     }
 
-    /// The background script the host runs for it: a version 2 one, while
-    /// it is live.
+    /// The background script the host runs for it, while it is live.
     fn host_background(&self) -> Option<&str> {
         self.live()
             .and_then(|plugin| plugin.manifest.host_background())
@@ -734,20 +730,10 @@ impl Registry {
                 manifest.name
             ));
         }
-        let in_host = manifest.host_background().is_some();
         drop(state);
-        if in_host {
-            self.inner
-                .background
-                .deliver(plugin, BackgroundEvent::Command { id: id.to_owned() });
-        } else {
-            // A background page: the client that frames it runs the command.
-            (self.inner.deliver)(&PluginDelivery::Command {
-                plugin: plugin.to_owned(),
-                data: PluginCommandEvent { id: id.to_owned() },
-                to: PluginDeliveryTarget::Background,
-            });
-        }
+        self.inner
+            .background
+            .deliver(plugin, BackgroundEvent::Command { id: id.to_owned() });
         Ok(())
     }
 
@@ -768,7 +754,7 @@ impl Registry {
         if self.inner.stopped() {
             return Err(PluginCallError::unavailable("the host is shutting down"));
         }
-        let (context, bridge) = {
+        let context = {
             let state = lock(&self.inner.state);
             let entry = by_id(&state, &call.plugin)
                 .filter(|entry| entry.live().is_some())
@@ -776,7 +762,7 @@ impl Registry {
             let plugin = entry.live().expect("filtered to live entries");
             let cancel = entry.runtime.child();
             cancel.follow(&call.cancel);
-            let context = CallContext {
+            CallContext {
                 plugin: call.plugin.clone(),
                 revision: entry.revision,
                 manifest: Arc::new(plugin.manifest.clone()),
@@ -784,13 +770,12 @@ impl Registry {
                 surface: call.surface,
                 origin: call.origin,
                 cancel,
-            };
-            (context, plugin.manifest.bridge())
+            }
         };
         let cancel = context.cancel.clone();
         let Some(running) = self.inner.methods.start(&call.method, context, call.args) else {
             return Err(PluginCallError::invalid(format!(
-                "{bridge}.{} is not part of the bridge",
+                "floti.{} is not part of the bridge",
                 call.method
             )));
         };
@@ -1231,8 +1216,6 @@ impl Inner {
             self.note(entry, error);
         }
         entry.watch = self.watch(entry);
-        // A version 1 background page is listed as it is; the client that
-        // frames it says how it is doing.
         if let Some(plugin) = entry.live().cloned()
             && let Some(module) = plugin.manifest.host_background().map(str::to_owned)
         {

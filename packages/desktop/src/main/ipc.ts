@@ -20,15 +20,13 @@ import { RELEASES_PAGE } from './update'
 import { appMode, dataDir, dbFile } from './paths'
 import type { PluginHost } from './plugins/host'
 import type { OwnDataCopy } from './host/own-data'
-import type { HostPlugins } from './host/plugins'
-import type { RemotePlugins } from './host/remote-plugins'
 import { activePty, windowsBuildNumber } from './pty'
 import { createClipboardText } from './clipboard'
 import { nativeProfileDialogs } from './profiles'
 import { updateSettings, type Services } from './services'
 import type { WorkspaceService } from './host/workspace'
 import { registerConfirmAnswers, showExitNotification, showNeedsYouNotification } from './host/confirm'
-import { isClientOnly, isHostInternal } from '../shared/host/protocol'
+import { isClientOnly } from '../shared/host/protocol'
 import type {
   EventChannel,
   EventPayload,
@@ -44,10 +42,9 @@ import type {
 /**
  * The main-process half of the contract.
  *
- * Main handles only what `boundary.rs` lists as client-only, and the
- * host-internal channels from the hidden plugin window: every other channel
- * is the host's, which each Helm page reaches over its own connection, so
- * main has no handler for it and the page's router refuses it
+ * Main handles only what `boundary.rs` lists as client-only: every other
+ * channel is the host's, which the window reaches over its own connection,
+ * so main has no handler for it and the page's router refuses it
  * (`renderer/src/app/host/router.ts`). `ipc.boundary.test.ts` checks both
  * halves. Nothing in this process may call `ipcMain.handle` outside
  * `registerIpc` - that is what keeps the surface enumerable.
@@ -96,16 +93,6 @@ export function helmPageOf(contents: WebContents): HelmPage {
       contents.once('destroyed', listener)
     }
   }
-}
-
-/** Typed `webContents.send` to one page's web contents, such as the hidden plugin window's. */
-export function emitToContents<K extends EventChannel>(
-  contents: WebContents | null | undefined,
-  channel: K,
-  payload: EventPayload<K>
-): void {
-  if (contents === null || contents === undefined || contents.isDestroyed()) return
-  contents.send(channel, payload)
 }
 
 /** Typed `webContents.send`. The only way the main process pushes to a window. */
@@ -157,17 +144,8 @@ export interface IpcContext {
   files: FilesService
   /** Built-in and user themes, and the watch on the user's; see `themes.ts`. */
   themes: ThemeService
-  /** The plugin pages' frames, runtime and theme, and the tool relay; see `plugins/host.ts`. */
+  /** The plugin pages' frames, runtime and theme; see `plugins/host.ts`. */
   plugins: PluginHost
-  /** The hidden window's reports of the local host's background pages it runs; see `host/plugins.ts`. */
-  hostPlugins: HostPlugins
-  /**
-   * Each remote host's plugins (`host/remote-plugins.ts`), whose background
-   * pages the hidden window runs on that host's origin and reports by host.
-   */
-  remotePlugins: RemotePlugins
-  /** The hidden window plugins' background pages run in. */
-  pluginBackground: () => Electron.WebContents | null
   /** This PC's host: how many sessions it runs, and stopping it once the user has agreed. */
   localHost: LocalHostControl
   /** The copy of Helm's own database into the local host (`host/own-data.ts`): its state answers `ownData:state`. */
@@ -212,20 +190,9 @@ export interface LocalHostControl {
   reconnect(): void
 }
 
-/**
- * How main handles a channel: a client-only one from any Helm page, a
- * host-internal one only from the hidden plugin window, and any other never.
- */
-export function mainHandles(channel: string): 'always' | 'fromPluginWindow' | 'never' {
-  if (isClientOnly(channel)) return 'always'
-  return isHostInternal(channel) ? 'fromPluginWindow' : 'never'
-}
-
 export function registerIpc(ctx: IpcContext): void {
   const { services, workspace } = ctx
   registerConfirmAnswers()
-  /** Whether a message came from the hidden plugin window, the only page a host-internal channel is taken from. */
-  const fromPluginWindow = (sender: WebContents): boolean => ctx.pluginBackground()?.id === sender.id
   // One for the app, so a later copy supersedes one still retrying.
   const clipboardText = createClipboardText(clipboard)
 
@@ -375,7 +342,6 @@ export function registerIpc(ctx: IpcContext): void {
     'windowSessions:stopHost': () => ctx.localHost.stop(),
     'windowSessions:restartAsk': () => ctx.localHost.restartAsk(),
     'windowSessions:restartHost': () => ctx.localHost.restart(),
-    'pluginBackground:states': () => [...ctx.hostPlugins.reports(), ...ctx.remotePlugins.reports()],
 
     // The window keeps the host's half of the settings over its own
     // connection and Helm's half here.
@@ -565,24 +531,6 @@ export function registerIpc(ctx: IpcContext): void {
       ctx.browsers.clearHistory()
     },
 
-    // A remote host's report goes to that host's plugins only.
-    'plugins:backgroundState': ({ plugin, revision, state, error, host }) =>
-      host !== undefined
-        ? ctx.remotePlugins.forHost(host)?.backgroundState(plugin, revision, state, error)
-        : ctx.hostPlugins.backgroundState(plugin, revision, state, error),
-    // A background page's ask that only the window can draw, from the hidden
-    // window, and the window's word that a secret dialog it asked for closed.
-    'pluginWindow:ask': (request, event) => {
-      if (ctx.pluginBackground()?.id === event.sender.id) emit(ctx.window(), 'pluginWindow:asked', request)
-    },
-    'pluginWindow:answer': (answer, event) => {
-      const win = ctx.window()
-      const hidden = ctx.pluginBackground()
-      if (win === null || win.webContents.id !== event.sender.id || hidden === null || hidden.isDestroyed()) return
-      hidden.send('pluginWindow:answered', answer)
-    },
-    'plugins:toolResult': (outcome, event) => ctx.plugins.toolResult(outcome, event.sender.id),
-
     // Consumed by one-shot `ipcMain.once` listeners in the spike drivers, which
     // register alongside these. A no-op here keeps the contract exhaustive
     // without stealing the event.
@@ -609,14 +557,8 @@ export function registerIpc(ctx: IpcContext): void {
   for (const [channel, handler] of Object.entries(requests) as Array<
     [string, (payload: unknown, event: Electron.IpcMainInvokeEvent) => unknown]
   >) {
-    const handles = mainHandles(channel)
-    if (handles === 'never') throw new Error(`${channel} is the host's; main has no handler for it.`)
-    ipcMain.handle(channel, (event, payload: unknown) => {
-      if (handles === 'fromPluginWindow' && !fromPluginWindow(event.sender)) {
-        return Promise.reject(new Error(`${channel} is taken only from the hidden plugin window.`))
-      }
-      return handler(payload, event)
-    })
+    if (!isClientOnly(channel)) throw new Error(`${channel} is the host's; main has no handler for it.`)
+    ipcMain.handle(channel, (event, payload: unknown) => handler(payload, event))
   }
 
   /*
@@ -640,10 +582,8 @@ export function registerIpc(ctx: IpcContext): void {
   for (const [channel, handler] of Object.entries(sends) as Array<
     [string, (payload: unknown, event: Electron.IpcMainEvent) => void]
   >) {
-    const handles = mainHandles(channel)
-    if (handles === 'never') throw new Error(`${channel} is the host's; main has no handler for it.`)
+    if (!isClientOnly(channel)) throw new Error(`${channel} is the host's; main has no handler for it.`)
     ipcMain.on(channel, (event, payload: unknown) => {
-      if (handles === 'fromPluginWindow' && !fromPluginWindow(event.sender)) return
       try {
         handler(payload, event)
       } catch (err) {

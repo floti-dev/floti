@@ -26,7 +26,7 @@ vi.mock('./bridge', () => import('./bridge.testkit'))
  * protocol is `relay.test.ts`'s.
  */
 
-const ORIGIN = 'helm-plugin://sample'
+const ORIGIN = 'floti-plugin://sample'
 
 const spec = (overrides: Partial<SurfaceSpec> = {}): SurfaceSpec => ({
   key: 'panel:sample/main',
@@ -203,7 +203,7 @@ describe('ending', () => {
   it('disposes only the frames the predicate names', () => {
     attachPluginFrame(spec(), slot())
     attachPluginFrame(spec({ key: 'tab:sample/item', surface: 'tab', name: 'item' }), slot())
-    attachPluginFrame(spec({ key: 'panel:other/main', plugin: 'other', url: 'helm-plugin://other/index.html' }), slot())
+    attachPluginFrame(spec({ key: 'panel:other/main', plugin: 'other', url: 'floti-plugin://other/index.html' }), slot())
 
     disposePluginFrames((each) => each.plugin === 'sample')
     expect(pluginFrameSpecs().map((each) => each.key)).toEqual(['panel:other/main'])

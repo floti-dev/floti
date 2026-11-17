@@ -86,12 +86,9 @@ describe('the React hooks', () => {
   })
 })
 
-describe.each([
-  ['a version 2 page', 'floti'],
-  ['a version 1 page', 'helm']
-] as const)('S5: in %s, the React hooks use window.%s', (_page, name) => {
+describe('S5: the React hooks use window.floti', () => {
   it('follow that bridge', async () => {
-    fake = installBridge(name)
+    fake = installBridge()
     const actions: string[] = []
     const { result } = renderHook(() => {
       useHelmEvent('action', ({ id }) => actions.push(id))

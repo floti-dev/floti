@@ -32,10 +32,8 @@ const { guardPluginFrames, installPluginPermissions, pluginNavigationAllowed, pl
 
 describe('pluginOriginOf', () => {
   it.each([
-    ['helm-plugin://sample/dist/panel.html', 'helm-plugin://sample'],
-    ['helm-plugin://sample/', 'helm-plugin://sample'],
-    ['helm-plugin://sample.build-box/dist/panel.html', 'helm-plugin://sample.build-box'],
     ['floti-plugin://sample/dist/panel.html', 'floti-plugin://sample'],
+    ['floti-plugin://sample/', 'floti-plugin://sample'],
     ['floti-plugin://sample.build-box/dist/panel.html', 'floti-plugin://sample.build-box'],
     ['https://example.com/', null],
     ['http://localhost:5173/', null],
@@ -50,17 +48,17 @@ describe('pluginOriginOf', () => {
 
 describe('pluginNavigationAllowed', () => {
   const base = {
-    target: 'helm-plugin://sample/dist/other.html',
-    frameOrigin: 'helm-plugin://sample',
-    initiatorOrigin: 'helm-plugin://sample',
+    target: 'floti-plugin://sample/dist/other.html',
+    frameOrigin: 'floti-plugin://sample',
+    initiatorOrigin: 'floti-plugin://sample',
     initiatorIsHelm: false,
     framesPlugins: true
   }
 
   it.each([
     ['a plugin frame to its own other page', {}, true],
-    ['a plugin frame to another plugin', { target: 'helm-plugin://other/x.html' }, false],
-    ['a plugin frame started by another plugin', { initiatorOrigin: 'helm-plugin://other' }, false],
+    ['a plugin frame to another plugin', { target: 'floti-plugin://other/x.html' }, false],
+    ['a plugin frame started by another plugin', { initiatorOrigin: 'floti-plugin://other' }, false],
     ['a plugin frame to a website', { target: 'https://example.com/' }, false],
     ['a plugin frame to plain http on this machine', { target: 'http://127.0.0.1:4790/' }, false],
     ['a plugin frame to about:blank', { target: 'about:blank' }, false],
@@ -71,7 +69,7 @@ describe('pluginNavigationAllowed', () => {
     ],
     [
       'Floti reloading a plugin frame onto another plugin it made it for',
-      { target: 'helm-plugin://other/x.html', initiatorIsHelm: true },
+      { target: 'floti-plugin://other/x.html', initiatorIsHelm: true },
       true
     ],
     [
@@ -96,8 +94,8 @@ describe('pluginNavigationAllowed', () => {
 })
 
 describe('the same plugin on two hosts', () => {
-  const ours = 'helm-plugin://sample'
-  const theirs = 'helm-plugin://sample.build-box'
+  const ours = 'floti-plugin://sample'
+  const theirs = 'floti-plugin://sample.build-box'
 
   it('s19: neither frame can navigate to the other’s origin, and each moves between its own pages', () => {
     const from = (origin: string, target: string): boolean =>
@@ -110,7 +108,7 @@ describe('the same plugin on two hosts', () => {
       })
     expect(from(ours, `${theirs}/dist/panel.html`)).toBe(false)
     expect(from(theirs, `${ours}/dist/panel.html`)).toBe(false)
-    expect(from(theirs, 'helm-plugin://sample.lab/dist/panel.html')).toBe(false)
+    expect(from(theirs, 'floti-plugin://sample.lab/dist/panel.html')).toBe(false)
     expect(from(ours, `${ours}/dist/other.html`)).toBe(true)
     expect(from(theirs, `${theirs}/dist/other.html`)).toBe(true)
   })
@@ -123,46 +121,6 @@ describe('the same plugin on two hosts', () => {
       request(null, 'clipboard-sanitized-write', (granted) => answers.push(granted), { requestingUrl: `${origin}/x.html` })
       request(null, 'notifications', (granted) => answers.push(granted), { requestingUrl: `${origin}/x.html` })
       expect(answers).toEqual([true, false])
-    }
-  })
-})
-
-describe('a version 1 and a version 2 plugin side by side', () => {
-  const v1 = 'helm-plugin://sample'
-  const v2 = 'floti-plugin://sample'
-  const from = (origin: string, target: string, initiatorIsHelm = false): boolean =>
-    pluginNavigationAllowed({ target, frameOrigin: origin, initiatorOrigin: origin, initiatorIsHelm, framesPlugins: true })
-
-  it('s1: keeps a version 2 frame on its own floti-plugin origin, scheme included, as a version 1 frame is kept on helm-plugin', () => {
-    expect(from(v2, `${v2}/dist/other.html`)).toBe(true)
-    expect(from(v2, `${v1}/dist/panel.html`)).toBe(false)
-    expect(from(v1, `${v2}/dist/panel.html`)).toBe(false)
-    expect(from(v2, 'floti-plugin://other/x.html')).toBe(false)
-    expect(from(v2, 'https://example.com/')).toBe(false)
-    // Helm itself puts a frame on either.
-    expect(from('http://localhost:5173', `${v2}/dist/panel.html`, true)).toBe(true)
-    expect(
-      pluginNavigationAllowed({
-        target: `${v2}/dist/panel.html`,
-        frameOrigin: 'https://example.com',
-        initiatorOrigin: 'https://example.com',
-        initiatorIsHelm: true,
-        framesPlugins: false
-      })
-    ).toBe(false)
-  })
-
-  it('s1: gives a version 2 page the clipboard write and nothing else, as a version 1 page', () => {
-    installPluginPermissions()
-    const request = handlers.request!
-    const check = handlers.check!
-    for (const origin of [v1, v2, 'floti-plugin://sample.build-box']) {
-      const answers: boolean[] = []
-      request(null, 'clipboard-sanitized-write', (granted) => answers.push(granted), { requestingUrl: `${origin}/x.html` })
-      request(null, 'notifications', (granted) => answers.push(granted), { requestingUrl: `${origin}/x.html` })
-      expect(answers).toEqual([true, false])
-      expect(check(null, 'media', origin, {})).toBe(false)
-      expect(check(null, 'clipboard-sanitized-write', origin, {})).toBe(true)
     }
   })
 })
@@ -200,14 +158,14 @@ describe('guardPluginFrames', () => {
     const page = contents(7)
     guardPluginFrames(page.contents, (id) => id === 7)
     expect(
-      page.navigate({ url: 'helm-plugin://sample/a.html', isMainFrame: false, frame: { origin: 'http://localhost:5173' }, initiator: page.top })
+      page.navigate({ url: 'floti-plugin://sample/a.html', isMainFrame: false, frame: { origin: 'http://localhost:5173' }, initiator: page.top })
     ).toBe(false)
     expect(
       page.navigate({
         url: 'https://example.com/',
         isMainFrame: false,
-        frame: { origin: 'helm-plugin://sample' },
-        initiator: { origin: 'helm-plugin://sample' }
+        frame: { origin: 'floti-plugin://sample' },
+        initiator: { origin: 'floti-plugin://sample' }
       })
     ).toBe(true)
   })
@@ -216,7 +174,7 @@ describe('guardPluginFrames', () => {
     const view = contents(8)
     guardPluginFrames(view.contents, () => false)
     expect(
-      view.navigate({ url: 'helm-plugin://sample/a.html', isMainFrame: false, frame: { origin: 'https://example.com' }, initiator: view.top })
+      view.navigate({ url: 'floti-plugin://sample/a.html', isMainFrame: false, frame: { origin: 'https://example.com' }, initiator: view.top })
     ).toBe(true)
   })
 
@@ -235,7 +193,7 @@ describe('guardPluginFrames', () => {
       }
     }
     expect(
-      page.navigate({ url: 'helm-plugin://sample/a.html', isMainFrame: false, frame: gone as never, initiator: gone })
+      page.navigate({ url: 'floti-plugin://sample/a.html', isMainFrame: false, frame: gone as never, initiator: gone })
     ).toBe(true)
   })
 })
@@ -250,9 +208,9 @@ describe('installPluginPermissions', () => {
   }
 
   it('gives a plugin page the clipboard write and nothing else', () => {
-    expect(request('clipboard-sanitized-write', 'helm-plugin://sample/a.html')).toBe(true)
+    expect(request('clipboard-sanitized-write', 'floti-plugin://sample/a.html')).toBe(true)
     for (const permission of ['media', 'notifications', 'geolocation', 'openExternal', 'clipboard-read', 'fullscreen']) {
-      expect(request(permission, 'helm-plugin://sample/a.html')).toBe(false)
+      expect(request(permission, 'floti-plugin://sample/a.html')).toBe(false)
     }
   })
 
@@ -261,9 +219,9 @@ describe('installPluginPermissions', () => {
   })
 
   it('applies the same rule to permission checks, by URL or by origin', () => {
-    expect(handlers.check!(null, 'media', 'helm-plugin://sample', { isMainFrame: false })).toBe(false)
+    expect(handlers.check!(null, 'media', 'floti-plugin://sample', { isMainFrame: false })).toBe(false)
     expect(
-      handlers.check!(null, 'clipboard-sanitized-write', '', { requestingUrl: 'helm-plugin://sample/x.html', isMainFrame: false })
+      handlers.check!(null, 'clipboard-sanitized-write', '', { requestingUrl: 'floti-plugin://sample/x.html', isMainFrame: false })
     ).toBe(true)
     expect(handlers.check!(null, 'media', 'http://localhost:5173', { isMainFrame: true })).toBe(true)
   })

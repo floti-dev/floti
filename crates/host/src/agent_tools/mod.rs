@@ -84,7 +84,7 @@
 //!
 //! **Families that come and go.** Besides the families it is built with, a
 //! listener reads a [`FamilySource`] on every request and every grant, such
-//! as the plugin tool servers a client offers: one that leaves the source
+//! as the plugins' tool servers: one that leaves the source
 //! answers 404 at once, and one that joins it reaches the launches after.
 //!
 //! **Read-only is allowed.** A tool a family lists with `readOnlyHint` is

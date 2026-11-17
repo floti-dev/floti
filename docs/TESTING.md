@@ -249,21 +249,15 @@ session lists, a call carried to that client and its answer handed back, no
 family for a launch with no browser attached, a call failing at once when
 the client leaves, and the refusals on the route. Its floti-sessions test
 compares what a session lists with `src/server/session_tools.json`, the table
-the desktop reads too. Its plugin tests attach a `TestClient` that listens on
-`agentPlugin:call` and `agentPlugin:cancel` and offers a plugin server: the
-tools a session lists and the read-only one in `--allowedTools`, a call
-answered by that client, a server left out of the next offer refused to a
-running session at once, calls failing at once when the client leaves, and a
-call withdrawn from the client when the session cancels it or ends.
-`crates/host/tests/it/host_plugin_tools.rs` does the same for the tools the host
-serves itself: a version 2 plugin of the test's own, its background module
-answering its tools with the caller it was told, painting a badge and a status
-item at load and fetching from its Node service on demand, with no client
-attached during the launches and calls; the plugin turned off, removed and
-with its tools off; a client's offer under its name passed over; and a version
-1 plugin's tool still answered by the client offering it. The relays
-themselves (`src/server/features/agent_browser.rs`, `agent_plugin.rs`) have
-unit tests with no listener.
+the desktop reads too.
+`crates/host/tests/it/host_plugin_tools.rs` covers the plugin tools the host
+serves: a plugin of the test's own, its background module answering its tools
+with the caller it was told, painting a badge and a status item at load and
+fetching from its Node service on demand, with no client attached during the
+launches and calls; the plugin turned off, removed and with its tools off;
+and an `agentPlugin:offer` and `agentPlugin:answer` taken and changing
+nothing, with no call sent to the client. The browser relay
+(`src/server/features/agent_browser.rs`) has unit tests with no listener.
 
 `crates/host/tests/it/os_conditionals.rs` fails, naming each `file:line`, when a
 compile-time OS conditional (`cfg(windows)`, `cfg!(unix)`, `target_os` and
@@ -505,8 +499,8 @@ over the window, or Electron's own guards on a page.
 | `notes` | a note rendered and its wikilink followed; a note edited beside its preview, its draft kept behind another tab, and saved; Ctrl+Shift+F finding a note; an HTML artifact framed with no reach |
 | `browser` | browsing; the security posture; a cookie surviving a restart; find in page; the browser's keys with the caret in the page; the page standing down for the address list and the menu; clipboard writing and fullscreen; the page standing down while a divider or the Browser tab is dragged |
 | `agent-tools` | a session drives a browser tab of its own through its own token, and loses its tools when it ends; a page the user shares with a session, read and driven until the share is taken back or the session ends |
-| `plugins` | the sample plugin, a version 2 plugin, against a server of its own: its background module, read through what it does (the badge, the status bar item, a command's effect, the tools' answers), a secret it asks for, its panel, badge, status and a tab with parameters, its pages on `floti-plugin://sample/` with `window.floti`, and `floti.fetch` held to the manifest's origins on every redirect; Floti's shortcuts from inside a plugin page and its commands from Ctrl+Shift+P; a crashed plugin page and Reload; a folder added in Settings, kept across a restart, and turned off and on; a session calling the plugin's tools through the host, answered by its background module, and losing them when they are turned off in Settings; a page strip; a plugin page starting a session and opening a link from a click |
-| `boundary` | every channel a workflow uses crosses only as `channels/boundary.rs` allows: the launcher, sessions and terminals; history; the Files view, a note and the profile form; plugin pages of both versions, a version 1 background page, a tool called by a session, and the Browser tab |
+| `plugins` | the sample plugin, against a server of its own: its background module, read through what it does (the badge, the status bar item, a command's effect, the tools' answers), a secret it asks for, its panel, badge, status and a tab with parameters, its pages on `floti-plugin://sample/` with `window.floti`, and `floti.fetch` held to the manifest's origins on every redirect; Floti's shortcuts from inside a plugin page and its commands from Ctrl+Shift+P; a crashed plugin page and Reload; a folder added in Settings, kept across a restart, and turned off and on; a session calling the plugin's tools through the host, answered by its background module, and losing them when they are turned off in Settings; a page strip; a plugin page starting a session and opening a link from a click |
+| `boundary` | every channel a workflow uses crosses only as `channels/boundary.rs` allows: the launcher, sessions and terminals; history; the Files view, a note and the profile form; plugin pages, a tool called by a session, and the Browser tab |
 
 - **Each test gets a world** (`test/world.ts`): a temporary root with a space in
   its path, in the run's root, named owner of its fake agents (a `test-owner`
@@ -537,10 +531,8 @@ over the window, or Electron's own guards on a page.
   the sample plugin into the world, registers it, starts its server, and finds
   a page with `pluginFrame`, on `floti-plugin://sample/` unless a test names
   another origin. The sample's background is a module the host runs, which no
-  window frames, so a test reads it through what it does;
-  `installVersion1Plugin` writes a small version 1 plugin whose background
-  page is a frame in the hidden plugin window, which `inVersion1Background`
-  runs a script in. `test:e2e` builds the sample first. Once a plugin
+  window frames, so a test reads it through what it does. `test:e2e` builds
+  the sample first. Once a plugin
   frame's process ends, Playwright counts the whole window as crashed and will
   not drive it again, so the crash test drives the window through the main
   process instead.

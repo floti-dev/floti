@@ -59,26 +59,24 @@ function check(name: string, lib: string[], source: string): { status: number | 
 }
 
 const PAGE = `/// <reference types="@floti-dev/plugin-sdk/global" />
-import type { ApiVersion, FlotiBridge, HelmBridge, PluginManifest, PluginSession } from '@floti-dev/plugin-sdk'
+import type { ApiVersion, FlotiBridge, PluginManifest, PluginSession } from '@floti-dev/plugin-sdk'
 
-// A version 2 page's floti, and a version 1 page's helm: the same calls, each at its version.
+// A page's floti, at version 2.
 export const two: 2 = floti.apiVersion
-export const one: 1 = window.helm.apiVersion
 export const page: FlotiBridge = window.floti
-export const old: HelmBridge = helm
 export const opened: Promise<void> = floti.tabs.open('page', { n: 1 }, { preview: true })
 export const linked: Promise<void> = floti.open('https://example.com')
 export const sessions: Promise<PluginSession[]> = floti.sessions.list()
 export const kind: 'dark' | 'light' = floti.theme.kind
 export const here: boolean = floti.onHostComputer
 
-// apiVersion is 1 or 2.
-export const versions: ApiVersion[] = [1, 2]
+// apiVersion is 2.
+export const versions: ApiVersion[] = [2]
+// @ts-expect-error there is no apiVersion 1 any more
+export const one: ApiVersion = 1
 // @ts-expect-error there is no apiVersion 3
 export const three: ApiVersion = 3
 export const manifest: PluginManifest = { apiVersion: 2, id: 'x', name: 'X', background: 'background/main.js' }
-// @ts-expect-error a version 2 page's bridge is not version 1's
-export const crossed: HelmBridge = floti
 `
 
 const BACKGROUND = `/// <reference types="@floti-dev/plugin-sdk/background" />
@@ -111,7 +109,7 @@ export const page = window
 `
 
 describe('the SDK types', () => {
-  it('S4: type floti and helm for a page, and apiVersion as 1 or 2', () => {
+  it('S4: type floti for a page, and apiVersion as 2 alone', () => {
     const result = check('page', ['ES2023', 'DOM'], PAGE)
     expect(result.output).toBe('')
     expect(result.status).toBe(0)

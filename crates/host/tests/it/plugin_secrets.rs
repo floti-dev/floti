@@ -909,9 +909,7 @@ async fn every_plugin_and_secrets_channel_is_served() {
             unserved::later(name).is_none(),
             "{name} is listed as not served yet"
         );
-        if !floti_host_internal(name) {
-            assert!(served.contains(name), "{name} is not served");
-        }
+        assert!(served.contains(name), "{name} is not served");
     }
     let drift = unserved::drift(&catalogue, &served);
     assert!(drift.is_empty(), "{drift}");
@@ -920,11 +918,4 @@ async fn every_plugin_and_secrets_channel_is_served() {
     assert!(client.request::<SecretsList>(&()).await.unwrap().available);
     drop(client);
     host.stop(HostStopReason::Stop).await;
-}
-
-/// The plugin channels that stay inside the host and are never a client's.
-fn floti_host_internal(name: &str) -> bool {
-    floti_protocol::channels::boundary::HOST_INTERNAL
-        .iter()
-        .any(|internal| internal.covers(name))
 }

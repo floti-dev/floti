@@ -393,40 +393,22 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   directory - never the token, never anything of the conversation. Turning
   them on reaches sessions started after; turning them off reaches running
   ones at once.
-- The host serves a version 2 plugin's tools itself
-  (`server/plugin_tools.rs` `HostPluginTools`): for each plugin whose
-  background module runs in its engine, on, error-free and with its tools
-  on, `floti-plugin-<id>` at `/mcp/plugin/<id>`, worded from the manifest as
-  Floti words an offer, is given to every launch with its read-only tools in
-  `--allowedTools`, with no client attached. Each call goes to the module's
-  handler (`Registry::call_tool`), naming the session as the relay does, and
-  is cancelled there when the session drops it. The plugin turned off,
-  removed or with its tools switched off loses its route at once (404) and is
-  given to no later launch, until it is back on. A client's offer naming a
-  plugin the host serves itself, or one that is off, removed or has its tools
-  off, is passed over (`PluginRelay::installed`), and that client is sent no
-  call for it.
-- For a version 1 plugin a client offers its servers (`agentPlugin:offer`,
-  replacing its last offer) and answers their calls (`agentPlugin:call`,
-  `agentPlugin:answer`). Each is
-  served as `floti-plugin-<id>` at `/mcp/plugin/<id>`, given to launches only
-  while that client listens, its read-only tools passed as `--allowedTools`.
-  A server left out of an offer answers 404 at once; a call is withdrawn
-  (`agentPlugin:cancel`) when the session cancels it, its request goes away
-  or the session ends; with its client gone, a call fails at once saying
-  Floti's window is not connected. Main offers the host the servers of the
-  plugins it lists as offering tools, on each connect and each change
-  (`main/host/plugin-tools.ts`), hands each call to the plugin's background
-  page in the hidden plugin host window (`main/host/plugins.ts` `callTool`)
-  and answers with its tool result.
-- A host serves an offered server only for a plugin it has itself, on,
-  error-free and with its tools on (`PluginRelay::installed`), whatever a
-  client offers: a plugin only another host has is given to no launch here,
-  and its route answers 404. Main runs one tool relay per host on that host's
-  own link (`main/host/remote-plugins.ts` for each remote host), offering it
-  only that host's plugins, and each call it relays names its host to the
-  end, so a remote host's session is answered by that host's background page
-  and never by This PC's.
+- The host serves every plugin's tools itself (`server/plugin_tools.rs`
+  `HostPluginTools`): for each plugin on, error-free and with its tools on,
+  `floti-plugin-<id>` at `/mcp/plugin/<id>`, worded from the manifest, is
+  given to every launch with its read-only tools in `--allowedTools`, with no
+  client attached. Each call goes to the background module's handler
+  (`Registry::call_tool`), naming the session, and is cancelled there when
+  the session drops it. The plugin turned off, removed or with its tools
+  switched off loses its route at once (404) and is given to no later
+  launch, until it is back on. A plugin only another host has is given to no
+  launch here, and its route answers 404, so a remote host's session is
+  answered by that host's plugin and never by This PC's.
+- The protocol still declares `agentPlugin:offer`, `agentPlugin:call`,
+  `agentPlugin:answer` and `agentPlugin:cancel`, so its version is
+  unchanged. No client sends on them: the host takes an offer or an answer
+  and changes nothing, and never emits a call or a cancel
+  (`server/features/agent_plugin.rs`).
 
 ## Agent definitions
 
