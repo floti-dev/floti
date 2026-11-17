@@ -62,6 +62,10 @@ it had a gap: add the unit or integration test that fails for it, then fix
 it. An end-to-end run that keeps sending work back means those tiers are not
 good enough. Only what needs the whole app running stays an end-to-end test.
 
+`packages/desktop/test/old-name.test.ts`, part of `pnpm check`, fails naming
+every tracked file, line and path that says the name Floti had before, with
+no allow list: that name is not used in this repository.
+
 The protocol crate generates JSON Schema and TypeScript into
 `crates/floti-protocol/generated/`. A test fails when those files are out of
 date and names the command that rewrites them:
