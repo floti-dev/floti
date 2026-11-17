@@ -40,7 +40,7 @@ use floti_protocol::channels::sessions::{
 };
 use tokio::sync::broadcast;
 
-use super::{ActivityHandle, Caller, Feature, FeatureContext, PluginRelay};
+use super::{ActivityHandle, Caller, Feature, FeatureContext};
 use crate::plugins::log::PluginLogs;
 use crate::plugins::net::Net;
 use crate::plugins::runtime::{ChannelMessage, IsolateRuntime};
@@ -61,21 +61,18 @@ pub(crate) struct Plugins {
 impl Plugins {
     /// Builds the registry and starts every plugin that is on. `activity`
     /// is read again when a plugin starts a session; `sessions` is what
-    /// plugins are told of the host's sessions; `tools` (the version 1
-    /// plugins' tools, answered by clients) and `hosted` (the version 2
-    /// plugins', answered by the host's engine through this registry) are
-    /// told the list each time it moves. Call it from inside a Tokio
+    /// plugins are told of the host's sessions; `hosted` (the plugins'
+    /// tools, answered by the host's engine through this registry) is told
+    /// the list each time it moves. Call it from inside a Tokio
     /// runtime: it starts the tasks that carry sessions and background
     /// posts to plugins.
     pub fn new(
         context: &FeatureContext,
         activity: ActivityHandle,
         sessions: Arc<PluginSessions>,
-        tools: Arc<PluginRelay>,
         hosted: Arc<HostPluginTools>,
     ) -> crate::Result<Self> {
         let events = Arc::clone(&context.events);
-        let serving = Arc::clone(&tools);
         let hosting = Arc::clone(&hosted);
         let delivering = Arc::clone(&context.events);
         context.events.serve_events::<PluginsDeliver>();
@@ -97,7 +94,6 @@ impl Plugins {
             logs,
             publish: Box::new(move |list| {
                 hosting.installed(list);
-                serving.installed(list);
                 // A list nobody could be sent is not a reason to fail the
                 // change that made it: the next one carries it.
                 let _ = events.set_state::<PluginsChanged, _>(list);
@@ -125,7 +121,6 @@ impl Plugins {
         registry.start()?;
         let list = registry.list();
         hosted.installed(&list);
-        tools.installed(&list);
         context.events.serve_state::<PluginsChanged, _>(&list)?;
         tokio::spawn(tell_sessions(
             context.events.observe(),

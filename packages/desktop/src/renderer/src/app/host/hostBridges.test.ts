@@ -222,13 +222,10 @@ describe("the preload’s bridge as a remote host’s adapters see it", () => {
     const own = remoteOwn(bridge, () => "build-box");
     const heard: string[] = [];
     own.on("windowSessions:quitConfirm", () => heard.push("quit"));
-    own.on("pluginBackground:changed", () => heard.push("background"));
     own.on("ownSettings:changed", () => heard.push("settings"));
     bridge.emit("windowSessions:quitConfirm", { id: 1 } as never);
-    bridge.emit("pluginBackground:changed", []);
     bridge.emit("ownSettings:changed", DEFAULT_SETTINGS);
-    // Main's background reports cover every host; the plugins adapter keeps its own host's.
-    expect(heard).toEqual(["background", "settings"]);
+    expect(heard).toEqual(["settings"]);
 
     expect(await own.invoke("windowSessions:lostLayout")).toBeNull();
     await expect(

@@ -4,8 +4,8 @@
 //! A version's record holds every host channel (its kind, its capability and
 //! the types it carries) and every type's JSON Schema, the handshake's
 //! messages included. It is the shape only: descriptions are left out, so a
-//! doc comment changes no record, and so are the client-only and
-//! host-internal lists, which never cross the protocol.
+//! doc comment changes no record, and so is the client-only list, which
+//! never crosses the protocol.
 //!
 //! `cargo run -p floti-protocol --bin generate` writes the current version's
 //! record when there is none. When there is one and the protocol differs

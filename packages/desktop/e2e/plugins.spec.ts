@@ -15,11 +15,10 @@ import { TOKEN, installSample, pluginFrame, startServer, type SampleFixture } fr
  * and what Helm holds it to - the hosts it may reach, the shortcuts it may not
  * keep, the process it may crash without taking Helm with it.
  *
- * The sample is a version 2 plugin: its pages are on `floti-plugin://sample/`
+ * The sample's pages are on `floti-plugin://sample/`
  * with `window.floti`, and its background is a module the host runs, read
  * here through what it does - the badge, the status bar item, a command's
- * effect and the tools' answers. A version 1 plugin loading beside it, on
- * `helm-plugin://` with `window.helm`, is in `boundary.spec.ts`.
+ * effect and the tools' answers.
  *
  * The detail is in `main/plugins/*.test.ts` and the relay's and bridge's own
  * tests; these are the workflows.
@@ -164,11 +163,11 @@ test('a plugin: its background module, a secret it asks for, its panel, badge, s
   expect(await tab.evaluate(() => (window as unknown as PluginWindow).floti.context.params)).toEqual({ id: '2' })
 
   // Every page is drawn on the computer the plugin runs on, with the version
-  // 2 bridge and no other.
-  const bridge = '[window.floti.onHostComputer, window.floti.apiVersion, typeof window.helm]'
+  // 2 bridge.
+  const bridge = '[window.floti.onHostComputer, window.floti.apiVersion]'
   expect([await panel.evaluate(bridge), await tab.evaluate(bridge)]).toEqual([
-    [true, 2, 'undefined'],
-    [true, 2, 'undefined']
+    [true, 2],
+    [true, 2]
   ])
 
   // A post on a BroadcastChannel reaches the plugin's other pages, and every
@@ -272,7 +271,7 @@ test("Floti's shortcuts work from inside a plugin page, and its commands run fro
 function inHelm<T>(helm: Helm, script: string, frameUrl?: string): Promise<T> {
   return helm.app.evaluate(
     async ({ BrowserWindow }, { script, frameUrl }) => {
-      const win = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().endsWith('/plugin-host.html'))
+      const win = BrowserWindow.getAllWindows()[0]
       if (win === undefined) throw new Error('no Floti window')
       if (frameUrl === undefined) return (await win.webContents.executeJavaScript(script)) as T
       const frame = win.webContents.mainFrame.framesInSubtree.find((f) => f.url.startsWith(frameUrl))
@@ -305,7 +304,7 @@ test('a plugin page that crashes says so in its own place, and Reload brings it 
   // The page's process ends from outside, the way a renderer that runs out of
   // memory or is ended in Task Manager does.
   const pids = await helm.app.evaluate(({ BrowserWindow }, url) => {
-    const win = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().endsWith('/plugin-host.html'))
+    const win = BrowserWindow.getAllWindows()[0]
     const frame = win?.webContents.mainFrame.framesInSubtree.find((f) => f.url.startsWith(url))
     if (win === undefined || frame === undefined) throw new Error(`no frame at ${url}`)
     const pids = { helm: win.webContents.getOSProcessId(), plugin: frame.osProcessId }

@@ -10,7 +10,7 @@ import type { Plugin } from 'vite'
  * which every plugin page loads from Helm under `/__helm/bridge.js`. It is
  * TypeScript checked against the SDK's types like the rest of the app, and it
  * has to arrive as one self-contained IIFE: a classic script in the page's
- * `<head>`, so `window.helm` is there before the plugin's own modules run.
+ * `<head>`, so `window.floti` is there before the plugin's own modules run.
  * Building it here, inside the main bundle, keeps that to one build step.
  */
 export function inlineScript(): Plugin {

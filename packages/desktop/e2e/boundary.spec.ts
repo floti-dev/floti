@@ -1,34 +1,23 @@
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { isClientOnly, isHostInternal } from '../../../crates/floti-protocol/generated/floti-protocol.generated'
+import { isClientOnly } from '../../../crates/floti-protocol/generated/floti-protocol.generated'
 import type { RecordedChannel } from '../src/main/ipc-recorder'
 import { bearerOf, callTool, readMcpConfig } from '../test/mcp-client'
 import { startBrowserFixture } from './browser-fixture'
-import {
-  CLASSIC,
-  TOKEN,
-  inVersion1Background,
-  installSample,
-  installVersion1Plugin,
-  pluginFrame,
-  startServer,
-  type SampleFixture
-} from './plugin-fixture'
+import { TOKEN, installSample, pluginFrame, startServer, type SampleFixture } from './plugin-fixture'
 import { claudeRunIn, expect, openHistory, startSession, terminalText, test as base, typeLine, type Helm } from './helm'
 
 /**
- * Electron IPC carries only what `boundary.rs` lists as client-only: the browser pane, clipboard, window,
- * theme, dialogs and each Helm page's own connection to the host. Everything
- * else reaches the host over that connection, in the protocol's types.
+ * Electron IPC carries only what `boundary.rs` lists as client-only: the
+ * browser pane, clipboard, window, theme, dialogs and the window's own
+ * connection to the host. Everything else reaches the host over that
+ * connection, in the protocol's types.
  *
  * Main records every channel used and which page used it (`ipc-recorder.ts`);
  * after each workflow the test fails naming any channel the generated
- * client-only list does not cover. A host-internal channel passes only on the
- * hidden window version 1 plugins' background pages run in, inside the
- * desktop; a version 2 background is a module the host runs, and the sample
- * is one. A small version 1 plugin beside it keeps the hidden window in the
- * workflow. Main registers nothing else, so a channel it does not
- * list could only show up here as one main answered.
+ * client-only list does not cover. A plugin's background is a module the
+ * host runs, and the sample's is one. Main registers nothing else, so a
+ * channel it does not list could only show up here as one main answered.
  */
 
 const test = base.extend<{ sample: SampleFixture }>({
@@ -43,7 +32,6 @@ const test = base.extend<{ sample: SampleFixture }>({
   ],
   world: async ({ world, sample }, use) => {
     sample.dir = installSample(world, sample.server)
-    installVersion1Plugin(world)
     const notes = join(world.projects.alpha, 'notes')
     mkdirSync(notes, { recursive: true })
     writeFileSync(join(notes, 'first.md'), '# First note\n\nWritten for the boundary.\n')
@@ -60,8 +48,7 @@ const recorded = (helm: Helm): Promise<RecordedChannel[]> =>
 function strays(channels: readonly RecordedChannel[]): string[] {
   return channels
     .filter(
-      ({ channel, page }) =>
-        !isClientOnly(channel) && !(isHostInternal(channel) && page === 'background')
+      ({ channel }) => !isClientOnly(channel)
     )
     .map(({ channel, kind, page }) => `${channel} (${kind}, ${page})`)
     .sort()
@@ -138,7 +125,7 @@ test('the Files view, a note and the profile form use only client channels', asy
   await expectOnlyClientChannels(helm)
 })
 
-test('plugin pages of both versions, a version 1 background page, a tool called by a session, and the Browser tab use only client channels', async ({
+test('plugin pages, a tool called by a session, and the Browser tab use only client channels', async ({
   helm,
   sample,
   world
@@ -162,26 +149,6 @@ test('plugin pages of both versions, a version 1 background page, a tool called 
   // channel: the sample's background module heard it through the host and
   // counted again.
   await expect(window.locator('[data-status-plugin="sample"]')).toHaveText('1 unread')
-
-  // The version 1 plugin: its background page is running in the hidden window,
-  // and a post from its panel reaches it, through the host and the hidden
-  // window's own connection.
-  await expect(window.locator(`[data-status-plugin="${CLASSIC.id}"]`)).toHaveText('Classic: running')
-  await destination(helm, new RegExp(`^${CLASSIC.name}`)).click()
-  const classic = await pluginFrame(window, 'panel.html', CLASSIC.origin)
-  // Its page has the version 1 bridge and no other.
-  expect(await classic.evaluate('[window.helm.apiVersion, typeof window.floti]')).toEqual([1, 'undefined'])
-  const sent = { from: 'the panel' }
-  await expect
-    .poll(() =>
-      inVersion1Background(
-        helm,
-        `(() => { window.__heard = []; new BroadcastChannel('boundary').onmessage = (event) => window.__heard.push(event.data); return true })()`
-      ).catch(() => false)
-    )
-    .toBe(true)
-  await classic.evaluate(`(() => { new BroadcastChannel('boundary').postMessage(${JSON.stringify(sent)}); return true })()`)
-  await expect.poll(() => inVersion1Background(helm, 'window.__heard')).toEqual([sent])
 
   const run = await claudeRunIn(world, world.projects.alpha)
   const config = readMcpConfig(run.argv[run.argv.indexOf('--mcp-config') + 1] ?? '')

@@ -56,8 +56,6 @@ export default defineConfig({
           // Spike B/C's harness page, kept as its own entry so the regression
           // checks drive a bare terminal with no app chrome around it.
           spike: resolve(__dirname, 'src/renderer/spike.html'),
-          // The hidden page plugins' background pages run in (main/plugins/background.ts).
-          'plugin-host': resolve(__dirname, 'src/renderer/plugin-host.html'),
           // The browser's menu layer: the bar's menus over a live page (main/menuLayer.ts).
           layer: resolve(__dirname, 'src/renderer/layer.html')
         }

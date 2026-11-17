@@ -1,46 +1,13 @@
 import type { SettingSpec } from '@floti-dev/plugin-sdk'
-import type { PluginBackgroundReport, PluginDelivery, PluginInfo, PluginLogLine, PluginUiRequest } from '../../ipc'
+import type { PluginDelivery, PluginInfo, PluginLogLine, PluginUiRequest } from '../../ipc'
 import { LOCAL_HOST_KEY } from '@helm/core/types'
 import { onHostOrigin } from '../../plugins/origin'
 import type * as P from '../protocol'
 
 /**
  * The host's plugins in the window's vocabulary. Nothing here reaches Node,
- * so main and the window's and the hidden plugin window's adapters share it.
+ * so main and the window's adapters share it.
  */
-
-/** A background a page runs, as opposed to a script the host's engine runs. */
-export const isBackgroundPage = (url: string): boolean => /\.html?$/i.test(new URL(url).pathname)
-
-/**
- * The host's list with what the hidden plugin window saw of each background
- * page it runs. The host lists a background page without running it, so a
- * page of an enabled plugin with no error is starting until a report for the
- * plugin's current read says it runs or crashed.
- */
-export function withBackgroundReports(
-  list: readonly PluginInfo[],
-  report: (plugin: string) => PluginBackgroundReport | undefined
-): PluginInfo[] {
-  return list.map((plugin) => {
-    const { background } = plugin
-    if (
-      background === null ||
-      plugin.id === null ||
-      !plugin.enabled ||
-      plugin.error !== null ||
-      !isBackgroundPage(background.url)
-    ) {
-      return plugin
-    }
-    const seen = report(plugin.id)
-    const current = seen !== undefined && seen.revision === plugin.revision ? seen : null
-    return {
-      ...plugin,
-      background: { ...background, state: current?.state ?? 'starting', error: current?.error ?? null }
-    }
-  })
-}
 
 /**
  * A plugin as the host lists it, in the shape Helm's window draws. A remote

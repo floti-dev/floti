@@ -14,12 +14,10 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   exposes three generic functions; a feature adds a channel, not a bridge
   method. `term:*` (the spike page's single pty) and `session:*` (the host's
   sessions) never mix.
-- Each Floti page (the window, and the hidden plugin host window) reaches the
-  host over its own protocol connection, which main pipes to a bridge unread
-  (`hostLink:*`); the bridge holds the device key, never a window. Electron
-  IPC carries only what `channels/boundary.rs` lists as client-only, and its
-  host-internal channels from the hidden plugin window: `registerIpc`
-  registers nothing else, and a page's router (`app/host/router.ts`) refuses
+- The window reaches the host over its own protocol connection, which main
+  pipes to a bridge unread (`hostLink:*`); the bridge holds the device key,
+  never a window. Electron IPC carries only what `channels/boundary.rs` lists
+  as client-only: `registerIpc` registers nothing else, and a page's router (`app/host/router.ts`) refuses
   any other channel at once. `e2e/boundary.spec.ts` fails naming any channel
   that crossed. Main runs no session, terminal, config reader, content,
   template or scan service of its own; those are the host's.

@@ -1,6 +1,5 @@
-//! Plugin background scripts in the host's isolates, as today's
-//! `desktop/main/plugins/host.test.ts` tests the background page and tools
-//! for sessions, and `tools.test.ts` the tool calls in flight.
+//! Plugin background scripts in the host's isolates, and their tools for
+//! sessions.
 //!
 //! Each script is written into a plugin folder under the test's own
 //! `TestDirs`. What a client sees (the plugin list going from starting to

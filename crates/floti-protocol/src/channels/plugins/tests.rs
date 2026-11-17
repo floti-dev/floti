@@ -422,34 +422,19 @@ fn every_plugin_and_secret_channel_in_ipc_ts_is_declared_with_its_kind_and_capab
 }
 
 #[test]
-fn host_internal_and_client_only_plugin_channels_are_not_declared() {
+fn the_client_only_plugin_channel_is_not_declared() {
     use crate::channels::boundary::{Placement, placement};
 
     let protocol = crate::channel::Catalogue::protocol();
-    let host_internal = [
-        "plugins:tool",
-        "plugins:toolCancel",
-        "plugins:toolResult",
-        "plugins:backgroundState",
-    ];
-    for name in host_internal {
-        assert!(
-            matches!(placement(&protocol, name), Some(Placement::HostInternal(_))),
-            "{name} stays between a background page and what runs it"
-        );
-    }
     assert!(matches!(
         placement(&protocol, "plugins:theme"),
         Some(Placement::ClientOnly(_))
     ));
-    let declared: Vec<_> = DECLARED.iter().map(|(name, ..)| *name).collect();
-    for name in host_internal.into_iter().chain(["plugins:theme"]) {
-        assert!(
-            protocol.get(name).is_none(),
-            "{name} must not cross the protocol"
-        );
-        assert!(!declared.contains(&name));
-    }
+    assert!(
+        protocol.get("plugins:theme").is_none(),
+        "plugins:theme must not cross the protocol"
+    );
+    assert!(!DECLARED.iter().any(|(name, ..)| *name == "plugins:theme"));
 }
 
 #[test]

@@ -16,7 +16,7 @@ use ts_rs::{TS, TypeVisitor};
 
 use crate::capability::Capability;
 use crate::channel::{Catalogue, ChannelKind, Shape, TypeInfo};
-use crate::channels::boundary::{CLIENT_ONLY, HOST_INTERNAL, Outside};
+use crate::channels::boundary::{CLIENT_ONLY, Outside};
 use crate::flow::DEFAULT_INITIAL_CREDIT;
 use crate::frame::MAX_FRAME_LEN;
 use crate::message::Message;
@@ -199,8 +199,8 @@ pub fn typescript(catalogue: &Catalogue) -> String {
     out
 }
 
-/// `boundary.rs`'s client-only and host-internal lists, and the check that
-/// says whether an entry covers a channel, which matches [`Outside::covers`].
+/// `boundary.rs`'s client-only list, and the check that says whether an
+/// entry covers a channel, which matches [`Outside::covers`].
 fn outside_typescript() -> String {
     let entries = |list: &[Outside]| -> String {
         list.iter()
@@ -224,20 +224,11 @@ fn outside_typescript() -> String {
     );
     let _ = writeln!(
         out,
-        "/** Channels between a plugin's background page and what runs it, which never cross the protocol. */\nexport const HOST_INTERNAL: readonly OutsideEntry[] = [\n{}];\n",
-        entries(HOST_INTERNAL)
-    );
-    let _ = writeln!(
-        out,
         "/** Whether `name` is this entry's channel or in its family. */\nexport function outsideCovers(entry: OutsideEntry, name: string): boolean {{\n  return entry.channels.endsWith(\"*\") ? name.startsWith(entry.channels.slice(0, -1)) : name === entry.channels;\n}}\n"
     );
     let _ = writeln!(
         out,
-        "/** Whether a client-only entry covers `name`. */\nexport function isClientOnly(name: string): boolean {{\n  return CLIENT_ONLY.some((entry) => outsideCovers(entry, name));\n}}\n"
-    );
-    let _ = writeln!(
-        out,
-        "/** Whether a host-internal entry covers `name`. */\nexport function isHostInternal(name: string): boolean {{\n  return HOST_INTERNAL.some((entry) => outsideCovers(entry, name));\n}}"
+        "/** Whether a client-only entry covers `name`. */\nexport function isClientOnly(name: string): boolean {{\n  return CLIENT_ONLY.some((entry) => outsideCovers(entry, name));\n}}"
     );
     out
 }

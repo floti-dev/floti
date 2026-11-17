@@ -6,11 +6,9 @@ import {
   type HelmBridge as Ipc,
   type PluginCallOutcome,
   type PluginDelivery,
-  type PluginFetchResponse,
-  type PluginToolCall,
-  type PluginToolOutcome
+  type PluginFetchResponse
 } from '../../../shared/ipc'
-import { hostLabel, parsePluginOrigin, pluginSchemeOf } from '../../../shared/plugins/origin'
+import { hostLabel, parsePluginOrigin } from '../../../shared/plugins/origin'
 import {
   CONNECT,
   HELLO,
@@ -21,11 +19,10 @@ import {
 } from '../../plugin-runtime/wire'
 
 /**
- * The Helm side of every plugin frame: the half of `wire.ts` that answers.
+ * The desktop side of every plugin frame: the half of `wire.ts` that answers.
  *
- * Both Helm pages that frame plugins run one - the window, for panels and
- * tabs, and the hidden background host, for background pages - and neither
- * page's own code talks to a plugin any other way. A relay makes the frame,
+ * The window runs one for the plugins' panels and tabs, and its own code
+ * talks to a plugin no other way. A relay makes the frame,
  * answers its `HELLO` with a port of its own, carries its bridge calls to main
  * and the answers back, and hands it Helm's events: the theme, its visibility,
  * and what main delivers for its plugin.
@@ -73,7 +70,7 @@ export interface SurfaceSpec {
   revision: number
   url: string
   surface: SurfaceKind
-  /** The panel's or tab's key in the manifest; `background` for the background page. */
+  /** The panel's or tab's key in the manifest. */
   name: string
   params: PluginParams
   /** The frame's accessible name. */
@@ -126,8 +123,6 @@ interface Frame {
   hellosAtLoad: number
   /** In-flight calls of the current connection: the page's id to the call id main knows. */
   calls: Map<number, string>
-  /** Tool calls handed to the page and not answered yet. Each is answered for, whatever becomes of the page. */
-  tools: Set<string>
   queue: HelmMessage[]
   visible: boolean
   timer: ReturnType<typeof setTimeout> | null
@@ -135,7 +130,7 @@ interface Frame {
 
 export interface PluginRelayOptions {
   win: Window
-  /** This PC's bridge: its plugins' calls, and what main says to every frame (the theme, tool calls). */
+  /** This PC's bridge: its plugins' calls, and what main says to every frame (the theme). */
   ipc: Ipc
   /**
    * A remote host's bridge, for its plugins' calls and deliveries; with none,
@@ -168,10 +163,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
     frame.timer = null
   }
 
-  const toolResult = (outcome: PluginToolOutcome): void => {
-    ipc.send('plugins:toolResult', outcome)
-  }
-
   /** Each remote host's deliveries, heard from the first frame of that host on. */
   const hostDeliveries = new Map<string, () => void>()
 
@@ -195,7 +186,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
   const deliver = (host: string | undefined, delivery: PluginDelivery): void => {
     for (const frame of frames.values()) {
       if (frame.spec.plugin !== delivery.plugin || !onHost(frame.spec, host)) continue
-      if (delivery.to === 'background' && frame.spec.surface !== 'background') continue
+      if (delivery.to === 'background') continue
       event(frame, delivery.event, delivery.data)
     }
   }
@@ -212,19 +203,10 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
     )
   }
 
-  /** Every tool call the page was handed and will now never answer, failed for the session waiting on it. */
-  const failTools = (frame: Frame): void => {
-    for (const id of frame.tools) {
-      toolResult({ id, ok: false, message: "The plugin's background page stopped before it answered." })
-    }
-    frame.tools.clear()
-  }
-
   /** Ends the current connection: its calls are cancelled in main and its port closed. */
   const disconnect = (frame: Frame): void => {
     for (const callId of frame.calls.values()) ipcOf(frame.spec)?.send('plugins:cancel', { callId })
     frame.calls.clear()
-    failTools(frame)
     if (frame.port !== null) {
       frame.port.onmessage = null
       frame.port.close()
@@ -256,10 +238,8 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
   const onWindowMessage = (event: MessageEvent): void => {
     const data = event.data as { type?: unknown } | null
     if (data === null || typeof data !== 'object' || data.type !== HELLO) return
-    // The origin names the plugin, its host and its scheme: a page is known
-    // as the frame made for that very plugin on that very host, on the
-    // scheme its URL has (helm-plugin at version 1, floti-plugin at 2), and
-    // no other.
+    // The origin names the plugin and its host: a page is known as the frame
+    // made for that very plugin on that very host, and no other.
     const origin = parsePluginOrigin(event.origin)
     if (origin === null) return
     let frame: Frame | undefined
@@ -267,7 +247,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
       if (
         candidate.spec.plugin === origin.plugin &&
         labelOf(candidate.spec) === origin.label &&
-        pluginSchemeOf(candidate.spec.url) === origin.scheme &&
         candidate.element.contentWindow === event.source
       ) {
         frame = candidate
@@ -293,7 +272,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
       frame.port = null
       for (const callId of frame.calls.values()) ipcOf(frame.spec)?.send('plugins:cancel', { callId })
       frame.calls.clear()
-      failTools(frame)
       clearTimer(frame)
       frame.timer = setTimeout(() => {
         frame.timer = null
@@ -380,17 +358,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
         hooks.keep?.(frame.spec)
         return
       }
-      case 'tool-result': {
-        // Only an answer to a call this frame was handed: a page cannot answer
-        // for another page's tools, or answer twice.
-        const id = message['id']
-        if (typeof id !== 'string' || !frame.tools.delete(id)) return
-        const text = message['text']
-        const said = message['message']
-        if (message['ok'] === true && typeof text === 'string') toolResult({ id, ok: true, text })
-        else toolResult({ id, ok: false, message: typeof said === 'string' && said !== '' ? said : 'The tool failed.' })
-        return
-      }
       default:
         return
     }
@@ -405,7 +372,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
         id,
         ok: false,
         code: 'not-allowed',
-        message: `helm.${method} needs a click or key press the user just made in the page`
+        message: `floti.${method} needs a click or key press the user just made in the page`
       })
       return
     }
@@ -455,35 +422,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
   // This PC's deliveries reach This PC's frames; each remote host's, its own (`hearHost`).
   const offDeliver = ipc.on('plugins:deliver', (delivery: PluginDelivery) => deliver(undefined, delivery))
 
-  // A session's tool call, for the plugin's background page on the host the
-  // session runs on, and no other host's. Main sends these to the background
-  // host only, and every one is answered: by the page, or here when there is
-  // no page connected to answer it.
-  const offTool = ipc.on('plugins:tool', (call: PluginToolCall) => {
-    let frame: Frame | undefined
-    for (const candidate of frames.values()) {
-      if (
-        candidate.spec.plugin === call.plugin &&
-        candidate.spec.surface === 'background' &&
-        onHost(candidate.spec, call.host)
-      ) {
-        frame = candidate
-      }
-    }
-    if (frame === undefined || frame.port === null) {
-      toolResult({ id: call.id, ok: false, message: "The plugin's background page is not running." })
-      return
-    }
-    frame.tools.add(call.id)
-    post(frame, { t: 'tool', id: call.id, name: call.name, args: call.args, session: call.session })
-  })
-
-  const offToolCancel = ipc.on('plugins:toolCancel', ({ id }) => {
-    for (const frame of frames.values()) {
-      if (frame.tools.delete(id)) post(frame, { t: 'tool-cancel', id })
-    }
-  })
-
   // The first theme, for frames that connect before anything changes it. An
   // event that beat this read is newer, and stays.
   void Promise.all([ipc.invoke('theme:current'), ipc.invoke('settings:read')]).then(
@@ -521,7 +459,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
       hellos: 0,
       hellosAtLoad: 0,
       calls: new Map(),
-      tools: new Set(),
       queue: [],
       visible: false,
       timer: null
@@ -630,8 +567,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
       win.removeEventListener('message', onWindowMessage)
       offTheme()
       offDeliver()
-      offTool()
-      offToolCancel()
       for (const off of hostDeliveries.values()) off()
       hostDeliveries.clear()
       for (const frame of [...frames.values()]) drop(frame)

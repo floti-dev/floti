@@ -2,23 +2,20 @@ import type {
   ExecOptions,
   ExecResult,
   FlotiBridge,
-  HelmBridge,
   HelmContext,
   HelmError,
   HelmErrorCode,
   HelmEvents,
   HelmTheme,
-  PluginBridge,
   PluginParams,
   PluginSession,
   SecretState,
   SessionStartRequest,
   SessionStartResult,
   SettingValue,
-  StatusItem,
-  ToolHandler
+  StatusItem
 } from '@floti-dev/plugin-sdk'
-import { PLUGIN_TOOL_ANSWER_MAX_CHARS as TOOL_ANSWER_MAX_CHARS, type PluginFetchRequest, type PluginFetchResponse } from '../../shared/ipc'
+import type { PluginFetchRequest, PluginFetchResponse } from '../../shared/ipc'
 import {
   CONNECT,
   CONTEXT_PREFIX,
@@ -30,15 +27,12 @@ import {
 } from './wire'
 
 /**
- * `window.helm`, as every version 1 plugin page gets it, and `window.floti`,
- * as every version 2 page does: the same object with the same calls, under the
- * name and `apiVersion` the page's boot gives (`main/plugins/protocol.ts`, from
- * the scheme the page was asked for on). A page gets one of the two, never both.
+ * `window.floti`, as every plugin page gets it.
  *
- * Served by Helm under `/__helm/bridge.js` and injected at the top of the
- * page's `<head>`, so it runs before any of the plugin's own code and the
- * plugin never carries a copy of it. Everything it does is ask the Helm page
- * framing it, over the port that page hands it (`wire.ts`); it holds no
+ * Served by the desktop under `/__helm/bridge.js` and injected at the top of
+ * the page's `<head>`, so it runs before any of the plugin's own code and the
+ * plugin never carries a copy of it. Everything it does is ask the desktop
+ * page framing it, over the port that page hands it (`wire.ts`); it holds no
  * authority of its own. Calls made before the port arrives wait for it.
  */
 
@@ -52,18 +46,9 @@ const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'O
 /** Responses that may not have a body, which `new Response` refuses one for. */
 const NULL_BODY = new Set([101, 103, 204, 205, 304])
 
-/**
- * How long a tool call waits for its handler. A page registers its handlers as
- * it starts, and a session can call the moment the page has connected, so the
- * first call may arrive while the page's own scripts are still loading.
- */
-export const TOOL_HANDLER_WAIT_MS = 5000
-
-export function installBridge(win: Window, bootText: string | null): HelmBridge | FlotiBridge {
+export function installBridge(win: Window, bootText: string | null): FlotiBridge {
   const doc = win.document
   const boot = readBoot(bootText)
-  // The global the page knows the bridge by, as its own errors name it.
-  const bridgeName = boot.apiVersion === 2 ? 'floti' : 'helm'
   let theme = boot.theme ?? fallbackTheme()
   let context = readContext(win)
   let visible = false
@@ -76,11 +61,6 @@ export function installBridge(win: Window, bootText: string | null): HelmBridge 
   let nextId = 1
   const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: unknown) => void }>()
   const listeners = new Map<string, Set<(data: never) => void>>()
-  /** Tool handlers by name, and the calls waiting for one to be registered. */
-  const handlers = new Map<string, ToolHandler>()
-  const awaitingHandler = new Map<string, Set<() => void>>()
-  /** Tool calls being answered, so a cancel can abort the one it names. */
-  const answering = new Map<string, AbortController>()
 
   const post = (message: FrameMessage): void => {
     if (port === null) queue.push(message)
@@ -127,49 +107,6 @@ export function installBridge(win: Window, bootText: string | null): HelmBridge 
     }
   }
 
-  /** The handler for `name`, once one is registered; null when none is within the wait or the call is aborted. */
-  const handlerFor = (name: string, signal: AbortSignal): Promise<ToolHandler | null> => {
-    const now = handlers.get(name)
-    if (now !== undefined) return Promise.resolve(now)
-    return new Promise((resolve) => {
-      const waiters = awaitingHandler.get(name) ?? new Set<() => void>()
-      const done = (): void => {
-        win.clearTimeout(timer)
-        signal.removeEventListener('abort', done)
-        waiters.delete(done)
-        if (waiters.size === 0) awaitingHandler.delete(name)
-        resolve(signal.aborted ? null : (handlers.get(name) ?? null))
-      }
-      const timer = win.setTimeout(done, TOOL_HANDLER_WAIT_MS)
-      signal.addEventListener('abort', done, { once: true })
-      waiters.add(done)
-      awaitingHandler.set(name, waiters)
-    })
-  }
-
-  const answerTool = async (message: Extract<HelmMessage, { t: 'tool' }>): Promise<void> => {
-    const controller = new AbortController()
-    answering.set(message.id, controller)
-    let answer: FrameMessage
-    try {
-      const handler = await handlerFor(message.name, controller.signal)
-      if (controller.signal.aborted) return
-      if (handler === null) {
-        throw new Error(
-          `The plugin's background page has no handler for ${message.name}. It registers one with ${bridgeName}.tools.handle('${message.name}', ...) as it starts.`
-        )
-      }
-      const value: unknown = await handler(message.args, { session: message.session, signal: controller.signal })
-      answer = { t: 'tool-result', id: message.id, ok: true, text: toolText(value) }
-    } catch (error) {
-      answer = { t: 'tool-result', id: message.id, ok: false, message: messageOf(error) }
-    } finally {
-      answering.delete(message.id)
-    }
-    // Nobody is waiting for it: the call was cancelled while the handler ran.
-    if (!controller.signal.aborted) post(answer)
-  }
-
   const receive = (message: HelmMessage): void => {
     if (message.t === 'result') {
       const waiting = pending.get(message.id)
@@ -177,14 +114,6 @@ export function installBridge(win: Window, bootText: string | null): HelmBridge 
       pending.delete(message.id)
       if (message.ok) waiting.resolve(message.value)
       else waiting.reject(message.code === 'aborted' ? abortError(message.message) : helmError(message.code, message.message))
-      return
-    }
-    if (message.t === 'tool') {
-      void answerTool(message)
-      return
-    }
-    if (message.t === 'tool-cancel') {
-      answering.get(message.id)?.abort()
       return
     }
     switch (message.name) {
@@ -216,7 +145,7 @@ export function installBridge(win: Window, bootText: string | null): HelmBridge 
   /*
    * A page drawn from the local host's files has its `BroadcastChannel`s
    * relayed through the host, so a message reaches the plugin's pages on
-   * every client and its background page. Every other page keeps the
+   * every client and its background. Every other page keeps the
    * browser's own.
    */
   const deliverChannel =
@@ -250,36 +179,34 @@ export function installBridge(win: Window, bootText: string | null): HelmBridge 
     if (visible !== wasVisible) emit('visibility', visible)
   })
 
-  // A Helm shortcut pressed while the page has focus would otherwise never
-  // reach Helm: keys go to the focused frame's own process. Forwarded after the
-  // page's own handlers have run, and only if none of them took it.
-  if (context.surface !== 'background') {
-    win.addEventListener('keydown', (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.altKey || event.metaKey) || MODIFIER_KEYS.has(event.key)) return
-      // AltGr arrives as Ctrl+Alt and is how many keyboards type @, { and \.
-      if (event.getModifierState('AltGraph') || (event.ctrlKey && event.altKey && event.key.length === 1)) return
-      const editing = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey
-      if (editing && !event.altKey && EDITING_KEYS.has(event.key.toLowerCase())) return
-      // On macOS Option types characters (Option+E is an accent), and text is the page's.
-      if (mac && event.altKey && !event.ctrlKey && !event.metaKey && event.key.length === 1) return
-      win.setTimeout(() => {
-        if (event.defaultPrevented) return
-        const key: KeyInit = {
-          key: event.key,
-          code: event.code,
-          ctrlKey: event.ctrlKey,
-          shiftKey: event.shiftKey,
-          altKey: event.altKey,
-          metaKey: event.metaKey,
-          repeat: event.repeat
-        }
-        post({ t: 'key', key })
-      })
+  // A desktop shortcut pressed while the page has focus would otherwise never
+  // reach the desktop: keys go to the focused frame's own process. Forwarded
+  // after the page's own handlers have run, and only if none of them took it.
+  win.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (!(event.ctrlKey || event.altKey || event.metaKey) || MODIFIER_KEYS.has(event.key)) return
+    // AltGr arrives as Ctrl+Alt and is how many keyboards type @, { and \.
+    if (event.getModifierState('AltGraph') || (event.ctrlKey && event.altKey && event.key.length === 1)) return
+    const editing = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey
+    if (editing && !event.altKey && EDITING_KEYS.has(event.key.toLowerCase())) return
+    // On macOS Option types characters (Option+E is an accent), and text is the page's.
+    if (mac && event.altKey && !event.ctrlKey && !event.metaKey && event.key.length === 1) return
+    win.setTimeout(() => {
+      if (event.defaultPrevented) return
+      const key: KeyInit = {
+        key: event.key,
+        code: event.code,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey,
+        repeat: event.repeat
+      }
+      post({ t: 'key', key })
     })
-  }
+  })
 
-  const bridge: PluginBridge = {
-    apiVersion: boot.apiVersion,
+  const bridge: FlotiBridge = {
+    apiVersion: 2,
     get context() {
       return context
     },
@@ -316,7 +243,7 @@ export function installBridge(win: Window, bootText: string | null): HelmBridge 
       // Said here, where the mistake is made: Helm refuses it too.
       if (navigator.userActivation?.isActive !== true) {
         return Promise.reject(
-          helmError('not-allowed', `${bridgeName}.open needs a click or key press the user just made in the page: call it from the handler`)
+          helmError('not-allowed', `floti.open needs a click or key press the user just made in the page: call it from the handler`)
         )
       }
       return call<void>('open', [url])
@@ -360,7 +287,7 @@ export function installBridge(win: Window, bootText: string | null): HelmBridge 
         // user's own click or key press in this page is refused by Helm too.
         if (navigator.userActivation?.isActive !== true) {
           return Promise.reject(
-            helmError('not-allowed', `${bridgeName}.sessions.start needs a click or key press the user just made in the page: call it from the handler`)
+            helmError('not-allowed', `floti.sessions.start needs a click or key press the user just made in the page: call it from the handler`)
           )
         }
         return call<SessionStartResult>('sessions.start', [request])
@@ -369,20 +296,11 @@ export function installBridge(win: Window, bootText: string | null): HelmBridge 
     },
 
     tools: {
-      handle(name: string, handler: ToolHandler): () => void {
+      handle(): never {
         // Said where the mistake is made, rather than as a call that never
-        // arrives: only the background page is running whenever a session
+        // arrives: only the background module is running whenever a session
         // might call, so only it is ever handed one.
-        if (context.surface !== 'background') {
-          throw helmError('invalid', `${bridgeName}.tools.handle works in the background page only`)
-        }
-        if (typeof name !== 'string' || name === '') throw helmError('invalid', `${bridgeName}.tools.handle needs the name of a tool`)
-        if (typeof handler !== 'function') throw helmError('invalid', `${bridgeName}.tools.handle needs a function to answer the tool`)
-        handlers.set(name, handler)
-        for (const wake of [...(awaitingHandler.get(name) ?? [])]) wake()
-        return () => {
-          if (handlers.get(name) === handler) handlers.delete(name)
-        }
+        throw helmError('invalid', 'floti.tools.handle works in the background module only')
       }
     },
 
@@ -396,9 +314,9 @@ export function installBridge(win: Window, bootText: string | null): HelmBridge 
     }
   }
 
-  Object.defineProperty(win, bridgeName, { value: Object.freeze(bridge), enumerable: true, configurable: false, writable: false })
+  Object.defineProperty(win, 'floti', { value: Object.freeze(bridge), enumerable: true, configurable: false, writable: false })
   if (win.parent !== win) win.parent.postMessage({ type: HELLO }, '*')
-  return bridge as HelmBridge | FlotiBridge
+  return bridge
 }
 
 /** A `Response` the page can use like any other, `url` and `redirected` included. */
@@ -421,36 +339,6 @@ function toResponse(answer: PluginFetchResponse): Response {
   return response
 }
 
-/**
- * A handler's answer as the text a session reads: a string as it is, nothing
- * as `Done.` - a model given an empty answer cannot tell it from a failure -
- * and anything else as JSON.
- */
-function toolText(value: unknown): string {
-  let text: string | undefined
-  if (typeof value === 'string') text = value
-  else if (value === undefined) text = 'Done.'
-  else {
-    try {
-      text = JSON.stringify(value, null, 2)
-    } catch (error) {
-      throw new Error(`The tool's answer could not be written as JSON: ${messageOf(error)}`, { cause: error })
-    }
-    if (text === undefined) throw new Error(`The tool answered with a ${typeof value}, which is not text or JSON.`)
-  }
-  if (text.length > TOOL_ANSWER_MAX_CHARS) {
-    throw new Error(
-      `The tool's answer is ${String(text.length)} characters, and a tool may answer with ${String(TOOL_ANSWER_MAX_CHARS)} at most.`
-    )
-  }
-  return text
-}
-
-function messageOf(error: unknown): string {
-  if (error instanceof Error) return error.message
-  return typeof error === 'string' ? error : String(error)
-}
-
 function helmError(code: HelmErrorCode, message: string): HelmError {
   const error = new Error(message) as HelmError
   error.name = 'HelmError'
@@ -465,34 +353,31 @@ function abortError(message = 'The operation was aborted.'): DOMException {
 /**
  * What the page's script tag carries: its first theme, whether its channels
  * are relayed through the local host, and whether this page is drawn on the
- * computer the plugin runs on, and the plugin API version its scheme serves:
- * 2 on `floti-plugin`, which makes the bridge `window.floti`. A boot that does
- * not say is a version 1 page Helm serves on its own computer.
+ * computer the plugin runs on. A boot that does not say is a page drawn on
+ * the plugin's own computer.
  */
 interface Boot {
   theme: HelmTheme | null
   channels: 'host' | null
   onHostComputer: boolean
-  apiVersion: 1 | 2
 }
 
 function readBoot(text: string | null): Boot {
-  const unsaid: Boot = { theme: null, channels: null, onHostComputer: true, apiVersion: 1 }
+  const unsaid: Boot = { theme: null, channels: null, onHostComputer: true }
   if (text === null) return unsaid
   try {
-    const boot = JSON.parse(text) as { theme?: HelmTheme; channels?: unknown; onHostComputer?: unknown; apiVersion?: unknown }
+    const boot = JSON.parse(text) as { theme?: HelmTheme; channels?: unknown; onHostComputer?: unknown }
     return {
       theme: boot.theme ?? null,
       channels: boot.channels === 'host' ? 'host' : null,
-      onHostComputer: boot.onHostComputer !== false,
-      apiVersion: boot.apiVersion === 2 ? 2 : 1
+      onHostComputer: boot.onHostComputer !== false
     }
   } catch {
     return unsaid
   }
 }
 
-/** The bridge's own method a channel post goes through; not part of `window.helm` or `window.floti`. */
+/** The bridge's own method a channel post goes through; not part of `window.floti`. */
 export const CHANNEL_POST = 'channel.post'
 
 /**

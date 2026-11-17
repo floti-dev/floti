@@ -3,8 +3,7 @@
 //! script, run in an isolate of its own; and the call layer every `floti.*`
 //! method goes through.
 //!
-//! A background script's `floti` global is answered here as today's
-//! background page is answered by Helm's main process: `floti.exec`,
+//! A background script's `floti` global is answered here: `floti.exec`,
 //! `floti.fetch`, `settings.get`, `secrets.state`, `status.set` and
 //! `badge.set` go through the registry's call layer to the methods below,
 //! and what clients do (a command with no tab, a setting, a secret saved or
@@ -13,8 +12,8 @@
 //! - [`engine`]: the V8 platform, started once per process, and the base
 //!   isolate with the web's data types every plugin script runs in.
 //! - [`manifest`]: the manifest, read by the SDK's validator in that isolate.
-//!   This host reads apiVersion 1 and 2 plugins: a version 2 background
-//!   script runs in its engine, a version 1 background page in a client.
+//!   This host runs apiVersion 2 plugins, whose background script runs in
+//!   its engine.
 //! - [`loader`]: a folder read: the manifest, the files it names, the icon.
 //! - [`store`]: the folders and settings in `floti.db`, today's schema.
 //! - [`settings`]: whether a value fits a setting, and the values shown.

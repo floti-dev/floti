@@ -64,7 +64,7 @@ export function outcomeFor(callId: number, result: BrowserToolResult): P.AgentBr
  * Whether `payload` fits in one frame as a request on `channel`: measured as
  * the request it goes out in, with the widest id one can carry.
  */
-export function fitsOneFrame(channel: 'agentBrowser:answer' | 'agentPlugin:answer', payload: unknown): boolean {
+export function fitsOneFrame(channel: 'agentBrowser:answer', payload: unknown): boolean {
   try {
     encodeFrame({ type: 'request', id: Number.MAX_SAFE_INTEGER, channel, payload } as P.Message)
   } catch (error) {

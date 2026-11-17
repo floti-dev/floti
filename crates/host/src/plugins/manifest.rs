@@ -3,11 +3,9 @@
 //! The validator is `packages/plugin-sdk/src/manifest.js`, embedded as it is
 //! and run in a base isolate, so what this host accepts is what
 //! `helm-plugin validate` accepts and what it says when it refuses is what
-//! the author already reads. The host passes `apiVersions: [1, 2]`. Version
-//! 1 is today's Helm plugin: its `background` is a `.html` page, which runs
-//! in the client that frames it, never on the host. Version 2 reads every
-//! field as version 1 does, except that `background` is a `.js` or `.mjs`
-//! module, which the host runs in its own engine.
+//! the author already reads. The host passes `apiVersions: [2]`: a plugin's
+//! `background` is a `.js` or `.mjs` module, which the host runs in its own
+//! engine, and a manifest of any other version is refused.
 //!
 //! One isolate serves every reading in the process, on a thread of its own:
 //! an isolate is tied to the thread that made it.
@@ -28,12 +26,6 @@ use super::engine::{IsolateOptions, base_runtime, evaluate_to_string};
 /// The manifest's file name in a plugin folder.
 pub const MANIFEST_FILE: &str = "helm-plugin.json";
 
-/// The bridge version whose background scripts the host's engine runs.
-pub const API_VERSION: u8 = 2;
-
-/// The bridge version whose background is a page a client frames.
-pub const PAGE_BACKGROUND_API_VERSION: u8 = 1;
-
 const VALIDATOR: &str = include_str!("../../../../packages/plugin-sdk/src/manifest.js");
 
 /// What the host asks of the validator: the parsed manifest's reading, with
@@ -50,7 +42,7 @@ globalThis.__flotiReadManifest = (text) => {
   const said = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   const id = typeof said.id === "string" ? said.id : null;
   const name = typeof said.name === "string" ? said.name : null;
-  const result = validateManifest(raw, { apiVersions: [1, 2] });
+  const result = validateManifest(raw, { apiVersions: [2] });
   if (!result.ok) {
     return JSON.stringify({ kind: "invalid", errors: result.errors, warnings: result.warnings, id, name });
   }
@@ -81,8 +73,7 @@ pub struct Manifest {
     pub panels: BTreeMap<String, PanelSpec>,
     pub tabs: BTreeMap<String, TabSpec>,
     pub page_strip: bool,
-    /// A `.js` or `.mjs` module in the folder, for version 2; a `.html`
-    /// page, for version 1.
+    /// A `.js` or `.mjs` module in the folder, which the host's engine runs.
     pub background: Option<String>,
     pub commands: Vec<PluginCommandInfo>,
     pub settings: Vec<PluginSettingSpec>,
@@ -96,32 +87,9 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    /// The background script the host's engine runs: a version 2
-    /// manifest's. A version 1 background page runs in a client.
+    /// The background script the host's engine runs.
     pub fn host_background(&self) -> Option<&str> {
-        (self.api_version >= API_VERSION)
-            .then_some(self.background.as_deref())
-            .flatten()
-    }
-
-    /// What its pages call the bridge, which sentences about a call name:
-    /// `helm` for version 1, `floti` for version 2.
-    pub fn bridge(&self) -> &'static str {
-        if self.api_version == PAGE_BACKGROUND_API_VERSION {
-            "helm"
-        } else {
-            "floti"
-        }
-    }
-
-    /// The scheme its pages are served on: `helm-plugin` for the bridge
-    /// called `helm` (version 1), `floti-plugin` for `floti` (version 2).
-    pub fn page_scheme(&self) -> &'static str {
-        if self.api_version == PAGE_BACKGROUND_API_VERSION {
-            "helm-plugin"
-        } else {
-            "floti-plugin"
-        }
+        self.background.as_deref()
     }
 }
 
@@ -427,51 +395,30 @@ mod tests {
     }
 
     #[test]
-    fn a_version_1_manifest_reads_with_its_background_page_for_a_client_to_frame() {
+    fn an_api_version_1_manifest_is_refused_naming_version_2_as_the_only_one() {
         let text = r#"{ "apiVersion": 1, "id": "old", "name": "Old", "background": "bg.html" }"#;
-        let Reading::Ok {
-            manifest, files, ..
-        } = read(text).unwrap()
-        else {
-            panic!("refused");
-        };
-        assert_eq!(manifest.api_version, 1);
-        assert_eq!(manifest.background.as_deref(), Some("bg.html"));
-        assert_eq!(manifest.host_background(), None, "a page runs in a client");
-        assert_eq!(manifest.page_scheme(), "helm-plugin");
-        assert_eq!(files.len(), 1);
-
-        let Reading::Ok { manifest, .. } = read(&minimal(1)).unwrap() else {
-            panic!("refused");
-        };
-        assert_eq!((manifest.api_version, manifest.background), (1, None));
+        assert_eq!(
+            read(text).unwrap(),
+            Reading::Invalid {
+                errors: vec![
+                    "apiVersion 1 is not supported: this host runs only apiVersion 2 plugins"
+                        .into()
+                ],
+                warnings: vec![],
+                id: Some("old".into()),
+                name: Some("Old".into()),
+            }
+        );
     }
 
     #[test]
-    fn a_version_1_background_is_a_page_and_a_version_2_one_a_module() {
-        let Reading::Invalid { errors, .. } =
-            read(r#"{ "apiVersion": 1, "id": "x", "name": "X", "background": "bg.mjs" }"#).unwrap()
-        else {
-            panic!("a version 1 background module was read");
-        };
-        assert!(errors[0].contains("background"), "{errors:?}");
-
-        let Reading::Ok { manifest, .. } =
-            read(r#"{ "apiVersion": 2, "id": "x", "name": "X", "background": "bg.mjs" }"#).unwrap()
-        else {
-            panic!("refused");
-        };
-        assert_eq!(manifest.host_background(), Some("bg.mjs"));
-        assert_eq!(manifest.page_scheme(), "floti-plugin");
-    }
-
-    #[test]
-    fn an_api_version_this_host_does_not_run_is_refused_naming_both() {
+    fn an_api_version_this_host_does_not_run_is_refused_naming_the_one_it_runs() {
         assert_eq!(
             read(&minimal(3)).unwrap(),
             Reading::Invalid {
                 errors: vec![
-                    "apiVersion 3 is not supported: this host runs apiVersion 1, 2 plugins".into()
+                    "apiVersion 3 is not supported: this host runs only apiVersion 2 plugins"
+                        .into()
                 ],
                 warnings: vec![],
                 id: Some("minimal".into()),
@@ -491,6 +438,7 @@ mod tests {
             panic!("refused");
         };
         assert_eq!(manifest.background.as_deref(), Some("bg.mjs"));
+        assert_eq!(manifest.host_background(), Some("bg.mjs"));
         let names: Vec<&str> = manifest
             .exec
             .iter()

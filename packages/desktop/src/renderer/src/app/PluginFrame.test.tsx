@@ -14,7 +14,7 @@ vi.mock('./bridge', () => import('./bridge.testkit'))
  * process ends.
  */
 
-const ORIGIN = 'helm-plugin://sample'
+const ORIGIN = 'floti-plugin://sample'
 
 const spec = (overrides: Partial<SurfaceSpec> = {}): SurfaceSpec => ({
   key: 'tab:sample/item',

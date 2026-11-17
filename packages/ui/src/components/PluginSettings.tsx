@@ -522,8 +522,8 @@ function SessionTools({
       ? `Sessions Floti starts get them as ${agent.server}. Turning this off takes them from sessions already running.`
       : 'No session gets them.'
   const hint = agent.tools.some((tool) => tool.readOnly)
-    ? "Claude Code sessions can call these. Its background page answers, and the answer goes into the session's conversation. Read-only ones run without asking; the others ask first."
-    : "Claude Code sessions can call these. Its background page answers, and the answer goes into the session's conversation."
+    ? "Claude Code sessions can call these. Its background answers, and the answer goes into the session's conversation. Read-only ones run without asking; the others ask first."
+    : "Claude Code sessions can call these. Its background answers, and the answer goes into the session's conversation."
   return (
     <Group name="plugin-tools" title="Tools for sessions" hint={hint}>
       <label className="flex items-center justify-between gap-4 py-1.5" data-plugin-tools-switch>
@@ -561,15 +561,15 @@ function SessionTools({
 function backgroundSentence(background: NonNullable<PluginInfo['background']>): string {
   switch (background.state) {
     case 'running':
-      return 'Its background page is running.'
+      return 'Its background is running.'
     case 'starting':
-      return 'Its background page is starting.'
+      return 'Its background is starting.'
     case 'stopped':
-      return 'Its background page is not running.'
+      return 'Its background is not running.'
     case 'crashed':
       return background.error === null
-        ? 'Its background page stopped. Reload starts it again.'
-        : `Its background page stopped: ${clause(background.error)}. Reload starts it again.`
+        ? 'Its background stopped. Reload starts it again.'
+        : `Its background stopped: ${clause(background.error)}. Reload starts it again.`
   }
 }
 

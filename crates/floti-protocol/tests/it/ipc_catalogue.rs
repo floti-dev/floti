@@ -1,13 +1,13 @@
 //! Every channel in the desktop's `shared/ipc.ts` lands somewhere: declared in
 //! the protocol (under its own name or a recorded backend-neutral rename, or
-//! as the client-to-host side of a stream), or listed as client-only or
-//! host-internal with a reason. No client-only channel is declared.
+//! as the client-to-host side of a stream), or listed as client-only with a
+//! reason. No client-only channel is declared.
 
 use std::path::Path;
 
 use floti_protocol::Catalogue;
 use floti_protocol::channels::boundary::{
-    CLIENT_ONLY, HOST_INTERNAL, Placement, RENAMED, declared_client_only, placement,
+    CLIENT_ONLY, Placement, RENAMED, declared_client_only, placement,
 };
 use floti_protocol::{Capability, RequestChannel};
 
@@ -65,23 +65,18 @@ fn unplaced(catalogue: &Catalogue, names: &[String]) -> Vec<String> {
         .map(|name| {
             format!(
                 "`{name}` in shared/ipc.ts is neither declared in the protocol nor listed as \
-                 client-only or host-internal in channels/boundary.rs"
+                 client-only in channels/boundary.rs"
             )
         })
         .collect()
 }
 
 #[test]
-fn every_channel_in_ipc_ts_is_declared_client_only_or_host_internal() {
+fn every_channel_in_ipc_ts_is_declared_or_client_only() {
     let names = every_ipc_channel();
     // The parse found the lists: a broken parse must not pass by finding
     // nothing.
-    for known in [
-        "app:info",
-        "session:input",
-        "plugins:toolResult",
-        "files:changed",
-    ] {
+    for known in ["app:info", "session:input", "plugins:call", "files:changed"] {
         assert!(
             names.iter().any(|name| name == known),
             "parsed no `{known}`"
@@ -168,9 +163,9 @@ fn renamed_and_stream_carried_channels_land_on_declared_protocol_channels() {
 }
 
 #[test]
-fn every_client_only_and_host_internal_entry_names_an_ipc_ts_channel_and_a_reason() {
+fn every_client_only_entry_names_an_ipc_ts_channel_and_a_reason() {
     let names = every_ipc_channel();
-    for entry in CLIENT_ONLY.iter().chain(HOST_INTERNAL) {
+    for entry in CLIENT_ONLY {
         assert!(
             !entry.reason.is_empty(),
             "`{}` has no reason",
@@ -181,16 +176,5 @@ fn every_client_only_and_host_internal_entry_names_an_ipc_ts_channel_and_a_reaso
             "`{}` matches no channel in shared/ipc.ts",
             entry.channels
         );
-    }
-    for name in [
-        "plugins:tool",
-        "plugins:toolCancel",
-        "plugins:toolResult",
-        "plugins:backgroundState",
-    ] {
-        assert!(matches!(
-            placement(&Catalogue::protocol(), name),
-            Some(Placement::HostInternal(_))
-        ));
     }
 }

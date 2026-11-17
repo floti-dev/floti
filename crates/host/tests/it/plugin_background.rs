@@ -1,9 +1,7 @@
 //! A background script end to end: a plugin folder added to a running host
 //! over a client connection, its script calling the host's real methods
 //! (`floti.exec`, `floti.fetch` with a secret placeholder, `settings.get`,
-//! `secrets.state`) and hearing what clients do through `floti.on`, as
-//! today's `desktop/main/plugins/host.test.ts` drives the sample plugin's
-//! background page.
+//! `secrets.state`) and hearing what clients do through `floti.on`.
 //!
 //! The plugin's server is a plain HTTP server on `127.0.0.1:0`, the program
 //! its `exec` names is `floti-fake-program`, and its secret is saved through

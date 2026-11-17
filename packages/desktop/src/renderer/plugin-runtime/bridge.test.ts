@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { FlotiBridge, HelmBridge, HelmContext, HelmError, HelmTheme } from '@floti-dev/plugin-sdk'
+import type { FlotiBridge, HelmContext, HelmError, HelmTheme } from '@floti-dev/plugin-sdk'
 import { BUILTIN_THEMES, PALETTE_HUES, pluginThemeOf, resolveTheme, type ThemeKind } from '@helm/core/types'
 import type { PluginFetchRequest, PluginFetchResponse } from '../../shared/ipc'
 import { installBridge } from './bridge'
@@ -7,7 +7,7 @@ import { CONNECT, HELLO, contextName, type FrameMessage } from './wire'
 import { PATIENCE } from '../../../../../test/patience'
 
 /**
- * `window.helm`, as a plugin page gets it: installed into a real jsdom frame
+ * `window.floti`, as a plugin page gets it: installed into a real jsdom frame
  * whose parent plays the Helm page framing it. The parent is reached as the
  * frame's own `parent`: jsdom hands a frame a window proxy that is not the
  * object vitest puts on `globalThis.window`.
@@ -52,8 +52,8 @@ const LIGHT: HelmTheme = { ...THEME, kind: 'light', tokens: { bg: '#ffffff' } as
 const PANEL: HelmContext = { plugin: 'sample', surface: 'panel', name: 'main', params: {} }
 
 interface Page {
-  win: Window & { helm: HelmBridge }
-  helm: HelmBridge
+  win: Window & { floti: FlotiBridge }
+  floti: FlotiBridge
   /** What the page posted to its parent before it had a port. */
   hellos: unknown[]
 }
@@ -63,28 +63,16 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-/** A frame with the bridge installed, as Helm serves a version 1 page: named with its context, booted with a theme. */
+/** A frame with the bridge installed, as the desktop serves a page: named with its context, booted with a theme. */
 function page(context: HelmContext | null = PANEL, boot: string | null = JSON.stringify({ theme: THEME })): Page {
   const frame = document.createElement('iframe')
   document.body.appendChild(frame)
-  const win = frame.contentWindow as Window & { helm: HelmBridge }
+  const win = frame.contentWindow as Window & { floti: FlotiBridge }
   if (context !== null) win.name = contextName(context)
   const parentPost = vi.spyOn(win.parent, 'postMessage').mockImplementation(() => undefined)
-  // A boot that names no apiVersion is a version 1 page's: the bridge is window.helm.
-  const helm = installBridge(win, boot) as HelmBridge
+  const floti = installBridge(win, boot)
   const hellos = parentPost.mock.calls.map((call) => call[0])
-  return { win, helm, hellos }
-}
-
-/** A frame booted as Helm serves a version 2 page on floti-plugin: the boot says apiVersion 2. */
-function flotiPage(context: HelmContext = PANEL): { win: Window & { floti: FlotiBridge }; floti: FlotiBridge; hellos: unknown[] } {
-  const frame = document.createElement('iframe')
-  document.body.appendChild(frame)
-  const win = frame.contentWindow as Window & { floti: FlotiBridge }
-  win.name = contextName(context)
-  const parentPost = vi.spyOn(win.parent, 'postMessage').mockImplementation(() => undefined)
-  const floti = installBridge(win, JSON.stringify({ theme: THEME, channels: 'host', onHostComputer: true, apiVersion: 2 })) as FlotiBridge
-  return { win, floti, hellos: parentPost.mock.calls.map((call) => call[0]) }
+  return { win, floti, hellos }
 }
 
 /** A `message` event made in the page's own realm, with the fields a browser sets. */
@@ -114,7 +102,7 @@ function connect(win: Window, extra: Partial<{ context: HelmContext; theme: Helm
 
 const sent = (port: FakePort): FrameMessage[] => port.received as FrameMessage[]
 
-/** The request the page's last `helm.fetch` sent. */
+/** The request the page's last `floti.fetch` sent. */
 function lastFetch(port: FakePort): PluginFetchRequest {
   const call = sent(port)
     .filter((entry) => entry.t === 'call' && entry.method === 'fetch')
@@ -136,44 +124,44 @@ async function flush(): Promise<void> {
 
 describe('onHostComputer', () => {
   it('is true on a page whose boot says so, from the first script, before Floti has connected, and stays true', () => {
-    const { win, helm } = page(PANEL, JSON.stringify({ theme: THEME, onHostComputer: true }))
-    expect(helm.onHostComputer).toBe(true)
+    const { win, floti } = page(PANEL, JSON.stringify({ theme: THEME, onHostComputer: true }))
+    expect(floti.onHostComputer).toBe(true)
     connect(win, { visible: true, context: { ...PANEL, params: { id: 2 } } })
-    expect(helm.onHostComputer).toBe(true)
+    expect(floti.onHostComputer).toBe(true)
   })
 
   it('is false on a page drawn from a host on another computer, before and after connecting', () => {
-    const { win, helm } = page(PANEL, JSON.stringify({ theme: THEME, channels: 'host', onHostComputer: false }))
-    expect(helm.onHostComputer).toBe(false)
+    const { win, floti } = page(PANEL, JSON.stringify({ theme: THEME, channels: 'host', onHostComputer: false }))
+    expect(floti.onHostComputer).toBe(false)
     connect(win)
-    expect(helm.onHostComputer).toBe(false)
+    expect(floti.onHostComputer).toBe(false)
   })
 
   it('reads as true from a boot that does not say, or no boot at all', () => {
-    expect(page(PANEL, JSON.stringify({ theme: THEME })).helm.onHostComputer).toBe(true)
-    expect(page(PANEL, null).helm.onHostComputer).toBe(true)
-    expect(page(PANEL, 'not json').helm.onHostComputer).toBe(true)
+    expect(page(PANEL, JSON.stringify({ theme: THEME })).floti.onHostComputer).toBe(true)
+    expect(page(PANEL, null).floti.onHostComputer).toBe(true)
+    expect(page(PANEL, 'not json').floti.onHostComputer).toBe(true)
   })
 
   it('cannot be changed by the page', () => {
-    const { helm } = page(PANEL, JSON.stringify({ theme: THEME, onHostComputer: false }))
+    const { floti } = page(PANEL, JSON.stringify({ theme: THEME, onHostComputer: false }))
     expect(() => {
-      ;(helm as { onHostComputer: boolean }).onHostComputer = true
+      ;(floti as { onHostComputer: boolean }).onHostComputer = true
     }).toThrow()
-    expect(helm.onHostComputer).toBe(false)
+    expect(floti.onHostComputer).toBe(false)
   })
 })
 
 describe('installing', () => {
   it('reads its context from the frame name before anything is said, and says HELLO to its parent', () => {
-    const { helm, hellos } = page({ plugin: 'sample', surface: 'tab', name: 'item', params: { id: '2' } })
-    expect(helm.context).toEqual({ plugin: 'sample', surface: 'tab', name: 'item', params: { id: '2' } })
+    const { floti, hellos } = page({ plugin: 'sample', surface: 'tab', name: 'item', params: { id: '2' } })
+    expect(floti.context).toEqual({ plugin: 'sample', surface: 'tab', name: 'item', params: { id: '2' } })
     expect(hellos).toEqual([{ type: HELLO }])
-    expect(helm.apiVersion).toBe(1)
+    expect(floti.apiVersion).toBe(2)
   })
 
   it('paints the boot theme onto <html> before the page has run', () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const root = win.document.documentElement
     expect(root.style.getPropertyValue('--helm-bg')).toBe('#101010')
     expect(root.style.getPropertyValue('--helm-accent')).toBe('#3366ff')
@@ -181,73 +169,27 @@ describe('installing', () => {
     expect(root.dataset['density']).toBe('compact')
     expect(root.dataset['theme']).toBe('dark')
     expect(root.classList.contains('dark')).toBe(true)
-    expect(helm.theme).toEqual(THEME)
+    expect(floti.theme).toEqual(THEME)
   })
 
-  it('is on window as helm, frozen, and cannot be replaced', () => {
-    const { win, helm } = page()
-    expect(win.helm).toBe(helm)
-    expect(Object.isFrozen(win.helm)).toBe(true)
-    const descriptor = Object.getOwnPropertyDescriptor(win, 'helm')
+  it('is on window as floti, frozen, and cannot be replaced', () => {
+    const { win, floti } = page()
+    expect(win.floti).toBe(floti)
+    expect(Object.isFrozen(win.floti)).toBe(true)
+    const descriptor = Object.getOwnPropertyDescriptor(win, 'floti')
     expect(descriptor).toMatchObject({ writable: false, configurable: false })
     // Modules are strict, so assigning to it throws rather than failing quietly.
     expect(() => {
-      ;(win as unknown as Record<string, unknown>)['helm'] = {}
+      ;(win as unknown as Record<string, unknown>)['floti'] = {}
     }).toThrow(TypeError)
-  })
-})
-
-describe('a version 2 page beside a version 1 page', () => {
-  /** Every method and property path of a bridge, as dotted names. */
-  const shape = (bridge: object, prefix = ''): string[] =>
-    Object.entries(Object.getOwnPropertyDescriptors(bridge)).flatMap(([key, descriptor]) =>
-      descriptor.value !== null && typeof descriptor.value === 'object'
-        ? shape(descriptor.value as object, `${prefix}${key}.`)
-        : [`${prefix}${key}`]
-    )
-
-  it('s1: gives a floti-plugin page window.floti at apiVersion 2 and no window.helm, and a helm-plugin page window.helm at apiVersion 1 and no window.floti', () => {
-    const v2 = flotiPage()
-    expect(v2.floti.apiVersion).toBe(2)
-    expect(v2.win.floti).toBe(v2.floti)
-    expect('helm' in v2.win).toBe(false)
-    expect(Object.isFrozen(v2.win.floti)).toBe(true)
-    expect(Object.getOwnPropertyDescriptor(v2.win, 'floti')).toMatchObject({ writable: false, configurable: false })
-    expect(v2.hellos).toEqual([{ type: HELLO }])
-
-    const v1 = page()
-    expect(v1.helm.apiVersion).toBe(1)
-    expect(v1.win.helm).toBe(v1.helm)
-    expect('floti' in v1.win).toBe(false)
-  })
-
-  it('s1: has the same calls, theme and context on either bridge', async () => {
-    const v1 = page()
-    const v2 = flotiPage()
-    expect(shape(v2.floti).sort()).toEqual(shape(v1.helm).sort())
-    expect(v2.floti.theme).toEqual(v1.helm.theme)
-    expect(v2.floti.context).toEqual(v1.helm.context)
-    expect(v2.win.document.documentElement.style.getPropertyValue('--helm-bg')).toBe('#101010')
-
-    const port = connect(v2.win)
-    const done = v2.floti.settings.get()
-    expect(sent(port).at(-1)).toMatchObject({ t: 'call', method: 'settings.get', args: [] })
-    answer(port, { ok: true, value: { a: 1 } })
-    await expect(done).resolves.toEqual({ a: 1 })
-  })
-
-  it('s1: names floti in the errors a version 2 page is told', async () => {
-    const { floti } = flotiPage()
-    await expect(floti.open('https://example.com')).rejects.toMatchObject({ code: 'not-allowed', message: expect.stringMatching(/^floti.open needs/) as string })
-    expect(() => floti.tools.handle('x', () => 'y')).toThrow(/^floti.tools.handle works in the background page only$/)
   })
 })
 
 describe('the port', () => {
   it('holds calls made before CONNECT, then sends them in order', () => {
-    const { win, helm } = page()
-    void helm.settings.get()
-    void helm.badge.set(3)
+    const { win, floti } = page()
+    void floti.settings.get()
+    void floti.badge.set(3)
     const port = connect(win)
     expect(sent(port)).toEqual([
       { t: 'call', id: 1, method: 'settings.get', args: [] },
@@ -256,46 +198,46 @@ describe('the port', () => {
   })
 
   it('is taken only from the parent, only with a port, and only once', () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     // Not from the parent.
     const stranger = channel()
     win.dispatchEvent(message(win, { data: { type: CONNECT, context: PANEL, theme: null, visible: false }, source: win, ports: [stranger.pageSide] }))
     // No port.
     win.dispatchEvent(message(win, { data: { type: CONNECT, context: PANEL, theme: null, visible: false }, source: win.parent }))
-    void helm.settings.get()
+    void floti.settings.get()
     expect(stranger.helmSide.received).toEqual([])
     const first = connect(win)
     const second = connect(win)
-    void helm.status.set(null)
+    void floti.status.set(null)
     expect(sent(first).map((entry) => entry.t === 'call' && entry.method)).toEqual(['settings.get', 'status.set'])
     expect(sent(second)).toEqual([])
   })
 
   it('takes the context, theme and visibility CONNECT gives, and a null theme keeps the boot one', () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const visibility = vi.fn()
-    helm.on('visibility', visibility)
+    floti.on('visibility', visibility)
     connect(win, { context: { ...PANEL, params: { from: 'connect' } }, theme: null, visible: true })
-    expect(helm.context.params).toEqual({ from: 'connect' })
-    expect(helm.theme).toEqual(THEME)
-    expect(helm.visible).toBe(true)
+    expect(floti.context.params).toEqual({ from: 'connect' })
+    expect(floti.theme).toEqual(THEME)
+    expect(floti.visible).toBe(true)
     expect(visibility).toHaveBeenCalledWith(true)
   })
 })
 
 describe('calls', () => {
   it('resolve with what Floti answered', async () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
-    const settings = helm.settings.get()
+    const settings = floti.settings.get()
     answer(port, { ok: true, value: { limit: 20 } })
     await expect(settings).resolves.toEqual({ limit: 20 })
   })
 
   it('reject with a HelmError carrying the code', async () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
-    const ran = helm.exec('nope', ['a'])
+    const ran = floti.exec('nope', ['a'])
     expect(sent(port).at(-1)).toEqual({ t: 'call', id: 1, method: 'exec', args: ['nope', ['a'], {}] })
     answer(port, { ok: false, code: 'not-declared', message: '"nope" is not one of the programs' })
     const error = (await ran.catch((failure: unknown) => failure)) as HelmError
@@ -305,19 +247,19 @@ describe('calls', () => {
   })
 
   it('reject as an AbortError when Floti says the call was aborted', async () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
-    const opened = helm.tabs.open('item', { id: '2' }, { title: 'Two' })
+    const opened = floti.tabs.open('item', { id: '2' }, { title: 'Two' })
     expect(sent(port).at(-1)).toEqual({ t: 'call', id: 1, method: 'tabs.open', args: ['item', { id: '2' }, { title: 'Two' }] })
     answer(port, { ok: false, code: 'aborted', message: 'stopped' })
     await expect(opened).rejects.toMatchObject({ name: 'AbortError' })
   })
 
   it('send a cancel when the page aborts, reject at once, and ignore a late answer', async () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
     const controller = new AbortController()
-    const fetched = helm.fetch('https://api.example.com/items', { signal: controller.signal })
+    const fetched = floti.fetch('https://api.example.com/items', { signal: controller.signal })
     await flush()
     const call = sent(port).at(-1)
     expect(call).toMatchObject({ t: 'call', method: 'fetch' })
@@ -328,11 +270,11 @@ describe('calls', () => {
   })
 
   it('reject before sending anything when the signal is already aborted', async () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
     const controller = new AbortController()
     controller.abort()
-    await expect(helm.fetch('https://api.example.com/', { signal: controller.signal })).rejects.toMatchObject({
+    await expect(floti.fetch('https://api.example.com/', { signal: controller.signal })).rejects.toMatchObject({
       name: 'AbortError'
     })
     expect(sent(port)).toEqual([])
@@ -341,9 +283,9 @@ describe('calls', () => {
 
 describe('fetch', () => {
   it('sends the request taken apart: URL, method, headers and the body as bytes', async () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
-    void helm.fetch('https://api.example.com/items', {
+    void floti.fetch('https://api.example.com/items', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: 'Bearer {{sample-token}}' },
       body: JSON.stringify({ title: 'x' })
@@ -361,9 +303,9 @@ describe('fetch', () => {
   })
 
   it('sends no body for a GET', async () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
-    void helm.fetch('https://api.example.com/items')
+    void floti.fetch('https://api.example.com/items')
     await flush()
     const request = lastFetch(port)
     expect(request.method).toBe('GET')
@@ -371,9 +313,9 @@ describe('fetch', () => {
   })
 
   it('gives back a Response with the status, headers, body, final URL and whether it was redirected', async () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
-    const fetched = helm.fetch('https://api.example.com/items')
+    const fetched = floti.fetch('https://api.example.com/items')
     await flush()
     const response: PluginFetchResponse = {
       status: 201,
@@ -397,9 +339,9 @@ describe('fetch', () => {
   })
 
   it('gives a 204 no body, as fetch would', async () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
-    const fetched = helm.fetch('https://api.example.com/items/1/read', { method: 'POST' })
+    const fetched = floti.fetch('https://api.example.com/items/1/read', { method: 'POST' })
     await flush()
     answer(port, {
       ok: true,
@@ -413,12 +355,12 @@ describe('fetch', () => {
 
 describe('events', () => {
   it('reach every listener for them, and an unsubscribed one no longer', () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
     const first = vi.fn()
     const second = vi.fn()
-    const off = helm.on('command', first)
-    helm.on('command', second)
+    const off = floti.on('command', first)
+    floti.on('command', second)
     port.postMessage({ t: 'event', name: 'command', data: { id: 'refresh' } })
     off()
     port.postMessage({ t: 'event', name: 'command', data: { id: 'again' } })
@@ -427,7 +369,7 @@ describe('events', () => {
   })
 
   it('keep going past a listener that throws, and the throw is reported rather than swallowed', async () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
     const reported: unknown[] = []
     win.addEventListener('error', (event) => {
@@ -435,10 +377,10 @@ describe('events', () => {
       reported.push((event as ErrorEvent).error)
     })
     const after = vi.fn()
-    helm.on('action', () => {
+    floti.on('action', () => {
       throw new Error('plugin bug')
     })
-    helm.on('action', after)
+    floti.on('action', after)
     port.postMessage({ t: 'event', name: 'action', data: { id: 'add' } })
     expect(after).toHaveBeenCalledWith({ id: 'add' })
     await vi.waitFor(() => expect(reported).toHaveLength(1), { timeout: PATIENCE })
@@ -452,26 +394,26 @@ describe('events', () => {
     ['action', { id: 'add' }],
     ['sessions', [{ id: 'a1b2', name: 'HELM-3', state: 'running' }]]
   ] as const)('pass Floti’s %s event to the page as it came', (name, data) => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
     const heard = vi.fn()
-    helm.on(name, heard)
+    floti.on(name, heard)
     port.postMessage({ t: 'event', name, data })
     expect(heard).toHaveBeenCalledWith(data)
   })
 
   it('apply a new theme to the page before telling it', () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
     const seen: string[] = []
-    helm.on('theme', (theme) => seen.push(`${theme.kind}:${win.document.documentElement.dataset['theme'] ?? ''}`))
+    floti.on('theme', (theme) => seen.push(`${theme.kind}:${win.document.documentElement.dataset['theme'] ?? ''}`))
     port.postMessage({ t: 'event', name: 'theme', data: LIGHT })
     expect(seen).toEqual(['light:light'])
     const root = win.document.documentElement
     expect(root.classList.contains('dark')).toBe(false)
     expect(root.style.getPropertyValue('--helm-bg')).toBe('#ffffff')
     expect(root.style.getPropertyValue('--helm-radius')).toBe('2px')
-    expect(helm.theme).toEqual(LIGHT)
+    expect(floti.theme).toEqual(LIGHT)
   })
 
   it('carry the palette onto <html> as --helm-hue-<name> in the theme on screen, and rewrite it in place on a change', () => {
@@ -481,32 +423,32 @@ describe('events', () => {
         { cornerRadius: 3, density: 'comfortable' }
       )
     const nocturne = themeFor('dark', 'nocturne')
-    const { win, helm } = page(PANEL, JSON.stringify({ theme: nocturne }))
+    const { win, floti } = page(PANEL, JSON.stringify({ theme: nocturne }))
     const root = win.document.documentElement
     const painted = (): string[] => PALETTE_HUES.map((hue) => root.style.getPropertyValue(`--helm-hue-${hue}`))
     const listed = (theme: HelmTheme): string[] => PALETTE_HUES.map((hue) => theme.tokens[`hue-${hue}`])
     expect(painted()).toEqual(listed(nocturne))
-    expect(listed(helm.theme)).toEqual(listed(nocturne))
+    expect(listed(floti.theme)).toEqual(listed(nocturne))
 
     const port = connect(win)
     for (const next of [themeFor('dark', 'graphite'), themeFor('light', 'daylight')]) {
       port.postMessage({ t: 'event', name: 'theme', data: next })
       expect(painted()).toEqual(listed(next))
-      expect(listed(helm.theme)).toEqual(listed(next))
+      expect(listed(floti.theme)).toEqual(listed(next))
     }
     expect(new Set(painted()).size).toBe(PALETTE_HUES.length)
   })
 
   it('say visibility only when it changes', () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
     const visibility = vi.fn()
-    helm.on('visibility', visibility)
+    floti.on('visibility', visibility)
     port.postMessage({ t: 'event', name: 'visibility', data: false })
     port.postMessage({ t: 'event', name: 'visibility', data: true })
     port.postMessage({ t: 'event', name: 'visibility', data: true })
     expect(visibility.mock.calls).toEqual([[true]])
-    expect(helm.visible).toBe(true)
+    expect(floti.visible).toBe(true)
   })
 })
 
@@ -562,23 +504,16 @@ describe('keys', () => {
       { t: 'key', key: { key: 'c', code: 'KeyC', ctrlKey: true, shiftKey: false, altKey: false, metaKey: false, repeat: false } }
     ])
   })
-
-  it('are not watched at all on a background page', async () => {
-    const { win } = page({ plugin: 'sample', surface: 'background', name: 'background', params: {} })
-    const port = connect(win)
-    await press(win, { key: 'n', ctrlKey: true })
-    expect(keys(port)).toEqual([])
-  })
 })
 
 describe('the surface title', () => {
   it("is trimmed and capped, and empty or not text means the manifest's title", () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
-    helm.surface.setTitle('  Second item  ')
-    helm.surface.setTitle('x'.repeat(200))
-    helm.surface.setTitle('   ')
-    helm.surface.setTitle(null)
+    floti.surface.setTitle('  Second item  ')
+    floti.surface.setTitle('x'.repeat(200))
+    floti.surface.setTitle('   ')
+    floti.surface.setTitle(null)
     expect(sent(port).filter((entry) => entry.t === 'title')).toEqual([
       { t: 'title', title: 'Second item' },
       { t: 'title', title: 'x'.repeat(120) },
@@ -588,141 +523,19 @@ describe('the surface title', () => {
   })
 
   it('is kept when the page asks', () => {
-    const { win, helm } = page()
+    const { win, floti } = page()
     const port = connect(win)
-    helm.surface.keep()
+    floti.surface.keep()
     expect(sent(port).filter((entry) => entry.t === 'keep')).toEqual([{ t: 'keep' }])
   })
 })
 
 describe('tools', () => {
-  const BACKGROUND: HelmContext = { plugin: 'sample', surface: 'background', name: 'background', params: {} }
-  const SESSION = { id: 'a1b2c3', name: 'alpha', cwd: 'C:/work/alpha' }
-
-  /** A background page, connected. */
-  const background = (): { win: Page['win']; helm: HelmBridge; port: FakePort } => {
-    const { win, helm } = page(BACKGROUND)
-    return { win, helm, port: connect(win, { context: BACKGROUND }) }
-  }
-  const call = (port: FakePort, id: string, name: string, args: Record<string, unknown> = {}): void =>
-    port.postMessage({ t: 'tool', id, name, args, session: SESSION })
-  const results = (port: FakePort): FrameMessage[] =>
-    sent(port)
-      .filter((entry) => entry.t === 'tool-result')
-      .sort((a, b) => ((a as { id: string }).id < (b as { id: string }).id ? -1 : 1))
-
-  it('answer with what the handler returned: text as it is, nothing as Done., anything else as JSON', async () => {
-    const { helm, port } = background()
-    const seen: unknown[] = []
-    helm.tools.handle('echo', (args, { session, signal }) => {
-      seen.push({ args, session, aborted: signal.aborted })
-      return 'hello'
-    })
-    helm.tools.handle('nothing', () => undefined)
-    helm.tools.handle('json', () => Promise.resolve({ items: [1, 2] }))
-    call(port, 't1', 'echo', { a: 1 })
-    call(port, 't2', 'nothing')
-    call(port, 't3', 'json')
-    await flush()
-    expect(seen).toEqual([{ args: { a: 1 }, session: SESSION, aborted: false }])
-    expect(results(port)).toEqual([
-      { t: 'tool-result', id: 't1', ok: true, text: 'hello' },
-      { t: 'tool-result', id: 't2', ok: true, text: 'Done.' },
-      { t: 'tool-result', id: 't3', ok: true, text: JSON.stringify({ items: [1, 2] }, null, 2) }
-    ])
-  })
-
-  it('fail with the reason when the handler threw, or answered with what a session cannot read', async () => {
-    const { helm, port } = background()
-    const cycle: Record<string, unknown> = {}
-    cycle['self'] = cycle
-    helm.tools.handle('boom', () => {
-      throw new Error('The board is locked.')
-    })
-    helm.tools.handle('fn', () => () => 1)
-    helm.tools.handle('big', () => 'x'.repeat(1_000_001))
-    helm.tools.handle('cycle', () => cycle)
-    for (const [id, name] of [['t1', 'boom'], ['t2', 'fn'], ['t3', 'big'], ['t4', 'cycle']] as const) call(port, id, name)
-    await flush()
-    const said = results(port).map((entry) => (entry as { ok: boolean; message?: string }).message)
-    expect(results(port).every((entry) => (entry as { ok: boolean }).ok === false)).toBe(true)
-    expect(said[0]).toBe('The board is locked.')
-    expect(said[1]).toBe('The tool answered with a function, which is not text or JSON.')
-    expect(said[2]).toBe("The tool's answer is 1000001 characters, and a tool may answer with 1000000 at most.")
-    expect(said[3]).toMatch(/^The tool's answer could not be written as JSON: /)
-  })
-
-  it('hold a call that arrives before its handler, and answer it once the handler is registered', async () => {
-    const { helm, port } = background()
-    call(port, 't1', 'late')
-    await flush()
-    expect(results(port)).toEqual([])
-    helm.tools.handle('late', () => 'here now')
-    await flush()
-    expect(results(port)).toEqual([{ t: 'tool-result', id: 't1', ok: true, text: 'here now' }])
-  })
-
-  it('fail a call no handler is registered for within the wait, saying how to register one', async () => {
-    const { win, port } = background()
-    const timers: Array<() => void> = []
-    vi.spyOn(win, 'setTimeout').mockImplementation(((callback: () => void) => {
-      timers.push(callback)
-      return timers.length
-    }) as unknown as typeof win.setTimeout)
-    call(port, 't1', 'missing')
-    await flush()
-    expect(results(port)).toEqual([])
-    for (const fire of timers) fire()
-    await flush()
-    expect(results(port)).toEqual([
-      {
-        t: 'tool-result',
-        id: 't1',
-        ok: false,
-        message:
-          "The plugin's background page has no handler for missing. It registers one with helm.tools.handle('missing', ...) as it starts."
-      }
-    ])
-  })
-
-  it("abort the handler's signal when Floti cancels the call, and send no answer for it", async () => {
-    const { helm, port } = background()
-    let signal: AbortSignal | null = null
-    let finish: (value: string) => void = () => undefined
-    helm.tools.handle('slow', (_args, { signal: given }) => {
-      signal = given
-      return new Promise<string>((resolve) => {
-        finish = resolve
-      })
-    })
-    call(port, 't1', 'slow')
-    await flush()
-    expect(signal!.aborted).toBe(false)
-    port.postMessage({ t: 'tool-cancel', id: 't1' })
-    expect(signal!.aborted).toBe(true)
-    finish('too late')
-    await flush()
-    expect(results(port)).toEqual([])
-  })
-
-  it('take the newest handler for a name, and removing an older one leaves it', async () => {
-    const { helm, port } = background()
-    const removeFirst = helm.tools.handle('pick', () => 'first')
-    helm.tools.handle('pick', () => 'second')
-    removeFirst()
-    call(port, 't1', 'pick')
-    await flush()
-    expect(results(port)).toEqual([{ t: 'tool-result', id: 't1', ok: true, text: 'second' }])
-  })
-
-  it('are handled in the background page only, by a name and a function', () => {
-    const panel = page().helm
-    expect(() => panel.tools.handle('pick', () => 'x')).toThrow(
-      expect.objectContaining({ code: 'invalid', message: 'helm.tools.handle works in the background page only' }) as Error
+  it('are handled in the background module only, never on a page', () => {
+    const { floti } = page()
+    expect(() => floti.tools.handle('pick', () => 'x')).toThrow(
+      expect.objectContaining({ code: 'invalid', message: 'floti.tools.handle works in the background module only' }) as Error
     )
-    const { helm } = background()
-    expect(() => helm.tools.handle('', () => 'x')).toThrow('helm.tools.handle needs the name of a tool')
-    expect(() => helm.tools.handle('pick', 'x' as never)).toThrow('helm.tools.handle needs a function to answer the tool')
   })
 })
 
