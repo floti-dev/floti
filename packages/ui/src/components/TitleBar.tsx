@@ -2,7 +2,14 @@ import type { JSX } from 'react'
 import { cn } from '../lib/cn'
 import { isMac } from '../lib/platform'
 import { FlotiMarkIcon } from './icons'
-import { RAIL_ICON } from './Rail'
+
+/**
+ * The mark's size in the strip. Larger than the rail's 20px icons: at 20 the
+ * longship's sail, dragon and waves crowd into each other. 24 leaves 6px of
+ * the 36px strip above and below, and keeps the mark's ink under what a
+ * checked checkbox fills (DESIGN.md, the mark).
+ */
+export const TITLE_MARK_SIZE = 24
 
 /**
  * The strip that replaces the native title bar, and the window's drag region.
@@ -10,8 +17,7 @@ import { RAIL_ICON } from './Rail'
  * Each OS draws its window controls into it (main/chrome.ts, DESIGN.md 5b).
  * On Windows the Window Controls Overlay draws min/max/close at the right,
  * which `pr-36` keeps clear, and the mark sits centred over the rail below it,
- * at the rail's icon size, so the two read as one column down the window's
- * left edge. On macOS the traffic lights sit at the left instead: the first
+ * so the two read as one column down the window's left edge. On macOS the traffic lights sit at the left instead: the first
  * 80px are left to them - nothing interactive under them, the mark included -
  * the mark moves right of them, and there is nothing at the right to keep
  * clear.
@@ -29,8 +35,8 @@ export function TitleBar(): JSX.Element {
             already looking at Floti. The accessible name stays, because the
             mark is the only thing identifying the window. */}
         <FlotiMarkIcon
-          width={RAIL_ICON.width}
-          height={RAIL_ICON.height}
+          width={TITLE_MARK_SIZE}
+          height={TITLE_MARK_SIZE}
           role="img"
           aria-label="Floti"
           // The icons default to `aria-hidden`, which is right when a label sits
