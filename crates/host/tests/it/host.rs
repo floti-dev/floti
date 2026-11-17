@@ -504,6 +504,7 @@ async fn s1_floti_host_is_one_executable_that_starts_and_serves_clients() {
             backend: Some(BackendId::new("shell")),
             agent: None,
             chosen: None,
+            opening_prompt: None,
             cols: 80,
             rows: 24,
         })
