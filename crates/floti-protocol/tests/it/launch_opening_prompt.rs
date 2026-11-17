@@ -19,7 +19,12 @@ fn a_launch_says_its_first_message_only_when_it_has_one_and_one_without_reads_as
     }))
     .expect("a 4.1 launch, which names no first message");
     assert_eq!(before.opening_prompt, None);
-    assert!(serde_json::to_value(&before).unwrap().get("openingPrompt").is_none());
+    assert!(
+        serde_json::to_value(&before)
+            .unwrap()
+            .get("openingPrompt")
+            .is_none()
+    );
 
     let with = LaunchSessionRequest {
         opening_prompt: Some("Read AGENTS.md and tell me what this workspace is for.".to_owned()),
