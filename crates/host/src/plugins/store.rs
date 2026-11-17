@@ -7,10 +7,12 @@
 //! ignoring case, and kept as it was first given.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::agent_config::time::now_iso;
+use crate::platform::folders::moved_out_of_helm_config;
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,6 +103,39 @@ pub fn remove_folder(conn: &Connection, path: &str) -> Result<()> {
     conn.execute("DELETE FROM plugins WHERE lower(path) = lower(?1)", [path])
         .map(drop)
         .map_err(sql("remove a plugin folder"))
+}
+
+/// Registers `to` in `from`'s place, switched as `from` was and in its place
+/// in the order (`rowid` stays). Where `to` is registered already, `from` is
+/// dropped and `to` kept as it is.
+pub fn move_folder(conn: &Connection, from: &str, to: &str) -> Result<()> {
+    if find_folder(conn, to)?.is_some() {
+        return remove_folder(conn, from);
+    }
+    conn.execute(
+        "UPDATE plugins SET path = ?2 WHERE lower(path) = lower(?1)",
+        params![from, to],
+    )
+    .map(drop)
+    .map_err(sql("move a plugin folder"))
+}
+
+/// Re-points every registered folder that was in Helm's config folder in
+/// `home` to where moving that folder to Floti's put it
+/// ([`moved_out_of_helm_config`]), and answers each `(from, to)`. It looks at
+/// the disk, not at what this start moved, so a folder that an earlier host
+/// moved is found as well.
+pub fn follow_helm_config_move(conn: &Connection, home: &Path) -> Result<Vec<(String, String)>> {
+    let mut moved = Vec::new();
+    for folder in read_folders(conn)? {
+        let Some(to) = moved_out_of_helm_config(home, Path::new(&folder.path)) else {
+            continue;
+        };
+        let to = to.to_string_lossy().into_owned();
+        move_folder(conn, &folder.path, &to)?;
+        moved.push((folder.path, to));
+    }
+    Ok(moved)
 }
 
 /// What the user set for one plugin, as stored. A value the manifest no

@@ -488,6 +488,26 @@ impl Host {
         let listener = socket::Native.bind(&endpoint)?;
         let relay = socket::Native.bind(&endpoint.relay())?;
         let store = Store::open(&folders.data)?;
+        // Plugin folders registered in Helm's config folder, read from where
+        // its move put them, whichever host moved it. Before the registry
+        // reads them; a failure here leaves them as they were and the host
+        // serves.
+        if let Some(home) = run.home.as_deref() {
+            match crate::plugins::store::follow_helm_config_move(store.connection(), home) {
+                Ok(moved) => {
+                    for (from, to) in moved {
+                        log_line!(
+                            "floti host: the plugin folder {from} is read from {to}, where your files moved"
+                        );
+                    }
+                }
+                Err(err) => {
+                    log_line!(
+                        "floti host: could not look for plugin folders your files moved out of: {err}"
+                    )
+                }
+            }
+        }
         // Sessions run in the keeper, which outlives this host; without one
         // they run here and end with it.
         let keeper = run
