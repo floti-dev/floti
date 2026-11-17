@@ -847,8 +847,8 @@ async fn after_a_restart_a_host_that_does_not_speak_the_keepers_link_version_end
 // takes them back; it ends nothing for a host of any other protocol
 // ---------------------------------------------------------------------------
 
-/// Helm's client folder, with a device key of its own and the host on
-/// `dirs`' data folder pinned, as Helm's is once it has connected.
+/// The desktop's client folder, with a device key of its own and the host on
+/// `dirs`' data folder pinned, as the desktop's is once it has connected.
 async fn desktop_client(dirs: &TestDirs) -> PathBuf {
     let folder = dirs.root().join("Floti data").join("host-client");
     let mut keys = ClientKeys::open(&folder).expect("set up Floti's client keys");

@@ -125,7 +125,7 @@ pub(crate) fn prepare_agents_folder_with(
 }
 
 /// The agents folder in `config` for a host that may not write there: a
-/// development or check run of Helm, whose config folder can be the
+/// development or check run of the desktop, whose config folder can be the
 /// installed host's. It reads `agents`, else `roles` where it is, and with
 /// neither serves the shipped agents from memory. It moves, seeds and
 /// writes nothing.

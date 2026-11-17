@@ -144,7 +144,7 @@ fn part(
 fn a_conversation_the_host_already_holds_is_kept_whole_and_appears_once() {
     let world = World::new();
     world.archive_own(ONE, &[message("h1", T0, "the host's own words")]);
-    // Helm's copy of the same conversation holds different messages.
+    // The desktop's copy of the same conversation holds different messages.
     let desktops = [
         message("c1", T0, "the desktop's words"),
         message("c2", T0 + 1, "more"),

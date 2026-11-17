@@ -217,7 +217,7 @@ fn host_protocol(data: &Path) -> floti_protocol::ProtocolVersion {
 /// The file in a data folder whose text is the floti version a test build's
 /// host names, in its welcome and its restart state, in place of
 /// [`FLOTI_VERSION`](crate::version::FLOTI_VERSION), so a test, or a dev
-/// window driven to look at it, can meet a host older than the Helm it is.
+/// window driven to look at it, can meet a host older than the desktop it is.
 /// A production build never reads it.
 #[cfg(any(test, feature = "testkit"))]
 pub const TEST_HOST_VERSION: &str = "floti-test-host-version";
