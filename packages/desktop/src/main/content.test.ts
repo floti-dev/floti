@@ -50,14 +50,14 @@ describe('the artifact scheme', () => {
   })
 
   const serve = async (url: string): Promise<Response> => {
-    const handler = captured.protocols.get('helm-content')
+    const handler = captured.protocols.get('floti-content')
     expect(handler).toBeDefined()
     return handler!(new Request(url))
   }
 
   it('answers nothing before the host is there to answer', async () => {
     serveArtifactsFrom(null)
-    expect((await serve('helm-content://artifact/tok/report.html')).status).toBe(404)
+    expect((await serve('floti-content://artifact/tok/report.html')).status).toBe(404)
   })
 
   it("answers an artifact from the host's bytes, under the window's policy", async () => {
@@ -76,7 +76,7 @@ describe('the artifact scheme', () => {
       })
     })
     try {
-      const page = await serve('helm-content://artifact/tok/report.html')
+      const page = await serve('floti-content://artifact/tok/report.html')
       expect(page.status).toBe(200)
       expect(await page.text()).toBe('<p>from the host</p>')
       expect(page.headers.get('content-type')).toBe('text/html; charset=utf-8')
@@ -85,11 +85,11 @@ describe('the artifact scheme', () => {
       expect(csp).not.toContain('floti-artifact:')
       expect(page.headers.get('x-content-type-options')).toBe('nosniff')
 
-      expect((await serve('helm-content://artifact/tok/missing.js')).status).toBe(404)
-      const broken = await serve('helm-content://artifact/tok/broken.js')
+      expect((await serve('floti-content://artifact/tok/missing.js')).status).toBe(404)
+      const broken = await serve('floti-content://artifact/tok/broken.js')
       expect(broken.status).toBe(502)
       expect(await broken.text()).toMatch(/local host was closed/)
-      expect(asked[0]).toBe('helm-content://artifact/tok/report.html')
+      expect(asked[0]).toBe('floti-content://artifact/tok/report.html')
     } finally {
       serveArtifactsFrom(null)
     }

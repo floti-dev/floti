@@ -7,7 +7,7 @@ import {
   type ThemeDefinition,
   type ThemeListing,
   type ThemeState
-} from '@helm/core/types'
+} from '@floti/core/types'
 import type { AppInfo, ClaudeStatus } from '../../../shared/ipc'
 import { bridge } from './bridge.testkit'
 import { useLauncher } from './useLauncher'
@@ -112,7 +112,7 @@ describe('useLauncher', () => {
     hostLogFile: null,
     windowsBuild: null,
     home: 'C:\\Users\\someone',
-    releasesUrl: 'https://github.com/example/helm/releases/latest'
+    releasesUrl: 'https://github.com/example/floti/releases/latest'
   }
 
   it('puts the shape settings on <html> whenever main says the settings changed', () => {

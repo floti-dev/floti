@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { HelmBridge, LocalHostStep } from '../../../../shared/ipc'
+import type { DesktopBridge, LocalHostStep } from '../../../../shared/ipc'
 import { createLocalHostStep } from './localHostStep'
 
 /**
@@ -23,7 +23,7 @@ function world() {
         fail = reject
       })
     }
-  } as unknown as Pick<HelmBridge, 'invoke' | 'on'>
+  } as unknown as Pick<DesktopBridge, 'invoke' | 'on'>
   const logged: string[] = []
   const store = createLocalHostStep(bridge, (line) => logged.push(line))
   let changes = 0

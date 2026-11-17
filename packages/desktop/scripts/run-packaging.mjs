@@ -457,7 +457,7 @@ function portableChecks(exe) {
         dataFiles: existsSync(dataDir) ? readdirSync(dataDir).sort() : [],
         appDataEntriesAdded: leaked,
         appDataReadIsEvidence: installedRunning === 0,
-        installedHelmProcessesRunning: installedRunning,
+        installedFlotiProcessesRunning: installedRunning,
         elevated: false
       },
       notes: [

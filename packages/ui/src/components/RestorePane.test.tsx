@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { RestorableSession, RestoreOffer } from '@helm/core/types'
+import type { RestorableSession, RestoreOffer } from '@floti/core/types'
 import { RestorePane, RestoreUnreadPane, RestoreWaitingPane, type RestorePaneProps } from './RestorePane'
 
 const NOW = new Date(2026, 9, 2, 13, 0, 0).getTime()
@@ -26,7 +26,7 @@ const QUIET_REASON = 'Claude Code has no record of a conversation in it to reope
 
 const OFFER: RestoreOffer = {
   sessions: [
-    session(4, 'tab baseline', { cwd: 'C:\\work\\helm', branch: 'feat/tab-baseline', profile: 'dev' }),
+    session(4, 'tab baseline', { cwd: 'C:\\work\\floti', branch: 'feat/tab-baseline', profile: 'dev' }),
     session(7, 'accruals report', { cwd: 'C:\\work\\reporting', profileGone: true, lastAt: LAST_WEEK }),
     session(9, 'quiet', { blocked: QUIET_REASON, lastAt: null })
   ],
@@ -64,7 +64,7 @@ describe('RestorePane', () => {
     screen.getByRole('region', { name: '3 sessions were running when Floti closed' })
 
     expect(within(row(4)).getByRole('checkbox', { name: 'tab baseline' })).toHaveProperty('checked', true)
-    expect(text(4)).toContain('helm · feat/tab-baseline')
+    expect(text(4)).toContain('floti · feat/tab-baseline')
     expect(text(4)).toContain('dev')
     expect(text(4)).toContain(
       new Date(EARLIER).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })

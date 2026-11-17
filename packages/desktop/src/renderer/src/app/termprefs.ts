@@ -1,4 +1,4 @@
-import type { AppSettings } from '@helm/core'
+import type { AppSettings } from '@floti/core'
 import { terminalFontStack, TERMINAL_DEFAULTS, type TerminalPrefs } from '../terminal'
 
 /**

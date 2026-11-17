@@ -633,7 +633,7 @@ describe('settings validation', () => {
     {
       key: 'scanRoots',
       good: [[], [join(tmpdir(), 'a')], [join(tmpdir(), 'a'), join(tmpdir(), 'b')]],
-      bad: [null, 'C:\\work', ['repos/helm'], ['../up'], [''], [17], [null]]
+      bad: [null, 'C:\\work', ['repos/floti'], ['../up'], [''], [17], [null]]
     },
     {
       key: 'pinnedProjects',
@@ -650,7 +650,7 @@ describe('settings validation', () => {
       bad: [
         [join(tmpdir(), 'alpha'), join(tmpdir(), 'ALPHA')],
         [join(tmpdir(), 'alpha'), join(tmpdir(), 'alpha')],
-        ['repos/helm'],
+        ['repos/floti'],
         ['../up'],
         [''],
         ['   '],
@@ -693,8 +693,8 @@ describe('settings validation', () => {
             children: [
               {
                 panes: [
-                  { kind: 'project', path: 'C:\\work\\helm' },
-                  { kind: 'pr', repoPath: 'C:\\work\\helm', number: 7 },
+                  { kind: 'project', path: 'C:\\work\\floti' },
+                  { kind: 'pr', repoPath: 'C:\\work\\floti', number: 7 },
                   { kind: 'pulls' },
                   { kind: 'session', id: 12 }
                 ],
@@ -708,7 +708,7 @@ describe('settings validation', () => {
                   {
                     panes: [
                       { kind: 'settings' },
-                      { kind: 'file', root: 'C:\\work\\helm', path: 'C:\\work\\helm\\README.md' }
+                      { kind: 'file', root: 'C:\\work\\floti', path: 'C:\\work\\floti\\README.md' }
                     ],
                     activeId: null
                   }
@@ -746,9 +746,9 @@ describe('settings validation', () => {
                 plugin: 'trackr',
                 pages: [
                   { tab: 'view', params: {}, title: null },
-                  { tab: 'view', params: { id: 'HELM-13' }, title: 'HELM-13' }
+                  { tab: 'view', params: { id: 'FLOTI-13' }, title: 'FLOTI-13' }
                 ],
-                active: 'plugin-page:trackr/view?{"id":"HELM-13"}'
+                active: 'plugin-page:trackr/view?{"id":"FLOTI-13"}'
               }
             ],
             activeId: 'plugin-pages:trackr'

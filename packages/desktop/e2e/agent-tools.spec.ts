@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { PATIENCE } from '../../../test/patience'
 import { bearerOf, callTool, readMcpConfig, rpc } from '../test/mcp-client'
-import { claudeRunIn, expect, startSession, test, typeLine } from './helm'
+import { claudeRunIn, expect, startSession, test, typeLine } from './desktop'
 
 /** A page the session drives, and one only the user may look at. */
 const PAGES: Record<string, string> = {
@@ -51,12 +51,12 @@ async function servePages(): Promise<{ origin: string; close: () => Promise<void
 }
 
 test('a session drives a browser tab of its own through its tools, and loses them when it ends', async ({
-  helm,
+  desktop,
   world
 }) => {
   const pages = await servePages()
   try {
-    const { window } = helm
+    const { window } = desktop
     await startSession(window, 'alpha')
     const pane = window.getByRole('region', { name: 'First pane' })
 
@@ -159,12 +159,12 @@ test('a session drives a browser tab of its own through its tools, and loses the
 })
 
 test('the user shares a page with a session, which reads and drives it until the share is taken back or the session ends', async ({
-  helm,
+  desktop,
   world
 }) => {
   const pages = await servePages()
   try {
-    const { window } = helm
+    const { window } = desktop
     await startSession(window, 'alpha')
     const pane = window.getByRole('region', { name: 'First pane' })
     const run = await claudeRunIn(world, world.projects.alpha)

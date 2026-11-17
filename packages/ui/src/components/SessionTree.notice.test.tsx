@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { EMPTY_INVENTORY, type DiscoveryResult, type Project } from '@helm/core/types'
+import { EMPTY_INVENTORY, type DiscoveryResult, type Project } from '@floti/core/types'
 import { SessionTree, type TreeNoticeActions, type TreeSession } from './SessionTree'
 
 /**
@@ -10,11 +10,11 @@ import { SessionTree, type TreeNoticeActions, type TreeSession } from './Session
  * > Agents, and Dismiss.
  */
 
-const HELM = 'C:\\work\\north\\repos\\helm'
+const FLOTI = 'C:\\work\\north\\repos\\floti'
 
 const PROJECT: Project = {
-  path: HELM,
-  name: 'helm',
+  path: FLOTI,
+  name: 'floti',
   kind: 'repo',
   workspacePath: 'C:\\work\\north',
   hasClaudeDir: false,
@@ -24,7 +24,7 @@ const PROJECT: Project = {
 
 const DISCOVERY: DiscoveryResult = {
   roots: ['C:\\work'],
-  workspaces: [{ path: 'C:\\work\\north', name: 'north', template: null, version: null, repoPaths: [HELM] }],
+  workspaces: [{ path: 'C:\\work\\north', name: 'north', template: null, version: null, repoPaths: [FLOTI] }],
   projects: [PROJECT],
   errors: [],
   scannedAt: '2026-10-03T00:00:00.000Z',
@@ -36,7 +36,7 @@ const row = (id: number, label: string, extra: Partial<TreeSession> = {}): TreeS
   label,
   state: 'busy',
   note: '',
-  hint: HELM,
+  hint: FLOTI,
   outside: false,
   shown: null,
   ...extra
@@ -50,7 +50,7 @@ function renderTree(parent: TreeSession, actions?: TreeNoticeActions): void {
       selectedPath={null}
       pinnedPaths={[]}
       onTogglePin={vi.fn()}
-      sessionsByPath={new Map([[HELM.toLowerCase(), [parent]]])}
+      sessionsByPath={new Map([[FLOTI.toLowerCase(), [parent]]])}
       elsewhere={[]}
       onSelect={vi.fn()}
       onLaunch={vi.fn()}

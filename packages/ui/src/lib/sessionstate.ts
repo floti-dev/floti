@@ -1,4 +1,4 @@
-import type { SessionActivity } from '@helm/core/types'
+import type { SessionActivity } from '@floti/core/types'
 
 /**
  * What a session's state dot looks like, in one place.

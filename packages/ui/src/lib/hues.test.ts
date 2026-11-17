@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { HUE_TINT_ALPHA, hueForText, PALETTE_HUES } from '@helm/core/types'
+import { HUE_TINT_ALPHA, hueForText, PALETTE_HUES } from '@floti/core/types'
 import { paletteTagClass, tagHue } from './hues'
 
 describe('palette tag classes', () => {

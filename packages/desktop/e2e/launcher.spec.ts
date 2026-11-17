@@ -10,7 +10,7 @@ import {
   terminalText,
   test as base,
   typeLine
-} from './helm'
+} from './desktop'
 
 /**
  * The new-session launcher. The world gets a profile before the app starts,
@@ -46,10 +46,10 @@ const test = base.extend({
 const after = (argv: readonly string[], flag: string): string | undefined => argv[argv.indexOf(flag) + 1]
 
 test('Ctrl+N starts a session in a folder found by typing, with the profile and mode picked there', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   await expect(window.getByRole('button', { name: 'Start a session in alpha' })).toBeAttached()
 
   await window.keyboard.press('ControlOrMeta+N')
@@ -82,8 +82,8 @@ test('Ctrl+N starts a session in a folder found by typing, with the profile and 
   expect((after(run.argv, '--plugin-dir') ?? '').toLowerCase()).toContain(shimFolderOf(world).toLowerCase())
 })
 
-test('a conversation that ended reopens from the launcher, in the pane beside', async ({ helm, world }) => {
-  const { window } = helm
+test('a conversation that ended reopens from the launcher, in the pane beside', async ({ desktop, world }) => {
+  const { window } = desktop
   const id = await startSession(window, 'beta')
   const first = window.getByRole('region', { name: 'First pane' })
   await typeLine(first, 'sketch the migration')
@@ -123,8 +123,8 @@ test('a conversation that ended reopens from the launcher, in the pane beside', 
   await expect.poll(() => terminalText(window, resumedId)).toContain(`Resumed ${ended.sessionId}`)
 })
 
-test('a new workspace ends in a session, not on a page', async ({ helm, world }) => {
-  const { window } = helm
+test('a new workspace ends in a session, not on a page', async ({ desktop, world }) => {
+  const { window } = desktop
   await expect(window.getByRole('button', { name: 'Start a session in alpha' })).toBeAttached()
 
   await window.getByRole('button', { name: 'Create a new workspace' }).click()

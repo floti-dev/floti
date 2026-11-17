@@ -1,5 +1,5 @@
 import { useState, type JSX, type ReactNode } from 'react'
-import type { AgentWorktree, AgentWorktreeRemoval, Workspace, LiveSession, Project } from '@helm/core'
+import type { AgentWorktree, AgentWorktreeRemoval, Workspace, LiveSession, Project } from '@floti/core'
 import { cn } from '../lib/cn'
 import { GitChip } from './GitChip'
 import {
@@ -492,7 +492,7 @@ function AlreadyRunning({ sessions }: { sessions: readonly LiveSession[] }): JSX
   if (sessions.length === 0) return null
 
   const named = sessions.map((session) => session.name ?? `pid ${String(session.pid)}`)
-  const outside = sessions.filter((session) => session.helmSessionId === null).length
+  const outside = sessions.filter((session) => session.hostSessionId === null).length
 
   return (
     <p

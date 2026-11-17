@@ -145,11 +145,11 @@ fn a_conversation_the_host_already_holds_is_kept_whole_and_appears_once() {
     let world = World::new();
     world.archive_own(ONE, &[message("h1", T0, "the host's own words")]);
     // Helm's copy of the same conversation holds different messages.
-    let helms = [
-        message("c1", T0, "helm's words"),
+    let desktops = [
+        message("c1", T0, "the desktop's words"),
         message("c2", T0 + 1, "more"),
     ];
-    let merged = world.conversations(&[whole(&ONE.to_uppercase(), &helms)]);
+    let merged = world.conversations(&[whole(&ONE.to_uppercase(), &desktops)]);
     assert_eq!((merged.added, merged.kept, merged.messages), (0, 1, 0));
     assert_eq!(world.texts(ONE), ["the host's own words"]);
     assert_eq!(world.count("SELECT COUNT(*) FROM transcript_sessions"), 1);
@@ -171,7 +171,7 @@ fn a_conversation_the_host_dropped_stays_dropped() {
 }
 
 #[test]
-fn a_copied_conversation_keeps_when_helm_captured_it_and_reads_back_whole() {
+fn a_copied_conversation_keeps_when_the_desktop_captured_it_and_reads_back_whole() {
     let world = World::new();
     let long = "a sentence that repeats until deflate shortens it. ".repeat(10);
     let messages = [message("c1", T0, "short"), message("c2", T0 + 1, &long)];
@@ -328,8 +328,8 @@ fn a_session_the_host_has_named_keeps_its_name() {
     let merged = merge_names(
         world.conn(),
         &[
-            name(&ONE.to_uppercase(), "helm's name"),
-            name(TWO, "named in helm"),
+            name(&ONE.to_uppercase(), "the desktop's name"),
+            name(TWO, "named in the desktop"),
         ],
     )
     .unwrap();
@@ -348,7 +348,7 @@ fn a_session_the_host_has_named_keeps_its_name() {
     assert_eq!(
         named(TWO),
         (
-            "named in helm".to_owned(),
+            "named in the desktop".to_owned(),
             "2026-09-03T10:00:00.000Z".to_owned()
         )
     );

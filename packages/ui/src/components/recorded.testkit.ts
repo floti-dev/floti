@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path'
  * path under `FIXTURE_ROOT`, wherever it appears, an HTML attribute included.
  * Nothing is read from or written to that folder; it need not exist.
  */
-export const FIXTURE_ROOT = resolve('/helm-fixture')
+export const FIXTURE_ROOT = resolve('/floti-fixture')
 
 const ROOTED = /<root>((?:\/[^"'<>\s)/]+)*)/g
 

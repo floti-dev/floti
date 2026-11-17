@@ -4,7 +4,7 @@ import type { Frame, Locator, Page } from '@playwright/test'
 import type { FlotiBridge } from '@floti-dev/plugin-sdk'
 import { bearerOf, callTool, readMcpConfig, rpc, rpcResult, toolNames } from '../test/mcp-client'
 import { HOST_TEST_SEAL_MARKER, hostDataOf } from '../test/world'
-import { claudeRunIn, expect, startSession, test as base, type Helm } from './helm'
+import { claudeRunIn, expect, startSession, test as base, type Desktop } from './desktop'
 import { startBrowserFixture } from './browser-fixture'
 import { TOKEN, installSample, pluginFrame, startServer, type SampleFixture } from './plugin-fixture'
 
@@ -47,7 +47,7 @@ const test = base.extend<{ sample: SampleFixture; sampleRegistered: boolean }>({
 /** The sample page's `window.floti`, in a frame's `evaluate`. */
 type PluginWindow = Window & { floti: FlotiBridge }
 /** Helm's window and its routed bridge (`inspect.ts`), which asks for a host feature the way the window does. */
-type HelmWindow = Window & { __helmRouted: { invoke: (channel: string, payload?: unknown) => Promise<unknown> } }
+type FlotiWindow = Window & { __flotiRouted: { invoke: (channel: string, payload?: unknown) => Promise<unknown> } }
 
 const statusItem = (ui: Page): Locator => ui.locator('[data-status-plugin="sample"]')
 const rail = (ui: Page): Locator => ui.getByRole('navigation', { name: 'Destinations' })
@@ -61,7 +61,7 @@ async function openPanel(ui: Page): Promise<Frame> {
 async function storeToken(ui: Page, url: string): Promise<void> {
   await ui.evaluate(
     ({ token, host }) =>
-      (window as unknown as HelmWindow).__helmRouted.invoke('secrets:save', {
+      (window as unknown as FlotiWindow).__flotiRouted.invoke('secrets:save', {
         key: 'sample-token',
         value: token,
         hosts: [host],
@@ -72,11 +72,11 @@ async function storeToken(ui: Page, url: string): Promise<void> {
 }
 
 test('a plugin: its background module, a secret it asks for, its panel, badge, status and a tab of its own', async ({
-  helm,
+  desktop,
   sample,
   world
 }) => {
-  const ui = helm.window
+  const ui = desktop.window
 
   // The background module runs with nothing of the plugin's on screen.
   await expect(statusItem(ui)).toHaveText('Sample: no token')
@@ -212,10 +212,10 @@ test('a plugin: its background module, a secret it asks for, its panel, badge, s
 })
 
 test("Floti's shortcuts work from inside a plugin page, and its commands run from Ctrl+Shift+P", async ({
-  helm,
+  desktop,
   sample
 }) => {
-  const ui = helm.window
+  const ui = desktop.window
   await storeToken(ui, sample.server.url)
   const panel = await openPanel(ui)
   await expect(panel.locator('[data-sample-item]')).toHaveCount(3)
@@ -268,8 +268,8 @@ test("Floti's shortcuts work from inside a plugin page, and its commands run fro
  * main process. Once a plugin frame's process ends, Playwright counts the whole
  * page as crashed and drives it no further, though Helm's own process is fine.
  */
-function inHelm<T>(helm: Helm, script: string, frameUrl?: string): Promise<T> {
-  return helm.app.evaluate(
+function inDesktop<T>(desktop: Desktop, script: string, frameUrl?: string): Promise<T> {
+  return desktop.app.evaluate(
     async ({ BrowserWindow }, { script, frameUrl }) => {
       const win = BrowserWindow.getAllWindows()[0]
       if (win === undefined) throw new Error('no Floti window')
@@ -291,57 +291,57 @@ const LISTEN = (name: string): string =>
  * `evaluate` counts as a gesture of its own, so a call made through it is
  * always "from a click".
  */
-async function activationLapsed(helm: Helm): Promise<void> {
-  await expect.poll(() => inHelm<boolean>(helm, 'navigator.userActivation.isActive')).toBe(false)
+async function activationLapsed(desktop: Desktop): Promise<void> {
+  await expect.poll(() => inDesktop<boolean>(desktop, 'navigator.userActivation.isActive')).toBe(false)
 }
 
-test('a plugin page that crashes says so in its own place, and Reload brings it back', async ({ helm }) => {
-  const ui = helm.window
+test('a plugin page that crashes says so in its own place, and Reload brings it back', async ({ desktop }) => {
+  const ui = desktop.window
   // Loaded, with Helm's bridge on the page.
   const panel = await openPanel(ui)
   const url = panel.url()
 
   // The page's process ends from outside, the way a renderer that runs out of
   // memory or is ended in Task Manager does.
-  const pids = await helm.app.evaluate(({ BrowserWindow }, url) => {
+  const pids = await desktop.app.evaluate(({ BrowserWindow }, url) => {
     const win = BrowserWindow.getAllWindows()[0]
     const frame = win?.webContents.mainFrame.framesInSubtree.find((f) => f.url.startsWith(url))
     if (win === undefined || frame === undefined) throw new Error(`no frame at ${url}`)
-    const pids = { helm: win.webContents.getOSProcessId(), plugin: frame.osProcessId }
+    const pids = { desktop: win.webContents.getOSProcessId(), plugin: frame.osProcessId }
     process.kill(pids.plugin)
     return pids
   }, url)
   // The plugin had a process of its own to lose.
-  expect(pids.plugin).not.toBe(pids.helm)
+  expect(pids.plugin).not.toBe(pids.desktop)
 
   await expect
-    .poll(() => inHelm<string>(helm, `document.querySelector('[data-plugin-error]')?.textContent ?? ''`))
+    .poll(() => inDesktop<string>(desktop, `document.querySelector('[data-plugin-error]')?.textContent ?? ''`))
     .toContain('Sample stopped')
 
   // Helm itself is untouched: Ctrl+H opens History over the window, and Escape closes it.
   const historyField = `document.querySelector('[role=combobox][aria-label="Search History"]') !== null`
-  await inHelm(helm, `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', ctrlKey: true }))`)
-  await expect.poll(() => inHelm<boolean>(helm, historyField)).toBe(true)
-  await inHelm(helm, `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`)
-  await expect.poll(() => inHelm<boolean>(helm, historyField)).toBe(false)
+  await inDesktop(desktop, `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', ctrlKey: true }))`)
+  await expect.poll(() => inDesktop<boolean>(desktop, historyField)).toBe(true)
+  await inDesktop(desktop, `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`)
+  await expect.poll(() => inDesktop<boolean>(desktop, historyField)).toBe(false)
 
   // The panel stays in the sidebar, still saying what happened.
-  expect(await inHelm<number>(helm, `document.querySelectorAll('[data-plugin-error]').length`)).toBe(1)
-  await inHelm(
-    helm,
+  expect(await inDesktop<number>(desktop, `document.querySelectorAll('[data-plugin-error]').length`)).toBe(1)
+  await inDesktop(
+    desktop,
     `[...document.querySelectorAll('[data-plugin-error] button')].find((b) => b.textContent === 'Reload').click()`
   )
-  await expect.poll(() => inHelm<number>(helm, `document.querySelectorAll('[data-plugin-error]').length`)).toBe(0)
+  await expect.poll(() => inDesktop<number>(desktop, `document.querySelectorAll('[data-plugin-error]').length`)).toBe(0)
   // A page again, in a process of its own, with the bridge on it.
-  await expect.poll(() => inHelm<string | null>(helm, 'typeof floti', url)).toBe('object')
+  await expect.poll(() => inDesktop<string | null>(desktop, 'typeof floti', url)).toBe('object')
 })
 
 /**
  * Answers the next folder pickers main opens with `folders`, in order, as the
  * user choosing them would. A native dialog has no automation surface.
  */
-async function chooseFolders(helm: Helm, folders: string[]): Promise<void> {
-  await helm.app.evaluate(({ dialog }, folders) => {
+async function chooseFolders(desktop: Desktop, folders: string[]): Promise<void> {
+  await desktop.app.evaluate(({ dialog }, folders) => {
     const queue = [...folders]
     dialog.showOpenDialog = (() => {
       const next = queue.shift()
@@ -367,15 +367,15 @@ test.describe('a plugin folder the user adds', () => {
   test.use({ sampleRegistered: false })
 
   test('a folder added in Settings > Plugins is read and listed, its rail icon, panel and background module appear, it is still there after a restart, and turning it off takes its surfaces away and on brings them back', async ({
-    helm,
+    desktop,
     sample,
     relaunch
   }) => {
-    let ui = helm.window
+    let ui = desktop.window
     await openPluginSettings(ui)
     await expect(ui.locator('[data-plugin-row="sample"]')).toHaveCount(0)
 
-    await chooseFolders(helm, [sample.dir])
+    await chooseFolders(desktop, [sample.dir])
     await ui.locator('[data-plugin-add]').click()
     await expect(ui.locator('[data-plugin-row="sample"]')).toBeVisible()
     await expect(ui.locator('[data-plugin-add-error]')).toHaveCount(0)
@@ -416,11 +416,11 @@ test.describe('a plugin folder the user adds', () => {
 })
 
 test("a session calls the plugin's tools, its background module answers, and turning them off in Settings takes them away", async ({
-  helm,
+  desktop,
   sample,
   world
 }) => {
-  const ui = helm.window
+  const ui = desktop.window
   await storeToken(ui, sample.server.url)
   await startSession(ui, 'alpha')
 
@@ -499,11 +499,11 @@ const stripTest = test.extend({
 })
 
 stripTest('a plugin with a page strip opens its tabs as pages in one tab, which Ctrl+W closes page by page', async ({
-  helm,
+  desktop,
   sample,
   relaunch
 }) => {
-  let ui = helm.window
+  let ui = desktop.window
   await storeToken(ui, sample.server.url)
   const panel = await openPanel(ui)
   await expect(panel.locator('[data-sample-item]')).toHaveCount(3)
@@ -545,7 +545,7 @@ stripTest('a plugin with a page strip opens its tabs as pages in one tab, which 
   // Written down with the panes, and back after a restart.
   const saved = (): Promise<string> =>
     ui.evaluate(async () => {
-      const settings = (await (window as unknown as HelmWindow).__helmRouted.invoke('settings:read')) as { paneLayout: unknown }
+      const settings = (await (window as unknown as FlotiWindow).__flotiRouted.invoke('settings:read')) as { paneLayout: unknown }
       return JSON.stringify(settings.paneLayout)
     })
   await expect.poll(saved).toMatch(/"kind":"plugin-pages".*"params":\{"id":"1"\}.*"params":\{"id":"2"\}/)
@@ -563,11 +563,11 @@ stripTest('a plugin with a page strip opens its tabs as pages in one tab, which 
 })
 
 test('a plugin page starts a session from a click, once the user has seen what it will run', async ({
-  helm,
+  desktop,
   sample,
   world
 }) => {
-  const ui = helm.window
+  const ui = desktop.window
   await storeToken(ui, sample.server.url)
   const panel = await openPanel(ui)
   await panel.locator('[data-sample-item="2"]').click()
@@ -575,9 +575,9 @@ test('a plugin page starts a session from a click, once the user has seen what i
   await expect(item.locator('h1')).toHaveText('Second item')
 
   // Asked for without a click, it is refused before Helm draws anything.
-  await activationLapsed(helm)
-  const unasked = await inHelm<string>(
-    helm,
+  await activationLapsed(desktop)
+  const unasked = await inDesktop<string>(
+    desktop,
     `floti.sessions.start({ cwd: ${JSON.stringify(world.projects.alpha)}, prompt: 'hello' }).then(() => 'started', (error) => error.code)`,
     item.url()
   )
@@ -614,17 +614,17 @@ test('a plugin page starts a session from a click, once the user has seen what i
   expect(Object.keys(run.mcpServers)).toEqual(expect.arrayContaining(['floti-browser', 'floti-sessions', 'floti-plugin-sample']))
   expect(run.exitCode).toBeNull()
   // The host runs it, in that folder.
-  const sessions = await ui.evaluate(() => (window as unknown as HelmWindow).__helmRouted.invoke('session:list'))
+  const sessions = await ui.evaluate(() => (window as unknown as FlotiWindow).__flotiRouted.invoke('session:list'))
   expect(sessions).toEqual([expect.objectContaining({ name: 'Second item', projectPath: world.projects.alpha })])
 })
 
 test('a plugin page opens a link in the Browser tab from a click, held to the reach a typed address meets', async ({
-  helm,
+  desktop,
   sample
 }) => {
   const fixture = await startBrowserFixture()
   try {
-    const ui = helm.window
+    const ui = desktop.window
     await storeToken(ui, sample.server.url)
     const panel = await openPanel(ui)
     await panel.locator('[data-sample-item="2"]').click()
@@ -632,9 +632,9 @@ test('a plugin page opens a link in the Browser tab from a click, held to the re
     const browserPages = ui.getByRole('tablist', { name: 'Browser tabs' })
 
     // Without a click, nothing opens.
-    await activationLapsed(helm)
-    const unasked = await inHelm<string>(
-      helm,
+    await activationLapsed(desktop)
+    const unasked = await inDesktop<string>(
+      desktop,
       `floti.open(${JSON.stringify(`${fixture.httpsLoopback}/two`)}).then(() => 'opened', (error) => error.code)`,
       item.url()
     )
@@ -650,19 +650,19 @@ test('a plugin page opens a link in the Browser tab from a click, held to the re
     // From a click, in the Browser tab, in front.
     await item.locator('[data-sample-link-address]').fill(`${fixture.httpsLoopback}/two`)
     await item.locator('[data-sample-link-open]').click()
-    await expect(ui.getByRole('tab', { name: /Helm fixture two/ })).toHaveAttribute('aria-selected', 'true')
+    await expect(ui.getByRole('tab', { name: /Floti fixture two/ })).toHaveAttribute('aria-selected', 'true')
     // Main had taken the link by now, so it took it before this.
-    const opened = await helm.app.evaluate(() => Date.now())
+    const opened = await desktop.app.evaluate(() => Date.now())
     await expect(ui.getByRole('combobox', { name: 'Address' })).toHaveValue(`${fixture.httpsLoopback}/two`)
     await expect(item.locator('[data-sample-link-error]')).toHaveCount(0)
 
     // "This machine only" refuses it on its own tab, as it would a typed address.
-    await ui.evaluate(() => (window as unknown as HelmWindow).__helmRouted.invoke('settings:write', { browserReach: 'local' }))
+    await ui.evaluate(() => (window as unknown as FlotiWindow).__flotiRouted.invoke('settings:write', { browserReach: 'local' }))
     await ui.getByRole('tab', { name: /^Second item/ }).click()
     await item.locator('[data-sample-link-address]').fill(`${fixture.httpsNamed}/two`)
     // One link a second per plugin (`LINK_SPACING_MS`; host.test.ts steps it),
     // read on the clock main measures it by.
-    await expect.poll(() => helm.app.evaluate(() => Date.now())).toBeGreaterThanOrEqual(opened + 1000)
+    await expect.poll(() => desktop.app.evaluate(() => Date.now())).toBeGreaterThanOrEqual(opened + 1000)
     await item.locator('[data-sample-link-open]').click()
     await expect(ui.getByRole('status').filter({ hasText: 'This machine only' })).toContainText(
       fixture.httpsNamed.replace('https://', '')

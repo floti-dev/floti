@@ -1,5 +1,5 @@
 import type { BrowserWindow, BrowserWindowConstructorOptions, MenuItemConstructorOptions } from 'electron'
-import { formatColor, mix, parseColor, type AppliedTheme } from '@helm/core'
+import { formatColor, mix, parseColor, type AppliedTheme } from '@floti/core'
 
 /**
  * The window's chrome, one answer per OS.

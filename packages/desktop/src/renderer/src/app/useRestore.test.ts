@@ -1,9 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RestoreOffer, SessionRecord } from '@helm/core'
+import type { RestoreOffer, SessionRecord } from '@floti/core'
 import type { LaunchedSession, RestoreSessionsResult } from '../../../shared/ipc'
 import { bridge } from './bridge.testkit'
-import { EMPTY_LAYOUT, openTab, reconcile, type PaneLayout, type PaneRef } from '@helm/core/types'
+import { EMPTY_LAYOUT, openTab, reconcile, type PaneLayout, type PaneRef } from '@floti/core/types'
 import { restoredPairs, restoreReport, restoreTabKept, useOpenOnFailedRead, useRestore } from './useRestore'
 
 vi.mock('./bridge', () => import('./bridge.testkit'))
@@ -13,7 +13,7 @@ const OFFER: RestoreOffer = {
     {
       id: 4,
       name: 'tab baseline',
-      cwd: 'C:\\work\\helm',
+      cwd: 'C:\\work\\floti',
       branch: 'main',
       profile: null,
       profileGone: false,

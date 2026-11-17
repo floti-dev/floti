@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HistorySession, LaunchAgents, RestorableSession } from '@helm/core'
+import type { HistorySession, LaunchAgents, RestorableSession } from '@floti/core'
 import { historySession } from '../lib/historyPalette.testkit'
 import { HistoryPalette, type HistoryAnswer, type HistoryPaletteProps } from './HistoryPalette'
 

@@ -15,7 +15,7 @@ export interface PluginPageTab {
  * The drag type of a plugin page. Its own, so a page cannot be dropped among a
  * pane's tabs or a browser's pages, nor they among a plugin's.
  */
-export const PLUGIN_PAGE_MIME = 'application/x-helm-plugin-page'
+export const PLUGIN_PAGE_MIME = 'application/x-floti-plugin-page'
 
 export interface PluginPagesProps {
   /** What the strip is called: "<plugin> pages". */

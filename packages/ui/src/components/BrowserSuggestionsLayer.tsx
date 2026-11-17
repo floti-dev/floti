@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type JSX, type RefObject } from 'react'
-import type { BrowserSuggestion } from '@helm/core/types'
+import type { BrowserSuggestion } from '@floti/core/types'
 import type { LayerRect, LayerSuggestions, MenuLayerPort, SuggestionsLayerHandle } from '../lib/menuLayer'
 import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
 import { BrowserSuggestions } from './BrowserSuggestions'

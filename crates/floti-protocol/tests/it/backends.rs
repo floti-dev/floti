@@ -13,7 +13,7 @@ use floti_protocol::{
 fn session(backend: BackendId) -> SessionRecord {
     SessionRecord {
         id: 12,
-        name: "helm-3".into(),
+        name: "floti-3".into(),
         label: None,
         title: None,
         cwd: "C:\\work\\a repo".into(),

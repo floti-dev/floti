@@ -1,5 +1,5 @@
-import type { PluginFolder } from '@helm/core'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import type { PluginFolder } from '@floti/core'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import type { SettingValue } from '@floti-dev/plugin-sdk'
 import type { PluginInfo } from '../../shared/ipc'
 import { HostRequestError, type HostConnection, type HostSubscription } from './client'

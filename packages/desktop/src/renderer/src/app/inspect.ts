@@ -1,5 +1,5 @@
-import { overlayOpen } from '@helm/ui'
-import type { HelmBridge } from '../../../shared/ipc'
+import { overlayOpen } from '@floti/ui'
+import type { DesktopBridge } from '../../../shared/ipc'
 import { describeSessionTerminals } from './terminals'
 import { describeShellTerminals } from './pterms'
 import { terminalPrefs } from './termprefs'
@@ -14,7 +14,7 @@ import { terminalPrefs } from './termprefs'
  * exposes nothing the renderer did not already have, and it cannot write.
  */
 export function installTerminalInspector(): void {
-  Object.defineProperty(window, '__helmTerminals', {
+  Object.defineProperty(window, '__flotiTerminals', {
     value: () => ({
       prefs: terminalPrefs(),
       sessions: describeSessionTerminals(),
@@ -37,7 +37,7 @@ export function installTerminalInspector(): void {
  * A reader, never a writer. `Overlay` is the only thing that moves this.
  */
 export function installOverlayInspector(): void {
-  Object.defineProperty(window, '__helmOverlayOpen', {
+  Object.defineProperty(window, '__flotiOverlayOpen', {
     value: () => overlayOpen(),
     configurable: true
   })
@@ -54,7 +54,7 @@ export function installOverlayInspector(): void {
  * artifact frame and a page in the Browser tab are other origins and never see
  * this window's globals.
  */
-export function installRoutedBridge(routed: HelmBridge): void {
+export function installRoutedBridge(routed: DesktopBridge): void {
   if (window.top !== window) return
-  Object.defineProperty(window, '__helmRouted', { value: routed, configurable: true })
+  Object.defineProperty(window, '__flotiRouted', { value: routed, configurable: true })
 }

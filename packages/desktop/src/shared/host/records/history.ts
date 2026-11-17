@@ -1,4 +1,4 @@
-import type { HistoryPage, HistoryQuery, HistorySession, HistorySummary } from '@helm/core'
+import type { HistoryPage, HistoryQuery, HistorySession, HistorySummary } from '@floti/core'
 import type * as P from '../protocol'
 
 /**

@@ -1,5 +1,5 @@
 import { useState, type JSX, type ReactNode } from 'react'
-import { FAMILY_PARENT_SHARE, type FamilyAxis } from '@helm/core/types'
+import { FAMILY_PARENT_SHARE, type FamilyAxis } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { SESSION_STATE_DOT, SESSION_STATE_LABEL, commandTone, type SessionState } from '../lib/sessionstate'
 import { CommandChildIcon } from './icons'

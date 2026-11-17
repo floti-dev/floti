@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { posix } from 'node:path'
-import type { AppSettings } from '@helm/core'
+import type { AppSettings } from '@floti/core'
 import type { BrowserAvailability } from '../shared/ipc'
 
 /**

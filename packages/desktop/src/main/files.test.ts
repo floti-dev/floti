@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { DiscoveryResult, Profile, Project } from '@helm/core'
+import type { DiscoveryResult, Profile, Project } from '@floti/core'
 import { createFilesService, filesRoots, vscodeUrl, type FilesService, type KnownFolders } from './files'
 
 /**
@@ -14,7 +14,7 @@ import { createFilesService, filesRoots, vscodeUrl, type FilesService, type Know
 function git(cwd: string, ...args: string[]): void {
   const run = spawnSync(
     'git',
-    ['-c', 'core.autocrlf=false', '-c', 'user.name=Floti', '-c', 'user.email=helm@example.invalid', ...args],
+    ['-c', 'core.autocrlf=false', '-c', 'user.name=Floti', '-c', 'user.email=floti@example.invalid', ...args],
     { cwd, windowsHide: true, encoding: 'utf8' }
   )
   if (run.status !== 0) throw new Error(`git ${args.join(' ')}: ${run.stderr}`)

@@ -1,7 +1,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, type Frame, type Page } from '@playwright/test'
-import { addPluginFolder, openStore } from '@helm/core'
+import { addPluginFolder, openStore } from '@floti/core'
 import { startSampleServer, type SampleServer } from '../../../examples/sample-plugin/server.mjs'
 import { repoRoot, type World } from '../test/world'
 
@@ -36,7 +36,7 @@ export interface SampleFixture {
 export function installSample(world: World, server: SampleServer, folder = 'sample plugin', register = true): string {
   const source = join(repoRoot(), 'examples', 'sample-plugin')
   if (!existsSync(join(source, 'dist', 'panels', 'main.html'))) {
-    throw new Error('examples/sample-plugin is not built: run `pnpm --filter @helm/sample-plugin build`')
+    throw new Error('examples/sample-plugin is not built: run `pnpm --filter @floti/sample-plugin build`')
   }
   const dir = join(world.root, 'plugins', folder)
   mkdirSync(dir, { recursive: true })

@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { TemplateChoice, TemplatePreview } from '@helm/core'
+import type { TemplateChoice, TemplatePreview } from '@floti/core'
 import { NewWorkspaceDialog, type NewWorkspaceDialogProps } from './NewWorkspaceDialog'
 
 const TEMPLATES: TemplateChoice[] = [
@@ -40,7 +40,7 @@ function renderDialog(overrides: Partial<NewWorkspaceDialogProps> = {}) {
     templates: TEMPLATES,
     template: 'starter',
     onTemplateChange: vi.fn(),
-    templatesDir: 'C:\\Users\\me\\.config\\helm\\templates',
+    templatesDir: 'C:\\Users\\me\\.config\\floti\\templates',
     onManageTemplates: vi.fn(),
     onCreate: vi.fn(),
     onCancel: vi.fn(),

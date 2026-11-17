@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Project } from '@helm/core/types'
+import type { Project } from '@floti/core/types'
 import { FakeConnection, fakeReach, reconnectingReach } from '../../../../../test/fake-connection'
 import type * as P from '../../../../shared/host/protocol'
 import { configScopesWithScan, hostArtifactUrl, windowArtifactUrl } from '../../../../shared/host/records/content'
@@ -186,7 +186,7 @@ describe('the Files view over the window’s own connection', () => {
     await expect(ask(adapter, 'content:write', request)).resolves.toMatchObject({ ok: true, snapshotId: 7 })
     expect(connection.payloads('content:write')).toEqual([request])
     await expect(ask(adapter, 'content:artifact', { scopePath: ALPHA, path: NOTE })).resolves.toEqual({
-      url: 'helm-content://artifact/tok123/report.html',
+      url: 'floti-content://artifact/tok123/report.html',
       token: 'tok123'
     })
     await expect(ask(adapter, 'content:wikilink', { scopePath: ALPHA, target: 'a', from: NOTE })).resolves.toEqual({
@@ -231,9 +231,9 @@ describe('the Files view over the window’s own connection', () => {
   })
 
   it('maps an artifact’s address between the host’s scheme and the window’s', () => {
-    expect(windowArtifactUrl('floti-artifact://t/a.html')).toBe('helm-content://artifact/t/a.html')
-    expect(hostArtifactUrl('helm-content://artifact/t/a.html')).toBe('floti-artifact://t/a.html')
-    expect(hostArtifactUrl('helm-content://elsewhere/a.html')).toBeNull()
+    expect(windowArtifactUrl('floti-artifact://t/a.html')).toBe('floti-content://artifact/t/a.html')
+    expect(hostArtifactUrl('floti-content://artifact/t/a.html')).toBe('floti-artifact://t/a.html')
+    expect(hostArtifactUrl('floti-content://elsewhere/a.html')).toBeNull()
     expect(() => windowArtifactUrl('https://example.invalid/a.html')).toThrow()
   })
 })

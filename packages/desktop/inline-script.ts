@@ -16,7 +16,7 @@ import type { Plugin } from 'vite'
 export function inlineScript(): Plugin {
   const SUFFIX = '?script'
   return {
-    name: 'helm-inline-script',
+    name: 'floti-inline-script',
     enforce: 'pre',
     async resolveId(source, importer) {
       if (!source.endsWith(SUFFIX)) return null

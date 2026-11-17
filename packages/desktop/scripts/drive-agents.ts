@@ -18,7 +18,7 @@
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openStore, settleWalkthrough, writeSettings, type AppSettings } from '@helm/core'
+import { openStore, settleWalkthrough, writeSettings, type AppSettings } from '@floti/core'
 import { FAKE_AGENTS, writeFakeAgent, type FakeBackend } from '../../../test/fake-agents/programs.mjs'
 
 /** The setting that chooses each backend's program in Helm. */

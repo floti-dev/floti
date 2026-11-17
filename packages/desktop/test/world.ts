@@ -9,7 +9,7 @@ import {
   type AppSettings,
   type Profile,
   type ProfileDraft
-} from '@helm/core'
+} from '@floti/core'
 import { writeFakeAgent } from '../../../test/fake-agents/programs.mjs'
 
 /**

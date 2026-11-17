@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { openStore, readSettings } from '@helm/core'
+import { openStore, readSettings } from '@floti/core'
 import { seedSettings } from '../test/world'
-import { claudeRunIn, expect, test as base } from './helm'
+import { claudeRunIn, expect, test as base } from './desktop'
 
 /**
  * The guided first run, from a first start to a running fake-agent session.
@@ -26,10 +26,10 @@ const test = base.extend({
 
 const FIRST_MESSAGE = 'Read AGENTS.md and tell me what this workspace is for.'
 
-test('a first start walks from Welcome to a running session in a new Starter workspace', async ({ helm, world }) => {
-  const { app } = helm
-  const setup = helm.window
-  await helm.app.evaluate(({ dialog }, folder) => {
+test('a first start walks from Welcome to a running session in a new Starter workspace', async ({ desktop, world }) => {
+  const { app } = desktop
+  const setup = desktop.window
+  await desktop.app.evaluate(({ dialog }, folder) => {
     dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [folder] })) as typeof dialog.showOpenDialog
   }, world.projectsDir)
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import { treeLaunchNotice, type TreeLaunchFailure } from './launchNotice'
 
 const BUILD = 'h-build'

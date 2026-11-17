@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import type { AppSettings } from '@helm/core'
+import type { AppSettings } from '@floti/core'
 import { fakeClaudeLogs } from '../test/world'
 import {
   answer,
@@ -9,7 +9,7 @@ import {
   expect,
   flotiChildren,
   flotiHostsAmong,
-  launchHelm,
+  launchDesktop,
   mainPid,
   processAlive,
   sessionIdOf,
@@ -17,7 +17,7 @@ import {
   terminalText,
   test,
   typeLine
-} from './helm'
+} from './desktop'
 
 /**
  * The host's own lifetime around Helm's: sessions run in a `floti host` Helm
@@ -27,22 +27,22 @@ import {
  */
 
 /** The window's routed bridge (`inspect.ts`): host features over the window's own connection. */
-type Bridge = { __helmRouted: { invoke: (channel: string, payload?: unknown) => Promise<unknown> } }
+type Bridge = { __flotiRouted: { invoke: (channel: string, payload?: unknown) => Promise<unknown> } }
 const invoke = <T>(window: Page, channel: string): Promise<T> =>
-  window.evaluate((name) => (window as unknown as Bridge).__helmRouted.invoke(name), channel) as Promise<T>
+  window.evaluate((name) => (window as unknown as Bridge).__flotiRouted.invoke(name), channel) as Promise<T>
 
 test('closing the window asks first; Cancel changes nothing, and Keep running and quit leaves the sessions in the host, where the next start brings back this device’s tabs, panes and split, their screens and input', async ({
-  helm,
+  desktop,
   world
 }) => {
-  let { window } = helm
+  let { window } = desktop
   const alpha = await startSession(window, 'alpha')
   await typeLine(window.getByRole('region', { name: 'First pane' }), 'draft the schema')
   await expect.poll(() => terminalText(window, alpha)).toContain('You said: draft the schema')
   const beta = await startSession(window, 'beta')
   const runs = [(await claudeRunIn(world, world.projects.alpha)).pid, (await claudeRunIn(world, world.projects.beta)).pid]
-  await expect.poll(async () => flotiChildren(await mainPid(helm)).length).toBe(3)
-  const [host] = flotiHostsAmong(flotiChildren(await mainPid(helm)))
+  await expect.poll(async () => flotiChildren(await mainPid(desktop)).length).toBe(3)
+  const [host] = flotiHostsAmong(flotiChildren(await mainPid(desktop)))
   expect(host).toBeDefined()
   await expect(window.getByRole('contentinfo').locator('[data-status-host]')).toHaveText('This PC · quit ends sessions')
 
@@ -68,22 +68,22 @@ test('closing the window asks first; Cancel changes nothing, and Keep running an
   const before = await saved()
 
   const question = window.getByRole('alertdialog', { name: 'Quitting Floti ends 2 sessions on this PC’s host.' })
-  await closeWindow(helm.app)
+  await closeWindow(desktop.app)
   await expect(question.getByRole('button')).toHaveText(['Cancel', 'Keep running and quit', 'End and quit'])
   await question.getByRole('button', { name: 'Cancel' }).click()
   await expect(question).toHaveCount(0)
   await expect(first.getByRole('tab', { name: 'alpha, ready' })).toBeVisible()
   expect([host!, ...runs].every(processAlive)).toBe(true)
 
-  const main = await mainPid(helm)
-  await closeWindow(helm.app)
+  const main = await mainPid(desktop)
+  await closeWindow(desktop.app)
   await answer(question.getByRole('button', { name: 'Keep running and quit' }))
   await expect.poll(() => processAlive(main)).toBe(false)
   // Helm is gone; the host and the sessions it runs are not.
   expect([host!, ...runs].every(processAlive)).toBe(true)
 
-  const next = await launchHelm(world)
-  Object.assign(helm, next)
+  const next = await launchDesktop(world)
+  Object.assign(desktop, next)
   window = next.window
   const firstAgain = window.getByRole('region', { name: 'First pane' })
   const secondAgain = window.getByRole('region', { name: 'Second pane' })
@@ -105,25 +105,25 @@ test('closing the window asks first; Cancel changes nothing, and Keep running an
   expect(runs.every(processAlive)).toBe(true)
 
   // Reattached to the host it left running, and the answer was for that quit only.
-  expect(flotiHostsAmong(flotiChildren(await mainPid(helm)))).toEqual([])
+  expect(flotiHostsAmong(flotiChildren(await mainPid(desktop)))).toEqual([])
   const { quitSessions } = await invoke<AppSettings>(window, 'settings:read')
   expect(quitSessions['local'] ?? 'end').toBe('end')
   await expect(window.getByRole('contentinfo').locator('[data-status-host]')).toHaveText('This PC · quit ends sessions')
 })
 
 test('Settings’ Stop host says how many sessions end; Cancel changes nothing, and Stop host ends them and the host', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   await startSession(window, 'alpha')
   await startSession(window, 'beta')
   const pids = [
     (await claudeRunIn(world, world.projects.alpha)).pid,
     (await claudeRunIn(world, world.projects.beta)).pid
   ]
-  await expect.poll(async () => flotiChildren(await mainPid(helm)).length).toBe(3)
-  const [host] = flotiHostsAmong(flotiChildren(await mainPid(helm)))
+  await expect.poll(async () => flotiChildren(await mainPid(desktop)).length).toBe(3)
+  const [host] = flotiHostsAmong(flotiChildren(await mainPid(desktop)))
 
   await window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name: 'Settings' }).click()
   await window.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Sessions', exact: true }).click()
@@ -140,10 +140,10 @@ test('Settings’ Stop host says how many sessions end; Cancel changes nothing, 
 })
 
 test('after Floti is killed outright, its sessions run on in the host, and the next start reattaches to that host and shows them, offering no restore', async ({
-  helm,
+  desktop,
   world
 }) => {
-  let { window } = helm
+  let { window } = desktop
   const id = await startSession(window, 'alpha')
   await typeLine(window.getByRole('region', { name: 'First pane' }), 'draft the schema')
   await expect.poll(() => terminalText(window, id)).toContain('You said: draft the schema')
@@ -155,8 +155,8 @@ test('after Floti is killed outright, its sessions run on in the host, and the n
     })
     .toBe(true)
   const run = await claudeRunIn(world, world.projects.alpha)
-  await expect.poll(async () => flotiChildren(await mainPid(helm)).length).toBe(3)
-  const floti = flotiChildren(await mainPid(helm))
+  await expect.poll(async () => flotiChildren(await mainPid(desktop)).length).toBe(3)
+  const floti = flotiChildren(await mainPid(desktop))
   const hosts = flotiHostsAmong(floti)
   expect(hosts).toHaveLength(1)
   const host = hosts[0]!
@@ -164,22 +164,22 @@ test('after Floti is killed outright, its sessions run on in the host, and the n
 
   // Outright: on macOS and Linux a plain kill's SIGTERM is a request to quit,
   // which Electron honours as a clean quit.
-  process.kill(await mainPid(helm), 'SIGKILL')
+  process.kill(await mainPid(desktop), 'SIGKILL')
   // The bridges end with the Helm whose pipes they were; the host and the
   // session it runs do not.
   await expect.poll(() => bridges.filter(processAlive)).toEqual([])
   expect([host, run.pid].every(processAlive)).toBe(true)
 
-  const next = await launchHelm(world)
-  Object.assign(helm, next)
+  const next = await launchDesktop(world)
+  Object.assign(desktop, next)
   window = next.window
   await expect(window.getByRole('tab', { name: 'alpha, ready' })).toBeVisible()
   expect(await sessionIdOf(window, 'alpha, ready')).toBe(id)
   await expect.poll(() => terminalText(window, id)).toContain('You said: draft the schema')
 
   // Reached through the host already running: this Helm started only its bridges.
-  await expect.poll(async () => flotiChildren(await mainPid(helm)).length).toBe(2)
-  expect(flotiHostsAmong(flotiChildren(await mainPid(helm)))).toEqual([])
+  await expect.poll(async () => flotiChildren(await mainPid(desktop)).length).toBe(2)
+  expect(flotiHostsAmong(flotiChildren(await mainPid(desktop)))).toEqual([])
   expect([host, run.pid].every(processAlive)).toBe(true)
   // Nothing ended, so there is nothing to offer back and nothing was resumed.
   await expect(window.getByRole('region', { name: /when Floti closed/ })).toHaveCount(0)
@@ -187,17 +187,17 @@ test('after Floti is killed outright, its sessions run on in the host, and the n
 })
 
 test('when the host Floti started dies, Floti starts a new host and reconnects, and the tab takes its session back running, with nothing resumed', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   const id = await startSession(window, 'alpha')
   const pane = window.getByRole('region', { name: 'First pane' })
   await typeLine(pane, 'sketch the migration')
   await expect.poll(() => terminalText(window, id)).toContain('You said: sketch the migration')
   await claudeRunIn(world, world.projects.alpha)
-  await expect.poll(async () => flotiHostsAmong(flotiChildren(await mainPid(helm))).length).toBe(1)
-  const [host] = flotiHostsAmong(flotiChildren(await mainPid(helm)))
+  await expect.poll(async () => flotiHostsAmong(flotiChildren(await mainPid(desktop))).length).toBe(1)
+  const [host] = flotiHostsAmong(flotiChildren(await mainPid(desktop)))
 
   // The banner is up only while the window has no host, so the page keeps
   // every text it showed rather than the test racing to see it.
@@ -217,7 +217,7 @@ test('when the host Floti started dies, Floti starts a new host and reconnects, 
   // Helm started the host that died, so it starts a new one and reconnects.
   await expect
     .poll(async () => {
-      const hosts = flotiHostsAmong(flotiChildren(await mainPid(helm)))
+      const hosts = flotiHostsAmong(flotiChildren(await mainPid(desktop)))
       return hosts.length === 1 && hosts[0] !== host
     })
     .toBe(true)

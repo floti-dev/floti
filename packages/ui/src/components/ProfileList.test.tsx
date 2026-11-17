@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { Profile } from '@helm/core/types'
+import type { Profile } from '@floti/core/types'
 import { ProfileList, type ProfileListProps } from './ProfileList'
 
 const HUB = 'C:\\work\\hub'

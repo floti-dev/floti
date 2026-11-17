@@ -35,7 +35,7 @@ export {
   type BrowserHistory,
   type BrowserHistoryOptions
 } from './browserHistory'
-export { openStore, type HelmDatabase, type OpenStoreOptions, type Store } from './db'
+export { openStore, type DesktopDatabase, type OpenStoreOptions, type Store } from './db'
 export {
   historyCursor,
   historySummary,

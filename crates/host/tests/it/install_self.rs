@@ -97,7 +97,7 @@ fn carried(dirs: &TestDirs, version: &[u8]) -> Carried {
     let resources = dirs
         .root()
         .join("Program Files")
-        .join("Helm")
+        .join("Floti")
         .join("resources");
     let node = resources.join("node");
     std::fs::create_dir_all(node.join("bin")).unwrap();

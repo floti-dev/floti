@@ -1,4 +1,4 @@
-import type { HostTransport } from '@helm/core/types'
+import type { HostTransport } from '@floti/core/types'
 import { describe, expect, it } from 'vitest'
 import { FakeChild, answersRestart, connects, type Program } from '../../../test/fake-child'
 import { FrameDecoder, encodeFrame } from './frame'
@@ -17,13 +17,13 @@ const PLACES: HostPlaces = {
   appMode: 'dev',
   dataDir: 'C:\\Users\\me\\AppData\\Local\\Floti Dev\\dev\\floti-data',
   packaged: false,
-  resourcesPath: 'C:\\Program Files\\Helm\\resources',
-  repoRoot: 'C:\\src\\my helm',
+  resourcesPath: 'C:\\Program Files\\Floti\\resources',
+  repoRoot: 'C:\\src\\my floti',
   templatesDir: 'C:\\Users\\me\\AppData\\Local\\Floti Dev\\dev\\floti-data\\templates',
-  execPath: 'C:\\src\\my helm\\node_modules\\electron\\dist\\electron.exe',
-  appPath: 'C:\\src\\my helm\\packages\\desktop'
+  execPath: 'C:\\src\\my floti\\node_modules\\electron\\dist\\electron.exe',
+  appPath: 'C:\\src\\my floti\\packages\\desktop'
 }
-const FLOTI = 'C:\\src\\my helm\\target\\debug\\floti.exe'
+const FLOTI = 'C:\\src\\my floti\\target\\debug\\floti.exe'
 const FOLDER = 'C:\\Users\\me\\AppData\\Local\\Floti Dev\\dev\\floti-data\\remote-hosts\\0123456789abcdef'
 const SSH: HostTransport = { kind: 'ssh', target: 'me@build-box' }
 const COMMAND: HostTransport = {

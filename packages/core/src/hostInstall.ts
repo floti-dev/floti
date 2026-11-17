@@ -86,7 +86,7 @@ export type HostCheck =
       floti?: string
     }
   | { kind: 'offer'; id: string; offer: InstallOffer }
-  | { kind: 'newer'; found: FlotiFound; ours: string; helm: string }
+  | { kind: 'newer'; found: FlotiFound; ours: string; desktop: string }
   | { kind: 'noBuild'; system: RemoteSystem; reason: string }
   | { kind: 'failed'; lastLine: string; said?: string; cause?: 'transportMissing' | 'loginOutput' }
 
@@ -231,8 +231,8 @@ export function parseProtocol(text: string): ProtocolVersionNumbers | null {
  * The sentence Settings > Hosts says about a connected host on another
  * computer whose floti is older than this Helm's, naming both versions.
  */
-export function olderHostSentence(name: string, hostVersion: string, helmVersion: string): string {
-  return `${name} runs floti ${hostVersion}, older than the floti ${helmVersion} this Floti carries.`
+export function olderHostSentence(name: string, hostVersion: string, carriedVersion: string): string {
+  return `${name} runs floti ${hostVersion}, older than the floti ${carriedVersion} this Floti carries.`
 }
 
 /**
@@ -348,8 +348,8 @@ function comparePrereleasePart(a: string, b: string): number {
  * only when both versions read, so a host naming something else is never
  * called older.
  */
-export function hostFlotiOlder(hostVersion: string, helmVersion: string): boolean {
-  const order = compareVersions(hostVersion, helmVersion)
+export function hostFlotiOlder(hostVersion: string, carriedVersion: string): boolean {
+  const order = compareVersions(hostVersion, carriedVersion)
   return order !== null && order < 0
 }
 
@@ -365,11 +365,11 @@ export function hostFlotiOlder(hostVersion: string, helmVersion: string): boolea
  *   the restart could be asked for: Restart host to update ends its process
  *   as a crash would, leaving its session keeper running, and the floti Helm
  *   carries starts and takes every session and terminal over in its tab.
- * - `older: 'helm'`: this Helm is too old for the host, and is updated.
+ * - `older: 'desktop'`: this Helm is too old for the host, and is updated.
  */
 export type LocalHostVersions =
-  | { older: 'host'; host: string; helm: string; beforeRestart: boolean }
-  | { older: 'helm'; host: string; helm: string }
+  | { older: 'host'; host: string; desktop: string; beforeRestart: boolean }
+  | { older: 'desktop'; host: string; desktop: string }
 
 /**
  * What a refused hello says of the two sides (`update` is the side it said
@@ -380,15 +380,15 @@ export function localHostVersions(
   seen:
     | { refused: { host: ProtocolVersionNumbers; client: ProtocolVersionNumbers; update: 'host' | 'client' } }
     | { hostVersion: string },
-  helmVersion: string
+  carriedVersion: string
 ): LocalHostVersions | null {
   if ('refused' in seen) {
     const { host, client, update } = seen.refused
-    const named = { host: `protocol ${formatProtocol(host)}`, helm: `protocol ${formatProtocol(client)}` }
-    return update === 'host' ? { older: 'host', ...named, beforeRestart: host.major < 2 } : { older: 'helm', ...named }
+    const named = { host: `protocol ${formatProtocol(host)}`, desktop: `protocol ${formatProtocol(client)}` }
+    return update === 'host' ? { older: 'host', ...named, beforeRestart: host.major < 2 } : { older: 'desktop', ...named }
   }
-  return hostFlotiOlder(seen.hostVersion, helmVersion)
-    ? { older: 'host', host: seen.hostVersion, helm: helmVersion, beforeRestart: false }
+  return hostFlotiOlder(seen.hostVersion, carriedVersion)
+    ? { older: 'host', host: seen.hostVersion, desktop: carriedVersion, beforeRestart: false }
     : null
 }
 
@@ -448,14 +448,14 @@ function sideName(side: string): string {
 /** The sentence Settings > Hosts and the status bar's hover say about this PC's host's version, naming both sides. */
 export function localHostVersionsSentence(versions: LocalHostVersions): string {
   const host = sideName(versions.host)
-  const helm = sideName(versions.helm)
-  if (versions.older === 'helm') {
-    return `This PC’s host runs ${host}, newer than the ${helm} this Floti speaks, so Floti cannot connect to it. Update Floti on this PC.`
+  const desktop = sideName(versions.desktop)
+  if (versions.older === 'desktop') {
+    return `This PC’s host runs ${host}, newer than the ${desktop} this Floti speaks, so Floti cannot connect to it. Update Floti on this PC.`
   }
   if (versions.beforeRestart) {
-    return `This PC’s host runs ${host}, older than the ${helm} this Floti carries. Restart host to update keeps every session and terminal running in its tab.`
+    return `This PC’s host runs ${host}, older than the ${desktop} this Floti carries. Restart host to update keeps every session and terminal running in its tab.`
   }
-  return `This PC’s host runs ${host}, older than the ${helm} this Floti carries. Restart host to update says first what it ends.`
+  return `This PC’s host runs ${host}, older than the ${desktop} this Floti carries. Restart host to update says first what it ends.`
 }
 
 /** What restarting this PC's host on the floti this Helm carries does, asked before anything happens. */
@@ -480,8 +480,8 @@ export interface LocalHostRestartOffer {
 }
 
 /** The question before restarting this PC's host, naming what it ends. */
-export function restartHostQuestion(offer: LocalHostRestartOffer, helmVersion: string): string {
-  const to = `floti ${helmVersion}`
+export function restartHostQuestion(offer: LocalHostRestartOffer, carriedVersion: string): string {
+  const to = `floti ${carriedVersion}`
   if (offer.ends === 0) return `Restart this PC’s host on ${to}? No session ends.`
   return `Restart this PC’s host on ${to}, ending ${String(offer.ends)} session${offer.ends === 1 ? '' : 's'}?`
 }

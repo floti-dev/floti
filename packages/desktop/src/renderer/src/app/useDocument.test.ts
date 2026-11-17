@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ContentDocument } from '@helm/core'
+import type { ContentDocument } from '@floti/core'
 import { bridge } from './bridge.testkit'
 import { noteDocument, rendered } from './document.testkit'
 import { useDocument, type DocumentOptions } from './useDocument'
@@ -133,15 +133,15 @@ describe('useDocument', () => {
 
   it('mints an artifact a URL, and keeps only what that artifact logged', async () => {
     bridge.answer('content:artifact', () => ({
-      url: 'helm-content://artifact/tok1/lesson.html',
+      url: 'floti-content://artifact/tok1/lesson.html',
       token: 'tok1'
     }))
     const { result } = renderHook(() => useDocument(options({ path: 'C:\\p\\lesson.html', kind: 'html' })))
-    await waitFor(() => expect(result.current.artifactUrl).toBe('helm-content://artifact/tok1/lesson.html'))
+    await waitFor(() => expect(result.current.artifactUrl).toBe('floti-content://artifact/tok1/lesson.html'))
 
     act(() => {
-      bridge.emit('content:artifactConsole', { level: 'error', message: 'mine', source: 'helm-content://artifact/tok1/lesson.html', line: 1 })
-      bridge.emit('content:artifactConsole', { level: 'error', message: 'theirs', source: 'helm-content://artifact/tok2/other.html', line: 1 })
+      bridge.emit('content:artifactConsole', { level: 'error', message: 'mine', source: 'floti-content://artifact/tok1/lesson.html', line: 1 })
+      bridge.emit('content:artifactConsole', { level: 'error', message: 'theirs', source: 'floti-content://artifact/tok2/other.html', line: 1 })
     })
     expect(result.current.artifactConsole.map((entry) => entry.message)).toEqual(['mine'])
   })

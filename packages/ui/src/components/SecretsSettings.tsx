@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useMemo, useState } from 'react'
-import type { SecretInfo, SecretInput, SecretsState } from '@helm/core/types'
+import type { SecretInfo, SecretInput, SecretsState } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { formatAge } from '../lib/time'
 import { Checkbox } from './Checkbox'

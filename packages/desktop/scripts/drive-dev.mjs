@@ -40,7 +40,7 @@ if (command === undefined) {
  * was true right up until the browser pane shipped: a `WebContentsView` is a
  * `page` target like any other and it carries whatever URL the user typed, so
  * with one browser tab open the picker chose the *page* - and every command
- * then ran against a document that has never heard of `window.helm`. `text`
+ * then ran against a document that has never heard of `window.desktop`. `text`
  * printed the page, `click` said nothing matched, and `eval` failed in a way
  * that reads exactly like the app being broken.
  *

@@ -1,5 +1,5 @@
 import { useState, type JSX, type ReactNode } from 'react'
-import type { LaunchAgents } from '@helm/core/types'
+import type { LaunchAgents } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { EmptyState } from './EmptyState'
 import { AgentCardIcon, PlusIcon } from './icons'

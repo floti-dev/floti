@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { HelmBridge, LocalHostStep } from '../../../../shared/ipc'
+import type { DesktopBridge, LocalHostStep } from '../../../../shared/ipc'
 
 /**
  * What main's link to this PC's host is doing (`LocalHostStep`), as the
@@ -17,7 +17,7 @@ export interface LocalHostStepStore {
 }
 
 export function createLocalHostStep(
-  bridge: Pick<HelmBridge, 'invoke' | 'on'>,
+  bridge: Pick<DesktopBridge, 'invoke' | 'on'>,
   log: (line: string) => void
 ): LocalHostStepStore {
   let step: LocalHostStep | null = null

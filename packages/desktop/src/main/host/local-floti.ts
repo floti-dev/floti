@@ -1,4 +1,4 @@
-import { compareVersions, parseVersionLine } from '@helm/core/types'
+import { compareVersions, parseVersionLine } from '@floti/core/types'
 import { carriedFloti, standaloneFloti, type HostPlaces, type LauncherDeps } from './launcher'
 
 /**

@@ -1027,7 +1027,7 @@ fn host_a_desktop_started(dirs: &TestDirs) -> HostProcess {
     HostProcess::spawn(
         floti_host_command(dirs)
             .arg("--desktop")
-            .arg(app.join("Helm.exe"))
+            .arg(app.join("Floti.exe"))
             .arg("--desktop-arg")
             .arg(app.join("resources app")),
     )

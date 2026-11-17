@@ -7,7 +7,7 @@ import {
   openStore,
   renameHistorySession,
   type Store
-} from '@helm/core'
+} from '@floti/core'
 import { FakeConnection, fakeLink, reconnectingLink } from '../../../test/host-connection'
 import { encodeFrame } from '../../shared/host/frame'
 import type { OwnDataCopyState } from '../../shared/ipc'

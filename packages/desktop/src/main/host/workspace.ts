@@ -1,4 +1,4 @@
-import type { AppSettings, CachedProject, DiscoveryResult } from '@helm/core'
+import type { AppSettings, CachedProject, DiscoveryResult } from '@floti/core'
 import type {
   FolderTemplateKind,
   FolderTemplatePreview,
@@ -7,7 +7,7 @@ import type {
   TemplateDetail,
   TemplateImportResult,
   TemplateWriteResult
-} from '@helm/core'
+} from '@floti/core'
 import type { ClaudeStatus, IpcRequests } from '../../shared/ipc'
 import type { HostConnection, HostSubscription } from './client'
 import type { HostLink } from './link'

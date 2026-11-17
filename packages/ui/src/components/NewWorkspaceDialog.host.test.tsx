@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import type { TemplateChoice } from '@helm/core'
+import type { TemplateChoice } from '@floti/core'
 import { NewWorkspaceDialog, type NewWorkspaceDialogProps } from './NewWorkspaceDialog'
 
 /** build-box's own templates, as its `template:list` answers. */

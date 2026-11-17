@@ -1,5 +1,5 @@
 import { resolve, sep } from 'node:path'
-import { isInsideRoot, type DiscoveryResult, type Profile } from '@helm/core'
+import { isInsideRoot, type DiscoveryResult, type Profile } from '@floti/core'
 
 /**
  * The Files view's one hand-off on this computer: a file opened in VS Code.

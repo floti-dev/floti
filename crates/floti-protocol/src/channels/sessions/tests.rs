@@ -199,7 +199,7 @@ where
 fn record(id: u64) -> SessionRecord {
     SessionRecord {
         id,
-        name: "helm-3".into(),
+        name: "floti-3".into(),
         label: Some("PR review".into()),
         title: None,
         cwd: "C:\\work\\a repo".into(),
@@ -243,7 +243,7 @@ fn command_child(id: u64) -> SessionRecord {
         id,
         name: "tests".into(),
         agent: None,
-        command: Some("pnpm test --filter @helm/core".into()),
+        command: Some("pnpm test --filter @floti/core".into()),
         exit_code: Some(1),
         ..record(id)
     }

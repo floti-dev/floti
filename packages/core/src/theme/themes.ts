@@ -16,7 +16,7 @@ import { contrastRatio, formatColor, mix, parseColor, withAlpha, type Rgba } fro
  * - **Shape.** Gaps, corners and density are settings of their own, so a
  *   person's choice of corner survives changing colours.
  *
- * Pure: no DOM, no Node. The renderer imports it through `@helm/core/types`;
+ * Pure: no DOM, no Node. The renderer imports it through `@floti/core/types`;
  * reading theme files off disk is `theme/load.ts`, which is not reachable from
  * there.
  */

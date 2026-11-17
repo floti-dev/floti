@@ -55,7 +55,7 @@ import type {
   ThemeState,
   WriteConfigRequest,
   WriteConfigResult
-} from '@helm/core'
+} from '@floti/core'
 import type {
   FlotiErrorCode,
   FlotiTheme,
@@ -69,7 +69,7 @@ import type {
   PluginMetrics,
   SecretInput,
   SecretsState
-} from '@helm/core'
+} from '@floti/core'
 import type {
   BrowserSuggestion,
   BrowserSuggestions,
@@ -82,7 +82,7 @@ import type {
   SshConfigHosts,
   WalkthroughStep,
   WslDistroList
-} from '@helm/core/types'
+} from '@floti/core/types'
 
 export type { LocalHostRestartOffer }
 import type { BrowserCommand } from './browserKeys'
@@ -1722,7 +1722,7 @@ export interface IpcRequests {
    * is a channel that hands main a URL to fetch on its own: every navigation
    * behind these is a page the user asked for, in a view they opened.
    *
-   * The whole family goes through `browserReachAllows`, in `@helm/core`, and
+   * The whole family goes through `browserReachAllows`, in `@floti/core`, and
    * nothing here re-implements any part of it - see `main/browser.ts`.
    */
 
@@ -1906,7 +1906,7 @@ export type {
   SecretInfo,
   SecretInput,
   SecretsState
-} from '@helm/core'
+} from '@floti/core'
 
 export interface PluginAddResult {
   /** The folder picked, or null when the picker was cancelled. */
@@ -2340,7 +2340,7 @@ export type EventPayload<K extends EventChannel> = IpcEvents[K]
 
 /** The object the preload exposes. The renderer sees exactly this and nothing
  * else - no `ipcRenderer`, no `require`, no Node globals. */
-export interface HelmBridge {
+export interface DesktopBridge {
   invoke<K extends RequestChannel>(
     channel: K,
     ...args: RequestPayload<K> extends void ? [] : [payload: RequestPayload<K>]

@@ -1,5 +1,5 @@
 /**
- * `@helm/core` - what Floti's clients share, and `desktop.db`.
+ * `@floti/core` - what Floti's clients share, and `desktop.db`.
  *
  * The local host runs sessions and reads and writes the workspace; this
  * package keeps what the window and main need beside it: the shapes the host

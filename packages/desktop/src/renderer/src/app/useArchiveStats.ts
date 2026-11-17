@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ArchiveStats } from '@helm/core'
+import type { ArchiveStats } from '@floti/core'
 import { bridgeFor } from './bridge'
 
 /**
@@ -17,11 +17,11 @@ export function useArchiveStats(host: string): ArchiveStats | null {
   }
   useEffect(() => {
     let live = true
-    const helm = bridgeFor(host)
-    const off = helm.on('archive:changed', (next) => {
+    const desktop = bridgeFor(host)
+    const off = desktop.on('archive:changed', (next) => {
       if (live) setStats(next)
     })
-    helm.invoke('archive:stats').then(
+    desktop.invoke('archive:stats').then(
       (next) => live && setStats(next),
       () => undefined
     )

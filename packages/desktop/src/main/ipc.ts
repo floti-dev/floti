@@ -1,5 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell, type WebContents } from 'electron'
-import { FOREIGN_PAGE, type HelmPage, type HostPageLinks } from './host/page-link'
+import { FOREIGN_PAGE, type FlotiPage, type HostPageLinks } from './host/page-link'
 import type { RemoteHostLinks } from './host/remote'
 import type { PortForwards } from './host/forwards'
 import type { RemoteInstaller } from './host/remote-install'
@@ -7,8 +7,8 @@ import type { RemoteHostAdder } from './host/remote-add'
 import { readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename } from 'node:path'
-import { pluginThemeOf, type AppSettings } from '@helm/core'
-import { remoteHostsProblem, type SshConfigHosts, type WalkthroughStep, type WslDistroList } from '@helm/core/types'
+import { pluginThemeOf, type AppSettings } from '@floti/core'
+import { remoteHostsProblem, type SshConfigHosts, type WalkthroughStep, type WslDistroList } from '@floti/core/types'
 import type { BrowserHost } from './browser'
 import type { MenuLayer } from './menuLayer'
 import type { BrowserMcpHost } from './browser-mcp'
@@ -80,7 +80,7 @@ export function pushTheme(ctx: Pick<IpcContext, 'services' | 'themes' | 'window'
 }
 
 /** A web contents as the page relay sees it: its id, its two events, and when it navigates away or closes. */
-export function helmPageOf(contents: WebContents): HelmPage {
+export function flotiPageOf(contents: WebContents): FlotiPage {
   return {
     id: contents.id,
     send: (channel, payload) => {
@@ -287,7 +287,7 @@ export function registerIpc(ctx: IpcContext): void {
     // an artifact or a plugin page would be.
     'hostLink:open': (payload, event) => {
       if (event.senderFrame !== event.sender.mainFrame) return Promise.reject(new Error(FOREIGN_PAGE))
-      return ctx.pageLinks.open(helmPageOf(event.sender), payload?.host ?? null)
+      return ctx.pageLinks.open(flotiPageOf(event.sender), payload?.host ?? null)
     },
 
     'hostLink:currentStep': () => ctx.localHost.step(),
@@ -497,7 +497,7 @@ export function registerIpc(ctx: IpcContext): void {
      * The browser pane. Every handler is a one-line delegation on purpose:
      * every decision behind them - what a typed address means, whether the
      * reach posture allows it, what hiding is - lives in `main/browser.ts` and
-     * `@helm/core`, so there is exactly one place either could be got wrong.
+     * `@floti/core`, so there is exactly one place either could be got wrong.
      */
     'browser:open': (request) => ctx.browsers.open(request),
     'browser:navigate': ({ id, input }) => ctx.browsers.navigate(id, input),

@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ContentDirListing, FilesStatus, FileView } from '@helm/core'
+import type { ContentDirListing, FilesStatus, FileView } from '@floti/core'
 import { bridge } from './bridge.testkit'
 import { joinRoot, relativeTo, useFiles, type FilesOptions } from './useFiles'
 

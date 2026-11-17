@@ -1,5 +1,5 @@
-import { compareVersions } from '@helm/core/types'
-import type { UpdateView } from '@helm/ui'
+import { compareVersions } from '@floti/core/types'
+import type { UpdateView } from '@floti/ui'
 import type { HostSubscription } from '../../../../shared/host/client'
 import type * as P from '../../../../shared/host/protocol'
 import type { HostReach } from './history'

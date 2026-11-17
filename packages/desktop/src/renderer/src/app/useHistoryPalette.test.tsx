@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HistoryPage, HistoryProject, HistoryQuery, HistorySession, HistorySummary } from '@helm/core'
+import type { HistoryPage, HistoryProject, HistoryQuery, HistorySession, HistorySummary } from '@floti/core'
 import { bridge, remoteBridge } from './bridge.testkit'
 import { splitQuery, useHistoryPalette } from './useHistoryPalette'
 

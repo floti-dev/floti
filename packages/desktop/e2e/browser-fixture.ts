@@ -43,7 +43,7 @@ export interface BrowserFixture {
 export const POPUP_CODE = 'FIXTURE-CODE-5501'
 /** What `/tools` puts on the clipboard. */
 export const COPIED = 'copied by the fixture 7302'
-export const COOKIE = { name: 'helmcookie', value: 'persisted-4711' }
+export const COOKIE = { name: 'floticookie', value: 'persisted-4711' }
 
 /*
  * A Content-Security-Policy on every page. An unpackaged Electron writes a
@@ -62,12 +62,12 @@ const page = (title: string, body = '', script = ''): string =>
 function respond(path: string, elsewhere: string): { headers: Record<string, string>; body: string } {
   switch (path) {
     case '/two':
-      return { headers: HTML, body: page('Helm fixture two', '<p>Two</p>') }
+      return { headers: HTML, body: page('Floti fixture two', '<p>Two</p>') }
     // Three of one word and none of another, for find in page.
     case '/find':
       return {
         headers: HTML,
-        body: page('Helm fixture find', '<p>needle one</p><p>a haystack</p><p>needle two</p><p>needle three</p>')
+        body: page('Floti fixture find', '<p>needle one</p><p>a haystack</p><p>needle two</p><p>needle three</p>')
       }
     /*
      * The two things a page may ask for - writing the clipboard and the whole
@@ -78,7 +78,7 @@ function respond(path: string, elsewhere: string): { headers: Record<string, str
       return {
         headers: HTML,
         body: page(
-          'Helm fixture tools',
+          'Floti fixture tools',
           '<button id="copy">Copy</button> <button id="fs">Go full screen</button><p role="status" id="status">idle</p>',
           `const status = document.getElementById('status')
            window.keys = []
@@ -97,7 +97,7 @@ function respond(path: string, elsewhere: string): { headers: Record<string, str
         // A year, so the second app start reads a cookie that was stored rather
         // than one that happens not to have expired yet.
         headers: { ...HTML, 'set-cookie': `${COOKIE.name}=${COOKIE.value}; Path=/; Max-Age=31536000; SameSite=Lax` },
-        body: page('Helm fixture cookie')
+        body: page('Floti fixture cookie')
       }
     /*
      * A sign-in in the shape every OAuth popup has: `window.open` must hand back
@@ -111,7 +111,7 @@ function respond(path: string, elsewhere: string): { headers: Record<string, str
       return {
         headers: HTML,
         body: page(
-          'Helm fixture posture',
+          'Floti fixture posture',
           `<a href="/two" target="_blank">Open two in a new tab</a>
            <button id="signin" type="button">Sign in</button>
            <button id="tab" type="button">Sign in in a tab</button>
@@ -144,14 +144,14 @@ function respond(path: string, elsewhere: string): { headers: Record<string, str
       return {
         headers: HTML,
         body: page(
-          path === '/opened' ? 'Helm fixture opened' : 'Helm fixture popup',
+          path === '/opened' ? 'Floti fixture opened' : 'Floti fixture popup',
           '<p>Signing in</p>',
           `if (window.opener) window.opener.postMessage({ code: ${JSON.stringify(POPUP_CODE)} }, '*')
            window.addEventListener('message', (event) => { if (event.data === 'done') window.close() })`
         )
       }
     default:
-      return { headers: HTML, body: page('Helm fixture one', '<a href="/two">Two</a>') }
+      return { headers: HTML, body: page('Floti fixture one', '<a href="/two">Two</a>') }
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, type SessionRecord } from '@helm/core'
+import { DEFAULT_SETTINGS, type SessionRecord } from '@floti/core'
 import { FakeConnection, fakeLink } from '../../../test/host-connection'
 import type { ConfirmRequest } from './session-host'
 import type * as P from './protocol'

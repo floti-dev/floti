@@ -285,7 +285,7 @@ light appearance and the `system` theme never follows macOS into dark mode.
 node-pty starts every pty on macOS through `spawn-helper`, an executable in its
 macOS prebuilds, and publishes it without the execute bit; without one every
 terminal fails with `posix_spawnp failed`. `scripts/spawn-helper.mjs` sets the
-bit in two places: as `@helm/desktop`'s postinstall, for a checkout on a Mac,
+bit in two places: as `@floti/desktop`'s postinstall, for a checkout on a Mac,
 and from electron-builder's `afterPack` hook (`scripts/after-pack.mjs`) on the
 copy under `app.asar.unpacked`. `afterPack` runs before signing, so the
 signature covers the file as changed. Neither rebuilds anything, and both do

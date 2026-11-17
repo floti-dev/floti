@@ -387,7 +387,7 @@ are tools, not tests, and nothing has to pass them before a change is done:
 
 ```bash
 pnpm shell             # interactive pane hosting pwsh
-pnpm --filter @helm/desktop claude   # ...hosting the real claude TUI
+pnpm --filter @floti/desktop claude   # ...hosting the real claude TUI
 pnpm fidelity          # terminal fidelity inside xterm
 pnpm claude-check      # the real claude TUI in the pane
 pnpm selftest          # native modules in a packaged build

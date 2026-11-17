@@ -5,8 +5,8 @@ import { createReadStream, existsSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, hostname, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { listProfiles, readPluginFolders, readPluginSettings, type AppSettings } from '@helm/core'
-import { parseSums, type FlotiOs, type RemoteHost, type SshConfigHosts, type WslDistroList } from '@helm/core/types'
+import { listProfiles, readPluginFolders, readPluginSettings, type AppSettings } from '@floti/core'
+import { parseSums, type FlotiOs, type RemoteHost, type SshConfigHosts, type WslDistroList } from '@floti/core/types'
 import { createClientFolderRemoteAdder, type RemoteHostAdder } from './remote-add'
 import { readSshConfigHosts } from './ssh-config'
 import { findClaudeExecutable, setClaudeOverride } from '../claude-cli'
@@ -272,7 +272,7 @@ async function updatePlanOrThrow(log: (line: string) => void): Promise<string> {
  */
 export function createLocalPageLinks(
   link: HostLink,
-  isHelmPage: (id: number) => boolean,
+  isFlotiPage: (id: number) => boolean,
   log: (line: string) => void,
   nextConnection?: () => number
 ): PageLinks {
@@ -280,7 +280,7 @@ export function createLocalPageLinks(
     ...(nextConnection !== undefined ? { nextConnection } : {}),
     appVersion: app.getVersion(),
     deviceName: hostname(),
-    isHelmPage,
+    isFlotiPage,
     // A page's connection waits through a host that cannot be used, on the
     // link's one connect: a page open never starts a connect of its own.
     ready: () => link.usable(),
@@ -301,7 +301,7 @@ export function createLocalPageLinks(
  * with the computer's name, and the first one to a host pins its key.
  */
 export function createDesktopRemoteHosts(options: {
-  isHelmPage: (id: number) => boolean
+  isFlotiPage: (id: number) => boolean
   nextConnection: () => number
   changed: (states: RemoteHostStates) => void
   /** Each host's plugins, on its main link. */
@@ -368,7 +368,7 @@ export function createDesktopRemoteHosts(options: {
       powerMonitor.on('resume', listener)
       powerMonitor.on('unlock-screen', listener)
     },
-    isHelmPage: options.isHelmPage,
+    isFlotiPage: options.isFlotiPage,
     appVersion: app.getVersion(),
     deviceName: hostname(),
     nextConnection: options.nextConnection,

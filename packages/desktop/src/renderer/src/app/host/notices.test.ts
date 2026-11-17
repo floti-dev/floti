@@ -1,4 +1,4 @@
-import type { StandingNotice } from '@helm/core/types'
+import type { StandingNotice } from '@floti/core/types'
 import { describe, expect, it, vi } from 'vitest'
 import { FakeConnection, fakeReach, reconnectingReach } from '../../../../../test/fake-connection'
 import type * as P from '../../../../shared/host/protocol'

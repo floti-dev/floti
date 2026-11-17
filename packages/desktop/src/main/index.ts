@@ -25,7 +25,7 @@ import {
   type AppliedTheme,
   type AppSettings,
   type Profile
-} from '@helm/core'
+} from '@floti/core'
 import { delimiter, isAbsolute, join } from 'node:path'
 import { homedir } from 'node:os'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -512,13 +512,13 @@ function startApp(options: AppOptions = {}): void {
    */
   const isWindow = (page: BrowserWindow | null, id: number): boolean =>
     page !== null && !page.isDestroyed() && page.webContents.id === id
-  const isHelmPage = (id: number): boolean => isWindow(win, id) || isWindow(setupWin, id)
+  const isFlotiPage = (id: number): boolean => isWindow(win, id) || isWindow(setupWin, id)
   // One counter for every host's page connections, so a number names one.
   let nextPageConnection = 1
   const nextConnection = (): number => nextPageConnection++
   const localPageLinks = createLocalPageLinks(
     desktopHost.link,
-    isHelmPage,
+    isFlotiPage,
     (line) => console.log(line),
     nextConnection
   )
@@ -534,7 +534,7 @@ function startApp(options: AppOptions = {}): void {
     log: (line) => console.log(line)
   })
   const remoteHosts: RemoteHostLinks = createDesktopRemoteHosts({
-    isHelmPage,
+    isFlotiPage,
     nextConnection,
     changed: (states) => emit(win, 'remoteHosts:changed', states),
     plugins: desktopHost.remotePlugins,

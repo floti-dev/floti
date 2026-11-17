@@ -6,8 +6,8 @@ import type {
   FolderTemplatePreview,
   TemplateChoice,
   TemplateDetail
-} from '@helm/core'
-import { helm } from './bridge'
+} from '@floti/core'
+import { desktop } from './bridge'
 
 /**
  * Template authoring, in one hook.
@@ -113,7 +113,7 @@ export function useTemplates(): TemplatesState {
    */
   useEffect(() => {
     let cancelled = false
-    void helm.invoke('template:list').then(
+    void desktop.invoke('template:list').then(
       (listing) => {
         if (cancelled) return
         setTemplates(listing.templates)
@@ -143,7 +143,7 @@ export function useTemplates(): TemplatesState {
   useEffect(() => {
     if (selected === null) return
     let cancelled = false
-    void helm
+    void desktop
       .invoke('template:detail', { template: selected })
       .then((next) => {
         if (!cancelled) setDetail(next)
@@ -162,7 +162,7 @@ export function useTemplates(): TemplatesState {
   useEffect(() => {
     if (!managerOpen) return
     let cancelled = false
-    void helm.invoke('config:scopes').then((next) => {
+    void desktop.invoke('config:scopes').then((next) => {
       if (!cancelled) setScopes(next)
     })
     return () => {
@@ -174,7 +174,7 @@ export function useTemplates(): TemplatesState {
   useEffect(() => {
     if (importScope === null) return
     let cancelled = false
-    void helm
+    void desktop
       .invoke('config:tree', { scopePath: importScope })
       .then((next) => {
         if (!cancelled) setImportTree(next)
@@ -216,7 +216,7 @@ export function useTemplates(): TemplatesState {
 
   const create = useCallback(
     (name: string) => {
-      void run(helm.invoke('template:create', { name }), (result) => {
+      void run(desktop.invoke('template:create', { name }), (result) => {
         if (result.template === null) return null
         setSelected(result.template)
         return `${result.template} was created.`
@@ -241,14 +241,14 @@ export function useTemplates(): TemplatesState {
       void run(
         (async () => {
           if (request.name !== '' && request.name !== from) {
-            const renamed = await helm.invoke('template:rename', {
+            const renamed = await desktop.invoke('template:rename', {
               template: from,
               name: request.name
             })
             if (!renamed.ok) return renamed
             setSelected(renamed.template)
           }
-          return helm.invoke('template:metadata', {
+          return desktop.invoke('template:metadata', {
             template: request.name === '' ? from : request.name,
             label: request.label,
             description: request.description
@@ -262,7 +262,7 @@ export function useTemplates(): TemplatesState {
 
   const remove = useCallback(
     (template: string) => {
-      void run(helm.invoke('template:delete', { template }), (result) => {
+      void run(desktop.invoke('template:delete', { template }), (result) => {
         if (!result.ok) return null
         setSelected(null)
         return `${template} was deleted.`
@@ -274,7 +274,7 @@ export function useTemplates(): TemplatesState {
   const makeSubstitutable = useCallback(
     (path: string) => {
       if (selected === null) return
-      void run(helm.invoke('template:substitute', { template: selected, path }), (result) =>
+      void run(desktop.invoke('template:substitute', { template: selected, path }), (result) =>
         result.ok ? `${path} is now ${path}.tpl, and its variables are filled in.` : null
       )
     },
@@ -285,7 +285,7 @@ export function useTemplates(): TemplatesState {
     (paths: string[]) => {
       if (selected === null || importScope === null) return
       void run(
-        helm.invoke('template:import', { template: selected, scopePath: importScope, paths }),
+        desktop.invoke('template:import', { template: selected, scopePath: importScope, paths }),
         (result) => {
           const parts: string[] = []
           if (result.created.length > 0) parts.push(`copied ${String(result.created.length)} in`)
@@ -306,7 +306,7 @@ export function useTemplates(): TemplatesState {
   useEffect(() => {
     if (saveDialog === null || saveDialog.dir === '') return
     let cancelled = false
-    void helm
+    void desktop
       .invoke('template:folderPreview', { dir: saveDialog.dir, kind: saveDialog.kind })
       .then((next) => {
         if (!cancelled) setSavePreview(next)
@@ -324,7 +324,7 @@ export function useTemplates(): TemplatesState {
   }, [])
 
   const chooseSaveDir = useCallback(() => {
-    void helm
+    void desktop
       .invoke('path:chooseDirectory', { title: 'Choose the folder to import as a template' })
       .then(({ path }) => {
         if (path === null) return
@@ -337,7 +337,7 @@ export function useTemplates(): TemplatesState {
     setSaveProblems([])
     setSavePreview(null)
     setSaveDialog({ kind: 'folder', dir: '' })
-    void helm
+    void desktop
       .invoke('path:chooseDirectory', { title: 'Choose the folder to import as a template' })
       .then(({ path }) => {
         // Cancelling the picker closes the dialog rather than leaving an empty
@@ -361,7 +361,7 @@ export function useTemplates(): TemplatesState {
       if (dialog === null) return
       setSaveBusy(true)
       setSaveProblems([])
-      void helm
+      void desktop
         .invoke('template:fromFolder', {
           dir: dialog.dir,
           kind: dialog.kind,

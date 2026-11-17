@@ -62,7 +62,7 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   floti the desktop runs, with no question, inside main's connect
   (`connectUpdatingLocalHost` in `main/host/launcher.ts`), once `floti
   version` there says it speaks a protocol the `hello` is accepted by
-  (`hostUpdatePlan` in `@helm/core`); the keeper hands its sessions to the
+  (`hostUpdatePlan` in `@floti/core`); the keeper hands its sessions to the
   new host. A host that is ending stops answering on its socket before it
   lets go of its data folder, so the desktop waits for that too (`floti
   wait-host-exit`), after a restart and whenever a host it starts finds the
@@ -166,7 +166,7 @@ means it is not showing.
   (`openSetup` in `main/index.ts`). It is the shell's page with
   `?window=setup` (`app/main.tsx` renders `setup/SetupWindow.tsx`), so it has
   the same preload, navigation guards and IPC boundary, and its own
-  connection to the host (`isHelmPage` names it).
+  connection to the host (`isFlotiPage` names it).
 - The setup window writes the step on every move. Once step 4 makes or
   chooses a workspace, is skipped, or setup is skipped on step 1, it stamps
   `setup:complete` on the host and asks main for `walkthrough:openShell`:
@@ -417,7 +417,7 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   records a visit when a page the user has commits (http or https, a real
   response, or a move within the page), and `page-title-updated` keeps its
   title. A page an agent opened is never recorded. `browser:suggest` ranks in
-  main (`suggestBrowserAddresses` in `@helm/core`): the address exactly as
+  main (`suggestBrowserAddresses` in `@floti/core`): the address exactly as
   typed, then an address starting with the text (after the scheme and
   `www.`), then a word start in the host or title, then a substring; ties by
   visits, then recency; at most 8 rows. With nothing typed it lists the pages

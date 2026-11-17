@@ -1,9 +1,9 @@
 import type { FlotiContext, FlotiTheme, PluginParams, SurfaceKind } from '@floti-dev/plugin-sdk'
-import { pluginThemeOf } from '@helm/core/types'
-import { isMac } from '@helm/ui'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import { pluginThemeOf } from '@floti/core/types'
+import { isMac } from '@floti/ui'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import {
-  type HelmBridge as Ipc,
+  type DesktopBridge as Ipc,
   type PluginCallOutcome,
   type PluginDelivery,
   type PluginFetchResponse

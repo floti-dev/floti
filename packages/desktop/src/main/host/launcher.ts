@@ -4,7 +4,7 @@ import type { Readable, Writable } from 'node:stream'
 import { RECONNECT_FIRST_MS } from '../../shared/host/reconnect'
 import { unreachable } from '../../shared/host/sentences'
 import { HostRefusedError, connectHost, restartFrame, streamTransport, type HostConnection } from './client'
-import { hostUpdatePlan, type HostUpdatePlan } from '@helm/core/types'
+import { hostUpdatePlan, type HostUpdatePlan } from '@floti/core/types'
 import {
   KEEPER_LINK_VERSION,
   PROTOCOL_VERSION,

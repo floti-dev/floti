@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { createPluginRelay, type FrameState, type PluginRelay, type RelayHooks, type SurfaceSpec } from '../plugins/relay'
-import { bridgeFor, helm } from './bridge'
+import { bridgeFor, desktop } from './bridge'
 
 /**
  * The window's plugin frames: one iframe per open panel or tab, owned outside
@@ -32,7 +32,7 @@ let holder: HTMLDivElement | null = null
 
 function frames(): PluginRelay {
   // A remote host's page calls and hears that host alone, over its bridge.
-  relay ??= createPluginRelay({ win: window, ipc: helm, hostIpc: bridgeFor })
+  relay ??= createPluginRelay({ win: window, ipc: desktop, hostIpc: bridgeFor })
   return relay
 }
 

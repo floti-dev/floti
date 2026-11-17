@@ -6,7 +6,7 @@ import type * as P from '../../../../shared/host/protocol'
 import type {
   EventChannel,
   EventPayload,
-  HelmBridge,
+  DesktopBridge,
   RequestChannel,
   RequestPayload,
   RequestResult,
@@ -60,7 +60,7 @@ function ownBridge() {
       listeners.set(channel, set)
       return () => set.delete(listener)
     }
-  } as unknown as HelmBridge
+  } as unknown as DesktopBridge
   const push = <K extends EventChannel>(channel: K, payload: EventPayload<K>): void => {
     for (const listener of listeners.get(channel) ?? []) listener(payload)
   }

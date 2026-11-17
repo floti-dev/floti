@@ -7,7 +7,7 @@ import {
 import type { Capability } from '../../../../shared/host/protocol'
 import { RECONNECT_FIRST_MS, nextReconnectWait } from '../../../../shared/host/reconnect'
 import { unreachable } from '../../../../shared/host/sentences'
-import type { HelmBridge, HostLinkOpened, RefusedVersions } from '../../../../shared/ipc'
+import type { DesktopBridge, HostLinkOpened, RefusedVersions } from '../../../../shared/ipc'
 
 /**
  * This page's own protocol connection to a host.
@@ -122,7 +122,7 @@ export interface HostUsability {
 
 export interface PageLinkDeps {
   /** The preload's bridge: only `hostLink:*` is used. */
-  bridge: Pick<HelmBridge, 'invoke' | 'send' | 'on'>
+  bridge: Pick<DesktopBridge, 'invoke' | 'send' | 'on'>
   capabilities: readonly Capability[]
   log?: (line: string) => void
   /** The clock the waits before connecting again run on; the page's own by default. */

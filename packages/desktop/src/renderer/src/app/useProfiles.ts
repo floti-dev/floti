@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Profile, ProfileDraft, SessionRecord } from '@helm/core'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import type { Profile, ProfileDraft, SessionRecord } from '@floti/core'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
 import { estimateGrid } from './terminals'
@@ -51,7 +51,7 @@ export interface ProfilesState {
 }
 
 export function useProfiles(host: string = LOCAL_HOST_KEY): ProfilesState {
-  const helm = bridgeFor(host)
+  const desktop = bridgeFor(host)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [launching, setLaunching] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -59,15 +59,15 @@ export function useProfiles(host: string = LOCAL_HOST_KEY): ProfilesState {
   const [deleting, setDeleting] = useState<Profile | null>(null)
 
   useEffect(() => {
-    const off = helm.on('profiles:changed', setProfiles)
+    const off = desktop.on('profiles:changed', setProfiles)
     // A list that could not be read says why - with sessions in the local
     // host, that Helm could not reach it - rather than showing no profiles.
-    void helm
+    void desktop
       .invoke('profile:list')
       .then(setProfiles)
       .catch((err: unknown) => setError(readable(err)))
     return off
-  }, [helm])
+  }, [desktop])
 
   /**
    * A notice is an acknowledgement, so it goes away on its own. An error is
@@ -83,12 +83,12 @@ export function useProfiles(host: string = LOCAL_HOST_KEY): ProfilesState {
   const save = useCallback(async (draft: ProfileDraft, id?: number | null) => {
     setError(null)
     try {
-      const result = await helm.invoke('profile:save', { draft, ...(id == null ? {} : { id }) })
+      const result = await desktop.invoke('profile:save', { draft, ...(id == null ? {} : { id }) })
       return { profile: result.profile, problems: result.problems }
     } catch (err: unknown) {
       return { profile: null, problems: [readable(err)] }
     }
-  }, [helm])
+  }, [desktop])
 
   /**
    * Deleting asks first, in the window's own dialog: `deleting` is the
@@ -101,15 +101,15 @@ export function useProfiles(host: string = LOCAL_HOST_KEY): ProfilesState {
     setDeleting(null)
     setError(null)
     try {
-      await helm.invoke('profile:delete', { id: profile.id })
+      await desktop.invoke('profile:delete', { id: profile.id })
     } catch (err: unknown) {
       setError(readable(err))
     }
-  }, [helm, deleting])
+  }, [desktop, deleting])
 
   const reorder = useCallback(async (ids: number[]) => {
-    await helm.invoke('profile:pin', { ids })
-  }, [helm])
+    await desktop.invoke('profile:pin', { ids })
+  }, [desktop])
 
   const togglePin = useCallback(
     async (profile: Profile) => {
@@ -121,27 +121,27 @@ export function useProfiles(host: string = LOCAL_HOST_KEY): ProfilesState {
         profile.pinnedOrder === null
           ? [...pinned, profile.id]
           : pinned.filter((id) => id !== profile.id)
-      await helm.invoke('profile:pin', { ids: next })
+      await desktop.invoke('profile:pin', { ids: next })
     },
-    [helm, profiles]
+    [desktop, profiles]
   )
 
   const exportProfile = useCallback(async (id: number) => {
     setError(null)
     setNotice(null)
     try {
-      const { file } = await helm.invoke('profile:export', { id })
+      const { file } = await desktop.invoke('profile:export', { id })
       if (file) setNotice(`Exported to ${file}`)
     } catch (err: unknown) {
       setError(readable(err))
     }
-  }, [helm])
+  }, [desktop])
 
   const importProfile = useCallback(async () => {
     setError(null)
     setNotice(null)
     try {
-      const result = await helm.invoke('profile:import')
+      const result = await desktop.invoke('profile:import')
       if (result.cancelled) return
       if (result.error !== undefined) {
         setError(result.error)
@@ -155,7 +155,7 @@ export function useProfiles(host: string = LOCAL_HOST_KEY): ProfilesState {
     } catch (err: unknown) {
       setError(readable(err))
     }
-  }, [helm])
+  }, [desktop])
 
   const launch = useCallback(
     async (profile: Profile, paneSize: HTMLElement | null): Promise<SessionRecord | null> => {
@@ -164,7 +164,7 @@ export function useProfiles(host: string = LOCAL_HOST_KEY): ProfilesState {
       setLaunching((current) => [...current, profile.id])
       try {
         const { cols, rows } = estimateGrid(paneSize)
-        const result = await helm.invoke('profile:launch', { profileId: profile.id, cols, rows })
+        const result = await desktop.invoke('profile:launch', { profileId: profile.id, cols, rows })
 
         // What the composition actually turned into. Worth saying once, because
         // the alternative is a session that silently has fewer skills in it
@@ -195,7 +195,7 @@ export function useProfiles(host: string = LOCAL_HOST_KEY): ProfilesState {
         setLaunching((current) => current.filter((id) => id !== profile.id))
       }
     },
-    [helm]
+    [desktop]
   )
 
   return {

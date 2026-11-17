@@ -8,7 +8,7 @@ import {
   type LostSession,
   type SavedPaneLayout,
   type Store
-} from '@helm/core'
+} from '@floti/core'
 import { dbFile } from './paths'
 
 /**

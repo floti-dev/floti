@@ -1,4 +1,4 @@
-import { THEME_TOKENS, type AppSettings, type ThemeState } from '@helm/core/types'
+import { THEME_TOKENS, type AppSettings, type ThemeState } from '@floti/core/types'
 import type { BrowserLayerLook } from '../../../shared/ipc'
 
 /**

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, render, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Overlay } from '@helm/ui'
+import { Overlay } from '@floti/ui'
 import type { BrowserBounds, BrowserState } from '../../../shared/ipc'
 import { bridge } from './bridge.testkit'
 import { useBrowsers } from './useBrowsers'

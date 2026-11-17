@@ -1,6 +1,6 @@
 import { render, waitFor, type RenderResult } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_SETTINGS, type AppSettings, type SessionRecord } from '@helm/core/types'
+import { DEFAULT_SETTINGS, type AppSettings, type SessionRecord } from '@floti/core/types'
 import { bridge } from './bridge.testkit'
 import { FakeResizeObserver, layout, type Terminal } from './terminal.testkit'
 import { ProjectShellPane } from './ProjectShellPane'

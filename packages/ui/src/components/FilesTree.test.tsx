@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ContentDirEntry, ContentDirListing, FilesStatus } from '@helm/core'
+import type { ContentDirEntry, ContentDirListing, FilesStatus } from '@floti/core'
 import { FilesEmpty, FilesRootPicker, FilesStatusNote, FilesTree, type FilesTreeProps } from './FilesTree'
 import { COPY_REFUSED } from '../lib/copyFeedback'
 
@@ -237,10 +237,10 @@ describe('FilesRootPicker', () => {
       <FilesRootPicker
         roots={[
           { kind: 'workspace', path: 'C:\\dev', label: 'dev' },
-          { kind: 'project', path: 'C:\\dev\\repos\\helm', label: 'helm' },
+          { kind: 'project', path: 'C:\\dev\\repos\\floti', label: 'floti' },
           { kind: 'project', path: 'C:\\dev\\repos\\hub', label: 'hub' }
         ]}
-        value={'C:\\dev\\repos\\helm'}
+        value={'C:\\dev\\repos\\floti'}
         onChange={onChange}
       />
     )
@@ -252,7 +252,7 @@ describe('FilesRootPicker', () => {
     expect(document.activeElement).toBe(list)
     const active = (): string | null =>
       document.getElementById(list.getAttribute('aria-activedescendant') ?? '')?.textContent ?? null
-    expect(active()).toBe('helm')
+    expect(active()).toBe('floti')
     fireEvent.keyDown(list, { key: 'ArrowDown' })
     expect(active()).toBe('hub')
     fireEvent.keyDown(list, { key: 'd' })

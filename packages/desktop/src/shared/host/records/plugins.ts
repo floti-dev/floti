@@ -1,6 +1,6 @@
 import type { SettingSpec } from '@floti-dev/plugin-sdk'
 import type { PluginDelivery, PluginInfo, PluginLogLine, PluginUiRequest } from '../../ipc'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import { onHostOrigin } from '../../plugins/origin'
 import type * as P from '../protocol'
 

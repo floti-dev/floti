@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DiscoveryResult, SessionActivityState, SessionRecord } from '@helm/core'
-import { DEFAULT_SETTINGS, EMPTY_INVENTORY } from '@helm/core/types'
+import type { DiscoveryResult, SessionActivityState, SessionRecord } from '@floti/core'
+import { DEFAULT_SETTINGS, EMPTY_INVENTORY } from '@floti/core/types'
 import { bridge, remoteBridge } from './bridge.testkit'
 import { useHostWorkspaces } from './useHostWorkspaces'
 

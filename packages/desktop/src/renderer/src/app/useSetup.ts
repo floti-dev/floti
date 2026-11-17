@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AppSettings, TemplateChoice, TemplatePreview } from '@helm/core'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import type { AppSettings, TemplateChoice, TemplatePreview } from '@floti/core'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import type { ClaudeStatus } from '../../../shared/ipc'
-import { bridgeFor, helm } from './bridge'
+import { bridgeFor, desktop } from './bridge'
 
 /**
  * The shell's CLI status and its new-workspace dialog. First run is the
@@ -126,7 +126,7 @@ export function useSetup(
   /** The button. Shows a spinner, because the user asked and is waiting. */
   const recheck = useCallback(() => {
     setChecking(true)
-    void helm
+    void desktop
       .invoke('setup:status')
       .then(answered, failed)
       .finally(() => setChecking(false))
@@ -143,7 +143,7 @@ export function useSetup(
    */
   useEffect(() => {
     let cancelled = false
-    void helm.invoke('setup:status').then(
+    void desktop.invoke('setup:status').then(
       (next) => {
         if (!cancelled) answered(next)
       },
@@ -158,7 +158,7 @@ export function useSetup(
 
   const locateClaude = useCallback(() => {
     setChecking(true)
-    void helm
+    void desktop
       .invoke('setup:locateClaude')
       .then(
         (next) => {
@@ -272,7 +272,7 @@ export function useSetup(
   const chooseDialogDir = useCallback(() => {
     // The picker browses this PC's folders: a host on another computer's path is typed.
     if (dialogHostRef.current !== LOCAL_HOST_KEY) return
-    void helm
+    void desktop
       .invoke('path:chooseDirectory', {
         title: dialog === 'convert' ? 'Choose the folder to convert' : 'Create the workspace inside'
       })

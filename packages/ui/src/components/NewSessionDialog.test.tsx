@@ -9,7 +9,7 @@ import {
   type LiveSession,
   type Profile,
   type Project
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { NewSessionDialog, type NewSessionDialogProps } from './NewSessionDialog'
 
 const HOME = 'C:\\Users\\someone'
@@ -32,8 +32,8 @@ function project(name: string, path = `${WORKSPACE}\\repos\\${name}`): Project {
 const dev: Project = { ...project('dev', WORKSPACE), kind: 'workspace' }
 const timeclick = project('timeclick')
 const builder = project('TimeClick-Builder')
-const helm = project('helm')
-const PROJECTS = [dev, helm, builder, timeclick]
+const floti = project('floti')
+const PROJECTS = [dev, floti, builder, timeclick]
 
 function profile(id: number, name: string, overlays: string[], patch: Partial<Profile> = {}): Profile {
   return {
@@ -88,7 +88,7 @@ function renderDialog(overrides: Partial<NewSessionDialogProps> = {}): NewSessio
   const props: NewSessionDialogProps = {
     projects: PROJECTS,
     recency: new Map([
-      [helm.path.toLowerCase(), NOW - HOUR],
+      [floti.path.toLowerCase(), NOW - HOUR],
       [timeclick.path.toLowerCase(), NOW - 2 * HOUR]
     ]),
     live: [],
@@ -131,9 +131,9 @@ describe('NewSessionDialog', () => {
   it('opens on the field, with the folder it was opened on first and the rest by when they were last used', () => {
     const props = renderDialog({ initialPath: dev.path })
     expect(document.activeElement).toBe(within(dialog()).getByRole('combobox', { name: 'Folder' }))
-    expect(options().slice(0, 4)).toEqual(['dev', 'helm', 'timeclick', 'TimeClick-Builder'])
+    expect(options().slice(0, 4)).toEqual(['dev', 'floti', 'timeclick', 'TimeClick-Builder'])
     expect(highlighted()).toBe('dev')
-    expect(props.onShowing).toHaveBeenLastCalledWith([dev.path, helm.path, timeclick.path, builder.path])
+    expect(props.onShowing).toHaveBeenLastCalledWith([dev.path, floti.path, timeclick.path, builder.path])
   })
 
   it('narrows to what is typed, marks the match, and starts the first folder with the profile most about it', async () => {
@@ -186,12 +186,12 @@ describe('NewSessionDialog', () => {
   })
 
   it('shows conversations only under the highlighted folder, which moves them as it moves', async () => {
-    renderDialog({ initialPath: helm.path })
+    renderDialog({ initialPath: floti.path })
     expect(options()).not.toContain('Resume payroll export fix')
     await userEvent.keyboard('{ArrowDown}')
     expect(highlighted()).toBe('timeclick')
     expect(options().slice(0, 4)).toEqual([
-      'helm',
+      'floti',
       'timeclick',
       'Resume payroll export fix',
       'Resume named breaks rollout'
@@ -199,10 +199,10 @@ describe('NewSessionDialog', () => {
   })
 
   it('keeps a profile that was picked for whatever folder is highlighted next, and the mode follows it until changed', async () => {
-    const props = renderDialog({ initialPath: helm.path })
+    const props = renderDialog({ initialPath: floti.path })
     expect(picker('Profile').value).toBe('')
     expect(picker('Permissions').value).toBe('')
-    expect(sentence()).toBe('Runs claude in ~\\.harness\\dev\\repos\\helm.')
+    expect(sentence()).toBe('Runs claude in ~\\.harness\\dev\\repos\\floti.')
 
     await userEvent.selectOptions(picker('Profile'), 'dev')
     expect(picker('Permissions').value).toBe('auto')
@@ -266,8 +266,8 @@ describe('NewSessionDialog', () => {
 
   it('says what is already running in the folder, and why a launch failed', () => {
     const live = [
-      { pid: 41, cwd: timeclick.path.toUpperCase(), name: 'accruals report', helmSessionId: 3 },
-      { pid: 42, cwd: timeclick.path, name: null, helmSessionId: null }
+      { pid: 41, cwd: timeclick.path.toUpperCase(), name: 'accruals report', hostSessionId: 3 },
+      { pid: 42, cwd: timeclick.path, name: null, hostSessionId: null }
     ] as LiveSession[]
     renderDialog({ initialPath: timeclick.path, live, error: 'Claude Code CLI not found.' })
 
@@ -488,16 +488,16 @@ describe('NewSessionDialog: the Agent picker', () => {
 
   it('names the new worktree of an agent that works in one, and outside git refuses with Start off', async () => {
     const repoFolder = inGit(timeclick)
-    const props = renderDialog({ agents: AGENTS, projects: [repoFolder, helm], initialPath: repoFolder.path })
+    const props = renderDialog({ agents: AGENTS, projects: [repoFolder, floti], initialPath: repoFolder.path })
     await userEvent.selectOptions(picker('Agent'), 'worker')
     expect(sentence()).toBe(
       "Runs claude in a new worktree, ~\\.harness\\dev\\repos\\timeclick\\.floti\\worktrees\\timeclick on branch agent/timeclick cut from main, as the worker agent with the Timeclick profile, composing dev and timeclick, and --model opus --permission-mode acceptEdits --disallowedTools mcp__floti-plugin-trackr__create. Its instructions go in after the project's; nothing is typed into the terminal. It gets no floti-agents tools."
     )
 
-    await userEvent.click(within(list()).getByRole('option', { name: 'helm' }))
+    await userEvent.click(within(list()).getByRole('option', { name: 'floti' }))
     expect(dialog().querySelector('[data-launch-sentence]')).toBeNull()
     expect(dialog().querySelector('[data-launch-refused]')?.textContent).toBe(
-      'worker works in a worktree of its own, and ~\\.harness\\dev\\repos\\helm is not in a git repository. Pick a folder in one, or No agent.'
+      'worker works in a worktree of its own, and ~\\.harness\\dev\\repos\\floti is not in a git repository. Pick a folder in one, or No agent.'
     )
     expect(within(dialog()).getByRole('button', { name: /Start$/ })).toHaveProperty('disabled', true)
     expect(within(dialog()).getByRole('button', { name: /Start beside/ })).toHaveProperty('disabled', true)

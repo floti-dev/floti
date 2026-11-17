@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { ProjectPane, type ProjectPaneProps } from '@helm/ui'
+import { ProjectPane, type ProjectPaneProps } from '@floti/ui'
 import { useAgentWorktrees } from './useAgentWorktrees'
 
 /**

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Project, SessionActivityState, SessionRecord } from '@helm/core'
-import { isCommandChild, withListed } from '@helm/core/types'
-import { helm } from './bridge'
+import type { Project, SessionActivityState, SessionRecord } from '@floti/core'
+import { isCommandChild, withListed } from '@floti/core/types'
+import { desktop } from './bridge'
 import { readable } from './errors'
 import { disposeTerminal, estimateGrid } from './terminals'
 
@@ -112,7 +112,7 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
     // but for what a child last told its parent and what a session's agent says
     // it is doing, which come with its row.
     const relist = (): void => {
-      void helm.invoke('session:list').then(
+      void desktop.invoke('session:list').then(
         (rows) =>
           setSessions((current) => {
             const held = new Set(current.map((session) => session.id))
@@ -124,7 +124,7 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
       )
     }
     const offs = [
-      helm.on('session:exit', (record) => {
+      desktop.on('session:exit', (record) => {
         // Replaced rather than removed: an exited session keeps its tab and its
         // scrollback until someone closes it.
         setSessions((current) => {
@@ -138,11 +138,11 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
             : current
         })
       }),
-      helm.on('session:activate', ({ id }) => activateRef.current(id)),
+      desktop.on('session:activate', ({ id }) => activateRef.current(id)),
       // The whole set every time, so a window that missed a push - mounted
       // late, or reloaded - is corrected by the next one rather than carrying a
       // stale dot until that session happens to move again.
-      helm.on('session:activity', (states) => {
+      desktop.on('session:activity', (states) => {
         setActivity(new Map(states.map((state) => [state.id, state])))
         // A child's report, which its parent's tab shows in its card, and a
         // session's title change with what its agent does, so a window holding a
@@ -165,7 +165,7 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
     // A renderer reload (dev HMR, or a crashed renderer) leaves main holding
     // processes this side has forgotten. Adopting them back is the difference
     // between a reload and an orphan.
-    void helm.invoke('session:list').then(
+    void desktop.invoke('session:list').then(
       (rows) => {
         if (!live) return
         listedRef.current = true
@@ -182,7 +182,7 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
     // Adopted with them, for the same reason: an idle session publishes nothing
     // until somebody types at it, so a strip waiting for the next push would sit
     // without dots for as long as nobody used it.
-    void helm.invoke('session:activity').then(
+    void desktop.invoke('session:activity').then(
       (states) => {
         if (live) setActivity(new Map(states.map((state) => [state.id, state])))
       },
@@ -198,7 +198,7 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
       setLaunchError(null)
       const { cols, rows } = estimateGrid(paneSize)
       try {
-        const record = await helm.invoke('session:start', {
+        const record = await desktop.invoke('session:start', {
           cwd: project.path,
           projectPath: project.path,
           name: project.name,
@@ -225,7 +225,7 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
   }, [])
 
   const close = useCallback(async (id: number): Promise<boolean> => {
-    const { closed } = await helm.invoke('session:close', { id })
+    const { closed } = await desktop.invoke('session:close', { id })
     if (!closed) return false
     // Its exit, heard after this, is not a session to add back.
     closedRef.current.add(id)
@@ -241,7 +241,7 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
    * would paint something the database does not hold.
    */
   const rename = useCallback(async (id: number, label: string | null): Promise<void> => {
-    const record = await helm.invoke('session:rename', { id, label })
+    const record = await desktop.invoke('session:rename', { id, label })
     setSessions((current) => current.map((s) => (s.id === record.id ? record : s)))
   }, [])
 
@@ -258,7 +258,7 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
   }, [])
 
   const reportFocus = useCallback((ids: readonly number[]) => {
-    helm.send('session:focus', { ids: [...ids] })
+    desktop.send('session:focus', { ids: [...ids] })
   }, [])
 
   const dismissLaunchError = useCallback(() => setLaunchError(null), [])

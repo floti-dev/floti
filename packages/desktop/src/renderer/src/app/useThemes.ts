@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ThemeListing, ThemeState } from '@helm/core/types'
-import { helm } from './bridge'
+import type { ThemeListing, ThemeState } from '@floti/core/types'
+import { desktop } from './bridge'
 import { applyTheme } from './theme'
 
 export interface ThemesState {
@@ -29,24 +29,24 @@ export function useThemes(): ThemesState {
       applyTheme(next)
       setState(next)
     }
-    const offs = [helm.on('theme:changed', adopt), helm.on('themes:changed', setListing)]
-    void helm.invoke('theme:current').then(adopt)
-    void helm.invoke('themes:list').then(setListing)
+    const offs = [desktop.on('theme:changed', adopt), desktop.on('themes:changed', setListing)]
+    void desktop.invoke('theme:current').then(adopt)
+    void desktop.invoke('themes:list').then(setListing)
     return () => {
       for (const off of offs) off()
     }
   }, [])
 
   const openFolder = useCallback(() => {
-    helm.invoke('themes:openFolder').catch((err: unknown) => {
+    desktop.invoke('themes:openFolder').catch((err: unknown) => {
       console.error('could not open the themes folder:', err)
     })
   }, [])
 
   const duplicate = useCallback((id: string) => {
-    helm
+    desktop
       .invoke('themes:duplicate', { id })
-      .then(({ file }) => helm.invoke('shell:showItem', { path: file }))
+      .then(({ file }) => desktop.invoke('shell:showItem', { path: file }))
       .catch((err: unknown) => {
         console.error(`could not duplicate ${id}:`, err)
       })

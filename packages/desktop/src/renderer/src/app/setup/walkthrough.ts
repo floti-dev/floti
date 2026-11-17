@@ -1,5 +1,5 @@
-import { AGENT_FIXES, type AppSettings, type Walkthrough, type WalkthroughStep } from '@helm/core/types'
-import type { WalkthroughAgent } from '@helm/ui'
+import { AGENT_FIXES, type AppSettings, type Walkthrough, type WalkthroughStep } from '@floti/core/types'
+import type { WalkthroughAgent } from '@floti/ui'
 import type { ClaudeStatus } from '../../../../shared/ipc'
 
 /**

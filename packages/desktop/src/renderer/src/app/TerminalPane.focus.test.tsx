@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SessionRecord } from '@helm/core/types'
+import type { SessionRecord } from '@floti/core/types'
 import { TerminalPane } from './TerminalPane'
 
 /** The terminal a pane shows lives outside React; this is the part of it a pane touches. */

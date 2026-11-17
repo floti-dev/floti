@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ForwardedPort } from '../../../shared/ipc'
-import { helm } from './bridge'
+import { desktop } from './bridge'
 
 /** What the window asks of the Browser tab: a page at `url`, belonging to no project. */
 export type OpenBrowserPage = (request: { url: string; project: null }) => void
@@ -32,8 +32,8 @@ export function useForwardedPorts(openPage: OpenBrowserPage): ForwardedPorts {
 
   useEffect(() => {
     let current = true
-    const off = helm.on('forwards:changed', (list) => setForwards(list))
-    void helm.invoke('forwards:read').then(
+    const off = desktop.on('forwards:changed', (list) => setForwards(list))
+    void desktop.invoke('forwards:read').then(
       (list) => {
         if (current) setForwards(list)
       },
@@ -53,7 +53,7 @@ export function useForwardedPorts(openPage: OpenBrowserPage): ForwardedPorts {
         next.delete(key)
         return next
       })
-      helm.invoke('forwards:open', { host, session, port }).then(
+      desktop.invoke('forwards:open', { host, session, port }).then(
         (forward) => openPage({ url: forwardedAddress(forward), project: null }),
         (error: unknown) =>
           setPortProblems((last) => new Map(last).set(key, error instanceof Error ? error.message : String(error)))

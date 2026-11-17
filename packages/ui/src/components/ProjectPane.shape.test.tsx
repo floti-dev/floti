@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { EMPTY_INVENTORY, type ClaudeInventory, type Project } from '@helm/core/types'
+import { EMPTY_INVENTORY, type ClaudeInventory, type Project } from '@floti/core/types'
 import { ProjectPane } from './ProjectPane'
 
 const project = (hasClaudeDir: boolean, inventory: Partial<ClaudeInventory>): Project => ({

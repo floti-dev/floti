@@ -343,7 +343,7 @@ impl HostWorld {
         command
             .arg("host")
             .arg("--desktop")
-            .arg(app.join("Helm.exe"))
+            .arg(app.join("Floti.exe"))
             .arg("--desktop-arg")
             .arg(app.join("resources app"))
             .env("LOCALAPPDATA", &self.local_app_data)

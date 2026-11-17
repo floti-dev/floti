@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { FolderTemplatePreview } from '@helm/core'
+import type { FolderTemplatePreview } from '@floti/core'
 import { SaveAsTemplateDialog, type SaveAsTemplateDialogProps } from './SaveAsTemplateDialog'
 
 type Entry = FolderTemplatePreview['entries'][number]

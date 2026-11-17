@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFi
 import { tmpdir } from 'node:os'
 import { join, relative, isAbsolute } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { openStore, readSettings, writeSettings, type AppSettings } from '@helm/core'
+import { openStore, readSettings, writeSettings, type AppSettings } from '@floti/core'
 import { prepareDriveAgents } from '../scripts/drive-agents'
 
 /**

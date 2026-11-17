@@ -21,7 +21,7 @@ import {
   type BrowserHistory,
   type BrowserReach,
   type BrowserSuggestions
-} from '@helm/core'
+} from '@floti/core'
 import { flushCookies, keepSignIns, writeCookies, type CookieKeeper } from './browserCookies'
 import { TITLEBAR_HEIGHT } from './chrome'
 import { createFavicons } from './favicons'
@@ -43,7 +43,7 @@ import {
  * Five things live here and none of them can live anywhere else.
  *
  * **The view itself has to be a `WebContentsView`.** The renderer's CSP allows
- * `frame-src helm-content:` and nothing else (`renderer/index.html`), so an
+ * `frame-src floti-content:` and nothing else (`renderer/index.html`), so an
  * `<iframe src="http://localhost:3000">` is blocked before it starts, and the
  * artifact path it *does* allow is deliberately network-less (`ARTIFACT_CSP` in
  * `content.ts`). A `WebContentsView` has web contents of its own and is
@@ -1461,7 +1461,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
           message: `console-message arrived in a shape Floti does not recognise: ${JSON.stringify(
             Object.keys(event)
           )}`,
-          source: 'helm',
+          source: 'floti',
           line: 0
         })
         return
@@ -1637,7 +1637,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
     child.on('closed', () => {
       exempt.delete(cwc.id)
       popups.delete(cwc.id)
-      log(owner, { level: 'info', message: 'the popup window closed', source: 'helm', line: 0 })
+      log(owner, { level: 'info', message: 'the popup window closed', source: 'floti', line: 0 })
     })
   }
 
@@ -2110,7 +2110,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       log(entry, {
         level: 'info',
         message: 'Cleared cookies and storage for the browser profile.',
-        source: 'helm',
+        source: 'floti',
         line: 0
       })
       return announce(entry)

@@ -23,7 +23,7 @@ export interface BrowserPage {
  * The drag type of a page tab. Its own, so a page cannot be dropped among a
  * pane's tabs and a pane's tab cannot be dropped among the pages.
  */
-export const BROWSER_PAGE_MIME = 'application/x-helm-browser-page'
+export const BROWSER_PAGE_MIME = 'application/x-floti-browser-page'
 
 export interface BrowserPagesProps {
   pages: readonly BrowserPage[]

@@ -14,13 +14,13 @@ import { createWorld, disposeWorld, fakeClaudeLogs, repoRoot, seedSettings, type
 
 export { expect }
 
-export interface Helm {
+export interface Desktop {
   app: ElectronApplication
   window: Page
 }
 
 /** Starts the built app into a world. `pnpm test:e2e` builds it first. */
-export async function launchHelm(world: World): Promise<Helm> {
+export async function launchDesktop(world: World): Promise<Desktop> {
   const desktop = join(repoRoot(), 'packages', 'desktop')
   const app = await electron.launch({
     args: [desktop],
@@ -82,8 +82,8 @@ export function worldProcesses(world: World): number[] {
  */
 export const test = base.extend<{
   world: World
-  helm: Helm
-  relaunch: () => Promise<Helm>
+  desktop: Desktop
+  relaunch: () => Promise<Desktop>
 }>({
   // eslint-disable-next-line no-empty-pattern
   world: async ({}, use) => {
@@ -96,17 +96,17 @@ export const test = base.extend<{
     removeHostShims(world)
     disposeWorld(world)
   },
-  helm: async ({ world }, use) => {
-    const current = await launchHelm(world)
+  desktop: async ({ world }, use) => {
+    const current = await launchDesktop(world)
     await use(current)
     await current.app.close()
   },
-  relaunch: async ({ world, helm }, use) => {
-    let latest = helm
+  relaunch: async ({ world, desktop }, use) => {
+    let latest = desktop
     await use(async () => {
       await latest.app.close()
-      latest = await launchHelm(world)
-      Object.assign(helm, latest)
+      latest = await launchDesktop(world)
+      Object.assign(desktop, latest)
       return latest
     })
   }
@@ -126,7 +126,7 @@ interface TerminalReport {
  */
 export async function terminalText(window: Page, sessionId: number): Promise<string> {
   const sessions = await window.evaluate(
-    () => (window as unknown as { __helmTerminals: () => { sessions: TerminalReport[] } }).__helmTerminals().sessions
+    () => (window as unknown as { __flotiTerminals: () => { sessions: TerminalReport[] } }).__flotiTerminals().sessions
   )
   return sessions.find((s) => s.key === String(sessionId))?.text ?? ''
 }
@@ -195,8 +195,8 @@ export async function typeLine(pane: Locator, text: string): Promise<void> {
  * to whichever side of the cursor has more room, past the screen's edge if it
  * must.
  */
-export async function keepClearOfCursor(helm: Helm): Promise<void> {
-  await helm.app.evaluate(({ BrowserWindow, screen }) => {
+export async function keepClearOfCursor(desktop: Desktop): Promise<void> {
+  await desktop.app.evaluate(({ BrowserWindow, screen }) => {
     const win = BrowserWindow.getAllWindows().find((candidate) => candidate.isVisible())
     if (win === undefined) throw new Error('no visible Floti window')
     const cursor = screen.getCursorScreenPoint()
@@ -242,7 +242,7 @@ export async function closeKeepRunning(window: Page, tab: Locator, name: string)
 }
 
 /** The pid of Helm's main process: `app.process()` is the launcher Playwright started. */
-export const mainPid = (helm: Helm): Promise<number> => helm.app.evaluate(() => process.pid)
+export const mainPid = (desktop: Desktop): Promise<number> => desktop.app.evaluate(() => process.pid)
 
 /** The `floti` programs a process started, by pid: the host and the bridge. */
 export function flotiChildren(parent: number): number[] {

@@ -64,7 +64,7 @@ describe('browserReachAllows', () => {
   it('refuses every scheme that is not http or https, on either posture', () => {
     for (const url of [
       'file:///C:/Windows/System32/drivers/etc/hosts',
-      'helm-content://artifact/abc/index.html',
+      'floti-content://artifact/abc/index.html',
       'ftp://example.com/',
       'javascript:alert(1)',
       'data:text/html,<b>x</b>',
@@ -176,7 +176,7 @@ describe('resolveBrowserAddress', () => {
    * gets, by not passing an engine.
    */
   it('with searching off, a word is refused with a sentence', () => {
-    for (const typed of ['helm desktop shell', 'hello', 'what is a webcontentsview', 'c++: a tutorial']) {
+    for (const typed of ['floti desktop shell', 'hello', 'what is a webcontentsview', 'c++: a tutorial']) {
       const answer = resolveBrowserAddress(typed)
       expect(answer.url, typed).toBeNull()
       expect(answer.problem, typed).toContain('searching from the address bar is off')
@@ -184,8 +184,8 @@ describe('resolveBrowserAddress', () => {
   })
 
   it('searches a phrase or a bare word with the engine asked for, and nothing that is an address', () => {
-    expect(resolveBrowserAddress('helm desktop shell', 'google').url).toBe(
-      'https://www.google.com/search?q=helm%20desktop%20shell'
+    expect(resolveBrowserAddress('floti desktop shell', 'google').url).toBe(
+      'https://www.google.com/search?q=floti%20desktop%20shell'
     )
     expect(resolveBrowserAddress('hello', 'duckduckgo').url).toBe('https://duckduckgo.com/?q=hello')
     expect(resolveBrowserAddress('c++: a tutorial & more', 'bing').url).toBe(

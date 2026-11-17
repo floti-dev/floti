@@ -1,4 +1,4 @@
-import { PLUGIN_TITLE_MAX, pluginParamsProblem } from '@helm/core/types'
+import { PLUGIN_TITLE_MAX, pluginParamsProblem } from '@floti/core/types'
 import type { SurfaceKind } from '@floti-dev/plugin-sdk'
 import type { PluginUiRequest } from '../ipc'
 import { PluginCallError } from './errors'
@@ -91,7 +91,7 @@ export function createClientCalls(deps: ClientCallsDeps): ClientCalls {
     run(method, caller, args) {
       if (method === 'tabs.open') return tabsOpen(caller, args)
       if (method === 'open') return open(caller, args)
-      throw new PluginCallError('invalid', `helm.${method} is not part of the bridge`)
+      throw new PluginCallError('invalid', `desktop.${method} is not part of the bridge`)
     }
   }
 }

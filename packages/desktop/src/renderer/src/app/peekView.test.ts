@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { LOCAL_HOST_KEY, childMark, type SessionRecord } from '@helm/core/types'
+import { LOCAL_HOST_KEY, childMark, type SessionRecord } from '@floti/core/types'
 import { afterEach, describe, expect, it } from 'vitest'
 import { chipKey, commandFacts, markLabel, peekAnchorFor, peekFacts, peekPlace, peekState, shellRunsIn } from './peekView'
 
@@ -8,7 +8,7 @@ const child = (overrides: Record<string, unknown> = {}): SessionRecord =>
     id: 8,
     name: 'reviewer-8',
     label: 'reviewer',
-    cwd: 'C:\\work\\helm',
+    cwd: 'C:\\work\\floti',
     branch: 'main',
     status: 'running',
     agent: 'reviewer',
@@ -26,8 +26,8 @@ describe('what the peek says of a child', () => {
     expect(facts).toMatchObject({
       name: 'reviewer',
       agent: 'reviewer',
-      folder: 'helm',
-      folderPath: 'C:\\work\\helm',
+      folder: 'floti',
+      folderPath: 'C:\\work\\floti',
       branch: 'main',
       mode: 'plan',
       state: { label: 'working', tone: 'working' },
@@ -126,7 +126,7 @@ describe('what the peek says of a command child', () => {
       mark: { glyph: 'command', state: 'running' },
       command: 'pnpm test',
       runsIn: 'your shell, pwsh',
-      folder: 'helm',
+      folder: 'floti',
       branch: 'main',
       agent: null,
       mode: null,

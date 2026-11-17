@@ -1,4 +1,4 @@
-import { agentReach, browserReachAllows, resolveBrowserAddress, type AppSettings } from '@helm/core'
+import { agentReach, browserReachAllows, resolveBrowserAddress, type AppSettings } from '@floti/core'
 import type { BrowserHost, BrowserOpener } from './browser'
 import { pairTools, type ToolSpec, type ToolTable } from './tool-table'
 import type { BrowserConsoleEntry, BrowserState } from '../shared/ipc'
@@ -345,7 +345,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
         tab.id,
         onTarget(
           args,
-          `const el = __helmTarget(); if (!el) return JSON.stringify({ missing: true });
+          `const el = __flotiTarget(); if (!el) return JSON.stringify({ missing: true });
            return JSON.stringify({ text: el.innerText ?? el.textContent ?? '', url: location.href })`
         )
       )
@@ -447,7 +447,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
           tab.id,
           inPage(
             args,
-            `const el = __helmTarget(); if (!el) return 'missing';
+            `const el = __flotiTarget(); if (!el) return 'missing';
              el.scrollIntoView({ block: 'center', inline: 'center' });
              el.focus();
              ${args.clear === true ? 'if (typeof el.select === "function") el.select();' : ''}
@@ -528,7 +528,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
           tab.id,
           inPage(
             args,
-            `const el = __helmTarget(); if (!el) return 'missing';
+            `const el = __flotiTarget(); if (!el) return 'missing';
              el.scrollIntoView({ block: 'center', inline: 'nearest' });
              return JSON.stringify([Math.round(window.scrollX), Math.round(window.scrollY)])`
           )
@@ -750,7 +750,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
       id,
       inPage(
         args,
-        `const el = __helmTarget(); if (!el) return JSON.stringify({ missing: true });
+        `const el = __flotiTarget(); if (!el) return JSON.stringify({ missing: true });
          el.scrollIntoView({ block: 'center', inline: 'center' });
          const b = el.getBoundingClientRect();
          return JSON.stringify({ x: b.x + b.width / 2, y: b.y + b.height / 2,
@@ -831,13 +831,13 @@ const missingElement = (args: Args): string =>
     : `Nothing in the page matches ${JSON.stringify(String(args.selector))}. Take a browser_snapshot to see what is there.`
 
 /**
- * One expression, run in the page, with `__helmTarget` in scope.
+ * One expression, run in the page, with `__flotiTarget` in scope.
  *
  * **Everything is inside an arrow function**, and that is not style: a
  * top-level `const` in a classic script creates a binding in the *global*
  * lexical environment that outlives the call, so the second
  * `executeJavaScript` carrying the same declaration throws "Identifier
- * '__helmTarget' has already been declared" - and the model would read that as
+ * '__flotiTarget' has already been declared" - and the model would read that as
  * the page being broken rather than as Helm having declared a variable twice.
  *
  * A `ref` is an index path from `documentElement` - `"1.3.0"` is
@@ -855,12 +855,12 @@ function inPage(args: Args, body: string): string {
   const ref = str(args.ref)
   const resolver =
     ref !== null
-      ? `const __helmTarget = () => {
+      ? `const __flotiTarget = () => {
            const parts = ${JSON.stringify(ref)}.split('.').filter((p) => p !== '');
            let el = document.documentElement;
            for (const part of parts) { el = el && el.children[Number(part)]; if (!el) return null }
            return el ?? null };`
-      : `const __helmTarget = () => document.querySelector(${JSON.stringify(
+      : `const __flotiTarget = () => document.querySelector(${JSON.stringify(
           String(args.selector ?? '')
         )});`
   return `(() => { ${resolver}\n${body} })()`
@@ -872,7 +872,7 @@ function inPage(args: Args, body: string): string {
  */
 function onTarget(args: Args, body: string): string {
   if (str(args.ref) !== null || str(args.selector) !== null) return inPage(args, body)
-  return `(() => { const __helmTarget = () => document.body ?? document.documentElement;\n${body} })()`
+  return `(() => { const __flotiTarget = () => document.body ?? document.documentElement;\n${body} })()`
 }
 
 /** Rendered text, with the runs of blank lines a layout leaves cut to one. */
@@ -903,7 +903,7 @@ interface SelectResult {
  * its shown text second, so either thing a snapshot shows works.
  */
 function selectBody(values: string[]): string {
-  return `const el = __helmTarget(); if (!el) return JSON.stringify({ missing: true });
+  return `const el = __flotiTarget(); if (!el) return JSON.stringify({ missing: true });
     if (el.tagName !== 'SELECT') return JSON.stringify({ notSelect: el.tagName.toLowerCase() });
     const options = Array.from(el.options);
     const label = (o) => (o.label || o.text || '').trim();
@@ -1093,7 +1093,7 @@ function renderSnapshot(id: number, snapshot: SnapshotResult): string {
 
 const consoleLine = (entry: BrowserConsoleEntry): string =>
   `[${new Date(entry.at).toISOString().slice(11, 19)}] ${entry.level}: ${entry.message}${
-    entry.source === '' || entry.source === 'helm' ? '' : `  (${entry.source}:${String(entry.line)})`
+    entry.source === '' || entry.source === 'floti' ? '' : `  (${entry.source}:${String(entry.line)})`
   }`
 
 /**

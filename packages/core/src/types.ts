@@ -22,7 +22,7 @@ import { LOCAL_HOST_KEY, type RemoteHost } from './hosts'
 /**
  * The browser pane's URL rules, re-exported here rather than from the package
  * root: the address bar and the settings pane are *renderer* code, and a value import
- * from `@helm/core` reaches the filesystem through `launch/` and `store/`,
+ * from `@floti/core` reaches the filesystem through `launch/` and `store/`,
  * which fails at rollup rather than at typecheck. These are pure by
  * construction - they decide about a string and touch nothing.
  */
@@ -588,7 +588,7 @@ export interface RestoreOffer {
  * "is anybody working in this tree" wrongly in exactly the case somebody gets
  * hurt by it. So every record is listed, and the fields below are the whole of
  * what a record carries. Everything richer - branch, profile, overlays, argv,
- * the process tree, the ports - hangs off `helmSessionId`, because Helm has
+ * the process tree, the ports - hangs off `hostSessionId`, because Helm has
  * none of it for a session it did not spawn. That degradation needs no special
  * case: it is simply what is knowable.
  *
@@ -602,7 +602,7 @@ export interface LiveSession {
    * The whole of the hosted/not distinction, and it is a join key rather than a
    * flag: everything Helm knows beyond the record is reached through it.
    */
-  helmSessionId: number | null
+  hostSessionId: number | null
   /**
    * The pid the session is registered under, or the pty's pid for a hosted
    * session that has no record yet.
@@ -785,7 +785,7 @@ export interface SessionResources {
  * cost is whatever the session had not finished saying.
  *
  * In `types.ts` because the renderer imports it, and a value import into the
- * browser bundle comes from `@helm/core/types` and not the package root
+ * browser bundle comes from `@floti/core/types` and not the package root
  * (CLAUDE.md "Boundaries").
  */
 export function sessionLabel(session: Pick<SessionRecord, 'name' | 'label'>): string {

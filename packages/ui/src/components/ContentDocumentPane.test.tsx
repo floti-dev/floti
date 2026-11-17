@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ContentDocument, ContentFile, ContentTree, RenderedMarkdown } from '@helm/core'
-import { hueForText, PALETTE_HUES } from '@helm/core/types'
+import type { ContentDocument, ContentFile, ContentTree, RenderedMarkdown } from '@floti/core'
+import { hueForText, PALETTE_HUES } from '@floti/core/types'
 import { installExecCommand, installLayoutStandIns, type ExecCommandStandIn } from './CodeEditor.testkit'
 import { ContentDocumentPane, type ContentDocumentPaneProps } from './ContentDocumentPane'
 import { FrontmatterChips } from './MarkdownBody'
@@ -34,7 +34,7 @@ const NOTE = [
   '---',
   'type: journal',
   'date: 2026-08-10',
-  'tags: [helm, notes]',
+  'tags: [floti, notes]',
   '---',
   '',
   '# Alpha note',
@@ -102,9 +102,9 @@ describe('ContentDocumentPane: a note', () => {
     render(<ContentDocumentPane {...paneProps(await documentOf('notes/alpha.md'))} />)
 
     expect(screen.getByRole('heading', { level: 1, name: 'Alpha note' })).toBeTruthy()
-    for (const chip of ['journal', '2026-08-10', '#helm', '#notes']) expect(screen.getByText(chip)).toBeTruthy()
+    for (const chip of ['journal', '2026-08-10', '#floti', '#notes']) expect(screen.getByText(chip)).toBeTruthy()
     expect(document.body.textContent).not.toContain('type: journal')
-    expect(document.body.textContent).not.toContain('tags: [helm')
+    expect(document.body.textContent).not.toContain('tags: [floti')
   })
 
   it('draws each tag in a palette colour, the same tag text in the same colour in every note', async () => {
@@ -117,7 +117,7 @@ describe('ContentDocumentPane: a note', () => {
       )
     const note = render(<ContentDocumentPane {...paneProps(await documentOf('notes/alpha.md'))} />)
     const inNote = tagged(note.container)
-    expect([...inNote.keys()]).toEqual(['#helm', '#notes'])
+    expect([...inNote.keys()]).toEqual(['#floti', '#notes'])
     for (const [text, hue] of inNote) {
       expect(hue).toBe(hueForText(text.slice(1)))
       const el = within(note.container).getByText(text)
@@ -254,7 +254,7 @@ describe('ContentDocumentPane: a draft left behind', () => {
 describe('ContentDocumentPane: an HTML artifact', () => {
   it('frames it with scripts allowed and nothing else, and trusts only its own frame’s messages', async () => {
     const props = paneProps(await documentOf('notes/lesson.html'), {
-      artifactUrl: 'helm-content://artifact/token/lesson.html'
+      artifactUrl: 'floti-content://artifact/token/lesson.html'
     })
     render(<ContentDocumentPane {...props} />)
 
@@ -264,7 +264,7 @@ describe('ContentDocumentPane: an HTML artifact', () => {
     expect(frame.getAttribute('referrerpolicy')).toBe('no-referrer')
     expect(screen.getByText('console clean')).toBeTruthy()
 
-    const message = { helm: 'wikilink', target: 'second', heading: null }
+    const message = { floti: 'wikilink', target: 'second', heading: null }
     act(() => {
       window.dispatchEvent(new MessageEvent('message', { data: message, source: window }))
     })
@@ -280,10 +280,10 @@ describe('ContentDocumentPane: an HTML artifact', () => {
     render(
       <ContentDocumentPane
         {...paneProps(await documentOf('notes/lesson.html'), {
-          artifactUrl: 'helm-content://artifact/token/lesson.html',
+          artifactUrl: 'floti-content://artifact/token/lesson.html',
           artifactConsole: [
-            { level: 'error', message: 'boom', source: 'helm-content://artifact/token/lesson.html', line: 3 },
-            { level: 'info', message: 'fine', source: 'helm-content://artifact/token/lesson.html', line: 4 }
+            { level: 'error', message: 'boom', source: 'floti-content://artifact/token/lesson.html', line: 3 },
+            { level: 'info', message: 'fine', source: 'floti-content://artifact/token/lesson.html', line: 4 }
           ]
         })}
       />

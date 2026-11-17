@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type JSX } from 'react'
-import { canonicalParams } from '@helm/core/types'
-import { EmptyState, WarnIcon, cn } from '@helm/ui'
+import { canonicalParams } from '@floti/core/types'
+import { EmptyState, WarnIcon, cn } from '@floti/ui'
 import type { SurfaceSpec } from '../plugins/relay'
 import { attachPluginFrame, detachPluginFrame, reloadPluginFrame, usePluginFrameState } from './pluginFrames'
 

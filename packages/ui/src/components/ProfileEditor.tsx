@@ -1,6 +1,6 @@
 import type { JSX, ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-// Values, not just types - so this comes from `@helm/core/types`, which is the
+// Values, not just types - so this comes from `@floti/core/types`, which is the
 // one entry point with no `node:` imports behind it. The package root reaches
 // the filesystem through `launch/` and `store/`, and a value import of it from
 // the renderer bundle fails at rollup.
@@ -14,7 +14,7 @@ import {
   type Profile,
   type ProfileDraft,
   type Project
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { Checkbox } from './Checkbox'
 import { CaretIcon, CloseIcon, FlotiMarkIcon } from './icons'

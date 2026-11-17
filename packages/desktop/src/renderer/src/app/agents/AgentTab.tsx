@@ -1,6 +1,6 @@
 import { useEffect, type JSX } from 'react'
-import { listedAgentNames, type EditorHighlight } from '@helm/core/types'
-import { AgentPage } from '@helm/ui'
+import { listedAgentNames, type EditorHighlight } from '@floti/core/types'
+import { AgentPage } from '@floti/ui'
 import { bridgeFor } from '../bridge'
 import { useAgentDraft, type AgentDraftTarget, type AgentOutcome } from './useAgentDraft'
 import { useAgentList } from './useAgentList'
@@ -34,9 +34,9 @@ export function AgentTab(props: AgentTabProps): JSX.Element {
   const { listing } = useAgentList(host, true)
   const agent = useAgentDraft(host, props.tabKey, props.target, props.onOutcome)
   const { state, dirty } = agent
-  const helm = bridgeFor(host)
+  const desktop = bridgeFor(host)
   const highlight = (path: string, source: string): Promise<EditorHighlight> =>
-    helm.invoke('editor:highlight', { path, source })
+    desktop.invoke('editor:highlight', { path, source })
 
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange])
   const bad = (state.base?.problems.length ?? 0) > 0

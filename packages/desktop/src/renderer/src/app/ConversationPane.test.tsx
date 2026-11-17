@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ConversationRef, LaunchAgents } from '@helm/core'
+import type { ConversationRef, LaunchAgents } from '@floti/core'
 import { bridge } from './bridge.testkit'
 import { ConversationPane, type ConversationPaneProps } from './ConversationPane'
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS } from '@helm/core'
+import { DEFAULT_SETTINGS } from '@floti/core'
 import { FakeConnection, fakeLocalHost } from '../../../test/host-connection'
 import type { HostConnection } from '../../shared/host/client'
 import type * as P from '../../shared/host/protocol'

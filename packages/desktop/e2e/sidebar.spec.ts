@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect, startSession, test as base } from './helm'
+import { expect, startSession, test as base } from './desktop'
 
 /**
  * The rail starts a piece of work; the tab it leaves open carries on with it.
@@ -17,8 +17,8 @@ const test = base.extend({
   }
 })
 
-test('clicking a tab brings its sidebar back, opened and pointed at it', async ({ helm }) => {
-  const { window } = helm
+test('clicking a tab brings its sidebar back, opened and pointed at it', async ({ desktop }) => {
+  const { window } = desktop
   const rail = (id: string) => window.locator(`[data-rail="${id}"]`)
   const sections = window.getByRole('navigation', { name: 'Settings sections' })
   const files = window.getByRole('group', { name: 'Project files' })

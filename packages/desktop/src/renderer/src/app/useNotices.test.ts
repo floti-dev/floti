@@ -1,4 +1,4 @@
-import type { StandingNotice } from '@helm/core/types'
+import type { StandingNotice } from '@floti/core/types'
 import { describe, expect, it } from 'vitest'
 import type { NoticesStore, NoticesView } from './host/notices'
 import { createHostNotices } from './useNotices'

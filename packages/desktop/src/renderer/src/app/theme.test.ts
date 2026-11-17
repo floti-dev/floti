@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BUILTIN_THEMES, hueToken, PALETTE_HUES, type ThemeState } from '@helm/core/types'
+import { BUILTIN_THEMES, hueToken, PALETTE_HUES, type ThemeState } from '@floti/core/types'
 import { applyShape, applyTheme } from './theme'
 
 const stateOf = (id: string): ThemeState => {

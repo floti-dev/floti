@@ -31,7 +31,7 @@ import {
   type ThemeListing,
   type ThemeState,
   type ThemeTokens
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './SettingsSections'
 import { SEGMENT_ON } from '../lib/segmented'

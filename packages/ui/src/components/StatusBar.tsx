@@ -3,7 +3,7 @@ import {
   LOCAL_HOST_KEY,
   localHostVersionsSentence,
   type LocalHostVersions,
-} from "@helm/core/types";
+} from "@floti/core/types";
 import { cn } from "../lib/cn";
 
 export interface StatusBarProps {
@@ -278,7 +278,7 @@ export function StatusBar({
               <button
                 type="button"
                 data-status-host={
-                  versions.older === "host" ? "older" : "update-helm"
+                  versions.older === "host" ? "older" : "update-desktop"
                 }
                 data-status-host-id={host.id}
                 onClick={host.onOpen}
@@ -290,7 +290,7 @@ export function StatusBar({
                   className="size-1.5 rounded-full border-[1.5px] border-warn"
                 />
                 {host.name} ·{" "}
-                {versions.older === "helm" ? "update Floti" : "older host"}
+                {versions.older === "desktop" ? "update Floti" : "older host"}
               </button>
             </Fragment>
           );

@@ -6,9 +6,9 @@ import { PLUGIN_PAGE_MIME, PluginPages, type PluginPagesProps } from './PluginPa
 import { TAB_MIME } from './TabBar'
 
 const PAGES: PluginPagesProps['pages'] = [
-  { id: 'plugin-page:trackr/view', title: 'Helm', hint: 'Helm - Trackr' },
-  { id: 'plugin-page:trackr/view?{"id":"HELM-12"}', title: 'HELM-12', hint: 'HELM-12 - Trackr' },
-  { id: 'plugin-page:trackr/view?{"id":"HELM-13"}', title: 'HELM-13', hint: 'HELM-13 - Trackr' }
+  { id: 'plugin-page:trackr/view', title: 'Floti', hint: 'Floti - Trackr' },
+  { id: 'plugin-page:trackr/view?{"id":"FLOTI-12"}', title: 'FLOTI-12', hint: 'FLOTI-12 - Trackr' },
+  { id: 'plugin-page:trackr/view?{"id":"FLOTI-13"}', title: 'FLOTI-13', hint: 'FLOTI-13 - Trackr' }
 ]
 
 function renderPages(overrides: Partial<PluginPagesProps> = {}): PluginPagesProps {
@@ -38,25 +38,25 @@ describe('PluginPages', () => {
     renderPages()
     const strip = screen.getByRole('tablist', { name: 'Trackr pages' })
     const tabs = within(strip).getAllByRole('tab')
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['Helm', 'HELM-12', 'HELM-13'])
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Floti', 'FLOTI-12', 'FLOTI-13'])
     expect(tabs[1]!.getAttribute('aria-selected')).toBe('true')
-    expect(tabs[2]!.getAttribute('title')).toBe('HELM-13 - Trackr')
+    expect(tabs[2]!.getAttribute('title')).toBe('FLOTI-13 - Trackr')
     expect(screen.queryByRole('button', { name: /new/i })).toBeNull()
   })
 
   it('reports pages by their own ids: front and close', async () => {
     const props = renderPages()
-    await userEvent.click(screen.getByRole('tab', { name: /^HELM-13/ }))
+    await userEvent.click(screen.getByRole('tab', { name: /^FLOTI-13/ }))
     expect(props.onActivate).toHaveBeenCalledWith(PAGES[2]!.id)
-    await userEvent.click(screen.getByRole('button', { name: 'Close Helm' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Close Floti' }))
     expect(props.onClose).toHaveBeenCalledWith(PAGES[0]!.id)
   })
 
   it('draws the preview page in italic and keeps it on a double click, and only it', () => {
     const props = renderPages({ pages: PAGES.map((page, index) => ({ ...page, preview: index === 2 })) })
-    const preview = screen.getByRole('tab', { name: /^HELM-13/ })
+    const preview = screen.getByRole('tab', { name: /^FLOTI-13/ })
     expect(preview.querySelector('[data-tab-title]')?.className).toContain('italic')
-    fireEvent.doubleClick(screen.getByRole('tab', { name: /^HELM-12/ }))
+    fireEvent.doubleClick(screen.getByRole('tab', { name: /^FLOTI-12/ }))
     expect(props.onKeep).not.toHaveBeenCalled()
     fireEvent.doubleClick(preview)
     expect(props.onKeep).toHaveBeenCalledWith(PAGES[2]!.id)
@@ -64,13 +64,13 @@ describe('PluginPages', () => {
 
   it('moves a page with Ctrl+Shift+Arrow, as the Browser tab moves its pages', () => {
     const props = renderPages()
-    fireEvent.keyDown(screen.getByRole('tab', { name: /^HELM-12/ }), { key: 'ArrowRight', ctrlKey: true, shiftKey: true })
+    fireEvent.keyDown(screen.getByRole('tab', { name: /^FLOTI-12/ }), { key: 'ArrowRight', ctrlKey: true, shiftKey: true })
     expect(props.onMove).toHaveBeenCalledWith(PAGES[1]!.id, 2)
   })
 
   it("moves a page dragged along the strip, and ignores a pane's tab or a browser page dropped on it", () => {
     const props = renderPages()
-    const last = screen.getByRole('tab', { name: /^HELM-13/ }).parentElement!
+    const last = screen.getByRole('tab', { name: /^FLOTI-13/ }).parentElement!
     fireEvent.drop(last, carrying(PLUGIN_PAGE_MIME, PAGES[0]!.id))
     expect(props.onMove).toHaveBeenCalledWith(PAGES[0]!.id, 1)
 

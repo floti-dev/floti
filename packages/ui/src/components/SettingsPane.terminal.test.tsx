@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_SETTINGS, type DetectedShell } from '@helm/core/types'
+import { DEFAULT_SETTINGS, type DetectedShell } from '@floti/core/types'
 import { SettingsPane, type SettingsPaneProps, type TerminalSettings } from './SettingsPane'
 
 /**
@@ -75,7 +75,7 @@ function paneProps(overrides: Partial<SettingsPaneProps> = {}): SettingsPaneProp
     transcriptArchiveMaxBytes: DEFAULT_SETTINGS.transcriptArchiveMaxBytes,
     onTranscriptArchiveMaxBytesChange: vi.fn(),
     templateCount: 0,
-    templatesDir: 'C:\\Users\\someone\\.config\\helm\\templates',
+    templatesDir: 'C:\\Users\\someone\\.config\\floti\\templates',
     onManageTemplates: vi.fn(),
     onRevealTemplates: vi.fn(),
     filesWrap: DEFAULT_SETTINGS.filesWrap,

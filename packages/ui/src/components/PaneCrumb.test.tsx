@@ -60,7 +60,7 @@ describe('PaneCrumb chips', () => {
   it('S7: each child is a chip with its state dot, or a terminal glyph for a command', () => {
     const { container } = render(
       <PaneCrumb
-        place="helm"
+        place="floti"
         chips={[
           chip(),
           chip({ chipKey: 'local:3', name: 'worker-2', mark: { glyph: 'dot', state: 'waiting' }, stateLabel: 'waiting for you', needsYou: true }),
@@ -82,7 +82,7 @@ describe('PaneCrumb chips', () => {
   it('S26: an agent keeps its dot and each command’s glyph is toned success while it runs, fg-subtle once it exited 0 and danger for any other code', () => {
     const { container } = render(
       <PaneCrumb
-        place="helm"
+        place="floti"
         chips={[
           chip(),
           chip({ chipKey: 'local:4', name: 'tests', mark: { glyph: 'command', state: 'running' }, stateLabel: 'running' }),
@@ -108,24 +108,24 @@ describe('PaneCrumb chips', () => {
 
   it('S7: pressing a chip opens its child’s peek, and says it has one open while it does', async () => {
     const onPress = vi.fn()
-    const { rerender } = render(<PaneCrumb place="helm" chips={[chip({ onPress })]} />)
+    const { rerender } = render(<PaneCrumb place="floti" chips={[chip({ onPress })]} />)
     const button = screen.getByRole('button', { name: 'reviewer, working, peek' })
     expect(button.getAttribute('aria-haspopup')).toBe('dialog')
     expect(button.getAttribute('aria-expanded')).toBe('false')
     await userEvent.click(button)
     expect(onPress).toHaveBeenCalledTimes(1)
-    rerender(<PaneCrumb place="helm" chips={[chip({ onPress, open: true })]} />)
+    rerender(<PaneCrumb place="floti" chips={[chip({ onPress, open: true })]} />)
     expect(button.getAttribute('aria-expanded')).toBe('true')
   })
 
   it('has no chips element for a parent with no children on screen as chips', () => {
-    const { container } = render(<PaneCrumb place="helm" chips={[]} />)
+    const { container } = render(<PaneCrumb place="floti" chips={[]} />)
     expect(container.querySelector('[data-crumb="chips"]')).toBeNull()
   })
 
   it('the chips are pushed to the end of the row and the status follows them', () => {
     const { container } = render(
-      <PaneCrumb place="helm" chips={[chip()]} status={{ text: 'Working · 3s', tone: 'accent' }} />
+      <PaneCrumb place="floti" chips={[chip()]} status={{ text: 'Working · 3s', tone: 'accent' }} />
     )
     const chips = container.querySelector<HTMLElement>('[data-crumb="chips"]')
     const status = container.querySelector<HTMLElement>('[data-crumb="status"]')
@@ -139,7 +139,7 @@ describe('PaneCrumb chips', () => {
 describe('PaneCrumb child tag and parent link', () => {
   it('spaces the row 8px apart, with the for <parent> link 3px nearer its tag', () => {
     const { container } = render(
-      <PaneCrumb tag={{ kind: 'agent', text: 'reviewer' }} parent={{ name: 'api-refactor', onOpen: () => {} }} place='helm' />
+      <PaneCrumb tag={{ kind: 'agent', text: 'reviewer' }} parent={{ name: 'api-refactor', onOpen: () => {} }} place='floti' />
     )
     expect(container.querySelector('[data-pane-crumb]')?.className).toContain(' gap-2 ')
     expect(container.querySelector('[data-crumb="parent"]')?.className).toContain('-ml-[3px]')
@@ -150,7 +150,7 @@ describe('PaneCrumb child tag and parent link', () => {
 
   it('S32: a command child begins with a command tag, fg-muted on an inset border-strong ring with no fill and no layout', () => {
     const { container } = render(
-      <PaneCrumb tag={{ kind: 'command', text: 'command' }} parent={{ name: 'api-refactor' }} place="helm" />
+      <PaneCrumb tag={{ kind: 'command', text: 'command' }} parent={{ name: 'api-refactor' }} place="floti" />
     )
     const tag = tagOf(container)
     expect(tag?.textContent).toBe('command')
@@ -167,7 +167,7 @@ describe('PaneCrumb child tag and parent link', () => {
   })
 
   it('S32: an agent child begins with its agent in accent-text on accent-soft', () => {
-    const { container } = render(<PaneCrumb tag={{ kind: 'agent', text: 'reviewer' }} place="helm" />)
+    const { container } = render(<PaneCrumb tag={{ kind: 'agent', text: 'reviewer' }} place="floti" />)
     const tag = tagOf(container)
     expect(tag?.textContent).toBe('reviewer')
     expect(tag?.className).toContain('text-accent-text')
@@ -190,17 +190,17 @@ describe('PaneCrumb child tag and parent link', () => {
   })
 
   it('has no tag for a child with no agent, and none for a session that is no child', () => {
-    const { container } = render(<PaneCrumb parent={{ name: 'api-refactor', onOpen: () => {} }} place="helm" />)
+    const { container } = render(<PaneCrumb parent={{ name: 'api-refactor', onOpen: () => {} }} place="floti" />)
     expect(tagOf(container)).toBeNull()
     expect(parentOf(container)?.textContent).toBe('for api-refactor')
-    const plain = render(<PaneCrumb place="helm" />)
+    const plain = render(<PaneCrumb place="floti" />)
     expect(tagOf(plain.container)).toBeNull()
     expect(parentOf(plain.container)).toBeNull()
   })
 
   it('S32: pressing for <parent> opens the parent', () => {
     const onOpen = vi.fn()
-    const { container } = render(<PaneCrumb parent={{ name: 'api-refactor', onOpen }} place="helm" />)
+    const { container } = render(<PaneCrumb parent={{ name: 'api-refactor', onOpen }} place="floti" />)
     const link = parentOf(container)
     expect(link?.tagName).toBe('BUTTON')
     expect(link?.className).toContain('text-fg-muted')
@@ -211,7 +211,7 @@ describe('PaneCrumb child tag and parent link', () => {
   })
 
   it('S32: for <parent> is plain text, not a button, when the window does not list the parent', () => {
-    const { container } = render(<PaneCrumb parent={{ name: 'api-refactor' }} place="helm" />)
+    const { container } = render(<PaneCrumb parent={{ name: 'api-refactor' }} place="floti" />)
     const link = parentOf(container)
     expect(link?.textContent).toBe('for api-refactor')
     expect(link?.tagName).toBe('SPAN')

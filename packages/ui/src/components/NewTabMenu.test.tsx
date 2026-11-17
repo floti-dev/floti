@@ -8,7 +8,7 @@ import {
   type LaunchAgents,
   type Profile,
   type Project
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { NewTabMenu, type NewTabMenuProps } from './NewTabMenu'
 
 const HOME = 'C:\\Users\\someone'
@@ -29,10 +29,10 @@ function project(name: string, path = `${WORKSPACE}\\repos\\${name}`): Project {
 }
 
 const dev: Project = { ...project('dev', WORKSPACE), kind: 'workspace' }
-const helm = project('helm')
+const floti = project('floti')
 const timeclick = project('timeclick')
 const notes = project('notes')
-const PROJECTS = [dev, helm, timeclick, notes]
+const PROJECTS = [dev, floti, timeclick, notes]
 
 function profile(id: number, name: string, overlays: string[], patch: Partial<Profile> = {}): Profile {
   return {
@@ -61,8 +61,8 @@ const PROFILES = [devProfile, timeclickProfile]
 function conversation(sessionId: string, title: string, lastAt: number): HistorySession {
   return {
     sessionId,
-    project: helm.path,
-    projectName: 'helm',
+    project: floti.path,
+    projectName: 'floti',
     promptCount: 3,
     firstAt: lastAt - HOUR,
     lastAt,
@@ -92,14 +92,14 @@ function renderMenu(overrides: Partial<NewTabMenuProps> = {}) {
     projects: PROJECTS,
     recency: new Map([
       [timeclick.path.toLowerCase(), NOW - 5 * 60_000],
-      [helm.path.toLowerCase(), NOW - 2 * HOUR],
+      [floti.path.toLowerCase(), NOW - 2 * HOUR],
       [dev.path.toLowerCase(), NOW - 26 * HOUR],
       [notes.path.toLowerCase(), NOW - 50 * HOUR]
     ]),
     live: [],
     profiles: PROFILES,
     home: HOME,
-    initialPath: helm.path,
+    initialPath: floti.path,
     resumable: new Map(),
     onShowing: vi.fn(),
     busy: false,
@@ -177,11 +177,11 @@ describe('NewTabMenu: terminal', () => {
     expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'dev',
       'timeclick',
-      'helm',
+      'floti',
       'notes'
     ])
-    await userEvent.click(within(menu).getByText('helm'))
-    expect(props.onTerminal).toHaveBeenCalledWith(helm)
+    await userEvent.click(within(menu).getByText('floti'))
+    expect(props.onTerminal).toHaveBeenCalledWith(floti)
     expect(props.onStart).not.toHaveBeenCalled()
   })
 
@@ -218,11 +218,11 @@ describe('NewTabMenu: session', () => {
     await userEvent.selectOptions(within(popover).getByRole('combobox', { name: 'Folder' }), dev.path)
     expect(within(popover).getByRole('combobox', { name: 'Profile' })).toHaveProperty('value', '1')
     await userEvent.selectOptions(within(popover).getByRole('combobox', { name: 'Profile' }), '')
-    await userEvent.selectOptions(within(popover).getByRole('combobox', { name: 'Folder' }), helm.path)
+    await userEvent.selectOptions(within(popover).getByRole('combobox', { name: 'Folder' }), floti.path)
     expect(within(popover).getByRole('combobox', { name: 'Profile' })).toHaveProperty('value', '')
     await userEvent.click(within(popover).getByRole('button', { name: 'Start session' }))
     expect(props.onStart).toHaveBeenCalledWith({
-      project: helm,
+      project: floti,
       profileId: null,
       permissionMode: null,
       resume: null,
@@ -255,7 +255,7 @@ describe('NewTabMenu: session', () => {
     const popover = await chooseSession()
     const recent = within(popover).getByRole('list', { name: 'Recent' })
     const rows = within(recent).getAllByRole('button')
-    expect(rows.map((row) => row.textContent)).toEqual(['timeclickTimeclick5m', 'helm2h', 'devdev1d'])
+    expect(rows.map((row) => row.textContent)).toEqual(['timeclickTimeclick5m', 'floti2h', 'devdev1d'])
     expect(rows[0]!.getAttribute('title')).toContain('with the Timeclick profile')
     await userEvent.click(rows[2]!)
     expect(props.onStart).toHaveBeenCalledWith({
@@ -269,13 +269,13 @@ describe('NewTabMenu: session', () => {
 
   it('resumes one of the folder’s conversations from Resume', async () => {
     const payroll = conversation('a1', 'payroll export fix', NOW - 3 * HOUR)
-    const { props } = renderMenu({ resumable: new Map([[helm.path.toLowerCase(), [payroll]]]) })
+    const { props } = renderMenu({ resumable: new Map([[floti.path.toLowerCase(), [payroll]]]) })
     const popover = await chooseSession()
     await userEvent.click(within(popover).getByRole('button', { name: 'Resume…' }))
     const menu = screen.getByRole('menu', { name: 'Resume a conversation' })
     await userEvent.click(within(menu).getByText('payroll export fix'))
     expect(props.onStart).toHaveBeenCalledWith({
-      project: helm,
+      project: floti,
       profileId: null,
       permissionMode: null,
       resume: payroll,
@@ -291,9 +291,9 @@ describe('NewTabMenu: session', () => {
     const popover = await chooseSession()
     const resume = within(popover).getByRole('button', { name: 'Resume…' })
     expect(resume).toHaveProperty('disabled', true)
-    expect(resume.getAttribute('title')).toBe('Reading the conversations in helm…')
-    rerender(<NewTabMenu {...props} resumable={new Map([[helm.path.toLowerCase(), []]])} />)
-    expect(resume.getAttribute('title')).toBe('Nothing in helm can be reopened')
+    expect(resume.getAttribute('title')).toBe('Reading the conversations in floti…')
+    rerender(<NewTabMenu {...props} resumable={new Map([[floti.path.toLowerCase(), []]])} />)
+    expect(resume.getAttribute('title')).toBe('Nothing in floti can be reopened')
   })
 
   it('says why a launch failed, and closes on Escape', async () => {
@@ -392,7 +392,7 @@ describe('NewTabMenu: agent session', () => {
     renderMenu({ agents: AGENTS })
     await userEvent.click(screen.getByText('Agent session'))
     const menu = screen.getByRole('menu', { name: 'Start an agent session' })
-    expect(menu.textContent).toContain('Agent session in helm')
+    expect(menu.textContent).toContain('Agent session in floti')
     const items = within(menu).getAllByRole('menuitem')
     expect(items.map((item) => item.textContent)).toEqual([
       'leadDelegates work and keeps Trackr true.',
@@ -411,17 +411,17 @@ describe('NewTabMenu: agent session', () => {
     const pickers = within(popover).getAllByRole('combobox')
     // Agent sits between Folder and Profile.
     expect(pickers.map((picker) => picker.id.split('-').at(-1))).toEqual(['folder', 'agent', 'profile'])
-    expect(within(popover).getByRole('combobox', { name: 'Folder' })).toHaveProperty('value', helm.path)
+    expect(within(popover).getByRole('combobox', { name: 'Folder' })).toHaveProperty('value', floti.path)
     expect(within(popover).getByRole('combobox', { name: 'Agent' })).toHaveProperty('value', 'research-lead')
     expect(popover.querySelector('[data-launch-sentence]')?.textContent).toBe(
-      'Runs claude in ~\\.harness\\dev\\repos\\helm as the research-lead agent, and --model opus --effort xhigh --permission-mode plan and its tool rules. It can start agents of its own.'
+      'Runs claude in ~\\.harness\\dev\\repos\\floti as the research-lead agent, and --model opus --effort xhigh --permission-mode plan and its tool rules. It can start agents of its own.'
     )
     expect(popover.querySelector('[data-agent-note]')?.textContent).toBe(
       "Its model, effort and permissions are research-lead's; Ctrl+N changes them."
     )
     await userEvent.click(within(popover).getByRole('button', { name: 'Start session' }))
     expect(props.onStart).toHaveBeenCalledWith({
-      project: helm,
+      project: floti,
       profileId: null,
       permissionMode: 'plan',
       resume: null,
@@ -456,7 +456,7 @@ describe('NewTabMenu: agent session', () => {
     const recent = within(popover).getByRole('list', { name: 'Recent' })
     await userEvent.click(within(recent).getAllByRole('button')[1]!)
     const started = vi.mocked(props.onStart).mock.calls.at(-1)?.[0]
-    expect(started?.project).toBe(helm)
+    expect(started?.project).toBe(floti)
     expect(started?.agent ?? null).toBeNull()
   })
 })

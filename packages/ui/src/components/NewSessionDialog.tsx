@@ -11,7 +11,7 @@ import {
   type PermissionMode,
   type Profile,
   type Project
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { hasPrimaryModifier, isMac, shortcutLabel } from '../lib/platform'
 import {

@@ -312,7 +312,7 @@ pnpm vitest run <file>             # one file, while building
 pnpm test:posix                    # the POSIX code's tests: under Linux in WSL on Windows, natively elsewhere
 pnpm test:posix <file> ...         # the same, for these files
 pnpm test:e2e                      # builds, then runs every workflow
-pnpm --filter @helm/desktop exec node scripts/playwright.mjs test -c e2e panes   # one spec, after a build; the wrapper keeps Playwright's cache out of the temp folder
+pnpm --filter @floti/desktop exec node scripts/playwright.mjs test -c e2e panes   # one spec, after a build; the wrapper keeps Playwright's cache out of the temp folder
 cargo nextest run --workspace      # every crate's tests; CI adds --profile ci
 cargo nextest run -p floti-protocol   # the protocol crate, its ipc.ts coverage and generated-file check included
 cargo nextest run -p floti-host    # the host, with the fake agents (Node on PATH)
@@ -511,19 +511,19 @@ over the window, or Electron's own guards on a page.
   chosen, first run done (no walkthrough), the update check
   off; `e2e/walkthrough.spec.ts` seeds a first start instead. Nothing reaches the network, a
   real `~/.claude` or the installed app. The world is removed only once
-  everything it ran has exited (`worldProcesses` in `e2e/helm.ts`: each host
+  everything it ran has exited (`worldProcesses` in `e2e/desktop.ts`: each host
   and session keeper by the pid the host logs, each fake `claude` by its
   record), because Windows will not delete a file a live process holds. A
   test that leaves something running fails there, naming the pids.
 - **One project**, `in the local host`: sessions, terminals, discovery, setup,
   templates, notes, files and the plugins registry are the local host's.
-- **`e2e/helm.ts`** has the `test` fixture (`world`, `helm`, `relaunch`) and
+- **`e2e/desktop.ts`** has the `test` fixture (`world`, `desktop`, `relaunch`) and
   the helpers: `startSession`, `typeLine`, `terminalText`, `claudeRunIn`,
   `processAlive`, and for quitting `closeWindow`, `answer` and
   `closeKeepRunning`.
 - **Find elements by role and accessible name**, as a user sees them. Two
   exceptions, both read-only: terminal text comes from
-  `window.__helmTerminals()`, because xterm paints to a canvas; and a pane's
+  `window.__flotiTerminals()`, because xterm paints to a canvas; and a pane's
   "needs you" state is `data-pane-attention`, which has no ARIA equivalent.
 - **The browser pane's page** is a native view, not part of the window's DOM.
   Once it has loaded a page, it appears in `app.windows()` as a page of its

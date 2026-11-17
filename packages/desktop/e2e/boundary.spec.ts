@@ -5,7 +5,7 @@ import type { RecordedChannel } from '../src/main/ipc-recorder'
 import { bearerOf, callTool, readMcpConfig } from '../test/mcp-client'
 import { startBrowserFixture } from './browser-fixture'
 import { TOKEN, installSample, pluginFrame, startServer, type SampleFixture } from './plugin-fixture'
-import { claudeRunIn, expect, openHistory, startSession, terminalText, test as base, typeLine, type Helm } from './helm'
+import { claudeRunIn, expect, openHistory, startSession, terminalText, test as base, typeLine, type Desktop } from './desktop'
 
 /**
  * Electron IPC carries only what `boundary.rs` lists as client-only: the
@@ -41,8 +41,8 @@ const test = base.extend<{ sample: SampleFixture }>({
 })
 
 /** Every channel main recorded so far, and which page used it. */
-const recorded = (helm: Helm): Promise<RecordedChannel[]> =>
-  helm.app.evaluate(() => (globalThis as unknown as { __flotiIpcChannels: () => RecordedChannel[] }).__flotiIpcChannels())
+const recorded = (desktop: Desktop): Promise<RecordedChannel[]> =>
+  desktop.app.evaluate(() => (globalThis as unknown as { __flotiIpcChannels: () => RecordedChannel[] }).__flotiIpcChannels())
 
 /** What crossed Electron IPC that `boundary.rs` does not keep on the client, named. */
 function strays(channels: readonly RecordedChannel[]): string[] {
@@ -55,22 +55,22 @@ function strays(channels: readonly RecordedChannel[]): string[] {
 }
 
 /** Fails naming every stray channel, and any page but Helm's own that used a page's connection. */
-async function expectOnlyClientChannels(helm: Helm): Promise<void> {
-  const channels = await recorded(helm)
+async function expectOnlyClientChannels(desktop: Desktop): Promise<void> {
+  const channels = await recorded(desktop)
   expect(channels.length).toBeGreaterThan(0)
   expect(strays(channels)).toEqual([])
   const foreign = channels.filter(({ channel, page }) => channel.startsWith('hostLink:') && page === 'other')
   expect(foreign).toEqual([])
 }
 
-const destination = (helm: Helm, name: string | RegExp) =>
-  helm.window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name, exact: typeof name === 'string' })
+const destination = (desktop: Desktop, name: string | RegExp) =>
+  desktop.window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name, exact: typeof name === 'string' })
 
 test('the launcher, a session and its terminal, and a project’s terminal use only client channels', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   const pane = window.getByRole('region', { name: 'First pane' })
   await window.getByRole('button', { name: 'alpha main' }).click()
   await expect(pane.getByRole('textbox', { name: 'Terminal input' })).toBeAttached()
@@ -78,11 +78,11 @@ test('the launcher, a session and its terminal, and a project’s terminal use o
   await typeLine(pane, 'hello boundary')
   await expect.poll(() => terminalText(window, id)).toContain('You said: hello boundary')
   await claudeRunIn(world, world.projects.alpha)
-  await expectOnlyClientChannels(helm)
+  await expectOnlyClientChannels(desktop)
 })
 
-test('history comes over the window’s own connection', async ({ helm }) => {
-  const { window } = helm
+test('history comes over the window’s own connection', async ({ desktop }) => {
+  const { window } = desktop
   const id = await startSession(window, 'alpha')
   const pane = window.getByRole('region', { name: 'First pane' })
   await typeLine(pane, 'plan the boundary')
@@ -97,15 +97,15 @@ test('history comes over the window’s own connection', async ({ helm }) => {
   await expect(palette).toHaveCount(0)
   await expect(window.locator('[data-transcript]')).toContainText('You said: plan the boundary')
 
-  const channels = await recorded(helm)
+  const channels = await recorded(desktop)
   // Read over the window's connection: main was asked none of it.
   expect(channels.filter(({ channel }) => /^(history:(summary|sessions|changed)|archive:)/.test(channel))).toEqual([])
   expect(channels).toContainEqual({ channel: 'hostLink:open', kind: 'invoke', page: 'window' })
-  await expectOnlyClientChannels(helm)
+  await expectOnlyClientChannels(desktop)
 })
 
-test('the Files view, a note and the profile form use only client channels', async ({ helm }) => {
-  const { window } = helm
+test('the Files view, a note and the profile form use only client channels', async ({ desktop }) => {
+  const { window } = desktop
   await window.locator('[data-rail="files"]').click()
   const picker = window.getByRole('button', { name: 'Project', exact: true })
   if ((await picker.textContent()) !== 'alpha') {
@@ -117,29 +117,29 @@ test('the Files view, a note and the profile form use only client channels', asy
   await files.getByRole('button', { name: /^first\.md/ }).click()
   await expect(window.getByRole('heading', { level: 1, name: 'First note' })).toBeVisible()
 
-  await destination(helm, 'Profiles').click()
+  await destination(desktop, 'Profiles').click()
   await window.getByRole('button', { name: 'New profile' }).click()
   const dialog = window.getByRole('dialog', { name: 'New profile' })
   await dialog.getByRole('textbox', { name: 'Profile name' }).fill('boundary')
   await dialog.getByRole('button', { name: 'Cancel' }).click()
-  await expectOnlyClientChannels(helm)
+  await expectOnlyClientChannels(desktop)
 })
 
 test('plugin pages, a tool called by a session, and the Browser tab use only client channels', async ({
-  helm,
+  desktop,
   sample,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   await startSession(window, 'alpha')
   await window.evaluate(
     ({ token, host }) =>
       (
-        window as unknown as { __helmRouted: { invoke: (channel: string, payload: unknown) => Promise<unknown> } }
-      ).__helmRouted.invoke('secrets:save', { key: 'sample-token', value: token, hosts: [host], plugins: ['sample'] }),
+        window as unknown as { __flotiRouted: { invoke: (channel: string, payload: unknown) => Promise<unknown> } }
+      ).__flotiRouted.invoke('secrets:save', { key: 'sample-token', value: token, hosts: [host], plugins: ['sample'] }),
     { token: TOKEN, host: sample.server.url }
   )
-  await destination(helm, /^Sample/).click()
+  await destination(desktop, /^Sample/).click()
   const panel = await pluginFrame(window, 'dist/panels/main.html')
   await panel.locator('[data-sample-item="2"]').click()
   const item = await pluginFrame(window, 'dist/tabs/item.html')
@@ -161,13 +161,13 @@ test('plugin pages, a tool called by a session, and the Browser tab use only cli
 
   const fixture = await startBrowserFixture()
   try {
-    await destination(helm, 'Browser').click()
+    await destination(desktop, 'Browser').click()
     const address = window.getByRole('combobox', { name: 'Address' })
     await address.fill(`${fixture.http}/`)
     await address.press('Enter')
-    await expect(window.getByRole('tab', { name: /^Helm fixture one/ })).toBeVisible()
+    await expect(window.getByRole('tab', { name: /^Floti fixture one/ })).toBeVisible()
   } finally {
     await fixture.close()
   }
-  await expectOnlyClientChannels(helm)
+  await expectOnlyClientChannels(desktop)
 })

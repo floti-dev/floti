@@ -6,8 +6,8 @@ import {
   type TerminalHost,
   type TerminalReport
 } from '../terminal'
-import { LOCAL_HOST_KEY, gridOf, type CellSize } from '@helm/core/types'
-import { bridgeFor, helm } from './bridge'
+import { LOCAL_HOST_KEY, gridOf, type CellSize } from '@floti/core/types'
+import { bridgeFor, desktop } from './bridge'
 import { attachSessionSink, forgetSession } from './sessionStream'
 import { onTerminalPrefs, terminalPrefs } from './termprefs'
 
@@ -109,9 +109,9 @@ export function mountTerminal(
     {
       onInput: (data) => session.send('session:input', { id, data }),
       onResize: (cols, rows) => session.send('session:resize', { id, cols, rows }),
-      readClipboard: () => helm.invoke('clipboard:read'),
-      writeClipboard: async (text) => (await helm.invoke('clipboard:write', text)).outcome,
-      openLink: (url) => void helm.invoke('shell:openExternal', { url })
+      readClipboard: () => desktop.invoke('clipboard:read'),
+      writeClipboard: async (text) => (await desktop.invoke('clipboard:write', text)).outcome,
+      openLink: (url) => void desktop.invoke('shell:openExternal', { url })
     },
     terminalPrefs()
   )

@@ -20,9 +20,9 @@ import type { Emit } from './sessions'
  * to every new connection; `files:changed` is subscribed on every connect and
  * handed to the window.
  *
- * An HTML artifact keeps the window's `helm-content:` scheme: the host's
+ * An HTML artifact keeps the window's `floti-content:` scheme: the host's
  * `floti-artifact://<token>/<name>` is handed to the window as
- * `helm-content://artifact/<token>/<name>`, and a frame's request for one is
+ * `floti-content://artifact/<token>/<name>`, and a frame's request for one is
  * answered from `content:artifactBytes`, a piece at a time until the body is
  * whole (`artifactBytes`).
  *
@@ -72,7 +72,7 @@ export interface HostFilesDeps {
 }
 
 export interface HostFiles extends FilesReads {
-  /** A frame's request for `helm-content://artifact/...`, answered from the host's bytes. */
+  /** A frame's request for `floti-content://artifact/...`, answered from the host's bytes. */
   artifactBytes(url: string): Promise<ArtifactAnswer>
   shutdown(): void
 }

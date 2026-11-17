@@ -7,7 +7,7 @@ import {
   type Profile,
   type ProfileDraft,
   type Project
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { ProfileEditor, type ProfileEditorProps, type ProfilePrediction } from './ProfileEditor'
 
 const HUB = 'C:\\work\\hub'

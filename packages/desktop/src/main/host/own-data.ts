@@ -8,7 +8,7 @@ import {
   type ConversationCursor,
   type CopyBudget,
   type Store
-} from '@helm/core'
+} from '@floti/core'
 import type { OwnDataCopied, OwnDataCopyState } from '../../shared/ipc'
 import { HostConnectionEnded, HostRequestError, type HostConnection } from './client'
 import type { HostLink } from './link'

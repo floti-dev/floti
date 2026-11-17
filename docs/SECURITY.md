@@ -38,7 +38,7 @@ together. The agent tools listener's token and origin rules are in
   agent tool. The only other call on what the partition stores is
   `clearStorageData`, and nothing reads its localStorage or any other
   credential. No password is saved: there is no password manager.
-- Every navigation goes through `browserReachAllows` in `@helm/core`; an
+- Every navigation goes through `browserReachAllows` in `@floti/core`; an
   agent's restrictions are composed by `agentReach`. `file:` and custom schemes
   are refused there.
 - A page's icon is fetched by main (`main/favicons.ts`) with `net.request` on

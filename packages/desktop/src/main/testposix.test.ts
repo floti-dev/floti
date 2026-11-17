@@ -40,10 +40,10 @@ describe('the POSIX test command', () => {
   })
 
   it('mirrors each checkout into a Linux-side folder of its own', () => {
-    const one = mirrorName('C:\\work\\helm')
-    expect(one).toMatch(/^helm-[0-9a-f]{8}$/)
-    expect(mirrorName('C:\\Work\\Helm')).not.toBe(mirrorName('D:\\other\\helm'))
-    expect(mirrorName('C:\\Users\\me\\my repos\\helm (2)')).toMatch(/^helm__2_-[0-9a-f]{8}$/)
+    const one = mirrorName('C:\\work\\floti')
+    expect(one).toMatch(/^floti-[0-9a-f]{8}$/)
+    expect(mirrorName('C:\\Work\\Floti')).not.toBe(mirrorName('D:\\other\\floti'))
+    expect(mirrorName('C:\\Users\\me\\my repos\\floti (2)')).toMatch(/^floti__2_-[0-9a-f]{8}$/)
   })
 
   it('installs in the mirror only when the lockfile changed, with the pinned pnpm and no Electron download', () => {

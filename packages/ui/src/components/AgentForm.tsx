@@ -7,7 +7,7 @@ import {
   type AgentDraftChange,
   type AgentProblem,
   type InstalledBackend
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { Checkbox } from './Checkbox'
 import { CloseIcon, GripIcon } from './icons'

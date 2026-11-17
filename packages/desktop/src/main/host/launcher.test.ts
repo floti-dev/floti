@@ -40,11 +40,11 @@ const WIN_PLACES: HostPlaces = {
   appMode: 'dev',
   dataDir: 'C:\\Users\\me\\AppData\\Local\\Floti Dev\\dev\\floti-data',
   packaged: false,
-  resourcesPath: 'C:\\Program Files\\Helm\\resources',
-  repoRoot: 'C:\\src\\my helm',
+  resourcesPath: 'C:\\Program Files\\Floti\\resources',
+  repoRoot: 'C:\\src\\my floti',
   templatesDir: 'C:\\Users\\me\\AppData\\Local\\Floti Dev\\dev\\floti-data\\templates',
-  execPath: 'C:\\src\\my helm\\node_modules\\electron\\dist\\electron.exe',
-  appPath: 'C:\\src\\my helm\\packages\\desktop'
+  execPath: 'C:\\src\\my floti\\node_modules\\electron\\dist\\electron.exe',
+  appPath: 'C:\\src\\my floti\\packages\\desktop'
 }
 
 /** How the host Helm starts is run: told which Helm started it. */
@@ -160,9 +160,9 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
   describe('where it looks for floti', () => {
     it('looks beside a packaged build’s resources, and in the checkout’s debug build otherwise', () => {
       expect(flotiBinary({ ...WIN_PLACES, packaged: true }, { platform: 'win32', env: {} })).toBe(
-        'C:\\Program Files\\Helm\\resources\\floti.exe'
+        'C:\\Program Files\\Floti\\resources\\floti.exe'
       )
-      expect(flotiBinary(WIN_PLACES, { platform: 'win32', env: {} })).toBe('C:\\src\\my helm\\target\\debug\\floti.exe')
+      expect(flotiBinary(WIN_PLACES, { platform: 'win32', env: {} })).toBe('C:\\src\\my floti\\target\\debug\\floti.exe')
       expect(
         flotiBinary(WIN_PLACES, {
           platform: 'win32',
@@ -171,19 +171,19 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       ).toBe('D:\\cargo target\\debug\\floti.exe')
       const mac: HostPlaces = {
         ...WIN_PLACES,
-        resourcesPath: '/Applications/Helm.app/Contents/Resources',
-        repoRoot: '/src/helm'
+        resourcesPath: '/Applications/Floti.app/Contents/Resources',
+        repoRoot: '/src/floti'
       }
       expect(flotiBinary({ ...mac, packaged: true }, { platform: 'darwin', env: {} })).toBe(
-        '/Applications/Helm.app/Contents/Resources/floti'
+        '/Applications/Floti.app/Contents/Resources/floti'
       )
-      expect(flotiBinary(mac, { platform: 'linux', env: {} })).toBe('/src/helm/target/debug/floti')
+      expect(flotiBinary(mac, { platform: 'linux', env: {} })).toBe('/src/floti/target/debug/floti')
     })
 
     it('runs floti installed on its own once the installed app uses it, and the carried one until then', () => {
       const installed: HostPlaces = { ...WIN_PLACES, appMode: 'installed', packaged: true }
       const env = { LOCALAPPDATA: 'C:\\Users\\Me Too\\AppData\\Local' }
-      const carried = 'C:\\Program Files\\Helm\\resources\\floti.exe'
+      const carried = 'C:\\Program Files\\Floti\\resources\\floti.exe'
       expect(flotiBinary(installed, { platform: 'win32', env })).toBe(carried)
       expect(flotiBinary({ ...installed, useStandalone: true }, { platform: 'win32', env })).toBe(
         'C:\\Users\\Me Too\\AppData\\Local\\Programs\\Floti\\bin\\floti.exe'
@@ -373,7 +373,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     })
 
     it('leaves out what running from an AppImage put in the environment, since the host outlives the mount', () => {
-      const mount = '/tmp/.mount_HelmAb12'
+      const mount = '/tmp/.mount_FlotiAb12'
       const appRun = {
         APPIMAGE: '/home/me/Apps/Floti-3.0.0-linux-x64.AppImage',
         APPDIR: mount,
@@ -411,7 +411,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     const local = await startLocalHost(WIN_PLACES, world.deps())
     expect(world.programs()).toEqual([`bridge ${WIN_PLACES.dataDir}\\host-client`])
     const [bridge] = world.spawned
-    expect(bridge!.command).toBe('C:\\src\\my helm\\target\\debug\\floti.exe')
+    expect(bridge!.command).toBe('C:\\src\\my floti\\target\\debug\\floti.exe')
     expect(bridge!.options).toMatchObject({
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
@@ -509,20 +509,20 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
 
   it('tells the host the command that opens this Floti again: its program, and the app an unpackaged one runs', () => {
     expect(desktopArgs(WIN_PLACES)).toEqual(['--desktop', WIN_PLACES.execPath, '--desktop-arg', WIN_PLACES.appPath])
-    expect(desktopArgs({ ...WIN_PLACES, packaged: true, execPath: 'C:\\Program Files\\Helm\\Helm.exe' })).toEqual([
+    expect(desktopArgs({ ...WIN_PLACES, packaged: true, execPath: 'C:\\Program Files\\Floti\\Floti.exe' })).toEqual([
       '--desktop',
-      'C:\\Program Files\\Helm\\Helm.exe'
+      'C:\\Program Files\\Floti\\Floti.exe'
     ])
   })
 
   it('names a packaged Linux build by its AppImage, not by the mount it runs from', () => {
-    const WIN_EXE = 'C:\\Program Files\\Helm\\Helm.exe'
-    const mounted = '/tmp/.mount_HelmAb12/helm'
+    const WIN_EXE = 'C:\\Program Files\\Floti\\Floti.exe'
+    const mounted = '/tmp/.mount_FlotiAb12/floti'
     const appImage = '/home/me/Apps/Floti-3.0.0-linux-x64.AppImage'
     expect(desktopProgram(mounted, true, { platform: 'linux', env: { APPIMAGE: appImage } })).toBe(appImage)
     expect(desktopProgram(mounted, true, { platform: 'linux', env: {} })).toBe(mounted)
-    expect(desktopProgram('/src/helm/node_modules/electron/dist/electron', false, { platform: 'linux', env: { APPIMAGE: appImage } })).toBe(
-      '/src/helm/node_modules/electron/dist/electron'
+    expect(desktopProgram('/src/floti/node_modules/electron/dist/electron', false, { platform: 'linux', env: { APPIMAGE: appImage } })).toBe(
+      '/src/floti/node_modules/electron/dist/electron'
     )
     expect(desktopProgram(WIN_EXE, true, { platform: 'win32', env: { APPIMAGE: appImage } })).toBe(WIN_EXE)
   })
@@ -674,7 +674,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
   it('says the local host program could not be found, and runs nothing', async () => {
     const world = new World({}, false)
     expect(await refusal(startLocalHost(WIN_PLACES, world.deps()))).toBe(
-      `Floti could not find the local host program at C:\\src\\my helm\\target\\debug\\floti.exe${END}`
+      `Floti could not find the local host program at C:\\src\\my floti\\target\\debug\\floti.exe${END}`
     )
     expect(world.spawned).toEqual([])
   })
@@ -691,7 +691,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       ]
     })
     expect(await refusal(startLocalHost(WIN_PLACES, world.deps()))).toBe(
-      `Floti could not run the local host program at C:\\src\\my helm\\target\\debug\\floti.exe (EACCES)${END}`
+      `Floti could not run the local host program at C:\\src\\my floti\\target\\debug\\floti.exe (EACCES)${END}`
     )
   })
 

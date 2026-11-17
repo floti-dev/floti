@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import type { SessionRecord } from "@helm/core";
+import type { SessionRecord } from "@floti/core";
 import { bridgeFor } from "./bridge";
 import { readable } from "./errors";
 

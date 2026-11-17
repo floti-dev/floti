@@ -1,4 +1,4 @@
-import type { ProjectKind } from '@helm/core/types'
+import type { ProjectKind } from '@floti/core/types'
 import { FolderIcon, WorkspaceIcon, RepoIcon } from '../components/icons'
 
 /**
