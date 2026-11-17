@@ -352,6 +352,7 @@ import { sessionActivityIn } from "./useAgentWorktrees";
 import { useSetup } from "./useSetup";
 import { addHostActions, hostInstall } from "./hostActions";
 import { ShellWalkthrough, type FirstSessionRequest } from "./setup/ShellWalkthrough";
+import { useWalkthroughReveal } from "./setup/useWalkthroughReveal";
 import { useHostWorkspaces } from "./useHostWorkspaces";
 import { treeHostPhase } from "./treeHostPhase";
 import { HostProfiles } from "./HostProfiles";
@@ -2427,6 +2428,16 @@ export function App(): JSX.Element {
       placeSession(launched.session.id, false, undefined, LOCAL_HOST_KEY);
     },
     [open.focused, sessionState, placeSession],
+  );
+  // The workspace the walkthrough chose is brought into view in the tree as
+  // the shell opens on it, as a click on its tab would.
+  useWalkthroughReveal(
+    settings?.walkthrough?.workspace ?? null,
+    walkthroughShown,
+    (path) => {
+      revealCount.current += 1;
+      setTreeReveal({ seq: revealCount.current, kind: "project", path });
+    },
   );
   /** The walkthrough is over: the workspace it chose stays selected, as its page when no session took the place. */
   const finishWalkthrough = useCallback(
