@@ -13,9 +13,10 @@
 //! 1. Where the app is already installed ([`Installs::desktop`]) it says
 //!    where, and its version where that can be told, and changes nothing
 //!    but a launcher entry floti makes that is missing
-//!    ([`Installs::repair_launcher`]). Where something else is at the
-//!    install's place (a folder with no app in it, an interrupted copy) it
-//!    refuses in one line and leaves it as it is.
+//!    ([`Installs::repair_launcher`]), or an older floti's icon beside one
+//!    that is there ([`Installs::refresh_launcher`]). Where something else
+//!    is at the install's place (a folder with no app in it, an interrupted
+//!    copy) it refuses in one line and leaves it as it is.
 //! 2. In a session with no display ([`installs::missing_display`]) it
 //!    refuses in one sentence saying why.
 //! 3. It reads `Floti-<version>-desktop-SHA256SUMS` from the release that is floti's
@@ -287,14 +288,25 @@ impl Adder<'_> {
             // One line, after the repair, so it says whether anything changed;
             // a repair that fails is its own line, which says the app is there.
             return match self.installs.repair_launcher(&self.env, &app) {
-                Ok(repaired) => {
-                    let line = match repaired {
-                        Some(entry) => repaired_line(self.installs, &app, &entry),
-                        None => already_installed_line(self.installs, &app),
-                    };
-                    self.say(&line);
+                Ok(Some(entry)) => {
+                    self.say(&repaired_line(self.installs, &app, &entry));
                     Ok(Added::AlreadyInstalled(app))
                 }
+                Ok(None) => match self.installs.refresh_launcher(&self.env) {
+                    Ok(refreshed) => {
+                        let line = match refreshed {
+                            Some(icon) => refreshed_icon_line(self.installs, &app, &icon),
+                            None => already_installed_line(self.installs, &app),
+                        };
+                        self.say(&line);
+                        Ok(Added::AlreadyInstalled(app))
+                    }
+                    Err(err) => Err(AddError::Launcher {
+                        app: app.name,
+                        path: app.path.display().to_string(),
+                        reason: err.to_string(),
+                    }),
+                },
                 Err(err) => Err(AddError::Launcher {
                     app: app.name,
                     path: app.path.display().to_string(),
@@ -494,8 +506,19 @@ pub fn repaired_line(installs: &dyn Installs, app: &Desktop, entry: &Path) -> St
     )
 }
 
+/// What `floti add desktop` says of the installed `app` once it put this
+/// floti's icon, at `icon`, in place of an older floti's beside its menu
+/// entry.
+pub fn refreshed_icon_line(installs: &dyn Installs, app: &Desktop, icon: &Path) -> String {
+    format!(
+        "{} Its menu icon was an older version's, so floti put this version's at {}.",
+        installed_clause(installs, app),
+        icon.display()
+    )
+}
+
 /// Where the installed `app` is, and its version where `installs` can tell
-/// it, as the sentence both lines start with.
+/// it, as the sentence these lines start with.
 fn installed_clause(installs: &dyn Installs, app: &Desktop) -> String {
     let named = match installs.desktop_version(app) {
         Some(version) => format!("{} {version}", app.name),

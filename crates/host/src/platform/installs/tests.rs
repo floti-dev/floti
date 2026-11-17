@@ -964,6 +964,63 @@ fn linux_writes_a_missing_menu_entry_for_an_installed_app_image_and_leaves_one_t
     );
 }
 
+#[test]
+fn linux_puts_its_icon_in_place_of_an_older_one_beside_its_menu_entry() {
+    let dirs = TestDirs::new();
+    let user = env(&dirs.home, &[]);
+    let desktop = Desktop {
+        name: "Floti",
+        path: dirs.folder("apps").join("Floti.AppImage"),
+    };
+    let share = dirs.home.join(".local").join("share");
+    let icon = share
+        .join("icons")
+        .join("hicolor")
+        .join("256x256")
+        .join("apps")
+        .join("dev.floti.desktop.png");
+
+    // No entry of floti's: nothing is written, not even the icon.
+    assert_eq!(linux::Native.refresh_launcher(&user).unwrap(), None);
+    assert!(!icon.exists());
+
+    // An older floti's entry and icon: the icon becomes this floti's, and
+    // the entry is left as it is.
+    let entry = linux::Native
+        .add_launcher(&user, &desktop)
+        .unwrap()
+        .unwrap();
+    let ours = std::fs::read(&icon).unwrap();
+    std::fs::write(&entry, b"an older floti's entry").unwrap();
+    std::fs::write(&icon, b"an older floti's icon").unwrap();
+    assert_eq!(
+        linux::Native.refresh_launcher(&user).unwrap(),
+        Some(icon.clone())
+    );
+    assert_eq!(std::fs::read(&icon).unwrap(), ours);
+    assert_eq!(std::fs::read(&entry).unwrap(), b"an older floti's entry");
+
+    // This floti's icon already: nothing is written.
+    assert_eq!(linux::Native.refresh_launcher(&user).unwrap(), None);
+
+    // An entry whose icon is gone gets it back.
+    std::fs::remove_file(&icon).unwrap();
+    assert_eq!(
+        linux::Native.refresh_launcher(&user).unwrap(),
+        Some(icon.clone())
+    );
+    assert_eq!(std::fs::read(&icon).unwrap(), ours);
+    let left: Vec<_> = std::fs::read_dir(icon.parent().unwrap())
+        .unwrap()
+        .map(|found| found.unwrap().file_name())
+        .collect();
+    assert_eq!(left, vec![OsString::from("dev.floti.desktop.png")]);
+
+    // The installer and the app bundle carry the icon elsewhere.
+    assert_eq!(windows::Native.refresh_launcher(&user).unwrap(), None);
+    assert_eq!(macos::Native.refresh_launcher(&user).unwrap(), None);
+}
+
 // ---------------------------------------------------------------------------
 // Removing the app, for floti uninstall
 // ---------------------------------------------------------------------------

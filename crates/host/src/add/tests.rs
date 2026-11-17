@@ -38,6 +38,8 @@ struct FakeInstalls {
     launcher: std::result::Result<Option<PathBuf>, String>,
     /// What repairing the installed app's launcher entry answers.
     repair: std::result::Result<Option<PathBuf>, String>,
+    /// What refreshing the icon beside that entry answers.
+    refresh: std::result::Result<Option<PathBuf>, String>,
     install_fails: bool,
     /// The bytes of each file installed, in turn.
     installs: Mutex<Vec<Vec<u8>>>,
@@ -57,6 +59,7 @@ impl FakeInstalls {
             carried: None,
             launcher: Ok(None),
             repair: Ok(None),
+            refresh: Ok(None),
             install_fails: false,
             installs: Mutex::default(),
             launchers: Mutex::default(),
@@ -103,6 +106,10 @@ impl Installs for FakeInstalls {
 
     fn repair_launcher(&self, _env: &UserEnv, _desktop: &Desktop) -> Result<Option<PathBuf>> {
         self.repair.clone().map_err(crate::Error::Refused)
+    }
+
+    fn refresh_launcher(&self, _env: &UserEnv) -> Result<Option<PathBuf>> {
+        self.refresh.clone().map_err(crate::Error::Refused)
     }
 
     fn add_launcher(&self, _env: &UserEnv, _desktop: &Desktop) -> Result<Option<PathBuf>> {
@@ -682,6 +689,41 @@ fn an_installed_app_missing_its_menu_entry_gets_it_and_is_still_already_installe
         run.failure(),
         format!(
             "Floti is installed at {}, but its menu entry could not be written: No HOME or XDG_DATA_HOME names where menu entries go.",
+            world.installs.target.path.display()
+        )
+    );
+    assert_eq!(run.out, "", "the failure line alone says the app is there");
+}
+
+#[test]
+fn an_installed_app_with_an_older_menu_icon_gets_this_versions_and_is_still_already_installed() {
+    let mut world = World::new();
+    world.installs.installed = true;
+    let icon =
+        PathBuf::from("/home/me/.local/share/icons/hicolor/256x256/apps/dev.floti.desktop.png");
+    world.installs.refresh = Ok(Some(icon.clone()));
+    let run = world.run();
+    assert_eq!(
+        run.result.as_ref().unwrap(),
+        &Added::AlreadyInstalled(world.installs.target.clone())
+    );
+    assert_eq!(
+        run.out,
+        format!(
+            "Floti is already installed at {}; floti update keeps it up to date. Its menu icon was an older version's, so floti put this version's at {}.
+",
+            world.installs.target.path.display(),
+            icon.display()
+        )
+    );
+    assert!(world.network.asked().is_empty());
+
+    world.installs.refresh = Err("The icon folder is read-only.".into());
+    let run = world.run();
+    assert_eq!(
+        run.failure(),
+        format!(
+            "Floti is installed at {}, but its menu entry could not be written: The icon folder is read-only.",
             world.installs.target.path.display()
         )
     );

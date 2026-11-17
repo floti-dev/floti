@@ -210,6 +210,18 @@ pub trait Installs {
         Ok(None)
     }
 
+    /// Where floti's launcher entry ([`Installs::add_launcher`]) is there,
+    /// puts this floti's icon beside it in place of one that differs, as an
+    /// older floti's does, and answers the icon it wrote; nothing where the
+    /// entry is not there, the icon is this floti's already, or the OS's
+    /// install carries the icon (Windows, macOS). The icon is built into
+    /// floti, so a newer floti is what rewrites it: the host at start, and
+    /// `floti add desktop` over an installed app.
+    fn refresh_launcher(&self, env: &UserEnv) -> Result<Option<PathBuf>> {
+        let _ = env;
+        Ok(None)
+    }
+
     /// What removing the desktop app installed for the user `env` describes
     /// takes, or `None` when there is nothing of it to remove: on Windows
     /// its NSIS uninstaller, run silently in place, then what that leaves of

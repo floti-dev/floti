@@ -14,7 +14,10 @@
 //! (`~/.local/share` when it is unset or not absolute). The icon is the one
 //! the AppImage's own entry has (`build/icon.png`), built into floti, so
 //! nothing is read out of the image. Each is written beside and renamed into
-//! place. A session has a display when `DISPLAY` or `WAYLAND_DISPLAY` is set.
+//! place. Since an older floti wrote its own icon there, a newer one puts
+//! its icon in place of one that differs wherever the entry is there
+//! ([`Installs::refresh_launcher`]); the entry itself is left as it is. A
+//! session has a display when `DISPLAY` or `WAYLAND_DISPLAY` is set.
 
 use std::path::{Path, PathBuf};
 
@@ -230,6 +233,21 @@ impl Installs for Native {
             return Ok(None);
         }
         self.add_launcher(env, desktop)
+    }
+
+    fn refresh_launcher(&self, env: &UserEnv) -> Result<Option<PathBuf>> {
+        let Some(share) = Self::data_home(env) else {
+            return Ok(None);
+        };
+        if !Self::entry_path(&share, ENTRY_NAME).is_file() {
+            return Ok(None);
+        }
+        let icon = Self::icon_path(&share, ENTRY_NAME);
+        if std::fs::read(&icon).is_ok_and(|there| there == ICON) {
+            return Ok(None);
+        }
+        write_into_place(&icon, ICON)?;
+        Ok(Some(icon))
     }
 
     fn removal(&self, env: &UserEnv) -> Option<DesktopRemoval> {

@@ -409,5 +409,22 @@ pub fn sweep_asides(binary: &Path) {
     }
 }
 
+/// Puts this floti's icon in place of an older floti's beside the desktop
+/// app's menu entry floti wrote, for the user `env` describes
+/// ([`installs::Installs::refresh_launcher`]). An update is run by the
+/// floti it replaces, whose icon is the old one, so the new floti's host
+/// does this when it starts.
+pub fn refresh_launcher(env: &UserEnv) {
+    use installs::Installs as _;
+    match installs::Native.refresh_launcher(env) {
+        Ok(Some(icon)) => log_line!(
+            "floti host: put this version's icon in place of an older one at {}.",
+            icon.display()
+        ),
+        Ok(None) => {}
+        Err(err) => log_line!("floti host: could not put this version's icon in place: {err}"),
+    }
+}
+
 #[cfg(test)]
 mod tests;
