@@ -39,9 +39,7 @@ describe('Step 1, Welcome', () => {
     expect(progress()).toEqual(['done', 'todo', 'todo', 'todo', 'todo'])
     expect(screen.getByText('Be the captain of your fleet.')).toBeTruthy()
     expect(
-      screen.getByText(
-        'Run your coding agents side by side, on this PC or your other computers. A few steps and your first one is running.'
-      )
+      screen.getByText('Run your coding agents side by side, on this PC or your other computers. A few steps and you’re ready.')
     ).toBeTruthy()
     // Get started has the focus, so Enter moves on.
     expect(document.activeElement).toBe(button('Get started'))

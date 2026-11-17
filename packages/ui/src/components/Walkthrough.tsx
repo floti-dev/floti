@@ -259,8 +259,7 @@ export function WelcomeStep({ onSkipSetup, onGetStarted }: WelcomeStepProps): JS
     >
       <p className="mb-2 text-[15px] text-fg">Be the captain of your fleet.</p>
       <p className="text-[13px] text-fg-muted">
-        Run your coding agents side by side, on this PC or your other computers. A few steps and your first one is
-        running.
+        Run your coding agents side by side, on this PC or your other computers. A few steps and you’re ready.
       </p>
     </StepFrame>
   )
