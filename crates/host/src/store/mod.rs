@@ -1,7 +1,7 @@
 //! `floti.db` in Floti's data folder, which only the host opens.
 //!
 //! It keeps today's schema: the migrations are embedded from
-//! `packages/core/drizzle` and recorded in today's `__helm_migrations` table,
+//! `packages/core/drizzle` and recorded in today's `__floti_migrations` table,
 //! so a database today's app migrated opens with nothing applied again.
 //! It opens with today's pragmas (`packages/core/src/store/db.ts`).
 //!

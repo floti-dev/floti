@@ -15,7 +15,7 @@ use crate::Result;
 
 /// The table that records which migrations a database has, shared with
 /// today's app so a database it migrated opens with nothing applied again.
-pub const JOURNAL_TABLE: &str = "__helm_migrations";
+pub const JOURNAL_TABLE: &str = "__floti_migrations";
 
 /// The marker drizzle-kit puts between statements, instead of a bare `;`
 /// that a trigger body or a default expression may contain.
