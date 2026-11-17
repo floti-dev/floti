@@ -1,17 +1,17 @@
 import type { MaybeRefOrGetter, Ref } from 'vue'
-import type { HelmEvents, HelmTheme, SecretState, SettingValue } from './types.js'
+import type { FlotiEvents, FlotiTheme, SecretState, SettingValue } from './types.js'
 
 /** Calls `listener` on every `event` until the effect scope it was called in ends. */
-export function useHelmEvent<K extends keyof HelmEvents>(event: K, listener: (data: HelmEvents[K]) => void): void
+export function useFlotiEvent<K extends keyof FlotiEvents>(event: K, listener: (data: FlotiEvents[K]) => void): void
 
-/** Helm's theme, kept current. */
-export function useHelmTheme(): Readonly<Ref<HelmTheme>>
+/** Floti's theme, kept current. */
+export function useFlotiTheme(): Readonly<Ref<FlotiTheme>>
 
 /** Whether the surface is on screen. */
-export function useHelmVisible(): Readonly<Ref<boolean>>
+export function useFlotiVisible(): Readonly<Ref<boolean>>
 
 /** The plugin's settings, or null until they have been read. */
-export function useHelmSettings(): Readonly<Ref<Record<string, SettingValue> | null>>
+export function useFlotiSettings(): Readonly<Ref<Record<string, SettingValue> | null>>
 
 /**
  * Whether a declared secret is ready (null until read), and a function that

@@ -29,7 +29,7 @@ const PREVIEW: Record<PaneDropZone, string> = {
 
 /** The gutter, read off the custom property `applyShape` keeps on `<html>`. */
 function gutter(): number {
-  const value = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--helm-gap'))
+  const value = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--floti-gap'))
   return Number.isFinite(value) ? value : 0
 }
 

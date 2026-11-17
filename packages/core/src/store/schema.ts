@@ -811,7 +811,7 @@ export const appSettings = sqliteTable('app_settings', {
  * The plugin folders Helm loads, registered by path (Settings > Plugins).
  *
  * Only the folder and its switches. Everything a plugin *is* - its id, its
- * surfaces, what it may reach - is read from its `helm-plugin.json` at every
+ * surfaces, what it may reach - is read from its `floti-plugin.json` at every
  * start and every reload, so a plugin developed in place is never described by
  * a stale copy of its own manifest. The path is the key because it is what the
  * user chose; the id belongs to the folder's contents and can change under it.

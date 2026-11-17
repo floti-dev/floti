@@ -2,11 +2,11 @@ import type {
   ExecOptions,
   ExecResult,
   FlotiBridge,
-  HelmContext,
-  HelmError,
-  HelmErrorCode,
-  HelmEvents,
-  HelmTheme,
+  FlotiContext,
+  FlotiError,
+  FlotiErrorCode,
+  FlotiEvents,
+  FlotiTheme,
   PluginParams,
   PluginSession,
   SecretState,
@@ -22,14 +22,14 @@ import {
   HELLO,
   type ConnectMessage,
   type FrameMessage,
-  type HelmMessage,
+  type FlotiMessage,
   type KeyInit
 } from './wire'
 
 /**
  * `window.floti`, as every plugin page gets it.
  *
- * Served by the desktop under `/__helm/bridge.js` and injected at the top of
+ * Served by the desktop under `/__floti/bridge.js` and injected at the top of
  * the page's `<head>`, so it runs before any of the plugin's own code and the
  * plugin never carries a copy of it. Everything it does is ask the desktop
  * page framing it, over the port that page hands it (`wire.ts`); it holds no
@@ -94,10 +94,10 @@ export function installBridge(win: Window, bootText: string | null): FlotiBridge
       post({ t: 'call', id, method, args })
     })
 
-  const emit = <K extends keyof HelmEvents>(name: K, data: HelmEvents[K]): void => {
+  const emit = <K extends keyof FlotiEvents>(name: K, data: FlotiEvents[K]): void => {
     for (const listener of listeners.get(name) ?? []) {
       try {
-        ;(listener as (value: HelmEvents[K]) => void)(data)
+        ;(listener as (value: FlotiEvents[K]) => void)(data)
       } catch (error) {
         // One listener's bug is the plugin's, and must not stop the others.
         win.setTimeout(() => {
@@ -107,13 +107,13 @@ export function installBridge(win: Window, bootText: string | null): FlotiBridge
     }
   }
 
-  const receive = (message: HelmMessage): void => {
+  const receive = (message: FlotiMessage): void => {
     if (message.t === 'result') {
       const waiting = pending.get(message.id)
       if (waiting === undefined) return
       pending.delete(message.id)
       if (message.ok) waiting.resolve(message.value)
-      else waiting.reject(message.code === 'aborted' ? abortError(message.message) : helmError(message.code, message.message))
+      else waiting.reject(message.code === 'aborted' ? abortError(message.message) : flotiError(message.code, message.message))
       return
     }
     switch (message.name) {
@@ -121,7 +121,7 @@ export function installBridge(win: Window, bootText: string | null): FlotiBridge
         deliverChannel?.(message.data)
         return
       case 'theme':
-        theme = message.data as HelmTheme
+        theme = message.data as FlotiTheme
         applyTheme(doc, theme)
         emit('theme', theme)
         return
@@ -159,13 +159,13 @@ export function installBridge(win: Window, bootText: string | null): FlotiBridge
 
   win.addEventListener('message', (event: MessageEvent) => {
     // Only the frame's own parent hands out the port, and only once: a second
-    // CONNECT is a page Helm reloaded underneath, which starts a new bridge.
+    // CONNECT is a page Floti reloaded underneath, which starts a new bridge.
     if (port !== null || event.source !== win.parent || event.ports.length === 0) return
     const data = event.data as Partial<ConnectMessage> | null
     if (data?.type !== CONNECT) return
     const given = event.ports[0]!
     port = given
-    given.onmessage = (portEvent: MessageEvent) => receive(portEvent.data as HelmMessage)
+    given.onmessage = (portEvent: MessageEvent) => receive(portEvent.data as FlotiMessage)
     given.start()
     if (data.context !== undefined) context = data.context
     mac = data.mac === true
@@ -240,10 +240,10 @@ export function installBridge(win: Window, bootText: string | null): FlotiBridge
     },
 
     open(url: string): Promise<void> {
-      // Said here, where the mistake is made: Helm refuses it too.
+      // Said here, where the mistake is made: Floti refuses it too.
       if (navigator.userActivation?.isActive !== true) {
         return Promise.reject(
-          helmError('not-allowed', `floti.open needs a click or key press the user just made in the page: call it from the handler`)
+          flotiError('not-allowed', `floti.open needs a click or key press the user just made in the page: call it from the handler`)
         )
       }
       return call<void>('open', [url])
@@ -284,10 +284,10 @@ export function installBridge(win: Window, bootText: string | null): FlotiBridge
     sessions: {
       start(request: SessionStartRequest): Promise<SessionStartResult> {
         // Said here, where the mistake is made: a call from anything but the
-        // user's own click or key press in this page is refused by Helm too.
+        // user's own click or key press in this page is refused by Floti too.
         if (navigator.userActivation?.isActive !== true) {
           return Promise.reject(
-            helmError('not-allowed', `floti.sessions.start needs a click or key press the user just made in the page: call it from the handler`)
+            flotiError('not-allowed', `floti.sessions.start needs a click or key press the user just made in the page: call it from the handler`)
           )
         }
         return call<SessionStartResult>('sessions.start', [request])
@@ -300,7 +300,7 @@ export function installBridge(win: Window, bootText: string | null): FlotiBridge
         // Said where the mistake is made, rather than as a call that never
         // arrives: only the background module is running whenever a session
         // might call, so only it is ever handed one.
-        throw helmError('invalid', 'floti.tools.handle works in the background module only')
+        throw flotiError('invalid', 'floti.tools.handle works in the background module only')
       }
     },
 
@@ -339,9 +339,9 @@ function toResponse(answer: PluginFetchResponse): Response {
   return response
 }
 
-function helmError(code: HelmErrorCode, message: string): HelmError {
-  const error = new Error(message) as HelmError
-  error.name = 'HelmError'
+function flotiError(code: FlotiErrorCode, message: string): FlotiError {
+  const error = new Error(message) as FlotiError
+  error.name = 'FlotiError'
   error.code = code
   return error
 }
@@ -357,7 +357,7 @@ function abortError(message = 'The operation was aborted.'): DOMException {
  * the plugin's own computer.
  */
 interface Boot {
-  theme: HelmTheme | null
+  theme: FlotiTheme | null
   channels: 'host' | null
   onHostComputer: boolean
 }
@@ -366,7 +366,7 @@ function readBoot(text: string | null): Boot {
   const unsaid: Boot = { theme: null, channels: null, onHostComputer: true }
   if (text === null) return unsaid
   try {
-    const boot = JSON.parse(text) as { theme?: HelmTheme; channels?: unknown; onHostComputer?: unknown }
+    const boot = JSON.parse(text) as { theme?: FlotiTheme; channels?: unknown; onHostComputer?: unknown }
     return {
       theme: boot.theme ?? null,
       channels: boot.channels === 'host' ? 'host' : null,
@@ -517,33 +517,33 @@ function toWire(realm: typeof globalThis, value: unknown, path: Set<object>): un
   }
 }
 
-function readContext(win: Window): HelmContext {
+function readContext(win: Window): FlotiContext {
   const name = win.name
   if (name.startsWith(CONTEXT_PREFIX)) {
     try {
-      return JSON.parse(name.slice(CONTEXT_PREFIX.length)) as HelmContext
+      return JSON.parse(name.slice(CONTEXT_PREFIX.length)) as FlotiContext
     } catch {
-      // Overwritten by the page; Helm's CONNECT says it again.
+      // Overwritten by the page; Floti's CONNECT says it again.
     }
   }
   return { plugin: win.location.hostname, surface: 'tab', name: '', params: {} }
 }
 
-/** Only for a page loaded without its boot attribute, which Helm never serves. */
-function fallbackTheme(): HelmTheme {
+/** Only for a page loaded without its boot attribute, which Floti never serves. */
+function fallbackTheme(): FlotiTheme {
   return {
     kind: 'dark',
-    tokens: {} as HelmTheme['tokens'],
+    tokens: {} as FlotiTheme['tokens'],
     radius: 3,
     density: 'comfortable'
   }
 }
 
-/** The theme onto the page: tokens as `--helm-*`, shape, and the kind for `dark:` styles and form controls. */
-export function applyTheme(doc: Document, theme: HelmTheme): void {
+/** The theme onto the page: tokens as `--floti-*`, shape, and the kind for `dark:` styles and form controls. */
+export function applyTheme(doc: Document, theme: FlotiTheme): void {
   const root = doc.documentElement
-  for (const [token, value] of Object.entries(theme.tokens)) root.style.setProperty(`--helm-${token}`, value)
-  root.style.setProperty('--helm-radius', `${String(theme.radius)}px`)
+  for (const [token, value] of Object.entries(theme.tokens)) root.style.setProperty(`--floti-${token}`, value)
+  root.style.setProperty('--floti-radius', `${String(theme.radius)}px`)
   root.style.colorScheme = theme.kind
   root.dataset['density'] = theme.density
   root.dataset['theme'] = theme.kind

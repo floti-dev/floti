@@ -57,7 +57,7 @@ describe('parseColor', () => {
     'rgb(-1 2 3)',
     '#fff; } body { display: none',
     'rgb(1 2 3)) url(x',
-    'var(--helm-bg)',
+    'var(--floti-bg)',
     ''
   ])('refuses %j', (input) => {
     expect(parseColor(input)).toBeNull()

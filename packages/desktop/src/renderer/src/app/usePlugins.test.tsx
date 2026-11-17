@@ -40,7 +40,7 @@ const plugin = (overrides: Partial<PluginInfo> = {}): PluginInfo => ({
 const on = plugin()
 const off = plugin({ path: 'C:\\plugins\\off', id: 'off', name: 'Off', enabled: false })
 const broken = plugin({ path: 'C:\\plugins\\broken', id: 'broken', name: 'Broken', error: 'apiVersion 2 is not supported' })
-const unnamed = plugin({ path: 'C:\\plugins\\empty', id: null, name: 'empty', error: 'no helm-plugin.json' })
+const unnamed = plugin({ path: 'C:\\plugins\\empty', id: null, name: 'empty', error: 'no floti-plugin.json' })
 
 afterEach(() => {
   bridge.reset()

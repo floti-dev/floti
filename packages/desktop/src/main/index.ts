@@ -37,10 +37,10 @@ import { PLUGIN_SCHEME } from '../shared/ipc'
 import { createPluginHost } from './plugins/host'
 import { registerHostPluginProtocol } from './plugins/protocol'
 import { guardPluginFrames, installPluginPermissions } from './plugins/guards'
-// The plugin runtime: served to every plugin page under `/__helm/`, so no
+// The plugin runtime: served to every plugin page under `/__floti/`, so no
 // plugin carries a copy of its own (see `main/plugins/protocol.ts`).
 import pluginBridge from '../renderer/plugin-runtime/bridge-entry.ts?script'
-import pluginStylesheet from '../renderer/plugin-runtime/helm.css?raw'
+import pluginStylesheet from '../renderer/plugin-runtime/floti.css?raw'
 import {
   browserWillNavigate,
   browserWindowOpen,

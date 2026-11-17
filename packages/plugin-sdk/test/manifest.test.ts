@@ -15,8 +15,8 @@ import {
 import { MINIMAL, SAMPLE, TEMPLATE } from './fixtures'
 
 /**
- * The validator Helm runs on every plugin it loads and `helm-plugin validate`
- * runs on every plugin somebody builds. What it accepts is what Helm will
+ * The validator Floti runs on every plugin it loads and `floti-plugin validate`
+ * runs on every plugin somebody builds. What it accepts is what Floti will
  * load; what it says when it refuses is what the author reads.
  */
 
@@ -43,7 +43,7 @@ describe('validateManifest - plugins that ship', () => {
     expect(manifest.network.map((pattern) => pattern.origin)).toEqual(['http://127.0.0.1:4790'])
   })
 
-  it('accepts the template `helm-plugin create` writes, with nothing to warn about', () => {
+  it('accepts the template `floti-plugin create` writes, with nothing to warn about', () => {
     const result = validateManifest(TEMPLATE)
     expect(result.warnings).toEqual([])
     const manifest = accepted(result)
@@ -196,7 +196,7 @@ describe('validateManifest - apiVersion', () => {
 
   it('refuses anything that is not an object', () => {
     for (const value of [null, [], 'text', 1]) {
-      expect(validateManifest(value)).toMatchObject({ ok: false, errors: ['helm-plugin.json must be a JSON object'] })
+      expect(validateManifest(value)).toMatchObject({ ok: false, errors: ['floti-plugin.json must be a JSON object'] })
     }
   })
 })
@@ -227,7 +227,7 @@ describe('validateManifest - every problem, in one pass', () => {
     ['an icon that is not svg or png', { icon: 'icon.gif' }, 'icon must be a .svg or .png file'],
     ['a page outside the folder', { tabs: { a: { title: 'A', entry: '../a.html' } } }, 'must be a relative path that stays inside'],
     ['a page by absolute path', { tabs: { a: { title: 'A', entry: 'C:\\a.html' } } }, 'must be a relative path that stays inside'],
-    ['a page under Floti runtime prefix', { tabs: { a: { title: 'A', entry: './__helm/a.html' } } }, 'may not be under __helm/'],
+    ['a page under Floti runtime prefix', { tabs: { a: { title: 'A', entry: './__floti/a.html' } } }, 'may not be under __floti/'],
     ['a page that is not html', { tabs: { a: { title: 'A', entry: 'a.js' } } }, 'must be a .html file'],
     ['a surface key that is not a name', { panels: { Main: { title: 'M', entry: 'm.html' } } }, 'panels key "Main"'],
     [
@@ -260,7 +260,7 @@ describe('validateManifest - every problem, in one pass', () => {
       { background: 'bg.mjs', commands: [{ id: 'go', title: 'Go' }, { id: 'go', title: 'Again' }] },
       'commands[1].id "go" is used twice'
     ],
-    ['a setting type Helm does not draw', { settings: [{ key: 'a', label: 'A', type: 'colour' }] }, 'type must be one of text'],
+    ['a setting type Floti does not draw', { settings: [{ key: 'a', label: 'A', type: 'colour' }] }, 'type must be one of text'],
     ['a setting key used twice', { settings: [{ key: 'a', label: 'A', type: 'toggle' }, { key: 'a', label: 'B', type: 'toggle' }] }, 'is used twice'],
     ['a select with no options', { settings: [{ key: 'a', label: 'A', type: 'select', options: [] }] }, 'options must be a non-empty array'],
     [

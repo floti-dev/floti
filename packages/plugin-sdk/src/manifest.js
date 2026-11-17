@@ -1,8 +1,8 @@
 // @ts-check
 /**
- * What `helm-plugin.json` may say, as code.
+ * What `floti-plugin.json` may say, as code.
  *
- * One validator, run by Helm when it loads a plugin and by `helm-plugin
+ * One validator, run by Floti when it loads a plugin and by `floti-plugin
  * validate` when somebody builds one, so the two cannot disagree about whether
  * a manifest is good. It is plain JavaScript on purpose: the command runs
  * straight from this folder, linked or installed, with nothing to build first.
@@ -12,12 +12,12 @@
  * folder. Whether those files exist is the caller's question, and
  * `manifestFiles` lists them for it.
  *
- * `helm-plugin.schema.json` says the same things for an editor's benefit, and a
+ * `floti-plugin.schema.json` says the same things for an editor's benefit, and a
  * test holds the two to each other.
  */
 
 /**
- * The plugin API versions this SDK speaks, and what `helm-plugin validate`
+ * The plugin API versions this SDK speaks, and what `floti-plugin validate`
  * accepts: 2, whose pages get `window.floti` and whose background is a module
  * the host runs in an isolate of its own.
  */
@@ -108,8 +108,8 @@ export function agentToolName(id, tool) {
 /** Past this an icon is not an icon. */
 export const ICON_MAX_BYTES = 64 * 1024
 
-/** The path prefix Helm serves its own runtime under on every plugin's origin. */
-export const RESERVED_PREFIX = '__helm/'
+/** The path prefix Floti serves its own runtime under on every plugin's origin. */
+export const RESERVED_PREFIX = '__floti/'
 
 /** @type {readonly import('./types').PanelActionIcon[]} */
 export const PANEL_ACTION_ICONS = Object.freeze([
@@ -267,8 +267,8 @@ export function normalizeEntry(path) {
 }
 
 /**
- * Every file the manifest names, for the caller to check exists - Helm when it
- * loads the plugin, `helm-plugin validate` when it is built.
+ * Every file the manifest names, for the caller to check exists - Floti when it
+ * loads the plugin, `floti-plugin validate` when it is built.
  *
  * @param {import('./manifest').NormalizedManifest} manifest
  * @returns {Array<{ field: string, path: string }>}
@@ -293,7 +293,7 @@ export function manifestFiles(manifest) {
  * refused. Left out, it is `SUPPORTED_API_VERSIONS`. A version this SDK does
  * not speak is refused whatever the host names.
  *
- * @param {unknown} value the parsed `helm-plugin.json`
+ * @param {unknown} value the parsed `floti-plugin.json`
  * @param {import('./manifest').ValidateOptions} [options]
  * @returns {import('./manifest').ManifestResult}
  */
@@ -308,7 +308,7 @@ export function validateManifest(value, options = {}) {
     errors.push(message)
   }
 
-  if (!isRecord(value)) return { ok: false, errors: ['helm-plugin.json must be a JSON object'], warnings }
+  if (!isRecord(value)) return { ok: false, errors: ['floti-plugin.json must be a JSON object'], warnings }
 
   for (const key of Object.keys(value)) {
     if (!KNOWN_FIELDS.has(key)) warnings.push(`"${key}" is not a manifest field and is ignored`)
@@ -424,7 +424,7 @@ export function validateManifest(value, options = {}) {
     warnings.push('pageStrip has no tabs to hold: it gathers the tabs the manifest declares, and this one declares none')
   }
 
-  // What it may do with the Claude Code sessions Helm hosts: ask to start one
+  // What it may do with the Claude Code sessions Floti hosts: ask to start one
   // (shown to the user, who starts it or not), and see the list of them. It
   // never types into one or reads its conversation.
   const sessions = { start: false, list: false }
@@ -589,7 +589,7 @@ export function validateManifest(value, options = {}) {
     }
   }
 
-  // --- agent: what the Claude Code sessions Helm starts are offered
+  // --- agent: what the Claude Code sessions Floti starts are offered
   /** @type {import('./manifest').NormalizedAgent | null} */
   let agent = null
   const rawAgent = value['agent']
@@ -872,7 +872,7 @@ function readTools(value, id, fail) {
 
 /**
  * A tool's arguments, as JSON Schema. Only its shape is checked - an object
- * whose `type` is `"object"`, which MCP requires - and its size: Helm passes
+ * whose `type` is `"object"`, which MCP requires - and its size: Floti passes
  * it to the session as written and does not hold arguments to it.
  *
  * @param {unknown} value

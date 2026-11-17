@@ -23,7 +23,7 @@ import { contrastRatio, formatColor, mix, parseColor, withAlpha, type Rgba } fro
 
 /**
  * Every colour a theme sets, by the name it has in a theme file and - with a
- * `--helm-` prefix - as a CSS custom property. Order is the order a duplicated
+ * `--floti-` prefix - as a CSS custom property. Order is the order a duplicated
  * theme file lists them in: grounds, edges, text, accent, status, palette.
  */
 export const THEME_TOKENS = [
@@ -79,14 +79,14 @@ export const THEME_KINDS: readonly ThemeKind[] = ['dark', 'light']
 export const PALETTE_HUES = ['blue', 'teal', 'green', 'amber', 'orange', 'red', 'pink', 'violet'] as const
 export type PaletteHue = (typeof PALETTE_HUES)[number]
 
-/** A palette hue's token: `blue` is `hue-blue`, painted as `--helm-hue-blue`. */
+/** A palette hue's token: `blue` is `hue-blue`, painted as `--floti-hue-blue`. */
 export function hueToken(hue: PaletteHue): `hue-${PaletteHue}` {
   return `hue-${hue}`
 }
 
 /**
  * How much of a hue a palette tag's tint is, over the island: the weight the
- * built-ins give their accent tint, per kind. The primitives (`helm.css`) and
+ * built-ins give their accent tint, per kind. The primitives (`floti.css`) and
  * Helm's own tags (`ui/lib/hues.ts`) mix at these, and the floors are measured
  * on the result.
  */

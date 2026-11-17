@@ -21,7 +21,7 @@ use crate::plugins::call::{CallContext, PluginCallError};
 use crate::plugins::manifest::ServiceSpec;
 
 /// The header a service is told to require. See `ServiceSpec` in the SDK.
-pub const SERVICE_TOKEN_HEADER: &str = "Helm-Service-Token";
+pub const SERVICE_TOKEN_HEADER: &str = "Floti-Service-Token";
 
 /// A running service: its loopback origin and the token for this run.
 #[derive(Clone, PartialEq, Eq)]

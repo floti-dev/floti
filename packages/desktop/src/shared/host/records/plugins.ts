@@ -73,9 +73,9 @@ export function deliveryFromHost(delivery: P.PluginDelivery): PluginDelivery {
   return { plugin: delivery.plugin, event: delivery.event, data: delivery.data, to: delivery.to }
 }
 
-/** The host's own log lines are what Helm's log calls its own. */
+/** The host's own log lines are what Floti's log calls its own. */
 export function logFromHost(lines: readonly P.PluginLogLine[]): PluginLogLine[] {
-  return lines.map((line) => ({ at: line.at, stream: line.stream === 'host' ? 'helm' : line.stream, text: line.text }))
+  return lines.map((line) => ({ at: line.at, stream: line.stream === 'host' ? 'floti' : line.stream, text: line.text }))
 }
 
 function mapValues<T, U>(record: Record<string, T>, map: (value: T) => U): Record<string, U> {

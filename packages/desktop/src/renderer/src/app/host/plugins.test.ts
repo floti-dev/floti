@@ -210,7 +210,7 @@ describe('the window’s plugins over its own connection', () => {
 
     expect((await ask(adapter, 'plugins:setEnabled', { path: DIR, enabled: false }))[0]?.enabled).toBe(false)
     expect(connection.payloads('plugins:setEnabled')).toEqual([{ path: DIR, enabled: false }])
-    expect((await ask(adapter, 'plugins:log', { path: DIR })).map((line) => line.stream)).toEqual(['helm', 'out'])
+    expect((await ask(adapter, 'plugins:log', { path: DIR })).map((line) => line.stream)).toEqual(['floti', 'out'])
     const input = { key: 'TOKEN', value: 'x', hosts: [], plugins: ['sample'] }
     expect((await ask(adapter, 'secrets:save', input)).secrets).toHaveLength(1)
     expect(connection.payloads('secrets:save')).toEqual([input])

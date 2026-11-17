@@ -1,4 +1,4 @@
-import type { HelmErrorCode } from '@floti-dev/plugin-sdk'
+import type { FlotiErrorCode } from '@floti-dev/plugin-sdk'
 
 /**
  * A bridge call that failed for a reason the plugin should be told.
@@ -9,9 +9,9 @@ import type { HelmErrorCode } from '@floti-dev/plugin-sdk'
  * tell "not declared" from "the network was down".
  */
 export class PluginCallError extends Error {
-  readonly code: HelmErrorCode
+  readonly code: FlotiErrorCode
 
-  constructor(code: HelmErrorCode, message: string) {
+  constructor(code: FlotiErrorCode, message: string) {
     super(message)
     this.code = code
     this.name = 'PluginCallError'
@@ -19,7 +19,7 @@ export class PluginCallError extends Error {
 }
 
 /** The answer to a bridge call, as it crosses IPC. */
-export type CallOutcome = { ok: true; value: unknown } | { ok: false; code: HelmErrorCode; message: string }
+export type CallOutcome = { ok: true; value: unknown } | { ok: false; code: FlotiErrorCode; message: string }
 
 /** Anything thrown under a call, as the outcome the page gets. A fault that is Helm's own is said as one. */
 export function failure(error: unknown): CallOutcome {

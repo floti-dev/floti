@@ -6,7 +6,7 @@ import { SAMPLE, SAMPLE_DIR } from './fixtures'
 
 /**
  * The sample plugin (`examples/sample-plugin`) is the worked example authors
- * copy and the plugin Helm's end-to-end tests drive, so it is a version 2
+ * copy and the plugin Floti's end-to-end tests drive, so it is a version 2
  * plugin: its background a module the host runs, its pages and that module
  * calling `floti`. Its build is checked by `pnpm --filter @helm/sample-plugin
  * build`; these read what the build starts from.

@@ -161,7 +161,7 @@ export function ProjectColumn({
         {/* A 3px grip that goes accent on hover (DESIGN.md "Split view"). A
             full-width hairline down the middle of the gutter read as a doubled
             border rather than as something to hold. */}
-        <span className="h-[min(3px,var(--helm-gap))] w-10 rounded-full bg-border-strong transition-colors group-hover:bg-accent" />
+        <span className="h-[min(3px,var(--floti-gap))] w-10 rounded-full bg-border-strong transition-colors group-hover:bg-accent" />
       </div>
       {/* Keyed by host and path: this is one project's shell, and handing the same
           component a different project re-mounted someone else's terminal

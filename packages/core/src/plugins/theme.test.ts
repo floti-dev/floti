@@ -32,7 +32,7 @@ describe("the plugin SDK's authoring guide", () => {
   })
 
   it('names the attribute the primitives take a palette hue by', () => {
-    for (const primitive of ['helm-tag', 'helm-chip', 'helm-dot']) {
+    for (const primitive of ['floti-tag', 'floti-chip', 'floti-dot']) {
       const row = section.split('\n').find((line) => line.startsWith(`| \`${primitive}\``))
       expect(row, primitive).toContain('data-hue')
     }

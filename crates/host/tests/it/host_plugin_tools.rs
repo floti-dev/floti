@@ -57,17 +57,17 @@ import { watchOwner } from './common.mjs'
 
 const here = process.cwd()
 watchOwner(here, () => process.exit(0))
-const token = process.env.HELM_SERVICE_TOKEN
+const token = process.env.FLOTI_SERVICE_TOKEN
 createServer((request, response) => {
-  if (request.headers['helm-service-token'] !== token) {
+  if (request.headers['floti-service-token'] !== token) {
     response.writeHead(403)
     response.end('wrong token')
     return
   }
   appendFileSync('asked.txt', `${request.url}\n`)
   response.writeHead(200, { 'content-type': 'application/json' })
-  response.end(JSON.stringify({ pid: process.pid, plugin: process.env.HELM_PLUGIN_ID, url: request.url }))
-}).listen(Number(process.env.HELM_SERVICE_PORT), '127.0.0.1')
+  response.end(JSON.stringify({ pid: process.pid, plugin: process.env.FLOTI_PLUGIN_ID, url: request.url }))
+}).listen(Number(process.env.FLOTI_SERVICE_PORT), '127.0.0.1')
 ";
 
 /// The module's tools: `whoami` answers with what it was asked and the

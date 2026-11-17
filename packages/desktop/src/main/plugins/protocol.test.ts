@@ -8,13 +8,13 @@ const { protocol } = await import('electron')
 
 /**
  * `floti-plugin://<id>/`: a plugin's page files served under its own origin
- * from the host that keeps it, every response under the plugin CSP, and Helm's
- * runtime injected at the top of every page and served under `/__helm/`.
+ * from the host that keeps it, every response under the plugin CSP, and Floti's
+ * runtime injected at the top of every page and served under `/__floti/`.
  */
 
 const runtime: PluginRuntime = {
   bridge: () => 'window.__bridge = 1',
-  css: () => ':root { --helm: 1 }',
+  css: () => ':root { --floti: 1 }',
   boot: (plugin) => JSON.stringify({ theme: { kind: 'dark' }, plugin, quote: "it's <b>&" })
 }
 
@@ -23,12 +23,12 @@ describe('injectRuntime', () => {
 
   it('puts both tags straight after <head>, with any attributes it has', () => {
     const html = injectRuntime('<html><HEAD lang="en"><title>t</title></HEAD></html>', boot)
-    expect(html).toMatch(/^<html><HEAD lang="en"><link rel="stylesheet" href="\/__helm\/helm\.css"><script src="\/__helm\/bridge\.js"/)
+    expect(html).toMatch(/^<html><HEAD lang="en"><link rel="stylesheet" href="\/__floti\/floti\.css"><script src="\/__floti\/bridge\.js"/)
   })
 
   it('makes a head for a page with none', () => {
     expect(injectRuntime('<html><body>x</body></html>', '{}')).toBe(
-      `<html><head><link rel="stylesheet" href="/__helm/helm.css"><script src="/__helm/bridge.js" data-helm-boot='{}'></script></head><body>x</body></html>`
+      `<html><head><link rel="stylesheet" href="/__floti/floti.css"><script src="/__floti/bridge.js" data-floti-boot='{}'></script></head><body>x</body></html>`
     )
   })
 
@@ -39,7 +39,7 @@ describe('injectRuntime', () => {
 
   it('escapes the boot JSON so it cannot close its attribute or open a tag', () => {
     const html = injectRuntime('<head></head>', boot)
-    const attribute = /data-helm-boot='([^']*)'/.exec(html)?.[1]
+    const attribute = /data-floti-boot='([^']*)'/.exec(html)?.[1]
     expect(attribute).toBe('{"a":"it&#39;s &lt;b> &amp; co"}')
     // What the browser hands the bridge, once it has decoded the attribute.
     const decoded = attribute!.replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&amp;/g, '&')
@@ -79,8 +79,8 @@ describe('servePluginRequestFrom: pages from the local host’s files', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
     const html = await response.text()
-    expect(html.indexOf('<head>')).toBeLessThan(html.indexOf('/__helm/helm.css'))
-    expect(html).toContain('<script src="/__helm/bridge.js" data-helm-boot=')
+    expect(html.indexOf('<head>')).toBeLessThan(html.indexOf('/__floti/floti.css'))
+    expect(html).toContain('<script src="/__floti/bridge.js" data-floti-boot=')
 
     const js = await servePluginRequestFrom('floti-plugin://sample/dist/assets/app.js?v=2', source, runtime)
     expect(js.headers.get('content-security-policy')).toBe(PLUGIN_CSP)
@@ -88,7 +88,7 @@ describe('servePluginRequestFrom: pages from the local host’s files', () => {
   })
 
   const bootOf = (html: string): unknown => {
-    const attribute = /data-helm-boot='([^']*)'/.exec(html)?.[1] ?? ''
+    const attribute = /data-floti-boot='([^']*)'/.exec(html)?.[1] ?? ''
     return JSON.parse(attribute.replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&amp;/g, '&'))
   }
 
@@ -110,10 +110,10 @@ describe('servePluginRequestFrom: pages from the local host’s files', () => {
 
   it('serves the runtime only on the origin of a plugin the host has on', async () => {
     const source = host()
-    const bridge = await servePluginRequestFrom('floti-plugin://sample/__helm/bridge.js', source, runtime)
+    const bridge = await servePluginRequestFrom('floti-plugin://sample/__floti/bridge.js', source, runtime)
     expect(await bridge.text()).toBe('window.__bridge = 1')
     expect(bridge.headers.get('content-security-policy')).toBe(PLUGIN_CSP)
-    expect((await servePluginRequestFrom('floti-plugin://other/__helm/bridge.js', source, runtime)).status).toBe(404)
+    expect((await servePluginRequestFrom('floti-plugin://other/__floti/bridge.js', source, runtime)).status).toBe(404)
     expect(source.asked).toEqual([])
   })
 
@@ -135,7 +135,7 @@ describe('servePluginRequestFrom: pages from the local host’s files', () => {
     const page = await servePluginRequestFrom('floti-plugin://sample/dist/main%20page.html', source, runtime)
     expect(page.status).toBe(503)
     expect(await page.text()).toBe(sentence)
-    expect((await servePluginRequestFrom('floti-plugin://sample/__helm/bridge.js', source, runtime)).status).toBe(503)
+    expect((await servePluginRequestFrom('floti-plugin://sample/__floti/bridge.js', source, runtime)).status).toBe(503)
   })
 
   it('serves no other host’s origin from the local host alone', async () => {
@@ -163,7 +163,7 @@ describe('servePluginRequestFrom: pages from the local host’s files', () => {
     expect(theirs.asked).toEqual(['sample:dist/main page.html'])
 
     expect((await servePluginRequestFrom('floti-plugin://sample.lab/dist/main%20page.html', sources, runtime)).status).toBe(404)
-    expect((await servePluginRequestFrom('floti-plugin://sample.lab/__helm/bridge.js', sources, runtime)).status).toBe(404)
+    expect((await servePluginRequestFrom('floti-plugin://sample.lab/__floti/bridge.js', sources, runtime)).status).toBe(404)
   })
 })
 
@@ -180,7 +180,7 @@ describe('registerHostPluginProtocol', () => {
     const handler = handle.mock.calls[0]![1] as (request: Request) => Promise<Response>
     const response = await handler(new Request('floti-plugin://sample/p.html'))
     expect(response.status).toBe(200)
-    expect(await response.text()).toContain('<script src="/__helm/bridge.js" data-helm-boot=')
+    expect(await response.text()).toContain('<script src="/__floti/bridge.js" data-floti-boot=')
     handle.mockRestore()
   })
 })

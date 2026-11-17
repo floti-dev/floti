@@ -5,10 +5,10 @@ import { fileURLToPath } from 'node:url'
 /**
  * The API the sample plugin reads: a list of items behind a bearer token.
  *
- * Helm's end-to-end tests start it on a free port and point a copy of the
+ * Floti's end-to-end tests start it on a free port and point a copy of the
  * plugin at it; `pnpm serve` starts it on 4790, the origin the manifest names,
  * for trying the plugin by hand. Every request is recorded, headers included,
- * so a test can see exactly what Helm sent - which is how it proves a secret
+ * so a test can see exactly what Floti sent - which is how it proves a secret
  * went where it was allowed and nowhere else.
  */
 
@@ -59,7 +59,7 @@ export async function startSampleServer({ port = 0, host = '127.0.0.1', token })
       res.end()
       return
     }
-    // What a page sent, given back: for the tests of what Helm put in it.
+    // What a page sent, given back: for the tests of what Floti put in it.
     if (url.pathname === '/echo') {
       let body = ''
       req.setEncoding('utf8')

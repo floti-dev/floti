@@ -331,7 +331,7 @@ async fn a_folder_with_no_manifest_is_refused_with_a_sentence_and_not_registered
         refused.error.as_deref(),
         Some(
             format!(
-                "There is no helm-plugin.json in {}. Choose the folder that holds the plugin's manifest.",
+                "There is no floti-plugin.json in {}. Choose the folder that holds the plugin's manifest.",
                 text(&empty)
             )
             .as_str()
@@ -389,7 +389,7 @@ async fn a_wrong_manifest_is_registered_and_listed_with_what_is_wrong_and_runs_n
 
     let error = listed[0].error.as_deref().unwrap();
     assert!(
-        error.starts_with("helm-plugin.json is not valid JSON: "),
+        error.starts_with("floti-plugin.json is not valid JSON: "),
         "{error}"
     );
     assert_eq!(
@@ -639,11 +639,11 @@ import { createServer } from 'node:http'
 import { watchOwner } from './common.mjs'
 
 watchOwner(process.cwd(), () => process.exit(0))
-writeFileSync('token.txt', process.env.HELM_SERVICE_TOKEN)
+writeFileSync('token.txt', process.env.FLOTI_SERVICE_TOKEN)
 console.log('the service is up')
-console.error(`my token is ${process.env.HELM_SERVICE_TOKEN}`)
+console.error(`my token is ${process.env.FLOTI_SERVICE_TOKEN}`)
 createServer((request, response) => response.end('ok'))
-  .listen(Number(process.env.HELM_SERVICE_PORT), '127.0.0.1')
+  .listen(Number(process.env.FLOTI_SERVICE_PORT), '127.0.0.1')
 ";
 
 #[tokio::test(flavor = "multi_thread")]

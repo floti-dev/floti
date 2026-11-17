@@ -36,7 +36,7 @@ packages/
 ├── core/     # what clients share: the host's answer shapes (types.ts), helm.db and its copy into the host (store), layout, themes
 ├── ui/       # React components
 ├── desktop/  # Electron main, preload and renderer
-└── plugin-sdk/ # manifest validator, bridge types, helm-plugin CLI, authoring guide
+└── plugin-sdk/ # manifest validator, bridge types, floti-plugin CLI, authoring guide
 examples/sample-plugin/  # every plugin surface; the plugin the E2E tests drive
 crates/
 ├── floti-protocol/  # the host-client protocol; generates JSON Schema and TypeScript into generated/

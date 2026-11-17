@@ -1,17 +1,17 @@
 // @ts-check
 /**
- * A plugin folder checked the way Helm checks it when it loads one: the
+ * A plugin folder checked the way Floti checks it when it loads one: the
  * manifest read and validated, every file it names found inside the folder
  * (links followed, so a junction cannot reach outside it), and the icon's
- * size. What `helm-plugin validate` runs.
+ * size. What `floti-plugin validate` runs.
  *
- * Node only: it reads the disk. The validator it calls is the one Helm runs.
+ * Node only: it reads the disk. The validator it calls is the one Floti runs.
  */
 import { readFileSync, realpathSync, statSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { ICON_MAX_BYTES, manifestFiles, validateManifest } from './manifest.js'
 
-export const MANIFEST_FILE = 'helm-plugin.json'
+export const MANIFEST_FILE = 'floti-plugin.json'
 
 /** A manifest is a page of JSON. Past this it is something else. */
 export const MANIFEST_MAX_BYTES = 256 * 1024

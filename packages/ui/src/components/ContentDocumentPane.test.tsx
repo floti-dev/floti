@@ -208,7 +208,7 @@ describe('ContentDocumentPane: a note', () => {
   it('edits in the shared editor, with its mirror and highlight layers under the text', async () => {
     render(<ContentDocumentPane {...paneProps(await documentOf('notes/alpha.md'), { mode: 'edit' })} />)
 
-    const editor = screen.getByRole('textbox', { name: 'Edit notes/alpha.md' }).closest('.helm-editor')
+    const editor = screen.getByRole('textbox', { name: 'Edit notes/alpha.md' }).closest('.floti-editor')
     expect(editor?.getAttribute('data-editor-surface')).toBe('content')
     expect(editor?.querySelector('[data-editor-underlay]')?.textContent).toBe(NOTE)
     expect(editor?.querySelector('[data-editor-highlight]')).not.toBeNull()

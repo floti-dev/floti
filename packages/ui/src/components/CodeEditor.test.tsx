@@ -89,7 +89,7 @@ describe('CodeEditor: the text', () => {
   it('paints each line of the tokeniser’s answer with both themes’ colours', async () => {
     const { container } = render(<Editor initial={RECORDED_SOURCE} onHighlight={realHighlight} />)
 
-    await vi.waitFor(() => expect(container.querySelector('.helm-editor')?.getAttribute('data-editor-coloured')).toBe('true'), { timeout: PATIENCE })
+    await vi.waitFor(() => expect(container.querySelector('.floti-editor')?.getAttribute('data-editor-coloured')).toBe('true'), { timeout: PATIENCE })
     const lines = [...layer(container, 'highlight').querySelectorAll<HTMLElement>('.line')]
     expect(lines.map((line) => line.textContent)).toEqual(['{ "a": 1 }', '{ "b": true }', ''])
     const tokens = [...lines[0]!.querySelectorAll<HTMLElement>('span[style]')]
@@ -117,10 +117,10 @@ describe('CodeEditor: the text', () => {
     box().scrollTop = 120
     box().scrollLeft = 30
     fireEvent.scroll(box())
-    expect((container.querySelector('.helm-editor-layers') as HTMLElement).style.transform).toBe(
+    expect((container.querySelector('.floti-editor-layers') as HTMLElement).style.transform).toBe(
       'translate(-30px, -120px)'
     )
-    expect((container.querySelector('.helm-editor-gutter-rows') as HTMLElement).style.transform).toBe(
+    expect((container.querySelector('.floti-editor-gutter-rows') as HTMLElement).style.transform).toBe(
       'translateY(-120px)'
     )
   })
@@ -179,7 +179,7 @@ describe('CodeEditor: keys', () => {
     press(1, 'Enter')
     press(0, 'Tab')
     expect(editing.calls.map((call) => call.command)).toEqual(['insertText', 'insertText'])
-    expect(container.querySelector('.helm-editor')?.getAttribute('data-editor-direct-writes')).toBe('0')
+    expect(container.querySelector('.floti-editor')?.getAttribute('data-editor-direct-writes')).toBe('0')
   })
 })
 
@@ -240,7 +240,7 @@ describe('CodeEditor: the gutter', () => {
     const heights = [20, 60, 20, 20]
     const box4 = (top: number, height: number): DOMRect => ({ top, height, bottom: top + height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) })
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-      if (this.classList.contains('helm-editor-layers')) return box4(100, 400)
+      if (this.classList.contains('floti-editor-layers')) return box4(100, 400)
       if (this.classList.contains('line') && this.closest('[data-editor-highlight]')) {
         const index = [...(this.parentElement?.children ?? [])].indexOf(this)
         return box4(108 + heights.slice(0, index).reduce((sum, h) => sum + h, 0), heights[index] ?? 0)
@@ -260,7 +260,7 @@ describe('CodeEditor: the gutter', () => {
       ['3', '88px'],
       ['4', '108px']
     ])
-    const band = container.querySelector<HTMLElement>('.helm-editor-caret-line')
+    const band = container.querySelector<HTMLElement>('.floti-editor-caret-line')
     expect([band?.style.top, band?.style.height]).toEqual(['28px', '60px'])
   })
 
@@ -268,7 +268,7 @@ describe('CodeEditor: the gutter', () => {
     // Sixty 20px lines in a 200px box: ten fit, and the rest are reached by scrolling.
     const box4 = (top: number, height: number): DOMRect => ({ top, height, bottom: top + height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) })
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-      if (this.classList.contains('helm-editor-layers')) return box4(0, 1200)
+      if (this.classList.contains('floti-editor-layers')) return box4(0, 1200)
       if (this.classList.contains('line') && this.closest('[data-editor-highlight]')) {
         const index = [...(this.parentElement?.children ?? [])].indexOf(this)
         return box4(12 + index * 20, 20)
@@ -309,7 +309,7 @@ describe('CodeEditor: colour arriving late, or not at all', () => {
       tookMs: 1
     })
     const { container } = render(<Editor initial={'{}\n[]'} onHighlight={onHighlight} />)
-    const root = container.querySelector('.helm-editor') as HTMLElement
+    const root = container.querySelector('.floti-editor') as HTMLElement
 
     await act(async () => vi.advanceTimersByTime(110))
     expect(asked).toEqual(['{}\n[]'])
@@ -357,7 +357,7 @@ describe('CodeEditor: colour arriving late, or not at all', () => {
       Promise.resolve({ lines: [], language: 'plaintext', highlighted: false, tooLarge: true, tookMs: 0 })
     const { container } = render(<Editor initial={'a\nb'} path="C:\\scope\\big.txt" onHighlight={tooLarge} />)
 
-    await vi.waitFor(() => expect(container.querySelector('.helm-editor')?.getAttribute('data-editor-plain')).toBe('true'), { timeout: PATIENCE })
+    await vi.waitFor(() => expect(container.querySelector('.floti-editor')?.getAttribute('data-editor-plain')).toBe('true'), { timeout: PATIENCE })
     expect(layer(container, 'highlight').querySelectorAll('.line')).toHaveLength(0)
     expect(layer(container, 'underlay').textContent).toBe('')
     expect(container.querySelectorAll('[data-editor-line-number]')).toHaveLength(0)

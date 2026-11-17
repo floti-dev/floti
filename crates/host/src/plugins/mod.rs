@@ -1,5 +1,5 @@
 //! Plugins on the host: folders the user registered, each read from its
-//! `helm-plugin.json` by the SDK's own validator; each one's background
+//! `floti-plugin.json` by the SDK's own validator; each one's background
 //! script, run in an isolate of its own; and the call layer every `floti.*`
 //! method goes through.
 //!

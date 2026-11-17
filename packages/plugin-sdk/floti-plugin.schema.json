@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Floti plugin manifest",
-  "description": "helm-plugin.json, at the root of a Floti plugin folder. Floti validates it with @floti-dev/plugin-sdk/manifest when it loads the plugin; this schema says the same for an editor. Checks that span fields - rail.panel naming a panel, a command tab naming a tab, {{key}} naming a declared secret - are made by Floti and `helm-plugin validate`, not here.",
+  "description": "floti-plugin.json, at the root of a Floti plugin folder. Floti validates it with @floti-dev/plugin-sdk/manifest when it loads the plugin; this schema says the same for an editor. Checks that span fields - rail.panel naming a panel, a command tab naming a tab, {{key}} naming a declared secret - are made by Floti and `floti-plugin validate`, not here.",
   "type": "object",
   "required": [
     "apiVersion",
@@ -151,7 +151,7 @@
             "minLength": 1,
             "maxLength": 60,
             "pattern": "\\S",
-            "description": "The tab title until its page sets one with helm.surface.setTitle."
+            "description": "The tab title until its page sets one with floti.surface.setTitle."
           },
           "entry": {
             "$ref": "#/$defs/htmlEntry"
@@ -370,21 +370,21 @@
     },
     "htmlEntry": {
       "type": "string",
-      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__helm[\\\\/])[^\\u0000]*\\.(?:[Hh][Tt][Mm][Ll])(?:[\\\\/]\\.?)*$",
-      "description": "An .html file, by a path relative to the plugin folder that stays inside it and is not under __helm/."
+      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__floti[\\\\/])[^\\u0000]*\\.(?:[Hh][Tt][Mm][Ll])(?:[\\\\/]\\.?)*$",
+      "description": "An .html file, by a path relative to the plugin folder that stays inside it and is not under __floti/."
     },
     "moduleEntry": {
       "type": "string",
-      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__helm[\\\\/])[^\\u0000]*\\.(?:[Jj][Ss]|[Mm][Jj][Ss])(?:[\\\\/]\\.?)*$",
-      "description": "A .js or .mjs module, by a path relative to the plugin folder that stays inside it and is not under __helm/."
+      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__floti[\\\\/])[^\\u0000]*\\.(?:[Jj][Ss]|[Mm][Jj][Ss])(?:[\\\\/]\\.?)*$",
+      "description": "A .js or .mjs module, by a path relative to the plugin folder that stays inside it and is not under __floti/."
     },
     "iconEntry": {
       "type": "string",
-      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__helm[\\\\/])[^\\u0000]*\\.(?:[Ss][Vv][Gg]|[Pp][Nn][Gg])(?:[\\\\/]\\.?)*$"
+      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__floti[\\\\/])[^\\u0000]*\\.(?:[Ss][Vv][Gg]|[Pp][Nn][Gg])(?:[\\\\/]\\.?)*$"
     },
     "scriptEntry": {
       "type": "string",
-      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__helm[\\\\/])[^\\u0000]*\\.(?:[Jj][Ss]|[Mm][Jj][Ss]|[Cc][Jj][Ss])(?:[\\\\/]\\.?)*$",
+      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__floti[\\\\/])[^\\u0000]*\\.(?:[Jj][Ss]|[Mm][Jj][Ss]|[Cc][Jj][Ss])(?:[\\\\/]\\.?)*$",
       "description": "A script in the plugin folder, run by the Node inside Floti."
     },
     "program": {

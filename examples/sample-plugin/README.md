@@ -3,7 +3,7 @@
 Items from a small API, in a panel, a tab and the status bar. It uses every
 part a Floti plugin can have, and it is the plugin Floti's end-to-end tests drive
 (`packages/desktop/e2e/plugins.spec.ts`). To write a plugin of your own, start
-from `helm-plugin create` and the authoring guide in
+from `floti-plugin create` and the authoring guide in
 [packages/plugin-sdk](../../packages/plugin-sdk/README.md); this folder is the
 worked example.
 
@@ -14,7 +14,7 @@ else.
 
 ```
 sample-plugin/
-├── helm-plugin.json          the manifest: every surface, setting, host, program, the service and the tools
+├── floti-plugin.json          the manifest: every surface, setting, host, program, the service and the tools
 ├── icon.svg                  drawn as a mask, so it takes the rail's colours
 ├── src/
 │   ├── panels/main.*         the rail panel: the items, a token prompt, the service's hello,

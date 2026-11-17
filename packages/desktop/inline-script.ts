@@ -7,7 +7,7 @@ import type { Plugin } from 'vite'
  * script, as a string.
  *
  * For code Helm serves to a page rather than runs itself - the plugin bridge,
- * which every plugin page loads from Helm under `/__helm/bridge.js`. It is
+ * which every plugin page loads from the desktop under `/__floti/bridge.js`. It is
  * TypeScript checked against the SDK's types like the rest of the app, and it
  * has to arrive as one self-contained IIFE: a classic script in the page's
  * `<head>`, so `window.floti` is there before the plugin's own modules run.

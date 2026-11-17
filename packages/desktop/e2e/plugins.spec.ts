@@ -491,7 +491,7 @@ test("a session calls the plugin's tools, its background module answers, and tur
 /** The sample as a plugin that declares `pageStrip`: its tabs open as pages in one tab of its own. */
 const stripTest = test.extend({
   world: async ({ world, sample }, use) => {
-    const file = join(sample.dir, 'helm-plugin.json')
+    const file = join(sample.dir, 'floti-plugin.json')
     const manifest = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
     writeFileSync(file, JSON.stringify({ ...manifest, pageStrip: true }, null, 2))
     await use(world)

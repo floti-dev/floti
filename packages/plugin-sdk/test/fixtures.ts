@@ -12,9 +12,9 @@ const readJson = (path: string): unknown => JSON.parse(readFileSync(path, 'utf8'
 export const SAMPLE_DIR = join(SDK_DIR, '..', '..', 'examples', 'sample-plugin')
 
 /** The sample plugin's manifest. */
-export const SAMPLE = readJson(join(SAMPLE_DIR, 'helm-plugin.json'))
+export const SAMPLE = readJson(join(SAMPLE_DIR, 'floti-plugin.json'))
 
-/** What `helm-plugin create` writes. */
-export const TEMPLATE = readJson(join(SDK_DIR, 'template', 'helm-plugin.json'))
+/** What `floti-plugin create` writes. */
+export const TEMPLATE = readJson(join(SDK_DIR, 'template', 'floti-plugin.json'))
 
 export const MINIMAL = { apiVersion: 2, id: 'minimal', name: 'Minimal' }

@@ -297,7 +297,7 @@ mod tests {
                 "service": { "node": "server/main.mjs" } }"#,
         ));
         for counted in [
-            "helm-plugin.json",
+            "floti-plugin.json",
             "icon.svg",
             "dist/background.js",
             "dist/assets/app.js",
@@ -409,11 +409,11 @@ mod tests {
         assert!(!watch.task.is_finished());
 
         *watch.files.lock().unwrap() = None;
-        watch.events.send("helm-plugin.json".into()).unwrap();
+        watch.events.send("floti-plugin.json".into()).unwrap();
         watch.step(WATCH_DEBOUNCE + Duration::from_millis(1)).await;
         assert_eq!(
             watch.told(),
-            ["helm-plugin.json"],
+            ["floti-plugin.json"],
             "too many files to tell is a change"
         );
     }

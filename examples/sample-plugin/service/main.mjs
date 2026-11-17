@@ -2,20 +2,20 @@
 import { createServer } from 'node:http'
 
 /**
- * The sample's service: a long-running program Helm starts and stops for the
- * plugin, reached from its pages as `helm.fetch('service:/hello')`.
+ * The sample's service: a long-running program Floti starts and stops for the
+ * plugin, reached from its pages as `floti.fetch('service:/hello')`.
  *
- * Helm hands it a port and a token in its environment and sends the token on
+ * Floti hands it a port and a token in its environment and sends the token on
  * every request, so nothing else on this machine that finds the port can use
  * it. It listens on loopback only.
  */
 
-const port = Number(process.env['HELM_SERVICE_PORT'])
-const token = process.env['HELM_SERVICE_TOKEN']
+const port = Number(process.env['FLOTI_SERVICE_PORT'])
+const token = process.env['FLOTI_SERVICE_TOKEN']
 const started = Date.now()
 
 const server = createServer((req, res) => {
-  if (req.headers['helm-service-token'] !== token) {
+  if (req.headers['floti-service-token'] !== token) {
     res.writeHead(401, { 'content-type': 'application/json' })
     res.end(JSON.stringify({ error: 'not Floti' }))
     return
