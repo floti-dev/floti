@@ -9,7 +9,7 @@ their data goes, how a release is cut, and why Floti has no auto-updater.
 
 | File | What it is |
 |---|---|
-| `Floti-<version>-portable.exe` | One file, ~95 MB. No install. Keeps its data in `helm-data\` beside itself. |
+| `Floti-<version>-portable.exe` | One file, ~95 MB. No install. Keeps its data in `floti-data\` beside itself. |
 | `Floti-<version>-setup.exe` | NSIS one-click installer. Per-user, no elevation, in `%LOCALAPPDATA%\Programs\Floti\desktop`. Data in `%LOCALAPPDATA%\Floti\desktop`. |
 
 `pnpm dist:mac` writes two more, and runs only on macOS, because
@@ -321,7 +321,7 @@ file's `.gnu.version_r`; and a `floti-desktop.desktop` whose `Exec` has no
 `src/main/paths.ts` decides, from one signal. electron-builder's portable
 launcher extracts the app to `%TEMP%\<random>\` and sets
 `PORTABLE_EXECUTABLE_DIR` to the directory the exe was double-clicked from. If
-that variable is set, `userData` is redirected to `<exe dir>\helm-data\`;
+that variable is set, `userData` is redirected to `<exe dir>\floti-data\`;
 otherwise it is `app.getPath('userData')`, which is `%APPDATA%\Floti`.
 
 `process.execPath` in portable mode points at the temp extraction, so **never
@@ -341,7 +341,7 @@ or checkout, and `PORTABLE_EXECUTABLE_DIR` says whether the data is its own -
 `installed`, `portable`, `dev`, `dev-live`.
 
 **Workspace templates take the same branch.** `templatesDir` reads the same
-variable: set, they live in `<exe dir>\helm-data\templates`, so **a portable
+variable: set, they live in `<exe dir>\floti-data\templates`, so **a portable
 install keeps its templates on the stick and leaves nothing on a machine it is
 plugged into**; unset, they live in `~/.config/floti/templates` rather than
 under the data directory, because a template is a directory somebody authors by
@@ -363,18 +363,18 @@ Where each run keeps its data, on each OS (`appMode` in `paths.ts` decides):
 | run | Windows | macOS | Linux |
 |---|---|---|---|
 | installed | `%LOCALAPPDATA%\Floti\desktop` | `~/Library/Application Support/Floti/desktop` | `${XDG_DATA_HOME:-~/.local/share}/floti/desktop` |
-| portable | `helm-data` beside the exe | none | none |
-| `pnpm dev` | `%LOCALAPPDATA%\Floti Dev\dev\helm-data` | `~/Library/Application Support/Floti Dev/dev/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/floti-dev/dev/helm-data` |
-| checks | `%LOCALAPPDATA%\Floti Dev\checks\<name>\helm-data` | `~/Library/Application Support/Floti Dev/checks/<name>/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/floti-dev/checks/<name>/helm-data` |
+| portable | `floti-data` beside the exe | none | none |
+| `pnpm dev` | `%LOCALAPPDATA%\Floti Dev\dev\floti-data` | `~/Library/Application Support/Floti Dev/dev/floti-data` | `${XDG_DATA_HOME:-~/.local/share}/floti-dev/dev/floti-data` |
+| checks | `%LOCALAPPDATA%\Floti Dev\checks\<name>\floti-data` | `~/Library/Application Support/Floti Dev/checks/<name>/floti-data` | `${XDG_DATA_HOME:-~/.local/share}/floti-dev/checks/<name>/floti-data` |
 | `pnpm dev:live` | the installed app's own | the installed app's own | the installed app's own |
-| templates | `~/.config/floti/templates`; `helm-data/templates` when portable | the same, without portable | the same, without portable |
+| templates | `~/.config/floti/templates`; `floti-data/templates` when portable | the same, without portable | the same, without portable |
 
-Templates are `helm-data/templates` in the run's own folder for `pnpm dev` and
+Templates are `floti-data/templates` in the run's own folder for `pnpm dev` and
 every check, on every OS.
 
 The installed desktop's data is the `desktop` folder of Floti's own data
 folder (design I12, `src/main/dataFolder.ts`), so its Chromium profile and
-`helm.db` sit beside, not among, the host's files.
+`desktop.db` sit beside, not among, the host's files.
 
 ## What the installer does, and what it deliberately does not
 
@@ -384,7 +384,7 @@ folder (design I12, `src/main/dataFolder.ts`), so its Chromium profile and
   config change that *would* need elevation fails the install rather than
   quietly putting a UAC prompt in front of everyone.
 - **Uninstall removes the program and leaves the data.**
-  `deleteAppDataOnUninstall` stays false: `%APPDATA%\Floti\helm.db` holds the
+  `deleteAppDataOnUninstall` stays false: `%LOCALAPPDATA%\Floti\desktop\desktop.db` holds the
   user's profiles, their session index and every config snapshot Floti has taken
   on their behalf, and uninstalling the program is not a request to destroy
   those. `pnpm verify:installer --yes` asserts the install directory,
@@ -1094,7 +1094,7 @@ Actions tab or with `gh workflow run macos-screenshots.yml --ref <branch>` once
 the file is on `main`. That run also builds the local host, launches the built
 app through the E2E tests' Playwright launch into a world with the fake claude,
 and photographs every destination on the rail and a session terminal in the
-light and the dark theme. The pictures are the run's `helm-macos-screenshots`
+light and the dark theme. The pictures are the run's `floti-macos-screenshots`
 artifact: each view as the page and, on macOS, as the window with its traffic
 lights. It is no check in the gate and nothing waits on it. `pnpm screenshots`
 runs the same capture locally on any OS, into `reports/screenshots`.

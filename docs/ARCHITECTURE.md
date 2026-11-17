@@ -23,14 +23,14 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   any other channel at once. `e2e/boundary.spec.ts` fails naming any channel
   that crossed. Main runs no session, terminal, config reader, content,
   template or scan service of its own; those are the host's.
-- The host never opens `helm.db` or learns Floti's data folder. What only
-  `helm.db` holds (archived conversations whose transcript is gone, their
+- The host never opens `desktop.db` or learns Floti's data folder. What only
+  `desktop.db` holds (archived conversations whose transcript is gone, their
   usage, History's names) main reads through core's
   read-only pages (`store/copy.ts`) and sends on `carry:*`, in batches, until
   the host records in `floti.db` that the copy finished
   (`main/host/own-data.ts`). The host's merge keeps what it already holds,
   and a copy that stops part way is sent again at the next connect. Config
-  file versions kept in `helm.db` are not copied; those already in
+  file versions kept in `desktop.db` are not copied; those already in
   `floti.db` stay there.
 - The host owns process lifetime. Every session's and plain terminal's pty and
   process tree is held by the session keeper (`floti keeper`,
@@ -42,7 +42,7 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   stop ends the keeper. Quitting a client ends the sessions it started only
   where its setting for that host says so; a crash ends nothing; stopping the
   host ends every session. The plain terminals a client opened end when it
-  quits. Floti's setting is `quitSessions`, kept in `helm.db` keyed by host
+  quits. Floti's setting is `quitSessions`, kept in `desktop.db` keyed by host
   (this PC's is `local`, End when absent; a remote host's is its id, Keep when
   absent). Quitting with sessions it would end asks first: End and quit, Keep
   running and quit (this quit only, never written to the setting), or Cancel.
@@ -203,7 +203,7 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
 ## Tabs, panes and families
 
 - Every client sees every session in the host, and tabs, panes and splits are
-  kept per device: `paneLayout` stays in `helm.db` and never reaches the host.
+  kept per device: `paneLayout` stays in `desktop.db` and never reaches the host.
   A window gives a tab only to a session its saved layout names or that it
   opened. A running child of a session it has a tab for is shown inside that
   tab while "Show children in their parent's tab" is on and the pane has room
@@ -379,7 +379,7 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   the bar before it is there. From Enter until main answers, the bar keeps
   what was typed.
 - The address bar suggests from the browser's history, the `browser_history`
-  table in `helm.db`: the newest 500 pages by last visit, with title and visit
+  table in `desktop.db`: the newest 500 pages by last visit, with title and visit
   count. Main owns it (`openBrowserHistory`, read once into memory): `remember`
   records a visit when a page the user has commits (http or https, a real
   response, or a move within the page), and `page-title-updated` keeps its
@@ -447,7 +447,7 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   process is provably dead. `EPERM` counts as alive; unknown means keep.
 - Templates live in `templates` in the host's config folder: for the
   installed app `~/.config/floti`; otherwise the folder holding `templatesDir` in
-  `paths.ts` (`helm-data/templates` when portable). The host reads and seeds them at
+  `paths.ts` (`floti-data/templates` when portable). The host reads and seeds them at
   its start. The shipped README is written only when the directory is absent,
   and nothing there is ever overwritten or removed. Starter
   (`workspace/templates/workspace.rs`, id `starter`) is the one template Floti
@@ -499,8 +499,8 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   file (`AgentConfigFolders`, from each backend's own `agent_config`), as
   spelled or where its links lead, is refused naming the agent's own commands, and the Files view shows those
   files read-only (`FileView.readOnly`). The transcript
-  archive copies into the host's `floti.db`, and never writes there. Copying `helm.db`'s archive into
-  `floti.db` writes neither the agent's config nor `helm.db`, and logs
+  archive copies into the host's `floti.db`, and never writes there. Copying `desktop.db`'s archive into
+  `floti.db` writes neither the agent's config nor `desktop.db`, and logs
   counts, never a message. What a launch needs (agent
   tools, settings, composed instructions, overlays) is a per-launch file under
   the data directory, never a write into the agent's config.

@@ -33,7 +33,7 @@ that describes it, not this file; a line is added here only for a new rule.
 
 ```
 packages/
-├── core/     # what clients share: the host's answer shapes (types.ts), helm.db and its copy into the host (store), layout, themes
+├── core/     # what clients share: the host's answer shapes (types.ts), desktop.db and its copy into the host (store), layout, themes
 ├── ui/       # React components
 ├── desktop/  # Electron main, preload and renderer
 └── plugin-sdk/ # manifest validator, bridge types, helm-plugin CLI, authoring guide
@@ -131,9 +131,9 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   `e2e/boundary.spec.ts` fails naming any channel that crossed. Main runs no
   session, terminal, config reader, content, template or scan service of its
   own; those are the host's.
-- The host never opens `helm.db` or learns Floti's data folder; what only
-  `helm.db` holds, main sends it on `carry:*` (`main/host/own-data.ts`). Main
-  owns the window's lifetime and `helm.db`: `will-quit` releases the database,
+- The host never opens `desktop.db` or learns Floti's data folder; what only
+  `desktop.db` holds, main sends it on `carry:*` (`main/host/own-data.ts`). Main
+  owns the window's lifetime and `desktop.db`: `will-quit` releases the database,
   and nothing else closes the store.
 - The host owns process lifetime. Every session's and plain terminal's pty and
   process tree is held by the session keeper (`floti keeper`,
@@ -149,7 +149,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   (`CREATE_NO_WINDOW`). `tests/it/console.rs` and the start audit in
   `process_tree/tests.rs` fail otherwise.
 - Tabs, panes, splits and families are kept per device (`paneLayout` in
-  `helm.db`) and never reach the host.
+  `desktop.db`) and never reach the host.
 - A host on another computer is reached through the user's own
   `ssh -o BatchMode=yes <target>`, the command they gave, or `wsl.exe`. Floti
   adds no ssh option, never skips a host-key check, reads or writes nothing
@@ -182,7 +182,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - `~/.claude/sessions` keeps a `<pid>.<sha256>.key` credential beside every
   `<pid>.json`. The host's Claude Code status reader
   (`agent/claude_code/status.rs`) reads `.json` files only; never widen it.
-- The `persist:helm-browser` partition holds the user's cookies and logins.
+- The `persist:floti-browser` partition holds the user's cookies and logins.
   Cookies are handled only in main (`main/browserCookies.ts`), which keeps
   session cookies by setting them again with an expiry; no cookie's name or
   value is logged or sent to the renderer, the host or an agent tool. The
