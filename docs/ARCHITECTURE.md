@@ -437,14 +437,10 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   (junctions on Windows, symlinks on macOS and Linux) and never walks into
   one. `fs.rm` with `recursive: true` has been seen to go through a junction
   and empty the repository folder it points to.
-- Launch folders are swept only at host start, and overlay shims left in
-  Floti's data folder only at Floti's start
-  (`createServices`), each only where every owning process is provably dead.
-  `EPERM` counts as alive; unknown means keep.
+- Launch folders are swept only at host start, and only where every owning
+  process is provably dead. `EPERM` counts as alive; unknown means keep.
 - Templates live in `templates` in the host's config folder: for the
-  installed app `~/.config/floti` whenever it is there (`~/.config/helm` only while
-  `~/.config/floti` is not there and Helm's is; the host moves Helm's folder there, once,
-  at its first start as Floti); otherwise the folder holding `templatesDir` in
+  installed app `~/.config/floti`; otherwise the folder holding `templatesDir` in
   `paths.ts` (`helm-data/templates` when portable). The host reads and seeds them at
   its start. The shipped README and example are written only when the
   directory is absent, and nothing there is ever overwritten. The in-app
@@ -458,13 +454,6 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   there. `workspace:create` writes `workspace.yaml` only, refuses a folder
   that has either, and a template cannot supply either. Nothing renames or
   rewrites a `harness.yaml`.
-- Someone upgrading sees once, over their sessions, that harnesses are now
-  called workspaces and nothing in their folders changed
-  (`UpgradeNoteDialog`). Whether it was seen is `upgradeNoteSeenAt` in
-  `helm.db`. Only a `helm.db` from before migration 0032 leaves it unseen: one
-  created on this release is stamped as main opens it (`settleUpgradeNote`),
-  so a new device, or one whose data was reset, never sees it whatever its
-  host says. Every isolated copy (`pnpm dev`, the checks) is stamped too.
 
 ## Terminals and session state
 

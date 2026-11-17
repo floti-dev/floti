@@ -65,9 +65,7 @@ whole install travels on a stick and removing it is deleting two things.
 
 **Installed** - download `Floti-<version>-setup.exe` and run it. It installs for
 your user only, into `%LOCALAPPDATA%\Programs\Floti\desktop`, and keeps its data in
-`%LOCALAPPDATA%\Floti\desktop`. An installed Helm moves there: the installer
-replaces it, and the app copies Helm's data from `%APPDATA%\Helm` at its first
-start and removes the old folder once the copy has opened. Uninstalling removes the program and **keeps** your data - the
+`%LOCALAPPDATA%\Floti\desktop`. Uninstalling removes the program and **keeps** your data - the
 database holds your profiles, session index and the versions of the notes you
 saved.
 
@@ -100,9 +98,7 @@ services may rely on it. Run it from a terminal Floti did not start.
 
 Workspace templates are the one thing outside that: they live in
 `~/.config/floti/templates`, because they are folders you write and edit by
-hand. While the app was called Helm they were in `~/.config/helm`; the host
-moves that folder to `~/.config/floti` once, at its first start as Floti.
-A portable install keeps them in its own `helm-data\templates`, so it still
+hand. A portable install keeps them in its own `helm-data\templates`, so it still
 leaves nothing behind on a machine you plug it into.
 
 Floti manages them without trying to replace your editor. **Settings ->

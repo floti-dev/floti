@@ -11,13 +11,6 @@ serves `floti-agents`: only the host does.
 [SECURITY.md](SECURITY.md) has the credential rules these tools sit beside,
 and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
 
-The families were called `helm-browser`, `helm-sessions` and
-`helm-plugin-<id>` while the app was Helm. Nothing rewrites the user's Claude
-settings for the new names (the agent's config folder is read-only to
-Floti), so an allow rule naming an old tool, such as
-`mcp__helm-browser__browser_open`, matches nothing and that tool asks again
-until the user updates the rule.
-
 ## The listener
 
 - `127.0.0.1` only, on port 0, or on the port the sessions it takes back from
@@ -46,9 +39,7 @@ until the user updates the rule.
   `--mcp-config` file in the session's launch folder under the host's data
   folder (`crates/host/src/agent/launch_folder.rs`), never
   `claude mcp add-json`. A launch folder a crash left is swept at host start,
-  and only when every owner is provably gone. At its own start main removes
-  any per-session `--mcp-config` files left in its data folder
-  (`cleanStaleMcpConfigs`), on the same terms.
+  and only when every owner is provably gone.
 - A session's row keeps what its launch was granted (`agent_tools`: the
   port, the token's SHA-256 and the families), never the token. A host that
   takes back sessions from the keeper binds that port again and accepts each
@@ -441,9 +432,7 @@ until the user updates the rule.
 
 - Agents (a lead, a worker, a reviewer: the named definitions a session
   starts its children as) live in `agents` in the host's config folder
-  (`~/.config/floti` whenever it is there (`~/.config/helm` only while
-  `~/.config/floti` is not there and Helm's is);
-  for the host a development or portable Floti starts, the folder that holds
+  (`~/.config/floti`; for the host a development or portable Floti starts, the folder that holds
   `templatesDir`), one
   `<name>.md` each (front matter, then the body), parsed as an
   `AgentDefinition` (`agent_definitions/`). The one a start naming none gets
