@@ -675,7 +675,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
   hosts: (value) => remoteHostsProblem(value),
 
   /**
-   * An instant Floti wrote, checked anyway: a value `Date.parse` cannot read
+   * An instant the desktop wrote, checked anyway: a value `Date.parse` cannot read
    * would make every comparison against it NaN, and NaN fails every `>`.
    */
   profilesCopiedToHostAt: (value) => {
@@ -684,7 +684,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
     return Number.isFinite(Date.parse(value)) ? null : 'must be an ISO 8601 instant'
   },
 
-  /** An instant Floti wrote, checked as `profilesCopiedToHostAt` is. */
+  /** An instant the desktop wrote, checked as `profilesCopiedToHostAt` is. */
   pluginsCopiedToHostAt: (value) => {
     if (value === null) return null
     if (typeof value !== 'string') return 'must be an ISO 8601 string or null'

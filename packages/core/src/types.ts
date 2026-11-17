@@ -1763,7 +1763,7 @@ export interface AppSettings {
    *
    * The host keeps it (`HostSettings.updateCheck`, `HOST_WORKSPACE_KEYS`):
    * what the window shows is the host's value, laid over this one, and a
-   * change goes to the host. Floti's own row is what this device had before
+   * change goes to the host. The desktop's own row is what this device had before
    * the host kept it: a `false` there is written to the host once, on the
    * next connect, and the row goes back to its default.
    *
@@ -1938,26 +1938,26 @@ export interface AppSettings {
    */
   hosts: readonly RemoteHost[]
   /**
-   * When Floti's saved profiles were copied into the local host, ISO 8601, or
+   * When the desktop's saved profiles were copied into the local host, ISO 8601, or
    * null while they never have been.
    *
    * Internal state, like `lastUpdateCheckAt`, and not in the settings pane.
-   * Profiles live in the host; the first time Floti connects to one it copies
+   * Profiles live in the host; the first time the desktop connects to one it copies
    * the ones an earlier version kept in desktop.db into it, once, and this is
    * what keeps a profile deleted in the host afterwards from being copied back
-   * on the next start. Floti's own profiles are never changed by the copy.
+   * on the next start. The desktop's own profiles are never changed by the copy.
    */
   profilesCopiedToHostAt: string | null
   /**
-   * When Floti's plugin folders were copied into the local host, ISO 8601, or
+   * When the desktop's plugin folders were copied into the local host, ISO 8601, or
    * null while they never have been.
    *
    * Internal state, like `profilesCopiedToHostAt`, and not in the settings
-   * pane. Plugins are registered in the host; the first time Floti connects to
+   * pane. Plugins are registered in the host; the first time the desktop connects to
    * one it copies its folders, their on/off and tools switches and their
    * setting values into it, once (never a secret),
    * and this keeps a plugin removed in the host afterwards from coming back on
-   * the next start. Floti's own plugin records are never changed by the copy.
+   * the next start. The desktop's own plugin records are never changed by the copy.
    */
   pluginsCopiedToHostAt: string | null
   /**
@@ -2104,7 +2104,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   agentStartsPerParent: AGENT_STARTS_PER_PARENT.default,
   agentCommandsPerParent: AGENT_COMMANDS_PER_PARENT.default,
   showChildrenInParentTab: true,
-  // Empty: this PC's host then ends the sessions Floti started when it quits,
+  // Empty: this PC's host then ends the sessions the desktop started when it quits,
   // which is what a session on your own computer usually wants, and a host on
   // another computer keeps them running (`quitChoice`).
   quitSessions: {},
