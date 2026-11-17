@@ -96,53 +96,28 @@ together. The agent tools listener's token and origin rules are in
 - Each release's files also carry a GitHub build attestation, made in
   `publish`, the only job with `attestations: write`.
 
-## The package manager and website credentials
+## The website credential
 
-A stable release updates the Homebrew tap, opens a winget pull request and
-copies the install scripts and the update manifest to floti.dev
-(PACKAGING.md, "Homebrew and winget" and "floti.dev", have the owner's
-setup). Each credential
+A stable release copies the install scripts and the update manifest to
+floti.dev (PACKAGING.md, "floti.dev", has the owner's setup). Its credential
 is a secret of the `release` environment, never a repository secret, and is
 read by one job, which runs after `publish` and never in a dry run or for a
 preview.
 
-- `HOMEBREW_TAP_DEPLOY_KEY` is the private half of an SSH deploy key with
-  write access to floti-dev/homebrew-tap and nothing else. Only the
-  `homebrew` job names it: one step confirms it is set, and the other writes
-  it to an owner-only file in a folder of its own under `$RUNNER_TEMP`, runs
-  the one `git push` to the tap, and removes the folder when the step ends,
-  whether the push worked or not. The push checks GitHub's host key against
-  the keys GitHub's API lists, fetched over HTTPS. The clone before it is
-  anonymous.
-- `WINGET_TOKEN` is a classic token with the `public_repo` scope, of a GitHub
-  account kept for this alone, which holds the fork of microsoft/winget-pkgs
-  and has no access to floti-dev. That scope is not limited to the fork: it
-  lets the token push to, and open or merge pull requests in, every public
-  repository the account can write to. On an account that could push to
-  floti-dev/floti, whose `main` a release builds and signs, a leaked token
-  would be as bad as a leaked signing key; on an account that holds only the
-  fork, it can push branches to that fork and open pull requests as that
-  account, nothing more. Only the last step of the `winget` job reads it, as
-  `GH_TOKEN` for gh, and that step makes one commit on the fork and opens or
-  finds one pull request. It never syncs the fork, so the token never needs
-  the `workflow` scope. If it leaks, it is revoked where it was made and
-  replaced.
 - `PAGES_DEPLOY_KEY` is the private half of an SSH deploy key with write
   access to floti-dev/floti-dev.github.io, the site served as floti.dev, and
-  nothing else. Only the `floti-dev` job names it, as `homebrew` names its
-  key: one step confirms it is set, and the other writes it to an owner-only
-  file in a folder of its own under `$RUNNER_TEMP`, runs the one `git push`
-  with `BatchMode=yes` and GitHub's host keys from its API, and removes the
-  folder when the step ends. A leaked key could change the install scripts
+  nothing else. Only the `floti-dev` job names it: one step confirms it is
+  set, and the other writes it to an owner-only file in a folder of its own
+  under `$RUNNER_TEMP`, runs the one `git push` with `BatchMode=yes` and
+  GitHub's host keys from its API, and removes the folder when the step ends. A leaked key could change the install scripts
   people pipe into a shell, so it is revoked on the site's deploy keys page
   and replaced; `floti update` would still refuse a manifest it changed,
   whose signature the project's key did not make.
-- All three jobs pin `actions/checkout`, `actions/setup-node` and
-  `actions/download-artifact` by commit, run no third-party action, and have
-  `contents: read` only. Each fetches the SHA-256 list the release published
+- The job pins `actions/checkout`, `actions/setup-node` and
+  `actions/download-artifact` by commit, runs no third-party action, and has
+  `contents: read` only. It fetches the SHA-256 list the release published
   and checks its signature against the committed public key before using
-  it. `homebrew` and `winget` build what they publish from that list.
-  `floti-dev` publishes what `assemble` built and `sign` signed, and pushes
+  it. It publishes what `assemble` built and `sign` signed, and pushes
   nothing unless each install script is, byte for byte, the script that list
   makes (so it carries exactly the published SHA-256s), and `update.json`'s
   signature verifies against the committed key and its floti files and
