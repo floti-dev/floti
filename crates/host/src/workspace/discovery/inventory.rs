@@ -1,15 +1,17 @@
-//! Counts a project's `.claude/` the way Claude Code resolves it.
+//! Counts what a project holds in either shape a workspace is written in:
+//! Claude's (`CLAUDE.md` and `.claude/`) and the shared one (`AGENTS.md` and
+//! `.agents/skills`), the way a launch composes them
+//! (`agent::workspace::WorkspaceProject`).
 //!
 //! A *skill* is a folder holding `SKILL.md`, at any depth; *commands* and
 //! *agents* are markdown files at any depth, since namespaced commands
 //! (`/spec:plan`) live in subfolders. Links are never followed: a junction
 //! pointing back up the tree would otherwise recurse forever.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use floti_protocol::channels::workspace::ClaudeInventory;
-
-use crate::store::projects::EMPTY_INVENTORY;
 
 fn exists(path: &Path) -> bool {
     std::fs::metadata(path).is_ok()
@@ -66,26 +68,55 @@ fn count_skills(dir: &Path) -> u32 {
         .sum()
 }
 
-/// What `project`'s `.claude/` holds, and whether it has a `CLAUDE.md` and a
-/// `.mcp.json`. A `CLAUDE.md` counts with no `.claude/` beside it: it alone
-/// changes how a session behaves.
-pub fn read_claude_inventory(project: &Path) -> ClaudeInventory {
+/// The skills in `skills`, by each folder directly in it: one for a folder
+/// holding `SKILL.md`, and the skills under it for one that groups them.
+fn skills_by_folder(skills: &Path) -> BTreeMap<String, u32> {
+    entries(skills)
+        .into_iter()
+        .filter(|(_, kind)| kind.is_dir())
+        .filter_map(|(path, _)| {
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            let count = if exists(&path.join("SKILL.md")) {
+                1
+            } else {
+                count_skills(&path)
+            };
+            Some((name, count))
+        })
+        .collect()
+}
+
+/// The skills a launch composes from `project`: those in `.claude/skills`,
+/// then those in `.agents/skills` whose folder `.claude/skills` has no folder
+/// of the same name for, since a launch takes Claude's where both have one.
+fn count_both_shapes(project: &Path) -> u32 {
+    let claude = skills_by_folder(&project.join(".claude").join("skills"));
+    let shared = skills_by_folder(&project.join(".agents").join("skills"));
+    let shared_only = shared
+        .iter()
+        .filter(|(name, _)| !claude.contains_key(*name))
+        .map(|(_, count)| count);
+    claude.values().chain(shared_only).sum()
+}
+
+/// What `project` holds in either shape: its `.claude/`, its skills from
+/// `.claude/skills` and `.agents/skills`, and whether it has a `CLAUDE.md`,
+/// an `AGENTS.md`, a `.agents/` and a `.mcp.json`. An instructions file
+/// counts with no folder beside it: it alone changes how a session behaves.
+pub fn read_inventory(project: &Path) -> ClaudeInventory {
     let claude = project.join(".claude");
-    if !is_directory(&claude) {
-        return ClaudeInventory {
-            claude_md: exists(&project.join("CLAUDE.md")),
-            ..EMPTY_INVENTORY
-        };
-    }
+    let has_claude = is_directory(&claude);
     ClaudeInventory {
-        skills: count_skills(&claude.join("skills")),
+        skills: count_both_shapes(project),
         commands: count_markdown(&claude.join("commands")),
         agents: count_markdown(&claude.join("agents")),
         hooks: is_directory(&claude.join("hooks")),
         settings: exists(&claude.join("settings.json"))
             || exists(&claude.join("settings.local.json")),
         claude_md: exists(&project.join("CLAUDE.md")),
-        mcp: exists(&project.join(".mcp.json")),
+        mcp: has_claude && exists(&project.join(".mcp.json")),
+        agents_md: exists(&project.join("AGENTS.md")),
+        agents_dir: is_directory(&project.join(".agents")),
     }
 }
 

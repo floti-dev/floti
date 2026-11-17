@@ -15,7 +15,7 @@ use floti_protocol::channels::workspace::{
 };
 
 use super::git::parse_git_status;
-use super::inventory::read_claude_inventory;
+use super::inventory::read_inventory;
 use super::scan::{disproved_project_paths, orphaned_project_paths, scan};
 use super::suggest::{find_enclosing_workspace, suggest_roots};
 use super::*;
@@ -939,7 +939,7 @@ fn inventory_of(files: &[(&str, &str)]) -> ClaudeInventory {
     for (path, content) in files {
         world.file(&format!("project/{path}"), content);
     }
-    read_claude_inventory(&world.path("project"))
+    read_inventory(&world.path("project"))
 }
 
 #[test]
@@ -953,7 +953,9 @@ fn reports_nothing_for_a_directory_with_no_claude_folder_and_no_claude_md() {
             hooks: false,
             settings: false,
             claude_md: false,
-            mcp: false
+            mcp: false,
+            agents_md: false,
+            agents_dir: false,
         }
     );
 }
@@ -1012,4 +1014,69 @@ fn flags_hooks_settings_claude_md_and_mcp_json() {
 fn treats_settings_local_json_as_settings() {
     let inventory = inventory_of(&[(".claude/settings.local.json", "{}")]);
     assert!(inventory.settings);
+}
+
+// ---------------------------------------------------------------------------
+// The shared shape, `AGENTS.md` and `.agents/skills`, counted beside Claude's.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_folder_in_the_shared_shape_shows_its_instructions_and_skills_as_one_in_claudes_does() {
+    let shared = inventory_of(&[
+        ("AGENTS.md", "# rules"),
+        (".agents/skills/plan/SKILL.md", ""),
+        (".agents/skills/review/SKILL.md", ""),
+    ]);
+    let claude = inventory_of(&[
+        ("CLAUDE.md", "# rules"),
+        (".claude/skills/plan/SKILL.md", ""),
+        (".claude/skills/review/SKILL.md", ""),
+    ]);
+    assert!(shared.agents_md && shared.agents_dir);
+    assert!(!shared.claude_md);
+    assert_eq!(shared.skills, 2);
+    assert_eq!(shared.skills, claude.skills);
+    assert!(!claude.agents_md && !claude.agents_dir);
+}
+
+#[test]
+fn a_skill_in_both_skills_folders_counts_once() {
+    let inventory = inventory_of(&[
+        (".claude/skills/think/SKILL.md", "claude's"),
+        (".agents/skills/think/SKILL.md", "shared"),
+        (".agents/skills/plan/SKILL.md", ""),
+        // A folder grouping skills counts what it holds, also in the shared shape.
+        (".agents/skills/group/a/SKILL.md", ""),
+        (".agents/skills/group/b/SKILL.md", ""),
+    ]);
+    assert_eq!(inventory.skills, 4);
+}
+
+#[test]
+fn an_agents_folder_alone_is_seen_with_nothing_in_it() {
+    let world = Fixtures::new();
+    world.dir("project/.agents");
+    let inventory = read_inventory(&world.path("project"));
+    assert!(inventory.agents_dir);
+    assert!(!inventory.agents_md);
+    assert_eq!(inventory.skills, 0);
+}
+
+#[test]
+fn a_starter_workspace_is_scanned_with_its_agents_md() {
+    let world = Fixtures::new();
+    world.file("hub/workspace.yaml", "name: \"hub\"\n");
+    world.file("hub/AGENTS.md", "# hub\n");
+    world.file("hub/.agents/skills/plan/SKILL.md", "");
+    world.dir("hub/repos");
+
+    let result = world.scan_of(&["hub"]);
+    let hub = result
+        .projects
+        .iter()
+        .find(|project| project.kind == ProjectKind::Workspace)
+        .expect("the workspace is a project");
+    assert!(hub.inventory.agents_md && hub.inventory.agents_dir);
+    assert_eq!(hub.inventory.skills, 1);
+    assert!(!hub.has_claude_dir);
 }
