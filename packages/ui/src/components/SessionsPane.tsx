@@ -11,6 +11,7 @@ import type {
 } from "@helm/core";
 import { sessionLabel } from "@helm/core/types";
 import { cn } from "../lib/cn";
+import { shortcutLabel } from "../lib/platform";
 import { ROW_SELECTED } from "../lib/rows";
 import {
   SESSION_STATE_DOT,
@@ -108,6 +109,8 @@ export interface SessionsPaneProps {
   /** Ends a session, after the confirmation naming its host. */
   onEndSession?: ((id: number) => void) | undefined;
   onReveal: (path: string) => void;
+  /** The empty state's New session: the launcher, as Ctrl+N opens it. */
+  onNewSession?: (() => void) | undefined;
   /** Docked beside a session split: list *or* detail, never both. */
   compact?: boolean | undefined;
   /**
@@ -264,6 +267,7 @@ export function SessionsPane({
   notOpenHere = [],
   onEndSession,
   onReveal,
+  onNewSession,
   compact = false,
   remoteHosts = [],
 }: SessionsPaneProps): JSX.Element {
@@ -297,6 +301,12 @@ export function SessionsPane({
     seenDirs.add(key);
   }
 
+  // Nothing anywhere: the list says so once, and the detail beside it is blank.
+  const nothing =
+    sessions.length === 0 &&
+    notOpenHere.length === 0 &&
+    remoteHosts.length === 0;
+
   // This PC's list: every session on this machine, as it has always been drawn.
   const thisPc = (
     <>
@@ -305,10 +315,18 @@ export function SessionsPane({
           size="list"
           name="sessions-list"
           icon={<TerminalIcon width={18} height={18} />}
-          title="Nothing running"
+          title="No sessions yet"
+          action={
+            onNewSession === undefined
+              ? undefined
+              : {
+                  label: "New session",
+                  keys: shortcutLabel("N"),
+                  onClick: onNewSession,
+                }
+          }
         >
-          A session started anywhere on this machine is listed here, in Floti or
-          not.
+          Start an agent in one of your workspaces.
         </EmptyState>
       ) : (
         <>
@@ -496,7 +514,9 @@ export function SessionsPane({
             )}
             <div className="min-h-0 flex-1 overflow-y-auto">
               {selected === null ? (
-                <NothingSelected count={sessions.length} />
+                nothing ? null : (
+                  <NothingSelected count={sessions.length} />
+                )
               ) : (
                 <Detail
                   // Remounted per session, so nothing from one row's tree is

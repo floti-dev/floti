@@ -345,6 +345,37 @@ describe('AgentList', () => {
     await userEvent.click(screen.getByRole('button', { name: /deploy-check\.md/ }))
     expect(onOpen).toHaveBeenCalledWith('deploy-check')
   })
+
+  it('with no agents, says No agents yet and offers New agent, still listing the shipped ones to add back', async () => {
+    const onNew = vi.fn()
+    const none: LaunchAgents = { ...LISTING, agents: [], bad: [] }
+    render(
+      <AgentList listing={none} error={null} hostName="This PC" remote={false} selected={null} onOpen={vi.fn()} onAdd={vi.fn()} onNew={onNew} />
+    )
+    const empty = document.querySelector<HTMLElement>('[data-empty-state="agents"]')!
+    expect(within(empty).getByText('No agents yet')).toBeTruthy()
+    expect(within(empty).getByText('A role with its own instructions, ready to start.')).toBeTruthy()
+    expect(screen.getByText('reviewer')).toBeTruthy()
+    await userEvent.click(within(empty).getByRole('button', { name: 'New agent' }))
+    expect(onNew).toHaveBeenCalledOnce()
+  })
+
+  it('offers no New agent where the folder takes no new agent', () => {
+    const none: LaunchAgents = { ...LISTING, agents: [], bad: [], readOnly: 'The agents folder is read-only.' }
+    render(
+      <AgentList listing={none} error={null} hostName="This PC" remote={false} selected={null} onOpen={vi.fn()} onAdd={vi.fn()} onNew={vi.fn()} />
+    )
+    const empty = document.querySelector<HTMLElement>('[data-empty-state="agents"]')!
+    expect(within(empty).queryByRole('button')).toBeNull()
+  })
+
+  it('says why when the agents could not be read, never No agents yet', () => {
+    render(
+      <AgentList listing={null} error="The host did not answer." hostName="This PC" remote={false} selected={null} onOpen={vi.fn()} onAdd={vi.fn()} onNew={vi.fn()} />
+    )
+    expect(screen.getByText('The host did not answer.')).toBeTruthy()
+    expect(document.querySelector('[data-empty-state="agents"]')).toBeNull()
+  })
 })
 
 describe('UndoToast', () => {

@@ -46,7 +46,7 @@ function renderTree(overrides: Partial<SessionTreeProps> = {}) {
     onLaunch: vi.fn(),
     launchingPath: null,
     onOpenSession: vi.fn(),
-    onAddRoot: vi.fn(),
+    onNewSession: vi.fn(),
     ...overrides
   }
   const view = render(<SessionTree {...props} />)

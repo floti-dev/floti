@@ -79,6 +79,11 @@ export function PluginsPage({
     onAdd(path)
     setTyping(null)
   }
+  /** Add folder, and the empty state's Add a plugin: the folder picker here, the path field for another computer. */
+  const startAdding = (): void => {
+    if (remoteHost === undefined) onAdd()
+    else setTyping((current) => current ?? '')
+  }
   return (
     <SettingsPage
       data-settings-section="plugins"
@@ -89,7 +94,7 @@ export function PluginsPage({
           <HostSwitch surface="Plugins" {...hostChoice} />
           <Action
             primary
-            onClick={() => (remoteHost === undefined ? onAdd() : setTyping((current) => current ?? ''))}
+            onClick={startAdding}
             data-plugin-add
           >
             <span className="flex items-center gap-1.5">
@@ -156,8 +161,15 @@ export function PluginsPage({
             {unavailable}
           </EmptyState>
         ) : plugins !== null && plugins.length === 0 ? (
-          <EmptyState size="list" name="plugins" icon={<PlugIcon width={18} height={18} />} title="No plugins">
-            Add a folder that holds a helm-plugin.json.
+          <EmptyState
+            size="list"
+            name="plugins"
+            icon={<PlugIcon width={18} height={18} />}
+            title="No plugins yet"
+            // Hidden while the path field is open: the field is the way on.
+            action={typing === null ? { label: 'Add a plugin', onClick: startAdding } : undefined}
+          >
+            Plugins add panels, tabs and agent tools.
           </EmptyState>
         ) : (
           <div className="-mx-2.5 flex flex-col gap-px">

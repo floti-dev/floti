@@ -272,7 +272,7 @@ describe('the states', () => {
     unmount()
     document.body.innerHTML = ''
     render(<HistoryPalette {...renderPropsOnly({ recent: answer([]), total: 0 })} />)
-    expect(document.body.textContent).toContain('No sessions yet')
+    expect(document.body.textContent).toContain('No history yet')
     document.body.innerHTML = ''
     const props = renderPropsOnly({
       recent: answer([]),
@@ -280,10 +280,33 @@ describe('the states', () => {
       readError: { file: 'C:\\Users\\you\\.claude\\history.jsonl', message: 'The process cannot access the file.' }
     })
     render(<HistoryPalette {...props} />)
-    expect(document.body.textContent).toContain('Could not read the history file')
-    expect(document.body.textContent).toContain('C:\\Users\\you\\.claude\\history.jsonl')
+    expect(document.querySelector('[data-empty-state="history-unknown"]')?.textContent).toContain('Unknown')
+    expect(document.body.textContent).toContain("Floti couldn't open Claude Code's records.")
+    expect(document.querySelector('[data-history-reason]')?.textContent).toContain('C:\\Users\\you\\.claude\\history.jsonl')
+    expect(document.body.textContent).not.toContain('No history yet')
     press('Enter')
     expect(props.onRetry).toHaveBeenCalled()
+  })
+
+  it('with nothing in History, says No history yet and offers New session', async () => {
+    const onNewSession = vi.fn()
+    render(<HistoryPalette {...renderPropsOnly({ recent: answer([]), total: 0, onNewSession })} />)
+    const empty = document.querySelector<HTMLElement>('[data-empty-state="history"]')!
+    expect(within(empty).getByText('No history yet')).toBeTruthy()
+    expect(within(empty).getByText('Your past sessions show up here.')).toBeTruthy()
+    await userEvent.click(within(empty).getByRole('button', { name: 'New session' }))
+    expect(onNewSession).toHaveBeenCalledOnce()
+  })
+
+  it('says Unknown with its reason and Try again when what it holds could not be read, never No history yet', async () => {
+    const props = renderPropsOnly({ recent: { error: 'The host did not answer.' }, total: null })
+    render(<HistoryPalette {...props} />)
+    const unknown = document.querySelector<HTMLElement>('[data-empty-state="history-unknown"]')!
+    expect(within(unknown).getByText('Unknown')).toBeTruthy()
+    expect(within(unknown).getByText('The host did not answer.')).toBeTruthy()
+    expect(document.querySelector('[data-empty-state="history"]')).toBeNull()
+    await userEvent.click(within(unknown).getByRole('button', { name: 'Try again' }))
+    expect(props.onRetry).toHaveBeenCalledOnce()
   })
 })
 
@@ -466,21 +489,21 @@ describe('F2 on the row it was pressed on', () => {
 describe('could not look', () => {
   it('is never said as nothing there: a count not read yet is reading, one that failed says so, and Enter tries again', () => {
     render(<HistoryPalette {...renderPropsOnly({ recent: answer([]), total: null })} />)
-    expect(document.body.textContent).not.toContain('No sessions yet')
+    expect(document.body.textContent).not.toContain('No history yet')
     expect(document.querySelector('[data-history-state]')?.getAttribute('data-history-state')).toBe('reading')
     document.body.innerHTML = ''
     const props = renderPropsOnly({ recent: answer([]), total: null, totalError: 'The host did not answer.' })
     render(<HistoryPalette {...props} />)
-    expect(document.body.textContent).toContain('Could not tell what History holds')
-    expect(document.body.textContent).not.toContain('No sessions yet')
+    expect(document.querySelector('[data-empty-state="history-unknown"]')?.textContent).toContain('The host did not answer.')
+    expect(document.body.textContent).not.toContain('No history yet')
     press('Enter')
     expect(props.onRetry).toHaveBeenCalled()
   })
 
-  it('says a count that failed to read again as that, never the No sessions yet of the 0 read before it', () => {
+  it('says a count that failed to read again as that, never the No history yet of the 0 read before it', () => {
     renderPalette({ recent: answer([], 0), total: 0, totalError: 'The host did not answer.' })
     expect(document.querySelector('[data-history-state]')?.getAttribute('data-history-state')).toBe('uncounted')
-    expect(document.body.textContent).not.toContain('No sessions yet')
+    expect(document.body.textContent).not.toContain('No history yet')
   })
 
   it('says the folders could not be read while a query is typed', () => {

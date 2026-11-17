@@ -586,6 +586,28 @@ describe("SessionsPane on its pane", () => {
   });
 });
 
+describe("SessionsPane with nothing running", () => {
+  it("says No sessions yet once, offers New session, and leaves the detail blank", async () => {
+    const onNewSession = vi.fn();
+    renderPane({ sessions: [], records: new Map(), onNewSession });
+    const empty = document.querySelector(
+      '[data-empty-state="sessions-list"]',
+    ) as HTMLElement;
+    expect(within(empty).getByText("No sessions yet")).toBeDefined();
+    expect(
+      within(empty).getByText("Start an agent in one of your workspaces."),
+    ).toBeDefined();
+    expect(screen.queryByText("Nothing running")).toBeNull();
+    expect(
+      document.querySelector('[data-empty-state="sessions-detail"]'),
+    ).toBeNull();
+    await userEvent.click(
+      within(empty).getByRole("button", { name: "New session" }),
+    );
+    expect(onNewSession).toHaveBeenCalledOnce();
+  });
+});
+
 describe("SessionsPane: every host under its name", () => {
   const BUILD: SessionsPaneHost = {
     id: "h-build",
