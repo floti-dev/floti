@@ -29,8 +29,8 @@ let store: Store
 beforeEach(async () => {
   // A real file, with a space in its path, because one test is about the file
   // being left exactly as it was.
-  dir = await mkdtemp(join(tmpdir(), 'helm copy '))
-  file = join(dir, 'helm data', 'helm.db')
+  dir = await mkdtemp(join(tmpdir(), 'floti copy '))
+  file = join(dir, 'desktop data', 'desktop.db')
   store = openStore({ file })
 })
 
@@ -310,7 +310,7 @@ describe('reading the rest to copy', () => {
   })
 })
 
-describe('a copy reading helm.db', () => {
+describe('a copy reading desktop.db', () => {
   it('leaves the file exactly as it was', async () => {
     archive('kept', [SHORT, LONG, SHORT])
     archive('dropped', [LONG], -10_000)

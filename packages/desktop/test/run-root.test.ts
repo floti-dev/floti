@@ -89,7 +89,7 @@ describe("a vitest run's root", () => {
 
   it('is removed with the world and the fake agent in it when a worker crashes', { timeout: crashTimeout }, async () => {
     const report = join(mkdtempSync(join(tmpdir(), 'crash report ')), 'report.json')
-    const env: NodeJS.ProcessEnv = { ...process.env, HELM_CRASH_REPORT: report }
+    const env: NodeJS.ProcessEnv = { ...process.env, FLOTI_CRASH_REPORT: report }
     // This worker's own variables would make the run below think it is one.
     for (const name of Object.keys(env)) if (name.startsWith('VITEST') || name === 'TEST') delete env[name]
     const run = spawn(

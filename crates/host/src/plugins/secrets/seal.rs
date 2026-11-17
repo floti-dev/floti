@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn the_installed_host_uses_todays_entry_and_a_moved_data_folder_its_own() {
-        let data = Path::new("/somewhere/helm-data");
+        let data = Path::new("/somewhere/floti-data");
         let installed = HostRun {
             mode: AppMode::Installed,
             ..HostRun::default()

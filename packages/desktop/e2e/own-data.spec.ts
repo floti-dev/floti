@@ -17,7 +17,7 @@ import { expect, openHistory, test as base } from './helm'
  * What only Helm's own database holds - a conversation it archived whose
  * transcript Claude Code has since deleted, the name given to it in History
  * and its usage - is copied into the local host, and reads there as it did
- * from helm.db.
+ * from desktop.db.
  */
 
 const KEPT = sessionUuid(0x11)
@@ -25,7 +25,7 @@ const PROMPT = 'draft the migration'
 const REPLY = 'The migration adds two columns to the ledger.'
 const NAME = 'Migration plan'
 
-const helmDb = (world: World): string => join(world.dataDir, 'helm.db')
+const helmDb = (world: World): string => join(world.dataDir, 'desktop.db')
 
 /** The `n`th message of a conversation: its session id with the fourth group numbering the message. */
 const messageUuid = (sessionId: string, n: number): string =>
@@ -132,7 +132,7 @@ async function showsTheArchivedConversation(window: Page): Promise<void> {
   await expect(window.getByText(REPLY)).toHaveCount(1)
 }
 
-test('History and the archived conversation show what only helm.db held, once copied into the host', async ({
+test('History and the archived conversation show what only desktop.db held, once copied into the host', async ({
   world,
   helm
 }) => {

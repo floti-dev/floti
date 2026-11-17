@@ -235,7 +235,7 @@ function appProblems(app, origin) {
 }
 
 function dmgProblems(dmg) {
-  const mount = mkdtempSync(join(tmpdir(), 'helm-dmg-'))
+  const mount = mkdtempSync(join(tmpdir(), 'floti-dmg-'))
   const attach = tool('hdiutil', ['attach', dmg, '-nobrowse', '-readonly', '-noautoopen', '-mountpoint', mount])
   if (!attach.ok) {
     rmSync(mount, { recursive: true, force: true })
@@ -255,7 +255,7 @@ function dmgProblems(dmg) {
 }
 
 function zipProblems(zip) {
-  const out = mkdtempSync(join(tmpdir(), 'helm-zip-'))
+  const out = mkdtempSync(join(tmpdir(), 'floti-zip-'))
   try {
     // ditto, not unzip: it is what Finder uses, and it keeps the symlinks and
     // extended attributes a framework's signature covers.

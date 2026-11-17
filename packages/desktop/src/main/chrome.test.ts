@@ -23,7 +23,7 @@ function items(template: MenuItemConstructorOptions[]): MenuItemConstructorOptio
  * launcher, quick open on names and text, the plugins' palette, the split, and
  * moving a tab or a profile.
  */
-const HELM_SHORTCUTS = ['Command+N', 'Command+P', 'Shift+Command+P', 'Shift+Command+F', 'Command+\\', 'Command+Enter']
+const FLOTI_SHORTCUTS = ['Command+N', 'Command+P', 'Shift+Command+P', 'Shift+Command+F', 'Command+\\', 'Command+Enter']
 
 /** An accelerator as the key press it is, for the Browser tab's table. */
 function pressOf(accelerator: string): { key: string; control: boolean; shift: boolean; alt: boolean; meta: boolean } {
@@ -98,7 +98,7 @@ describe('applicationMenuTemplate', () => {
 
     const accelerators = all.flatMap((item) => (typeof item.accelerator === 'string' ? [item.accelerator] : []))
     for (const accelerator of accelerators) {
-      expect(HELM_SHORTCUTS, accelerator).not.toContain(accelerator)
+      expect(FLOTI_SHORTCUTS, accelerator).not.toContain(accelerator)
       expect(browserKeyCommand(pressOf(accelerator), 'darwin'), accelerator).toBeNull()
     }
   })

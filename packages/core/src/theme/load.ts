@@ -18,7 +18,7 @@ import {
  * (`themesDir` in `paths.ts`): `themes` in the user's config folder
  * (`~/.config/floti`) for an installed Floti,
  * because these are files a person writes by hand and may keep in git, and
- * `helm-data/themes` beside a portable exe or under a check's own data
+ * `floti-data/themes` beside a portable exe or under a check's own data
  * directory. Read here, never written except by `seedThemesDir` and
  * `writeThemeCopy`, both of which only ever create a file that was not there.
  */

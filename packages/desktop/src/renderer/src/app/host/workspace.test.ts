@@ -83,7 +83,7 @@ const BUILD: OwnAppInfo = {
   version: '9.9.9',
   mode: 'dev',
   dataDir: '/data dir',
-  dbFile: '/data dir/helm.db',
+  dbFile: '/data dir/desktop.db',
   migrations: [],
   versions: { electron: '1', chrome: '2', node: '3' },
   windowsBuild: null,

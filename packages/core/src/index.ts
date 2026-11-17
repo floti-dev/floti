@@ -1,10 +1,10 @@
 /**
- * `@helm/core` - what Helm's clients share, and `helm.db`.
+ * `@helm/core` - what Floti's clients share, and `desktop.db`.
  *
  * The local host runs sessions and reads and writes the workspace; this
  * package keeps what the window and main need beside it: the shapes the host
  * answers in (`types.ts`, the one entry point a browser bundle imports values
- * from), `helm.db` for what stays per device and the copy of an older
+ * from), `desktop.db` for what stays per device and the copy of an older
  * install's data into the host (`store/`).
  *
  * The one discipline (SPEC 5): nothing in this package may import Electron.

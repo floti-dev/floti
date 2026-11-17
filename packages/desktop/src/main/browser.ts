@@ -56,7 +56,7 @@ import {
  * session cookie are gone every time somebody looks at something else.
  *
  * **One partition, shared by every view, and never the renderer's.**
- * `persist:helm-browser` puts cookies and localStorage under the app's own data
+ * `persist:floti-browser` puts cookies and localStorage under the app's own data
  * directory - which moves with `PORTABLE_EXECUTABLE_DIR`, so a check's browser
  * profile lands in the check's directory and a portable install keeps its
  * profile on the stick. Main keeps its session cookies across a restart and
@@ -114,7 +114,7 @@ import {
 export const BROWSER_LIVE_WHILE_HIDDEN = true
 
 /** The partition every browser view shares. Never the window's session. */
-export const BROWSER_PARTITION = 'persist:helm-browser'
+export const BROWSER_PARTITION = 'persist:floti-browser'
 
 /**
  * Which session opened a tab, and the identity a tool is checked against.

@@ -28,7 +28,7 @@ together. The agent tools listener's token and origin rules are in
 
 ## Browser pane
 
-- The `persist:helm-browser` partition holds the user's cookies and logins.
+- The `persist:floti-browser` partition holds the user's cookies and logins.
   Main sets its permission, download and certificate handlers and its user
   agent, and opens pages in it. Cookies are handled only in main
   (`main/browserCookies.ts`): a cookie a page sets without an expiry is set
@@ -54,7 +54,7 @@ together. The agent tools listener's token and origin rules are in
   and those only to a page in the Browser tab that has the keyboard. Only the
   address bar searches, on Enter, with the engine in `browserSearch` (`off`
   refuses); nothing is sent while typing. Its suggestions are ranked in main
-  from the history in `helm.db` (`browser_history`), which records only the
+  from the history in `desktop.db` (`browser_history`), which records only the
   pages the user has, never a page an agent opened.
 - No web page runs without Chromium's OS sandbox. A Linux Floti started with
   `--no-sandbox` (an AppImage's AppRun adds it where user namespaces are

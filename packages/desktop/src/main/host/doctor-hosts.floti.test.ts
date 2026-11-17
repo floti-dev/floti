@@ -63,7 +63,7 @@ describe.runIf(flotiAvailable)('the hosts floti doctor checks', () => {
     { timeout: PATIENCE * 4 },
     async () => {
       const root = await mkdtemp(join(inject(RUN_ROOT), 'doctor hosts '))
-      const places: HostPlaces = { ...FLOTI_PLACES, dataDir: join(root, 'helm-data'), templatesDir: join(root, 'config', 'templates') }
+      const places: HostPlaces = { ...FLOTI_PLACES, dataDir: join(root, 'floti-data'), templatesDir: join(root, 'config', 'templates') }
       const deps = { platform: process.platform, env: process.env, tmpdir, exists: existsSync, spawn }
       // The environment Helm's own host runs with, as `floti doctor` in a terminal would have it.
       const env = { ...hostEnvironment(places, deps), FAKE_SSH_FLOTI: FLOTI }

@@ -15,7 +15,7 @@ import {
 } from './history'
 
 /** A folder the rows name. Nothing is made there: the rows are only data. */
-const dir = join(tmpdir(), 'helm-history-store')
+const dir = join(tmpdir(), 'floti-history-store')
 let store: Store
 const HISTORY = 'C:\\Users\\x\\.claude\\history.jsonl'
 

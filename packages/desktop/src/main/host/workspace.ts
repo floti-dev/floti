@@ -33,10 +33,10 @@ import { CLAUDE_CODE_BACKEND, type Emit } from './sessions'
  *
  * The settings are split by who owns them. The workspace keys
  * (`HOST_WORKSPACE_KEYS`) are the host's and are held here in memory, never
- * written to `helm.db`. Everything else is Helm's: the window's own keys, and
- * the ones Helm tells the host on every connect (`hostSettingsFor`). What the
- * window reads is Helm's settings with the host's keys laid over; while the
- * host cannot be reached it is Helm's own, so the window still paints, and the
+ * written to `desktop.db`. Everything else is the desktop's: the window's own keys,
+ * and the ones the desktop tells the host on every connect (`hostSettingsFor`).
+ * What the window reads is the desktop's settings with the host's keys laid
+ * over; while the host cannot be reached it is the desktop's own, so the window still paints, and the
  * sidebar says why from its own refused read.
  *
  * On the first connect to a host that has never been set up - no scan roots

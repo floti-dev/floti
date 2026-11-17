@@ -216,7 +216,7 @@ function installerChecks(setupExe) {
     const reportFile = join(realDataDir, 'spike-report.json')
     selftest = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null
     appDataFilesAfter = existsSync(realDataDir) ? readdirSync(realDataDir).sort() : []
-    besideExe = readdirSync(installDir).filter((name) => /^helm-data$|\.db$|\.db-wal$/.test(name))
+    besideExe = readdirSync(installDir).filter((name) => /^floti-data$|\.db$|\.db-wal$/.test(name))
   }
 
   say('uninstalling...')
@@ -305,7 +305,7 @@ function installerChecks(setupExe) {
       notes: [
         'Installed silently as the ordinary user. This shell is not elevated, and a per-machine installer would fail here rather than prompt, so "no elevation" is the reason it worked rather than an assumption.',
         'The installed app is asked for the same selftest the portable exe ran, and it reports its own mode and data directory, which are compared against %LOCALAPPDATA%\\Floti\\desktop.',
-        'Nothing landed beside the exe: the install directory holds no helm-data, no .db and no WAL.',
+        'Nothing landed beside the exe: the install directory holds no floti-data, no .db and no WAL.',
         'The install put floti in %LOCALAPPDATA%\\Programs\\Floti\\bin and ran floti setup from there, which also put that folder on the user\'s PATH and registered nothing to start the host at sign-in. The uninstaller leaves floti and the PATH entry for now; docs/PACKAGING.md lists them.',
         'A start-menu entry is created and a desktop icon deliberately is not. Both are checked, and the uninstall has to take back the one it made.',
         'An empty install directory counts as removed: NSIS deletes every file it installed but cannot remove the folder its own uninstaller is running out of, so an empty shell is the ordinary successful outcome.',

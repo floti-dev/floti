@@ -241,7 +241,7 @@ test('persistence: a cookie a page sets is kept in the browser profile, apart fr
 }) => {
   const jars = (app: Helm): Promise<{ browser: string[]; app: string[] }> =>
     app.app.evaluate(async ({ BrowserWindow, session }, name) => {
-      const browser = await session.fromPartition('persist:helm-browser').cookies.get({ name })
+      const browser = await session.fromPartition('persist:floti-browser').cookies.get({ name })
       const own = await BrowserWindow.getAllWindows()[0]!.webContents.session.cookies.get({ name })
       return { browser: browser.map((cookie) => cookie.value), app: own.map((cookie) => cookie.value) }
     }, COOKIE.name)

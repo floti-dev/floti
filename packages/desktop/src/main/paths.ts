@@ -34,7 +34,7 @@ const portableDir = process.env['PORTABLE_EXECUTABLE_DIR']
  * checkout, and `PORTABLE_EXECUTABLE_DIR` says whether the data lives somewhere
  * of its own - and the pair matters because the case with no directory of its
  * own is the dangerous one. An unpackaged run with no portable directory uses
- * **the installed app's own** data folder: the same `helm.db`, the same
+ * **the installed app's own** data folder: the same `desktop.db`, the same
  * `overlays/` and the same Chromium profile as the Floti somebody is using.
  * That is `dev-live`, it is what `pnpm dev:live` asks for on purpose, and it is
  * named rather than inferred so the status bar can say it.
@@ -53,7 +53,7 @@ export const appMode: AppMode = app.isPackaged
     : 'dev-live'
 
 export const dataDir: string = portableDir
-  ? join(portableDir, 'helm-data')
+  ? join(portableDir, 'floti-data')
   : flotiDataDirFor(process.platform, process.env, homedir())
 
 /** Must run before anything reads `app.getPath('userData')`. */
@@ -62,7 +62,7 @@ export function initDataDir(): void {
   app.setPath('userData', dataDir)
 }
 
-export const dbFile: string = join(dataDir, 'helm.db')
+export const dbFile: string = join(dataDir, 'desktop.db')
 
 /**
  * Where the user's workspace templates live.
@@ -72,7 +72,7 @@ export const dbFile: string = join(dataDir, 'helm.db')
  * second override invented for this one:
  *
  *   installed, dev:live   `templates` in the user's config folder, on every OS
- *   portable              `helm-data/templates` beside the exe
+ *   portable              `floti-data/templates` beside the exe
  *   pnpm dev              its own, under `<isolated base>/dev`
  *   every check           its own, under `<isolated base>/checks/<name>`
  *

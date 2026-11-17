@@ -56,7 +56,7 @@ export function installSample(world: World, server: SampleServer, folder = 'samp
 
 /** A plugin folder in the plugins table, as Settings > Plugins > Add folder leaves it. */
 export function registerPlugin(world: World, dir: string): void {
-  const store = openStore({ file: join(world.dataDir, 'helm.db') })
+  const store = openStore({ file: join(world.dataDir, 'desktop.db') })
   try {
     addPluginFolder(store, dir)
   } finally {

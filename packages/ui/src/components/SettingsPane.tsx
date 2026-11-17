@@ -1247,7 +1247,7 @@ const ARCHIVE_CEILINGS = [
  *
  * The figures are stated rather than drawn. A bar with no number on it would
  * be exactly the wrong answer here: the whole reason this group exists is that
- * `helm.db` is the user's file and a feature that grows it silently is one they
+ * `desktop.db` is the user's file and a feature that grows it silently is one they
  * find out about from their disk. So the sentence says how many conversations,
  * how many messages, how many bytes, and how many bytes out of how many - and,
  * when the ceiling has actually bitten, how many conversations it dropped.

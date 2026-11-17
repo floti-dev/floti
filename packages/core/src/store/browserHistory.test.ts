@@ -133,12 +133,12 @@ describe('migration 0034', () => {
   /** A database holding every migration before the history, with `recent` as the retired setting's raw value. */
   function earlierDatabase(recent: string | null): Database.Database {
     const raw = new Database(':memory:')
-    raw.exec('CREATE TABLE __helm_migrations (tag TEXT PRIMARY KEY, applied_at TEXT NOT NULL)')
+    raw.exec('CREATE TABLE __floti_migrations (tag TEXT PRIMARY KEY, applied_at TEXT NOT NULL)')
     const upTo = MIGRATIONS.findIndex((migration) => migration.tag === SEEDS)
     expect(upTo).toBeGreaterThan(0)
     for (const migration of MIGRATIONS.slice(0, upTo)) {
       for (const statement of migration.statements) raw.exec(statement)
-      raw.prepare('INSERT INTO __helm_migrations (tag, applied_at) VALUES (?, ?)').run(migration.tag, '2026-11-01T00:00:00.000Z')
+      raw.prepare('INSERT INTO __floti_migrations (tag, applied_at) VALUES (?, ?)').run(migration.tag, '2026-11-01T00:00:00.000Z')
     }
     raw.prepare("INSERT INTO app_settings (key, value) VALUES ('browserSearch', '\"bing\"')").run()
     if (recent !== null) raw.prepare("INSERT INTO app_settings (key, value) VALUES ('browserRecentUrls', ?)").run(recent)
