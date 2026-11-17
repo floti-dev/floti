@@ -2,7 +2,7 @@ import type { JSX } from 'react'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ContentDirEntry, ContentDirListing, FilesStatus } from '@helm/core'
-import { FilesRootPicker, FilesStatusNote, FilesTree, type FilesTreeProps } from './FilesTree'
+import { FilesEmpty, FilesRootPicker, FilesStatusNote, FilesTree, type FilesTreeProps } from './FilesTree'
 import { COPY_REFUSED } from '../lib/copyFeedback'
 
 const ROOT = 'C:\\p'
@@ -267,5 +267,28 @@ describe('FilesRootPicker', () => {
     fireEvent.keyDown(screen.getByRole('listbox'), { key: 'ArrowUp' })
     fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Enter' })
     expect(onChange).toHaveBeenCalledWith('C:\\dev')
+  })
+})
+
+describe('FilesEmpty', () => {
+  it('with no workspaces, says No workspaces yet and offers New workspace', () => {
+    const onNewWorkspace = vi.fn()
+    render(<FilesEmpty roots={[]} onNewWorkspace={onNewWorkspace} />)
+    const empty = document.querySelector<HTMLElement>('[data-empty-state="files"]')!
+    expect(within(empty).getByText('No workspaces yet')).toBeTruthy()
+    expect(within(empty).getByText('Notes and docs from your workspaces show up here.')).toBeTruthy()
+    fireEvent.click(within(empty).getByRole('button', { name: 'New workspace' }))
+    expect(onNewWorkspace).toHaveBeenCalledOnce()
+  })
+
+  it('says nothing before its folders are listed or where they could not be read, never No workspaces yet', () => {
+    const { container } = render(<FilesEmpty roots={null} onNewWorkspace={vi.fn()} />)
+    expect(container.textContent).toBe('')
+  })
+
+  it('points at the picker while there are folders to pick from', () => {
+    render(<FilesEmpty roots={[{ kind: 'project', path: '/work/a', label: 'a' }]} onNewWorkspace={vi.fn()} />)
+    expect(screen.getByText('Choose a project above to see its files.')).toBeTruthy()
+    expect(document.querySelector('[data-empty-state]')).toBeNull()
   })
 })

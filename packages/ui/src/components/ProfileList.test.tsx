@@ -90,9 +90,24 @@ describe('ProfileList on a host', () => {
     expect(onNew).toHaveBeenCalledOnce()
   })
 
-  it('says a remote host has none yet, rather than the first-run sentence', () => {
-    renderList({ profiles: [], host: { id: 'h1', name: 'build-box', remote: true, connected: false, onNew: vi.fn() } })
-    expect(screen.getByText('No profiles on build-box yet.')).toBeTruthy()
+  it('says a remote host has none yet, and its New profile makes one there', async () => {
+    const onNew = vi.fn()
+    renderList({ profiles: [], host: { id: 'h1', name: 'build-box', remote: true, connected: false, onNew } })
+    const empty = document.querySelector<HTMLElement>('[data-empty-state="profiles:h1"]')!
+    expect(within(empty).getByText('No profiles on build-box yet')).toBeTruthy()
     expect(screen.getByText('retrying')).toBeTruthy()
+    await userEvent.click(within(empty).getByRole('button', { name: 'New profile' }))
+    expect(onNew).toHaveBeenCalledOnce()
+  })
+
+  it('with no profiles, says No profiles yet and offers New profile, which opens the editor', async () => {
+    const onNew = vi.fn()
+    renderList({ profiles: [], onNew })
+    const empty = document.querySelector<HTMLElement>('[data-empty-state="profiles"]')!
+    expect(within(empty).getByText('No profiles yet')).toBeTruthy()
+    expect(within(empty).getByText('Save a folder and an agent, to launch in one click.')).toBeTruthy()
+    expect(screen.queryByRole('list', { name: 'Saved profiles' })).toBeNull()
+    await userEvent.click(within(empty).getByRole('button', { name: 'New profile' }))
+    expect(onNew).toHaveBeenCalledOnce()
   })
 })

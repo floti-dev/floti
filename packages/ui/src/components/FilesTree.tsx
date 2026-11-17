@@ -7,6 +7,7 @@ import { copyPathLabel, useCopyFeedback } from '../lib/copyFeedback'
 import { shortcutLabel } from '../lib/platform'
 import { ROW_SELECTED_GROUP } from '../lib/rows'
 import { CaretIcon, CheckIcon, CodeIcon, CopyIcon, DocIcon, FolderIcon, WorkspaceIcon, LinkIcon, SearchIcon, WarnIcon } from './icons'
+import { EmptyState } from './EmptyState'
 import { HostSwitch, type HostChoice } from './HostSwitch'
 import { Menu } from './Menu'
 
@@ -212,6 +213,37 @@ export function FilesRootPicker({
         />
       )}
     </>
+  )
+}
+
+/**
+ * The Files view with no project to show. Once its host has listed its
+ * folders and holds none, the empty-state pattern, offering New workspace;
+ * with folders to pick from, a line pointing at the picker. Before the list
+ * has answered, or where it could not be read (`roots` null), nothing: the
+ * view says why above, never that there are none.
+ */
+export function FilesEmpty({
+  roots,
+  onNewWorkspace
+}: {
+  roots: readonly ContentScope[] | null
+  onNewWorkspace: () => void
+}): JSX.Element | null {
+  if (roots === null) return null
+  if (roots.length > 0) {
+    return <p className="px-3.5 py-6 text-[12px] text-fg-subtle">Choose a project above to see its files.</p>
+  }
+  return (
+    <EmptyState
+      size="list"
+      name="files"
+      icon={<DocIcon width={18} height={18} />}
+      title="No workspaces yet"
+      action={{ label: 'New workspace', onClick: onNewWorkspace }}
+    >
+      Notes and docs from your workspaces show up here.
+    </EmptyState>
   )
 }
 

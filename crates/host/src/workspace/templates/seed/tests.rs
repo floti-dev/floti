@@ -4,7 +4,7 @@ use floti_protocol::channels::workspace::{CreateWorkspaceRequest, WorkspaceMode}
 
 use super::{SHIPPED_TEMPLATES, seed_templates};
 use crate::workspace::templates::reader::list_templates;
-use crate::workspace::templates::testing::{World, ids, line_matches, read, tree};
+use crate::workspace::templates::testing::{World, ids, read, tree, write};
 use crate::workspace::templates::workspace::create_workspace;
 
 // ---------------------------------------------------------------------------
@@ -20,24 +20,32 @@ fn shipped(relative: &str) -> &'static str {
 }
 
 #[test]
-fn writes_the_readme_and_the_example_into_a_folder_that_is_not_there() {
+fn writes_only_the_readme_into_a_folder_that_is_not_there() {
     let world = World::new();
     let dir = world.root.join("seeded");
     let result = seed_templates(&dir);
 
     assert!(result.seeded);
     assert_eq!(result.problem, None);
-    let mut created = result.created.clone();
-    created.sort();
-    let mut expected: Vec<&str> = SHIPPED_TEMPLATES.iter().map(|(path, _)| *path).collect();
-    expected.sort_unstable();
-    assert_eq!(created, expected);
-    assert!(tree(&dir).contains(&"README.md".to_owned()));
+    assert_eq!(result.created, ["README.md"]);
+    assert_eq!(tree(&dir), ["README.md"]);
+    assert_eq!(read(&dir.join("README.md")), shipped("README.md"));
 
-    // And what it wrote is a template the engine can read back.
+    // No template is a folder here: the picker is Starter alone.
     let listing = list_templates(&dir);
-    assert_eq!(ids(&dir), ["minimal", "example"]);
+    assert_eq!(ids(&dir), ["starter"]);
     assert!(listing.problems.is_empty(), "{:?}", listing.problems);
+}
+
+#[test]
+fn the_readme_says_how_to_make_a_template_and_points_at_no_example() {
+    let readme = shipped("README.md");
+    assert!(!readme.to_lowercase().contains("example"), "{readme}");
+    assert!(readme.contains("## Making one"), "{readme}");
+    assert!(readme.contains("Save as template"), "{readme}");
+    assert!(readme.contains("Import folder"), "{readme}");
+    assert!(readme.contains("## Starter"), "{readme}");
+    assert!(!readme.contains("Minimal"), "{readme}");
 }
 
 #[test]
@@ -82,35 +90,46 @@ fn re_seeds_once_the_folder_is_gone_which_is_the_whole_of_reset() {
 }
 
 #[test]
-fn produces_a_workspace_from_the_shipped_example() {
+fn leaves_an_example_an_older_floti_seeded_exactly_as_it_was_and_still_offers_it() {
     let world = World::new();
     let dir = world.root.join("seeded");
-    seed_templates(&dir);
+    let older = [
+        ("README.md", "# Workspace templates\n\nThe old README.\n"),
+        (
+            "example/template.yaml",
+            "label: \"Example\"\ndescription: \"A CLAUDE.md naming the workspace.\"\norder: 10\n",
+        ),
+        ("example/CLAUDE.md.tpl", "# {{NAME}}\n"),
+        ("example/dot-claude/skills/.gitkeep", ""),
+        ("example/repos/.gitkeep", ""),
+    ];
+    for (relative, content) in older {
+        write(&dir.join(relative), content);
+    }
+    let before = tree(&dir);
 
-    let result = create_workspace(
+    let again = seed_templates(&dir);
+
+    assert!(!again.seeded);
+    assert!(again.created.is_empty());
+    assert_eq!(tree(&dir), before);
+    for (relative, content) in older {
+        assert_eq!(read(&dir.join(relative)), content, "{relative}");
+    }
+    // Starter reaches this user anyway, first, with their example after it.
+    assert_eq!(ids(&dir), ["starter", "example"]);
+
+    // And making a workspace from Starter writes nothing into the folder.
+    let made = create_workspace(
         &CreateWorkspaceRequest {
             mode: WorkspaceMode::New,
             dir: world.root.display().to_string(),
             name: Some("work".into()),
-            template: Some("example".into()),
+            template: Some("starter".into()),
         },
         Some(&dir),
     )
     .unwrap();
-
-    assert!(result.problems.is_empty(), "{:?}", result.problems);
-    assert_eq!(
-        tree(&world.root.join("work")),
-        [
-            ".claude",
-            ".claude/skills",
-            "CLAUDE.md",
-            "repos",
-            "workspace.yaml"
-        ]
-    );
-    assert!(line_matches(
-        &read(&world.root.join("work").join("CLAUDE.md")),
-        "# work"
-    ));
+    assert!(made.problems.is_empty(), "{:?}", made.problems);
+    assert_eq!(tree(&dir), before);
 }

@@ -660,7 +660,13 @@ overrides the gate; keep it.
   tab Floti does not colour.
 - **Empty states** (`EmptyState`): the destination's icon in a 36px well, a
   title saying what is empty in 13px/500, one sentence in `fg-subtle`, and the
-  way on as a button where there is one. In a detail region it centres; at the
+  way on as one button where there is one (`action`): the primary button that
+  fills the surface, its shortcut after the label in mono ("New session
+  Ctrl+N"), or a secondary Try again where it could not look. Each surface's
+  wording is the onboarding design's: "No sessions yet", "No history yet",
+  "No profiles yet", "No agents yet", "No workspaces yet", "No pages open",
+  "No plugins yet". A surface that could not look says Unknown and why in the
+  same pattern, never its empty state. In a detail region it centres; at the
   top of a list it sits where the eye already is. One sentence, not two
   paragraphs: an empty pane is read once and skipped every time after, so it
   says what would fill it and stops. A filter that matched nothing is not an
@@ -1324,8 +1330,8 @@ overrides the gate; keep it.
   the Sessions page.
 
   **A host says it has nothing only once it has listed its sessions.** The
-  empty state ("No workspaces on build-box yet") and this PC's "No folders are
-  being scanned yet" draw only in the live phase; before it, the group's line is
+  empty state ("No workspaces on build-box yet") and this PC's "No sessions
+  yet" draw only in the live phase; before it, the group's line is
   all there is. It is the "Unknown, never nothing" rule again: a host still
   connecting and a host with nothing on it would otherwise look the same, and
   only one of them means its sessions are not coming. A listing that fails

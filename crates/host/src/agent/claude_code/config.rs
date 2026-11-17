@@ -81,6 +81,7 @@ const TEXT_EXT: &[&str] = &[
 /// The order a listing groups kinds in.
 const ORDER: &[ConfigFileKind] = &[
     ConfigFileKind::ClaudeMd,
+    ConfigFileKind::AgentsMd,
     ConfigFileKind::Settings,
     ConfigFileKind::SettingsLocal,
     ConfigFileKind::Mcp,
@@ -130,8 +131,11 @@ fn is_credential(credentials: &[PathBuf], path: &Path) -> bool {
     })
 }
 
-/// One scope's files, sorted by kind and then name. `loose` adds the
-/// `CLAUDE.md` and `.mcp.json` beside a project's `.claude`.
+/// One scope's files, sorted by kind and then name. `loose` adds what sits
+/// beside a project's `.claude`: its `CLAUDE.md` and `.mcp.json`, and the
+/// shared shape's `AGENTS.md` and `.agents/skills` (listed as a `.claude`
+/// skill folder is, with `rel_path` from the project). Nothing else under
+/// `.agents` is configuration, so nothing else there is listed.
 fn scope_files(
     base: &Path,
     claude_dir: &Path,
@@ -155,8 +159,17 @@ fn scope_files(
         Err(source) => return Err(Error::path("list", claude_dir, source)),
     }
     if loose {
+        let agents_dir = base.join(".agents");
+        let shared = Tree {
+            base,
+            claude_dir: &agents_dir,
+            credentials,
+        };
+        // At the depth `skills` has in a walk from the config folder.
+        walk(&shared, &agents_dir.join("skills"), 1, &mut files);
         for (name, kind) in [
             ("CLAUDE.md", ConfigFileKind::ClaudeMd),
+            ("AGENTS.md", ConfigFileKind::AgentsMd),
             (".mcp.json", ConfigFileKind::Mcp),
         ] {
             let path = base.join(name);
@@ -198,6 +211,8 @@ fn compare_names(a: &str, b: &str) -> Ordering {
 /// What a walk of one config folder holds fixed as it descends.
 struct Tree<'a> {
     base: &'a Path,
+    /// The config folder a file is classified from: `.claude`, or the
+    /// shared shape's `.agents`.
     claude_dir: &'a Path,
     credentials: &'a [PathBuf],
 }

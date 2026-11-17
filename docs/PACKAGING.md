@@ -350,10 +350,13 @@ installed app's templates are where a host started at sign-in reads them. One ru
 mechanism - `pnpm dev` and every check get a templates directory of their own
 for free, because both already set that variable for the database.
 
-The shipped `README.md` and example template are written on a start that finds
-the directory **absent**, and nothing there is ever overwritten. Floti records no
-hashes of what it seeded, so it cannot distinguish an edited file from an
-untouched one; deleting the directory is what puts the originals back.
+The shipped `README.md` is written on a start that finds the directory
+**absent**, and nothing there is ever overwritten or removed, an example an
+older release seeded included. Floti records no hashes of what it seeded, so it
+cannot distinguish an edited file from an untouched one; deleting the directory
+is what puts the README back. Starter, the one template Floti ships, is built
+into the host rather than written there, so it reaches a templates folder that
+already exists.
 
 Where each run keeps its data, on each OS (`appMode` in `paths.ts` decides):
 

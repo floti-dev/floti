@@ -63,11 +63,14 @@ pub enum ProjectKind {
     Folder,
 }
 
-/// What a project's `.claude/` folder holds, counted the way Claude Code
-/// resolves it.
+/// What a project holds in either shape a workspace is written in: Claude's
+/// (`CLAUDE.md` and `.claude/`) and the shared one (`AGENTS.md` and
+/// `.agents/skills`), counted the way a launch composes them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaudeInventory {
+    /// The skills in `.claude/skills` and `.agents/skills`, a skill folder
+    /// in both counted once.
     pub skills: u32,
     pub commands: u32,
     pub agents: u32,
@@ -75,6 +78,17 @@ pub struct ClaudeInventory {
     pub settings: bool,
     pub claude_md: bool,
     pub mcp: bool,
+    /// An `AGENTS.md` in the project: the shared shape's instructions file.
+    /// Absent reads false, as it does from a host before protocol 4.2.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub agents_md: bool,
+    /// A `.agents/` folder in the project: the shared shape's, beside
+    /// `.claude/`. Absent reads false, as it does from a host before
+    /// protocol 4.2.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub agents_dir: bool,
 }
 
 /// A working tree's summary, for a project's chips.
@@ -197,8 +211,8 @@ pub struct CreateWorkspaceRequest {
     pub dir: String,
     #[serde(default)]
     pub name: Option<String>,
-    /// For `new` only: `minimal` or absent writes the built-in scaffold, and
-    /// anything else names a template.
+    /// For `new` only: absent, `starter` or `minimal` (its old id) writes
+    /// Starter, the built-in template, and anything else names a template.
     #[serde(default)]
     pub template: Option<String>,
 }

@@ -11,19 +11,17 @@ use floti_protocol::channels::workspace::{
 use serde_yaml_ng::Value;
 
 use super::{
-    DOT_CLAUDE_ALIAS, KEEP_FILE, MINIMAL_TEMPLATE, TEMPLATE_MANIFEST, TPL_SUFFIX,
-    WORKSPACE_MANIFEST, WORKSPACE_MANIFESTS, below, collate, entries_of, is_real_dir,
+    DOT_CLAUDE_ALIAS, KEEP_FILE, STARTER_TEMPLATE, TEMPLATE_MANIFEST, TPL_SUFFIX,
+    WORKSPACE_MANIFEST, WORKSPACE_MANIFESTS, below, collate, entries_of, is_built_in, is_real_dir,
 };
 use crate::platform::links;
 
-/// The picker's first row, which always works.
-pub fn minimal_choice() -> TemplateChoice {
+/// The picker's first row, Starter, which always works.
+pub fn starter_choice() -> TemplateChoice {
     TemplateChoice {
-        id: MINIMAL_TEMPLATE.to_owned(),
-        label: "Minimal".to_owned(),
-        description: Some(
-            "A manifest, an empty repos/ and an empty .claude/. Nothing else.".to_owned(),
-        ),
+        id: STARTER_TEMPLATE.to_owned(),
+        label: "Starter".to_owned(),
+        description: Some("repos/, AGENTS.md".to_owned()),
         order: None,
         built_in: true,
     }
@@ -120,7 +118,7 @@ fn read_metadata(dir: &Path, name: &str) -> Result<Metadata, String> {
 /// folder that is not there is a one-row picker, not an error.
 pub fn list_templates(dir: &Path) -> TemplateListing {
     let mut problems = Vec::new();
-    let mut templates = vec![minimal_choice()];
+    let mut templates = vec![starter_choice()];
     let shown = dir.display().to_string();
     let Ok(entries) = entries_of(dir) else {
         return TemplateListing {
@@ -142,9 +140,10 @@ pub fn list_templates(dir: &Path) -> TemplateListing {
         if !entry.directory {
             continue;
         }
-        if entry.name == MINIMAL_TEMPLATE {
+        if is_built_in(&entry.name) {
             problems.push(format!(
-                "\"{MINIMAL_TEMPLATE}\" is Floti's built-in scaffold, so the folder of that name was not offered."
+                "\"{}\" is the name of Floti's built-in Starter template, so the folder of that name was not offered.",
+                entry.name
             ));
             continue;
         }
@@ -396,20 +395,20 @@ pub fn preview_template(
     mode: Option<WorkspaceMode>,
 ) -> TemplatePreview {
     let mode = mode.unwrap_or(WorkspaceMode::New);
-    if mode == WorkspaceMode::Convert || template == MINIMAL_TEMPLATE {
+    if mode == WorkspaceMode::Convert || is_built_in(template) {
         let (entries, note): (&[&str], &str) = match mode {
             WorkspaceMode::New => (
-                &[WORKSPACE_MANIFEST, "repos/", ".claude/"],
-                "Nothing else. No starter skills, notes or rules - what belongs in a workspace is yours to decide.",
+                &[WORKSPACE_MANIFEST, "AGENTS.md", "repos/"],
+                "Nothing else. AGENTS.md holds the basics of working here, with the workspace's name filled in; edit it to say what agents here should know.",
             ),
             WorkspaceMode::Convert => (
-                &[WORKSPACE_MANIFEST, ".claude/"],
-                "The manifest records repos: \".\" so the repositories already in this folder stay visible.",
+                &[WORKSPACE_MANIFEST],
+                "Nothing else: the folder's own instructions stay as they are. Without a repos/ folder, the manifest records repos: \".\" so the repositories already in it stay visible.",
             ),
         };
         return TemplatePreview {
-            template: if mode == WorkspaceMode::Convert {
-                MINIMAL_TEMPLATE.to_owned()
+            template: if mode == WorkspaceMode::New {
+                STARTER_TEMPLATE.to_owned()
             } else {
                 template.to_owned()
             },

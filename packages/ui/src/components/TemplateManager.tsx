@@ -50,7 +50,7 @@ import { Overlay } from './Overlay'
  */
 
 export interface TemplateManagerProps {
-  /** The picker's rows, `minimal` included - it is shown, and is not editable. */
+  /** The picker's rows, Starter included - it is shown, and is not editable. */
   templates: readonly TemplateChoice[]
   /** Where they live, said out loud so the folder can be found without Helm. */
   templatesDir: string
@@ -161,7 +161,7 @@ export function TemplateManager({
           >
             {authored.length === 0 && !creating && (
               <p className="px-2 py-3 text-[11.5px] leading-[1.55] text-fg-subtle">
-                No templates yet. Every new workspace gets the built-in Minimal scaffold until there
+                No templates yet. Every new workspace gets the built-in Starter template until there
                 is one.
               </p>
             )}
@@ -768,6 +768,7 @@ const IMPORTABLE = new Set<ConfigFile['kind']>([
   'hook',
   'rule',
   'claude-md',
+  'agents-md',
   'settings',
   'mcp'
 ])
@@ -780,6 +781,7 @@ const KIND_LABEL: Partial<Record<ConfigFile['kind'], string>> = {
   hook: 'hook',
   rule: 'rule',
   'claude-md': 'CLAUDE.md',
+  'agents-md': 'AGENTS.md',
   settings: 'settings',
   mcp: 'mcp'
 }

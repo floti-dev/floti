@@ -94,6 +94,23 @@ describe('installing floti from a host’s row in Settings > Hosts', () => {
     expect(later.textContent).not.toContain('Cannot connect')
   })
 
+  it('an install whose download answered 404 in its only line, as on Windows, says that version has no published floti', async () => {
+    const line = 'Exception calling "DownloadFile": "The remote server returned an error: (404) Not Found."'
+    const install = actions(
+      { kind: 'offer', id: 'offer-4', offer: { ...NOT_FOUND_OFFER, how: 'download', version: '3.0.0' } },
+      { ok: false, step: 'install', lastLine: line }
+    )
+    renderHosts(install, { hosts: [host({ state: 'missing', lastLine: 'sh: 1: floti: not found' })] })
+    const row = screen.getByRole('group', { name: 'build-box' })
+    await userEvent.click(within(row).getByRole('button', { name: 'Install floti' }))
+    await userEvent.click(await within(row).findByRole('button', { name: 'Install on build-box' }))
+    const problem = await screen.findByRole('alert')
+    expect(problem.textContent).toContain('floti 3.0.0 has no published build to download')
+    expect(problem.querySelector('[data-settings-host-problem-line]')?.textContent).toBe(line)
+    expect(problem.textContent).toContain('Update Floti on this PC, then try again.')
+    expect(problem.textContent).not.toMatch(/github\.com/)
+  })
+
   it('S18: the sidebar’s Update floti starts the same update in the host’s row', async () => {
     const install = actions({ kind: 'offer', id: 'offer-3', offer: { ...NOT_FOUND_OFFER, action: 'update', found: { version: '2.1.0', protocol: '0.9' } } })
     const { rerender } = renderHosts(install, { hosts: [host({ state: 'tooOld', host: '0.9', client: '1.0' })] })

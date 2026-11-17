@@ -141,6 +141,28 @@ describe('the add-a-host dialog', () => {
     expect(w.dialog().textContent).not.toMatch(/pair|approv|role|code/i)
   })
 
+  it('says in one line to pick a computer, and keeps what the other computer needs behind a link, read before anything connects', async () => {
+    const w = world()
+    await within(w.dialog()).findByRole('radiogroup', { name: 'From your SSH config' })
+    expect(within(w.dialog()).getByRole('heading').textContent).toBe('Add a host')
+    expect(w.dialog().textContent).toContain('Pick a computer you reach with ssh.')
+    const link = within(w.dialog()).getByRole('button', { name: 'What does the other computer need?' })
+    expect(link.getAttribute('aria-expanded')).toBe('false')
+    expect(w.dialog().querySelector('[data-add-host-needs]')).toBeNull()
+
+    await pick(w)
+    await userEvent.click(link)
+    expect(link.getAttribute('aria-expanded')).toBe('true')
+    const needs = w.dialog().querySelector('[data-add-host-needs]') as HTMLElement
+    expect(needs.textContent).toBe(
+      'ssh build-box has to work in a terminal without a prompt (its host key accepted, a key sign-in).' +
+        'A Windows computer needs OpenSSH Server, with an administrator’s key in C:\\ProgramData\\ssh\\administrators_authorized_keys.'
+    )
+    expect(w.actions.check).not.toHaveBeenCalled()
+    await userEvent.click(link)
+    expect(w.dialog().querySelector('[data-add-host-needs]')).toBeNull()
+  })
+
   it('S4: with no ssh config, or one naming only wildcard Hosts, the list says so and the typed target is the way in', async () => {
     const none = world({ config: { found: false, hosts: [] } })
     expect((await within(none.dialog()).findByText(/This PC has no ssh config\./)).textContent).toContain('Type the target')
@@ -165,12 +187,13 @@ describe('the add-a-host dialog', () => {
         ])
       )
     expect(steps()).toEqual({ check: 'now', install: 'wait', connect: 'wait', quit: 'wait' })
-    expect(w.dialog().textContent).toContain('ssh -o BatchMode=yes build-box floti version')
+    expect(
+      [...w.dialog().querySelectorAll('[data-add-host-step]')].map((each) => each.querySelector('span:last-child')?.textContent)
+    ).toEqual(['Looking for floti', 'Install it if needed', 'Connect to build-box', 'Choose what quitting does'])
 
     w.checks[0]?.answer.resolve(READY)
     await vi.waitFor(() => expect(w.adds).toHaveLength(1))
     expect(steps()).toEqual({ check: 'done', install: 'done', connect: 'now', quit: 'wait' })
-    expect(w.dialog().textContent).toContain('ssh build-box floti connect')
     expect(w.adds[0]?.request).toEqual({
       attempt: 'attempt-2',
       name: 'build-box',
@@ -234,7 +257,7 @@ describe('the add-a-host dialog', () => {
     expect(within(w.dialog()).getByRole('heading').textContent).toBe('Install floti on build-box?')
     expect(w.dialog().querySelector('[data-settings-host-offer-system]')?.textContent).toBe('Linux · x86_64')
     expect(w.dialog().querySelector('[data-settings-host-offer-found]')?.textContent).toBe('floti not found')
-    expect(w.dialog().textContent).toContain('~/.local/bin')
+    expect(w.dialog().textContent).toContain('floti isn’t on build-box yet. It installs in your user folder, with no admin rights.')
     expect(w.button('Back')).toBeTruthy()
     expect(w.actions.install).not.toHaveBeenCalled()
 
@@ -355,8 +378,8 @@ describe('the add-a-host dialog', () => {
     ['S11', { kind: 'failed', lastLine: 'ssh: Could not resolve hostname build-box: Name or service not known' }, 'unresolved', 'ssh does not know build-box'],
     ['S12', { kind: 'failed', lastLine: 'ssh: connect to host 10.0.0.7 port 22: Connection timed out' }, 'unreachable', 'Can’t reach build-box'],
     ['S14', { kind: 'failed', lastLine: 'Host key verification failed.', said: 'No ED25519 host key is known for build-box and you have requested strict checking.\nHost key verification failed.' }, 'unknownKey', 'ssh does not trust build-box yet'],
-    ['S15', { kind: 'failed', lastLine: 'Welcome to build-box!', cause: 'loginOutput' }, 'loginOutput', 'build-box’s login printed text where floti’s connection goes'],
-    ['S16', { kind: 'noBuild', system: { os: null, cpu: 'arm64', label: 'FreeBSD · arm64' }, reason: 'There is no floti for FreeBSD · arm64 yet.' }, 'noBuild', 'There is no floti for FreeBSD · arm64 yet'],
+    ['S15', { kind: 'failed', lastLine: 'Welcome to build-box!', cause: 'loginOutput' }, 'loginOutput', 'build-box’s shell prints text at login'],
+    ['S16', { kind: 'noBuild', system: { os: null, cpu: 'arm64', label: 'FreeBSD · arm64' }, reason: 'There is no floti for FreeBSD · arm64 yet.' }, 'noBuild', 'There is no floti for FreeBSD on arm64 yet'],
     ['S18', { kind: 'newer', found: { version: '3.2.0', protocol: '2.0' }, ours: '1.0', helm: '3.0.0' }, 'newer', 'build-box runs floti 3.2.0, newer than this Floti 3.0.0']
   ] as const)('%s: a check that fails as %s says what went wrong, with the line and the fix', async (_scenario, check, kind, title) => {
     const w = world()
@@ -384,6 +407,58 @@ describe('the add-a-host dialog', () => {
     expect(w.dialog().querySelector('[data-add-host-line]')?.textContent).toBe('curl: (6) Could not resolve host: github.com')
     await userEvent.click(w.button('Try again'))
     expect(w.checks).toHaveLength(2)
+  })
+
+  it('an install whose download answers 404 says that version has no published floti and to update Floti here, not to check github.com', async () => {
+    const w = world()
+    await pick(w)
+    await userEvent.click(w.button('Connect'))
+    w.checks[0]?.answer.resolve({ kind: 'offer', id: 'offer-1', offer: OFFER })
+    await vi.waitFor(() => expect(w.step()).toBe('install'))
+    await userEvent.click(w.button('Install on build-box'))
+    const lastLine = 'floti install: could not download https://example.test/floti-3.0.0-linux-x64.'
+    w.installs[0]?.answer.resolve({
+      ok: false,
+      step: 'install',
+      lastLine,
+      said: `curl: (22) The requested URL returned error: 404\n${lastLine}`
+    })
+    await vi.waitFor(() => expect(w.step()).toBe('failed'))
+    expect(within(w.dialog()).getByRole('heading').textContent).toBe('floti 3.0.0 has no published build to download')
+    expect(w.dialog().querySelector('[data-add-host-line]')?.textContent).toBe(lastLine)
+    expect(w.dialog().querySelector('[data-add-host-fix]')?.textContent).toBe('Update Floti on this PC, then try again.')
+    expect(w.dialog().textContent).not.toMatch(/github\.com|reaches/)
+  })
+
+  it('too old there: asks to update, naming the version it found and how many sessions the update ends', async () => {
+    const w = world()
+    await pick(w)
+    await userEvent.click(w.button('Connect'))
+    const old: InstallOffer = {
+      ...OFFER,
+      found: { version: '2.9.0', protocol: '2.0' },
+      action: 'update',
+      sessions: 2,
+      talks: false
+    }
+    w.checks[0]?.answer.resolve({ kind: 'offer', id: 'offer-1', offer: old })
+    await vi.waitFor(() => expect(w.step()).toBe('install'))
+    expect(within(w.dialog()).getByRole('heading').textContent).toBe('Update floti on build-box?')
+    expect(w.dialog().textContent).toContain('build-box has floti 2.9.0, too old for this Floti to talk to.')
+    expect(w.button('Update floti on build-box, ending 2 sessions')).toBeTruthy()
+  })
+
+  it('the added screen is a title, one line and the choices, with no explaining paragraphs', async () => {
+    const w = world()
+    await pick(w)
+    await userEvent.click(w.button('Connect'))
+    w.checks[0]?.answer.resolve(READY)
+    await vi.waitFor(() => expect(w.adds).toHaveLength(1))
+    w.adds[0]?.answer.resolve(added(w.adds[0].request))
+    await vi.waitFor(() => expect(w.step()).toBe('added'))
+    expect(w.dialog().textContent).toContain('It’s in the sidebar, next to this PC.')
+    expect(w.dialog().textContent).toContain('When you quit Floti, on build-box')
+    expect(w.dialog().textContent).not.toMatch(/pinned|lost connection|Sessions you start/)
   })
 
   it('a Linux server installs, its setup says the host keeps running with nobody signed in, and it is added and connected with no next-sign-in note', async () => {
@@ -427,7 +502,9 @@ describe('the add-a-host dialog', () => {
     })
     await vi.waitFor(() => expect(w.step()).toBe('failed'))
     expect(w.dialog().querySelector('[data-add-host-failed]')?.getAttribute('data-add-host-failed')).toBe('hostKeyChanged')
-    expect(w.dialog().querySelector('[data-add-host-fix]')?.textContent).toContain('Floti never accepts a host key for you')
+    expect(w.dialog().querySelector('[data-add-host-fix]')?.textContent).toBe(
+      'Run ssh build-box once in a terminal and check the key it shows.'
+    )
   })
 
   it('S23: Not installed names the install command, Not signed in names claude, Unknown says why; the host is added either way', async () => {
@@ -543,14 +620,12 @@ describe('the add-a-host dialog’s WSL distros', () => {
       transport: { kind: 'wsl', distro: 'Debian' },
       attempt: 'attempt-1'
     })
-    expect(w.dialog().textContent).toContain('wsl.exe -d Debian -- floti version')
     w.checks[0]?.answer.resolve(READY)
     await vi.waitFor(() => expect(w.adds).toHaveLength(1))
     expect(w.adds[0]?.request).toMatchObject({
       name: 'Debian',
       transport: { kind: 'wsl', distro: 'Debian' }
     })
-    expect(w.dialog().textContent).toContain('wsl.exe -d Debian -- floti connect')
   })
 
   it('S5: picking Ubuntu on win-box checks through ssh win-box and its wsl.exe, and names it Ubuntu on win-box', async () => {
@@ -566,7 +641,6 @@ describe('the add-a-host dialog’s WSL distros', () => {
       transport: { kind: 'wsl', distro: 'Ubuntu', through: 'win-box' },
       attempt: 'attempt-1'
     })
-    expect(w.dialog().textContent).toContain('ssh -o BatchMode=yes win-box wsl.exe -d Ubuntu -- floti version')
   })
 
   it('S10: a distro gone says WSL has no distro of that name, with wsl.exe’s line and wsl --list; no WSL says to run wsl --install; nothing is added', async () => {

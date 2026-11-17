@@ -1908,12 +1908,20 @@
       "type": "object"
     },
     "ClaudeInventory": {
-      "description": "What a project's `.claude/` folder holds, counted the way Claude Code\nresolves it.",
+      "description": "What a project holds in either shape a workspace is written in: Claude's\n(`CLAUDE.md` and `.claude/`) and the shared one (`AGENTS.md` and\n`.agents/skills`), counted the way a launch composes them.",
       "properties": {
         "agents": {
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "agentsDir": {
+          "description": "A `.agents/` folder in the project: the shared shape's, beside\n`.claude/`. Absent reads false, as it does from a host before\nprotocol 4.2.",
+          "type": "boolean"
+        },
+        "agentsMd": {
+          "description": "An `AGENTS.md` in the project: the shared shape's instructions file.\nAbsent reads false, as it does from a host before protocol 4.2.",
+          "type": "boolean"
         },
         "claudeMd": {
           "type": "boolean"
@@ -1933,6 +1941,7 @@
           "type": "boolean"
         },
         "skills": {
+          "description": "The skills in `.claude/skills` and `.agents/skills`, a skill folder\nin both counted once.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -2108,7 +2117,7 @@
       "type": "object"
     },
     "ConfigFileKind": {
-      "description": "What a file in a config tree is, as the agent resolves it.",
+      "description": "What a file in a config tree is, as the agent resolves it. `agents-md`,\na project's `AGENTS.md` (the shared shape's instructions file), is since\nprotocol 4.2. No variant carries a doc of its own: one would make this\ntype's schema a `oneOf` rather than an `enum` gaining a value.",
       "enum": [
         "skill",
         "command",
@@ -2120,7 +2129,8 @@
         "claude-md",
         "mcp",
         "rule",
-        "other"
+        "other",
+        "agents-md"
       ],
       "type": "string"
     },
@@ -2922,7 +2932,7 @@
         },
         "template": {
           "default": null,
-          "description": "For `new` only: `minimal` or absent writes the built-in scaffold, and\nanything else names a template.",
+          "description": "For `new` only: absent, `starter` or `minimal` (its old id) writes\nStarter, the built-in template, and anything else names a template.",
           "type": [
             "string",
             "null"
@@ -10237,7 +10247,7 @@
       "description": "One row of the template picker.",
       "properties": {
         "builtIn": {
-          "description": "The built-in scaffold, which has no folder behind it.",
+          "description": "Starter, the built-in template, which has no folder behind it.",
           "type": "boolean"
         },
         "description": {
@@ -10247,7 +10257,7 @@
           ]
         },
         "id": {
-          "description": "The folder name, and what a workspace records. `minimal` for the\nbuilt-in scaffold.",
+          "description": "The folder name, and what a workspace records. `starter` for Starter,\nthe built-in template.",
           "type": "string"
         },
         "label": {
@@ -13291,5 +13301,5 @@
   ],
   "x-defaultInitialCredit": 262144,
   "x-maxFrameLen": 16777216,
-  "x-protocolVersion": "4.1"
+  "x-protocolVersion": "4.2"
 }

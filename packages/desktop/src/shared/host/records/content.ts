@@ -10,7 +10,9 @@ const scopeKey = (path: string): string => path.replace(/\\/g, '/').replace(/\/+
 
 /**
  * A scanned folder's config scope, from what the scan found there: its
- * `.claude` beside it, which exists when the scan saw it or a `CLAUDE.md`.
+ * `.claude` beside it. The scope exists when the folder holds config in
+ * either shape: a `.claude/` or a `CLAUDE.md`, or an `.agents/` or an
+ * `AGENTS.md`.
  */
 export function scannedConfigScope(folder: Project, kind: 'workspace' | 'project'): ConfigScope {
   const base = folder.path.replace(/[\\/]+$/, '')
@@ -20,7 +22,11 @@ export function scannedConfigScope(folder: Project, kind: 'workspace' | 'project
     path: base,
     claudeDir: `${base}${separator}.claude`,
     label: folder.name || base,
-    exists: folder.hasClaudeDir || folder.inventory.claudeMd
+    exists:
+      folder.hasClaudeDir ||
+      folder.inventory.claudeMd ||
+      folder.inventory.agentsMd === true ||
+      folder.inventory.agentsDir === true
   }
 }
 

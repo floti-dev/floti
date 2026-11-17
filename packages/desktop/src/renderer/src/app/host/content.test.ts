@@ -112,6 +112,27 @@ describe('what composition reads of an agent’s config, over the window’s own
     expect(scopes[1]).toEqual({ kind: 'workspace', path: HUB, claudeDir: `${HUB}/.claude`, label: 'hub', exists: false })
   })
 
+  it('lists a folder in the shared shape, with only an AGENTS.md or an .agents/, as a scope that exists', () => {
+    const shared = (path: string, inventory: Partial<Project['inventory']>): Project => {
+      const base = folder(path, 'repo', path.split('/').pop() ?? path, false)
+      return { ...base, inventory: { ...base.inventory, ...inventory } }
+    }
+    const merged = configScopesWithScan(
+      [scope('user', HOME, 'User')],
+      [
+        shared('/work dir/agents-md', { agentsMd: true }),
+        shared('/work dir/agents-dir', { agentsDir: true }),
+        shared('/work dir/neither', {})
+      ]
+    )
+    expect(merged.map((s) => [s.label, s.exists])).toEqual([
+      ['User', true],
+      ['agents-md', true],
+      ['agents-dir', true],
+      ['neither', false]
+    ])
+  })
+
   it('tells apart paths that differ only by separators, a trailing one or case', () => {
     const merged = configScopesWithScan(
       [scope('user', HOME, 'User'), scope('project', 'C:\\work\\alpha\\', 'alpha'), scope('project', OUTSIDE, 'tooling')],

@@ -158,14 +158,17 @@ export type ProjectKind =
   | 'folder'
 
 /**
- * Counts of what a project's `.claude/` directory actually contains.
+ * Counts of what a project holds, in either shape a workspace is written in:
+ * Claude's (`CLAUDE.md` and `.claude/`) and the shared one (`AGENTS.md` and
+ * `.agents/skills`).
  *
- * Counted the way Claude Code resolves them, not the way a file listing would:
+ * Counted the way a launch composes them, not the way a file listing would:
  * a skill is a directory holding a `SKILL.md`, and commands and agents are
  * markdown files at any depth (`commands/spec/plan.md` is the `/spec:plan`
  * command, so a top-level count of that tree would report 1 instead of 20).
  */
 export interface ClaudeInventory {
+  /** In `.claude/skills` and `.agents/skills`; a skill folder in both counts once. */
   skills: number
   commands: number
   agents: number
@@ -173,6 +176,10 @@ export interface ClaudeInventory {
   settings: boolean
   claudeMd: boolean
   mcp: boolean
+  /** An `AGENTS.md`, the shared shape's instructions. Absent from a host before protocol 4.2, and read as false. */
+  agentsMd?: boolean
+  /** A `.agents/` folder, the shared shape's. Absent from a host before protocol 4.2, and read as false. */
+  agentsDir?: boolean
 }
 
 export const EMPTY_INVENTORY: ClaudeInventory = {
@@ -2101,6 +2108,7 @@ export type ConfigFileKind =
   | 'settings'
   | 'settings-local'
   | 'claude-md'
+  | 'agents-md'
   | 'mcp'
   | 'rule'
   | 'other'
@@ -2786,18 +2794,18 @@ export interface ContentSearchResult {
 
 /** One row of the picker. */
 export interface TemplateChoice {
-  /** Directory name, and what `template:` records. `minimal` for the built-in. */
+  /** Directory name, and what `template:` records. `starter` for Starter, the built-in. */
   id: string
   label: string
   description: string | null
   /** `order:` from `template.yaml`. Sorted on before the label; null sorts last. */
   order: number | null
-  /** The built-in scaffold, which has no directory behind it. */
+  /** Starter, the built-in template, which has no directory behind it. */
   builtIn: boolean
 }
 
 export interface TemplateListing {
-  /** `minimal` first and always, then the user's by `order` then label. */
+  /** Starter first and always, then the user's by `order` then label. */
   templates: TemplateChoice[]
   /** Where the user's templates live, so the dialog can say so. */
   dir: string

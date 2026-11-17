@@ -8,12 +8,14 @@ import { SEGMENT_ON } from '../lib/segmented'
 import type { MenuLayerPort, SuggestionsLayerHandle } from '../lib/menuLayer'
 import { BrowserSuggestionsLayer } from './BrowserSuggestionsLayer'
 import { ConsolePanel, type ConsoleEntry } from './ConsolePanel'
+import { EmptyState } from './EmptyState'
 import {
   AgentIcon,
   BackIcon,
   CloseIcon,
   ExternalIcon,
   ForwardIcon,
+  GlobeIcon,
   MoreIcon,
   RefreshIcon,
   SearchIcon,
@@ -155,6 +157,41 @@ export interface BrowserPaneProps {
 }
 
 /**
+ * A page with nothing in it: a new tab that has not been sent anywhere, is
+ * loading nothing, and has no refusal or problem to show. Its view is clear
+ * (main grounds it white only on its first navigation), so the window hides
+ * it and the pane says the Browser tab's empty state where the page would be.
+ */
+export function browserPageBlank(
+  state: Pick<BrowserPaneState, 'url' | 'pendingUrl' | 'refusedUrl' | 'loading' | 'problem'>
+): boolean {
+  return (
+    state.url === '' &&
+    state.pendingUrl === null &&
+    state.refusedUrl === null &&
+    !state.loading &&
+    state.problem === null
+  )
+}
+
+/**
+ * The Browser tab with no page to show (DESIGN.md 5, "Empty states"). Open a
+ * page puts the caret in an address bar: the blank page's own, or a new page's.
+ */
+export function BrowserEmpty({ onOpen }: { onOpen: () => void }): JSX.Element {
+  return (
+    <EmptyState
+      name="browser"
+      icon={<GlobeIcon width={18} height={18} />}
+      title="No pages open"
+      action={{ label: 'Open a page', onClick: onOpen }}
+    >
+      Type an address, or let an agent open one.
+    </EmptyState>
+  )
+}
+
+/**
  * The browser pane: an address-bar island, a hole for the native view, and a
  * console under it.
  *
@@ -233,6 +270,8 @@ export function BrowserPane({
   /** What the address bar says when nobody is typing: where the page is going, or where it is. */
   const shown = submitted ?? state.pendingUrl ?? address
   const typed = draft ?? shown
+  /** A new tab nothing has been sent to yet: the empty state stands where the page would be. */
+  const blank = submitted === null && browserPageBlank(state)
   const [suggesting, setSuggesting] = useState(false)
   /** The newest answer to `onSuggest`, for the text it names. */
   const [suggestions, setSuggestions] = useState<Suggestions | null>(null)
@@ -925,6 +964,11 @@ export function BrowserPane({
           style={width === null ? undefined : { maxWidth: `${String(width)}px` }}
           className="relative min-h-0 w-full flex-1 overflow-hidden"
         >
+          {blank && (
+            <div className="absolute inset-0">
+              <BrowserEmpty onOpen={() => addressRef.current?.focus()} />
+            </div>
+          )}
           {/* The page, as a picture, while the view is off the screen for
               something drawn over it - so a menu opens over the page rather
               than over a hole. Exactly the view's rectangle, which is this one. */}

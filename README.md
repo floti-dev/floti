@@ -150,7 +150,7 @@ keys:
 
 ```yaml
 name: "work"        # what the sidebar calls it
-template: "minimal" # informational
+template: "starter" # informational
 version: "1"        # manifest format
 repos: "projects"   # where the repositories are; omit for `repos/`
 ```
@@ -161,9 +161,12 @@ repositories sit at its **top level** would hide all of them. `repos: "."` says
 they are right here. The "turn a folder into a workspace" action writes that for
 you.
 
-Creating a workspace scaffolds the minimum and nothing else - `workspace.yaml`,
-`repos/`, an empty `.claude/`. No starter skills, notes or rules: what belongs
-in a workspace is yours to decide.
+Creating a workspace makes it from **Starter**, the one template Floti ships,
+unless you pick one of your own: `workspace.yaml`, an empty `repos/` and an
+`AGENTS.md` with the basics of working there and the workspace's name filled
+in, and nothing else. `AGENTS.md` is the file every agent reads; edit it to say
+what agents in that workspace should know. Turning a folder you already have
+into a workspace writes only `workspace.yaml`.
 
 ## What it does
 

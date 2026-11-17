@@ -299,6 +299,12 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   does while the sidebar is hidden. The view never enters the top 36px, where
   Windows draws the window controls, except in fullscreen, when the page has
   the whole window and there is no title bar.
+- A blank page (a new tab sent nowhere yet: no address, nothing pending,
+  loading, refused or wrong; `browserPageBlank` in `BrowserPane.tsx`) is kept
+  off the screen too. Its view is clear until its first navigation, and a
+  clear view still takes clicks, so the Browser tab's empty state ("No pages
+  open", whose Open a page puts the caret in the address bar) is drawn where
+  the page would be and the view comes back the moment an address is sent.
 - The bar's own menus (More, Share) and the address suggestions are drawn
   over the live page instead, in the **menu layer** (`main/menuLayer.ts`):
   one transparent `WebContentsView` per window, made with the window's first
@@ -442,8 +448,15 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
 - Templates live in `templates` in the host's config folder: for the
   installed app `~/.config/floti`; otherwise the folder holding `templatesDir` in
   `paths.ts` (`helm-data/templates` when portable). The host reads and seeds them at
-  its start. The shipped README and example are written only when the
-  directory is absent, and nothing there is ever overwritten. The in-app
+  its start. The shipped README is written only when the directory is absent,
+  and nothing there is ever overwritten or removed. Starter
+  (`workspace/templates/workspace.rs`, id `starter`) is the one template Floti
+  ships: code, not a folder, listed first and chosen in the picker, writing
+  `workspace.yaml`, an empty `repos/` and an `AGENTS.md`
+  (`templates/starter/AGENTS.md`) with the workspace's name filled in. A
+  manifest recording `template: minimal`, the id of the scaffold before it,
+  lists, opens and launches as any other, and a request for `minimal` makes
+  Starter. The in-app
   Templates manager makes templates (from a folder too, `template:fromFolder`),
   renames, imports, fills (`template:substitute`) and deletes them and edits
   their label and description; it has no file editor.
@@ -451,8 +464,9 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   workspaces had while they were called harnesses
   (`discovery/scan.rs`, `WORKSPACE_MANIFESTS`). Discovery, launches and
   overlays read either the same way, `workspace.yaml` first when both are
-  there. `workspace:create` writes `workspace.yaml` only, refuses a folder
-  that has either, and a template cannot supply either. Nothing renames or
+  there. `workspace:create` writes `workspace.yaml` itself, refuses a folder
+  that has either, and a template cannot supply either; converting a folder
+  writes that manifest and nothing else. Nothing renames or
   rewrites a `harness.yaml`.
 
 ## Terminals and session state
@@ -490,6 +504,17 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   counts, never a message. What a launch needs (agent
   tools, settings, composed instructions, overlays) is a per-launch file under
   the data directory, never a write into the agent's config.
+- A folder is written in Claude's shape (`CLAUDE.md`, `.claude/`) or the
+  shared one (`AGENTS.md`, `.agents/skills`), or both, and a launch composes
+  either (`agent/workspace.rs`). Everything that shows what a folder holds
+  reads both: the scan's inventory (`workspace/discovery/inventory.rs`, its
+  `agentsMd` and `agentsDir` since protocol 4.2), the project pane, the config
+  scopes (a folder with either shape's files is a scope that exists) and their
+  trees (a scope's `AGENTS.md`, kind `agents-md`, and its `.agents/skills`,
+  which a template import copies to the same place), and the effective view,
+  which lists an overlay's `.agents/skills` and every `AGENTS.md` a launch
+  loads. A skill folder in both skills folders counts and lists once, from
+  `.claude/skills`, as a launch takes it. None of them writes into the folder.
 
 ## Processes and ports
 

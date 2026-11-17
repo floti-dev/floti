@@ -1193,7 +1193,7 @@ function TemplatesGroup({
     >
       <p className="pb-1 text-[12px] leading-[1.55] text-fg-muted">
         A template is a folder here; creating a workspace from one copies it in. The New Workspace
-        dialog picks between them, and the built-in <em>Minimal</em> scaffold is always the first
+        dialog picks between them, and the built-in <em>Starter</em> template is always the first
         row whatever is in this folder.
       </p>
 

@@ -279,6 +279,10 @@ export function ProjectPane({
             <ul className="flex flex-col gap-1 text-[12px]">
               <Flag on={project.hasClaudeDir}>.claude/</Flag>
               <Flag on={inventory.claudeMd}>CLAUDE.md</Flag>
+              {/* The shared shape is named only where it is there, so a
+                  folder in Claude's shape reads as it always has. */}
+              {inventory.agentsDir === true && <Flag on>.agents/</Flag>}
+              {inventory.agentsMd === true && <Flag on>AGENTS.md</Flag>}
               <Flag on={inventory.settings}>settings.json</Flag>
               <Flag on={inventory.hooks}>hooks/</Flag>
               <Flag on={inventory.mcp}>.mcp.json</Flag>

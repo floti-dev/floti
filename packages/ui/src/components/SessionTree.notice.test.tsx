@@ -56,7 +56,7 @@ function renderTree(parent: TreeSession, actions?: TreeNoticeActions): void {
       onLaunch={vi.fn()}
       launchingPath={null}
       onOpenSession={vi.fn()}
-      onAddRoot={vi.fn()}
+      onNewSession={vi.fn()}
       noticeActions={actions}
     />
   )

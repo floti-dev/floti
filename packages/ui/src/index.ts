@@ -1,6 +1,8 @@
 export { AppShell, type AppShellProps } from './components/AppShell'
 export {
+  BrowserEmpty,
   BrowserPane,
+  browserPageBlank,
   BROWSER_WIDTHS,
   BROWSER_ZOOM,
   type BrowserPaneProps,
@@ -10,7 +12,7 @@ export {
 export { BrowserOff, type BrowserOffProps } from './components/BrowserOff'
 export { BrowserSuggestions, type BrowserSuggestionsProps } from './components/BrowserSuggestions'
 export { Chip, type ChipProps, type ChipTone } from './components/Chip'
-export { EmptyState, type EmptyStateProps } from './components/EmptyState'
+export { EmptyState, type EmptyStateAction, type EmptyStateProps } from './components/EmptyState'
 export { CommandPalette, commandScore, type CommandPaletteProps, type PaletteCommand } from './components/CommandPalette'
 export { PluginIcon } from './components/PluginIcon'
 export {
@@ -43,7 +45,7 @@ export {
   type CodeEditorProps,
   type EditorStatus
 } from './components/CodeEditor'
-export { FilesRootPicker, FilesStatusNote, FilesTree, type FilesTreeProps } from './components/FilesTree'
+export { FilesEmpty, FilesRootPicker, FilesStatusNote, FilesTree, type FilesTreeProps } from './components/FilesTree'
 export { FileActions, FileCrumb, FileView, type FileViewProps } from './components/FileView'
 export {
   QuickOpenDialog,

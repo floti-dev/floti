@@ -167,7 +167,7 @@ fn roots_heard(listener: &mut broadcast::Receiver<Publication>) -> Vec<Vec<Strin
 }
 
 #[tokio::test]
-async fn a_host_seeds_the_shipped_readme_and_example_into_a_templates_folder_that_is_absent() {
+async fn a_host_seeds_only_the_shipped_readme_into_a_templates_folder_that_is_absent() {
     let world = World::new();
     let dir = world.templates();
     for (relative, content) in SHIPPED_TEMPLATES {
@@ -186,7 +186,12 @@ async fn a_host_seeds_the_shipped_readme_and_example_into_a_templates_folder_tha
         .iter()
         .map(|choice| choice.id.as_str())
         .collect();
-    assert_eq!(ids, ["minimal", "example"]);
+    assert_eq!(ids, ["starter"]);
+    assert_eq!(
+        std::fs::read_dir(&dir).unwrap().count(),
+        1,
+        "the README and nothing else"
+    );
     assert_eq!(listing.dir, text(&dir));
     assert!(listing.problems.is_empty(), "{:?}", listing.problems);
 }
@@ -202,7 +207,7 @@ async fn a_host_whose_config_folder_is_another_hosts_seeds_no_templates_and_stil
         .iter()
         .map(|choice| choice.id.as_str())
         .collect();
-    assert_eq!(ids, ["minimal"]);
+    assert_eq!(ids, ["starter"]);
 }
 
 #[tokio::test]
@@ -404,6 +409,50 @@ async fn offers_the_user_scope_to_copy_from_and_copies_a_skill_as_its_whole_fold
 }
 
 #[tokio::test]
+async fn copies_a_shared_shape_scopes_agents_md_and_a_skill_where_the_shared_shape_keeps_them() {
+    let world = World::new();
+    let hub = world.dirs.folder("hub");
+    let skill = hub.join(".agents").join("skills").join("plan");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(hub.join("AGENTS.md"), "# hub\n").unwrap();
+    std::fs::write(skill.join("SKILL.md"), "---\nname: plan\n---\n").unwrap();
+    std::fs::write(skill.join("reference.md"), "# reference\n").unwrap();
+    let _: TemplateWriteResult = world
+        .ask::<CreateTemplate>(&CreateTemplateRequest {
+            name: "kit".into(),
+            label: None,
+            description: None,
+        })
+        .unwrap();
+
+    let result: TemplateImportResult = world
+        .ask::<ImportIntoTemplate>(&ImportIntoTemplateRequest {
+            template: "kit".into(),
+            scope_path: text(&hub),
+            paths: vec![text(&hub.join("AGENTS.md")), text(&skill.join("SKILL.md"))],
+        })
+        .unwrap();
+
+    assert!(result.problems.is_empty(), "{:?}", result.problems);
+    let mut created = result.created.clone();
+    created.sort();
+    assert_eq!(
+        created,
+        [
+            ".agents/skills/plan/SKILL.md",
+            ".agents/skills/plan/reference.md",
+            "AGENTS.md"
+        ]
+    );
+    let kit = world.templates().join("kit");
+    assert_eq!(
+        std::fs::read_to_string(kit.join("AGENTS.md")).unwrap(),
+        "# hub\n"
+    );
+    assert!(kit.join(".agents/skills/plan/reference.md").is_file());
+}
+
+#[tokio::test]
 async fn an_import_of_a_file_the_scope_no_longer_lists_says_so_and_copies_nothing() {
     let world = World::new();
     let claude = world.dirs.home.join(".claude");
@@ -490,16 +539,47 @@ async fn a_refused_workspace_changes_no_roots_and_answers_the_roots_as_they_are(
 }
 
 #[tokio::test]
+async fn a_workspace_made_with_no_template_named_is_starter() {
+    let world = World::new();
+    let parent = world.dirs.folder("workspaces");
+
+    let outcome = world.create_workspace(&parent, "my work");
+
+    assert!(outcome.problems.is_empty(), "{:?}", outcome.problems);
+    let workspace = parent.join("my work");
+    let mut entries: Vec<String> = std::fs::read_dir(&workspace)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    entries.sort();
+    assert_eq!(entries, ["AGENTS.md", "repos", "workspace.yaml"]);
+    assert_eq!(
+        std::fs::read_dir(workspace.join("repos")).unwrap().count(),
+        0
+    );
+    let agents_md = std::fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
+    assert!(agents_md.starts_with("# my work\n"), "{agents_md}");
+}
+
+#[tokio::test]
 async fn a_workspace_made_from_a_template_in_the_hosts_folder_carries_its_tree() {
     let world = World::new();
     let parent = world.dirs.folder("workspaces");
+    let template = world.templates().join("client-work");
+    std::fs::create_dir_all(template.join("dot-claude").join("skills")).unwrap();
+    std::fs::write(
+        template.join("dot-claude").join("skills").join(".gitkeep"),
+        "",
+    )
+    .unwrap();
+    std::fs::write(template.join("CLAUDE.md.tpl"), "# {{NAME}}\n").unwrap();
 
     let outcome: CreateWorkspaceOutcome = world
         .ask::<CreateWorkspace>(&CreateWorkspaceRequest {
             mode: WorkspaceMode::New,
             dir: text(&parent),
             name: Some("work".into()),
-            template: Some("example".into()),
+            template: Some("client-work".into()),
         })
         .unwrap();
 

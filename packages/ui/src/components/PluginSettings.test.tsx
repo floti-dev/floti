@@ -45,17 +45,31 @@ const plugin = (overrides: Partial<PluginInfo> = {}): PluginInfo => ({
 })
 
 describe('PluginsPage', () => {
-  it('says there are none, and adds a folder', () => {
+  it('says No plugins yet, and Add a plugin picks a folder as Add folder does', () => {
     const onAdd = vi.fn()
     render(<PluginsPage plugins={[]} addError={null} onAdd={onAdd} onOpen={vi.fn()} />)
-    expect(screen.getByText('No plugins')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Add folder' }))
+    const empty = document.querySelector<HTMLElement>('[data-empty-state="plugins"]')!
+    expect(within(empty).getByText('No plugins yet')).toBeTruthy()
+    expect(within(empty).getByText('Plugins add panels, tabs and agent tools.')).toBeTruthy()
+    fireEvent.click(within(empty).getByRole('button', { name: 'Add a plugin' }))
     expect(onAdd).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Add folder' }))
+    expect(onAdd).toHaveBeenCalledTimes(2)
+  })
+
+  it('on another computer, Add a plugin opens the path field, and the empty state offers it no second time', () => {
+    const onAdd = vi.fn()
+    render(<PluginsPage plugins={[]} addError={null} onAdd={onAdd} onOpen={vi.fn()} remoteHost="build-box" />)
+    const empty = (): HTMLElement => document.querySelector<HTMLElement>('[data-empty-state="plugins"]')!
+    fireEvent.click(within(empty()).getByRole('button', { name: 'Add a plugin' }))
+    expect(onAdd).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-plugin-add-confirm]')).not.toBeNull()
+    expect(within(empty()).queryByRole('button', { name: 'Add a plugin' })).toBeNull()
   })
 
   it('says nothing about plugins before main has answered', () => {
     render(<PluginsPage plugins={null} addError={null} onAdd={vi.fn()} onOpen={vi.fn()} />)
-    expect(screen.queryByText('No plugins')).toBeNull()
+    expect(document.querySelector('[data-empty-state="plugins"]')).toBeNull()
   })
 
   it('says the local host could not be reached and why, rather than that there are no plugins', () => {
@@ -63,7 +77,7 @@ describe('PluginsPage', () => {
     render(<PluginsPage plugins={null} unavailable={why} addError={null} onAdd={vi.fn()} onOpen={vi.fn()} />)
     expect(screen.getByText('The local host could not be reached')).toBeTruthy()
     expect(screen.getByText(why)).toBeTruthy()
-    expect(screen.queryByText('No plugins')).toBeNull()
+    expect(document.querySelector('[data-empty-state="plugins"]')).toBeNull()
   })
 
   it('lists each folder with its version and path, says Off or Not loaded, and opens one', () => {
