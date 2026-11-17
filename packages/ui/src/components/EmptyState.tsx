@@ -1,5 +1,18 @@
 import type { JSX, ReactNode } from 'react'
 import { cn } from '../lib/cn'
+import { BUTTON_PRIMARY, BUTTON_SECONDARY } from '../lib/page'
+
+/** The one button an empty state offers: what fills the surface, or Try again where it could not look. */
+export interface EmptyStateAction {
+  label: string
+  onClick: () => void
+  /** The shortcut that does the same, drawn after the label in mono ("Ctrl+N"). */
+  keys?: string | undefined
+  /** An icon before the label, 12px: Try again's refresh. */
+  icon?: ReactNode | undefined
+  /** Outlined in `border-strong` rather than the accent: Try again, which fills nothing. */
+  secondary?: boolean | undefined
+}
 
 export interface EmptyStateProps {
   /** The destination's own icon, 18px. */
@@ -8,7 +21,9 @@ export interface EmptyStateProps {
   title: string
   /** One sentence on what fills it, or why it is empty. */
   children?: ReactNode | undefined
-  /** The way on, where there is one: refresh, pick a scope, open settings. */
+  /** The way on: the one button that fills the surface. */
+  action?: EmptyStateAction | undefined
+  /** Anything else the way on needs, after `action`: a command to copy, a second link. */
   actions?: ReactNode | undefined
   /**
    * `page` fills a detail region and centres in it; `list` sits at the top of a
@@ -28,7 +43,7 @@ export interface EmptyStateProps {
  * explaining the feature to somebody looking at nothing - and a paragraph in an
  * empty pane is read once and skipped every time after.
  */
-export function EmptyState({ icon, title, children, actions, size = 'page', name }: EmptyStateProps): JSX.Element {
+export function EmptyState({ icon, title, children, action, actions, size = 'page', name }: EmptyStateProps): JSX.Element {
   return (
     <div
       data-empty-state={name ?? ''}
@@ -45,7 +60,27 @@ export function EmptyState({ icon, title, children, actions, size = 'page', name
         {children !== undefined && (
           <p className="mt-1 text-[12px] leading-relaxed text-fg-subtle">{children}</p>
         )}
-        {actions !== undefined && <div className="mt-4 flex flex-wrap justify-center gap-2">{actions}</div>}
+        {(action !== undefined || actions !== undefined) && (
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {action !== undefined && (
+              <button
+                type="button"
+                data-empty-action
+                onClick={action.onClick}
+                className={action.secondary === true ? BUTTON_SECONDARY : BUTTON_PRIMARY}
+              >
+                {action.icon}
+                {action.label}
+                {action.keys !== undefined && (
+                  <span aria-hidden className="font-mono text-[11px] text-fg-subtle">
+                    {action.keys}
+                  </span>
+                )}
+              </button>
+            )}
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   )

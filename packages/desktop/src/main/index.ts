@@ -14,35 +14,37 @@ import {
 import { appCommandBrowserCommand } from '../shared/browserKeys'
 import {
   addPluginFolder,
-  cleanStaleMcpConfigs,
   openBrowserHistory,
   pluginThemeOf,
   quitEndsSessions,
+  WALKTHROUGH_SETUP_LAST,
+  WALKTHROUGH_START,
+  walkthroughInSetupWindow,
+  type WalkthroughStep,
   writeSetting,
   type AppliedTheme,
   type AppSettings,
   type Profile
-} from '@helm/core'
+} from '@floti/core'
 import { delimiter, isAbsolute, join } from 'node:path'
 import { homedir } from 'node:os'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { emit, emitToContents, pushTheme, registerIpc } from './ipc'
+import { emit, pushTheme, registerIpc } from './ipc'
 import { createClipboardText } from './clipboard'
-import { appMode, dataDir, finishDataMove, initDataDir, mcpConfigDir, themesDir } from './paths'
+import { appMode, dataDir, initDataDir, themesDir } from './paths'
 import { createThemeService } from './themes'
 import { activePty, killPty, spawnPty, windowsBuildNumber } from './pty'
 import { adoptExistingProfile, createServices, updateSettings, type Services } from './services'
 import { createFilesService, filesRoots } from './files'
 import { attachArtifactConsole, CONTENT_SCHEME, registerContentProtocol, serveArtifactsFrom } from './content'
-import { PLUGIN_SCHEMES } from '../shared/ipc'
+import { PLUGIN_SCHEME } from '../shared/ipc'
 import { createPluginHost } from './plugins/host'
 import { registerHostPluginProtocol } from './plugins/protocol'
-import { createBackgroundHost } from './plugins/background'
 import { guardPluginFrames, installPluginPermissions } from './plugins/guards'
-// The plugin runtime: served to every plugin page under `/__helm/`, so no
+// The plugin runtime: served to every plugin page under `/__floti/`, so no
 // plugin carries a copy of its own (see `main/plugins/protocol.ts`).
 import pluginBridge from '../renderer/plugin-runtime/bridge-entry.ts?script'
-import pluginStylesheet from '../renderer/plugin-runtime/helm.css?raw'
+import pluginStylesheet from '../renderer/plugin-runtime/floti.css?raw'
 import {
   browserWillNavigate,
   browserWindowOpen,
@@ -134,14 +136,14 @@ const isSpikeMode =
  * pane's width - so a throttled renderer answers "nothing changed" to all of
  * it, which is indistinguishable from the app being broken.
  *
- * Measured on a machine running six Helm windows at once: a hover probe
+ * Measured on a machine running six desktop windows at once: a hover probe
  * measured 162 controls with its window in front and 7 with somebody else's on
  * top, reporting most of the app as having no hover state at all. The
  * alternative - raising or focusing our own window - is worse than the
  * problem, because every other window on that machine belongs to a check that
  * would then be the one being measured through a throttled renderer.
  *
- * Check and spike modes only. `app` is somebody's actual Helm, and a Helm
+ * Check and spike modes only. `app` is somebody's actual Floti, and a desktop
  * minimised behind an editor should go quiet like any other window.
  */
 if (mode !== 'app') {
@@ -166,20 +168,19 @@ protocol.registerSchemesAsPrivileged([
     scheme: CONTENT_SCHEME,
     privileges: { standard: true, secure: true, supportFetchAPI: false, corsEnabled: false }
   },
-  // A plugin's pages: an origin per plugin (`helm-plugin://<id>` at version 1,
-  // `floti-plugin://<id>` at version 2), secure so its storage and module
-  // scripts work, and no fetch - its network goes through Helm. See
-  // `main/plugins/protocol.ts`.
-  ...PLUGIN_SCHEMES.map((scheme) => ({
-    scheme,
+  // A plugin's pages: an origin per plugin (`floti-plugin://<id>`), secure
+  // so its storage and module scripts work, and no fetch - its network goes
+  // through the host. See `main/plugins/protocol.ts`.
+  {
+    scheme: PLUGIN_SCHEME,
     privileges: { standard: true, secure: true, supportFetchAPI: false, corsEnabled: false }
-  }))
+  }
 ])
 
 /**
  * Every renderer is our own bundle; nothing else may be navigated to or opened.
  *
- * The browser pane's `WebContentsView`s are the one thing in Helm that is
+ * The browser pane's `WebContentsView`s are the one thing in the desktop that is
  * *supposed* to navigate, and they are let through **here**, by id, rather than
  * by relaxing anything. `browserWillNavigate` answers false for every web
  * contents that is not a live browser view - the window, the spike page, an
@@ -197,7 +198,7 @@ protocol.registerSchemesAsPrivileged([
  *
  * Allowing those opens is the one deliberate widening in this file and it was
  * measured into existence: denied, `window.open` returns `null` and every
- * OAuth library reports a blocked popup, and a page Helm loaded fresh instead
+ * OAuth library reports a blocked popup, and a page the desktop loaded fresh instead
  * has no `window.opener` for the sign-in to hand its code back through. See
  * `browserWindowOpen` for the terms it is held to.
  *
@@ -209,7 +210,7 @@ app.on('web-contents-created', (_e, contents) => {
   contents.on('will-navigate', (event, url) => {
     if (!browserWillNavigate(contents.id, url)) event.preventDefault()
   })
-  // A plugin frame stays on its own origin, and only Helm's pages that frame
+  // A plugin frame stays on its own origin, and only the desktop's pages that frame
   // plugins put one there (`plugins/guards.ts`). Read at navigation time, so
   // the plugin host can be made after this is armed.
   guardPluginFrames(contents, (id) => pluginFrameHosts(id))
@@ -219,7 +220,7 @@ app.on('web-contents-created', (_e, contents) => {
 let pluginFrameHosts: (contentsId: number) => boolean = () => false
 
 /**
- * What the app menu's Quit Helm does (macOS; chrome.ts). A plain quit until
+ * What the app menu's Quit Floti does (macOS; chrome.ts). A plain quit until
  * the app has sessions to ask about; `startApp` points it at the quit gate.
  */
 let quitFromMenu: () => void = () => app.quit()
@@ -238,19 +239,41 @@ function flotiPagePreferences(): WebPreferences {
   }
 }
 
+/**
+ * The Floti pages a window can show: the shell (`index`), the guided first
+ * run's setup window (`setup`, the same page told which window it is by
+ * `?window=setup`, so it runs with the same preload, guards and IPC
+ * boundary), and the spike harness.
+ */
+type WindowPage = 'index' | 'setup' | 'spike'
+
+/** The setup window's size: one question at a time, the design's 560px column and its foot. */
+const SETUP_WINDOW = { width: 600, height: 600 } as const
+
 function createWindow(
-  page: 'index' | 'spike',
+  page: WindowPage,
   bounds?: AppSettings['windowBounds'],
   theme?: AppliedTheme
 ): BrowserWindow {
+  const setup = page === 'setup'
   const win = new BrowserWindow({
-    width: bounds?.width ?? 1280,
-    height: bounds?.height ?? 820,
-    // Position is restored only when both coordinates were saved; handing
-    // Electron one of the two would place the window at the other's default.
-    ...(bounds?.x !== undefined && bounds.y !== undefined ? { x: bounds.x, y: bounds.y } : {}),
-    minWidth: 900,
-    minHeight: 560,
+    ...(setup
+      ? {
+          width: SETUP_WINDOW.width,
+          height: SETUP_WINDOW.height,
+          resizable: false,
+          maximizable: false,
+          fullscreenable: false
+        }
+      : {
+          width: bounds?.width ?? 1280,
+          height: bounds?.height ?? 820,
+          // Position is restored only when both coordinates were saved; handing
+          // Electron one of the two would place the window at the other's default.
+          ...(bounds?.x !== undefined && bounds.y !== undefined ? { x: bounds.x, y: bounds.y } : {}),
+          minWidth: 900,
+          minHeight: 560
+        }),
     // Painted before the renderer's first frame, so a cold start does not flash
     // white on a dark desktop. The theme's own canvas, so the frame Chromium
     // shows before any CSS has loaded is the colour the first paint lands on.
@@ -262,7 +285,7 @@ function createWindow(
     // and the OS draws its window controls into it (see chrome.ts). The spike
     // pages keep the native frame: their drivers predate the strip and measure
     // a page, not the chrome.
-    ...(page === 'index' && theme !== undefined ? windowChromeFor(process.platform, theme) : {}),
+    ...(page !== 'spike' && theme !== undefined ? windowChromeFor(process.platform, theme) : {}),
     // A packaged Electron window does NOT inherit the exe's icon: given no
     // `icon` it uses Electron's own, which is what the taskbar showed on
     // 2026-08-10 while the exe itself was correctly stamped.
@@ -279,13 +302,16 @@ function createWindow(
     webPreferences: flotiPagePreferences()
   })
 
-  if (page === 'index') void requestSmallCorners(win)
+  if (page !== 'spike') void requestSmallCorners(win)
 
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   if (devUrl) {
-    win.loadURL(page === 'index' ? devUrl : `${devUrl}/spike.html`)
+    win.loadURL(page === 'spike' ? `${devUrl}/spike.html` : setup ? `${devUrl}/?window=setup` : devUrl)
   } else {
-    win.loadFile(join(__dirname, `../renderer/${page === 'index' ? 'index' : 'spike'}.html`))
+    win.loadFile(
+      join(__dirname, `../renderer/${page === 'spike' ? 'spike' : 'index'}.html`),
+      setup ? { query: { window: 'setup' } } : {}
+    )
   }
   return win
 }
@@ -325,8 +351,8 @@ export interface AppOptions {
  *
  * Printed before the database is opened, because by the time the window is up
  * the damage this warns about is already possible: this process is about to
- * write to the `helm.db`, the `overlays/` and the Chromium profile of whichever
- * Helm the user has open. The status bar names the mode too, but a chip on a
+ * write to the `desktop.db`, the `overlays/` and the Chromium profile of whichever
+ * Floti the user has open. The status bar names the mode too, but a chip on a
  * window somebody is not looking at is not a warning.
  */
 function announceLiveMode(): void {
@@ -352,8 +378,6 @@ function announceLiveMode(): void {
 function startApp(options: AppOptions = {}): void {
   announceLiveMode()
   const services: Services = createServices()
-  // The store opened in the moved copy, so the folder it came from can go.
-  finishDataMove()
   // Before anything can spawn: a `claude` the user picked by hand has to win
   // over discovery in every caller, and the session host does not read
   // settings.
@@ -369,9 +393,6 @@ function startApp(options: AppOptions = {}): void {
       `${String(services.lost.sessions.length)} session(s) did not outlive the last run; marked lost`
     )
   }
-  if (services.staleShims > 0) {
-    console.log(`removed ${String(services.staleShims)} overlay shim(s) left by the last run`)
-  }
 
   // Before the window, because the window's first colour is the theme's. The
   // preference has to reach `nativeTheme` first for the same reason: `system`
@@ -386,10 +407,13 @@ function startApp(options: AppOptions = {}): void {
    * has to answer by the time the window asks for its first panel. A service
    * marked `start: "enable"` starts here, in the background.
    */
+  /** The shell window, once it exists: none while the setup window runs steps 1 to 4. */
   let win: BrowserWindow | null = null
+  /** The guided first run's setup window, while it is open (`walkthrough`). */
+  let setupWin: BrowserWindow | null = null
   // `pnpm dev` starts from a fresh copy of the database every launch, so a
   // plugin being worked on is registered from FLOTI_PLUGINS instead of being
-  // added again in Settings each time. Dev builds only: an installed Helm
+  // added again in Settings each time. Dev builds only: an installed Floti
   // registers a folder when the user adds one, and at no other time.
   if (appMode === 'dev') {
     for (const folder of (process.env['FLOTI_PLUGINS'] ?? '').split(delimiter)) {
@@ -404,29 +428,23 @@ function startApp(options: AppOptions = {}): void {
   let browserMcp: BrowserMcpHost | null = null
   /*
    * The host keeps the plugin registry - the folders, their switches,
-   * settings, services and page files - and Helm keeps what concerns its own
-   * pages: the runtime, the theme, the frames, and the hidden window
-   * background pages run in, which the host's list opens.
+   * settings, services, backgrounds and page files - and the desktop keeps
+   * what concerns its own pages: the runtime, the theme and the frames.
    */
-  /** What hears that the background host's renderer died; the host's plugins, once they exist. */
-  let pluginBackgroundGone = (_reason: string): void => undefined
-  const pluginBackground = createBackgroundHost({ onGone: (reason) => pluginBackgroundGone(reason) })
-
   const plugins = createPluginHost({
     window: () => win,
     theme: () => pluginThemeOf(windowTheme(), services.settings),
     bridge: pluginBridge,
-    stylesheet: pluginStylesheet,
-    background: pluginBackground
+    stylesheet: pluginStylesheet
   })
   // Asked only once a page loads, which is after the desktop host below exists.
   // Each origin from its own host's files: This PC's from the local host, a
-  // remote host's (`<scheme>://<id>.<label>/`) from that host only.
+  // remote host's (`floti-plugin://<id>.<label>/`) from that host only.
   registerHostPluginProtocol((label) => {
     const hosted = label === null ? desktopHost.plugins : desktopHost.remotePlugins.byLabel(label)
     if (hosted === null) return null
     return {
-      // The local host is the one Helm started, on this computer; a remote host's is not.
+      // The local host is the one desktop started, on this computer; a remote host's is not.
       onHostComputer: label === null,
       serves: (id) => hosted.serves(id),
       file: (id, path) => hosted.file(id, path)
@@ -435,15 +453,13 @@ function startApp(options: AppOptions = {}): void {
   installPluginPermissions()
   pluginFrameHosts = (id) => plugins.framesPlugins(id)
 
-  win = createWindow('index', services.settings.windowBounds ?? null, windowTheme())
-
   /*
-   * Sessions and terminals run in the local host, which Helm connects to now
+   * Sessions and terminals run in the local host, which the desktop connects to now
    * and starts when none answers.
    */
   const checkConfirm = options.confirm
   /*
-   * Whether the browser pane may run: not in a Linux Helm started without
+   * Whether the browser pane may run: not in a Linux desktop started without
    * Chromium's sandbox (`browser-sandbox.ts`). Every read of the browser tools'
    * switch goes through `browserSettings`, so with the pane off no session is
    * given the tools.
@@ -467,19 +483,17 @@ function startApp(options: AppOptions = {}): void {
         ? async (request) => ((await checkConfirm(request)) ? 'end' : 'cancel')
         : quitConfirm(() => win),
     browserTools: () => browserMcp,
-    runPluginTool: (request, signal) => plugins.runTool(request, signal),
-    pluginBackground,
     browserAvailability: browserPane
   })
-  pluginBackgroundGone = (reason) => {
-    desktopHost.plugins.backgroundGone(reason)
-    desktopHost.remotePlugins.backgroundGone(reason)
-  }
   // An artifact frame keeps the window's scheme, answered from the host's bytes.
   serveArtifactsFrom((url) => desktopHost.files.artifactBytes(url))
-  // The window hears each step of the local host's connect as it begins; one
-  // that loads later asks for the step under way (`hostLink:currentStep`).
-  localHostSteps.onStep((step) => emit(win, 'hostLink:step', step))
+  // Each window hears each step of the local host's connect as it begins: the
+  // shell, and the setup window, whose step 3 says when the host is running.
+  // One that loads later asks for the step under way (`hostLink:currentStep`).
+  localHostSteps.onStep((step) => {
+    emit(win, 'hostLink:step', step)
+    emit(setupWin, 'hostLink:step', step)
+  })
   void desktopHost.link.connection().catch((err: unknown) => {
     console.warn(err instanceof Error ? err.message : String(err))
   })
@@ -493,18 +507,18 @@ function startApp(options: AppOptions = {}): void {
   // notifications over its own connection (`renderer/src/app/host/sessions.ts`).
 
   /*
-   * Each Helm page's own connection to the local host: the window, and the
-   * hidden window plugins' background pages run in. No other page - a plugin
+   * The window's own connection to the local host. No other page - a plugin
    * frame, an artifact frame, a page in the Browser tab - may open one.
    */
-  const isHelmPage = (id: number): boolean =>
-    (win !== null && !win.isDestroyed() && win.webContents.id === id) || pluginBackground.contents()?.id === id
+  const isWindow = (page: BrowserWindow | null, id: number): boolean =>
+    page !== null && !page.isDestroyed() && page.webContents.id === id
+  const isFlotiPage = (id: number): boolean => isWindow(win, id) || isWindow(setupWin, id)
   // One counter for every host's page connections, so a number names one.
   let nextPageConnection = 1
   const nextConnection = (): number => nextPageConnection++
   const localPageLinks = createLocalPageLinks(
     desktopHost.link,
-    isHelmPage,
+    isFlotiPage,
     (line) => console.log(line),
     nextConnection
   )
@@ -520,13 +534,9 @@ function startApp(options: AppOptions = {}): void {
     log: (line) => console.log(line)
   })
   const remoteHosts: RemoteHostLinks = createDesktopRemoteHosts({
-    isHelmPage,
+    isFlotiPage,
     nextConnection,
-    // The hidden plugin window hears it too: it runs each connected host's background pages.
-    changed: (states) => {
-      emit(win, 'remoteHosts:changed', states)
-      emitToContents(pluginBackground.contents(), 'remoteHosts:changed', states)
-    },
+    changed: (states) => emit(win, 'remoteHosts:changed', states),
     plugins: desktopHost.remotePlugins,
     forwards,
     localLink: desktopHost.link,
@@ -547,7 +557,7 @@ function startApp(options: AppOptions = {}): void {
   /** What the quit question names on the hosts on other computers whose setting ends them. */
   const remoteQuitParts = (): ReturnType<RemoteHostLinks['quitParts']> => remoteHosts.quitParts(remoteEnds)
 
-  // One question about running sessions, shared by the menu's Quit Helm and
+  // One question about running sessions, shared by the menu's Quit Floti and
   // the window's close, asked before anything ends (quit.ts). With the setting
   // keeping them, nothing would end, so nothing is asked.
   const quitGate = createQuitGate({
@@ -571,8 +581,6 @@ function startApp(options: AppOptions = {}): void {
 
   /** The saved profiles, which live in the host; every reader of them in main reads this one. */
   const profileList = (): Profile[] => desktopHost.profiles.current()
-
-  attachArtifactConsole(win, (entry) => emit(win, 'content:artifactConsole', entry))
 
   /**
    * The Files view's hand-off to an editor; the host reads the files. Its
@@ -627,7 +635,7 @@ function startApp(options: AppOptions = {}): void {
     settings: () => services.settings,
     writeSettings: (patch) => {
       const next = updateSettings(services, patch)
-      // The window lays the host's half over Helm's own itself, which it hears
+      // The window lays the host's half over the desktop's own itself, which it hears
       // on its own channel.
       emit(win, 'ownSettings:changed', next)
     },
@@ -650,9 +658,6 @@ function startApp(options: AppOptions = {}): void {
    * sessions' tools.
    */
   browserMcp = createBrowserMcp({ browsers, settings: browserSettings })
-  // The `--mcp-config` files an earlier version wrote for its own sessions,
-  // where their owning pid is provably dead (`core/launch/mcp.ts`).
-  cleanStaleMcpConfigs(mcpConfigDir)
 
   // What each session is doing, from the host, asked again after every spawn,
   // exit, close and rename.
@@ -673,14 +678,11 @@ function startApp(options: AppOptions = {}): void {
     browserMcp,
     // The folders the window's picker chose go to the host's scan roots.
     workspace: desktopHost.workspace,
-    // Opening an editor stays Helm's; the host reads the files.
+    // Opening an editor stays the desktop's; the host reads the files.
     files,
     themes,
     plugins,
-    hostPlugins: desktopHost.plugins,
-    remotePlugins: desktopHost.remotePlugins,
     ownData: desktopHost.ownData,
-    pluginBackground: () => pluginBackground.contents(),
     localHost: {
       sessionCount: async () => {
         const rows = await (await desktopHost.link.connection()).request('session:list', null)
@@ -692,7 +694,12 @@ function startApp(options: AppOptions = {}): void {
       step: () => localHostSteps.current(),
       reconnect: () => desktopHost.link.reconnectNow()
     },
-    window: () => win,
+    // The shell, or the setup window while it is the only one.
+    window: () => win ?? setupWin,
+    walkthrough: {
+      openShell: () => walkthroughOpenShell(),
+      open: (step) => walkthroughOpen(step)
+    },
     ...(options.chooseDirectory !== undefined ? { chooseDirectory: options.chooseDirectory } : {}),
     ...(options.chooseFile !== undefined ? { chooseFile: options.chooseFile } : {}),
     hostSettingsChanged: () => desktopHost.link.writeSettings(),
@@ -746,62 +753,125 @@ function startApp(options: AppOptions = {}): void {
       persistBounds()
     }, 400)
   }
-  // The mouse's back and forward buttons arrive as an `app-command` on Windows
-  // and Linux (macOS has none; the window reads the buttons itself). Main only
-  // says where the pointer was: which page is in front, and whether the pointer
-  // is over the Browser tab, is the window's.
-  win.on('app-command', (_event, appCommand) => {
-    const command = appCommandBrowserCommand(appCommand)
-    if (command === null) return
-    const pointer = screen.getCursorScreenPoint()
-    const content = win?.getContentBounds()
-    if (content === undefined) return
-    emit(win, 'browser:pointerCommand', { command, at: { x: pointer.x - content.x, y: pointer.y - content.y } })
-  })
-  win.on('resize', scheduleBoundsPersist)
-  win.on('move', scheduleBoundsPersist)
+  /**
+   * Opens the shell window and wires what only it has: its bounds, its close
+   * through the quit gate, the mouse's back and forward buttons and its
+   * artifact console. Made at start when no walkthrough step comes first, or
+   * when the setup window hands over to it (`walkthrough:openShell`).
+   */
+  function openShell(): BrowserWindow {
+    const shellWindow = createWindow('index', services.settings.windowBounds ?? null, windowTheme())
+    win = shellWindow
+    attachArtifactConsole(shellWindow, (entry) => emit(shellWindow, 'content:artifactConsole', entry))
+
+    // The mouse's back and forward buttons arrive as an `app-command` on Windows
+    // and Linux (macOS has none; the window reads the buttons itself). Main only
+    // says where the pointer was: which page is in front, and whether the pointer
+    // is over the Browser tab, is the window's.
+    shellWindow.on('app-command', (_event, appCommand) => {
+      const command = appCommandBrowserCommand(appCommand)
+      if (command === null) return
+      const pointer = screen.getCursorScreenPoint()
+      const content = shellWindow.getContentBounds()
+      if (content === undefined) return
+      emit(win, 'browser:pointerCommand', { command, at: { x: pointer.x - content.x, y: pointer.y - content.y } })
+    })
+    shellWindow.on('resize', scheduleBoundsPersist)
+    shellWindow.on('move', scheduleBoundsPersist)
+
+    /**
+     * Closing the window ends every hosted session, so it asks first - once, for
+     * all of them, rather than a dialog per tab - through the quit gate, so a
+     * quit already agreed to from the menu is not asked about again.
+     *
+     * `close` is also the last moment the window still exists, so this is where
+     * the bounds are flushed: by `closed` the geometry is gone and whatever the
+     * debounce was still holding would be lost.
+     */
+    shellWindow.on('close', (event) => {
+      if (boundsTimer) clearTimeout(boundsTimer)
+      boundsTimer = null
+      persistBounds()
+
+      if (!quitGate.allowClose(() => shellWindow.close())) event.preventDefault()
+    })
+
+    shellWindow.on('closed', () => {
+      if (boundsTimer) clearTimeout(boundsTimer)
+      boundsTimer = null
+      win = null
+    })
+    return shellWindow
+  }
+
+  /** Opens the setup window, or brings the open one forward. */
+  function openSetup(): void {
+    if (setupWin !== null && !setupWin.isDestroyed()) {
+      setupWin.show()
+      setupWin.focus()
+      return
+    }
+    const page = createWindow('setup', null, windowTheme())
+    setupWin = page
+    page.on('closed', () => {
+      if (setupWin === page) setupWin = null
+    })
+  }
 
   /**
-   * Closing the window ends every hosted session, so it asks first - once, for
-   * all of them, rather than a dialog per tab - through the quit gate, so a
-   * quit already agreed to from the menu is not asked about again.
-   *
-   * `close` is also the last moment the window still exists, so this is where
-   * the bounds are flushed: by `closed` the geometry is gone and whatever the
-   * debounce was still holding would be lost.
+   * The setup window's hand-over: the shell opens, or the open one comes
+   * forward and hears the settings the setup window wrote, which were not
+   * sent to it as they were written; then the setup window closes. In that
+   * order, so there is never a moment with no window, which would quit.
    */
-  win.on('close', (event) => {
-    if (boundsTimer) clearTimeout(boundsTimer)
-    boundsTimer = null
-    persistBounds()
+  function walkthroughOpenShell(): void {
+    const shellWindow = win !== null && !win.isDestroyed() ? win : openShell()
+    emit(shellWindow, 'ownSettings:changed', services.settings)
+    shellWindow.show()
+    shellWindow.focus()
+    const page = setupWin
+    setupWin = null
+    if (page !== null && !page.isDestroyed()) page.close()
+  }
 
-    if (!quitGate.allowClose(() => win?.close())) event.preventDefault()
-  })
+  /**
+   * The setup window opened beside the shell at `step`: 1 from Settings >
+   * General's Show the walkthrough, 4 from Back on step 5, which keeps the
+   * workspace it chose.
+   */
+  function walkthroughOpen(step: WalkthroughStep): void {
+    const next = updateSettings(services, {
+      walkthrough:
+        step <= WALKTHROUGH_SETUP_LAST && step > 1
+          ? { step, workspace: services.settings.walkthrough?.workspace ?? null }
+          : WALKTHROUGH_START
+    })
+    emit(win, 'ownSettings:changed', next)
+    openSetup()
+  }
 
-  win.on('closed', () => {
-    if (boundsTimer) clearTimeout(boundsTimer)
-    boundsTimer = null
-    win = null
-    // The background host is a window too, and a hidden one would keep the
-    // app alive after its only visible window closed.
-    plugins.shutdown()
-  })
+  // A first start, or a walkthrough closed before its step 4 was done, opens
+  // on the setup window; every other start opens the shell.
+  if (walkthroughInSetupWindow(services.settings.walkthrough)) openSetup()
+  else openShell()
 
   // A reopen while the quit below is underway opens no window in this process;
-  // it relaunches Helm once the quit has finished (reopen.ts).
+  // it relaunches the desktop once the quit has finished (reopen.ts).
   let hostStop: QuitPhase = 'running'
   const reopen = createReopen({
     quitPhase: () => hostStop,
     windowCount: () => BrowserWindow.getAllWindows().length,
     openWindow: () => {
-      win = createWindow('index', services.settings.windowBounds ?? null, windowTheme())
+      // A walkthrough left at steps 1 to 4 reopens on its setup window.
+      if (walkthroughInSetupWindow(services.settings.walkthrough)) openSetup()
+      else openShell()
     },
     relaunch: () => app.relaunch()
   })
   app.on('activate', () => reopen.activate())
 
   /*
-   * The host owns the sessions' lifetime and outlives Helm. A deliberate quit tells it what becomes of what this device started,
+   * The host owns the sessions' lifetime and outlives the desktop. A deliberate quit tells it what becomes of what this device started,
    * which takes a round trip: the first `before-quit` is held while every
    * page's connection closes, the host is told whether the sessions end
    * (`host:quit`: as the quit question was answered, or as the quit setting
@@ -811,7 +881,7 @@ function startApp(options: AppOptions = {}): void {
    * host, left with no session and no client, exits by itself. Each host on
    * another computer this device is connected to is told the same at the
    * same time, by its own setting (Keep them running unless set) unless the
-   * answer kept them this once; one not connected is told nothing. A Helm that
+   * answer kept them this once; one not connected is told nothing. A desktop that
    * ends any other way tells no host anything, so nothing ends and the next
    * start reattaches.
    */
@@ -821,7 +891,6 @@ function startApp(options: AppOptions = {}): void {
       if (hostStop === 'running') {
         hostStop = 'stopping'
         desktopHost.browserRelay.stop()
-        desktopHost.pluginRelay.stop()
         desktopHost.profiles.shutdown()
         desktopHost.plugins.shutdown()
         desktopHost.remotePlugins.shutdown()
@@ -851,8 +920,6 @@ function startApp(options: AppOptions = {}): void {
     if (boundsTimer) clearTimeout(boundsTimer)
     boundsTimer = null
     persistBounds()
-    // The hidden plugin window and the frames go with the window.
-    plugins.shutdown()
     activity.stop()
     /*
      * The browser views die here too, and it is the same argument.
@@ -984,14 +1051,14 @@ function startSpike(): void {
 }
 
 /**
- * Gives the dev app id a Start Menu shortcut of Helm's own, so the dev window's
+ * Gives the dev app id a Start Menu shortcut of its own, so the dev window's
  * taskbar button carries Floti's mark rather than Electron's atom.
  *
  * A taskbar button's icon comes from the shortcut that declares its app id, not
  * from the window. Electron writes that shortcut itself the first time a toast
  * fires - pointing at `node_modules/electron/dist/electron.exe`, whose icon is
  * the atom - and then skips the write because one already exists. Writing it
- * first is therefore the whole fix: same id, same target, Helm's `.ico`.
+ * first is therefore the whole fix: same id, same target, Floti's `.ico`.
  *
  * Dev only, Windows only, and never fatal. `Electron.lnk` is removed only when
  * it points at *this* checkout's electron.exe, because that one is an artefact
@@ -1009,13 +1076,6 @@ function claimDevShortcut(): void {
     if (existsSync(stale)) {
       const target = shell.readShortcutLink(stale).target.toLowerCase()
       if (target === process.execPath.toLowerCase()) rmSync(stale, { force: true })
-    }
-    // The shortcut a checkout wrote while the app was called Helm, declaring
-    // the id it had then. Only this checkout's own, by the same rule.
-    const renamed = join(programs, 'Helm (dev).lnk')
-    if (existsSync(renamed)) {
-      const target = shell.readShortcutLink(renamed).target.toLowerCase()
-      if (target === process.execPath.toLowerCase()) rmSync(renamed, { force: true })
     }
 
     // `create`, not `update`: `update` only edits a shortcut that is already
@@ -1083,7 +1143,7 @@ app.whenReady().then(() => {
    * this one can enter. The driver starts it with `PORTABLE_EXECUTABLE_DIR`
    * pointed at a temporary directory - the app's own portable-mode mechanism,
    * used as the isolation - so it opens an empty database beside that directory
-   * and touches neither `%APPDATA%\Helm` nor the user's `~/.claude`, which it is
+   * and touches neither `%LOCALAPPDATA%\Floti\desktop` nor the user's `~/.claude`, which it is
    * pointed away from with `--claude-home=`.
    */
   if (mode === 'packaging-check' || mode === 'packaging-firstrun') {

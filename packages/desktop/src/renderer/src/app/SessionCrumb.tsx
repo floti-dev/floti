@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
-import { isCommandChild, type SessionRecord } from '@helm/core/types'
-import { PaneCrumb, type PaneCrumbProps, type TabIndicator } from '@helm/ui'
+import { isCommandChild, type SessionRecord } from '@floti/core/types'
+import { PaneCrumb, type PaneCrumbProps, type TabIndicator } from '@floti/ui'
 import { crumbStatus, useSecondsClock } from './sessionView'
 
 export interface SessionCrumbProps extends Omit<PaneCrumbProps, 'status'> {

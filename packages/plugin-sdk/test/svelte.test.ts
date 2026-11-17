@@ -72,12 +72,9 @@ describe('the stores in Svelte', () => {
   })
 })
 
-describe.each([
-  ['a version 2 page', 'floti'],
-  ['a version 1 page', 'helm']
-] as const)('S5: in %s, a Svelte component reads the stores from window.%s', (_page, name) => {
+describe('S5: a Svelte component reads the stores from window.floti', () => {
   it('renders and follows that bridge', async () => {
-    fake = installBridge(name)
+    fake = installBridge()
     const panel = mount(Panel, { target })
     await fake.settingsReads[0]!.answer({ query: 'is:open' })
     fake.emit('theme', LIGHT)

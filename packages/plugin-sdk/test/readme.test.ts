@@ -22,16 +22,12 @@ function section(heading: string): string {
 }
 
 describe('the README', () => {
-  it('S6: documents both API versions, says version 1 still loads, and how to move a plugin over', () => {
+  it('S6: documents version 2 as the only API version, and that any other is refused', () => {
     const versions = section('## API versions')
+    expect(versions).toContain('Floti runs version 2')
     expect(versions).toContain('`window.floti`')
     expect(versions).toContain('`floti-plugin://<id>/`')
-    expect(versions).toContain('`helm-plugin://<id>/`')
-    expect(versions).toContain('A version 1\nplugin still loads and works as it did')
-    const moving = section('### Moving a version 1 plugin to version 2')
-    expect(moving).toContain('"apiVersion": 2')
-    expect(moving).toContain('`floti.fetch(...)`')
-    expect(moving).toContain('`@floti-dev/plugin-sdk/background`')
+    expect(versions).toContain('any other `apiVersion` is refused')
   })
 
   it("S6: documents the background as a module in the host's isolate, with what it can and cannot reach", () => {
@@ -45,13 +41,13 @@ describe('the README', () => {
 
   it('S6: documents the floti bridge, its apiVersion, and the types for a page and a background', () => {
     const bridge = section('## The bridge: `window.floti`')
-    expect(bridge).toContain('`window.helm` on every page of a version 1')
-    expect(bridge).toContain('| `apiVersion` | `2` for `window.floti`, `1` for `window.helm`. |')
+    expect(bridge).toContain('Floti puts `window.floti` on every page of a plugin it serves')
+    expect(bridge).toContain('| `apiVersion` | `2`. |')
     const types = section('## TypeScript')
     expect(types).toContain('FlotiBridge')
     expect(types).toContain('FlotiBackground')
     expect(types).toContain('/// <reference types="@floti-dev/plugin-sdk/background" />')
-    // The manifest table names both versions.
-    expect(section('## The manifest')).toContain('Required. `2`, or `1`')
+    // The manifest table names the one version.
+    expect(section('## The manifest')).toContain('| `apiVersion` | Required. `2`.')
   })
 })

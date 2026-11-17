@@ -57,7 +57,7 @@ describe('parseColor', () => {
     'rgb(-1 2 3)',
     '#fff; } body { display: none',
     'rgb(1 2 3)) url(x',
-    'var(--helm-bg)',
+    'var(--floti-bg)',
     ''
   ])('refuses %j', (input) => {
     expect(parseColor(input)).toBeNull()
@@ -243,7 +243,7 @@ describe('parseThemeFile', () => {
 
 describe('hueForText', () => {
   it('gives the same text the same hue every time, whatever its case or spacing', () => {
-    for (const tag of ['floti', 'helm', 'notes', 'journal', 'design']) {
+    for (const tag of ['floti', 'notes', 'journal', 'design']) {
       expect(hueForText(tag)).toBe(hueForText(tag))
       expect(hueForText(` ${tag.toUpperCase()} `)).toBe(hueForText(tag))
     }
@@ -251,10 +251,9 @@ describe('hueForText', () => {
 
   it('is fixed across releases for a known tag, so a tag keeps its colour after a restart or an update', () => {
     // Pinned: changing the hash recolours every tag a user has.
-    expect(['floti', 'helm', 'notes', 'reference', 'journal', 'task'].map(hueForText)).toMatchInlineSnapshot(`
+    expect(['floti', 'notes', 'reference', 'journal', 'task'].map(hueForText)).toMatchInlineSnapshot(`
       [
         "amber",
-        "violet",
         "red",
         "blue",
         "green",
@@ -357,7 +356,7 @@ describe('resolveTheme', () => {
 describe('user themes on disk', () => {
   let dir: string
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'helm-themes-'))
+    dir = mkdtempSync(join(tmpdir(), 'floti-themes-'))
   })
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true })

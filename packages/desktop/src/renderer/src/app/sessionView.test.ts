@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SessionActivity, SessionActivityState, SessionRecord } from '@helm/core/types'
+import type { SessionActivity, SessionActivityState, SessionRecord } from '@floti/core/types'
 import {
   agentRow,
   childCrumb,

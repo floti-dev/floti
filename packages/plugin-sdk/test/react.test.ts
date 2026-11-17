@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { StrictMode, createElement, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { useHelmEvent, useHelmSettings, useHelmTheme, useHelmVisible, useSecret } from '../src/react.js'
+import { useFlotiEvent, useFlotiSettings, useFlotiTheme, useFlotiVisible, useSecret } from '../src/react.js'
 import { DARK, LIGHT, installBridge, removeBridge, type FakeBridge } from './bridge'
 
 /** The React hooks, over the stores, the way a plugin's components use them. */
@@ -26,7 +26,7 @@ afterEach(() => {
 describe('the React hooks', () => {
   it('read settings and a secret once for every component, follow Floti, and let go on unmount', async () => {
     const { result, unmount } = renderHook(
-      () => ({ panel: useHelmSettings(), list: useHelmSettings(), token: useSecret('github-token') }),
+      () => ({ panel: useFlotiSettings(), list: useFlotiSettings(), token: useSecret('github-token') }),
       { wrapper: strict }
     )
     expect(result.current.panel).toBeNull()
@@ -56,7 +56,7 @@ describe('the React hooks', () => {
   })
 
   it('re-render on theme and visibility', () => {
-    const { result, unmount } = renderHook(() => ({ theme: useHelmTheme(), visible: useHelmVisible() }), { wrapper: strict })
+    const { result, unmount } = renderHook(() => ({ theme: useFlotiTheme(), visible: useFlotiVisible() }), { wrapper: strict })
     expect(result.current).toEqual({ theme: DARK, visible: false })
 
     act(() => {
@@ -73,7 +73,7 @@ describe('the React hooks', () => {
   it('call the latest listener for an event, until unmount', () => {
     const seen: string[] = []
     const { rerender, unmount } = renderHook(
-      ({ label }: { label: string }) => useHelmEvent('action', ({ id }) => seen.push(`${label}:${id}`)),
+      ({ label }: { label: string }) => useFlotiEvent('action', ({ id }) => seen.push(`${label}:${id}`)),
       { initialProps: { label: 'first' }, wrapper: strict }
     )
     act(() => fake.emit('action', { id: 'refresh' }))
@@ -86,16 +86,13 @@ describe('the React hooks', () => {
   })
 })
 
-describe.each([
-  ['a version 2 page', 'floti'],
-  ['a version 1 page', 'helm']
-] as const)('S5: in %s, the React hooks use window.%s', (_page, name) => {
+describe('S5: the React hooks use window.floti', () => {
   it('follow that bridge', async () => {
-    fake = installBridge(name)
+    fake = installBridge()
     const actions: string[] = []
     const { result } = renderHook(() => {
-      useHelmEvent('action', ({ id }) => actions.push(id))
-      return { theme: useHelmTheme(), visible: useHelmVisible(), settings: useHelmSettings() }
+      useFlotiEvent('action', ({ id }) => actions.push(id))
+      return { theme: useFlotiTheme(), visible: useFlotiVisible(), settings: useFlotiSettings() }
     })
     expect(result.current.theme).toBe(DARK)
     await act(async () => {

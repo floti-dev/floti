@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ConfigSnapshotMeta, ContentDocument, RenderedMarkdown } from '@helm/core'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
-import type { ArtifactConsoleEntry } from '@helm/ui'
+import type { ConfigSnapshotMeta, ContentDocument, RenderedMarkdown } from '@floti/core'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
+import type { ArtifactConsoleEntry } from '@floti/ui'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
 import { relativeTo } from './useFiles'
@@ -16,8 +16,8 @@ import { relativeTo } from './useFiles'
  * console and conflict.
  *
  * **Reads and writes go through `content:*` with `scopePath` the deepest folder
- * Helm knows that holds the file** - so a note under a workspace's `repos/helm`
- * is saved, snapshotted and wikilinked as part of `helm` rather than refused
+ * the desktop knows that holds the file** - so a note under a workspace's `repos/app`
+ * is saved, snapshotted and wikilinked as part of `app` rather than refused
  * as "not content" by the workspace's guard (`assertContentWritable`).
  *
  * A change on disk arrives through the Files view's own watch (`files:changed`)
@@ -84,7 +84,7 @@ const inside = (root: string, path: string): boolean =>
   path.toLowerCase().startsWith(`${root.replace(/[\\/]+$/, '').toLowerCase()}\\`) ||
   path.toLowerCase().startsWith(`${root.replace(/[\\/]+$/, '').toLowerCase()}/`)
 
-/** `helm-content://artifact/<token>/` - everything the artifact loaded is under it. */
+/** `floti-content://artifact/<token>/` - everything the artifact loaded is under it. */
 const artifactBase = (url: string): string => url.slice(0, url.lastIndexOf('/') + 1)
 
 export function useDocument({
@@ -95,7 +95,7 @@ export function useDocument({
   editing,
   parked
 }: DocumentOptions): DocumentState {
-  const helm = bridgeFor(host)
+  const desktop = bridgeFor(host)
   const [document, setDocument] = useState<ContentDocument | null>(null)
   const [version, setVersion] = useState(0)
   const [snapshots, setSnapshots] = useState<ConfigSnapshotMeta[]>([])
@@ -121,7 +121,7 @@ export function useDocument({
   const seq = useRef(0)
   useEffect(() => {
     const ticket = ++seq.current
-    void helm
+    void desktop
       .invoke('content:document', { scopePath, path })
       .then((next) => {
         if (ticket !== seq.current) return
@@ -137,7 +137,7 @@ export function useDocument({
       .catch((err: unknown) => {
         if (ticket === seq.current) setError(readable(err))
       })
-    void helm
+    void desktop
       .invoke('content:snapshots', { scopePath, path })
       .then((rows) => {
         if (ticket !== seq.current) return
@@ -147,14 +147,14 @@ export function useDocument({
       .catch((err: unknown) => {
         if (ticket === seq.current) setSnapshotsError(readable(err))
       })
-  }, [helm, scopePath, path, version])
+  }, [desktop, scopePath, path, version])
 
   // An artifact gets a URL its sandboxed frame may load - minted per read, so a
   // changed file is a fresh frame and an old token cannot outlive its page.
   useEffect(() => {
     if (kind !== 'html') return
     let current = true
-    void helm
+    void desktop
       .invoke('content:artifact', { scopePath, path })
       .then((minted) => {
         if (!current) return
@@ -167,26 +167,26 @@ export function useDocument({
     return () => {
       current = false
     }
-  }, [helm, kind, scopePath, path, version])
+  }, [desktop, kind, scopePath, path, version])
 
   // What this artifact logged, and nothing another tab's did.
   useEffect(() => {
     if (artifactUrl === null) return undefined
     const base = artifactBase(artifactUrl)
-    return helm.on('content:artifactConsole', (entry) => {
+    return desktop.on('content:artifactConsole', (entry) => {
       if (!entry.source.startsWith(base) && !entry.source.endsWith('://unknown')) return
       setArtifactConsole((current) => [...current.slice(-(CONSOLE_MAX - 1)), entry])
     })
-  }, [helm, artifactUrl])
+  }, [desktop, artifactUrl])
 
   // The file changed on disk. Followed when nothing is typed over it; a
   // conflict, held until somebody decides, when something is.
   useEffect(
     () =>
-      helm.on('files:changed', ({ root, paths }) => {
+      desktop.on('files:changed', ({ root, paths }) => {
         if (!inside(root, path)) return
         if (paths !== null && !paths.some((changed) => sameFile(changed, relativeTo(root, path)))) return
-        void helm
+        void desktop
           .invoke('content:document', { scopePath, path })
           .then((next) => {
             const before = live.current.document
@@ -200,7 +200,7 @@ export function useDocument({
           })
           .catch(() => undefined)
       }),
-    [helm, scopePath, path, kind]
+    [desktop, scopePath, path, kind]
   )
 
   // -------------------------------------------------------------------------
@@ -219,13 +219,13 @@ export function useDocument({
   useEffect(() => {
     if (!editing || kind !== 'markdown') return
     const ticket = ++previewSeq.current
-    void helm
+    void desktop
       .invoke('content:render', { scopePath, path, source: debounced })
       .then((rendered) => {
         if (ticket === previewSeq.current) setPreview({ source: debounced, rendered })
       })
       .catch(() => undefined)
-  }, [helm, editing, kind, scopePath, path, debounced])
+  }, [desktop, editing, kind, scopePath, path, debounced])
 
   // -------------------------------------------------------------------------
   // Writing
@@ -236,7 +236,7 @@ export function useDocument({
       if (loaded === null) return
       setSaving(true)
       setError(null)
-      void helm
+      void desktop
         .invoke('content:write', {
           scopePath,
           path,
@@ -259,7 +259,7 @@ export function useDocument({
         .catch((err: unknown) => setError(readable(err)))
         .finally(() => setSaving(false))
     },
-    [helm, scopePath, path]
+    [desktop, scopePath, path]
   )
 
   const reload = useCallback(() => {
@@ -271,7 +271,7 @@ export function useDocument({
   const restore = useCallback(
     (snapshot: ConfigSnapshotMeta) => {
       setSaving(true)
-      void helm
+      void desktop
         .invoke('content:restore', { id: snapshot.id, path })
         .then((result) => {
           if (!result.ok) {
@@ -284,16 +284,16 @@ export function useDocument({
         .catch((err: unknown) => setError(readable(err)))
         .finally(() => setSaving(false))
     },
-    [helm, path]
+    [desktop, path]
   )
 
   const resolveWikilink = useCallback(
     (target: string) =>
-      helm
+      desktop
         .invoke('content:wikilink', { scopePath, target, from: path })
         .then((answer) => answer.path)
         .catch(() => null),
-    [helm, scopePath, path]
+    [desktop, scopePath, path]
   )
 
   return {

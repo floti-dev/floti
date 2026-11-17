@@ -3,7 +3,7 @@ import { execFile, execFileSync } from 'node:child_process'
 /**
  * Ends a process and everything it started.
  *
- * Used wherever Helm owns a process that may have children: a session's pty
+ * Used wherever the desktop owns a process that may have children: a session's pty
  * and a plugin's programs and service. A `.cmd` shim alone makes every one of
  * them a tree - `cmd.exe` and the program it ran.
  *

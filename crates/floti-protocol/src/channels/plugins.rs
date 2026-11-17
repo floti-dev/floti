@@ -9,9 +9,8 @@
 //!   channels between a page and the host (`plugins:call`, `plugins:cancel`,
 //!   `plugins:answer`), the host's pushes to pages (`plugins:ui`,
 //!   `plugins:deliver`) and the page files a client frames (`plugins:file`)
-//!   need that capability. A background page's own wires to whatever runs it
-//!   never cross the protocol:
-//!   [`HOST_INTERNAL`](super::boundary::HOST_INTERNAL).
+//!   need that capability. A plugin's background module runs in the host's
+//!   engine, so nothing between it and the host crosses the protocol.
 //! - `plugins:file` is not in ipc.ts: the desktop's main process answered its
 //!   frames' page loads from the plugin's folder in its own protocol handler.
 //!   A client whose plugins are on the host asks the host for each file
@@ -125,7 +124,7 @@ request_channel! {
     PluginsSession = "plugins:session", PluginSessionAnswer => Option<SessionRecord>
 }
 request_channel! {
-    /// A Quick Open command with no tab, for the plugin's background page.
+    /// A Quick Open command with no tab, for the plugin's background.
     PluginsCommand = "plugins:command", PluginCommandRequest => ()
 }
 request_channel! {
@@ -336,7 +335,7 @@ pub const PLUGIN_FILE_PIECE_LEN: u64 = 4 * 1024 * 1024;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginFileRequest {
-    /// The plugin's id: the host of its `helm-plugin://<id>/` origin, which
+    /// The plugin's id: the host of its `floti-plugin://<id>/` origin, which
     /// the client established from the frame, never from what the page asked.
     pub plugin: String,
     /// The path on that origin, percent-decoded, without its leading `/`:
@@ -864,8 +863,7 @@ pub struct PluginAgentInfo {
     pub tools: Vec<PluginToolInfo>,
 }
 
-/// One tool as the manifest declares it: enough for a client whose plugin
-/// pages answer its calls to offer it on `agentPlugin:offer`.
+/// One tool as the manifest declares it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginToolInfo {

@@ -25,6 +25,7 @@ import {
   restartHostConfirmTone,
   restartHostDetail,
   restartHostQuestion,
+  saysDownloadNotFound,
   saysNotFound
 } from './hostInstall'
 import type { InstallOffer } from './hostInstall'
@@ -167,13 +168,74 @@ describe('which floti goes to a computer', () => {
   it('S15: names the step that failed, and says a floti that was there still works', () => {
     expect(describeInstallFailure('install', 'build-box', '~/.local/bin')).toEqual({
       title: 'Installing floti on build-box failed',
-      fix: 'Nothing replaced a floti that was there. Check that ~/.local/bin there can be written to and, for a download, that build-box reaches github.com, then try again.'
+      fix: 'Nothing replaced a floti that was there. Check that ~/.local/bin there can be written to, then try again.'
     })
     expect(describeInstallFailure('stop', 'build-box', '~/.local/bin').fix).toContain('its sessions are still running')
     expect(describeInstallFailure('update', 'build-box', '~/.local/bin')).toEqual({
       title: 'floti update failed on build-box',
       fix: 'floti update replaces nothing until every download has passed its checks, and its sessions keep running. Run floti update in a terminal there to see all of its output, then try again.'
     })
+  })
+})
+
+describe('a download that answers 404', () => {
+  const folder = '~/.local/bin'
+
+  it('says that version has no published floti and to update Floti on this PC, never to check the network', () => {
+    const said = [
+      'curl: (22) The requested URL returned error: 404',
+      'could not download https://github.com/floti-dev/floti/releases/download/v3.0.0/floti-3.0.0-linux-x64.'
+    ].join('\n')
+    const words = describeInstallFailure('install', 'build-box', folder, { said, version: '3.0.0' })
+    expect(words).toEqual({
+      title: 'floti 3.0.0 has no published build to download',
+      fix: 'Update Floti on this PC, then try again.'
+    })
+    expect(JSON.stringify(words)).not.toMatch(/github|reaches/i)
+  })
+
+  it('reads PowerShell’s 404 the same way', () => {
+    const said = 'Exception calling "DownloadFile": "The remote server returned an error: (404) Not Found."'
+    expect(describeInstallFailure('install', 'win-box', folder, { said, version: '3.0.0' }).title).toBe(
+      'floti 3.0.0 has no published build to download'
+    )
+  })
+
+  it('reads the last line when nothing more was written, as install.ps1 writes one line on Windows', () => {
+    const lastLine = 'Exception calling "DownloadFile": "The remote server returned an error: (404) Not Found."'
+    expect(describeInstallFailure('install', 'win-box', folder, { lastLine, version: '3.0.0' })).toEqual({
+      title: 'floti 3.0.0 has no published build to download',
+      fix: 'Update Floti on this PC, then try again.'
+    })
+    // What was said wins over the last line.
+    expect(
+      describeInstallFailure('install', 'win-box', folder, { said: 'curl: (6) no', lastLine, version: '3.0.0' }).title
+    ).toBe('Installing floti on win-box failed')
+  })
+
+  it('reads wget’s 404, GNU’s ERROR 404 and busybox’s 404 Not Found', () => {
+    expect(saysDownloadNotFound('2026-11-16 12:00:00 ERROR 404: Not Found.')).toBe(true)
+    expect(saysDownloadNotFound('wget: server returned error: HTTP/1.1 404 Not Found')).toBe(true)
+    expect(saysDownloadNotFound('Connecting to example.test (1.2.3.4:443)\nwget: server returned error: HTTP/1.1 404 Not Found')).toBe(true)
+    expect(saysDownloadNotFound('wget: unable to resolve host address ‘github.com’')).toBe(false)
+  })
+
+  it('is told apart from a download that failed for another reason', () => {
+    expect(saysDownloadNotFound('curl: (6) Could not resolve host: github.com')).toBe(false)
+    expect(saysDownloadNotFound('floti was installed, but /opt/404/floti is not where it should be.')).toBe(false)
+    expect(saysDownloadNotFound('curl: (22) The requested URL returned error: 404')).toBe(true)
+    const other = describeInstallFailure('install', 'build-box', folder, {
+      said: 'curl: (6) Could not resolve host: github.com',
+      version: '3.0.0'
+    })
+    expect(other.title).toBe('Installing floti on build-box failed')
+  })
+
+  it('applies to the install step only', () => {
+    const said = 'curl: (22) The requested URL returned error: 404'
+    expect(describeInstallFailure('setup', 'build-box', folder, { said, version: '3.0.0' }).title).toBe(
+      'floti is installed on build-box, but its setup failed'
+    )
   })
 })
 
@@ -321,26 +383,26 @@ describe('which of this PC’s host and this Floti is behind', () => {
   it('S7: a refusal saying to update the host marks this PC’s host older, naming both protocols', () => {
     expect(
       localHostVersions({ refused: { host: { major: 2, minor: 0 }, client: { major: 2, minor: 1 }, update: 'host' } }, '2.5.0')
-    ).toEqual({ older: 'host', host: 'protocol 2.0', helm: 'protocol 2.1', beforeRestart: false })
+    ).toEqual({ older: 'host', host: 'protocol 2.0', desktop: 'protocol 2.1', beforeRestart: false })
   })
 
   it('S8: a refusal saying to update the client says this Floti is the one behind', () => {
     expect(
       localHostVersions({ refused: { host: { major: 2, minor: 2 }, client: { major: 2, minor: 0 }, update: 'client' } }, '2.4.1')
-    ).toEqual({ older: 'helm', host: 'protocol 2.2', helm: 'protocol 2.0' })
+    ).toEqual({ older: 'desktop', host: 'protocol 2.2', desktop: 'protocol 2.0' })
   })
 
   it('S17: a host on protocol 1.x is older and from before the restart could be asked for', () => {
     expect(
       localHostVersions({ refused: { host: { major: 1, minor: 4 }, client: { major: 2, minor: 0 }, update: 'host' } }, '2.4.1')
-    ).toEqual({ older: 'host', host: 'protocol 1.4', helm: 'protocol 2.0', beforeRestart: true })
+    ).toEqual({ older: 'host', host: 'protocol 1.4', desktop: 'protocol 2.0', beforeRestart: true })
   })
 
   it('S9: a welcome naming an earlier floti marks the host older; S10: the same floti, nothing', () => {
     expect(localHostVersions({ hostVersion: '2.4.1-preview.6' }, '2.4.1-preview.7')).toEqual({
       older: 'host',
       host: '2.4.1-preview.6',
-      helm: '2.4.1-preview.7',
+      desktop: '2.4.1-preview.7',
       beforeRestart: false
     })
     expect(localHostVersions({ hostVersion: '2.4.1-preview.7' }, '2.4.1-preview.7')).toBeNull()
@@ -349,13 +411,13 @@ describe('which of this PC’s host and this Floti is behind', () => {
 
 describe('what is said of this PC’s host’s version', () => {
   it('S9: an older host names both flotis and offers the restart', () => {
-    expect(localHostVersionsSentence({ older: 'host', host: '2.4.0', helm: '2.4.1', beforeRestart: false })).toBe(
+    expect(localHostVersionsSentence({ older: 'host', host: '2.4.0', desktop: '2.4.1', beforeRestart: false })).toBe(
       'This PC’s host runs floti 2.4.0, older than the floti 2.4.1 this Floti carries. Restart host to update says first what it ends.'
     )
   })
 
   it('S8: a Floti behind its host is told to update Floti on this PC', () => {
-    expect(localHostVersionsSentence({ older: 'helm', host: 'protocol 2.2', helm: 'protocol 2.0' })).toContain(
+    expect(localHostVersionsSentence({ older: 'desktop', host: 'protocol 2.2', desktop: 'protocol 2.0' })).toContain(
       'runs Floti protocol 2.2, newer than the Floti protocol 2.0 this Floti speaks, so Floti cannot connect to it. Update Floti on this PC.'
     )
   })
@@ -364,7 +426,7 @@ describe('what is said of this PC’s host’s version', () => {
     const sentence = localHostVersionsSentence({
       older: 'host',
       host: 'protocol 1.4',
-      helm: 'protocol 2.0',
+      desktop: 'protocol 2.0',
       beforeRestart: true
     })
     expect(sentence).toBe(

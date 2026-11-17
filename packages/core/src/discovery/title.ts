@@ -5,7 +5,7 @@
  * 0 of 275 surviving transcripts hold a `"type":"summary"` record, and the
  * types that are there are `message`, `assistant`, `user`, `tool_use`,
  * `tool_result`, `text`, `thinking`, `mode` and `attachment`. So a name that
- * says what a session was about has to be *derived* by Helm - there is nothing
+ * says what a session was about has to be *derived* by Floti - there is nothing
  * to borrow.
  *
  * The opening prompt was the previous answer and it fails in three measurable
@@ -70,7 +70,7 @@ export function cleanPrompt(text: string): string {
  * Does this read as a subject - two words or more that are actually words.
  *
  * Two rather than one, because the one-word case is `continue`, `yes`, `1` and
- * `helm`, none of which distinguishes a session from the next one. A session
+ * `floti`, none of which distinguishes a session from the next one. A session
  * whose every prompt is like that still gets that text as its title through the
  * fallback below; this only decides whether to keep looking.
  */
@@ -134,11 +134,11 @@ function truncate(text: string): string {
  */
 export interface SessionTitle {
   text: string
-  /** True when no prompt survived cleaning and `text` is Helm's own words. */
+  /** True when no prompt survived cleaning and `text` is Floti's own words. */
   fallback: boolean
 }
 
-/** Helm's own words for a session that recorded nothing readable. */
+/** Floti's own words for a session that recorded nothing readable. */
 function fallbackFor(raw: string): string {
   if (IMAGE.test(raw)) return 'Image only'
   if (PASTED.test(raw)) return 'Pasted text only'

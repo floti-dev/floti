@@ -62,6 +62,10 @@ it had a gap: add the unit or integration test that fails for it, then fix
 it. An end-to-end run that keeps sending work back means those tiers are not
 good enough. Only what needs the whole app running stays an end-to-end test.
 
+`packages/desktop/test/old-name.test.ts`, part of `pnpm check`, fails naming
+every tracked file, line and path that says the name Floti had before, with
+no allow list: that name is not used in this repository.
+
 The protocol crate generates JSON Schema and TypeScript into
 `crates/floti-protocol/generated/`. A test fails when those files are out of
 date and names the command that rewrites them:
@@ -249,21 +253,15 @@ session lists, a call carried to that client and its answer handed back, no
 family for a launch with no browser attached, a call failing at once when
 the client leaves, and the refusals on the route. Its floti-sessions test
 compares what a session lists with `src/server/session_tools.json`, the table
-the desktop reads too. Its plugin tests attach a `TestClient` that listens on
-`agentPlugin:call` and `agentPlugin:cancel` and offers a plugin server: the
-tools a session lists and the read-only one in `--allowedTools`, a call
-answered by that client, a server left out of the next offer refused to a
-running session at once, calls failing at once when the client leaves, and a
-call withdrawn from the client when the session cancels it or ends.
-`crates/host/tests/it/host_plugin_tools.rs` does the same for the tools the host
-serves itself: a version 2 plugin of the test's own, its background module
-answering its tools with the caller it was told, painting a badge and a status
-item at load and fetching from its Node service on demand, with no client
-attached during the launches and calls; the plugin turned off, removed and
-with its tools off; a client's offer under its name passed over; and a version
-1 plugin's tool still answered by the client offering it. The relays
-themselves (`src/server/features/agent_browser.rs`, `agent_plugin.rs`) have
-unit tests with no listener.
+the desktop reads too.
+`crates/host/tests/it/host_plugin_tools.rs` covers the plugin tools the host
+serves: a plugin of the test's own, its background module answering its tools
+with the caller it was told, painting a badge and a status item at load and
+fetching from its Node service on demand, with no client attached during the
+launches and calls; the plugin turned off, removed and with its tools off;
+and an `agentPlugin:offer` and `agentPlugin:answer` taken and changing
+nothing, with no call sent to the client. The browser relay
+(`src/server/features/agent_browser.rs`) has unit tests with no listener.
 
 `crates/host/tests/it/os_conditionals.rs` fails, naming each `file:line`, when a
 compile-time OS conditional (`cfg(windows)`, `cfg!(unix)`, `target_os` and
@@ -318,7 +316,7 @@ pnpm vitest run <file>             # one file, while building
 pnpm test:posix                    # the POSIX code's tests: under Linux in WSL on Windows, natively elsewhere
 pnpm test:posix <file> ...         # the same, for these files
 pnpm test:e2e                      # builds, then runs every workflow
-pnpm --filter @helm/desktop exec node scripts/playwright.mjs test -c e2e panes   # one spec, after a build; the wrapper keeps Playwright's cache out of the temp folder
+pnpm --filter @floti/desktop exec node scripts/playwright.mjs test -c e2e panes   # one spec, after a build; the wrapper keeps Playwright's cache out of the temp folder
 cargo nextest run --workspace      # every crate's tests; CI adds --profile ci
 cargo nextest run -p floti-protocol   # the protocol crate, its ipc.ts coverage and generated-file check included
 cargo nextest run -p floti-host    # the host, with the fake agents (Node on PATH)
@@ -334,8 +332,8 @@ node scripts/test-leftovers.mjs cargo nextest run --workspace   # the same aroun
 
 `scripts/test-leftovers.mjs` is the check CI runs after `pnpm check` and after
 the host tests, on every runner. Around a command it runs it, then lists each
-test temp folder (`helm-test-run-*`, a vitest or Playwright run's root,
-`floti test *`, `helm world-*`, `helm-test-posix-*`) the
+test temp folder (`floti-test-*`, a vitest or Playwright run's root,
+`floti test *`, `floti world-*`, `floti-test-posix-*`) the
 command left in the temp folder and each process of a kind tests start
 (`floti*`, Node, shells, `conhost`, Electron, Xvfb) that the command started and is still
 running, with its pid, name and command line. It exits with the command's
@@ -374,14 +372,14 @@ both before comparing them, and its tests reach the folder through a link
 short alias on Windows, or point TMPDIR at a link to a folder - from Windows,
 `TMPDIR=/tmp/<link> WSLENV=TMPDIR pnpm test:posix <files>`.
 
-The code that differs by OS - the processes-and-ports pass, overlay links,
-ending a process tree, the data directories and node-pty's spawn-helper mode -
+The code that differs by OS - the processes-and-ports pass, ending a
+process tree, the data directories and node-pty's spawn-helper mode -
 has its tests run where that code is the POSIX one by `pnpm test:posix`
 (`scripts/test-posix.mjs`):
 
 - **On macOS and Linux** it runs those test files natively, in the checkout.
 - **On Windows** it runs them under Linux in WSL. It mirrors the working tree
-  into `~/.cache/helm-posix/<checkout>` inside WSL with `rsync` (no
+  into `~/.cache/floti-posix/<checkout>` inside WSL with `rsync` (no
   `node_modules`, `.git` or build output), runs `pnpm install
   --frozen-lockfile` there when `pnpm-lock.yaml` has changed since the last
   install, and runs the tests in that copy. The copy is Linux-side because a
@@ -430,7 +428,7 @@ vitest runs five projects (`vitest.config.ts`):
 
 Every project runs one global setup, `test/run-root.ts`, set in the root
 config, which every project extends. It makes the run's root, a
-`helm-test-run-*` folder in the OS temp folder, and points `TMPDIR`, `TEMP` and
+`floti-test-*` folder in the OS temp folder, and points `TMPDIR`, `TEMP` and
 `TMP` at it before any worker starts; the workers are forked with that
 environment, so every temp folder a test, the code under test or a process
 either starts makes is in the root, by construction, a world (`createWorld`)
@@ -499,14 +497,14 @@ over the window, or Electron's own guards on a page.
 | `settings` | the gear opens Settings as a tab with its sections, Ctrl+Tab walks every tab from inside a terminal, and a setting changed there survives a restart |
 | `launcher` | Ctrl+N, a folder typed, a profile and mode picked there; a conversation reopened in the pane beside; a new workspace ending in a session |
 | `profiles` | a profile made in the form, saved in the host, starting with its overlay, name and opening prompt |
-| `history` | an ended session in History without a refresh, its archive read in a tab with nothing of it in `helm.db`, found by what was said, and resumed where it ran |
-| `own-data` | what only `helm.db` held copied into the host, and History and the archived conversation showing it |
+| `history` | an ended session in History without a refresh, its archive read in a tab with nothing of it in `desktop.db`, found by what was said, and resumed where it ran |
+| `own-data` | what only `desktop.db` held copied into the host, and History and the archived conversation showing it |
 | `files` | a file opened from the tree beside its session, its changed lines counted, its line numbers to the bottom, and the view following the session's next edit; Ctrl+P, and the hand-offs to VS Code, Explorer and the clipboard |
 | `notes` | a note rendered and its wikilink followed; a note edited beside its preview, its draft kept behind another tab, and saved; Ctrl+Shift+F finding a note; an HTML artifact framed with no reach |
 | `browser` | browsing; the security posture; a cookie surviving a restart; find in page; the browser's keys with the caret in the page; the page standing down for the address list and the menu; clipboard writing and fullscreen; the page standing down while a divider or the Browser tab is dragged |
 | `agent-tools` | a session drives a browser tab of its own through its own token, and loses its tools when it ends; a page the user shares with a session, read and driven until the share is taken back or the session ends |
-| `plugins` | the sample plugin, a version 2 plugin, against a server of its own: its background module, read through what it does (the badge, the status bar item, a command's effect, the tools' answers), a secret it asks for, its panel, badge, status and a tab with parameters, its pages on `floti-plugin://sample/` with `window.floti`, and `floti.fetch` held to the manifest's origins on every redirect; Floti's shortcuts from inside a plugin page and its commands from Ctrl+Shift+P; a crashed plugin page and Reload; a folder added in Settings, kept across a restart, and turned off and on; a session calling the plugin's tools through the host, answered by its background module, and losing them when they are turned off in Settings; a page strip; a plugin page starting a session and opening a link from a click |
-| `boundary` | every channel a workflow uses crosses only as `channels/boundary.rs` allows: the launcher, sessions and terminals; history; the Files view, a note and the profile form; plugin pages of both versions, a version 1 background page, a tool called by a session, and the Browser tab |
+| `plugins` | the sample plugin, against a server of its own: its background module, read through what it does (the badge, the status bar item, a command's effect, the tools' answers), a secret it asks for, its panel, badge, status and a tab with parameters, its pages on `floti-plugin://sample/` with `window.floti`, and `floti.fetch` held to the manifest's origins on every redirect; Floti's shortcuts from inside a plugin page and its commands from Ctrl+Shift+P; a crashed plugin page and Reload; a folder added in Settings, kept across a restart, and turned off and on; a session calling the plugin's tools through the host, answered by its background module, and losing them when they are turned off in Settings; a page strip; a plugin page starting a session and opening a link from a click |
+| `boundary` | every channel a workflow uses crosses only as `channels/boundary.rs` allows: the launcher, sessions and terminals; history; the Files view, a note and the profile form; plugin pages, a tool called by a session, and the Browser tab |
 
 - **Each test gets a world** (`test/world.ts`): a temporary root with a space in
   its path, in the run's root, named owner of its fake agents (a `test-owner`
@@ -514,21 +512,22 @@ over the window, or Electron's own guards on a page.
   (a `.cmd` shim on Windows, an `sh` script elsewhere), two git projects, and the app's data
   directory (`PORTABLE_EXECUTABLE_DIR`). Settings are seeded through the app's
   own store before it starts: the projects folder scanned, the fake `claude`
-  chosen, first run done, the update check off. Nothing reaches the network, a
+  chosen, first run done (no walkthrough), the update check
+  off; `e2e/walkthrough.spec.ts` seeds a first start instead. Nothing reaches the network, a
   real `~/.claude` or the installed app. The world is removed only once
-  everything it ran has exited (`worldProcesses` in `e2e/helm.ts`: each host
+  everything it ran has exited (`worldProcesses` in `e2e/desktop.ts`: each host
   and session keeper by the pid the host logs, each fake `claude` by its
   record), because Windows will not delete a file a live process holds. A
   test that leaves something running fails there, naming the pids.
 - **One project**, `in the local host`: sessions, terminals, discovery, setup,
   templates, notes, files and the plugins registry are the local host's.
-- **`e2e/helm.ts`** has the `test` fixture (`world`, `helm`, `relaunch`) and
+- **`e2e/desktop.ts`** has the `test` fixture (`world`, `desktop`, `relaunch`) and
   the helpers: `startSession`, `typeLine`, `terminalText`, `claudeRunIn`,
   `processAlive`, and for quitting `closeWindow`, `answer` and
   `closeKeepRunning`.
 - **Find elements by role and accessible name**, as a user sees them. Two
   exceptions, both read-only: terminal text comes from
-  `window.__helmTerminals()`, because xterm paints to a canvas; and a pane's
+  `window.__flotiTerminals()`, because xterm paints to a canvas; and a pane's
   "needs you" state is `data-pane-attention`, which has no ARIA equivalent.
 - **The browser pane's page** is a native view, not part of the window's DOM.
   Once it has loaded a page, it appears in `app.windows()` as a page of its
@@ -537,10 +536,8 @@ over the window, or Electron's own guards on a page.
   the sample plugin into the world, registers it, starts its server, and finds
   a page with `pluginFrame`, on `floti-plugin://sample/` unless a test names
   another origin. The sample's background is a module the host runs, which no
-  window frames, so a test reads it through what it does;
-  `installVersion1Plugin` writes a small version 1 plugin whose background
-  page is a frame in the hidden plugin window, which `inVersion1Background`
-  runs a script in. `test:e2e` builds the sample first. Once a plugin
+  window frames, so a test reads it through what it does. `test:e2e` builds
+  the sample first. Once a plugin
   frame's process ends, Playwright counts the whole window as crashed and will
   not drive it again, so the crash test drives the window through the main
   process instead.

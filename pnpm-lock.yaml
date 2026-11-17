@@ -105,10 +105,10 @@ importers:
       '@floti-dev/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk
-      '@helm/core':
+      '@floti/core':
         specifier: workspace:*
         version: link:../core
-      '@helm/ui':
+      '@floti/ui':
         specifier: workspace:*
         version: link:../ui
       '@xterm/addon-fit':
@@ -209,7 +209,7 @@ importers:
         specifier: ^3.4.1
         version: 3.6.0
     devDependencies:
-      '@helm/core':
+      '@floti/core':
         specifier: workspace:*
         version: link:../core
       '@types/react':

@@ -1,4 +1,4 @@
-import { LOCAL_HOST_KEY, hostOf, type PaneRef } from '@helm/core/types'
+import { LOCAL_HOST_KEY, hostOf, type PaneRef } from '@floti/core/types'
 
 /** A session started from a project's row or page that did not start, on whichever host. */
 export interface TreeLaunchFailure {

@@ -40,7 +40,7 @@ if (command === undefined) {
  * was true right up until the browser pane shipped: a `WebContentsView` is a
  * `page` target like any other and it carries whatever URL the user typed, so
  * with one browser tab open the picker chose the *page* - and every command
- * then ran against a document that has never heard of `window.helm`. `text`
+ * then ran against a document that has never heard of `window.desktop`. `text`
  * printed the page, `click` said nothing matched, and `eval` failed in a way
  * that reads exactly like the app being broken.
  *
@@ -51,7 +51,14 @@ if (command === undefined) {
  */
 function isAppRenderer(url) {
   if (url.includes('spike')) return false
-  if (url.startsWith('file:')) return url.endsWith('index.html')
+  // The shell and the setup window are the same page; the setup window is it with `?window=setup`.
+  if (url.startsWith('file:')) {
+    try {
+      return new URL(url).pathname.endsWith('index.html')
+    } catch {
+      return false
+    }
+  }
   try {
     const parsed = new URL(url)
     return parsed.port === DEV_SERVER_PORT && (parsed.pathname === '/' || parsed.pathname === '/index.html')

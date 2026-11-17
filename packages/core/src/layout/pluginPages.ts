@@ -4,7 +4,7 @@ import { activateTab, closeTab, findTab, groupById, openTab, retitleTab, type Pa
 /**
  * The pages of a plugin that declares `pageStrip`, as data.
  *
- * Such a plugin has one tab (`plugin-pages`), and every `helm.tabs.open` is a
+ * Such a plugin has one tab (`plugin-pages`), and every `floti.tabs.open` is a
  * page in a strip inside it rather than a tab among a pane's tabs - the way
  * the Browser tab holds its pages (`browserStrip.ts`). The pages live in the
  * tab's ref, so they move, split and are written down with it, and every rule
@@ -58,7 +58,7 @@ function appended(ref: PluginPagesRef, page: PluginPage): PluginPage[] {
 }
 
 /**
- * `helm.tabs.open` for a plugin with a page strip: the page comes to the front
+ * `floti.tabs.open` for a plugin with a page strip: the page comes to the front
  * of the plugin's tab, and that tab to the front of its pane.
  *
  * A page with the same tab and parameters is brought forward rather than
@@ -172,7 +172,7 @@ export function movePluginPage(layout: PaneLayout, plugin: string, id: string, t
 }
 
 /**
- * A plugin surface renamed itself (`helm.surface.setTitle`), or put the
+ * A plugin surface renamed itself (`floti.surface.setTitle`), or put the
  * manifest's title back (null). `key` is its frame's key: a plugin tab's id,
  * or a page's. Nothing moves and nothing takes the focus.
  */

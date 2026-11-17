@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ContentScope, FileView, HistoryPage, HistorySession, HistorySummary } from '@helm/core'
+import type { ContentScope, FileView, HistoryPage, HistorySession, HistorySummary } from '@floti/core'
 import type { PluginInfo } from '../../../shared/ipc'
 import { bridge, remoteBridge, type Invocation } from './bridge.testkit'
 import { noteDocument } from './document.testkit'

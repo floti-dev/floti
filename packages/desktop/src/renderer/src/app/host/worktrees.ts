@@ -1,4 +1,4 @@
-import type { AgentWorktree, AgentWorktreeRemoval } from '@helm/core'
+import type { AgentWorktree, AgentWorktreeRemoval } from '@floti/core'
 import type { HostConnection } from '../../../../shared/host/client'
 import type { HostReach } from './history'
 import type { HostAdapter } from './router'

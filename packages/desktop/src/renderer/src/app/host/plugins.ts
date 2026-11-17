@@ -1,22 +1,9 @@
 import type { SurfaceKind } from '@floti-dev/plugin-sdk'
-import { LOCAL_HOST_KEY, type SessionRecord } from '@helm/core/types'
+import { LOCAL_HOST_KEY, type SessionRecord } from '@floti/core/types'
 import type { HostConnection, HostSubscription } from '../../../../shared/host/client'
 import type * as P from '../../../../shared/host/protocol'
-import {
-  deliveryFromHost,
-  logFromHost,
-  pluginFromHost,
-  uiFromHost,
-  withBackgroundReports
-} from '../../../../shared/host/records'
-import type {
-  HelmBridge,
-  PluginBackgroundReport,
-  PluginCallOutcome,
-  PluginCallRequest,
-  PluginInfo,
-  PluginUiRequest
-} from '../../../../shared/ipc'
+import { deliveryFromHost, logFromHost, pluginFromHost, uiFromHost } from '../../../../shared/host/records'
+import type { DesktopBridge, PluginCallOutcome, PluginCallRequest, PluginInfo, PluginUiRequest } from '../../../../shared/ipc'
 import { CLIENT_METHODS, createClientCalls } from '../../../../shared/plugins/client-calls'
 import { failure, PluginCallError } from '../../../../shared/plugins/errors'
 import { createLocalEvents, type LocalEvents } from './events'
@@ -24,49 +11,36 @@ import type { HostReach } from './history'
 import type { HostAdapter } from './router'
 
 /**
- * Plugins, over a Helm page's own
- * connection. The host registers the folders, keeps their switches, setting
- * values and secrets, runs their services and answers their pages' calls:
- * `helm.fetch`, `exec`, settings, secrets, sessions, status and badge, and a
+ * Plugins, over the window's own connection. The host registers the
+ * folders, keeps their switches, setting values and secrets, runs their
+ * services and backgrounds and answers their pages' calls: `floti.fetch`,
+ * `exec`, settings, secrets, sessions, status and badge, and a
  * `BroadcastChannel` post, which the host hands every page of the plugin on
- * every client and its background page.
+ * every client and its background.
  *
- * Two pages frame plugins, each on its own connection:
- *
- * - The window (`createPluginsAdapter`): Settings and the rail, and the
- *   plugin's panels and tabs. It draws what the host asks of it on this
- *   connection (`plugins:ui`: the secret and session dialogs), answers on the
- *   same connection, which is the one the host checks, and takes every
- *   delivery but those for the background page.
- * - The hidden plugin host window (`createBackgroundAdapter`), where a plugin's
- *   background page runs under API v1. It takes every delivery, the
- *   background's included. What a background page asks that only the window
- *   can draw (one of the plugin's tabs, a secret dialog) goes to the window
- *   through main (`pluginWindow:*`), and the window's word that the dialog
- *   closed comes back the same way, to be answered on this connection.
+ * The window (`createPluginsAdapter`) draws Settings and the rail, and the
+ * plugin's panels and tabs. It draws what the host asks of it on this
+ * connection (`plugins:ui`: the secret and session dialogs), answers on the
+ * same connection, which is the one the host checks, and takes every
+ * delivery but those for the background.
  *
  * What concerns only the page on screen is answered in the page that draws
  * it, with the checks in `client-calls.ts`:
  * opening one of the plugin's tabs, and opening a link in the Browser tab,
  * which the window opens through `browser:open` and the reach rule. A call the
  * host cannot be reached for settles in the page as unavailable, with the
- * link's sentence, and nowhere in Helm's chrome.
+ * link's sentence, and nowhere in the desktop's chrome.
  *
  * Every read goes through `link.connection()`, so one asked before the first
  * connect waits for it, and one asked when the host cannot be reached rejects
  * with the link's sentence, never an empty list.
- *
- * Whether each background page runs is what the hidden window sees: the window
- * hears it from main (`pluginBackground:*`), the hidden window from its own
- * frames, and each lays it over the host's list, which lists a background page
- * without running it.
  */
 
-const SURFACES: readonly SurfaceKind[] = ['panel', 'tab', 'background']
+const SURFACES: readonly SurfaceKind[] = ['panel', 'tab']
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
-type Own = Pick<HelmBridge, 'invoke' | 'send' | 'on'>
+type Own = Pick<DesktopBridge, 'invoke'>
 
 interface CoreDeps {
   link: HostReach
@@ -74,8 +48,6 @@ interface CoreDeps {
   host: string
   /** Where the client calls hand what they open: false when there is nothing to hand it to. */
   ui: (request: PluginUiRequest) => boolean
-  /** What the hidden window saw of a plugin's background page. */
-  report: (plugin: string) => PluginBackgroundReport | undefined
   /** What the host asked of this page on its connection. */
   asked: (request: PluginUiRequest) => void
   /** Whether a delivery is for this page's frames. */
@@ -85,7 +57,7 @@ interface CoreDeps {
   log: (line: string) => void
 }
 
-/** What both pages share: the host's list, its subscriptions and a page's calls. */
+/** The host's list, its subscriptions and a page's calls. */
 interface PluginsCore {
   events: LocalEvents
   host(): Promise<HostConnection>
@@ -94,8 +66,6 @@ interface PluginsCore {
   list(): Promise<PluginInfo[]>
   /** The host's list, now the one this page has; the list as the page shows it. */
   take(listed: readonly P.PluginInfo[]): PluginInfo[]
-  /** Tells the page's listeners the list again when what it shows moved. */
-  retell(): void
   call(request: PluginCallRequest): Promise<PluginCallOutcome>
   cancel(callId: string): void
 }
@@ -108,26 +78,20 @@ function createPluginsCore(deps: CoreDeps): PluginsCore {
   })
   /** The host's last list, mapped; null until the first one. */
   let hosted: PluginInfo[] | null = null
-  /** The list as last told, so a report that moves nothing tells nobody. */
+  /** The list as last told, so a list that moves nothing tells nobody. */
   let said = ''
   let current: HostConnection | null = null
   let subscriptions: HostSubscription[] = []
 
-  const shown = (): PluginInfo[] => withBackgroundReports(hosted ?? [], deps.report)
-
-  const retell = (): void => {
-    if (hosted === null) return
-    const list = shown()
-    const text = JSON.stringify(list)
-    if (text === said) return
-    said = text
-    events.tell('plugins:changed', list)
-  }
-
   const take = (listed: readonly P.PluginInfo[]): PluginInfo[] => {
-    hosted = listed.map((plugin) => pluginFromHost(plugin, deps.host))
-    retell()
-    return shown()
+    const list = listed.map((plugin) => pluginFromHost(plugin, deps.host))
+    hosted = list
+    const text = JSON.stringify(list)
+    if (text !== said) {
+      said = text
+      events.tell('plugins:changed', list)
+    }
+    return list
   }
 
   const live = (plugin: string): PluginInfo | null =>
@@ -188,11 +152,9 @@ function createPluginsCore(deps: CoreDeps): PluginsCore {
     host,
     current: () => current,
     async list() {
-      take(await (await host()).request('plugins:list', null))
-      return shown()
+      return take(await (await host()).request('plugins:list', null))
     },
     take,
-    retell,
     async call(request) {
       try {
         if (!SURFACES.includes(request.surface)) return { ok: false, code: 'invalid', message: 'unknown surface' }
@@ -209,7 +171,7 @@ function createPluginsCore(deps: CoreDeps): PluginsCore {
       } catch (error) {
         // A check here refused it, or the host could not be reached or refused
         // the request itself: the page is told why, as a call that failed, and
-        // Helm's chrome hears nothing.
+        // the desktop's chrome hears nothing.
         if (error instanceof PluginCallError) return failure(error)
         return { ok: false, code: 'unavailable', message: messageOf(error) }
       }
@@ -228,7 +190,7 @@ export interface PluginsAdapterDeps {
   link: HostReach
   /** The host this window's connection reaches: This PC's (`LOCAL_HOST_KEY`) when absent. */
   host?: string
-  /** The preload's bridge: the folder picker, and what main hears from the hidden window. */
+  /** The preload's bridge: the folder picker. */
   own: Own
   /** A session the host started for a plugin, kept with the window's sessions so it opens as a tab. */
   adopt: (row: P.SessionRecord) => SessionRecord
@@ -238,62 +200,24 @@ export interface PluginsAdapterDeps {
 /** The window's plugins: Settings and the rail, and the plugin pages it frames. */
 export function createPluginsAdapter(deps: PluginsAdapterDeps): HostAdapter {
   const { own } = deps
-  const host = deps.host ?? LOCAL_HOST_KEY
   const log = deps.log ?? (() => undefined)
-  const reports = new Map<string, PluginBackgroundReport>()
-  /** Secret dialogs the hidden window handed over, whose close goes back to it. */
-  const handedOver = new Set<string>()
-
-  /** Main's reports cover every host's background pages: this host's are the ones naming it. */
-  const setReports = (next: readonly PluginBackgroundReport[]): void => {
-    reports.clear()
-    for (const report of next) if ((report.host ?? LOCAL_HOST_KEY) === host) reports.set(report.plugin, report)
-  }
 
   const core: PluginsCore = createPluginsCore({
     link: deps.link,
-    host,
+    host: deps.host ?? LOCAL_HOST_KEY,
     ui: (request) => {
       if (core.events.count('plugins:ui') === 0) return false
       core.events.tell('plugins:ui', request)
       return true
     },
-    report: (plugin) => reports.get(plugin),
     asked: (request) => core.events.tell('plugins:ui', request),
     delivers: (delivery) => delivery.to !== 'background',
     secrets: true,
     log
   })
 
-  /** Main's word on the background pages, asked once and then heard as it moves. */
-  let reportsRead: Promise<void> | null = null
-  const readReports = (): Promise<void> => {
-    reportsRead ??= (async () => {
-      own.on('pluginBackground:changed', (next) => {
-        setReports(next)
-        core.retell()
-      })
-      try {
-        setReports(await own.invoke('pluginBackground:states'))
-      } catch (error) {
-        log(`plugins: the background pages' states were not read (${messageOf(error)})`)
-      }
-    })()
-    return reportsRead
-  }
-  deps.link.onConnected(() => {
-    void readReports()
-  })
-
   const reach = (): Promise<HostConnection> => core.host()
-  const listed = async (answer: Promise<readonly P.PluginInfo[]>): Promise<PluginInfo[]> => {
-    const plugins = await answer
-    await readReports()
-    return core.take(plugins)
-  }
-
-  let handOverHeard = false
-  const uiRoute = core.events.listen('plugins:ui')
+  const listed = async (answer: Promise<readonly P.PluginInfo[]>): Promise<PluginInfo[]> => core.take(await answer)
 
   return {
     requests: {
@@ -335,10 +259,6 @@ export function createPluginsAdapter(deps: PluginsAdapterDeps): HostAdapter {
     sends: {
       'plugins:cancel': ({ callId }) => core.cancel(callId),
       'plugins:answer': ({ requestId }) => {
-        if (handedOver.delete(requestId)) {
-          own.send('pluginWindow:answer', { requestId })
-          return
-        }
         reach()
           .then((connection) => connection.request('plugins:answer', { requestId }))
           .catch((error: unknown) => log(`host: plugins:answer was not taken (${messageOf(error)})`))
@@ -348,90 +268,7 @@ export function createPluginsAdapter(deps: PluginsAdapterDeps): HostAdapter {
       'plugins:changed': core.events.listen('plugins:changed'),
       'secrets:changed': core.events.listen('secrets:changed'),
       'plugins:deliver': core.events.listen('plugins:deliver'),
-      'plugins:ui': (listener) => {
-        if (!handOverHeard) {
-          handOverHeard = true
-          own.on('pluginWindow:asked', (request) => {
-            if (request.kind === 'secret') handedOver.add(request.requestId)
-            core.events.tell('plugins:ui', request)
-          })
-        }
-        return uiRoute(listener)
-      }
-    }
-  }
-}
-
-export interface BackgroundAdapterDeps {
-  link: HostReach
-  /** The host this connection reaches: This PC's (`LOCAL_HOST_KEY`) when absent. */
-  host?: string
-  /** The preload's bridge: Helm's own settings, and the hand-off to the window through main. */
-  own: Own
-  log?: (line: string) => void
-}
-
-export interface BackgroundAdapter extends HostAdapter {
-  /** What this window's frames say of a background page: it connected, or it crashed. */
-  reported(report: PluginBackgroundReport): void
-}
-
-/**
- * The hidden plugin host window's plugins: the background pages it runs.
- * Nothing else is asked here: no terminal, files or sessions.
- */
-export function createBackgroundAdapter(deps: BackgroundAdapterDeps): BackgroundAdapter {
-  const { own } = deps
-  const log = deps.log ?? (() => undefined)
-  const reports = new Map<string, PluginBackgroundReport>()
-
-  const handOver = (request: PluginUiRequest): boolean => {
-    own.send('pluginWindow:ask', request)
-    return true
-  }
-
-  const core: PluginsCore = createPluginsCore({
-    link: deps.link,
-    host: deps.host ?? LOCAL_HOST_KEY,
-    ui: handOver,
-    report: (plugin) => reports.get(plugin),
-    asked: (request) => {
-      // Only a secret dialog can be asked of a background page: starting a
-      // session needs a click, which a page nobody sees never has.
-      if (request.kind === 'secret') handOver(request)
-      else log(`plugins: a background page cannot answer “${request.kind}”`)
-    },
-    delivers: () => true,
-    secrets: false,
-    log
-  })
-
-  // The window closed a secret dialog this window's page asked for: answered
-  // on this connection, which is the one the host asked on.
-  own.on('pluginWindow:answered', ({ requestId }) => {
-    core
-      .host()
-      .then((connection) => connection.request('plugins:answer', { requestId }))
-      .catch((error: unknown) => log(`host: plugins:answer was not taken (${messageOf(error)})`))
-  })
-
-  return {
-    requests: {
-      'plugins:list': () => core.list(),
-      'plugins:call': (request) => core.call(request),
-      // The first theme the relay hands its frames: Helm's own corner and density.
-      'settings:read': () => own.invoke('ownSettings:read')
-    },
-    sends: {
-      'plugins:cancel': ({ callId }) => core.cancel(callId)
-    },
-    events: {
-      'plugins:changed': core.events.listen('plugins:changed'),
-      'plugins:deliver': core.events.listen('plugins:deliver')
-    },
-    reported(report) {
-      reports.set(report.plugin, report)
-      core.retell()
+      'plugins:ui': core.events.listen('plugins:ui')
     }
   }
 }

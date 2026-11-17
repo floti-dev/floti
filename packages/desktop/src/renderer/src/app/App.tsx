@@ -8,7 +8,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { Workspace } from "@helm/core";
+import type { Workspace } from "@floti/core";
 import {
   activateTab,
   activeRef,
@@ -74,6 +74,7 @@ import {
   retitlePluginSurface,
   RAIL_DESTINATIONS,
   LOCAL_HOST_KEY,
+  walkthroughInShell,
   LOCAL_HOST_LABEL,
   failedLastLine,
   hostFlotiVerdict,
@@ -106,13 +107,15 @@ import {
   type RestoreOffer,
   type SavedPaneLayout,
   type SessionRecord,
-} from "@helm/core/types";
+} from "@floti/core/types";
 import {
   AppShell,
   BROWSER_ZOOM,
+  BrowserEmpty,
   BrowserOff,
   BrowserPages,
   BrowserPane,
+  browserPageBlank,
   AwayList,
   ChildPeek,
   type TreeNoticeActions,
@@ -151,6 +154,7 @@ import {
   DocIcon,
   FileActions,
   FileCrumb,
+  FilesEmpty,
   FilesRootPicker,
   FilesStatusNote,
   FilesTree,
@@ -194,7 +198,6 @@ import {
   sessionTreeHostProps,
   SettingsPane,
   SettingsSections,
-  SetupPane,
   Sidebar,
   shortcutLabel,
   SidebarAction,
@@ -207,7 +210,6 @@ import {
   TemplateManager,
   TerminalIcon,
   ConsoleIcon,
-  TitleBar,
   VersionBanner,
   claudeBanner,
   OwnDataBanner,
@@ -231,12 +233,9 @@ import {
   type TreeHost,
   type LauncherHost,
   type HostChoice,
-  type HostInstallActions,
   AddHostDialog,
-  type AddHostActions,
-} from "@helm/ui";
+} from "@floti/ui";
 import { sidebarFor, type SidebarView } from "./sidebarFor";
-import { UpgradeNote } from "./UpgradeNote";
 import { viewRailItems } from "./railViews";
 import { AgentTab } from "./agents/AgentTab";
 import { forgetAgentDraft } from "./agents/useAgentDraft";
@@ -287,7 +286,7 @@ import {
   bridgeFor,
   devices,
   eachHostBridge,
-  helm,
+  desktop,
   hostSessionPeek,
   hostSessionTabs,
   hostState,
@@ -336,6 +335,7 @@ import { useArchiveStats } from "./useArchiveStats";
 import { ConversationPane } from "./ConversationPane";
 import { useLauncher } from "./useLauncher";
 import { useProfiles } from "./useProfiles";
+import { launchTarget } from "./launchTarget";
 import { useLiveSessions } from "./useLiveSessions";
 import { useNewSession } from "./useNewSession";
 import {
@@ -349,6 +349,9 @@ import { useSessions } from "./useSessions";
 import { LocalProjectPane } from "./LocalProjectPane";
 import { sessionActivityIn } from "./useAgentWorktrees";
 import { useSetup } from "./useSetup";
+import { addHostActions, hostInstall } from "./hostActions";
+import { ShellWalkthrough, type FirstSessionRequest } from "./setup/ShellWalkthrough";
+import { useWalkthroughReveal } from "./setup/useWalkthroughReveal";
 import { useHostWorkspaces } from "./useHostWorkspaces";
 import { treeHostPhase } from "./treeHostPhase";
 import { HostProfiles } from "./HostProfiles";
@@ -401,8 +404,8 @@ const KIND_ICON = {
  * `WebContentsView`s that are exempt **by id**, in `main/index.ts`; this window
  * is not one of them and never will be.
  */
-const helmOpenExternal = (url: string): Promise<{ opened: boolean }> =>
-  helm.invoke("shell:openExternal", { url });
+const desktopOpenExternal = (url: string): Promise<{ opened: boolean }> =>
+  desktop.invoke("shell:openExternal", { url });
 
 /** The packaging notes on the browser pane and Chromium's sandbox on Linux. */
 const BROWSER_SANDBOX_DOC =
@@ -410,34 +413,7 @@ const BROWSER_SANDBOX_DOC =
 
 /** The Browser tab's command copied to the clipboard; true once it is there. */
 const copyCommand = async (command: string): Promise<boolean> =>
-  (await helm.invoke("clipboard:write", command)).outcome === "copied";
-
-/** Settings > Hosts' check, install and cancel on a host's computer: main runs them, through that host's own transport. */
-const hostInstall: HostInstallActions = {
-  check: (target) => helm.invoke("remoteHosts:check", target),
-  install: (id, host) => helm.invoke("remoteHosts:install", { id, host }),
-  cancel: (id) => void helm.invoke("remoteHosts:cancel", { id }),
-  progress: (id, listener) =>
-    helm.on("remoteHosts:installProgress", (said) => {
-      if (said.id === id) listener(said.line);
-    }),
-};
-
-/**
- * The add-a-host dialog's reads, checks and adds: main reads this computer's
- * ssh config Host names, checks and installs through the user's own ssh or
- * command, and adds a host only once it connected.
- */
-const addHostActions: AddHostActions = {
-  sshHosts: () => helm.invoke("remoteHosts:sshHosts"),
-  wslDistros: () => helm.invoke("remoteHosts:wslDistros"),
-  check: hostInstall.check,
-  install: hostInstall.install,
-  cancelInstall: hostInstall.cancel,
-  add: (request) => helm.invoke("remoteHosts:add", request),
-  cancelAdd: (attempt) =>
-    void helm.invoke("remoteHosts:cancelAdd", { attempt }),
-};
+  (await desktop.invoke("clipboard:write", command)).outcome === "copied";
 
 /** A stable empty list, so a view with no console entries does not hand
  * `BrowserPane` a fresh array to re-render against on every render. */
@@ -457,16 +433,16 @@ const EMPTY_PROJECTS: Project[] = [];
  * per render of `App` would cancel and restart the debounce on every render the
  * app happens to do. Nothing here closes over state.
  */
-const helmHighlight = (
+const desktopHighlight = (
   path: string,
   source: string,
 ): Promise<EditorHighlight> =>
-  helm.invoke("editor:highlight", { path, source });
+  desktop.invoke("editor:highlight", { path, source });
 
 /**
  * What each build mode is called on the status bar, and null for the one that
  * needs no word. `dev-live` is the dev build with **no data directory of its
- * own**, sharing `%APPDATA%\Helm` with the installed app, and the chip that says
+ * own**, sharing `%LOCALAPPDATA%\Floti\desktop` with the installed app, and the chip that says
  * so is the only thing on screen that distinguishes it from an ordinary
  * `pnpm dev`.
  */
@@ -783,7 +759,7 @@ export function App(): JSX.Element {
   /** The project a session is starting in, from its page or its `+`. */
   const [launchingPath, setLaunchingPath] = useState<string | null>(null);
   /**
-   * The row the sessions pane has open, by pid - the one key a session Helm
+   * The row the sessions pane has open, by pid - the one key a session the desktop
    * does not host also has. Held here rather than in the pane because a pane
    * can be thrown away and rebuilt at will, and a selection that unmounted with
    * it would drop whenever somebody looked at another tab.
@@ -810,7 +786,7 @@ export function App(): JSX.Element {
   const localUsable = useLocalHostUsable(localHostUsable);
   const localHostWaiting = localUsable.unusable !== null;
   const hostNotice = localHostNotice(localUsable, hostLink.lost);
-  /** Which of this PC's host and this Helm is behind, while they differ (`localHostVersions`). */
+  /** Which of this PC's host and this desktop is behind, while they differ (`localHostVersions`). */
   const localVersions =
     seenLocalVersion === null || info === null
       ? null
@@ -964,7 +940,7 @@ export function App(): JSX.Element {
   const ownData = useOwnDataCopy();
   const themes = useThemes();
   /*
-   * Every live session on the machine, and what Helm's own are holding. Held
+   * Every live session on the machine, and what the desktop's own are holding. Held
    * here rather than inside the sessions pane because the tree and the launch
    * warning need it whether or not that pane has ever been opened.
    */
@@ -1041,7 +1017,7 @@ export function App(): JSX.Element {
 
   const { writeSettings } = launcher;
   const locateShell = useCallback(() => {
-    void helm
+    void desktop
       .invoke("path:chooseFile", { title: "Choose a shell" })
       .then(({ path }) => {
         if (path !== null) writeSettings({ terminalShell: path });
@@ -1055,7 +1031,7 @@ export function App(): JSX.Element {
   const chooseShellPath = useCallback(
     async (typed: string): Promise<string | null> => {
       try {
-        const { shell, problem } = await helm.invoke("pterm:checkShell", {
+        const { shell, problem } = await desktop.invoke("pterm:checkShell", {
           path: typed,
         });
         if (shell === null) return problem ?? `${typed} is not a shell.`;
@@ -1465,7 +1441,7 @@ export function App(): JSX.Element {
 
   /**
    * What the window does with what a plugin page says to it: a key the page
-   * did not take is pressed again here, on its frame, so Helm's shortcuts work
+   * did not take is pressed again here, on its frame, so the desktop's shortcuts work
    * from inside a plugin as from anywhere else; a tab's title goes on its tab,
    * or on its page in a plugin's strip. Set once - the relay outlives renders,
    * and `commit` is stable.
@@ -1666,8 +1642,13 @@ export function App(): JSX.Element {
   const { setShowing: setBrowserShowing, active: frontPage } = browsers;
   const browserShown = visible.some((ref) => ref.kind === "browser");
   useEffect(() => {
-    for (const id of browserViews.keys())
-      setBrowserShowing(id, browserShown && id === frontPage);
+    // A blank page's view is clear and would take the clicks meant for the
+    // empty state drawn under it, so it stays off the screen until it loads.
+    for (const [id, page] of browserViews)
+      setBrowserShowing(
+        id,
+        browserShown && id === frontPage && !browserPageBlank(page),
+      );
   }, [browserViews, browserShown, frontPage, setBrowserShowing]);
 
   // Main decides whether an exiting session is worth a notification, and that
@@ -1830,7 +1811,7 @@ export function App(): JSX.Element {
   const openLink = useCallback(
     (url: string) => {
       if (isLoopbackUrl(url)) openBrowser({ url });
-      else void helmOpenExternal(url);
+      else void desktopOpenExternal(url);
     },
     [openBrowser],
   );
@@ -2391,13 +2372,10 @@ export function App(): JSX.Element {
 
   /*
    * A workspace created whole ends in a session in it, not on a page: creating
-   * one is a step on the way to working there. Not during first run, which
-   * owns the window until it is finished.
+   * one is a step on the way to working there.
    */
-  const setupNeeded = setup.needed;
   useEffect(() => {
     workspaceCreatedRef.current = (path: string, host: string) => {
-      if (setupNeeded) return;
       void newSession
         .launch(
           {
@@ -2418,13 +2396,56 @@ export function App(): JSX.Element {
         });
     };
   }, [
-    setupNeeded,
     newSession,
     sessionState,
     adoptThere,
     placeSession,
     open.focused,
   ]);
+
+  /** Whether steps 5 and 6 of the walkthrough hold the main area. */
+  const walkthroughShown = walkthroughInShell(settings?.walkthrough ?? null);
+  /**
+   * Step 6's session: started in the workspace step 4 made, on this PC's
+   * host, with its first message as the opening prompt, and put in a tab.
+   */
+  const startFirstSession = useCallback(
+    async (request: FirstSessionRequest): Promise<void> => {
+      const { cols, rows } = estimateGrid(bodyRefs.current.get(open.focused) ?? null);
+      const launched = await bridgeFor(LOCAL_HOST_KEY).invoke("session:launch", {
+        cwd: request.cwd,
+        projectPath: request.cwd,
+        profileId: null,
+        permissionMode: null,
+        resume: null,
+        backend: request.backend,
+        ...(request.openingPrompt === "" ? {} : { openingPrompt: request.openingPrompt }),
+        cols,
+        rows,
+      });
+      sessionState.adopt(launched.session);
+      placeSession(launched.session.id, false, undefined, LOCAL_HOST_KEY);
+    },
+    [open.focused, sessionState, placeSession],
+  );
+  // The workspace the walkthrough chose is brought into view in the tree as
+  // the shell opens on it, as a click on its tab would.
+  useWalkthroughReveal(
+    settings?.walkthrough?.workspace ?? null,
+    walkthroughShown,
+    (path) => {
+      revealCount.current += 1;
+      setTreeReveal({ seq: revealCount.current, kind: "project", path });
+    },
+  );
+  /** The walkthrough is over: the workspace it chose stays selected, as its page when no session took the place. */
+  const finishWalkthrough = useCallback(
+    (workspace: string | null, started: boolean) => {
+      if (workspace !== null && !started)
+        openPane({ kind: "project", path: workspace });
+    },
+    [openPane],
+  );
 
   /** The sessions a lost tab's Restore asked for, ticked when the Restore sessions tab opens. */
   const [restoreChosen, setRestoreChosen] = useState<readonly number[] | null>(
@@ -2480,7 +2501,7 @@ export function App(): JSX.Element {
       setRestoreChosen(null);
       commit((current) => {
         // A session lost with its host while its tab was open comes back in
-        // that tab; one lost with Helm goes back where the saved layout had
+        // that tab; one lost with the desktop goes back where the saved layout had
         // it; one neither names still opens here: it was asked for.
         const inPlace = replaceSessionTabs(closeTab(current, "restore"), pairs);
         const elsewhere = new Map(
@@ -2588,7 +2609,7 @@ export function App(): JSX.Element {
    */
   const predictProfile = useCallback(
     async (root: string, overlays: string[]): Promise<ProfilePrediction> => {
-      const view = await helm.invoke("config:effective", {
+      const view = await desktop.invoke("config:effective", {
         cwd: root,
         overlays,
       });
@@ -2903,17 +2924,17 @@ export function App(): JSX.Element {
   );
   useEffect(
     () =>
-      helm.on("browser:command", ({ id, command }) =>
+      desktop.on("browser:command", ({ id, command }) =>
         runBrowserCommand(id, command),
       ),
     [runBrowserCommand],
   );
 
   /**
-   * The browser's keys with the caret in Helm's own chrome, only while the
+   * The browser's keys with the caret in the desktop's own chrome, only while the
    * Browser tab is in front of the focused pane (`shared/browserKeys.ts` has
    * the list). In capture so a focused terminal does not eat them - but gated,
-   * because Ctrl+L is *clear the screen* in every shell Helm hosts and
+   * because Ctrl+L is *clear the screen* in every shell the desktop hosts and
    * stealing it from a session would be a worse bug than not having the
    * shortcut. A menu or a dialog open has the keys to itself.
    */
@@ -2951,7 +2972,7 @@ export function App(): JSX.Element {
   /**
    * Ctrl+W and Ctrl+F4 close the page in front of a plugin's strip, as they
    * close the Browser tab's - while that plugin's tab is in front of the
-   * focused pane, with the caret in Helm's chrome or in the page, which
+   * focused pane, with the caret in the desktop's chrome or in the page, which
    * forwards a key it did not take. Gated as the browser's keys are, and never
    * taken from a terminal.
    */
@@ -3077,6 +3098,14 @@ export function App(): JSX.Element {
     const ref = group === undefined ? null : activeRef(group);
     return ref === null ? LOCAL_HOST_KEY : hostOf(ref);
   }, [open]);
+  /** This PC's empty states' New session: this PC's launcher, whatever host is in front. */
+  const openLocalLauncher = useCallback(() => {
+    const { folder, host } = launchTarget(LOCAL_HOST_KEY, {
+      host: frontRefHost,
+      folder: frontFolder,
+    });
+    showLauncher(folder, host);
+  }, [showLauncher, frontRefHost, frontFolder]);
   const files = useFiles({
     host: filesHost,
     active: sidebarShown && sidebarView === "files",
@@ -3152,13 +3181,13 @@ export function App(): JSX.Element {
 
   /**
    * The folder a note is saved, snapshotted and wikilinked as part of: the
-   * deepest one Helm knows that holds it. A README under a workspace's
-   * `repos/helm` belongs to `helm` - the workspace's own write guard refuses
+   * deepest one the desktop knows that holds it. A README under a workspace's
+   * `repos/app` belongs to `app` - the workspace's own write guard refuses
    * `repos/` outright, for exactly that reason.
    */
   const scopeOf = useCallback(
     (ref: FileRef): string => {
-      // The folders Helm knows are the Files view's host's.
+      // The folders the desktop knows are the Files view's host's.
       if (hostOf(ref) !== files.host) return ref.root;
       const lower = ref.path.toLowerCase();
       let best = ref.root;
@@ -3257,12 +3286,12 @@ export function App(): JSX.Element {
   }, []);
 
   const openInEditor = useCallback((path: string, line: number | null) => {
-    void helm.invoke("files:openInEditor", { path, line });
+    void desktop.invoke("files:openInEditor", { path, line });
   }, []);
   /** True unless the clipboard refused it; a copy a later one replaced counts as done. */
   const copyPath = useCallback(
     async (path: string) =>
-      (await helm.invoke("clipboard:write", path)).outcome !== "refused",
+      (await desktop.invoke("clipboard:write", path)).outcome !== "refused",
     [],
   );
 
@@ -3307,7 +3336,6 @@ export function App(): JSX.Element {
    * own process, not this window, so Ctrl+N there is the page's.
    */
   useEffect(() => {
-    if (setupNeeded) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!hasPrimaryModifier(event) || event.altKey || event.shiftKey) return;
       if (event.key.toLowerCase() !== "n") return;
@@ -3318,7 +3346,7 @@ export function App(): JSX.Element {
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [setupNeeded, openLauncher]);
+  }, [openLauncher]);
 
   /**
    * Ctrl+P, from anywhere in the window, a focused terminal included - in
@@ -3329,7 +3357,6 @@ export function App(): JSX.Element {
    * Code or a shell binds it.
    */
   useEffect(() => {
-    if (setupNeeded) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!hasPrimaryModifier(event) || event.altKey) return;
       const key = event.key.toLowerCase();
@@ -3347,14 +3374,13 @@ export function App(): JSX.Element {
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [setupNeeded, openQuickOpen]);
+  }, [openQuickOpen]);
 
   /**
    * Ctrl+Shift+P, the plugins' commands - in capture, as Ctrl+P is. Nothing in
    * Claude Code or a shell binds it.
    */
   useEffect(() => {
-    if (setupNeeded) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!hasPrimaryModifier(event) || !event.shiftKey || event.altKey) return;
       if (event.key.toLowerCase() !== "p") return;
@@ -3365,7 +3391,7 @@ export function App(): JSX.Element {
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [setupNeeded]);
+  }, []);
 
   /**
    * Ctrl+H, History - in capture, as Ctrl+P is, so a focused terminal never
@@ -3373,7 +3399,6 @@ export function App(): JSX.Element {
    * own key and still sends a terminal what it sends.
    */
   useEffect(() => {
-    if (setupNeeded) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)
         return;
@@ -3385,7 +3410,7 @@ export function App(): JSX.Element {
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [setupNeeded, openHistory]);
+  }, [openHistory]);
 
   /**
    * Ctrl+Tab cycles every tab in every pane on screen as one ring, and Ctrl+\
@@ -3393,7 +3418,7 @@ export function App(): JSX.Element {
    * focused terminal. Ctrl+Shift+Tab is not bound by Claude Code; Shift+Tab
    * alone is (it cycles permission modes) and is deliberately left alone.
    *
-   * On macOS the split is Cmd+\, as Helm's other shortcuts are, but the ring
+   * On macOS the split is Cmd+\, as the desktop's other shortcuts are, but the ring
    * stays Ctrl+Tab: Cmd+Tab is the system's app switcher, and Ctrl+Tab is how
    * every Mac browser cycles its tabs.
    */
@@ -3435,11 +3460,11 @@ export function App(): JSX.Element {
 
   const now = useNow(30_000);
 
-  /** Each of Helm's sessions' registry record, for how long it has been in its state. */
-  const liveByHelmId = useMemo(() => {
+  /** Each of the desktop's sessions' registry record, for how long it has been in its state. */
+  const liveByHostSessionId = useMemo(() => {
     const map = new Map<number, LiveSession>();
     for (const live of machineSessions.sessions) {
-      if (live.helmSessionId !== null) map.set(live.helmSessionId, live);
+      if (live.hostSessionId !== null) map.set(live.hostSessionId, live);
     }
     return map;
   }, [machineSessions.sessions]);
@@ -3462,9 +3487,9 @@ export function App(): JSX.Element {
   /**
    * The tree's sessions, under the project each is running in.
    *
-   * Helm's own are matched on the project they were launched against, falling
+   * The desktop's own are matched on the project they were launched against, falling
    * back to their working directory; ended ones stay, because their tab does -
-   * the scrollback is the record of what happened. Sessions Helm did not start
+   * the scrollback is the record of what happened. Sessions the desktop did not start
    * are matched with core's `liveSessionsIn`, the comparison the launch warning
    * uses, so the tree and the warning cannot disagree about whether two paths
    * are one folder.
@@ -3518,7 +3543,7 @@ export function App(): JSX.Element {
           ? sessionActivity.get(session.id)
           : undefined;
       const state = indicatorOf(session, activity);
-      const live = liveByHelmId.get(session.id);
+      const live = liveByHostSessionId.get(session.id);
       const status = statusHint(activity);
       const id = `session:${String(session.id)}`;
       return {
@@ -3562,7 +3587,7 @@ export function App(): JSX.Element {
         machineSessions.sessions,
         project.path,
       )) {
-        if (live.helmSessionId !== null) continue;
+        if (live.hostSessionId !== null) continue;
         add(project.path.toLowerCase(), {
           id: `pid:${String(live.pid)}`,
           label: live.name ?? "claude",
@@ -3764,7 +3789,7 @@ export function App(): JSX.Element {
     scope: placeScope,
     inFront: () => document.hasFocus(),
     notify: ({ host, id, title, body }) =>
-      helm.send("windowSessions:needsYou", { host, id, title, body }),
+      desktop.send("windowSessions:needsYou", { host, id, title, body }),
   });
 
   /**
@@ -3793,7 +3818,7 @@ export function App(): JSX.Element {
   // A click on the notification of a child that needs a person.
   useEffect(
     () =>
-      helm.on("windowSessions:showChild", ({ host, id }) =>
+      desktop.on("windowSessions:showChild", ({ host, id }) =>
         showChildRef.current(host, id),
       ),
     [],
@@ -3946,7 +3971,7 @@ export function App(): JSX.Element {
         return;
       }
       // Somebody else's session has no tab; its row in the sessions pane is
-      // where what Helm can know about it is.
+      // where what the desktop can know about it is.
       setSelectedLivePid(Number(id.slice("pid:".length)));
       openSessions();
     },
@@ -3996,7 +4021,7 @@ export function App(): JSX.Element {
     onUpdateFloti: (host: string) => updateFlotiOn(host),
   };
 
-  /** Helm's live sessions by what they are doing, for the status bar. */
+  /** The desktop's live sessions by what they are doing, for the status bar. */
   const running = sessions.filter((session) => session.status === "running");
   const waiting = running.filter((session) => stateOf(session) === "waiting");
   const statusCounts = countSessionStates(running, stateOf);
@@ -4012,7 +4037,7 @@ export function App(): JSX.Element {
 
   /**
    * The machine-wide line under the tree: how many sessions are running on
-   * this machine and how many of them are not Helm's - the half that changes
+   * this machine and how many of them are not the desktop's - the half that changes
    * what somebody does next, and the reason the listing behind it exists.
    */
   const sessionsSummaryLine = ((): string => {
@@ -4020,7 +4045,7 @@ export function App(): JSX.Element {
     if (machineSessions.readAtMs === null) return "Reading…";
     if (all.length === 0) return "Nothing running on this machine";
     const outside = all.filter(
-      (session) => session.helmSessionId === null,
+      (session) => session.hostSessionId === null,
     ).length;
     const count = `${String(all.length)} on this machine`;
     return outside === 0
@@ -4462,7 +4487,7 @@ export function App(): JSX.Element {
         }
         session={session}
         state={stateOf(session)}
-        since={liveByHelmId.get(session.id)?.statusSinceMs ?? null}
+        since={liveByHostSessionId.get(session.id)?.statusSinceMs ?? null}
         now={now}
         message={
           session.status === "running"
@@ -4584,7 +4609,7 @@ export function App(): JSX.Element {
   const [stopHostError, setStopHostError] = useState<string | null>(null);
   const askStopHost = useCallback(() => {
     setStopHostError(null);
-    helm
+    desktop
       .invoke("windowSessions:hostSessionCount")
       .then(setStopHostAsk, (error: unknown) =>
         setStopHostError(
@@ -4594,7 +4619,7 @@ export function App(): JSX.Element {
   }, []);
   const stopHost = useCallback(() => {
     setStopHostAsk(null);
-    helm
+    desktop
       .invoke("windowSessions:stopHost")
       .catch((error: unknown) =>
         setStopHostError(
@@ -4606,11 +4631,11 @@ export function App(): JSX.Element {
   /** Restart host to update, on the user's click only (`useRestartHost`). */
   const restartHostDeps = useMemo<RestartHostDeps>(
     () => ({
-      ask: () => helm.invoke("windowSessions:restartAsk"),
+      ask: () => desktop.invoke("windowSessions:restartAsk"),
       // Main resolves once it has the new host. A window that old host
       // refused waits to try again, and connects to the new one now.
       restart: () =>
-        helm.invoke("windowSessions:restartHost").then(reconnectLocalHost),
+        desktop.invoke("windowSessions:restartHost").then(reconnectLocalHost),
       onError: setStopHostError,
     }),
     [],
@@ -4626,7 +4651,7 @@ export function App(): JSX.Element {
   /**
    * Rendered by both branches below: main holds the window's `close` open on
    * this promise, so a branch that did not draw the dialog would be a branch
-   * Helm could not quit from until the fallback timer ran out.
+   * the desktop could not quit from until the fallback timer ran out.
    */
   const confirmDialog =
     confirmRequest !== null ? (
@@ -4677,18 +4702,6 @@ export function App(): JSX.Element {
         onCancel={restartHostFlow.cancel}
       />
     );
-
-  /** The note someone coming from an earlier Helm sees once (`UpgradeNote`). */
-  const upgradeNote = (
-    <UpgradeNote
-      settings={settings}
-      setupNeeded={setup.needed}
-      writeSettings={writeSettings}
-      onWhatsNew={() => {
-        if (info !== null) openBrowser({ url: info.releasesUrl });
-      }}
-    />
-  );
 
   /** Rendered by both branches: creating a workspace is a first-run action and
    * an every-day one, and two copies of the dialog would drift apart. */
@@ -4768,42 +4781,6 @@ export function App(): JSX.Element {
         }}
       />
     ) : null;
-
-  /**
-   * Setup owns the whole window rather than sitting in a tab: with no roots
-   * there is no tree and no content, and a launcher painted
-   * empty behind a dialog would be four broken surfaces framing one that works.
-   */
-  if (setup.needed) {
-    return (
-      <div className="flex h-full w-full flex-col bg-bg text-fg">
-        <TitleBar />
-        <div className="min-h-0 flex-1">
-          <SetupPane
-            status={setup.status}
-            statusError={setup.statusError}
-            roots={settings?.scanRoots ?? []}
-            suggestions={setup.suggestions}
-            suggestionsError={setup.suggestionsError}
-            projectCount={discovery?.projects.length ?? 0}
-            scanning={launcher.scanning}
-            checking={setup.checking}
-            onRecheck={setup.recheck}
-            onLocateClaude={setup.locateClaude}
-            onAddFolder={launcher.addRoot}
-            onAcceptSuggestion={setup.acceptSuggestion}
-            onCreateWorkspace={() => setup.openDialog("new")}
-            onConvertFolder={() => setup.openDialog("convert")}
-            onFinish={setup.finish}
-          />
-        </div>
-        {workspaceDialog}
-        {templateDialogs}
-        {confirmDialog}
-        {restartDialog}
-      </div>
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // The pages
@@ -4943,7 +4920,7 @@ export function App(): JSX.Element {
         openRemoteSession(host.id, Number(key.slice(host.id.length + 1))),
       onEndSession: (key: string) =>
         closeRemoteSession(host.id, Number(key.slice(host.id.length + 1))),
-      // A floti too old or newer than this Helm, with both versions, or a
+      // A floti too old or newer than this desktop, with both versions, or a
       // connected one older than it; too old and older offer the same
       // yes-first update Settings > Hosts does.
       floti: hostFlotiVerdict(connection),
@@ -5009,10 +4986,10 @@ export function App(): JSX.Element {
         />
       );
     }
-    return renderHelmSettings();
+    return renderFlotiSettings();
   };
 
-  const renderHelmSettings = (): JSX.Element => (
+  const renderFlotiSettings = (): JSX.Element => (
     <SettingsPane
       section={settingsSection}
       agentsOverview={{
@@ -5030,6 +5007,7 @@ export function App(): JSX.Element {
       onRecheck={setup.recheck}
       onLocateClaude={setup.locateClaude}
       onClearClaudeOverride={launcher.clearClaudePath}
+      onShowWalkthrough={() => void desktop.invoke("walkthrough:open", { step: 1 })}
       roots={settings?.scanRoots ?? []}
       projectCount={discovery?.projects.length ?? 0}
       scanning={launcher.scanning}
@@ -5068,7 +5046,7 @@ export function App(): JSX.Element {
       onInstallUpdate={check.install}
       onOpenReleases={() => {
         if (info?.releasesUrl !== undefined)
-          void helmOpenExternal(info.releasesUrl);
+          void desktopOpenExternal(info.releasesUrl);
       }}
       terminal={terminalSettings}
       onTerminalChange={launcher.writeSettings}
@@ -5085,7 +5063,7 @@ export function App(): JSX.Element {
         settings?.transcriptArchiveMaxBytes ??
         DEFAULT_SETTINGS.transcriptArchiveMaxBytes
       }
-      // The authored templates, so the built-in Minimal row does not make an
+      // The authored templates, so the built-in Starter row does not make an
       // empty templates folder read as one that has something in it.
       templateCount={
         templates.templates.filter((choice) => !choice.builtIn).length
@@ -5176,7 +5154,7 @@ export function App(): JSX.Element {
       // Main checks, installs and updates floti there, after the yes the
       // window asks for; the window never says what to run.
       hostInstall={hostInstall}
-      // The path Helm installed floti at there, which every line run there
+      // The path the desktop installed floti at there, which every line run there
       // starts with from now on.
       onHostInstalled={(id, floti, system) =>
         writeSettings({
@@ -5356,6 +5334,9 @@ export function App(): JSX.Element {
             notOpenHere={notOpen}
             onEndSession={closeSession}
             onReveal={launcher.reveal}
+            onNewSession={openLocalLauncher}
+            listError={machineSessions.error}
+            onRetry={machineSessions.retry}
             compact={compact}
             remoteHosts={sessionsPaneHosts}
           />
@@ -5368,7 +5349,7 @@ export function App(): JSX.Element {
             <BrowserOff
               command={browsers.availability.command}
               onCopy={copyCommand}
-              onReadMore={() => void helmOpenExternal(BROWSER_SANDBOX_DOC)}
+              onReadMore={() => void desktopOpenExternal(BROWSER_SANDBOX_DOC)}
             />
           );
         }
@@ -5406,6 +5387,15 @@ export function App(): JSX.Element {
               onMove={browsers.move}
               onNew={() => openBrowser({ project: null, focusAddress: true })}
             />
+            {view === undefined && (
+              <div className="min-h-0 flex-1">
+                <BrowserEmpty
+                  onOpen={() =>
+                    openBrowser({ project: null, focusAddress: true })
+                  }
+                />
+              </div>
+            )}
             {view !== undefined && (
               <div className="min-h-0 flex-1">
                 <BrowserPane
@@ -5436,7 +5426,7 @@ export function App(): JSX.Element {
                   onReload={(hard) => browsers.reload(view.id, hard)}
                   onStop={() => browsers.stop(view.id)}
                   onDevTools={() => browsers.devtools(view.id)}
-                  onOpenExternal={(url) => void helmOpenExternal(url)}
+                  onOpenExternal={(url) => void desktopOpenExternal(url)}
                   onFind={(query, forward) =>
                     browsers.find(view.id, query, forward)
                   }
@@ -5562,7 +5552,7 @@ export function App(): JSX.Element {
         wrap={filesWrap}
         onWrapChange={setFilesWrap}
         reveal={reveal}
-        onHighlight={helmHighlight}
+        onHighlight={desktopHighlight}
         onCaretChange={(caret) => fileCarets.current.set(key, caret.line)}
         onReveal={revealOn(on)}
         onOpenInEditor={
@@ -5588,7 +5578,7 @@ export function App(): JSX.Element {
         draftKey={key}
         readOnly={state?.view?.readOnly}
         onDirtyChange={(dirty) => markDocDirty(key, dirty)}
-        onHighlight={helmHighlight}
+        onHighlight={desktopHighlight}
         // A wikilink opens beside it as a kept tab, in the same project.
         onOpenPath={(path) => openFileAt(ref.root, path, true, undefined, on)}
         onOpenExternal={openLink}
@@ -5616,7 +5606,7 @@ export function App(): JSX.Element {
           state: there.indicator,
           since:
             host === LOCAL_HOST_KEY
-              ? (liveByHelmId.get(member.id)?.statusSinceMs ?? null)
+              ? (liveByHostSessionId.get(member.id)?.statusSinceMs ?? null)
               : null,
         },
       ];
@@ -5977,7 +5967,7 @@ export function App(): JSX.Element {
       return;
     }
     if (plugin.background !== null) {
-      void helm.invoke("plugins:command", { plugin: id, id: command.id });
+      void desktop.invoke("plugins:command", { plugin: id, id: command.id });
       return;
     }
     const spec = railPanelSpec(id, plugin);
@@ -6183,7 +6173,13 @@ export function App(): JSX.Element {
             localHostWaiting={localHostWaiting}
             localHostStarting={startupTreeStep(localStep)}
             onRelistSessions={sessionState.relist}
-            selectedPath={front?.kind === "project" ? front.path : null}
+            selectedPath={
+              walkthroughShown && settings?.walkthrough?.workspace != null
+                ? settings.walkthrough.workspace
+                : front?.kind === "project"
+                  ? front.path
+                  : null
+            }
             pinnedPaths={
               settings?.pinnedProjects ?? DEFAULT_SETTINGS.pinnedProjects
             }
@@ -6194,7 +6190,7 @@ export function App(): JSX.Element {
             onLaunch={(project) => void launch(project)}
             launchingPath={launchingPath}
             onOpenSession={openTreeSession}
-            onAddRoot={launcher.addRoot}
+            onNewSession={openLocalLauncher}
             reveal={treeReveal}
             hostActions={treeHostActions}
             localName={LOCAL_HOST_LABEL}
@@ -6272,9 +6268,10 @@ export function App(): JSX.Element {
           )}
           {files.root === null ? (
             files.rootsError === null && (
-              <p className="px-3.5 py-6 text-[12px] text-fg-subtle">
-                Choose a project above to see its files.
-              </p>
+              <FilesEmpty
+                roots={files.rootsListed ? files.roots : null}
+                onNewWorkspace={() => setup.openDialog("new", files.host)}
+              />
             )
           ) : (
             <FilesTree
@@ -6360,6 +6357,7 @@ export function App(): JSX.Element {
             }
             onOpen={(name) => openPane(agentRefOn(name, agentsHost))}
             onAdd={agentList.addShipped}
+            onNew={() => newAgent(null)}
           />
         </Sidebar>
       )}
@@ -6399,6 +6397,10 @@ export function App(): JSX.Element {
             onExport={(profile) => void profileState.exportProfile(profile.id)}
             onTogglePin={(profile) => void profileState.togglePin(profile)}
             onReorder={(ids) => void profileState.reorder(ids)}
+            onNew={() => {
+              setSaveProblems([]);
+              setEditing(blankProfile(discovery?.roots[0] ?? "", ""));
+            }}
             {...(listedHosts.length === 0
               ? {}
               : {
@@ -6612,6 +6614,17 @@ export function App(): JSX.Element {
           <div className="h-full w-full">
             <StartupWaiting hostName={LOCAL_HOST_NAME} />
           </div>
+        ) : walkthroughShown && settings?.walkthrough != null ? (
+          <div className="h-full w-full">
+            <ShellWalkthrough
+              walkthrough={settings.walkthrough}
+              bridge={desktop}
+              hostReady={localStep?.step === "ready"}
+              write={writeSettings}
+              start={startFirstSession}
+              onDone={finishWalkthrough}
+            />
+          </div>
         ) : empty ? (
           <div className="h-full w-full">
             <WelcomePane
@@ -6642,7 +6655,6 @@ export function App(): JSX.Element {
         {confirmDialog}
         {restartDialog}
         {profileDialog}
-        {upgradeNote}
         {addingHost && (
           <AddHostDialog
             actions={addHostActions}
@@ -6750,6 +6762,13 @@ export function App(): JSX.Element {
             }
             onRetry={history.retry}
             onDismiss={() => closeHistory(true)}
+            onNewSession={() => {
+              closeHistory(false);
+              showLauncher(
+                historyHost === LOCAL_HOST_KEY ? frontFolder : null,
+                historyHost,
+              );
+            }}
             hosts={hostChoiceFor("history")}
             hostName={
               hostChoiceFor("history") === undefined

@@ -260,10 +260,10 @@ async function checkComposer(ctx: Ctx, h: PtyHandle): Promise<Check[]> {
   const detail: Record<string, unknown> = {}
   let ok = true
 
-  await typeText(ctx.win, 'hello from helm')
+  await typeText(ctx.win, 'hello from floti')
   await sleep(700)
   const typedRows = await composerRows(ctx)
-  const typed = typedRows.some((r) => r.includes('hello from helm'))
+  const typed = typedRows.some((r) => r.includes('hello from floti'))
   detail.typing = { rendered: typed, composerRows: typedRows.map((r) => r.trim()) }
   if (!typed) {
     ok = false
@@ -280,7 +280,7 @@ async function checkComposer(ctx: Ctx, h: PtyHandle): Promise<Check[]> {
   await typeText(ctx.win, 'second line')
   await sleep(900)
   const afterRows = await composerRows(ctx)
-  const firstStillEditing = afterRows.some((r) => r.includes('hello from helm'))
+  const firstStillEditing = afterRows.some((r) => r.includes('hello from floti'))
   const secondInComposer = afterRows.some((r) => r.includes('second line'))
   const multiline = firstStillEditing && secondInComposer
   const shotMulti = await screenshot(ctx.win, ctx.shotDir, 'd3-composer-multiline.png')
@@ -358,7 +358,7 @@ async function checkComposer(ctx: Ctx, h: PtyHandle): Promise<Check[]> {
 /**
  * Shift+Enter has no standard encoding, so a host has to pick one and the TUI
  * has to agree. Rather than guess, send each candidate to the real composer and
- * see which one grows a second line. Whatever wins here is what Helm's key
+ * see which one grows a second line. Whatever wins here is what the desktop's key
  * binding should emit.
  */
 const NEWLINE_CANDIDATES: { name: string; bytes: string }[] = [
@@ -554,7 +554,7 @@ async function checkPermissionPrompt(ctx: Ctx, h: PtyHandle): Promise<Check> {
   // directory is harmless, and it is declined below in any case.
   await typeText(
     ctx.win,
-    'Run this exact shell command with the Bash tool, nothing else: mkdir -p /tmp/helm-spike-perm'
+    'Run this exact shell command with the Bash tool, nothing else: mkdir -p /tmp/floti-spike-perm'
   )
   await sleep(500)
   await sendKey(ctx.win, 'Return', [], 500)
@@ -592,8 +592,8 @@ async function checkPermissionPrompt(ctx: Ctx, h: PtyHandle): Promise<Check> {
   // have created does not exist.
   const declined =
     appeared &&
-    !existsSync(join(tmpdir(), 'helm-spike-perm')) &&
-    !existsSync('C:\\tmp\\helm-spike-perm')
+    !existsSync(join(tmpdir(), 'floti-spike-perm')) &&
+    !existsSync('C:\\tmp\\floti-spike-perm')
 
   if (!appeared) {
     notes.push(

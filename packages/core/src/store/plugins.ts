@@ -11,7 +11,7 @@ import { pluginSettings, plugins } from './schema'
 export interface PluginFolder {
   path: string
   enabled: boolean
-  /** Whether the sessions Helm starts are offered the tools its manifest declares. */
+  /** Whether the sessions Floti starts are offered the tools its manifest declares. */
   toolsEnabled: boolean
   addedAt: string
 }

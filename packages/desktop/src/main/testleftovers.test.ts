@@ -30,7 +30,7 @@ import { REPO_ROOT } from '../../scripts/test-posix.mjs'
 const SCRIPT = join(REPO_ROOT, 'scripts', 'test-leftovers.mjs')
 const FIXTURE = join(REPO_ROOT, 'test', 'fixtures', 'leaky-step.mjs')
 const TMP = join('/', 'tmp')
-const CHECKOUT = join('/', 'work', 'helm')
+const CHECKOUT = join('/', 'work', 'floti')
 const PLACES = { temps: [TMP], checkouts: [CHECKOUT] }
 
 /** What the OS says of a process it will say nothing about. */
@@ -51,13 +51,13 @@ function row(pid: number, parentPid: number, name: string, start: number, comman
 const pids = (rows: ProcessRow[] | null): number[] | null => (rows === null ? null : rows.map((r) => r.pid))
 
 /**
- * A machine before the step: the system, the installed Helm with another
+ * A machine before the step: the system, the installed Floti with another
  * session's agent and its fake agent, the CI runner, and the shell the check
  * runs from with its own ancestors.
  */
 const BEFORE: ProcessRow[] = [
   row(1, 0, 'init', 1),
-  row(10, 1, 'helm', 2),
+  row(10, 1, 'floti', 2),
   row(11, 10, 'claude', 3),
   row(12, 11, 'node', 4, 'node fake-claude.mjs'),
   row(20, 1, 'runner', 5),
@@ -78,10 +78,10 @@ describe('what the leftover check selects', () => {
       row(50, 30, 'node', 20, 'node scripts/test-leftovers.mjs after state.json')
     ]
     const leftovers = selectLeftovers({
-      before: { processes: BEFORE, folders: ['helm world-old'] },
+      before: { processes: BEFORE, folders: ['floti world-old'] },
       after: {
         processes: after,
-        folders: ['helm world-old', 'floti test abc', 'helm world-xyz', 'helm-test-posix-1', 'helm-test-run-a1']
+        folders: ['floti world-old', 'floti test abc', 'floti world-xyz', 'floti-test-posix-1', 'floti-test-a1']
       },
       self: 50,
       tmp: TMP,
@@ -90,9 +90,9 @@ describe('what the leftover check selects', () => {
     })
     expect(leftovers.folders).toEqual([
       join(TMP, 'floti test abc'),
-      join(TMP, 'helm world-xyz'),
-      join(TMP, 'helm-test-posix-1'),
-      join(TMP, 'helm-test-run-a1')
+      join(TMP, 'floti world-xyz'),
+      join(TMP, 'floti-test-posix-1'),
+      join(TMP, 'floti-test-a1')
     ])
     expect(pids(leftovers.processes)).toEqual([40, 41, 42])
     expect(formatLeftovers(leftovers)).toContain('  process  40 floti floti host --listen 127.0.0.1:0')
@@ -122,8 +122,8 @@ describe('what the leftover check selects', () => {
       row(50, 30, 'node', 20)
     ]
     const leftovers = selectLeftovers({
-      before: { processes: BEFORE, folders: ['floti test earlier run', 'helm world-earlier'] },
-      after: { processes: after, folders: ['floti test earlier run', 'helm world-earlier'] },
+      before: { processes: BEFORE, folders: ['floti test earlier run', 'floti world-earlier'] },
+      after: { processes: after, folders: ['floti test earlier run', 'floti world-earlier'] },
       self: 50,
       tmp: TMP,
       places: PLACES,
@@ -134,7 +134,7 @@ describe('what the leftover check selects', () => {
 
   it('never reports what a process the check runs under starts beside it', () => {
     // The check runs under a test runner or an app that keeps starting work of
-    // its own: vitest's other workers, Helm's other sessions. Only init or a
+    // its own: vitest's other workers, the desktop's other sessions. Only init or a
     // subreaper adopts what the step left, so a new process under any other
     // ancestor of the check was started by that ancestor, not by the step.
     const after = [
@@ -191,7 +191,7 @@ describe('what the leftover check selects', () => {
 
     it('reports one running in a test temp folder, as a host session the host started with a cleared environment does', () => {
       expect(adopted({ 45: { cwd: join(TMP, 'floti test abc') } }, 'floti')).toEqual([45])
-      expect(adopted({ 45: { cwd: join(TMP, 'helm world-xyz', 'project a') } })).toEqual([45])
+      expect(adopted({ 45: { cwd: join(TMP, 'floti world-xyz', 'project a') } })).toEqual([45])
     })
 
     it('reports one running in the checkout', () => {
@@ -285,7 +285,7 @@ describe('what the leftover check selects', () => {
       before: { processes: BEFORE, folders: [] },
       after: {
         processes: [...BEFORE, row(80, 999, 'mspdbsrv', 12), row(81, 999, 'rustc', 13), row(50, 30, 'node', 20)],
-        folders: ['node-compile-cache', 'helm compile cache probe-1']
+        folders: ['node-compile-cache', 'floti compile cache probe-1']
       },
       self: 50,
       tmp: TMP,
@@ -340,13 +340,13 @@ describe('what the leftover check selects', () => {
   it('still judges folders when the process table could not be read', () => {
     const leftovers = selectLeftovers({
       before: { processes: null, folders: [] },
-      after: { processes: null, folders: ['helm world-1'] },
+      after: { processes: null, folders: ['floti world-1'] },
       self: 50,
       tmp: TMP,
       places: PLACES,
       inspect: unreadable
     })
-    expect(leftovers).toEqual({ folders: [join(TMP, 'helm world-1')], processes: null })
+    expect(leftovers).toEqual({ folders: [join(TMP, 'floti world-1')], processes: null })
   })
 })
 
@@ -438,12 +438,12 @@ describe("reading a process's mark and working folder", () => {
       {},
       {
         'ps -wwE -o command= -p 7': `/opt/node/bin/node -e x leaky-step-child PATH=/usr/bin TEST_LEFTOVERS_MARK=${MARK} HOME=/Users/runner\n`,
-        'lsof -a -d cwd -p 7 -Fn': 'p7\nfcwd\nn/Users/runner/work/helm/helm\n',
+        'lsof -a -d cwd -p 7 -Fn': 'p7\nfcwd\nn/Users/runner/work/floti/floti\n',
         'ps -wwE -o command= -p 8': 'bash /Library/Application Support/Veertu/Anka/addons/ankaupd.sh PATH=/usr/bin\n',
         'lsof -a -d cwd -p 8 -Fn': 'p8\nfcwd\nn/\n'
       }
     )
-    expect(inspectProcess(7, MARK, 'darwin', io)).toEqual({ marked: true, cwd: '/Users/runner/work/helm/helm' })
+    expect(inspectProcess(7, MARK, 'darwin', io)).toEqual({ marked: true, cwd: '/Users/runner/work/floti/floti' })
     expect(inspectProcess(8, MARK, 'darwin', io)).toEqual({ marked: false, cwd: '/' })
     expect(inspectProcess(9, MARK, 'darwin', io)).toEqual(UNREADABLE)
     expect(runs).toContain('lsof -a -d cwd -p 9 -Fn')
@@ -457,7 +457,7 @@ describe("reading a process's mark and working folder", () => {
   })
 
   it('takes the working folder from the n line of lsof -Fn', () => {
-    expect(parseLsofCwd('p12\nfcwd\nn/Users/runner/work/helm helm\n')).toBe('/Users/runner/work/helm helm')
+    expect(parseLsofCwd('p12\nfcwd\nn/Users/runner/work/floti floti\n')).toBe('/Users/runner/work/floti floti')
     expect(parseLsofCwd('p12\n')).toBeNull()
     expect(parseLsofCwd('')).toBeNull()
   })
@@ -468,7 +468,7 @@ const started: number[] = []
 
 beforeEach(() => {
   // A private temp folder, so what the script lists is only what this test makes.
-  temp = mkdtempSync(join(tmpdir(), 'helm leftovers temp-'))
+  temp = mkdtempSync(join(tmpdir(), 'floti leftovers temp-'))
 })
 
 afterEach(() => {

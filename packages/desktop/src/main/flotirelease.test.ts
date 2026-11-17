@@ -11,6 +11,7 @@ import {
   binaryProblem,
   desktopVersion,
   formatSums,
+  noticesFileName,
   parseSums,
   releaseFileName,
   releaseFileNames,
@@ -98,6 +99,9 @@ describe('the floti files a release carries', () => {
       'floti-3.0.0-windows-arm64.exe',
       'floti-3.0.0-windows-x64.exe'
     ])
+    // floti's third-party notices are a release file too, written after the sums, which list the five builds alone.
+    expect(noticesFileName(VERSION)).toBe('floti-3.0.0-THIRD-PARTY-NOTICES.txt')
+    expect(releaseFileNames(VERSION)).not.toContain(noticesFileName(VERSION))
   })
 
   it('finds the build for the platform this desktop runs on, and none for one no release carries', () => {

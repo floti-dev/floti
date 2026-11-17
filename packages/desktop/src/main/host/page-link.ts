@@ -1,17 +1,17 @@
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import type { EventPayload, HostLinkOpened, RefusedVersions } from '../../shared/ipc'
 import type { PageBridge } from './launcher'
 
 /**
- * Each Helm page's own connection to the local host, while sessions run there.
+ * Each desktop page's own connection to the local host, while sessions run there.
  *
- * A Helm page that reaches a host feature does so over a protocol connection
+ * A desktop page that reaches a host feature does so over a protocol connection
  * of its own: main starts a `floti bridge` for it and pipes its frames both
  * ways over `hostLink:*`, reading none of them. The device key and the Noise
  * session stay in the bridge, so no window holds a key, and main logs no
  * frame.
  *
- * - Only Helm's own pages may open one, checked by web-contents id: never a
+ * - Only the desktop's own pages may open one, checked by web-contents id: never a
  *   plugin frame, an artifact frame or a page in the Browser tab.
  * - A page's bridge is opened only after main's own link has connected, so
  *   the host key it pinned and the settings main writes come first.
@@ -19,7 +19,7 @@ import type { PageBridge } from './launcher'
  *   a page that navigates, reloads or closes has its bridge ended.
  * - At quit every bridge is ended before main's link stops the host.
  * - A bridge that ends by itself tells the page whether main's link ended the
- *   host on purpose (Stop host, or a quit), and whether Helm starts a new host
+ *   host on purpose (Stop host, or a quit), and whether the desktop starts a new host
  *   in place of this one, so a page tells a crash from a stop and says what
  *   comes next.
  * - When main's link finds its host no longer answering (`drop`), every
@@ -28,8 +28,8 @@ import type { PageBridge } from './launcher'
  *   minutes.
  */
 
-/** A Helm page, as much of its web contents as this needs. */
-export interface HelmPage {
+/** A desktop page, as much of its web contents as this needs. */
+export interface FlotiPage {
   readonly id: number
   send<K extends 'hostLink:data' | 'hostLink:ended'>(channel: K, payload: EventPayload<K>): void
   /** Calls `listener` each time the page navigates away, reloads or closes. */
@@ -37,17 +37,17 @@ export interface HelmPage {
 }
 
 export interface PageLinksDeps {
-  /** Helm's version, for the page's `hello`. */
+  /** The desktop's version, for the page's `hello`. */
   appVersion: string
   /** The computer's name, for the page's `hello`, as main's gives it. */
   deviceName?: string
   /** What the log calls the host: the local host when absent. */
   name?: string
-  /** Whether a web contents is one of Helm's own pages. */
-  isHelmPage: (id: number) => boolean
+  /** Whether a web contents is one of the desktop's own pages. */
+  isFlotiPage: (id: number) => boolean
   /** Settles once main's own link has connected; rejects with the sentence saying why it could not. */
   ready: () => Promise<unknown>
-  /** Whether main's link ended the host on purpose, and whether Helm starts a new one if it is gone. */
+  /** Whether main's link ended the host on purpose, and whether the desktop starts a new one if it is gone. */
   howEnded: () => { planned: boolean; restarts: boolean; restarting?: boolean }
   /** Starts a bridge whose host bytes go to `data`. */
   openBridge: (data: (bytes: Uint8Array) => void) => PageBridge
@@ -61,8 +61,8 @@ export interface PageLinksDeps {
 }
 
 export interface PageLinks {
-  /** Opens `page`'s connection, ending any it had. Throws for a page that is not Helm's. */
-  open(page: HelmPage): Promise<HostLinkOpened>
+  /** Opens `page`'s connection, ending any it had. Throws for a page that is not the desktop's. */
+  open(page: FlotiPage): Promise<HostLinkOpened>
   /** A page's bytes for its bridge; anything not from the page that opened `connection` is dropped. */
   send(pageId: number, connection: number, bytes: Uint8Array): void
   /** The page closed `connection`. */
@@ -79,7 +79,7 @@ export interface PageLinks {
 }
 
 interface Open {
-  page: HelmPage
+  page: FlotiPage
   bridge: PageBridge
 }
 
@@ -121,7 +121,7 @@ export function createPageLinks(deps: PageLinksDeps): PageLinks {
 
   return {
     async open(page) {
-      if (!deps.isHelmPage(page.id)) throw new Error(FOREIGN_PAGE)
+      if (!deps.isFlotiPage(page.id)) throw new Error(FOREIGN_PAGE)
       if (!watched.has(page.id)) {
         watched.add(page.id)
         page.onGone(() => pageGone(page.id))
@@ -188,14 +188,14 @@ export function createPageLinks(deps: PageLinksDeps): PageLinks {
 }
 
 /**
- * Every Helm page's connections: to this PC's host, and to each host on
+ * Every desktop page's connections: to this PC's host, and to each host on
  * another computer, named by its id in `hostLink:open`. Bytes and closes
  * carry the connection's number, which every host's page links take from one
  * counter, so each goes to the one link that opened it.
  */
 export interface HostPageLinks {
   /** Opens `page`'s connection to `host`: this PC's when null or `local`. */
-  open(page: HelmPage, host: string | null): Promise<HostLinkOpened>
+  open(page: FlotiPage, host: string | null): Promise<HostLinkOpened>
   send(pageId: number, connection: number, bytes: Uint8Array): void
   close(pageId: number, connection: number): void
   /** Ends this PC's host's page bridges; each remote host's are its link's. */

@@ -1,4 +1,4 @@
-/** Types for `server.mjs`, for the TypeScript that starts it (Helm's end-to-end tests). */
+/** Types for `server.mjs`, for the TypeScript that starts it (Floti's end-to-end tests). */
 
 export interface SampleItem {
   id: string

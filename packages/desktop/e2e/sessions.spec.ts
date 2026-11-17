@@ -16,16 +16,16 @@ import {
   terminalText,
   test,
   typeLine
-} from './helm'
+} from './desktop'
 
 /** How many times `text` is on a session's screen. */
 const count = (screen: string, text: string): number => screen.split(text).length - 1
 
 test('a session starts in a project, takes input and the pane’s size, is drawn again after a reload, and ends', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   const id = await startSession(window, 'alpha')
   const pane = window.getByRole('region', { name: 'First pane' })
 
@@ -46,7 +46,7 @@ test('a session starts in a project, takes input and the pane’s size, is drawn
   expect(history).toContain('"display":"hello there"')
 
   // The pane's size reaches the agent's terminal.
-  await helm.app.evaluate(({ BrowserWindow }) => {
+  await desktop.app.evaluate(({ BrowserWindow }) => {
     const [win] = BrowserWindow.getAllWindows()
     const [width, height] = win?.getSize() ?? [1200, 800]
     win?.setSize((width ?? 1200) + 160, (height ?? 800) + 80)
@@ -55,8 +55,8 @@ test('a session starts in a project, takes input and the pane’s size, is drawn
     const sessions = await window.evaluate(
       () =>
         (
-          window as unknown as { __helmTerminals: () => { sessions: { key: string; cols: number; rows: number }[] } }
-        ).__helmTerminals().sessions
+          window as unknown as { __flotiTerminals: () => { sessions: { key: string; cols: number; rows: number }[] } }
+        ).__flotiTerminals().sessions
     )
     const terminal = sessions.find((session) => session.key === String(id))
     return terminal === undefined ? undefined : { cols: terminal.cols, rows: terminal.rows }
@@ -91,10 +91,10 @@ test('a session starts in a project, takes input and the pane’s size, is drawn
 })
 
 test('quitting asks first, and End and quit ends every session, everything a session started, and the host and its bridges', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   const alpha = await startSession(window, 'alpha')
   await typeLine(window.getByRole('region', { name: 'First pane' }), '/child')
   let child = 0
@@ -119,13 +119,13 @@ test('quitting asks first, and End and quit ends every session, everything a ses
 
   await startSession(window, 'beta')
   const pids = [run.pid, child, (await claudeRunIn(world, world.projects.beta)).pid]
-  // The host Helm started, the bridge main reaches it through and the window's own.
-  await expect.poll(async () => flotiChildren(await mainPid(helm)).length).toBe(3)
-  const floti = flotiChildren(await mainPid(helm))
+  // The host the desktop started, the bridge main reaches it through and the window's own.
+  await expect.poll(async () => flotiChildren(await mainPid(desktop)).length).toBe(3)
+  const floti = flotiChildren(await mainPid(desktop))
   expect([...pids, ...floti].every(processAlive)).toBe(true)
 
-  const main = await mainPid(helm)
-  await closeWindow(helm.app)
+  const main = await mainPid(desktop)
+  await closeWindow(desktop.app)
   await answer(
     window
       .getByRole('alertdialog', { name: 'Quitting Floti ends 2 sessions on this PC’s host.' })
@@ -135,10 +135,10 @@ test('quitting asks first, and End and quit ends every session, everything a ses
 })
 
 test('a session tab closed keeping its session opens again with its screen, is renamed and ended with confirmation, and one not open here is ended from the sessions pane', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   const id = await startSession(window, 'alpha')
   const pane = window.getByRole('region', { name: 'First pane' })
   const run = await claudeRunIn(world, world.projects.alpha)
@@ -219,10 +219,10 @@ async function pointAt(pane: Locator, sessionId: number, text: string): Promise<
     (key) =>
       (
         window as unknown as {
-          __helmTerminals: () => { sessions: { key: string; lines: string[]; cols: number; rows: number }[] }
+          __flotiTerminals: () => { sessions: { key: string; lines: string[]; cols: number; rows: number }[] }
         }
       )
-        .__helmTerminals()
+        .__flotiTerminals()
         .sessions.find((s) => s.key === key),
     String(sessionId)
   )
@@ -235,10 +235,10 @@ async function pointAt(pane: Locator, sessionId: number, text: string): Promise<
 }
 
 test('a word copied from a session goes to the clipboard, and pastes back into the session once', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { app, window } = helm
+  const { app, window } = desktop
   const clipboard = (): Promise<string> => app.evaluate(({ clipboard: board }) => board.readText())
   const word = 'clip-4821'
 
@@ -274,10 +274,10 @@ async function ctrlClick(window: Page, at: { x: number; y: number }): Promise<vo
 }
 
 test('a link in a session opens on Ctrl+click, once, wherever focus was, and a plain click stays the session’s', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { app, window } = helm
+  const { app, window } = desktop
   // Nothing leaves the app: the system browser is recorded rather than opened.
   await app.evaluate(({ shell }) => {
     const record = globalThis as { opened?: string[] }

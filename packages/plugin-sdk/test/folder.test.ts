@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resolveInside } from '../src/folder.js'
 
 /**
- * `resolveInside`, which `helm-plugin validate` checks every file a manifest
+ * `resolveInside`, which `floti-plugin validate` checks every file a manifest
  * names with: the file and the folder compared as the disk resolves them, so
  * a folder reached through a link holds its own files, and a link inside it
  * cannot reach out.
@@ -22,7 +22,7 @@ function linkFolder(link: string, target: string): void {
 }
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'helm sdk folder-'))
+  root = mkdtempSync(join(tmpdir(), 'floti sdk folder-'))
   dir = join(root, 'my plugin')
   mkdirSync(join(dir, 'dist'), { recursive: true })
   writeFileSync(join(dir, 'dist', 'a b.html'), '')

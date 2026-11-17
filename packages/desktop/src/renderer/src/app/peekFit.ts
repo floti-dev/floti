@@ -1,4 +1,4 @@
-import type { PeekScreenRoom } from '@helm/ui'
+import type { PeekScreenRoom } from '@floti/ui'
 import type { PeekGrid } from './peek'
 
 /**

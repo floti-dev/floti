@@ -1,7 +1,7 @@
 // Generated from the floti-protocol crate by `cargo run -p floti-protocol --bin generate`. Do not edit.
 
 /** The protocol version these declarations describe. */
-export const PROTOCOL_VERSION = { major: 4, minor: 1 } as const;
+export const PROTOCOL_VERSION = { major: 4, minor: 2 } as const;
 
 /** The link version of the session keeper a host of this build takes back. */
 export const KEEPER_LINK_VERSION = 1;
@@ -906,10 +906,27 @@ text: string,
 at: string, };
 
 /**
- * What a project's `.claude/` folder holds, counted the way Claude Code
- * resolves it.
+ * What a project holds in either shape a workspace is written in: Claude's
+ * (`CLAUDE.md` and `.claude/`) and the shared one (`AGENTS.md` and
+ * `.agents/skills`), counted the way a launch composes them.
  */
-export type ClaudeInventory = { skills: number, commands: number, agents: number, hooks: boolean, settings: boolean, claudeMd: boolean, mcp: boolean, };
+export type ClaudeInventory = { 
+/**
+ * The skills in `.claude/skills` and `.agents/skills`, a skill folder
+ * in both counted once.
+ */
+skills: number, commands: number, agents: number, hooks: boolean, settings: boolean, claudeMd: boolean, mcp: boolean, 
+/**
+ * An `AGENTS.md` in the project: the shared shape's instructions file.
+ * Absent reads false, as it does from a host before protocol 4.2.
+ */
+agentsMd?: boolean, 
+/**
+ * A `.agents/` folder in the project: the shared shape's, beside
+ * `.claude/`. Absent reads false, as it does from a host before
+ * protocol 4.2.
+ */
+agentsDir?: boolean, };
 
 export type ClientInfo = { 
 /**
@@ -973,9 +990,12 @@ hash: string, size: number, mtimeMs: Millis,
 binary: boolean, };
 
 /**
- * What a file in a config tree is, as the agent resolves it.
+ * What a file in a config tree is, as the agent resolves it. `agents-md`,
+ * a project's `AGENTS.md` (the shared shape's instructions file), is since
+ * protocol 4.2. No variant carries a doc of its own: one would make this
+ * type's schema a `oneOf` rather than an `enum` gaining a value.
  */
-export type ConfigFileKind = "skill" | "command" | "agent" | "workflow" | "hook" | "settings" | "settings-local" | "claude-md" | "mcp" | "rule" | "other";
+export type ConfigFileKind = "skill" | "command" | "agent" | "workflow" | "hook" | "settings" | "settings-local" | "claude-md" | "mcp" | "rule" | "other" | "agents-md";
 
 /**
  * One config tree.
@@ -1183,8 +1203,8 @@ roots: Array<string>, };
 
 export type CreateWorkspaceRequest = { mode: WorkspaceMode, dir: string, name: string | null, 
 /**
- * For `new` only: `minimal` or absent writes the built-in scaffold, and
- * anything else names a template.
+ * For `new` only: absent, `starter` or `minimal` (its old id) writes
+ * Starter, the built-in template, and anything else names a template.
  */
 template: string | null, };
 
@@ -2034,7 +2054,14 @@ agent?: string,
  * flag, as `permissionMode` does. Absent, the profile's and the agent's
  * apply, as they did for a client before 2.3.
  */
-chosen?: LaunchChoices, cols: number, rows: number, };
+chosen?: LaunchChoices, 
+/**
+ * The session's first message, passed to the agent at launch as its
+ * opening prompt, as a profile's is, and never typed. Present and not
+ * blank, it replaces the profile's; a resume takes none. A host before
+ * it ignores the field and starts the session with no first message.
+ */
+openingPrompt?: string, cols: number, rows: number, };
 
 /**
  * What a session was launched with, as its launch composed it.
@@ -2380,7 +2407,7 @@ totalBytes: number, body: Uint8Array, };
  */
 export type PluginFileRequest = { 
 /**
- * The plugin's id: the host of its `helm-plugin://<id>/` origin, which
+ * The plugin's id: the host of its `floti-plugin://<id>/` origin, which
  * the client established from the frame, never from what the page asked.
  */
 plugin: string, 
@@ -2660,8 +2687,7 @@ export type PluginSwitchRequest = { path: string, enabled: boolean, };
 export type PluginTabInfo = { title: string, url: string, };
 
 /**
- * One tool as the manifest declares it: enough for a client whose plugin
- * pages answer its calls to offer it on `agentPlugin:offer`.
+ * One tool as the manifest declares it.
  */
 export type PluginToolInfo = { name: string, description: string, 
 /**
@@ -3819,8 +3845,8 @@ channel: string, code: ErrorCode, message: string, };
  */
 export type TemplateChoice = { 
 /**
- * The folder name, and what a workspace records. `minimal` for the
- * built-in scaffold.
+ * The folder name, and what a workspace records. `starter` for Starter,
+ * the built-in template.
  */
 id: string, label: string, description: string | null, 
 /**
@@ -3828,7 +3854,7 @@ id: string, label: string, description: string | null,
  */
 order: number | null, 
 /**
- * The built-in scaffold, which has no folder behind it.
+ * Starter, the built-in template, which has no folder behind it.
  */
 builtIn: boolean, };
 
@@ -4677,20 +4703,11 @@ export const CLIENT_ONLY: readonly OutsideEntry[] = [
   { channels: "remoteHosts:*", reason: "where each host on another computer stands with this device: connected, retrying, its key changed since the client pinned it, or its transport's last line, which the client's main process learns from its own links to those hosts and tells only its own window; and adding one, which the client's main process does by connecting to it through the user's own ssh or command, after reading the Host names of this computer's ssh config" },
   { channels: "forwards:*", reason: "a port a session on another computer listens on, forwarded to the client's own loopback: the client's main process listens there and carries each connection to that host on a sessions:port stream" },
   { channels: "ownSettings:*", reason: "the settings the client keeps for itself: its window, theme, terminal and browser preferences, the programs it picked, which its main process tells the host, and its tabs, panes and splits, which are kept per device and never reach the host" },
+  { channels: "walkthrough:*", reason: "the client's own guided first run: its main process closes the setup window and opens the shell, or opens the setup window again, and keeps the step in the client's own settings" },
   { channels: "ownApp:info", reason: "the client's own build, data folder and runtime versions" },
   { channels: "ownData:*", reason: "where the copy of the client's own database into the host stands: only the client's main process reads that database, and it sends the rows over carry:*" },
   { channels: "profileDialog:*", reason: "the client's own dialogs for exporting and importing a profile, and the file it writes or reads on its machine; the profile itself is the host's" },
   { channels: "windowSessions:*", reason: "what the client's main process keeps of its sessions for its window: the OS notification for an exit nobody saw, the question before it quits with sessions running, the count before it stops the host, what restarting this PC's host for an update ends and the restart itself, which the client's main process sends in place of a hello through a bridge of its own, and the pane layout its last run saved; every client sees every session, and which have a tab is each device's own" },
-  { channels: "pluginBackground:*", reason: "what the client's hidden plugin window saw of the background pages it runs under plugin API v1, which its main process alone hears and tells its window" },
-  { channels: "pluginWindow:*", reason: "what a background page in the client's hidden plugin window asks that only the client's own window can draw (a plugin tab, a secret dialog), passed between its two windows by its main process" },
-];
-
-/** Channels between a plugin's background page and what runs it, which never cross the protocol. */
-export const HOST_INTERNAL: readonly OutsideEntry[] = [
-  { channels: "plugins:tool", reason: "a session's call to a plugin tool, handed to its background page by whatever runs it" },
-  { channels: "plugins:toolCancel", reason: "cancels a plugin tool call at whatever runs its background page" },
-  { channels: "plugins:toolResult", reason: "a background page's answer to a plugin tool call, to whatever runs it" },
-  { channels: "plugins:backgroundState", reason: "a background page reporting its state to whatever runs it" },
 ];
 
 /** Whether `name` is this entry's channel or in its family. */
@@ -4701,9 +4718,4 @@ export function outsideCovers(entry: OutsideEntry, name: string): boolean {
 /** Whether a client-only entry covers `name`. */
 export function isClientOnly(name: string): boolean {
   return CLIENT_ONLY.some((entry) => outsideCovers(entry, name));
-}
-
-/** Whether a host-internal entry covers `name`. */
-export function isHostInternal(name: string): boolean {
-  return HOST_INTERNAL.some((entry) => outsideCovers(entry, name));
 }

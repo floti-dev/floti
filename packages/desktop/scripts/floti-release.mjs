@@ -73,6 +73,15 @@ export function sumsFileName(version) {
   return `floti-${version}-SHA256SUMS`
 }
 
+/**
+ * `floti-<version>-THIRD-PARTY-NOTICES.txt`: the license texts of the crates
+ * floti links (third-party-notices.mjs), which floti.yml writes beside the
+ * five builds once their sums are written, so `sums` never sees it.
+ */
+export function noticesFileName(version) {
+  return `floti-${version}-THIRD-PARTY-NOTICES.txt`
+}
+
 /** Every file a release of `version` carries for floti, sorted: the five builds and their sums. */
 export function releaseFileNames(version) {
   return [...RELEASE_TARGETS.map((target) => releaseFileName(version, target)), sumsFileName(version)].sort()

@@ -16,7 +16,7 @@ import {
 } from './profiles'
 
 /** A folder the rows name. Nothing is made there: the rows are only data. */
-const dir = join(tmpdir(), 'helm-profiles')
+const dir = join(tmpdir(), 'floti-profiles')
 let store: Store
 
 // The rows are about the store, not the file it lives in, so they live in

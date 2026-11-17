@@ -1,9 +1,9 @@
-import { NO_HOST_LINE, type RemoteHost } from '@helm/core/types'
+import { NO_HOST_LINE, type RemoteHost } from '@floti/core/types'
 import { describe, expect, it, vi } from 'vitest'
 import { FakeConnection, fakeLocalHost } from '../../../test/host-connection'
 import type { RemoteHostStates } from '../../shared/ipc'
 import type { LocalHost, PageBridge } from './launcher'
-import type { HelmPage } from './page-link'
+import type { FlotiPage } from './page-link'
 import { createPageLinks, routePageLinks } from './page-link'
 import { WAKE_CHECK_MS, WAKE_DEAD_LINE, createRemoteHostLinks, type RemoteHostLinksDeps } from './remote'
 import { RECONNECT_FIRST_MS, RECONNECT_MOST_MS } from '../../shared/host/reconnect'
@@ -81,7 +81,7 @@ function world() {
     changed: (states) => told.push(states),
     onWake: (listener) => wakeListeners.push(listener),
     hostsChanged: (hosts) => recorded.push(hosts.map((host) => host.name)),
-    isHelmPage: () => true,
+    isFlotiPage: () => true,
     appVersion: '2.4.0',
     nextConnection: () => nextConnection++,
     log: (line) => log.push(line),
@@ -150,7 +150,7 @@ function hostWith(own: Array<{ id: number; name: string }> = []): FakeConnection
   return new FakeConnection().answer('host:deviceSessions', () => own)
 }
 
-function page(id = 1): HelmPage & { sent: Array<{ channel: string; payload: unknown }> } {
+function page(id = 1): FlotiPage & { sent: Array<{ channel: string; payload: unknown }> } {
   const sent: Array<{ channel: string; payload: unknown }> = []
   return {
     id,
@@ -190,7 +190,7 @@ describe('the links to hosts on other computers', () => {
     const window = page()
     const local = createPageLinks({
       appVersion: '2.4.0',
-      isHelmPage: () => true,
+      isFlotiPage: () => true,
       ready: () => Promise.resolve(),
       howEnded: () => ({ planned: false, restarts: false }),
       openBridge: () => ({ write: () => undefined, end: () => undefined, ended: new Promise(() => undefined) }),

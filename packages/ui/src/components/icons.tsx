@@ -315,7 +315,7 @@ export function SlidersIcon(props: IconProps): JSX.Element {
 }
 
 /**
- * Helm's own settings: a gear, which is the one glyph nobody has to learn.
+ * Floti's own settings: a gear, which is the one glyph nobody has to learn.
  *
  * Not `SlidersIcon`, which marks data files. Eight teeth drawn as a stroked
  * ring with radial ticks rather than a filled cog: at 14px a cog outline turns
@@ -671,7 +671,7 @@ export function ConsoleIcon(props: IconProps): JSX.Element {
   )
 }
 
-/** `</>`, for the per-view DevTools - the first one in Helm. */
+/** `</>`, for the per-view DevTools - the first one in Floti. */
 export function DevToolsIcon(props: IconProps): JSX.Element {
   return (
     <Icon {...props}>

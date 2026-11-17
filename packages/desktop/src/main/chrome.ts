@@ -1,10 +1,10 @@
 import type { BrowserWindow, BrowserWindowConstructorOptions, MenuItemConstructorOptions } from 'electron'
-import { formatColor, mix, parseColor, type AppliedTheme } from '@helm/core'
+import { formatColor, mix, parseColor, type AppliedTheme } from '@floti/core'
 
 /**
  * The window's chrome, one answer per OS.
  *
- * Helm draws its own 36px strip (`TitleBar.tsx`) at the top of the app window,
+ * The desktop draws its own 36px strip (`TitleBar.tsx`) at the top of the app window,
  * and each OS draws its window controls into it in its own way:
  *
  *  - Windows paints the frame in the OS accent colour, which has nothing to do
@@ -65,12 +65,12 @@ export function windowChromeFor(
  * Mac, not editing commands in the page. Cmd never collides with the
  * terminal's Ctrl+C. So a Mac gets the app menu and the Edit menu every app
  * has, and a Window menu with Minimize and Zoom, and nothing else: no Close,
- * Reload, Developer Tools or any item whose key one of Helm's own Cmd
+ * Reload, Developer Tools or any item whose key one of the desktop's own Cmd
  * shortcuts uses (Cmd+W, Cmd+R and Cmd+Option+I are the Browser tab's).
  * Accelerators are written out, though the roles carry the same ones, so the
- * keys the menu takes can be read here and checked against Helm's.
+ * keys the menu takes can be read here and checked against the desktop's.
  *
- * Quit Helm is not Electron's `quit` role. That role is `app.quit()`, and
+ * Quit Floti is not Electron's `quit` role. That role is `app.quit()`, and
  * Electron runs `before-quit` - which ends every session - before it closes
  * the window, so the question closing the window asks would come after the
  * sessions were gone. The item calls `quit` instead, which asks that question

@@ -51,12 +51,14 @@ const here = process.cwd()
 appendFileSync('runs.txt', `${process.pid}\n`)
 watchOwner(here, () => process.exit(0))
 const child = spawn(process.execPath, ['-e', childScript(here)], { stdio: 'ignore' })
-const token = process.env.HELM_SERVICE_TOKEN
+const token = process.env.FLOTI_SERVICE_TOKEN
+// What the host hands every service; anything else of its own is a leak.
+const GIVEN = ['FLOTI_SERVICE_PORT', 'FLOTI_SERVICE_TOKEN', 'FLOTI_PLUGIN_ID']
 if (process.env.SILENT === '1') {
   setInterval(() => {}, 1 << 30)
 } else {
   createServer((request, response) => {
-    if (request.headers['helm-service-token'] !== token) {
+    if (request.headers['floti-service-token'] !== token) {
       response.writeHead(403)
       response.end('wrong token')
       return
@@ -65,15 +67,17 @@ if (process.env.SILENT === '1') {
     response.end(JSON.stringify({
       pid: process.pid,
       child: child.pid,
-      plugin: process.env.HELM_PLUGIN_ID,
-      port: Number(process.env.HELM_SERVICE_PORT),
+      plugin: process.env.FLOTI_PLUGIN_ID,
+      port: Number(process.env.FLOTI_SERVICE_PORT),
       token,
       greeting: process.env.GREETING ?? null,
       cwd: process.cwd(),
       url: request.url,
-      hostOwn: Object.keys(process.env).filter((name) => /^(FLOTI_|ELECTRON_|CLAUDE)/i.test(name)),
+      hostOwn: Object.keys(process.env).filter(
+        (name) => /^(FLOTI_|ELECTRON_|CLAUDE)/i.test(name) && !GIVEN.includes(name.toUpperCase())
+      ),
     }))
-  }).listen(Number(process.env.HELM_SERVICE_PORT), '127.0.0.1')
+  }).listen(Number(process.env.FLOTI_SERVICE_PORT), '127.0.0.1')
 }
 ";
 

@@ -1,4 +1,4 @@
-// What the installed Helm is, and how to ask about it safely.
+// What the installed Floti is, and how to ask about it safely.
 //
 // Split out of `run-packaging.mjs` when the installer verification became a
 // tool of its own (`verify-installer.mjs`). Two callers need these now and they
@@ -44,7 +44,7 @@ export function waitForEmpty(path, timeoutMs) {
  *
  * What that silently did: `endInstalledApp` matched nothing and killed nothing,
  * `stillRunning()` answered "no" without ever having looked, and the installer
- * phase then installed and uninstalled **over a running Helm**. Measured - the
+ * phase then installed and uninstalled **over a running desktop**. Measured - the
  * JSON form returns 0 and this one returns 4, with the app plainly open. It took
  * down a Claude Code session somebody was working in.
  *
@@ -65,7 +65,7 @@ export function installedAppDir() {
 }
 
 /**
- * How many Helm processes are running out of `installDir`.
+ * How many desktop processes are running out of `installDir`.
  *
  * Matched by **executable path**, not image name, so a portable build or a
  * `pnpm dev` running from elsewhere on this machine is not counted - the
@@ -90,7 +90,7 @@ export function countInstalledProcesses(installDir) {
  * Ends the app the installer launched, and only that one.
  *
  * Matched by `ExecutablePath` under the install directory rather than by image
- * name: whoever runs this almost certainly has a dev or portable Helm open, and
+ * name: whoever runs this almost certainly has a dev or portable desktop open, and
  * killing by name would take those with it. Waits for the processes to actually
  * be gone, because an uninstall cannot remove files a live process still holds.
  *
@@ -133,7 +133,7 @@ export function isElevated() {
   }
 }
 
-/** Per-user uninstall entries mentioning Helm. */
+/** Per-user uninstall entries mentioning Floti. */
 export function readUninstallRegistry() {
   try {
     const out = execFileSync(

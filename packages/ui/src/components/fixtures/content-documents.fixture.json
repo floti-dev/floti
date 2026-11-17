@@ -60,7 +60,7 @@
         "noteType": "journal",
         "date": "2026-08-10",
         "tags": [
-          "helm",
+          "floti",
           "notes"
         ]
       },
@@ -156,14 +156,14 @@
         "noteType": "journal",
         "date": "2026-08-10",
         "tags": [
-          "helm",
+          "floti",
           "notes"
         ]
       },
       "content": {
         "path": "<root>/notes/alpha.md",
         "exists": true,
-        "content": "---\ntype: journal\ndate: 2026-08-10\ntags: [helm, notes]\n---\n\n# Alpha note\n\nRead [[second]], then [[unwritten]], then [the docs](https://example.com/page).\n",
+        "content": "---\ntype: journal\ndate: 2026-08-10\ntags: [floti, notes]\n---\n\n# Alpha note\n\nRead [[second]], then [[unwritten]], then [the docs](https://example.com/page).\n",
         "hash": "e91cb3ad49cc356b6da69b56bada53f30b8b31892ef9322a534cf8772087a4e2",
         "size": 154,
         "mtimeMs": 1793773140395.4348,
@@ -190,14 +190,14 @@
             },
             {
               "key": "tags",
-              "value": "helm, notes",
+              "value": "floti, notes",
               "values": [
-                "helm",
+                "floti",
                 "notes"
               ]
             }
           ],
-          "raw": "type: journal\ndate: 2026-08-10\ntags: [helm, notes]",
+          "raw": "type: journal\ndate: 2026-08-10\ntags: [floti, notes]",
           "error": null,
           "endLine": 5
         },
@@ -324,14 +324,14 @@
         },
         {
           "key": "tags",
-          "value": "helm, notes",
+          "value": "floti, notes",
           "values": [
-            "helm",
+            "floti",
             "notes"
           ]
         }
       ],
-      "raw": "type: journal\ndate: 2026-08-10\ntags: [helm, notes]",
+      "raw": "type: journal\ndate: 2026-08-10\ntags: [floti, notes]",
       "error": null,
       "endLine": 5
     },

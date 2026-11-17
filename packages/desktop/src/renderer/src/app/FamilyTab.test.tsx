@@ -18,8 +18,8 @@ import {
   type PaneLayout,
   type SavedPane,
   type SessionRecord
-} from '@helm/core/types'
-import { FAMILY_HEADER_PX, type TabIndicator } from '@helm/ui'
+} from '@floti/core/types'
+import { FAMILY_HEADER_PX, type TabIndicator } from '@floti/ui'
 import { bridge } from './bridge.testkit'
 import { familyCapacity, familyRoomFits } from './familyRooms'
 import { FamilyTab } from './FamilyTab'

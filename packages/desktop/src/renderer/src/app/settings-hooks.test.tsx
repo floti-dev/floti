@@ -7,7 +7,7 @@ import {
   type ThemeDefinition,
   type ThemeListing,
   type ThemeState
-} from '@helm/core/types'
+} from '@floti/core/types'
 import type { AppInfo, ClaudeStatus } from '../../../shared/ipc'
 import { bridge } from './bridge.testkit'
 import { useLauncher } from './useLauncher'
@@ -105,14 +105,14 @@ describe('useLauncher', () => {
   const APP_INFO: AppInfo = {
     version: '1.2.0',
     mode: 'portable',
-    dataDir: 'C:\\helm-data',
-    dbFile: 'C:\\helm-data\\helm.db',
+    dataDir: 'C:\\floti-data',
+    dbFile: 'C:\\floti-data\\desktop.db',
     migrations: [],
     versions: { electron: '43', chrome: '150', node: '24' },
     hostLogFile: null,
     windowsBuild: null,
     home: 'C:\\Users\\someone',
-    releasesUrl: 'https://github.com/example/helm/releases/latest'
+    releasesUrl: 'https://github.com/example/floti/releases/latest'
   }
 
   it('puts the shape settings on <html> whenever main says the settings changed', () => {
@@ -122,8 +122,8 @@ describe('useLauncher', () => {
     expect(result.current.settings?.density).toBe('compact')
     const root = document.documentElement
     expect(root.dataset['density']).toBe('compact')
-    expect(root.style.getPropertyValue('--helm-gap')).toBe('9px')
-    expect(root.style.getPropertyValue('--helm-radius')).toBe('5px')
+    expect(root.style.getPropertyValue('--floti-gap')).toBe('9px')
+    expect(root.style.getPropertyValue('--floti-radius')).toBe('5px')
   })
 
   it('takes the settings as soon as they are read, without waiting on the app info', async () => {
@@ -206,18 +206,15 @@ describe('useSetup', () => {
     expect(result.current.status).toMatchObject({ source: 'setting', path: 'D:\\picked\\claude.cmd', version: '2.1.500' })
   })
 
-  it('says the host could not be reached when setup, its suggestions or its templates cannot be read, never none', async () => {
+  it('says the host could not be reached when the CLI status or its templates cannot be read, never none', async () => {
     const unreachable = 'No local host answered on its socket.'
     const refuse = (): never => {
       throw new Error(unreachable)
     }
     bridge.answer('setup:status', refuse)
-    bridge.answer('roots:suggest', refuse)
     bridge.answer('template:list', refuse)
     const { result } = renderHook(() => useSetup(DEFAULT_SETTINGS, () => undefined))
 
-    await vi.waitFor(() => expect(result.current.suggestionsError).toBe(unreachable), { timeout: PATIENCE })
-    expect(result.current.suggestions).toEqual([])
     await vi.waitFor(() => expect(result.current.statusError).toBe(unreachable), { timeout: PATIENCE })
     // Could not look: no status at all, not a "not found" one.
     expect(result.current.status).toBeNull()

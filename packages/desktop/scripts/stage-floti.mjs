@@ -1,5 +1,5 @@
 // Builds the `floti` host in release and copies it to `dist-host/`, where
-// electron-builder.yml's `extraResources` picks it up. A packaged Helm runs it
+// electron-builder.yml's `extraResources` picks it up. A packaged desktop runs it
 // from `process.resourcesPath` (`flotiBinary` in src/main/host/launcher.ts).
 // Beside it goes the pinned Node
 // runtime the host runs plugin services on, fetched here, at build time only,
@@ -17,15 +17,21 @@
 // Without FLOTI_PREBUILT floti is built here, and no list or arm64 copy is
 // carried.
 //
+// Last it writes the app's third-party notices, `dist-host/THIRD-PARTY-NOTICES.txt`
+// (third-party-notices.mjs), which end with floti's. A release build, given
+// FLOTI_SHA256SUMS, carries the release's own floti notices, which
+// FLOTI_NOTICES names; any other build writes floti's here, through cargo.
+//
 // Copied rather than referenced in place because Cargo's output folder moves
 // with CARGO_TARGET_DIR, and electron-builder's file sets are relative to this
 // package.
 
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { STAGED_ARM64_NAME, STAGED_SUMS_NAME, desktopVersion, stagePrebuilt, stageWindowsArm64 } from './floti-release.mjs'
 import { stageNode } from './node-runtime.mjs'
+import { APP_NOTICES_NAME, desktopNotices, flotiNotices } from './third-party-notices.mjs'
 
 const desktopDir = resolve(import.meta.dirname, '..')
 const repoRoot = resolve(desktopDir, '..', '..')
@@ -35,9 +41,15 @@ const target = process.env['CARGO_TARGET_DIR'] || join(repoRoot, 'target')
 const prebuilt = process.env['FLOTI_PREBUILT'] || undefined
 const sums = process.env['FLOTI_SHA256SUMS'] || undefined
 const arm64 = process.env['FLOTI_PREBUILT_ARM64'] || undefined
+const notices = process.env['FLOTI_NOTICES'] || undefined
 
 if (arm64 !== undefined && (process.platform !== 'win32' || prebuilt === undefined)) {
   console.error("FLOTI_PREBUILT_ARM64 is the Windows desktop's second floti, so it needs Windows and FLOTI_PREBUILT")
+  process.exit(1)
+}
+
+if (sums !== undefined && notices === undefined) {
+  console.error("FLOTI_SHA256SUMS makes this a release build, which carries the release's floti notices: FLOTI_NOTICES must name them")
   process.exit(1)
 }
 
@@ -96,5 +108,19 @@ try {
   console.log(`Staged Node ${node.pin.version} (${how} ${node.pin.archive}, SHA-256 verified) as ${join('dist-host', 'node')}`)
 } catch (error) {
   console.error(`Could not stage the Node runtime: ${error instanceof Error ? error.message : String(error)}`)
+  process.exit(1)
+}
+
+// The app's third-party notices, staged as `dist-host/THIRD-PARTY-NOTICES.txt`,
+// which electron-builder.yml carries in the app's resources: the npm packages
+// the app carries, then floti's, the release's when FLOTI_NOTICES names them.
+try {
+  const flotiText = notices !== undefined ? readFileSync(notices, 'utf8') : flotiNotices()
+  const file = join(staged, APP_NOTICES_NAME)
+  mkdirSync(staged, { recursive: true })
+  writeFileSync(file, desktopNotices({ flotiText }))
+  console.log(`Staged the third-party notices, with ${notices ?? "floti's, written from cargo metadata"}, as ${join('dist-host', APP_NOTICES_NAME)}`)
+} catch (error) {
+  console.error(`Could not write the third-party notices: ${error instanceof Error ? error.message : String(error)}`)
   process.exit(1)
 }

@@ -23,7 +23,7 @@ export interface BrowserPage {
  * The drag type of a page tab. Its own, so a page cannot be dropped among a
  * pane's tabs and a pane's tab cannot be dropped among the pages.
  */
-export const BROWSER_PAGE_MIME = 'application/x-helm-browser-page'
+export const BROWSER_PAGE_MIME = 'application/x-floti-browser-page'
 
 export interface BrowserPagesProps {
   pages: readonly BrowserPage[]
@@ -94,7 +94,7 @@ const tabId = (id: number): string => `page:${String(id)}`
  * The Browser tab's own strip of pages.
  *
  * The pane's `TabBar`, so a page tab looks, closes, middle-clicks and
- * reorders exactly like every other tab in Helm - and a strip of its own,
+ * reorders exactly like every other tab in Floti - and a strip of its own,
  * inside the Browser tab, so pages never sit among the sessions. That was the
  * complaint: a sign-in that opened four pages left four tabs between the
  * sessions somebody was working in.

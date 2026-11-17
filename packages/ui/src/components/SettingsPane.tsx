@@ -31,7 +31,7 @@ import {
   type ThemeListing,
   type ThemeState,
   type ThemeTokens
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './SettingsSections'
 import { SEGMENT_ON } from '../lib/segmented'
@@ -53,12 +53,12 @@ import {
   useDraft
 } from './SettingsKit'
 import { CheckIcon, CloseIcon, PlusIcon, RefreshIcon } from './icons'
-import type { SetupClaudeStatus } from './SetupPane'
+import type { SetupClaudeStatus } from '../lib/claudeStatus'
 import { HostsSettings, type HostInstallActions, type HostsSettingsProps, type SettingsHost } from './HostsSettings'
 import { DevicesSettings, type DevicesSettingsProps } from './DevicesSettings'
 
 /**
- * Helm's own settings.
+ * Floti's own settings.
  *
  * Not the `.claude` trees Claude Code reads, which belong to Claude, are shared
  * with every other client on the machine, and are edited by Claude Code's own
@@ -81,9 +81,9 @@ import { DevicesSettings, type DevicesSettingsProps } from './DevicesSettings'
  * through `settings:write` and this pane renders whatever `settings:changed`
  * carries back, so the two cannot disagree.
  *
- * Internal state is not shown. `windowBounds`, `firstRunCompletedAt` and
- * `upgradeNoteSeenAt` live in the same table but they are things Helm
- * remembers, not things anyone chose.
+ * Internal state is not shown. `windowBounds` and `firstRunCompletedAt` live
+ * in the same table but they are things Floti remembers, not things anyone
+ * chose.
  */
 
 /** What Settings › Agents says of the host's agents, and where Open Agents goes. */
@@ -98,7 +98,7 @@ export interface AgentsOverview {
 export interface SettingsPaneProps {
   /** The one section on screen; the sidebar lists the rest (`SettingsSections`). */
   section: SettingsSectionId
-  /** What Helm found out about the CLI. Null until the first read lands. */
+  /** What Floti found out about the CLI. Null until the first read lands. */
   status: SetupClaudeStatus | null
   /** Why the status could not be read, when it could not: shown as Unknown, never as not found. */
   statusError?: string | null
@@ -108,6 +108,8 @@ export interface SettingsPaneProps {
   onLocateClaude: () => void
   /** Writes `claudePath: null` - back to whatever discovery finds. */
   onClearClaudeOverride: () => void
+  /** Starts the guided first run again at step 1, in its own window. */
+  onShowWalkthrough: () => void
 
   roots: string[]
   /** What the current roots turned up, so "it worked" is visible here. */
@@ -160,7 +162,7 @@ export interface SettingsPaneProps {
   updateError: string | null
   updateChecking: boolean
   onCheckForUpdate: () => void
-  /** Asks the host to update floti and Helm. */
+  /** Asks the host to update floti and the desktop. */
   onInstallUpdate: () => void
   onOpenReleases: () => void
 
@@ -198,7 +200,7 @@ export interface SettingsPaneProps {
    * managing them.
    *
    * A group here as well as a link in the New Workspace dialog, because
-   * templates are **app-level**: they belong to this Helm rather than to any
+   * templates are **app-level**: they belong to this desktop rather than to any
    * one workspace, and having to start creating a workspace in order to rename or
    * delete one would be the same mistake as putting "stop scanning this
    * folder" only in Settings - which is a bug this pane has already been on the
@@ -227,7 +229,7 @@ export interface SettingsPaneProps {
   browserSearch: BrowserSearch
   onBrowserSearchChange: (search: BrowserSearch) => void
   /**
-   * The two browser-tool keys: whether Helm serves its browser tools to the
+   * The two browser-tool keys: whether Floti serves its browser tools to the
    * sessions it hosts, and whether those tools are held to this machine when
    * the pane is not. Both are preferences rather than state, so both are here.
    */
@@ -237,7 +239,7 @@ export interface SettingsPaneProps {
   onBrowserMcpLocalOnlyChange: (next: boolean) => void
 
   /**
-   * Whether a session may ask Helm what the other sessions are doing.
+   * Whether a session may ask Floti what the other sessions are doing.
    *
    * Its own row in its own group rather than a third tick under Browser: it is
    * served by the same endpoint but it is not the same capability, and a person
@@ -263,7 +265,7 @@ export interface SettingsPaneProps {
   /** Reopen what a crash took without asking. Also ticked from the offer itself. */
   restoreWithoutAsking: boolean
   onRestoreWithoutAskingChange: (next: boolean) => void
-  /** What quitting Helm does to the sessions it started on this PC's host, kept on this device. */
+  /** What quitting the desktop does to the sessions it started on this PC's host, kept on this device. */
   quitSessions: QuitSessions
   onQuitSessionsChange: (next: QuitSessions) => void
   /** Asks how many sessions stopping ends, and stops this PC's host on a yes. */
@@ -286,7 +288,7 @@ export interface SettingsPaneProps {
   hostUpdateRequest?: { id: string; nonce: number } | null | undefined
   /** A host's Reconnect now: its link tries at once rather than after the wait. */
   onReconnectHost?: ((id: string) => void) | undefined
-  /** This PC's host, while it and this Helm are on different versions (`HostsSettings`' notice). */
+  /** This PC's host, while it and this desktop are on different versions (`HostsSettings`' notice). */
   localHost?: HostsSettingsProps['localHost']
   /** Settings > Devices: the devices attached to each connected host, and Disconnect. */
   devices: DevicesSettingsProps
@@ -312,7 +314,7 @@ export interface UpdateView {
   checking: boolean
   /** Why the host neither checks nor updates: a dev or check run, or a floti not installed on its own. */
   unavailable: 'readOnly' | 'notStandalone' | null
-  /** The update the host runs, while it runs: its last line, and whether it waits for Helm to quit. */
+  /** The update the host runs, while it runs: its last line, and whether it waits for the desktop to quit. */
   installing: { line: string; waitingForApp: boolean } | null
   /** Why the last update the host ran failed. */
   installFailed: string | null
@@ -361,6 +363,7 @@ export function SettingsPane({
   onRecheck,
   onLocateClaude,
   onClearClaudeOverride,
+  onShowWalkthrough,
   roots,
   projectCount,
   scanning,
@@ -440,7 +443,7 @@ export function SettingsPane({
   // Workspace and Agents hold two groups each and keep their headings; every
   // other section is one group, whose title is the page's and whose hint is the
   // line under it.
-  const sole = section !== 'workspace' && section !== 'agents'
+  const sole = section !== 'workspace' && section !== 'agents' && section !== 'general'
 
   return (
     <SettingsPage
@@ -536,6 +539,13 @@ export function SettingsPane({
                       }
                     >
                       Clear override
+                    </Action>
+                  </Actions>
+                </Group>
+                <Group name="walkthrough" title="Walkthrough" hint="The steps Floti opened with the first time.">
+                  <Actions>
+                    <Action data-settings-show-walkthrough onClick={onShowWalkthrough}>
+                      Show the walkthrough
                     </Action>
                   </Actions>
                 </Group>
@@ -1162,17 +1172,17 @@ function ThemeSwatch({ tokens }: { tokens: ThemeTokens }): JSX.Element {
 // ---------------------------------------------------------------------------
 
 /**
- * The templates this Helm has, and the two ways to reach them.
+ * The templates this desktop has, and the two ways to reach them.
  *
  * The path is a button rather than a line of text, and that is the group's
  * whole argument for existing beside the manager: **there is no file editor in
- * Helm for these**. A template is a folder, editing one is a job for the editor
+ * Floti for these**. A template is a folder, editing one is a job for the editor
  * somebody already has, and a settings group that named the folder without
  * opening it would be describing a destination it declined to take you to.
  *
  * The count is stated rather than the list drawn. Which template is which is
  * the manager's question and the picker's; what belongs here is the one fact
- * Settings is for - whether this Helm has any, and where they are.
+ * Settings is for - whether this desktop has any, and where they are.
  */
 function TemplatesGroup({
   total,
@@ -1193,7 +1203,7 @@ function TemplatesGroup({
     >
       <p className="pb-1 text-[12px] leading-[1.55] text-fg-muted">
         A template is a folder here; creating a workspace from one copies it in. The New Workspace
-        dialog picks between them, and the built-in <em>Minimal</em> scaffold is always the first
+        dialog picks between them, and the built-in <em>Starter</em> template is always the first
         row whatever is in this folder.
       </p>
 
@@ -1243,11 +1253,11 @@ const ARCHIVE_CEILINGS = [
 ] as const
 
 /**
- * What Helm has kept, and the one knob over it.
+ * What Floti has kept, and the one knob over it.
  *
  * The figures are stated rather than drawn. A bar with no number on it would
  * be exactly the wrong answer here: the whole reason this group exists is that
- * `helm.db` is the user's file and a feature that grows it silently is one they
+ * `desktop.db` is the user's file and a feature that grows it silently is one they
  * find out about from their disk. So the sentence says how many conversations,
  * how many messages, how many bytes, and how many bytes out of how many - and,
  * when the ceiling has actually bitten, how many conversations it dropped.
@@ -1464,7 +1474,7 @@ function FilesGroup({ wrap, onWrapChange }: { wrap: boolean; onWrapChange: (wrap
  * The browser pane's posture, and what a Claude session may do with it.
  *
  * Four rows, because there are four decisions: where the pane may go at all,
- * what the address bar does with a phrase, whether the sessions Helm hosts can
+ * what the address bar does with a phrase, whether the sessions Floti hosts can
  * drive it, and whether they are held to this machine when the pane is not.
  * Everything else about the pane - downloads denied, every permission but
  * clipboard writing and fullscreen denied, self-signed certificates accepted
@@ -1880,7 +1890,7 @@ function AgentLimitsGroup({
  * whatever the last check found, because "up to date", "could not check" and
  * "never checked" are the states in which somebody wants to look for
  * themselves. Update is offered only while a newer release exists and the
- * host updates; Helm closes when the update is ready for it and the update
+ * host updates; the desktop closes when the update is ready for it and the update
  * opens it again, its sessions running throughout. On a host that does not
  * update, the sentence says why and both buttons that would ask it rest.
  */

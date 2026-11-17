@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { RemoteHost } from "@helm/core/types";
+import type { RemoteHost } from "@floti/core/types";
 import type { HostConnection } from "../../../shared/host/client";
 import type * as P from "../../../shared/host/protocol";
 import {

@@ -1,0 +1,286 @@
+#!/usr/bin/env node
+// @ts-check
+/**
+ * `floti-plugin`: make a plugin, and check one the way Floti will.
+ *
+ *   floti-plugin create <folder> [--id <id>] [--name <name>]
+ *   floti-plugin validate [folder]
+ *
+ * Plain JavaScript and Node's own modules only, so it runs as published -
+ * through npx, from a plugin's own node_modules, or from a clone of Floti -
+ * with nothing to build first.
+ * `validate` runs the validator Floti itself runs (`src/manifest.js`), plus the
+ * checks Floti makes on the folder when it loads it (`src/folder.js`).
+ */
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { basename, extname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { checkPluginFolder, MANIFEST_FILE } from '../src/folder.js'
+import { ID_PATTERN } from '../src/manifest.js'
+
+const SDK = fileURLToPath(new URL('..', import.meta.url))
+const TEMPLATE = join(SDK, 'template')
+/** This SDK's own name and version: what a new plugin depends on. */
+const PACKAGE = /** @type {{ name: string, version: string }} */ (JSON.parse(readFileSync(join(SDK, 'package.json'), 'utf8')))
+/** What the template is called, replaced by what the new plugin is called. */
+const TEMPLATE_ID = 'my-plugin'
+const TEMPLATE_NAME = 'My plugin'
+const NAME_MAX = 60
+
+const USAGE = `floti-plugin - make a Floti plugin, and check one
+
+Usage:
+  floti-plugin create <folder> [--id <id>] [--name <name>]
+      Writes a new apiVersion 2 plugin into <folder>, which must be new or
+      empty: a rail icon, a sidebar panel, a tab and a background module, in
+      plain HTML and JavaScript.
+      --id    the plugin's id: lower-case letters, digits and dashes
+              (default: made from the folder's name)
+      --name  what Floti calls it (default: made from the id)
+
+  floti-plugin validate [folder]
+      Checks the plugin in [folder] (default: this folder) as Floti does when
+      it loads it: the manifest, at apiVersion 2, and every file it names. Exits 1 on errors.
+
+  floti-plugin --help
+`
+
+/** @param {string} text */
+function out(text) {
+  process.stdout.write(`${text}\n`)
+}
+
+/** @param {string} text */
+function err(text) {
+  process.stderr.write(`${text}\n`)
+}
+
+/**
+ * @param {readonly string[]} argv the arguments after the command
+ * @param {readonly string[]} known the options the command takes, without `--`
+ * @returns {{ positional: string[], options: Map<string, string>, problem: string | null }}
+ */
+function parse(argv, known) {
+  /** @type {string[]} */
+  const positional = []
+  /** @type {Map<string, string>} */
+  const options = new Map()
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = /** @type {string} */ (argv[index])
+    if (!arg.startsWith('--')) {
+      positional.push(arg)
+      continue
+    }
+    const eq = arg.indexOf('=')
+    const name = eq === -1 ? arg.slice(2) : arg.slice(2, eq)
+    if (!known.includes(name)) return { positional, options, problem: `unknown option --${name}` }
+    let value = eq === -1 ? argv[index + 1] : arg.slice(eq + 1)
+    if (eq === -1) index += 1
+    if (value === undefined || (eq === -1 && value.startsWith('--'))) return { positional, options, problem: `--${name} needs a value` }
+    options.set(name, value)
+  }
+  return { positional, options, problem: null }
+}
+
+/**
+ * An id from a folder's name: lower-cased, anything else made a dash.
+ *
+ * @param {string} folderName
+ */
+function idFrom(folderName) {
+  return folderName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 63)
+    .replace(/-+$/, '')
+}
+
+/** @param {string} id */
+function nameFrom(id) {
+  const words = id.split('-').filter((word) => word !== '').join(' ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+/** @param {string} text */
+function escapeHtml(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+/**
+ * Every file under `dir`, relative to it.
+ *
+ * @param {string} dir
+ * @param {string} [prefix]
+ * @returns {string[]}
+ */
+function walk(dir, prefix = '') {
+  return readdirSync(join(dir, prefix), { withFileTypes: true }).flatMap((entry) => {
+    const rel = prefix === '' ? entry.name : join(prefix, entry.name)
+    if (entry.isDirectory()) return walk(dir, rel)
+    return entry.isFile() ? [rel] : []
+  })
+}
+
+/**
+ * Where the new manifest's `$schema` points: the schema in the plugin's own
+ * `node_modules`, once `npm install` has put the SDK there. Never this copy's
+ * path - run through npx, that is a cache folder that can be emptied at any
+ * time - and never a URL, so an editor needs no network to check a manifest.
+ */
+const SCHEMA_REFERENCE = `./node_modules/${PACKAGE.name}/floti-plugin.schema.json`
+
+/**
+ * The new plugin's `package.json`: the SDK as a development dependency, which
+ * is where its schema, types and `floti-plugin` come from. Private, so an
+ * `npm publish` in the wrong folder cannot put the plugin on npm. No version:
+ * the manifest's is the one Floti shows.
+ *
+ * @param {string} id
+ */
+function packageJson(id) {
+  return {
+    name: id,
+    private: true,
+    scripts: { validate: 'floti-plugin validate' },
+    devDependencies: { [PACKAGE.name]: `^${PACKAGE.version}` }
+  }
+}
+
+/** npm leaves `.gitignore` out of every package it packs, so the template cannot carry one. */
+const GITIGNORE = 'node_modules/\n'
+
+/**
+ * @param {readonly string[]} argv
+ * @returns {number} the exit code
+ */
+function create(argv) {
+  const { positional, options, problem } = parse(argv, ['id', 'name'])
+  if (problem !== null) {
+    err(`floti-plugin create: ${problem}`)
+    return 1
+  }
+  const [folder, extra] = positional
+  if (folder === undefined || extra !== undefined) {
+    err('floti-plugin create: give one folder to create the plugin in. See floti-plugin --help.')
+    return 1
+  }
+  const target = resolve(folder)
+  if (existsSync(target)) {
+    if (!statSync(target).isDirectory()) {
+      err(`floti-plugin create: ${target} is a file, not a folder.`)
+      return 1
+    }
+    if (readdirSync(target).length > 0) {
+      err(`floti-plugin create: ${target} is not empty. Create a plugin in a new or empty folder.`)
+      return 1
+    }
+  }
+
+  const id = options.get('id') ?? idFrom(basename(target))
+  if (!ID_PATTERN.test(id)) {
+    err(
+      `floti-plugin create: "${id}" cannot be a plugin id. An id is 1-63 lower-case letters, digits and dashes, starting with a letter or digit. Pass one with --id.`
+    )
+    return 1
+  }
+  const name = (options.get('name') ?? nameFrom(id)).trim()
+  if (name === '' || name.length > NAME_MAX) {
+    err(`floti-plugin create: a name is 1-${String(NAME_MAX)} characters.`)
+    return 1
+  }
+
+  for (const rel of walk(TEMPLATE)) {
+    const from = join(TEMPLATE, rel)
+    const to = join(target, rel)
+    mkdirSync(join(to, '..'), { recursive: true })
+    if (rel === MANIFEST_FILE) {
+      const manifest = /** @type {Record<string, unknown>} */ (JSON.parse(readFileSync(from, 'utf8')))
+      const renamed = /** @type {Record<string, unknown>} */ (
+        JSON.parse(JSON.stringify(manifest), (_key, value) => (value === TEMPLATE_NAME ? name : value))
+      )
+      renamed['id'] = id
+      writeFileSync(to, `${JSON.stringify({ $schema: SCHEMA_REFERENCE, ...renamed }, null, 2)}\n`)
+      continue
+    }
+    const extension = extname(rel).toLowerCase()
+    if (extension === '.html') {
+      writeFileSync(to, readFileSync(from, 'utf8').split(TEMPLATE_NAME).join(escapeHtml(name)))
+    } else if (extension === '.md') {
+      writeFileSync(to, readFileSync(from, 'utf8').split(TEMPLATE_NAME).join(name).split(TEMPLATE_ID).join(id))
+    } else {
+      writeFileSync(to, readFileSync(from))
+    }
+  }
+  writeFileSync(join(target, 'package.json'), `${JSON.stringify(packageJson(id), null, 2)}\n`)
+  writeFileSync(join(target, '.gitignore'), GITIGNORE)
+
+  const check = checkPluginFolder(target)
+  if (!check.ok) {
+    for (const message of check.errors) err(`error: ${message}`)
+    return 1
+  }
+  out(`Created "${name}" (${id}) in ${target}`)
+  out('')
+  out('Next:')
+  out(`  1. In Floti, open Settings > Plugins > Add folder and pick ${target}`)
+  out('  2. Edit pages/panel.html, pages/panel.js and background/main.js. Floti reloads the plugin when you save.')
+  out('  3. Run npm install there, for the manifest schema in your editor. Then')
+  out('     npm run validate checks the plugin as Floti will.')
+  return 0
+}
+
+/**
+ * @param {readonly string[]} argv
+ * @returns {number} the exit code
+ */
+function validate(argv) {
+  const { positional, problem } = parse(argv, [])
+  if (problem !== null) {
+    err(`floti-plugin validate: ${problem}`)
+    return 1
+  }
+  if (positional.length > 1) {
+    err('floti-plugin validate: give at most one folder. See floti-plugin --help.')
+    return 1
+  }
+  const folder = positional[0] ?? process.cwd()
+  const check = checkPluginFolder(folder)
+  for (const message of check.errors) err(`error: ${message}`)
+  for (const message of check.warnings) err(`warning: ${message}`)
+  if (!check.ok) {
+    err(`${String(check.errors.length)} ${check.errors.length === 1 ? 'error' : 'errors'}: Floti would not load this plugin.`)
+    return 1
+  }
+  const manifest = /** @type {import('../src/manifest').NormalizedManifest} */ (check.manifest)
+  const warned = check.warnings.length === 0 ? '' : ` (${String(check.warnings.length)} ${check.warnings.length === 1 ? 'warning' : 'warnings'})`
+  out(`${manifest.name} (${manifest.id}): Floti would load it${warned}.`)
+  return 0
+}
+
+/**
+ * @param {readonly string[]} argv
+ * @returns {number}
+ */
+function main(argv) {
+  const [command, ...rest] = argv
+  switch (command) {
+    case 'create':
+      return create(rest)
+    case 'validate':
+      return validate(rest)
+    case '--help':
+    case '-h':
+    case 'help':
+      out(USAGE)
+      return 0
+    case undefined:
+      err(USAGE)
+      return 1
+    default:
+      err(`floti-plugin: unknown command "${command}". See floti-plugin --help.`)
+      return 1
+  }
+}
+
+process.exitCode = main(process.argv.slice(2))

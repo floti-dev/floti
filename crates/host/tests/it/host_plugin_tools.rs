@@ -1,4 +1,4 @@
-//! A version 2 plugin's tools served by the host itself: a `RunningHost`
+//! A plugin's tools served by the host itself: a `RunningHost`
 //! whose sessions run the fake agent (which takes agent tools as Claude Code
 //! does), a plugin folder of the test's own whose background module runs in
 //! the host's engine, and its Node service run for real on the Node that
@@ -6,9 +6,6 @@
 //! plugin and starts sessions, and every call is made over HTTP to the
 //! listener with the URL and bearer token read from the session's own
 //! `--mcp-config` file, after that client has gone.
-//!
-//! Beside it, a version 1 plugin with a background page is still answered by
-//! the client that offers its server, as Helm's window does today.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -21,7 +18,7 @@ use floti_host::testkit::{FakeAgent, PATIENCE, RunningHost, TestClient, TestDirs
 use floti_protocol::channel::{EventChannel, from_payload, to_payload};
 use floti_protocol::channels::agent_plugin::{
     AgentPluginAnswer, AgentPluginCalls, AgentPluginOffer, AgentPluginOutcome, AgentPluginServer,
-    AgentPluginServers, AgentPluginTool, AgentPluginToolAnswer, AgentPluginToolCall,
+    AgentPluginServers, AgentPluginTool, AgentPluginToolAnswer,
 };
 use floti_protocol::channels::common::SessionRecord;
 use floti_protocol::channels::host::HostStopReason;
@@ -39,8 +36,7 @@ use tokio::net::TcpStream;
 
 const TERMINAL: &[&str] = &["terminal"];
 
-/// The subscriptions a client offering plugin tools hears calls and the
-/// plugin list on.
+/// The subscriptions a client hears plugin tool calls and the plugin list on.
 const PLUGIN_CALLS: u64 = 50;
 const PLUGINS_CHANGED: u64 = 60;
 
@@ -61,17 +57,17 @@ import { watchOwner } from './common.mjs'
 
 const here = process.cwd()
 watchOwner(here, () => process.exit(0))
-const token = process.env.HELM_SERVICE_TOKEN
+const token = process.env.FLOTI_SERVICE_TOKEN
 createServer((request, response) => {
-  if (request.headers['helm-service-token'] !== token) {
+  if (request.headers['floti-service-token'] !== token) {
     response.writeHead(403)
     response.end('wrong token')
     return
   }
   appendFileSync('asked.txt', `${request.url}\n`)
   response.writeHead(200, { 'content-type': 'application/json' })
-  response.end(JSON.stringify({ pid: process.pid, plugin: process.env.HELM_PLUGIN_ID, url: request.url }))
-}).listen(Number(process.env.HELM_SERVICE_PORT), '127.0.0.1')
+  response.end(JSON.stringify({ pid: process.pid, plugin: process.env.FLOTI_PLUGIN_ID, url: request.url }))
+}).listen(Number(process.env.FLOTI_SERVICE_PORT), '127.0.0.1')
 ";
 
 /// The module's tools: `whoami` answers with what it was asked and the
@@ -203,27 +199,6 @@ impl World {
                 ("service.mjs", SERVICE),
                 ("common.mjs", COMMON),
             ],
-        )
-    }
-
-    /// A version 1 plugin `notes` with a background page and the tools the
-    /// notes server lists.
-    fn notes(&self) -> PathBuf {
-        let manifest = json!({
-            "apiVersion": 1,
-            "id": "notes",
-            "name": "Notes",
-            "version": "1.0.0",
-            "background": "background.html",
-            "agent": { "tools": {
-                "find": { "description": "Finds a note.", "readOnly": true },
-                "write": { "description": "Writes a note." },
-            } },
-        });
-        self.dirs.plugin_folder(
-            "plugin notes",
-            &manifest.to_string(),
-            &[("background.html", "<!doctype html><p>background</p>")],
         )
     }
 
@@ -799,11 +774,11 @@ async fn s4_a_badge_and_status_a_version_2_module_set_with_no_client_attached_ar
 }
 
 // ---------------------------------------------------------------------------
-// S6: a client's offer under a version 2 plugin's name is passed over
+// S6: an agentPlugin offer or answer is taken and changes nothing
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s6_a_client_offering_a_server_under_a_version_2_plugins_name_is_sent_nothing_and_the_module_answers()
+async fn s6_an_agent_plugin_offer_and_answer_are_taken_change_nothing_and_the_client_is_sent_no_call()
  {
     let world = World::new();
     let host = world.host();
@@ -830,6 +805,16 @@ async fn s6_a_client_offering_a_server_under_a_version_2_plugins_name_is_sent_no
         })
         .await
         .expect("the offer is taken");
+    // An answer to a call nobody made is taken too, and answers nothing.
+    desktop
+        .request::<AgentPluginAnswer>(&AgentPluginToolAnswer {
+            call_id: 1,
+            outcome: AgentPluginOutcome::Failed {
+                message: "no call".into(),
+            },
+        })
+        .await
+        .expect("the answer is taken");
 
     let alpha = world.session(&mut desktop, "alpha").await;
     assert_eq!(alpha.servers(), ["floti-plugin-ledger", "floti-sessions"]);
@@ -859,90 +844,6 @@ async fn s6_a_client_offering_a_server_under_a_version_2_plugins_name_is_sent_no
         );
     }
 
-    drop(desktop);
-    host.stop(HostStopReason::Stop).await;
-}
-
-// ---------------------------------------------------------------------------
-// S8: a version 1 plugin is answered by the client, the engine runs nothing
-// ---------------------------------------------------------------------------
-
-#[tokio::test(flavor = "multi_thread")]
-async fn s8_a_version_1_plugins_tool_is_answered_by_the_window_that_offers_it_and_the_hosts_engine_runs_nothing_for_it()
- {
-    let world = World::new();
-    let host = world.host();
-    let folder = world.notes();
-    let mut desktop = world.client().await;
-    add(&mut desktop, &folder).await;
-    desktop
-        .subscribe_quietly(PLUGIN_CALLS, AgentPluginCalls::NAME)
-        .await;
-    let schema = to_payload(&json!({ "type": "object" })).unwrap();
-    desktop
-        .request::<AgentPluginOffer>(&AgentPluginServers {
-            servers: vec![AgentPluginServer {
-                name: "floti-plugin-notes".into(),
-                plugin: "notes".into(),
-                instructions: "Offered by the window.".into(),
-                tools: vec![AgentPluginTool {
-                    name: "find".into(),
-                    description: "Finds a note.".into(),
-                    input_schema: schema,
-                    read_only: true,
-                }],
-            }],
-        })
-        .await
-        .expect("the offer is taken");
-    let mut client = world.client().await;
-    let alpha = world.session(&mut client, "alpha").await;
-    assert_eq!(alpha.servers(), ["floti-plugin-notes", "floti-sessions"]);
-    let (url, token) = alpha.server("floti-plugin-notes");
-    let (_, instructions, _) = server_as_listed(&url, &token).await;
-    assert_eq!(instructions, "Offered by the window.");
-
-    let calling = tokio::spawn(async move {
-        call_tool(&url, &token, "find", json!({ "query": "release" })).await
-    });
-    let call: AgentPluginToolCall = loop {
-        match desktop.next(PATIENCE).await {
-            Some(Message::Event(event)) if event.subscription == PLUGIN_CALLS => {
-                break from_payload(&event.payload).expect("a call");
-            }
-            Some(_) => {}
-            None => panic!("no call reached the window within {PATIENCE:?}"),
-        }
-    };
-    assert_eq!(
-        (call.plugin.as_str(), call.tool.as_str()),
-        ("notes", "find")
-    );
-    let found =
-        json!({ "content": [{ "type": "text", "text": "Found 2 notes." }], "isError": false });
-    desktop
-        .request::<AgentPluginAnswer>(&AgentPluginToolAnswer {
-            call_id: call.call_id,
-            outcome: AgentPluginOutcome::Done {
-                value: to_payload(&found).unwrap(),
-            },
-        })
-        .await
-        .expect("the window's answer is taken");
-    assert_eq!(calling.await.unwrap(), (false, "Found 2 notes.".to_owned()));
-
-    // The page is listed for a client to run; the host's engine started
-    // nothing for it.
-    let notes = listed(&mut client, "notes").await;
-    let background = notes.background.expect("a background page");
-    assert!(
-        background.url.starts_with("helm-plugin://"),
-        "{}",
-        background.url
-    );
-    assert_eq!(background.state, PluginBackgroundState::Stopped);
-
-    drop(client);
     drop(desktop);
     host.stop(HostStopReason::Stop).await;
 }

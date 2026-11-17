@@ -1,4 +1,4 @@
-import type { SessionActivity } from '@helm/core/types'
+import type { SessionActivity } from '@floti/core/types'
 
 /**
  * What a session's state dot looks like, in one place.
@@ -19,7 +19,7 @@ import type { SessionActivity } from '@helm/core/types'
 /**
  * Everything a session's dot can say.
  *
- * Eight and not three. The first three are Helm's own knowledge of the
+ * Eight and not three. The first three are Floti's own knowledge of the
  * process; the five after them are what the session says about itself, in its
  * backend's own records (Claude Code's live registry) or else in the OSC 7501
  * reports its program writes. `error` only ever comes from a report.
@@ -35,7 +35,7 @@ export const SESSION_STATE_DOT: Record<SessionState, string> = {
   // filled with it disappears into whatever it sits on.
   ended: 'bg-fg-subtle',
   failed: 'bg-danger',
-  // The one live state, and the accent is Helm's tone for the thing currently
+  // The one live state, and the accent is Floti's tone for the thing currently
   // happening. A 6px dot is a
   // mark, not an area fill, so "the accent never floods" is intact.
   busy: 'bg-accent',

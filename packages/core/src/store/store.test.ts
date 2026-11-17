@@ -21,7 +21,7 @@ import { sessions } from './schema'
 import { reconcileRunningSessions } from './sessions'
 import {
   readSettings,
-  settleUpgradeNote,
+  settleWalkthrough,
   validateSetting,
   writeSetting,
   writeSettings,
@@ -29,7 +29,7 @@ import {
 } from './settings'
 
 /** A folder the rows name. Nothing is made there: the rows are only data. */
-const dir = join(tmpdir(), 'helm-store')
+const dir = join(tmpdir(), 'floti-store')
 let store: Store
 
 // The rows are about the store, not the file it lives in, so they live in
@@ -48,8 +48,8 @@ afterEach(() => {
  * test may close the store and reopen the file.
  */
 async function withFile(test: (file: string, onFile: Store) => void): Promise<void> {
-  const folder = await mkdtemp(join(tmpdir(), 'helm-store-'))
-  const file = join(folder, 'helm.db')
+  const folder = await mkdtemp(join(tmpdir(), 'floti-store-'))
+  const file = join(folder, 'desktop.db')
   const onFile = openStore({ file })
   try {
     test(file, onFile)
@@ -120,13 +120,13 @@ describe('openStore', () => {
     const last = '0022_concerned_gwen_stacy'
     const raw = new Database(':memory:')
     try {
-      raw.exec('CREATE TABLE __helm_migrations (tag TEXT PRIMARY KEY, applied_at TEXT NOT NULL)')
+      raw.exec('CREATE TABLE __floti_migrations (tag TEXT PRIMARY KEY, applied_at TEXT NOT NULL)')
       const upTo = MIGRATIONS.findIndex((migration) => migration.tag === last)
       expect(upTo).toBeGreaterThan(0)
       const earlier = MIGRATIONS.slice(0, upTo + 1)
       for (const migration of earlier) {
         for (const statement of migration.statements) raw.exec(statement)
-        raw.prepare('INSERT INTO __helm_migrations (tag, applied_at) VALUES (?, ?)').run(migration.tag, '2026-11-01T00:00:00.000Z')
+        raw.prepare('INSERT INTO __floti_migrations (tag, applied_at) VALUES (?, ?)').run(migration.tag, '2026-11-01T00:00:00.000Z')
       }
       raw.exec(`
         INSERT INTO sessions (name, cwd, status, exit_code, command) VALUES ('tests', 'C:/work', 'exited', 2, 'pnpm test');
@@ -156,86 +156,58 @@ describe('openStore', () => {
   })
 })
 
-describe('the upgrade note as the database opens', () => {
-  const RENAME = '0032_workspaces_were_harnesses'
-
-  /** A database file holding every migration before the rename, as an earlier Helm left it. */
-  function earlierHelmDatabase(file: string): void {
-    const raw = new Database(file)
-    try {
-      raw.exec('CREATE TABLE __helm_migrations (tag TEXT PRIMARY KEY, applied_at TEXT NOT NULL)')
-      const upTo = MIGRATIONS.findIndex((migration) => migration.tag === RENAME)
-      expect(upTo).toBeGreaterThan(0)
-      for (const migration of MIGRATIONS.slice(0, upTo)) {
-        for (const statement of migration.statements) raw.exec(statement)
-        raw.prepare('INSERT INTO __helm_migrations (tag, applied_at) VALUES (?, ?)').run(migration.tag, '2026-11-01T00:00:00.000Z')
-      }
-    } finally {
-      raw.close()
-    }
-  }
-
-  /** Opens `file` as main does: migrated, then the note settled. */
+describe('the walkthrough as the database opens', () => {
+  /** Opens `file` as main does: migrated, then the walkthrough settled. */
   function openAsMain(file: string): Store {
     const opened = openStore({ file })
-    settleUpgradeNote(opened)
+    settleWalkthrough(opened)
     return opened
   }
 
-  it('counts the note seen on a database this open created, so a new or reset device never sees it', async () => {
+  it('starts the walkthrough at step 1 on a database this open created: a first start', async () => {
     await withFile((file, created) => {
       created.close()
-      const folder = dirname(file)
-      const fresh = openAsMain(join(folder, 'fresh.db'))
+      const fresh = openAsMain(join(dirname(file), 'fresh.db'))
       try {
-        expect(fresh.migrations.alreadyApplied).toEqual([])
-        expect(readSettings(fresh).upgradeNoteSeenAt).not.toBeNull()
+        expect(readSettings(fresh).walkthrough).toEqual({ step: 1, workspace: null })
       } finally {
         fresh.close()
       }
     })
   })
 
-  it('leaves the note due on a database an earlier Helm used, on this open and every one after until it is closed', async () => {
-    await withFile((file, created) => {
-      created.close()
-      const earlier = join(dirname(file), 'earlier.db')
-      earlierHelmDatabase(earlier)
-
-      const first = openAsMain(earlier)
-      // The rename and every migration after it.
-      const fromRename = MIGRATIONS.slice(MIGRATIONS.findIndex((migration) => migration.tag === RENAME))
-      expect(first.migrations.applied).toEqual(fromRename.map((migration) => migration.tag))
-      expect(readSettings(first).upgradeNoteSeenAt).toBeNull()
-      first.close()
-
-      const again = openAsMain(earlier)
-      expect(again.migrations.applied).toEqual([])
-      expect(readSettings(again).upgradeNoteSeenAt).toBeNull()
-      writeSettings(again, { upgradeNoteSeenAt: '2026-11-13T09:00:00.000Z' })
-      again.close()
-
-      const closed = openAsMain(earlier)
-      try {
-        expect(readSettings(closed).upgradeNoteSeenAt).toBe('2026-11-13T09:00:00.000Z')
-      } finally {
-        closed.close()
-      }
-    })
-  })
-
-  it('keeps the stamp a new database got when it is opened again', async () => {
+  it('resumes the step it was closed on, and leaves a finished one finished', async () => {
     await withFile((file, created) => {
       created.close()
       const fresh = join(dirname(file), 'fresh.db')
       const first = openAsMain(fresh)
-      const stamped = readSettings(first).upgradeNoteSeenAt
+      writeSettings(first, { walkthrough: { step: 3, workspace: null } })
       first.close()
+
       const again = openAsMain(fresh)
+      expect(readSettings(again).walkthrough).toEqual({ step: 3, workspace: null })
+      writeSettings(again, { walkthrough: null })
+      again.close()
+
+      const done = openAsMain(fresh)
       try {
-        expect(readSettings(again).upgradeNoteSeenAt).toBe(stamped)
+        expect(readSettings(done).walkthrough).toBeNull()
       } finally {
-        again.close()
+        done.close()
+      }
+    })
+  })
+
+  it('never starts it on a database that was already here: that start opens the shell', async () => {
+    await withFile((file, created) => {
+      // `withFile`'s own open created it; this one finds it there.
+      created.close()
+      const existing = openAsMain(file)
+      try {
+        expect(existing.migrations.applied).toEqual([])
+        expect(readSettings(existing).walkthrough).toBeNull()
+      } finally {
+        existing.close()
       }
     })
   })
@@ -244,6 +216,13 @@ describe('the upgrade note as the database opens', () => {
 describe('settings', () => {
   it('returns defaults for an empty database', () => {
     expect(readSettings(store)).toEqual(DEFAULT_SETTINGS)
+  })
+
+  it('reads past a stored row for a setting this build does not have, and writes beside it', () => {
+    store.raw.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run('upgradeNoteSeenAt', '"2026-11-13T09:00:00.000Z"')
+    expect(readSettings(store)).toEqual(DEFAULT_SETTINGS)
+    const firstRunCompletedAt = '2026-11-16T09:00:00.000Z'
+    expect(writeSettings(store, { firstRunCompletedAt })).toEqual({ ...DEFAULT_SETTINGS, firstRunCompletedAt })
   })
 
   it('round-trips every value type in AppSettings', () => {
@@ -287,7 +266,7 @@ describe('settings', () => {
         focused: 1
       },
       firstRunCompletedAt: '2026-08-09T12:00:00.000Z',
-      upgradeNoteSeenAt: '2026-11-13T09:00:00.000Z',
+      walkthrough: { step: 5, workspace: join(dir, 'my-work') },
       claudePath: join(dir, 'claude.exe'),
       terminalFontFamily: 'Consolas',
       terminalFontSize: 17,
@@ -344,7 +323,7 @@ describe('settings', () => {
   })
 
   it('S2: ignores a stored run-sessions-in-the-local-host row an earlier version wrote, and takes the next write', () => {
-    // An earlier version kept this switch; helm.db keeps its row and the host
+    // An earlier version kept this switch; desktop.db keeps its row and the host
     // is the only path whatever it says.
     store.raw
       .prepare('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)')
@@ -364,7 +343,7 @@ describe('settings', () => {
 
   it('ignores a stored heavy-agents limit an earlier version wrote, and takes the next write', () => {
     // An earlier version kept a limit on heavy agents; Floti has none, and
-    // helm.db keeps the row, whatever it holds.
+    // desktop.db keeps the row, whatever it holds.
     for (const value of ['3', '0', '{oops']) {
       store.raw
         .prepare(
@@ -654,7 +633,7 @@ describe('settings validation', () => {
     {
       key: 'scanRoots',
       good: [[], [join(tmpdir(), 'a')], [join(tmpdir(), 'a'), join(tmpdir(), 'b')]],
-      bad: [null, 'C:\\work', ['repos/helm'], ['../up'], [''], [17], [null]]
+      bad: [null, 'C:\\work', ['repos/floti'], ['../up'], [''], [17], [null]]
     },
     {
       key: 'pinnedProjects',
@@ -671,7 +650,7 @@ describe('settings validation', () => {
       bad: [
         [join(tmpdir(), 'alpha'), join(tmpdir(), 'ALPHA')],
         [join(tmpdir(), 'alpha'), join(tmpdir(), 'alpha')],
-        ['repos/helm'],
+        ['repos/floti'],
         ['../up'],
         [''],
         ['   '],
@@ -714,8 +693,8 @@ describe('settings validation', () => {
             children: [
               {
                 panes: [
-                  { kind: 'project', path: 'C:\\work\\helm' },
-                  { kind: 'pr', repoPath: 'C:\\work\\helm', number: 7 },
+                  { kind: 'project', path: 'C:\\work\\floti' },
+                  { kind: 'pr', repoPath: 'C:\\work\\floti', number: 7 },
                   { kind: 'pulls' },
                   { kind: 'session', id: 12 }
                 ],
@@ -729,7 +708,7 @@ describe('settings validation', () => {
                   {
                     panes: [
                       { kind: 'settings' },
-                      { kind: 'file', root: 'C:\\work\\helm', path: 'C:\\work\\helm\\README.md' }
+                      { kind: 'file', root: 'C:\\work\\floti', path: 'C:\\work\\floti\\README.md' }
                     ],
                     activeId: null
                   }
@@ -767,9 +746,9 @@ describe('settings validation', () => {
                 plugin: 'trackr',
                 pages: [
                   { tab: 'view', params: {}, title: null },
-                  { tab: 'view', params: { id: 'HELM-13' }, title: 'HELM-13' }
+                  { tab: 'view', params: { id: 'FLOTI-13' }, title: 'FLOTI-13' }
                 ],
-                active: 'plugin-page:trackr/view?{"id":"HELM-13"}'
+                active: 'plugin-page:trackr/view?{"id":"FLOTI-13"}'
               }
             ],
             activeId: 'plugin-pages:trackr'
@@ -887,9 +866,20 @@ describe('settings validation', () => {
       bad: ['soon', '', 1786353684315, {}]
     },
     {
-      key: 'upgradeNoteSeenAt',
-      good: [null, '2026-11-13T09:00:00.000Z'],
-      bad: ['soon', '', 1794560000000, {}]
+      key: 'walkthrough',
+      good: [null, { step: 1, workspace: null }, { step: 6, workspace: 'C:\\Users\\you\\Projects\\my-work' }],
+      bad: [
+        {},
+        { step: 0, workspace: null },
+        { step: 7, workspace: null },
+        { step: '2', workspace: null },
+        { step: 3 },
+        { step: 5, workspace: '' },
+        { step: 5, workspace: 42 },
+        { step: 2, workspace: null, done: true },
+        [],
+        'welcome'
+      ]
     },
     {
       key: 'noticesSeen',
@@ -996,7 +986,7 @@ describe('settings validation', () => {
     {
       // A byte count, and null is in the *bad* column deliberately: there is no
       // "no ceiling" for this key. The archive is always on and always bounded,
-      // and an unbounded one is the state `helm.db` is not allowed to reach.
+      // and an unbounded one is the state `desktop.db` is not allowed to reach.
       key: 'transcriptArchiveMaxBytes',
       good: [1024, 1024 ** 3, 64 * 1024 ** 3],
       bad: [1023, 0, -1, 64 * 1024 ** 3 + 1, 1024.5, '1073741824', null, {}]
@@ -1295,7 +1285,7 @@ describe('settings validation', () => {
       hosts: [{ id: 'h1', name: 'build-box', transport: { kind: 'ssh', target: 'you@build-box' } }],
       profilesCopiedToHostAt: null,
       pluginsCopiedToHostAt: null,
-      upgradeNoteSeenAt: null
+      walkthrough: null
     })
 
     expect(() => writeSettings(store, readSettings(store))).not.toThrow()
@@ -1350,7 +1340,7 @@ const DEFAULT_SETTINGS_SHAPE = (dir: string): typeof DEFAULT_SETTINGS => ({
   hosts: [{ id: 'h1', name: 'build-box', transport: { kind: 'ssh', target: 'you@build-box' } }],
   profilesCopiedToHostAt: null,
   pluginsCopiedToHostAt: null,
-  upgradeNoteSeenAt: null,
+  walkthrough: null,
   noticesSeen: {}
 })
 
@@ -1400,7 +1390,7 @@ describe('pinned projects', () => {
 })
 
 /**
- * The session log an earlier version of Helm wrote while it ran sessions in its
+ * The session log an earlier version wrote while it ran sessions in the desktop's
  * own process. Nothing writes it now; a row it left claiming to be running is
  * marked lost once, at the next start, and the rest stay as they were.
  */

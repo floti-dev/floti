@@ -6,8 +6,8 @@ import {
   type TerminalHost,
   type TerminalReport
 } from '../terminal'
-import { LOCAL_HOST_KEY, gridOf, type CellSize } from '@helm/core/types'
-import { bridgeFor, helm } from './bridge'
+import { LOCAL_HOST_KEY, gridOf, type CellSize } from '@floti/core/types'
+import { bridgeFor, desktop } from './bridge'
 import { attachSessionSink, forgetSession } from './sessionStream'
 import { onTerminalPrefs, terminalPrefs } from './termprefs'
 
@@ -29,7 +29,7 @@ import { onTerminalPrefs, terminalPrefs } from './termprefs'
  * A session is its host and its row id there (this PC's host is
  * `LOCAL_HOST_KEY`, the default): each host numbers its own sessions, so a
  * terminal is kept by both, and its keys and size go to its own host's bridge.
- * The clipboard and links are this PC's, through `helm`.
+ * The clipboard and links are this PC's, through `desktop`.
  */
 
 interface Pane {
@@ -109,9 +109,9 @@ export function mountTerminal(
     {
       onInput: (data) => session.send('session:input', { id, data }),
       onResize: (cols, rows) => session.send('session:resize', { id, cols, rows }),
-      readClipboard: () => helm.invoke('clipboard:read'),
-      writeClipboard: async (text) => (await helm.invoke('clipboard:write', text)).outcome,
-      openLink: (url) => void helm.invoke('shell:openExternal', { url })
+      readClipboard: () => desktop.invoke('clipboard:read'),
+      writeClipboard: async (text) => (await desktop.invoke('clipboard:write', text)).outcome,
+      openLink: (url) => void desktop.invoke('shell:openExternal', { url })
     },
     terminalPrefs()
   )
@@ -202,7 +202,7 @@ const SAMPLE = 'W'.repeat(32)
  * canvas-based estimate opened every pty eight columns narrow.
  *
  * Both axes then follow the WebGL renderer's own arithmetic, which is the one
- * Helm loads: a cell is quantised to whole device pixels, **down** across and
+ * the desktop loads: a cell is quantised to whole device pixels, **down** across and
  * **up** down. That is not a detail - the built-in stack measures 11.72px per
  * cell at 20px and the renderer draws it at 11, which is eight columns across a
  * wide pane. The DOM renderer, which only appears after a lost GL context,

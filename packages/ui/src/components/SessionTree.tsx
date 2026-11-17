@@ -1,8 +1,9 @@
 import type { JSX, MouseEvent, ReactNode } from 'react'
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import type { DiscoveryResult, Workspace, HostFlotiVerdict, Project } from '@helm/core'
-import { isProjectPinned, mostPressingState } from '@helm/core/types'
+import type { DiscoveryResult, Workspace, HostFlotiVerdict, Project } from '@floti/core'
+import { isProjectPinned, mostPressingState } from '@floti/core/types'
 import { cn } from '../lib/cn'
+import { shortcutLabel } from '../lib/platform'
 import type { SessionState } from '../lib/sessionstate'
 import { EmptyState as EmptyWell } from './EmptyState'
 import { LimitNotice } from './LimitNotice'
@@ -128,7 +129,7 @@ export interface TreeHost {
   name: string
   /** Where the window stands with it, which its header and the top of its group say. */
   phase: TreeHostPhase
-  /** Its floti against this Helm's, which its header says in place of its phase's word; null or absent when there is nothing to say. */
+  /** Its floti against this desktop's, which its header says in place of its phase's word; null or absent when there is nothing to say. */
   floti?: HostFlotiVerdict | null | undefined
   discovery: DiscoveryResult | null
   scanning: boolean
@@ -206,16 +207,17 @@ export interface SessionTreeProps {
    */
   pinnedPaths: readonly string[]
   onTogglePin: (path: string) => void
-  /** Lower-cased project path -> the sessions running there, Helm's and not. */
+  /** Lower-cased project path -> the sessions running there, Floti's and not. */
   sessionsByPath: ReadonlyMap<string, readonly TreeSession[]>
-  /** Helm's sessions whose folder is no project the scan found. */
+  /** Floti's sessions whose folder is no project the scan found. */
   elsewhere: readonly TreeSession[]
   onSelect: (project: Project) => void
   onLaunch: (project: Project) => void
   /** The project a session is starting in right now. */
   launchingPath: string | null
   onOpenSession: (id: string) => void
-  onAddRoot: () => void
+  /** This PC's empty state's New session: the launcher, as Ctrl+N opens it. */
+  onNewSession: () => void
   /**
    * A row to bring into view: what is folded over it opens and the tree
    * scrolls to it. A new `seq` asks again for the same row.
@@ -395,7 +397,7 @@ function ancestorsOf(levels: Iterable<readonly TreeSession[]>, id: string): stri
  * line with a terminal button under the pointer. Pinned projects sit above the workspace
  * groups, as they always have, and a session whose folder is no project the
  * scan found is listed at the bottom rather than not at all - every session
- * Helm hosts has a row somewhere.
+ * Floti hosts has a row somewhere.
  *
  * What is folded is local and absent-means-open, for the reason the workspace
  * groups always were: a project that gains a session after this render should
@@ -424,7 +426,7 @@ export function SessionTree({
   onLaunch,
   launchingPath,
   onOpenSession,
-  onAddRoot,
+  onNewSession,
   reveal = null,
   hosts = [],
   hostActions,
@@ -441,10 +443,17 @@ export function SessionTree({
 
   // The row in front - a session's or a project's page - is the tree's one
   // `aria-current`, so the scroll needs no second way of finding it.
+  // A row not drawn yet (the scan or the session list still arriving) leaves the
+  // request pending: the scroll is carried out once the row is there, once per
+  // request.
+  const scrolledSeq = useRef<number | null>(null)
   useEffect(() => {
-    if (reveal === null) return
-    navRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView({ block: 'nearest' })
-  }, [reveal])
+    if (reveal === null || scrolledSeq.current === reveal.seq) return
+    const row = navRef.current?.querySelector<HTMLElement>('[aria-current="true"]')
+    if (row === null || row === undefined) return
+    scrolledSeq.current = reveal.seq
+    row.scrollIntoView({ block: 'nearest' })
+  }, [reveal, discovery, sessionsByPath, selectedPath, pinnedPaths])
 
   const localPhase: TreeHostPhase = sessionsListed
     ? LIVE
@@ -479,10 +488,12 @@ export function SessionTree({
           // Until this PC's host has listed its sessions, the line above is all it says.
           localPhase.kind === 'live' ? (
             <ScanEmpty
-              scanning={scanning}
+              scanning={scanning || discovery === null}
               filtering={query !== '' && (discovery?.projects.length ?? 0) > 0}
-              hasRoots={(discovery?.roots.length ?? 0) > 0}
-              onAddRoot={onAddRoot}
+              unknown={scanError !== undefined}
+              hostName={localName}
+              onNewSession={onNewSession}
+              onRescan={hostActions === undefined ? undefined : () => hostActions.onRescan(localKey)}
             />
           ) : null
         }
@@ -676,7 +687,7 @@ function failureSentence(failure: TreeHostFailure): string {
  * A host's header row: a ring dot in its phase's tone, its name - a remote
  * host's in mono, as the machine data it is - and its phase's word at the
  * right ("connecting", "loading", "reconnecting", "unreachable"; nothing once
- * live), or, for a floti that is not this Helm's, what it is
+ * live), or, for a floti that is not this desktop's, what it is
  * (`HostFlotiLabel`). Under the pointer it offers New session, New workspace
  * and Rescan, which its right-click menu offers too.
  */
@@ -765,10 +776,10 @@ function HostHeader({
 }
 
 /**
- * What a host header says about a floti that is not this Helm's, as the
+ * What a host header says about a floti that is not this desktop's, as the
  * Sessions page says it, with both versions in its tooltip. An older floti or
  * one too old is a button that starts its update in Settings > Hosts; a newer
- * one is updated by updating Helm on this PC.
+ * one is updated by updating the desktop on this PC.
  */
 function HostFlotiLabel({
   name,
@@ -996,17 +1007,9 @@ function RemoteEmpty({
       size="list"
       icon={<ServerIcon width={18} height={18} />}
       title={`No workspaces on ${host.name} yet`}
-      actions={
-        <button
-          type="button"
-          onClick={() => onNewWorkspace(host.id)}
-          className="flex h-7 items-center rounded-well border border-accent px-3 text-[12px] font-medium text-accent-text transition-colors hover:bg-accent-soft"
-        >
-          New workspace
-        </button>
-      }
+      action={{ label: 'New workspace', onClick: () => onNewWorkspace(host.id) }}
     >
-      {`A workspace there is a folder on ${host.name}, and its sessions run there.`}
+      {`Its sessions run on ${host.name}.`}
     </EmptyWell>
   )
 }
@@ -1068,34 +1071,41 @@ function HostTree({
    */
   const [revealedSeq, setRevealedSeq] = useState<number | null>(null)
   if (reveal !== null && reveal.seq !== revealedSeq) {
-    setRevealedSeq(reveal.seq)
     const key =
       reveal.kind === 'project'
         ? reveal.path.toLowerCase()
         : ([...sessionsByPath].find(([, rows]) => withNested(rows).some((row) => row.id === reveal.id))?.[0] ??
           null)
-    const unfold = (current: ReadonlySet<string>, item: string): ReadonlySet<string> => {
-      if (!current.has(item)) return current
-      const next = new Set(current)
-      next.delete(item)
-      return next
-    }
-    if (reveal.kind === 'session') {
-      // A session folded away under the one that started it opens that one too.
-      const above = ancestorsOf([...sessionsByPath.values(), elsewhere], reveal.id) ?? []
-      if (above.some((parent) => foldedFamilies.has(parent))) {
-        setFoldedFamilies((current) => above.reduce(unfold, current))
+    const group =
+      key === null
+        ? undefined
+        : groups.find(
+            (each) =>
+              each.root?.path.toLowerCase() === key ||
+              each.members.some((member) => member.path.toLowerCase() === key)
+          )
+    const pinned = key !== null && pins.some((pin) => pin.path.toLowerCase() === key)
+    // A row not listed yet (a window just opened, its scan still running) keeps
+    // the request pending: it is carried out on the render that lists it, and a
+    // newer request replaces it.
+    if (key !== null && (group !== undefined || pinned)) {
+      setRevealedSeq(reveal.seq)
+      const unfold = (current: ReadonlySet<string>, item: string): ReadonlySet<string> => {
+        if (!current.has(item)) return current
+        const next = new Set(current)
+        next.delete(item)
+        return next
       }
-    }
-    if (key !== null) {
+      if (reveal.kind === 'session') {
+        // A session folded away under the one that started it opens that one too.
+        const above = ancestorsOf([...sessionsByPath.values(), elsewhere], reveal.id) ?? []
+        if (above.some((parent) => foldedFamilies.has(parent))) {
+          setFoldedFamilies((current) => above.reduce(unfold, current))
+        }
+      }
       setFoldedProjects((current) => unfold(current, key))
-      const group = groups.find(
-        (each) =>
-          each.root?.path.toLowerCase() === key ||
-          each.members.some((member) => member.path.toLowerCase() === key)
-      )
       if (group !== undefined) setFoldedGroups((current) => unfold(current, group.key))
-      if (pins.some((pin) => pin.path.toLowerCase() === key)) setPinsFolded(false)
+      if (pinned) setPinsFolded(false)
     }
   }
 
@@ -1383,36 +1393,55 @@ function Caption({
   )
 }
 
-/** This PC's tree with nothing in it: still scanning, nothing matched, or nothing found. */
+/**
+ * This PC's tree with nothing in it: still scanning, nothing matched, its
+ * folders could not be read (Unknown, never its empty state), or nothing has
+ * started yet - the empty-state pattern, offering New session.
+ */
 function ScanEmpty({
   scanning,
   filtering,
-  hasRoots,
-  onAddRoot
+  unknown,
+  hostName,
+  onNewSession,
+  onRescan
 }: {
   scanning: boolean
   filtering: boolean
-  hasRoots: boolean
-  onAddRoot: () => void
+  /** The scan failed: the line above the tree says why. */
+  unknown: boolean
+  hostName: string
+  onNewSession: () => void
+  onRescan: (() => void) | undefined
 }): JSX.Element {
   if (filtering) {
     return <p className="px-2 py-6 text-center text-[12px] text-fg-subtle">No match.</p>
+  }
+  if (unknown) {
+    return (
+      <EmptyWell
+        name="sessions-unknown"
+        size="list"
+        icon={<TerminalIcon width={18} height={18} />}
+        title="Unknown"
+        actions={onRescan === undefined ? undefined : <TryAgainButton onClick={onRescan} />}
+      >
+        {`Floti could not read the folders on ${hostName}.`}
+      </EmptyWell>
+    )
   }
   if (scanning) {
     return <p className="px-2 py-6 text-center text-[12px] text-fg-subtle">Scanning&hellip;</p>
   }
   return (
-    <div className="px-2 py-6 text-center">
-      <p className="text-[12px] text-fg-muted">
-        {hasRoots ? 'Nothing found in the scanned folders.' : 'No folders are being scanned yet.'}
-      </p>
-      <button
-        type="button"
-        onClick={onAddRoot}
-        className="mt-3 rounded-well border border-border-strong px-2.5 py-1 text-[12px] text-fg transition-colors hover:bg-hover"
-      >
-        Add a folder
-      </button>
-    </div>
+    <EmptyWell
+      name="sessions-empty"
+      size="list"
+      icon={<TerminalIcon width={18} height={18} />}
+      title="No sessions yet"
+      action={{ label: 'New session', keys: shortcutLabel('N'), onClick: onNewSession }}
+    >
+      Start an agent in one of your workspaces.
+    </EmptyWell>
   )
 }

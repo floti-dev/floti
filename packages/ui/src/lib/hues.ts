@@ -1,4 +1,4 @@
-import { hueForText, type PaletteHue } from '@helm/core/types'
+import { hueForText, type PaletteHue } from '@floti/core/types'
 
 /**
  * A palette tag's classes, per hue (DESIGN.md "The categorical palette"): the

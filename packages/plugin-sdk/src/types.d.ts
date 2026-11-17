@@ -1,20 +1,17 @@
 /**
- * The contract between a plugin and the Helm or Floti running it, at
- * apiVersion 1 and 2.
+ * The contract between a plugin and the Floti running it, at apiVersion 2.
  *
- * Types only. Everything here describes something the running Helm provides:
- * the bridge it injects into every page a plugin serves (`window.helm` at
- * version 1, `window.floti` at 2), the `floti` global a version 2 background
- * module runs with, and the manifest it reads from `helm-plugin.json`. A
- * plugin never carries a copy of the runtime, so it cannot carry a stale one -
- * `apiVersion` in the manifest is what ties a plugin to the Helm it was built
- * against.
+ * Types only. Everything here describes something the running Floti provides:
+ * the bridge it injects into every page a plugin serves (`window.floti`), the
+ * `floti` global a background module runs with, and the manifest it reads
+ * from `floti-plugin.json`. A plugin never carries a copy of the runtime, so it
+ * cannot carry a stale one - `apiVersion` in the manifest is what ties a
+ * plugin to the Floti it was built against.
  *
  * `import type { FlotiBridge } from '@floti-dev/plugin-sdk'`, and add
  * `/// <reference types="@floti-dev/plugin-sdk/global" />` once to have
- * `window.floti` and `window.helm` typed in every page. A version 2 background
- * module references `@floti-dev/plugin-sdk/background` instead, for
- * the `floti` it runs with.
+ * `window.floti` typed in every page. A background module references
+ * `@floti-dev/plugin-sdk/background` instead, for the `floti` it runs with.
  */
 
 // ---------------------------------------------------------------------------
@@ -22,24 +19,23 @@
 // ---------------------------------------------------------------------------
 
 /**
- * The bridge versions this SDK describes. 1: pages get `window.helm`, and the
- * background is a page a window frames. 2: pages get `window.floti`, and the
- * background is a module the host runs in an isolate of its own.
+ * The plugin API versions this SDK describes. 2: pages get `window.floti`,
+ * and the background is a module the host runs in an isolate of its own.
  */
-export type ApiVersion = 1 | 2
+export type ApiVersion = 2
 
 /**
- * `helm-plugin.json`, at the root of a plugin's folder. Every surface is
+ * `floti-plugin.json`, at the root of a plugin's folder. Every surface is
  * optional; a plugin with none of them loads and does nothing.
  *
  * Paths (`icon`, every `entry`, `background`) are relative to the folder and
  * may not leave it.
  */
 export interface PluginManifest {
-  /** For editors: `"./node_modules/@floti-dev/plugin-sdk/helm-plugin.schema.json"`. Ignored by Helm. */
+  /** For editors: `"./node_modules/@floti-dev/plugin-sdk/floti-plugin.schema.json"`. Ignored by Floti. */
   $schema?: string
   apiVersion: ApiVersion
-  /** Lower-case letters, digits and dashes. The plugin's origin is `helm-plugin://<id>` at version 1 and `floti-plugin://<id>` at 2. */
+  /** Lower-case letters, digits and dashes. The plugin's origin is `floti-plugin://<id>`. */
   id: string
   name: string
   version?: string
@@ -52,32 +48,32 @@ export interface PluginManifest {
   tabs?: Record<string, TabSpec>
   /**
    * Code that runs from the moment the plugin is enabled, with no surface
-   * open. At version 1 a `.html` page a window frames; at version 2 a `.js` or
-   * `.mjs` module the host runs, with `floti` as `FlotiBackground` describes it.
+   * open: a `.js` or `.mjs` module the host runs, with `floti` as
+   * `FlotiBackground` describes it.
    */
   background?: string
   /** Entries in the command palette (Ctrl+Shift+P, or Cmd+Shift+P on macOS). */
   commands?: CommandSpec[]
-  /** A settings page Helm draws for the plugin. */
+  /** A settings page Floti draws for the plugin. */
   settings?: SettingSpec[]
-  /** The origins `helm.fetch` may reach: `https://api.example.com`, `https://*.example.com`, `http://127.0.0.1:8080`. */
+  /** The origins `floti.fetch` may reach: `https://api.example.com`, `https://*.example.com`, `http://127.0.0.1:8080`. */
   network?: string[]
   /** The secret keys the plugin uses as `{{key}}`. The user stores the values in Settings > Secrets. */
   secrets?: string[]
-  /** Programs `helm.exec` may run, by the name the plugin calls them. */
+  /** Programs `floti.exec` may run, by the name the plugin calls them. */
   exec?: Record<string, ExecSpec>
-  /** A long-running process Helm starts, supervises and stops. */
+  /** A long-running process Floti starts, supervises and stops. */
   service?: ServiceSpec | null
   /**
-   * Tools Helm offers the Claude Code sessions it starts, answered by the
-   * background with `tools.handle` (`helm` at version 1, `floti` at 2).
+   * Tools Floti offers the Claude Code sessions it starts, answered by the
+   * background with `floti.tools.handle`.
    * Needs `background`.
    */
   agent?: AgentSpec
   /**
-   * What its pages may do with the Claude Code sessions Helm hosts. `start`:
-   * ask to start one with `helm.sessions.start`, which Helm shows to the user,
-   * who starts it or not. `list`: see them with `helm.sessions.list` and the
+   * What its pages may do with the Claude Code sessions Floti hosts. `start`:
+   * ask to start one with `floti.sessions.start`, which Floti shows to the user,
+   * who starts it or not. `list`: see them with `floti.sessions.list` and the
    * `sessions` event.
    */
   sessions?: Array<'start' | 'list'>
@@ -99,7 +95,7 @@ export interface PanelSpec {
   actions?: PanelActionSpec[]
 }
 
-/** The icons a panel action may use: Helm's own, so the header looks like every other header. */
+/** The icons a panel action may use: Floti's own, so the header looks like every other header. */
 export type PanelActionIcon =
   | 'refresh'
   | 'plus'
@@ -121,7 +117,7 @@ export interface PanelActionSpec {
 }
 
 export interface TabSpec {
-  /** The tab's title until the page sets its own with `helm.surface.setTitle`. */
+  /** The tab's title until the page sets its own with `floti.surface.setTitle`. */
   title: string
   entry: string
 }
@@ -137,7 +133,7 @@ export interface CommandSpec {
 export type SettingSpec = TextSetting | NumberSetting | ToggleSetting | SelectSetting | SecretSetting
 
 interface SettingBase {
-  /** How the plugin reads it: `(await helm.settings.get())[key]`. */
+  /** How the plugin reads it: `(await floti.settings.get())[key]`. */
   key: string
   label: string
   description?: string
@@ -183,13 +179,13 @@ export type ExecSpec = string | { command: string; args?: string[]; env?: Record
 
 /**
  * One long-running process: exactly one of `command` (any program) or `node`
- * (a script in the plugin folder, run by Helm's own Node - no Node install
+ * (a script in the plugin folder, run by Floti's own Node - no Node install
  * needed).
  *
- * It is given `HELM_SERVICE_PORT` to listen on, on 127.0.0.1, and
- * `HELM_SERVICE_TOKEN`, which every request from Helm carries as the
- * `Helm-Service-Token` header. The plugin reaches it as
- * `helm.fetch('service:/path')`.
+ * It is given `FLOTI_SERVICE_PORT` to listen on, on 127.0.0.1, and
+ * `FLOTI_SERVICE_TOKEN`, which every request from Floti carries as the
+ * `Floti-Service-Token` header. The plugin reaches it as
+ * `floti.fetch('service:/path')`.
  */
 export interface ServiceSpec {
   command?: string
@@ -202,7 +198,7 @@ export interface ServiceSpec {
 
 /**
  * What a Claude Code session is offered: an MCP server of the plugin's own,
- * `floti-plugin-<id>`, in every session Helm starts while the plugin is on and
+ * `floti-plugin-<id>`, in every session Floti starts while the plugin is on and
  * the user has not turned its tools off in Settings.
  */
 export interface AgentSpec {
@@ -225,13 +221,13 @@ export interface AgentToolSpec {
   description: string
   /**
    * The arguments, as JSON Schema with `type: "object"`. Passed to the session
-   * as written. Helm does not hold a call's arguments to it, so a handler
+   * as written. Floti does not hold a call's arguments to it, so a handler
    * treats them as untrusted input.
    */
   inputSchema?: { type: 'object'; [keyword: string]: unknown }
   /**
    * It only reads: it changes nothing in the plugin, its service or anywhere
-   * else. The sessions Helm starts call it without asking the user first, and
+   * else. The sessions Floti starts call it without asking the user first, and
    * Settings says so. A tool that is not marked asks, as any MCP tool does,
    * unless the user has allowed it. False when left out.
    */
@@ -248,7 +244,7 @@ export type SurfaceKind = 'panel' | 'tab' | 'background'
 export type PluginParams = Record<string, string | number | boolean>
 
 /** Where this page is running. Read synchronously; it never changes for the life of the page. */
-export interface HelmContext {
+export interface FlotiContext {
   plugin: string
   surface: SurfaceKind
   /** The key in `panels` or `tabs`; `background` for the background. */
@@ -282,17 +278,17 @@ export type ThemeTokenName =
  * The categorical palette, by name: for telling apart things of one kind that
  * have no order or status (projects, tags, chart series), never for status,
  * selection or emphasis. Each is the token `hue-<name>`, on `<html>` as
- * `--helm-hue-<name>` in the shade of the theme on screen, and the value a
+ * `--floti-hue-<name>` in the shade of the theme on screen, and the value a
  * primitive's `data-hue` takes. Store the name, never the colour.
  */
 export type PaletteHue = 'blue' | 'teal' | 'green' | 'amber' | 'orange' | 'red' | 'pink' | 'violet'
 
 /**
- * Helm's theme, as the page sees it. The same values are on the page's
- * `<html>` as `--helm-<token>`, `--helm-radius` and `data-density`, kept
+ * Floti's theme, as the page sees it. The same values are on the page's
+ * `<html>` as `--floti-<token>`, `--floti-radius` and `data-density`, kept
  * current without a reload.
  */
-export interface HelmTheme {
+export interface FlotiTheme {
   kind: 'dark' | 'light'
   tokens: Record<ThemeTokenName, string>
   /** The corner radius setting, in pixels. */
@@ -302,7 +298,7 @@ export interface HelmTheme {
 
 export type StatusTone = 'neutral' | 'accent' | 'success' | 'warn' | 'danger'
 
-/** The plugin's item on Helm's status bar. Clicking it opens the plugin's rail panel. */
+/** The plugin's item on Floti's status bar. Clicking it opens the plugin's rail panel. */
 export interface StatusItem {
   text: string
   tone?: StatusTone
@@ -333,7 +329,7 @@ export type SettingValue = string | number | boolean | null
  */
 export type SecretState = 'ready' | 'missing'
 
-/** A Claude Code session a page asks Helm to start. */
+/** A Claude Code session a page asks Floti to start. */
 export interface SessionStartRequest {
   /** The folder it runs in: an absolute path to a folder that exists. */
   cwd: string
@@ -347,11 +343,11 @@ export interface SessionStartRequest {
 export type SessionStartResult = 'started' | 'cancelled'
 
 /**
- * One Claude Code session Helm started since it opened, as a plugin may see
+ * One Claude Code session Floti started since it opened, as a plugin may see
  * it. Nothing of its conversation: no prompt, no output, no transcript.
  */
 export interface PluginSession {
-  /** The same id a tool call from this session carries (`ToolSession.id`). It means nothing outside Helm and does not survive a restart. */
+  /** The same id a tool call from this session carries (`ToolSession.id`). It means nothing outside Floti and does not survive a restart. */
   id: string
   /** What its tab is called now. */
   name: string
@@ -361,10 +357,10 @@ export interface PluginSession {
   /**
    * What Claude Code says it is doing: `busy` working, `idle` done and waiting
    * for the user's next message, `waiting` for the user to answer something,
-   * `shell` running a command. Null when it has ended, or Helm cannot tell.
+   * `shell` running a command. Null when it has ended, or Floti cannot tell.
    */
   activity: 'busy' | 'idle' | 'waiting' | 'shell' | null
-  /** Since when `activity` has held, epoch ms. Null when Helm cannot tell. For an idle session, when it last finished working. */
+  /** Since when `activity` has held, epoch ms. Null when Floti cannot tell. For an idle session, when it last finished working. */
   activitySince: number | null
   /** Epoch ms. */
   startedAt: number
@@ -372,10 +368,10 @@ export interface PluginSession {
   endedAt: number | null
 }
 
-/** What Helm tells a page, by event name. */
-export interface HelmEvents {
+/** What Floti tells a page, by event name. */
+export interface FlotiEvents {
   /** The theme changed. Tokens are already applied to the page when this fires. */
-  theme: HelmTheme
+  theme: FlotiTheme
   /** The surface came on screen, or went off it. Always false for the background. */
   visibility: boolean
   /** The user changed the plugin's settings. */
@@ -385,20 +381,20 @@ export interface HelmEvents {
   /**
    * A command with no `tab` was chosen in Quick Open. Delivered to the
    * background when there is one, and otherwise to the rail panel, which
-   * Helm opens first.
+   * Floti opens first.
    */
   command: { id: string }
   /** A panel's header action was pressed. Panels only. */
   action: { id: string }
   /**
    * A session started, ended, was renamed or changed what it is doing. Every
-   * session, as `helm.sessions.list` answers. Needs `"list"` in `sessions`.
+   * session, as `floti.sessions.list` answers. Needs `"list"` in `sessions`.
    */
   sessions: PluginSession[]
 }
 
 /** Why a bridge call failed: `error.code` on the `Error` it rejects with. */
-export type HelmErrorCode =
+export type FlotiErrorCode =
   /** The URL, command or tab is not declared in the manifest. */
   | 'not-declared'
   /** A `{{secret}}` is not stored, not permitted for this plugin, or not bound to the request's host. */
@@ -409,7 +405,7 @@ export type HelmErrorCode =
   | 'aborted'
   /** The arguments were not what the method takes. */
   | 'invalid'
-  /** The plugin is disabled, or Helm is shutting down. */
+  /** The plugin is disabled, or Floti is shutting down. */
   | 'unavailable'
   /** The service is not running and could not be started. */
   | 'service'
@@ -420,13 +416,13 @@ export type HelmErrorCode =
   /** The same request is already waiting on the user, or a link was opened a moment ago. */
   | 'busy'
 
-export interface HelmError extends Error {
-  code: HelmErrorCode
+export interface FlotiError extends Error {
+  code: FlotiErrorCode
 }
 
 /** The session calling a tool. */
 export interface ToolSession {
-  /** The same for every call the session makes, for as long as it runs. It means nothing outside Helm. */
+  /** The same for every call the session makes, for as long as it runs. It means nothing outside Floti. */
   id: string
   /** The session's name, as its tab shows it. */
   name: string
@@ -451,25 +447,23 @@ export interface ToolCall {
 export type ToolHandler = (args: Record<string, unknown>, call: ToolCall) => unknown
 
 /**
- * Everything a plugin page can ask of Helm, at either version: `window.helm`
- * at version 1 (`HelmBridge`) and `window.floti` at 2 (`FlotiBridge`) have
- * these same calls. Examples below say `helm.`; a version 2 page says
- * `floti.`.
+ * Everything a plugin page can ask of Floti: the calls `window.floti`
+ * (`FlotiBridge`) has.
  *
  * Present before any of the page's own scripts run. Calls made before the
- * connection to Helm is up are queued, not dropped.
+ * connection to Floti is up are queued, not dropped.
  */
 export interface PluginBridge {
   readonly apiVersion: ApiVersion
-  readonly context: HelmContext
+  readonly context: FlotiContext
   /** The current theme. Also on the page as CSS variables. */
-  readonly theme: HelmTheme
+  readonly theme: FlotiTheme
   /** Whether the surface is on screen. Always false for the background. */
   readonly visible: boolean
   /**
    * Whether this page is drawn on the computer the plugin runs on: where its
    * service, its programs and its background run, and where its data
-   * lives. True in Helm on that computer. A page drawn on another computer
+   * lives. True in Floti on that computer. A page drawn on another computer
    * hides what only makes sense on the plugin's, such as revealing a file,
    * which would open a window there. Read synchronously, from the page's
    * first script; it never changes for the life of the page.
@@ -477,8 +471,8 @@ export interface PluginBridge {
   readonly onHostComputer: boolean
 
   /**
-   * `fetch`, sent by Helm. Only to the origins in `network`, and to the
-   * plugin's own service as `service:/path`. Redirects are followed by Helm and
+   * `fetch`, sent by Floti. Only to the origins in `network`, and to the
+   * plugin's own service as `service:/path`. Redirects are followed by Floti and
    * each hop is checked against the same list.
    *
    * `{{key}}` in the URL, a header or a text body is replaced with the stored
@@ -492,9 +486,9 @@ export interface PluginBridge {
   exec(command: string, args?: readonly string[], options?: ExecOptions): Promise<ExecResult>
 
   /**
-   * Opens an `https` address in Helm's Browser tab, where the user's own pages
+   * Opens an `https` address in Floti's Browser tab, where the user's own pages
    * are. Needs a click or key press the user just made in the page: call it
-   * from the handler. Panels and tabs only, one link a second. Helm holds it to
+   * from the handler. Panels and tabs only, one link a second. Floti holds it to
    * the same rule as an address typed in the Browser tab, and says on that tab
    * when it will not go there.
    */
@@ -506,13 +500,12 @@ export interface PluginBridge {
      * the same parameters. `title` names the tab until its page sets one.
      *
      * `preview: true` opens it as the preview, the way a single click opens a
-     * file in Helm: the next tab opened as a preview takes its place, so
+     * file in Floti: the next tab opened as a preview takes its place, so
      * clicking through a list does not leave a tab per item. The user keeps it
-     * by double-clicking its tab, and the page by `helm.surface.keep()`.
+     * by double-clicking its tab, and the page by `floti.surface.keep()`.
      * Opened without it, the tab stays, and opening the preview that way keeps
      * it. A plugin with `pageStrip` has a preview of its own among its pages;
-     * one without shares the pane's with Helm's files. Helm before 2.3.2 ignores
-     * it and opens a tab that stays.
+     * one without shares the pane's with Floti's files.
      */
     open(tab: string, params?: PluginParams, options?: { title?: string; preview?: boolean }): Promise<void>
   }
@@ -525,8 +518,7 @@ export interface PluginBridge {
      * Keeps a tab opened as a preview, so the next preview does not replace
      * it. Call it once the user starts changing something in the page, as an
      * editor keeps a file once it is edited. No effect on a tab that already
-     * stays, or outside a tab. Helm before 2.3.2 does not have it: check
-     * `helm.surface.keep` before calling it in a plugin that runs on both.
+     * stays, or outside a tab.
      */
     keep(): void
   }
@@ -548,7 +540,7 @@ export interface PluginBridge {
 
   secrets: {
     state(key: string): Promise<SecretState>
-    /** Opens Helm's dialog for adding the key, scoped to this plugin. Resolves with the state after it closes. */
+    /** Opens Floti's dialog for adding the key, scoped to this plugin. Resolves with the state after it closes. */
     request(key: string): Promise<SecretState>
   }
 
@@ -556,12 +548,12 @@ export interface PluginBridge {
     /**
      * Asks to start a Claude Code session in a folder with a first message.
      * Needs `"start"` in the manifest's `sessions`, and a click or key press the user just
-     * made in the page: call it from the handler. Helm shows the folder and the
+     * made in the page: call it from the handler. Floti shows the folder and the
      * message and the user starts it or not. Panels and tabs only.
      */
     start(request: SessionStartRequest): Promise<SessionStartResult>
     /**
-     * The Claude Code sessions Helm started since it opened, running and ended,
+     * The Claude Code sessions Floti started since it opened, running and ended,
      * oldest first. Needs `"list"` in `sessions`. The `sessions` event says
      * when the list changes.
      */
@@ -579,25 +571,16 @@ export interface PluginBridge {
   }
 
   /** Subscribes to an event. Returns the function that unsubscribes. */
-  on<K extends keyof HelmEvents>(event: K, listener: (data: HelmEvents[K]) => void): () => void
+  on<K extends keyof FlotiEvents>(event: K, listener: (data: FlotiEvents[K]) => void): () => void
 }
 
-/** `window.helm`: the bridge a version 1 page gets. */
-export interface HelmBridge extends PluginBridge {
-  readonly apiVersion: 1
-}
-
-/**
- * `window.floti`: the bridge a version 2 page gets. The same calls as
- * `window.helm`, under the name the version 2 runtime gives them, on the
- * page's `floti-plugin://<id>/` origin.
- */
+/** `window.floti`: the bridge every plugin page gets, on its `floti-plugin://<id>/` origin. */
 export interface FlotiBridge extends PluginBridge {
   readonly apiVersion: 2
 }
 
-/** What a version 2 background module hears, by event name: what is not about a page on screen. */
-export type BackgroundEvents = Pick<HelmEvents, 'settings' | 'secrets' | 'command' | 'sessions'>
+/** What a background module hears, by event name: what is not about a page on screen. */
+export type BackgroundEvents = Pick<FlotiEvents, 'settings' | 'secrets' | 'command' | 'sessions'>
 
 /**
  * `floti` in a version 2 background module, which the host runs in a V8
@@ -616,7 +599,7 @@ export type BackgroundEvents = Pick<HelmEvents, 'settings' | 'secrets' | 'comman
  */
 export interface FlotiBackground {
   readonly apiVersion: 2
-  readonly context: HelmContext & { readonly surface: 'background'; readonly name: 'background' }
+  readonly context: FlotiContext & { readonly surface: 'background'; readonly name: 'background' }
   readonly visible: false
 
   /** As `PluginBridge.fetch`: the manifest's `network` and `service:/path`, sent by the host. */

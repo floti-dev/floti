@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { UpdateView } from '@helm/ui'
+import type { UpdateView } from '@floti/ui'
 import type * as P from '../../../shared/host/protocol'
 import { updateView, type Updates } from './host/updates'
 

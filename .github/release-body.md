@@ -4,7 +4,7 @@
   since the previous tag under a "Changes" heading.
 
   It is deliberately empty. A release page is a changelog and nothing else -
-  the reader is already on the repository, and what Helm is, which artefact to
+  the reader is already on the repository, and what Floti is, which artefact to
   take, what SmartScreen will say and what to install first are all in the
   README one click away, maintained once instead of restated at every tag.
   Through 0.2.3 they were restated here and the page read as a second README

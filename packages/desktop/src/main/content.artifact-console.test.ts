@@ -23,7 +23,7 @@ describe('artifact console capture', () => {
     window.webContents.emit('console-message', {
       level: 'error',
       message: 'chart failed',
-      sourceId: 'helm-content://artifact/abc/report.html',
+      sourceId: 'floti-content://artifact/abc/report.html',
       lineNumber: 3
     })
     window.webContents.emit('console-message', {
@@ -32,7 +32,7 @@ describe('artifact console capture', () => {
       sourceId: 'http://localhost:5173/src/main.tsx',
       lineNumber: 1
     })
-    const expected = { level: 'error', message: 'chart failed', source: 'helm-content://artifact/abc/report.html', line: 3 }
+    const expected = { level: 'error', message: 'chart failed', source: 'floti-content://artifact/abc/report.html', line: 3 }
     expect(seen).toEqual([expected])
     expect(artifactConsoleEntries()).toEqual([expected])
   })

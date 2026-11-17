@@ -9,7 +9,7 @@ their data goes, how a release is cut, and why Floti has no auto-updater.
 
 | File | What it is |
 |---|---|
-| `Floti-<version>-portable.exe` | One file, ~95 MB. No install. Keeps its data in `helm-data\` beside itself. |
+| `Floti-<version>-portable.exe` | One file, ~95 MB. No install. Keeps its data in `floti-data\` beside itself. |
 | `Floti-<version>-setup.exe` | NSIS one-click installer. Per-user, no elevation, in `%LOCALAPPDATA%\Programs\Floti\desktop`. Data in `%LOCALAPPDATA%\Floti\desktop`. |
 
 `pnpm dist:mac` writes two more, and runs only on macOS, because
@@ -137,6 +137,7 @@ its own:
 | `floti-<version>-linux-x64` | Linux on x64, statically linked: it needs no C library of the computer's own. |
 | `floti-<version>-linux-arm64` | Linux on arm64, statically linked. |
 | `floti-<version>-SHA256SUMS` | The SHA-256 of each of the five, in `sha256sum` format; `sha256sum --check` reads it. |
+| `floti-<version>-THIRD-PARTY-NOTICES.txt` | The license texts of the Rust crates the five link (see [Third-party notices](#third-party-notices)). |
 
 `.github/workflows/floti.yml` builds them, each on its own native runner
 (`windows-latest`, `windows-11-arm`, `macos-latest`, `ubuntu-latest`,
@@ -145,7 +146,8 @@ the workflows. `scripts/floti-release.mjs check` runs and checks each file: its
 header names its own OS and CPU, a Linux file names no program interpreter and
 needs no shared library (and `file` and `ldd` agree), and `floti --version` and
 `floti version` name this version, OS and CPU. Then `floti-release.mjs sums`
-refuses anything but exactly the five and writes their list. The files go up
+refuses anything but exactly the five and writes their list, and
+`third-party-notices.mjs floti` writes the notices beside them. The files go up
 as workflow artifacts only; a branch push tags, releases and publishes nothing.
 
 The Linux files are the gnu targets built with `-C target-feature=+crt-static`
@@ -169,7 +171,8 @@ compares both Windows copies with the release's files. On macOS that holds only
 because signing the app leaves floti alone (`signIgnore` in
 `electron-builder.yml`): signing a binary rewrites its signature, and so its
 SHA-256. The linker has already signed it ad-hoc, which is all Apple Silicon
-needs to run it.
+needs to run it. The same jobs hand it the release's floti notices
+(`FLOTI_NOTICES`), which the app's own notices end with.
 
 ### The protocol types
 
@@ -285,7 +288,7 @@ light appearance and the `system` theme never follows macOS into dark mode.
 node-pty starts every pty on macOS through `spawn-helper`, an executable in its
 macOS prebuilds, and publishes it without the execute bit; without one every
 terminal fails with `posix_spawnp failed`. `scripts/spawn-helper.mjs` sets the
-bit in two places: as `@helm/desktop`'s postinstall, for a checkout on a Mac,
+bit in two places: as `@floti/desktop`'s postinstall, for a checkout on a Mac,
 and from electron-builder's `afterPack` hook (`scripts/after-pack.mjs`) on the
 copy under `app.asar.unpacked`. `afterPack` runs before signing, so the
 signature covers the file as changed. Neither rebuilds anything, and both do
@@ -307,7 +310,7 @@ needs macOS;
 
 `pnpm verify:linux-artifact` is the Linux counterpart. It extracts the AppImage
 a person downloads with the AppImage's own runtime (`--appimage-extract`, no
-FUSE) and checks the app inside: an x64 Linux `helm`; better-sqlite3's
+FUSE) and checks the app inside: an x64 Linux `floti-desktop`; better-sqlite3's
 prebuild, node-pty's compiled addon and koffi's Linux package unpacked beside
 the asar; a `floti` and `floti-SHA256SUMS` byte for byte the ones it is given
 (`--floti`, `--sums`; by default `dist-host/`'s), floti executable; the pinned
@@ -321,7 +324,7 @@ file's `.gnu.version_r`; and a `floti-desktop.desktop` whose `Exec` has no
 `src/main/paths.ts` decides, from one signal. electron-builder's portable
 launcher extracts the app to `%TEMP%\<random>\` and sets
 `PORTABLE_EXECUTABLE_DIR` to the directory the exe was double-clicked from. If
-that variable is set, `userData` is redirected to `<exe dir>\helm-data\`;
+that variable is set, `userData` is redirected to `<exe dir>\floti-data\`;
 otherwise it is `app.getPath('userData')`, which is `%APPDATA%\Floti`.
 
 `process.execPath` in portable mode points at the temp extraction, so **never
@@ -341,63 +344,40 @@ or checkout, and `PORTABLE_EXECUTABLE_DIR` says whether the data is its own -
 `installed`, `portable`, `dev`, `dev-live`.
 
 **Workspace templates take the same branch.** `templatesDir` reads the same
-variable: set, they live in `<exe dir>\helm-data\templates`, so **a portable
+variable: set, they live in `<exe dir>\floti-data\templates`, so **a portable
 install keeps its templates on the stick and leaves nothing on a machine it is
 plugged into**; unset, they live in `~/.config/floti/templates` rather than
 under the data directory, because a template is a directory somebody authors by
-hand and likely keeps in git. That is the host's own config folder
-(`~/.config/helm` only while `~/.config/floti` is not there and Helm's is,
-below), so the
+hand and likely keeps in git. That is the host's own config folder, so the
 installed app's templates are where a host started at sign-in reads them. One rule, four run modes, and no second override
 mechanism - `pnpm dev` and every check get a templates directory of their own
 for free, because both already set that variable for the database.
 
-The shipped `README.md` and example template are written on a start that finds
-the directory **absent**, and nothing there is ever overwritten. Floti records no
-hashes of what it seeded, so it cannot distinguish an edited file from an
-untouched one; deleting the directory is what puts the originals back.
+The shipped `README.md` is written on a start that finds the directory
+**absent**, and nothing there is ever overwritten or removed, an example an
+older release seeded included. Floti records no hashes of what it seeded, so it
+cannot distinguish an edited file from an untouched one; deleting the directory
+is what puts the README back. Starter, the one template Floti ships, is built
+into the host rather than written there, so it reaches a templates folder that
+already exists.
 
 Where each run keeps its data, on each OS (`appMode` in `paths.ts` decides):
 
 | run | Windows | macOS | Linux |
 |---|---|---|---|
 | installed | `%LOCALAPPDATA%\Floti\desktop` | `~/Library/Application Support/Floti/desktop` | `${XDG_DATA_HOME:-~/.local/share}/floti/desktop` |
-| portable | `helm-data` beside the exe | none | none |
-| `pnpm dev` | `%LOCALAPPDATA%\Floti Dev\dev\helm-data` | `~/Library/Application Support/Floti Dev/dev/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/floti-dev/dev/helm-data` |
-| checks | `%LOCALAPPDATA%\Floti Dev\checks\<name>\helm-data` | `~/Library/Application Support/Floti Dev/checks/<name>/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/floti-dev/checks/<name>/helm-data` |
+| portable | `floti-data` beside the exe | none | none |
+| `pnpm dev` | `%LOCALAPPDATA%\Floti Dev\dev\floti-data` | `~/Library/Application Support/Floti Dev/dev/floti-data` | `${XDG_DATA_HOME:-~/.local/share}/floti-dev/dev/floti-data` |
+| checks | `%LOCALAPPDATA%\Floti Dev\checks\<name>\floti-data` | `~/Library/Application Support/Floti Dev/checks/<name>/floti-data` | `${XDG_DATA_HOME:-~/.local/share}/floti-dev/checks/<name>/floti-data` |
 | `pnpm dev:live` | the installed app's own | the installed app's own | the installed app's own |
-| templates | `~/.config/floti/templates` (`~/.config/helm/templates` only while `~/.config/floti` is not there and Helm's is); `helm-data/templates` when portable | the same, without portable | the same, without portable |
+| templates | `~/.config/floti/templates`; `floti-data/templates` when portable | the same, without portable | the same, without portable |
 
-Templates are `helm-data/templates` in the run's own folder for `pnpm dev` and
+Templates are `floti-data/templates` in the run's own folder for `pnpm dev` and
 every check, on every OS.
 
 The installed desktop's data is the `desktop` folder of Floti's own data
 folder (design I12, `src/main/dataFolder.ts`), so its Chromium profile and
-`helm.db` sit beside, not among, the host's files. While the app was called
-Helm it kept them in Electron's `userData` for that name: `%APPDATA%\Helm`,
-`~/Library/Application Support/Helm` and `${XDG_CONFIG_HOME:-~/.config}/Helm`.
-The installed app's first start as Floti copies that folder to its new place,
-file by file into a folder beside it that is renamed into place, so a copy cut
-off halfway is never taken for the data; links are not copied (the overlay
-shims are made again as sessions need them), Chromium's caches (`Cache`,
-`Code Cache`, `GPUCache`, `DawnCache` and the like) are left out and made again,
-the device keys in `host-client` and `remote-hosts` are made owner-only again
-once copied (a copy carries no access list on Windows), and the browser's
-partition, `persist:helm-browser`, moves with the rest under its own name.
-
-**Browser-pane sign-ins on macOS and Linux need signing in once more.** Chromium
-encrypts the cookies it keeps with a key the OS holds under the app's name: the
-Keychain entry "Helm Safe Storage" on macOS, the Secret Service entry for Helm
-on Linux. Under the name Floti it asks for a key of its own, so the cookies
-copied from Helm's partition cannot be read and the sites in the browser pane
-ask you to sign in again. Floti does not read or move Helm's key: nothing reads
-what the partition stores. On Windows the key is in the copied `Local State`,
-and sign-ins carry over. Helm's folder
-is removed only once the store has opened in the copy, never walking into a
-link, and a removal that fails is tried again at the next start. A copy that
-fails changes nothing: the app says why, quits, and tries again at its next
-start. `pnpm dev:live` moves nothing and reads Helm's folder where it is until
-the installed app has moved it.
+`desktop.db` sit beside, not among, the host's files.
 
 ## What the installer does, and what it deliberately does not
 
@@ -407,7 +387,7 @@ the installed app has moved it.
   config change that *would* need elevation fails the install rather than
   quietly putting a UAC prompt in front of everyone.
 - **Uninstall removes the program and leaves the data.**
-  `deleteAppDataOnUninstall` stays false: `%APPDATA%\Floti\helm.db` holds the
+  `deleteAppDataOnUninstall` stays false: `%LOCALAPPDATA%\Floti\desktop\desktop.db` holds the
   user's profiles, their session index and every config snapshot Floti has taken
   on their behalf, and uninstalling the program is not a request to destroy
   those. `pnpm verify:installer --yes` asserts the install directory,
@@ -431,18 +411,17 @@ the installed app has moved it.
   new Floti reaches it: a host older than Floti is restarted onto the new
   floti with no question, once that floti says it speaks Floti's protocol,
   and the keeper hands its sessions to the new host.
-- **Once, it stops a host from inside the old install, after saying what
-  that ends.** A Helm from before this ran its host from
-  `resources\floti.exe` inside the install folder, and the previous
+- **It stops a host still running from inside the install, after saying
+  what that ends.** Until `install-self` has worked, the desktop runs its
+  host from `resources\floti.exe` inside the install folder, and the previous
   version's uninstaller, which runs before any of this version's files are
   written, force-stops it and its keeper whatever this installer does. So
   `customCheckAppRunning` first checks whether that file is in use (it cannot
   be opened for writing while any process runs it), and only then runs the
   floti.exe **this installer carries**: it embeds `dist-host\floti.exe`, the
-  same file it installs, and writes it to its own temporary folder, so an
-  installed floti.exe that predates `update-stop` is asked too.
-  `floti update-stop "%APPDATA%\Floti\host-client" --ask` connects with Floti's
-  client folder keys, as `floti bridge` does, so the device key never leaves
+  same file it installs, and writes it to its own temporary folder.
+  `floti update-stop "%LOCALAPPDATA%\Floti\desktop\host-client" --ask`
+  connects with the desktop's client folder keys, as `floti bridge` does, so the device key never leaves
   that process, and it never pins a host. When the host runs sessions it
   prints the question ("Installing this update stops the local host on this
   PC, ending 2 sessions. Floti offers them back when it next starts.") and the
@@ -521,27 +500,10 @@ Who runs it:
   its data beside it, as before.
 
 The host's config folder is `~/.config/floti`, where the user's own files
-are: templates, themes, agents and the plugins they are writing. Helm kept
-them in `~/.config/helm`, and the first host to start as Floti, the one that
-owns the data folder, moves that folder there once
-(`platform/folders/mod.rs`, `move_helm_config`): renamed whole where there is
-no `~/.config/floti`, else each entry moved into it when none is in both, so no
-file is replaced; otherwise nothing moves and the log names the entries in
-both. Every host and the desktop read the same folder by one rule
-(`config_folder`, `userConfigDirFor`): `~/.config/floti` whenever it is
-there, and `~/.config/helm` only while `~/.config/floti` is not there and
-Helm's is. So a `~/.config/helm` that something makes again once
-`~/.config/floti` is there, such as a plugin from Helm's days writing its
-data, is left beside it and not read; each host start still tries to move
-its entries in, and the log says which folder is read. Once
-it has moved, every host start re-points a plugin folder registered inside
-`~/.config/helm` to the same place in `~/.config/floti`
-(`plugins/store.rs`, `follow_helm_config_move`), whichever host moved it; a
-folder registered in both places is kept once, as the `~/.config/floti` one. A host
-started with `FLOTI_CONFIG_READ_ONLY` (a development or check run) moves
-nothing. The installed app gives its
-host no config folder of its own, so the host it starts and the host started
-any other way read the same one.
+are: templates, themes, agents and the plugins they are writing. Every host
+and the desktop read that one folder (`config_folder`, `userConfigDirFor`).
+The installed app gives its host no config folder of its own, so the host
+it starts and the host started any other way read the same one.
 
 What it adds outside the install folder, which uninstalling the app leaves
 and `floti uninstall` removes ([below](#floti-uninstall)), the host's data
@@ -568,11 +530,11 @@ hand, no button to press, no artefact built on a developer's machine.
 remote, runs the checks, builds floti for its five targets, builds the Windows
 artefacts on a clean `windows-latest` runner, the macOS ones on `macos-latest`
 and the Linux one on `ubuntu-latest`, packs the protocol types, signs every
-file, and publishes one GitHub release with twenty-six files attached: the
+file, and publishes one GitHub release with twenty-eight files attached: the
 five desktop files and their SHA-256 list (`Floti-<version>-desktop-SHA256SUMS`,
 which `floti add desktop` checks a download against), the protocol types, the
-five floti files and their SHA-256 list, and a minisign signature beside each
-of those thirteen.
+five floti files, their SHA-256 list and floti's third-party notices, and a
+minisign signature beside each of those fourteen.
 
 GitHub's release asset names ignore case, and it refuses a file whose name
 equals one already uploaded, after the draft is made. So no two files of a
@@ -581,18 +543,16 @@ because floti's is `floti-<version>-SHA256SUMS`, and `scripts/release.mjs
 check` refuses a folder holding such a pair, in `assemble`, `sign` and
 `publish`.
 
-The desktop files are named `Floti-<version>-*` from 3.0; releases before
-that named them `Helm-<version>-*`, and keep those names. None is published
-under both, because no released floti derives a later release's desktop file
-name: `floti update` takes each file's name from the manifest (it checks only
+The desktop files are named `Floti-<version>-*`. No released floti derives
+a later release's desktop file name: `floti update` takes each file's name from the manifest (it checks only
 that it is a plain file name) and its signature's as that name with
 `.minisig` after it, and `floti add desktop` derives the names
 (`desktop_file`, `desktop_sums_name` in `crates/host/src/add.rs`) only for
-the release of the floti running it. So a 2.4 floti updates to 3.0 by the
-names the 3.0 manifest gives, and adds the desktop from its own 2.4
-release's `Helm-*` files, its list `Helm-<version>-SHA256SUMS` among them.
-Nothing reads a later release's desktop list, so the list took its 3.0 name
-`Floti-<version>-desktop-SHA256SUMS` with no old name kept beside it.
+the release of the floti running it. So a floti updates to a later release
+by the names that release's manifest gives, and adds the desktop from its own
+release's files, its list `Floti-<version>-desktop-SHA256SUMS` among them.
+Nothing reads a later release's desktop list, so a release can rename its
+files without keeping the old names beside them.
 
 A stable release
 then copies the install scripts and the update manifest to
@@ -606,8 +566,8 @@ after them and finishes green.
 | `check`, `floti` | `ci.yml` and `floti.yml`, called. |
 | `protocol` | The crate's `generated_files` test, then `floti-protocol-<version>.tar.gz`. |
 | `release-windows`, `release-mac`, `release-linux` | One desktop build each, verified from the inside and handed on as a workflow artifact. None publishes anything. |
-| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s, writes and checks the desktop files' SHA-256 list (`scripts/release.mjs desktop-sums`), checks that the folder holds exactly the thirteen files to sign, no two with names equal ignoring case (`scripts/release.mjs check --unsigned`), and uploads them as `release-unsigned`. Writes floti.dev's install scripts and, for a stable release, `update.json` (`scripts/floti-dev.mjs`) as `floti-dev-unsigned`. |
-| `sign` | The only job that reads the signing key, in the `release` environment (a prerequisite: "The release environment"). Signs every file, and `update.json` with the comment `floti update.json`, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-six files with their SHA-256s in the run's summary and uploads them as `release-files`, and floti.dev's files as `floti-dev`. Never runs in a dry run. |
+| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s, writes and checks the desktop files' SHA-256 list (`scripts/release.mjs desktop-sums`), checks that the folder holds exactly the fourteen files to sign, no two with names equal ignoring case (`scripts/release.mjs check --unsigned`), and uploads them as `release-unsigned`. Writes floti.dev's install scripts and, for a stable release, `update.json` (`scripts/floti-dev.mjs`) as `floti-dev-unsigned`. |
+| `sign` | The only job that reads the signing key, in the `release` environment (a prerequisite: "The release environment"). Signs every file, and `update.json` with the comment `floti update.json`, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-eight files with their SHA-256s in the run's summary and uploads them as `release-files`, and floti.dev's files as `floti-dev`. Never runs in a dry run. |
 | `sign-dry-run` | A dry run's `sign`: the same signing and checks, with a key pair made in the run. Runs only in a dry run. |
 | `publish` | The only job with write access. Attests every file in `release-files`, then creates the release from them, publishes it and confirms it. Never runs in a dry run. |
 | `floti-dev` | After `publish`, for a stable release only: commits `install.sh`, `install.ps1`, `update.json` and `update.json.minisig` to floti-dev/floti-dev.github.io ("floti.dev"). Never runs for a preview or in a dry run. |
@@ -643,7 +603,7 @@ after them and finishes green.
   publish: no tag, no release, no artefacts.
 - **The release is created as a draft and published in the same job**, which is
   not an approval gate. Publishing the draft is what creates the tag, so the
-  ref and all twenty-six assets appear together rather than leaving a window where
+  ref and all twenty-eight assets appear together rather than leaving a window where
   the app announces a version whose download page is empty. A run cancelled
   mid-upload leaves an unpublished draft; the next run deletes it and starts
   over.
@@ -686,11 +646,11 @@ after them and finishes green.
   It runs on any exe: `pnpm verify:artifact -- path/to/Floti-x.y.z-setup.exe`.
   The Mac artefacts get `verify-mac-artifact.mjs` and the AppImage
   `verify-linux-artifact.mjs`, described above.
-- **The confirmation expects all twenty-six files.** After publishing a
+- **The confirmation expects all twenty-eight files.** After publishing a
   release, `publish` asks `/releases/latest` - the endpoint the in-app check
   asks - and fails unless it names this tag, is not a draft, and lists exactly
   the files `scripts/release.mjs names` gives, signatures included. A preview
-  must be published, a pre-release, carry the same twenty-six and not be what
+  must be published, a pre-release, carry the same twenty-eight and not be what
   `/releases/latest` answers.
 - **Every version downloads without a sign-in.** For a release and a preview
   alike, `publish` then fetches the setup exe and `floti-<version>-linux-x64`
@@ -702,8 +662,9 @@ after them and finishes green.
 
 ### Signatures and attestations
 
-Every file a release carries - the five desktop files, the protocol types, the
-five floti files and their SHA-256 list - has a minisign signature beside it,
+Every file a release carries - the five desktop files and their SHA-256 list,
+the protocol types, the five floti files, their SHA-256 list and floti's
+third-party notices - has a minisign signature beside it,
 `<file>.minisig`, and a GitHub build attestation.
 
 - **The trusted comment is exactly `floti <version> <file>`**, for example
@@ -879,7 +840,7 @@ every check of the files that needs no published release. `sign-dry-run` makes
 a minisign key pair in the run (`minisign -G -W` under `$RUNNER_TEMP`), signs
 every file with it through the same `scripts/minisign.mjs` a release uses,
 checks every signature against that pair's public key and uploads exactly the
-twenty-six files as the run's `release-files` artifact, kept for seven days.
+twenty-eight files as the run's `release-files` artifact, kept for seven days.
 The run's summary lists each with its SHA-256 and gives the run's public key.
 floti.dev's four files are written from the run's own files as a stable
 release writes them, `update.json` in the stable form when the branch's
@@ -1030,7 +991,7 @@ Actions tab or with `gh workflow run macos-screenshots.yml --ref <branch>` once
 the file is on `main`. That run also builds the local host, launches the built
 app through the E2E tests' Playwright launch into a world with the fake claude,
 and photographs every destination on the rail and a session terminal in the
-light and the dark theme. The pictures are the run's `helm-macos-screenshots`
+light and the dark theme. The pictures are the run's `floti-macos-screenshots`
 artifact: each view as the page and, on macOS, as the window with its traffic
 lights. It is no check in the gate and nothing waits on it. `pnpm screenshots`
 runs the same capture locally on any OS, into `reports/screenshots`.
@@ -1371,37 +1332,6 @@ the process that left them is known to have ended.
 | macOS | Written beside, made executable, stripped of any quarantine flag, renamed over. | `Floti.app` in `~/Applications`, else `/Applications`: the release's zip is unpacked beside it with `ditto -x -k --noqtn` and swapped in by rename. | `CFBundleShortVersionString` in its `Info.plist`. |
 | Linux | Written beside, made executable, renamed over. | The AppImage at `~/Applications/Floti.AppImage` (AppImage's own tools look there, and it is outside the data folder `floti uninstall` keeps), where `floti add desktop` puts it: written beside, made executable, renamed over. | Unknown, so it is always updated. |
 
-An install from when the app was called Helm is found too (`Programs\Helm`
-with `Helm.exe`, `Helm.app`, `Helm.AppImage`) and updated into the new place:
-on Windows the release's installer finds it by the uninstall entry Helm's app
-ID gave it, runs its uninstaller silently, which takes that entry, its Start
-menu shortcut and its app ID's registration with it and keeps the data, and
-installs in `Programs\Floti\desktop` (`build/installer.nsh`); on macOS
-`Floti.app` is swapped in beside `Helm.app`, which is then removed; on Linux
-`Floti.AppImage` is written beside `Helm.AppImage`, which is then removed,
-and the `helm.desktop` entry and icon floti wrote for it are replaced by the
-new ones (`Installs::remove_replaced`, `carry_launcher`). An old copy that
-cannot be removed leaves the update done: one line warns and names it. The
-app opens again from its new place.
-
-**Updating from Helm, the first time.** The floti that runs an update replaces
-itself first and installs the desktop app with its own code, so an update from
-a floti before the rename installs the app as that floti knew it:
-
-- **Windows** works: the old floti runs the release's installer, which moves
-  the app. Afterwards it opens nothing, because it looks for
-  `Programs\Helm\Helm.exe`; Floti is in the Start menu.
-- **macOS** fails the desktop step with "The Helm release holds no Helm.app",
-  after floti itself is updated, and `Helm.app` stays as it was. **Run `floti
-  update` again** in a terminal: the floti now installed is this one, which
-  installs `Floti.app` and removes `Helm.app`.
-- **Linux** writes the new AppImage over `~/Applications/Helm.AppImage`, which
-  runs as Floti under its old name. Running `floti update` again, or the next
-  update, moves it to `~/Applications/Floti.AppImage` with its menu entry.
-
-From then on the floti running an update is one that knows both names, so no
-second run is needed.
-
 A release with no desktop file for this computer updates floti alone and
 says so. No downloaded file carries a quarantine flag or a
 download mark: floti's own process writes them, which neither Gatekeeper's
@@ -1502,7 +1432,6 @@ half-working, and the next run carries on where it stopped:
    `floti install-self` and `floti update` rename through too). A run whose
    `Floti.exe` is still there afterwards fails.
    On macOS the `.app`; on Linux the AppImage, `applications/dev.floti.desktop.desktop`
-   (and `helm.desktop`, which floti wrote before the rename)
    and the icon. **The desktop app's own settings stay**: they are the app's,
    where the app keeps them, which the host never learns, and its uninstaller
    leaves them too. One line says so, with `--purge` as well.
@@ -1695,10 +1624,10 @@ installer that a firewall prompt follows is a bad first impression, and a
 loopback bind produces no prompt on Windows.
 
 **Plugins reach the hosts their manifests name.** A plugin page has no network
-of its own (`connect-src 'none'`); `helm.fetch` sends its requests from the
+of its own (`connect-src 'none'`); `floti.fetch` sends its requests from the
 local host, only to an origin the manifest lists, following redirects one
 hop at a time so that every hop is checked against the same list. A plugin's
-background page may fetch on its own schedule, which is the plugin's doing
+background may fetch on its own schedule, which is the plugin's doing
 rather than Floti's - the user added it - and is why the sentence above says
 so. A plugin never holds a secret: it writes `{{key}}`, and the host fills in
 a value the user typed into Settings > Secrets, only for an origin and a
@@ -1776,6 +1705,44 @@ through ConPTY, renderer-synthesized keystrokes, a resize verified inside the
 shell, and the real `claude` TUI reaching its version banner. It spawns a real
 session.
 
+## Third-party notices
+
+Every download carries the license texts of the code from other projects
+inside it. `packages/desktop/scripts/third-party-notices.mjs` writes them,
+plain text, each distinct text once after the list of packages it covers.
+
+| Where | What it holds |
+|---|---|
+| `floti-<version>-THIRD-PARTY-NOTICES.txt`, a release file | Every Rust crate floti links for a target the release carries floti for: `floti-host`'s normal dependencies, as `cargo metadata --filter-platform` resolves them for each target. Written by `floti.yml` after the SHA-256 list, so `sums` still sees the five builds alone, and signed like every release file. |
+| `THIRD-PARTY-NOTICES.txt` in the desktop app's resources | Every npm package the app carries or bundles (the production dependencies of `packages/desktop`, through the workspace packages it bundles), then floti's notices whole, since the app carries floti. `stage-floti.mjs` writes it for every build; a release build must be handed the release's floti notices (`FLOTI_NOTICES`), and each desktop job checks the packaged copy holds them (`third-party-notices.mjs check`). |
+| `LICENSE.electron.txt`, `LICENSES.chromium.html` | Electron's license and Chromium's. On Windows and Linux electron-builder leaves them beside the app; on macOS it deletes them, so `scripts/after-extract.mjs` copies them into the bundle's `Contents/Resources` first. |
+| `node/LICENSE` beside floti | Node's, staged with the pinned Node runtime (`node-runtime.mjs`). |
+
+Each package's notice is its own license files: those at its root, and those
+in its folders below that no build skips (tests, examples, benchmarks and
+docs are skipped), because a package that vendors another project's code
+keeps that project's license beside it (ring's `third_party/fiat/LICENSE`).
+A package that ships none gets, in order:
+
+1. **A vendored file**, for a crate named in `VENDORED`. The `v8` crate's
+   package leaves out every license file, and the static library it links,
+   librusty_v8, holds V8, ICU, Abseil, Highway, simdutf, FP16, fast_float,
+   Dragonbox and PartitionAlloc. `third-party/v8-<version>.txt` holds
+   rusty_v8's license files and each library's at the commits rusty_v8's tag
+   pins, written by `third-party-notices.mjs vendor-v8` from GitHub and
+   chromium.googlesource.com. libc++, libc++abi, libunwind and LLVM's libc are
+   linked too and left out: their LLVM exception waives the notice conditions
+   for compiled object code. A v8 update fails the notices until
+   `vendor-v8` has written the file for the new version.
+2. **A package from the same repository** under the same license that ships
+   its files (`@xterm/addon-serialize` takes `@xterm/xterm`'s).
+3. **The MIT License text** with the copyright its manifest's authors name,
+   when its license is a choice that offers MIT, or **this repository's
+   Apache-2.0 text** when it offers Apache-2.0.
+
+A package none of these covers fails the command, naming it, on the branch
+that adds it: `floti.yml` runs on every push that touches the crates.
+
 ## License
 
-Apache License 2.0. `LICENSE` and `NOTICE` at the repository root; the plugin SDK ships its own copies of both.
+Apache License 2.0. `LICENSE` and `NOTICE` at the repository root; the plugin SDK ships its own copies of both. Third-party code's licenses are in the notices above.

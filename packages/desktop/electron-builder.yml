@@ -13,16 +13,14 @@
 # cannot be loaded from inside the asar archive.
 # The app ID every OS remembers the app by (design I11): the macOS bundle ID,
 # the Windows AppUserModelID (main/index.ts sets the same) and the uninstall
-# entry's key, which electron-builder derives from it. It was
-# dev.coletaylor.helm while the app was Helm; build/installer.nsh removes what
-# an install under that ID left.
+# entry's key, which electron-builder derives from it.
 appId: dev.floti.desktop
 productName: Floti
 copyright: Apache License 2.0 - see LICENSE
 
 # The package name the packaged copy carries, which electron-builder names the
 # default install directory after (`sanitizeFileName(metadata.name)` for a
-# one-click per-user install): the workspace name `@helm/desktop` would leak an
+# one-click per-user install): the workspace name `@floti/desktop` would leak an
 # internal package name into a path the user sees. build/installer.nsh then
 # puts the install in %LOCALAPPDATA%\Programs\Floti\desktop, beside floti's
 # own Programs\Floti\bin. `app.getName()` still resolves through productName.
@@ -49,6 +47,11 @@ extraResources:
   # there (`main/host/desktop.ts` reads them from `resources/install`).
   - from: ../../scripts/install
     to: install
+  # The app's third-party notices: the npm packages it carries, then floti's.
+  # scripts/stage-floti.mjs writes them for every build (third-party-notices.mjs),
+  # and the release's desktop jobs check the packaged copy holds floti's.
+  - from: dist-host/THIRD-PARTY-NOTICES.txt
+    to: THIRD-PARTY-NOTICES.txt
 asarUnpack:
   - '**/node_modules/better-sqlite3/**'
   # On macOS this also unpacks node-pty's `spawn-helper`, an executable every
@@ -66,6 +69,13 @@ asarUnpack:
 # every build runs electron-builder.
 afterPack: ./scripts/after-pack.mjs
 
+# On macOS, copies Electron's license and Chromium's into the bundle's
+# Resources as LICENSE.electron.txt and LICENSES.chromium.html, the names a
+# Windows or Linux build keeps beside the app: electron-builder deletes them
+# from a Mac build when it makes the app, which is after this hook. Every
+# other platform it leaves alone.
+afterExtract: ./scripts/after-extract.mjs
+
 # No update feed is generated, because there is no auto-updater. The decision
 # and the three reasons behind it are in docs/PACKAGING.md; the short version is
 # that the build is unsigned, half the artefacts (the portable exe) have no
@@ -78,7 +88,7 @@ win:
   # The local host, built and staged by scripts/stage-floti.mjs. Lands at
   # `process.resourcesPath/floti.exe` (`carriedFloti`), which is only what
   # the installer lays down: `floti install-self` copies it, with the Node
-  # beside it, to %LOCALAPPDATA%\Programs\Floti\bin, and Helm runs floti
+  # beside it, to %LOCALAPPDATA%\Programs\Floti\bin, and the desktop runs floti
   # from there (`flotiBinary`). electron-builder adds these to the
   # top-level extraResources rather than replacing them. Beside it, the pinned
   # Node runtime it runs plugin services on (`node/node.exe`) and Node's LICENSE.
@@ -144,14 +154,14 @@ nsis:
   # resources\floti.exe: floti and its Node go to
   # %LOCALAPPDATA%\Programs\Floti\bin, that folder onto the user's PATH, and
   # `floti setup` runs from there. Stops no host: only a host still running
-  # from inside the install folder, from a Helm before this, is asked about
+  # from inside the install folder, from an earlier version, is asked about
   # and stopped first. Named rather than left to the `build/installer.nsh`
   # default, so a moved file fails the build. docs/PACKAGING.md has the rest.
   include: build/installer.nsh
 
 # Built by `pnpm dist:mac`, on a Mac or the macos-latest runner: electron-builder
 # makes a dmg only on macOS. Apple Silicon only - every Mac sold since 2023 is,
-# and an Intel build would double the release's size for machines Helm is not
+# and an Intel build would double the release's size for machines Floti is not
 # looked at on.
 mac:
   # The local host, as for `win`: `Contents/Resources/floti`, with the pinned
@@ -234,7 +244,7 @@ linux:
 appImage:
   # No arguments in the menu entry. electron-builder's default puts
   # `--no-sandbox` there, which starts every renderer without Chromium's OS
-  # sandbox for anybody who launches Helm from a desktop integration. AppRun
+  # sandbox for anybody who launches Floti from a desktop integration. AppRun
   # still adds it when user namespaces are refused; then the browser pane stays
   # off (main/browser-sandbox.ts).
   executableArgs: []

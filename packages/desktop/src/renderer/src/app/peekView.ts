@@ -7,8 +7,8 @@ import {
   type ChildMark,
   type PermissionMode,
   type SessionRecord
-} from '@helm/core/types'
-import { SESSION_STATE_LABEL, type ChildPeekProps, type PeekTone, type PopupAnchor, type TabIndicator } from '@helm/ui'
+} from '@floti/core/types'
+import { SESSION_STATE_LABEL, type ChildPeekProps, type PeekTone, type PopupAnchor, type TabIndicator } from '@floti/ui'
 import type { PeekAnchor as PeekOpenedFrom, PeekTarget } from './peek'
 import { commandWord } from './treeFamilies'
 

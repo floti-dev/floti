@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { EMPTY_INVENTORY, type DiscoveryResult, type Project } from '@helm/core/types'
+import { EMPTY_INVENTORY, type DiscoveryResult, type Project } from '@floti/core/types'
 import { SessionTree, type SessionTreeProps } from './SessionTree'
 
 const project = (path: string, workspacePath: string | null, kind: Project['kind'] = 'repo'): Project => ({
@@ -46,7 +46,7 @@ function renderTree(overrides: Partial<SessionTreeProps> = {}) {
     onLaunch: vi.fn(),
     launchingPath: null,
     onOpenSession: vi.fn(),
-    onAddRoot: vi.fn(),
+    onNewSession: vi.fn(),
     ...overrides
   }
   const view = render(<SessionTree {...props} />)

@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import type { ClaudeInventory } from '@helm/core'
+import type { ClaudeInventory } from '@floti/core'
 import { Chip } from './Chip'
 import { AgentIcon, CommandIcon, SparkIcon } from './icons'
 import { cn } from '../lib/cn'

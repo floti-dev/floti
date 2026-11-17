@@ -1,7 +1,6 @@
 //! macOS: the binary is renamed over; the desktop app is `Floti.app`,
 //! replaced by, or installed fresh in `~/Applications` as, the one in the
-//! release's zip. A `Helm.app` from before the rename is found too, and an
-//! update puts `Floti.app` beside it and removes it.
+//! release's zip.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -18,9 +17,6 @@ use crate::{Error, Result};
 
 /// What the desktop app is called: `productName` in `electron-builder.yml`.
 pub const DESKTOP_NAME: &str = "Floti";
-
-/// What the app was called before it was Floti, and so its bundle's name.
-pub const HELM_NAME: &str = "Helm";
 
 /// macOS's own archive tool, which keeps a bundle's links, modes and
 /// signature intact where a plain unzip would not.
@@ -83,15 +79,14 @@ impl Installs for Native {
     }
 
     fn desktop(&self, env: &UserEnv) -> Option<Desktop> {
-        // Floti's in any of the folders first, then one from before the
-        // rename.
-        [DESKTOP_NAME, HELM_NAME].into_iter().find_map(|name| {
-            Self::folders(env)
-                .into_iter()
-                .map(|folder| folder.join(Self::bundle_name(name)))
-                .find(|app| Self::info_plist(app).is_file())
-                .map(|path| Desktop { name, path })
-        })
+        Self::folders(env)
+            .into_iter()
+            .map(|folder| folder.join(Self::bundle_name(DESKTOP_NAME)))
+            .find(|app| Self::info_plist(app).is_file())
+            .map(|path| Desktop {
+                name: DESKTOP_NAME,
+                path,
+            })
     }
 
     fn desktop_target(&self, env: &UserEnv) -> Option<Desktop> {
@@ -149,17 +144,10 @@ impl Installs for Native {
         )
     }
 
-    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<Desktop> {
-        // In the folder the app is in, under its own name: `Floti.app` beside
-        // a `Helm.app` from before the rename, which `remove_replaced` takes
-        // away once it is in.
-        let installed = Desktop {
-            name: DESKTOP_NAME,
-            path: desktop.path.with_file_name(Self::bundle_name(DESKTOP_NAME)),
-        };
-        let unpacked = beside(&installed.path, NEW_COPY);
-        let old = beside(&installed.path, OLD_COPY);
-        if let Some(folder) = installed.path.parent() {
+    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
+        let unpacked = beside(&desktop.path, NEW_COPY);
+        let old = beside(&desktop.path, OLD_COPY);
+        if let Some(folder) = desktop.path.parent() {
             std::fs::create_dir_all(folder)
                 .map_err(|source| Error::path("make", folder, source))?;
         }
@@ -187,19 +175,11 @@ impl Installs for Native {
                     Self::bundle_name(DESKTOP_NAME)
                 )));
             }
-            Self::swap_in(&new, &installed.path, &old)
+            Self::swap_in(&new, &desktop.path, &old)
         })();
         let _ = Self::remove(&unpacked);
         let _ = Self::remove(&old);
-        swapped?;
-        Ok(installed)
-    }
-
-    fn remove_replaced(&self, replaced: &Desktop, installed: &Desktop) -> Result<()> {
-        if replaced.path == installed.path {
-            return Ok(());
-        }
-        Self::remove(&replaced.path)
+        swapped
     }
 
     fn no_display(&self, _env: &UserEnv) -> Option<String> {

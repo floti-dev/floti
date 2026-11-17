@@ -15,8 +15,8 @@ import {
 import { MINIMAL, SAMPLE, TEMPLATE } from './fixtures'
 
 /**
- * The validator Helm runs on every plugin it loads and `helm-plugin validate`
- * runs on every plugin somebody builds. What it accepts is what Helm will
+ * The validator Floti runs on every plugin it loads and `floti-plugin validate`
+ * runs on every plugin somebody builds. What it accepts is what Floti will
  * load; what it says when it refuses is what the author reads.
  */
 
@@ -43,7 +43,7 @@ describe('validateManifest - plugins that ship', () => {
     expect(manifest.network.map((pattern) => pattern.origin)).toEqual(['http://127.0.0.1:4790'])
   })
 
-  it('accepts the template `helm-plugin create` writes, with nothing to warn about', () => {
+  it('accepts the template `floti-plugin create` writes, with nothing to warn about', () => {
     const result = validateManifest(TEMPLATE)
     expect(result.warnings).toEqual([])
     const manifest = accepted(result)
@@ -56,7 +56,7 @@ describe('validateManifest - plugins that ship', () => {
 describe('validateManifest - what a manifest leaves out', () => {
   it('fills every optional part in, so nothing downstream asks whether it is there', () => {
     expect(accepted(validateManifest(MINIMAL))).toEqual({
-      apiVersion: 1,
+      apiVersion: 2,
       id: 'minimal',
       name: 'Minimal',
       version: null,
@@ -120,7 +120,7 @@ describe('validateManifest - what a manifest leaves out', () => {
     expect(accepted(validateManifest({ ...MINIMAL, panels, sessions: ['list'] })).sessions).toEqual({ start: false, list: true })
     expect(accepted(validateManifest({ ...MINIMAL, panels, sessions: [] })).sessions).toEqual({ start: false, list: false })
 
-    // Seeing the list needs no page of its own: the background page may read it.
+    // Seeing the list needs no page of its own: the background may read it.
     expect(validateManifest({ ...MINIMAL, sessions: ['list'] }).warnings).toEqual([])
     expect(validateManifest({ ...MINIMAL, sessions: ['start'] }).warnings).toEqual([
       'sessions "start" needs a panel or a tab: only a click in one of its pages can ask for a session, and this manifest declares neither'
@@ -138,59 +138,65 @@ describe('validateManifest - what a manifest leaves out', () => {
 })
 
 describe('validateManifest - apiVersion', () => {
-  it('says an unsupported version first and alone, naming 1 and 2: a newer plugin fails everything else for reasons not its own', () => {
+  it('runs version 2 alone', () => {
+    expect(SUPPORTED_API_VERSIONS).toEqual([2])
+    expect(accepted(validateManifest(MINIMAL)).apiVersion).toBe(2)
+  })
+
+  it('refuses an apiVersion 1 manifest first and alone, naming version 2 as the only one', () => {
+    const result = validateManifest({ apiVersion: 1, id: 'old', name: 'Old', background: 'bg.html' })
+    expect(result).toMatchObject({ ok: false, errors: ['apiVersion 1 is not supported: this Floti runs only apiVersion 2 plugins'] })
+  })
+
+  it('says an unsupported version first and alone: a plugin for another version fails everything else for reasons not its own', () => {
     const result = validateManifest({ apiVersion: 3, id: 'NOT VALID', name: '', panels: 'nope' })
     expect(result.ok).toBe(false)
-    expect(result.ok ? [] : result.errors).toEqual(['apiVersion 3 is not supported by this Floti, which supports 1 and 2'])
+    expect(result.ok ? [] : result.errors).toEqual(['apiVersion 3 is not supported: this Floti runs only apiVersion 2 plugins'])
   })
 
   it('says a missing version, and a version that is not a number', () => {
-    expect(validateManifest({ id: 'x', name: 'X' })).toMatchObject({ ok: false, errors: ['apiVersion is missing; this Floti supports 1 and 2'] })
-    expect(validateManifest({ apiVersion: '1', id: 'x', name: 'X' })).toMatchObject({
+    expect(validateManifest({ id: 'x', name: 'X' })).toMatchObject({
       ok: false,
-      errors: ['apiVersion "1" is not supported by this Floti, which supports 1 and 2']
+      errors: ['apiVersion is missing: this Floti runs only apiVersion 2 plugins']
+    })
+    expect(validateManifest({ apiVersion: '2', id: 'x', name: 'X' })).toMatchObject({
+      ok: false,
+      errors: ['apiVersion "2" is not supported: this Floti runs only apiVersion 2 plugins']
     })
   })
 
-  it('S2: passes a version 2 manifest whose background is a .js or .mjs module', () => {
-    expect(SUPPORTED_API_VERSIONS).toEqual([1, 2])
+  it('S2: passes a background that is a .js or .mjs module', () => {
     for (const background of ['dist/background.js', 'background.mjs']) {
-      const manifest = accepted(validateManifest({ ...MINIMAL, apiVersion: 2, background }))
-      expect(manifest.apiVersion).toBe(2)
-      expect(manifest.background).toBe(background)
+      expect(accepted(validateManifest({ ...MINIMAL, background })).background).toBe(background)
     }
-    // Every other field reads as in version 1.
-    const { apiVersion: one, ...rest } = accepted(validateManifest(MINIMAL))
-    const { apiVersion: two, ...restTwo } = accepted(validateManifest({ ...MINIMAL, apiVersion: 2 }))
-    expect([one, two]).toEqual([1, 2])
-    expect(restTwo).toEqual(rest)
   })
 
-  it('S2: refuses a version 2 background page and a version 1 background module, saying what each version takes', () => {
-    expect(errorsFor({ apiVersion: 2, background: 'background.html' })).toEqual([
-      'background must be a .js or .mjs module at apiVersion 2, and a .html page at apiVersion 1'
-    ])
-    expect(errorsFor({ apiVersion: 1, background: 'background.mjs' })).toEqual([
-      'background must be a .html page at apiVersion 1, and a .js or .mjs module at apiVersion 2'
-    ])
-    expect(accepted(validateManifest({ ...MINIMAL, background: 'background.html' })).background).toBe('background.html')
+  it('S2: refuses a background page, saying a background is a module', () => {
+    expect(errorsFor({ background: 'background.html' })).toEqual(['background must be a .js or .mjs module'])
   })
 
   it("S2: says a version the caller does not run in the host's words, naming what it runs", () => {
     // The host's own tests assert this sentence (crates/host/src/plugins/manifest.rs).
-    expect(validateManifest({ ...MINIMAL, apiVersion: 3 }, { apiVersions: [1, 2] })).toMatchObject({
+    expect(validateManifest({ ...MINIMAL, apiVersion: 1 }, { apiVersions: [2] })).toMatchObject({
       ok: false,
-      errors: ['apiVersion 3 is not supported: this host runs apiVersion 1, 2 plugins']
+      errors: ['apiVersion 1 is not supported: this host runs only apiVersion 2 plugins']
     })
-    expect(validateManifest(MINIMAL, { apiVersions: [2] })).toMatchObject({
+    expect(validateManifest({ ...MINIMAL, apiVersion: 3 }, { apiVersions: [2] })).toMatchObject({
       ok: false,
-      errors: ['apiVersion 1 is not supported: this host runs apiVersion 2 plugins']
+      errors: ['apiVersion 3 is not supported: this host runs only apiVersion 2 plugins']
+    })
+  })
+
+  it('refuses a version the SDK does not speak even when a caller names it', () => {
+    expect(validateManifest({ ...MINIMAL, apiVersion: 1 }, { apiVersions: [1, 2] })).toMatchObject({
+      ok: false,
+      errors: ['apiVersion 1 is not supported: this host runs only apiVersion 2 plugins']
     })
   })
 
   it('refuses anything that is not an object', () => {
-    for (const value of [null, [], 'helm', 1]) {
-      expect(validateManifest(value)).toMatchObject({ ok: false, errors: ['helm-plugin.json must be a JSON object'] })
+    for (const value of [null, [], 'text', 1]) {
+      expect(validateManifest(value)).toMatchObject({ ok: false, errors: ['floti-plugin.json must be a JSON object'] })
     }
   })
 })
@@ -221,7 +227,7 @@ describe('validateManifest - every problem, in one pass', () => {
     ['an icon that is not svg or png', { icon: 'icon.gif' }, 'icon must be a .svg or .png file'],
     ['a page outside the folder', { tabs: { a: { title: 'A', entry: '../a.html' } } }, 'must be a relative path that stays inside'],
     ['a page by absolute path', { tabs: { a: { title: 'A', entry: 'C:\\a.html' } } }, 'must be a relative path that stays inside'],
-    ['a page under Floti runtime prefix', { tabs: { a: { title: 'A', entry: './__helm/a.html' } } }, 'may not be under __helm/'],
+    ['a page under Floti runtime prefix', { tabs: { a: { title: 'A', entry: './__floti/a.html' } } }, 'may not be under __floti/'],
     ['a page that is not html', { tabs: { a: { title: 'A', entry: 'a.js' } } }, 'must be a .html file'],
     ['a surface key that is not a name', { panels: { Main: { title: 'M', entry: 'm.html' } } }, 'panels key "Main"'],
     [
@@ -245,16 +251,16 @@ describe('validateManifest - every problem, in one pass', () => {
     ['a rail naming no panel', { rail: { title: 'R', panel: 'missing' } }, 'rail.panel must name one of the panels - "missing" is not one'],
     [
       'a command naming no tab',
-      { background: 'bg.html', commands: [{ id: 'go', title: 'Go', tab: 'missing' }] },
+      { background: 'bg.mjs', commands: [{ id: 'go', title: 'Go', tab: 'missing' }] },
       'commands[0].tab must name one of the tabs'
     ],
     ['a command nothing can receive', { commands: [{ id: 'go', title: 'Go' }] }, 'needs a background or a rail panel'],
     [
       'a command id used twice',
-      { background: 'bg.html', commands: [{ id: 'go', title: 'Go' }, { id: 'go', title: 'Again' }] },
+      { background: 'bg.mjs', commands: [{ id: 'go', title: 'Go' }, { id: 'go', title: 'Again' }] },
       'commands[1].id "go" is used twice'
     ],
-    ['a setting type Helm does not draw', { settings: [{ key: 'a', label: 'A', type: 'colour' }] }, 'type must be one of text'],
+    ['a setting type Floti does not draw', { settings: [{ key: 'a', label: 'A', type: 'colour' }] }, 'type must be one of text'],
     ['a setting key used twice', { settings: [{ key: 'a', label: 'A', type: 'toggle' }, { key: 'a', label: 'B', type: 'toggle' }] }, 'is used twice'],
     ['a select with no options', { settings: [{ key: 'a', label: 'A', type: 'select', options: [] }] }, 'options must be a non-empty array'],
     [
@@ -296,7 +302,7 @@ describe('validateManifest - tools for sessions', () => {
     const manifest = accepted(
       validateManifest({
         ...MINIMAL,
-        background: 'bg.html',
+        background: 'bg.mjs',
         agent: {
           instructions: '  Use these for the list.  ',
           tools: { list_things: tool, 'add-thing': { description: 'Adds one.', inputSchema: schema } }
@@ -316,7 +322,7 @@ describe('validateManifest - tools for sessions', () => {
     const manifest = accepted(
       validateManifest({
         ...MINIMAL,
-        background: 'bg.html',
+        background: 'bg.mjs',
         agent: {
           tools: {
             list_things: { ...tool, readOnly: true },
@@ -339,51 +345,51 @@ describe('validateManifest - tools for sessions', () => {
   })
 
   it('takes no instructions as none', () => {
-    const manifest = accepted(validateManifest({ ...MINIMAL, background: 'bg.html', agent: { tools: { go: tool } } }))
+    const manifest = accepted(validateManifest({ ...MINIMAL, background: 'bg.mjs', agent: { tools: { go: tool } } }))
     expect(manifest.agent?.instructions).toBeNull()
   })
 
   it.each([
-    ['an agent that is not an object', { background: 'bg.html', agent: [] }, 'agent must be an object'],
-    ['no tools', { background: 'bg.html', agent: { instructions: 'x' } }, 'agent.tools must be an object with at least one tool'],
-    ['an empty tools object', { background: 'bg.html', agent: { tools: {} } }, 'agent.tools must be an object with at least one tool'],
-    ['tools with no background page to answer them', { agent: { tools: { go: tool } } }, 'needs a background'],
-    ['a tool name with capitals', { background: 'bg.html', agent: { tools: { ListThings: tool } } }, 'agent.tools key "ListThings"'],
-    ['a tool name starting with a digit', { background: 'bg.html', agent: { tools: { '1go': tool } } }, 'agent.tools key "1go"'],
-    ['a tool with no description', { background: 'bg.html', agent: { tools: { go: {} } } }, 'agent.tools.go.description must be a non-empty string'],
-    ['a tool that is not an object', { background: 'bg.html', agent: { tools: { go: 'Lists.' } } }, 'agent.tools.go must be an object'],
+    ['an agent that is not an object', { background: 'bg.mjs', agent: [] }, 'agent must be an object'],
+    ['no tools', { background: 'bg.mjs', agent: { instructions: 'x' } }, 'agent.tools must be an object with at least one tool'],
+    ['an empty tools object', { background: 'bg.mjs', agent: { tools: {} } }, 'agent.tools must be an object with at least one tool'],
+    ['tools with no background to answer them', { agent: { tools: { go: tool } } }, 'needs a background'],
+    ['a tool name with capitals', { background: 'bg.mjs', agent: { tools: { ListThings: tool } } }, 'agent.tools key "ListThings"'],
+    ['a tool name starting with a digit', { background: 'bg.mjs', agent: { tools: { '1go': tool } } }, 'agent.tools key "1go"'],
+    ['a tool with no description', { background: 'bg.mjs', agent: { tools: { go: {} } } }, 'agent.tools.go.description must be a non-empty string'],
+    ['a tool that is not an object', { background: 'bg.mjs', agent: { tools: { go: 'Lists.' } } }, 'agent.tools.go must be an object'],
     [
       'a tool read-only in words rather than true or false',
-      { background: 'bg.html', agent: { tools: { go: { ...tool, readOnly: 'yes' } } } },
+      { background: 'bg.mjs', agent: { tools: { go: { ...tool, readOnly: 'yes' } } } },
       'agent.tools.go.readOnly must be true or false'
     ],
     [
       'a description too long',
-      { background: 'bg.html', agent: { tools: { go: { description: 'd'.repeat(2001) } } } },
+      { background: 'bg.mjs', agent: { tools: { go: { description: 'd'.repeat(2001) } } } },
       'agent.tools.go.description must be at most 2000 characters'
     ],
-    ['instructions too long', { background: 'bg.html', agent: { instructions: 'i'.repeat(2001), tools: { go: tool } } }, 'at most 2000'],
+    ['instructions too long', { background: 'bg.mjs', agent: { instructions: 'i'.repeat(2001), tools: { go: tool } } }, 'at most 2000'],
     [
       'an input schema that is not an object schema',
-      { background: 'bg.html', agent: { tools: { go: { ...tool, inputSchema: { type: 'string' } } } } },
+      { background: 'bg.mjs', agent: { tools: { go: { ...tool, inputSchema: { type: 'string' } } } } },
       'agent.tools.go.inputSchema must be a JSON Schema whose type is "object"'
     ],
     [
       'an input schema too large',
-      { background: 'bg.html', agent: { tools: { go: { ...tool, inputSchema: { type: 'object', description: 'x'.repeat(17_000) } } } } },
+      { background: 'bg.mjs', agent: { tools: { go: { ...tool, inputSchema: { type: 'object', description: 'x'.repeat(17_000) } } } } },
       'agent.tools.go.inputSchema must be at most 16 KB'
     ],
     [
       'more tools than a session should be handed',
       {
-        background: 'bg.html',
+        background: 'bg.mjs',
         agent: { tools: Object.fromEntries(Array.from({ length: MANIFEST_LIMITS.tools + 1 }, (_, n) => [`t${String(n)}`, tool])) }
       },
       'agent.tools may hold at most 50'
     ],
     [
       'a name a session would be handed past 64 characters',
-      { id: 'a-plugin-with-a-rather-long-id', background: 'bg.html', agent: { tools: { list_every_single_thing: tool } } },
+      { id: 'a-plugin-with-a-rather-long-id', background: 'bg.mjs', agent: { tools: { list_every_single_thing: tool } } },
       'a session sees it as mcp__floti-plugin-a-plugin-with-a-rather-long-id__list_every_single_thing, which is 73 characters; Claude takes at most 64'
     ]
   ])('refuses %s', (_what, patch, message) => {
@@ -401,12 +407,12 @@ describe("the name a session sees for a plugin's tool", () => {
   it('is accepted at 64 characters, the most Claude takes', () => {
     const name = `list_${'x'.repeat(64 - 20 - id.length - 5)}`
     expect(`mcp__floti-plugin-${id}__${name}`).toHaveLength(64)
-    expect(errorsFor({ id, background: 'bg.html', agent: { tools: { [name]: tool } } })).toEqual([])
+    expect(errorsFor({ id, background: 'bg.mjs', agent: { tools: { [name]: tool } } })).toEqual([])
   })
 
   it('is refused one character past it, naming the limit', () => {
     const name = `list_${'x'.repeat(64 - 20 - id.length - 4)}`
-    expect(errorsFor({ id, background: 'bg.html', agent: { tools: { [name]: tool } } }).join('\n')).toContain(
+    expect(errorsFor({ id, background: 'bg.mjs', agent: { tools: { [name]: tool } } }).join('\n')).toContain(
       `which is 65 characters; Claude takes at most 64. Shorten the tool's name or the plugin's id`
     )
   })

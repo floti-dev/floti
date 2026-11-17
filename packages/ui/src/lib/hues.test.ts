@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { HUE_TINT_ALPHA, hueForText, PALETTE_HUES } from '@helm/core/types'
+import { HUE_TINT_ALPHA, hueForText, PALETTE_HUES } from '@floti/core/types'
 import { paletteTagClass, tagHue } from './hues'
 
 describe('palette tag classes', () => {
@@ -21,6 +21,6 @@ describe('palette tag classes', () => {
 
   it('have a Tailwind colour for every hue', () => {
     const css = readFileSync(join(import.meta.dirname, '../styles/theme.css'), 'utf8')
-    for (const hue of PALETTE_HUES) expect(css).toContain(`--color-hue-${hue}: var(--helm-hue-${hue});`)
+    for (const hue of PALETTE_HUES) expect(css).toContain(`--color-hue-${hue}: var(--floti-hue-${hue});`)
   })
 })

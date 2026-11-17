@@ -1,14 +1,14 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { LiveSession, SessionResources, SessionsOverview } from '@helm/core/types'
+import type { LiveSession, SessionResources, SessionsOverview } from '@floti/core/types'
 import { bridge } from './bridge.testkit'
 import { useLiveSessions } from './useLiveSessions'
 
 vi.mock('./bridge', () => import('./bridge.testkit'))
 
-function live(pid: number, helmSessionId: number | null): LiveSession {
+function live(pid: number, hostSessionId: number | null): LiveSession {
   return {
-    helmSessionId,
+    hostSessionId,
     pid,
     registered: true,
     cwd: 'C:\\work\\shop',
@@ -69,5 +69,24 @@ describe('useLiveSessions', () => {
     // A set the host sends once it is reached again is taken as before.
     act(() => bridge.emit('sessions:resources', [held(1)]))
     expect([...result.current.resources.keys()]).toEqual([1])
+  })
+
+  it('keeps a read that failed as why, never as nothing running, and Try again reads again', async () => {
+    let fail = true
+    bridge.answer('sessions:overview', () => {
+      if (fail) throw new Error('No local host answered on its socket.')
+      return { sessions: [], readAtMs: 7 }
+    })
+    bridge.answer('sessions:resources', () => [])
+
+    const { result } = renderHook(() => useLiveSessions())
+    await waitFor(() => expect(result.current.error).toMatch(/No local host answered/))
+    expect(result.current.readAtMs).toBeNull()
+
+    fail = false
+    act(() => result.current.retry())
+    await waitFor(() => expect(result.current.readAtMs).toBe(7))
+    expect(result.current.error).toBeNull()
+    expect(result.current.sessions).toEqual([])
   })
 })

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { LOCAL_HOST_KEY, LOCAL_HOST_LABEL, type RemoteHost } from '@helm/core/types'
-import type { DevicesSettingsProps, SettingsDevicesHost } from '@helm/ui'
+import { LOCAL_HOST_KEY, LOCAL_HOST_LABEL, type RemoteHost } from '@floti/core/types'
+import type { DevicesSettingsProps, SettingsDevicesHost } from '@floti/ui'
 import type { HostConnection } from '../../../shared/host/client'
 import type { AttachedUpdate, Devices, DevicesHostRef } from './host/devices'
 import type { RemoteHostView } from './host/remoteHosts'

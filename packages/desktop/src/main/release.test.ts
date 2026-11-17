@@ -109,7 +109,7 @@ describe('the version gate', () => {
 })
 
 describe('the files a release carries', () => {
-  it('signs the five desktop files and their list, the protocol types and the six floti files, sorted as jq sorts them', () => {
+  it("signs the five desktop files and their list, the protocol types, the six floti files and floti's notices, sorted as jq sorts them", () => {
     expect(signedFileNames('3.0.0')).toEqual([
       'Floti-3.0.0-arm64-mac.zip',
       'Floti-3.0.0-arm64.dmg',
@@ -118,6 +118,7 @@ describe('the files a release carries', () => {
       'Floti-3.0.0-portable.exe',
       'Floti-3.0.0-setup.exe',
       'floti-3.0.0-SHA256SUMS',
+      'floti-3.0.0-THIRD-PARTY-NOTICES.txt',
       'floti-3.0.0-linux-arm64',
       'floti-3.0.0-linux-x64',
       'floti-3.0.0-macos-arm64',
@@ -129,7 +130,7 @@ describe('the files a release carries', () => {
 
   it('carries each signed file with its minisign signature beside it, sorted as jq and LC_ALL=C sort sort them', () => {
     const names = releaseAssetNames('3.0.0')
-    expect(names).toHaveLength(26)
+    expect(names).toHaveLength(28)
     expect(names.slice(0, 6)).toEqual([
       'Floti-3.0.0-arm64-mac.zip',
       'Floti-3.0.0-arm64-mac.zip.minisig',

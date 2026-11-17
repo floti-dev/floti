@@ -9,8 +9,8 @@ import {
   type FamilyRow,
   type FamilyRoomOf,
   type PaneLayout
-} from '@helm/core/types'
-import type { TreeSession } from '@helm/ui'
+} from '@floti/core/types'
+import type { TreeSession } from '@floti/ui'
 
 /**
  * What a command child's row says of itself, or null for a session that is not

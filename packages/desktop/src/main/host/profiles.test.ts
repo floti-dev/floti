@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { profileDraft, type Profile } from '@helm/core'
+import { profileDraft, type Profile } from '@floti/core'
 import { FakeConnection, fakeLink } from '../../../test/host-connection'
 import { HostRequestError } from './client'
 import type * as P from './protocol'
@@ -24,9 +24,9 @@ const profile = (id: number, name: string, patch: Partial<P.Profile> = {}): P.Pr
 })
 
 interface Options {
-  /** Helm's own profiles, in their pin order. */
+  /** The desktop's own profiles, in their pin order. */
   own?: Profile[]
-  /** Whether Helm's profiles were copied into a host before. */
+  /** Whether the desktop's profiles were copied into a host before. */
   copied?: boolean
   /** The host's profiles to begin with. */
   hosted?: P.Profile[]
@@ -85,7 +85,7 @@ function world(options: Options = {}) {
   return { connection, hosted, link, profiles, emitted, logged, asked, written, marks }
 }
 
-/** A profile of Helm's own, as its database lists it. */
+/** A profile of the desktop's own, as its database lists it. */
 const own = (id: number, name: string, pinnedOrder: number | null, patch: Partial<Profile> = {}): Profile => ({
   ...profile(id, name, { pinnedOrder }),
   ...patch
@@ -165,12 +165,12 @@ describe('profiles in the local host', () => {
 
   it('exports the host’s document where Floti’s save dialog says, and writes nothing when it is cancelled', async () => {
     const w = world({ copied: true })
-    w.connection.answer('profile:export', () => ({ fileName: 'api.helm-profile.yaml', yaml: 'name: api\n' }))
-    expect(await w.profiles.exportProfile(1)).toEqual({ file: '/out/api.helm-profile.yaml' })
-    expect(w.written).toEqual([{ path: '/out/api.helm-profile.yaml', text: 'name: api\n' }])
+    w.connection.answer('profile:export', () => ({ fileName: 'api.floti-profile.yaml', yaml: 'name: api\n' }))
+    expect(await w.profiles.exportProfile(1)).toEqual({ file: '/out/api.floti-profile.yaml' })
+    expect(w.written).toEqual([{ path: '/out/api.floti-profile.yaml', text: 'name: api\n' }])
 
     const cancelled = world({ copied: true, exportTo: null })
-    cancelled.connection.answer('profile:export', () => ({ fileName: 'api.helm-profile.yaml', yaml: 'name: api\n' }))
+    cancelled.connection.answer('profile:export', () => ({ fileName: 'api.floti-profile.yaml', yaml: 'name: api\n' }))
     expect(await cancelled.profiles.exportProfile(1)).toEqual({ file: null })
     expect(cancelled.written).toEqual([])
   })
@@ -184,20 +184,20 @@ describe('profiles in the local host', () => {
   })
 
   it('imports the file Floti’s open dialog chose, by its name and text, and says what the host renamed it to', async () => {
-    const w = world({ copied: true, importFrom: '/in/api.helm-profile.yaml', files: { '/in/api.helm-profile.yaml': 'name: api\n' } })
+    const w = world({ copied: true, importFrom: '/in/api.floti-profile.yaml', files: { '/in/api.floti-profile.yaml': 'name: api\n' } })
     w.connection.answer('profile:import', () => ({ profile: profile(5, 'api (2)'), error: null, renamedTo: 'api (2)' }))
     expect(await w.profiles.importProfile()).toEqual({
       profile: expect.objectContaining({ id: 5, name: 'api (2)' }),
       cancelled: false,
       renamedTo: 'api (2)'
     })
-    expect(w.connection.payloads('profile:import')).toEqual([{ fileName: 'api.helm-profile.yaml', yaml: 'name: api\n' }])
+    expect(w.connection.payloads('profile:import')).toEqual([{ fileName: 'api.floti-profile.yaml', yaml: 'name: api\n' }])
 
-    w.connection.answer('profile:import', () => ({ profile: null, error: 'api.helm-profile.yaml: not a profile', renamedTo: null }))
+    w.connection.answer('profile:import', () => ({ profile: null, error: 'api.floti-profile.yaml: not a profile', renamedTo: null }))
     expect(await w.profiles.importProfile()).toEqual({
       profile: null,
       cancelled: false,
-      error: 'api.helm-profile.yaml: not a profile'
+      error: 'api.floti-profile.yaml: not a profile'
     })
   })
 

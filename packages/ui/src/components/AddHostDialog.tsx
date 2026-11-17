@@ -3,9 +3,7 @@ import {
   classifyHostFailure,
   describeAgents,
   describeHostSystem,
-  describeTransport,
   hostSystem,
-  lineToTryByHand,
   REMOTE_CONNECT_LINE,
   remoteHostFromDraft,
   sameDistro,
@@ -25,7 +23,7 @@ import {
   type RemoteSystem,
   type SshConfigHosts,
   type WslDistroList
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { Chip, type ChipTone } from './Chip'
 import {
@@ -37,7 +35,7 @@ import {
   primaryButton,
   secondaryButton
 } from './DialogParts'
-import { installButtonLabel, installQuestion, OfferDetails } from './HostsSettings'
+import { installButtonLabel, installQuestion } from './HostsSettings'
 import { CheckIcon, RefreshIcon, ServerIcon } from './icons'
 import { Overlay } from './Overlay'
 
@@ -59,7 +57,7 @@ import { Overlay } from './Overlay'
  * `cancelInstall`), and nothing is added or kept.
  *
  * The user's login is the access: there is no pairing code, approval, role or
- * prompt, and Helm never asks for a password or accepts a host key. Every
+ * prompt, and Floti never asks for a password or accepts a host key. Every
  * failure says what went wrong the one way Settings > Hosts says it
  * (`classifyHostFailure`), with the last line written, unedited, and the fix.
  */
@@ -84,7 +82,7 @@ export interface AddHostDialogProps {
   actions: AddHostActions
   /** The hosts this device has, so a name is not given twice. */
   hosts: readonly RemoteHost[]
-  /** Writes what quitting Helm does to the sessions it starts on the added host. */
+  /** Writes what quitting the desktop does to the sessions it starts on the added host. */
   onQuitChange: (id: string, choice: QuitSessions) => void
   onClose: () => void
   /** Mints the id of each check and connection; the browser's random UUID when absent. */
@@ -105,7 +103,7 @@ type Retry = { step: 'check' } | { step: 'connect'; floti: string | undefined; s
 
 type Screen =
   | { step: 'pick' }
-  | { step: 'checking'; phase: Phase; installed: boolean }
+  | { step: 'checking'; phase: Phase }
   | { step: 'install'; id: string; offer: InstallOffer }
   | {
       step: 'added'
@@ -123,7 +121,7 @@ interface PickedDistro {
   distro: string
   /** The ssh target of the Windows PC, or null for this PC. */
   through: string | null
-  /** That PC's name in Helm, for the name the host gets. */
+  /** That PC's name in Floti, for the name the host gets. */
   pcName: string
 }
 
@@ -236,10 +234,10 @@ export function AddHostDialog({
     setScreen({ step: 'failed', failure: classifyHostFailure({ ...input, ...who }), retry })
   }
 
-  const connect = (who: Subject, floti: string | undefined, system: RemoteSystem | null, installed: boolean): void => {
+  const connect = (who: Subject, floti: string | undefined, system: RemoteSystem | null): void => {
     const attempt = newAttempt()
     const current = begin(attempt)
-    setScreen({ step: 'checking', phase: 'connect', installed })
+    setScreen({ step: 'checking', phase: 'connect' })
     const request: HostAddRequest = {
       attempt,
       name: who.name,
@@ -275,7 +273,7 @@ export function AddHostDialog({
   const checked = (who: Subject, check: HostCheck): void => {
     const retry: Retry = { step: 'check' }
     if (check.kind === 'ready') {
-      connect(who, check.floti, check.system, false)
+      connect(who, check.floti, check.system)
     } else if (check.kind === 'offer') {
       running.current = { ...running.current, attempt: null, offer: check.id }
       setScreen({ step: 'install', id: check.id, offer: check.offer })
@@ -284,7 +282,7 @@ export function AddHostDialog({
         who,
         {
           lastLine: `floti ${check.found.version}${check.found.protocol === null ? '' : ` protocol ${check.found.protocol}`}`,
-          cause: { kind: 'newer', host: check.found.version, ours: check.helm, by: 'version' },
+          cause: { kind: 'newer', host: check.found.version, ours: check.desktop, by: 'version' },
           step: 'check'
         },
         retry
@@ -308,7 +306,7 @@ export function AddHostDialog({
   const runCheck = (who: Subject): void => {
     const attempt = newAttempt()
     const current = begin(attempt)
-    setScreen({ step: 'checking', phase: 'check', installed: false })
+    setScreen({ step: 'checking', phase: 'check' })
     actions.check({ transport: who.transport, attempt }).then(
       (check) => {
         if (current()) checked(who, check)
@@ -345,7 +343,7 @@ export function AddHostDialog({
   const install = (who: Subject, id: string, offer: InstallOffer): void => {
     const current = begin(null)
     running.current = { ...running.current, offer: id }
-    setScreen({ step: 'checking', phase: 'install', installed: false })
+    setScreen({ step: 'checking', phase: 'install' })
     // Main's install names what it is for by a host id; a host being added
     // has none yet, so the offer's own id stands in.
     actions.install(id, id).then(
@@ -353,14 +351,18 @@ export function AddHostDialog({
         if (!current()) return
         running.current = { ...running.current, offer: null }
         if (outcome.ok === true) {
-          connect(who, outcome.floti, offer.system, true)
+          connect(who, outcome.floti, offer.system)
           return
         }
         // Adding a host installs; only an added host's Update floti runs floti update.
         const step = outcome.ok === false ? outcome.step : 'update'
+        const said = outcome.ok === false ? outcome.said : undefined
         fail(
           who,
-          { lastLine: outcome.lastLine ?? '', cause: { kind: 'install', step, folder: offer.folder } },
+          {
+            lastLine: outcome.lastLine ?? '',
+            cause: { kind: 'install', step, folder: offer.folder, said, version: offer.version }
+          },
           { step: 'check' }
         )
       },
@@ -368,7 +370,10 @@ export function AddHostDialog({
         if (!current()) return
         fail(
           who,
-          { lastLine: (error as Error).message, cause: { kind: 'install', step: 'install', folder: offer.folder } },
+          {
+            lastLine: (error as Error).message,
+            cause: { kind: 'install', step: 'install', folder: offer.folder, version: offer.version }
+          },
           { step: 'check' }
         )
       }
@@ -382,7 +387,7 @@ export function AddHostDialog({
 
   const tryAgain = (who: Subject, retry: Retry): void => {
     if (retry.step === 'check') runCheck(who)
-    else connect(who, retry.floti, retry.system, retry.floti !== undefined)
+    else connect(who, retry.floti, retry.system)
   }
 
   const another = (): void => {
@@ -427,7 +432,7 @@ export function AddHostDialog({
     )
   } else if (screen.step === 'checking') {
     title = `Checking ${name}`
-    body = <CheckingScreen subject={subject} phase={screen.phase} installed={screen.installed} />
+    body = <CheckingScreen subject={subject} phase={screen.phase} />
     footer = (
       <>
         <GhostButton data-add-host-cancel onClick={cancel}>
@@ -441,11 +446,7 @@ export function AddHostDialog({
     )
   } else if (screen.step === 'install') {
     title = installQuestion(name, screen.offer)
-    body = (
-      <div data-add-host-install={screen.offer.action} className="flex flex-col gap-2">
-        <OfferDetails name={name} offer={screen.offer} />
-      </div>
-    )
+    body = <InstallScreen name={name} offer={screen.offer} />
     const { id, offer } = screen
     footer = (
       <>
@@ -555,8 +556,7 @@ function GhostButton({
 // Pick
 // ---------------------------------------------------------------------------
 
-const VIA_HINT: Record<HostTransport['kind'], string> = {
-  ssh: 'Floti reads only the Host names in ~/.ssh/config. ssh works out the address, user and key when it connects.',
+const VIA_HINT: Record<Exclude<HostTransport['kind'], 'ssh'>, string> = {
   command: `Run without a shell, with ${REMOTE_CONNECT_LINE} added as its last argument. It must carry input and output unchanged and ask nothing.`,
   wsl: `Floti runs floti in the distro with wsl.exe -d <distro> -- ${REMOTE_CONNECT_LINE}, through ssh for another PC’s. Nothing is approved in the distro.`
 }
@@ -591,15 +591,7 @@ function PickScreen({
       }}
     >
       <p className="text-[11.5px] leading-[1.55] text-fg-muted">
-        A host is Floti on another computer, such as a server or your other PC. Floti reaches it with your own{' '}
-        {ssh ? (
-          <>
-            ssh, the way <span className="font-mono">ssh {targetOf(draft) === '' ? 'build-box' : targetOf(draft)}</span>{' '}
-            does in a terminal.
-          </>
-        ) : (
-          'command, which carries its input and output.'
-        )}
+        {ssh ? 'Pick a computer you reach with ssh.' : 'Give the command that reaches a computer.'}
       </p>
       {ssh ? (
         <>
@@ -655,7 +647,8 @@ function PickScreen({
           <NameField draft={draft} onEdit={onEdit} />
         </div>
       )}
-      <p className="text-[11px] leading-[1.5] text-fg-subtle">{VIA_HINT[draft.via]}</p>
+      {draft.via !== 'ssh' && <p className="text-[11px] leading-[1.5] text-fg-subtle">{VIA_HINT[draft.via]}</p>}
+      {ssh && <WhatItNeeds target={targetOf(draft) === '' ? 'build-box' : targetOf(draft)} />}
       <button
         type="button"
         data-add-host-via={ssh ? 'command' : 'ssh'}
@@ -668,6 +661,39 @@ function PickScreen({
       {/* Enter in a field connects. */}
       <button type="submit" hidden aria-hidden tabIndex={-1} />
     </form>
+  )
+}
+
+/**
+ * "What does the other computer need?": two lines opened in place, read before
+ * anything connects. The same on every surface that opens the dialog.
+ */
+function WhatItNeeds({ target }: { target: string }): JSX.Element {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        type="button"
+        data-add-host-needs-toggle
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="w-fit text-[11.5px] text-accent-text underline-offset-2 hover:underline"
+      >
+        What does the other computer need?
+      </button>
+      {open && (
+        <div data-add-host-needs className="flex flex-col gap-1 text-[11.5px] leading-[1.55] text-fg-muted">
+          <p>
+            <span className="font-mono">ssh {target}</span> has to work in a terminal without a prompt (its host key
+            accepted, a key sign-in).
+          </p>
+          <p>
+            A Windows computer needs OpenSSH Server, with an administrator’s key in{' '}
+            <span className="font-mono break-all">C:\ProgramData\ssh\administrators_authorized_keys</span>.
+          </p>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -835,41 +861,14 @@ function SshHostList({
 
 type StepState = 'done' | 'now' | 'wait'
 
-/** The line the check runs, as typed by hand: `ssh -o BatchMode=yes build-box floti version`, `wsl.exe -d Debian -- floti version`. */
-function checkLine(transport: HostTransport): string {
-  switch (transport.kind) {
-    case 'ssh':
-      return `ssh -o BatchMode=yes ${transport.target} floti version`
-    case 'command':
-      return `${describeTransport(transport)} floti version`
-    case 'wsl': {
-      const wsl = `wsl.exe -d ${transport.distro} -- floti version`
-      return transport.through === undefined ? wsl : `ssh -o BatchMode=yes ${transport.through} ${wsl}`
-    }
-  }
-}
-
 function CheckingScreen({
   subject,
-  phase,
-  installed
+  phase
 }: {
   subject: Subject
   phase: Phase
-  installed: boolean
 }): JSX.Element {
-  const { name, transport } = subject
-  // ssh carries the check and the connection, to the host or to the PC a distro is on.
-  const ssh = transport.kind === 'ssh' || (transport.kind === 'wsl' && transport.through !== undefined)
-  const versionLine = checkLine(transport)
-  const through =
-    transport.kind === 'wsl'
-      ? transport.through === undefined
-        ? 'wsl.exe'
-        : 'your ssh and that PC’s wsl.exe'
-      : transport.kind === 'ssh'
-        ? 'your ssh'
-        : 'your command'
+  const { name } = subject
   const order: Phase[] = ['check', 'install', 'connect']
   const at = order.indexOf(phase)
   const state = (step: Phase): StepState => {
@@ -877,48 +876,16 @@ function CheckingScreen({
     return index < at ? 'done' : index === at ? 'now' : 'wait'
   }
   return (
-    <div className="flex flex-col gap-3.5">
-      <p className="text-[11.5px] leading-[1.55] text-fg-muted">
-        Floti asks {name}, through {through}, whether floti is there and which version, then connects to it. Nothing is
-        changed there without your yes.
-      </p>
-      <ol data-add-host-steps className="flex flex-col gap-2.5">
-        <Step state={state('check')} step="check" title={`Reach ${name} and look for floti there`} line={versionLine} />
-        <Step
-          state={state('install')}
-          step="install"
-          title={
-            phase === 'connect' && !installed ? 'Install floti, if it is missing: it is there' : 'Install floti, if it is missing'
-          }
-        />
-        <Step
-          state={state('connect')}
-          step="connect"
-          title={`Connect to ${name}`}
-          line={lineToTryByHand({ transport })}
-        />
-        <Step state="wait" step="quit" title="Choose what quitting does there" />
-      </ol>
-      <p className="text-[11px] leading-[1.5] text-fg-subtle">
-        {ssh
-          ? 'ssh runs without a terminal, so it never stops here to ask for a password. If it needs one, Floti says so and what to do.'
-          : `${transport.kind === 'wsl' ? 'wsl.exe' : 'The command'} runs without a terminal, so it never stops here to ask for anything. If it needs something, Floti shows what it said.`}
-      </p>
-    </div>
+    <ol data-add-host-steps className="flex flex-col gap-2.5">
+      <Step state={state('check')} step="check" title="Looking for floti" />
+      <Step state={state('install')} step="install" title="Install it if needed" />
+      <Step state={state('connect')} step="connect" title={`Connect to ${name}`} />
+      <Step state="wait" step="quit" title="Choose what quitting does" />
+    </ol>
   )
 }
 
-function Step({
-  state,
-  step,
-  title,
-  line
-}: {
-  state: StepState
-  step: string
-  title: string
-  line?: string
-}): JSX.Element {
+function Step({ state, step, title }: { state: StepState; step: string; title: string }): JSX.Element {
   return (
     <li data-add-host-step={step} data-add-host-step-state={state} className="flex items-start gap-2.5">
       <span
@@ -932,14 +899,7 @@ function Step({
       >
         {state === 'done' && <CheckIcon width={9} height={9} />}
       </span>
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className={cn('text-[12px]', state === 'wait' ? 'text-fg-subtle' : 'text-fg')}>{title}</span>
-        {line !== undefined && state !== 'wait' && (
-          <span className="truncate font-mono text-[10.5px] text-fg-subtle select-text" title={line}>
-            {line}
-          </span>
-        )}
-      </span>
+      <span className={cn('text-[12px]', state === 'wait' ? 'text-fg-subtle' : 'text-fg')}>{title}</span>
     </li>
   )
 }
@@ -973,18 +933,44 @@ function HostLine({
   )
 }
 
-const QUIT_OPTIONS: readonly { value: QuitSessions; title: string; detail: (name: string) => string }[] = [
-  {
-    value: 'keep',
-    title: 'Keep them running',
-    detail: (name) => `Sessions you start on ${name} keep running there. Open Floti again to pick them up.`
-  },
-  {
-    value: 'end',
-    title: 'End my sessions there',
-    detail: (name) => `Sessions you started on ${name} end when you quit.`
-  }
+const QUIT_OPTIONS: readonly { value: QuitSessions; title: string }[] = [
+  { value: 'keep', title: 'Keep them running' },
+  { value: 'end', title: 'End my sessions there' }
 ]
+
+/**
+ * floti is missing or too old on the computer: what the offer is, said once
+ * before anything is installed there. What the install does (the download,
+ * the checksum, where it goes) is on the button's own yes, not on this screen.
+ */
+function InstallScreen({ name, offer }: { name: string; offer: InstallOffer }): JSX.Element {
+  const { found, system, action, talks } = offer
+  const lead =
+    action === 'install'
+      ? `floti isn’t on ${name} yet. It installs in your user folder, with no admin rights.`
+      : talks
+        ? `${name} has floti ${found?.version ?? ''}, older than the floti ${offer.version} this Floti carries.`
+        : `${name} has floti ${found?.version ?? ''}, too old for this Floti to talk to.`
+  return (
+    <div data-add-host-install={action} className="flex flex-col gap-3.5">
+      <p className="text-[11.5px] leading-[1.55] text-fg-muted">{lead}</p>
+      <div className="flex items-center gap-2.5 rounded-well border border-border bg-surface-sunken px-3 py-2">
+        <ServerIcon width={14} height={14} className="shrink-0 text-fg-subtle" />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate font-mono text-[12.5px] text-fg">{name}</span>
+          <span data-settings-host-offer-system className="truncate text-[11px] text-fg-subtle">
+            {system.label}
+          </span>
+        </span>
+        <Chip tone="warn">
+          <span data-settings-host-offer-found>
+            {found === null ? 'floti not found' : `floti ${found.version}`}
+          </span>
+        </Chip>
+      </div>
+    </div>
+  )
+}
 
 function AddedScreen({
   screen,
@@ -997,10 +983,7 @@ function AddedScreen({
   const os = host.system !== undefined ? describeHostSystem(host.system) : system === null ? null : system.label
   return (
     <div data-add-host-added={host.id} className="flex flex-col gap-3.5">
-      <p className="text-[11.5px] leading-[1.55] text-fg-muted">
-        Its workspaces and sessions appear in the sidebar beside this PC’s. Its key is pinned on this PC: from now on
-        Floti connects only to the host that proves it.
-      </p>
+      <p className="text-[11.5px] leading-[1.55] text-fg-muted">It’s in the sidebar, next to this PC.</p>
       <HostLine
         name={host.name}
         detail={[`floti ${version}`, ...(os === null ? [] : [os])].join(' · ')}
@@ -1033,20 +1016,14 @@ function AddedScreen({
               >
                 {quit === option.value && <span className="size-1.5 rounded-full bg-accent" />}
               </span>
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="flex items-center gap-2 text-[12px] text-fg">
-                  {option.title}
-                  {option.value === 'keep' && <span className="text-[10.5px] text-fg-subtle">Default</span>}
-                </span>
-                <span className="text-[11px] leading-[1.5] text-fg-muted">{option.detail(host.name)}</span>
+              <span className="flex items-center gap-2 text-[12px] text-fg">
+                {option.title}
+                {option.value === 'keep' && <span className="text-[10.5px] text-fg-subtle">Default</span>}
               </span>
             </button>
           ))}
         </div>
       </div>
-      <p className="text-[11px] leading-[1.5] text-fg-subtle">
-        A lost connection never ends a session there. Change this in Settings &gt; Hosts.
-      </p>
     </div>
   )
 }

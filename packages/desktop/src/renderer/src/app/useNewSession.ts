@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { LOCAL_HOST_KEY, type HistorySession, type LaunchAgents } from '@helm/core/types'
+import { LOCAL_HOST_KEY, type HistorySession, type LaunchAgents } from '@floti/core/types'
 import type { LaunchedSession, LaunchSessionRequest } from '../../../shared/ipc'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'

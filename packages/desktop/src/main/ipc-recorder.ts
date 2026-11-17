@@ -1,20 +1,20 @@
 import { app, ipcMain, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 
 /**
- * Records every Electron IPC channel Helm uses, and which page used it, for
+ * Records every Electron IPC channel the desktop uses, and which page used it, for
  * the end-to-end test that holds Electron IPC to what `boundary.rs` lists as
  * client-only. It hooks Electron's own entry points: each `ipcMain` handler as
  * it is called, each listener's message as it arrives, and each web
  * contents' `send`. It records channel names only, never a payload.
  *
- * Off unless `HELM_RECORD_IPC` is `1`, which only the e2e fixture sets, and
+ * Off unless `FLOTI_RECORD_IPC` is `1`, which only the e2e fixture sets, and
  * never in a packaged build.
  */
 
-export const RECORD_IPC_ENV = 'HELM_RECORD_IPC'
+export const RECORD_IPC_ENV = 'FLOTI_RECORD_IPC'
 
-/** Which page used a channel: Helm's window, the plugins' background window, or another page. */
-export type RecordedPage = 'window' | 'background' | 'other'
+/** Which page used a channel: the desktop's window, or another page. */
+export type RecordedPage = 'window' | 'other'
 
 export interface RecordedChannel {
   channel: string
@@ -24,7 +24,7 @@ export interface RecordedChannel {
 }
 
 /** Where the record is read from, by `app.evaluate` in the test. */
-export const RECORD_GLOBAL = '__helmIpcChannels'
+export const RECORD_GLOBAL = '__flotiIpcChannels'
 
 const EMITTER_EVENTS = new Set(['newListener', 'removeListener', 'error'])
 
@@ -36,7 +36,6 @@ function pageOf(contents: WebContents | null | undefined): RecordedPage {
   } catch {
     return 'other'
   }
-  if (path.endsWith('/plugin-host.html')) return 'background'
   if (path.endsWith('/index.html') || path === '/') return 'window'
   return 'other'
 }

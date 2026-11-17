@@ -12,7 +12,7 @@ const PAGE = resolve('/work dir/alpha/pages/report.html')
 const UNREACHABLE = 'No local host answered on its socket.'
 
 const HOST_URL = 'floti-artifact://tok123/report.html'
-const WINDOW_URL = 'helm-content://artifact/tok123/report.html'
+const WINDOW_URL = 'floti-content://artifact/tok123/report.html'
 
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text)
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes)
@@ -185,7 +185,7 @@ describe('the Files view through the local host', () => {
     expect(decode(refused.body)).toBe('Forbidden')
     expect(connection.payloads('content:artifactBytes')).toHaveLength(1)
 
-    const bad = await files.artifactBytes('helm-content://scope/elsewhere')
+    const bad = await files.artifactBytes('floti-content://scope/elsewhere')
     expect(bad.status).toBe(400)
     expect(connection.payloads('content:artifactBytes')).toHaveLength(1)
   })
@@ -205,7 +205,7 @@ describe('the Files view through the local host', () => {
   it("maps an artifact's address between the host's scheme and the window's", () => {
     expect(windowArtifactUrl(HOST_URL)).toBe(WINDOW_URL)
     expect(hostArtifactUrl(WINDOW_URL)).toBe(HOST_URL)
-    expect(hostArtifactUrl('helm-content://scope/x')).toBeNull()
+    expect(hostArtifactUrl('floti-content://scope/x')).toBeNull()
     expect(() => windowArtifactUrl('https://example.com/x')).toThrow(/cannot serve/)
   })
 })

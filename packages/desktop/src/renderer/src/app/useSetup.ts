@@ -1,35 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AppSettings, TemplateChoice, TemplatePreview } from '@helm/core'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import type { AppSettings, TemplateChoice, TemplatePreview } from '@floti/core'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import type { ClaudeStatus } from '../../../shared/ipc'
-import { bridgeFor, helm } from './bridge'
+import { bridgeFor, desktop } from './bridge'
 
 /**
- * First run, and everything that stays true afterwards.
+ * The shell's CLI status and its new-workspace dialog. First run is the
+ * guided walkthrough's (`setup/SetupWindow.tsx`, `setup/ShellWalkthrough.tsx`).
  *
- * The pane is on screen whenever `settings` says there is nothing to scan and
- * no completion stamp - a *state*, not a wizard the app remembers having shown.
- * That is why nothing here holds a "step": quitting halfway through leaves the
- * settings exactly as they were, so the next launch resumes rather than
- * dropping the user into an empty launcher with a small button in the corner.
- *
- * The CLI status is fetched here and used twice: by the setup pane, and by the
- * version banner that outlives it. One request, one answer, so the two surfaces
- * cannot disagree about what version is installed.
+ * The CLI status is fetched here and used twice: by Settings, and by the
+ * version banner. One request, one answer, so the two surfaces cannot
+ * disagree about what version is installed.
  */
 
 export type WorkspaceDialogMode = 'new' | 'convert'
 
 /**
- * The built-in scaffold's id, written out rather than imported.
- *
- * `MINIMAL_TEMPLATE` is a *value* in `@helm/core`, and a value import of the
- * package root from the renderer reaches `launch/` and `store/` and fails at
- * rollup rather than at typecheck (CLAUDE.md, "Boundaries"). It is one word and
- * it is also the string the main process would answer with; if the two drift,
- * `template:list` disagrees with the picker's default.
+ * Starter's id: the one template Floti ships, built into the host. The
+ * picker's default before `template:list` answers; once it has, the default is
+ * whichever row the host marks `builtIn`, so a host that names it differently
+ * still opens with its built-in chosen.
  */
-const MINIMAL = 'minimal'
+const STARTER = 'starter'
+
+/** The row to choose: `current` while the listing still has it, else the built-in. */
+function chosenFrom(templates: readonly TemplateChoice[], current: string): string {
+  if (templates.some((choice) => choice.id === current)) return current
+  return templates.find((choice) => choice.builtIn)?.id ?? templates[0]?.id ?? current
+}
 
 const sentence = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
@@ -43,15 +41,8 @@ export interface SetupState {
   /** Why the last read failed, for the pane's Unknown; null once one succeeded. */
   statusError: string | null
   checking: boolean
-  suggestions: string[]
-  /** Why the suggestions could not be looked for; null when they were. */
-  suggestionsError: string | null
-  /** Whether the setup pane owns the window. */
-  needed: boolean
   recheck: () => void
   locateClaude: () => void
-  acceptSuggestion: (path: string) => void
-  finish: () => void
 
   /** The create-a-workspace dialog, which is reachable long after first run. */
   dialog: WorkspaceDialogMode | null
@@ -79,13 +70,13 @@ export interface SetupState {
     template: string
   }) => void
 
-  /** The picker: `minimal` first, then whatever is in the templates directory. */
+  /** The picker: Starter first, then whatever is in the templates directory. */
   templates: TemplateChoice[]
   templatesDir: string
   templateProblems: string[]
   /** Re-reads them, for when the manager has been authoring over this dialog. */
   refreshTemplates: () => void
-  /** Which one is chosen. Reset to `minimal` every time the dialog opens. */
+  /** Which one is chosen. Reset to Starter every time the dialog opens. */
   template: string
   chooseTemplate: (template: string) => void
   /** What "What gets written" lists. Null until the first answer lands. */
@@ -110,8 +101,6 @@ export function useSetup(
   const [status, setStatus] = useState<ClaudeStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
-  const [suggestions, setSuggestions] = useState<string[]>([])
-  const [suggestionsError, setSuggestionsError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<WorkspaceDialogMode | null>(null)
   const [dialogHost, setDialogHost] = useState<string>(LOCAL_HOST_KEY)
   /** The dialog's host as the last opening left it, for callbacks that outlive a render. */
@@ -124,7 +113,7 @@ export function useSetup(
   const [templates, setTemplates] = useState<TemplateChoice[]>([])
   const [templatesDir, setTemplatesDir] = useState('')
   const [templateProblems, setTemplateProblems] = useState<string[]>([])
-  const [template, setTemplate] = useState(MINIMAL)
+  const [template, setTemplate] = useState(STARTER)
   const [templatePreview, setTemplatePreview] = useState<TemplatePreview | null>(null)
 
   /** A host answer replaces what was known; a failure only says it could not look. */
@@ -137,34 +126,24 @@ export function useSetup(
   /** The button. Shows a spinner, because the user asked and is waiting. */
   const recheck = useCallback(() => {
     setChecking(true)
-    void helm
+    void desktop
       .invoke('setup:status')
       .then(answered, failed)
       .finally(() => setChecking(false))
   }, [answered, failed])
 
-  useEffect(() => {
-    void helm.invoke('roots:suggest').then(
-      (next) => {
-        setSuggestions(next)
-        setSuggestionsError(null)
-      },
-      (err: unknown) => setSuggestionsError(sentence(err))
-    )
-  }, [])
-
   /**
    * Read on mount, and again whenever the chosen CLI changes - however it
    * changed. The picker is one way; a settings write is another, and a banner
    * that only updated for the first would describe a version that is no longer
-   * the one Helm would launch.
+   * the one desktop would launch.
    *
    * No spinner here: nobody asked for this one, and `checking` is about a
    * button someone is looking at.
    */
   useEffect(() => {
     let cancelled = false
-    void helm.invoke('setup:status').then(
+    void desktop.invoke('setup:status').then(
       (next) => {
         if (!cancelled) answered(next)
       },
@@ -179,7 +158,7 @@ export function useSetup(
 
   const locateClaude = useCallback(() => {
     setChecking(true)
-    void helm
+    void desktop
       .invoke('setup:locateClaude')
       .then(
         (next) => {
@@ -193,20 +172,6 @@ export function useSetup(
       .finally(() => setChecking(false))
   }, [answered, failed])
 
-  const acceptSuggestion = useCallback(
-    (path: string) => {
-      void helm.invoke('roots:accept', { path }).then(() => onRootsChanged(LOCAL_HOST_KEY))
-    },
-    [onRootsChanged]
-  )
-
-  // No local state to update: the main process emits `settings:changed` from
-  // the same handler, and the launcher's copy of the settings is the one the
-  // pane's visibility is derived from.
-  const finish = useCallback(() => {
-    void helm.invoke('setup:complete')
-  }, [])
-
   /**
    * Re-reads the picker's rows.
    *
@@ -219,6 +184,9 @@ export function useSetup(
     void bridgeFor(dialogHostRef.current).invoke('template:list').then(
       (listing) => {
         setTemplates(listing.templates)
+        // A template deleted in the manager, or a host whose built-in has
+        // another id, leaves the choice on a row that is there.
+        setTemplate((current) => chosenFrom(listing.templates, current))
         setTemplatesDir(listing.dir)
         setTemplateProblems(listing.problems)
       },
@@ -256,16 +224,16 @@ export function useSetup(
         }
       }
       setDialogMode(mode)
-      // Back to `minimal` every time, deliberately. The picker is not a
+      // Back to Starter every time, deliberately. The picker is not a
       // preference: someone who used a template once has a workspace from it, and
       // the next one is a fresh decision rather than a repeat of the last.
-      setTemplate(MINIMAL)
+      setTemplate(STARTER)
       // Nothing from the last open: the effect below fills this in, and until
       // it does an empty list is the truthful thing to show.
       setTemplatePreview(null)
       setDialog(mode)
       // Read on open rather than at mount: a template is a directory somebody
-      // can add while Helm is running, and a list fetched once at startup would
+      // can add while the desktop is running, and a list fetched once at startup would
       // be stale for the rest of the session.
       refreshTemplates()
     },
@@ -304,7 +272,7 @@ export function useSetup(
   const chooseDialogDir = useCallback(() => {
     // The picker browses this PC's folders: a host on another computer's path is typed.
     if (dialogHostRef.current !== LOCAL_HOST_KEY) return
-    void helm
+    void desktop
       .invoke('path:chooseDirectory', {
         title: dialog === 'convert' ? 'Choose the folder to convert' : 'Create the workspace inside'
       })
@@ -364,22 +332,12 @@ export function useSetup(
     [onRootsChanged, onWorkspaceCreated]
   )
 
-  // One question: has this profile been through setup. Deliberately not "does
-  // it have roots" - the pane is where roots are acquired, and one that closed
-  // itself when the first folder landed would close halfway through its own job.
-  const needed = settings !== null && settings.firstRunCompletedAt === null
-
   return {
     status,
     statusError,
     checking,
-    suggestions,
-    suggestionsError,
-    needed,
     recheck,
     locateClaude,
-    acceptSuggestion,
-    finish,
     dialog,
     dialogHost,
     dialogDir,

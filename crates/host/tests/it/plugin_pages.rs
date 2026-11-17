@@ -3,10 +3,10 @@
 //! asks on `plugins:ui` and delivers on `plugins:deliver`.
 //!
 //! Each test runs a host over its own folders, with the fake agent as its
-//! only backend, and connects clients to it as Helm's window would: with
+//! only backend, and connects clients to it as the desktop's window would: with
 //! `pluginPages`, listening on `plugins:deliver` and `plugins:ui`. The plugin
-//! is a version 1 one written into the test's folder, whose program is the
-//! fake in `testkit/fake_program.rs`.
+//! is written into the test's folder, and its program is the fake in
+//! `testkit/fake_program.rs`.
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
@@ -45,7 +45,7 @@ const DELIVER: u64 = 10;
 const UI: u64 = 11;
 const CHANGED: u64 = 12;
 
-/// What Helm's window says it can do.
+/// What the desktop's window says it can do.
 const WINDOW: &[&str] = &["pluginPages", "terminal"];
 
 const PLUGIN: &str = "board";
@@ -94,7 +94,7 @@ impl World {
         }
     }
 
-    /// Helm's window on the testkit's device, listening for what the
+    /// the desktop's window on the testkit's device, listening for what the
     /// host sends plugin pages.
     async fn window(&self) -> TestClient {
         listening(TestClient::connect(&self.endpoint, WINDOW).await).await
@@ -109,7 +109,7 @@ impl World {
     /// The board plugin, reaching `network`, registered by `client`.
     async fn board(&self, client: &mut TestClient, network: &[String]) -> PathBuf {
         let manifest = json!({
-            "apiVersion": 1,
+            "apiVersion": 2,
             "id": PLUGIN,
             "name": "Board",
             "version": "1.0.0",
@@ -379,13 +379,13 @@ async fn s2_a_page_fetch_reaches_a_listed_origin_through_the_host_and_an_unliste
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_version_1_page_calling_what_the_bridge_lacks_is_told_in_helm_terms() {
+async fn a_page_calling_what_the_bridge_lacks_is_told_in_floti_terms() {
     let world = World::new();
     let mut window = world.window().await;
     world.board(&mut window, &[]).await;
     let (code, message) = failed(call(&mut window, "nothing.here", &[]).await);
     assert_eq!(code, PluginErrorCode::Invalid);
-    assert_eq!(message, "helm.nothing.here is not part of the bridge");
+    assert_eq!(message, "floti.nothing.here is not part of the bridge");
     world.stop().await;
 }
 

@@ -5,7 +5,7 @@
 // file existing.**
 //
 // It is the only thing in this repository that stops, replaces and removes the
-// Helm installed on this machine. Every check gets its own data directory
+// Floti installed on this machine. Every check gets its own data directory
 // precisely so it cannot reach the app somebody is using; this one cannot be
 // isolated, because it is *about* where an installer puts things. So instead of
 // being isolated it is made **unreachable by accident**: it is not a group of
@@ -15,7 +15,7 @@
 // That is a rule about structure rather than about care, and it is written this
 // way because care has already failed twice:
 //
-//   - It ran inside a `pnpm packaging-check` sweep, killed the installed Helm,
+//   - It ran inside a `pnpm packaging-check` sweep, killed the installed Floti,
 //     took the Claude Code session somebody was working in down with it, and
 //     then uninstalled the app so it had to be put back by hand.
 //   - The guard meant to prevent that had itself never been run - once because
@@ -24,16 +24,16 @@
 //     it was a `const` arrow in a temporal dead zone and threw out of the very
 //     branch that exists to refuse.
 //
-// A branch that refuses only when Helm is open is a branch nobody takes on the
+// A branch that refuses only when the desktop is open is a branch nobody takes on the
 // machine that wrote it. Moving the whole thing out of the suite means the
 // dangerous path is one somebody chooses, by name, rather than one a sweep can
 // wander into.
 //
-// Helm **hosts sessions**. Terminating it is not like terminating an editor
+// The desktop **hosts sessions**. Terminating it is not like terminating an editor
 // with everything saved.
 //
 //   pnpm verify:installer --yes                     # install, run, uninstall
-//   pnpm verify:installer --yes --replace-running   # ... even if Helm is open
+//   pnpm verify:installer --yes --replace-running   # ... even if the desktop is open
 //
 // Without `--yes` it explains itself and does nothing.
 
@@ -150,7 +150,7 @@ function installerChecks(setupExe) {
   }
 
   /**
-   * Stop if the installed Helm is **running**.
+   * Stop if the installed Floti is **running**.
    *
    * The second guard, kept even though this file is no longer reachable from a
    * suite. `--yes` says "I meant to run the tool"; this says "and I know
@@ -216,7 +216,7 @@ function installerChecks(setupExe) {
     const reportFile = join(realDataDir, 'spike-report.json')
     selftest = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null
     appDataFilesAfter = existsSync(realDataDir) ? readdirSync(realDataDir).sort() : []
-    besideExe = readdirSync(installDir).filter((name) => /^helm-data$|\.db$|\.db-wal$/.test(name))
+    besideExe = readdirSync(installDir).filter((name) => /^floti-data$|\.db$|\.db-wal$/.test(name))
   }
 
   say('uninstalling...')
@@ -305,7 +305,7 @@ function installerChecks(setupExe) {
       notes: [
         'Installed silently as the ordinary user. This shell is not elevated, and a per-machine installer would fail here rather than prompt, so "no elevation" is the reason it worked rather than an assumption.',
         'The installed app is asked for the same selftest the portable exe ran, and it reports its own mode and data directory, which are compared against %LOCALAPPDATA%\\Floti\\desktop.',
-        'Nothing landed beside the exe: the install directory holds no helm-data, no .db and no WAL.',
+        'Nothing landed beside the exe: the install directory holds no floti-data, no .db and no WAL.',
         'The install put floti in %LOCALAPPDATA%\\Programs\\Floti\\bin and ran floti setup from there, which also put that folder on the user\'s PATH and registered nothing to start the host at sign-in. The uninstaller leaves floti and the PATH entry for now; docs/PACKAGING.md lists them.',
         'A start-menu entry is created and a desktop icon deliberately is not. Both are checked, and the uninstall has to take back the one it made.',
         'An empty install directory counts as removed: NSIS deletes every file it installed but cannot remove the folder its own uninstaller is running out of, so an empty shell is the ordinary successful outcome.',

@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Profile, ProfileDraft, SessionRecord } from '@helm/core'
+import type { Profile, ProfileDraft, SessionRecord } from '@floti/core'
 import type { LaunchedProfile } from '../../../shared/ipc'
 import { bridge, remoteBridge } from './bridge.testkit'
 import { useProfiles } from './useProfiles'

@@ -6,9 +6,9 @@ import { PluginSessionDialog, pluginSessionCommand, type PluginSessionDialogProp
 function renderDialog(overrides: Partial<PluginSessionDialogProps> = {}): PluginSessionDialogProps {
   const props: PluginSessionDialogProps = {
     pluginName: 'Trackr',
-    cwd: 'C:\\Users\\me\\repos\\helm',
-    name: 'HELM-2',
-    prompt: 'work on HELM-2',
+    cwd: 'C:\\Users\\me\\repos\\floti',
+    name: 'FLOTI-2',
+    prompt: 'work on FLOTI-2',
     busy: false,
     error: null,
     onStart: vi.fn(),
@@ -25,10 +25,10 @@ describe('PluginSessionDialog', () => {
     const dialog = screen.getByRole('alertdialog', { name: 'Trackr wants to start a session' })
     const field = (name: string): string | null | undefined =>
       dialog.querySelector(`[data-plugin-session-field="${name}"] dd`)?.textContent
-    expect(field('folder')).toBe('C:\\Users\\me\\repos\\helm')
-    expect(field('name')).toBe('HELM-2')
-    expect(field('prompt')).toBe('work on HELM-2')
-    expect(field('command')).toBe('claude -n HELM-2 "work on HELM-2"')
+    expect(field('folder')).toBe('C:\\Users\\me\\repos\\floti')
+    expect(field('name')).toBe('FLOTI-2')
+    expect(field('prompt')).toBe('work on FLOTI-2')
+    expect(field('command')).toBe('claude -n FLOTI-2 "work on FLOTI-2"')
   })
 
   it('puts the focus on Cancel, so an Enter meant for something else starts nothing', async () => {

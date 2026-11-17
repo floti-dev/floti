@@ -375,7 +375,7 @@ fn status_keys_every_kind_of_entry_by_its_path_inside_the_project_a_rename_consu
 #[tokio::test(flavor = "multi_thread")]
 async fn status_reports_each_changed_file_under_the_project_and_an_empty_map_for_a_clean_one() {
     let mut world = World::start().await;
-    let repo = world.committed_repo("helm files");
+    let repo = world.committed_repo("floti files");
     let root = repo.path().to_path_buf();
     world.know(&root).await;
     assert_eq!(world.status(&root).await.unwrap().files, files(&[]));
@@ -402,7 +402,7 @@ async fn status_reports_each_changed_file_under_the_project_and_an_empty_map_for
 #[tokio::test(flavor = "multi_thread")]
 async fn status_carries_modified_added_deleted_renamed_and_untracked_files_by_root_relative_path() {
     let mut world = World::start().await;
-    let repo = world.committed_repo("helm files");
+    let repo = world.committed_repo("floti files");
     let root = repo.path().to_path_buf();
     repo.write("notes/was.md", &lines(20));
     repo.commit_all("a note");
@@ -431,7 +431,7 @@ async fn status_carries_modified_added_deleted_renamed_and_untracked_files_by_ro
 #[tokio::test(flavor = "multi_thread")]
 async fn status_answers_for_a_folder_inside_a_repository_with_paths_relative_to_that_folder() {
     let mut world = World::start().await;
-    let repo = world.committed_repo("helm files");
+    let repo = world.committed_repo("floti files");
     let src = repo.path().join("src");
     world.know(&src).await;
     write(&src.join("a.ts"), lines(12));
@@ -491,7 +491,7 @@ async fn a_git_failure_is_reported_as_an_error_never_as_an_empty_status() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_read_marks_the_lines_that_differ_from_the_last_commit() {
     let mut world = World::start().await;
-    let repo = world.committed_repo("helm files");
+    let repo = world.committed_repo("floti files");
     let root = repo.path().to_path_buf();
     world.know(&root).await;
     let mut text_lines: Vec<String> = lines(10).split('\n').map(str::to_owned).collect();
@@ -511,7 +511,7 @@ async fn a_read_marks_the_lines_that_differ_from_the_last_commit() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_read_tells_unchanged_new_ignored_and_outside_apart() {
     let mut world = World::start().await;
-    let repo = world.committed_repo("helm files");
+    let repo = world.committed_repo("floti files");
     let root = repo.path().to_path_buf();
     world.know(&root).await;
     write(&root.join("src").join("fresh.ts"), "x\n");
@@ -552,7 +552,7 @@ async fn a_read_tells_unchanged_new_ignored_and_outside_apart() {
         FileChangeState::Ignored
     );
 
-    let elsewhere = world.folder("helm no-repo");
+    let elsewhere = world.folder("floti no-repo");
     write(&elsewhere.join("x.txt"), "x\n");
     world.know(&elsewhere).await;
     assert_eq!(
@@ -570,7 +570,7 @@ async fn a_read_tells_unchanged_new_ignored_and_outside_apart() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_read_of_a_file_whose_name_git_would_take_as_a_pattern_answers_for_that_file() {
     let mut world = World::start().await;
-    let repo = world.committed_repo("helm files");
+    let repo = world.committed_repo("floti files");
     let root = repo.path().to_path_buf();
     world.know(&root).await;
     repo.write("src/[id].tsx", "one\n");
@@ -594,7 +594,7 @@ async fn a_read_of_a_file_whose_name_git_would_take_as_a_pattern_answers_for_tha
 #[tokio::test(flavor = "multi_thread")]
 async fn a_read_has_line_feeds_only_says_how_the_file_ended_its_lines_and_carries_its_changes() {
     let mut world = World::start().await;
-    let repo = world.committed_repo("helm files");
+    let repo = world.committed_repo("floti files");
     let root = repo.path().to_path_buf();
     world.know(&root).await;
     write(&root.join("src").join("a.ts"), "one\r\ntwo\r\n");
@@ -619,14 +619,14 @@ async fn a_read_has_line_feeds_only_says_how_the_file_ended_its_lines_and_carrie
 #[tokio::test(flavor = "multi_thread")]
 async fn a_read_of_a_path_outside_the_project_is_refused_before_it_is_read() {
     let mut world = World::start().await;
-    let root = world.folder("helm files");
+    let root = world.folder("floti files");
     world.know(&root).await;
-    let outside = world.folder("helm outside");
+    let outside = world.folder("floti outside");
     write(&outside.join("secret.txt"), "nope");
 
     for path in [
         outside.join("secret.txt"),
-        root.join("..").join("helm outside").join("secret.txt"),
+        root.join("..").join("floti outside").join("secret.txt"),
     ] {
         let view = world.read(&root, &path).await.unwrap();
         assert_eq!(view.content, "");
@@ -643,7 +643,7 @@ async fn a_read_of_a_path_outside_the_project_is_refused_before_it_is_read() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_read_says_a_file_is_gone_binary_or_too_large_rather_than_showing_nothing() {
     let mut world = World::start().await;
-    let root = world.folder("helm files");
+    let root = world.folder("floti files");
     world.know(&root).await;
 
     let gone = world.read(&root, &root.join("missing.txt")).await.unwrap();
@@ -672,8 +672,8 @@ async fn a_read_says_a_file_is_gone_binary_or_too_large_rather_than_showing_noth
 #[tokio::test(flavor = "multi_thread")]
 async fn a_project_reached_through_a_link_reads_as_the_project_and_a_link_out_of_it_is_refused() {
     let mut world = World::start().await;
-    let root = world.folder("helm files");
-    let elsewhere = world.folder("helm files elsewhere");
+    let root = world.folder("floti files");
+    let elsewhere = world.folder("floti files elsewhere");
     let linked = elsewhere.join("linked project");
     let escape = root.join("escape");
     write(&root.join("a.txt"), "one\n");
@@ -742,7 +742,7 @@ fn short_path(path: &Path) -> Option<PathBuf> {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_project_named_by_its_short_alias_reads_as_the_project() {
     let mut world = World::start().await;
-    let root = world.folder("helm files long name");
+    let root = world.folder("floti files long name");
     write(&root.join("a.txt"), "one\n");
     let Some(short) = short_path(&root) else {
         // No 8.3 names here: nothing to read through.
@@ -776,7 +776,7 @@ async fn a_project_named_by_its_short_alias_reads_as_the_project() {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_list_is_what_git_tracks_and_does_not_ignore_relative_to_the_project() {
     let mut world = World::start().await;
-    let repo = world.committed_repo("helm files");
+    let repo = world.committed_repo("floti files");
     let root = repo.path().to_path_buf();
     world.know(&root).await;
     write(&root.join("src").join("b.ts"), "new\n");
@@ -793,7 +793,7 @@ async fn the_list_is_what_git_tracks_and_does_not_ignore_relative_to_the_project
 #[tokio::test(flavor = "multi_thread")]
 async fn a_folder_with_no_repository_is_walked_skipping_what_the_tree_skips() {
     let mut world = World::start().await;
-    let root = world.folder("helm files");
+    let root = world.folder("floti files");
     write(&root.join("docs").join("a.md"), "x");
     write(&root.join("top.txt"), "x");
     write(&root.join("node_modules").join("dep").join("index.js"), "x");
@@ -814,7 +814,7 @@ async fn a_folder_with_no_repository_is_walked_skipping_what_the_tree_skips() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_folder_lists_its_entries_marking_the_skipped_ones_and_refuses_a_path_out_of_the_root() {
     let mut world = World::start().await;
-    let root = world.folder("helm files");
+    let root = world.folder("floti files");
     write(&root.join("src").join("file10.ts"), "x");
     write(&root.join("src").join("file2.ts"), "x");
     write(&root.join("node_modules").join("dep").join("index.js"), "x");
@@ -852,7 +852,7 @@ async fn a_folder_lists_its_entries_marking_the_skipped_ones_and_refuses_a_path_
 #[tokio::test(flavor = "multi_thread")]
 async fn a_folder_in_a_repository_marks_what_git_ignores() {
     let mut world = World::start().await;
-    let repo = world.committed_repo("helm files");
+    let repo = world.committed_repo("floti files");
     let root = repo.path().to_path_buf();
     write(&root.join("build").join("out.js"), "x");
     world.know(&root).await;
@@ -882,7 +882,7 @@ async fn a_folder_in_a_repository_marks_what_git_ignores() {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_files_view_lists_reads_and_reports_status_only_under_a_folder_the_host_knows() {
     let mut world = World::start().await;
-    let repo = GitRepo::init(world.folder("helm files-ipc"));
+    let repo = GitRepo::init(world.folder("floti files-ipc"));
     repo.write("src/a.ts", "one\ntwo\nthree\n");
     repo.commit_all("first");
     let root = repo.path().to_path_buf();
@@ -908,7 +908,7 @@ async fn the_files_view_lists_reads_and_reports_status_only_under_a_folder_the_h
     assert_eq!(view.changes, tracked(&[(2, 2)], &[], 1, 0));
     assert_eq!(world.list(&root).await.unwrap().files, ["src/a.ts"]);
 
-    let stranger = world.folder("helm stranger");
+    let stranger = world.folder("floti stranger");
     let parent = world.dirs.root().to_path_buf();
     let climbing = root.join("..");
     for unknown in [&stranger, &parent, &climbing] {
@@ -926,7 +926,7 @@ async fn the_files_view_lists_reads_and_reports_status_only_under_a_folder_the_h
 #[tokio::test(flavor = "multi_thread")]
 async fn a_folder_is_known_once_a_session_starts_in_it_and_not_once_the_session_is_gone() {
     let mut world = World::start().await;
-    let root = world.folder("helm session folder");
+    let root = world.folder("floti session folder");
     write(&root.join("a.txt"), "one\n");
     refused_as_unknown(&world.list(&root).await.unwrap_err(), &root);
 
@@ -963,14 +963,14 @@ async fn a_folder_is_known_once_a_session_starts_in_it_and_not_once_the_session_
 #[tokio::test(flavor = "multi_thread")]
 async fn the_watching_client_alone_is_told_which_files_changed_and_not_once_it_lets_go() {
     let mut world = World::start().await;
-    let repo = GitRepo::init(world.folder("helm files-ipc"));
+    let repo = GitRepo::init(world.folder("floti files-ipc"));
     repo.write("src/a.ts", "one\ntwo\nthree\n");
     repo.commit_all("first");
     let root = repo.path().to_path_buf();
-    let other = world.folder("helm other root");
+    let other = world.folder("floti other root");
     world.know(&root).await;
     world.know(&other).await;
-    let stranger = world.folder("helm stranger");
+    let stranger = world.folder("floti stranger");
 
     let mut bystander = TestClient::connect(&world.endpoint, CAPABILITIES).await;
     bystander
@@ -1117,7 +1117,7 @@ async fn the_watching_client_alone_is_told_which_files_changed_and_not_once_it_l
 #[tokio::test(flavor = "multi_thread")]
 async fn the_file_list_is_reused_until_a_watch_says_the_files_moved() {
     let mut world = World::start().await;
-    let root = world.folder("helm files");
+    let root = world.folder("floti files");
     write(&root.join("a.txt"), "x");
     world.know(&root).await;
     world
@@ -1150,7 +1150,7 @@ async fn the_file_list_is_reused_until_a_watch_says_the_files_moved() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_client_that_disconnects_leaves_no_watch_and_the_others_keep_theirs() {
     let mut world = World::start().await;
-    let root = world.folder("helm files");
+    let root = world.folder("floti files");
     world.know(&root).await;
     let mut leaving = TestClient::connect(&world.endpoint, CAPABILITIES).await;
     leaving

@@ -1260,10 +1260,10 @@ impl Installs for RecordedInstalls {
         false
     }
 
-    fn install_desktop(&self, target: &Desktop, release: &Path) -> floti_host::Result<Desktop> {
+    fn install_desktop(&self, _target: &Desktop, release: &Path) -> floti_host::Result<()> {
         let bytes = std::fs::read(release).expect("read the release file");
         self.installed.lock().unwrap().push(bytes);
-        Ok(target.clone())
+        Ok(())
     }
 
     fn opener(&self, desktop: &Desktop) -> (PathBuf, Vec<String>) {

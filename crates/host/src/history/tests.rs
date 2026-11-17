@@ -466,12 +466,12 @@ fn each_pass_reads_only_what_the_prompt_record_gained_and_starts_over_when_it_sh
     assert!(session_of(&store, ONE).is_none());
     assert_eq!(prompts_of(&store, TWO), ["only one now"]);
 
-    // Gone: the index starts over with nothing, and says why.
+    // Gone: the index starts over with nothing, and holds none - not Unknown.
     std::fs::remove_file(world.history_file()).unwrap();
     let gone = pass(&store, &backend);
     assert_eq!((gone.summary.sessions, gone.summary.prompts), (0, 0));
     assert_eq!(gone.summary.indexed_bytes, 0);
-    assert!(gone.summary.error.is_some());
+    assert_eq!(gone.summary.error, None);
 }
 
 #[test]

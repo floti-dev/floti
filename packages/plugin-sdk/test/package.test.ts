@@ -57,7 +57,7 @@ function npm(args: string[], cwd: string): Run {
 
 beforeAll(() => {
   if (!existsSync(NPM_CLI)) throw new Error(`these tests run npm, and it is not beside node at ${NPM_CLI}`)
-  root = mkdtempSync(join(tmpdir(), 'helm sdk package-'))
+  root = mkdtempSync(join(tmpdir(), 'floti sdk package-'))
   const pack = npm(['pack', '--json', '--pack-destination', root], SDK_DIR)
   expect(pack.status, pack.stderr).toBe(0)
   const [report] = JSON.parse(pack.stdout) as Array<{ filename: string; files: Array<{ path: string }> }>
@@ -81,9 +81,9 @@ describe(`${NAME} as published`, () => {
     expect(packed).toContain('LICENSE')
     expect(packed).toContain('NOTICE')
     expect(packed).toContain('README.md')
-    expect(packed).toContain('bin/helm-plugin.mjs')
-    expect(packed).toContain('helm-plugin.schema.json')
-    expect(packed).toContain('template/helm-plugin.json')
+    expect(packed).toContain('bin/floti-plugin.mjs')
+    expect(packed).toContain('floti-plugin.schema.json')
+    expect(packed).toContain('template/floti-plugin.json')
     expect(packed).toContain('template/pages/panel.js')
     expect(packed).toContain('template/background/main.js')
     // The page and background globals, types only.
@@ -102,12 +102,12 @@ describe(`${NAME} as published`, () => {
   })
 
   it('creates a plugin through npm exec, which installs the SDK, then checks it with its own copy', () => {
-    const created = npm(['exec', '--yes', `--package=${tarball}`, '--', 'helm-plugin', 'create', 'Issue Tracker'], root)
+    const created = npm(['exec', '--yes', `--package=${tarball}`, '--', 'floti-plugin', 'create', 'Issue Tracker'], root)
     expect(created.status, created.stderr).toBe(0)
     expect(created.stdout).toContain('Created "Issue tracker" (issue-tracker)')
     const folder = join(root, 'Issue Tracker')
 
-    const manifest = JSON.parse(readFileSync(join(folder, 'helm-plugin.json'), 'utf8')) as { $schema: string }
+    const manifest = JSON.parse(readFileSync(join(folder, 'floti-plugin.json'), 'utf8')) as { $schema: string }
     // Nothing yet: the schema is the plugin's own, from its node_modules.
     expect(existsSync(resolve(folder, manifest.$schema))).toBe(false)
 
@@ -128,9 +128,9 @@ describe(`${NAME} as published`, () => {
         [
           `import { validateManifest } from '${NAME}/manifest'`,
           `import { checkPluginFolder } from '${NAME}/folder'`,
-          `import schema from '${NAME}/helm-plugin.schema.json' with { type: 'json' }`,
+          `import schema from '${NAME}/floti-plugin.schema.json' with { type: 'json' }`,
           `import pkg from '${NAME}/package.json' with { type: 'json' }`,
-          // No framework and no window.helm here: the stores import, and read nothing until subscribed.
+          // No framework and no window.floti here: the stores import, and read nothing until subscribed.
           `import { secret, settings } from '${NAME}/stores'`,
           `console.log(typeof validateManifest, checkPluginFolder('.').ok, typeof schema.properties, pkg.name, typeof settings.subscribe, typeof secret)`
         ].join('\n')

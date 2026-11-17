@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EMPTY_INVENTORY, type LaunchAgent, type LaunchAgents, type Profile, type Project } from '@helm/core/types'
+import { EMPTY_INVENTORY, type LaunchAgent, type LaunchAgents, type Profile, type Project } from '@floti/core/types'
 import { agentOptions, agentValuesNote, resolveLaunch, runnableAgent, worktreePlan } from './launchAgent'
 
 function agent(name: string, patch: Partial<LaunchAgent> = {}): LaunchAgent {

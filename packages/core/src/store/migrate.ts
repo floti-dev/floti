@@ -10,7 +10,7 @@ import { MIGRATIONS } from './migrations.generated'
  * same ordering, no filesystem.
  */
 
-const JOURNAL_TABLE = '__helm_migrations'
+const JOURNAL_TABLE = '__floti_migrations'
 
 export interface MigrationOutcome {
   applied: string[]

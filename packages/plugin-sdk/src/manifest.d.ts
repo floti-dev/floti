@@ -7,7 +7,7 @@ import type {
   TabSpec
 } from './types.js'
 
-/** The bridge versions this SDK speaks, 1 and 2: what `helm-plugin validate` accepts. */
+/** The plugin API versions this SDK speaks, 2 alone: what `floti-plugin validate` accepts. */
 export const SUPPORTED_API_VERSIONS: readonly ApiVersion[]
 /** Every top-level field a manifest may have. Anything else is a warning. */
 export const MANIFEST_FIELDS: readonly string[]
@@ -48,7 +48,7 @@ export const AGENT_TOOL_NAME_MAX: number
 export const AGENT_TEXT_MAX: number
 /** A tool's `inputSchema`, as JSON, in characters. */
 export const INPUT_SCHEMA_MAX_CHARS: number
-/** The path prefix Helm serves its own runtime under on every plugin's origin. */
+/** The path prefix Floti serves its own runtime under on every plugin's origin. */
 export const RESERVED_PREFIX: string
 export const PANEL_ACTION_ICONS: readonly PanelActionIcon[]
 
@@ -69,7 +69,7 @@ export interface NormalizedExec {
 }
 
 export interface NormalizedService {
-  /** `node`: `command` is a script in the plugin folder, run by Helm's own Node. */
+  /** `node`: `command` is a script in the plugin folder, run by Floti's own Node. */
   kind: 'command' | 'node'
   command: string
   args: string[]
@@ -82,7 +82,7 @@ export interface NormalizedAgentTool {
   description: string
   /** As the manifest wrote it; `{ type: 'object', properties: {} }` when it wrote none. */
   inputSchema: Record<string, unknown>
-  /** The sessions Helm starts call it without asking. False when the manifest did not say. */
+  /** The sessions Floti starts call it without asking. False when the manifest did not say. */
   readOnly: boolean
 }
 
@@ -94,7 +94,7 @@ export interface NormalizedAgent {
 
 /** A manifest that passed, with every optional part filled in and every path in one spelling. */
 export interface NormalizedManifest {
-  /** 1: pages get `window.helm` and `background` is a page. 2: pages get `window.floti` and `background` is a module the host runs. */
+  /** 2: pages get `window.floti` and `background` is a module the host runs. */
   apiVersion: ApiVersion
   id: string
   name: string
@@ -116,7 +116,7 @@ export interface NormalizedManifest {
   agent: NormalizedAgent | null
   /**
    * `start`: its pages may ask to start a Claude Code session, which the user
-   * confirms. `list`: its pages may see the sessions Helm hosts.
+   * confirms. `list`: its pages may see the sessions Floti hosts.
    */
   sessions: { start: boolean; list: boolean }
 }
@@ -127,20 +127,20 @@ export type ManifestResult =
 
 export interface ValidateOptions {
   /**
-   * The bridge versions the caller runs, for a host that says so in its
-   * refusal: Floti's host passes `[1, 2]`. Left out, it is
+   * The plugin API versions the caller runs, for a host that says so in its
+   * refusal: Floti's host passes `[2]`. Left out, it is
    * `SUPPORTED_API_VERSIONS`.
    */
   apiVersions?: readonly number[]
 }
 
-/** Reads a parsed `helm-plugin.json`. Pure: whether the files it names exist is the caller's question. */
+/** Reads a parsed `floti-plugin.json`. Pure: whether the files it names exist is the caller's question. */
 export function validateManifest(value: unknown, options?: ValidateOptions): ManifestResult
 
 /** Every `{{key}}` in a string, in order. */
 export function placeholders(text: string): string[]
 
-/** One `network` entry, or null when it is not an origin Helm accepts. */
+/** One `network` entry, or null when it is not an origin Floti accepts. */
 export function parseOrigin(entry: string): OriginPattern | null
 
 /** Whether a URL is one a pattern allows. */

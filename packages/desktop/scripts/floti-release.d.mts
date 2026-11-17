@@ -26,6 +26,7 @@ export function targetNamed(name: string): ReleaseTarget
 export function targetFor(platform: string, arch: string): ReleaseTarget | null
 export function releaseFileName(version: string, target: ReleaseTarget): string
 export function sumsFileName(version: string): string
+export function noticesFileName(version: string): string
 export function releaseFileNames(version: string): string[]
 export function binaryFacts(bytes: Uint8Array): BinaryFacts
 export function binaryProblem(bytes: Uint8Array, target: ReleaseTarget): string | null

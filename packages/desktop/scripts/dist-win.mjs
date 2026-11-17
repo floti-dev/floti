@@ -134,7 +134,7 @@ if (declared !== null && first !== null && firstVersion !== declared) {
   // A directory holding one file, first on PATH. Deliberately `.cmd` and not
   // `.exe`: `which` prefers `.EXE`, so an exe here would be found before the
   // shim in every *other* directory too, which is the problem being fixed.
-  const shimDir = mkdtempSync(join(tmpdir(), 'helm-pnpm-shim-'))
+  const shimDir = mkdtempSync(join(tmpdir(), 'floti-pnpm-shim-'))
   writeFileSync(join(shimDir, 'pnpm.cmd'), `@"${working}" %*\r\n`, 'utf8')
   env[pathKey] = `${shimDir}${delimiter}${env[pathKey] ?? ''}`
   console.log(

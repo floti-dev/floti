@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LaunchAgents } from '@helm/core/types'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import type { LaunchAgents } from '@floti/core/types'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import { bridge, remoteBridge } from '../bridge.testkit'
 import { useAgentList } from './useAgentList'
 

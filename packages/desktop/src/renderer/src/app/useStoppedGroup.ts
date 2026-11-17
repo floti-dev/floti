@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { RestorableSession } from "@helm/core/types";
-import type { StoppedGroup } from "@helm/ui";
+import type { RestorableSession } from "@floti/core/types";
+import type { StoppedGroup } from "@floti/ui";
 
 /** What the Stopped group asks of the window. */
 export interface StoppedGroupDeps {

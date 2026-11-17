@@ -782,11 +782,11 @@ mod tests {
     #[test]
     fn tags_are_shown_and_hashes_that_are_not_tags_ignored() {
         let out = render_markdown(
-            "A #helm tag, see https://x.test/#frag and issue #12.\n",
+            "A #floti tag, see https://x.test/#frag and issue #12.\n",
             None,
             None,
         );
-        assert_eq!(out.tags, ["helm"]);
+        assert_eq!(out.tags, ["floti"]);
     }
 
     #[test]

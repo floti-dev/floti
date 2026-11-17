@@ -50,7 +50,7 @@ impl Carry {
 
 fn said(merged: CarryMerged, what: &str) {
     log_line!(
-        "floti host: copied {} {what} from Helm, kept {} already here",
+        "floti host: copied {} {what} from the desktop, kept {} already here",
         merged.added,
         merged.kept
     );
@@ -93,7 +93,7 @@ impl Feature for Carry {
                         .map_err(|err| err.to_string())?
                 };
                 log_line!(
-                    "floti host: copied {} archived conversations ({} messages) from Helm, kept {} parts already here, dropped {} to stay under the archive's limit",
+                    "floti host: copied {} archived conversations ({} messages) from the desktop, kept {} parts already here, dropped {} to stay under the archive's limit",
                     merged.added, merged.messages, merged.kept, merged.evicted
                 );
                 if merged.added > 0 || merged.messages > 0 || merged.evicted > 0 {
@@ -104,7 +104,7 @@ impl Feature for Carry {
             .handle::<CarryFinish>(|()| {
                 let status =
                     carry::finish(self.store().connection()).map_err(|err| err.to_string())?;
-                log_line!("floti host: copying Helm's data finished");
+                log_line!("floti host: copying the desktop's data finished");
                 Ok(status)
             });
     }

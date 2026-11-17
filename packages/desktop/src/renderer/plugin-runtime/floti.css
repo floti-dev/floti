@@ -1,0 +1,628 @@
+/*
+ * Floti's primitives, for plugin pages (DESIGN.md "Plugin surfaces").
+ *
+ * Served at `/__floti/floti.css` on every plugin origin and linked at the top of
+ * every page's `<head>`, before the plugin's own styles. The colours are the
+ * twenty-seven theme tokens the bridge writes onto `<html>` as `--floti-*` and
+ * rewrites when the theme changes, so a page drawn with these classes follows
+ * Floti without a reload; `--floti-radius` and `data-density` arrive the same
+ * way, so corners and row height follow their settings too.
+ *
+ * Everything is in the `floti` layer, and the statement below orders it:
+ *
+ * - **Unlayered plugin CSS wins over all of it**, whatever its specificity,
+ *   because unlayered rules outrank every layer.
+ * - **A Tailwind page gets the order it would want**: its preflight (`base`)
+ *   is under the primitives, so `.floti-button` is not reset to a bare button,
+ *   and its utilities are over them, so `class="floti-button px-4"` takes the
+ *   padding. Naming Tailwind's layers here is what places `floti` between them;
+ *   the plugin's own `@layer` statement later cannot reorder layers already
+ *   declared. On a page without Tailwind the four names are empty layers.
+ */
+@layer theme, base, floti, components, utilities;
+
+@layer floti {
+  :root {
+    --floti-font-sans: 'Inter var', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --floti-font-mono: 'Cascadia Mono', 'SF Mono', Menlo, Consolas, ui-monospace, monospace;
+    /* The corner scale (DESIGN.md "Shape"): rows and cards at the radius,
+     * controls one pixel rounder so they read as separate from their panel. */
+    --floti-radius-well: calc(var(--floti-radius, 3px) + 1px);
+    /* Density: how tightly repeated rows pack. Text and controls never move. */
+    --floti-row-y: 6px;
+    --floti-line: 26px;
+    accent-color: var(--floti-accent);
+  }
+
+  :root[data-density='compact'] {
+    --floti-row-y: 3px;
+    --floti-line: 22px;
+  }
+
+  :where(html, body) {
+    height: 100%;
+  }
+
+  /* A plugin surface sits inside one of Floti's islands, so its ground is the
+   * island's surface, edge to edge, and it draws no island of its own. */
+  :where(body) {
+    margin: 0;
+    background: var(--floti-surface);
+    color: var(--floti-fg);
+    font-family: var(--floti-font-sans);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    cursor: default;
+  }
+
+  :where(*, ::before, ::after) {
+    box-sizing: border-box;
+  }
+
+  :where(button, [role='button'], a[href], select, summary, input[type='checkbox'], input[type='radio']) {
+    cursor: pointer;
+  }
+
+  :where(:disabled, [aria-disabled='true']) {
+    cursor: default;
+  }
+
+  ::selection {
+    background: var(--floti-accent-soft);
+  }
+
+  :where(:focus-visible) {
+    outline: 2px solid var(--floti-accent);
+    outline-offset: 2px;
+  }
+
+  /* A field's accent border is its focus mark; a ring on top reads as two. */
+  :where(input:not([type='checkbox'], [type='radio']), textarea, select):focus-visible {
+    outline: none;
+    border-color: var(--floti-accent);
+  }
+
+  /* Chromium's default scrollbar is a light grey slab that ignores the theme. */
+  :where(*) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--floti-border-strong) transparent;
+  }
+
+  /* Every select opens its list as Floti's menus do (DESIGN.md "Select"):
+   * `base-select` hands the list to CSS and keeps the keyboard native. */
+  :where(select),
+  ::picker(select) {
+    appearance: base-select;
+  }
+
+  :where(select) {
+    align-items: center;
+  }
+
+  :where(select)::picker-icon {
+    color: var(--floti-fg-subtle);
+  }
+
+  ::picker(select) {
+    margin-block: 4px;
+    padding: 4px;
+    border: 1px solid var(--floti-border-strong);
+    border-radius: var(--floti-radius-well);
+    background: var(--floti-surface-raised);
+    color: var(--floti-fg);
+    box-shadow: none;
+    max-block-size: min(360px, 60vh);
+  }
+
+  :where(select) option {
+    min-block-size: 28px;
+    padding: 0 8px;
+    border-radius: var(--floti-radius);
+    background: transparent;
+    color: var(--floti-fg);
+    font-size: 12px;
+  }
+
+  :where(select) option:hover,
+  :where(select) option:focus-visible {
+    background: var(--floti-hover);
+    outline: none;
+  }
+
+  :where(select) option:checked {
+    background: var(--floti-accent-soft);
+  }
+
+  :where(select) option:checked:hover,
+  :where(select) option:checked:focus-visible {
+    background: var(--floti-accent-soft-hover);
+  }
+
+  :where(select) option::checkmark {
+    display: none;
+  }
+
+  :where(select) option:disabled {
+    color: var(--floti-fg-subtle);
+  }
+
+  /* ------------------------------------------------------------------------
+   * Buttons (DESIGN.md "Controls"). The accent outlines, never fills.
+   * ---------------------------------------------------------------------- */
+  .floti-button {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--floti-border-strong);
+    border-radius: var(--floti-radius-well);
+    background: transparent;
+    color: var(--floti-fg);
+    font: inherit;
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+    transition: background-color 120ms, color 120ms, border-color 120ms;
+  }
+
+  .floti-button:hover:not(:disabled) {
+    background: var(--floti-hover);
+  }
+
+  .floti-button[data-variant='primary'] {
+    border-color: var(--floti-accent);
+    color: var(--floti-accent-text);
+  }
+
+  .floti-button[data-variant='primary']:hover:not(:disabled) {
+    background: var(--floti-accent-soft);
+  }
+
+  .floti-button[data-variant='ghost'] {
+    border-color: transparent;
+    color: var(--floti-fg-muted);
+  }
+
+  .floti-button[data-variant='ghost']:hover:not(:disabled) {
+    color: var(--floti-fg);
+  }
+
+  .floti-button[data-variant='danger'] {
+    border-color: color-mix(in srgb, var(--floti-danger) 45%, transparent);
+    color: var(--floti-danger);
+  }
+
+  .floti-button[data-variant='danger']:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--floti-danger) 10%, transparent);
+  }
+
+  /* Disabled keeps its outline at reduced opacity; it never swaps to a grey fill. */
+  .floti-button:disabled,
+  .floti-icon-button:disabled {
+    opacity: 0.45;
+  }
+
+  .floti-button svg,
+  .floti-icon-button svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  .floti-icon-button {
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--floti-radius-well);
+    background: transparent;
+    color: var(--floti-fg-subtle);
+    transition: background-color 120ms, color 120ms;
+  }
+
+  .floti-icon-button:hover:not(:disabled) {
+    background: var(--floti-hover);
+    color: var(--floti-fg);
+  }
+
+  .floti-icon-button[aria-pressed='true'] {
+    color: var(--floti-accent-text);
+  }
+
+  /* ------------------------------------------------------------------------
+   * Fields: a sunken well. Hover strengthens the hairline, focus makes it the
+   * accent, and the fill never changes under the pointer.
+   * ---------------------------------------------------------------------- */
+  .floti-input,
+  .floti-select,
+  .floti-textarea {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--floti-border);
+    border-radius: var(--floti-radius-well);
+    background: var(--floti-surface-sunken);
+    color: var(--floti-fg);
+    font: inherit;
+    font-size: 12px;
+    transition: border-color 120ms;
+  }
+
+  .floti-input,
+  .floti-select {
+    height: 28px;
+    padding: 0 8px;
+  }
+
+  .floti-textarea {
+    display: block;
+    min-height: 64px;
+    padding: 6px 8px;
+    line-height: 1.5;
+    resize: vertical;
+  }
+
+  .floti-input::placeholder,
+  .floti-textarea::placeholder {
+    color: var(--floti-fg-subtle);
+  }
+
+  .floti-input:hover:not(:disabled, :focus-visible),
+  .floti-select:hover:not(:disabled, :focus-visible),
+  .floti-textarea:hover:not(:disabled, :focus-visible) {
+    border-color: var(--floti-border-strong);
+  }
+
+  .floti-input:disabled,
+  .floti-select:disabled,
+  .floti-textarea:disabled {
+    color: var(--floti-fg-subtle);
+  }
+
+  .floti-input[aria-invalid='true'],
+  .floti-select[aria-invalid='true'],
+  .floti-textarea[aria-invalid='true'] {
+    border-color: color-mix(in srgb, var(--floti-danger) 60%, transparent);
+  }
+
+  .floti-select {
+    padding-right: 4px;
+  }
+
+  /* ------------------------------------------------------------------------
+   * Lists. A row is the action: it carries no buttons. Selection is the soft
+   * accent plus a 2px bar down the left edge, never a solid fill.
+   * ---------------------------------------------------------------------- */
+  .floti-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+  }
+
+  .floti-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: var(--floti-row-y) 8px;
+    border: 0;
+    border-radius: var(--floti-radius-well);
+    background: transparent;
+    color: var(--floti-fg);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+  }
+
+  :is(button, a).floti-row {
+    width: 100%;
+  }
+
+  .floti-row:is(button, a, [role='option'], [role='button'], [tabindex]):hover {
+    background: var(--floti-hover);
+  }
+
+  .floti-row:is([aria-selected='true'], [aria-current]:not([aria-current='false'])) {
+    background: var(--floti-accent-soft);
+  }
+
+  .floti-row:is([aria-selected='true'], [aria-current]:not([aria-current='false'])):hover {
+    background: var(--floti-accent-soft-hover);
+  }
+
+  .floti-row:is([aria-selected='true'], [aria-current]:not([aria-current='false']))::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 0;
+    width: 2px;
+    border-radius: 9999px;
+    background: var(--floti-accent);
+  }
+
+  /* ------------------------------------------------------------------------
+   * Marks. A chip is borderless and carries its tone in its text; a state
+   * chip is the one outlined pill, for the single word that is a thing's
+   * whole status; a dot is the same tone at 6px.
+   * ---------------------------------------------------------------------- */
+  .floti-chip,
+  .floti-state {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    line-height: 15px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .floti-chip {
+    --floti-tone: var(--floti-fg-subtle);
+    color: var(--floti-tone);
+  }
+
+  .floti-state {
+    --floti-tone: var(--floti-fg-muted);
+    --floti-tone-edge: var(--floti-border-strong);
+    padding: 0 7px;
+    border: 1px solid var(--floti-tone-edge);
+    border-radius: 9999px;
+    color: var(--floti-tone);
+  }
+
+  .floti-dot {
+    --floti-tone: var(--floti-fg-subtle);
+    display: inline-block;
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: var(--floti-tone);
+  }
+
+  :is(.floti-chip, .floti-state, .floti-dot)[data-tone='accent'] {
+    --floti-tone: var(--floti-accent-text);
+    --floti-tone-edge: color-mix(in srgb, var(--floti-accent) 40%, transparent);
+  }
+
+  .floti-dot[data-tone='accent'] {
+    --floti-tone: var(--floti-accent);
+  }
+
+  :is(.floti-chip, .floti-state, .floti-dot)[data-tone='success'] {
+    --floti-tone: var(--floti-success);
+    --floti-tone-edge: color-mix(in srgb, var(--floti-success) 40%, transparent);
+  }
+
+  :is(.floti-chip, .floti-state, .floti-dot)[data-tone='warn'] {
+    --floti-tone: var(--floti-warn);
+    --floti-tone-edge: color-mix(in srgb, var(--floti-warn) 40%, transparent);
+  }
+
+  :is(.floti-chip, .floti-state, .floti-dot)[data-tone='danger'] {
+    --floti-tone: var(--floti-danger);
+    --floti-tone-edge: color-mix(in srgb, var(--floti-danger) 40%, transparent);
+  }
+
+  /* A tag: the hairline pill for neutral ones, the soft accent for a kind. */
+  .floti-tag {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    padding: 0 7px;
+    border: 1px solid var(--floti-border-strong);
+    border-radius: 9999px;
+    color: var(--floti-fg-muted);
+    font-size: 11px;
+    line-height: 15px;
+    white-space: nowrap;
+  }
+
+  .floti-tag[data-tone='accent'] {
+    border-color: transparent;
+    background: var(--floti-accent-soft);
+    color: var(--floti-accent-text);
+  }
+
+  /* ------------------------------------------------------------------------
+   * The categorical palette, by name: `data-hue="blue"` on a tag, chip or dot
+   * draws it in that hue's shade for the theme on screen, so a plugin stores
+   * a name and never a colour. For telling apart things of one kind with no
+   * order or status (projects, tags, series), never for status, selection or
+   * emphasis - those are `data-tone`. A palette tag is the accent tag's shape
+   * in the hue: its tint behind its text, no border. The tint's weight is the
+   * one the floors are measured at (core `HUE_TINT_ALPHA`).
+   * ---------------------------------------------------------------------- */
+  :root {
+    --floti-hue-tint: 10%;
+  }
+
+  :root.dark {
+    --floti-hue-tint: 14%;
+  }
+
+  [data-hue='blue'] {
+    --floti-hue: var(--floti-hue-blue);
+  }
+
+  [data-hue='teal'] {
+    --floti-hue: var(--floti-hue-teal);
+  }
+
+  [data-hue='green'] {
+    --floti-hue: var(--floti-hue-green);
+  }
+
+  [data-hue='amber'] {
+    --floti-hue: var(--floti-hue-amber);
+  }
+
+  [data-hue='orange'] {
+    --floti-hue: var(--floti-hue-orange);
+  }
+
+  [data-hue='red'] {
+    --floti-hue: var(--floti-hue-red);
+  }
+
+  [data-hue='pink'] {
+    --floti-hue: var(--floti-hue-pink);
+  }
+
+  [data-hue='violet'] {
+    --floti-hue: var(--floti-hue-violet);
+  }
+
+  :is(.floti-chip, .floti-dot)[data-hue] {
+    --floti-tone: var(--floti-hue);
+  }
+
+  .floti-tag[data-hue] {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--floti-hue) var(--floti-hue-tint), transparent);
+    color: var(--floti-hue);
+  }
+
+  /* ------------------------------------------------------------------------
+   * Page parts.
+   * ---------------------------------------------------------------------- */
+
+  /* A page's bar: a row along its top with a hairline under it. */
+  .floti-bar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--floti-border);
+  }
+
+  /* A divider inside the surface fades at its ends, a crease and not a wall. */
+  .floti-rule {
+    height: 1px;
+    flex-shrink: 0;
+    border: 0;
+    margin: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--floti-border-strong) 20%,
+      var(--floti-border-strong) 80%,
+      transparent
+    );
+  }
+
+  /* The caps label over a section. The one place weight goes past 500. */
+  .floti-caps {
+    color: var(--floti-fg-subtle);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+
+  /* A row's second line, a hint, a timestamp. */
+  .floti-meta {
+    color: var(--floti-fg-muted);
+    font-size: 11px;
+  }
+
+  /* Machine data: a path, a hash, a size, a command. */
+  .floti-mono {
+    font-family: var(--floti-font-mono);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* What a page or list says when it has nothing to show: an icon in a small
+   * well, what is empty, one sentence, and the way on. */
+  .floti-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 360px;
+    margin: 0 auto;
+    padding: 32px 16px;
+    text-align: center;
+  }
+
+  .floti-empty > .floti-empty-icon {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    margin-bottom: 12px;
+    border: 1px solid var(--floti-border);
+    border-radius: var(--floti-radius-well);
+    background: var(--floti-surface-raised);
+    color: var(--floti-fg-subtle);
+  }
+
+  .floti-empty > .floti-empty-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .floti-empty > .floti-empty-title {
+    margin: 0;
+    color: var(--floti-fg);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .floti-empty > .floti-empty-text {
+    margin: 4px 0 0;
+    color: var(--floti-fg-subtle);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .floti-empty > .floti-empty-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 16px;
+  }
+}
+
+/*
+ * Outside the layer, because Chromium ignores these pseudo-elements on any
+ * element whose `scrollbar-width` or `scrollbar-color` is set and they only
+ * paint where the standard properties are left at `auto` - which a plugin that
+ * resets them gets. Kept to the same shape as Floti's own bars.
+ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 6px;
+  background-color: var(--floti-border-strong);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--floti-fg-subtle);
+}

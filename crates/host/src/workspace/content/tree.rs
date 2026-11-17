@@ -514,7 +514,7 @@ mod tests {
         );
         let alpha = tree.files.iter().find(|file| file.slug == "alpha").unwrap();
         assert_eq!(alpha.note_type.as_deref(), Some("journal"));
-        assert_eq!(alpha.tags, ["helm", "notes"]);
+        assert_eq!(alpha.tags, ["floti", "notes"]);
         assert_eq!(alpha.title, "Alpha");
         let skill = tree
             .files

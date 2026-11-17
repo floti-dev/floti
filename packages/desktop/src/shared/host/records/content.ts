@@ -1,4 +1,4 @@
-import type { ConfigScope, Project } from '@helm/core/types'
+import type { ConfigScope, Project } from '@floti/core/types'
 
 /**
  * The config scope list a template imports from and the Files view's artifact addresses,
@@ -10,7 +10,9 @@ const scopeKey = (path: string): string => path.replace(/\\/g, '/').replace(/\/+
 
 /**
  * A scanned folder's config scope, from what the scan found there: its
- * `.claude` beside it, which exists when the scan saw it or a `CLAUDE.md`.
+ * `.claude` beside it. The scope exists when the folder holds config in
+ * either shape: a `.claude/` or a `CLAUDE.md`, or an `.agents/` or an
+ * `AGENTS.md`.
  */
 export function scannedConfigScope(folder: Project, kind: 'workspace' | 'project'): ConfigScope {
   const base = folder.path.replace(/[\\/]+$/, '')
@@ -20,12 +22,16 @@ export function scannedConfigScope(folder: Project, kind: 'workspace' | 'project
     path: base,
     claudeDir: `${base}${separator}.claude`,
     label: folder.name || base,
-    exists: folder.hasClaudeDir || folder.inventory.claudeMd
+    exists:
+      folder.hasClaudeDir ||
+      folder.inventory.claudeMd ||
+      folder.inventory.agentsMd === true ||
+      folder.inventory.agentsDir === true
   }
 }
 
 /**
- * The switcher's list, in the order Helm has always given it: the user scope,
+ * The switcher's list, in the order the desktop has always given it: the user scope,
  * then the scanned workspaces, then the scanned projects, then every other
  * folder the host lists (a saved profile's root and overlays), each once by
  * its path, ignoring case.
@@ -47,7 +53,7 @@ export function configScopesWithScan(host: readonly ConfigScope[], scanned: read
 }
 
 const HOST_ARTIFACT = 'floti-artifact://'
-const WINDOW_ARTIFACT = 'helm-content://artifact/'
+const WINDOW_ARTIFACT = 'floti-content://artifact/'
 
 /** The host's address for one a frame asked the window for, or null for one that is not an artifact's. */
 export function hostArtifactUrl(windowUrl: string): string | null {
@@ -56,7 +62,7 @@ export function hostArtifactUrl(windowUrl: string): string | null {
 
 /**
  * The window's address for one the host minted: an artifact frame keeps the
- * window's `helm-content:` scheme, which main answers from the host's bytes.
+ * window's `floti-content:` scheme, which main answers from the host's bytes.
  */
 export function windowArtifactUrl(hostUrl: string): string {
   if (!hostUrl.startsWith(HOST_ARTIFACT))

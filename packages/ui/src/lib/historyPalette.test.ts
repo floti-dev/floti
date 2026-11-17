@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { HistoryCommand, HistorySession, LaunchAgents } from '@helm/core'
+import type { HistoryCommand, HistorySession, LaunchAgents } from '@floti/core'
 import { at, historySession } from './historyPalette.testkit'
 import {
   agentGone,

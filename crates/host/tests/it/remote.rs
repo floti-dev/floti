@@ -1042,10 +1042,14 @@ fn files_under(folder: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     found
 }
 
-/// Connects a new client folder through `transport` the way Helm does,
+/// Connects a new client folder through `transport` the way the desktop does,
 /// learning the host's key the first time, then connects again with the key
 /// pinned, and returns the folder.
-async fn connect_twice_as_helm_does(world: &World, name: &str, transport: &[String]) -> PathBuf {
+async fn connect_twice_as_the_desktop_does(
+    world: &World,
+    name: &str,
+    transport: &[String],
+) -> PathBuf {
     let dirs = &world.dirs;
     let folder = dirs.root().join(name);
     for _ in 0..2 {
@@ -1088,9 +1092,9 @@ async fn s7_through_ssh_and_a_custom_command_nothing_under_the_users_ssh_folder_
     }
     let before = files_under(&ssh);
 
-    let through_ssh = connect_twice_as_helm_does(&world, "a laptop", &ssh_transport()).await;
+    let through_ssh = connect_twice_as_the_desktop_does(&world, "a laptop", &ssh_transport()).await;
     let through_command =
-        connect_twice_as_helm_does(&world, "a desktop", &custom_transport()).await;
+        connect_twice_as_the_desktop_does(&world, "a desktop", &custom_transport()).await;
 
     // Nothing under ~/.ssh was written, added or removed.
     assert_eq!(files_under(&ssh), before);

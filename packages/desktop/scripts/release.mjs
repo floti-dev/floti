@@ -34,7 +34,7 @@ import { createReadStream, readdirSync, readFileSync, statSync, writeFileSync } 
 import { join, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
-import { formatSums, releaseFileNames } from './floti-release.mjs'
+import { formatSums, noticesFileName, releaseFileNames } from './floti-release.mjs'
 
 // Semver 2.0.0 without build metadata: a `+` part is ignored in precedence, so
 // two versions differing only there would be two tags no comparison can order.
@@ -179,14 +179,16 @@ export function signatureName(name) {
 /**
  * The files of a release of `version` that are signed, sorted as jq and
  * `LC_ALL=C sort` sort them: the desktop files and their SHA-256 list, the
- * protocol types, the floti files and their SHA-256 list.
+ * protocol types, the floti files and their SHA-256 list, and floti's
+ * third-party notices.
  */
 export function signedFileNames(version) {
   return [
     ...desktopFileNames(version),
     desktopSumsName(version),
     protocolFileName(version),
-    ...releaseFileNames(version)
+    ...releaseFileNames(version),
+    noticesFileName(version)
   ].sort()
 }
 

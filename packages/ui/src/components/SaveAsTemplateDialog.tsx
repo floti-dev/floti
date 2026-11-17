@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useState } from 'react'
-import type { FolderTemplateKind, FolderTemplatePreview } from '@helm/core'
+import type { FolderTemplateKind, FolderTemplatePreview } from '@floti/core'
 import { cn } from '../lib/cn'
 import { formatBytes } from '../lib/time'
 import { Checkbox } from './Checkbox'
@@ -28,7 +28,7 @@ import { Overlay } from './Overlay'
  *   `workspace.yaml` are never copied, and a preview that silently omitted them
  *   would be a preview that is not the list of what is in the folder. They are
  *   shown with the reason, unticked and untickable.
- * - **Everything else is ticked and the user unticks.** Helm cannot know that
+ * - **Everything else is ticked and the user unticks.** Floti cannot know that
  *   `notes/` is a journal rather than a scaffold, so it asks rather than
  *   guesses. `repos/` is the one directory whose purpose is to hold this
  *   workspace's things rather than the layout's, so it starts unticked - and it

@@ -1,4 +1,4 @@
-import { closeTab, LOCAL_HOST_KEY, paneId, replaceTab, type PaneLayout, type PaneRef } from '@helm/core/types'
+import { closeTab, LOCAL_HOST_KEY, paneId, replaceTab, type PaneLayout, type PaneRef } from '@floti/core/types'
 import { forgetAgentDraft, moveAgentDraft, type AgentOutcome } from './useAgentDraft'
 import { restoreAgent } from './useAgentToast'
 

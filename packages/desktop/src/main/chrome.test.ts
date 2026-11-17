@@ -1,6 +1,6 @@
 import type { KeyboardEvent, MenuItem, MenuItemConstructorOptions } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
-import { resolveTheme } from '@helm/core'
+import { resolveTheme } from '@floti/core'
 import { browserKeyCommand } from '../shared/browserKeys'
 import { applicationMenuTemplate, TITLEBAR_HEIGHT, TRAFFIC_LIGHTS, windowChromeFor } from './chrome'
 
@@ -19,11 +19,11 @@ function items(template: MenuItemConstructorOptions[]): MenuItemConstructorOptio
 }
 
 /**
- * Helm's own Cmd shortcuts on macOS, outside the Browser tab's table: the
+ * The desktop's own Cmd shortcuts on macOS, outside the Browser tab's table: the
  * launcher, quick open on names and text, the plugins' palette, the split, and
  * moving a tab or a profile.
  */
-const HELM_SHORTCUTS = ['Command+N', 'Command+P', 'Shift+Command+P', 'Shift+Command+F', 'Command+\\', 'Command+Enter']
+const FLOTI_SHORTCUTS = ['Command+N', 'Command+P', 'Shift+Command+P', 'Shift+Command+F', 'Command+\\', 'Command+Enter']
 
 /** An accelerator as the key press it is, for the Browser tab's table. */
 function pressOf(accelerator: string): { key: string; control: boolean; shift: boolean; alt: boolean; meta: boolean } {
@@ -40,7 +40,7 @@ function pressOf(accelerator: string): { key: string; control: boolean; shift: b
 
 const noQuit = (): void => undefined
 
-/** The app menu's Quit Helm item. */
+/** The app menu's Quit Floti item. */
 function quitItem(template: MenuItemConstructorOptions[]): MenuItemConstructorOptions {
   const found = items(template).find((item) => item.label === 'Quit Floti')
   if (found === undefined) throw new Error('no Quit Floti item')
@@ -98,7 +98,7 @@ describe('applicationMenuTemplate', () => {
 
     const accelerators = all.flatMap((item) => (typeof item.accelerator === 'string' ? [item.accelerator] : []))
     for (const accelerator of accelerators) {
-      expect(HELM_SHORTCUTS, accelerator).not.toContain(accelerator)
+      expect(FLOTI_SHORTCUTS, accelerator).not.toContain(accelerator)
       expect(browserKeyCommand(pressOf(accelerator), 'darwin'), accelerator).toBeNull()
     }
   })

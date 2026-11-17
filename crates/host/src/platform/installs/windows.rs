@@ -14,12 +14,7 @@
 //! installer makes the Start menu entry.
 //!
 //! The app is installed in `%LOCALAPPDATA%\Programs\Floti\desktop`, beside
-//! floti's own `Programs\Floti\bin`. While it was called Helm it was
-//! installed in `Programs\Helm`, as `Helm.exe` with `Uninstall Helm.exe`; such
-//! an install is still found, so `floti update` updates it, and the release's
-//! installer moves it to the new folder (`build/installer.nsh` runs the old
-//! uninstaller, which takes its uninstall entry and Start menu shortcut with
-//! it, and installs in the new folder).
+//! floti's own `Programs\Floti\bin`, as `Floti.exe` with `Uninstall Floti.exe`.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -38,10 +33,6 @@ pub const DESKTOP_NAME: &str = "Floti";
 /// floti's own `Floti\bin` (`INSTALL_FOLDER` in `build/installer.nsh`).
 pub const INSTALL_FOLDER: [&str; 2] = ["Floti", "desktop"];
 
-/// What the app was called before it was Floti, and so the folder under
-/// Programs it was installed in, its program and its uninstaller.
-pub const HELM_NAME: &str = "Helm";
-
 pub struct Native;
 
 /// One per-user uninstall entry: what it runs to uninstall, and the version
@@ -57,8 +48,7 @@ impl Native {
         windows_path::join(&desktop.path, &[&Self::program_name(desktop)])
     }
 
-    /// The app's program's file name: `Floti.exe`, or `Helm.exe` for an
-    /// install from before the rename.
+    /// The app's program's file name: `Floti.exe`.
     fn program_name(desktop: &Desktop) -> String {
         format!("{}.exe", desktop.name)
     }
@@ -75,33 +65,11 @@ impl Native {
         }
     }
 
-    /// Where an install from before the rename is in `programs`.
-    fn helm_install(programs: &Path) -> Desktop {
-        Desktop {
-            name: HELM_NAME,
-            path: windows_path::join(programs, &[HELM_NAME]),
-        }
-    }
-
     /// `desktop` when it is an install: its program and its uninstaller are
     /// there. A portable copy has no uninstaller and is not one.
     fn installed(desktop: Desktop) -> Option<Desktop> {
         (Self::program(&desktop).is_file() && Self::uninstaller(&desktop).is_file())
             .then_some(desktop)
-    }
-
-    /// What the release's installer leaves in place of `replaced`: the app
-    /// in the new folder of the Programs folder `replaced` is in.
-    pub fn installed_over(replaced: &Desktop) -> Desktop {
-        if replaced.name == DESKTOP_NAME {
-            return replaced.clone();
-        }
-        let programs = replaced
-            .path
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_default();
-        Self::floti_install(&programs)
     }
 
     /// The folder per-user programs are installed in for `env`.
@@ -170,7 +138,6 @@ impl Installs for Native {
     fn desktop(&self, env: &UserEnv) -> Option<Desktop> {
         let programs = Self::programs(env)?;
         Self::installed(Self::floti_install(&programs))
-            .or_else(|| Self::installed(Self::helm_install(&programs)))
     }
 
     fn desktop_target(&self, env: &UserEnv) -> Option<Desktop> {
@@ -221,7 +188,7 @@ impl Installs for Native {
         })
     }
 
-    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<Desktop> {
+    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<()> {
         let status = system::run_out_of_job(
             Command::new(release)
                 .arg("/S")
@@ -231,9 +198,7 @@ impl Installs for Native {
         )
         .map_err(|source| Error::path("run", release, source))?;
         if status.success() {
-            // The installer installs in the new folder, moving an install
-            // from before the rename there.
-            Ok(Self::installed_over(desktop))
+            Ok(())
         } else {
             Err(Error::Refused(format!(
                 "The {} installer {} ended with {status}.",

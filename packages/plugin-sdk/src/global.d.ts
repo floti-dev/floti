@@ -1,26 +1,20 @@
 /**
- * The page bridges, typed. Reference it once in a plugin's pages:
+ * The page bridge, typed. Reference it once in a plugin's pages:
  *
  *   /// <reference types="@floti-dev/plugin-sdk/global" />
  *
- * A page gets one of the two: `window.floti` at apiVersion 2, `window.helm`
- * at apiVersion 1. Use the one your manifest's version gives you. A version 2
- * background module references `@floti-dev/plugin-sdk/background`
- * instead, for the `floti` it runs with.
+ * Every page gets `window.floti`. A background module references
+ * `@floti-dev/plugin-sdk/background` instead, for the `floti` it runs with.
  */
-import type { FlotiBridge, HelmBridge } from './types.js'
+import type { FlotiBridge } from './types.js'
 
 declare global {
   interface Window {
-    /** The bridge in a version 2 page. */
+    /** The bridge in a plugin page. */
     readonly floti: FlotiBridge
-    /** The bridge in a version 1 page. */
-    readonly helm: HelmBridge
   }
-  /** The bridge in a version 2 page. */
+  /** The bridge in a plugin page. */
   const floti: FlotiBridge
-  /** The bridge in a version 1 page. */
-  const helm: HelmBridge
 }
 
 export {}

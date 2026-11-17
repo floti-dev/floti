@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect, startSession, test as base } from './helm'
+import { expect, startSession, test as base } from './desktop'
 
 /**
  * The Files view: a project's tree with git's letters on it, a file read beside
@@ -19,7 +19,7 @@ const test = base.extend({
     mkdirSync(join(alpha, 'src'))
     writeFileSync(join(alpha, 'src', 'app.ts'), text(LINES))
     const git = (...args: string[]): void => {
-      execFileSync('git', ['-c', 'user.name=Floti Tests', '-c', 'user.email=tests@helm.invalid', ...args], {
+      execFileSync('git', ['-c', 'user.name=Floti Tests', '-c', 'user.email=tests@floti.invalid', ...args], {
         cwd: alpha,
         stdio: 'ignore'
       })
@@ -30,8 +30,8 @@ const test = base.extend({
   }
 })
 
-test('a file opens beside its session with the changed lines marked, and follows the edits', async ({ helm, world }) => {
-  const { window } = helm
+test('a file opens beside its session with the changed lines marked, and follows the edits', async ({ desktop, world }) => {
+  const { window } = desktop
   const app = join(world.projects.alpha, 'src', 'app.ts')
   await startSession(window, 'alpha')
 
@@ -78,10 +78,10 @@ test('a file opens beside its session with the changed lines marked, and follows
 })
 
 test('Ctrl+P opens a file by a few letters, and a file goes to VS Code, Explorer or the clipboard', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { app, window } = helm
+  const { app, window } = desktop
   const file = join(world.projects.alpha, 'src', 'app.ts')
 
   // Nothing leaves the app: VS Code and Explorer are recorded rather than opened.

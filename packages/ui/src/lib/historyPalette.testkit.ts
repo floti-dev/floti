@@ -1,4 +1,4 @@
-import type { HistorySession } from '@helm/core'
+import type { HistorySession } from '@floti/core'
 
 /** A moment in November 2026, local time, as History's tests read the clock. */
 export const at = (day: number, hour: number, minute = 0): number => new Date(2026, 10, day, hour, minute).getTime()

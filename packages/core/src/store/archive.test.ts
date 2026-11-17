@@ -17,7 +17,7 @@ import { openStore, type Store } from './db'
 import { indexHistory, readHistorySessions } from './history'
 
 /**
- * The archive `helm.db` keeps for an install that ran sessions in Helm's own
+ * The archive `desktop.db` keeps for an install that ran sessions in the desktop's own
  * process, which the copy into the host reads (`copy.ts`). The rows are the
  * ones that install's transcript reader produced; each test hands them to the
  * archive as one transcript's tail, with the cursor counted in rows.
@@ -29,7 +29,7 @@ let store: Store
 let transcripts: Map<string, ArchiveRow[]>
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'helm-archive-'))
+  dir = await mkdtemp(join(tmpdir(), 'floti-archive-'))
   // The rows the archive writes are about the store, not its file, so the
   // store is in memory.
   store = openStore({ file: ':memory:' })

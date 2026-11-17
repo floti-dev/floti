@@ -4,7 +4,7 @@ import { relative } from 'node:path'
 /**
  * The window's half of the content viewer's artifacts.
  *
- * An HTML artifact is content Helm did not produce, so it is served to a
+ * An HTML artifact is content the desktop did not produce, so it is served to a
  * sandboxed frame through a scheme of its own, under a Content Security Policy
  * that permits no network of any kind. The local host mints each artifact's
  * address and answers its bytes (`host/files.ts`); this scheme hands the frame
@@ -21,7 +21,7 @@ import { relative } from 'node:path'
  * passes the console panel no evaluator for exactly that reason.
  */
 
-export const CONTENT_SCHEME = 'helm-content'
+export const CONTENT_SCHEME = 'floti-content'
 
 /**
  * What an artifact frame is allowed to do.

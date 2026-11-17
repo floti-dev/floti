@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, render, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Overlay } from '@helm/ui'
+import { Overlay } from '@floti/ui'
 import type { BrowserBounds, BrowserState } from '../../../shared/ipc'
 import { bridge } from './bridge.testkit'
 import { useBrowsers } from './useBrowsers'
@@ -372,7 +372,7 @@ describe('useBrowsers - the menu layer', () => {
   const AT = { x: 1000, y: 80, width: 220, height: 120 }
 
   it("asks main for the menu with the window's look, and stands no view down for it", () => {
-    document.documentElement.style.setProperty('--helm-surface-raised', '#202124')
+    document.documentElement.style.setProperty('--floti-surface-raised', '#202124')
     document.documentElement.classList.add('dark')
     const { result } = renderHook(() => useBrowsers())
     act(() => result.current.sendBounds(3, RECT, true))
@@ -382,7 +382,7 @@ describe('useBrowsers - the menu layer', () => {
     })
     const [sent] = bridge.sent('browser:layer')
     expect(sent).toMatchObject({ open: { turn: 1, rect: AT, content: MENU, look: { kind: 'dark' } } })
-    expect(sent && 'open' in sent ? sent.open.look.vars['--helm-surface-raised'] : null).toBe('#202124')
+    expect(sent && 'open' in sent ? sent.open.look.vars['--floti-surface-raised'] : null).toBe('#202124')
     expect(bridge.invoked('browser:snapshot')).toEqual([])
     expect(bounds()).toEqual([])
     document.documentElement.removeAttribute('style')

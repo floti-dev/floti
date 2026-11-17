@@ -4,7 +4,7 @@
  * pane keeps its own cursor: the
  * text cursor, or the arrow while the program has asked for the mouse.
  */
-:root:not(.helm-link-chord) .xterm .xterm-cursor-pointer {
+:root:not(.floti-link-chord) .xterm .xterm-cursor-pointer {
   cursor: inherit;
 }
 

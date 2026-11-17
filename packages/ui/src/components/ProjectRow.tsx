@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import type { Project } from '@helm/core'
+import type { Project } from '@floti/core'
 import { cn } from '../lib/cn'
 import { PROJECT_KIND_ICON } from '../lib/projectIcons'
 import { ROW_SELECTED, ROW_SELECTED_GROUP } from '../lib/rows'
@@ -236,16 +236,16 @@ export function MissingProjectRow({
 }
 
 export interface SessionRowProps {
-  /** `session:12` for one of Helm's, `pid:4068` for one somebody else started. */
+  /** `session:12` for one of Floti's, `pid:4068` for one somebody else started. */
   id: string
   label: string
-  /** Null for a session outside Helm that has not said what it is doing. */
+  /** Null for a session outside Floti that has not said what it is doing. */
   state: SessionState | null
   /** The short word at the right: "needs you", "4m", "idle". */
   note: string
   /** Hover text - where it is running, and the CLI's own sentence if it is waiting. */
   hint: string
-  /** Not one of Helm's: a `claude` started in a terminal, in this folder. */
+  /** Not one of Floti's: a `claude` started in a terminal, in this folder. */
   outside: boolean
   /** In front of the focused pane, in front of the other one, or neither. */
   shown: 'focused' | 'visible' | null
@@ -345,8 +345,8 @@ const CARET_DOT_SHIFT_PX = 3
  * you are looking at. The one in front of the *other* pane gets the hover
  * tone, the same split the two panes' tab strips make.
  *
- * A session Helm did not start is listed too, muted and saying so, because it
- * holds a working tree exactly as hard as one of Helm's does - the reason the
+ * A session Floti did not start is listed too, muted and saying so, because it
+ * holds a working tree exactly as hard as one of Floti's does - the reason the
  * sessions pane is machine-wide. It has no tab, so it opens that pane instead.
  *
  * A session another session started is drawn under that one, a step in, whatever

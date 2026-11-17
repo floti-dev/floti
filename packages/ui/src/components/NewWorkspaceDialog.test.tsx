@@ -1,20 +1,28 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { TemplateChoice, TemplatePreview } from '@helm/core'
+import type { TemplateChoice, TemplatePreview } from '@floti/core'
 import { NewWorkspaceDialog, type NewWorkspaceDialogProps } from './NewWorkspaceDialog'
 
 const TEMPLATES: TemplateChoice[] = [
   {
-    id: 'minimal',
-    label: 'Minimal',
-    description: 'A manifest, an empty repos/ and an empty .claude/. Nothing else.',
+    id: 'starter',
+    label: 'Starter',
+    description: 'repos/, AGENTS.md',
     order: null,
     builtIn: true
   },
   { id: 'client', label: 'Client work', description: 'Notes, tools and a review skill.', order: 1, builtIn: false },
   { id: 'bare', label: 'bare', description: null, order: null, builtIn: false }
 ]
+
+/** What `template:preview` answers for Starter. */
+const STARTER_PREVIEW: TemplatePreview = {
+  template: 'starter',
+  entries: ['workspace.yaml', 'AGENTS.md', 'repos/'],
+  note: 'Nothing else.',
+  problems: []
+}
 
 /** What `template:preview` answers for `client`: the manifest first. */
 const PREVIEW: TemplatePreview = {
@@ -30,9 +38,9 @@ function renderDialog(overrides: Partial<NewWorkspaceDialogProps> = {}) {
     dir: 'C:\\work',
     onChooseDir: vi.fn(),
     templates: TEMPLATES,
-    template: 'minimal',
+    template: 'starter',
     onTemplateChange: vi.fn(),
-    templatesDir: 'C:\\Users\\me\\.config\\helm\\templates',
+    templatesDir: 'C:\\Users\\me\\.config\\floti\\templates',
     onManageTemplates: vi.fn(),
     onCreate: vi.fn(),
     onCancel: vi.fn(),
@@ -43,16 +51,42 @@ function renderDialog(overrides: Partial<NewWorkspaceDialogProps> = {}) {
 }
 
 describe('NewWorkspaceDialog', () => {
-  it('shows each template by the label and description its template.yaml gives', () => {
-    renderDialog()
+  it('lists Starter first and chosen, then the user’s own templates by their template.yaml, with no Minimal row', () => {
+    renderDialog({ template: undefined })
     const picker = screen.getByRole('radiogroup', { name: 'Template' })
     const rows = within(picker).getAllByRole('radio')
     expect(rows.map((row) => row.textContent)).toEqual([
-      'MinimalA manifest, an empty repos/ and an empty .claude/. Nothing else.',
+      'Starterrepos/, AGENTS.md',
       'Client workNotes, tools and a review skill.',
       'bare'
     ])
-    expect(within(picker).getByRole('radio', { name: /^Minimal/ }).getAttribute('aria-checked')).toBe('true')
+    expect(within(picker).getByRole('radio', { name: /^Starter/ }).getAttribute('aria-checked')).toBe('true')
+    expect(within(picker).queryByRole('radio', { name: /^Minimal/ })).toBeNull()
+  })
+
+  it('says Starter writes workspace.yaml, AGENTS.md and an empty repos/, and creates from it', async () => {
+    const props = renderDialog({ template: undefined, preview: STARTER_PREVIEW })
+    await userEvent.type(screen.getByRole('textbox', { name: 'Workspace name' }), 'my-work')
+
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'workspace.yaml',
+      'AGENTS.md',
+      'repos/'
+    ])
+    await userEvent.click(screen.getByRole('button', { name: 'Create workspace' }))
+    expect(props.onCreate).toHaveBeenCalledWith({ mode: 'new', dir: 'C:\\work', name: 'my-work', template: 'starter' })
+  })
+
+  it('names its two ways in as the onboarding design does: New, and Use a folder I have', () => {
+    renderDialog({ preview: STARTER_PREVIEW })
+    const modes = screen.getByRole('radiogroup', { name: 'What to create' })
+    expect(within(modes).getAllByRole('radio').map((mode) => mode.textContent)).toEqual(['New', 'Use a folder I have'])
+  })
+
+  it('shows no picker when using a folder I have', () => {
+    renderDialog({ mode: 'convert', preview: { ...STARTER_PREVIEW, entries: ['workspace.yaml'] } })
+    expect(screen.queryByRole('radiogroup', { name: 'Template' })).toBeNull()
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(['workspace.yaml'])
   })
 
   it('picks a template and creates the workspace from it', async () => {

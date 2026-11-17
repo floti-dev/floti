@@ -1,9 +1,9 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
-import { ShellLostBar } from '@helm/ui'
+import { ShellLostBar } from '@floti/ui'
 import { estimateGrid } from './terminals'
 import { getShell, mountShell, onShellsChange, reopenShell, shellLost, terminalShellKey } from './pterms'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import { LOCAL_HOST_NAME } from './host/sessions'
 
 export interface TerminalTabPaneProps {

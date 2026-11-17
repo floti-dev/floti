@@ -7,7 +7,7 @@ import {
   parseSshConfig,
   SSH_INCLUDE_DEPTH,
   type SshConfigHosts
-} from '@helm/core/types'
+} from '@floti/core/types'
 
 /**
  * The Host names in the user's `~/.ssh/config`, for the add-a-host dialog.

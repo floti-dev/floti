@@ -1527,6 +1527,102 @@ fn a_workspace_in_the_shared_shape_reaches_the_session_with_nothing_written_into
     );
 }
 
+/// A workspace made the way the New workspace dialog makes one from Starter.
+fn starter_workspace(world: &World, name: &str) -> PathBuf {
+    use floti_protocol::channels::workspace::{CreateWorkspaceRequest, WorkspaceMode};
+
+    let parent = world.folder("workspaces");
+    let made = crate::workspace::templates::workspace::create_workspace(
+        &CreateWorkspaceRequest {
+            mode: WorkspaceMode::New,
+            dir: text(&parent),
+            name: Some(name.into()),
+            template: Some("starter".into()),
+        },
+        None,
+    )
+    .unwrap();
+    assert!(made.problems.is_empty(), "{:?}", made.problems);
+    real(&made.path.unwrap())
+}
+
+#[test]
+fn a_session_in_a_starter_workspace_or_a_repository_under_its_repos_loads_its_agents_md_once() {
+    let world = World::new();
+    let workspace = starter_workspace(&world, "my work");
+    let agents_md = workspace.join("AGENTS.md");
+    let repo = workspace.join("repos").join("acme");
+    std::fs::create_dir_all(&repo).unwrap();
+    let workspace_before = tree_state(&workspace);
+
+    // With and without the workspace overlaid: a session started from the
+    // tree may carry it, and either way the file must arrive exactly once.
+    for (folder, overlays) in [
+        (workspace.clone(), Vec::new()),
+        (workspace.clone(), vec![workspace.clone()]),
+        (repo.clone(), Vec::new()),
+        (repo.clone(), vec![workspace.clone()]),
+    ] {
+        let (launch, launch_folder) = world.launch(&LaunchRequest {
+            folder: folder.clone(),
+            name: "starter".into(),
+            composition: Composition {
+                overlays: overlays.clone(),
+                ..Composition::default()
+            },
+            ..LaunchRequest::default()
+        });
+        let (output, log) = world.run(&launch, "/exit\n");
+        succeeded(&output);
+
+        let loaded = loaded_instructions(&log);
+        assert_eq!(
+            loaded.iter().filter(|file| **file == agents_md).count(),
+            1,
+            "{} with {} overlays loads it once of {loaded:?}",
+            folder.display(),
+            overlays.len()
+        );
+        // Not a second time through the composed instructions either.
+        let composed = log["composedInstructions"].as_str().unwrap_or_default();
+        assert!(
+            !composed.contains("# my work"),
+            "{} with {} overlays: {composed}",
+            folder.display(),
+            overlays.len()
+        );
+        launch_folder.remove().unwrap();
+    }
+    assert_eq!(tree_state(&workspace), workspace_before);
+}
+
+#[test]
+fn a_workspace_recorded_as_minimal_still_launches() {
+    let world = World::new();
+    let workspace = world.folder("older");
+    write(
+        &workspace.join("workspace.yaml"),
+        "name: \"older\"\ntemplate: \"minimal\"\nversion: \"1\"\ncreated: \"2026-01-01T00:00:00.000Z\"\n",
+    );
+    std::fs::create_dir_all(workspace.join(".claude")).unwrap();
+    let repo = world.folder("older/repos/acme");
+
+    for folder in [workspace.clone(), repo] {
+        let (launch, launch_folder) = world.launch(&LaunchRequest {
+            folder: folder.clone(),
+            name: "older".into(),
+            composition: Composition {
+                overlays: vec![workspace.clone()],
+                ..Composition::default()
+            },
+            ..LaunchRequest::default()
+        });
+        let (output, _log) = world.run(&launch, "/exit\n");
+        succeeded(&output);
+        launch_folder.remove().unwrap();
+    }
+}
+
 #[test]
 fn with_both_shapes_the_claude_skill_wins_a_name_clash_and_the_launch_says_so() {
     let world = World::new();
@@ -2348,12 +2444,22 @@ fn the_record_keeps_a_prompt_that_was_submitted_empty() {
 }
 
 #[test]
-fn the_record_reports_a_missing_file_as_a_reset_rather_than_failing() {
+fn the_record_reads_a_missing_file_as_empty_and_a_reset_rather_than_failing() {
+    // Claude Code writes the record with its first prompt: none yet is nothing there.
     let world = World::new();
     let tail = prompts::read_since(&world.config.join("nope.jsonl"), 512);
     assert!(tail.lines.is_empty());
     assert!(tail.reset);
     assert_eq!(tail.bytes, 0);
+    assert_eq!(tail.error, None);
+}
+
+#[test]
+fn the_record_still_reports_a_file_it_could_not_read() {
+    // A name no file system takes: the read fails for a reason other than absence.
+    let world = World::new();
+    let tail = prompts::read_since(&world.config.join("bad\0name.jsonl"), 0);
+    assert!(tail.lines.is_empty());
     assert!(tail.error.is_some());
 }
 

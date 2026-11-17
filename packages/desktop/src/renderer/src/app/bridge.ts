@@ -1,5 +1,5 @@
-import { LOCAL_HOST_KEY, LOCAL_HOST_LABEL, type AppSettings } from '@helm/core/types'
-import type { HelmBridge } from '../../../shared/ipc'
+import { LOCAL_HOST_KEY, LOCAL_HOST_LABEL, type AppSettings } from '@floti/core/types'
+import type { DesktopBridge } from '../../../shared/ipc'
 import { createDevices, type Devices } from './host/devices'
 import { createUpdates, type Updates } from './host/updates'
 import {
@@ -19,14 +19,14 @@ import type { HostAdapter } from './host/router'
 declare global {
   interface Window {
     /** Injected by the preload. The renderer's only route to the main process. */
-    readonly helm: HelmBridge
+    readonly desktop: DesktopBridge
   }
 }
 
 const log = (line: string): void => console.warn(line)
 
 /** What main's link to this PC's host is doing: connecting, starting, updating it, ready (`host/localHostStep.ts`). */
-export const localHostStep: LocalHostStepStore = createLocalHostStep(window.helm, log)
+export const localHostStep: LocalHostStepStore = createLocalHostStep(window.desktop, log)
 
 /**
  * Whether this PC's host can be used, from main's steps, kept through main's
@@ -40,7 +40,7 @@ export const localHostUsable: LocalHostUsableStore = createLocalHostUsable(local
  * run there (`host/link.ts`). Its reads wait while the host cannot be used.
  */
 const link = createPageLink({
-  bridge: window.helm,
+  bridge: window.desktop,
   capabilities: WINDOW_CAPABILITIES,
   usability: usabilityOf(localHostUsable),
   log
@@ -57,8 +57,8 @@ const nameOf = (host: string): string => {
   if (host === LOCAL_HOST_KEY) return LOCAL_HOST_LABEL
   if (!namesAsked) {
     namesAsked = true
-    window.helm.on('ownSettings:changed', learnNames)
-    window.helm.invoke('ownSettings:read').then(learnNames, (error: unknown) => {
+    window.desktop.on('ownSettings:changed', learnNames)
+    window.desktop.invoke('ownSettings:read').then(learnNames, (error: unknown) => {
       log(`host: the hosts' names were not read (${(error as Error).message})`)
     })
   }
@@ -71,7 +71,7 @@ const nameOf = (host: string): string => {
  * (`host/hostBridges.ts`).
  */
 const hostBridges = createHostBridges({
-  own: window.helm,
+  own: window.desktop,
   localLink: link,
   front: {
     focused: () => document.hasFocus(),
@@ -91,16 +91,16 @@ const local = hostBridges.hostBridge(LOCAL_HOST_KEY)
 /** Whether the window has its host: lost from a crash until it is connected again (`host/hostState.ts`). */
 export const hostState: HostStateStore = createHostState(link)
 
-/** The floti version this PC's host last named, or the versions it refused this Helm with (`host/hostVersions.ts`). */
+/** The floti version this PC's host last named, or the versions it refused this desktop with (`host/hostVersions.ts`). */
 export const seenHostVersion: SeenHostVersionStore = createSeenHostVersion(link)
 
 /**
  * Each host on another computer this device added: where main's link to it
  * stands, and its running sessions over the window's connection to it, the
- * one its bridge holds (`host/remoteHosts.ts`). Empty with sessions in Helm.
+ * one its bridge holds (`host/remoteHosts.ts`).
  */
 export const remoteHosts: RemoteHostsStore = createRemoteHosts({
-  bridge: window.helm,
+  bridge: window.desktop,
   pageLink: (host) => hostBridges.hostBridge(host).link,
   log
 })
@@ -109,15 +109,15 @@ export const remoteHosts: RemoteHostsStore = createRemoteHosts({
 export const connectedHosts: ConnectedHosts = createConnectedHosts(remoteHosts)
 
 /**
- * The bridge to one host: `helm` for this PC's (`LOCAL_HOST_KEY`), and for a
+ * The bridge to one host: `desktop` for this PC's (`LOCAL_HOST_KEY`), and for a
  * host on another computer, by its id, the router to its own adapters over
  * the window's own connection to it.
  */
-export const bridgeFor = (host: string): HelmBridge => hostBridges.bridgeFor(host)
+export const bridgeFor = (host: string): DesktopBridge => hostBridges.bridgeFor(host)
 
 /** Calls `listener` with every host's bridge, this PC's first, and each made from now on. Returns the stop. */
-export const eachHostBridge = (listener: (host: string, bridge: HelmBridge) => void): (() => void) =>
-  hostBridges.each((bridge: HostBridge) => listener(bridge.host, bridge.helm))
+export const eachHostBridge = (listener: (host: string, bridge: DesktopBridge) => void): (() => void) =>
+  hostBridges.each((bridge: HostBridge) => listener(bridge.host, bridge.desktop))
 
 /**
  * Settings > Devices: who is attached to each connected host, and
@@ -179,4 +179,4 @@ export const hostAdapters: readonly HostAdapter[] = local.adapters
  * bridge, each a host adapter takes goes to the host over this window's own
  * connection, and any other is refused (`host/router.ts`).
  */
-export const helm: HelmBridge = local.helm
+export const desktop: DesktopBridge = local.desktop

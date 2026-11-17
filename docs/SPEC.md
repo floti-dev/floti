@@ -9,7 +9,7 @@ tags: [claude-gui, electron, spec, launch-scope, plugin-dir, v1]
 > favour of ordinary tests (see TESTING.md). Git history has them; BR-n,
 > PKG-n, C-n and D-n still exist as diagnostic drivers.
 
-# Helm - v1 Spec
+# Floti - v1 Spec
 
 A portable, configurable desktop shell **on top of** Claude Code. Not a client,
 not a reimplementation. It hosts the real `claude` TUI and owns everything that
@@ -64,7 +64,7 @@ from the harness root - which is the right call at work, where the product is ma
 microservices and reaching all of `repos/` matters - silently drops ~43 skills and
 ~96 agents on the floor.
 
-That is the problem Helm exists to solve. Everything else is secondary.
+That is the problem Floti exists to solve. Everything else is secondary.
 
 ---
 
@@ -89,10 +89,10 @@ A plugin is just a directory. Verified against the installed `superpowers` and
 with convention directories beside it: `skills/`, `commands/`, `agents/`, `hooks/`.
 
 A repo's `.claude/` directory is *already almost that shape* - it just lacks the
-manifest. So Helm synthesises a shim per project:
+manifest. So Floti synthesises a shim per project:
 
 ```
-%TEMP%/helm/overlay-product-core/
+<data>/overlays/overlay-product-core/
 ├── .claude-plugin/plugin.json      generated
 ├── skills/     ──junction──▶  repos/product-core/.claude/skills
 ├── commands/   ──junction──▶  repos/product-core/.claude/commands
@@ -138,15 +138,15 @@ rather than by shelling out to `mklink /J`. Copy as a fallback.
 > root. The platform namespaces everything automatically
 > (`<plugin-name>:<skill>`), so cross-overlay name collisions are impossible.
 > One caveat: **plugins do not carry the overlaid repo's CLAUDE.md** - and
-> neither does `--add-dir`, measured later and found wanting. Helm composes
+> neither does `--add-dir`, measured later and found wanting. Floti composes
 > them into `--append-system-prompt-file` instead. The composition this settled
-> on is what Helm implements; 8.1 has the detail.
+> on is what Floti implements; 8.1 has the detail.
 
 ---
 
 ## 3. The Core Object: a Profile
 
-Everything in Helm is organised around one saved, reusable thing.
+Everything in Floti is organised around one saved, reusable thing.
 
 ```yaml
 name: "Product core + reporting"
@@ -248,8 +248,8 @@ favour of a plugin.
 > change or break the row that always works.
 >
 > What it does not hold for is somebody's **own** layout. So a template is a
-> user-authored directory tree in `~/.config/helm/templates` (portable:
-> `helm-data/templates` beside the exe, on the same `PORTABLE_EXECUTABLE_DIR`
+> user-authored directory tree in `~/.config/floti/templates` (portable:
+> `floti-data/templates` beside the exe, on the same `PORTABLE_EXECUTABLE_DIR`
 > branch as `dataDir`, so a portable install stays self-contained and every
 > check is isolated with no new mechanism). The New Harness dialog grows a
 > picker, and the "What gets written" list stops being three lines in a
@@ -275,11 +275,11 @@ favour of a plugin.
 > already refuses those three for.
 >
 > **What was deliberately cut**, having been designed and then removed before
-> any of it was built: a creation manifest (`.helm-template.json`), per-file
+> any of it was built: a creation manifest written into the new harness, per-file
 > post-substitution hashes, a three-way template/disk/manifest compare, an
 > update-from-template pass with a plan/apply split, and a preview-of-changes
 > dialog. A template makes a harness; from that moment the harness belongs to
-> the user and their agents, to change as they please. Helm records no history
+> the user and their agents, to change as they please. Floti records no history
 > of it and re-applies nothing - anyone who wants that has git. `template:` in
 > the manifest survives as **provenance only**: it is shown on the harness row
 > and its pane, it is carried through the projects cache so it is right on the
@@ -308,7 +308,7 @@ favour of a plugin.
 > because templates are app-level and nobody should have to start creating a
 > harness to rename one. It lists label, description, file count and age;
 > creates (a `template.yaml` and nothing else - a starter file here would be
-> Helm's opinion arriving inside the feature whose whole point is that the
+> Floti's opinion arriving inside the feature whose whole point is that the
 > layout is yours); renames, deletes, and shows in Explorer. Metadata is a
 > two-field form rather than a YAML box, because a misspelled `label:` drops a
 > template out of the picker silently.
@@ -323,7 +323,7 @@ favour of a plugin.
 >
 > **Skill import.** `ClaudeInventory` cannot feed this - it is counts and
 > carries no names - so the seam is the host's config scopes: `config:scopes`
-> lists every `.claude` tree Helm can see, `config:tree` names what is in one, and
+> lists every `.claude` tree Floti can see, `config:tree` names what is in one, and
 > the picker is that tree with checkboxes. Every scope is a source, `~/.claude`
 > included, and that is a **read**; the writes land inside the templates
 > directory and nowhere else (`assertTemplateWritable`). A skill copies as its
@@ -339,7 +339,7 @@ favour of a plugin.
 > until it is shown**: `.git`, `node_modules` and `harness.yaml` are listed and
 > refused rather than pruned silently, `repos/` is listed and unticked but may
 > be ticked, everything else is ticked and the user unticks what is instance
-> data - Helm cannot tell a journal from a scaffold, so it asks. `.git` and
+> data - Floti cannot tell a journal from a scaffold, so it asks. `.git` and
 > `node_modules` are refused **at every depth** and are not merely defaults: a
 > `.git` in a template puts one workspace's history into every harness made
 > from it, and pruning them is also what bounds the walk that states the size.
@@ -419,7 +419,7 @@ The `.claude/` directory of whatever scope you point at, as a real interface.
 
 > [!note] Built 2026-08-10
 > Four views over one scope switcher - files, effective, MCP, health - and the
-> only surface in Helm that writes to a `.claude` tree. Three findings shaped
+> only surface in Floti that writes to a `.claude` tree. Three findings shaped
 > it, all measured on 2.1.225:
 >
 > - **Settings merge per leaf, not per key.** A project `settings.json` setting
@@ -435,7 +435,7 @@ The `.claude/` directory of whatever scope you point at, as a real interface.
 > - **The JSON error position cannot be read out of V8's message.** On Node 24
 >   a trailing comma reports `Unexpected token ',' ... is not valid JSON` with
 >   no offset at all, and falling back to the end of the file marks a line
->   twenty below the mistake. Helm scans for the position itself.
+>   twenty below the mistake. Floti scans for the position itself.
 >
 > The namespace prediction needed no measurement - the composition spike
 > settled it. Overlay
@@ -513,7 +513,7 @@ Read what Claude writes without a detour through Explorer and a text editor.
 >   top-level entries and ignored for the tree. That count is the direct answer
 >   to "nothing on screen says what was left out".
 >
-> What the tree ignores is the **repository's** decision, not Helm's:
+> What the tree ignores is the **repository's** decision, not Floti's:
 > `git check-ignore` is asked, so nested `.gitignore` files, `.git/info/exclude`
 > and negations are all exactly right without a second implementation of a
 > format that is easy to get subtly wrong. Where there is no git the built-in
@@ -533,7 +533,7 @@ Read what Claude writes without a detour through Explorer and a text editor.
 #### The editors: a textarea with an overlay, not a code editor
 
 > [!note] Decided 2026-08-16
-> Helm edited files in two places - the config console and the content viewer -
+> Floti edited files in two places - the config console and the content viewer -
 > and both were **one component**: a `<textarea>` with an `aria-hidden`
 > highlighted `<pre>` under it, the textarea's own text transparent and its
 > caret painted. Not CodeMirror, not Monaco. This is written down here because
@@ -605,7 +605,7 @@ Read what Claude writes without a detour through Explorer and a text editor.
 
 ### 4.4 Terminal
 
-`xterm.js` + `node-pty` hosting the **real** `claude` TUI, in tabs. Helm renders no
+`xterm.js` + `node-pty` hosting the **real** `claude` TUI, in tabs. Floti renders no
 messages, parses no output, handles no permissions. It supplies the argv, the cwd,
 and the environment, then gets out of the way.
 
@@ -650,12 +650,12 @@ amendment rather than a row (DESIGN.md par. 6).
 > filename substring test that decided a shell's arguments is replaced by a
 > table keyed on the executable's own name: the old one gave `-NoLogo` to
 > anything whose *path* contained `pwsh`, and `bash -NoLogo` prints a usage
-> error and exits. Claude sessions are untouched by any of it - Helm hands the
+> error and exits. Claude sessions are untouched by any of it - Floti hands the
 > CLI its own pty.
 
 ### 4.5 Settings
 
-Helm's own configuration, and the permanent home for all of it. Distinct by
+Floti's own configuration, and the permanent home for all of it. Distinct by
 ownership from the `.claude` trees that belong to Claude Code and are shared
 with every other client on the machine, which Claude Code's own commands edit:
 this edits the app.
@@ -670,7 +670,7 @@ the theme toggle, laid out as one scrolling page of titled groups:
   project pane - the "Scanned folder" panel, in 5's Portability note - which is
   where somebody looking at a folder they want gone actually is
 - **Appearance** - theme, and what the status bar's usage segment shows
-- **Updates** - this build's version, the newest release Helm has heard of, one
+- **Updates** - this build's version, the newest release Floti has heard of, one
   sentence saying which of five things is true of the pair, the launch-check
   tick, **Check now** and **Release notes**
 - **Terminal** - font family (with a hint when it is not installed), size,
@@ -703,7 +703,7 @@ the theme toggle, laid out as one scrolling page of titled groups:
 > now.
 >
 > Internal state (`windowBounds`, `firstRunCompletedAt`) is deliberately not
-> shown. Those are things Helm remembers, not things anyone chose.
+> shown. Those are things Floti remembers, not things anyone chose.
 
 > [!note] The workspace strip is remembered too (2026-08-11)
 > `workspaceTabs` joins that internal group: which panes are open, the order
@@ -725,7 +725,7 @@ the theme toggle, laid out as one scrolling page of titled groups:
 > of dead tabs to close.
 >
 > A pane is written down as its fields, never as its tab id: a Windows path can
-> contain a `#` and a `:`, so `pr:C:\work\helm#7` is an identity to compare and
+> contain a `#` and a `:`, so `pr:C:\work\floti#7` is an identity to compare and
 > not a record to take apart. What is saved is the strip **on screen**
 > (`openPanes`), so a tab whose project a rescan no longer finds does not come
 > back on the next launch.
@@ -740,7 +740,7 @@ the theme toggle, laid out as one scrolling page of titled groups:
 > So: an **Updates** group, and a **Check now** in it. The channel already
 > existed and already kept no throttle; what was missing was anything that
 > pressed it. It is deliberately unthrottled and deliberately live when
-> `updateCheck` is off - the setting governs whether Helm asks *by itself*, not
+> `updateCheck` is off - the setting governs whether Floti asks *by itself*, not
 > whether the user may, and a deliberate act that silently did nothing would be
 > worse than no button. The network posture in section 5 is unchanged: same one
 > connection, same payload, still no artefact fetched.
@@ -748,12 +748,12 @@ the theme toggle, laid out as one scrolling page of titled groups:
 > The launch throttle (`lastUpdateCheckAt`) is **not** stamped by a manual
 > check, and that is the load-bearing half. The bound is what earns the app the
 > right to ask on its own; a button that moved it would let a person pressing it
-> silently buy Helm another day of not asking.
+> silently buy Floti another day of not asking.
 >
 > The outcome is one sentence in five states - `checking`, `unasked`, `newer`,
 > `current`, `unreachable` - and `unreachable` is toned `todo`, never `warn`. A
 > machine on a train has done nothing wrong, nothing is known to be out of date,
-> and a warning triangle would be Helm blaming the network for a question Helm
+> and a warning triangle would be Floti blaming the network for a question Floti
 > asked. It names the reason and says what could not be *asked*.
 >
 > `AppInfo` gained `releasesUrl` for the same reason. The link has to work in
@@ -769,7 +769,7 @@ the theme toggle, laid out as one scrolling page of titled groups:
 
 ### 4.6 Pull requests
 
-> **Removed (2026-10-05): taken out of Helm in favour of a plugin.** Helm no
+> **Removed (2026-10-05): taken out of Floti in favour of a plugin.** Floti no
 > longer runs `gh`, caches pull requests or has a GitHub settings group. What
 > follows is the record of what was built and why.
 
@@ -815,14 +815,14 @@ advance would be wrong about all three.
   naming the program, the working directory, the exact opening prompt and any
   model or effort flag *before* it is pressed.
 
-**Everything goes through the user's own `gh`.** Helm never receives, stores or
+**Everything goes through the user's own `gh`.** Floti never receives, stores or
 reads a GitHub token: `gh` owns it, every fetch runs on it, and a sign-in is
 detected **only from what `gh` reports on its own streams**. Nothing opens
 `hosts.yml`, the keyring or `GH_TOKEN`. This is the same rule Claude's
 credentials have, for the same reason, and it is why the surface shells out
 rather than calling the API.
 
-**"Signed out" and "cannot reach GitHub" are different answers and Helm must
+**"Signed out" and "cannot reach GitHub" are different answers and Floti must
 not confuse them.** `gh auth status` cannot tell them apart: with no route to
 github.com it exits 1 and reports the token as invalid, naming `gh auth login`
 as the remedy for a credential that is fine. Measured on gh 2.86 - the same
@@ -877,10 +877,10 @@ checkout` - refused outright on a dirty tree, because a tool that moves
 somebody's uncommitted work is a tool they stop trusting - and passes the
 rendered prompt as the trailing positional of an ordinary launch. `prReviewModel`
 and `prReviewEffort` ride along the same way: read in main, emitted as `--model`
-and `--effort` before the positional, and **null passes no flag at all** - a Helm
+and `--effort` before the positional, and **null passes no flag at all** - a Floti
 nobody has configured launches exactly what `claude` would have launched, and the
 disclosure sentence names a flag only when there is one to name. From the
-moment it starts it is a session tab like any other, and **Helm never reads the
+moment it starts it is a session tab like any other, and **Floti never reads the
 review's output back**: 6 still applies, and a feature that needed to parse a
 session is a feature that belongs somewhere else.
 
@@ -964,7 +964,7 @@ session is a feature that belongs somewhere else.
 > painted a review as a bare verdict and a pull request as one nobody had said
 > anything on. They are now a **third fetch**, beside `pr view` and `pr diff`
 > and running with them: `gh api graphql` over `pullRequest.reviewThreads`.
-> Still `gh`, still the user's own token, still no credential anywhere near Helm.
+> Still `gh`, still the user's own token, still no credential anywhere near Floti.
 >
 > **GraphQL and not the REST `pulls/{n}/comments` endpoint**, which `gh api`
 > could equally have called. REST gives `in_reply_to_id` - enough to rebuild the
@@ -987,7 +987,7 @@ session is a feature that belongs somewhere else.
 >
 > **`undefined` and `[]` are different facts and may never collapse.** The
 > threads ride inside `PullDetail`, so every row cached before this shipped has
-> no key for them - and `[]` on such a row would be Helm stating, about a pull
+> no key for them - and `[]` on such a row would be Floti stating, about a pull
 > request it has never asked the question of, that nobody annotated the diff.
 > Absent is "not fetched" and paints a sentence naming the remedy; `[]` is
 > "asked, and there are none" and paints nothing. `JSON.stringify` drops an
@@ -1042,15 +1042,15 @@ reliable than squinting at a PNG. Click, type and press exist alongside
 click is more reliable than generated JavaScript and enormously more legible in
 a transcript.
 
-**This is not Helm hosting a client.** Nothing here reads a session's output,
+**This is not Floti hosting a client.** Nothing here reads a session's output,
 renders a message or answers a prompt. A session calls a tool the way it calls
-any other MCP tool, and Helm's whole part is to be at the other end of it - the
+any other MCP tool, and Floti's whole part is to be at the other end of it - the
 same boundary the transcript archive was admitted under, from the other
 direction. See 4.4 and CLAUDE.md's Boundaries.
 
 **How a session reaches it.** An MCP endpoint over HTTP on `127.0.0.1`, on a
 port the kernel picks per run, with a bearer token minted per *session*.
-Registration is a per-session `--mcp-config` file written under Helm's data
+Registration is a per-session `--mcp-config` file written under Floti's data
 directory and appended to the argv by `prepareLaunch`, so the composition stays
 in the one place every other launch flag comes from. `claude mcp add-json -s
 local` was rejected: it writes into the user's `~/.claude.json` on every launch
@@ -1114,7 +1114,7 @@ element.
 ## 5. Architecture
 
 ```
-helm/
+floti/
 ├── packages/
 │   ├── core/        # headless. ZERO electron imports.
 │   │   ├── launch/    profile → argv, overlay shim generation
@@ -1149,22 +1149,22 @@ fetches the page you navigate to, a plugin you added reaches the hosts
 its manifest names, and a host you added on another computer is reached
 through your own ssh, or the command you gave.**
 
-That replaced "Helm's own process opens exactly one outbound connection"
+That replaced "the app's own process opens exactly one outbound connection"
 (decided 2026-08-15). The browser pane made the old claim false, and the answer
 is an honest replacement rather than a carve-out: what people care about -
-Helm does not phone home, there is no telemetry - is unchanged, and the app has
+Floti does not phone home, there is no telemetry - is unchanged, and the app has
 stopped claiming something it no longer does. The same wording appears in the
 README, [PACKAGING.md](PACKAGING.md) and the network posture comment in
 `shared/ipc.ts`, and CLAUDE.md's rule that all four move together stays.
 
 Plugins (2026-10-05) moved it by one clause, for the same reason and in the
-same way: a plugin's background page can fetch with nobody pressing anything,
+same way: a plugin's background can fetch with nobody pressing anything,
 so leaving the sentence alone would have been the old false claim again. The
 clause names the limit rather than hiding the fact - the user added the
 plugin, and its pages reach only what its manifest lists.
 
 Removing the pull-request surface (2026-10-05, see 4.6) took out the clause
-about the user's own `gh`: Helm no longer runs it.
+about the user's own `gh`: Floti no longer runs it.
 
 - **The update check** is the host's (2026-11-11). A host running floti
   installed on its own reads floti.dev's signed `update.json` at most once a
@@ -1184,7 +1184,7 @@ about the user's own `gh`: Helm no longer runs it.
   typed into it.
 - **A plugin you added reaches the hosts its manifest names**, and its pages
   reach nothing else. A plugin page has no network of its own
-  (`connect-src 'none'`); `floti.fetch` (`helm.fetch` at version 1) sends its requests from the local
+  (`connect-src 'none'`); `floti.fetch` sends its requests from the local
   host, only to an origin the manifest lists, taking redirects one hop at a
   time so each hop is checked against the same list, and a URL a server
   supplied is never searched for placeholders. A plugin never holds a secret:
@@ -1200,7 +1200,7 @@ about the user's own `gh`: Helm no longer runs it.
   bullet below is still the whole of Floti's own.
 - **The browser pane fetches the page you navigate to**, and nothing else. It
   is a dev-server viewport rather than a browser (M16): a `WebContentsView` in
-  a partition of its own, `persist:helm-browser`, whose cookies and storage live
+  a partition of its own, `persist:floti-browser`, whose cookies and storage live
   under the app's data directory and which the renderer's session never shares.
   Every request behind it is a page somebody typed the address of or clicked a
   link to - Floti opens nothing there on its own initiative, the address bar
@@ -1249,17 +1249,17 @@ about the user's own `gh`: Helm no longer runs it.
   `webContents.id`**, in the guard itself, so the app's own renderers keep it.
 
   > [!note] Amended 2026-08-17 - a browser view may open a real window
-  > "The window-open handler denies" stayed true of every web-contents in Helm
+  > "The window-open handler denies" stayed true of every web-contents in Floti
   > except a browser view, and stopped being true of those. It was measured
   > into changing by a bug report: a Google sign-in in the pane threw, and it
   > threw because a popup sign-in cannot work through a tab. Denied,
   > `window.open` returns `null` and every OAuth library reports a blocked
-  > popup; the tab Helm opened in its place has no `window.opener`, so the
+  > popup; the tab Floti opened in its place has no `window.opener`, so the
   > authorisation code has nothing to come back through. Both halves measured
   > on the fixture, both now asserted by `BR-39`.
   >
   > Only `window.open` **with features** - Chromium's `new-window` disposition -
-  > makes a window. `target="_blank"` and a middle click are still Helm tabs,
+  > makes a window. `target="_blank"` and a middle click are still Floti tabs,
   > which is what they mean everywhere else. The popup is on the same partition
   > under the same denied permissions and refused downloads, is in the same
   > `webContents.id` registry, and every navigation it makes goes through
@@ -1270,12 +1270,12 @@ about the user's own `gh`: Helm no longer runs it.
   > windows rather than by reading a policy.
   >
   > What did not change: the app's own renderers still get `null`, and nothing
-  > here alters what Helm contacts on its own initiative, which is still only
+  > here alters what Floti contacts on its own initiative, which is still only
   > the update check.
 
   > [!note] Amended 2026-10-06 - a page's tab keeps its opener
   > `target="_blank"`, a plain `window.open` and a middle click are no longer
-  > Helm tabs loaded fresh. They are pages in the one Browser tab's own strip,
+  > Floti tabs loaded fresh. They are pages in the one Browser tab's own strip,
   > and the page adopts the web contents Chromium made for it (`createWindow`),
   > so `window.open` returns a live handle and the page keeps `window.opener`.
   > A sign-in that opened in a tab got `null` back and no opener, and its
@@ -1296,7 +1296,7 @@ about the user's own `gh`: Helm no longer runs it.
   > (Google by default, `off` restores the refusal); nothing is sent while
   > typing, and the results page is held to `browserReach` like any address.
   > The network sentence did not move: a search is a page the user navigated
-  > to by pressing Enter, and Helm still contacts nothing on its own.
+  > to by pressing Enter, and Floti still contacts nothing on its own.
 
 ### Portability
 
@@ -1342,12 +1342,12 @@ Added for the 1.0.0 release, because a version number that stops disclaiming
 invites the question and answering it by implication is how a promise gets made
 by accident.
 
-**1.0 promises one thing: an existing `helm.db` keeps working.** A newer Helm
+**1.0 promises one thing: an existing `desktop.db` keeps working.** A newer Floti
 opens a database an older one wrote, and it does that by construction rather
 than by intention:
 
 - Migrations only ever roll forward, are journalled by tag in
-  `__helm_migrations`, and each runs in its own transaction, so a failure leaves
+  `__floti_migrations`, and each runs in its own transaction, so a failure leaves
   the file on the last complete one rather than half-way through
   (`core/store/migrate.ts`). They are embedded in the bundle, so the exe carries
   its own and needs nothing shipped beside it.
@@ -1359,17 +1359,17 @@ than by intention:
 **Everything else is internal and may change in a patch release.** The overlay
 shim layout, the `--mcp-config` document, the IPC channel contract, the
 `app_settings` key set, the shape of an exported profile and the layout of the
-templates directory are all Helm's own, and none of them is a format anything
-outside Helm is asked to write.
+templates directory are all Floti's own, and none of them is a format anything
+outside Floti is asked to write.
 
 Two of those are files a person edits by hand, so the distinction is worth
 stating rather than leaving to be discovered - and in both cases what protects
 the user is the same rule the settings table follows, not a version number.
 
-**A template is a folder of ordinary files.** Helm's interest in it is `.tpl`
+**A template is a folder of ordinary files.** Floti's interest in it is `.tpl`
 substitution and nothing else, and a directory that is only ever *read* cannot
-be broken by a change to what Helm does with it. Nothing there is overwritten
-either, because Helm keeps no hashes and so cannot tell an edited file from an
+be broken by a change to what Floti does with it. Nothing there is overwritten
+either, because Floti keeps no hashes and so cannot tell an edited file from an
 untouched one.
 
 **An exported profile is read tolerantly.** `profileFromYaml` throws only for a
@@ -1381,7 +1381,7 @@ version imports, minus anything this one cannot honour.
 
 What none of this promises is the Claude Code CLI, which is a separate product
 on its own release schedule. The tested range (`TESTED_VERSIONS`, in the
-host's Claude Code backend) is a measurement, not a dependency bound - outside it Helm warns and starts anyway (7).
+host's Claude Code backend) is a measurement, not a dependency bound - outside it Floti warns and starts anyway (7).
 
 ---
 
@@ -1408,8 +1408,8 @@ host's Claude Code backend) is a measurement, not a dependency bound - outside i
 | Risk | Mitigation |
 |---|---|
 | ~~**`--plugin-dir` may not accept a synthesised dir**~~ | **Closed by the composition spike.** Junction-based shims work; two overlays composed in one session. Copy fallback exists but was not needed. |
-| ~~**Skill name collisions** across composed overlays~~ | **Closed by the composition spike.** The platform namespaces every overlay automatically (`<plugin-name>:<skill>`); same-named skills in two overlays coexist. Helm only sanitizes plugin manifest names. |
-| ~~**Project CLAUDE.md not carried by `--plugin-dir`**~~ (a composition-spike finding) | **Closed when profiles were built, but not the way the mitigation guessed.** `--add-dir` does *not* pull in an overlaid repo's CLAUDE.md - measured on 2.1.225, a session launched from the harness root with both flags reported only the user and cwd instruction files. Helm composes the overlays' CLAUDE.md into one document and passes it to **`--append-system-prompt-file`**. A file, not `--append-system-prompt` inline: two repos here total 34 KB against a 32,767-character Windows command line. |
+| ~~**Skill name collisions** across composed overlays~~ | **Closed by the composition spike.** The platform namespaces every overlay automatically (`<plugin-name>:<skill>`); same-named skills in two overlays coexist. Floti only sanitizes plugin manifest names. |
+| ~~**Project CLAUDE.md not carried by `--plugin-dir`**~~ (a composition-spike finding) | **Closed when profiles were built, but not the way the mitigation guessed.** `--add-dir` does *not* pull in an overlaid repo's CLAUDE.md - measured on 2.1.225, a session launched from the harness root with both flags reported only the user and cwd instruction files. Floti composes the overlays' CLAUDE.md into one document and passes it to **`--append-system-prompt-file`**. A file, not `--append-system-prompt` inline: two repos here total 34 KB against a 32,767-character Windows command line. |
 | **Junctions on Windows** | `mklink /J` needs no elevation. Fall back to copy + watch. |
 | ~~**Native modules** (`node-pty`, `better-sqlite3`) vs portable exe~~ | **Closed by the packaging spike** (8.2). Both ship N-API prebuilds, so nothing is rebuilt against Electron's ABI and nothing compiles; the config that spike produced is what `electron-builder.yml` still holds. |
 | **CLI flag drift** across Claude Code releases | Flags are a stable public surface, far safer than the 0.3.x SDK. Pin a tested version, assert on `claude --version` at startup. |
@@ -1441,7 +1441,7 @@ makes the effective view's namespace prediction decidable rather than measured.
 
 One caveat, and it became the design: **plugins do not carry the overlaid repo's
 CLAUDE.md.** `--add-dir` does not either - that was the mitigation this spike
-guessed at, and building profiles proved it wrong. Helm composes the overlays'
+guessed at, and building profiles proved it wrong. Floti composes the overlays'
 CLAUDE.md into one document and passes `--append-system-prompt-file`.
 
 Headless (`-p`) only. The first profile launch through the real form was the
@@ -1498,8 +1498,8 @@ signs the unpacked helper exes automatically.
 
 The portable launcher extracts the app to `%TEMP%\<random>\` and sets
 `PORTABLE_EXECUTABLE_DIR` to the directory containing the exe. The main process
-detects that env var and redirects `userData` to `<exe dir>\helm-data\` -
-verified: `helm.db` (WAL), screenshots and the selftest report all landed beside
+detects that env var and redirects `userData` to `<exe dir>\floti-data\` -
+verified: `desktop.db` (WAL), screenshots and the selftest report all landed beside
 the exe; nothing was written to `%APPDATA%`.
 
 `process.execPath` in portable mode points at the temp extraction, so **never
@@ -1509,12 +1509,12 @@ driver now uses for isolation.
 
 #### Selftest harness
 
-`Helm.exe --selftest` runs the whole proof unattended and exits 0/1: SQLite
+`Floti.exe --selftest` runs the whole proof unattended and exits 0/1: SQLite
 roundtrip, pwsh marker echo, renderer-synthesized keystrokes, resize
 verification (`[Console]::WindowWidth` inside the shell after
 `pty.resize(120,30)`), then launches `claude`, auto-dismisses startup gates
 (folder trust, MCP enablement) and waits for the version banner. Evidence goes
-to `helm-data/spike-report.json` + `helm-data/screenshots/*.png`.
+to `floti-data/spike-report.json` + `floti-data/screenshots/*.png`.
 
 Two lessons encoded there for future TUI automation:
 
@@ -1527,8 +1527,8 @@ Two lessons encoded there for future TUI automation:
 
 #### Builds
 
-- `pnpm dist:win` → `dist-app/Helm-<version>-portable.exe` (~95 MB) and
-  `Helm-<version>-setup.exe` (NSIS one-click, per-user, no elevation).
+- `pnpm dist:win` → `dist-app/Floti-<version>-portable.exe` (~95 MB) and
+  `Floti-<version>-setup.exe` (NSIS one-click, per-user, no elevation).
 - Reproducible from a clean checkout with no build tools, Python or compiler,
   because nothing compiles.
 
@@ -1546,7 +1546,7 @@ node-pty 1.1.0, Claude Code 2.1.225.
 
 The real `claude` TUI runs in an embedded xterm.js + node-pty pane with no
 observable loss of fidelity, and the pane is as fast as having no terminal at
-all. Every deviation found was a *host configuration* problem - something Helm
+all. Every deviation found was a *host configuration* problem - something Floti
 must set, not something xterm.js or Claude Code gets wrong - and all of them are
 fixed and re-verified in this repo.
 
@@ -1562,8 +1562,8 @@ human has to squint at. Keystrokes and mouse events are synthesised as real
 Chromium input events, so they travel the same path a user's typing does.
 
 ```
-pnpm fidelity        # C1-C9, the terminal itself      -> helm-data/fidelity-report.json
-pnpm claude-check    # D0-D7, the real claude TUI      -> helm-data/claude-report.json
+pnpm fidelity        # C1-C9, the terminal itself      -> floti-data/fidelity-report.json
+pnpm claude-check    # D0-D7, the real claude TUI      -> floti-data/claude-report.json
 pnpm shell           # the interactive pane, for the soak test
 ```
 
@@ -1601,7 +1601,7 @@ fails the check rather than waiting to be noticed in a table.
 
 #### Deviations
 
-Severity is what would happen if Helm shipped without the fix.
+Severity is what would happen if Floti shipped without the fix.
 
 | # | Deviation | Severity | Status |
 |---|---|---|---|
@@ -1609,11 +1609,11 @@ Severity is what would happen if Helm shipped without the fix.
 | 2 | **Electron's default menu eats Ctrl-C.** The stock application menu binds Ctrl-C to the Edit→Copy role, which consumes the keydown before xterm sees it - the interrupt never reaches Claude. | **High** - no way to interrupt a turn | **Fixed.** `Menu.setApplicationMenu(null)`. |
 | 3 | **Colour depth is not advertised by default.** Without `COLORTERM=truecolor` in the child environment, Ink resolves 256 colours and the whole theme shifts. | Medium - wrong colours everywhere | **Fixed** in `ptyEnv`. D2 confirms zero palette colours in use. |
 | 4 | **Unicode 6 widths by default.** Without `allowProposedApi` + the Unicode 11 addon, emoji are measured one cell wide and every box-drawn surface - status line, dialogs, the composer - misaligns. | Medium - visibly broken UI | **Fixed.** C2 is the regression test. |
-| 5 | **Inherited `CLAUDE_CODE_*` environment.** Launching Helm from inside a Claude Code session leaks `CLAUDECODE`, `CLAUDE_CODE_CHILD_SESSION` and friends into the hosted session, which then announces *"Transcript saving is off - inherited CLAUDE_CODE_CHILD_SESSION marker"* and stops writing a transcript. | Medium - silent data loss, and it defeats the v1.1 transcript-archive plan | **Fixed.** `ptyEnv` scrubs them. |
+| 5 | **Inherited `CLAUDE_CODE_*` environment.** Launching Floti from inside a Claude Code session leaks `CLAUDECODE`, `CLAUDE_CODE_CHILD_SESSION` and friends into the hosted session, which then announces *"Transcript saving is off - inherited CLAUDE_CODE_CHILD_SESSION marker"* and stops writing a transcript. | Medium - silent data loss, and it defeats the v1.1 transcript-archive plan | **Fixed.** `ptyEnv` scrubs them. |
 | 6 | **Ctrl-C is overloaded.** A terminal host has to choose between copy and interrupt. | Medium | **Implemented** to Windows Terminal's contract: Ctrl-C copies only while a selection is live, any other keystroke drops the selection, Ctrl-Shift-C/V always copy and paste. C7 covers all three transitions. |
 | 7 | **`minimumContrastRatio` and `drawBoldTextInBrightColors`** would rewrite Claude's colours if left at anything but the passive setting. | Low | **Fixed** - both pinned explicitly, with comments saying why. |
 | 8 | **node-pty prints `AttachConsole failed`** from `conpty_console_list_agent` when enumerating the console process list. | Low | **Not fixed.** node-pty has a built-in timeout fallback (it falls back to killing the shell pid alone), so the effect is stderr noise plus a marginally less thorough process-tree kill. Revisit if orphaned processes ever show up. |
-| 9 | **Electron's own binary cannot host a process in a pty.** `electron.exe` run as node inside a ConPTY exits cleanly but its stdio never reaches the pseudoconsole - it is a `/SUBSYSTEM:WINDOWS` binary. | Low | **Informational.** Nothing Helm ships needs it; the spike's own sink/echo processes use `node.exe`. Worth remembering before planning any in-pane helper. |
+| 9 | **Electron's own binary cannot host a process in a pty.** `electron.exe` run as node inside a ConPTY exits cleanly but its stdio never reaches the pseudoconsole - it is a `/SUBSYSTEM:WINDOWS` binary. | Low | **Informational.** Nothing Floti ships needs it; the spike's own sink/echo processes use `node.exe`. Worth remembering before planning any in-pane helper. |
 
 #### On latency
 

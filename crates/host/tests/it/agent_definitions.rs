@@ -2729,7 +2729,7 @@ async fn an_agent_md_with_no_default_md_is_the_default_for_a_new_start_and_a_res
 // ---------------------------------------------------------------------------
 
 impl World {
-    /// A host told its config folder is not its to write, as Helm starts
+    /// A host told its config folder is not its to write, as the desktop starts
     /// one in every run but the installed app's.
     async fn host_read_only(&self) -> RunningHost {
         let mut config = self.config();
@@ -3269,6 +3269,7 @@ fn launch_request(folder: &Path, agent: Option<&str>) -> LaunchSessionRequest {
         backend: None,
         agent: agent.map(str::to_owned),
         chosen: None,
+        opening_prompt: None,
         cols: 80,
         rows: 24,
     }

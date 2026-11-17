@@ -4,27 +4,40 @@
 //! `harness.yaml` it had before; a new one always gets `workspace.yaml`, and
 //! neither shape is made over a folder that has either. Two shapes:
 //!
-//! - `new`: a folder that does not exist yet. It gets `workspace.yaml`,
-//!   `repos/` and `.claude/` and nothing else, or, given a template, that
-//!   template's tree and a manifest.
+//! - `new`: a folder that does not exist yet. From Starter it gets
+//!   `workspace.yaml`, an empty `repos/` and an `AGENTS.md` naming it, and
+//!   nothing else; from one of the user's templates, that template's tree and
+//!   a manifest.
 //! - `convert`: a folder that already holds repositories. It gets a
 //!   `workspace.yaml`, with `repos: "."` when it has no `repos/` so the
-//!   repositories at its top level stay visible, and a `.claude/`.
-//!   Templates do not apply: converting is about a folder somebody already
-//!   has, and writing a layout into it would be writing into their work.
+//!   repositories at its top level stay visible, and nothing else: its own
+//!   instructions stay as they are. Templates do not apply: converting is
+//!   about a folder somebody already has, and writing a layout into it would
+//!   be writing into their work.
 
 use std::path::{Path, PathBuf};
 
 use floti_protocol::channels::workspace::{CreateWorkspaceRequest, WorkspaceMode};
 
 use super::reader::{TemplateValues, apply_template, template_id_problems, template_path_value};
-use super::{MINIMAL_TEMPLATE, WORKSPACE_MANIFEST, WORKSPACE_MANIFESTS, exists, is_real_dir};
+use super::{
+    STARTER_TEMPLATE, WORKSPACE_MANIFEST, WORKSPACE_MANIFESTS, exists, is_built_in, is_real_dir,
+};
 use crate::agent_config::normalize;
 use crate::agent_config::time::now_iso;
 
 /// The manifest format this writer produces; not the host's version, nor
 /// the workspace's.
 pub const WORKSPACE_FORMAT_VERSION: &str = "1";
+
+/// The instructions Starter writes, with `{{NAME}}` for the workspace's name.
+/// `AGENTS.md` is the shape every full backend reads.
+const STARTER_AGENTS_MD: &str = include_str!("starter/AGENTS.md");
+
+/// Starter's `AGENTS.md` for a workspace called `name`.
+fn starter_agents_md(name: &str) -> String {
+    STARTER_AGENTS_MD.replace("{{NAME}}", name)
+}
 
 /// What making a workspace did.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -85,17 +98,20 @@ pub fn workspace_name_problems(name: &str) -> Vec<String> {
     problems
 }
 
-/// The manifest, written by hand: four keys, five when converting, no
-/// comments. A JSON string is a valid YAML double-quoted scalar, so JSON is
-/// the escaping.
-fn manifest(name: &str, template: &str, created: &str, repos: Option<&str>) -> String {
+/// The manifest, written by hand, with no comments: `name`, `template`,
+/// `version` and `created` for a new workspace; a converted one has no
+/// `template` and may have `repos`. A JSON string is a valid YAML
+/// double-quoted scalar, so JSON is the escaping.
+fn manifest(name: &str, template: Option<&str>, created: &str, repos: Option<&str>) -> String {
     let quoted = |text: &str| serde_json::to_string(text).unwrap_or_default();
-    let mut lines = vec![
-        format!("name: {}", quoted(name)),
-        format!("template: {}", quoted(template)),
+    let mut lines = vec![format!("name: {}", quoted(name))];
+    if let Some(template) = template {
+        lines.push(format!("template: {}", quoted(template)));
+    }
+    lines.extend([
         format!("version: {}", quoted(WORKSPACE_FORMAT_VERSION)),
         format!("created: {}", quoted(created)),
-    ];
+    ]);
     if let Some(repos) = repos {
         lines.push(format!("repos: {}", quoted(repos)));
     }
@@ -127,18 +143,21 @@ fn create_new(
         .unwrap_or_default()
         .trim()
         .to_owned();
+    // Absent, empty or either id the built-in has had is Starter, and is
+    // recorded as `starter` whichever id asked for it.
     let template = request
         .template
         .as_deref()
         .map(str::trim)
-        .filter(|template| !template.is_empty())
-        .unwrap_or(MINIMAL_TEMPLATE)
+        .filter(|template| !template.is_empty() && !is_built_in(template))
+        .unwrap_or(STARTER_TEMPLATE)
         .to_owned();
+    let starter = template == STARTER_TEMPLATE;
     let mut problems = workspace_name_problems(&name);
     if !is_real_dir(dir) {
         problems.push(format!("{} is not a folder.", dir.display()));
     }
-    if template != MINIMAL_TEMPLATE {
+    if !starter {
         let id_problems = template_id_problems(&template);
         let valid = id_problems.is_empty();
         problems.extend(id_problems);
@@ -171,11 +190,11 @@ fn create_new(
     make_dir(&target)?;
     let mut created = Vec::new();
     let mut problems = Vec::new();
-    if template == MINIMAL_TEMPLATE {
-        for folder in ["repos", ".claude"] {
-            make_dir(&target.join(folder))?;
-            created.push(folder.to_owned());
-        }
+    if starter {
+        make_dir(&target.join("repos"))?;
+        created.push("repos".to_owned());
+        write(&target.join("AGENTS.md"), &starter_agents_md(&name))?;
+        created.push("AGENTS.md".to_owned());
     } else {
         // The template's tree first and the manifest last, so `template:`
         // is what the host wrote and a partial apply still leaves a workspace
@@ -196,7 +215,7 @@ fn create_new(
     }
     write(
         &target.join(WORKSPACE_MANIFEST),
-        &manifest(&name, &template, &created_at, None),
+        &manifest(&name, Some(&template), &created_at, None),
     )?;
     created.push(WORKSPACE_MANIFEST.to_owned());
     Ok(WorkspaceCreated {
@@ -239,21 +258,15 @@ fn convert(request: &CreateWorkspaceRequest, dir: &Path) -> Result<WorkspaceCrea
         });
     // A folder that already has `repos/` means what the default means.
     let repos = (!is_real_dir(&dir.join("repos"))).then_some(".");
-    // Always `minimal`: a converted folder was never built from a template,
+    // No `template:`: a converted folder was never built from a template,
     // whatever the caller passed.
     write(
         &dir.join(WORKSPACE_MANIFEST),
-        &manifest(&name, MINIMAL_TEMPLATE, &now_iso(), repos),
+        &manifest(&name, None, &now_iso(), repos),
     )?;
-    let mut created = vec![WORKSPACE_MANIFEST.to_owned()];
-    let claude = dir.join(".claude");
-    if !is_real_dir(&claude) {
-        make_dir(&claude)?;
-        created.push(".claude".to_owned());
-    }
     Ok(WorkspaceCreated {
         path: Some(dir.to_path_buf()),
-        created,
+        created: vec![WORKSPACE_MANIFEST.to_owned()],
         problems: Vec::new(),
     })
 }

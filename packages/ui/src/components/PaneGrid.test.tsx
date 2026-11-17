@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PaneNode } from '@helm/core/types'
+import type { PaneNode } from '@floti/core/types'
 import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
 import { PaneGrid } from './PaneGrid'
 

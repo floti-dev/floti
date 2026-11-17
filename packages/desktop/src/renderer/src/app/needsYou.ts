@@ -7,7 +7,7 @@ import {
   type PaneLayout,
   type PlaceScope,
   type StandingNotice
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NoticesView } from './host/notices'
 import { noticeKey } from './host/notices'

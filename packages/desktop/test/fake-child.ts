@@ -54,7 +54,7 @@ export class FakeChild extends EventEmitter implements HostChild {
     return this.exitCode === null && this.signalCode === null
   }
 
-  /** Resolves once Helm has closed this program's standard input. */
+  /** Resolves once the desktop has closed this program's standard input. */
   inputClosed(): Promise<void> {
     return new Promise((resolve) => {
       if (this.stdin.writableFinished || this.stdin.readableEnded) resolve()

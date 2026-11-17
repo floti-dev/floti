@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { EMPTY_INVENTORY, commandState, type DiscoveryResult, type Project } from '@helm/core/types'
+import { EMPTY_INVENTORY, commandState, type DiscoveryResult, type Project } from '@floti/core/types'
 import { SessionTree, type SessionTreeProps, type TreeSession } from './SessionTree'
 
 /**
@@ -11,7 +11,7 @@ import { SessionTree, type SessionTreeProps, type TreeSession } from './SessionT
  * child whose parent has ended standing on its own, naming it.
  */
 
-const HELM = 'C:\\work\\north\\repos\\helm'
+const FLOTI = 'C:\\work\\north\\repos\\floti'
 const TRACKR = 'C:\\work\\north\\repos\\trackr'
 
 const project = (path: string): Project => ({
@@ -26,8 +26,8 @@ const project = (path: string): Project => ({
 
 const DISCOVERY: DiscoveryResult = {
   roots: ['C:\\work'],
-  workspaces: [{ path: 'C:\\work\\north', name: 'north', template: null, version: null, repoPaths: [HELM, TRACKR] }],
-  projects: [project(HELM), project(TRACKR)],
+  workspaces: [{ path: 'C:\\work\\north', name: 'north', template: null, version: null, repoPaths: [FLOTI, TRACKR] }],
+  projects: [project(FLOTI), project(TRACKR)],
   errors: [],
   scannedAt: '2026-10-03T00:00:00.000Z',
   durationMs: 1
@@ -38,7 +38,7 @@ const row = (id: number, label: string, state: TreeSession['state'], extra: Part
   label,
   state,
   note: '',
-  hint: HELM,
+  hint: FLOTI,
   outside: false,
   shown: null,
   ...extra
@@ -66,7 +66,7 @@ function renderTree(
     onLaunch: vi.fn(),
     launchingPath: null,
     onOpenSession: vi.fn(),
-    onAddRoot: vi.fn(),
+    onNewSession: vi.fn(),
     reveal: null,
     ...patch
   }
@@ -94,11 +94,11 @@ const indentOf = (id: number): number => Number.parseFloat(rowOf(id).style.paddi
 const guides = (id: number): string[] =>
   [...rowOf(id).querySelectorAll('[data-session-guide]')].map((each) => each.getAttribute('data-session-guide') ?? '')
 
-/** api-refactor in helm, with a reviewer and two workers it started in other folders. */
+/** api-refactor in floti, with a reviewer and two workers it started in other folders. */
 const family = (): ReadonlyMap<string, readonly TreeSession[]> =>
   new Map([
     [
-      HELM.toLowerCase(),
+      FLOTI.toLowerCase(),
       [
         row(1, 'api-refactor', 'idle', {
           nested: [
@@ -115,8 +115,8 @@ const family = (): ReadonlyMap<string, readonly TreeSession[]> =>
 describe('SessionTree: sessions that started sessions', () => {
   it('A23: a session a person started as an agent has its agent tag after its name, and its children only their guide', () => {
     const tree = family()
-    const [parent, docs] = tree.get(HELM.toLowerCase()) ?? []
-    renderTree(new Map([[HELM.toLowerCase(), [{ ...parent!, label: 'orbit-api', agent: 'lead', note: '4m' }, docs!]]]))
+    const [parent, docs] = tree.get(FLOTI.toLowerCase()) ?? []
+    renderTree(new Map([[FLOTI.toLowerCase(), [{ ...parent!, label: 'orbit-api', agent: 'lead', note: '4m' }, docs!]]]))
 
     const lead = screen.getByRole('button', { name: /^orbit-api, ready, started as the lead agent, / })
     const tag = lead.querySelector<HTMLElement>('[data-agent-tag]')
@@ -161,14 +161,14 @@ describe('SessionTree: sessions that started sessions', () => {
 
     // They run in trackr, but trackr's project lists none of them.
     expect(screen.queryByRole('button', { name: 'Fold the sessions in trackr' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Fold the sessions in helm' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Fold the sessions in floti' })).toBeTruthy()
   })
 
   it('S18: a child whose parent has ended is a top-level row marked with its parent’s name', () => {
     renderTree(
       new Map([
         [
-          HELM.toLowerCase(),
+          FLOTI.toLowerCase(),
           [
             row(1, 'api-refactor', 'ended'),
             row(2, 'worker', 'busy', { parentName: 'api-refactor', hint: TRACKR }),
@@ -202,7 +202,7 @@ describe('SessionTree: sessions that started sessions', () => {
     renderTree(
       new Map([
         [
-          HELM.toLowerCase(),
+          FLOTI.toLowerCase(),
           [
             row(1, 'api-refactor', 'idle', {
               nested: [
@@ -251,7 +251,7 @@ describe('SessionTree: sessions that started sessions', () => {
     renderTree(
       new Map([
         [
-          HELM.toLowerCase(),
+          FLOTI.toLowerCase(),
           [row(1, 'api-refactor', 'idle', { nested: [row(2, 'reviewer', 'busy'), row(3, 'worker', 'idle')] })]
         ]
       ])
@@ -264,7 +264,7 @@ describe('SessionTree: sessions that started sessions', () => {
     renderTree(
       new Map([
         [
-          HELM.toLowerCase(),
+          FLOTI.toLowerCase(),
           [
             row(1, 'first', 'idle', { nested: [row(2, 'first-child', 'busy')] }),
             row(3, 'second', 'idle', { nested: [row(4, 'second-child', 'busy')] })
@@ -292,7 +292,7 @@ describe('SessionTree: sessions that started sessions', () => {
 
   it('S20: a child that appears never opens or unfolds anything by itself', () => {
     const { props, rerender } = renderTree(
-      new Map([[HELM.toLowerCase(), [row(1, 'api-refactor', 'idle')]]])
+      new Map([[FLOTI.toLowerCase(), [row(1, 'api-refactor', 'idle')]]])
     )
     rerender({ sessionsByPath: family() })
     expect(props.onOpenSession).not.toHaveBeenCalled()
@@ -304,7 +304,7 @@ describe('SessionTree: sessions that started sessions', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Fold the sessions started by api-refactor' }))
     const more = new Map([
       [
-        HELM.toLowerCase(),
+        FLOTI.toLowerCase(),
         [
           row(1, 'api-refactor', 'idle', {
             nested: [row(2, 'reviewer', 'busy'), row(6, 'late', 'idle')]
@@ -378,7 +378,7 @@ describe('SessionTree: a parent’s row and a child’s as the design draws them
     renderTree(
       new Map([
         [
-          HELM.toLowerCase(),
+          FLOTI.toLowerCase(),
           [row(1, 'api-refactor', 'idle', { nested: [row(2, 'lead', 'busy', { nested: [row(3, 'helper', 'busy')] })] })]
         ]
       ])
@@ -409,7 +409,7 @@ describe('SessionTree: a parent’s row and a child’s as the design draws them
     renderTree(
       new Map([
         [
-          HELM.toLowerCase(),
+          FLOTI.toLowerCase(),
           [
             row(1, 'api-refactor', 'idle', {
               nested: [row(2, 'a', 'waiting'), row(3, 'b', 'waiting'), row(4, 'c', 'busy')]
@@ -427,7 +427,7 @@ describe('SessionTree: a parent’s row and a child’s as the design draws them
     renderTree(
       new Map([
         [
-          HELM.toLowerCase(),
+          FLOTI.toLowerCase(),
           [
             row(1, 'api-refactor', 'idle', {
               nested: [
@@ -464,7 +464,7 @@ describe('SessionTree: a parent’s row and a child’s as the design draws them
     renderTree(
       new Map([
         [
-          HELM.toLowerCase(),
+          FLOTI.toLowerCase(),
           [
             row(1, 'api-refactor', 'idle', {
               nested: [
@@ -495,7 +495,7 @@ describe('SessionTree: a parent’s row and a child’s as the design draws them
     renderTree(
       new Map([
         [
-          HELM.toLowerCase(),
+          FLOTI.toLowerCase(),
           [
             row(1, 'api-refactor', 'idle', {
               nested: [
@@ -520,7 +520,7 @@ describe('SessionTree: a parent’s row and a child’s as the design draws them
   it('draws the command glyph as its own 12-unit drawing in the 12px box a dot’s column gives it', () => {
     renderTree(
       new Map([
-        [HELM.toLowerCase(), [row(1, 'api-refactor', 'idle', { nested: [row(2, 'tests', 'running', { command: true })] })]]
+        [FLOTI.toLowerCase(), [row(1, 'api-refactor', 'idle', { nested: [row(2, 'tests', 'running', { command: true })] })]]
       ])
     )
     const box = rowOf(2).querySelector<HTMLElement>('[data-session-command]')
@@ -547,7 +547,7 @@ describe('SessionTree: a parent’s row and a child’s as the design draws them
     renderTree(
       new Map([
         [
-          HELM.toLowerCase(),
+          FLOTI.toLowerCase(),
           [row(1, 'api-refactor', 'shell', { nested: [row(2, 'worker', 'shell')] })]
         ]
       ])
@@ -604,7 +604,7 @@ describe('a session row’s menu', () => {
   it('opens none: a stopped row has left the tree, so there is nothing to remove', () => {
     renderTree(
       new Map([
-        [HELM.toLowerCase(), [row(1, 'lead', 'busy', { nested: [row(2, 'mapper', 'ended'), row(5, 'worker', 'busy')] })]]
+        [FLOTI.toLowerCase(), [row(1, 'lead', 'busy', { nested: [row(2, 'mapper', 'ended'), row(5, 'worker', 'busy')] })]]
       ])
     )
     for (const id of [1, 2, 5]) fireEvent.contextMenu(rowOf(id), { clientX: 20, clientY: 30 })

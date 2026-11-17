@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Profile, SessionRecord } from '@helm/core'
+import type { Profile, SessionRecord } from '@floti/core'
 import { bridge, remoteBridge } from './bridge.testkit'
 import { HostProfiles } from './HostProfiles'
 

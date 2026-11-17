@@ -127,10 +127,8 @@ export async function rightClick(win: BrowserWindow, x: number, y: number): Prom
  * modifiers, so a driver that writes the gesture out by hand - press, move,
  * move, release - sends two *hovers* between the press and the release, and a
  * handler that reads `clientX` off whatever move arrives cannot tell the
- * difference. Helm had two such drivers and one such handler, and between them
- * they reported a working drag for as long as the divider has existed. The
- * failure only surfaced on the first handle built with `setPointerCapture`,
- * which correctly ignored all of it and moved nothing.
+ * difference. A drag that looks right to both would still move nothing on a handle
+ * built with `setPointerCapture`, which correctly ignores all of it.
  *
  * So the button-held case is the one that is easy to write, and the loose
  * `sendMouse` calls are what now look unusual at a call site.

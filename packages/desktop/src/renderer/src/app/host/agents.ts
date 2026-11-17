@@ -1,4 +1,4 @@
-import type { AgentChangeResult, AgentFileText, LaunchAgents } from '@helm/core/types'
+import type { AgentChangeResult, AgentFileText, LaunchAgents } from '@floti/core/types'
 import type { HostConnection, HostSubscription } from '../../../../shared/host/client'
 import { agentProblemFromHost, launchAgentsFromHost } from '../../../../shared/host/launch'
 import type * as P from '../../../../shared/host/protocol'

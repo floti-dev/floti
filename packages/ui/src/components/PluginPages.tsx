@@ -15,7 +15,7 @@ export interface PluginPageTab {
  * The drag type of a plugin page. Its own, so a page cannot be dropped among a
  * pane's tabs or a browser's pages, nor they among a plugin's.
  */
-export const PLUGIN_PAGE_MIME = 'application/x-helm-plugin-page'
+export const PLUGIN_PAGE_MIME = 'application/x-floti-plugin-page'
 
 export interface PluginPagesProps {
   /** What the strip is called: "<plugin> pages". */
@@ -38,7 +38,7 @@ export interface PluginPagesProps {
  * The strip of pages inside the one tab of a plugin that declares `pageStrip`.
  *
  * The pane's `TabBar`, as the Browser tab's strip is, so a page looks, closes,
- * middle-clicks and reorders exactly like every other tab in Helm - and a
+ * middle-clicks and reorders exactly like every other tab in Floti - and a
  * strip of its own, so a plugin that opens a list, then an item, then another
  * does not fill the pane's strip beside the sessions. There is no `+`: a
  * plugin opens its own pages.

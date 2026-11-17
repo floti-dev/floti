@@ -1,11 +1,11 @@
 /**
- * The shapes of Claude Code's prompt history and transcripts, as an earlier
- * Helm indexed them into `helm.db` (`store/history.ts`). The local host reads
- * the files now; `helm.db` keeps what was indexed, which the copy into the host
- * carries (`store/copy.ts`).
+ * The shapes of Claude Code's prompt history and transcripts, as `desktop.db`
+ * keeps them indexed (`store/history.ts`). The local host reads the files;
+ * `desktop.db` keeps what was indexed, which the copy into the host carries
+ * (`store/copy.ts`).
  */
 
-/** One line of `history.jsonl`, after the fields Helm uses have been checked. */
+/** One line of `history.jsonl`, after the fields Floti uses have been checked. */
 export interface HistoryLine {
   sessionId: string
   project: string

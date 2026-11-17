@@ -6,7 +6,7 @@ import type {
   SessionProcess,
   SessionRecord,
   SessionResources,
-} from "@helm/core";
+} from "@floti/core";
 import {
   SessionsPane,
   type SessionsPaneHost,
@@ -18,7 +18,7 @@ function live(
   over: Partial<LiveSession> & Pick<LiveSession, "pid">,
 ): LiveSession {
   return {
-    helmSessionId: null,
+    hostSessionId: null,
     registered: true,
     cwd: null,
     name: null,
@@ -64,20 +64,20 @@ function proc(
 }
 
 const SHOP = live({
-  helmSessionId: 1,
+  hostSessionId: 1,
   pid: 4100,
   cwd: "C:\\work\\shop",
   name: "shop",
 });
 const DOCS = live({
-  helmSessionId: 2,
+  hostSessionId: 2,
   pid: 4200,
   cwd: "C:\\work\\docs",
   name: "docs",
   activity: "busy",
 });
 const QUIET = live({
-  helmSessionId: 3,
+  hostSessionId: 3,
   pid: 4300,
   cwd: "C:\\work\\quiet",
   name: "quiet",
@@ -169,7 +169,7 @@ const items = (region: HTMLElement): string[] =>
 describe("SessionsPane", () => {
   it("shows a session whose program reports an error, with its message, and a reported block's kind", () => {
     const failing = live({
-      helmSessionId: 1,
+      hostSessionId: 1,
       pid: 4100,
       cwd: "C:\\work\\shop",
       name: "shop",
@@ -178,7 +178,7 @@ describe("SessionsPane", () => {
       message: "build failed: 3 errors",
     });
     const asking = live({
-      helmSessionId: 2,
+      hostSessionId: 2,
       pid: 4200,
       cwd: "C:\\work\\docs",
       name: "docs",
@@ -190,8 +190,8 @@ describe("SessionsPane", () => {
       sessions: [failing, asking],
       selectedPid: failing.pid,
     });
-    const inHelm = screen.getByRole("region", { name: "In Floti" });
-    const [shop, docs] = within(inHelm).getAllByRole("button");
+    const inDesktop = screen.getByRole("region", { name: "In Floti" });
+    const [shop, docs] = within(inDesktop).getAllByRole("button");
     expect(shop?.textContent).toContain("build failed: 3 errors");
     expect(
       within(shop as HTMLElement).getByTitle("Error: build failed: 3 errors"),
@@ -208,12 +208,12 @@ describe("SessionsPane", () => {
 
   it("lists Floti’s sessions and everything else on the machine apart, each with its own folder", async () => {
     const props = renderPane();
-    const inHelm = screen.getByRole("region", { name: "In Floti" });
+    const inDesktop = screen.getByRole("region", { name: "In Floti" });
     const elsewhere = screen.getByRole("region", {
       name: "Elsewhere on this machine",
     });
 
-    const hosted = within(inHelm).getAllByRole("button");
+    const hosted = within(inDesktop).getAllByRole("button");
     expect(hosted).toHaveLength(3);
     for (const [i, session] of [SHOP, DOCS, QUIET].entries()) {
       expect(hosted[i]?.textContent).toContain(session.name);
@@ -225,7 +225,7 @@ describe("SessionsPane", () => {
     });
     expect(outside.textContent).toContain("C:\\work\\api");
     expect(
-      within(inHelm).queryByRole("button", { name: /^terminal session/ }),
+      within(inDesktop).queryByRole("button", { name: /^terminal session/ }),
     ).toBeNull();
 
     await userEvent.click(outside);
@@ -343,8 +343,8 @@ describe("SessionsPane: what a session's agent says it is doing", () => {
         [3, row(3, "quiet", "C:\\work\\quiet")],
       ]),
     });
-    const inHelm = screen.getByRole("region", { name: "In Floti" });
-    const [shop, docs] = within(inHelm).getAllByRole("button");
+    const inDesktop = screen.getByRole("region", { name: "In Floti" });
+    const [shop, docs] = within(inDesktop).getAllByRole("button");
     expect(shop?.querySelector("[data-session-title]")?.textContent).toBe(
       TITLE,
     );
@@ -418,8 +418,8 @@ describe("SessionsPane: the agent tag (A23, M15)", () => {
 
   it("draws the agent tag after the name on its row, and none for a session started as no agent", () => {
     renderPane({ records });
-    const inHelm = screen.getByRole("region", { name: "In Floti" });
-    const [shop, docs] = within(inHelm).getAllByRole("button");
+    const inDesktop = screen.getByRole("region", { name: "In Floti" });
+    const [shop, docs] = within(inDesktop).getAllByRole("button");
     const tag = shop?.querySelector<HTMLElement>("[data-agent-tag]");
     expect(tag?.textContent).toBe("lead");
     expect(tag?.className).toContain("bg-accent-soft");
@@ -536,9 +536,9 @@ describe("SessionsPane sessions not open here", () => {
       "bg-accent",
     );
 
-    const inHelm = screen.getByRole("region", { name: "In Floti" });
+    const inDesktop = screen.getByRole("region", { name: "In Floti" });
     expect(
-      within(inHelm)
+      within(inDesktop)
         .getAllByRole("button")
         .map((button) => button.textContent),
     ).toEqual([
@@ -583,6 +583,61 @@ describe("SessionsPane on its pane", () => {
     expect(
       document.querySelector('[data-empty-state="sessions-detail"]'),
     ).not.toBeNull();
+  });
+});
+
+describe("SessionsPane with nothing running", () => {
+  it("says No sessions yet once, offers New session, and leaves the detail blank", async () => {
+    const onNewSession = vi.fn();
+    renderPane({ sessions: [], records: new Map(), onNewSession });
+    const empty = document.querySelector(
+      '[data-empty-state="sessions-list"]',
+    ) as HTMLElement;
+    expect(within(empty).getByText("No sessions yet")).toBeDefined();
+    expect(
+      within(empty).getByText("Start an agent in one of your workspaces."),
+    ).toBeDefined();
+    expect(screen.queryByText("Nothing running")).toBeNull();
+    expect(
+      document.querySelector('[data-empty-state="sessions-detail"]'),
+    ).toBeNull();
+    await userEvent.click(
+      within(empty).getByRole("button", { name: "New session" }),
+    );
+    expect(onNewSession).toHaveBeenCalledOnce();
+  });
+
+  it("says it is reading, never No sessions yet, before the registry has answered", () => {
+    renderPane({ sessions: [], records: new Map(), readAtMs: null });
+    expect(document.querySelector("[data-sessions-reading]")).not.toBeNull();
+    expect(screen.queryByText("No sessions yet")).toBeNull();
+    expect(document.querySelector("[data-empty-state]")).toBeNull();
+  });
+
+  it("says Unknown and why with Try again when the registry could not be read, never No sessions yet", async () => {
+    const onRetry = vi.fn();
+    renderPane({
+      sessions: [],
+      records: new Map(),
+      readAtMs: null,
+      listError: "No local host answered on its socket.",
+      onRetry,
+    });
+    const unknown = document.querySelector(
+      '[data-empty-state="sessions-unknown"]',
+    ) as HTMLElement;
+    expect(within(unknown).getByText("Unknown")).toBeDefined();
+    expect(unknown.textContent).toContain(
+      "No local host answered on its socket.",
+    );
+    expect(screen.queryByText("No sessions yet")).toBeNull();
+    expect(
+      document.querySelector('[data-empty-state="sessions-detail"]'),
+    ).toBeNull();
+    await userEvent.click(
+      within(unknown).getByRole("button", { name: "Try again" }),
+    );
+    expect(onRetry).toHaveBeenCalledOnce();
   });
 });
 

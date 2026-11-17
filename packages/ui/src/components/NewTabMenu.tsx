@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useMemo, useRef, useState } from 'react'
-import type { Profile, Project } from '@helm/core/types'
+import type { Profile, Project } from '@floti/core/types'
 import { folderName, homePath, profilesInOrder, rankProjects } from '../lib/launcher'
 import { agentOptions } from '../lib/launchAgent'
 import { shortcutLabel } from '../lib/platform'

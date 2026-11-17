@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { PluginInfo, PluginLogLine, PluginMetrics } from '@helm/core/types'
+import type { PluginInfo, PluginLogLine, PluginMetrics } from '@floti/core/types'
 import { PluginPage, PluginsPage, type PluginPageProps } from './PluginSettings'
 
 /**
@@ -45,17 +45,31 @@ const plugin = (overrides: Partial<PluginInfo> = {}): PluginInfo => ({
 })
 
 describe('PluginsPage', () => {
-  it('says there are none, and adds a folder', () => {
+  it('says No plugins yet, and Add a plugin picks a folder as Add folder does', () => {
     const onAdd = vi.fn()
     render(<PluginsPage plugins={[]} addError={null} onAdd={onAdd} onOpen={vi.fn()} />)
-    expect(screen.getByText('No plugins')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Add folder' }))
+    const empty = document.querySelector<HTMLElement>('[data-empty-state="plugins"]')!
+    expect(within(empty).getByText('No plugins yet')).toBeTruthy()
+    expect(within(empty).getByText('Plugins add panels, tabs and agent tools.')).toBeTruthy()
+    fireEvent.click(within(empty).getByRole('button', { name: 'Add a plugin' }))
     expect(onAdd).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Add folder' }))
+    expect(onAdd).toHaveBeenCalledTimes(2)
+  })
+
+  it('on another computer, Add a plugin opens the path field, and the empty state offers it no second time', () => {
+    const onAdd = vi.fn()
+    render(<PluginsPage plugins={[]} addError={null} onAdd={onAdd} onOpen={vi.fn()} remoteHost="build-box" />)
+    const empty = (): HTMLElement => document.querySelector<HTMLElement>('[data-empty-state="plugins"]')!
+    fireEvent.click(within(empty()).getByRole('button', { name: 'Add a plugin' }))
+    expect(onAdd).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-plugin-add-confirm]')).not.toBeNull()
+    expect(within(empty()).queryByRole('button', { name: 'Add a plugin' })).toBeNull()
   })
 
   it('says nothing about plugins before main has answered', () => {
     render(<PluginsPage plugins={null} addError={null} onAdd={vi.fn()} onOpen={vi.fn()} />)
-    expect(screen.queryByText('No plugins')).toBeNull()
+    expect(document.querySelector('[data-empty-state="plugins"]')).toBeNull()
   })
 
   it('says the local host could not be reached and why, rather than that there are no plugins', () => {
@@ -63,7 +77,7 @@ describe('PluginsPage', () => {
     render(<PluginsPage plugins={null} unavailable={why} addError={null} onAdd={vi.fn()} onOpen={vi.fn()} />)
     expect(screen.getByText('The local host could not be reached')).toBeTruthy()
     expect(screen.getByText(why)).toBeTruthy()
-    expect(screen.queryByText('No plugins')).toBeNull()
+    expect(document.querySelector('[data-empty-state="plugins"]')).toBeNull()
   })
 
   it('lists each folder with its version and path, says Off or Not loaded, and opens one', () => {
@@ -92,8 +106,8 @@ describe('PluginsPage', () => {
   })
 
   it('says why the last folder picked was not added', () => {
-    render(<PluginsPage plugins={[]} addError="That folder holds no helm-plugin.json." onAdd={vi.fn()} onOpen={vi.fn()} />)
-    expect(screen.getByText('That folder holds no helm-plugin.json.')).toBeTruthy()
+    render(<PluginsPage plugins={[]} addError="That folder holds no floti-plugin.json." onAdd={vi.fn()} onOpen={vi.fn()} />)
+    expect(screen.getByText('That folder holds no floti-plugin.json.')).toBeTruthy()
   })
 })
 
@@ -148,14 +162,14 @@ describe('PluginPage: what it is', () => {
     ])
   })
 
-  it('says how its background page is, a crash with its reason as a clause', () => {
+  it('says how its background is, a crash with its reason as a clause', () => {
     renderPage({
       plugin: plugin({
-        background: { url: 'helm-plugin://sample/bg.html', state: 'crashed', error: 'The page ended unexpectedly.' }
+        background: { url: 'floti-plugin://sample/bg.js', state: 'crashed', error: 'The module ended unexpectedly.' }
       })
     })
     expect(document.querySelector('[data-plugin-background="crashed"]')?.textContent).toBe(
-      'Its background page stopped: the page ended unexpectedly. Reload starts it again.'
+      'Its background stopped: the module ended unexpectedly. Reload starts it again.'
     )
   })
 
@@ -390,7 +404,7 @@ describe('PluginPage: its log', () => {
     rerender(<PluginPage {...pageProps({ log: [] })} />)
     expect(group('plugin-log').textContent).toContain('Nothing yet.')
     const log: PluginLogLine[] = [
-      { at: '2026-10-05T16:14:46.000Z', stream: 'helm', text: 'reloaded from Settings' },
+      { at: '2026-10-05T16:14:46.000Z', stream: 'floti', text: 'reloaded from Settings' },
       { at: '2026-10-05T16:14:47.000Z', stream: 'out', text: 'listening on 51384' },
       { at: '2026-10-05T16:14:48.000Z', stream: 'err', text: 'it broke' }
     ]

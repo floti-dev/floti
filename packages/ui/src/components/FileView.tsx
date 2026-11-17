@@ -1,7 +1,7 @@
 import type { JSX, ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { EditorHighlight, FileChangeState, FileView as FileViewData } from '@helm/core'
-import { changedLineSet, describeFileChanges } from '@helm/core/types'
+import type { EditorHighlight, FileChangeState, FileView as FileViewData } from '@floti/core'
+import { changedLineSet, describeFileChanges } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { COPY_REFUSED, copyPathLabel, useCopyFeedback } from '../lib/copyFeedback'
 import { languageName } from '../lib/languages'
@@ -26,7 +26,7 @@ import { CheckIcon, CodeIcon, CopyIcon, DocIcon, FolderIcon, WarnIcon, WrapIcon 
 export interface FileViewProps {
   /** The file as last read, or null while the first read is in flight. */
   view: FileViewData | null
-  /** The read itself failed - the folder is not one Helm knows, or main threw. */
+  /** The read itself failed - the folder is not one Floti knows, or main threw. */
   error: string | null
   wrap: boolean
   onWrapChange: (wrap: boolean) => void

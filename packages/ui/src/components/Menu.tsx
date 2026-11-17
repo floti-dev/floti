@@ -19,7 +19,7 @@ import type {
  * (the Files view's project), or a set of ticks (which destinations the rail
  * shows).
  *
- * Drawn by Helm rather than left to the platform, which is what the native
+ * Drawn by Floti rather than left to the platform, which is what the native
  * `<select>` it replaces did - Chromium painted that list white, with the
  * app's light text on it, in every theme. This one is the popup recipe
  * (DESIGN.md "Menus"): `surface-raised` behind a `border-strong` edge, the

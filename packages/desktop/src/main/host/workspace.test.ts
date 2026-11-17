@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, type AppSettings } from '@helm/core'
+import { DEFAULT_SETTINGS, type AppSettings } from '@floti/core'
 import { FakeConnection, fakeLink, reconnectingLink } from '../../../test/host-connection'
 import type { HostLink } from './link'
 import type * as P from './protocol'
@@ -88,11 +88,11 @@ const backend = (patch: Partial<P.BackendStatus> = {}): P.BackendStatus => ({
 
 const LISTING: P.TemplateListing = {
   templates: [],
-  dir: resolve('/fixture home/.config/helm/templates'),
+  dir: resolve('/fixture home/.config/floti/templates'),
   problems: []
 }
 
-/** Helm's own settings, which `writeOwn` writes as the store would. */
+/** The desktop's own settings, which `writeOwn` writes as the store would. */
 function ownSettings(patch: Partial<AppSettings> = {}) {
   let settings: AppSettings = { ...DEFAULT_SETTINGS, ...patch }
   const writes: Array<Partial<AppSettings>> = []
@@ -293,7 +293,7 @@ describe('the workspace through the local host', () => {
     await expect(w.workspace.templates.list()).rejects.toThrow(UNREACHABLE)
     await expect(w.workspace.templates.detail('mine')).rejects.toThrow(UNREACHABLE)
     await expect(w.workspace.acceptRoots([ELSEWHERE])).rejects.toThrow(UNREACHABLE)
-    // The window still paints, from Helm's own settings.
+    // The window still paints, from the desktop's own settings.
     expect(await w.workspace.settings()).toEqual(own.own())
   })
 
@@ -345,7 +345,7 @@ describe('the workspace through the local host', () => {
     expect(settings.updateCheck).toBe(false)
     expect(own.own().updateCheck).toBe(true)
 
-    // Turned on at the host since, it stays on: Helm has nothing left to say.
+    // Turned on at the host since, it stays on: the desktop has nothing left to say.
     const second = new FakeConnection()
       .answer('settings:read', () => hostSettings({ updateCheck: true }))
       .answer('settings:write', () => hostSettings())
@@ -368,7 +368,7 @@ describe('the workspace through the local host', () => {
       density: 'compact',
       pinnedProjects: [ALPHA]
     })
-    // Helm's database never holds the host's keys.
+    // The desktop's database never holds the host's keys.
     expect(w.own.own().pinnedProjects).toEqual([])
 
     // A window-only change asks nothing of the host.

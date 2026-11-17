@@ -3,8 +3,8 @@ import type { JSX } from 'react'
 /**
  * A plugin's icon, drawn as a mask over `currentColor` so it takes the colour
  * of wherever it sits - the rail's idle, hover and current states, a tab's
- * label, a Settings row - like Helm's own icons. Its own colours are ignored
- * on purpose. A block, as Helm's SVGs are, so it centres in its slot rather
+ * label, a Settings row - like Floti's own icons. Its own colours are ignored
+ * on purpose. A block, as Floti's SVGs are, so it centres in its slot rather
  * than sitting on a text baseline. `url` is the `data:` URL main made of the
  * manifest's icon; a plugin without one gets an outlined square.
  */

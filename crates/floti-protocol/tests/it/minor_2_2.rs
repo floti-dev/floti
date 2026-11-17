@@ -80,7 +80,7 @@ fn protocol_2_2_adds_only_optional_fields_and_the_remove_channel() {
 fn record_2_1() -> Value {
     json!({
         "id": 12,
-        "name": "helm-3",
+        "name": "floti-3",
         "label": null,
         "cwd": "C:\\work\\a repo",
         "branch": "main",
@@ -115,7 +115,7 @@ fn a_record_from_a_2_1_host_reads_as_no_title_and_a_titled_record_says_it() {
     let mut known = said.as_object().unwrap().clone();
     known.remove("title");
     let again: SessionRecord = from_payload(&to_payload(&Value::Object(known)).unwrap()).unwrap();
-    assert_eq!(again.name, "helm-3");
+    assert_eq!(again.name, "floti-3");
     assert_eq!(again.title, None);
 }
 

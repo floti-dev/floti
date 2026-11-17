@@ -27,6 +27,8 @@ import {
   PINNED_PROJECTS_MAX,
   PROJECT_SHELL_HEIGHT_PCT,
   QUIT_SESSIONS,
+  WALKTHROUGH_START,
+  WALKTHROUGH_STEPS,
   RAIL_DESTINATIONS,
   REMOTE_HOST_ID_MAX,
   remoteHostsProblem,
@@ -119,7 +121,7 @@ const boundedInteger = (bounds: { min: number; max: number }) => {
  * checked at the point it is saved rather than at the point it is painted.
  *
  * A comma is refused too, and that one is about meaning rather than safety:
- * this setting names *one* family, which Helm puts in front of the default
+ * this setting names *one* family, which Floti puts in front of the default
  * stack. A stack typed in here would look like it replaced the default and
  * would not.
  */
@@ -497,8 +499,22 @@ export const SETTING_VALIDATORS: SettingValidators = {
   /** A timestamp, or null for "has not happened". Parsed, not pattern-matched. */
   firstRunCompletedAt: (value) => timestampProblem(value),
 
-  /** The same: when the upgrade note was closed, or null. */
-  upgradeNoteSeenAt: (value) => timestampProblem(value),
+  /** A step of the walkthrough and the workspace it chose, or null while it is not showing. */
+  walkthrough: (value) => {
+    if (value === null) return null
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      return `expected a walkthrough step or null, got ${describe(value)}`
+    }
+    const { step, workspace, ...rest } = value as Record<string, unknown>
+    if (!(WALKTHROUGH_STEPS as readonly unknown[]).includes(step)) {
+      return `expected a step from 1 to 6, got ${describe(step)}`
+    }
+    if (workspace !== null && (typeof workspace !== 'string' || workspace.trim() === '')) {
+      return `expected a workspace folder or null, got ${describe(workspace)}`
+    }
+    const extra = Object.keys(rest)
+    return extra.length === 0 ? null : `expected only step and workspace, got ${extra.join(', ')}`
+  },
 
   /**
    * One family name, or null for the built-in stack.
@@ -531,7 +547,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
   /**
    * Null means "find one"; anything else is an absolute path, for the same
    * reason `claudePath` is. A bare `pwsh.exe` would be resolved against the
-   * PATH of whatever launched Helm, so the setting would name different
+   * PATH of whatever launched Floti, so the setting would name different
    * programs on different launches.
    */
   terminalShell: (value) => {
@@ -659,7 +675,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
   hosts: (value) => remoteHostsProblem(value),
 
   /**
-   * An instant Helm wrote, checked anyway: a value `Date.parse` cannot read
+   * An instant the desktop wrote, checked anyway: a value `Date.parse` cannot read
    * would make every comparison against it NaN, and NaN fails every `>`.
    */
   profilesCopiedToHostAt: (value) => {
@@ -668,7 +684,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
     return Number.isFinite(Date.parse(value)) ? null : 'must be an ISO 8601 instant'
   },
 
-  /** An instant Helm wrote, checked as `profilesCopiedToHostAt` is. */
+  /** An instant the desktop wrote, checked as `profilesCopiedToHostAt` is. */
   pluginsCopiedToHostAt: (value) => {
     if (value === null) return null
     if (typeof value !== 'string') return 'must be an ISO 8601 string or null'
@@ -840,20 +856,23 @@ export function writeSettings(store: Store, patch: Partial<AppSettings>): AppSet
 }
 
 /**
- * Decides, as the database opens, whether this device is told once that
- * harnesses are now workspaces (`upgradeNoteSeenAt`).
+ * Decides, as the database opens, whether this start is a first start, which
+ * runs the guided first run (`walkthrough`).
  *
- * Only a database that predates `0032_workspaces_were_harnesses`, the
- * migration that renamed harnesses, ran an earlier Helm, so only there is the
- * note left due. A database this open created is a new device, or one whose
- * data was reset: there was nothing here to rename, so it counts the note seen
- * at once, whatever its host says about setup. Any later open changes nothing,
- * so a note still due stays due until it is closed, and one seen stays seen.
+ * A first start is one with no data folder, and the open that creates
+ * `desktop.db` is where that shows: a database that was here before has its
+ * migrations already applied, so it opens the shell. Only a walkthrough not already written is started, and any
+ * later open changes nothing, so one that was closed halfway resumes where it
+ * was and one that was finished stays finished.
  */
-export function settleUpgradeNote(store: Store): void {
+export function settleWalkthrough(store: Store): void {
+  if (!createdByThisOpen(store)) return
+  if (readSettings(store).walkthrough !== null) return
+  writeSettings(store, { walkthrough: WALKTHROUGH_START })
+}
+
+/** Whether this open created the database: nothing was applied before it, and it applied the migrations. */
+function createdByThisOpen(store: Store): boolean {
   const { applied, alreadyApplied } = store.migrations
-  const createdNow = alreadyApplied.length === 0 && applied.length > 0
-  if (!createdNow) return
-  if (readSettings(store).upgradeNoteSeenAt !== null) return
-  writeSettings(store, { upgradeNoteSeenAt: new Date().toISOString() })
+  return alreadyApplied.length === 0 && applied.length > 0
 }

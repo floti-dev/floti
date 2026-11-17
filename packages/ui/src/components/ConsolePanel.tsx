@@ -5,7 +5,7 @@ import { SEGMENT_ON } from '../lib/segmented'
 import { CloseIcon, ConsoleIcon } from './icons'
 
 /**
- * A line something wrote to a console, from either of the two places Helm
+ * A line something wrote to a console, from either of the two places Floti
  * captures one.
  *
  * `at` is optional because the artifact capture predates this panel and its
@@ -35,7 +35,7 @@ export interface ConsolePanelProps {
    * **Absent means read-only, and that is the whole difference between the two
    * places this component is used.** An HTML artifact runs in a frame with an
    * opaque origin, where `postMessage` is deliberately the only channel in
-   * (`ContentDocumentPane`); Helm cannot execute in there and should not gain
+   * (`ContentDocumentPane`); Floti cannot execute in there and should not gain
    * the ability to. A browser view is a `WebContentsView` whose web contents
    * the main process owns, so it can - and the same `executeJavaScript`
    * plumbing is what M17's `browser_evaluate` is built on.
@@ -58,7 +58,7 @@ export interface ConsolePanelProps {
  *
  * The evaluating input line is what the two uses differ by, and it is a
  * capability rather than a decoration: a console you can only read is half a
- * console. It is absent for the artifact because Helm genuinely cannot reach
+ * console. It is absent for the artifact because Floti genuinely cannot reach
  * into that frame, which is the design and not a limitation to route around.
  */
 export function ConsolePanel({

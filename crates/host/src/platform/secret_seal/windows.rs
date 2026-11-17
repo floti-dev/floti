@@ -143,7 +143,7 @@ mod tests {
         // unseals what the installed one sealed, as it did before.
         let installed = Native::new(StoreEntry::installed());
         let moved = Native::new(StoreEntry::for_moved_data_folder(std::path::Path::new(
-            "/a moved/helm-data",
+            "/a moved/floti-data",
         )));
         let sealed = installed.seal(b"value").unwrap();
         assert_eq!(moved.unseal(&sealed).unwrap(), b"value");

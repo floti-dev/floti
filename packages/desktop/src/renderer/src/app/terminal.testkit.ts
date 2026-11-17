@@ -5,7 +5,7 @@ import { vi } from 'vitest'
  * not do, and `ResizeObserver`. The preload's bridge is `bridge.testkit.ts`.
  *
  * xterm needs a canvas and a layout engine, and jsdom has neither, so the
- * terminal tests assert the logic Helm wraps around it - which preferences a
+ * terminal tests assert the logic the desktop wraps around it - which preferences a
  * terminal is built with, when a pane is fitted, which change tells a pty its
  * grid - against a fake that does only what that logic touches. What xterm
  * then paints is the diagnostic drivers' to look at (docs/TESTING.md).
@@ -136,7 +136,7 @@ interface Addon {
 
 type Listener<T> = (value: T) => void
 
-/** The surface of xterm's `Terminal` Helm's code reaches for, and no more. */
+/** The surface of xterm's `Terminal` the desktop's code reaches for, and no more. */
 export class Terminal {
   static instances: Terminal[] = []
 
@@ -193,12 +193,12 @@ export class Terminal {
     return { dispose: () => undefined }
   }
 
-  /** Types as if the user had: what `onData` would hand Helm. */
+  /** Types as if the user had: what `onData` would hand the desktop. */
   type(data: string): void {
     for (const listener of this.dataListeners) listener(data)
   }
 
-  /** The key handler Helm attached, which `press` runs as xterm would. */
+  /** The key handler the desktop attached, which `press` runs as xterm would. */
   keyHandler: ((event: KeyboardEvent) => boolean) | null = null
   /** What is selected, as a test sets it. */
   selection = ''
@@ -209,8 +209,8 @@ export class Terminal {
   }
 
   /**
-   * A keydown, through Helm's handler. True when it would go on to xterm, and
-   * so to the program; false when Helm answered it.
+   * A keydown, through the desktop's handler. True when it would go on to xterm, and
+   * so to the program; false when the desktop answered it.
    */
   press(init: KeyboardEventInit): boolean {
     if (this.keyHandler === null) throw new Error('no key handler attached')

@@ -11,13 +11,6 @@ serves `floti-agents`: only the host does.
 [SECURITY.md](SECURITY.md) has the credential rules these tools sit beside,
 and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
 
-The families were called `helm-browser`, `helm-sessions` and
-`helm-plugin-<id>` while the app was Helm. Nothing rewrites the user's Claude
-settings for the new names (the agent's config folder is read-only to
-Floti), so an allow rule naming an old tool, such as
-`mcp__helm-browser__browser_open`, matches nothing and that tool asks again
-until the user updates the rule.
-
 ## The listener
 
 - `127.0.0.1` only, on port 0, or on the port the sessions it takes back from
@@ -46,9 +39,7 @@ until the user updates the rule.
   `--mcp-config` file in the session's launch folder under the host's data
   folder (`crates/host/src/agent/launch_folder.rs`), never
   `claude mcp add-json`. A launch folder a crash left is swept at host start,
-  and only when every owner is provably gone. At its own start main removes
-  any per-session `--mcp-config` files left in its data folder
-  (`cleanStaleMcpConfigs`), on the same terms.
+  and only when every owner is provably gone.
 - A session's row keeps what its launch was granted (`agent_tools`: the
   port, the token's SHA-256 and the families), never the token. A host that
   takes back sessions from the keeper binds that port again and accepts each
@@ -222,7 +213,7 @@ until the user updates the rule.
   exit or failed launch raises none: its parent hears it as news. A
   device lists as While you were away only the notices that stood when it
   connected and began after the newest one it had shown of that host
-  (`noticesSeen` in `helm.db`), so a dropped connection or a restart lists
+  (`noticesSeen` in `desktop.db`), so a dropped connection or a restart lists
   nothing it showed already.
 - Kept belongs to the host: `kept` on the child's row in `floti.db`, written
   with `stopped_by` by the first stop (`records::record_stopping`): true for
@@ -402,48 +393,28 @@ until the user updates the rule.
   directory - never the token, never anything of the conversation. Turning
   them on reaches sessions started after; turning them off reaches running
   ones at once.
-- The host serves a version 2 plugin's tools itself
-  (`server/plugin_tools.rs` `HostPluginTools`): for each plugin whose
-  background module runs in its engine, on, error-free and with its tools
-  on, `floti-plugin-<id>` at `/mcp/plugin/<id>`, worded from the manifest as
-  Floti words an offer, is given to every launch with its read-only tools in
-  `--allowedTools`, with no client attached. Each call goes to the module's
-  handler (`Registry::call_tool`), naming the session as the relay does, and
-  is cancelled there when the session drops it. The plugin turned off,
-  removed or with its tools switched off loses its route at once (404) and is
-  given to no later launch, until it is back on. A client's offer naming a
-  plugin the host serves itself, or one that is off, removed or has its tools
-  off, is passed over (`PluginRelay::installed`), and that client is sent no
-  call for it.
-- For a version 1 plugin a client offers its servers (`agentPlugin:offer`,
-  replacing its last offer) and answers their calls (`agentPlugin:call`,
-  `agentPlugin:answer`). Each is
-  served as `floti-plugin-<id>` at `/mcp/plugin/<id>`, given to launches only
-  while that client listens, its read-only tools passed as `--allowedTools`.
-  A server left out of an offer answers 404 at once; a call is withdrawn
-  (`agentPlugin:cancel`) when the session cancels it, its request goes away
-  or the session ends; with its client gone, a call fails at once saying
-  Floti's window is not connected. Main offers the host the servers of the
-  plugins it lists as offering tools, on each connect and each change
-  (`main/host/plugin-tools.ts`), hands each call to the plugin's background
-  page in the hidden plugin host window (`main/host/plugins.ts` `callTool`)
-  and answers with its tool result.
-- A host serves an offered server only for a plugin it has itself, on,
-  error-free and with its tools on (`PluginRelay::installed`), whatever a
-  client offers: a plugin only another host has is given to no launch here,
-  and its route answers 404. Main runs one tool relay per host on that host's
-  own link (`main/host/remote-plugins.ts` for each remote host), offering it
-  only that host's plugins, and each call it relays names its host to the
-  end, so a remote host's session is answered by that host's background page
-  and never by This PC's.
+- The host serves every plugin's tools itself (`server/plugin_tools.rs`
+  `HostPluginTools`): for each plugin on, error-free and with its tools on,
+  `floti-plugin-<id>` at `/mcp/plugin/<id>`, worded from the manifest, is
+  given to every launch with its read-only tools in `--allowedTools`, with no
+  client attached. Each call goes to the background module's handler
+  (`Registry::call_tool`), naming the session, and is cancelled there when
+  the session drops it. The plugin turned off, removed or with its tools
+  switched off loses its route at once (404) and is given to no later
+  launch, until it is back on. A plugin only another host has is given to no
+  launch here, and its route answers 404, so a remote host's session is
+  answered by that host's plugin and never by This PC's.
+- The protocol still declares `agentPlugin:offer`, `agentPlugin:call`,
+  `agentPlugin:answer` and `agentPlugin:cancel`, so its version is
+  unchanged. No client sends on them: the host takes an offer or an answer
+  and changes nothing, and never emits a call or a cancel
+  (`server/features/agent_plugin.rs`).
 
 ## Agent definitions
 
 - Agents (a lead, a worker, a reviewer: the named definitions a session
   starts its children as) live in `agents` in the host's config folder
-  (`~/.config/floti` whenever it is there (`~/.config/helm` only while
-  `~/.config/floti` is not there and Helm's is);
-  for the host a development or portable Floti starts, the folder that holds
+  (`~/.config/floti`; for the host a development or portable Floti starts, the folder that holds
   `templatesDir`), one
   `<name>.md` each (front matter, then the body), parsed as an
   `AgentDefinition` (`agent_definitions/`). The one a start naming none gets

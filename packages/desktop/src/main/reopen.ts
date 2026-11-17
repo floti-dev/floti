@@ -1,13 +1,13 @@
 /**
- * Reopening Helm while it quits.
+ * Reopening the desktop while it quits.
  *
  * The first `before-quit` is held while every service shuts down and each host
  * is told what becomes of its sessions (index.ts), and by then the window has
  * gone. A reopen in that wait - the Dock icon clicked, which Electron reports
  * as `activate` - must not open a window in the quitting process: its links
- * refuse everything and its plugins answer that Helm is shutting down. So the
- * reopen is kept instead, and honoured once the quit has finished: Helm calls
- * `app.relaunch()` before it exits, and a fresh Helm starts once the old one
+ * refuse everything and its plugins answer that the desktop is shutting down. So the
+ * reopen is kept instead, and honoured once the quit has finished: the desktop calls
+ * `app.relaunch()` before it exits, and a fresh desktop starts once the old one
  * is gone. With no quit underway a reopen opens the window, as it always has.
  */
 
@@ -19,9 +19,9 @@ export interface ReopenHost {
   quitPhase: () => QuitPhase
   /** How many windows are open: `BrowserWindow.getAllWindows().length`. */
   windowCount: () => number
-  /** Opens Helm's window. */
+  /** Opens the desktop's window. */
   openWindow: () => void
-  /** Has a fresh Helm start once this one exits: `app.relaunch()`. */
+  /** Has a fresh desktop start once this one exits: `app.relaunch()`. */
   relaunch: () => void
 }
 
@@ -38,7 +38,7 @@ export function createReopen(host: ReopenHost): Reopen {
 
   /**
    * Electron starts one more instance for every `app.relaunch()` call, so a
-   * reopen asked for twice still starts a single Helm.
+   * reopen asked for twice still starts a single desktop.
    */
   const relaunchOnce = (): void => {
     if (relaunched) return

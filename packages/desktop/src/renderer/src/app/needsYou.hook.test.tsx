@@ -6,7 +6,7 @@ import {
   type PaneLayout,
   type PlaceScope,
   type StandingNotice
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { noticeKey, type NoticesView } from './host/notices'

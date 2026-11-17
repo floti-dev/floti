@@ -10,8 +10,8 @@ function peek(overrides: Partial<ChildPeekProps> = {}): ChildPeekProps {
     mark: { glyph: 'dot', state: 'busy' },
     state: { label: 'working', tone: 'working' },
     agent: 'reviewer',
-    folder: 'helm',
-    folderPath: 'C:\\work\\helm',
+    folder: 'floti',
+    folderPath: 'C:\\work\\floti',
     branch: 'main',
     mode: 'plan',
     report: null,
@@ -31,8 +31,8 @@ describe('the peek', () => {
     const dialog = screen.getByRole('dialog', { name: 'reviewer' })
     expect(within(dialog).getByText('working').getAttribute('data-peek-state')).toBe('working')
     const facts = dialog.querySelector('dl')
-    expect(facts?.textContent).toBe('AgentreviewerFolderhelmBranchmainModeplan')
-    expect(within(dialog).getByText('helm').getAttribute('title')).toBe('C:\\work\\helm')
+    expect(facts?.textContent).toBe('AgentreviewerFolderflotiBranchmainModeplan')
+    expect(within(dialog).getByText('floti').getAttribute('title')).toBe('C:\\work\\floti')
     expect(within(dialog).getByTestId('screen')).toBeTruthy()
     const report = dialog.querySelector('[data-peek-report]')
     expect(report?.textContent).toBe('Last report · doneReviewed the diff; two nits.')
@@ -44,7 +44,7 @@ describe('the peek', () => {
   it('S1: says none for a child started with no agent, and has no report block when it told nothing', () => {
     render(<ChildPeek {...peek({ agent: null, branch: null, mode: null })} />)
     const dialog = screen.getByRole('dialog')
-    expect(dialog.querySelector('dl')?.textContent).toBe('AgentnoneFolderhelmBranchnoneModedefault')
+    expect(dialog.querySelector('dl')?.textContent).toBe('AgentnoneFolderflotiBranchnoneModedefault')
     expect(dialog.querySelector('[data-peek-report]')).toBeNull()
   })
 
@@ -61,7 +61,7 @@ describe('the peek', () => {
     )
     const dialog = screen.getByRole('dialog', { name: 'tests' })
     expect(dialog.querySelector('dl')?.textContent).toBe(
-      'Commandpnpm test --watchFolderhelmBranchmainRuns inyour shell, pwsh'
+      'Commandpnpm test --watchFolderflotiBranchmainRuns inyour shell, pwsh'
     )
     expect(dialog.querySelector('[data-child-command="running"]')).not.toBeNull()
     expect(dialog.querySelector('[data-child-dot]')).toBeNull()

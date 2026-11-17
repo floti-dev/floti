@@ -11,15 +11,14 @@ import {
 } from '../../scripts/test-posix.mjs'
 
 /**
- * `pnpm test:posix`: the overlay, process-tree and data-directory tests, run under Linux in WSL from Windows and natively on
+ * `pnpm test:posix`: the process-tree and data-directory tests, run under Linux in WSL from Windows and natively on
  * macOS and Linux.
  */
 
 describe('the POSIX test command', () => {
-  it('runs the overlay, process-tree and data-directory tests, each of which exists', () => {
+  it('runs the process-tree and data-directory tests, each of which exists', () => {
     expect(POSIX_TESTS).toEqual(
       expect.arrayContaining([
-        'packages/core/src/launch/overlay.test.ts',
         'packages/desktop/src/main/treekill.test.ts',
         'packages/desktop/src/main/datadirs.test.ts'
       ])
@@ -34,17 +33,17 @@ describe('the POSIX test command', () => {
   })
 
   it('runs the files it is given instead, with Windows separators made POSIX', () => {
-    expect(posixTestPlan('win32', ['packages\\core\\src\\launch\\overlay.test.ts'])).toEqual({
+    expect(posixTestPlan('win32', ['packages\\desktop\\src\\main\\treekill.test.ts'])).toEqual({
       where: 'wsl',
-      files: ['packages/core/src/launch/overlay.test.ts']
+      files: ['packages/desktop/src/main/treekill.test.ts']
     })
   })
 
   it('mirrors each checkout into a Linux-side folder of its own', () => {
-    const one = mirrorName('C:\\work\\helm')
-    expect(one).toMatch(/^helm-[0-9a-f]{8}$/)
-    expect(mirrorName('C:\\Work\\Helm')).not.toBe(mirrorName('D:\\other\\helm'))
-    expect(mirrorName('C:\\Users\\me\\my repos\\helm (2)')).toMatch(/^helm__2_-[0-9a-f]{8}$/)
+    const one = mirrorName('C:\\work\\floti')
+    expect(one).toMatch(/^floti-[0-9a-f]{8}$/)
+    expect(mirrorName('C:\\Work\\Floti')).not.toBe(mirrorName('D:\\other\\floti'))
+    expect(mirrorName('C:\\Users\\me\\my repos\\floti (2)')).toMatch(/^floti__2_-[0-9a-f]{8}$/)
   })
 
   it('installs in the mirror only when the lockfile changed, with the pinned pnpm and no Electron download', () => {

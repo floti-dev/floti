@@ -472,7 +472,7 @@ fn an_artifact_is_told_which_wikilinks_resolve_and_nothing_about_where() {
     );
     let html = String::from_utf8(entry.body).unwrap();
 
-    let open = "<script type=\"application/json\" data-helm-wikilinks>";
+    let open = "<script type=\"application/json\" data-floti-wikilinks>";
     let start = html.find(open).unwrap() + open.len();
     let end = start + html[start..].find("</script>").unwrap();
     let island: Value = serde_json::from_str(&html[start..end]).unwrap();
@@ -502,7 +502,7 @@ fn an_artifact_is_told_which_wikilinks_resolve_and_nothing_about_where() {
     // A neighbour is served verbatim, with no bootstrap.
     let base = &link.url[..link.url.rfind('/').unwrap()];
     let script = world.content.serve_artifact(&format!("{base}/chart.js"));
-    assert!(!String::from_utf8_lossy(&script.body).contains("data-helm-wikilinks"));
+    assert!(!String::from_utf8_lossy(&script.body).contains("data-floti-wikilinks"));
 }
 
 // ---------------------------------------------------------------------------

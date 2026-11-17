@@ -51,7 +51,7 @@ const MENU: BrowserLayerMenu = {
 const SHOW: NonNullable<BrowserLayerShow> = {
   turn: 4,
   content: MENU,
-  look: { vars: { '--helm-surface-raised': '#202124', '--helm-radius': '6px' }, kind: 'dark', data: { theme: 'night', density: 'compact' } }
+  look: { vars: { '--floti-surface-raised': '#202124', '--floti-radius': '6px' }, kind: 'dark', data: { theme: 'night', density: 'compact' } }
 }
 
 afterEach(() => {
@@ -77,8 +77,8 @@ describe('LayerRoot', () => {
     const menu = screen.getByRole('menu', { name: 'Browser' })
     expect(document.activeElement).toBe(menu)
     const root = document.documentElement
-    expect(root.style.getPropertyValue('--helm-surface-raised')).toBe('#202124')
-    expect(root.style.getPropertyValue('--helm-radius')).toBe('6px')
+    expect(root.style.getPropertyValue('--floti-surface-raised')).toBe('#202124')
+    expect(root.style.getPropertyValue('--floti-radius')).toBe('6px')
     expect(root.classList.contains('dark')).toBe(true)
     expect(root.dataset['density']).toBe('compact')
   })

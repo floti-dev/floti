@@ -1,6 +1,6 @@
 ---
 name: procedures
-description: Fixed procedures in Helm - adding an app setting, changing the database schema, cutting a release, publishing the plugin SDK, and building the Windows installer. Use before doing any of those.
+description: Fixed procedures in Floti - adding an app setting, changing the database schema, cutting a release, publishing the plugin SDK, and building the Windows installer. Use before doing any of those.
 ---
 
 ## Adding an app setting
@@ -61,7 +61,7 @@ and the build on Windows, macOS and Linux - a failure on any of them blocks
 the release - and verifies the exes, the dmg and zip, and the AppImage from
 the inside before publishing. `packaging-check` and `verify:installer` are not part of a
 release and run only when the owner asks. `verify:installer --yes` installs over
-and then uninstalls the Helm on this machine, leaving none behind.
+and then uninstalls the Floti desktop on this machine, leaving none behind.
 
 ## Publishing the plugin SDK
 
@@ -78,9 +78,9 @@ the app's.
    is not on npm yet, by trusted publishing, so no npm token exists anywhere.
 
 The app and the SDK are independent: bumping one never publishes the other.
-Helm bundles the workspace SDK, so a validator change ships in the next app
+Floti desktop bundles the workspace SDK, so a validator change ships in the next app
 release whether or not the SDK was bumped; bump it as well, or authors check
-against an older validator than the Helm they run.
+against an older validator than the Floti desktop they run.
 
 ## Building the Windows installer
 

@@ -1,5 +1,5 @@
-import type { StandingNotice } from '@helm/core/types'
-import type { AwayRowView, TreeNotice } from '@helm/ui'
+import type { StandingNotice } from '@floti/core/types'
+import type { AwayRowView, TreeNotice } from '@floti/ui'
 import type { NeedsYouToastView } from './needsYou'
 
 /**

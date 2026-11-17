@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { Profile } from '@helm/core/types'
+import type { Profile } from '@floti/core/types'
 import { FakeConnection, fakeReach, unusableReach } from '../../../../../test/fake-connection'
 import type * as P from '../../../../shared/host/protocol'
 import type {
-  HelmBridge,
+  DesktopBridge,
   ProfileFileChosen,
   RequestChannel,
   RequestPayload,
@@ -35,12 +35,12 @@ const profile = (id: number, name: string, patch: Partial<P.Profile> = {}): P.Pr
 
 interface Options {
   hosted?: P.Profile[]
-  /** Where Helm's save dialog says, or null when cancelled. */
+  /** Where the desktop's save dialog says, or null when cancelled. */
   exportTo?: string | null
   chosen?: ProfileFileChosen
 }
 
-/** The host's profiles, and Helm's own dialogs on the user's machine. */
+/** The host's profiles, and the desktop's own dialogs on the user's machine. */
 function world(options: Options = {}, connection: FakeConnection | null = new FakeConnection()) {
   const hosted = [...(options.hosted ?? [])]
   let nextId = 100
@@ -77,7 +77,7 @@ function world(options: Options = {}, connection: FakeConnection | null = new Fa
           return Promise.reject(new Error(`${channel} is not Floti's own`))
       }
     }
-  } as unknown as Pick<HelmBridge, 'invoke'>
+  } as unknown as Pick<DesktopBridge, 'invoke'>
   const link = fakeReach(connection, UNREACHABLE)
   const adapter = createProfilesAdapter({ link, own })
   return { connection: connection ?? new FakeConnection(), link, adapter, asked, hosted }
@@ -177,7 +177,7 @@ describe('the window’s profiles over its own connection', () => {
 describe('a profile action while this PC’s host cannot be used', () => {
   it('fails at once with the short sentence, sends nothing, and reaches the host once it can be used', async () => {
     const connection = new FakeConnection()
-      .answer('profile:list', () => [profile(4, 'helm')])
+      .answer('profile:list', () => [profile(4, 'floti')])
       .answer('profile:delete', () => ({ deleted: true }))
     const link = unusableReach(connection, HOST_UNUSABLE_FOR_ACTIONS)
     const adapter = createProfilesAdapter({ link, own: { invoke: () => Promise.reject(new Error('unused')) } as never })

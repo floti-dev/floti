@@ -2,12 +2,12 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import type { TemplateChoice } from '@helm/core'
+import type { TemplateChoice } from '@floti/core'
 import { NewWorkspaceDialog, type NewWorkspaceDialogProps } from './NewWorkspaceDialog'
 
 /** build-box's own templates, as its `template:list` answers. */
 const BUILD_BOX_TEMPLATES: TemplateChoice[] = [
-  { id: 'minimal', label: 'Minimal', description: 'A manifest and nothing else.', order: null, builtIn: true },
+  { id: 'starter', label: 'Starter', description: 'repos/, AGENTS.md', order: null, builtIn: true },
   { id: 'infra', label: 'Infra', description: 'Runbooks and deploy scripts.', order: 1, builtIn: false }
 ]
 
@@ -27,7 +27,7 @@ describe('NewWorkspaceDialog on another host', () => {
         host="build-box"
         onChooseDir={onChooseDir}
         templates={BUILD_BOX_TEMPLATES}
-        template="minimal"
+        template="starter"
         onTemplateChange={vi.fn()}
         onCreate={onCreate}
         onCancel={vi.fn()}
@@ -49,7 +49,7 @@ describe('NewWorkspaceDialog on another host', () => {
     expect(screen.getByTitle('/srv/work/ops')).toBeTruthy()
 
     await userEvent.click(screen.getByRole('button', { name: /Create/ }))
-    expect(onCreate).toHaveBeenCalledWith({ mode: 'new', dir: '/srv/work', name: 'ops', template: 'minimal' })
+    expect(onCreate).toHaveBeenCalledWith({ mode: 'new', dir: '/srv/work', name: 'ops', template: 'starter' })
     expect(onChooseDir).not.toHaveBeenCalled()
   })
 })

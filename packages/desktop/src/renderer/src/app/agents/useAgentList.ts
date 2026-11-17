@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { LaunchAgents } from '@helm/core/types'
+import type { LaunchAgents } from '@floti/core/types'
 import { bridgeFor } from '../bridge'
 import { readable } from '../errors'
 
@@ -21,7 +21,7 @@ export interface AgentListState {
  * while no surface shows an agent. The window keeps no copy beyond that.
  */
 export function useAgentList(host: string, enabled: boolean): AgentListState {
-  const helm = bridgeFor(host)
+  const desktop = bridgeFor(host)
   /** The last answer, with the host it is of: another host's list is never shown as this one's. */
   const [read, setRead] = useState<{ host: string; listing: LaunchAgents | null; error: string | null }>({
     host,
@@ -35,7 +35,7 @@ export function useAgentList(host: string, enabled: boolean): AgentListState {
 
   const reload = useCallback(() => {
     const ask = ++asked.current
-    helm
+    desktop
       .invoke('agents:list')
       .then((listing) => {
         if (ask === asked.current) setRead({ host, listing, error: null })
@@ -43,24 +43,24 @@ export function useAgentList(host: string, enabled: boolean): AgentListState {
       .catch((err: unknown) => {
         if (ask === asked.current) setRead((last) => ({ host, listing: last.host === host ? last.listing : null, error: readable(err) }))
       })
-  }, [helm, host])
+  }, [desktop, host])
 
   useEffect(() => {
     if (!enabled) return
-    const off = helm.on('agents:changed', reload)
+    const off = desktop.on('agents:changed', reload)
     reload()
     return off
-  }, [helm, enabled, reload])
+  }, [desktop, enabled, reload])
 
   const addShipped = useCallback(
     (name: string) => {
       setAdded({ host, error: null })
-      helm
+      desktop
         .invoke('agents:addShipped', { name })
         .then((result) => setAdded({ host, error: result.refusal }))
         .catch((err: unknown) => setAdded({ host, error: readable(err) }))
     },
-    [helm, host]
+    [desktop, host]
   )
 
   const mine = read.host === host

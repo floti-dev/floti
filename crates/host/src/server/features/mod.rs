@@ -28,8 +28,8 @@
 //!   calls, asks and deliveries of the plugin pages clients frame.
 //! - [`agent_browser`]: the agent browser tools' calls, carried to a client
 //!   with a browser pane, and its answers.
-//! - [`agent_plugin`]: the plugin tool servers a client offers, their calls
-//!   carried to it, and its answers.
+//! - [`agent_plugin`]: the `agentPlugin:*` channels, which no client sends
+//!   on, answered with nothing.
 //! - [`carry`]: a client's own data, merged into the host's store once.
 //! - [`wsl`]: keeping a WSL distro on this computer running while the host
 //!   inside it has sessions (`wsl:keepAwake`).
@@ -75,7 +75,6 @@ use super::plugin_tools::HostPluginTools;
 use crate::platform::folders::Folders;
 use crate::session::{ClientId, Session, SessionOutput};
 pub(crate) use agent_browser::BrowserRelay;
-pub(crate) use agent_plugin::{PluginRelay, PluginServer};
 pub use resources::ResourcesHandle;
 pub(crate) use sessions::ActivityHandle;
 pub(crate) use update::Updates;
@@ -240,7 +239,6 @@ pub(crate) struct Features {
     activity: ActivityHandle,
     settings: Arc<SettingsService>,
     browser: Arc<BrowserRelay>,
-    plugin_tools: Arc<PluginRelay>,
     host_plugin_tools: Arc<HostPluginTools>,
     updates: Updates,
     /// The plugin registry the plugins feature keeps: the host waits on its
@@ -276,10 +274,7 @@ impl Features {
         let activity = sessions.activity();
         let browser = Arc::new(BrowserRelay::new(&context.events));
         let plugin_sessions = Arc::new(plugins::PluginSessions::new(&context.hosted));
-        let plugin_tools = Arc::new(
-            PluginRelay::new(&context.events)
-                .naming_callers(plugins::tool_caller(Arc::downgrade(&plugin_sessions))),
-        );
+        let agent_plugin = agent_plugin::AgentPluginChannels::new(&context.events);
         let host_plugin_tools = Arc::new(HostPluginTools::new(plugins::tool_caller(
             Arc::downgrade(&plugin_sessions),
         )));
@@ -308,13 +303,12 @@ impl Features {
             &context,
             activity.clone(),
             plugin_sessions,
-            Arc::clone(&plugin_tools),
             Arc::clone(&host_plugin_tools),
         )?;
         let plugin_registry = plugins.registry().clone();
         features.push(Box::new(plugins));
         features.push(Box::new(Arc::clone(&browser)));
-        features.push(Box::new(Arc::clone(&plugin_tools)));
+        features.push(Box::new(agent_plugin));
         features.push(Box::new(wsl::Wsl::new(&context, wsl_program)));
         features.push(Box::new(updates.clone()));
         Ok(Self {
@@ -325,7 +319,6 @@ impl Features {
             activity,
             settings: Arc::clone(&context.workspace.settings),
             browser,
-            plugin_tools,
             host_plugin_tools,
             updates,
             plugins: plugin_registry,
@@ -362,14 +355,8 @@ impl Features {
         &self.browser
     }
 
-    /// The plugin tools' relay, for the families served from what clients
-    /// offer.
-    pub fn plugin_tools(&self) -> &Arc<PluginRelay> {
-        &self.plugin_tools
-    }
-
-    /// The tool servers of the plugins whose background module the host
-    /// runs, for the families the host answers itself.
+    /// The plugins' tool servers, for the families the host answers
+    /// itself.
     pub fn host_plugin_tools(&self) -> &Arc<HostPluginTools> {
         &self.host_plugin_tools
     }

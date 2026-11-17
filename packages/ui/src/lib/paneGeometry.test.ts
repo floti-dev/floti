@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PaneNode } from '@helm/core/types'
+import type { PaneNode } from '@floti/core/types'
 import {
   dragShares,
   dropZoneAt,

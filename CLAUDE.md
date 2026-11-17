@@ -33,10 +33,10 @@ that describes it, not this file; a line is added here only for a new rule.
 
 ```
 packages/
-├── core/     # what clients share: the host's answer shapes (types.ts), helm.db and its copy into the host (store), layout, themes, the start-up sweep
+├── core/     # what clients share: the host's answer shapes (types.ts), desktop.db and its copy into the host (store), layout, themes
 ├── ui/       # React components
 ├── desktop/  # Electron main, preload and renderer
-└── plugin-sdk/ # manifest validator, bridge types, helm-plugin CLI, authoring guide
+└── plugin-sdk/ # manifest validator, bridge types, floti-plugin CLI, authoring guide
 examples/sample-plugin/  # every plugin surface; the plugin the E2E tests drive
 crates/
 ├── floti-protocol/  # the host-client protocol; generates JSON Schema and TypeScript into generated/
@@ -114,26 +114,25 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - `packages/core` never imports Electron (`no-electron-in-core` in
   `eslint.config.js`). If core needs something from the host, the host passes
   it in.
-- A value import into the browser bundle comes from `@helm/core/types`, never
+- A value import into the browser bundle comes from `@floti/core/types`, never
   the package root. This fails at rollup, not at typecheck.
 - Every channel a Floti page uses is declared in `shared/ipc.ts`. The preload
-  exposes three generic functions; a feature adds a channel, not a bridge
-  method. `term:*` (the spike page's single pty) and `session:*` (the host's
-  sessions) never mix.
+  exposes three generic functions on `window.desktop`; a feature adds a
+  channel, not a bridge method. `term:*` (the spike page's single pty) and
+  `session:*` (the host's sessions) never mix.
 - A host channel added to `shared/ipc.ts` is also declared in
-  `crates/floti-protocol`, or listed there as client-only or host-internal
-  with a reason (`channels/boundary.rs`), and the generated files are
-  rewritten with `cargo run -p floti-protocol --bin generate`. A crate test
-  reads `shared/ipc.ts` and fails naming any channel that is neither.
-- Electron IPC carries only what `channels/boundary.rs` lists as client-only,
-  and its host-internal channels from the hidden plugin window; every other
-  call goes over the page's own protocol connection to the host.
-  `e2e/boundary.spec.ts` fails naming any channel that crossed. Main runs no
-  session, terminal, config reader, content, template or scan service of its
-  own; those are the host's.
-- The host never opens `helm.db` or learns Floti's data folder; what only
-  `helm.db` holds, main sends it on `carry:*` (`main/host/own-data.ts`). Main
-  owns the window's lifetime and `helm.db`: `will-quit` releases the database,
+  `crates/floti-protocol`, or listed there as client-only with a reason
+  (`channels/boundary.rs`), and the generated files are rewritten with
+  `cargo run -p floti-protocol --bin generate`. A crate test reads
+  `shared/ipc.ts` and fails naming any channel that is neither.
+- Electron IPC carries only what `channels/boundary.rs` lists as client-only;
+  every other call goes over the window's own protocol connection to the
+  host. `e2e/boundary.spec.ts` fails naming any channel that crossed. Main
+  runs no session, terminal, config reader, content, template or scan service
+  of its own; those are the host's.
+- The host never opens `desktop.db` or learns Floti's data folder; what only
+  `desktop.db` holds, main sends it on `carry:*` (`main/host/own-data.ts`). Main
+  owns the window's lifetime and `desktop.db`: `will-quit` releases the database,
   and nothing else closes the store.
 - The host owns process lifetime. Every session's and plain terminal's pty and
   process tree is held by the session keeper (`floti keeper`,
@@ -149,7 +148,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   (`CREATE_NO_WINDOW`). `tests/it/console.rs` and the start audit in
   `process_tree/tests.rs` fail otherwise.
 - Tabs, panes, splits and families are kept per device (`paneLayout` in
-  `helm.db`) and never reach the host.
+  `desktop.db`) and never reach the host.
 - A host on another computer is reached through the user's own
   `ssh -o BatchMode=yes <target>`, the command they gave, or `wsl.exe`. Floti
   adds no ssh option, never skips a host-key check, reads or writes nothing
@@ -182,7 +181,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - `~/.claude/sessions` keeps a `<pid>.<sha256>.key` credential beside every
   `<pid>.json`. The host's Claude Code status reader
   (`agent/claude_code/status.rs`) reads `.json` files only; never widen it.
-- The `persist:helm-browser` partition holds the user's cookies and logins.
+- The `persist:floti-browser` partition holds the user's cookies and logins.
   Cookies are handled only in main (`main/browserCookies.ts`), which keeps
   session cookies by setting them again with an expiry; no cookie's name or
   value is logged or sent to the renderer, the host or an agent tool. The
@@ -207,7 +206,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - `will-navigate` and `setWindowOpenHandler` are denied on every web-contents
   in `main/index.ts`. Browser views are exempted by a `webContents.id` registry
   read inside those guards. Widen the registry, never the guard.
-- Every navigation goes through `browserReachAllows` in `@helm/core`, an
+- Every navigation goes through `browserReachAllows` in `@floti/core`, an
   agent's also through `agentReach` and `browserMcpLocalOnly`. `file:` and
   custom schemes are refused there.
 - A view can lose its web contents. Reach them only through `contentsOf` in
@@ -248,8 +247,8 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   named on its own; never a `floti agent:*` wildcard, never `run`, and a
   user's deny rule still wins.
 - A host serves a plugin's tools only for a plugin it has itself, on,
-  error-free and with its tools on (`PluginRelay::installed`), whatever a
-  client offers.
+  error-free and with its tools on (`HostPluginTools::installed`); a
+  client's `agentPlugin:*` changes nothing.
 
 ## Plugins
 
@@ -257,10 +256,10 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   with. The SDK ships what `files` in its `package.json` lists, and nothing it
   ships may reach outside its own folder: run through npx, that folder is a
   cache.
-- A plugin page's CSP has `connect-src 'none'`: `floti.fetch` (`helm.fetch` at
-  version 1) is its only way out, to origins the manifest lists and its own
-  service, checked again on every redirect hop. `helm.exec` runs only programs
-  the manifest names, with an argument array and no shell.
+- A plugin page's CSP has `connect-src 'none'`: `floti.fetch` is its only way
+  out, to origins the manifest lists and its own service, checked again on
+  every redirect hop. `floti.exec` runs only programs the manifest names, with
+  an argument array and no shell.
 - Frames live outside React (`app/pluginFrames.ts`) and move between slots
   with `moveBefore`; `appendChild` would reload them.
 - A plugin's failure shows in its own surface (`PluginFrame`), never in Floti's
@@ -277,7 +276,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   (junctions on Windows, symlinks on macOS and Linux) and never walks into
   one. `fs.rm` with `recursive: true` has been seen to go through a junction
   and empty the repository folder it points to.
-- Launch folders and leftover overlay shims are swept only at start, and only
+- Launch folders are swept only at start, and only
   where every owning process is provably dead. `EPERM` counts as alive;
   unknown means keep.
 - The shipped templates and agents are seeded only where their folder is
@@ -331,8 +330,8 @@ request.
 - The plugin SDK publishes to npm on its own version: a bump in
   `packages/plugin-sdk/package.json` merged to `main`. A change to the SDK
   reaches plugin authors only with that bump.
-- Work is tracked in the ClickUp list "Helm - Claude Code Shell"
-  (`901114291892`). Nothing in the repository refers to a task by id.
+- Work is tracked outside the repository. Nothing in the repository refers to
+  a task by id.
 - Machine-specific facts go in `CLAUDE.local.md` (gitignored). No personal path
   or name may appear anywhere in the repository; `pnpm packaging-check
   --only=audit` checks that, when asked for.
