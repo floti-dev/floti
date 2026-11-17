@@ -527,7 +527,11 @@ owns the data folder, moves that folder there once
 no `~/.config/floti`, else each entry moved into it when none is in both, so no
 file is replaced; otherwise nothing moves and the log names the entries in
 both. Until it has moved, `~/.config/helm` is the folder read, by every host
-and the desktop alike, so the answer does not change while Floti runs. A host
+and the desktop alike, so the answer does not change while Floti runs. Once
+it has moved, every host start re-points a plugin folder registered inside
+`~/.config/helm` to the same place in `~/.config/floti`
+(`plugins/store.rs`, `follow_helm_config_move`), whichever host moved it; a
+folder registered in both places is kept once, as the `~/.config/floti` one. A host
 started with `FLOTI_CONFIG_READ_ONLY` (a development or check run) moves
 nothing. The installed app gives its
 host no config folder of its own, so the host it starts and the host started

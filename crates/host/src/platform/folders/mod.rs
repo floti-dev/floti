@@ -238,6 +238,42 @@ pub fn after_helm_config_move(
     (folders, moved)
 }
 
+/// Where `path`, a path in Helm's config folder in `home`, is now that the
+/// folder has moved to Floti's ([`move_helm_config`]): the same path in
+/// `~/.config/floti`, when nothing is at `path` any more and something is
+/// there. Paths are matched ignoring ASCII case, as the plugin store matches
+/// them. `None` for a path outside Helm's folder, one that is still there, or
+/// one with nothing at the new place.
+pub fn moved_out_of_helm_config(home: &Path, path: &Path) -> Option<PathBuf> {
+    let config = home.join(".config");
+    let inside = strip_prefix_ignoring_case(path, &config.join(HELM_CONFIG_FOLDER))?;
+    if std::fs::symlink_metadata(path).is_ok() {
+        return None;
+    }
+    let floti = config.join(FLOTI_CONFIG_FOLDER);
+    let moved = if inside.as_os_str().is_empty() {
+        floti
+    } else {
+        floti.join(inside)
+    };
+    moved.exists().then_some(moved)
+}
+
+/// `path` past `prefix`, comparing each component ignoring ASCII case.
+fn strip_prefix_ignoring_case<'a>(path: &'a Path, prefix: &Path) -> Option<&'a Path> {
+    let mut rest = path.components();
+    for want in prefix.components() {
+        if !rest
+            .next()?
+            .as_os_str()
+            .eq_ignore_ascii_case(want.as_os_str())
+        {
+            return None;
+        }
+    }
+    Some(rest.as_path())
+}
+
 /// [`move_helm_config`], renaming with `rename`.
 pub(crate) fn move_helm_config_with(
     home: &Path,

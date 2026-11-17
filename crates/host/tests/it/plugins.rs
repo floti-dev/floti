@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
 use std::time::Instant;
 
+use floti_host::platform::folders::Folders;
 use floti_host::platform::socket::Endpoint;
 use floti_host::plugins::background::{
     BackgroundEvent, BackgroundLaunch, BackgroundReporter, BackgroundRuntime, NoBackground,
@@ -106,14 +107,21 @@ struct HostWorld {
     endpoint: Endpoint,
     /// The Node the host runs `node` services on.
     node: Option<PathBuf>,
+    /// The folders every host this world starts uses.
+    folders: Folders,
     /// Last: fields drop in order, and the folder goes only once the host
     /// has let go of its store.
     dirs: TestDirs,
 }
 
-fn start_host(dirs: &TestDirs, endpoint: &Endpoint, node: Option<PathBuf>) -> RunningHost {
+fn start_host(
+    dirs: &TestDirs,
+    folders: &Folders,
+    endpoint: &Endpoint,
+    node: Option<PathBuf>,
+) -> RunningHost {
     RunningHost::start(HostConfig {
-        folders: dirs.folders(),
+        folders: folders.clone(),
         endpoint: endpoint.clone(),
         backends: backends(&dirs.user_env(), None),
         inherited_env: std::env::vars_os()
@@ -146,14 +154,21 @@ impl HostWorld {
     /// A host that runs `node` services on `node`, with a client that draws
     /// plugin pages.
     async fn start_with(dirs: TestDirs, node: Option<PathBuf>) -> Self {
+        let folders = dirs.folders();
+        Self::start_on(dirs, folders, node).await
+    }
+
+    /// A host on `folders` in place of the test's own.
+    async fn start_on(dirs: TestDirs, folders: Folders, node: Option<PathBuf>) -> Self {
         let endpoint = dirs.endpoint();
-        let host = start_host(&dirs, &endpoint, node.clone());
+        let host = start_host(&dirs, &folders, &endpoint, node.clone());
         let client = TestClient::connect(&endpoint, &[PLUGIN_PAGES]).await;
         Self {
             host: Some(host),
             client: Some(client),
             endpoint,
             node,
+            folders,
             dirs,
         }
     }
@@ -175,7 +190,12 @@ impl HostWorld {
     /// Stops the host and starts another over the same folders.
     async fn restart(&mut self) {
         self.stop_host().await;
-        self.host = Some(start_host(&self.dirs, &self.endpoint, self.node.clone()));
+        self.host = Some(start_host(
+            &self.dirs,
+            &self.folders,
+            &self.endpoint,
+            self.node.clone(),
+        ));
         self.client = Some(TestClient::connect(&self.endpoint, &[PLUGIN_PAGES]).await);
     }
 
@@ -849,6 +869,79 @@ async fn folders_and_their_on_off_state_survive_a_host_restart() {
         [(text(&b), false, true), (text(&a), true, true)]
     );
     store.close().unwrap();
+    world.stop().await;
+}
+
+/// A version 2 plugin called `id` written at `folder`, as a user's own
+/// plugin folder in their config folder is.
+fn write_plugin(folder: &Path, id: &str) {
+    std::fs::create_dir_all(folder).unwrap();
+    std::fs::write(
+        folder.join(floti_host::plugins::manifest::MANIFEST_FILE),
+        manifest(id, "Board", ""),
+    )
+    .unwrap();
+}
+
+/// A store holding `paths`, registered in that order, for a host to start on.
+fn register(dirs: &TestDirs, paths: &[&Path]) {
+    let store = Store::open(&dirs.data).unwrap();
+    for path in paths {
+        plugin_store::add_folder(store.connection(), &text(path)).unwrap();
+    }
+    store.close().unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_folder_registered_in_helms_config_folder_loads_from_flotis_once_the_host_has_moved_it() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    let registered = config.join("helm").join("plugins").join("board");
+    write_plugin(&registered, "board");
+    register(&dirs, &[&registered]);
+    let folders = Folders {
+        config: config.join("helm"),
+        ..dirs.folders()
+    };
+
+    let mut world = HostWorld::start_on(dirs, folders, None).await;
+    let listed = world.list().await;
+    let plugin = only(&listed);
+    assert_eq!(
+        plugin.path,
+        text(&config.join("floti").join("plugins").join("board"))
+    );
+    assert!(plugin.error.is_none(), "{plugin:#?}");
+    assert!(plugin.enabled);
+    world.stop_host().await;
+
+    let store = world.store();
+    let stored = plugin_store::read_folders(store.connection()).unwrap();
+    assert_eq!(
+        stored
+            .iter()
+            .map(|folder| folder.path.clone())
+            .collect::<Vec<_>>(),
+        std::slice::from_ref(&plugin.path)
+    );
+    store.close().unwrap();
+    world.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_folder_registered_in_both_config_folders_after_the_move_is_listed_once_from_flotis() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    let floti = config.join("floti").join("plugins").join("board");
+    write_plugin(&floti, "board");
+    let helm = config.join("helm").join("plugins").join("board");
+    register(&dirs, &[&helm, &floti]);
+
+    let mut world = HostWorld::start_in(dirs).await;
+    let listed = world.list().await;
+    let plugin = only(&listed);
+    assert_eq!(plugin.path, text(&floti));
+    assert!(plugin.error.is_none(), "{plugin:#?}");
     world.stop().await;
 }
 

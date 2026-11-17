@@ -572,3 +572,67 @@ fn a_helm_config_folder_that_is_a_link_is_never_emptied_into_flotis() {
     assert_eq!(read(&target.join("themes").join("mine.json")), "theme");
     assert!(!config.join("floti").join("themes").exists());
 }
+
+#[test]
+fn a_path_in_helms_moved_config_folder_is_found_at_the_same_place_in_flotis() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    write(
+        &config
+            .join("floti")
+            .join("plugins")
+            .join("board")
+            .join("helm-plugin.json"),
+        "{}",
+    );
+    let moved = config.join("floti").join("plugins").join("board");
+
+    assert_eq!(
+        moved_out_of_helm_config(
+            &dirs.home,
+            &config.join("helm").join("plugins").join("board")
+        ),
+        Some(moved.clone())
+    );
+    // Another spelling of the same path, where the disk ignores case.
+    if cfg!(windows) {
+        assert_eq!(
+            moved_out_of_helm_config(
+                &dirs.home,
+                &config.join("HELM").join("Plugins").join("board")
+            ),
+            Some(config.join("floti").join("Plugins").join("board"))
+        );
+    }
+    assert_eq!(
+        moved_out_of_helm_config(&dirs.home, &config.join("helm")),
+        Some(config.join("floti"))
+    );
+}
+
+#[test]
+fn a_path_still_there_outside_helms_folder_or_with_nothing_moved_to_it_stays() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    write(
+        &config.join("floti").join("plugins").join("board").join("a"),
+        "",
+    );
+    write(
+        &config.join("helm").join("plugins").join("kept").join("a"),
+        "",
+    );
+    write(
+        &config.join("floti").join("plugins").join("kept").join("a"),
+        "",
+    );
+
+    let still_there = config.join("helm").join("plugins").join("kept");
+    assert_eq!(moved_out_of_helm_config(&dirs.home, &still_there), None);
+    let nothing_moved = config.join("helm").join("plugins").join("gone");
+    assert_eq!(moved_out_of_helm_config(&dirs.home, &nothing_moved), None);
+    let outside = dirs.home.join("plugins").join("board");
+    assert_eq!(moved_out_of_helm_config(&dirs.home, &outside), None);
+    let other_folder = config.join("helmet").join("plugins").join("board");
+    assert_eq!(moved_out_of_helm_config(&dirs.home, &other_folder), None);
+}
