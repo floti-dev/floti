@@ -8,7 +8,7 @@
 //!    floti: copies put aside (`floti.old-<pid>-<n>.exe`), where nothing
 //!    runs them any more (`Standalone::remove_asides`), and downloads
 //!    (`.floti-<version>.<pid>[.exe]`) and what it left beside the desktop
-//!    app (`.Helm.app.floti-old-<pid>` and the like), where the process that
+//!    app (`.Floti.app.floti-old-<pid>` and the like), where the process that
 //!    left it is known to have ended.
 //! 2. It downloads `https://floti.dev/update.json` and its signature
 //!    `update.json.minisig`, and checks the signature with the key built
@@ -454,12 +454,10 @@ impl Updater<'_> {
                     self.relaunch_host(&version);
                 }
                 if let Some(display) = waited {
-                    // Where it is now: an app from before the rename has
-                    // moved to its new place.
-                    let opened = result.as_ref().unwrap_or(&app).clone();
-                    self.open_desktop(&opened, &display);
+                    self.open_desktop(&app, &display);
                 }
-                Some(result?.name.to_owned())
+                result?;
+                Some(app.name.to_owned())
             }
             None => {
                 let _ = clear(&staging);
@@ -693,11 +691,9 @@ impl Updater<'_> {
         Ok(())
     }
 
-    /// Waits until `app` has quit, then installs `downloaded` over it, and
-    /// answers the app as it is installed then (in its new place, for an
-    /// app from before the rename). `waited` is set once it has found the
-    /// app running and waited for it, to the display and session-bus
-    /// variables the app ran with.
+    /// Waits until `app` has quit, then installs `downloaded` over it.
+    /// `waited` is set once it has found the app running and waited for it,
+    /// to the display and session-bus variables the app ran with.
     fn install_desktop(
         &mut self,
         app: &Desktop,
@@ -705,7 +701,7 @@ impl Updater<'_> {
         version: &Version,
         floti_updated: bool,
         waited: &mut Option<Vec<(String, String)>>,
-    ) -> Result<Desktop, UpdateError> {
+    ) -> Result<(), UpdateError> {
         let failed = |reason: String| {
             let (version, app) = (version.to_string(), app.name.to_owned());
             if floti_updated {
@@ -748,40 +744,13 @@ impl Updater<'_> {
             }
             (self.pause)(APP_POLL);
         }
-        let installed = self
-            .installs
+        self.installs
             .install_desktop(app, downloaded)
             .map_err(|err| failed(err.to_string()))?;
-        if installed.path == app.path {
-            self.say(&format!("{} is updated to {version}.", installed.name));
-        } else {
-            self.say(&format!(
-                "{} is updated to {} {version}, at {}.",
-                app.name,
-                installed.name,
-                installed.path.display()
-            ));
-            // The update is done once the new app is in place: what is left of
-            // the old one is said, and fails nothing.
-            if let Err(err) = self.installs.remove_replaced(app, &installed) {
-                self.say(&format!(
-                    "Warning: {} at {} was not removed ({err}); remove it yourself once {} has opened.",
-                    app.name,
-                    app.path.display(),
-                    installed.name
-                ));
-            }
-            match self.installs.carry_launcher(&self.env, app, &installed) {
-                Ok(Some(entry)) => self.say(&format!("Its menu entry is {}.", entry.display())),
-                Ok(None) => {}
-                Err(err) => self.say(&format!(
-                    "Its menu entry was not moved ({err}); floti add desktop writes it."
-                )),
-            }
-        }
+        self.say(&format!("{} is updated to {version}.", app.name));
         if let Some(carried) = self
             .installs
-            .carried_floti(&installed)
+            .carried_floti(app)
             .filter(|carried| carried.is_file())
         {
             match (self.install_self)(&carried) {
@@ -793,11 +762,11 @@ impl Updater<'_> {
                 // The app is updated; its own start puts its floti in place.
                 Err(line) => self.say(&format!(
                     "{} could not put its floti and Node in place now ({line}); it does when it next starts.",
-                    installed.name
+                    app.name
                 )),
             }
         }
-        Ok(installed)
+        Ok(())
     }
 }
 

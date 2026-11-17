@@ -21,7 +21,7 @@ export interface SqliteResult {
 }
 
 export function testSqlite(dataDir: string): SqliteResult {
-  const dbPath = join(dataDir, 'helm.db')
+  const dbPath = join(dataDir, 'desktop.db')
   try {
     mkdirSync(dataDir, { recursive: true })
     const db = new Database(dbPath)

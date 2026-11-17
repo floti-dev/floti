@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_SETTINGS } from '@helm/core/types'
+import { DEFAULT_SETTINGS } from '@floti/core/types'
 import type { ClaudeStatus } from '../../../shared/ipc'
 import { bridge } from './bridge.testkit'
 import { useSetup } from './useSetup'

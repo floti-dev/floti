@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Floti plugin manifest",
-  "description": "helm-plugin.json, at the root of a Floti plugin folder. Floti validates it with @floti-dev/plugin-sdk/manifest when it loads the plugin; this schema says the same for an editor. Checks that span fields - rail.panel naming a panel, a command tab naming a tab, {{key}} naming a declared secret - are made by Floti and `helm-plugin validate`, not here.",
+  "description": "floti-plugin.json, at the root of a Floti plugin folder. Floti validates it with @floti-dev/plugin-sdk/manifest when it loads the plugin; this schema says the same for an editor. Checks that span fields - rail.panel naming a panel, a command tab naming a tab, {{key}} naming a declared secret - are made by Floti and `floti-plugin validate`, not here.",
   "type": "object",
   "required": [
     "apiVersion",
@@ -9,62 +9,19 @@
     "name"
   ],
   "additionalProperties": false,
-  "allOf": [
-    {
-      "if": {
-        "required": [
-          "apiVersion"
-        ],
-        "properties": {
-          "apiVersion": {
-            "const": 1
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "background": {
-            "$ref": "#/$defs/htmlEntry"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "required": [
-          "apiVersion"
-        ],
-        "properties": {
-          "apiVersion": {
-            "const": 2
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "background": {
-            "$ref": "#/$defs/moduleEntry"
-          }
-        }
-      }
-    }
-  ],
   "properties": {
     "$schema": {
       "type": "string",
       "description": "For editors. Ignored by Floti."
     },
     "apiVersion": {
-      "enum": [
-        1,
-        2
-      ],
-      "description": "The bridge version the plugin was written against. 1: pages get window.helm and background is a .html page. 2: pages get window.floti and background is a .js or .mjs module the host runs in an isolate."
+      "const": 2,
+      "description": "The plugin API version the plugin was written against. Floti runs version 2: pages get window.floti and background is a .js or .mjs module the host runs in an isolate."
     },
     "id": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-      "description": "Lower-case letters, digits and dashes. The plugin origin is helm-plugin://<id> at apiVersion 1 and floti-plugin://<id> at 2."
+      "description": "Lower-case letters, digits and dashes. The plugin origin is floti-plugin://<id>."
     },
     "name": {
       "type": "string",
@@ -194,7 +151,7 @@
             "minLength": 1,
             "maxLength": 60,
             "pattern": "\\S",
-            "description": "The tab title until its page sets one with helm.surface.setTitle."
+            "description": "The tab title until its page sets one with floti.surface.setTitle."
           },
           "entry": {
             "$ref": "#/$defs/htmlEntry"
@@ -208,8 +165,8 @@
       "description": "Open the tabs as pages in one tab of the plugin's own, with a strip of pages inside it, rather than a tab each among the pane's tabs."
     },
     "background": {
-      "type": "string",
-      "description": "Code that runs from the moment the plugin is turned on, with no surface open: a .html page at apiVersion 1, a .js or .mjs module at apiVersion 2."
+      "$ref": "#/$defs/moduleEntry",
+      "description": "Code that runs from the moment the plugin is turned on, with no surface open: a .js or .mjs module the host runs."
     },
     "commands": {
       "type": "array",
@@ -249,7 +206,7 @@
     "network": {
       "type": "array",
       "maxItems": 50,
-      "description": "The origins the bridge's fetch (floti.fetch, or helm.fetch at apiVersion 1) may reach.",
+      "description": "The origins the bridge's fetch (floti.fetch) may reach.",
       "items": {
         "type": "string",
         "pattern": "^([Hh][Tt][Tt][Pp][Ss]?):\\/\\/(\\*\\.)?([^/?#@\\s]+?)(?::(\\d{1,5}))?\\/?$",
@@ -269,7 +226,7 @@
     "exec": {
       "type": "object",
       "maxProperties": 50,
-      "description": "Programs the bridge's exec (floti.exec, or helm.exec at apiVersion 1) may run, by the name the plugin calls them.",
+      "description": "Programs the bridge's exec (floti.exec) may run, by the name the plugin calls them.",
       "propertyNames": {
         "$ref": "#/$defs/name"
       },
@@ -299,7 +256,7 @@
       }
     },
     "service": {
-      "description": "A long-running process Floti starts, supervises and stops, reached as floti.fetch(\"service:/path\"), or helm.fetch at apiVersion 1.",
+      "description": "A long-running process Floti starts, supervises and stops, reached as floti.fetch(\"service:/path\").",
       "oneOf": [
         {
           "type": "null"
@@ -345,14 +302,14 @@
     "sessions": {
       "type": "array",
       "uniqueItems": true,
-      "description": "What the plugin's pages may do with the Claude Code sessions Floti hosts. start: ask to start one in a folder with a first message, with helm.sessions.start; Floti shows each one to the user, who starts it or not. list: see them, with helm.sessions.list and the sessions event.",
+      "description": "What the plugin's pages may do with the Claude Code sessions Floti hosts. start: ask to start one in a folder with a first message, with floti.sessions.start; Floti shows each one to the user, who starts it or not. list: see them, with floti.sessions.list and the sessions event.",
       "items": {
         "enum": ["start", "list"]
       }
     },
     "agent": {
       "type": "object",
-      "description": "Tools Floti offers the Claude Code sessions it starts, as an MCP server named floti-plugin-<id>. The background answers them with tools.handle (floti.tools.handle, or helm.tools.handle at apiVersion 1), so the manifest needs a background.",
+      "description": "Tools Floti offers the Claude Code sessions it starts, as an MCP server named floti-plugin-<id>. The background answers them with tools.handle (floti.tools.handle), so the manifest needs a background.",
       "required": [
         "tools"
       ],
@@ -413,21 +370,21 @@
     },
     "htmlEntry": {
       "type": "string",
-      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__helm[\\\\/])[^\\u0000]*\\.(?:[Hh][Tt][Mm][Ll])(?:[\\\\/]\\.?)*$",
-      "description": "An .html file, by a path relative to the plugin folder that stays inside it and is not under __helm/."
+      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__floti[\\\\/])[^\\u0000]*\\.(?:[Hh][Tt][Mm][Ll])(?:[\\\\/]\\.?)*$",
+      "description": "An .html file, by a path relative to the plugin folder that stays inside it and is not under __floti/."
     },
     "moduleEntry": {
       "type": "string",
-      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__helm[\\\\/])[^\\u0000]*\\.(?:[Jj][Ss]|[Mm][Jj][Ss])(?:[\\\\/]\\.?)*$",
-      "description": "A .js or .mjs module, by a path relative to the plugin folder that stays inside it and is not under __helm/: a version 2 background."
+      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__floti[\\\\/])[^\\u0000]*\\.(?:[Jj][Ss]|[Mm][Jj][Ss])(?:[\\\\/]\\.?)*$",
+      "description": "A .js or .mjs module, by a path relative to the plugin folder that stays inside it and is not under __floti/."
     },
     "iconEntry": {
       "type": "string",
-      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__helm[\\\\/])[^\\u0000]*\\.(?:[Ss][Vv][Gg]|[Pp][Nn][Gg])(?:[\\\\/]\\.?)*$"
+      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__floti[\\\\/])[^\\u0000]*\\.(?:[Ss][Vv][Gg]|[Pp][Nn][Gg])(?:[\\\\/]\\.?)*$"
     },
     "scriptEntry": {
       "type": "string",
-      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__helm[\\\\/])[^\\u0000]*\\.(?:[Jj][Ss]|[Mm][Jj][Ss]|[Cc][Jj][Ss])(?:[\\\\/]\\.?)*$",
+      "pattern": "^(?!\\s)(?![\\\\/])(?![A-Za-z]:)(?!(?:[^\\\\/]*[\\\\/])*\\.\\.(?:[\\\\/]|$))(?!(?:\\.?[\\\\/])*__floti[\\\\/])[^\\u0000]*\\.(?:[Jj][Ss]|[Mm][Jj][Ss]|[Cc][Jj][Ss])(?:[\\\\/]\\.?)*$",
       "description": "A script in the plugin folder, run by the Node inside Floti."
     },
     "program": {

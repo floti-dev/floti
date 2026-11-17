@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentWorktree, SessionRecord } from '@helm/core'
+import type { AgentWorktree, SessionRecord } from '@floti/core'
 import { bridge } from './bridge.testkit'
 import { sessionActivityIn, useAgentWorktrees } from './useAgentWorktrees'
 

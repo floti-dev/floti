@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { DiscoveryResult, SessionActivityState, SessionRecord } from '@helm/core'
-import { isCommandChild, isProjectPinned, withListed, withProjectPinned } from '@helm/core/types'
-import type { HelmBridge } from '../../../shared/ipc'
+import type { DiscoveryResult, SessionActivityState, SessionRecord } from '@floti/core'
+import { isCommandChild, isProjectPinned, withListed, withProjectPinned } from '@floti/core/types'
+import type { DesktopBridge } from '../../../shared/ipc'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
 
@@ -65,7 +65,7 @@ const EMPTY: HostWorkspace = {
 export function useHostWorkspaces(
   hosts: readonly string[],
   connected: readonly string[],
-  bridges: (host: string) => HelmBridge = bridgeFor
+  bridges: (host: string) => DesktopBridge = bridgeFor
 ): HostWorkspaces {
   const [byHost, setByHost] = useState<ReadonlyMap<string, HostWorkspace>>(new Map())
   const bridgesRef = useRef(bridges)

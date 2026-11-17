@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_SETTINGS, type DetectedShell } from '@helm/core/types'
+import { DEFAULT_SETTINGS, type DetectedShell } from '@floti/core/types'
 import { bridge } from './bridge.testkit'
 import { FakeResizeObserver, layout } from './terminal.testkit'
 import { ProjectShellPane } from './ProjectShellPane'

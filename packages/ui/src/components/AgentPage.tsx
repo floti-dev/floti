@@ -7,7 +7,7 @@ import {
   type AgentProblem,
   type EditorHighlight,
   type InstalledBackend
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { SEGMENT_ON } from '../lib/segmented'
 import { AgentForm, FORM_FIELDS } from './AgentForm'

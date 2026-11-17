@@ -1,4 +1,4 @@
-import type { HostAddRequest, RemoteHost } from '@helm/core/types'
+import type { HostAddRequest, RemoteHost } from '@floti/core/types'
 import { describe, expect, it } from 'vitest'
 import { FakeConnection, fakeLocalHost } from '../../../test/host-connection'
 import type { LocalHost } from './launcher'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RemoteHost } from '@helm/core/types'
+import type { RemoteHost } from '@floti/core/types'
 import { treeHostPhase } from './treeHostPhase'
 
 const BUILD_BOX: Pick<RemoteHost, 'name' | 'transport'> = { name: 'build-box', transport: { kind: 'ssh', target: 'build-box' } }

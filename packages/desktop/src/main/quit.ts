@@ -8,7 +8,7 @@ import type { QuitAnswer } from '../shared/ipc'
  * local host, when the quit setting says so. So a window's `close`
  * handler cannot ask on behalf of a quit: by the time it runs, the sessions it
  * would ask about are gone. A quit that asks has to ask before it calls
- * `app.quit()`. That is the app menu's Quit Helm (Cmd+Q on macOS), which is
+ * `app.quit()`. That is the app menu's Quit Floti (Cmd+Q on macOS), which is
  * why that item is not Electron's `quit` role (chrome.ts).
  *
  * Closing the window asks in its `close` handler, as it always has: the window
@@ -76,7 +76,7 @@ export interface QuitGateHost {
 }
 
 export interface QuitGate {
-  /** The app menu's Quit Helm: quits, asking first while sessions would end. */
+  /** The app menu's Quit Floti: quits, asking first while sessions would end. */
   requestQuit(): void
   /**
    * The window's `close`. True when the close may go ahead now. False when it

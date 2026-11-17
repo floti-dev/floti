@@ -97,7 +97,7 @@ fn meta(row: &Row<'_>) -> rusqlite::Result<ConfigSnapshotMeta> {
 }
 
 /// One file's versions, newest first, without their bytes. Newest by when
-/// each was taken, not by id: versions Helm took before the host ran its
+/// each was taken, not by id: versions the desktop took before the host ran its
 /// sessions are copied in later and take later ids.
 pub fn list(
     conn: &Connection,

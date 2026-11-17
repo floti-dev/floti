@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS } from '@helm/core'
+import { DEFAULT_SETTINGS } from '@floti/core'
 import { FakeConnection, fakeLocalHost } from '../../../test/host-connection'
 import type { HostConnection } from '../../shared/host/client'
 import type * as P from '../../shared/host/protocol'
@@ -273,7 +273,7 @@ describe('the link to the local host', () => {
         start: ({ startHost }) => {
           starts.push(startHost)
           // While the 1.x host runs it answers and refuses; once Restart host
-          // to update ended its process, the launcher starts the floti Helm carries.
+          // to update ended its process, the launcher starts the floti the desktop carries.
           return oldHostRunning
             ? Promise.reject(
                 new LocalHostRefusedError(
@@ -405,7 +405,7 @@ describe('the link to the local host', () => {
 
       expect(w.link.current()).toBe(second.asConnection())
       expect(w.connected).toEqual([w.firstConnection.asConnection(), second.asConnection()])
-      // Helm's settings are written to the new host before anything else.
+      // The desktop's settings are written to the new host before anything else.
       expect(second.sent[0]?.channel).toBe('settings:write')
       // Connected: no more tries, and the next loss starts from the first wait again.
       expect(w.timers.pending()).toEqual([])

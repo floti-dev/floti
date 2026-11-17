@@ -1155,7 +1155,7 @@ async fn a_name_is_made_unique_against_the_running_sessions_on_launch_and_rename
     let agent = fake_agent!(&dirs);
     let endpoint = dirs.endpoint();
     let host = RunningHost::start(fake_config(&dirs, &endpoint, &agent, &[]));
-    let folder = dirs.folder("helm");
+    let folder = dirs.folder("floti");
     let mut client = TestClient::connect(&endpoint, TERMINAL).await;
 
     let first = client
@@ -1166,26 +1166,26 @@ async fn a_name_is_made_unique_against_the_running_sessions_on_launch_and_rename
         .request::<SessionStart>(&start_request(&folder))
         .await
         .unwrap();
-    assert_eq!(first.name, "helm");
-    assert_eq!(second.name, "helm 2");
+    assert_eq!(first.name, "floti");
+    assert_eq!(second.name, "floti 2");
 
     // Against the other sessions, never itself, and ignoring case.
     let renamed = client
         .request::<SessionRename>(&RenameSessionRequest {
             id: second.id,
-            label: Some("HELM".into()),
+            label: Some("FLOTI".into()),
         })
         .await
         .unwrap();
-    assert_eq!(renamed.label.as_deref(), Some("HELM 2"));
+    assert_eq!(renamed.label.as_deref(), Some("FLOTI 2"));
     let same = client
         .request::<SessionRename>(&RenameSessionRequest {
             id: first.id,
-            label: Some("helm".into()),
+            label: Some("floti".into()),
         })
         .await
         .unwrap();
-    assert_eq!(same.label.as_deref(), Some("helm"));
+    assert_eq!(same.label.as_deref(), Some("floti"));
     let cleared = client
         .request::<SessionRename>(&RenameSessionRequest {
             id: second.id,

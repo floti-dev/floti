@@ -1,8 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import '@helm/ui/styles.css'
+import '@floti/ui/styles.css'
 import { App } from './App'
-import { helm, localHostStep } from './bridge'
+import { desktop, localHostStep } from './bridge'
 import { installOverlayInspector, installRoutedBridge, installTerminalInspector } from './inspect'
 import { SetupWindow } from './setup/SetupWindow'
 import { applyShape, applyTheme } from './theme'
@@ -21,7 +21,7 @@ const setupWindow = new URLSearchParams(window.location.search).get('window') ==
 // says a modal is up. This is how a check driving the real window sees either.
 installTerminalInspector()
 installOverlayInspector()
-installRoutedBridge(helm)
+installRoutedBridge(desktop)
 
 /*
  * The theme and the shape are painted before React's first frame, not after:
@@ -31,13 +31,13 @@ installRoutedBridge(helm)
  * screen to flash. If either read fails the app still mounts - `useLauncher`
  * reads both again and the stylesheet's shape defaults stand in until then.
  */
-void Promise.allSettled([helm.invoke('theme:current'), helm.invoke('settings:read')])
+void Promise.allSettled([desktop.invoke('theme:current'), desktop.invoke('settings:read')])
   .then(([theme, settings]) => {
     if (theme.status === 'fulfilled') applyTheme(theme.value)
     if (settings.status === 'fulfilled') applyShape(settings.value)
   })
   .finally(() => {
     createRoot(container).render(
-      <StrictMode>{setupWindow ? <SetupWindow bridge={helm} hostStep={localHostStep} /> : <App />}</StrictMode>
+      <StrictMode>{setupWindow ? <SetupWindow bridge={desktop} hostStep={localHostStep} /> : <App />}</StrictMode>
     )
   })

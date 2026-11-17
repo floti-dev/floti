@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS } from '@helm/core'
+import { DEFAULT_SETTINGS } from '@floti/core'
 import type * as P from '../protocol'
 import { historyPageFromHost, historySessionFromHost } from './history'
 import { claudeStatusFromHost, endedFromHost, profileFromHost, sessionFromHost, settingsWithHost, splitSettingsPatch } from './index'

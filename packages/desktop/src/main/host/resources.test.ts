@@ -1,4 +1,4 @@
-import type { SessionResources } from '@helm/core'
+import type { SessionResources } from '@floti/core'
 import { describe, expect, it } from 'vitest'
 import { FakeConnection, fakeLink, reconnectingLink } from '../../../test/host-connection'
 import type { HostLink } from './link'

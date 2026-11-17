@@ -1,7 +1,7 @@
 import type { ClipboardRead, ClipboardWriteOutcome } from '../shared/ipc'
 
 /**
- * Text in and out of the system clipboard, for the copies and pastes Helm makes
+ * Text in and out of the system clipboard, for the copies and pastes the desktop makes
  * itself: a terminal's selection, a file's path.
  *
  * Electron's `writeText` and `readText` never say they failed. On Windows the

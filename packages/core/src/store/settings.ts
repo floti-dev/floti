@@ -121,7 +121,7 @@ const boundedInteger = (bounds: { min: number; max: number }) => {
  * checked at the point it is saved rather than at the point it is painted.
  *
  * A comma is refused too, and that one is about meaning rather than safety:
- * this setting names *one* family, which Helm puts in front of the default
+ * this setting names *one* family, which Floti puts in front of the default
  * stack. A stack typed in here would look like it replaced the default and
  * would not.
  */
@@ -499,9 +499,6 @@ export const SETTING_VALIDATORS: SettingValidators = {
   /** A timestamp, or null for "has not happened". Parsed, not pattern-matched. */
   firstRunCompletedAt: (value) => timestampProblem(value),
 
-  /** The same: when the upgrade note was closed, or null. */
-  upgradeNoteSeenAt: (value) => timestampProblem(value),
-
   /** A step of the walkthrough and the workspace it chose, or null while it is not showing. */
   walkthrough: (value) => {
     if (value === null) return null
@@ -550,7 +547,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
   /**
    * Null means "find one"; anything else is an absolute path, for the same
    * reason `claudePath` is. A bare `pwsh.exe` would be resolved against the
-   * PATH of whatever launched Helm, so the setting would name different
+   * PATH of whatever launched Floti, so the setting would name different
    * programs on different launches.
    */
   terminalShell: (value) => {
@@ -678,7 +675,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
   hosts: (value) => remoteHostsProblem(value),
 
   /**
-   * An instant Helm wrote, checked anyway: a value `Date.parse` cannot read
+   * An instant the desktop wrote, checked anyway: a value `Date.parse` cannot read
    * would make every comparison against it NaN, and NaN fails every `>`.
    */
   profilesCopiedToHostAt: (value) => {
@@ -687,7 +684,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
     return Number.isFinite(Date.parse(value)) ? null : 'must be an ISO 8601 instant'
   },
 
-  /** An instant Helm wrote, checked as `profilesCopiedToHostAt` is. */
+  /** An instant the desktop wrote, checked as `profilesCopiedToHostAt` is. */
   pluginsCopiedToHostAt: (value) => {
     if (value === null) return null
     if (typeof value !== 'string') return 'must be an ISO 8601 string or null'
@@ -859,28 +856,11 @@ export function writeSettings(store: Store, patch: Partial<AppSettings>): AppSet
 }
 
 /**
- * Decides, as the database opens, whether this device is told once that
- * harnesses are now workspaces (`upgradeNoteSeenAt`).
- *
- * Only a database that predates `0032_workspaces_were_harnesses`, the
- * migration that renamed harnesses, ran an earlier Helm, so only there is the
- * note left due. A database this open created is a new device, or one whose
- * data was reset: there was nothing here to rename, so it counts the note seen
- * at once, whatever its host says about setup. Any later open changes nothing,
- * so a note still due stays due until it is closed, and one seen stays seen.
- */
-export function settleUpgradeNote(store: Store): void {
-  if (!createdByThisOpen(store)) return
-  if (readSettings(store).upgradeNoteSeenAt !== null) return
-  writeSettings(store, { upgradeNoteSeenAt: new Date().toISOString() })
-}
-
-/**
  * Decides, as the database opens, whether this start is a first start, which
  * runs the guided first run (`walkthrough`).
  *
  * A first start is one with no data folder, and the open that creates
- * `helm.db` is where that shows: a database that was here before has its
+ * `desktop.db` is where that shows: a database that was here before has its
  * migrations already applied, so it opens the shell. Only a walkthrough not already written is started, and any
  * later open changes nothing, so one that was closed halfway resumes where it
  * was and one that was finished stays finished.

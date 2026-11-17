@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import type { TemplateChoice, TemplatePreview } from '@helm/core'
+import type { TemplateChoice, TemplatePreview } from '@floti/core'
 import { cn } from '../lib/cn'
 import { ROW_SELECTED } from '../lib/rows'
 import { SEGMENT_ON } from '../lib/segmented'

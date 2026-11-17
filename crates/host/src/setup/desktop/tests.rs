@@ -19,7 +19,7 @@ use crate::platform::process_table::ProcessRow;
 
 const APP: &str = "the Floti desktop app";
 
-fn helm() -> Desktop {
+fn installed_app() -> Desktop {
     Desktop {
         name: "Floti",
         path: PathBuf::from("/home/me/Applications/Floti.AppImage"),
@@ -75,11 +75,11 @@ impl Installs for FakeInstalls {
 
     fn desktop(&self, _env: &UserEnv) -> Option<Desktop> {
         self.looked.set(self.looked.get() + 1);
-        self.installed.then(helm)
+        self.installed.then(installed_app)
     }
 
     fn desktop_target(&self, _env: &UserEnv) -> Option<Desktop> {
-        Some(helm())
+        Some(installed_app())
     }
 
     fn desktop_version(&self, _desktop: &Desktop) -> Option<String> {
@@ -94,7 +94,7 @@ impl Installs for FakeInstalls {
         false
     }
 
-    fn install_desktop(&self, _target: &Desktop, _release: &Path) -> Result<Desktop> {
+    fn install_desktop(&self, _target: &Desktop, _release: &Path) -> Result<()> {
         unreachable!("setup installs only through floti add desktop")
     }
 
@@ -113,7 +113,7 @@ impl Installs for FakeInstalls {
 
 fn found(installed: bool, display: bool, terminal: bool) -> Situation {
     Situation {
-        installed: installed.then(helm),
+        installed: installed.then(installed_app),
         not_offered: (!display).then(|| "this session has no display".to_owned()),
         terminal,
         app: APP.into(),
@@ -165,7 +165,7 @@ fn an_app_already_installed_is_said_and_never_asked_about() {
     for (display, terminal) in [(true, true), (true, false), (false, true), (false, false)] {
         assert_eq!(
             step(DesktopChoice::Ask, || found(true, display, terminal)),
-            Step::AlreadyInstalled(helm()),
+            Step::AlreadyInstalled(installed_app()),
             "display {display}, terminal {terminal}"
         );
     }
@@ -185,7 +185,7 @@ fn the_situation_names_the_app_and_takes_the_display_from_the_session() {
         vars: [(OsString::from(DISPLAY_TEST_VAR), OsString::from("none"))].into(),
     };
     let seen = situation(&FakeInstalls::installed(), &none, true, false);
-    assert_eq!(seen.installed, Some(helm()));
+    assert_eq!(seen.installed, Some(installed_app()));
     assert!(seen.not_offered.is_some());
     assert!(!seen.terminal);
 }
@@ -288,7 +288,7 @@ fn run_signed_in(
 
 fn installed() -> std::result::Result<Added, String> {
     Ok(Added::Installed {
-        desktop: helm(),
+        desktop: installed_app(),
         version: "3.0.0".into(),
     })
 }
@@ -419,7 +419,7 @@ fn an_installed_app_found_by_floti_add_desktop_ends_as_already_installed() {
         &FakeInstalls::new(),
         true,
         "",
-        Ok(Added::AlreadyInstalled(helm())),
+        Ok(Added::AlreadyInstalled(installed_app())),
     );
     assert_eq!(ran.outcome, DesktopOutcome::AlreadyInstalled);
 }

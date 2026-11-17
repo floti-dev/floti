@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * The sample's program, run by `helm.exec('echo', [...])`: says what it was
+ * The sample's program, run by `floti.exec('echo', [...])`: says what it was
  * given. It reports only whether the secret reached it - a program that
  * printed a token would put it in the page's hands, which is what keeping it
  * in the environment exists to avoid.

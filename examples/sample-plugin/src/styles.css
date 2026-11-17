@@ -1,7 +1,7 @@
 /*
- * The sample's own layout. Colours, type, controls and rows are Helm's: its
+ * The sample's own layout. Colours, type, controls and rows are Floti's: its
  * primitives stylesheet is on every plugin page before this one, and its
- * theme is on <html> as --helm-* variables, kept current by Helm.
+ * theme is on <html> as --floti-* variables, kept current by Floti.
  */
 
 .panel {
@@ -46,12 +46,12 @@ p {
   min-width: 0;
 }
 
-/* A two-line row: the dot keeps to the title's line, as Helm's own rows do. */
+/* A two-line row: the dot keeps to the title's line, as Floti's own rows do. */
 .item {
   align-items: flex-start;
 }
 
-.item > .helm-dot {
+.item > .floti-dot {
   margin-top: calc((1lh - 6px) / 2);
 }
 
@@ -64,14 +64,14 @@ p {
 .output {
   margin: 0;
   padding: 8px 10px;
-  border: 1px solid var(--helm-border);
-  border-radius: var(--helm-radius);
-  background: var(--helm-surface-sunken);
+  border: 1px solid var(--floti-border);
+  border-radius: var(--floti-radius);
+  background: var(--floti-surface-sunken);
   white-space: pre-wrap;
 }
 
 .error {
-  color: var(--helm-danger);
+  color: var(--floti-danger);
 }
 
 .session {
@@ -80,10 +80,10 @@ p {
   gap: 8px;
   margin-top: 8px;
   padding-top: 16px;
-  border-top: 1px solid var(--helm-border);
+  border-top: 1px solid var(--floti-border);
 }
 
-.session .helm-input {
+.session .floti-input {
   flex: 1;
   min-width: 0;
 }

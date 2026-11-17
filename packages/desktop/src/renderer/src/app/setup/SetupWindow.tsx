@@ -8,7 +8,7 @@ import {
   type AppSettings,
   type Walkthrough,
   type WalkthroughStep
-} from '@helm/core/types'
+} from '@floti/core/types'
 import {
   AddHostDialog,
   AgentsStep,
@@ -20,8 +20,8 @@ import {
   type WalkthroughAgent,
   type WalkthroughQuit,
   type WorkspaceChoice
-} from '@helm/ui'
-import type { HelmBridge } from '../../../../shared/ipc'
+} from '@floti/ui'
+import type { DesktopBridge } from '../../../../shared/ipc'
 import { addHostActions } from '../hostActions'
 import { atStep, claudeAgent, stepAfter, stepBefore, WALKTHROUGH_DONE } from './walkthrough'
 import type { LocalHostStepStore } from '../host/localHostStep'
@@ -30,7 +30,7 @@ const sentence = (err: unknown): string => (err instanceof Error ? err.message :
 
 /** What the setup window reaches: the routed bridge, and main's steps for this PC's host. */
 export interface SetupWindowProps {
-  bridge: Pick<HelmBridge, 'invoke' | 'on'>
+  bridge: Pick<DesktopBridge, 'invoke' | 'on'>
   hostStep: LocalHostStepStore
 }
 

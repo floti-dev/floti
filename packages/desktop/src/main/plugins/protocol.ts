@@ -1,24 +1,21 @@
 import { extname } from 'node:path'
 import { protocol } from 'electron'
 import { RESERVED_PREFIX } from '@floti-dev/plugin-sdk/manifest'
-import { PLUGIN_SCHEMES } from '../../shared/ipc'
-import { apiVersionOfScheme, parsePluginOrigin } from '../../shared/plugins/origin'
+import { PLUGIN_SCHEME } from '../../shared/ipc'
+import { parsePluginOrigin } from '../../shared/plugins/origin'
 import { MIME } from '../content'
 
 /**
- * `helm-plugin://<id>/<path>` and `floti-plugin://<id>/<path>`: a version 1
- * and a version 2 plugin's page files, served from the host that keeps the
- * plugin, and Helm's runtime beside them. The two schemes are served alike,
- * under the same policy, stylesheet and bridge script; the scheme a page is
- * asked for on tells the bridge which it is (`window.helm` at apiVersion 1,
- * `window.floti` at apiVersion 2).
+ * `floti-plugin://<id>/<path>`: a plugin's page files, served from the host
+ * that keeps the plugin, and the desktop's runtime beside them, which gives
+ * every page `window.floti`.
  *
  * The host names the plugin, so every plugin is its own **origin**: the
- * browser keeps it out of Helm's page and out of every other plugin's, gives
+ * browser keeps it out of the desktop's page and out of every other plugin's, gives
  * it storage of its own, and stamps its `postMessage`s with an origin it
  * cannot forge. That origin is the plugin's identity everywhere.
  *
- * Under `/__helm/` on every origin Helm serves its runtime - the bridge and
+ * Under `/__floti/` on every origin Floti serves its runtime - the bridge and
  * the primitives stylesheet - so a plugin never ships a copy of either and
  * never runs a stale one. Every HTML page the plugin serves gets the two
  * injected at the top of its `<head>`, before its own styles and scripts:
@@ -31,7 +28,7 @@ import { MIME } from '../content'
  *
  * Its own origin for script, style, images and fonts, and no network of any
  * kind: `connect-src 'none'` closes fetch, XHR, WebSocket and EventSource, so
- * `helm.fetch` - where the host list and the secrets are - is the only way out.
+ * `floti.fetch` - where the host list and the secrets are - is the only way out.
  * No inline script, because a built plugin has none and an injected one is the
  * commonest way a page that renders remote data goes wrong.
  */
@@ -64,7 +61,7 @@ const RUNTIME_PATH = `/${RESERVED_PREFIX}`
 const HEADERS = {
   'content-security-policy': PLUGIN_CSP,
   'x-content-type-options': 'nosniff',
-  // A plugin under development is rebuilt underneath a running Helm.
+  // A plugin under development is rebuilt underneath a running Floti.
   'cache-control': 'no-store'
 }
 
@@ -90,12 +87,10 @@ export interface PluginPageSource {
 export type PluginPageSources = (label: string | null) => PluginPageSource | null
 
 /**
- * A request on either scheme, taken apart: the plugin API version its scheme
- * serves, the plugin, the label of the host it is on (null for This PC), and
- * the runtime file or the page path it names.
+ * A request taken apart: the plugin, the label of the host it is on (null
+ * for This PC), and the runtime file or the page path it names.
  */
 interface ParsedOrigin {
-  apiVersion: 1 | 2
   id: string
   label: string | null
 }
@@ -111,7 +106,7 @@ function parse(requestUrl: string): Parsed {
   }
   const origin = parsePluginOrigin(requestUrl)
   if (origin === null) return new Response('Bad request', { status: 400 })
-  const at: ParsedOrigin = { apiVersion: apiVersionOfScheme(origin.scheme), id: origin.plugin, label: origin.label }
+  const at: ParsedOrigin = { id: origin.plugin, label: origin.label }
   if (url.pathname.startsWith(RUNTIME_PATH)) return { ...at, runtime: url.pathname.slice(RUNTIME_PATH.length) }
   try {
     return {
@@ -128,7 +123,7 @@ function parse(requestUrl: string): Parsed {
 
 function runtimeAsset(name: string, runtime: PluginRuntime): Response {
   if (name === 'bridge.js') return asset(runtime.bridge(), 'text/javascript; charset=utf-8')
-  if (name === 'helm.css') return asset(runtime.css(), 'text/css; charset=utf-8')
+  if (name === 'floti.css') return asset(runtime.css(), 'text/css; charset=utf-8')
   return new Response('Not found', { status: 404 })
 }
 
@@ -143,13 +138,12 @@ function page(path: string, bytes: Uint8Array, boot: () => string, fallbackType:
 }
 
 /**
- * Answers one request on either scheme from a host's files, every response
- * under the plugin CSP and every page with the runtime injected. Separate from
- * the registration so a test can call it. Each origin is
- * served from the host it names and from no other: This PC's
- * (`helm-plugin://<id>/`, `floti-plugin://<id>/`) from the local host, a
- * remote host's (`<scheme>://<id>.<label>/`) from that host, and one naming a
- * host this device has not added not at all (404). The host resolves the path inside
+ * Answers one request from a host's files, every response under the plugin
+ * CSP and every page with the runtime injected. Separate from the
+ * registration so a test can call it. Each origin is served from the host it
+ * names and from no other: This PC's (`floti-plugin://<id>/`) from the local
+ * host, a remote host's (`floti-plugin://<id>.<label>/`) from that host, and
+ * one naming a host this device has not added not at all (404). The host resolves the path inside
  * the plugin's folder and refuses one outside it (403) or not there (404); a
  * host that cannot be reached is a 503 saying why.
  *
@@ -162,7 +156,7 @@ export async function servePluginRequestFrom(
 ): Promise<Response> {
   const parsed = parse(requestUrl)
   if (parsed instanceof Response) return parsed
-  const { apiVersion, id, label } = parsed
+  const { id, label } = parsed
   const source = typeof sources === 'function' ? sources(label) : label === null ? sources : null
   if (source === null) return new Response('Not found', { status: 404 })
   try {
@@ -175,7 +169,7 @@ export async function servePluginRequestFrom(
     if (file.status !== 200) {
       return new Response(new Uint8Array(file.body), { status: file.status, headers: { 'content-type': file.contentType } })
     }
-    return page(path, file.body, () => hostBoot(runtime.boot(id), source.onHostComputer, apiVersion), file.contentType)
+    return page(path, file.body, () => hostBoot(runtime.boot(id), source.onHostComputer), file.contentType)
   } catch (error) {
     return new Response(error instanceof Error ? error.message : String(error), {
       status: 503,
@@ -187,12 +181,11 @@ export async function servePluginRequestFrom(
 /**
  * The boot facts of a page drawn from a host's files: the runtime's, that the
  * page's `BroadcastChannel`s are relayed through the host, so a message
- * reaches the plugin's pages on every client and its background page,
- * whether that host runs on this computer, and the plugin API version the
- * page's scheme serves, which is the bridge it gets.
+ * reaches the plugin's pages on every client and its background, and whether
+ * that host runs on this computer.
  */
-export function hostBoot(boot: string, onHostComputer: boolean, apiVersion: 1 | 2): string {
-  return JSON.stringify({ ...(JSON.parse(boot) as Record<string, unknown>), channels: 'host', onHostComputer, apiVersion })
+export function hostBoot(boot: string, onHostComputer: boolean): string {
+  return JSON.stringify({ ...(JSON.parse(boot) as Record<string, unknown>), channels: 'host', onHostComputer })
 }
 
 function asset(body: string, type: string): Response {
@@ -202,15 +195,15 @@ function asset(body: string, type: string): Response {
 /**
  * The runtime's two tags, at the top of the document's `<head>`.
  *
- * The page's first theme rides on the script tag (`data-helm-boot`), so the
+ * The page's first theme rides on the script tag (`data-floti-boot`), so the
  * bridge can paint it before anything else draws and the bridge itself stays
  * the same bytes for every page.
  */
 export function injectRuntime(html: string, boot: string): string {
   const attribute = boot.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/</g, '&lt;')
   const tags =
-    `<link rel="stylesheet" href="${RUNTIME_PATH}helm.css">` +
-    `<script src="${RUNTIME_PATH}bridge.js" data-helm-boot='${attribute}'></script>`
+    `<link rel="stylesheet" href="${RUNTIME_PATH}floti.css">` +
+    `<script src="${RUNTIME_PATH}bridge.js" data-floti-boot='${attribute}'></script>`
   const head = /<head(?:\s[^>]*)?>/i.exec(html)
   if (head !== null) return insertAt(html, head.index + head[0].length, tags)
   const root = /<html(?:\s[^>]*)?>/i.exec(html)
@@ -224,9 +217,7 @@ function insertAt(text: string, at: number, insert: string): string {
   return text.slice(0, at) + insert + text.slice(at)
 }
 
-/** Both schemes, answered from each host's files by the one handler. */
+/** The plugin scheme, answered from each host's files. */
 export function registerHostPluginProtocol(sources: PluginPageSources, runtime: PluginRuntime): void {
-  for (const scheme of PLUGIN_SCHEMES) {
-    protocol.handle(scheme, (request) => servePluginRequestFrom(request.url, sources, runtime))
-  }
+  protocol.handle(PLUGIN_SCHEME, (request) => servePluginRequestFrom(request.url, sources, runtime))
 }

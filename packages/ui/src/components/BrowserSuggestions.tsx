@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import type { BrowserSuggestion } from '@helm/core/types'
+import type { BrowserSuggestion } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { GlobeIcon, SearchIcon } from './icons'
 

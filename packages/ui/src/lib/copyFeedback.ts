@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * What a Copy button says after it is pressed: that it copied, briefly, or
  * that the clipboard refused it, for long enough to read. On Windows another
  * program holding the clipboard open refuses every other program's write, and
- * Helm retries before it gives up (`main/clipboard.ts`), so a refusal here is
+ * Floti retries before it gives up (`main/clipboard.ts`), so a refusal here is
  * one that lasted.
  */
 

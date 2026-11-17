@@ -1,4 +1,4 @@
-import type { RemoteHost } from '@helm/core/types'
+import type { RemoteHost } from '@floti/core/types'
 import { describe, expect, it } from 'vitest'
 import { FakeConnection, fakeLocalHost, reconnectingLink } from '../../../test/host-connection'
 import type { LocalHost } from './launcher'
@@ -56,7 +56,7 @@ function world() {
     },
     forget: () => Promise.resolve(),
     changed: () => undefined,
-    isHelmPage: () => true,
+    isFlotiPage: () => true,
     appVersion: '3.0.0',
     nextConnection: () => 1,
     wsl,

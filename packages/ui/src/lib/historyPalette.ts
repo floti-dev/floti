@@ -1,4 +1,4 @@
-import type { EndedBy, HistoryCommand, HistorySession, LaunchAgents } from '@helm/core'
+import type { EndedBy, HistoryCommand, HistorySession, LaunchAgents } from '@floti/core'
 
 /**
  * What History's palette says about a session, apart from how it draws it:

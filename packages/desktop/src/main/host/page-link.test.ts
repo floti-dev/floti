@@ -3,11 +3,11 @@ import type { EventPayload } from '../../shared/ipc'
 import { FakeConnection, fakeLocalHost } from '../../../test/host-connection'
 import { HOST_RETRY_MS, LocalHostRefusedError, type PageBridge } from './launcher'
 import { createHostLink } from './link'
-import { FOREIGN_PAGE, createPageLinks, type HelmPage, type PageLinksDeps } from './page-link'
+import { FOREIGN_PAGE, createPageLinks, type FlotiPage, type PageLinksDeps } from './page-link'
 
 class FakeBridge implements PageBridge {
   readonly written: Uint8Array[] = []
-  endedByHelm = false
+  endedByDesktop = false
   private settle: (why: string | null) => void = () => undefined
   readonly ended = new Promise<string | null>((resolve) => {
     this.settle = resolve
@@ -17,7 +17,7 @@ class FakeBridge implements PageBridge {
     this.written.push(bytes)
   }
   end(): void {
-    this.endedByHelm = true
+    this.endedByDesktop = true
     this.settle(null)
   }
   /** The bridge exits on its own. */
@@ -26,7 +26,7 @@ class FakeBridge implements PageBridge {
   }
 }
 
-class FakePage implements HelmPage {
+class FakePage implements FlotiPage {
   readonly sent: Array<{ channel: string; payload: unknown }> = []
   private gone: Array<() => void> = []
   constructor(readonly id: number) {}
@@ -49,7 +49,7 @@ function world(overrides: Partial<PageLinksDeps> = {}) {
   const bridges: FakeBridge[] = []
   const links = createPageLinks({
     appVersion: '2.9.0',
-    isHelmPage: (id) => id === WINDOW || id === BACKGROUND,
+    isFlotiPage: (id) => id === WINDOW || id === BACKGROUND,
     ready: () => Promise.resolve(),
     howEnded: () => ({ planned: false, restarts: true }),
     openBridge: (data) => {
@@ -77,7 +77,7 @@ describe('each Floti page’s own connection to the local host', () => {
     w.links.send(77, opened.connection, Uint8Array.of(1))
     w.links.close(77, opened.connection)
     expect(w.bridges[0]?.written).toEqual([])
-    expect(w.bridges[0]?.endedByHelm).toBe(false)
+    expect(w.bridges[0]?.endedByDesktop).toBe(false)
   })
 
   it('passes bytes both ways unread, under the connection’s number', async () => {
@@ -114,12 +114,12 @@ describe('each Floti page’s own connection to the local host', () => {
     const page = new FakePage(WINDOW)
     await w.links.open(page)
     page.leave()
-    expect(w.bridges[0]?.endedByHelm).toBe(true)
+    expect(w.bridges[0]?.endedByDesktop).toBe(true)
 
     await w.links.open(page)
     await w.links.open(page)
-    expect(w.bridges[1]?.endedByHelm).toBe(true)
-    expect(w.bridges[2]?.endedByHelm).toBe(false)
+    expect(w.bridges[1]?.endedByDesktop).toBe(true)
+    expect(w.bridges[2]?.endedByDesktop).toBe(false)
     // The page that left was not told: it is gone.
     expect(page.sent.filter((s) => s.channel === 'hostLink:ended')).toEqual([])
   })
@@ -177,7 +177,7 @@ describe('each Floti page’s own connection to the local host', () => {
     await w.links.open(new FakePage(WINDOW))
     await w.links.open(new FakePage(BACKGROUND))
     await w.links.stop()
-    expect(w.bridges.map((b) => b.endedByHelm)).toEqual([true, true])
+    expect(w.bridges.map((b) => b.endedByDesktop)).toEqual([true, true])
     expect(await w.links.open(new FakePage(WINDOW))).toEqual({ unreachable: 'Floti is quitting.' })
     expect(w.bridges).toHaveLength(2)
   })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Profile, Project } from '@helm/core/types'
+import type { Profile, Project } from '@floti/core/types'
 import { folderName, homePath, launchSentence, profileFor, rankProjects, type SentencePart } from './launcher'
 
 const WORKSPACE = 'C:\\Users\\someone\\.harness\\dev'
@@ -45,17 +45,17 @@ describe('rankProjects', () => {
   const timeclick = project(repo('timeclick'))
   const builder = project(repo('TimeClick-Builder'))
   const reporting = project(repo('timeclick-reporting'))
-  const helm = project(repo('helm'))
+  const floti = project(repo('floti'))
   const overtime = project(repo('overtime'))
-  const all = [helm, reporting, builder, timeclick, overtime]
+  const all = [floti, reporting, builder, timeclick, overtime]
 
   it('lists everything by when it was last worked in when nothing is typed, then by name', () => {
     const recency = new Map([
       [reporting.path.toLowerCase(), 300],
-      [helm.path.toLowerCase(), 500]
+      [floti.path.toLowerCase(), 500]
     ])
     expect(rankProjects(all, '  ', recency).map((m) => m.project.name)).toEqual([
-      'helm',
+      'floti',
       'timeclick-reporting',
       'overtime',
       'timeclick',
@@ -76,8 +76,8 @@ describe('rankProjects', () => {
   })
 
   it('falls back to the path, with either separator, and drops what matches nothing', () => {
-    const ranked = rankProjects(all, 'repos/hel', new Map())
-    expect(ranked.map((m) => [m.project.name, m.hit])).toEqual([['helm', null]])
+    const ranked = rankProjects(all, 'repos/flo', new Map())
+    expect(ranked.map((m) => [m.project.name, m.hit])).toEqual([['floti', null]])
     expect(rankProjects(all, 'nothing like it', new Map())).toEqual([])
   })
 })
@@ -103,8 +103,8 @@ describe('profileFor', () => {
   })
 
   it('starts a folder no profile is about with none', () => {
-    expect(profileFor(repo('helm'), profiles)).toBeNull()
-    expect(profileFor(repo('helm'), [])).toBeNull()
+    expect(profileFor(repo('floti'), profiles)).toBeNull()
+    expect(profileFor(repo('floti'), [])).toBeNull()
   })
 
   it('breaks a tie with the profile rooted there, then the pinned order, then the name', () => {
@@ -135,11 +135,11 @@ describe('launchSentence', () => {
   const home = 'C:\\Users\\someone'
 
   it('names the program and the folder, and nothing else for a plain launch', () => {
-    expect(read(launchSentence({ cwd: repo('helm'), home, profile: null, permissionMode: null, resume: null }))).toBe(
-      'Runs `claude` in `~\\.harness\\dev\\repos\\helm`.'
+    expect(read(launchSentence({ cwd: repo('floti'), home, profile: null, permissionMode: null, resume: null }))).toBe(
+      'Runs `claude` in `~\\.harness\\dev\\repos\\floti`.'
     )
-    expect(read(launchSentence({ cwd: repo('helm'), home, profile: null, permissionMode: 'plan', resume: null }))).toBe(
-      'Runs `claude` in `~\\.harness\\dev\\repos\\helm` with `--permission-mode plan`.'
+    expect(read(launchSentence({ cwd: repo('floti'), home, profile: null, permissionMode: 'plan', resume: null }))).toBe(
+      'Runs `claude` in `~\\.harness\\dev\\repos\\floti` with `--permission-mode plan`.'
     )
   })
 

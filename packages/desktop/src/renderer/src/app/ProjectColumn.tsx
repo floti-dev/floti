@@ -1,8 +1,8 @@
 import type { JSX, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useCallback, useRef } from 'react'
-import type { DetectedShell } from '@helm/core'
-import { DEFAULT_SETTINGS, LOCAL_HOST_KEY, PROJECT_SHELL_HEIGHT_PCT } from '@helm/core/types'
-import { cn } from '@helm/ui'
+import type { DetectedShell } from '@floti/core'
+import { DEFAULT_SETTINGS, LOCAL_HOST_KEY, PROJECT_SHELL_HEIGHT_PCT } from '@floti/core/types'
+import { cn } from '@floti/ui'
 import { getShell } from './pterms'
 import { useShells } from './useShells'
 import { PROJECT_SHELL_MIN_PX, ProjectShellPane } from './ProjectShellPane'
@@ -161,7 +161,7 @@ export function ProjectColumn({
         {/* A 3px grip that goes accent on hover (DESIGN.md "Split view"). A
             full-width hairline down the middle of the gutter read as a doubled
             border rather than as something to hold. */}
-        <span className="h-[min(3px,var(--helm-gap))] w-10 rounded-full bg-border-strong transition-colors group-hover:bg-accent" />
+        <span className="h-[min(3px,var(--floti-gap))] w-10 rounded-full bg-border-strong transition-colors group-hover:bg-accent" />
       </div>
       {/* Keyed by host and path: this is one project's shell, and handing the same
           component a different project re-mounted someone else's terminal

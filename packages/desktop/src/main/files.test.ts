@@ -3,18 +3,18 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { DiscoveryResult, Profile, Project } from '@helm/core'
+import type { DiscoveryResult, Profile, Project } from '@floti/core'
 import { createFilesService, filesRoots, vscodeUrl, type FilesService, type KnownFolders } from './files'
 
 /**
- * The Files view's hand-off to VS Code: only a file in a folder Helm knows,
+ * The Files view's hand-off to VS Code: only a file in a folder the desktop knows,
  * reached through VS Code's own URL handler and nothing else.
  */
 
 function git(cwd: string, ...args: string[]): void {
   const run = spawnSync(
     'git',
-    ['-c', 'core.autocrlf=false', '-c', 'user.name=Floti', '-c', 'user.email=helm@example.invalid', ...args],
+    ['-c', 'core.autocrlf=false', '-c', 'user.name=Floti', '-c', 'user.email=floti@example.invalid', ...args],
     { cwd, windowsHide: true, encoding: 'utf8' }
   )
   if (run.status !== 0) throw new Error(`git ${args.join(' ')}: ${run.stderr}`)
@@ -27,7 +27,7 @@ let opened: string[]
 let handler: string
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'helm files-ipc-'))
+  root = mkdtempSync(join(tmpdir(), 'floti files-ipc-'))
   git(root, 'init', '-q')
   mkdirSync(join(root, 'src'))
   writeFileSync(join(root, 'src', 'a.ts'), 'one\ntwo\nthree\n')
@@ -76,7 +76,7 @@ describe('filesRoots', () => {
   const profileAt = (root: string, overlays: string[] = []): Profile => ({ root, overlays }) as Profile
 
   it('hands on a file from a folder the host knows and nothing else', async () => {
-    const elsewhere = mkdtempSync(join(tmpdir(), 'helm files-elsewhere-'))
+    const elsewhere = mkdtempSync(join(tmpdir(), 'floti files-elsewhere-'))
     try {
       const profileRoot = join(elsewhere, 'profile root')
       const overlay = join(elsewhere, 'overlay')
@@ -99,7 +99,7 @@ describe('filesRoots', () => {
       expect(await service.openInEditor(join(stranger, 'a.ts'), 1)).toEqual({ opened: false })
       expect(opened).toHaveLength(4)
 
-      // Before the host has answered, nothing is a folder Helm knows.
+      // Before the host has answered, nothing is a folder the desktop knows.
       known = filesRoots({ scan: null, profiles: [], sessions: [] })
       expect(await service.openInEditor(join(root, 'src', 'a.ts'), 1)).toEqual({ opened: false })
     } finally {

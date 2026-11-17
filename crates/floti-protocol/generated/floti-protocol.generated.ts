@@ -2407,7 +2407,7 @@ totalBytes: number, body: Uint8Array, };
  */
 export type PluginFileRequest = { 
 /**
- * The plugin's id: the host of its `helm-plugin://<id>/` origin, which
+ * The plugin's id: the host of its `floti-plugin://<id>/` origin, which
  * the client established from the frame, never from what the page asked.
  */
 plugin: string, 
@@ -2687,8 +2687,7 @@ export type PluginSwitchRequest = { path: string, enabled: boolean, };
 export type PluginTabInfo = { title: string, url: string, };
 
 /**
- * One tool as the manifest declares it: enough for a client whose plugin
- * pages answer its calls to offer it on `agentPlugin:offer`.
+ * One tool as the manifest declares it.
  */
 export type PluginToolInfo = { name: string, description: string, 
 /**
@@ -4709,16 +4708,6 @@ export const CLIENT_ONLY: readonly OutsideEntry[] = [
   { channels: "ownData:*", reason: "where the copy of the client's own database into the host stands: only the client's main process reads that database, and it sends the rows over carry:*" },
   { channels: "profileDialog:*", reason: "the client's own dialogs for exporting and importing a profile, and the file it writes or reads on its machine; the profile itself is the host's" },
   { channels: "windowSessions:*", reason: "what the client's main process keeps of its sessions for its window: the OS notification for an exit nobody saw, the question before it quits with sessions running, the count before it stops the host, what restarting this PC's host for an update ends and the restart itself, which the client's main process sends in place of a hello through a bridge of its own, and the pane layout its last run saved; every client sees every session, and which have a tab is each device's own" },
-  { channels: "pluginBackground:*", reason: "what the client's hidden plugin window saw of the background pages it runs under plugin API v1, which its main process alone hears and tells its window" },
-  { channels: "pluginWindow:*", reason: "what a background page in the client's hidden plugin window asks that only the client's own window can draw (a plugin tab, a secret dialog), passed between its two windows by its main process" },
-];
-
-/** Channels between a plugin's background page and what runs it, which never cross the protocol. */
-export const HOST_INTERNAL: readonly OutsideEntry[] = [
-  { channels: "plugins:tool", reason: "a session's call to a plugin tool, handed to its background page by whatever runs it" },
-  { channels: "plugins:toolCancel", reason: "cancels a plugin tool call at whatever runs its background page" },
-  { channels: "plugins:toolResult", reason: "a background page's answer to a plugin tool call, to whatever runs it" },
-  { channels: "plugins:backgroundState", reason: "a background page reporting its state to whatever runs it" },
 ];
 
 /** Whether `name` is this entry's channel or in its family. */
@@ -4729,9 +4718,4 @@ export function outsideCovers(entry: OutsideEntry, name: string): boolean {
 /** Whether a client-only entry covers `name`. */
 export function isClientOnly(name: string): boolean {
   return CLIENT_ONLY.some((entry) => outsideCovers(entry, name));
-}
-
-/** Whether a host-internal entry covers `name`. */
-export function isHostInternal(name: string): boolean {
-  return HOST_INTERNAL.some((entry) => outsideCovers(entry, name));
 }

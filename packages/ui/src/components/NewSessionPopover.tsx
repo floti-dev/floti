@@ -9,7 +9,7 @@ import {
   type LiveSession,
   type Profile,
   type Project
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { shortcutLabel } from '../lib/platform'
 import { homePath, launchSentence, profileFor, profilesInOrder, rankProjects } from '../lib/launcher'

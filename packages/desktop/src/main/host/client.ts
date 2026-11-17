@@ -5,7 +5,7 @@ import type { Capability, ProtocolVersion } from './protocol'
 /**
  * Main's own connection to the host, over `floti bridge`'s standard output
  * (the host's frames) and standard input (main's). The protocol itself is
- * `shared/host/client.ts`, which a Helm page's connection shares.
+ * `shared/host/client.ts`, which a desktop page's connection shares.
  */
 
 export * from '../../shared/host/client'
@@ -20,11 +20,11 @@ export interface HostTransport {
 
 export interface MainConnectOptions {
   transport: HostTransport
-  /** Helm's own version, for the `hello`'s client name. */
+  /** The desktop's own version, for the `hello`'s client name. */
   appVersion: string
   /** The computer's name, which the `hello` gives as this device's name. */
   deviceName?: string
-  /** A line for Helm's log. Never given a payload, a frame or stream bytes. */
+  /** A line for the desktop's log. Never given a payload, a frame or stream bytes. */
   log?: (line: string) => void
   /** The protocol the `hello` names, only ever set by a test (`ConnectOptions.protocol`). */
   protocol?: ProtocolVersion

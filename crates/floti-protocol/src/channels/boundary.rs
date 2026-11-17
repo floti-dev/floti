@@ -2,9 +2,9 @@
 //!
 //! Each ipc.ts channel lands in exactly one place: declared in the protocol
 //! under its own name or a recorded backend-neutral rename, carried on a byte
-//! stream, kept by the client ([`CLIENT_ONLY`]), or kept between a plugin's
-//! background page and whatever runs it ([`HOST_INTERNAL`]). A test reads ipc.ts and fails naming any channel that
-//! lands nowhere, so a channel added there is placed here in the same change.
+//! stream, or kept by the client ([`CLIENT_ONLY`]). A test reads ipc.ts and
+//! fails naming any channel that lands nowhere, so a channel added there is
+//! placed here in the same change.
 //!
 //! The browser pane, clipboard, window, theme, dialogs and diagnostics belong
 //! to one client's window and never cross the protocol.
@@ -116,38 +116,6 @@ pub const CLIENT_ONLY: &[Outside] = &[
         "windowSessions:*",
         "what the client's main process keeps of its sessions for its window: the OS notification for an exit nobody saw, the question before it quits with sessions running, the count before it stops the host, what restarting this PC's host for an update ends and the restart itself, which the client's main process sends in place of a hello through a bridge of its own, and the pane layout its last run saved; every client sees every session, and which have a tab is each device's own",
     ),
-    outside(
-        "pluginBackground:*",
-        "what the client's hidden plugin window saw of the background pages it runs under plugin API v1, which its main process alone hears and tells its window",
-    ),
-    outside(
-        "pluginWindow:*",
-        "what a background page in the client's hidden plugin window asks that only the client's own window can draw (a plugin tab, a secret dialog), passed between its two windows by its main process",
-    ),
-];
-
-/// Channels between a plugin's background page and what runs it, which never
-/// cross the protocol. A v1 background page runs in the desktop's hidden
-/// plugin host window and these are Electron IPC inside the desktop, its tool
-/// calls reaching it through `agentPlugin:call`; a v2 background script runs
-/// in the host's engine and these stay inside the host.
-pub const HOST_INTERNAL: &[Outside] = &[
-    outside(
-        "plugins:tool",
-        "a session's call to a plugin tool, handed to its background page by whatever runs it",
-    ),
-    outside(
-        "plugins:toolCancel",
-        "cancels a plugin tool call at whatever runs its background page",
-    ),
-    outside(
-        "plugins:toolResult",
-        "a background page's answer to a plugin tool call, to whatever runs it",
-    ),
-    outside(
-        "plugins:backgroundState",
-        "a background page reporting its state to whatever runs it",
-    ),
 ];
 
 /// ipc.ts channels the protocol declares under a backend-neutral name, as
@@ -162,12 +130,11 @@ pub enum Placement {
     /// The client-to-host direction of this stream channel.
     CarriedOnStream(&'static str),
     ClientOnly(&'static Outside),
-    HostInternal(&'static Outside),
 }
 
 /// Where the ipc.ts channel `name` went in `catalogue`, or `None` when it
 /// went nowhere: the protocol neither declares it nor lists it as
-/// client-only or host-internal.
+/// client-only.
 pub fn placement(catalogue: &Catalogue, name: &str) -> Option<Placement> {
     if let Some(decl) = catalogue.get(name) {
         return Some(Placement::Declared(decl.name()));
@@ -186,13 +153,10 @@ pub fn placement(catalogue: &Catalogue, name: &str) -> Option<Placement> {
     {
         return Some(Placement::CarriedOnStream(decl.name()));
     }
-    if let Some(entry) = CLIENT_ONLY.iter().find(|entry| entry.covers(name)) {
-        return Some(Placement::ClientOnly(entry));
-    }
-    HOST_INTERNAL
+    CLIENT_ONLY
         .iter()
         .find(|entry| entry.covers(name))
-        .map(Placement::HostInternal)
+        .map(Placement::ClientOnly)
 }
 
 /// Declared channels that a client-only entry covers. The protocol describes

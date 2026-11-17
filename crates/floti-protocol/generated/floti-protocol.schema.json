@@ -6467,7 +6467,7 @@
           "type": "string"
         },
         "plugin": {
-          "description": "The plugin's id: the host of its `helm-plugin://<id>/` origin, which\nthe client established from the frame, never from what the page asked.",
+          "description": "The plugin's id: the host of its `floti-plugin://<id>/` origin, which\nthe client established from the frame, never from what the page asked.",
           "type": "string"
         }
       },
@@ -7426,7 +7426,7 @@
       "type": "object"
     },
     "PluginToolInfo": {
-      "description": "One tool as the manifest declares it: enough for a client whose plugin\npages answer its calls to offer it on `agentPlugin:offer`.",
+      "description": "One tool as the manifest declares it.",
       "properties": {
         "description": {
           "type": "string"

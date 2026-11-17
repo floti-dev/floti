@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, LOCAL_HOST_KEY } from "@helm/core/types";
+import { DEFAULT_SETTINGS, LOCAL_HOST_KEY } from "@floti/core/types";
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeConnection, fakeReach } from "../../../../../test/fake-connection";
 import type { RemoteHostStates } from "../../../../shared/ipc";
@@ -149,7 +149,7 @@ describe("one bridge per host", () => {
     const w = world();
     const first = w.bridges.hostBridge("h-build");
     expect(w.bridges.hostBridge("h-build")).toBe(first);
-    expect(w.bridges.bridgeFor("h-build")).toBe(first.helm);
+    expect(w.bridges.bridgeFor("h-build")).toBe(first.desktop);
     expect(w.linked).toEqual(["h-build"]);
 
     const seen: string[] = [];
@@ -222,13 +222,10 @@ describe("the preload’s bridge as a remote host’s adapters see it", () => {
     const own = remoteOwn(bridge, () => "build-box");
     const heard: string[] = [];
     own.on("windowSessions:quitConfirm", () => heard.push("quit"));
-    own.on("pluginBackground:changed", () => heard.push("background"));
     own.on("ownSettings:changed", () => heard.push("settings"));
     bridge.emit("windowSessions:quitConfirm", { id: 1 } as never);
-    bridge.emit("pluginBackground:changed", []);
     bridge.emit("ownSettings:changed", DEFAULT_SETTINGS);
-    // Main's background reports cover every host; the plugins adapter keeps its own host's.
-    expect(heard).toEqual(["background", "settings"]);
+    expect(heard).toEqual(["settings"]);
 
     expect(await own.invoke("windowSessions:lostLayout")).toBeNull();
     await expect(

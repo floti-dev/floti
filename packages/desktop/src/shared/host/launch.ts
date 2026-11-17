@@ -1,4 +1,4 @@
-import type { AgentProblem, BadAgent, InstalledBackend, LaunchAgent, LaunchAgents } from '@helm/core/types'
+import type { AgentProblem, BadAgent, InstalledBackend, LaunchAgent, LaunchAgents } from '@floti/core/types'
 import type { LaunchSessionRequest } from '../ipc'
 import { CLAUDE_CODE_BACKEND } from './backend'
 import type * as P from './protocol'

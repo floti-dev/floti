@@ -1,7 +1,7 @@
 import type { JSX, KeyboardEvent, ReactNode } from 'react'
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { HistoryMatchLine, HistorySession, LaunchAgents, RestorableSession } from '@helm/core'
-import { HISTORY_NAME_MAX } from '@helm/core/types'
+import type { HistoryMatchLine, HistorySession, LaunchAgents, RestorableSession } from '@floti/core'
+import { HISTORY_NAME_MAX } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import {
   agentGone,

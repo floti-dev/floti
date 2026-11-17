@@ -7,14 +7,14 @@ const { injectRuntime, PLUGIN_CSP, registerHostPluginProtocol, servePluginReques
 const { protocol } = await import('electron')
 
 /**
- * `helm-plugin://<id>/`: a plugin's page files served under its own origin
- * from the host that keeps it, every response under the plugin CSP, and Helm's
- * runtime injected at the top of every page and served under `/__helm/`.
+ * `floti-plugin://<id>/`: a plugin's page files served under its own origin
+ * from the host that keeps it, every response under the plugin CSP, and Floti's
+ * runtime injected at the top of every page and served under `/__floti/`.
  */
 
 const runtime: PluginRuntime = {
   bridge: () => 'window.__bridge = 1',
-  css: () => ':root { --helm: 1 }',
+  css: () => ':root { --floti: 1 }',
   boot: (plugin) => JSON.stringify({ theme: { kind: 'dark' }, plugin, quote: "it's <b>&" })
 }
 
@@ -23,12 +23,12 @@ describe('injectRuntime', () => {
 
   it('puts both tags straight after <head>, with any attributes it has', () => {
     const html = injectRuntime('<html><HEAD lang="en"><title>t</title></HEAD></html>', boot)
-    expect(html).toMatch(/^<html><HEAD lang="en"><link rel="stylesheet" href="\/__helm\/helm\.css"><script src="\/__helm\/bridge\.js"/)
+    expect(html).toMatch(/^<html><HEAD lang="en"><link rel="stylesheet" href="\/__floti\/floti\.css"><script src="\/__floti\/bridge\.js"/)
   })
 
   it('makes a head for a page with none', () => {
     expect(injectRuntime('<html><body>x</body></html>', '{}')).toBe(
-      `<html><head><link rel="stylesheet" href="/__helm/helm.css"><script src="/__helm/bridge.js" data-helm-boot='{}'></script></head><body>x</body></html>`
+      `<html><head><link rel="stylesheet" href="/__floti/floti.css"><script src="/__floti/bridge.js" data-floti-boot='{}'></script></head><body>x</body></html>`
     )
   })
 
@@ -39,7 +39,7 @@ describe('injectRuntime', () => {
 
   it('escapes the boot JSON so it cannot close its attribute or open a tag', () => {
     const html = injectRuntime('<head></head>', boot)
-    const attribute = /data-helm-boot='([^']*)'/.exec(html)?.[1]
+    const attribute = /data-floti-boot='([^']*)'/.exec(html)?.[1]
     expect(attribute).toBe('{"a":"it&#39;s &lt;b> &amp; co"}')
     // What the browser hands the bridge, once it has decoded the attribute.
     const decoded = attribute!.replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&amp;/g, '&')
@@ -71,7 +71,7 @@ describe('servePluginRequestFrom: pages from the local host’s files', () => {
 
   it('renders a page the host served on the plugin’s origin, with the runtime injected and the same policy as today', async () => {
     const source = host()
-    const response = await servePluginRequestFrom('helm-plugin://sample/dist/main%20page.html', source, runtime)
+    const response = await servePluginRequestFrom('floti-plugin://sample/dist/main%20page.html', source, runtime)
     expect(source.asked).toEqual(['sample:dist/main page.html'])
     expect(response.status).toBe(200)
     expect(response.headers.get('content-security-policy')).toBe(PLUGIN_CSP)
@@ -79,88 +79,50 @@ describe('servePluginRequestFrom: pages from the local host’s files', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
     const html = await response.text()
-    expect(html.indexOf('<head>')).toBeLessThan(html.indexOf('/__helm/helm.css'))
-    expect(html).toContain('<script src="/__helm/bridge.js" data-helm-boot=')
+    expect(html.indexOf('<head>')).toBeLessThan(html.indexOf('/__floti/floti.css'))
+    expect(html).toContain('<script src="/__floti/bridge.js" data-floti-boot=')
 
-    const js = await servePluginRequestFrom('helm-plugin://sample/dist/assets/app.js?v=2', source, runtime)
+    const js = await servePluginRequestFrom('floti-plugin://sample/dist/assets/app.js?v=2', source, runtime)
     expect(js.headers.get('content-security-policy')).toBe(PLUGIN_CSP)
     expect(await js.text()).toBe('console.log(1)')
   })
 
   const bootOf = (html: string): unknown => {
-    const attribute = /data-helm-boot='([^']*)'/.exec(html)?.[1] ?? ''
+    const attribute = /data-floti-boot='([^']*)'/.exec(html)?.[1] ?? ''
     return JSON.parse(attribute.replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&amp;/g, '&'))
   }
 
   it('tells a page drawn from the host’s files that its channels are relayed through the host', async () => {
-    const hosted = await servePluginRequestFrom('helm-plugin://sample/dist/main%20page.html', host(), runtime)
+    const hosted = await servePluginRequestFrom('floti-plugin://sample/dist/main%20page.html', host(), runtime)
     expect(bootOf(await hosted.text())).toEqual({
       theme: { kind: 'dark' },
       plugin: 'sample',
       quote: "it's <b>&",
       channels: 'host',
-      onHostComputer: true,
-      apiVersion: 1
+      onHostComputer: true
     })
   })
 
-  it('s1: serves a version 2 page on floti-plugin from the same files, policy, stylesheet and bridge, booted for window.floti at apiVersion 2', async () => {
-    const source = host()
-    const v1 = await servePluginRequestFrom('helm-plugin://sample/dist/main%20page.html', source, runtime)
-    const v2 = await servePluginRequestFrom('floti-plugin://sample/dist/main%20page.html', source, runtime)
-    expect(source.asked).toEqual(['sample:dist/main page.html', 'sample:dist/main page.html'])
-    expect(v2.status).toBe(200)
-    for (const header of ['content-security-policy', 'x-content-type-options', 'cache-control', 'content-type']) {
-      expect(v2.headers.get(header)).toBe(v1.headers.get(header))
-    }
-    const [v1Html, v2Html] = [await v1.text(), await v2.text()]
-    expect(v2Html).toContain('<link rel="stylesheet" href="/__helm/helm.css"><script src="/__helm/bridge.js" data-helm-boot=')
-    expect(bootOf(v1Html)).toMatchObject({ theme: { kind: 'dark' }, channels: 'host', apiVersion: 1 })
-    expect(bootOf(v2Html)).toMatchObject({ theme: { kind: 'dark' }, channels: 'host', apiVersion: 2 })
-    // The rest of the page is the plugin's own, the same on either scheme.
-    expect(v2Html.replace(/data-helm-boot='[^']*'/, '')).toBe(v1Html.replace(/data-helm-boot='[^']*'/, ''))
-
-    const bridge = await servePluginRequestFrom('floti-plugin://sample/__helm/bridge.js', source, runtime)
-    expect(await bridge.text()).toBe('window.__bridge = 1')
-    expect(bridge.headers.get('content-security-policy')).toBe(PLUGIN_CSP)
-    const css = await servePluginRequestFrom('floti-plugin://sample/__helm/helm.css', source, runtime)
-    expect(await css.text()).toBe(':root { --helm: 1 }')
-    expect((await servePluginRequestFrom('floti-plugin://other/__helm/bridge.js', source, runtime)).status).toBe(404)
-  })
-
-  it('s1: serves a remote host’s version 2 page from that host only, on floti-plugin://<id>.<label>/', async () => {
-    const ours = host()
-    const theirs = host(false)
-    const sources = (label: string | null): PluginPageSource | null =>
-      label === null ? ours : label === 'build-box' ? theirs : null
-    const remote = await servePluginRequestFrom('floti-plugin://sample.build-box/dist/main%20page.html', sources, runtime)
-    expect(remote.status).toBe(200)
-    expect(bootOf(await remote.text())).toMatchObject({ onHostComputer: false, apiVersion: 2 })
-    expect(theirs.asked).toEqual(['sample:dist/main page.html'])
-    expect(ours.asked).toEqual([])
-    expect((await servePluginRequestFrom('floti-plugin://sample.lab/dist/main%20page.html', sources, runtime)).status).toBe(404)
-  })
-
   it('tells a page drawn from a host on another computer that it is not on the host’s computer', async () => {
-    const remote = await servePluginRequestFrom('helm-plugin://sample/dist/main%20page.html', host(false), runtime)
+    const remote = await servePluginRequestFrom('floti-plugin://sample/dist/main%20page.html', host(false), runtime)
     expect(bootOf(await remote.text())).toMatchObject({ channels: 'host', onHostComputer: false })
   })
 
   it('serves the runtime only on the origin of a plugin the host has on', async () => {
     const source = host()
-    const bridge = await servePluginRequestFrom('helm-plugin://sample/__helm/bridge.js', source, runtime)
+    const bridge = await servePluginRequestFrom('floti-plugin://sample/__floti/bridge.js', source, runtime)
     expect(await bridge.text()).toBe('window.__bridge = 1')
     expect(bridge.headers.get('content-security-policy')).toBe(PLUGIN_CSP)
-    expect((await servePluginRequestFrom('helm-plugin://other/__helm/bridge.js', source, runtime)).status).toBe(404)
+    expect((await servePluginRequestFrom('floti-plugin://other/__floti/bridge.js', source, runtime)).status).toBe(404)
     expect(source.asked).toEqual([])
   })
 
   it('passes on the host’s refusals as they are', async () => {
     const source = host()
-    expect((await servePluginRequestFrom('helm-plugin://sample/escape/x.js', source, runtime)).status).toBe(403)
-    expect((await servePluginRequestFrom('helm-plugin://sample/dist/gone.js', source, runtime)).status).toBe(404)
-    expect((await servePluginRequestFrom('helm-plugin://other/dist/main%20page.html', source, runtime)).status).toBe(404)
-    expect((await servePluginRequestFrom('helm-plugin://sample/', source, runtime)).status).toBe(404)
+    expect((await servePluginRequestFrom('floti-plugin://sample/escape/x.js', source, runtime)).status).toBe(403)
+    expect((await servePluginRequestFrom('floti-plugin://sample/dist/gone.js', source, runtime)).status).toBe(404)
+    expect((await servePluginRequestFrom('floti-plugin://other/dist/main%20page.html', source, runtime)).status).toBe(404)
+    expect((await servePluginRequestFrom('floti-plugin://sample/', source, runtime)).status).toBe(404)
   })
 
   it('says why when the host cannot be reached, in the page’s own place', async () => {
@@ -170,15 +132,15 @@ describe('servePluginRequestFrom: pages from the local host’s files', () => {
       serves: () => Promise.reject(new Error(sentence)),
       file: () => Promise.reject(new Error(sentence))
     }
-    const page = await servePluginRequestFrom('helm-plugin://sample/dist/main%20page.html', source, runtime)
+    const page = await servePluginRequestFrom('floti-plugin://sample/dist/main%20page.html', source, runtime)
     expect(page.status).toBe(503)
     expect(await page.text()).toBe(sentence)
-    expect((await servePluginRequestFrom('helm-plugin://sample/__helm/bridge.js', source, runtime)).status).toBe(503)
+    expect((await servePluginRequestFrom('floti-plugin://sample/__floti/bridge.js', source, runtime)).status).toBe(503)
   })
 
   it('serves no other host’s origin from the local host alone', async () => {
     const source = host()
-    expect((await servePluginRequestFrom('helm-plugin://sample.build-box/dist/main%20page.html', source, runtime)).status).toBe(404)
+    expect((await servePluginRequestFrom('floti-plugin://sample.build-box/dist/main%20page.html', source, runtime)).status).toBe(404)
     expect(source.asked).toEqual([])
   })
 
@@ -188,7 +150,7 @@ describe('servePluginRequestFrom: pages from the local host’s files', () => {
     const sources = (label: string | null): PluginPageSource | null =>
       label === null ? ours : label === 'build-box' ? theirs : null
 
-    const remote = await servePluginRequestFrom('helm-plugin://sample.build-box/dist/main%20page.html', sources, runtime)
+    const remote = await servePluginRequestFrom('floti-plugin://sample.build-box/dist/main%20page.html', sources, runtime)
     expect(remote.status).toBe(200)
     expect(remote.headers.get('content-security-policy')).toBe(PLUGIN_CSP)
     // Drawn from build-box's files: not the computer the plugin runs on.
@@ -196,17 +158,17 @@ describe('servePluginRequestFrom: pages from the local host’s files', () => {
     expect(theirs.asked).toEqual(['sample:dist/main page.html'])
     expect(ours.asked).toEqual([])
 
-    await servePluginRequestFrom('helm-plugin://sample/dist/assets/app.js', sources, runtime)
+    await servePluginRequestFrom('floti-plugin://sample/dist/assets/app.js', sources, runtime)
     expect(ours.asked).toEqual(['sample:dist/assets/app.js'])
     expect(theirs.asked).toEqual(['sample:dist/main page.html'])
 
-    expect((await servePluginRequestFrom('helm-plugin://sample.lab/dist/main%20page.html', sources, runtime)).status).toBe(404)
-    expect((await servePluginRequestFrom('helm-plugin://sample.lab/__helm/bridge.js', sources, runtime)).status).toBe(404)
+    expect((await servePluginRequestFrom('floti-plugin://sample.lab/dist/main%20page.html', sources, runtime)).status).toBe(404)
+    expect((await servePluginRequestFrom('floti-plugin://sample.lab/__floti/bridge.js', sources, runtime)).status).toBe(404)
   })
 })
 
 describe('registerHostPluginProtocol', () => {
-  it('s1: answers helm-plugin and floti-plugin with the one handler, each page booted for its own bridge', async () => {
+  it('s1: answers floti-plugin, and only it, with the handler', async () => {
     const handle = vi.spyOn(protocol, 'handle').mockImplementation(() => undefined)
     const source: PluginPageSource = {
       onHostComputer: true,
@@ -214,14 +176,11 @@ describe('registerHostPluginProtocol', () => {
       file: () => Promise.resolve({ status: 200, contentType: 'text/html', body: new TextEncoder().encode('<head></head>') })
     }
     registerHostPluginProtocol(() => source, runtime)
-    expect(handle.mock.calls.map(([scheme]) => scheme)).toEqual(['helm-plugin', 'floti-plugin'])
-    for (const [scheme, handler] of handle.mock.calls) {
-      const response = await (handler as (request: Request) => Promise<Response>)(new Request(`${scheme}://sample/p.html`))
-      const attribute = /data-helm-boot='([^']*)'/.exec(await response.text())?.[1] ?? ''
-      expect(JSON.parse(attribute.replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&amp;/g, '&'))).toMatchObject({
-        apiVersion: scheme === 'floti-plugin' ? 2 : 1
-      })
-    }
+    expect(handle.mock.calls.map(([scheme]) => scheme)).toEqual(['floti-plugin'])
+    const handler = handle.mock.calls[0]![1] as (request: Request) => Promise<Response>
+    const response = await handler(new Request('floti-plugin://sample/p.html'))
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('<script src="/__floti/bridge.js" data-floti-boot=')
     handle.mockRestore()
   })
 })

@@ -17,7 +17,7 @@ vi.mock('@xterm/addon-web-links', () => import('./app/terminal.testkit'))
  * The fake xterm cannot find links on a canvas, so the tests play its part:
  * they call the hover and leave callbacks xterm calls as the pointer crosses a
  * link, then press the mouse on the screen the way a person would. What is
- * under test is what Helm does with a press - open the link and keep the press
+ * under test is what the desktop does with a press - open the link and keep the press
  * from the program, or leave it alone.
  */
 
@@ -271,7 +271,7 @@ describe('Ctrl+click on a link', () => {
     web.handler?.(pointer({ ctrlKey: true }), BARE)
 
     expect(opened).toEqual([])
-    // xterm's default for a hyperlink, had Helm not handed it one.
+    // xterm's default for a hyperlink, had the desktop not handed it one.
     expect(confirm).not.toHaveBeenCalled()
     expect(open).not.toHaveBeenCalled()
     // Only http and https: a `file://` hyperlink is not xterm's, and its click is the program's.

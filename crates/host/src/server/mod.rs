@@ -217,7 +217,7 @@ fn host_protocol(data: &Path) -> floti_protocol::ProtocolVersion {
 /// The file in a data folder whose text is the floti version a test build's
 /// host names, in its welcome and its restart state, in place of
 /// [`FLOTI_VERSION`](crate::version::FLOTI_VERSION), so a test, or a dev
-/// window driven to look at it, can meet a host older than the Helm it is.
+/// window driven to look at it, can meet a host older than the desktop it is.
 /// A production build never reads it.
 #[cfg(any(test, feature = "testkit"))]
 pub const TEST_HOST_VERSION: &str = "floti-test-host-version";
@@ -461,15 +461,6 @@ impl Host {
         // it, that was said and the host serves anyway.
         process_tree::Native.end_tree_with_this_process();
         let lock = lock_data_folder(&folders)?;
-        // The user's own files, out of the folder Helm kept them in, once,
-        // by the host that owns this data folder and may write its config
-        // folder. Only where that folder is the default one in the home,
-        // Helm's or Floti's, not one moved by FLOTI_CONFIG_DIR.
-        let (folders, moved) =
-            folders::after_helm_config_move(folders, run.home.as_deref(), run.config_read_only);
-        if let Some(said) = moved.log_line() {
-            log_line!("{said}");
-        }
         // What a key or registry write killed partway left, once the process
         // that made it is gone.
         sweep_stale_temps(
@@ -488,26 +479,6 @@ impl Host {
         let listener = socket::Native.bind(&endpoint)?;
         let relay = socket::Native.bind(&endpoint.relay())?;
         let store = Store::open(&folders.data)?;
-        // Plugin folders registered in Helm's config folder, read from where
-        // its move put them, whichever host moved it. Before the registry
-        // reads them; a failure here leaves them as they were and the host
-        // serves.
-        if let Some(home) = run.home.as_deref() {
-            match crate::plugins::store::follow_helm_config_move(store.connection(), home) {
-                Ok(moved) => {
-                    for (from, to) in moved {
-                        log_line!(
-                            "floti host: the plugin folder {from} is read from {to}, where your files moved"
-                        );
-                    }
-                }
-                Err(err) => {
-                    log_line!(
-                        "floti host: could not look for plugin folders your files moved out of: {err}"
-                    )
-                }
-            }
-        }
         // Sessions run in the keeper, which outlives this host; without one
         // they run here and end with it.
         let keeper = run
@@ -759,24 +730,16 @@ fn start_background_update(features: &Features, data: PathBuf, binary: PathBuf, 
 }
 
 /// The host's agent tools: the listener with its families switched as the
-/// settings say, following every change to them and to the plugins' offers,
+/// settings say, following every change to them and to the plugins' tools,
 /// answering from the sessions, the activity pass and the processes-and-ports
 /// pass, given to every launch from now on, and revoking each session's token
 /// as it ends.
 fn start_agent_tools(hosted: &Arc<Hosted>, features: &Features) -> Result<Arc<HostAgentTools>> {
     let tools = Arc::new(HostAgentTools::new(
         Arc::clone(features.browser()),
-        Arc::clone(features.plugin_tools()),
         Arc::clone(features.host_plugin_tools()),
     ));
-    // An offer taken away, or a plugin of the host's own switched off, can
-    // leave nothing to serve: the port goes then.
-    let offers = Arc::downgrade(&tools);
-    features.plugin_tools().on_change(move || {
-        if let Some(tools) = offers.upgrade() {
-            tools.settle();
-        }
-    });
+    // A plugin switched off can leave nothing to serve: the port goes then.
     let own_plugins = Arc::downgrade(&tools);
     features.host_plugin_tools().on_change(move || {
         if let Some(tools) = own_plugins.upgrade() {

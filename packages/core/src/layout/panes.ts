@@ -28,7 +28,7 @@ import { pluginPagesId, pluginTabId } from '../plugins/tabs'
  * tree, so left to right and top to bottom within each split - which is the
  * order the keyboard walks and the panes are named in.
  *
- * Pure and browser-safe, so the renderer imports it through `@helm/core/types`
+ * Pure and browser-safe, so the renderer imports it through `@floti/core/types`
  * and every rule about where a tab lands is tested here rather than discovered
  * in a window. Every operation takes a layout and returns one, normalised: no
  * empty group survives beside a group with tabs in it, no split holds fewer
@@ -993,7 +993,7 @@ export function resizeSplit(layout: PaneLayout, path: readonly number[], sizes: 
  * `keep` says whether a tab's thing still exists - a project discovery still
  * finds, a session main still hosts, a view main still holds. `extra` is what
  * exists and must have a tab whether or not anything placed it: every session
- * Helm's own process hosts (`unplacedSessionTabs`), and the Browser tab while
+ * the desktop's own process hosts (`unplacedSessionTabs`), and the Browser tab while
  * main holds a page. Those land in the focused group.
  *
  * Derived, rather than synced into state in an effect, for the reason the
@@ -1057,12 +1057,12 @@ function familiesOfExisting(
 /**
  * The sessions `reconcile` gives a tab to whether or not anything placed one.
  *
- * Sessions in Helm's own process end with it, so each one it hosts is this
+ * Sessions in the desktop's own process end with it, so each one it hosts is this
  * window's and has a tab. Sessions in a host outlive the window and are shared
  * by every device that reaches it, while the arrangement is kept per device:
  * a session gets a tab here only where this device placed one (its saved
  * layout, a launch, Open in the sessions pane), so none is given one unasked.
- * Helm's own process runs this PC's sessions only.
+ * The desktop's own process runs this PC's sessions only.
  *
  * **A child is given none either way.** One an agent started is drawn under its
  * parent in the sessions tree and shown in its parent's tab; it never adds a
@@ -1279,7 +1279,7 @@ export function savedGroups(saved: SavedPaneLayout | null): SavedPaneGroup[] {
 /**
  * Tab kinds an older build wrote down that open nothing now. The content
  * viewer's tab went when it merged into Files, the pull request list and its
- * per-PR tabs went when pull requests left Helm for a plugin, Config's tab
+ * per-PR tabs went when pull requests became a plugin, Config's tab
  * went when its page did, the agent's own commands editing its config, and
  * History's went when it became a palette (Ctrl+H): a layout naming any of
  * them still loads, without them.

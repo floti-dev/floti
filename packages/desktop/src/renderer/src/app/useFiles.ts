@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ContentDirListing, ContentScope, FileListing, FilesStatus, FileView } from '@helm/core'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import type { ContentDirListing, ContentScope, FileListing, FilesStatus, FileView } from '@floti/core'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
 
@@ -82,7 +82,7 @@ export interface FilesOptions {
   /** The file tabs in front of a pane - the ones worth reading and watching. */
   shown: readonly ShownFile[]
   /**
-   * Changes whenever the folders Helm knows may have - each scan's result. The
+   * Changes whenever the folders the desktop knows may have - each scan's result. The
    * picker's list is read again on it: the first scan lands a moment after the
    * window paints, and a list read before it would be empty until the sidebar
    * was closed and opened again.
@@ -118,7 +118,7 @@ export function relativeTo(root: string, path: string): string {
 const hostOfShown = (tab: ShownFile): string => tab.host ?? LOCAL_HOST_KEY
 
 export function useFiles({ host = LOCAL_HOST_KEY, active, follow, shown, revision }: FilesOptions): FilesState {
-  const helm = bridgeFor(host)
+  const desktop = bridgeFor(host)
   const [root, setRootState] = useState<string | null>(null)
   const [roots, setRoots] = useState<readonly ContentScope[]>([])
   const [rootsError, setRootsError] = useState<string | null>(null)
@@ -211,7 +211,7 @@ export function useFiles({ host = LOCAL_HOST_KEY, active, follow, shown, revisio
   // is saved as part of the deepest of these that holds it.
   useEffect(() => {
     let live = true
-    void helm
+    void desktop
       .invoke('content:scopes')
       .then((list) => {
         if (!live) return
@@ -227,7 +227,7 @@ export function useFiles({ host = LOCAL_HOST_KEY, active, follow, shown, revisio
     return () => {
       live = false
     }
-  }, [helm, active, setRoot, revision])
+  }, [desktop, active, setRoot, revision])
 
   /** Whether an answer about `at` on `on` is still about what the sidebar shows. */
   const stillShown = (on: string, at: string): boolean =>
@@ -237,7 +237,7 @@ export function useFiles({ host = LOCAL_HOST_KEY, active, follow, shown, revisio
     (relPath: string) => {
       const at = rootRef.current
       if (at === null) return
-      void helm
+      void desktop
         .invoke('files:dir', { root: at, relPath })
         .catch(
           (err: unknown): ContentDirListing => ({
@@ -256,19 +256,19 @@ export function useFiles({ host = LOCAL_HOST_KEY, active, follow, shown, revisio
           if (stillShown(host, at)) setDirs((current) => new Map(current).set(relPath, listing))
         })
     },
-    [helm, host]
+    [desktop, host]
   )
 
   const readStatus = useCallback(() => {
     const at = rootRef.current
     if (at === null) return
-    void helm
+    void desktop
       .invoke('files:status', { root: at })
       .catch((err: unknown): FilesStatus => ({ root: at, repo: null, files: null, error: readable(err) }))
       .then((next) => {
         if (stillShown(host, at)) setStatus(next)
       })
-  }, [helm, host])
+  }, [desktop, host])
 
   // The tree's top and every folder left open, and the status - whenever the
   // sidebar is opened onto a project, or pointed at another one.
@@ -469,7 +469,7 @@ export function useFiles({ host = LOCAL_HOST_KEY, active, follow, shown, revisio
   const loadListing = useCallback(
     (at: string) => {
       setListingRoot(at)
-      void helm
+      void desktop
         .invoke('files:list', { root: at })
         .catch(
           (err: unknown): FileListing => ({ root: at, files: [], source: 'walk', truncated: false, error: readable(err) })
@@ -478,7 +478,7 @@ export function useFiles({ host = LOCAL_HOST_KEY, active, follow, shown, revisio
           if (hostRef.current === host) setListings((current) => new Map(current).set(keyOf(at), listing))
         })
     },
-    [helm, host]
+    [desktop, host]
   )
 
   const listing = listingRoot === null ? null : (listings.get(keyOf(listingRoot)) ?? null)

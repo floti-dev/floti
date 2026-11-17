@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppSettings, Walkthrough } from '@helm/core/types'
+import type { AppSettings, Walkthrough } from '@floti/core/types'
 import type { ClaudeStatus } from '../../../../shared/ipc'
 import { bridge } from '../bridge.testkit'
 import { ShellWalkthrough, type ShellWalkthroughProps } from './ShellWalkthrough'

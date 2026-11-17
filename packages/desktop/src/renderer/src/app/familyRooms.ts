@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react'
-import type { FamilyRoomOf } from '@helm/core/types'
+import type { FamilyRoomOf } from '@floti/core/types'
 
 /**
  * What the window last measured of each parent tab's pane: whether it has room

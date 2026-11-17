@@ -5,7 +5,7 @@
  */
 
 /** The browser pane's partition, as `main/browser.ts` names it. */
-export const BROWSER_PARTITION_NAME = 'persist:helm-browser'
+export const BROWSER_PARTITION_NAME = 'persist:floti-browser'
 
 /**
  * The cookies the page sets: one kept, one `__Host-` one kept, one the site

@@ -1024,7 +1024,7 @@ impl Installs for WithUninstaller {
         false
     }
 
-    fn install_desktop(&self, _target: &Desktop, _release: &Path) -> floti_host::Result<Desktop> {
+    fn install_desktop(&self, _target: &Desktop, _release: &Path) -> floti_host::Result<()> {
         unreachable!("uninstalling installs nothing")
     }
 
@@ -1155,7 +1155,7 @@ impl Installs for LyingUninstaller {
         self.app.is_desktop_process(desktop, row)
     }
 
-    fn install_desktop(&self, target: &Desktop, release: &Path) -> floti_host::Result<Desktop> {
+    fn install_desktop(&self, target: &Desktop, release: &Path) -> floti_host::Result<()> {
         self.app.install_desktop(target, release)
     }
 

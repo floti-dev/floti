@@ -7,11 +7,11 @@ import { checkPluginFolder } from '../src/folder.js'
 import { SDK_DIR } from './fixtures'
 
 /**
- * `helm-plugin`, run as an author runs it: a separate Node process, in a
+ * `floti-plugin`, run as an author runs it: a separate Node process, in a
  * folder with a space in its path, reading and writing real files.
  */
 
-const BIN = join(SDK_DIR, 'bin', 'helm-plugin.mjs')
+const BIN = join(SDK_DIR, 'bin', 'floti-plugin.mjs')
 const SDK = JSON.parse(readFileSync(join(SDK_DIR, 'package.json'), 'utf8')) as { name: string; version: string }
 
 interface Run {
@@ -30,13 +30,13 @@ beforeEach(() => {
   // Resolved, because the CLI names folders from its working directory, which
   // the OS reports resolved: macOS's temporary folder is under /var, a link to
   // /private/var.
-  root = realpathSync.native(mkdtempSync(join(tmpdir(), 'helm sdk-')))
+  root = realpathSync.native(mkdtempSync(join(tmpdir(), 'floti sdk-')))
 })
 afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-describe('helm-plugin create', () => {
+describe('floti-plugin create', () => {
   it('S3: writes a version 2 plugin Floti would load, named after its folder, and validate agrees', () => {
     const created = run(['create', 'Issue Tracker'], root)
     expect(created.stderr).toBe('')
@@ -45,7 +45,7 @@ describe('helm-plugin create', () => {
     expect(created.stdout).toContain(`Created "Issue tracker" (issue-tracker) in ${folder}`)
     expect(created.stdout).toContain('Settings > Plugins > Add folder')
 
-    const manifest = JSON.parse(readFileSync(join(folder, 'helm-plugin.json'), 'utf8')) as Record<string, unknown>
+    const manifest = JSON.parse(readFileSync(join(folder, 'floti-plugin.json'), 'utf8')) as Record<string, unknown>
     expect(manifest['id']).toBe('issue-tracker')
     expect(manifest['name']).toBe('Issue tracker')
     expect(manifest['rail']).toEqual({ title: 'Issue tracker', panel: 'main' })
@@ -55,19 +55,18 @@ describe('helm-plugin create', () => {
     for (const page of ['pages/panel.js', 'pages/tab.js']) {
       const script = readFileSync(join(folder, page), 'utf8')
       expect(script, page).toMatch(/\bfloti\./)
-      expect(script, page).not.toMatch(/\bhelm\./)
     }
     expect(readFileSync(join(folder, 'background', 'main.js'), 'utf8')).toMatch(/\bfloti\.badge\.set\(/)
     // The schema the plugin installs, never this copy's path: run through npx,
     // that is a cache folder.
-    expect(manifest['$schema']).toBe(`./node_modules/${SDK.name}/helm-plugin.schema.json`)
+    expect(manifest['$schema']).toBe(`./node_modules/${SDK.name}/floti-plugin.schema.json`)
     expect(Object.keys(manifest)[0]).toBe('$schema')
 
     // The SDK is a development dependency, at this version or later.
     expect(JSON.parse(readFileSync(join(folder, 'package.json'), 'utf8'))).toEqual({
       name: 'issue-tracker',
       private: true,
-      scripts: { validate: 'helm-plugin validate' },
+      scripts: { validate: 'floti-plugin validate' },
       devDependencies: { [SDK.name]: `^${SDK.version}` }
     })
     expect(readFileSync(join(folder, '.gitignore'), 'utf8')).toBe('node_modules/\n')
@@ -88,7 +87,7 @@ describe('helm-plugin create', () => {
     const created = run(['create', 'p', '--id', 'board', '--name=Q&A <board> "two"'], root)
     expect(created.status).toBe(0)
     const folder = join(root, 'p')
-    const manifest = JSON.parse(readFileSync(join(folder, 'helm-plugin.json'), 'utf8')) as Record<string, unknown>
+    const manifest = JSON.parse(readFileSync(join(folder, 'floti-plugin.json'), 'utf8')) as Record<string, unknown>
     expect(manifest['id']).toBe('board')
     expect(manifest['name']).toBe('Q&A <board> "two"')
     expect(readFileSync(join(folder, 'pages', 'panel.html'), 'utf8')).toContain('Q&amp;A &lt;board&gt; &quot;two&quot;')
@@ -107,7 +106,7 @@ describe('helm-plugin create', () => {
     const refused = run(['create', 'busy'], root)
     expect(refused.status).toBe(1)
     expect(refused.stderr).toContain('is not empty')
-    expect(existsSync(join(folder, 'helm-plugin.json'))).toBe(false)
+    expect(existsSync(join(folder, 'floti-plugin.json'))).toBe(false)
   })
 
   it('refuses an id Floti would refuse, before writing anything', () => {
@@ -126,10 +125,10 @@ describe('helm-plugin create', () => {
   })
 })
 
-describe('helm-plugin validate', () => {
+describe('floti-plugin validate', () => {
   const write = (folder: string, manifest: unknown, files: Record<string, string> = {}): void => {
     mkdirSync(folder, { recursive: true })
-    writeFileSync(join(folder, 'helm-plugin.json'), typeof manifest === 'string' ? manifest : JSON.stringify(manifest))
+    writeFileSync(join(folder, 'floti-plugin.json'), typeof manifest === 'string' ? manifest : JSON.stringify(manifest))
     for (const [path, body] of Object.entries(files)) {
       mkdirSync(join(folder, path, '..'), { recursive: true })
       writeFileSync(join(folder, path), body)
@@ -141,13 +140,22 @@ describe('helm-plugin validate', () => {
     write(folder, { apiVersion: 7, id: 'broken', name: 'Broken' })
     const result = run(['validate', folder], root)
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain('error: apiVersion 7 is not supported by this Floti, which supports 1 and 2')
+    expect(result.stderr).toContain('error: apiVersion 7 is not supported: this Floti runs only apiVersion 2 plugins')
+    expect(result.stderr).toContain('1 error: Floti would not load this plugin.')
+  })
+
+  it('refuses an apiVersion 1 plugin, naming version 2 as the only one Floti runs', () => {
+    const folder = join(root, 'one')
+    write(folder, { apiVersion: 1, id: 'one', name: 'One', background: 'bg.html' }, { 'bg.html': '<!doctype html>' })
+    const result = run(['validate', folder], root)
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('error: apiVersion 1 is not supported: this Floti runs only apiVersion 2 plugins')
     expect(result.stderr).toContain('1 error: Floti would not load this plugin.')
   })
 
   it('refuses a page that is not there, the way Floti does', () => {
     const folder = join(root, 'unbuilt')
-    write(folder, { apiVersion: 1, id: 'unbuilt', name: 'Unbuilt', tabs: { a: { title: 'A', entry: 'dist/a.html' } } })
+    write(folder, { apiVersion: 2, id: 'unbuilt', name: 'Unbuilt', tabs: { a: { title: 'A', entry: 'dist/a.html' } } })
     const result = run(['validate'], folder)
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('error: tabs.a.entry: dist/a.html does not exist - has the plugin been built?')
@@ -155,7 +163,7 @@ describe('helm-plugin validate', () => {
 
   it('refuses an icon too large to be one', () => {
     const folder = join(root, 'big icon')
-    write(folder, { apiVersion: 1, id: 'big', name: 'Big', icon: 'icon.svg' }, { 'icon.svg': `<svg>${'x'.repeat(70_000)}</svg>` })
+    write(folder, { apiVersion: 2, id: 'big', name: 'Big', icon: 'icon.svg' }, { 'icon.svg': `<svg>${'x'.repeat(70_000)}</svg>` })
     const result = run(['validate', folder], root)
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('icon: icon.svg is over 64 KB')
@@ -163,24 +171,24 @@ describe('helm-plugin validate', () => {
 
   it('says when there is no manifest, or it is not JSON', () => {
     mkdirSync(join(root, 'nothing'))
-    expect(run(['validate', join(root, 'nothing')], root).stderr).toContain('there is no helm-plugin.json')
-    write(join(root, 'garbled'), '{ "apiVersion": 1,')
+    expect(run(['validate', join(root, 'nothing')], root).stderr).toContain('there is no floti-plugin.json')
+    write(join(root, 'garbled'), '{ "apiVersion": 2,')
     const garbled = run(['validate', join(root, 'garbled')], root)
     expect(garbled.status).toBe(1)
-    expect(garbled.stderr).toContain('helm-plugin.json is not valid JSON')
+    expect(garbled.stderr).toContain('floti-plugin.json is not valid JSON')
     expect(run(['validate', join(root, 'missing')], root).stderr).toContain('does not exist')
   })
 
   it('passes a plugin with warnings, and prints them', () => {
     const folder = join(root, 'warned')
-    write(folder, { apiVersion: 1, id: 'warned', name: 'Warned', colour: 'red' })
+    write(folder, { apiVersion: 2, id: 'warned', name: 'Warned', colour: 'red' })
     const result = run(['validate', folder], root)
     expect(result.status).toBe(0)
     expect(result.stderr).toContain('warning: "colour" is not a manifest field and is ignored')
     expect(result.stdout).toContain('Warned (warned): Floti would load it (1 warning).')
   })
 
-  it('S2: passes a version 2 plugin whose background is a module, and refuses a version 2 background page', () => {
+  it('S2: passes a plugin whose background is a module, and refuses a background page', () => {
     const folder = join(root, 'two')
     write(folder, { apiVersion: 2, id: 'two', name: 'Two', background: 'bg.mjs' }, { 'bg.mjs': 'floti.badge.set(1)\n' })
     const passed = run(['validate', folder], root)
@@ -191,7 +199,7 @@ describe('helm-plugin validate', () => {
     write(page, { apiVersion: 2, id: 'page', name: 'Page', background: 'bg.html' }, { 'bg.html': '<!doctype html>' })
     const refused = run(['validate', page], root)
     expect(refused.status).toBe(1)
-    expect(refused.stderr).toContain('error: background must be a .js or .mjs module at apiVersion 2, and a .html page at apiVersion 1')
+    expect(refused.stderr).toContain('error: background must be a .js or .mjs module')
   })
 
   it('passes the template as it ships', () => {
@@ -199,11 +207,11 @@ describe('helm-plugin validate', () => {
   })
 })
 
-describe('helm-plugin', () => {
+describe('floti-plugin', () => {
   it('prints its usage for --help, and fails without a command or with an unknown one', () => {
     const help = run(['--help'], root)
     expect(help.status).toBe(0)
-    expect(help.stdout).toContain('helm-plugin create <folder>')
+    expect(help.stdout).toContain('floti-plugin create <folder>')
     expect(run([], root).status).toBe(1)
     const unknown = run(['publish'], root)
     expect(unknown.status).toBe(1)

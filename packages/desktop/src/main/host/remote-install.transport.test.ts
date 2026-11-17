@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { join, resolve } from 'node:path'
-import { classifyHostFailure, type HostCheck, type HostTransport } from '@helm/core/types'
+import { classifyHostFailure, type HostCheck, type HostTransport } from '@floti/core/types'
 import { describe, expect, it } from 'vitest'
 import { createRemoteInstaller, spawnTransportRun } from './remote-install'
 

@@ -1,33 +1,30 @@
-import type { HelmContext, HelmTheme, PluginParams, SurfaceKind } from '@floti-dev/plugin-sdk'
-import { pluginThemeOf } from '@helm/core/types'
-import { isMac } from '@helm/ui'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import type { FlotiContext, FlotiTheme, PluginParams, SurfaceKind } from '@floti-dev/plugin-sdk'
+import { pluginThemeOf } from '@floti/core/types'
+import { isMac } from '@floti/ui'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import {
-  type HelmBridge as Ipc,
+  type DesktopBridge as Ipc,
   type PluginCallOutcome,
   type PluginDelivery,
-  type PluginFetchResponse,
-  type PluginToolCall,
-  type PluginToolOutcome
+  type PluginFetchResponse
 } from '../../../shared/ipc'
-import { hostLabel, parsePluginOrigin, pluginSchemeOf } from '../../../shared/plugins/origin'
+import { hostLabel, parsePluginOrigin } from '../../../shared/plugins/origin'
 import {
   CONNECT,
   HELLO,
   contextName,
   type ConnectMessage,
-  type HelmMessage,
+  type FlotiMessage,
   type KeyInit
 } from '../../plugin-runtime/wire'
 
 /**
- * The Helm side of every plugin frame: the half of `wire.ts` that answers.
+ * The desktop side of every plugin frame: the half of `wire.ts` that answers.
  *
- * Both Helm pages that frame plugins run one - the window, for panels and
- * tabs, and the hidden background host, for background pages - and neither
- * page's own code talks to a plugin any other way. A relay makes the frame,
+ * The window runs one for the plugins' panels and tabs, and its own code
+ * talks to a plugin no other way. A relay makes the frame,
  * answers its `HELLO` with a port of its own, carries its bridge calls to main
- * and the answers back, and hands it Helm's events: the theme, its visibility,
+ * and the answers back, and hands it Floti's events: the theme, its visibility,
  * and what main delivers for its plugin.
  *
  * What it trusts is decided here, once. A frame is known by its element, not
@@ -38,7 +35,7 @@ import {
  *
  * It also decides when a frame has failed, because a plugin page that died
  * says nothing: a load with no `HELLO` (the page is missing, or is not a page
- * Helm served), and a port that closed with no new `HELLO` behind it (the
+ * Floti served), and a port that closed with no new `HELLO` behind it (the
  * page's process ended). Either is a state the surface draws, with Reload.
  */
 
@@ -51,7 +48,7 @@ const QUEUE_MAX = 64
 const METHOD_MAX = 64
 const TITLE_MAX = 120
 /**
- * Calls that put something of Helm's in front of the user - its dialog, a
+ * Calls that put something of Floti's in front of the user - its dialog, a
  * page in the Browser tab - so only the user can cause one: each is let through only while this page has transient
  * activation. A click or key press in a plugin's frame activates the page
  * framing it too (Chromium's user activation v2), so this is a check the page
@@ -73,7 +70,7 @@ export interface SurfaceSpec {
   revision: number
   url: string
   surface: SurfaceKind
-  /** The panel's or tab's key in the manifest; `background` for the background page. */
+  /** The panel's or tab's key in the manifest. */
   name: string
   params: PluginParams
   /** The frame's accessible name. */
@@ -86,7 +83,7 @@ export type FrameState =
   | { kind: 'failed'; reason: 'load' | 'crash'; message: string }
 
 export interface RelayHooks {
-  /** A Helm shortcut pressed inside the page, which the page did not take. */
+  /** A Floti shortcut pressed inside the page, which the page did not take. */
   key?: (spec: SurfaceSpec, element: HTMLIFrameElement, key: KeyInit) => void
   /** The page named its surface, or gave the name back (null). */
   title?: (spec: SurfaceSpec, title: string | null) => void
@@ -126,16 +123,14 @@ interface Frame {
   hellosAtLoad: number
   /** In-flight calls of the current connection: the page's id to the call id main knows. */
   calls: Map<number, string>
-  /** Tool calls handed to the page and not answered yet. Each is answered for, whatever becomes of the page. */
-  tools: Set<string>
-  queue: HelmMessage[]
+  queue: FlotiMessage[]
   visible: boolean
   timer: ReturnType<typeof setTimeout> | null
 }
 
 export interface PluginRelayOptions {
   win: Window
-  /** This PC's bridge: its plugins' calls, and what main says to every frame (the theme, tool calls). */
+  /** This PC's bridge: its plugins' calls, and what main says to every frame (the theme). */
   ipc: Ipc
   /**
    * A remote host's bridge, for its plugins' calls and deliveries; with none,
@@ -151,7 +146,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
   const frames = new Map<string, Frame>()
   const listeners = new Set<() => void>()
   let serials = 0
-  let theme: HelmTheme | null = null
+  let theme: FlotiTheme | null = null
   let destroyed = false
 
   const notify = (): void => {
@@ -166,10 +161,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
   const clearTimer = (frame: Frame): void => {
     if (frame.timer !== null) clearTimeout(frame.timer)
     frame.timer = null
-  }
-
-  const toolResult = (outcome: PluginToolOutcome): void => {
-    ipc.send('plugins:toolResult', outcome)
   }
 
   /** Each remote host's deliveries, heard from the first frame of that host on. */
@@ -195,7 +186,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
   const deliver = (host: string | undefined, delivery: PluginDelivery): void => {
     for (const frame of frames.values()) {
       if (frame.spec.plugin !== delivery.plugin || !onHost(frame.spec, host)) continue
-      if (delivery.to === 'background' && frame.spec.surface !== 'background') continue
+      if (delivery.to === 'background') continue
       event(frame, delivery.event, delivery.data)
     }
   }
@@ -212,19 +203,10 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
     )
   }
 
-  /** Every tool call the page was handed and will now never answer, failed for the session waiting on it. */
-  const failTools = (frame: Frame): void => {
-    for (const id of frame.tools) {
-      toolResult({ id, ok: false, message: "The plugin's background page stopped before it answered." })
-    }
-    frame.tools.clear()
-  }
-
   /** Ends the current connection: its calls are cancelled in main and its port closed. */
   const disconnect = (frame: Frame): void => {
     for (const callId of frame.calls.values()) ipcOf(frame.spec)?.send('plugins:cancel', { callId })
     frame.calls.clear()
-    failTools(frame)
     if (frame.port !== null) {
       frame.port.onmessage = null
       frame.port.close()
@@ -232,7 +214,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
     }
   }
 
-  const post = (frame: Frame, message: HelmMessage, transfer: Transferable[] = []): void => {
+  const post = (frame: Frame, message: FlotiMessage, transfer: Transferable[] = []): void => {
     if (frame.port !== null) {
       frame.port.postMessage(message, transfer)
       return
@@ -242,7 +224,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
     if (frame.queue.length > QUEUE_MAX) frame.queue.splice(0, frame.queue.length - QUEUE_MAX)
   }
 
-  const contextOf = (spec: SurfaceSpec): HelmContext => ({
+  const contextOf = (spec: SurfaceSpec): FlotiContext => ({
     plugin: spec.plugin,
     surface: spec.surface,
     name: spec.name,
@@ -256,10 +238,8 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
   const onWindowMessage = (event: MessageEvent): void => {
     const data = event.data as { type?: unknown } | null
     if (data === null || typeof data !== 'object' || data.type !== HELLO) return
-    // The origin names the plugin, its host and its scheme: a page is known
-    // as the frame made for that very plugin on that very host, on the
-    // scheme its URL has (helm-plugin at version 1, floti-plugin at 2), and
-    // no other.
+    // The origin names the plugin and its host: a page is known as the frame
+    // made for that very plugin on that very host, and no other.
     const origin = parsePluginOrigin(event.origin)
     if (origin === null) return
     let frame: Frame | undefined
@@ -267,7 +247,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
       if (
         candidate.spec.plugin === origin.plugin &&
         labelOf(candidate.spec) === origin.label &&
-        pluginSchemeOf(candidate.spec.url) === origin.scheme &&
         candidate.element.contentWindow === event.source
       ) {
         frame = candidate
@@ -293,7 +272,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
       frame.port = null
       for (const callId of frame.calls.values()) ipcOf(frame.spec)?.send('plugins:cancel', { callId })
       frame.calls.clear()
-      failTools(frame)
       clearTimer(frame)
       frame.timer = setTimeout(() => {
         frame.timer = null
@@ -315,7 +293,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
 
   const onLoad = (frame: Frame): void => {
     if (frames.get(frame.spec.key) !== frame) return
-    // A page Helm served said HELLO from the top of its <head>, which is
+    // A page Floti served said HELLO from the top of its <head>, which is
     // before this event in any page that has a bridge at all. The grace is
     // for the two arriving in either order.
     const check = (): void => {
@@ -380,17 +358,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
         hooks.keep?.(frame.spec)
         return
       }
-      case 'tool-result': {
-        // Only an answer to a call this frame was handed: a page cannot answer
-        // for another page's tools, or answer twice.
-        const id = message['id']
-        if (typeof id !== 'string' || !frame.tools.delete(id)) return
-        const text = message['text']
-        const said = message['message']
-        if (message['ok'] === true && typeof text === 'string') toolResult({ id, ok: true, text })
-        else toolResult({ id, ok: false, message: typeof said === 'string' && said !== '' ? said : 'The tool failed.' })
-        return
-      }
       default:
         return
     }
@@ -405,7 +372,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
         id,
         ok: false,
         code: 'not-allowed',
-        message: `helm.${method} needs a click or key press the user just made in the page`
+        message: `floti.${method} needs a click or key press the user just made in the page`
       })
       return
     }
@@ -440,7 +407,7 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
   }
 
   // ---------------------------------------------------------------------------
-  // What Helm sends
+  // What Floti sends
   // ---------------------------------------------------------------------------
 
   const event = (frame: Frame, name: string, data: unknown): void => {
@@ -454,35 +421,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
 
   // This PC's deliveries reach This PC's frames; each remote host's, its own (`hearHost`).
   const offDeliver = ipc.on('plugins:deliver', (delivery: PluginDelivery) => deliver(undefined, delivery))
-
-  // A session's tool call, for the plugin's background page on the host the
-  // session runs on, and no other host's. Main sends these to the background
-  // host only, and every one is answered: by the page, or here when there is
-  // no page connected to answer it.
-  const offTool = ipc.on('plugins:tool', (call: PluginToolCall) => {
-    let frame: Frame | undefined
-    for (const candidate of frames.values()) {
-      if (
-        candidate.spec.plugin === call.plugin &&
-        candidate.spec.surface === 'background' &&
-        onHost(candidate.spec, call.host)
-      ) {
-        frame = candidate
-      }
-    }
-    if (frame === undefined || frame.port === null) {
-      toolResult({ id: call.id, ok: false, message: "The plugin's background page is not running." })
-      return
-    }
-    frame.tools.add(call.id)
-    post(frame, { t: 'tool', id: call.id, name: call.name, args: call.args, session: call.session })
-  })
-
-  const offToolCancel = ipc.on('plugins:toolCancel', ({ id }) => {
-    for (const frame of frames.values()) {
-      if (frame.tools.delete(id)) post(frame, { t: 'tool-cancel', id })
-    }
-  })
 
   // The first theme, for frames that connect before anything changes it. An
   // event that beat this read is newer, and stays.
@@ -499,11 +437,11 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
 
   const make = (spec: SurfaceSpec): Frame => {
     const element = win.document.createElement('iframe')
-    // Its own origin keeps it out of Helm's page; the sandbox takes away what
-    // an origin alone would still allow: navigating Helm, popups, modal
+    // Its own origin keeps it out of the desktop's page; the sandbox takes away what
+    // an origin alone would still allow: navigating Floti, popups, modal
     // dialogs, downloads. `allow-same-origin` keeps that origin - and its
     // storage - rather than an opaque one, which is safe because it is not
-    // Helm's.
+    // Floti's.
     element.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms')
     element.setAttribute('allow', 'clipboard-write')
     element.referrerPolicy = 'no-referrer'
@@ -521,7 +459,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
       hellos: 0,
       hellosAtLoad: 0,
       calls: new Map(),
-      tools: new Set(),
       queue: [],
       visible: false,
       timer: null
@@ -630,8 +567,6 @@ export function createPluginRelay(options: PluginRelayOptions): PluginRelay {
       win.removeEventListener('message', onWindowMessage)
       offTheme()
       offDeliver()
-      offTool()
-      offToolCancel()
       for (const off of hostDeliveries.values()) off()
       hostDeliveries.clear()
       for (const frame of [...frames.values()]) drop(frame)

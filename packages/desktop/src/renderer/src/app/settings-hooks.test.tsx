@@ -7,7 +7,7 @@ import {
   type ThemeDefinition,
   type ThemeListing,
   type ThemeState
-} from '@helm/core/types'
+} from '@floti/core/types'
 import type { AppInfo, ClaudeStatus } from '../../../shared/ipc'
 import { bridge } from './bridge.testkit'
 import { useLauncher } from './useLauncher'
@@ -105,14 +105,14 @@ describe('useLauncher', () => {
   const APP_INFO: AppInfo = {
     version: '1.2.0',
     mode: 'portable',
-    dataDir: 'C:\\helm-data',
-    dbFile: 'C:\\helm-data\\helm.db',
+    dataDir: 'C:\\floti-data',
+    dbFile: 'C:\\floti-data\\desktop.db',
     migrations: [],
     versions: { electron: '43', chrome: '150', node: '24' },
     hostLogFile: null,
     windowsBuild: null,
     home: 'C:\\Users\\someone',
-    releasesUrl: 'https://github.com/example/helm/releases/latest'
+    releasesUrl: 'https://github.com/example/floti/releases/latest'
   }
 
   it('puts the shape settings on <html> whenever main says the settings changed', () => {
@@ -122,8 +122,8 @@ describe('useLauncher', () => {
     expect(result.current.settings?.density).toBe('compact')
     const root = document.documentElement
     expect(root.dataset['density']).toBe('compact')
-    expect(root.style.getPropertyValue('--helm-gap')).toBe('9px')
-    expect(root.style.getPropertyValue('--helm-radius')).toBe('5px')
+    expect(root.style.getPropertyValue('--floti-gap')).toBe('9px')
+    expect(root.style.getPropertyValue('--floti-radius')).toBe('5px')
   })
 
   it('takes the settings as soon as they are read, without waiting on the app info', async () => {

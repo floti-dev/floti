@@ -4,7 +4,7 @@ import type { PageLink } from './link'
 /**
  * What the window last heard of this PC's host's version: the floti version
  * its welcome named, or the protocol versions it named when it refused this
- * Helm's hello. Null before either. Core's `localHostVersions` says from this
+ * desktop's hello. Null before either. Core's `localHostVersions` says from this
  * which side is behind; the window offers Restart host to update only on the
  * user's click, never by itself.
  */

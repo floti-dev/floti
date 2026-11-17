@@ -7,7 +7,7 @@ import { useOwnDataCopy } from './useOwnDataCopy'
 vi.mock('./bridge', () => import('./bridge.testkit'))
 
 /**
- * The notice that copying what only Helm's own database holds into the local
+ * The notice that copying what only the desktop's own database holds into the local
  * host stopped part way: the copy's state read once, then each change main
  * pushes, until it is dismissed or a later attempt finishes.
  */

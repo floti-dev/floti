@@ -3,7 +3,7 @@
 // agent's stop key), and the run log each fake writes about itself.
 //
 // One fake per backend lives beside this file, named after the backend's id
-// (`claude-code.mjs`). Each one does what Floti and Helm can observe of the
+// (`claude-code.mjs`). Each one does what the host and the desktop can observe of the
 // real CLI, deterministically and with no network, and logs what it was given
 // to `<its config dir>/fake-agent/<pid>.json` in the shape `RunLog` below, so
 // the host's Rust tests and the desktop's TypeScript tests read one format.

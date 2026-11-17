@@ -8,8 +8,8 @@ import type {
   SessionProcess,
   SessionRecord,
   SessionResources,
-} from "@helm/core";
-import { sessionLabel } from "@helm/core/types";
+} from "@floti/core";
+import { sessionLabel } from "@floti/core/types";
 import { cn } from "../lib/cn";
 import { shortcutLabel } from "../lib/platform";
 import { ROW_SELECTED } from "../lib/rows";
@@ -34,26 +34,26 @@ import {
 import { PAGE_BAR, PAGE_LIST_BESIDE } from "../lib/page";
 
 /**
- * Every live Claude Code session on this machine, and what Helm's own are
+ * Every live Claude Code session on this machine, and what Floti's own are
  * holding.
  *
  * ## The scope split, which falls out rather than being imposed
  *
  * **Listing is machine-wide.** A `claude` started in Windows Terminal registers
- * beside anything Helm hosts, and it collides with a working tree exactly as
+ * beside anything Floti hosts, and it collides with a working tree exactly as
  * hard as a tab does. Leaving it out would make this pane answer the one
  * question it exists for - "is anybody else in this repository" - wrongly, and
  * quietly. Same rule `browser_tabs` established from the other side: listing is
  * not driving.
  *
- * **Detail is Helm's own.** Branch, argv, the process tree, the ports: Helm has
+ * **Detail is Floti's own.** Branch, argv, the process tree, the ports: Floti has
  * none of that for a session it did not spawn, so the degradation needs no
  * special case. A foreign row carries what the registry recorded and says so;
  * there is nothing to hide because there is nothing to know.
  *
- * ## Why a process tree belongs in Helm at all
+ * ## Why a process tree belongs in Floti at all
  *
- * Because Helm spawned the pty, so the tree under it is **Helm's own process
+ * Because Floti spawned the pty, so the tree under it is **Floti's own process
  * tree** - not a reading of anybody's conversation. Nothing here parses session
  * output. What it buys is the answer metadata cannot give: that a session has a
  * container up and a dev server on 5173, which is what stops the next agent
@@ -66,7 +66,7 @@ import { PAGE_BAR, PAGE_LIST_BESIDE } from "../lib/page";
  * line. A pass that failed says **unknown**; a pass that succeeded over a
  * childless session says so in those words. The alternative - an empty list for
  * both - would tell somebody a session is holding nothing at exactly the moment
- * Helm had failed to ask.
+ * Floti had failed to ask.
  *
  * A pass is also a **sample** and says so on screen. Long-lived children are
  * the point here; a `rg` that started and finished between two passes was never
@@ -82,7 +82,7 @@ export interface SessionsPaneProps {
   /** When main last read the registry, epoch ms. Null before the first answer. */
   readAtMs: number | null;
   /**
-   * Helm's own rows, by session id - the detail half for a hosted session.
+   * Floti's own rows, by session id - the detail half for a hosted session.
    *
    * Passed in rather than duplicated onto `LiveSession`: this is the same row
    * the tab strip is drawn from, and a second copy of a session's argv would be
@@ -142,10 +142,10 @@ export interface SessionsPaneHost {
   sessions: readonly SessionsPaneRemoteSession[];
   /**
    * Its floti refused this device's hello (P6): too old, which Update floti
-   * fixes there, or newer, which updating Helm on this PC fixes. `host` is the
-   * protocol its floti speaks and `client` this Helm's. `older` is a
-   * connected host whose floti is older than this Helm's, which Update floti
-   * fixes too: `host` is its floti version and `client` this Helm's.
+   * fixes there, or newer, which updating the desktop on this PC fixes. `host` is the
+   * protocol its floti speaks and `client` this desktop's. `older` is a
+   * connected host whose floti is older than this desktop's, which Update floti
+   * fixes too: `host` is its floti version and `client` this desktop's.
    */
   floti?: HostFlotiVerdict | null | undefined;
   /** Starts the yes-first update of its floti, in Settings > Hosts. */
@@ -288,11 +288,11 @@ export function SessionsPane({
 
   // A session not open here is listed once, under its own heading.
   const elsewhere = new Set(notOpenHere.map((record) => record.id));
-  const hosted = sessions.filter((session) => session.helmSessionId !== null);
+  const hosted = sessions.filter((session) => session.hostSessionId !== null);
   const hostedHere = hosted.filter(
-    (session) => !elsewhere.has(session.helmSessionId!),
+    (session) => !elsewhere.has(session.hostSessionId!),
   );
-  const foreign = sessions.filter((session) => session.helmSessionId === null);
+  const foreign = sessions.filter((session) => session.hostSessionId === null);
 
   /*
    * Directories with more than one live session in them.
@@ -300,7 +300,7 @@ export function SessionsPane({
    * The same collision the launch warning is about, seen from the list rather
    * than from the launch button. Counted over every session whoever started it,
    * because two sessions in one working tree is the same problem whether or not
-   * Helm started both.
+   * Floti started both.
    */
   const crowded = new Set<string>();
   const seenDirs = new Set<string>();
@@ -394,7 +394,7 @@ export function SessionsPane({
                   record={record}
                   live={
                     hosted.find(
-                      (session) => session.helmSessionId === record.id,
+                      (session) => session.hostSessionId === record.id,
                     ) ?? null
                   }
                   onOpen={onOpenSession}
@@ -410,23 +410,23 @@ export function SessionsPane({
                 key={session.pid}
                 session={session}
                 title={
-                  session.helmSessionId === null
+                  session.hostSessionId === null
                     ? undefined
-                    : records.get(session.helmSessionId)?.title
+                    : records.get(session.hostSessionId)?.title
                 }
                 agent={
-                  session.helmSessionId === null
+                  session.hostSessionId === null
                     ? undefined
-                    : agentOf(records.get(session.helmSessionId))
+                    : agentOf(records.get(session.hostSessionId))
                 }
                 selected={session.pid === selectedPid}
                 crowded={
                   session.cwd !== null && crowded.has(session.cwd.toLowerCase())
                 }
                 resources={
-                  session.helmSessionId === null
+                  session.hostSessionId === null
                     ? undefined
-                    : resources.get(session.helmSessionId)
+                    : resources.get(session.hostSessionId)
                 }
                 onSelect={onSelect}
               />
@@ -589,14 +589,14 @@ export function SessionsPane({
                   session={selected}
                   profileNames={profileNames}
                   record={
-                    selected.helmSessionId === null
+                    selected.hostSessionId === null
                       ? null
-                      : (records.get(selected.helmSessionId) ?? null)
+                      : (records.get(selected.hostSessionId) ?? null)
                   }
                   resources={
-                    selected.helmSessionId === null
+                    selected.hostSessionId === null
                       ? null
-                      : (resources.get(selected.helmSessionId) ?? null)
+                      : (resources.get(selected.hostSessionId) ?? null)
                   }
                   {...(onOpenSession ? { onOpenSession } : {})}
                   onReveal={onReveal}
@@ -899,7 +899,7 @@ function Row({
       aria-current={selected}
       data-session-pid={session.pid}
       data-session-state={state}
-      data-session-hosted={session.helmSessionId !== null}
+      data-session-hosted={session.hostSessionId !== null}
       onClick={() => onSelect(session)}
       title={`${nameLine(name, title)} - ${SESSION_STATE_LABEL[state]}\n${session.cwd ?? "working directory not recorded"}`}
       className={cn(
@@ -1099,7 +1099,7 @@ function Detail({
   const state = stateOf(session);
   const name = record === null ? nameOf(session) : sessionLabel(record);
   const agent = agentOf(record);
-  const helmSessionId = session.helmSessionId;
+  const hostSessionId = session.hostSessionId;
   const cwd = session.cwd;
 
   return (
@@ -1124,17 +1124,17 @@ function Detail({
           waitingFor={session.waitingFor}
           message={session.activity === "error" ? session.message : null}
         />
-        {helmSessionId === null && (
+        {hostSessionId === null && (
           <span className="shrink-0 rounded-full border border-border-strong px-2.5 py-0.5 text-[10px] text-fg-muted">
             outside Floti
           </span>
         )}
         <span className="flex-1" />
-        {helmSessionId !== null && onOpenSession && (
+        {hostSessionId !== null && onOpenSession && (
           <button
             type="button"
             data-open-session-tab
-            onClick={() => onOpenSession(helmSessionId)}
+            onClick={() => onOpenSession(hostSessionId)}
             className={cn(
               "flex shrink-0 items-center gap-2 rounded-well border border-border-strong px-3 py-1",
               "text-[12px] text-fg transition-colors hover:bg-hover",
@@ -1248,7 +1248,7 @@ function Detail({
         </Group>
       )}
 
-      {helmSessionId === null ? (
+      {hostSessionId === null ? (
         <Group label="What Floti knows">
           <p className="text-[11.5px] leading-[1.6] text-fg-subtle">
             Floti did not start this session, so it has no branch, no profile, no
@@ -1454,7 +1454,7 @@ function Group({
   );
 }
 
-/** Helm has nothing to say here, and says that rather than painting a zero. */
+/** Floti has nothing to say here, and says that rather than painting a zero. */
 function Unknown({ children }: { children: ReactNode }): JSX.Element {
   return <span className="text-[11px] text-fg-subtle italic">{children}</span>;
 }

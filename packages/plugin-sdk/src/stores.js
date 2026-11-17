@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Helm's state as stores, for any framework or none.
+ * Floti's state as stores, for any framework or none.
  *
  * A store's `subscribe(run)` calls `run` with the current value straight away
  * and again on every change, and returns the function that unsubscribes. That
@@ -11,7 +11,7 @@ import { bridge } from './bridge.js'
 
 /**
  * @template T
- * @typedef {import('./stores').HelmStore<T>} HelmStore
+ * @typedef {import('./stores').FlotiStore<T>} FlotiStore
  */
 
 /**
@@ -37,9 +37,9 @@ function deliver(run, value) {
  * A value the bridge holds as a property, and the event that says it changed.
  *
  * @template {'theme' | 'visibility'} K
- * @param {(helm: import('./types').PluginBridge) => import('./types').HelmEvents[K]} read
+ * @param {(floti: import('./types').PluginBridge) => import('./types').FlotiEvents[K]} read
  * @param {K} event
- * @returns {HelmStore<import('./types').HelmEvents[K]>}
+ * @returns {FlotiStore<import('./types').FlotiEvents[K]>}
  */
 function property(read, event) {
   return {
@@ -47,17 +47,17 @@ function property(read, event) {
       return read(bridge())
     },
     subscribe(run) {
-      const helm = bridge()
-      run(read(helm))
+      const floti = bridge()
+      run(read(floti))
       // A listener of its own: the bridge keeps a set, so two subscriptions
       // passing the same function would otherwise share one entry.
-      return helm.on(event, (value) => run(value))
+      return floti.on(event, (value) => run(value))
     }
   }
 }
 
 /**
- * A value Helm has to be asked for, then kept current by an event. It is null
+ * A value Floti has to be asked for, then kept current by an event. It is null
  * until the first read answers. However many subscribe, there is one read and
  * one listener; when the last one leaves the value is forgotten, since nothing
  * kept it current after that, and the next subscriber reads again.
@@ -66,9 +66,9 @@ function property(read, event) {
  * request answered - so a read that answers after one is dropped.
  *
  * @template T
- * @param {(helm: import('./types').PluginBridge) => Promise<T>} read
- * @param {(helm: import('./types').PluginBridge, update: (value: T) => void) => () => void} listen
- * @returns {{ store: HelmStore<T | null>, update: (value: T) => void }}
+ * @param {(floti: import('./types').PluginBridge) => Promise<T>} read
+ * @param {(floti: import('./types').PluginBridge, update: (value: T) => void) => () => void} listen
+ * @returns {{ store: FlotiStore<T | null>, update: (value: T) => void }}
  */
 function loaded(read, listen) {
   /** @type {T | null} */
@@ -101,10 +101,10 @@ function loaded(read, listen) {
   }
 
   const start = () => {
-    const helm = bridge()
-    const run = { off: listen(helm, update), overtaken: false }
+    const floti = bridge()
+    const run = { off: listen(floti, update), overtaken: false }
     running = run
-    void read(helm).then((first) => {
+    void read(floti).then((first) => {
       if (running === run && !run.overtaken) publish(first)
     })
   }
@@ -134,16 +134,16 @@ function loaded(read, listen) {
   }
 }
 
-/** Helm's theme. The tokens are on the page as CSS variables already; this is for code that needs the values. */
-export const theme = property((helm) => helm.theme, 'theme')
+/** Floti's theme. The tokens are on the page as CSS variables already; this is for code that needs the values. */
+export const theme = property((floti) => floti.theme, 'theme')
 
 /** Whether the surface is on screen. A plugin that polls should poll only while this is true. */
-export const visible = property((helm) => helm.visible, 'visibility')
+export const visible = property((floti) => floti.visible, 'visibility')
 
 /** The plugin's settings: null until they have been read, then kept current. */
 export const settings = loaded(
-  (helm) => helm.settings.get(),
-  (helm, update) => helm.on('settings', (values) => update(values))
+  (floti) => floti.settings.get(),
+  (floti, update) => floti.on('settings', (values) => update(values))
 ).store
 
 /** @type {Map<string, import('./stores').SecretStore>} */
@@ -160,9 +160,9 @@ export function secret(key) {
   const known = secrets.get(key)
   if (known !== undefined) return known
   const { store, update } = loaded(
-    (helm) => helm.secrets.state(key),
-    (helm, set) =>
-      helm.on('secrets', (states) => {
+    (floti) => floti.secrets.state(key),
+    (floti, set) =>
+      floti.on('secrets', (states) => {
         const state = states[key]
         if (state !== undefined) set(state)
       })

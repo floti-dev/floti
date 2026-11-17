@@ -49,9 +49,9 @@ pub const CRASH_WINDOW: Duration = Duration::from_secs(60);
 pub const STABLE: Duration = Duration::from_secs(30);
 
 /// The variables every service is told.
-pub const PORT_VAR: &str = "HELM_SERVICE_PORT";
-pub const TOKEN_VAR: &str = "HELM_SERVICE_TOKEN";
-pub const PLUGIN_VAR: &str = "HELM_PLUGIN_ID";
+pub const PORT_VAR: &str = "FLOTI_SERVICE_PORT";
+pub const TOKEN_VAR: &str = "FLOTI_SERVICE_TOKEN";
+pub const PLUGIN_VAR: &str = "FLOTI_PLUGIN_ID";
 
 /// Bytes of randomness in a run's token.
 const TOKEN_BYTES: usize = 32;

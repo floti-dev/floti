@@ -8,7 +8,7 @@ import type {
   RemoteHost,
   SshConfigHosts,
   WslDistroList
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -380,7 +380,7 @@ describe('the add-a-host dialog', () => {
     ['S14', { kind: 'failed', lastLine: 'Host key verification failed.', said: 'No ED25519 host key is known for build-box and you have requested strict checking.\nHost key verification failed.' }, 'unknownKey', 'ssh does not trust build-box yet'],
     ['S15', { kind: 'failed', lastLine: 'Welcome to build-box!', cause: 'loginOutput' }, 'loginOutput', 'build-box’s shell prints text at login'],
     ['S16', { kind: 'noBuild', system: { os: null, cpu: 'arm64', label: 'FreeBSD · arm64' }, reason: 'There is no floti for FreeBSD · arm64 yet.' }, 'noBuild', 'There is no floti for FreeBSD on arm64 yet'],
-    ['S18', { kind: 'newer', found: { version: '3.2.0', protocol: '2.0' }, ours: '1.0', helm: '3.0.0' }, 'newer', 'build-box runs floti 3.2.0, newer than this Floti 3.0.0']
+    ['S18', { kind: 'newer', found: { version: '3.2.0', protocol: '2.0' }, ours: '1.0', desktop: '3.0.0' }, 'newer', 'build-box runs floti 3.2.0, newer than this Floti 3.0.0']
   ] as const)('%s: a check that fails as %s says what went wrong, with the line and the fix', async (_scenario, check, kind, title) => {
     const w = world()
     await pick(w)

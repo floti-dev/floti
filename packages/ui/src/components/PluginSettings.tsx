@@ -6,7 +6,7 @@ import type {
   PluginMetrics,
   SecretInput,
   SecretsState
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { formatBytes } from '../lib/time'
 import { Checkbox } from './Checkbox'
@@ -24,7 +24,7 @@ import { Action, Divider, Fact, Group, Row, Select, SettingsPage, Verdict, useDr
  *
  * A plugin is a folder on this computer, registered by its path. The list says
  * which are on and which failed to load; a plugin's own page is everything
- * Helm knows about it - its settings, the secrets and hosts and programs its
+ * Floti knows about it - its settings, the secrets and hosts and programs its
  * manifest asks for, the tools it offers sessions, what it is costing, and its
  * log - and the controls that switch it off, reload it and remove it.
  */
@@ -110,8 +110,8 @@ export function PluginsPage({
         title="Plugins"
         hint={
           remoteHost === undefined
-            ? 'Folders that hold a helm-plugin.json. Each runs in a process of its own and reaches only the hosts, programs and secrets its manifest declares.'
-            : `Folders on ${remoteHost} that hold a helm-plugin.json. Each runs there, in a process of its own, and reaches only the hosts, programs and secrets its manifest declares.`
+            ? 'Folders that hold a floti-plugin.json. Each runs in a process of its own and reaches only the hosts, programs and secrets its manifest declares.'
+            : `Folders on ${remoteHost} that hold a floti-plugin.json. Each runs there, in a process of its own, and reaches only the hosts, programs and secrets its manifest declares.`
         }
       >
         {remoteHost !== undefined && typing !== null && (
@@ -232,7 +232,7 @@ export interface PluginPageProps {
   log: PluginLogLine[] | null
   secrets: SecretsState | null
   onSetEnabled: (enabled: boolean) => void
-  /** Whether the sessions Helm starts are offered the plugin's tools. */
+  /** Whether the sessions Floti starts are offered the plugin's tools. */
   onSetTools: (enabled: boolean) => void
   onReload: () => void
   /** The secrets only this plugin may use, for the remove dialog to offer. */
@@ -502,7 +502,7 @@ export function PluginPage({
 }
 
 /**
- * The tools the plugin offers the sessions Helm starts, and the switch for them.
+ * The tools the plugin offers the sessions Floti starts, and the switch for them.
  * Said with what follows from them: what the plugin answers is read by the
  * session, so it reaches the conversation the way anything the session reads
  * does.
@@ -522,8 +522,8 @@ function SessionTools({
       ? `Sessions Floti starts get them as ${agent.server}. Turning this off takes them from sessions already running.`
       : 'No session gets them.'
   const hint = agent.tools.some((tool) => tool.readOnly)
-    ? "Claude Code sessions can call these. Its background page answers, and the answer goes into the session's conversation. Read-only ones run without asking; the others ask first."
-    : "Claude Code sessions can call these. Its background page answers, and the answer goes into the session's conversation."
+    ? "Claude Code sessions can call these. Its background answers, and the answer goes into the session's conversation. Read-only ones run without asking; the others ask first."
+    : "Claude Code sessions can call these. Its background answers, and the answer goes into the session's conversation."
   return (
     <Group name="plugin-tools" title="Tools for sessions" hint={hint}>
       <label className="flex items-center justify-between gap-4 py-1.5" data-plugin-tools-switch>
@@ -561,15 +561,15 @@ function SessionTools({
 function backgroundSentence(background: NonNullable<PluginInfo['background']>): string {
   switch (background.state) {
     case 'running':
-      return 'Its background page is running.'
+      return 'Its background is running.'
     case 'starting':
-      return 'Its background page is starting.'
+      return 'Its background is starting.'
     case 'stopped':
-      return 'Its background page is not running.'
+      return 'Its background is not running.'
     case 'crashed':
       return background.error === null
-        ? 'Its background page stopped. Reload starts it again.'
-        : `Its background page stopped: ${clause(background.error)}. Reload starts it again.`
+        ? 'Its background stopped. Reload starts it again.'
+        : `Its background stopped: ${clause(background.error)}. Reload starts it again.`
   }
 }
 
@@ -820,8 +820,8 @@ function PluginLog({ log }: { log: PluginLogLine[] | null }): JSX.Element {
           <span
             className={cn(
               'min-w-0 flex-1',
-              // What Helm noted recedes; what the plugin printed is the log.
-              line.stream === 'err' ? 'text-danger' : line.stream === 'helm' ? 'text-fg-subtle' : 'text-fg-muted'
+              // What Floti noted recedes; what the plugin printed is the log.
+              line.stream === 'err' ? 'text-danger' : line.stream === 'floti' ? 'text-fg-subtle' : 'text-fg-muted'
             )}
           >
             {line.text}

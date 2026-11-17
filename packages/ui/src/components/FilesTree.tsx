@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import type { ContentDirEntry, ContentDirListing, ContentScope, FilesStatus, GitFileState } from '@helm/core'
-import { changedDirectories, GIT_STATE_LABEL, GIT_STATE_LETTER } from '@helm/core/types'
+import type { ContentDirEntry, ContentDirListing, ContentScope, FilesStatus, GitFileState } from '@floti/core'
+import { changedDirectories, GIT_STATE_LABEL, GIT_STATE_LETTER } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { copyPathLabel, useCopyFeedback } from '../lib/copyFeedback'
 import { shortcutLabel } from '../lib/platform'
@@ -124,7 +124,7 @@ export function FilesTree(props: FilesTreeProps): JSX.Element {
 
 /**
  * Which project the tree shows, beside the view's title: a control as wide as
- * the project's name, and a list Helm draws itself (`Menu`). The native
+ * the project's name, and a list Floti draws itself (`Menu`). The native
  * `<select>` it replaces opened a white list with the theme's light text on
  * it, in every theme.
  *
@@ -332,7 +332,7 @@ function Row({
 
   const activate = (keep: boolean): void => {
     if (walkable) return onToggleDir(entry.relPath)
-    // A folder Helm will not walk has nothing to open onto but Explorer, which
+    // A folder Floti will not walk has nothing to open onto but Explorer, which
     // has nothing to show of a folder on another computer.
     if (entry.directory) return onReveal?.(entry.path)
     onOpen(entry.path, keep)

@@ -11,7 +11,7 @@ import {
   type ThemeListing,
   type ThemeProblem,
   type ThemeState
-} from '@helm/core'
+} from '@floti/core'
 
 /**
  * The themes on this machine, kept current while the app runs.

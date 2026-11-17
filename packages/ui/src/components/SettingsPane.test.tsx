@@ -10,7 +10,7 @@ import {
   type ThemeDefinition,
   type ThemeListing,
   type ThemeState
-} from '@helm/core/types'
+} from '@floti/core/types'
 import type { SettingsHost } from './HostsSettings'
 import {
   SettingsPane,
@@ -28,7 +28,7 @@ const builtin = (id: string): ThemeDefinition => {
   return theme
 }
 
-const LISTING: ThemeListing = { dir: 'C:\\helm data\\themes', themes: [...BUILTIN_THEMES], errors: [] }
+const LISTING: ThemeListing = { dir: 'C:\\floti data\\themes', themes: [...BUILTIN_THEMES], errors: [] }
 
 /** The theme main says is on screen. */
 const showing = (theme: ThemeDefinition, preference: ThemeState['preference'] = theme.kind): ThemeState => ({
@@ -86,7 +86,7 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
     updateCheck: true,
     onUpdateCheckChange: vi.fn(),
     appVersion: '1.2.0',
-    releasesUrl: 'https://github.com/example/helm/releases/latest',
+    releasesUrl: 'https://github.com/example/floti/releases/latest',
     update: null,
     updateError: null,
     updateChecking: false,
@@ -111,7 +111,7 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
     transcriptArchiveMaxBytes: DEFAULT_SETTINGS.transcriptArchiveMaxBytes,
     onTranscriptArchiveMaxBytesChange: vi.fn(),
     templateCount: 0,
-    templatesDir: 'C:\\helm data\\templates',
+    templatesDir: 'C:\\floti data\\templates',
     onManageTemplates: vi.fn(),
     onRevealTemplates: vi.fn(),
     filesWrap: false,
@@ -208,7 +208,7 @@ describe('SettingsPane', () => {
         ['button', 'Add a folder']
       ],
       'Workspace templates': [
-        ['button', 'C:\\helm data\\templates'],
+        ['button', 'C:\\floti data\\templates'],
         ['button', 'Manage templates']
       ],
       Appearance: [
@@ -612,7 +612,7 @@ describe('SettingsPane', () => {
     })
 
     it('keeps Release notes open, to the same page, whatever the host said', async () => {
-      const url = 'https://github.com/example/helm/releases/latest'
+      const url = 'https://github.com/example/floti/releases/latest'
       const { props, rerender } = renderPane({ section: 'updates', releasesUrl: url, updateChecking: true })
       const notes = (): HTMLElement => within(group('Updates')).getByRole('button', { name: 'Release notes' })
 

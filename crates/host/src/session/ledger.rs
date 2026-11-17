@@ -1,6 +1,6 @@
 //! Where a session's row is written: on spawn, and again when it ends.
 //!
-//! The rows have the shape of helm.db's `sessions` table
+//! The rows have the shape of desktop.db's `sessions` table
 //! (`packages/core/src/store/schema.ts`): a row is `running` from the spawn,
 //! naming the agent backend it runs on, and `exited` with its code, end time
 //! and duration once the program ends. The end is written only over a row

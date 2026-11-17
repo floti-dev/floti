@@ -4,7 +4,7 @@
 // scripts never set one, so on a Mac every terminal fails with
 // "posix_spawnp failed" until something does. This sets it:
 //
-// - after `pnpm install`, as @helm/desktop's postinstall, so `pnpm check` and
+// - after `pnpm install`, as @floti/desktop's postinstall, so `pnpm check` and
 //   `pnpm dev` start terminals on a Mac;
 // - in the packaged app, through `after-pack.mjs`, on the copy under
 //   app.asar.unpacked, before electron-builder signs the app.
@@ -46,7 +46,7 @@ export function makeSpawnHelpersExecutable(nodePtyDir) {
   return changed
 }
 
-/** The installed node-pty, as @helm/desktop resolves it. */
+/** The installed node-pty, as @floti/desktop resolves it. */
 function installedNodePty() {
   const require = createRequire(import.meta.url)
   return dirname(require.resolve('node-pty/package.json'))

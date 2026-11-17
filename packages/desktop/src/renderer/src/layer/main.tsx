@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import '@helm/ui/styles.css'
-import type { HelmBridge } from '../../../shared/ipc'
+import '@floti/ui/styles.css'
+import type { DesktopBridge } from '../../../shared/ipc'
 import { LayerRoot } from './LayerRoot'
 
 /**
@@ -12,7 +12,7 @@ import { LayerRoot } from './LayerRoot'
 const container = document.getElementById('root')
 if (!container) throw new Error('#root is missing from layer.html')
 
-const bridge = (window as unknown as { helm: HelmBridge }).helm
+const bridge = (window as unknown as { desktop: DesktopBridge }).desktop
 
 createRoot(container).render(
   <StrictMode>

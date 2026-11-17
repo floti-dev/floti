@@ -1,6 +1,6 @@
 ---
 name: dev
-description: Running Helm in development, looking at a change, and the diagnostic drivers. Use before launching the app to look at something, driving the window you have open, or diagnosing a problem a test cannot reach.
+description: Running Floti in development, looking at a change, and the diagnostic drivers. Use before launching the app to look at something, driving the window you have open, or diagnosing a problem a test cannot reach.
 ---
 
 ## The dev build
@@ -15,7 +15,7 @@ pnpm dev --drive    # a remote debugging port for drive-dev.mjs, and only the fa
   (else `target/`) and runs `cargo build -p floti-host --bin floti` (at most 4
   jobs) when it is missing or older than the client in protocol or version. A
   failed build stops it with cargo's error and opens nothing.
-- The data directory is `%LOCALAPPDATA%\Helm\dev\helm-data`, seeded each launch
+- The data directory is `%LOCALAPPDATA%\Floti Dev\dev\floti-data`, seeded each launch
   from a `VACUUM INTO` copy of the real database. Anything changed in dev,
   settings included, is gone at the next launch. A second `pnpm dev` gets
   `dev-2`.
@@ -30,7 +30,7 @@ pnpm dev --drive    # a remote debugging port for drive-dev.mjs, and only the fa
   `~/.claude/history.jsonl`.
 - Templates are copied once and then left alone; `--fresh` re-copies them.
 
-`pnpm dev:live` runs against the installed app's `%APPDATA%\Helm`. Do not use it
+`pnpm dev:live` runs against the installed app's `%LOCALAPPDATA%\Floti\desktop`. Do not use it
 unless the owner asks.
 
 ## Looking at the window
@@ -41,7 +41,7 @@ With `pnpm dev --drive` running:
 node packages/desktop/scripts/drive-dev.mjs text             # what the window says
 node packages/desktop/scripts/drive-dev.mjs controls         # every button, by label
 node packages/desktop/scripts/drive-dev.mjs eval "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'h', ctrlKey: true}))"   # History
-node packages/desktop/scripts/drive-dev.mjs eval "window.helm.invoke('settings:write', {...})"
+node packages/desktop/scripts/drive-dev.mjs eval "window.desktop.invoke('settings:write', {...})"
 node packages/desktop/scripts/drive-dev.mjs shot history.png
 ```
 
@@ -52,12 +52,12 @@ The port is off unless `--drive` asks for it.
 
 These drive the real window and are tools for diagnosis, not tests. Nothing has
 to pass them before a change is done. Each runs in its own data directory under
-`%LOCALAPPDATA%\Helm\checks\<name>`.
+`%LOCALAPPDATA%\Floti Dev\checks\<name>`.
 
 | command | answers |
 |---|---|
 | `pnpm fidelity` | does xterm still render a TUI correctly (spike page, no sessions) |
-| `pnpm claude-check` | does the real `claude` CLI behave inside Helm's terminal |
+| `pnpm claude-check` | does the real `claude` CLI behave inside Floti's terminal |
 | `pnpm packaging-check` | first run, the built artefacts and the personal-path audit; only when the owner asks |
 
 Most take `--only=<group>`; the `GROUPS` constant in each driver is the list.

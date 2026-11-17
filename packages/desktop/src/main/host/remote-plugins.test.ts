@@ -1,22 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
 import { FakeConnection, fakeLink } from '../../../test/host-connection'
-import type { ToolAnswer, ToolCallRequest } from '../plugins/tools'
-import { createPluginToolRelay } from './plugin-tools'
-import { createHostPlugins } from './plugins'
 import type * as P from './protocol'
-import { createBackgroundNeeds, createRemotePlugins } from './remote-plugins'
+import { createRemotePlugins } from './remote-plugins'
 
 const BUILD_BOX = 'build-box'
 
-const TOOLS = (server: string): P.PluginAgentInfo => ({
-  enabled: true,
-  server,
-  instructions: null,
-  tools: [{ name: 'find', description: 'Finds things.', inputSchema: { type: 'object', properties: {} }, readOnly: true }]
-})
-
-/** A plugin as a host lists it: on, with a background page and its tools on. */
+/** A plugin as a host lists it: on, with a background module. */
 const listed = (id: string, patch: Partial<P.PluginInfo> = {}): P.PluginInfo => ({
   path: `/plugins/${id}`,
   id,
@@ -29,10 +18,10 @@ const listed = (id: string, patch: Partial<P.PluginInfo> = {}): P.PluginInfo => 
   revision: 1,
   icon: null,
   rail: null,
-  panels: { main: { title: id, url: `helm-plugin://${id}/panel.html`, actions: [] } },
+  panels: { main: { title: id, url: `floti-plugin://${id}/panel.html`, actions: [] } },
   tabs: {},
   pageStrip: false,
-  background: { url: `helm-plugin://${id}/background.html`, state: 'stopped', error: null },
+  background: { url: `floti-plugin://${id}/background.js`, state: 'running', error: null },
   commands: [],
   settings: [],
   settingValues: {},
@@ -41,7 +30,7 @@ const listed = (id: string, patch: Partial<P.PluginInfo> = {}): P.PluginInfo => 
   exec: [],
   service: null,
   runsPrograms: false,
-  agent: TOOLS(`floti-plugin-${id}`),
+  agent: null,
   startsSessions: false,
   seesSessions: false,
   status: null,
@@ -49,199 +38,69 @@ const listed = (id: string, patch: Partial<P.PluginInfo> = {}): P.PluginInfo => 
   ...patch
 })
 
-const SESSION_CALL = (callId: number, plugin: string): P.AgentPluginToolCall => ({
-  callId,
-  session: 7,
-  caller: { id: 'minted', label: 'alpha', folder: '/home/me/alpha' },
-  plugin,
-  tool: 'find',
-  arguments: { q: 'release' }
-})
-
-/**
- * This PC's host and build-box, each with its own connection, plugins and
- * tool relay, and one hidden window answering every host's tool calls.
- */
-function twoHosts() {
-  const local = new FakeConnection()
+/** build-box, attached on a connection of its own. */
+function buildBox() {
   const remote = new FakeConnection()
-  for (const connection of [local, remote]) {
-    connection.answer('agentPlugin:offer', () => null)
-    connection.answer('agentPlugin:answer', () => null)
-  }
-  const runs: Array<{ request: ToolCallRequest; answer: (answer: ToolAnswer) => void }> = []
-  const ran: Array<() => void> = []
-  const runTool = (request: ToolCallRequest): Promise<ToolAnswer> =>
-    new Promise((resolve) => {
-      runs.push({ request, answer: resolve })
-      ran.shift()?.()
-    })
-  const synced: boolean[] = []
-  const needs = createBackgroundNeeds({ sync: (needed) => synced.push(needed) })
-  let reportsTold = 0
-
-  const localLink = fakeLink(local)
-  let localRelay: ReturnType<typeof createPluginToolRelay> | null = null
-  const localPlugins = createHostPlugins({
-    link: localLink,
-    reportsChanged: () => undefined,
-    runTool,
-    onToolsChanged: () => localRelay?.offer(),
-    background: needs.forHost(LOCAL_HOST_KEY),
-    log: () => undefined
-  })
-  localRelay = createPluginToolRelay({
-    link: localLink,
-    servers: () => localPlugins.toolServers(),
-    call: (request, signal) => localPlugins.callTool(request, signal),
-    log: () => undefined
-  })
-
-  const remotePlugins = createRemotePlugins({
-    runTool,
-    background: needs,
-    reportsChanged: () => {
-      reportsTold += 1
-    },
-    log: () => undefined
-  })
+  const remotePlugins = createRemotePlugins({ log: () => undefined })
   const remoteLink = fakeLink(remote)
   const attached = remotePlugins.attach(BUILD_BOX, remoteLink)
-  return {
-    local,
-    remote,
-    localLink,
-    remoteLink,
-    localPlugins,
-    remotePlugins,
-    attached,
-    runs,
-    synced,
-    reportsTold: () => reportsTold,
-    nextRun: () => new Promise<void>((resolve) => ran.push(resolve))
-  }
+  return { remote, remoteLink, remotePlugins, attached }
 }
 
-const offered = (connection: FakeConnection): string[][] =>
-  (connection.payloads('agentPlugin:offer') as P.AgentPluginServers[]).map((offer) =>
-    offer.servers.map((server) => server.plugin)
-  )
-
-describe('each remote host’s plugins and tool relay', () => {
-  it('s21: offers build-box only the tools of the plugins build-box lists, never one only This PC has', async () => {
-    const w = twoHosts()
-    await w.localLink.connect()
-    await w.remoteLink.connect()
-    w.local.snapshot('plugins:changed', [listed('trackr'), listed('notes')])
-    w.remote.snapshot('plugins:changed', [listed('trackr')])
-    expect(offered(w.local).at(-1)).toEqual(['trackr', 'notes'])
-    expect(offered(w.remote).at(-1)).toEqual(['trackr'])
-    expect(offered(w.remote).flat()).not.toContain('notes')
-
-    // build-box switching its tools off is offered to build-box alone.
-    const localOffers = offered(w.local).length
-    w.remote.push('plugins:changed', [listed('trackr', { agent: { ...TOOLS('floti-plugin-trackr'), enabled: false } })])
-    expect(offered(w.remote).at(-1)).toEqual([])
-    expect(offered(w.local)).toHaveLength(localOffers)
-  })
-
-  it('s21: answers build-box’s call to a plugin it does not list as not offered, and This PC’s background page never sees it', async () => {
-    const w = twoHosts()
-    await w.remoteLink.connect()
-    w.remote.snapshot('plugins:changed', [listed('trackr')])
-    w.remote.push('agentPlugin:call', SESSION_CALL(1, 'notes'))
-    await expect.poll(() => w.remote.payloads('agentPlugin:answer')).toHaveLength(1)
-    const [answer] = w.remote.payloads('agentPlugin:answer') as P.AgentPluginToolAnswer[]
-    expect(answer?.outcome.status).toBe('done')
-    expect(JSON.stringify(answer?.outcome)).toContain('not offering tools')
-    expect(w.runs).toEqual([])
-  })
-
-  it('s20: a build-box session’s call is answered by build-box’s background page over build-box’s connection, and This PC’s by This PC’s', async () => {
-    const w = twoHosts()
-    await w.localLink.connect()
-    await w.remoteLink.connect()
-    w.local.snapshot('plugins:changed', [listed('trackr')])
-    w.remote.snapshot('plugins:changed', [listed('trackr')])
-    w.localPlugins.backgroundState('trackr', 1, 'running', null)
-    w.remotePlugins.forHost(BUILD_BOX)?.backgroundState('trackr', 1, 'running', null)
-
-    const theirs = w.nextRun()
-    w.remote.push('agentPlugin:call', SESSION_CALL(1, 'trackr'))
-    await theirs
-    expect(w.runs[0]?.request).toMatchObject({ plugin: 'trackr', tool: 'find', host: BUILD_BOX })
-    w.runs[0]?.answer({ ok: true, text: 'from build-box' })
-    await expect.poll(() => w.remote.payloads('agentPlugin:answer')).toHaveLength(1)
-    expect(w.local.payloads('agentPlugin:answer')).toEqual([])
-
-    const ours = w.nextRun()
-    w.local.push('agentPlugin:call', SESSION_CALL(1, 'trackr'))
-    await ours
-    expect(w.runs[1]?.request.host).toBeUndefined()
-    w.runs[1]?.answer({ ok: true, text: 'from This PC' })
-    await expect.poll(() => w.local.payloads('agentPlugin:answer')).toHaveLength(1)
-    expect(w.remote.payloads('agentPlugin:answer')).toHaveLength(1)
-  })
-
-  it('s19: has build-box’s pages on build-box’s origin, its reports name it, and it is found by its label', async () => {
-    const w = twoHosts()
+describe('each remote host’s plugins', () => {
+  it('s19: has build-box’s pages found by its label, served only for the plugins build-box has on', async () => {
+    const w = buildBox()
     await w.remoteLink.connect()
     w.remote.snapshot('plugins:changed', [listed('trackr')])
     const plugins = w.remotePlugins.byLabel(BUILD_BOX)
-    expect(plugins).toBe(w.remotePlugins.forHost(BUILD_BOX))
+    expect(plugins).not.toBeNull()
     expect(w.remotePlugins.byLabel('lab')).toBeNull()
     expect(await plugins?.serves('trackr')).toBe(true)
     expect(await plugins?.serves('notes')).toBe(false)
-
-    plugins?.backgroundState('trackr', 1, 'running', null)
-    expect(w.remotePlugins.reports()).toEqual([
-      { plugin: 'trackr', revision: 1, state: 'running', error: null, host: BUILD_BOX }
-    ])
-    expect(w.reportsTold()).toBeGreaterThan(0)
   })
 
-  it('serves build-box’s new read of a plugin moved from version 1 to 2 to a page that loads it before main’s list hears of the reload', async () => {
-    const w = twoHosts()
-    // build-box's files as its current read of Trackr has them: version 1, then version 2 at the same paths.
-    let read = { revision: 1, api: 'helm' }
+  it('serves build-box’s new read of a plugin to a page that loads it before main’s list hears of the reload', async () => {
+    const w = buildBox()
+    // build-box's files as its current read of Trackr has them: one read, then the next at the same paths.
+    let revision = 1
     w.remote.answer('plugins:file', ({ path }) => {
-      const body = new TextEncoder().encode(`${read.api} r${String(read.revision)} ${path}`)
-      return { status: 200, contentType: 'text/plain', version: '0.2.0', revision: read.revision, totalBytes: body.length, body }
+      const body = new TextEncoder().encode(`r${String(revision)} ${path}`)
+      return { status: 200, contentType: 'text/plain', version: '0.2.0', revision, totalBytes: body.length, body }
     })
-    const v1 = listed('trackr', { version: '0.2.0', panels: { main: { title: 'Trackr', url: 'helm-plugin://trackr/pages/panel.html', actions: [] } } })
+    const first = listed('trackr', { version: '0.2.0', panels: { main: { title: 'Trackr', url: 'floti-plugin://trackr/pages/panel.html', actions: [] } } })
     await w.remoteLink.connect()
-    w.remote.snapshot('plugins:changed', [v1])
+    w.remote.snapshot('plugins:changed', [first])
     const plugins = w.remotePlugins.byLabel(BUILD_BOX)!
     const text = async (path: string): Promise<string> => new TextDecoder().decode((await plugins.file('trackr', path)).body)
-    expect(await text('pages/panel.html')).toBe('helm r1 pages/panel.html')
-    expect(await text('pages/panel.js')).toBe('helm r1 pages/panel.js')
+    expect(await text('pages/panel.html')).toBe('r1 pages/panel.html')
+    expect(await text('pages/panel.js')).toBe('r1 pages/panel.js')
 
-    // Reloaded on build-box as version 2, same version string. The window's
-    // own connection heard it and the frame moved to floti-plugin; main's
-    // link has not heard it yet.
-    read = { revision: 2, api: 'floti' }
-    expect(await text('pages/panel.html')).toBe('floti r2 pages/panel.html')
-    expect(await text('pages/panel.js')).toBe('floti r2 pages/panel.js')
+    // Reloaded on build-box, same version string. The window's own
+    // connection heard it and the frame reloaded; main's link has not heard
+    // it yet.
+    revision = 2
+    expect(await text('pages/panel.html')).toBe('r2 pages/panel.html')
+    expect(await text('pages/panel.js')).toBe('r2 pages/panel.js')
 
     // Main's list catches up: the new read's files are kept from then on.
-    w.remote.push('plugins:changed', [{ ...v1, revision: 2 }])
+    w.remote.push('plugins:changed', [{ ...first, revision: 2 }])
     const asked = w.remote.payloads('plugins:file').length
-    expect(await text('pages/panel.js')).toBe('floti r2 pages/panel.js')
-    expect(await text('pages/panel.js')).toBe('floti r2 pages/panel.js')
+    expect(await text('pages/panel.js')).toBe('r2 pages/panel.js')
+    expect(await text('pages/panel.js')).toBe('r2 pages/panel.js')
     expect(w.remote.payloads('plugins:file')).toHaveLength(asked + 1)
   })
 
-  it('keeps the hidden window open while any host’s background page needs it, and lets go of a host removed', async () => {
-    const w = twoHosts()
-    await w.localLink.connect()
+  it('lets go of a host removed, and of every host at shutdown', async () => {
+    const w = buildBox()
     await w.remoteLink.connect()
-    w.local.snapshot('plugins:changed', [])
     w.remote.snapshot('plugins:changed', [listed('trackr')])
-    expect(w.synced.at(-1)).toBe(true)
-    w.local.push('plugins:changed', [])
-    expect(w.synced.at(-1)).toBe(true)
     w.attached.stop()
-    expect(w.synced.at(-1)).toBe(false)
-    expect(w.remotePlugins.forHost(BUILD_BOX)).toBeNull()
+    expect(w.remotePlugins.byLabel(BUILD_BOX)).toBeNull()
+
+    const again = w.remotePlugins.attach(BUILD_BOX, w.remoteLink)
+    expect(w.remotePlugins.byLabel(BUILD_BOX)).not.toBeNull()
+    w.remotePlugins.shutdown()
+    expect(w.remotePlugins.byLabel(BUILD_BOX)).toBeNull()
+    again.stop()
   })
 })

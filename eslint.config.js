@@ -99,7 +99,7 @@ export default tseslint.config(
   },
 
   // A plugin's programs, its service and the sample's server are Node
-  // processes: what they print is their output, and Helm shows it in the log.
+  // processes: what they print is their output, and Floti shows it in the log.
   {
     files: ['examples/sample-plugin/{server.mjs,programs/**/*.mjs,service/**/*.mjs}'],
     rules: { 'no-console': 'off' }

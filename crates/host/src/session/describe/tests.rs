@@ -312,7 +312,7 @@ fn detail_carries_the_branch_as_the_branch_at_spawn_not_as_the_branch_now() {
     let facts = HostedSessionFacts {
         branch: Some("feat/cart".to_owned()),
         profile: Some("reviewer".to_owned()),
-        overlays: vec![r"C:\repos\helm".to_owned()],
+        overlays: vec![r"C:\repos\floti".to_owned()],
         ..facts()
     };
     let text = describe_session_detail(SessionDetailInput {
@@ -326,7 +326,7 @@ fn detail_carries_the_branch_as_the_branch_at_spawn_not_as_the_branch_now() {
     assert!(text.contains("feat/cart (the branch at spawn"), "{text}");
     assert!(text.contains("captured and never followed"), "{text}");
     assert!(text.contains("reviewer"), "{text}");
-    assert!(text.contains(r"C:\repos\helm"), "{text}");
+    assert!(text.contains(r"C:\repos\floti"), "{text}");
 }
 
 /// The three answers `SessionResources` is shaped to keep apart, kept apart

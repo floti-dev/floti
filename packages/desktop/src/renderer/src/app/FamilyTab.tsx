@@ -18,7 +18,7 @@ import {
   type FamilyState,
   type PaneLayout,
   type SessionRecord
-} from '@helm/core/types'
+} from '@floti/core/types'
 import {
   ChildHeader,
   cn,
@@ -28,7 +28,7 @@ import {
   FamilyKids,
   ReportNote,
   type TabIndicator
-} from '@helm/ui'
+} from '@floti/ui'
 import { forgetFamilyRoom, reportFamilyRoom } from './familyRooms'
 import { childStatus, startedMs, useSecondsClock } from './sessionView'
 import { commandWord } from './treeFamilies'

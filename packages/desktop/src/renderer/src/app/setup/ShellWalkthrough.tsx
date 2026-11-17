@@ -1,8 +1,8 @@
 import type { JSX } from 'react'
 import { useEffect, useState } from 'react'
-import type { AppSettings, Walkthrough } from '@helm/core/types'
-import { FirstSessionStep, TourStep } from '@helm/ui'
-import type { HelmBridge } from '../../../../shared/ipc'
+import type { AppSettings, Walkthrough } from '@floti/core/types'
+import { FirstSessionStep, TourStep } from '@floti/ui'
+import type { DesktopBridge } from '../../../../shared/ipc'
 import { folderName, WALKTHROUGH_DONE } from './walkthrough'
 
 const sentence = (err: unknown): string => (err instanceof Error ? err.message : String(err))
@@ -18,7 +18,7 @@ export interface FirstSessionRequest {
 export interface ShellWalkthroughProps {
   /** At step 5 or 6. */
   walkthrough: Walkthrough
-  bridge: Pick<HelmBridge, 'invoke'>
+  bridge: Pick<DesktopBridge, 'invoke'>
   /**
    * Whether this PC's host is ready. The agents are read again when it
    * becomes so: a read made while the shell was still connecting can answer
@@ -89,7 +89,7 @@ function FirstSession({
   onBack,
   onStarted
 }: {
-  bridge: Pick<HelmBridge, 'invoke'>
+  bridge: Pick<DesktopBridge, 'invoke'>
   hostReady: boolean
   workspace: string | null
   start: ShellWalkthroughProps['start']

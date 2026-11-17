@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { PluginInfo, PluginLogLine, PluginMetrics } from '@helm/core/types'
+import type { PluginInfo, PluginLogLine, PluginMetrics } from '@floti/core/types'
 import { PluginPage, PluginsPage, type PluginPageProps } from './PluginSettings'
 
 /**
@@ -106,8 +106,8 @@ describe('PluginsPage', () => {
   })
 
   it('says why the last folder picked was not added', () => {
-    render(<PluginsPage plugins={[]} addError="That folder holds no helm-plugin.json." onAdd={vi.fn()} onOpen={vi.fn()} />)
-    expect(screen.getByText('That folder holds no helm-plugin.json.')).toBeTruthy()
+    render(<PluginsPage plugins={[]} addError="That folder holds no floti-plugin.json." onAdd={vi.fn()} onOpen={vi.fn()} />)
+    expect(screen.getByText('That folder holds no floti-plugin.json.')).toBeTruthy()
   })
 })
 
@@ -162,14 +162,14 @@ describe('PluginPage: what it is', () => {
     ])
   })
 
-  it('says how its background page is, a crash with its reason as a clause', () => {
+  it('says how its background is, a crash with its reason as a clause', () => {
     renderPage({
       plugin: plugin({
-        background: { url: 'helm-plugin://sample/bg.html', state: 'crashed', error: 'The page ended unexpectedly.' }
+        background: { url: 'floti-plugin://sample/bg.js', state: 'crashed', error: 'The module ended unexpectedly.' }
       })
     })
     expect(document.querySelector('[data-plugin-background="crashed"]')?.textContent).toBe(
-      'Its background page stopped: the page ended unexpectedly. Reload starts it again.'
+      'Its background stopped: the module ended unexpectedly. Reload starts it again.'
     )
   })
 
@@ -404,7 +404,7 @@ describe('PluginPage: its log', () => {
     rerender(<PluginPage {...pageProps({ log: [] })} />)
     expect(group('plugin-log').textContent).toContain('Nothing yet.')
     const log: PluginLogLine[] = [
-      { at: '2026-10-05T16:14:46.000Z', stream: 'helm', text: 'reloaded from Settings' },
+      { at: '2026-10-05T16:14:46.000Z', stream: 'floti', text: 'reloaded from Settings' },
       { at: '2026-10-05T16:14:47.000Z', stream: 'out', text: 'listening on 51384' },
       { at: '2026-10-05T16:14:48.000Z', stream: 'err', text: 'it broke' }
     ]

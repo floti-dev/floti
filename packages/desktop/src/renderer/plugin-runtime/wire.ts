@@ -1,18 +1,18 @@
-import type { HelmContext, HelmErrorCode, HelmTheme, ToolSession } from '@floti-dev/plugin-sdk'
+import type { FlotiContext, FlotiErrorCode, FlotiTheme } from '@floti-dev/plugin-sdk'
 
 /**
- * The messages between a plugin page's bridge and the Helm page framing it.
+ * The messages between a plugin page's bridge and the desktop page framing it.
  *
  * Two phases. A page announces itself with `HELLO` on `window.parent`, which
- * is the only thing it ever sends that way; Helm checks the message's origin
+ * is the only thing it ever sends that way; Floti checks the message's origin
  * and source against the frames it made, and answers with `CONNECT` and a
  * `MessagePort` of the page's own. Everything after that goes over the port,
  * so no later message has to be told apart from anything else on the window,
- * and a page that is not one Helm framed never gets a port at all.
+ * and a page that is not one Floti framed never gets a port at all.
  */
 
-export const HELLO = 'helm:hello'
-export const CONNECT = 'helm:connect'
+export const HELLO = 'floti:hello'
+export const CONNECT = 'floti:connect'
 
 export interface HelloMessage {
   type: typeof HELLO
@@ -20,19 +20,19 @@ export interface HelloMessage {
 
 export interface ConnectMessage {
   type: typeof CONNECT
-  context: HelmContext
+  context: FlotiContext
   /** Null while the relay has not read one yet; the page keeps the one it booted with. */
-  theme: HelmTheme | null
+  theme: FlotiTheme | null
   visible: boolean
   /**
-   * Whether Helm runs on macOS, where Cmd rather than Ctrl is the page's
+   * Whether Floti runs on macOS, where Cmd rather than Ctrl is the page's
    * editing modifier. The window answers it once, from the platform helper
-   * Helm's own shortcuts use, so a frame never works it out on its own.
+   * Floti's own shortcuts use, so a frame never works it out on its own.
    */
   mac?: boolean
 }
 
-/** A key the page did not handle, for Helm's shortcuts. */
+/** A key the page did not handle, for Floti's shortcuts. */
 export interface KeyInit {
   key: string
   code: string
@@ -50,22 +50,15 @@ export type FrameMessage =
   | { t: 'title'; title: string | null }
   /** The page's surface should stay rather than be replaced as a preview. */
   | { t: 'keep' }
-  /** A background page's answer to a `tool` message. */
-  | { t: 'tool-result'; id: string; ok: true; text: string }
-  | { t: 'tool-result'; id: string; ok: false; message: string }
 
-export type HelmMessage =
+export type FlotiMessage =
   | { t: 'result'; id: number; ok: true; value: unknown }
-  | { t: 'result'; id: number; ok: false; code: HelmErrorCode; message: string }
+  | { t: 'result'; id: number; ok: false; code: FlotiErrorCode; message: string }
   | { t: 'event'; name: string; data: unknown }
-  /** A session called one of the plugin's tools. Background pages only. */
-  | { t: 'tool'; id: string; name: string; args: Record<string, unknown>; session: ToolSession }
-  /** Nobody is waiting for that answer any more. */
-  | { t: 'tool-cancel'; id: string }
 
 /** The frame's `name`: how a page knows where it is before it has said anything. */
-export const CONTEXT_PREFIX = 'helm:'
+export const CONTEXT_PREFIX = 'floti:'
 
-export function contextName(context: HelmContext): string {
+export function contextName(context: FlotiContext): string {
   return `${CONTEXT_PREFIX}${JSON.stringify(context)}`
 }

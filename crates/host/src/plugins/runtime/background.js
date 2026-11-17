@@ -2,7 +2,7 @@
 // the `floti` global for the background surface, BroadcastChannel, and
 // setTimeout, setInterval, clearTimeout and clearInterval.
 //
-// `floti` is shaped like the SDK's bridge (`HelmBridge`), apiVersion 2. Every
+// `floti` is shaped like the SDK's `FlotiBackground`, apiVersion 2. Every
 // method goes through the host's call layer: the arguments cross as protocol
 // payloads, and the host answers them, never this file. The methods that need
 // a client (a window, a dialog, a click) reject as unavailable with a

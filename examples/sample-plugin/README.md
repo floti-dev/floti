@@ -3,7 +3,7 @@
 Items from a small API, in a panel, a tab and the status bar. It uses every
 part a Floti plugin can have, and it is the plugin Floti's end-to-end tests drive
 (`packages/desktop/e2e/plugins.spec.ts`). To write a plugin of your own, start
-from `helm-plugin create` and the authoring guide in
+from `floti-plugin create` and the authoring guide in
 [packages/plugin-sdk](../../packages/plugin-sdk/README.md); this folder is the
 worked example.
 
@@ -14,7 +14,7 @@ else.
 
 ```
 sample-plugin/
-├── helm-plugin.json          the manifest: every surface, setting, host, program, the service and the tools
+├── floti-plugin.json          the manifest: every surface, setting, host, program, the service and the tools
 ├── icon.svg                  drawn as a mask, so it takes the rail's colours
 ├── src/
 │   ├── panels/main.*         the rail panel: the items, a token prompt, the service's hello,
@@ -45,8 +45,8 @@ window, so `floti.tabs.open`, `floti.open`, `floti.secrets.request` and
 ## Run it
 
 ```powershell
-pnpm --filter @helm/sample-plugin build
-pnpm --filter @helm/sample-plugin serve      # the API, in a terminal of its own
+pnpm --filter @floti/sample-plugin build
+pnpm --filter @floti/sample-plugin serve      # the API, in a terminal of its own
 $env:FLOTI_PLUGINS = "$PWD\examples\sample-plugin"; pnpm dev
 ```
 
@@ -61,6 +61,6 @@ A session started while the plugin is on has its tools as `floti-plugin-sample`:
 ask it to list the Sample items, or to add one, and the panel shows the new
 item at once.
 
-`pnpm --filter @helm/sample-plugin watch` rebuilds on every save. Floti watches
+`pnpm --filter @floti/sample-plugin watch` rebuilds on every save. Floti watches
 the folder and reloads the plugin when what it loads changes, so there is no
 need to reload the window.

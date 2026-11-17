@@ -47,7 +47,7 @@ fn rename(fails: usize, held: i32, last: fn() -> io::Result<()>) -> (io::Result<
 }
 
 /// The removal of a folder through [`remove_held`], with `classification`,
-/// refused `fails` times on `Uninstall Helm.exe` with Windows error `held`,
+/// refused `fails` times on `Uninstall Floti.exe` with Windows error `held`,
 /// then answering `last`.
 fn removal(
     classification: &dyn HeldFiles,
@@ -68,7 +68,7 @@ fn removal(
             if *tries <= fails {
                 Err(Error::path(
                     "remove",
-                    Path::new(r"C:\Programs\Helm\Uninstall Helm.exe"),
+                    Path::new(r"C:\Programs\Floti\desktop\Uninstall Floti.exe"),
                     io::Error::from_raw_os_error(held),
                 ))
             } else {
@@ -154,7 +154,7 @@ fn a_removal_held_past_the_patience_fails_with_the_line_a_single_try_gives() {
     let (result, run) = removal(&windows::Native, usize::MAX, ERROR_ACCESS_DENIED, || Ok(()));
     let single = Error::path(
         "remove",
-        Path::new(r"C:\Programs\Helm\Uninstall Helm.exe"),
+        Path::new(r"C:\Programs\Floti\desktop\Uninstall Floti.exe"),
         io::Error::from_raw_os_error(ERROR_ACCESS_DENIED),
     );
     assert_eq!(result.unwrap_err().to_string(), single.to_string());

@@ -18,7 +18,7 @@ const STRIPPED_ENV = [
   'NODE_OPTIONS',
   'NODE_ENV',
   'VITE_DEV_SERVER_URL',
-  // Claude Code stamps these on every process it spawns. If Helm is launched
+  // Claude Code stamps these on every process it spawns. If the desktop is launched
   // from inside a session they are inherited, and the hosted `claude` decides
   // it is a nested child: it announces "Transcript saving is off - inherited
   // CLAUDE_CODE_CHILD_SESSION marker" and stops writing a transcript. Observed

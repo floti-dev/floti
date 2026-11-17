@@ -1,4 +1,4 @@
-import type { ConfigScope, Project } from '@helm/core/types'
+import type { ConfigScope, Project } from '@floti/core/types'
 
 /**
  * The config scope list a template imports from and the Files view's artifact addresses,
@@ -31,7 +31,7 @@ export function scannedConfigScope(folder: Project, kind: 'workspace' | 'project
 }
 
 /**
- * The switcher's list, in the order Helm has always given it: the user scope,
+ * The switcher's list, in the order the desktop has always given it: the user scope,
  * then the scanned workspaces, then the scanned projects, then every other
  * folder the host lists (a saved profile's root and overlays), each once by
  * its path, ignoring case.
@@ -53,7 +53,7 @@ export function configScopesWithScan(host: readonly ConfigScope[], scanned: read
 }
 
 const HOST_ARTIFACT = 'floti-artifact://'
-const WINDOW_ARTIFACT = 'helm-content://artifact/'
+const WINDOW_ARTIFACT = 'floti-content://artifact/'
 
 /** The host's address for one a frame asked the window for, or null for one that is not an artifact's. */
 export function hostArtifactUrl(windowUrl: string): string | null {
@@ -62,7 +62,7 @@ export function hostArtifactUrl(windowUrl: string): string | null {
 
 /**
  * The window's address for one the host minted: an artifact frame keeps the
- * window's `helm-content:` scheme, which main answers from the host's bytes.
+ * window's `floti-content:` scheme, which main answers from the host's bytes.
  */
 export function windowArtifactUrl(hostUrl: string): string {
   if (!hostUrl.startsWith(HOST_ARTIFACT))

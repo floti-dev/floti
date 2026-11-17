@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_SETTINGS, type AppSettings, type Walkthrough } from '@helm/core/types'
+import { DEFAULT_SETTINGS, type AppSettings, type Walkthrough } from '@floti/core/types'
 import type { ClaudeStatus, LocalHostStep } from '../../../../shared/ipc'
 import { bridge } from '../bridge.testkit'
 import type { LocalHostStepStore } from '../host/localHostStep'

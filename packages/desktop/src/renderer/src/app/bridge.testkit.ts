@@ -1,4 +1,4 @@
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import type { ConnectedHosts } from './host/hostBridges'
 import type { HostState, HostStateStore } from './host/hostState'
 import type { SeenHostVersionStore } from './host/hostVersions'
@@ -8,7 +8,7 @@ import type { RemoteHostsStore } from './host/remoteHosts'
 import type {
   EventChannel,
   EventPayload,
-  HelmBridge,
+  DesktopBridge,
   RequestChannel,
   RequestPayload,
   RequestResult,
@@ -29,7 +29,7 @@ import type {
  *
  *   vi.mock('./bridge', () => import('./bridge.testkit'))
  *
- * There is one bridge per test file. `bridge.ts` reads `window.helm` once, when
+ * There is one bridge per test file. `bridge.ts` reads `window.desktop` once, when
  * it loads, and so does every module that subscribes at import time
  * (`pterms.ts`); a single instance per file is what they all see. `reset` it
  * between tests.
@@ -40,7 +40,7 @@ import type {
  * what it leaves unanswered then waits quietly instead of throwing into an
  * unhandled rejection.
  */
-export interface FakeBridge extends HelmBridge {
+export interface FakeBridge extends DesktopBridge {
   /**
    * Answers `invoke(channel)` from now on. The answer runs inside the invoke,
    * as the renderer makes it, so a test can keep a resolver it hands out and
@@ -155,11 +155,11 @@ function createBridge(): FakeBridge {
 export const bridge: FakeBridge = createBridge()
 
 /** The same object, under the name `bridge.ts` exports it by. */
-export const helm: HelmBridge = bridge
+export const desktop: DesktopBridge = bridge
 
 /** Each host on another computer's bridge a test reached for, by host id. */
 const remoteBridges = new Map<string, FakeBridge>()
-const bridgeListeners = new Set<(host: string, bridge: HelmBridge) => void>()
+const bridgeListeners = new Set<(host: string, bridge: DesktopBridge) => void>()
 
 /**
  * A host on another computer's bridge, faked as this PC's is: the test plays
@@ -175,10 +175,10 @@ export function remoteBridge(host: string): FakeBridge {
 }
 
 /** As `bridge.ts` exports it: this PC's for `LOCAL_HOST_KEY`, otherwise that host's fake. */
-export const bridgeFor = (host: string): HelmBridge => (host === LOCAL_HOST_KEY ? bridge : remoteBridge(host))
+export const bridgeFor = (host: string): DesktopBridge => (host === LOCAL_HOST_KEY ? bridge : remoteBridge(host))
 
 /** As `bridge.ts` exports it: this PC's bridge first, then each remote one made so far and from now on. */
-export const eachHostBridge = (listener: (host: string, bridge: HelmBridge) => void): (() => void) => {
+export const eachHostBridge = (listener: (host: string, bridge: DesktopBridge) => void): (() => void) => {
   bridgeListeners.add(listener)
   listener(LOCAL_HOST_KEY, bridge)
   for (const [host, made] of remoteBridges) listener(host, made)

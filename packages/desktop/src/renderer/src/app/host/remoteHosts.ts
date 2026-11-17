@@ -1,9 +1,9 @@
-import type { SessionResources } from '@helm/core'
-import type { RemoteHostConnection } from '@helm/core/types'
+import type { SessionResources } from '@floti/core'
+import type { RemoteHostConnection } from '@floti/core/types'
 import type { HostConnection, HostSubscription } from '../../../../shared/host/client'
 import type * as P from '../../../../shared/host/protocol'
 import { createHostResources, type HostResources } from '../../../../shared/host/resources'
-import type { HelmBridge, RemoteHostStates } from '../../../../shared/ipc'
+import type { DesktopBridge, RemoteHostStates } from '../../../../shared/ipc'
 import type { PageLink } from './link'
 
 /**
@@ -81,7 +81,7 @@ export interface RemoteHostsStore {
 
 export interface RemoteHostsDeps {
   /** The preload's bridge: `remoteHosts:*` and `hostLink:*` only. */
-  bridge: Pick<HelmBridge, 'invoke' | 'send' | 'on'>
+  bridge: Pick<DesktopBridge, 'invoke' | 'send' | 'on'>
   log: (line: string) => void
   /**
    * The window's own connection to one host: the one that host's bridge

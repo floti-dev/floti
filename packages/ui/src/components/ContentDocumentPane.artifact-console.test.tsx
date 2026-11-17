@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { ContentFile } from '@helm/core'
+import type { ContentFile } from '@floti/core'
 import { ContentDocumentPane, type ArtifactConsoleEntry } from './ContentDocumentPane'
 
 const REPORT: ContentFile = {
@@ -21,8 +21,8 @@ const REPORT: ContentFile = {
 }
 
 const LOGGED: ArtifactConsoleEntry[] = [
-  { level: 'info', message: 'chart drawn', source: 'helm-content://artifact/abc/report.html', line: 12 },
-  { level: 'error', message: 'axis data missing', source: 'helm-content://artifact/abc/report.html', line: 30 }
+  { level: 'info', message: 'chart drawn', source: 'floti-content://artifact/abc/report.html', line: 12 },
+  { level: 'error', message: 'axis data missing', source: 'floti-content://artifact/abc/report.html', line: 30 }
 ]
 
 /** The artifact viewer showing REPORT with what its frame logged. */
@@ -34,7 +34,7 @@ function renderArtifact(logged: ArtifactConsoleEntry[]): void {
       preview={null}
       previewPending={false}
       mode="read"
-      artifactUrl="helm-content://artifact/abc/report.html"
+      artifactUrl="floti-content://artifact/abc/report.html"
       artifactConsole={logged}
       snapshots={[]}
       saving={false}
@@ -77,13 +77,13 @@ describe('ContentDocumentPane - the artifact console', () => {
   })
 
   it('counts warnings as warnings, not errors', () => {
-    const warning = { level: 'warning', message: 'deprecated api', source: 'helm-content://artifact/abc/report.html', line: 3 }
+    const warning = { level: 'warning', message: 'deprecated api', source: 'floti-content://artifact/abc/report.html', line: 3 }
     renderArtifact([warning, warning])
     expect(screen.getByRole('button', { name: '2 console warnings' })).toBeTruthy()
   })
 
   it('names both when there are errors and warnings', () => {
-    const warning = { level: 'warning', message: 'deprecated api', source: 'helm-content://artifact/abc/report.html', line: 3 }
+    const warning = { level: 'warning', message: 'deprecated api', source: 'floti-content://artifact/abc/report.html', line: 3 }
     renderArtifact([...LOGGED, warning])
     expect(screen.getByRole('button', { name: '1 console error, 1 warning' })).toBeTruthy()
   })

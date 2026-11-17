@@ -4,10 +4,10 @@ import { decodeBody } from './archive'
 import type { Store } from './db'
 
 /**
- * Read-only pages over what only Helm's own database holds, for copying it into
+ * Read-only pages over what only the desktop's own database holds, for copying it into
  * a local host's database.
  *
- * The host rebuilds most of `helm.db` from Claude Code's tree on its own: the
+ * The host rebuilds most of `desktop.db` from Claude Code's tree on its own: the
  * prompts and sessions from `history.jsonl`, usage and the archive from the
  * transcripts still on disk, and every cursor. What it cannot rebuild is what
  * outlived its source or never had one:
@@ -20,7 +20,7 @@ import type { Store } from './db'
  *   than derived.
  *
  * Every function here is a SELECT. Nothing in this file writes the database it
- * reads, so a copy that stops part way, or runs twice, leaves `helm.db` exactly
+ * reads, so a copy that stops part way, or runs twice, leaves `desktop.db` exactly
  * as it was. Each page is bounded by a row count and by bytes of text, so one
  * page fits in one protocol frame and reading it does not hold the caller for
  * long; a conversation larger than one page goes in several parts, the last

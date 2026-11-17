@@ -2,7 +2,7 @@ import { existsSync, writeFileSync } from 'node:fs'
 import { delimiter, dirname, join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
-import { readSettings, type ThemeListing, type ThemeState } from '@helm/core'
+import { readSettings, type ThemeListing, type ThemeState } from '@floti/core'
 import { createWorld, disposeWorld, seedSettings, type World } from '../../test/world'
 import type { EventChannel, RequestChannel, RequestPayload, RequestResult } from '../shared/ipc'
 import type { Services } from './services'
@@ -68,7 +68,7 @@ describe('settings over IPC', () => {
   let themesDir: string
   let nativeTheme: Electron.NativeTheme
   const events: Array<{ channel: EventChannel; payload: unknown }> = []
-  /** What tells the local host Helm's settings again, as `index.ts` passes it. */
+  /** What tells the local host the desktop's settings again, as `index.ts` passes it. */
   const hostSettingsChanged = vi.fn()
   /** The windows the walkthrough's hand-overs reach, as `index.ts` passes them. */
   const walkthrough = { openShell: vi.fn(), open: vi.fn() }
@@ -139,9 +139,6 @@ describe('settings over IPC', () => {
       files: {} as never,
       themes,
       plugins: { pushTheme: vi.fn() } as never,
-      hostPlugins: {} as never,
-      remotePlugins: {} as never,
-      pluginBackground: () => null,
       localHost: {} as never,
       ownData: {} as never,
       rendererReady: () => undefined,

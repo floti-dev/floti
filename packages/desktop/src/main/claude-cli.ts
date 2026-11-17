@@ -3,7 +3,7 @@ import { delimiter, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /**
- * Locates the `claude` CLI on this computer, for the local host Helm starts
+ * Locates the `claude` CLI on this computer, for the local host the desktop starts
  * (`hostSettingsFor`) and the spike page's self-test. The host checks the
  * version and the sign-in itself.
  */

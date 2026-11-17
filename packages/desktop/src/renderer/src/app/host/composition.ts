@@ -1,4 +1,4 @@
-import type { Project } from '@helm/core/types'
+import type { Project } from '@floti/core/types'
 import type { HostConnection } from '../../../../shared/host/client'
 import { effectiveRequestForHost } from '../../../../shared/host/records'
 import { configScopesWithScan } from '../../../../shared/host/records/content'

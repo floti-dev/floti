@@ -4,33 +4,33 @@ import type { LocalHost } from './launcher'
 import type { HostSettingsPatch } from './protocol'
 
 /**
- * Helm's one connection to the local host, made when Helm starts and again
+ * The desktop's one connection to the local host, made when the desktop starts and again
  * whenever it is wanted after the last one failed or ended.
  *
- * On every connect, before anything else uses it, Helm writes the two things
+ * On every connect, before anything else uses it, the desktop writes the two things
  * its own Settings decide for the host's sessions - the `claude` it runs and
  * the shell a terminal opens - and reads nothing else back: everything else in
  * the host's settings is the host's.
  *
- * Helm never stops the host on its own. A deliberate quit tells it what
+ * The desktop never stops the host on its own. A deliberate quit tells it what
  * becomes of what this device started (`host:quit`) and lets go; the host
  * decides its own exit. Quitting is bounded: a host that does not answer in
- * time is let go of all the same, and a Helm that crashes or is killed tells
+ * time is let go of all the same, and a desktop that crashes or is killed tells
  * it nothing. The user can stop it from Settings (`stopHost`), which ends
  * every session; the next request then starts a fresh one. Or, when this
- * Helm carries a newer floti, they can restart it for the update
+ * desktop carries a newer floti, they can restart it for the update
  * (`restartHost`): the host leaves its sessions running in its keeper and
  * exits, or, for a host on protocol 1.x from before the restart frames, its
  * process alone is ended as a crash would end it, leaving its keeper; then
- * the link starts the floti this Helm carries and connects to it, and that
+ * the link starts the floti this desktop carries and connects to it, and that
  * host takes the keeper back. Neither end is a crash to the link, so neither
  * is retried or marked lost.
  *
  * A connection that ends without a stop or a quit is a host that crashed or
  * was killed. The link then connects again by itself, the first try after
  * `RECONNECT_FIRST_MS` and each wait after a failed try twice the last, up to
- * two minutes, until it connects or Helm quits. It starts a new host only in
- * place of one a desktop started (this Helm, or another whose host it found
+ * two minutes, until it connects or the desktop quits. It starts a new host only in
+ * place of one a desktop started (this desktop, or another whose host it found
  * and which says so in `app:info`); any other host is waited for, never
  * replaced. Every `onConnected` listener runs again on the new connection.
  *
@@ -46,7 +46,7 @@ import type { HostSettingsPatch } from './protocol'
  *
  * A host on another computer is reached by a link of its own
  * (`remote.ts`), made with the same function: its `start` never starts a
- * host, it writes none of Helm's settings there (this PC's `claude` and shell
+ * host, it writes none of the desktop's settings there (this PC's `claude` and shell
  * mean nothing on another computer), and it keeps trying from its first
  * connect (`keepConnected`). A link that merely drops sends nothing; only a
  * quit sends `host:quit`, and forgetting a host (`release`) sends nothing at
@@ -78,10 +78,10 @@ export interface HostLink {
    * needs to answer is subscribed.
    */
   onConnected(listener: (connection: HostConnection) => void | Promise<void>): void
-  /** Writes Helm's settings for the host's sessions to the host connected now. */
+  /** Writes the desktop's settings for the host's sessions to the host connected now. */
   writeSettings(): void
   /**
-   * Helm is quitting on purpose: tells the host that the plain terminals this
+   * The desktop is quitting on purpose: tells the host that the plain terminals this
    * device opened end, and with `end` the sessions it started too, then lets
    * go of the connection and its bridge; resolves once the bridge has exited,
    * or the deadline passed. The host is never stopped here. Nothing connects
@@ -128,7 +128,7 @@ export interface HostLink {
   stopHost(): Promise<void>
   /**
    * The user asked, and agreed to what it ends: restarts the host for an
-   * update (`deps.restart`), then connects to the new host this Helm starts,
+   * update (`deps.restart`), then connects to the new host this desktop starts,
    * as after any ended connection. Every `onConnected` listener runs again
    * on the new connection. While it runs, `connection()` waits for it rather
    * than reaching the host that is exiting. Rejects with the sentence to show,
@@ -139,11 +139,11 @@ export interface HostLink {
   restarting(): boolean
   /**
    * Whether the connection there is, or the last one, is ending or ended
-   * because Helm stopped or restarted the host or is quitting: an end that is
+   * because the desktop stopped or restarted the host or is quitting: an end that is
    * no crash.
    */
   endedOnPurpose(): boolean
-  /** Whether Helm starts a new host if the one it reaches now, or last reached, is gone. */
+  /** Whether the desktop starts a new host if the one it reaches now, or last reached, is gone. */
   restartsHost(): boolean
 }
 
@@ -153,7 +153,7 @@ export interface HostLinkDeps {
    * and a host that does not answer is a failure rather than one to start.
    */
   start: (options: { startHost: boolean }) => Promise<LocalHost>
-  /** What Helm writes to the host on every connect; nothing when absent. */
+  /** What the desktop writes to the host on every connect; nothing when absent. */
   settings?: () => HostSettingsPatch
   /** What the log calls the host: the local host when absent. */
   name?: string
@@ -220,7 +220,7 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
     waiting?.resolve(connection)
   }
 
-  /** Tries to connect again after a wait, until it connects or Helm quits. */
+  /** Tries to connect again after a wait, until it connects or the desktop quits. */
   const scheduleRetry = (): void => {
     if (stopping !== null || retryTimer !== null) return
     const wait = retryWait

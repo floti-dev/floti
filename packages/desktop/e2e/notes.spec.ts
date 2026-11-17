@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
-import { expect, test as base } from './helm'
+import { expect, test as base } from './desktop'
 
 /**
  * A project's notes in the Files view: a note rendered and followed by its
@@ -51,8 +51,8 @@ async function openNotes(window: Page): Promise<void> {
 const files = (window: Page) => window.getByRole('group', { name: 'Project files' })
 const pane = (window: Page) => window.getByRole('region', { name: 'First pane' })
 
-test('a note opens rendered, and its wikilink opens the note it names', async ({ helm }) => {
-  const { window } = helm
+test('a note opens rendered, and its wikilink opens the note it names', async ({ desktop }) => {
+  const { window } = desktop
   await openNotes(window)
 
   await files(window).getByRole('button', { name: /^first\.md/ }).click()
@@ -68,10 +68,10 @@ test('a note opens rendered, and its wikilink opens the note it names', async ({
 })
 
 test('a note is edited beside its preview, keeps its draft behind another tab, and saves to disk', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   const path = join(world.projects.alpha, 'notes', 'first.md')
   await openNotes(window)
   await files(window).getByRole('button', { name: /^first\.md/ }).click()
@@ -106,8 +106,8 @@ test('a note is edited beside its preview, keeps its draft behind another tab, a
   await expect(window.getByRole('button', { name: '1 version' })).toBeVisible()
 })
 
-test('Ctrl+Shift+F finds a note by what it says and opens it with the words marked', async ({ helm }) => {
-  const { window } = helm
+test('Ctrl+Shift+F finds a note by what it says and opens it with the words marked', async ({ desktop }) => {
+  const { window } = desktop
   await openNotes(window)
 
   await window.keyboard.press('ControlOrMeta+Shift+F')
@@ -121,19 +121,19 @@ test('Ctrl+Shift+F finds a note by what it says and opens it with the words mark
 })
 
 test('an HTML artifact renders in a frame that can reach nothing, and its wikilink opens the note', async ({
-  helm
+  desktop
 }) => {
-  const { window } = helm
+  const { window } = desktop
   await openNotes(window)
   await files(window).getByRole('button', { name: /^lesson\.html/ }).click()
 
-  const frameElement = window.locator('iframe[src^="helm-content:"]')
-  const frame = window.frameLocator('iframe[src^="helm-content:"]')
+  const frameElement = window.locator('iframe[src^="floti-content:"]')
+  const frame = window.frameLocator('iframe[src^="floti-content:"]')
   await expect(frame.getByRole('heading', { name: 'Lesson text' })).toBeVisible()
   await expect(frame.locator('#probe')).toHaveAttribute('data-ran', 'yes')
   await expect(frameElement).toHaveAttribute('sandbox', 'allow-scripts')
 
-  // Its own script and Helm's bootstrap both ran without a word to the console.
+  // Its own script and the desktop's bootstrap both ran without a word to the console.
   await expect(window.getByRole('button', { name: 'console clean', exact: true })).toBeVisible()
 
   // A server of the test's own, to see whether anything in the frame reaches it.
@@ -170,7 +170,7 @@ test('an HTML artifact renders in a frame that can reach nothing, and its wikili
         document.body.append(img)
       })
       return {
-        helm: typeof scope['helm'],
+        desktop: typeof scope['desktop'],
         require: typeof scope['require'],
         process: typeof scope['process'],
         origin: self.origin,
@@ -180,7 +180,7 @@ test('an HTML artifact renders in a frame that can reach nothing, and its wikili
       }
     }, origin)
     expect(reach).toEqual({
-      helm: 'undefined',
+      desktop: 'undefined',
       require: 'undefined',
       process: 'undefined',
       origin: 'null',

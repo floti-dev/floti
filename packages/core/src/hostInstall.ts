@@ -1,7 +1,7 @@
 /**
  * Installing and updating floti on a host's computer, as far as it can be
  * said without running anything: reading what that computer answered, judging
- * whether this Helm can talk to its floti (P6), choosing which build goes
+ * whether this desktop can talk to its floti (P6), choosing which build goes
  * there, and the words the window shows for each outcome.
  *
  * Pure by construction and re-exported through `types.ts`: the desktop's main
@@ -60,14 +60,14 @@ export interface FlotiFound {
 /**
  * What adding or updating a host found there.
  *
- * - `ready`: a floti this Helm can talk to is there: nothing to install.
+ * - `ready`: a floti this desktop can talk to is there: nothing to install.
  *   `system` is that computer's OS and CPU, as its floti's build names them.
  * - `offer`: floti is missing, or too old to talk to; `id` names the plan
  *   main keeps for `remoteHosts:install`.
- * - `newer`: its floti speaks a protocol newer than this Helm's: update Helm
- *   on this PC. Nothing is offered there. `ours` is this Helm's protocol and
- *   `helm` its version.
- * - `noBuild`: there is no floti this Helm can install there.
+ * - `newer`: its floti speaks a protocol newer than this desktop's: update the desktop
+ *   on this PC. Nothing is offered there. `ours` is this desktop's protocol and
+ *   `desktop` its version.
+ * - `noBuild`: there is no floti this desktop can install there.
  * - `failed`: the check could not run there; `lastLine` is what ssh, the
  *   command or that computer's shell wrote, unedited, and `said` all of it.
  *   `cause` is what only main can tell: the transport's program is not on
@@ -86,18 +86,18 @@ export type HostCheck =
       floti?: string
     }
   | { kind: 'offer'; id: string; offer: InstallOffer }
-  | { kind: 'newer'; found: FlotiFound; ours: string; helm: string }
+  | { kind: 'newer'; found: FlotiFound; ours: string; desktop: string }
   | { kind: 'noBuild'; system: RemoteSystem; reason: string }
   | { kind: 'failed'; lastLine: string; said?: string; cause?: 'transportMissing' | 'loginOutput' }
 
-/** What Helm offers to do on a host's computer, said before anything is done. */
+/** What Floti offers to do on a host's computer, said before anything is done. */
 export interface InstallOffer {
   system: RemoteSystem
   /** The floti found there, which an update replaces; null when there is none. */
   found: FlotiFound | null
   action: 'install' | 'update'
   /**
-   * - `copy`: this Helm's own floti, over the same login, then `floti setup`.
+   * - `copy`: this desktop's own floti, over the same login, then `floti setup`.
    * - `download`: that computer fetches the release's, then `floti setup`.
    * - `flotiUpdate`: the floti there runs `floti update`, which fetches its
    *   channel's newest floti and relaunches the host through its session
@@ -112,7 +112,7 @@ export interface InstallOffer {
    * login). Absent otherwise.
    */
   updatesTo?: string | null
-  /** This Helm's version: what `copy` and `download` install, and what an older floti there is behind. */
+  /** This desktop's version: what `copy` and `download` install, and what an older floti there is behind. */
   version: string
   /** Where it goes there, as that computer's user would write it. */
   folder: string
@@ -120,12 +120,12 @@ export interface InstallOffer {
    * For an update, how many sessions it ends there, or null when that cannot
    * be told beforehand. A `flotiUpdate` ends none when the new host takes the
    * session keeper back, and every running one when it cannot; it is told
-   * only for an update to this Helm's own version, whose keeper link this
-   * Helm knows.
+   * only for an update to this desktop's own version, whose keeper link this
+   * the desktop knows.
    */
   sessions: number | null
   /**
-   * Whether this Helm can talk to the floti found there now: an older floti
+   * Whether this desktop can talk to the floti found there now: an older floti
    * on a protocol it speaks, as against one too old to talk to.
    */
   talks: boolean
@@ -163,24 +163,24 @@ export type InstallOutcome =
       said?: string
     }
   /**
-   * A `floti update` Helm did not see replace floti: `lastLine` is the last
+   * A `floti update` the desktop did not see replace floti: `lastLine` is the last
    * thing known of it, or null.
    */
   | { ok: null; ended: UnsettledUpdate; lastLine: string | null }
 
 /**
- * How a `floti update` ended without Helm seeing floti replaced:
+ * How a `floti update` ended without the desktop seeing floti replaced:
  *
  * - `upToDate`: its channel has nothing newer than the floti there; nothing
  *   was replaced and no session ended.
  * - `unconfirmed`: it ended, but the host there is not seen on a newer floti
  *   (it came back on the same one, or ended its update without relaunching).
- * - `stoppedWaiting`: Helm stopped waiting for it, at the user's word or
+ * - `stoppedWaiting`: the desktop stopped waiting for it, at the user's word or
  *   after `UPDATE_PATIENCE_MS`; it may still be running there.
  */
 export type UnsettledUpdate = 'upToDate' | 'unconfirmed' | 'stoppedWaiting'
 
-/** How long Helm waits for a `floti update` on a host's computer before it stops waiting. */
+/** How long the desktop waits for a `floti update` on a host's computer before it stops waiting. */
 export const UPDATE_PATIENCE_MS = 10 * 60 * 1000
 
 /** `floti update --floti-only`'s status when floti is up to date there (`crates/host/src/update`). */
@@ -229,10 +229,10 @@ export function parseProtocol(text: string): ProtocolVersionNumbers | null {
 
 /**
  * The sentence Settings > Hosts says about a connected host on another
- * computer whose floti is older than this Helm's, naming both versions.
+ * computer whose floti is older than this desktop's, naming both versions.
  */
-export function olderHostSentence(name: string, hostVersion: string, helmVersion: string): string {
-  return `${name} runs floti ${hostVersion}, older than the floti ${helmVersion} this Floti carries.`
+export function olderHostSentence(name: string, hostVersion: string, carriedVersion: string): string {
+  return `${name} runs floti ${hostVersion}, older than the floti ${carriedVersion} this Floti carries.`
 }
 
 /**
@@ -300,7 +300,7 @@ export function parseVersionLine(output: string):
   return null
 }
 
-/** A version as floti and Helm name them: `2.4.1`, or a prerelease such as `2.4.1-preview.7`. */
+/** A version as the host and the desktop name them: `2.4.1`, or a prerelease such as `2.4.1-preview.7`. */
 const SEMVER = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/
 
 /**
@@ -344,51 +344,51 @@ function comparePrereleasePart(a: string, b: string): number {
 }
 
 /**
- * Whether this PC's host runs a floti older than the one this Helm carries:
+ * Whether this PC's host runs a floti older than the one this desktop carries:
  * only when both versions read, so a host naming something else is never
  * called older.
  */
-export function hostFlotiOlder(hostVersion: string, helmVersion: string): boolean {
-  const order = compareVersions(hostVersion, helmVersion)
+export function hostFlotiOlder(hostVersion: string, carriedVersion: string): boolean {
+  const order = compareVersions(hostVersion, carriedVersion)
   return order !== null && order < 0
 }
 
 /**
- * Which of this PC's host and this Helm is behind the other, as Settings >
+ * Which of this PC's host and this desktop is behind the other, as Settings >
  * Hosts and the status bar say it: from the floti version the host's welcome
- * named, or, when it refused this Helm's hello, from the protocol versions it
- * named. `host` and `helm` name each side the same way: a floti version
+ * named, or, when it refused this desktop's hello, from the protocol versions it
+ * named. `host` and `desktop` name each side the same way: a floti version
  * (`2.4.0`), or `protocol 1.3` when that is all the refusal said.
  *
  * - `older: 'host'`: the host runs an older floti, and is offered Restart
  *   host to update. With `beforeRestart` it speaks protocol 1.x, from before
  *   the restart could be asked for: Restart host to update ends its process
- *   as a crash would, leaving its session keeper running, and the floti Helm
+ *   as a crash would, leaving its session keeper running, and the floti the desktop
  *   carries starts and takes every session and terminal over in its tab.
- * - `older: 'helm'`: this Helm is too old for the host, and is updated.
+ * - `older: 'desktop'`: this desktop is too old for the host, and is updated.
  */
 export type LocalHostVersions =
-  | { older: 'host'; host: string; helm: string; beforeRestart: boolean }
-  | { older: 'helm'; host: string; helm: string }
+  | { older: 'host'; host: string; desktop: string; beforeRestart: boolean }
+  | { older: 'desktop'; host: string; desktop: string }
 
 /**
  * What a refused hello says of the two sides (`update` is the side it said
- * to update), or, when the host welcomed this Helm, what its floti version
+ * to update), or, when the host welcomed this desktop, what its floti version
  * says: older only when both versions read and the host's comes first.
  */
 export function localHostVersions(
   seen:
     | { refused: { host: ProtocolVersionNumbers; client: ProtocolVersionNumbers; update: 'host' | 'client' } }
     | { hostVersion: string },
-  helmVersion: string
+  carriedVersion: string
 ): LocalHostVersions | null {
   if ('refused' in seen) {
     const { host, client, update } = seen.refused
-    const named = { host: `protocol ${formatProtocol(host)}`, helm: `protocol ${formatProtocol(client)}` }
-    return update === 'host' ? { older: 'host', ...named, beforeRestart: host.major < 2 } : { older: 'helm', ...named }
+    const named = { host: `protocol ${formatProtocol(host)}`, desktop: `protocol ${formatProtocol(client)}` }
+    return update === 'host' ? { older: 'host', ...named, beforeRestart: host.major < 2 } : { older: 'desktop', ...named }
   }
-  return hostFlotiOlder(seen.hostVersion, helmVersion)
-    ? { older: 'host', host: seen.hostVersion, helm: helmVersion, beforeRestart: false }
+  return hostFlotiOlder(seen.hostVersion, carriedVersion)
+    ? { older: 'host', host: seen.hostVersion, desktop: carriedVersion, beforeRestart: false }
     : null
 }
 
@@ -448,17 +448,17 @@ function sideName(side: string): string {
 /** The sentence Settings > Hosts and the status bar's hover say about this PC's host's version, naming both sides. */
 export function localHostVersionsSentence(versions: LocalHostVersions): string {
   const host = sideName(versions.host)
-  const helm = sideName(versions.helm)
-  if (versions.older === 'helm') {
-    return `This PC’s host runs ${host}, newer than the ${helm} this Floti speaks, so Floti cannot connect to it. Update Floti on this PC.`
+  const desktop = sideName(versions.desktop)
+  if (versions.older === 'desktop') {
+    return `This PC’s host runs ${host}, newer than the ${desktop} this Floti speaks, so Floti cannot connect to it. Update Floti on this PC.`
   }
   if (versions.beforeRestart) {
-    return `This PC’s host runs ${host}, older than the ${helm} this Floti carries. Restart host to update keeps every session and terminal running in its tab.`
+    return `This PC’s host runs ${host}, older than the ${desktop} this Floti carries. Restart host to update keeps every session and terminal running in its tab.`
   }
-  return `This PC’s host runs ${host}, older than the ${helm} this Floti carries. Restart host to update says first what it ends.`
+  return `This PC’s host runs ${host}, older than the ${desktop} this Floti carries. Restart host to update says first what it ends.`
 }
 
-/** What restarting this PC's host on the floti this Helm carries does, asked before anything happens. */
+/** What restarting this PC's host on the floti this desktop carries does, asked before anything happens. */
 export interface LocalHostRestartOffer {
   /**
    * The floti the host runs now (`2.4.0`), or `protocol 1.4` for a host from
@@ -480,8 +480,8 @@ export interface LocalHostRestartOffer {
 }
 
 /** The question before restarting this PC's host, naming what it ends. */
-export function restartHostQuestion(offer: LocalHostRestartOffer, helmVersion: string): string {
-  const to = `floti ${helmVersion}`
+export function restartHostQuestion(offer: LocalHostRestartOffer, carriedVersion: string): string {
+  const to = `floti ${carriedVersion}`
   if (offer.ends === 0) return `Restart this PC’s host on ${to}? No session ends.`
   return `Restart this PC’s host on ${to}, ending ${String(offer.ends)} session${offer.ends === 1 ? '' : 's'}?`
 }
@@ -578,9 +578,9 @@ export function saysNotFound(code: number | null, said: string): boolean {
 }
 
 /**
- * Whether this Helm can talk to a floti speaking `remote` (P6): the host
+ * Whether this desktop can talk to a floti speaking `remote` (P6): the host
  * accepts its own protocol and the previous minor of the same major. Too old
- * is the host's to update; newer is this Helm's.
+ * is the host's to update; newer is this desktop's.
  */
 export function judgeProtocol(
   remote: ProtocolVersionNumbers,
@@ -644,7 +644,7 @@ export function parseSums(text: string): Map<string, string> {
   return sums
 }
 
-/** The OS and CPU this Helm runs on, in Node's words, as a floti build names them. */
+/** The OS and CPU this desktop runs on, in Node's words, as a floti build names them. */
 export function desktopSystem(platform: string, arch: string): { os: FlotiOs | null; cpu: string } {
   const os: FlotiOs | null =
     platform === 'win32' ? 'windows' : platform === 'darwin' ? 'macos' : platform === 'linux' ? 'linux' : null
@@ -658,9 +658,9 @@ export type InstallSource =
   | { how: 'none'; reason: string }
 
 /**
- * Which floti goes to a computer of `system`: this Helm's own when that
- * computer's OS and CPU are this PC's and this Helm carries one; otherwise the
- * release's build for that target, checked against the SHA-256 this Helm
+ * Which floti goes to a computer of `system`: this desktop's own when that
+ * computer's OS and CPU are this PC's and this desktop carries one; otherwise the
+ * release's build for that target, checked against the SHA-256 this desktop
  * carries for it (`sums`, null for a build that carries none, as a
  * development build does). None when neither fits.
  */

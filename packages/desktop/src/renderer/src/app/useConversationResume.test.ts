@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { HistorySession, SessionRecord } from "@helm/core";
+import type { HistorySession, SessionRecord } from "@floti/core";
 import { bridge, remoteBridge } from "./bridge.testkit";
 import { useConversationResume } from "./useConversationResume";
 

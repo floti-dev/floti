@@ -1,22 +1,22 @@
 import { readFileSync } from 'node:fs'
 import { posix } from 'node:path'
-import type { AppSettings } from '@helm/core'
+import type { AppSettings } from '@floti/core'
 import type { BrowserAvailability } from '../shared/ipc'
 
 /**
- * Whether the browser pane may run in this Helm.
+ * Whether the browser pane may run in this desktop.
  *
  * Every renderer runs inside Chromium's OS sandbox, and the browser pane is
  * the one that loads arbitrary sites. Started without the sandbox, a renderer
  * exploit would be code running as the user, holding the host's socket and so
  * every session. On Linux an AppImage's AppRun adds `--no-sandbox` by itself
  * whenever unprivileged user namespaces are refused (Ubuntu 24.04's AppArmor
- * restriction does that), so Helm never degrades silently: with the switch
+ * restriction does that), so the desktop never degrades silently: with the switch
  * present, no web page is opened and no browser tool is served, and the
  * Browser tab says how to give the sandbox back. Everything else keeps
  * working.
  *
- * Decided once, at start: the switch cannot change while Helm runs.
+ * Decided once, at start: the switch cannot change while the desktop runs.
  */
 
 /** The file the profile is written to, and the profile's name. */
@@ -36,7 +36,7 @@ export interface SandboxFacts {
   appArmorRestricts: boolean | null
 }
 
-/** The decision: available, or off with the command that fixes it where Helm can write one. */
+/** The decision: available, or off with the command that fixes it where the desktop can write one. */
 export function browserAvailability(facts: SandboxFacts): BrowserAvailability {
   if (facts.platform !== 'linux' || !facts.noSandbox) return { available: true }
   const appImage = facts.env['APPIMAGE']
@@ -75,7 +75,7 @@ const UNSAFE_IN_PROFILE = /["*?[\]{}^\\\n\r]/
 
 /**
  * The one command that installs the profile for this AppImage and loads it:
- * a single `sudo`. It covers every Helm AppImage in the same folder
+ * a single `sudo`. It covers every desktop AppImage in the same folder
  * (`Floti-*.AppImage`), so the next version keeps the sandbox; a renamed file
  * is covered by its own name. Null when the path cannot be written into a
  * profile safely.

@@ -20,8 +20,8 @@ import type { HostAdapter } from './router'
  * to every new connection; `files:changed` is subscribed on every connect.
  * A folder the host could not look at stays `null`, never `[]`.
  *
- * An HTML artifact keeps the window's `helm-content:` scheme: the host's
- * address is handed to the window as `helm-content://artifact/...`, and main
+ * An HTML artifact keeps the window's `floti-content:` scheme: the host's
+ * address is handed to the window as `floti-content://artifact/...`, and main
  * answers a frame's request for one from the host's bytes on its own
  * connection. Opening a file in the editor and revealing it stay the window's
  * own (`files:editor`, `files:openInEditor`, `shell:showItem`).

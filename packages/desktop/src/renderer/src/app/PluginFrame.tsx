@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type JSX } from 'react'
-import { canonicalParams } from '@helm/core/types'
-import { EmptyState, WarnIcon, cn } from '@helm/ui'
+import { canonicalParams } from '@floti/core/types'
+import { EmptyState, WarnIcon, cn } from '@floti/ui'
 import type { SurfaceSpec } from '../plugins/relay'
 import { attachPluginFrame, detachPluginFrame, reloadPluginFrame, usePluginFrameState } from './pluginFrames'
 
@@ -16,7 +16,7 @@ export interface PluginFrameProps {
 /**
  * Where a plugin surface appears. The frame itself lives in `pluginFrames.ts`;
  * this is its slot, and the error drawn over it when the page fails to load or
- * stops - in the surface's own place, so one plugin's failure is never Helm's.
+ * stops - in the surface's own place, so one plugin's failure is never the desktop's.
  *
  * A layout effect, not a plain one: its cleanup runs while the slot is still
  * in the document, which is the last moment the frame can be moved out
@@ -80,7 +80,7 @@ export function PluginFrame({ spec, pluginName, onOpenSettings, className }: Plu
 }
 
 /**
- * A plugin's surface while Helm could not say which plugins there are: the
+ * A plugin's surface while the desktop could not say which plugins there are: the
  * local host could not be reached. Drawn in the surface's own place, saying
  * why, so a restored tab or an open panel is kept rather than dropped.
  */

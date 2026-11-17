@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { EMPTY_INVENTORY, type DiscoveryResult, type Project } from '@helm/core/types'
+import { EMPTY_INVENTORY, type DiscoveryResult, type Project } from '@floti/core/types'
 import { SessionTree, type SessionTreeProps, type TreeReveal, type TreeSession } from './SessionTree'
 
 /**

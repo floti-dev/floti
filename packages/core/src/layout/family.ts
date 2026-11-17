@@ -197,7 +197,7 @@ export const SESSION_URGENCY: readonly UrgentState[] = [
   'ended'
 ]
 
-/** Everything a session's dot can say: what Helm knows of the process, then what the session says of itself. */
+/** Everything a session's dot can say: what Floti knows of the process, then what the session says of itself. */
 export type UrgentState = 'running' | 'ended' | 'failed' | SessionActivity
 
 /** The most pressing of `states`, or null when none has one. */

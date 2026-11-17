@@ -1,10 +1,10 @@
-// A data directory of the check's own, so a run cannot disturb the Helm the
+// A data directory of the check's own, so a run cannot disturb the desktop the
 // user is sitting in front of.
 //
 // The drivers used to point the app they launch at the real data directory -
 // the installed app's own - and one of them went further and said so on purpose: it parked
 // settings on fixture values and put them back at the end. That is defensible
-// for a claim about persistence and indefensible in practice, because Helm is a
+// for a claim about persistence and indefensible in practice, because the desktop is a
 // desktop app somebody is using while its checks run. Observed: a check run
 // flipped the live app's theme, font and default shell underneath it, and the
 // only reason the settings came back at all is that the run got as far as its
@@ -14,7 +14,7 @@
 // from the installed app's `realDataDirFor` on each OS - and it is told about it with
 // **PORTABLE_EXECUTABLE_DIR** - the app's own portable-mode mechanism, the same
 // one `run-packaging.mjs` already uses as isolation, rather than a hook that exists
-// only for checks. `paths.ts` reads it, puts `helm-data` under it and calls
+// only for checks. `paths.ts` reads it, puts `floti-data` under it and calls
 // `app.setPath('userData')`, so the database, the overlay shims, the reports and
 // Chromium's own profile all move together.
 //
@@ -69,21 +69,6 @@ export function realDataDirFor(platform, env, home) {
 }
 
 /**
- * Where the app kept its data while it was called Helm, until the installed
- * Floti copies it to `realDataDirFor` at its first start (`helmDataDirFor` in
- * `src/main/dataFolder.ts`).
- *
- *   Windows  `%APPDATA%\Helm`
- *   macOS    `~/Library/Application Support/Helm`
- *   Linux    `${XDG_CONFIG_HOME:-~/.config}/Helm`
- */
-export function helmDataDirFor(platform, env, home) {
-  if (platform === 'win32') return win32.join(env.APPDATA ?? win32.join(home, 'AppData', 'Roaming'), 'Helm')
-  if (platform === 'darwin') return posix.join(home, 'Library', 'Application Support', 'Helm')
-  return posix.join(env.XDG_CONFIG_HOME || posix.join(home, '.config'), 'Helm')
-}
-
-/**
  * Where `pnpm dev` and every check keep their data on each OS: a folder of
  * their own, outside the installed app's and outside Floti's data folder.
  *
@@ -97,15 +82,9 @@ export function isolatedBaseFor(platform, env, home) {
   return posix.join(env.XDG_DATA_HOME || posix.join(home, '.local', 'share'), 'floti-dev')
 }
 
-/**
- * The real Floti's data directory - read from, never written to. Until the
- * installed app has copied Helm's folder there, Helm's, where the real data
- * still is.
- */
+/** The real Floti's data directory - read from, never written to. */
 export function realDataDir() {
-  const floti = realDataDirFor(process.platform, process.env, homedir())
-  const helm = helmDataDirFor(process.platform, process.env, homedir())
-  return !existsSync(join(floti, 'helm.db')) && existsSync(join(helm, 'helm.db')) ? helm : floti
+  return realDataDirFor(process.platform, process.env, homedir())
 }
 
 /**
@@ -167,7 +146,7 @@ export function isolatedRoot(name, group = 'checks') {
  *
  * `concurrent: true` when the thing being launched is an app somebody keeps
  * open rather than a check that runs and exits. A second one then gets
- * `<name>-2` rather than failing, because the first still holds `helm.db` and
+ * `<name>-2` rather than failing, because the first still holds `desktop.db` and
  * Windows will not let the seed replace an open file. Checks leave this off on
  * purpose: two of them in one directory would interleave their fixtures and
  * their reports, and the honest answer to that is to stop, not to shard.
@@ -189,7 +168,7 @@ export function isolate(
   for (let attempt = 0; attempt < limit; attempt++) {
     const dirName = attempt === 0 ? name : `${name}-${String(attempt + 1)}`
     const root = isolatedRoot(dirName, group)
-    const dataDir = join(root, 'helm-data')
+    const dataDir = join(root, 'floti-data')
     mkdirSync(dataDir, { recursive: true })
     const env = { ...process.env, PORTABLE_EXECUTABLE_DIR: root }
 
@@ -213,7 +192,7 @@ export function isolate(
  * Removes the isolated database, and the `-wal`/`-shm` beside it.
  *
  * Both of those, always: SQLite reads a stale write-ahead log back over a file
- * that has been replaced, so deleting only `helm.db` produces a database that
+ * that has been replaced, so deleting only `desktop.db` produces a database that
  * is neither the old one nor the new one.
  *
  * Returns `'busy'` when an app still has it open. Windows holds a mandatory
@@ -223,7 +202,7 @@ export function isolate(
  * copy of unknown age while reporting a fresh one.
  */
 export function clearDatabase(dataDir) {
-  const dest = join(dataDir, 'helm.db')
+  const dest = join(dataDir, 'desktop.db')
   for (const suffix of ['', '-wal', '-shm']) {
     try {
       rmSync(`${dest}${suffix}`, { force: true })
@@ -248,8 +227,8 @@ export function clearDatabase(dataDir) {
  * one then starts empty.
  */
 export function seedDatabase(dataDir, { keepUiState = false } = {}) {
-  const source = join(realDataDir(), 'helm.db')
-  const dest = join(dataDir, 'helm.db')
+  const source = join(realDataDir(), 'desktop.db')
+  const dest = join(dataDir, 'desktop.db')
   if (!existsSync(source)) {
     console.log(`(no database at ${source}; the isolated one starts empty)`)
     return clearDatabase(dataDir) === 'busy' ? 'busy' : false
@@ -272,12 +251,6 @@ export function seedDatabase(dataDir, { keepUiState = false } = {}) {
   // that moved would otherwise put the old behaviour back silently, and a check
   // quietly reverting to inheriting somebody's tabs is precisely the failure
   // this is here to end.
-  //
-  // Every copy also counts the upgrade note seen where the real app's row
-  // lacks it. The copy is made again on every start, so a note left due there
-  // would cover every dev window and every check's screen, and closing it
-  // would never stick; a driver decides what is on screen, and the note is
-  // not somewhere anybody left the app.
   //
   // And the rows still claiming to be running are the real app's sessions,
   // live in it right now, not a crash of this one: left as they are, the copy
@@ -305,10 +278,7 @@ export function seedDatabase(dataDir, { keepUiState = false } = {}) {
     '    .map((row) => row.key)',
     '  copy.close()',
     '  if (left.length > 0) throw new Error(`still in the copy after the strip: ${left.join(", ")}`)',
-    '}',
-    'const stamped = new Database(process.argv[2], { fileMustExist: true })',
-    "stamped.prepare(\"INSERT OR IGNORE INTO app_settings (key, value) VALUES ('upgradeNoteSeenAt', ?)\").run(JSON.stringify(new Date().toISOString()))",
-    'stamped.close()'
+    '}'
   ].join('\n')
   const { status, stderr } = spawnSync(
     electronBinary(),

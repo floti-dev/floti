@@ -4,7 +4,7 @@ import type { SettingValue } from '@floti-dev/plugin-sdk'
  * The sample server's API, through `floti.fetch`: the pages' and the
  * background module's, which take the same request.
  *
- * `{{sample-token}}` is written into the header as it is: Helm puts the stored
+ * `{{sample-token}}` is written into the header as it is: Floti puts the stored
  * value there on its way out, and only for a host the user allowed it for.
  * The page never holds the token, so nothing here can leak it.
  */

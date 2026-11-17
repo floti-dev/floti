@@ -60,14 +60,12 @@ YAML so it travels with the workspace.
 Windows 10/11, x64. No admin rights are needed for any of these.
 
 **Portable** - download `Floti-<version>-portable.exe`, put it wherever you like
-and run it. It keeps everything in a `helm-data\` folder beside itself, so the
+and run it. It keeps everything in a `floti-data\` folder beside itself, so the
 whole install travels on a stick and removing it is deleting two things.
 
 **Installed** - download `Floti-<version>-setup.exe` and run it. It installs for
 your user only, into `%LOCALAPPDATA%\Programs\Floti\desktop`, and keeps its data in
-`%LOCALAPPDATA%\Floti\desktop`. An installed Helm moves there: the installer
-replaces it, and the app copies Helm's data from `%APPDATA%\Helm` at its first
-start and removes the old folder once the copy has opened. Uninstalling removes the program and **keeps** your data - the
+`%LOCALAPPDATA%\Floti\desktop`. Uninstalling removes the program and **keeps** your data - the
 database holds your profiles, session index and the versions of the notes you
 saved.
 
@@ -100,9 +98,7 @@ services may rely on it. Run it from a terminal Floti did not start.
 
 Workspace templates are the one thing outside that: they live in
 `~/.config/floti/templates`, because they are folders you write and edit by
-hand. While the app was called Helm they were in `~/.config/helm`; the host
-moves that folder to `~/.config/floti` once, at its first start as Floti.
-A portable install keeps them in its own `helm-data\templates`, so it still
+hand. A portable install keeps them in its own `floti-data\templates`, so it still
 leaves nothing behind on a machine you plug it into.
 
 Floti manages them without trying to replace your editor. **Settings ->
@@ -202,12 +198,12 @@ into a workspace writes only `workspace.yaml`.
   Ctrl+Shift+F by what it says, and the markdown and HTML artifacts Claude
   writes opened rendered - with wikilinks, an editor beside a live preview for
   notes, and a sandboxed frame for artifacts.
-- **Plugins** - a folder with a `helm-plugin.json` adds a rail icon and panel,
+- **Plugins** - a folder with a `floti-plugin.json` adds a rail icon and panel,
   tabs, a status bar item, commands for Ctrl+Shift+P and a settings page, all
   drawn in Floti's theme. Each runs in a process of its own, so one that hangs
   or crashes takes nothing else with it. Add one in **Settings → Plugins**;
   [the SDK](packages/plugin-sdk/README.md), `@floti-dev/plugin-sdk` on
-  npm, has `helm-plugin create`, `helm-plugin validate` and the authoring
+  npm, has `floti-plugin create`, `floti-plugin validate` and the authoring
   guide.
 
 ### The version guard warns; it never gates
@@ -299,7 +295,7 @@ A **plugin** you add reaches the network on the terms its manifest states.
 Its pages have none of their own: every request goes through Floti, to the
 hosts the manifest names and nowhere else, with every redirect checked against
 the same list. A plugin can do that on its own schedule - that is what its
-background page is for - so "because you asked" means you added it. When it
+background is for - so "because you asked" means you added it. When it
 needs a token, you type it into **Settings → Secrets** and say which hosts and
 plugins may use it; the local host stores it sealed by your OS's own store
 for your account, refuses to store it at all when that is unavailable, fills it into
@@ -315,10 +311,10 @@ listening, not Floti's.
 
 ```
 packages/
-├── core/      # shared: types.ts, store/ (helm.db), layout/, theme/ - ZERO electron imports
+├── core/      # shared: types.ts, store/ (desktop.db), layout/, theme/ - ZERO electron imports
 ├── ui/        # React components
 ├── desktop/   # Electron main + preload + renderer + pty host
-└── plugin-sdk/ # the manifest validator, the bridge's types, the helm-plugin CLI
+└── plugin-sdk/ # the manifest validator, the bridge's types, the floti-plugin CLI
 ```
 
 Stack: Electron, TypeScript strict, React + Vite, Tailwind, xterm.js + node-pty,
@@ -391,7 +387,7 @@ are tools, not tests, and nothing has to pass them before a change is done:
 
 ```bash
 pnpm shell             # interactive pane hosting pwsh
-pnpm --filter @helm/desktop claude   # ...hosting the real claude TUI
+pnpm --filter @floti/desktop claude   # ...hosting the real claude TUI
 pnpm fidelity          # terminal fidelity inside xterm
 pnpm claude-check      # the real claude TUI in the pane
 pnpm selftest          # native modules in a packaged build

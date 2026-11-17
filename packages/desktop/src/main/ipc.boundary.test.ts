@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { isClientOnly, isHostInternal } from '../shared/host/protocol'
+import { isClientOnly } from '../shared/host/protocol'
 import { EVENT_CHANNELS, REQUEST_CHANNELS, SEND_CHANNELS } from '../shared/ipc'
 
 /** Every channel main registers, by how: a handled request, or a listened-for send. */
@@ -45,10 +45,10 @@ describe('what main handles over Electron IPC', () => {
     vi.resetModules()
   })
 
-  it('S6: registers no channel boundary.rs does not list as client-only or host-internal', async () => {
+  it('S6: registers no channel boundary.rs does not list as client-only', async () => {
     const channels = await register()
     expect(channels.length).toBeGreaterThan(0)
-    expect(channels.filter((channel) => !isClientOnly(channel) && !isHostInternal(channel)).sort()).toEqual([])
+    expect(channels.filter((channel) => !isClientOnly(channel)).sort()).toEqual([])
     // The window's answer to a session's close is the host's, never main's.
     expect(channels).not.toContain('session:confirmed')
     expect(channels).not.toContain('session:start')
@@ -57,12 +57,10 @@ describe('what main handles over Electron IPC', () => {
     expect(channels).toContain('hostLink:open')
   })
 
-  it('S6: registers every client-only and host-internal request and send the desktop declares', async () => {
+  it('S6: registers every client-only request and send the desktop declares', async () => {
     const channels = new Set(await register())
     const declared = [...REQUEST_CHANNELS, ...SEND_CHANNELS]
-    const missing = declared.filter(
-      (channel) => (isClientOnly(channel) || isHostInternal(channel)) && !channels.has(channel)
-    )
+    const missing = declared.filter((channel) => isClientOnly(channel) && !channels.has(channel))
     expect(missing).toEqual([])
     // Main's pushes are not registrations.
     expect(EVENT_CHANNELS.filter((channel) => channels.has(channel) && !declared.includes(channel as never))).toEqual([])

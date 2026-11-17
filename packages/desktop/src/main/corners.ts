@@ -31,7 +31,7 @@ async function dwmSetWindowAttribute(): Promise<SetWindowAttribute | null> {
       'long __stdcall DwmSetWindowAttribute(intptr_t hwnd, uint32_t attribute, _In_ uint32_t *value, uint32_t size)'
     ) as SetWindowAttribute
   } catch (err) {
-    console.warn('[helm] window corners: dwmapi could not be loaded, keeping the default', err)
+    console.warn('[floti] window corners: dwmapi could not be loaded, keeping the default', err)
     setWindowAttribute = null
   }
   return setWindowAttribute

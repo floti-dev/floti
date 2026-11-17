@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useMemo, useState, type JSX } from 'react'
 import { createRoot } from 'react-dom/client'
-import type { ExecResult, HelmError, SessionStartResult } from '@floti-dev/plugin-sdk'
-import { useHelmSettings } from '@floti-dev/plugin-sdk/react'
+import type { ExecResult, FlotiError, SessionStartResult } from '@floti-dev/plugin-sdk'
+import { useFlotiSettings } from '@floti-dev/plugin-sdk/react'
 import { CHANNEL, createItem, getItem, markRead, messageOf, optionsOf, type Item, type Options } from '../lib/api'
 import '../styles.css'
 
@@ -10,17 +10,17 @@ import '../styles.css'
  * same item opened twice is one tab, and another item is another.
  */
 function ItemTab(): JSX.Element {
-  const settings = useHelmSettings()
+  const settings = useFlotiSettings()
   const options = useMemo(() => (settings === null ? null : optionsOf(settings)), [settings])
   const id = floti.context.params['id']
-  if (options === null) return <p className="helm-meta page">Loading…</p>
+  if (options === null) return <p className="floti-meta page">Loading…</p>
   return typeof id === 'string' ? <ItemView options={options} id={id} /> : <NewItem options={options} />
 }
 
 /**
- * Typing into the page keeps its tab, as editing keeps a file Helm opened as a
+ * Typing into the page keeps its tab, as editing keeps a file Floti opened as a
  * preview: the next item clicked in the panel must not replace what the user
- * is half way through. A Helm without `keep` has no previews to keep.
+ * is half way through. A Floti without `keep` has no previews to keep.
  */
 function keepTab(): void {
   if (typeof floti.surface.keep === 'function') floti.surface.keep()
@@ -52,21 +52,21 @@ function ItemView({ options, id }: { options: Options; id: string }): JSX.Elemen
 
   if (error !== null) {
     return (
-      <div className="helm-empty">
-        <p className="helm-empty-title">Item {id} did not load</p>
-        <p className="helm-empty-text">{error}</p>
+      <div className="floti-empty">
+        <p className="floti-empty-title">Item {id} did not load</p>
+        <p className="floti-empty-text">{error}</p>
       </div>
     )
   }
-  if (item === null) return <p className="helm-meta page">Loading…</p>
+  if (item === null) return <p className="floti-meta page">Loading…</p>
   return (
     <main className="page" data-sample-item-page={item.id}>
       <h1>{item.title}</h1>
-      <p>{item.body === '' ? <span className="helm-meta">No body.</span> : item.body}</p>
+      <p>{item.body === '' ? <span className="floti-meta">No body.</span> : item.body}</p>
       <div className="row">
         <button
           type="button"
-          className="helm-button"
+          className="floti-button"
           data-sample-echo
           onClick={() => void floti.exec('echo', [item.id]).then(setEcho, (failure: unknown) => setError(messageOf(failure)))}
         >
@@ -74,7 +74,7 @@ function ItemView({ options, id }: { options: Options; id: string }): JSX.Elemen
         </button>
       </div>
       {echo !== null && (
-        <pre className="helm-mono output" data-sample-echo-output>
+        <pre className="floti-mono output" data-sample-echo-output>
           {echo.stdout.trim()}
         </pre>
       )}
@@ -85,8 +85,8 @@ function ItemView({ options, id }: { options: Options; id: string }): JSX.Elemen
 }
 
 /**
- * An address, opened in Helm's Browser tab. Like a session, only the click
- * itself can ask: Helm refuses the call from anywhere else.
+ * An address, opened in Floti's Browser tab. Like a session, only the click
+ * itself can ask: Floti refuses the call from anywhere else.
  */
 function OpenLink(): JSX.Element {
   const [address, setAddress] = useState('')
@@ -94,7 +94,7 @@ function OpenLink(): JSX.Element {
   const open = (): void => {
     setError(null)
     floti.open(address.trim()).catch((failure: unknown) => {
-      const code = (failure as Partial<HelmError>).code
+      const code = (failure as Partial<FlotiError>).code
       setError(code === undefined ? messageOf(failure) : `${code}: ${messageOf(failure)}`)
     })
   }
@@ -103,7 +103,7 @@ function OpenLink(): JSX.Element {
       <h2>Open a link</h2>
       <div className="row">
         <input
-          className="helm-input"
+          className="floti-input"
           aria-label="Address"
           data-sample-link-address
           placeholder="https://example.com"
@@ -113,7 +113,7 @@ function OpenLink(): JSX.Element {
             keepTab()
           }}
         />
-        <button type="button" className="helm-button" data-sample-link-open disabled={address.trim() === ''} onClick={open}>
+        <button type="button" className="floti-button" data-sample-link-open disabled={address.trim() === ''} onClick={open}>
           Open
         </button>
       </div>
@@ -127,7 +127,7 @@ function OpenLink(): JSX.Element {
 }
 
 /**
- * A Claude Code session about this item, in a folder the user names. Helm
+ * A Claude Code session about this item, in a folder the user names. Floti
  * shows the folder and the message, and starts it only if the user does; the
  * call has to come from the click itself.
  */
@@ -139,7 +139,7 @@ function StartSession({ item }: { item: Item }): JSX.Element {
     setOutcome(null)
     setError(null)
     floti.sessions.start({ cwd: folder.trim(), prompt: `work on ${item.title}`, name: item.title }).then(setOutcome, (failure: unknown) => {
-      const code = (failure as Partial<HelmError>).code
+      const code = (failure as Partial<FlotiError>).code
       setError(code === undefined ? messageOf(failure) : `${code}: ${messageOf(failure)}`)
     })
   }
@@ -148,7 +148,7 @@ function StartSession({ item }: { item: Item }): JSX.Element {
       <h2>Work on it in Claude Code</h2>
       <div className="row">
         <input
-          className="helm-input"
+          className="floti-input"
           aria-label="Folder"
           data-sample-session-folder
           placeholder="C:\path\to\project"
@@ -158,12 +158,12 @@ function StartSession({ item }: { item: Item }): JSX.Element {
             keepTab()
           }}
         />
-        <button type="button" className="helm-button" data-sample-session-start disabled={folder.trim() === ''} onClick={start}>
+        <button type="button" className="floti-button" data-sample-session-start disabled={folder.trim() === ''} onClick={start}>
           Start a session
         </button>
       </div>
       {outcome !== null && (
-        <p className="helm-meta" data-sample-session-result>
+        <p className="floti-meta" data-sample-session-result>
           {outcome === 'started' ? 'Started.' : 'Cancelled.'}
         </p>
       )}
@@ -193,7 +193,7 @@ function NewItem({ options }: { options: Options }): JSX.Element {
       <h1>New item</h1>
       <div className="row">
         <input
-          className="helm-input"
+          className="floti-input"
           aria-label="Title"
           data-sample-new-title
           placeholder="Title"
@@ -203,7 +203,7 @@ function NewItem({ options }: { options: Options }): JSX.Element {
             if (event.key === 'Enter') void create()
           }}
         />
-        <button type="button" className="helm-button" data-variant="primary" disabled={title.trim() === ''} onClick={() => void create()}>
+        <button type="button" className="floti-button" data-variant="primary" disabled={title.trim() === ''} onClick={() => void create()}>
           Create
         </button>
       </div>

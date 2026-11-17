@@ -12,16 +12,16 @@
 // Claude Code's config folder moves with it (`CLAUDE_CONFIG_DIR`), to a folder
 // beside the fakes, so what the fake writes (its session records, history and
 // transcripts) never lands in the real `~/.claude`. That folder starts with
-// the onboarding record a signed-in CLI leaves, which is all Helm reads of a
+// the onboarding record a signed-in CLI leaves, which is all the desktop reads of a
 // sign-in, and is kept across launches so a fake conversation can be resumed;
 // `--fresh` starts it over.
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openStore, settleUpgradeNote, settleWalkthrough, writeSettings, type AppSettings } from '@helm/core'
+import { openStore, settleWalkthrough, writeSettings, type AppSettings } from '@floti/core'
 import { FAKE_AGENTS, writeFakeAgent, type FakeBackend } from '../../../test/fake-agents/programs.mjs'
 
-/** The setting that chooses each backend's program in Helm. */
+/** The setting that chooses each backend's program in the desktop. */
 const PROGRAM_SETTING = { 'claude-code': 'claudePath' } as const satisfies Record<FakeBackend, keyof AppSettings>
 
 export interface DriveAgent {
@@ -48,7 +48,7 @@ export interface DriveAgentsOptions {
 
 /**
  * Writes every fake under `<root>/fake-agents` and chooses each in
- * `<dataDir>/helm.db`, whatever the copied database chose.
+ * `<dataDir>/desktop.db`, whatever the copied database chose.
  */
 export function prepareDriveAgents(root: string, dataDir: string, options: DriveAgentsOptions): DriveAgents {
   const folder = join(root, 'fake-agents')
@@ -60,7 +60,7 @@ export function prepareDriveAgents(root: string, dataDir: string, options: Drive
 
   const onboarding = join(claudeConfigDir, '.claude.json')
   if (!existsSync(onboarding)) {
-    writeFileSync(onboarding, JSON.stringify({ hasCompletedOnboarding: true, userID: 'helm-dev-drive' }))
+    writeFileSync(onboarding, JSON.stringify({ hasCompletedOnboarding: true, userID: 'floti-dev-drive' }))
   }
 
   const write = {
@@ -72,12 +72,11 @@ export function prepareDriveAgents(root: string, dataDir: string, options: Drive
 
   const patch: Partial<AppSettings> = {}
   for (const { backend, program } of agents) patch[PROGRAM_SETTING[backend]] = program
-  const store = openStore({ file: join(dataDir, 'helm.db') })
+  const store = openStore({ file: join(dataDir, 'desktop.db') })
   try {
     // When this open makes the database (`--fresh`), it is the device's first
     // open, not the app's, so it settles what a first start settles: the
-    // window then opens on the walkthrough, with no upgrade note over it.
-    settleUpgradeNote(store)
+    // window then opens on the walkthrough.
     settleWalkthrough(store)
     writeSettings(store, patch)
   } finally {

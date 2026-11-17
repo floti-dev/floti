@@ -1,6 +1,6 @@
 import type { JSX, RefObject } from 'react'
 import { useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react'
-import type { BrowserSuggestion, BrowserSuggestions as Suggestions } from '@helm/core/types'
+import type { BrowserSuggestion, BrowserSuggestions as Suggestions } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
 import { isMac, shortcutLabel } from '../lib/platform'
@@ -201,7 +201,7 @@ export function BrowserEmpty({ onOpen }: { onOpen: () => void }): JSX.Element {
  * so the view can be put exactly there. Everything drawn here is drawn *around*
  * it. That is also why the placeholder carries no border, no radius and no
  * ground of its own: the view's ground is the page's, which is foreign ground
- * (DESIGN.md 6), and a rounded corner Helm drew would be a rounded corner the
+ * (DESIGN.md 6), and a rounded corner Floti drew would be a rounded corner the
  * page paints straight over.
  *
  * **It never reaches the top 36px.** The window hides the native title bar and

@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { RestorableSession } from "@helm/core/types";
+import type { RestorableSession } from "@floti/core/types";
 import { useStoppedGroup, type StoppedGroupDeps } from "./useStoppedGroup";
 
 const lost = (id: number, patch: Partial<RestorableSession> = {}): RestorableSession => ({

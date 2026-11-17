@@ -1,6 +1,6 @@
 import { useEffect, useState, type JSX } from 'react'
-import { BrowserSuggestions, MENU_FRAME, MenuList } from '@helm/ui'
-import type { BrowserLayerShow, HelmBridge } from '../../../shared/ipc'
+import { BrowserSuggestions, MENU_FRAME, MenuList } from '@floti/ui'
+import type { BrowserLayerShow, DesktopBridge } from '../../../shared/ipc'
 import { applyLook } from '../app/theme'
 
 /**
@@ -15,7 +15,7 @@ import { applyLook } from '../app/theme'
  * the address bar keeps the keyboard and sends the highlight - so only the
  * pointer's pick and hover go back, by row.
  */
-export function LayerRoot({ bridge }: { bridge: Pick<HelmBridge, 'on' | 'send'> }): JSX.Element | null {
+export function LayerRoot({ bridge }: { bridge: Pick<DesktopBridge, 'on' | 'send'> }): JSX.Element | null {
   const [show, setShow] = useState<BrowserLayerShow>(null)
 
   useEffect(() => {

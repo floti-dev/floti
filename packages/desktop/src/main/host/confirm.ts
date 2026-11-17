@@ -1,5 +1,5 @@
 import { type BrowserWindow, dialog, ipcMain, Notification } from 'electron'
-import { sessionLabel, type SessionRecord } from '@helm/core'
+import { sessionLabel, type SessionRecord } from '@floti/core'
 import type { NeedsYouNotification, QuitAnswer } from '../../shared/ipc'
 import { emit } from '../ipc'
 import type { Confirm, ConfirmRequest, QuitConfirm } from './session-host'
@@ -10,9 +10,9 @@ import type { Confirm, ConfirmRequest, QuitConfirm } from './session-host'
  * This is not a "the user is taking too long" timer - it is set well past any
  * real reading time, because the only thing it exists to catch is a renderer
  * that will never answer at all. `before-quit` holds the window open on this
- * promise, so without a ceiling a wedged renderer makes Helm unquittable, and
+ * promise, so without a ceiling a wedged renderer makes the desktop unquittable, and
  * an ugly dialog beats an app that cannot be closed. If it does fire while a
- * Helm dialog is still on screen, the native box is what decides; the stale
+ * desktop dialog is still on screen, the native box is what decides; the stale
  * answer arrives later and finds nothing waiting for it.
  */
 const CONFIRM_TIMEOUT_MS = 120_000
@@ -47,7 +47,7 @@ export type ConfirmChannel = 'windowSessions:quitConfirm'
 type Ask = (request: ConfirmRequest) => Promise<QuitAnswer>
 
 /**
- * Ask the renderer, so the question is a Helm island rather than a Win32 box.
+ * Ask the renderer, so the question is a desktop island rather than a Win32 box.
  *
  * Falls back to `native` whenever there is no live window to ask - during
  * shutdown, before the first window, or after a renderer has gone. That path is
@@ -119,7 +119,7 @@ export function sessionConfirm(window: () => BrowserWindow | null): Confirm {
 }
 
 /**
- * How Helm asks before it quits with sessions in the local host it would end:
+ * How the desktop asks before it quits with sessions in the local host it would end:
  * in the window on `windowSessions:quitConfirm`, with the native box behind it,
  * and answered End and quit, Keep running and quit, or Cancel.
  */

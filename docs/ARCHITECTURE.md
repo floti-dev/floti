@@ -14,24 +14,22 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   exposes three generic functions; a feature adds a channel, not a bridge
   method. `term:*` (the spike page's single pty) and `session:*` (the host's
   sessions) never mix.
-- Each Floti page (the window, the guided first run's setup window while it
-  is open, and the hidden plugin host window) reaches the host over its own
-  protocol connection, which main pipes to a bridge unread
-  (`hostLink:*`); the bridge holds the device key, never a window. Electron
-  IPC carries only what `channels/boundary.rs` lists as client-only, and its
-  host-internal channels from the hidden plugin window: `registerIpc`
-  registers nothing else, and a page's router (`app/host/router.ts`) refuses
+- Each Floti page (the window, and the guided first run's setup window while
+  it is open) reaches the host over its own protocol connection, which main
+  pipes to a bridge unread (`hostLink:*`); the bridge holds the device key,
+  never a window. Electron IPC carries only what `channels/boundary.rs` lists
+  as client-only: `registerIpc` registers nothing else, and a page's router (`app/host/router.ts`) refuses
   any other channel at once. `e2e/boundary.spec.ts` fails naming any channel
   that crossed. Main runs no session, terminal, config reader, content,
   template or scan service of its own; those are the host's.
-- The host never opens `helm.db` or learns Floti's data folder. What only
-  `helm.db` holds (archived conversations whose transcript is gone, their
+- The host never opens `desktop.db` or learns Floti's data folder. What only
+  `desktop.db` holds (archived conversations whose transcript is gone, their
   usage, History's names) main reads through core's
   read-only pages (`store/copy.ts`) and sends on `carry:*`, in batches, until
   the host records in `floti.db` that the copy finished
   (`main/host/own-data.ts`). The host's merge keeps what it already holds,
   and a copy that stops part way is sent again at the next connect. Config
-  file versions kept in `helm.db` are not copied; those already in
+  file versions kept in `desktop.db` are not copied; those already in
   `floti.db` stay there.
 - The host owns process lifetime. Every session's and plain terminal's pty and
   process tree is held by the session keeper (`floti keeper`,
@@ -43,7 +41,7 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   stop ends the keeper. Quitting a client ends the sessions it started only
   where its setting for that host says so; a crash ends nothing; stopping the
   host ends every session. The plain terminals a client opened end when it
-  quits. Floti's setting is `quitSessions`, kept in `helm.db` keyed by host
+  quits. Floti's setting is `quitSessions`, kept in `desktop.db` keyed by host
   (this PC's is `local`, End when absent; a remote host's is its id, Keep when
   absent). Quitting with sessions it would end asks first: End and quit, Keep
   running and quit (this quit only, never written to the setting), or Cancel.
@@ -64,7 +62,7 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   floti the desktop runs, with no question, inside main's connect
   (`connectUpdatingLocalHost` in `main/host/launcher.ts`), once `floti
   version` there says it speaks a protocol the `hello` is accepted by
-  (`hostUpdatePlan` in `@helm/core`); the keeper hands its sessions to the
+  (`hostUpdatePlan` in `@floti/core`); the keeper hands its sessions to the
   new host. A host that is ending stops answering on its socket before it
   lets go of its data folder, so the desktop waits for that too (`floti
   wait-host-exit`), after a restart and whenever a host it starts finds the
@@ -157,10 +155,10 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
 
 ## First run
 
-A first start is one with no data folder: the open that creates `helm.db`
+A first start is one with no data folder: the open that creates `desktop.db`
 (`settleWalkthrough` in core) writes the `walkthrough` setting at step 1. A
 database that was there before has its migrations applied already, so it
-opens the shell. `walkthrough` is the step (1 to 6) and the workspace step 4 chose, kept in `helm.db` on this device; null
+opens the shell. `walkthrough` is the step (1 to 6) and the workspace step 4 chose, kept in `desktop.db` on this device; null
 means it is not showing.
 
 - Steps 1 to 4 run in a setup window of their own, before the shell exists:
@@ -168,7 +166,7 @@ means it is not showing.
   (`openSetup` in `main/index.ts`). It is the shell's page with
   `?window=setup` (`app/main.tsx` renders `setup/SetupWindow.tsx`), so it has
   the same preload, navigation guards and IPC boundary, and its own
-  connection to the host (`isHelmPage` names it).
+  connection to the host (`isFlotiPage` names it).
 - The setup window writes the step on every move. Once step 4 makes or
   chooses a workspace, is skipped, or setup is skipped on step 1, it stamps
   `setup:complete` on the host and asks main for `walkthrough:openShell`:
@@ -238,7 +236,7 @@ means it is not showing.
 ## Tabs, panes and families
 
 - Every client sees every session in the host, and tabs, panes and splits are
-  kept per device: `paneLayout` stays in `helm.db` and never reaches the host.
+  kept per device: `paneLayout` stays in `desktop.db` and never reaches the host.
   A window gives a tab only to a session its saved layout names or that it
   opened. A running child of a session it has a tab for is shown inside that
   tab while "Show children in their parent's tab" is on and the pane has room
@@ -414,12 +412,12 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   the bar before it is there. From Enter until main answers, the bar keeps
   what was typed.
 - The address bar suggests from the browser's history, the `browser_history`
-  table in `helm.db`: the newest 500 pages by last visit, with title and visit
+  table in `desktop.db`: the newest 500 pages by last visit, with title and visit
   count. Main owns it (`openBrowserHistory`, read once into memory): `remember`
   records a visit when a page the user has commits (http or https, a real
   response, or a move within the page), and `page-title-updated` keeps its
   title. A page an agent opened is never recorded. `browser:suggest` ranks in
-  main (`suggestBrowserAddresses` in `@helm/core`): the address exactly as
+  main (`suggestBrowserAddresses` in `@floti/core`): the address exactly as
   typed, then an address starting with the text (after the scheme and
   `www.`), then a word start in the host or title, then a substring; ties by
   visits, then recency; at most 8 rows. With nothing typed it lists the pages
@@ -478,15 +476,11 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   (junctions on Windows, symlinks on macOS and Linux) and never walks into
   one. `fs.rm` with `recursive: true` has been seen to go through a junction
   and empty the repository folder it points to.
-- Launch folders are swept only at host start, and overlay shims left in
-  Floti's data folder only at Floti's start
-  (`createServices`), each only where every owning process is provably dead.
-  `EPERM` counts as alive; unknown means keep.
+- Launch folders are swept only at host start, and only where every owning
+  process is provably dead. `EPERM` counts as alive; unknown means keep.
 - Templates live in `templates` in the host's config folder: for the
-  installed app `~/.config/floti` whenever it is there (`~/.config/helm` only while
-  `~/.config/floti` is not there and Helm's is; the host moves Helm's folder there, once,
-  at its first start as Floti); otherwise the folder holding `templatesDir` in
-  `paths.ts` (`helm-data/templates` when portable). The host reads and seeds them at
+  installed app `~/.config/floti`; otherwise the folder holding `templatesDir` in
+  `paths.ts` (`floti-data/templates` when portable). The host reads and seeds them at
   its start. The shipped README is written only when the directory is absent,
   and nothing there is ever overwritten or removed. Starter
   (`workspace/templates/workspace.rs`, id `starter`) is the one template Floti
@@ -507,13 +501,6 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   that has either, and a template cannot supply either; converting a folder
   writes that manifest and nothing else. Nothing renames or
   rewrites a `harness.yaml`.
-- Someone upgrading sees once, over their sessions, that harnesses are now
-  called workspaces and nothing in their folders changed
-  (`UpgradeNoteDialog`). Whether it was seen is `upgradeNoteSeenAt` in
-  `helm.db`. Only a `helm.db` from before migration 0032 leaves it unseen: one
-  created on this release is stamped as main opens it (`settleUpgradeNote`),
-  so a new device, or one whose data was reset, never sees it whatever its
-  host says. Every isolated copy (`pnpm dev`, the checks) is stamped too.
 
 ## Terminals and session state
 
@@ -545,8 +532,8 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   file (`AgentConfigFolders`, from each backend's own `agent_config`), as
   spelled or where its links lead, is refused naming the agent's own commands, and the Files view shows those
   files read-only (`FileView.readOnly`). The transcript
-  archive copies into the host's `floti.db`, and never writes there. Copying `helm.db`'s archive into
-  `floti.db` writes neither the agent's config nor `helm.db`, and logs
+  archive copies into the host's `floti.db`, and never writes there. Copying `desktop.db`'s archive into
+  `floti.db` writes neither the agent's config nor `desktop.db`, and logs
   counts, never a message. What a launch needs (agent
   tools, settings, composed instructions, overlays) is a per-launch file under
   the data directory, never a write into the agent's config.

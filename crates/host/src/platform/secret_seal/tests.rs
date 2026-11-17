@@ -61,8 +61,8 @@ fn an_installed_host_keeps_todays_store_entry() {
 
 #[test]
 fn each_moved_data_folder_has_a_store_entry_of_its_own_every_time() {
-    let one = std::path::Path::new("/home/someone/dev one/helm-data");
-    let two = std::path::Path::new("/home/someone/dev two/helm-data");
+    let one = std::path::Path::new("/home/someone/dev one/floti-data");
+    let two = std::path::Path::new("/home/someone/dev two/floti-data");
     let installed = StoreEntry::installed();
     let first = StoreEntry::for_moved_data_folder(one);
     let second = StoreEntry::for_moved_data_folder(two);
@@ -118,7 +118,7 @@ fn a_data_folder_tag_follows_the_launchers_rule() {
     // characters of the SHA-256 of the data folder's path.
     assert_eq!(data_folder_tag(std::path::Path::new("abc")), "ba7816bf8f01");
     let folder =
-        std::path::Path::new("/Users/someone/Library/Application Support/Helm Dev/dev/helm-data");
+        std::path::Path::new("/Users/someone/Library/Application Support/Floti Dev/dev/floti-data");
     let tag = data_folder_tag(folder);
     assert_eq!(tag.len(), 12);
     assert!(

@@ -13,7 +13,7 @@ const SDK_SVELTE = 'packages/plugin-sdk/test/svelte.test.ts'
  * - `desktop`: main-process services in Node, with Electron faked and real
  *   ptys running the fake `claude` (`packages/desktop/test`).
  * - `sdk`: the plugin SDK - its manifest validator, its schema, its
- *   `helm-plugin` command and the package as npm publishes it - in Node, and
+ *   `floti-plugin` command and the package as npm publishes it - in Node, and
  *   its React and Vue helpers in jsdom, each test file naming that
  *   environment.
  * - `sdk-svelte`: a Svelte component the compiler built, mounted in jsdom to

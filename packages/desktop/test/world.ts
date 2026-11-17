@@ -9,11 +9,11 @@ import {
   type AppSettings,
   type Profile,
   type ProfileDraft
-} from '@helm/core'
+} from '@floti/core'
 import { writeFakeAgent } from '../../../test/fake-agents/programs.mjs'
 
 /**
- * A machine of Helm's own for one test: a home directory with its own
+ * A machine of the desktop's own for one test: a home directory with its own
  * `.claude`, a fake `claude`, two git projects, and a data
  * directory for the app. Nothing in it touches the network, a real `~/.claude`,
  * a real CLI or the installed app.
@@ -27,7 +27,7 @@ export interface World {
   home: string
   /** `<home>/.claude`, Claude Code's directory. */
   claudeDir: string
-  /** `PORTABLE_EXECUTABLE_DIR`: the app keeps its data under `<portableDir>/helm-data`. */
+  /** `PORTABLE_EXECUTABLE_DIR`: the app keeps its data under `<portableDir>/floti-data`. */
   portableDir: string
   dataDir: string
   projectsDir: string
@@ -108,7 +108,7 @@ const LEAKY = /^(ANTHROPIC_|CLAUDE|GH_|GITHUB_|ELECTRON_RUN_AS_NODE$|PORTABLE_EX
 export function createWorld(): World {
   // Real path: on macOS the temporary folder is reached through /var, a link to
   // /private/var, and a process's own cwd always names the real one.
-  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'helm world-')))
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'floti world-')))
   writeFileSync(join(root, FAKE_AGENT_OWNER_FILE), String(process.pid))
   const home = join(root, 'home')
   const claudeDir = join(home, '.claude')
@@ -117,8 +117,8 @@ export function createWorld(): World {
   const bin = join(root, 'bin')
   for (const dir of [claudeDir, portableDir, projectsDir, bin]) mkdirSync(dir, { recursive: true })
 
-  // Signed in as far as Helm can tell: it reads only that onboarding finished.
-  writeFileSync(join(home, '.claude.json'), JSON.stringify({ hasCompletedOnboarding: true, userID: 'helm-tests' }))
+  // Signed in as far as the desktop can tell: it reads only that onboarding finished.
+  writeFileSync(join(home, '.claude.json'), JSON.stringify({ hasCompletedOnboarding: true, userID: 'floti-tests' }))
 
   const claude = writeFakeAgent(bin, 'claude-code')
 
@@ -136,7 +136,7 @@ export function createWorld(): World {
     home,
     claudeDir,
     portableDir,
-    dataDir: join(portableDir, 'helm-data'),
+    dataDir: join(portableDir, 'floti-data'),
     projectsDir,
     projects: { alpha, beta },
     claude,
@@ -151,8 +151,8 @@ function gitProject(dir: string, branch: string): string {
     execFileSync('git', args, { cwd: dir, stdio: 'ignore' })
   }
   git('init', '-q', '-b', branch)
-  git('-c', 'user.name=Floti Tests', '-c', 'user.email=tests@helm.invalid', 'add', '.')
-  git('-c', 'user.name=Floti Tests', '-c', 'user.email=tests@helm.invalid', 'commit', '-q', '-m', 'init')
+  git('-c', 'user.name=Floti Tests', '-c', 'user.email=tests@floti.invalid', 'add', '.')
+  git('-c', 'user.name=Floti Tests', '-c', 'user.email=tests@floti.invalid', 'commit', '-q', '-m', 'init')
   return dir
 }
 
@@ -164,7 +164,7 @@ function gitProject(dir: string, branch: string): string {
  */
 export const HOST_TEST_SEAL_MARKER = 'floti-test-secret-seal'
 
-/** Where the host Helm starts for a world keeps its data. */
+/** Where the host the desktop starts for a world keeps its data. */
 export const hostDataOf = (world: World): string => join(world.dataDir, 'host', 'data')
 
 /**
@@ -177,16 +177,13 @@ export const hostDataOf = (world: World): string => join(world.dataDir, 'host', 
 export function seedSettings(world: World, patch: Partial<AppSettings> = {}): void {
   mkdirSync(hostDataOf(world), { recursive: true })
   writeFileSync(join(hostDataOf(world), HOST_TEST_SEAL_MARKER), 'key-file')
-  const store = openStore({ file: join(world.dataDir, 'helm.db') })
+  const store = openStore({ file: join(world.dataDir, 'desktop.db') })
   try {
     writeSettings(store, {
       scanRoots: [world.projectsDir],
       claudePath: world.claude,
       updateCheck: false,
       firstRunCompletedAt: new Date().toISOString(),
-      // A test's app was set up before it opened, not upgraded into: the
-      // upgrade note would sit over every surface it drives.
-      upgradeNoteSeenAt: new Date().toISOString(),
       ...patch
     })
   } finally {
@@ -196,7 +193,7 @@ export function seedSettings(world: World, patch: Partial<AppSettings> = {}): vo
 
 /** A saved profile, written through the app's own store before the app opens it. */
 export function seedProfile(world: World, draft: ProfileDraft): Profile {
-  const store = openStore({ file: join(world.dataDir, 'helm.db') })
+  const store = openStore({ file: join(world.dataDir, 'desktop.db') })
   try {
     return createProfile(store, draft)
   } finally {

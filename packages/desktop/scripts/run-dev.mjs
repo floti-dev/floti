@@ -4,15 +4,9 @@
 // own uses **the installed app's own directory** (`paths.ts`:
 // `%LOCALAPPDATA%\Floti\desktop`, `~/Library/Application Support/Floti/desktop`,
 // `~/.local/share/floti/desktop`). Before this script, `pnpm dev` shared
-// `helm.db`, `overlays/` and the Chromium profile with whichever copy of the
-// app the developer had open. The visible half of that was two
-// processes fighting over one Chromium profile ("Unable to move the cache:
-// Access is denied"). The invisible half was worse: the app sweeps overlay shims
-// at start, and starting dev beside a live installed session unlinked that
-// session's `--plugin-dir` out from under it - the session kept running and
-// silently lost its skills. The sweep is fixed too (`cleanStaleShims` now asks
-// who owns a shim), but the sharing was never something to fix by making the
-// sharing safe.
+// `desktop.db`, `overlays/` and the Chromium profile with whichever copy of the
+// app the developer had open, and two processes fought over one Chromium
+// profile ("Unable to move the cache: Access is denied").
 //
 // Every check already gets a directory of its own through `isolate.mjs`. This is
 // the same mechanism, pointed at `dev` under the isolated base (`%LOCALAPPDATA%\Floti Dev`
@@ -90,7 +84,7 @@ if (drivePort !== null) env.REMOTE_DEBUGGING_PORT = drivePort
 /**
  * A driven window's agents: the fakes, chosen in the dev database after its
  * copy above and before the app opens it. `drive-agents.ts` is TypeScript
- * that writes through `@helm/core`'s own store, so it is loaded through
+ * that writes through `@floti/core`'s own store, so it is loaded through
  * Vite's module runner, the way Vite loads a config file.
  */
 const drive = drivePort === null ? null : await prepareDriveAgents()
@@ -159,8 +153,7 @@ async function prepareDriveAgents() {
  *
  * `templates` in the user's config folder is the installed app's, resolved here
  * the same way `paths.ts` resolves it for the run that is not portable:
- * `~/.config/floti` whenever that folder is there, and `~/.config/helm` only
- * while Floti's is not there and Helm's is. Dev gets a **copy**
+ * `~/.config/floti`. Dev gets a **copy**
  * rather than a share, because the dev app can now write templates and a shared
  * directory would be somebody's real one.
  *
@@ -225,18 +218,7 @@ function countTemplates(dir) {
 }
 
 function realTemplatesDir() {
-  const floti = join(homedir(), '.config', 'floti')
-  const helm = join(homedir(), '.config', 'helm')
-  return join(!isFolder(floti) && isFolder(helm) ? helm : floti, 'templates')
-}
-
-/** Whether `path` is a folder. */
-function isFolder(path) {
-  try {
-    return statSync(path).isDirectory()
-  } catch {
-    return false
-  }
+  return join(homedir(), '.config', 'floti', 'templates')
 }
 
 /** Every file under the real templates directory, with size and mtime. */
@@ -288,7 +270,7 @@ function reportTemplates(start, end) {
 /** Entry names and the database's size and mtime, which is what a run moves. */
 function snapshot(dir) {
   if (!existsSync(dir)) return { entries: [], db: null }
-  const db = join(dir, 'helm.db')
+  const db = join(dir, 'desktop.db')
   let stamp = null
   try {
     const stat = statSync(db)
@@ -303,9 +285,9 @@ function snapshot(dir) {
  * Says whether the real directory moved while dev was up.
  *
  * Printed rather than thrown, and this is the honest form: acceptance asks for
- * dev to write nothing there, but the installed Helm is allowed to be running
+ * dev to write nothing there, but the installed Floti is allowed to be running
  * at the same time - that is the other half of what this change is for - and a
- * running Helm writes to its own directory constantly. So the comparison names
+ * running desktop writes to its own directory constantly. So the comparison names
  * what changed and leaves the reading to whoever is looking, rather than
  * failing a dev run over somebody else's write.
  */
@@ -319,7 +301,7 @@ function report(start, end) {
     // behind it is what a comparison against an empty listing would also say.
     console.log(
       `\n${realDataDir()} is unchanged: ${String(end.entries.length)} entries, ` +
-        `helm.db ${end.db ?? 'absent'} (size@mtime).`
+        `desktop.db ${end.db ?? 'absent'} (size@mtime).`
     )
     return
   }
@@ -327,7 +309,7 @@ function report(start, end) {
   console.log(`\n${realDataDir()} CHANGED while dev was up:`)
   if (added.length > 0) console.log(`  added    ${added.join(', ')}`)
   if (removed.length > 0) console.log(`  removed  ${removed.join(', ')}`)
-  if (dbMoved) console.log(`  helm.db  ${String(start.db)} -> ${String(end.db)}`)
+  if (dbMoved) console.log(`  desktop.db  ${String(start.db)} -> ${String(end.db)}`)
   console.log('  If the installed app was open, this is its own writing. If it was')
   console.log('  not, something in the dev run is still resolving the real userData.')
 }

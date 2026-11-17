@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { afterEach, describe, expect, inject, it } from 'vitest'
-import type { HostTransport, RemoteHost } from '@helm/core/types'
+import type { HostTransport, RemoteHost } from '@floti/core/types'
 import { PATIENCE } from '../../../../../test/patience'
 import { RUN_ROOT } from '../../../../../test/run-root'
 import { flotiBinary, type HostChild, type HostPlaces, type LocalHost } from './launcher'
@@ -92,7 +92,7 @@ describe.runIf(existsSync(FLOTI))('adding a host on another computer by connecti
       const root = await mkdtemp(join(inject(RUN_ROOT), 'adding a host '))
       const home = join(root, 'home')
       await mkdir(home, { recursive: true })
-      const dataDir = join(root, 'helm data')
+      const dataDir = join(root, 'desktop data')
       const places: HostPlaces = { ...BUILT, dataDir }
       const transportLog = join(root, 'transport.jsonl')
       const hostEnv = (name: string): NodeJS.ProcessEnv => ({

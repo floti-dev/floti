@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import type { GitState } from '@helm/core'
+import type { GitState } from '@floti/core'
 import { Chip } from './Chip'
 import { AheadIcon, BehindIcon, BranchIcon, DirtyIcon } from './icons'
 import { cn } from '../lib/cn'

@@ -23,7 +23,7 @@ import {
   type RemoteSystem,
   type SshConfigHosts,
   type WslDistroList
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { Chip, type ChipTone } from './Chip'
 import {
@@ -57,7 +57,7 @@ import { Overlay } from './Overlay'
  * `cancelInstall`), and nothing is added or kept.
  *
  * The user's login is the access: there is no pairing code, approval, role or
- * prompt, and Helm never asks for a password or accepts a host key. Every
+ * prompt, and Floti never asks for a password or accepts a host key. Every
  * failure says what went wrong the one way Settings > Hosts says it
  * (`classifyHostFailure`), with the last line written, unedited, and the fix.
  */
@@ -82,7 +82,7 @@ export interface AddHostDialogProps {
   actions: AddHostActions
   /** The hosts this device has, so a name is not given twice. */
   hosts: readonly RemoteHost[]
-  /** Writes what quitting Helm does to the sessions it starts on the added host. */
+  /** Writes what quitting the desktop does to the sessions it starts on the added host. */
   onQuitChange: (id: string, choice: QuitSessions) => void
   onClose: () => void
   /** Mints the id of each check and connection; the browser's random UUID when absent. */
@@ -121,7 +121,7 @@ interface PickedDistro {
   distro: string
   /** The ssh target of the Windows PC, or null for this PC. */
   through: string | null
-  /** That PC's name in Helm, for the name the host gets. */
+  /** That PC's name in Floti, for the name the host gets. */
   pcName: string
 }
 
@@ -282,7 +282,7 @@ export function AddHostDialog({
         who,
         {
           lastLine: `floti ${check.found.version}${check.found.protocol === null ? '' : ` protocol ${check.found.protocol}`}`,
-          cause: { kind: 'newer', host: check.found.version, ours: check.helm, by: 'version' },
+          cause: { kind: 'newer', host: check.found.version, ours: check.desktop, by: 'version' },
           step: 'check'
         },
         retry

@@ -2,7 +2,7 @@ import type { UsageTail } from '../usage/transcripts'
 import type { Store } from './db'
 
 /**
- * The usage index an install that ran sessions in Helm's own process kept:
+ * The usage index an install that ran sessions in the desktop's own process kept:
  * token counts from every transcript under `~/.claude/projects`. The copy into
  * the host reads it (`copy.ts`); this writer stays so the copy's tests can
  * plant what such an install left behind.

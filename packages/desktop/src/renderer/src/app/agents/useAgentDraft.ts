@@ -7,7 +7,7 @@ import {
   type AgentChangeResult,
   type AgentFileText,
   type AgentProblem
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { bridgeFor } from '../bridge'
 import { readable } from '../errors'
 
@@ -135,7 +135,7 @@ export function useAgentDraft(
   target: AgentDraftTarget,
   onOutcome: (outcome: AgentOutcome) => void
 ): AgentDraft {
-  const helm = bridgeFor(host)
+  const desktop = bridgeFor(host)
   const [state, setState] = useState<AgentDraftState>(() => kept.get(key) ?? initial(target))
   /** The state as last set, for what runs after an answer arrives. */
   const current = useRef(state)
@@ -166,12 +166,12 @@ export function useAgentDraft(
   const isGone = useCallback(
     async (name: string): Promise<boolean> => {
       try {
-        return !listedAgentNames(await helm.invoke('agents:list')).has(name)
+        return !listedAgentNames(await desktop.invoke('agents:list')).has(name)
       } catch {
         return false
       }
     },
-    [helm]
+    [desktop]
   )
 
   /** Reads `name` and takes it as the page's base, or holds it beside an unsaved edit. */
@@ -180,7 +180,7 @@ export function useAgentDraft(
       let file: AgentFileText | null = null
       let failure: string | null = null
       try {
-        file = await helm.invoke('agents:read', { name })
+        file = await desktop.invoke('agents:read', { name })
       } catch (err) {
         failure = readable(err)
       }
@@ -215,7 +215,7 @@ export function useAgentDraft(
       }
       update({ external: { file, at: clock() }, loadError: null })
     },
-    [helm, isGone, update]
+    [desktop, isGone, update]
   )
 
   const isCopy = 'copyOf' in target
@@ -232,9 +232,9 @@ export function useAgentDraft(
     let live = true
     // A copy is named after the names its own host's folder holds now, bad files included.
     const taken = isCopy
-      ? helm.invoke('agents:list').then(listedAgentNames, () => new Set([from]))
+      ? desktop.invoke('agents:list').then(listedAgentNames, () => new Set([from]))
       : Promise.resolve(null)
-    Promise.all([helm.invoke('agents:read', { name: from }), taken])
+    Promise.all([desktop.invoke('agents:read', { name: from }), taken])
       .then(([file, names]) => {
         if (!live) return
         if (names !== null) update({ draft: file.text, name: copyName(from, names), loaded: true })
@@ -244,15 +244,15 @@ export function useAgentDraft(
     return () => {
       live = false
     }
-  }, [helm, key, from, isCopy, refresh, update])
+  }, [desktop, key, from, isCopy, refresh, update])
 
   useEffect(
     () =>
-      helm.on('agents:changed', ({ names }) => {
+      desktop.on('agents:changed', ({ names }) => {
         const base = current.current.base
         if (base !== null && names.includes(base.name)) void refresh(base.name)
       }),
-    [helm, refresh]
+    [desktop, refresh]
   )
 
   /**
@@ -298,7 +298,7 @@ export function useAgentDraft(
   ): Promise<AgentChangeResult | null> => {
     update({ saving: true, refusal: null })
     try {
-      return await helm.invoke('agents:write', {
+      return await desktop.invoke('agents:write', {
         name: sent.name,
         text: withoutRetiredLines(sent.draft),
         expectedHash,
@@ -391,7 +391,7 @@ export function useAgentDraft(
     if (s.base === null) return null
     let result: AgentChangeResult
     try {
-      result = await helm.invoke('agents:delete', { name: s.base.name, expectedHash: s.base.hash })
+      result = await desktop.invoke('agents:delete', { name: s.base.name, expectedHash: s.base.hash })
     } catch (err) {
       update({ refusal: readable(err) })
       return null

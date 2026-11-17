@@ -1,4 +1,4 @@
-import type { BrowserSuggestion } from '@helm/core/types'
+import type { BrowserSuggestion } from '@floti/core/types'
 import type { MenuEntry } from '../components/Menu'
 
 /**

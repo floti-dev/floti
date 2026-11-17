@@ -3,7 +3,7 @@ import type { FileChangeState, GitFileState, LineChanges } from '../types'
 /**
  * What the Files view says about git, as pure functions over the shapes main
  * hands it. Browser-safe: the renderer imports these through
- * `@helm/core/types`, so nothing here may reach `node:`.
+ * `@floti/core/types`, so nothing here may reach `node:`.
  */
 
 /**

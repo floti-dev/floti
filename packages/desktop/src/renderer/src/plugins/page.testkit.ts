@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { HELLO, type ConnectMessage, type HelmMessage } from '../../plugin-runtime/wire'
+import { HELLO, type ConnectMessage, type FlotiMessage } from '../../plugin-runtime/wire'
 
 /**
  * A plugin page, played by a test, for anything that drives the relay through
@@ -80,4 +80,4 @@ export function sayHello(element: HTMLIFrameElement, origin: string): { port: Fa
 }
 
 /** What a page received on its port, as messages. */
-export const received = (port: FakePort): HelmMessage[] => port.received as HelmMessage[]
+export const received = (port: FakePort): FlotiMessage[] => port.received as FlotiMessage[]

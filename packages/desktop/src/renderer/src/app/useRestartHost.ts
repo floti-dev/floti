@@ -1,11 +1,11 @@
 import { useCallback, useState } from "react";
-import type { LocalHostRestartOffer } from "@helm/core/types";
+import type { LocalHostRestartOffer } from "@floti/core/types";
 
 /** The two calls Restart host to update makes of main. */
 export interface RestartHostDeps {
   /** What a restart would end, asked of this PC's host. */
   ask: () => Promise<LocalHostRestartOffer>;
-  /** Restarts this PC's host on the floti this Helm carries. */
+  /** Restarts this PC's host on the floti this desktop carries. */
   restart: () => Promise<void>;
   /** Says a call that failed, in the window's own error toast. */
   onError: (message: string) => void;

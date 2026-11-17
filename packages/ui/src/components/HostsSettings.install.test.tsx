@@ -1,4 +1,4 @@
-import type { HostCheck, HostSystem, InstallOffer, InstallOutcome } from '@helm/core/types'
+import type { HostCheck, HostSystem, InstallOffer, InstallOutcome } from '@floti/core/types'
 import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -251,7 +251,7 @@ describe('a floti update running from a host’s row, and how it ends', () => {
     sessions: null,
     talks: true
   }
-  /** What the check offers for an install from this Helm's floti instead. */
+  /** What the check offers for an install from this desktop's floti instead. */
   const INSTALL_INSTEAD: InstallOffer = { ...NOT_FOUND_OFFER, action: 'update', found: { version: '2.5.0', protocol: '3.1' } }
 
   /** Install actions whose install ends only when the test says, and whose progress the test tells. */

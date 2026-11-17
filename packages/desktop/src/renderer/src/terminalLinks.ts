@@ -1,6 +1,6 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { hasPrimaryModifier } from '@helm/ui'
+import { hasPrimaryModifier } from '@floti/ui'
 import './terminalLinks.css'
 
 /**
@@ -8,7 +8,7 @@ import './terminalLinks.css'
  * time, and once.
  *
  * Two kinds of link reach a terminal. A program that knows the terminal shows
- * hyperlinks writes OSC 8, which xterm reads itself - `ptyEnv` says Helm's does,
+ * hyperlinks writes OSC 8, which xterm reads itself - `ptyEnv` says the desktop's does,
  * and Claude Code then draws its links the way Windows Terminal shows them. Any
  * other web address on screen is found by `WebLinksAddon`. For both, xterm
  * works out which link is under the pointer, and this keeps that link - and
@@ -21,7 +21,7 @@ import './terminalLinks.css'
  * of the terminal gaining focus is the click that activated the window and does
  * nothing, and every click waits 500ms to see whether a second one makes it a
  * double-click, which cancels the open. Measured on claude 2.1.291: the first
- * ctrl+click after focus had been anywhere else in Helm opened nothing, the
+ * ctrl+click after focus had been anywhere else in the desktop opened nothing, the
  * next one did, and clicking again while waiting cancelled both. Taken here,
  * the press never reaches the program, so it neither opens the link a second
  * time nor starts a selection.
@@ -132,7 +132,7 @@ function isLinkChord(event: MouseEvent): boolean {
  * only when a click would follow it (`terminalLinks.css`). Without the chord a
  * click on a link goes to the program, and a hand there would say otherwise.
  */
-export const LINK_CHORD_CLASS = 'helm-link-chord'
+export const LINK_CHORD_CLASS = 'floti-link-chord'
 
 let chordHeld: boolean | null = null
 

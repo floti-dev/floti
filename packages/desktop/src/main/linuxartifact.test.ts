@@ -100,7 +100,7 @@ async function extracted(change: Record<string, Uint8Array | null> = {}): Promis
   return root
 }
 
-const check = (root: string, modes = false) => appProblems(root, { floti: FLOTI, sums: SUMS, origin: 'Helm.AppImage', modes })
+const check = (root: string, modes = false) => appProblems(root, { floti: FLOTI, sums: SUMS, origin: 'Floti.AppImage', modes })
 
 describe('the Linux AppImage check', () => {
   it('passes an AppImage laid out as the release builds it', async () => {
@@ -117,8 +117,8 @@ describe('the Linux AppImage check', () => {
   it('refuses a floti or a SHA-256 list that is not the one it was given', async () => {
     const root = await extracted({ 'resources/floti': X64, 'resources/floti-SHA256SUMS': new Uint8Array([0]) })
     expect(check(root)).toEqual([
-      'Helm.AppImage: resources/floti is not the floti it was given, byte for byte, so it is not the one the release lists',
-      'Helm.AppImage: resources/floti-SHA256SUMS is not the SHA-256 list it was given'
+      'Floti.AppImage: resources/floti is not the floti it was given, byte for byte, so it is not the one the release lists',
+      'Floti.AppImage: resources/floti-SHA256SUMS is not the SHA-256 list it was given'
     ])
   })
 
@@ -129,9 +129,9 @@ describe('the Linux AppImage check', () => {
       'resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds/linux-x64.node': elf(0xb7)
     })
     expect(check(root)).toEqual([
-      'Helm.AppImage: app.asar.unpacked/node_modules/better-sqlite3/prebuilds/linux-x64.node is built for linux arm64, not linux x64',
-      'Helm.AppImage: app.asar.unpacked/node_modules/node-pty/build/Release/pty.node is missing',
-      'Helm.AppImage: app.asar.unpacked/node_modules/@koromix/koffi-linux-x64 is missing'
+      'Floti.AppImage: app.asar.unpacked/node_modules/better-sqlite3/prebuilds/linux-x64.node is built for linux arm64, not linux x64',
+      'Floti.AppImage: app.asar.unpacked/node_modules/node-pty/build/Release/pty.node is missing',
+      'Floti.AppImage: app.asar.unpacked/node_modules/@koromix/koffi-linux-x64 is missing'
     ])
   })
 
@@ -144,11 +144,11 @@ describe('the Linux AppImage check', () => {
       'resources/install/install.sh': null
     })
     expect(check(root)).toEqual([
-      "Helm.AppImage: floti-desktop, the app's executable, is missing",
-      'Helm.AppImage: resources/install/install.sh is missing',
-      'Helm.AppImage: resources/floti is missing, so sessions cannot run in the local host',
-      "Helm.AppImage: resources/floti-SHA256SUMS is missing, so Settings > Hosts can check no host's floti",
-      'Helm.AppImage: resources/node/bin/node is built for no OS this reads, not linux x64'
+      "Floti.AppImage: floti-desktop, the app's executable, is missing",
+      'Floti.AppImage: resources/install/install.sh is missing',
+      'Floti.AppImage: resources/floti is missing, so sessions cannot run in the local host',
+      "Floti.AppImage: resources/floti-SHA256SUMS is missing, so Settings > Hosts can check no host's floti",
+      'Floti.AppImage: resources/node/bin/node is built for no OS this reads, not linux x64'
     ])
   })
 
@@ -169,8 +169,8 @@ describe('the Linux AppImage check', () => {
       'libffmpeg.so': elfNeeding(['GLIBC_2.35'])
     })
     expect(check(root)).toEqual([
-      'Helm.AppImage: resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node needs glibc 2.42, newer than 2.34, so it does not load on an older Linux',
-      'Helm.AppImage: libffmpeg.so needs glibc 2.35, newer than 2.34, so it does not load on an older Linux'
+      'Floti.AppImage: resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node needs glibc 2.42, newer than 2.34, so it does not load on an older Linux',
+      'Floti.AppImage: libffmpeg.so needs glibc 2.35, newer than 2.34, so it does not load on an older Linux'
     ])
     expect(glibcByFile(root).map(({ path, needed }) => `${needed} ${path}`)).toEqual([
       '2.42 resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node',
@@ -181,17 +181,17 @@ describe('the Linux AppImage check', () => {
 
   it('refuses a menu entry that starts Floti without the sandbox, or none at all', async () => {
     const unsandboxed = await extracted({ 'floti-desktop.desktop': new TextEncoder().encode('[Desktop Entry]\nExec=AppRun --no-sandbox %U\n') })
-    expect(check(unsandboxed)).toEqual(['Helm.AppImage: floti-desktop.desktop starts Floti with --no-sandbox (Exec=AppRun --no-sandbox %U)'])
-    expect(check(await extracted({ 'floti-desktop.desktop': null }))).toEqual(['Helm.AppImage: floti-desktop.desktop, the menu entry, is missing'])
+    expect(check(unsandboxed)).toEqual(['Floti.AppImage: floti-desktop.desktop starts Floti with --no-sandbox (Exec=AppRun --no-sandbox %U)'])
+    expect(check(await extracted({ 'floti-desktop.desktop': null }))).toEqual(['Floti.AppImage: floti-desktop.desktop, the menu entry, is missing'])
   })
 
   it.skipIf(process.platform === 'win32')('refuses a floti, Node or executable without its execute bit', async () => {
     const root = await extracted()
     for (const path of ['floti-desktop', 'resources/floti', 'resources/node/bin/node']) chmodSync(join(root, path), 0o644)
     expect(check(root, true)).toEqual([
-      'Helm.AppImage: floti-desktop is not executable',
-      'Helm.AppImage: resources/floti is not executable',
-      'Helm.AppImage: resources/node/bin/node is not executable'
+      'Floti.AppImage: floti-desktop is not executable',
+      'Floti.AppImage: resources/floti is not executable',
+      'Floti.AppImage: resources/node/bin/node is not executable'
     ])
   })
 })

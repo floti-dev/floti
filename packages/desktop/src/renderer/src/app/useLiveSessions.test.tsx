@@ -1,14 +1,14 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { LiveSession, SessionResources, SessionsOverview } from '@helm/core/types'
+import type { LiveSession, SessionResources, SessionsOverview } from '@floti/core/types'
 import { bridge } from './bridge.testkit'
 import { useLiveSessions } from './useLiveSessions'
 
 vi.mock('./bridge', () => import('./bridge.testkit'))
 
-function live(pid: number, helmSessionId: number | null): LiveSession {
+function live(pid: number, hostSessionId: number | null): LiveSession {
   return {
-    helmSessionId,
+    hostSessionId,
     pid,
     registered: true,
     cwd: 'C:\\work\\shop',

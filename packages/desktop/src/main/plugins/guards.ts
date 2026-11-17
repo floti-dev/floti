@@ -11,11 +11,11 @@ import { formatPluginOrigin, parsePluginOrigin } from '../../shared/plugins/orig
  */
 
 /**
- * `helm-plugin://<id>` for This PC's plugin, `helm-plugin://<id>.<label>` for
- * a remote host's (`shared/plugins/origin.ts`), the same on `floti-plugin`
- * for a version 2 plugin's, or null for anything on neither scheme. Each
- * scheme, host and plugin is an origin of its own, so the rules below keep a
- * frame on its own scheme and host's plugin as well as its own plugin.
+ * `floti-plugin://<id>` for This PC's plugin, `floti-plugin://<id>.<label>`
+ * for a remote host's (`shared/plugins/origin.ts`), or null for anything not
+ * on the plugin scheme. Each host and plugin is an origin of its own, so the
+ * rules below keep a frame on its own host's plugin as well as its own
+ * plugin.
  */
 export function pluginOriginOf(url: string | null | undefined): string | null {
   // Node gives a scheme it does not know an opaque origin, so the origin is
@@ -31,9 +31,9 @@ export interface FrameNavigation {
   frameOrigin: string | null
   /** The origin of the frame that started the navigation; null when there was none, or it is gone. */
   initiatorOrigin: string | null
-  /** The navigation was started by the top of a Helm page that frames plugins - the relay making or reloading a frame. */
-  initiatorIsHelm: boolean
-  /** The web contents is a Helm page that frames plugins: the window, or the background host. */
+  /** The navigation was started by the top of a desktop page that frames plugins - the relay making or reloading a frame. */
+  initiatorIsDesktop: boolean
+  /** The web contents is a desktop page that frames plugins: the window, or the background host. */
   framesPlugins: boolean
 }
 
@@ -42,8 +42,8 @@ export interface FrameNavigation {
  *
  * A frame on a plugin's origin stays on that origin: it can move between its
  * own pages, and nowhere else - not to a website, which would put a page
- * outside the plugin's CSP inside Helm's window, and not to another plugin,
- * whose origin and storage it would then be. Only Helm's own page puts a
+ * outside the plugin's CSP inside the desktop's window, and not to another plugin,
+ * whose origin and storage it would then be. Only Floti's own page puts a
  * frame on a plugin's origin in the first place, and only in a page that
  * frames plugins. Everything else is not this guard's business.
  */
@@ -53,7 +53,7 @@ export function pluginNavigationAllowed(navigation: FrameNavigation): boolean {
   if (target === null && current === null) return true
   if (target === null) return false
   if (!navigation.framesPlugins) return false
-  if (navigation.initiatorIsHelm) return true
+  if (navigation.initiatorIsDesktop) return true
   return navigation.initiatorOrigin === target && current === target
 }
 
@@ -85,7 +85,7 @@ export function guardPluginFrames(contents: WebContents, framesPlugins: (content
       target: details.url,
       frameOrigin: originOf(details.frame),
       initiatorOrigin: originOf(initiator),
-      initiatorIsHelm: isTopOf(contents, initiator),
+      initiatorIsDesktop: isTopOf(contents, initiator),
       framesPlugins: framesPlugins(contents.id)
     })
     if (!allowed) details.preventDefault()
@@ -96,10 +96,10 @@ export function guardPluginFrames(contents: WebContents, framesPlugins: (content
 const PLUGIN_PERMISSIONS = new Set(['clipboard-sanitized-write'])
 
 /**
- * Permissions, for the session Helm's own pages and the plugin frames share.
+ * Permissions, for the session Floti's own pages and the plugin frames share.
  *
  * Electron grants every request when a session has no handler, which is what
- * Helm's own renderer has always had and keeps: these handlers answer as
+ * the desktop's own renderer has always had and keeps: these handlers answer as
  * before for everything that is not a plugin. A plugin frame gets the
  * clipboard write and nothing else - no camera, no notifications, no
  * geolocation, no opening of external URLs.

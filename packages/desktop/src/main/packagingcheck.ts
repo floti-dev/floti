@@ -24,7 +24,7 @@ import type { Check } from './fidelity'
  * checks. A
  * hand-written `readdirSync` recursion beside the scaffolder, a hand-written
  * YAML line parser beside the manifest writer, a hand-written semver comparison
- * beside the version guard, a direct `execFileSync` of the CLI beside Helm's
+ * beside the version guard, a direct `execFileSync` of the CLI beside the desktop's
  * own detection.
  *
  * Two of the criteria cannot be settled that way and are handled differently:
@@ -35,7 +35,7 @@ import type { Check } from './fidelity'
  *   directory. That is not a test hook - it is the app's own portable-mode
  *   mechanism, which redirects `userData` beside the exe. The child therefore
  *   opens an empty database in a temp directory, is pointed away from the real
- *   `~/.claude` with `--claude-home=`, and the user's own `%APPDATA%\Helm` is
+ *   `~/.claude` with `--claude-home=`, and the user's own `%LOCALAPPDATA%\Floti\desktop` is
  *   never opened. Nothing is backed up because nothing is touched.
  *
  *   "The portable exe runs from any path" and "NSIS installs per-user" are
@@ -49,7 +49,7 @@ import type { Check } from './fidelity'
  * So the auditor is made to fail first - a file carrying a personal path is
  * planted, caught, and removed - before its clean result is believed.
  *
- * `pnpm packaging-check` -> helm-data/packaging-report.json + helm-data/packaging-firstrun-report.json
+ * `pnpm packaging-check` -> floti-data/packaging-report.json + floti-data/packaging-firstrun-report.json
  */
 
 const GROUPS = ['audit', 'cli', 'firstrun', 'workspace', 'scan', 'version'] as const
@@ -313,13 +313,11 @@ function personal(): Array<{ id: string; re: RegExp }> {
  * Occurrences that are the project's own identity rather than an assumption
  * about who is running it.
  *
- * Three, and the audit asserts there are exactly three: an application id, a
- * release address, and an authorship field. None of them is a path, none is
- * read at runtime to find anything on disk, and every one of them would be
- * equally true on a stranger's machine.
+ * Two, and the audit asserts there are exactly two: a release address and an
+ * authorship field. Neither is a path, neither is read at runtime to find
+ * anything on disk, and both would be equally true on a stranger's machine.
  */
 const IDENTITY_ALLOWED: Array<{ needle: string; why: string }> = [
-  { needle: 'dev.coletaylor.helm', why: 'the app ID Helm had, whose entries the installer removes' },
   { needle: 'floti-dev/floti', why: "the project's release address" },
   { needle: '"author": "Cole Taylor"', why: 'the authorship field in package.json' }
 ]
@@ -624,7 +622,7 @@ function repoRoot(): string | null {
   try {
     const pkg: unknown = JSON.parse(readFileSync(join(candidate, 'package.json'), 'utf8'))
     const name = (pkg as Record<string, unknown>)['name']
-    if (name === 'helm-workspace') return candidate
+    if (name === 'floti-workspace') return candidate
   } catch {
     return null
   }
@@ -823,7 +821,7 @@ function auditChecks(): Check[] {
   const publication = publishable === null ? null : publicationAudit(root, publishable)
 
   // The allowlist is only defensible if it is short and enumerated. Count what
-  // each of its three entries actually excuses, so a fourth cannot be smuggled
+  // each of its two entries actually excuses, so a third cannot be smuggled
   // in behind one of them.
   const allowed = IDENTITY_ALLOWED.map((entry) => {
     let count = 0
@@ -868,7 +866,7 @@ function auditChecks(): Check[] {
       notes: [
         `The auditor was made to fail first: a planted file carrying a Windows profile path, a .harness path and a private project name was caught under ${String(probePatterns.length)} patterns and then deleted.`,
         `${String(shipped.length)} hits in what ships. ${String(harness.length)} in the development harness - the check drivers, the unit tests and the measured evidence - which is the "outside test fixtures" the criterion allows, and they are listed by file rather than waved at.`,
-        'Three occurrences are identity rather than assumption and are allowlisted by their exact text: an application id, a release address, and an authorship field. None is read at runtime to find anything on disk.',
+        'Two occurrences are identity rather than assumption and are allowlisted by their exact text: a release address and an authorship field. Neither is read at runtime to find anything on disk.',
         'Two real portability bugs were found by this audit and fixed rather than excused: claudecheck.ts and selftest.ts each started their session in a literal path under one machine\'s home directory, and now derive the checkout from app.getAppPath().'
       ]
     },
@@ -931,7 +929,7 @@ async function cliChecks(ctx: CheckContext): Promise<Check[]> {
     configDirExists: boolean
     auth: string
     authSignal: string
-  }>(ctx.win, `window.helm.invoke('setup:status')`)
+  }>(ctx.win, `window.desktop.invoke('setup:status')`)
 
   // A second opinion that shares no code with `claude-cli.ts`: ask Windows
   // itself where the program is, and run the one it names.
@@ -980,7 +978,7 @@ async function cliChecks(ctx: CheckContext): Promise<Check[]> {
         status.tested === handTested &&
         (independentAuth !== 'authenticated' || status.auth === 'authenticated'),
       detail: {
-        helm: status,
+        desktop: status,
         independent: {
           where: wherePath,
           path: independentPath,
@@ -1031,7 +1029,7 @@ async function firstRunChecks(
   // asserted rather than assumed.
   const settings = await js<{ scanRoots: string[]; firstRunCompletedAt: string | null }>(
     win,
-    `window.helm.invoke('settings:read')`
+    `window.desktop.invoke('settings:read')`
   )
   const paneShowing = await pollJs(win, `document.querySelector('[data-setup-pane]')`, 20_000)
   const sidebarAbsent = !(await exists(win, 'aside'))
@@ -1129,19 +1127,19 @@ async function reachLauncher(
   // --- PKG-5: the machine is not signed in, and the pane says what to do -----
   const status = await js<{ auth: string; authSignal: string; configDir: string; configDirExists: boolean }>(
     win,
-    `window.helm.invoke('setup:status')`
+    `window.desktop.invoke('setup:status')`
   )
   const guidance = await text(win, '[data-setup-auth-guidance]')
   const guidanceShown = await exists(win, '[data-setup-auth-guidance]')
   const authShot = await screenshot(win, shotDir, 'packaging-firstrun-unauthenticated.png')
 
   // Independent: nothing that looks like a credential exists anywhere the app
-  // could have found one, and Helm wrote nothing into the config directory.
+  // could have found one, and the desktop wrote nothing into the config directory.
   const credentialsAbsent = !existsSync(join(fixtures.claudeHome, '.credentials.json'))
   const configDirStillAbsent = !existsSync(fixtures.claudeHome)
 
   /**
-   * Files *Helm* wrote, which is a smaller set than the data directory.
+   * Files *the desktop* wrote, which is a smaller set than the data directory.
    * Chromium keeps its own profile in there and one of its stores is called
    * "Trust Tokens" - a browser-platform feature with nothing to do with Claude,
    * and a false positive that would make this assertion meaningless in either
@@ -1165,14 +1163,14 @@ async function reachLauncher(
     'TransportSecurity'
   ]
   const dataFiles = walk(dataDir)
-  const helmWrote = dataFiles.filter(
+  const desktopWrote = dataFiles.filter(
     (f) => !CHROMIUM_OWNED.some((name) => f === name || f.startsWith(`${name}/`))
   )
-  const secretLooking = helmWrote.filter((f) => /credential|token|oauth|secret|\.key$/i.test(f))
+  const secretLooking = desktopWrote.filter((f) => /credential|token|oauth|secret|\.key$/i.test(f))
 
   // And what it persisted: the settings shape has no field a credential could
   // live in, which is checked rather than asserted from the type.
-  const persisted = await js<Record<string, unknown>>(win, `window.helm.invoke('settings:read')`)
+  const persisted = await js<Record<string, unknown>>(win, `window.desktop.invoke('settings:read')`)
   const settingsKeys = Object.keys(persisted).sort()
   const secretKeys = settingsKeys.filter((k) => /credential|token|oauth|secret|key|password/i.test(k))
 
@@ -1195,7 +1193,7 @@ async function reachLauncher(
       credentialsAbsent,
       configDirStillAbsent,
       dataDirEntries: dataFiles.length,
-      writtenByHelm: helmWrote,
+      writtenByDesktop: desktopWrote,
       secretLookingFiles: secretLooking,
       persistedSettingKeys: settingsKeys,
       secretLookingSettingKeys: secretKeys,
@@ -1204,7 +1202,7 @@ async function reachLauncher(
     notes: [
       `Floti's answer is "${status.auth}" because ${status.authSignal}.`,
       'The independent read is the absence of the file, checked here without opening it.',
-      `The guidance is the whole of the remedy: a sentence telling the user to run \`claude\` once. There is no login form and no token field, none of the ${String(helmWrote.length)} entries Floti wrote is named like a credential, and none of the ${String(settingsKeys.length)} persisted settings is a field one could live in.`,
+      `The guidance is the whole of the remedy: a sentence telling the user to run \`claude\` once. There is no login form and no token field, none of the ${String(desktopWrote.length)} entries Floti wrote is named like a credential, and none of the ${String(settingsKeys.length)} persisted settings is a field one could live in.`,
       "Chromium's own profile directories are excluded from that count and listed in the source: one of its stores is called \"Trust Tokens\", which is a browser feature and would be a false positive in both directions."
     ]
   })
@@ -1232,7 +1230,7 @@ async function reachLauncher(
 
   const after = await js<{ scanRoots: string[]; firstRunCompletedAt: string | null }>(
     win,
-    `window.helm.invoke('settings:read')`
+    `window.desktop.invoke('settings:read')`
   )
 
   checks.push({
@@ -1629,7 +1627,7 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
   // function of this.
   await js<unknown>(
     win,
-    `window.helm.invoke('settings:write', { claudePath: ${JSON.stringify(fixtures.stubCli)} })`
+    `window.desktop.invoke('settings:write', { claudePath: ${JSON.stringify(fixtures.stubCli)} })`
   )
   const bannerUp = await pollJs(win, `document.querySelector('[data-version-banner]')`, 20_000)
   const bannerText = (await text(win, '[data-version-banner]')).replace(/\s+/g, ' ').trim()
@@ -1638,7 +1636,7 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
     semver: string | null
     tested: boolean
     testedRange: { min: string; max: string }
-  }>(win, `window.helm.invoke('setup:status')`)
+  }>(win, `window.desktop.invoke('setup:status')`)
   const shot = await screenshot(win, shotDir, 'packaging-version-banner.png')
 
   // Not blocked: the launcher underneath still works. A sidebar row opens its
@@ -1673,7 +1671,7 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
   await sleep(400)
   const dismissed = !(await exists(win, '[data-version-banner]'))
 
-  await js<unknown>(win, `window.helm.invoke('settings:write', { claudePath: null })`)
+  await js<unknown>(win, `window.desktop.invoke('settings:write', { claudePath: null })`)
   await sleep(800)
   const bannerAfterRestore = await exists(win, '[data-version-banner]')
 
@@ -1704,7 +1702,7 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
       detail: {
         stub: fixtures.stubCli,
         stubSaysDirectly: stubVersion,
-        helmStatus: status,
+        desktopStatus: status,
         handComputedOutsideRange: handOutside,
         range,
         bannerBefore,

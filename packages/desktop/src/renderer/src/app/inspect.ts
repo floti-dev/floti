@@ -1,5 +1,5 @@
-import { overlayOpen } from '@helm/ui'
-import type { HelmBridge } from '../../../shared/ipc'
+import { overlayOpen } from '@floti/ui'
+import type { DesktopBridge } from '../../../shared/ipc'
 import { describeSessionTerminals } from './terminals'
 import { describeShellTerminals } from './pterms'
 import { terminalPrefs } from './termprefs'
@@ -8,13 +8,13 @@ import { terminalPrefs } from './termprefs'
  * A read-only window onto the terminals, for the end-to-end tests and the
  * diagnostic drivers.
  *
- * Every terminal in Helm lives outside React in a module registry, and xterm
+ * Every terminal in the desktop lives outside React in a module registry, and xterm
  * paints to a canvas, so a test holding the window has no other route to what a
  * terminal shows or how it is configured. Nothing in the app reads this, it
  * exposes nothing the renderer did not already have, and it cannot write.
  */
 export function installTerminalInspector(): void {
-  Object.defineProperty(window, '__helmTerminals', {
+  Object.defineProperty(window, '__flotiTerminals', {
     value: () => ({
       prefs: terminalPrefs(),
       sessions: describeSessionTerminals(),
@@ -37,7 +37,7 @@ export function installTerminalInspector(): void {
  * A reader, never a writer. `Overlay` is the only thing that moves this.
  */
 export function installOverlayInspector(): void {
-  Object.defineProperty(window, '__helmOverlayOpen', {
+  Object.defineProperty(window, '__flotiOverlayOpen', {
     value: () => overlayOpen(),
     configurable: true
   })
@@ -49,12 +49,12 @@ export function installOverlayInspector(): void {
  * the window's own connection to the host, or over Electron IPC for what is
  * the window's own.
  *
- * Only on Helm's own top-level window. It is the same object the app imports
+ * Only on the desktop's own top-level window. It is the same object the app imports
  * and reaches nothing the page did not already have: a plugin page, an
  * artifact frame and a page in the Browser tab are other origins and never see
  * this window's globals.
  */
-export function installRoutedBridge(routed: HelmBridge): void {
+export function installRoutedBridge(routed: DesktopBridge): void {
   if (window.top !== window) return
-  Object.defineProperty(window, '__helmRouted', { value: routed, configurable: true })
+  Object.defineProperty(window, '__flotiRouted', { value: routed, configurable: true })
 }

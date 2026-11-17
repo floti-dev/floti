@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { LocalHostRestartOffer } from "@helm/core/types";
+import type { LocalHostRestartOffer } from "@floti/core/types";
 import { useRestartHost, type RestartHostDeps } from "./useRestartHost";
 
 /** Main's two restart calls, recorded, answering `offer` to the ask. */

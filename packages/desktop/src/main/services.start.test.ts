@@ -1,17 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { plantShim, type PlantedShim } from '@helm/core/overlay-testkit'
-import {
-  claimShimFor,
-  exitedPid,
-  isLink,
-  plantWorkspace,
-  removeShims,
-  runningProcess,
-  shimOwners,
-  type PlantedWorkspace
-} from '../../test/overlay-world'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { writeSettings } from '@floti/core'
 import { createWorld, disposeWorld, type World } from '../../test/world'
 import type { Services } from './services'
 
@@ -19,88 +7,45 @@ vi.mock('electron', async () => (await import('../../test/electron')).electronFa
 
 /**
  * What `createServices` - app start - does to the data directory before any
- * window exists: sweeping overlay shims that nothing holds any more. The
- * templates folder is the local host's to seed.
+ * window exists: the start that creates the database is a first start, and
+ * puts this device in the guided first run; a later start leaves the step
+ * where it was.
  */
 describe('app start', () => {
   let world: World
-  let workspace: PlantedWorkspace
-  let shimRoot: string
   let createServices: () => Services
 
   beforeAll(async () => {
     world = createWorld()
     Object.assign(process.env, { PORTABLE_EXECUTABLE_DIR: world.portableDir, USERPROFILE: world.home, HOME: world.home })
     ;({ createServices } = await import('./services'))
-    workspace = plantWorkspace(world)
-    // Where the app keeps these, by its own rule: under its data directory.
-    shimRoot = join(world.dataDir, 'overlays')
   })
 
-  afterEach(() => removeShims(shimRoot))
+  afterAll(() => disposeWorld(world))
 
-  afterAll(() => {
-    removeShims(shimRoot)
-    disposeWorld(world)
-  })
-
-  /** Starts the app's services once and closes the database again. */
-  const start = (): Services => {
+  it('opens on the walkthrough in a data folder this start made', () => {
     const services = createServices()
-    services.store.close()
-    return services
-  }
-
-  /** The shim an earlier version of Helm built for a session composing the workspace's overlay. */
-  const buildShim = (): PlantedShim => {
-    const shim = plantShim(workspace.overlay, shimRoot)
-    expect(isLink(join(shim.dir, 'skills'))).toBe(true)
-    return shim
-  }
-
-  const skillThroughShim = (shim: PlantedShim): string =>
-    readFileSync(join(shim.dir, 'skills', workspace.skill, 'SKILL.md'), 'utf8')
-
-  it('counts the upgrade note seen in a data folder this start made, so a new device never shows it', () => {
-    // Whichever test starts first makes the database; the stamp it gets then is kept.
-    expect(start().settings.upgradeNoteSeenAt).not.toBeNull()
-  })
-
-  it('opens on the walkthrough in a data folder a start made, at the step it was left on after that', () => {
-    // A first start, or the step the first one left it on: never null, and never past step 6.
-    expect(start().settings.walkthrough).not.toBeNull()
-  })
-
-  it('sweeps a shim whose owner has exited, and leaves the repository it linked', () => {
-    const shim = buildShim()
-    const gone = exitedPid()
-    claimShimFor(shim.dir, gone)
-    expect(shimOwners(shim.dir)).toEqual([gone])
-
-    const services = start()
-
-    expect(services.staleShims).toBe(1)
-    expect(readdirSync(shimRoot).filter((name) => name.startsWith('overlay-'))).toEqual([])
-    expect(readFileSync(join(workspace.overlay, '.claude', 'skills', workspace.skill, 'SKILL.md'), 'utf8')).toContain(
-      '# think'
-    )
-    expect(existsSync(join(workspace.overlay, '.claude', 'agents', `${workspace.agent}.md`))).toBe(true)
-  })
-
-  it('leaves the live shim of another Floti on the same data directory, junctions and all', () => {
-    const shim = buildShim()
-    const other = runningProcess()
     try {
-      claimShimFor(shim.dir, other.pid)
-
-      const services = start()
-
-      expect(services.staleShims).toBe(0)
-      expect(shimOwners(shim.dir)).toEqual([other.pid])
-      expect(isLink(join(shim.dir, 'skills'))).toBe(true)
-      expect(skillThroughShim(shim)).toContain('# think')
+      expect(services.settings.walkthrough).toEqual({ step: 1, workspace: null })
     } finally {
-      other.stop()
+      services.store.close()
+    }
+  })
+
+  it('resumes the walkthrough at the step it was left on in a data folder an earlier start made', () => {
+    const left = { step: 3, workspace: null } as const
+    const earlier = createServices()
+    try {
+      writeSettings(earlier.store, { walkthrough: left })
+    } finally {
+      earlier.store.close()
+    }
+
+    const again = createServices()
+    try {
+      expect(again.settings.walkthrough).toEqual(left)
+    } finally {
+      again.store.close()
     }
   })
 })

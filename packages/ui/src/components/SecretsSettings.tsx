@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useMemo, useState } from 'react'
-import type { SecretInfo, SecretInput, SecretsState } from '@helm/core/types'
+import type { SecretInfo, SecretInput, SecretsState } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { formatAge } from '../lib/time'
 import { Checkbox } from './Checkbox'
@@ -34,7 +34,7 @@ import { Action, Group, SettingsPage, Verdict } from './SettingsKit'
 export interface SecretPluginChoice {
   id: string
   name: string
-  /** The origins its `helm.fetch` may reach: the hosts offered for its secrets. */
+  /** The origins its `floti.fetch` may reach: the hosts offered for its secrets. */
   network: readonly string[]
   /** The keys its manifest declares. */
   secrets: readonly string[]
