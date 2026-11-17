@@ -47,6 +47,11 @@ extraResources:
   # there (`main/host/desktop.ts` reads them from `resources/install`).
   - from: ../../scripts/install
     to: install
+  # The app's third-party notices: the npm packages it carries, then floti's.
+  # scripts/stage-floti.mjs writes them for every build (third-party-notices.mjs),
+  # and the release's desktop jobs check the packaged copy holds floti's.
+  - from: dist-host/THIRD-PARTY-NOTICES.txt
+    to: THIRD-PARTY-NOTICES.txt
 asarUnpack:
   - '**/node_modules/better-sqlite3/**'
   # On macOS this also unpacks node-pty's `spawn-helper`, an executable every
@@ -63,6 +68,13 @@ asarUnpack:
 # Every other platform it leaves alone. Resolved from packages/desktop, where
 # every build runs electron-builder.
 afterPack: ./scripts/after-pack.mjs
+
+# On macOS, copies Electron's license and Chromium's into the bundle's
+# Resources as LICENSE.electron.txt and LICENSES.chromium.html, the names a
+# Windows or Linux build keeps beside the app: electron-builder deletes them
+# from a Mac build when it makes the app, which is after this hook. Every
+# other platform it leaves alone.
+afterExtract: ./scripts/after-extract.mjs
 
 # No update feed is generated, because there is no auto-updater. The decision
 # and the three reasons behind it are in docs/PACKAGING.md; the short version is

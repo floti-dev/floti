@@ -9,7 +9,7 @@
     "sdk"
   ],
   "homepage": "https://github.com/floti-dev/floti/wiki/Plugins-Overview",
-  "bugs": "https://github.com/floti-dev/floti/issues",
+  "bugs": "https://github.com/floti-dev/floti/blob/main/.github/CONTRIBUTING.md",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/floti-dev/floti.git",
