@@ -702,6 +702,8 @@ export function saysDownloadNotFound(said: string): boolean {
 export interface InstallFailureDetail {
   /** Everything the step wrote, when more than its last line is known. */
   said?: string | undefined
+  /** The step's last line, read when `said` is absent: a step that wrote one line has no more to say. */
+  lastLine?: string | undefined
   /** The floti version the install fetches (this Floti's own). */
   version?: string | undefined
 }
@@ -717,7 +719,7 @@ export function describeInstallFailure(
   folder: string,
   detail: InstallFailureDetail = {}
 ): { title: string; fix: string } {
-  if (step === 'install' && detail.version !== undefined && saysDownloadNotFound(detail.said ?? '')) {
+  if (step === 'install' && detail.version !== undefined && saysDownloadNotFound(detail.said ?? detail.lastLine ?? '')) {
     return {
       title: `floti ${detail.version} has no published build to download`,
       fix: 'Update Floti on this PC, then try again.'

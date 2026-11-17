@@ -49,8 +49,14 @@ floti_install() {
       return 1
     fi
   elif command -v wget >/dev/null 2>&1; then
-    if ! wget -q -O "$tmp" "$from/$file"; then
-      rm -f "$tmp"
+    # -nv rather than -q: a failure then says why (GNU wget's "ERROR 404: Not
+    # Found."), and what it wrote is shown only when the download fails.
+    wgetlog="$tmp.wget"
+    if wget -nv -O "$tmp" "$from/$file" 2>"$wgetlog"; then
+      rm -f "$wgetlog"
+    else
+      cat "$wgetlog" >&2
+      rm -f "$tmp" "$wgetlog"
       say "could not download $from/$file."
       return 1
     fi

@@ -125,6 +125,16 @@ describe('what went wrong reaching a host, one row of the design’s table each'
     expect(failure.fix).toBe('Run the install command there to see its full output.')
   })
 
+  it('S17: a 404 in the only line written, as on Windows, says the same', () => {
+    const line = 'Exception calling "DownloadFile": "The remote server returned an error: (404) Not Found."'
+    const failure = classify(line, { cause: { kind: 'install', step: 'install', folder: '%LOCALAPPDATA%\\Programs\\Floti\\bin', version: '3.0.0' } })
+    expect(failure).toMatchObject({
+      title: 'floti 3.0.0 has no published build to download',
+      line,
+      fix: 'Update Floti on this PC, then try again.'
+    })
+  })
+
   it('S18: its floti is newer than this Floti, naming both versions', () => {
     const failure = classify('floti 3.2.0 protocol 2.0 linux x64', {
       cause: { kind: 'newer', host: '3.2.0', ours: '3.0.0', by: 'version' }

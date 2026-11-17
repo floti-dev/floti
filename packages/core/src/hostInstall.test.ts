@@ -201,6 +201,25 @@ describe('a download that answers 404', () => {
     )
   })
 
+  it('reads the last line when nothing more was written, as install.ps1 writes one line on Windows', () => {
+    const lastLine = 'Exception calling "DownloadFile": "The remote server returned an error: (404) Not Found."'
+    expect(describeInstallFailure('install', 'win-box', folder, { lastLine, version: '3.0.0' })).toEqual({
+      title: 'floti 3.0.0 has no published build to download',
+      fix: 'Update Floti on this PC, then try again.'
+    })
+    // What was said wins over the last line.
+    expect(
+      describeInstallFailure('install', 'win-box', folder, { said: 'curl: (6) no', lastLine, version: '3.0.0' }).title
+    ).toBe('Installing floti on win-box failed')
+  })
+
+  it('reads wget’s 404, GNU’s ERROR 404 and busybox’s 404 Not Found', () => {
+    expect(saysDownloadNotFound('2026-11-16 12:00:00 ERROR 404: Not Found.')).toBe(true)
+    expect(saysDownloadNotFound('wget: server returned error: HTTP/1.1 404 Not Found')).toBe(true)
+    expect(saysDownloadNotFound('Connecting to example.test (1.2.3.4:443)\nwget: server returned error: HTTP/1.1 404 Not Found')).toBe(true)
+    expect(saysDownloadNotFound('wget: unable to resolve host address ‘github.com’')).toBe(false)
+  })
+
   it('is told apart from a download that failed for another reason', () => {
     expect(saysDownloadNotFound('curl: (6) Could not resolve host: github.com')).toBe(false)
     expect(saysDownloadNotFound('floti was installed, but /opt/404/floti is not where it should be.')).toBe(false)

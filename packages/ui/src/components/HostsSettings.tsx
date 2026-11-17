@@ -554,6 +554,7 @@ function useInstallFlow(actions: HostInstallActions): InstallFlow {
         }
         const words = describeInstallFailure(outcome.step, hostName, offer.folder, {
           said: outcome.said,
+          lastLine: outcome.lastLine,
           version: offer.version
         })
         show({ step: 'problem', title: words.title, line: outcome.lastLine, fix: words.fix })
