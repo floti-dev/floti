@@ -197,8 +197,8 @@ pub struct CreateWorkspaceRequest {
     pub dir: String,
     #[serde(default)]
     pub name: Option<String>,
-    /// For `new` only: `minimal` or absent writes the built-in scaffold, and
-    /// anything else names a template.
+    /// For `new` only: absent, `starter` or `minimal` (its old id) writes
+    /// Starter, the built-in template, and anything else names a template.
     #[serde(default)]
     pub template: Option<String>,
 }

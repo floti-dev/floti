@@ -1183,8 +1183,8 @@ roots: Array<string>, };
 
 export type CreateWorkspaceRequest = { mode: WorkspaceMode, dir: string, name: string | null, 
 /**
- * For `new` only: `minimal` or absent writes the built-in scaffold, and
- * anything else names a template.
+ * For `new` only: absent, `starter` or `minimal` (its old id) writes
+ * Starter, the built-in template, and anything else names a template.
  */
 template: string | null, };
 
@@ -3819,8 +3819,8 @@ channel: string, code: ErrorCode, message: string, };
  */
 export type TemplateChoice = { 
 /**
- * The folder name, and what a workspace records. `minimal` for the
- * built-in scaffold.
+ * The folder name, and what a workspace records. `starter` for Starter,
+ * the built-in template.
  */
 id: string, label: string, description: string | null, 
 /**
@@ -3828,7 +3828,7 @@ id: string, label: string, description: string | null,
  */
 order: number | null, 
 /**
- * The built-in scaffold, which has no folder behind it.
+ * Starter, the built-in template, which has no folder behind it.
  */
 builtIn: boolean, };
 
