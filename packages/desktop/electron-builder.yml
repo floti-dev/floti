@@ -13,9 +13,7 @@
 # cannot be loaded from inside the asar archive.
 # The app ID every OS remembers the app by (design I11): the macOS bundle ID,
 # the Windows AppUserModelID (main/index.ts sets the same) and the uninstall
-# entry's key, which electron-builder derives from it. It was
-# dev.coletaylor.helm while the app was Helm; build/installer.nsh removes what
-# an install under that ID left.
+# entry's key, which electron-builder derives from it.
 appId: dev.floti.desktop
 productName: Floti
 copyright: Apache License 2.0 - see LICENSE

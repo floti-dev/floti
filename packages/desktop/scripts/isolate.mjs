@@ -69,21 +69,6 @@ export function realDataDirFor(platform, env, home) {
 }
 
 /**
- * Where the app kept its data while it was called Helm, until the installed
- * Floti copies it to `realDataDirFor` at its first start (`helmDataDirFor` in
- * `src/main/dataFolder.ts`).
- *
- *   Windows  `%APPDATA%\Helm`
- *   macOS    `~/Library/Application Support/Helm`
- *   Linux    `${XDG_CONFIG_HOME:-~/.config}/Helm`
- */
-export function helmDataDirFor(platform, env, home) {
-  if (platform === 'win32') return win32.join(env.APPDATA ?? win32.join(home, 'AppData', 'Roaming'), 'Helm')
-  if (platform === 'darwin') return posix.join(home, 'Library', 'Application Support', 'Helm')
-  return posix.join(env.XDG_CONFIG_HOME || posix.join(home, '.config'), 'Helm')
-}
-
-/**
  * Where `pnpm dev` and every check keep their data on each OS: a folder of
  * their own, outside the installed app's and outside Floti's data folder.
  *
@@ -97,15 +82,9 @@ export function isolatedBaseFor(platform, env, home) {
   return posix.join(env.XDG_DATA_HOME || posix.join(home, '.local', 'share'), 'floti-dev')
 }
 
-/**
- * The real Floti's data directory - read from, never written to. Until the
- * installed app has copied Helm's folder there, Helm's, where the real data
- * still is.
- */
+/** The real Floti's data directory - read from, never written to. */
 export function realDataDir() {
-  const floti = realDataDirFor(process.platform, process.env, homedir())
-  const helm = helmDataDirFor(process.platform, process.env, homedir())
-  return !existsSync(join(floti, 'helm.db')) && existsSync(join(helm, 'helm.db')) ? helm : floti
+  return realDataDirFor(process.platform, process.env, homedir())
 }
 
 /**
@@ -273,12 +252,6 @@ export function seedDatabase(dataDir, { keepUiState = false } = {}) {
   // quietly reverting to inheriting somebody's tabs is precisely the failure
   // this is here to end.
   //
-  // Every copy also counts the upgrade note seen where the real app's row
-  // lacks it. The copy is made again on every start, so a note left due there
-  // would cover every dev window and every check's screen, and closing it
-  // would never stick; a driver decides what is on screen, and the note is
-  // not somewhere anybody left the app.
-  //
   // And the rows still claiming to be running are the real app's sessions,
   // live in it right now, not a crash of this one: left as they are, the copy
   // would reconcile them to lost and offer to reopen conversations somebody is
@@ -305,10 +278,7 @@ export function seedDatabase(dataDir, { keepUiState = false } = {}) {
     '    .map((row) => row.key)',
     '  copy.close()',
     '  if (left.length > 0) throw new Error(`still in the copy after the strip: ${left.join(", ")}`)',
-    '}',
-    'const stamped = new Database(process.argv[2], { fileMustExist: true })',
-    "stamped.prepare(\"INSERT OR IGNORE INTO app_settings (key, value) VALUES ('upgradeNoteSeenAt', ?)\").run(JSON.stringify(new Date().toISOString()))",
-    'stamped.close()'
+    '}'
   ].join('\n')
   const { status, stderr } = spawnSync(
     electronBinary(),

@@ -236,7 +236,6 @@ import {
   type AddHostActions,
 } from "@helm/ui";
 import { sidebarFor, type SidebarView } from "./sidebarFor";
-import { UpgradeNote } from "./UpgradeNote";
 import { viewRailItems } from "./railViews";
 import { AgentTab } from "./agents/AgentTab";
 import { forgetAgentDraft } from "./agents/useAgentDraft";
@@ -4678,18 +4677,6 @@ export function App(): JSX.Element {
       />
     );
 
-  /** The note someone coming from an earlier Helm sees once (`UpgradeNote`). */
-  const upgradeNote = (
-    <UpgradeNote
-      settings={settings}
-      setupNeeded={setup.needed}
-      writeSettings={writeSettings}
-      onWhatsNew={() => {
-        if (info !== null) openBrowser({ url: info.releasesUrl });
-      }}
-    />
-  );
-
   /** Rendered by both branches: creating a workspace is a first-run action and
    * an every-day one, and two copies of the dialog would drift apart. */
   const workspaceDialog =
@@ -6642,7 +6629,6 @@ export function App(): JSX.Element {
         {confirmDialog}
         {restartDialog}
         {profileDialog}
-        {upgradeNote}
         {addingHost && (
           <AddHostDialog
             actions={addHostActions}

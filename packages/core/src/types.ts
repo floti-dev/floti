@@ -473,7 +473,8 @@ export interface SessionRegistryEntry {
    * **Its age says nothing about staleness.** The file is written on
    * transition and never on a timer - a `busy` record carrying an 18-minute-old
    * stamp is an ordinary long tool call. Liveness is the only test, and it is
-   * `probeProcess`. Present for diagnostics; nothing in Helm may infer from it.
+   * a probe of its process. Present for diagnostics; nothing in Floti may infer
+   * from it.
    */
   statusUpdatedAt: number | null
 }
@@ -633,8 +634,8 @@ export interface LiveSession {
    * `SessionRegistryEntry.statusUpdatedAt` forbids, and the two are worth
    * keeping apart: the record is written on transition and never on a timer, so
    * its age says exactly how long this status has held, and says **nothing**
-   * about whether the session is still alive. Liveness is `probeProcess` and
-   * only `probeProcess` - by the time a value reaches this field the record has
+   * about whether the session is still alive. Liveness is a probe of its
+   * process and only that - by the time a value reaches this field the record has
    * already been through that filter.
    */
   statusSinceMs: number | null
@@ -1646,16 +1647,6 @@ export interface AppSettings {
    */
   firstRunCompletedAt: string | null
   /**
-   * When the upgrade note was closed: the dialog that tells someone coming
-   * from an earlier Helm, once, that harnesses are now called workspaces and
-   * nothing in their folders changed. Null means it has not been, and it shows
-   * over the sessions once setup is not on screen. Only a `helm.db` from before
-   * the rename is left null: one created on this release is stamped as it
-   * opens (`settleUpgradeNote`), so a new or reset device never sees it,
-   * whatever its host says. Kept on this device, never on the host.
-   */
-  upgradeNoteSeenAt: string | null
-  /**
    * A `claude` executable the user picked by hand, for the machine where it is
    * not on PATH and not in the usual install directory. Null means "find it".
    *
@@ -2010,7 +2001,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   windowBounds: null,
   paneLayout: null,
   firstRunCompletedAt: null,
-  upgradeNoteSeenAt: null,
   claudePath: null,
   // The four defaults below are the values Spike C measured and `terminal.ts`
   // was built around. They are the documented baseline, not a starting point

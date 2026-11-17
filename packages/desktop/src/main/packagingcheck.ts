@@ -313,13 +313,11 @@ function personal(): Array<{ id: string; re: RegExp }> {
  * Occurrences that are the project's own identity rather than an assumption
  * about who is running it.
  *
- * Three, and the audit asserts there are exactly three: an application id, a
- * release address, and an authorship field. None of them is a path, none is
- * read at runtime to find anything on disk, and every one of them would be
- * equally true on a stranger's machine.
+ * Two, and the audit asserts there are exactly two: a release address and an
+ * authorship field. Neither is a path, neither is read at runtime to find
+ * anything on disk, and both would be equally true on a stranger's machine.
  */
 const IDENTITY_ALLOWED: Array<{ needle: string; why: string }> = [
-  { needle: 'dev.coletaylor.helm', why: 'the app ID Helm had, whose entries the installer removes' },
   { needle: 'floti-dev/floti', why: "the project's release address" },
   { needle: '"author": "Cole Taylor"', why: 'the authorship field in package.json' }
 ]
@@ -823,7 +821,7 @@ function auditChecks(): Check[] {
   const publication = publishable === null ? null : publicationAudit(root, publishable)
 
   // The allowlist is only defensible if it is short and enumerated. Count what
-  // each of its three entries actually excuses, so a fourth cannot be smuggled
+  // each of its two entries actually excuses, so a fourth cannot be smuggled
   // in behind one of them.
   const allowed = IDENTITY_ALLOWED.map((entry) => {
     let count = 0
@@ -868,7 +866,7 @@ function auditChecks(): Check[] {
       notes: [
         `The auditor was made to fail first: a planted file carrying a Windows profile path, a .harness path and a private project name was caught under ${String(probePatterns.length)} patterns and then deleted.`,
         `${String(shipped.length)} hits in what ships. ${String(harness.length)} in the development harness - the check drivers, the unit tests and the measured evidence - which is the "outside test fixtures" the criterion allows, and they are listed by file rather than waved at.`,
-        'Three occurrences are identity rather than assumption and are allowlisted by their exact text: an application id, a release address, and an authorship field. None is read at runtime to find anything on disk.',
+        'Two occurrences are identity rather than assumption and are allowlisted by their exact text: a release address and an authorship field. Neither is read at runtime to find anything on disk.',
         'Two real portability bugs were found by this audit and fixed rather than excused: claudecheck.ts and selftest.ts each started their session in a literal path under one machine\'s home directory, and now derive the checkout from app.getAppPath().'
       ]
     },
