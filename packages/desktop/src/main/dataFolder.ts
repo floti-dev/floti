@@ -75,14 +75,16 @@ export function helmDataDirFor(platform: NodeJS.Platform, env: FolderEnv, home: 
 
 /**
  * The user's own files (templates, themes, plugins they are writing) on every
- * OS: `~/.config/helm` while Helm's folder is there, else `~/.config/floti`.
- * The host's own rule (`config_folder` in the host): the first host to start
- * as Floti moves Helm's folder to Floti's once, and that move is what
- * switches a computer over.
+ * OS: `~/.config/floti` whenever that folder is there, and `~/.config/helm`
+ * only while Floti's is not there and Helm's is. The host's own rule
+ * (`config_folder` in the host): the first host to start as Floti moves
+ * Helm's folder to Floti's once, and that move is what switches a computer
+ * over. A `~/.config/helm` made again afterwards is not read.
  */
 export function userConfigDirFor(home: string, isDir: (path: string) => boolean): string {
+  const floti = join(home, '.config', 'floti')
   const helm = join(home, '.config', 'helm')
-  return isDir(helm) ? helm : join(home, '.config', 'floti')
+  return !isDir(floti) && isDir(helm) ? helm : floti
 }
 
 /**

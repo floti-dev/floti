@@ -442,8 +442,9 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   (`createServices`), each only where every owning process is provably dead.
   `EPERM` counts as alive; unknown means keep.
 - Templates live in `templates` in the host's config folder: for the
-  installed app `~/.config/floti` (`~/.config/helm` until the host has moved Helm's folder
-  there, once, at its first start as Floti); otherwise the folder holding `templatesDir` in
+  installed app `~/.config/floti` whenever it is there (`~/.config/helm` only while
+  `~/.config/floti` is not there and Helm's is; the host moves Helm's folder there, once,
+  at its first start as Floti); otherwise the folder holding `templatesDir` in
   `paths.ts` (`helm-data/templates` when portable). The host reads and seeds them at
   its start. The shipped README and example are written only when the
   directory is absent, and nothing there is ever overwritten. The in-app

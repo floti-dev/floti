@@ -346,7 +346,8 @@ install keeps its templates on the stick and leaves nothing on a machine it is
 plugged into**; unset, they live in `~/.config/floti/templates` rather than
 under the data directory, because a template is a directory somebody authors by
 hand and likely keeps in git. That is the host's own config folder
-(`~/.config/helm` until the host has moved Helm's folder, below), so the
+(`~/.config/helm` only while `~/.config/floti` is not there and Helm's is,
+below), so the
 installed app's templates are where a host started at sign-in reads them. One rule, four run modes, and no second override
 mechanism - `pnpm dev` and every check get a templates directory of their own
 for free, because both already set that variable for the database.
@@ -365,7 +366,7 @@ Where each run keeps its data, on each OS (`appMode` in `paths.ts` decides):
 | `pnpm dev` | `%LOCALAPPDATA%\Floti Dev\dev\helm-data` | `~/Library/Application Support/Floti Dev/dev/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/floti-dev/dev/helm-data` |
 | checks | `%LOCALAPPDATA%\Floti Dev\checks\<name>\helm-data` | `~/Library/Application Support/Floti Dev/checks/<name>/helm-data` | `${XDG_DATA_HOME:-~/.local/share}/floti-dev/checks/<name>/helm-data` |
 | `pnpm dev:live` | the installed app's own | the installed app's own | the installed app's own |
-| templates | `~/.config/floti/templates` (`~/.config/helm/templates` until the host has moved it); `helm-data/templates` when portable | the same, without portable | the same, without portable |
+| templates | `~/.config/floti/templates` (`~/.config/helm/templates` only while `~/.config/floti` is not there and Helm's is); `helm-data/templates` when portable | the same, without portable | the same, without portable |
 
 Templates are `helm-data/templates` in the run's own folder for `pnpm dev` and
 every check, on every OS.
@@ -526,8 +527,13 @@ owns the data folder, moves that folder there once
 (`platform/folders/mod.rs`, `move_helm_config`): renamed whole where there is
 no `~/.config/floti`, else each entry moved into it when none is in both, so no
 file is replaced; otherwise nothing moves and the log names the entries in
-both. Until it has moved, `~/.config/helm` is the folder read, by every host
-and the desktop alike, so the answer does not change while Floti runs. Once
+both. Every host and the desktop read the same folder by one rule
+(`config_folder`, `userConfigDirFor`): `~/.config/floti` whenever it is
+there, and `~/.config/helm` only while `~/.config/floti` is not there and
+Helm's is. So a `~/.config/helm` that something makes again once
+`~/.config/floti` is there, such as a plugin from Helm's days writing its
+data, is left beside it and not read; each host start still tries to move
+its entries in, and the log says which folder is read. Once
 it has moved, every host start re-points a plugin folder registered inside
 `~/.config/helm` to the same place in `~/.config/floti`
 (`plugins/store.rs`, `follow_helm_config_move`), whichever host moved it; a

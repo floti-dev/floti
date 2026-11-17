@@ -441,8 +441,8 @@ until the user updates the rule.
 
 - Agents (a lead, a worker, a reviewer: the named definitions a session
   starts its children as) live in `agents` in the host's config folder
-  (`~/.config/floti` (`~/.config/helm` until the host has moved Helm's folder
-  there, once, at its first start as Floti);
+  (`~/.config/floti` whenever it is there (`~/.config/helm` only while
+  `~/.config/floti` is not there and Helm's is);
   for the host a development or portable Floti starts, the folder that holds
   `templatesDir`), one
   `<name>.md` each (front matter, then the body), parsed as an

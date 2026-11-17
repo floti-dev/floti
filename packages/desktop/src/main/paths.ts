@@ -139,7 +139,8 @@ export const dbFile: string = join(dataDir, 'helm.db')
  *   every check           its own, under `<isolated base>/checks/<name>`
  *
  * where the user's config folder is the host's own (`userConfigDirFor`):
- * `~/.config/floti`, or `~/.config/helm` until the host has moved it, and the isolated base is the per-OS folder
+ * `~/.config/floti` whenever it is there, `~/.config/helm` only while Floti's
+ * is not and Helm's is, and the isolated base is the per-OS folder
  * `isolate.mjs` names (`%LOCALAPPDATA%\Floti Dev` on Windows).
  *
  * The last two come for free: both go through `scripts/isolate.mjs`, which sets
