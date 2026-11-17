@@ -51,7 +51,14 @@ if (command === undefined) {
  */
 function isAppRenderer(url) {
   if (url.includes('spike')) return false
-  if (url.startsWith('file:')) return url.endsWith('index.html')
+  // The shell and the setup window are the same page; the setup window is it with `?window=setup`.
+  if (url.startsWith('file:')) {
+    try {
+      return new URL(url).pathname.endsWith('index.html')
+    } catch {
+      return false
+    }
+  }
   try {
     const parsed = new URL(url)
     return parsed.port === DEV_SERVER_PORT && (parsed.pathname === '/' || parsed.pathname === '/index.html')

@@ -70,6 +70,8 @@ describe('settings over IPC', () => {
   const events: Array<{ channel: EventChannel; payload: unknown }> = []
   /** What tells the local host Helm's settings again, as `index.ts` passes it. */
   const hostSettingsChanged = vi.fn()
+  /** The windows the walkthrough's hand-overs reach, as `index.ts` passes them. */
+  const walkthrough = { openShell: vi.fn(), open: vi.fn() }
   /** The folders the window's picker handed to the host's scan roots. */
   const acceptedRoots: string[][] = []
   const win = {
@@ -143,6 +145,7 @@ describe('settings over IPC', () => {
       localHost: {} as never,
       ownData: {} as never,
       rendererReady: () => undefined,
+      walkthrough,
       hostSettingsChanged
     })
   })
@@ -158,6 +161,26 @@ describe('settings over IPC', () => {
     win.setBackgroundColor.mockClear()
     win.setTitleBarOverlay.mockClear()
     electron.pick = null
+  })
+
+  describe('the walkthrough', () => {
+    it("hands the setup window's last step to main's shell and Settings' Show the walkthrough to its setup window", async () => {
+      await invoke('walkthrough:openShell')
+      expect(walkthrough.openShell).toHaveBeenCalledTimes(1)
+      expect(walkthrough.open).not.toHaveBeenCalled()
+      await invoke('walkthrough:open', { step: 1 })
+      expect(walkthrough.open).toHaveBeenCalledWith(1)
+    })
+
+    it('keeps the step on this device, and tells the window', async () => {
+      await invoke('ownSettings:write', { walkthrough: { step: 3, workspace: null } })
+      expect(stored().walkthrough).toEqual({ step: 3, workspace: null })
+      expect(emitted<{ walkthrough: unknown }>('ownSettings:changed').at(-1)?.walkthrough).toEqual({ step: 3, workspace: null })
+      await expect(invoke('ownSettings:write', { walkthrough: { step: 9, workspace: null } as never })).rejects.toThrow(
+        /walkthrough/
+      )
+      await invoke('ownSettings:write', { walkthrough: null })
+    })
   })
 
   describe('the local host', () => {

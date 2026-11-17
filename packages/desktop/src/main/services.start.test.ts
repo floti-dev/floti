@@ -66,6 +66,11 @@ describe('app start', () => {
     expect(start().settings.upgradeNoteSeenAt).not.toBeNull()
   })
 
+  it('opens on the walkthrough in a data folder a start made, at the step it was left on after that', () => {
+    // A first start, or the step the first one left it on: never null, and never past step 6.
+    expect(start().settings.walkthrough).not.toBeNull()
+  })
+
   it('sweeps a shim whose owner has exited, and leaves the repository it linked', () => {
     const shim = buildShim()
     const gone = exitedPid()
