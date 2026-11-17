@@ -1,11 +1,11 @@
-//! `floti update-stop <client folder> --ask | --stop`: what Helm's Windows
+//! `floti update-stop <client folder> --ask | --stop`: what the desktop's Windows
 //! installer runs, from the copy of `floti` it carries, before it replaces
-//! anything, when a host from inside the old install folder still runs: the
+//! anything, when a host from inside the install folder still runs: the
 //! old version's uninstaller would force-stop it, ending every session it
 //! runs, so the installer asks first. A host running from floti installed on
 //! its own (`floti install-self`) is never asked or stopped by an install.
 //!
-//! It connects as `floti bridge` does, with the keys in Helm's client folder,
+//! It connects as `floti bridge` does, with the keys in the desktop's client folder,
 //! so the device key never leaves this process. Unlike the bridge it never
 //! pins a host: a folder without a device key and a pinned host key is left
 //! as it is, untouched.
@@ -62,7 +62,7 @@ pub const NOTHING_TO_END_EXIT: u8 = 7;
 /// it ends every session's process tree first.
 const HOST_EXIT_DEADLINE: Duration = Duration::from_secs(60);
 
-/// Who asks: Helm's installer with its client folder, or the host's own
+/// Who asks: the desktop's installer with its client folder, or the host's own
 /// user on the host's computer, with the host's key.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Asker {
@@ -540,7 +540,7 @@ mod tests {
     }
 
     #[test]
-    fn with_sessions_running_it_asks_saying_how_many_end_and_that_helm_offers_them_back() {
+    fn with_sessions_running_it_asks_saying_how_many_end_and_that_floti_offers_them_back() {
         let outcome = asked(3);
         assert_eq!(outcome.code(), 0);
         assert_eq!(
@@ -599,16 +599,16 @@ mod tests {
     #[test]
     fn it_takes_a_client_folder_and_one_step() {
         assert_eq!(
-            parse(&args(&["C:\\Users\\a user\\Helm\\host-client", "--ask"])),
+            parse(&args(&["C:\\Users\\a user\\Floti\\desktop\\host-client", "--ask"])),
             Some((
-                Asker::Client(PathBuf::from("C:\\Users\\a user\\Helm\\host-client")),
+                Asker::Client(PathBuf::from("C:\\Users\\a user\\Floti\\desktop\\host-client")),
                 Step::Ask
             ))
         );
         assert_eq!(
-            parse(&args(&["/home/me/Helm/host-client", "--stop"])),
+            parse(&args(&["/home/me/.local/share/floti/desktop/host-client", "--stop"])),
             Some((
-                Asker::Client(PathBuf::from("/home/me/Helm/host-client")),
+                Asker::Client(PathBuf::from("/home/me/.local/share/floti/desktop/host-client")),
                 Step::Stop
             ))
         );

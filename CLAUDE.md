@@ -33,7 +33,7 @@ that describes it, not this file; a line is added here only for a new rule.
 
 ```
 packages/
-├── core/     # what clients share: the host's answer shapes (types.ts), helm.db and its copy into the host (store), layout, themes, the start-up sweep
+├── core/     # what clients share: the host's answer shapes (types.ts), helm.db and its copy into the host (store), layout, themes
 ├── ui/       # React components
 ├── desktop/  # Electron main, preload and renderer
 └── plugin-sdk/ # manifest validator, bridge types, helm-plugin CLI, authoring guide
@@ -277,7 +277,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   (junctions on Windows, symlinks on macOS and Linux) and never walks into
   one. `fs.rm` with `recursive: true` has been seen to go through a junction
   and empty the repository folder it points to.
-- Launch folders and leftover overlay shims are swept only at start, and only
+- Launch folders are swept only at start, and only
   where every owning process is provably dead. `EPERM` counts as alive;
   unknown means keep.
 - The shipped templates and agents are seeded only where their folder is

@@ -1,5 +1,3 @@
-import { join } from 'node:path'
-import { removeShims } from '../test/overlay-world'
 import { fakeClaudeLogs, seedProfile } from '../test/world'
 import { claudeRunIn, expect, startSession, test as base } from './helm'
 
@@ -24,7 +22,6 @@ const test = base.extend({
       pinnedOrder: null
     })
     await use(world)
-    removeShims(join(world.dataDir, 'overlays'))
   }
 })
 

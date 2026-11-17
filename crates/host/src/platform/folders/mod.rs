@@ -5,8 +5,7 @@
 //! `~/Library/Application Support/Floti` on macOS and `$XDG_DATA_HOME/floti`
 //! (default `~/.local/share/floti`) on Linux, with logs in
 //! `~/.local/state/floti` there. What the user writes lives in
-//! `~/.config/floti` on every OS, or `~/.config/helm` only while Floti's is
-//! not there and Helm's is ([`config_folder`]).
+//! `~/.config/floti` on every OS ([`config_folder`]).
 //!
 //! Each OS's layout is plain path arithmetic over a [`UserEnv`], so all three
 //! are compiled and tested on every OS; the build picks one as [`Native`].
@@ -32,7 +31,6 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use crate::platform::links;
 use crate::{Error, Result};
 
 #[cfg(test)]
@@ -118,267 +116,13 @@ pub trait FolderLayout {
     fn resolve(&self, env: &UserEnv) -> Result<Folders>;
 }
 
-/// The user's own files, on every OS: `~/.config/floti` whenever that
-/// folder is there. `~/.config/helm`, which Helm set up before the name
-/// changed and where its agents, templates and plugins are, is read only
-/// while `~/.config/floti` is not there and it is. Otherwise
-/// `~/.config/floti`.
-///
-/// Once `~/.config/floti` is there nothing switches a computer back: a
-/// program that makes `~/.config/helm` again afterwards (a plugin from
-/// Helm's days writing its data there, say) is not read, so a host started
-/// by the desktop, at sign-in or by hand reads one folder. The one-time move
-/// of `~/.config/helm` to `~/.config/floti` ([`move_helm_config`]), which
-/// the first host to start as Floti makes, is what switches a computer over.
-/// This is the one look at the disk resolving makes, and it creates nothing.
+/// The user's own files, on every OS: `~/.config/floti`.
 pub fn config_folder(home: &Path) -> PathBuf {
-    let config = home.join(".config");
-    let floti = config.join(FLOTI_CONFIG_FOLDER);
-    let helm = config.join(HELM_CONFIG_FOLDER);
-    if !floti.is_dir() && helm.is_dir() {
-        helm
-    } else {
-        floti
-    }
+    home.join(".config").join(FLOTI_CONFIG_FOLDER)
 }
-
-/// The folder in `~/.config` Helm kept the user's own files in.
-pub const HELM_CONFIG_FOLDER: &str = "helm";
 
 /// The folder in `~/.config` the user's own files are kept in.
 pub const FLOTI_CONFIG_FOLDER: &str = "floti";
-
-/// What [`move_helm_config`] did.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConfigMove {
-    /// There is no `~/.config/helm` to move.
-    Nothing,
-    /// `~/.config/helm` is now `~/.config/floti`, every file in it as it was.
-    Moved { from: PathBuf, to: PathBuf },
-    /// `~/.config/helm` stays where it is, for the reason given, and the move
-    /// is tried again at the next start. `read` is the folder read
-    /// meanwhile ([`config_folder`]): Helm's while Floti's is not there,
-    /// else Floti's, with Helm's left beside it.
-    Kept {
-        from: PathBuf,
-        to: PathBuf,
-        read: PathBuf,
-        reason: String,
-    },
-}
-
-impl ConfigMove {
-    /// The host's log line for it, or `None` when there is nothing to say.
-    pub fn log_line(&self) -> Option<String> {
-        match self {
-            Self::Nothing => None,
-            Self::Moved { from, to } => Some(format!(
-                "floti host: moved your files from {} to {}",
-                from.display(),
-                to.display()
-            )),
-            Self::Kept {
-                from,
-                to,
-                read,
-                reason,
-            } if read == from => Some(format!(
-                "floti host: your files stay in {} and are read from there, because {reason}; moving them to {} is tried again at the next start",
-                from.display(),
-                to.display()
-            )),
-            Self::Kept {
-                from, read, reason, ..
-            } => Some(format!(
-                "floti host: your files are read from {}, which is there, and {} is left beside it and not read; its files did not move in because {reason}, and moving them is tried again at the next start",
-                read.display(),
-                from.display()
-            )),
-        }
-    }
-
-    /// The config folder to read once this move is done, as
-    /// [`config_folder`] answers it then.
-    pub fn config(&self) -> Option<&Path> {
-        match self {
-            Self::Nothing => None,
-            Self::Moved { to, .. } => Some(to),
-            Self::Kept { read, .. } => Some(read),
-        }
-    }
-}
-
-/// Moves the user's own files, once, from `~/.config/helm`, where Helm kept
-/// them, to `~/.config/floti` in `home`: templates, themes, agents and the
-/// plugins they are writing.
-///
-/// - No `~/.config/helm`: nothing.
-/// - No `~/.config/floti`: the folder is renamed whole, every file and link
-///   in it as it was. A `~/.config/helm` that is itself a link (a symlink,
-///   or a junction on Windows) is renamed as the link, and what it points
-///   to stays where it is.
-/// - Both: each entry of Helm's is renamed into Floti's, and Helm's empty
-///   folder removed, but only when no entry is in both, so no file of the
-///   user's is ever replaced. Otherwise nothing moves and the reason names
-///   the entries in both. A rename that fails partway is undone. A
-///   `~/.config/helm` that is a link is never emptied this way: nothing
-///   moves, and the reason says so.
-///
-/// Only a host that may write its config folder calls this: one started
-/// with [`CONFIG_READ_ONLY_VAR`] moves nothing.
-pub fn move_helm_config(home: &Path) -> ConfigMove {
-    move_helm_config_with(home, |from, to| std::fs::rename(from, to))
-}
-
-/// The folders a host starting with `folders` reads once Helm's config
-/// folder has been moved ([`move_helm_config`]), and what the move did. It
-/// moves only for a host that may write its config folder (`read_only` is
-/// [`CONFIG_READ_ONLY_VAR`] being set) whose config folder is the default
-/// one in `home`, Helm's or Floti's, not one `FLOTI_CONFIG_DIR` moved:
-/// otherwise nothing moves and `folders` is as it was. Once it has moved,
-/// the config folder is [`config_folder`]'s answer.
-pub fn after_helm_config_move(
-    folders: Folders,
-    home: Option<&Path>,
-    read_only: bool,
-) -> (Folders, ConfigMove) {
-    let Some(home) = home else {
-        return (folders, ConfigMove::Nothing);
-    };
-    let config = home.join(".config");
-    let in_home = folders.config == config.join(HELM_CONFIG_FOLDER)
-        || folders.config == config.join(FLOTI_CONFIG_FOLDER);
-    if read_only || !in_home {
-        return (folders, ConfigMove::Nothing);
-    }
-    let moved = move_helm_config(home);
-    let folders = match moved {
-        ConfigMove::Nothing => folders,
-        _ => Folders {
-            config: config_folder(home),
-            ..folders
-        },
-    };
-    (folders, moved)
-}
-
-/// Where `path`, a path in Helm's config folder in `home`, is now that the
-/// folder has moved to Floti's ([`move_helm_config`]): the same path in
-/// `~/.config/floti`, when nothing is at `path` any more and something is
-/// there. Paths are matched ignoring ASCII case, as the plugin store matches
-/// them. `None` for a path outside Helm's folder, one that is still there, or
-/// one with nothing at the new place.
-pub fn moved_out_of_helm_config(home: &Path, path: &Path) -> Option<PathBuf> {
-    let config = home.join(".config");
-    let inside = strip_prefix_ignoring_case(path, &config.join(HELM_CONFIG_FOLDER))?;
-    if std::fs::symlink_metadata(path).is_ok() {
-        return None;
-    }
-    let floti = config.join(FLOTI_CONFIG_FOLDER);
-    let moved = if inside.as_os_str().is_empty() {
-        floti
-    } else {
-        floti.join(inside)
-    };
-    moved.exists().then_some(moved)
-}
-
-/// `path` past `prefix`, comparing each component ignoring ASCII case.
-fn strip_prefix_ignoring_case<'a>(path: &'a Path, prefix: &Path) -> Option<&'a Path> {
-    let mut rest = path.components();
-    for want in prefix.components() {
-        if !rest
-            .next()?
-            .as_os_str()
-            .eq_ignore_ascii_case(want.as_os_str())
-        {
-            return None;
-        }
-    }
-    Some(rest.as_path())
-}
-
-/// [`move_helm_config`], renaming with `rename`.
-pub(crate) fn move_helm_config_with(
-    home: &Path,
-    rename: impl Fn(&Path, &Path) -> std::io::Result<()>,
-) -> ConfigMove {
-    let config = home.join(".config");
-    let from = config.join(HELM_CONFIG_FOLDER);
-    let to = config.join(FLOTI_CONFIG_FOLDER);
-    if !from.is_dir() {
-        return ConfigMove::Nothing;
-    }
-    // Read after whatever was tried, so that it names the folder read then.
-    let kept = |reason: String| ConfigMove::Kept {
-        from: from.clone(),
-        to: to.clone(),
-        read: config_folder(home),
-        reason,
-    };
-    if std::fs::symlink_metadata(&to).is_err() {
-        return match rename(&from, &to) {
-            Ok(()) => ConfigMove::Moved {
-                from: from.clone(),
-                to: to.clone(),
-            },
-            Err(err) => kept(format!("it could not be renamed: {err}")),
-        };
-    }
-    if !to.is_dir() {
-        return kept(format!("{} is not a folder", to.display()));
-    }
-    if links::is_link(&from) {
-        return kept(format!(
-            "it is a link and {} is there too, and moving what it points to would empty that folder",
-            to.display()
-        ));
-    }
-    let names = match std::fs::read_dir(&from) {
-        Ok(entries) => {
-            let mut names: Vec<_> = entries.flatten().map(|entry| entry.file_name()).collect();
-            names.sort();
-            names
-        }
-        Err(err) => return kept(format!("it could not be read: {err}")),
-    };
-    let in_both: Vec<String> = names
-        .iter()
-        .filter(|name| std::fs::symlink_metadata(to.join(name)).is_ok())
-        .map(|name| name.to_string_lossy().into_owned())
-        .collect();
-    if !in_both.is_empty() {
-        return kept(format!(
-            "both folders hold {}; with one of each left, the rest move",
-            in_both.join(", ")
-        ));
-    }
-    let mut moved = Vec::new();
-    for name in &names {
-        if let Err(err) = rename(&from.join(name), &to.join(name)) {
-            for back in moved.iter().rev() {
-                let _ = rename(&to.join(back), &from.join(back));
-            }
-            return kept(format!(
-                "{} could not be moved: {err}",
-                from.join(name).display()
-            ));
-        }
-        moved.push(name.clone());
-    }
-    match std::fs::remove_dir(&from) {
-        Ok(()) => ConfigMove::Moved {
-            from: from.clone(),
-            to: to.clone(),
-        },
-        Err(err) => {
-            for back in moved.iter().rev() {
-                let _ = rename(&to.join(back), &from.join(back));
-            }
-            kept(format!("it could not be removed once empty: {err}"))
-        }
-    }
-}
 
 /// The variables that move one folder each.
 pub const DATA_DIR_VAR: &str = "FLOTI_DATA_DIR";

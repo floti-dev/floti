@@ -16,8 +16,7 @@ import {
  *
  * The directory is a sibling of the templates one and takes the same branch
  * (`themesDir` in `paths.ts`): `themes` in the user's config folder
- * (`~/.config/floti`, or `~/.config/helm` only while Floti's is not there and
- * Helm's is) for an installed Floti,
+ * (`~/.config/floti`) for an installed Floti,
  * because these are files a person writes by hand and may keep in git, and
  * `helm-data/themes` beside a portable exe or under a check's own data
  * directory. Read here, never written except by `seedThemesDir` and

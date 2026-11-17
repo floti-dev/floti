@@ -14,7 +14,6 @@ import {
 import { appCommandBrowserCommand } from '../shared/browserKeys'
 import {
   addPluginFolder,
-  cleanStaleMcpConfigs,
   openBrowserHistory,
   pluginThemeOf,
   quitEndsSessions,
@@ -28,7 +27,7 @@ import { homedir } from 'node:os'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { emit, emitToContents, pushTheme, registerIpc } from './ipc'
 import { createClipboardText } from './clipboard'
-import { appMode, dataDir, finishDataMove, initDataDir, mcpConfigDir, themesDir } from './paths'
+import { appMode, dataDir, initDataDir, themesDir } from './paths'
 import { createThemeService } from './themes'
 import { activePty, killPty, spawnPty, windowsBuildNumber } from './pty'
 import { adoptExistingProfile, createServices, updateSettings, type Services } from './services'
@@ -352,8 +351,6 @@ function announceLiveMode(): void {
 function startApp(options: AppOptions = {}): void {
   announceLiveMode()
   const services: Services = createServices()
-  // The store opened in the moved copy, so the folder it came from can go.
-  finishDataMove()
   // Before anything can spawn: a `claude` the user picked by hand has to win
   // over discovery in every caller, and the session host does not read
   // settings.
@@ -368,9 +365,6 @@ function startApp(options: AppOptions = {}): void {
     console.warn(
       `${String(services.lost.sessions.length)} session(s) did not outlive the last run; marked lost`
     )
-  }
-  if (services.staleShims > 0) {
-    console.log(`removed ${String(services.staleShims)} overlay shim(s) left by the last run`)
   }
 
   // Before the window, because the window's first colour is the theme's. The
@@ -650,9 +644,6 @@ function startApp(options: AppOptions = {}): void {
    * sessions' tools.
    */
   browserMcp = createBrowserMcp({ browsers, settings: browserSettings })
-  // The `--mcp-config` files an earlier version wrote for its own sessions,
-  // where their owning pid is provably dead (`core/launch/mcp.ts`).
-  cleanStaleMcpConfigs(mcpConfigDir)
 
   // What each session is doing, from the host, asked again after every spawn,
   // exit, close and rename.
@@ -984,14 +975,14 @@ function startSpike(): void {
 }
 
 /**
- * Gives the dev app id a Start Menu shortcut of Helm's own, so the dev window's
+ * Gives the dev app id a Start Menu shortcut of its own, so the dev window's
  * taskbar button carries Floti's mark rather than Electron's atom.
  *
  * A taskbar button's icon comes from the shortcut that declares its app id, not
  * from the window. Electron writes that shortcut itself the first time a toast
  * fires - pointing at `node_modules/electron/dist/electron.exe`, whose icon is
  * the atom - and then skips the write because one already exists. Writing it
- * first is therefore the whole fix: same id, same target, Helm's `.ico`.
+ * first is therefore the whole fix: same id, same target, Floti's `.ico`.
  *
  * Dev only, Windows only, and never fatal. `Electron.lnk` is removed only when
  * it points at *this* checkout's electron.exe, because that one is an artefact
@@ -1009,13 +1000,6 @@ function claimDevShortcut(): void {
     if (existsSync(stale)) {
       const target = shell.readShortcutLink(stale).target.toLowerCase()
       if (target === process.execPath.toLowerCase()) rmSync(stale, { force: true })
-    }
-    // The shortcut a checkout wrote while the app was called Helm, declaring
-    // the id it had then. Only this checkout's own, by the same rule.
-    const renamed = join(programs, 'Helm (dev).lnk')
-    if (existsSync(renamed)) {
-      const target = shell.readShortcutLink(renamed).target.toLowerCase()
-      if (target === process.execPath.toLowerCase()) rmSync(renamed, { force: true })
     }
 
     // `create`, not `update`: `update` only edits a shortcut that is already

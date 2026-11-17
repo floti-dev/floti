@@ -81,9 +81,9 @@ import { DevicesSettings, type DevicesSettingsProps } from './DevicesSettings'
  * through `settings:write` and this pane renders whatever `settings:changed`
  * carries back, so the two cannot disagree.
  *
- * Internal state is not shown. `windowBounds`, `firstRunCompletedAt` and
- * `upgradeNoteSeenAt` live in the same table but they are things Helm
- * remembers, not things anyone chose.
+ * Internal state is not shown. `windowBounds` and `firstRunCompletedAt` live
+ * in the same table but they are things Floti remembers, not things anyone
+ * chose.
  */
 
 /** What Settings › Agents says of the host's agents, and where Open Agents goes. */

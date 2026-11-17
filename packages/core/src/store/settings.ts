@@ -497,9 +497,6 @@ export const SETTING_VALIDATORS: SettingValidators = {
   /** A timestamp, or null for "has not happened". Parsed, not pattern-matched. */
   firstRunCompletedAt: (value) => timestampProblem(value),
 
-  /** The same: when the upgrade note was closed, or null. */
-  upgradeNoteSeenAt: (value) => timestampProblem(value),
-
   /**
    * One family name, or null for the built-in stack.
    *
@@ -837,23 +834,4 @@ export function writeSettings(store: Store, patch: Partial<AppSettings>): AppSet
   })
   apply()
   return readSettings(store)
-}
-
-/**
- * Decides, as the database opens, whether this device is told once that
- * harnesses are now workspaces (`upgradeNoteSeenAt`).
- *
- * Only a database that predates `0032_workspaces_were_harnesses`, the
- * migration that renamed harnesses, ran an earlier Helm, so only there is the
- * note left due. A database this open created is a new device, or one whose
- * data was reset: there was nothing here to rename, so it counts the note seen
- * at once, whatever its host says about setup. Any later open changes nothing,
- * so a note still due stays due until it is closed, and one seen stays seen.
- */
-export function settleUpgradeNote(store: Store): void {
-  const { applied, alreadyApplied } = store.migrations
-  const createdNow = alreadyApplied.length === 0 && applied.length > 0
-  if (!createdNow) return
-  if (readSettings(store).upgradeNoteSeenAt !== null) return
-  writeSettings(store, { upgradeNoteSeenAt: new Date().toISOString() })
 }

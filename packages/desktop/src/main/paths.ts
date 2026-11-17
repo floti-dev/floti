@@ -1,9 +1,9 @@
-import { app, dialog } from 'electron'
-import { mkdirSync, statSync } from 'node:fs'
+import { app } from 'electron'
+import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AppMode } from '../shared/ipc'
-import { finishHelmDataMove, flotiDataDirFor, helmDataDirFor, moveHelmData, userConfigDirFor } from './dataFolder'
+import { flotiDataDirFor, userConfigDirFor } from './dataFolder'
 
 /**
  * Where Floti keeps its data.
@@ -17,10 +17,7 @@ import { finishHelmDataMove, flotiDataDirFor, helmDataDirFor, moveHelmData, user
  *   Linux    `${XDG_DATA_HOME:-~/.local/share}/floti/desktop`
  *
  * That is not Electron's own `userData` for the product name `Floti`, so
- * `initDataDir` points `userData` there before anything reads it. Helm kept
- * it in `userData` for the product name `Helm` (`%APPDATA%\Helm` and its
- * macOS and Linux equivalents); the installed app copies that folder here
- * once, at its first start as Floti, and removes it once the copy has opened.
+ * `initDataDir` points `userData` there before anything reads it.
  *
  * electron-builder's portable launcher is what tells us which we are: it sets
  * `PORTABLE_EXECUTABLE_DIR` to the directory the exe was double-clicked from
@@ -55,73 +52,14 @@ export const appMode: AppMode = app.isPackaged
     ? 'dev'
     : 'dev-live'
 
-/** Whether `path` is a folder. */
-function isDir(path: string): boolean {
-  try {
-    return statSync(path).isDirectory()
-  } catch {
-    return false
-  }
-}
+export const dataDir: string = portableDir
+  ? join(portableDir, 'helm-data')
+  : flotiDataDirFor(process.platform, process.env, homedir())
 
-/** Floti's data folder for the installed app on this computer. */
-const flotiData = (): string => flotiDataDirFor(process.platform, process.env, homedir())
-
-/** The folder Helm kept its data in on this computer. */
-const helmData = (): string => helmDataDirFor(process.platform, process.env, homedir())
-
-/**
- * The installed app's data folder: Floti's, which `initDataDir` fills from
- * Helm's at the first start. `dev:live` moves nothing, so until the installed
- * app has made the move it reads Helm's folder where it is.
- */
-function liveDataDir(): string {
-  const floti = flotiData()
-  if (appMode === 'dev-live' && !isDir(floti) && isDir(helmData())) return helmData()
-  return floti
-}
-
-export const dataDir: string = portableDir ? join(portableDir, 'helm-data') : liveDataDir()
-
-/**
- * Must run before anything reads `app.getPath('userData')`.
- *
- * The installed app first copies Helm's data folder to Floti's, once
- * (`moveHelmData`). A copy that fails changes nothing: the app says why and
- * quits, and the next start tries again with Helm's folder as it was.
- */
+/** Must run before anything reads `app.getPath('userData')`. */
 export function initDataDir(): void {
-  if (appMode === 'installed') {
-    const moved = moveHelmData(helmData(), dataDir)
-    if (moved.kind === 'moved') console.log(`data: copied ${moved.from} to ${moved.to}`)
-    if (moved.kind === 'failed') {
-      dialog.showErrorBox(
-        'Floti could not move its data',
-        `Floti keeps its data in ${moved.to} now, and copying it there from ${moved.from} failed: ` +
-          `${moved.reason}\n\nNothing was changed, and ${moved.from} is as it was. ` +
-          'Floti tries again when it next starts.'
-      )
-      app.exit(1)
-      return
-    }
-  }
   mkdirSync(dataDir, { recursive: true })
   app.setPath('userData', dataDir)
-}
-
-/**
- * Called once the store in the data folder has opened: removes the folder it
- * was copied from at this start or an earlier one (`finishHelmDataMove`). A
- * folder that cannot be removed yet is tried again at the next start.
- */
-export function finishDataMove(): void {
-  if (appMode !== 'installed') return
-  try {
-    const removed = finishHelmDataMove(dataDir)
-    if (removed !== null) console.log(`data: removed ${removed}, which Floti's data was copied from`)
-  } catch (err) {
-    console.warn(`data: the folder Floti's data was copied from is not removed yet: ${(err as Error).message}`)
-  }
 }
 
 export const dbFile: string = join(dataDir, 'helm.db')
@@ -138,10 +76,9 @@ export const dbFile: string = join(dataDir, 'helm.db')
  *   pnpm dev              its own, under `<isolated base>/dev`
  *   every check           its own, under `<isolated base>/checks/<name>`
  *
- * where the user's config folder is the host's own (`userConfigDirFor`):
- * `~/.config/floti` whenever it is there, `~/.config/helm` only while Floti's
- * is not and Helm's is, and the isolated base is the per-OS folder
- * `isolate.mjs` names (`%LOCALAPPDATA%\Floti Dev` on Windows).
+ * where the user's config folder is the host's own (`userConfigDirFor`),
+ * `~/.config/floti`, and the isolated base is the per-OS folder `isolate.mjs`
+ * names (`%LOCALAPPDATA%\Floti Dev` on Windows).
  *
  * The last two come for free: both go through `scripts/isolate.mjs`, which sets
  * the variable. `pnpm dev` needs its own rather than sharing because in-app
@@ -158,7 +95,7 @@ export const dbFile: string = join(dataDir, 'helm.db')
  */
 export const templatesDir: string = portableDir
   ? join(dataDir, 'templates')
-  : join(userConfigDirFor(homedir(), isDir), 'templates')
+  : join(userConfigDirFor(homedir()), 'templates')
 
 /**
  * Where user themes live: one `*.json` per theme, watched while the app runs.
@@ -174,36 +111,4 @@ export const templatesDir: string = portableDir
  */
 export const themesDir: string = portableDir
   ? join(dataDir, 'themes')
-  : join(userConfigDirFor(homedir(), isDir), 'themes')
-
-/**
- * Where synthesised overlay plugins go.
- *
- * SPEC 2 sketched these under `%TEMP%`, and they are not there. A shim's
- * subdirectories are links (junctions on Windows, symlinks on macOS and Linux)
- * into the user's real repositories, and every
- * temp-cleaning tool on Windows - Disk Cleanup, Storage Sense, the third-party
- * ones - walks `%TEMP%` and deletes what it finds. One that follows a reparse
- * point instead of unlinking it deletes the repo's `.claude/skills`, which is
- * an unrecoverable outcome for a directory Helm only borrowed.
- *
- * Under the data directory they are ours, they travel with a portable install,
- * and `cleanStaleShims` at startup is the only thing that removes them.
- */
-export const shimRoot: string = join(dataDir, 'overlays')
-
-/**
- * Where the per-session `--mcp-config` documents go.
- *
- * Under the data directory for the same reason the shims are, and one reason
- * more: each file carries a **bearer token** for Helm's loopback endpoint, and
- * a token written into `%TEMP%` is a token in a directory every process on the
- * machine enumerates by habit. Here it travels with a portable install, it
- * moves with `PORTABLE_EXECUTABLE_DIR` so a check writes its own, and
- * `cleanStaleMcpConfigs` is the only thing that removes what a crash left.
- *
- * Not `overlays/`, though it could have been: a sweep that has to tell a shim
- * directory from a token file by filename is a sweep with a rule in it, and the
- * rule would be the thing that went wrong.
- */
-export const mcpConfigDir: string = join(dataDir, 'mcp')
+  : join(userConfigDirFor(homedir()), 'themes')

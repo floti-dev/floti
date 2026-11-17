@@ -49,11 +49,6 @@ struct FakeInstalls {
     install_fails: bool,
     /// The variables the running app's process has, as `display_env` reads them.
     display: Vec<(String, String)>,
-    /// Where installing puts the app, when that is not where it was: an app
-    /// from before the rename, moved to its new place.
-    installed_as: Option<Desktop>,
-    /// Whether removing the app it replaced fails.
-    removal_fails: bool,
 }
 
 impl FakeInstalls {
@@ -75,11 +70,6 @@ impl FakeInstalls {
 
     fn failing_to_install(mut self) -> Self {
         self.install_fails = true;
-        self
-    }
-
-    fn moving_to(mut self, installed: Desktop) -> Self {
-        self.installed_as = Some(installed);
         self
     }
 
@@ -173,19 +163,12 @@ impl Installs for FakeInstalls {
         )
     }
 
-    fn remove_replaced(&self, _replaced: &Desktop, _installed: &Desktop) -> Result<()> {
-        if self.removal_fails {
-            return Err(crate::Error::Refused("it is in use".into()));
-        }
-        Ok(())
-    }
-
     fn display_env(&self, pid: u32) -> Vec<(String, String)> {
         assert_eq!(pid, 2, "read from the app's own process");
         self.display.clone()
     }
 
-    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<Desktop> {
+    fn install_desktop(&self, _desktop: &Desktop, release: &Path) -> Result<()> {
         if self.install_fails {
             return Err(crate::Error::Refused(
                 "The Floti installer Floti-2.1.0-setup.exe ended with exit code: 2.".into(),
@@ -197,7 +180,7 @@ impl Installs for FakeInstalls {
             .lock()
             .unwrap()
             .push(std::fs::read(release).unwrap());
-        Ok(self.installed_as.clone().unwrap_or_else(|| desktop.clone()))
+        Ok(())
     }
 }
 
@@ -393,8 +376,6 @@ impl World {
             running_binary: self.running_binary.clone(),
             install_fails: false,
             display: Vec::new(),
-            installed_as: None,
-            removal_fails: false,
         }
     }
 
@@ -1551,82 +1532,6 @@ fn from_the_desktop_the_host_relaunches_once_the_app_is_replaced_and_before_it_o
     let updated = run.out.find("Floti is updated to 2.1.0.").unwrap();
     let opening = run.out.find("Opening Floti again.").unwrap();
     assert!(updated < opening, "{}", run.out);
-}
-
-#[test]
-fn an_app_from_before_the_rename_is_updated_into_its_new_place_and_opens_again_there() {
-    let world = World::new();
-    world.from_desktop.set(true);
-    let release = Published::new("2.1.0").with_desktop();
-    world.publish(&[("stable", &release)]);
-    let moved = world.dirs.folder("apps").join("Floti").join("desktop");
-    let mut installs = world.installs(true).moving_to(Desktop {
-        name: "Floti",
-        path: moved.clone(),
-    });
-    installs.desktop = Some(Desktop {
-        name: "Helm",
-        path: world.dirs.folder("apps").join("Helm"),
-    });
-    let run = world.update(&installs, 1, None);
-    assert_eq!(
-        run.result.unwrap(),
-        Outcome::Updated {
-            version: "2.1.0".into(),
-            floti: true,
-            desktop: Some("Floti".into())
-        }
-    );
-    assert!(
-        run.out.contains(&format!(
-            "Helm is updated to Floti 2.1.0, at {}.",
-            moved.display()
-        )),
-        "{}",
-        run.out
-    );
-    assert_eq!(
-        world.done.borrow().last().cloned(),
-        Some(format!("open {}", moved.join("Floti.exe").display()))
-    );
-    assert!(run.out.contains("Opening Floti again."), "{}", run.out);
-}
-
-#[test]
-fn an_old_app_that_cannot_be_removed_leaves_the_update_done_with_a_warning() {
-    let world = World::new();
-    world.from_desktop.set(true);
-    let release = Published::new("2.1.0").with_desktop();
-    world.publish(&[("stable", &release)]);
-    let moved = world.dirs.folder("apps").join("Floti").join("desktop");
-    let mut installs = world.installs(true).moving_to(Desktop {
-        name: "Floti",
-        path: moved.clone(),
-    });
-    installs.desktop = Some(Desktop {
-        name: "Helm",
-        path: world.dirs.folder("apps").join("Helm"),
-    });
-    installs.removal_fails = true;
-    let run = world.update(&installs, 1, None);
-    assert_eq!(
-        run.result.unwrap(),
-        Outcome::Updated {
-            version: "2.1.0".into(),
-            floti: true,
-            desktop: Some("Floti".into())
-        }
-    );
-    assert!(
-        run.out.contains("Warning: Helm at ") && run.out.contains("was not removed (it is in use)"),
-        "{}",
-        run.out
-    );
-    // The new app opens, not the old one.
-    assert_eq!(
-        world.done.borrow().last().cloned(),
-        Some(format!("open {}", moved.join("Floti.exe").display()))
-    );
 }
 
 #[test]

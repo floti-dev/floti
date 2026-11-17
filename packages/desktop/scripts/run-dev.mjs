@@ -5,14 +5,8 @@
 // `%LOCALAPPDATA%\Floti\desktop`, `~/Library/Application Support/Floti/desktop`,
 // `~/.local/share/floti/desktop`). Before this script, `pnpm dev` shared
 // `helm.db`, `overlays/` and the Chromium profile with whichever copy of the
-// app the developer had open. The visible half of that was two
-// processes fighting over one Chromium profile ("Unable to move the cache:
-// Access is denied"). The invisible half was worse: the app sweeps overlay shims
-// at start, and starting dev beside a live installed session unlinked that
-// session's `--plugin-dir` out from under it - the session kept running and
-// silently lost its skills. The sweep is fixed too (`cleanStaleShims` now asks
-// who owns a shim), but the sharing was never something to fix by making the
-// sharing safe.
+// app the developer had open, and two processes fought over one Chromium
+// profile ("Unable to move the cache: Access is denied").
 //
 // Every check already gets a directory of its own through `isolate.mjs`. This is
 // the same mechanism, pointed at `dev` under the isolated base (`%LOCALAPPDATA%\Floti Dev`
@@ -159,8 +153,7 @@ async function prepareDriveAgents() {
  *
  * `templates` in the user's config folder is the installed app's, resolved here
  * the same way `paths.ts` resolves it for the run that is not portable:
- * `~/.config/floti` whenever that folder is there, and `~/.config/helm` only
- * while Floti's is not there and Helm's is. Dev gets a **copy**
+ * `~/.config/floti`. Dev gets a **copy**
  * rather than a share, because the dev app can now write templates and a shared
  * directory would be somebody's real one.
  *
@@ -225,18 +218,7 @@ function countTemplates(dir) {
 }
 
 function realTemplatesDir() {
-  const floti = join(homedir(), '.config', 'floti')
-  const helm = join(homedir(), '.config', 'helm')
-  return join(!isFolder(floti) && isFolder(helm) ? helm : floti, 'templates')
-}
-
-/** Whether `path` is a folder. */
-function isFolder(path) {
-  try {
-    return statSync(path).isDirectory()
-  } catch {
-    return false
-  }
+  return join(homedir(), '.config', 'floti', 'templates')
 }
 
 /** Every file under the real templates directory, with size and mtime. */

@@ -317,16 +317,15 @@ const CONFIG_READ_ONLY = 'FLOTI_CONFIG_READ_ONLY'
 /**
  * The environment both programs run with. The installed app uses the host's
  * own folders, so it passes its environment as it is, its config folder
- * included: the host's own rule (`~/.config/floti` whenever it is there,
- * `~/.config/helm` only while Floti's is not and Helm's is) picks the same
- * folder for the host Helm starts as for
- * the one started at sign-in. Every other run moves the host's folders inside
- * Helm's data directory, so a dev or check run never meets the user's real
- * host, except the config folder: the folder holding Helm's templates folder.
+ * included: the host's own rule (`~/.config/floti`) picks the same folder for
+ * the host the desktop starts as for one started on its own. Every other run
+ * moves the host's folders inside the desktop's data directory, so a dev or
+ * check run never meets the user's real host, except the config folder: the
+ * folder holding the desktop's templates folder.
  *
  * A development run (`pnpm dev`, `dev:live`, every check) sets
  * `FLOTI_CONFIG_READ_ONLY`, because its config folder can be the installed
- * host's own (`dev:live` shares `~/.config/helm`), and a host built from a
+ * host's own (`dev:live` shares `~/.config/floti`), and a host built from a
  * checkout must never move, seed or write what the installed one reads: it
  * reads `agents`, else `roles` where it is, else the shipped agents from
  * memory, and seeds no templates. The installed and the portable app are

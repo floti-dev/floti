@@ -374,8 +374,8 @@ both before comparing them, and its tests reach the folder through a link
 short alias on Windows, or point TMPDIR at a link to a folder - from Windows,
 `TMPDIR=/tmp/<link> WSLENV=TMPDIR pnpm test:posix <files>`.
 
-The code that differs by OS - the processes-and-ports pass, overlay links,
-ending a process tree, the data directories and node-pty's spawn-helper mode -
+The code that differs by OS - the processes-and-ports pass, ending a
+process tree, the data directories and node-pty's spawn-helper mode -
 has its tests run where that code is the POSIX one by `pnpm test:posix`
 (`scripts/test-posix.mjs`):
 

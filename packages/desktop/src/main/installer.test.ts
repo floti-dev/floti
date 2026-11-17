@@ -1,33 +1,24 @@
-import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { flotiDataDirFor } from './dataFolder'
+import { clientFolder } from './host/launcher'
 
 /**
  * The Windows installer's include (`build/installer.nsh`) against the
- * electron-builder config it is built with: the app ID it moves an old install
- * from, and the folder it installs in. Read as text; nothing is built.
+ * electron-builder config it is built with: the app ID, the folder it installs
+ * in, and the host it asks to stop. Read as text; nothing is built.
  */
 
 const HERE = import.meta.dirname
 const BUILD = join(HERE, '..', '..', 'build')
 const nsh = readFileSync(join(BUILD, 'installer.nsh'), 'utf8')
 const config = readFileSync(join(HERE, '..', '..', 'electron-builder.yml'), 'utf8')
-
-/** electron-builder's namespace for the GUID it derives from an app ID (`ELECTRON_BUILDER_NS_UUID`). */
-const ELECTRON_BUILDER_NS = '50e065bc-3134-11e6-9bab-38c9862bdaf3'
-
-/** A name-based UUID (RFC 4122 version 5) of `name` in `namespace`, as electron-builder computes it. */
-function uuidV5(name: string, namespace: string): string {
-  const hash = createHash('sha1')
-    .update(Buffer.from(namespace.replace(/-/g, ''), 'hex'))
-    .update(name, 'utf8')
-    .digest()
-  hash[6] = (hash[6]! & 0x0f) | 0x50
-  hash[8] = (hash[8]! & 0x3f) | 0x80
-  const hex = hash.subarray(0, 16).toString('hex')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
-}
+/** The include without its comments. */
+const code = nsh
+  .split('\n')
+  .filter((line) => !line.trim().startsWith(';'))
+  .join('\n')
 
 describe('the Windows installer', () => {
   it('is built for the app ID dev.floti.desktop', () => {
@@ -35,19 +26,21 @@ describe('the Windows installer', () => {
     expect(config).toMatch(/^productName: Floti$/m)
   })
 
-  it("moves an old install from the uninstall entry Helm's app ID gave it", () => {
-    expect(uuidV5('dev.floti.desktop', ELECTRON_BUILDER_NS)).toBe('189f9946-3aab-5304-9f04-ec8cb9d04196')
-    const guid = /!define HELM_APP_GUID "([0-9a-f-]+)"/.exec(nsh)?.[1]
-    expect(guid).toBe(uuidV5('dev.coletaylor.helm', ELECTRON_BUILDER_NS))
-    expect(nsh).toContain('Uninstall Helm.exe')
-    expect(nsh).toContain('"$PLUGINSDIR\\helm-uninstaller.exe" /S /currentuser _?=$helmInstall')
+  it("asks a host running from inside the install to stop, with the installed desktop's own client folder", () => {
+    // The installer's define, with $LOCALAPPDATA standing for the folder it names.
+    const folder = /!define FLOTI_CLIENT_FOLDER "([^"]+)"/.exec(nsh)?.[1]
+    const local = 'C:\\Users\\Some One\\AppData\\Local'
+    const dataDir = flotiDataDirFor('win32', { LOCALAPPDATA: local }, 'C:\\Users\\Some One')
+    expect(folder?.replace('$LOCALAPPDATA', local)).toBe(clientFolder({ dataDir } as Parameters<typeof clientFolder>[0], 'win32'))
+    expect(code).toContain('!insertmacro FLOTI_STOP_INSTALLED_HOST')
+    expect(code).toContain('FileOpen $3 "$INSTDIR\\resources\\floti.exe" a')
+    expect(code).toContain('update-stop "${FLOTI_CLIENT_FOLDER}" --ask')
+    expect(code).toContain('update-stop "${FLOTI_CLIENT_FOLDER}" --stop')
+    // The one install it acts on is this one: no other folder, no other uninstaller.
+    expect(code).not.toMatch(/ExecWait|DeleteRegKey|Uninstall [^"]*\.exe/)
   })
 
   it('finds a running app by its path alone, never by an image name the host shares but for case', () => {
-    const code = nsh
-      .split('\n')
-      .filter((line) => !line.trim().startsWith(';'))
-      .join('\n')
     expect(code).toContain('!insertmacro FLOTI_CHECK_APP_RUNNING')
     expect(code).not.toMatch(/!insertmacro _CHECK_APP_RUNNING\b/)
     expect(code).not.toMatch(/\b(taskkill|tasklist)\b|IMAGENAME|\/IM /)

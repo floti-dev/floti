@@ -1,4 +1,3 @@
-import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, posix, relative, win32 } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -66,13 +65,7 @@ describe('templates and themes', () => {
     vi.doMock('electron', async () => (await import('../../test/electron')).electronFake())
     vi.stubEnv('PORTABLE_EXECUTABLE_DIR', undefined)
     const installed = await import('./paths')
-    const config = userConfigDirFor(homedir(), (path) => {
-      try {
-        return statSync(path).isDirectory()
-      } catch {
-        return false
-      }
-    })
+    const config = userConfigDirFor(homedir())
     expect(installed.templatesDir).toBe(join(config, 'templates'))
     expect(installed.themesDir).toBe(join(config, 'themes'))
 
