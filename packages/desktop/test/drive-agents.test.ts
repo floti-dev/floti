@@ -14,12 +14,12 @@ import { prepareDriveAgents } from '../scripts/drive-agents'
 
 /** A dev run's folder, as `isolate('dev')` lays it out, under the test run's root. */
 function devRun(): { root: string; dataDir: string } {
-  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'helm drive-')))
-  return { root, dataDir: join(root, 'helm-data') }
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'floti drive-')))
+  return { root, dataDir: join(root, 'floti-data') }
 }
 
 function settingsIn(dataDir: string): AppSettings {
-  const store = openStore({ file: join(dataDir, 'helm.db') })
+  const store = openStore({ file: join(dataDir, 'desktop.db') })
   try {
     return readSettings(store)
   } finally {
@@ -45,7 +45,7 @@ describe('the agents a driven dev window runs', () => {
   it('chooses the fake claude over the one the copied database chose, under the run folder', () => {
     const { root, dataDir } = devRun()
     const real = join(root, 'elsewhere', 'claude')
-    const copied = openStore({ file: join(dataDir, 'helm.db') })
+    const copied = openStore({ file: join(dataDir, 'desktop.db') })
     try {
       writeSettings(copied, { claudePath: real, updateCheck: false })
     } finally {

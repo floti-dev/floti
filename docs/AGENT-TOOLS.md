@@ -213,7 +213,7 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   exit or failed launch raises none: its parent hears it as news. A
   device lists as While you were away only the notices that stood when it
   connected and began after the newest one it had shown of that host
-  (`noticesSeen` in `helm.db`), so a dropped connection or a restart lists
+  (`noticesSeen` in `desktop.db`), so a dropped connection or a restart lists
   nothing it showed already.
 - Kept belongs to the host: `kept` on the child's row in `floti.db`, written
   with `stopped_by` by the first stop (`records::record_stopping`): true for

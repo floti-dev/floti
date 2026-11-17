@@ -22,7 +22,7 @@ const onPosix = it.runIf(process.platform !== 'win32')
 let root: string
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'helm spawn-helper-'))
+  root = mkdtempSync(join(tmpdir(), 'floti spawn-helper-'))
 })
 
 afterEach(() => {

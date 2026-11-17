@@ -150,7 +150,7 @@ const handedOver = (guest?: FakeWebContents): BrowserWindowConstructorOptions =>
   (guest === undefined ? {} : { webContents: guest as unknown as WebContents }) as BrowserWindowConstructorOptions
 
 const partition = (): FakeSession => {
-  const found = fakeBrowser.partitions.get('persist:helm-browser')
+  const found = fakeBrowser.partitions.get('persist:floti-browser')
   if (found === undefined) throw new Error('the browser partition was never configured')
   return found
 }

@@ -1393,10 +1393,10 @@ export type RailDestination = (typeof RAIL_DESTINATIONS)[number]
 export type RailItemId = RailDestination | PluginRailId
 
 /**
- * How much of `helm.db` the transcript archive may take, in bytes.
+ * How much of `desktop.db` the transcript archive may take, in bytes.
  *
  * A gigabyte by default, and both halves of that are deliberate. Unbounded is
- * not an option: `helm.db` is the user's file, and a feature that grows it
+ * not an option: `desktop.db` is the user's file, and a feature that grows it
  * without limit is one they find out about from their disk rather than from
  * Helm. A gigabyte is enormous for what this actually stores - the conversation
  * text out of one 3.9 MB transcript on this machine is 54 KB before
@@ -1732,7 +1732,7 @@ export interface AppSettings {
   railHidden: RailItemId[]
 
   /**
-   * How many bytes of `helm.db` the transcript archive may occupy.
+   * How many bytes of `desktop.db` the transcript archive may occupy.
    *
    * The archive itself has no on/off switch, and that is the decision rather
    * than an omission. 91% of the conversations behind `history.jsonl` were
@@ -1932,7 +1932,7 @@ export interface AppSettings {
    *
    * Internal state, like `lastUpdateCheckAt`, and not in the settings pane.
    * Profiles live in the host; the first time Helm connects to one it copies
-   * the ones an earlier version kept in helm.db into it, once, and this is
+   * the ones an earlier version kept in desktop.db into it, once, and this is
    * what keeps a profile deleted in the host afterwards from being copied back
    * on the next start. Helm's own profiles are never changed by the copy.
    */

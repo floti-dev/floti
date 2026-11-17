@@ -249,7 +249,7 @@ favour of a plugin.
 >
 > What it does not hold for is somebody's **own** layout. So a template is a
 > user-authored directory tree in `~/.config/helm/templates` (portable:
-> `helm-data/templates` beside the exe, on the same `PORTABLE_EXECUTABLE_DIR`
+> `floti-data/templates` beside the exe, on the same `PORTABLE_EXECUTABLE_DIR`
 > branch as `dataDir`, so a portable install stays self-contained and every
 > check is isolated with no new mechanism). The New Harness dialog grows a
 > picker, and the "What gets written" list stops being three lines in a
@@ -1200,7 +1200,7 @@ about the user's own `gh`: Helm no longer runs it.
   bullet below is still the whole of Floti's own.
 - **The browser pane fetches the page you navigate to**, and nothing else. It
   is a dev-server viewport rather than a browser (M16): a `WebContentsView` in
-  a partition of its own, `persist:helm-browser`, whose cookies and storage live
+  a partition of its own, `persist:floti-browser`, whose cookies and storage live
   under the app's data directory and which the renderer's session never shares.
   Every request behind it is a page somebody typed the address of or clicked a
   link to - Floti opens nothing there on its own initiative, the address bar
@@ -1342,12 +1342,12 @@ Added for the 1.0.0 release, because a version number that stops disclaiming
 invites the question and answering it by implication is how a promise gets made
 by accident.
 
-**1.0 promises one thing: an existing `helm.db` keeps working.** A newer Helm
+**1.0 promises one thing: an existing `desktop.db` keeps working.** A newer Floti
 opens a database an older one wrote, and it does that by construction rather
 than by intention:
 
 - Migrations only ever roll forward, are journalled by tag in
-  `__helm_migrations`, and each runs in its own transaction, so a failure leaves
+  `__floti_migrations`, and each runs in its own transaction, so a failure leaves
   the file on the last complete one rather than half-way through
   (`core/store/migrate.ts`). They are embedded in the bundle, so the exe carries
   its own and needs nothing shipped beside it.
@@ -1498,8 +1498,8 @@ signs the unpacked helper exes automatically.
 
 The portable launcher extracts the app to `%TEMP%\<random>\` and sets
 `PORTABLE_EXECUTABLE_DIR` to the directory containing the exe. The main process
-detects that env var and redirects `userData` to `<exe dir>\helm-data\` -
-verified: `helm.db` (WAL), screenshots and the selftest report all landed beside
+detects that env var and redirects `userData` to `<exe dir>\floti-data\` -
+verified: `desktop.db` (WAL), screenshots and the selftest report all landed beside
 the exe; nothing was written to `%APPDATA%`.
 
 `process.execPath` in portable mode points at the temp extraction, so **never
@@ -1514,7 +1514,7 @@ roundtrip, pwsh marker echo, renderer-synthesized keystrokes, resize
 verification (`[Console]::WindowWidth` inside the shell after
 `pty.resize(120,30)`), then launches `claude`, auto-dismisses startup gates
 (folder trust, MCP enablement) and waits for the version banner. Evidence goes
-to `helm-data/spike-report.json` + `helm-data/screenshots/*.png`.
+to `floti-data/spike-report.json` + `floti-data/screenshots/*.png`.
 
 Two lessons encoded there for future TUI automation:
 
@@ -1562,8 +1562,8 @@ human has to squint at. Keystrokes and mouse events are synthesised as real
 Chromium input events, so they travel the same path a user's typing does.
 
 ```
-pnpm fidelity        # C1-C9, the terminal itself      -> helm-data/fidelity-report.json
-pnpm claude-check    # D0-D7, the real claude TUI      -> helm-data/claude-report.json
+pnpm fidelity        # C1-C9, the terminal itself      -> floti-data/fidelity-report.json
+pnpm claude-check    # D0-D7, the real claude TUI      -> floti-data/claude-report.json
 pnpm shell           # the interactive pane, for the soak test
 ```
 

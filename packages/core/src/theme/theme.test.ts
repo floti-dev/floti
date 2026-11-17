@@ -357,7 +357,7 @@ describe('resolveTheme', () => {
 describe('user themes on disk', () => {
   let dir: string
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'helm-themes-'))
+    dir = mkdtempSync(join(tmpdir(), 'floti-themes-'))
   })
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true })

@@ -14,7 +14,7 @@ import { PATIENCE } from '../../../../test/patience'
 let root: string
 
 beforeAll(() => {
-  root = mkdtempSync(join(tmpdir(), 'helm tree kill-'))
+  root = mkdtempSync(join(tmpdir(), 'floti tree kill-'))
   // Says the pids of its child and grandchild, then waits forever.
   writeFileSync(
     join(root, 'leaf.mjs'),

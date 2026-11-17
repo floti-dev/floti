@@ -328,8 +328,8 @@ node scripts/test-leftovers.mjs cargo nextest run --workspace   # the same aroun
 
 `scripts/test-leftovers.mjs` is the check CI runs after `pnpm check` and after
 the host tests, on every runner. Around a command it runs it, then lists each
-test temp folder (`helm-test-run-*`, a vitest or Playwright run's root,
-`floti test *`, `helm world-*`, `helm-test-posix-*`) the
+test temp folder (`floti-test-*`, a vitest or Playwright run's root,
+`floti test *`, `floti world-*`, `floti-test-posix-*`) the
 command left in the temp folder and each process of a kind tests start
 (`floti*`, Node, shells, `conhost`, Electron, Xvfb) that the command started and is still
 running, with its pid, name and command line. It exits with the command's
@@ -375,7 +375,7 @@ has its tests run where that code is the POSIX one by `pnpm test:posix`
 
 - **On macOS and Linux** it runs those test files natively, in the checkout.
 - **On Windows** it runs them under Linux in WSL. It mirrors the working tree
-  into `~/.cache/helm-posix/<checkout>` inside WSL with `rsync` (no
+  into `~/.cache/floti-posix/<checkout>` inside WSL with `rsync` (no
   `node_modules`, `.git` or build output), runs `pnpm install
   --frozen-lockfile` there when `pnpm-lock.yaml` has changed since the last
   install, and runs the tests in that copy. The copy is Linux-side because a
@@ -424,7 +424,7 @@ vitest runs five projects (`vitest.config.ts`):
 
 Every project runs one global setup, `test/run-root.ts`, set in the root
 config, which every project extends. It makes the run's root, a
-`helm-test-run-*` folder in the OS temp folder, and points `TMPDIR`, `TEMP` and
+`floti-test-*` folder in the OS temp folder, and points `TMPDIR`, `TEMP` and
 `TMP` at it before any worker starts; the workers are forked with that
 environment, so every temp folder a test, the code under test or a process
 either starts makes is in the root, by construction, a world (`createWorld`)
@@ -493,8 +493,8 @@ over the window, or Electron's own guards on a page.
 | `settings` | the gear opens Settings as a tab with its sections, Ctrl+Tab walks every tab from inside a terminal, and a setting changed there survives a restart |
 | `launcher` | Ctrl+N, a folder typed, a profile and mode picked there; a conversation reopened in the pane beside; a new workspace ending in a session |
 | `profiles` | a profile made in the form, saved in the host, starting with its overlay, name and opening prompt |
-| `history` | an ended session in History without a refresh, its archive read in a tab with nothing of it in `helm.db`, found by what was said, and resumed where it ran |
-| `own-data` | what only `helm.db` held copied into the host, and History and the archived conversation showing it |
+| `history` | an ended session in History without a refresh, its archive read in a tab with nothing of it in `desktop.db`, found by what was said, and resumed where it ran |
+| `own-data` | what only `desktop.db` held copied into the host, and History and the archived conversation showing it |
 | `files` | a file opened from the tree beside its session, its changed lines counted, its line numbers to the bottom, and the view following the session's next edit; Ctrl+P, and the hand-offs to VS Code, Explorer and the clipboard |
 | `notes` | a note rendered and its wikilink followed; a note edited beside its preview, its draft kept behind another tab, and saved; Ctrl+Shift+F finding a note; an HTML artifact framed with no reach |
 | `browser` | browsing; the security posture; a cookie surviving a restart; find in page; the browser's keys with the caret in the page; the page standing down for the address list and the menu; clipboard writing and fullscreen; the page standing down while a divider or the Browser tab is dragged |

@@ -245,7 +245,7 @@ if (sevenZip === null) {
   process.exit(1)
 }
 
-const scratch = mkdtempSync(join(tmpdir(), 'helm-verify-artifact-'))
+const scratch = mkdtempSync(join(tmpdir(), 'floti-verify-artifact-'))
 let failures = []
 try {
   console.log(`Verifying ${String(artefacts.length)} artefact(s) with ${sevenZip}:`)

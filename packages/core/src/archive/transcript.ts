@@ -1,7 +1,7 @@
 /**
  * The shape of an archived conversation, as an earlier Helm copied it out of
- * Claude Code's transcripts into `helm.db` (`store/archive.ts`). The local host
- * archives now; `helm.db` keeps what was archived, which the copy into the host
+ * Claude Code's transcripts into `desktop.db` (`store/archive.ts`). The local host
+ * archives now; `desktop.db` keeps what was archived, which the copy into the host
  * carries (`store/copy.ts`).
  */
 

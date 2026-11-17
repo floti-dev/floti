@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PATIENCE } from '../../../../../test/patience'
+import { RUN_ROOT_PREFIX } from '../../../../../test/run-root'
 import { FakeChild, answersRestart, connects, type Program } from '../../../test/fake-child'
 import { FrameDecoder, encodeFrame } from './frame'
 import { KEEPER_LINK_VERSION } from './protocol'
@@ -37,11 +38,11 @@ const END = '.'
 
 const WIN_PLACES: HostPlaces = {
   appMode: 'dev',
-  dataDir: 'C:\\Users\\me\\AppData\\Local\\Helm\\dev\\helm-data',
+  dataDir: 'C:\\Users\\me\\AppData\\Local\\Floti Dev\\dev\\floti-data',
   packaged: false,
   resourcesPath: 'C:\\Program Files\\Helm\\resources',
   repoRoot: 'C:\\src\\my helm',
-  templatesDir: 'C:\\Users\\me\\AppData\\Local\\Helm\\dev\\helm-data\\templates',
+  templatesDir: 'C:\\Users\\me\\AppData\\Local\\Floti Dev\\dev\\floti-data\\templates',
   execPath: 'C:\\src\\my helm\\node_modules\\electron\\dist\\electron.exe',
   appPath: 'C:\\src\\my helm\\packages\\desktop'
 }
@@ -291,7 +292,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       }
       expect(
         hostEnvironment(
-          { ...WIN_PLACES, dataDir: '/home/me/helm-data' },
+          { ...WIN_PLACES, dataDir: '/home/me/floti-data' },
           { platform: 'linux', env: { PATH: '/usr/bin:/opt/node/bin' }, tmpdir: () => '/tmp', exists: (path) => path === '/opt/node/bin/node' }
         )['FLOTI_NODE']
       ).toBe('/opt/node/bin/node')
@@ -312,7 +313,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     it('keeps the socket under the macOS and Linux path limit when the data directory is too deep for it', () => {
       const shallow = {
         ...WIN_PLACES,
-        dataDir: '/Users/me/Library/Application Support/Helm Dev/dev/helm-data'
+        dataDir: '/Users/me/Library/Application Support/Floti Dev/dev/floti-data'
       }
       expect(
         hostEnvironment(shallow, {
@@ -324,7 +325,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
 
       const deep = {
         ...WIN_PLACES,
-        dataDir: `/private/var/folders/ab/T/helm-test-run/world with a space ${'x'.repeat(60)}/helm-data`
+        dataDir: `/private/var/folders/ab/T/floti-test-AbC123/world with a space ${'x'.repeat(60)}/floti-data`
       }
       const mac = hostEnvironment(deep, {
         platform: 'darwin',
@@ -349,9 +350,9 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       // A Mac's own temp folder, as long as macOS makes it, with a test run's
       // folder inside it, as every test's `tmpdir()` is: the keeper's socket,
       // the longest, still fits.
-      const nested = '/var/folders/76/wrkg31yx61g_4sqkvq4bnt_40000gn/T/helm-test-run-AbC123'
+      const nested = `/var/folders/76/wrkg31yx61g_4sqkvq4bnt_40000gn/T/${RUN_ROOT_PREFIX}AbC123`
       const run = hostEnvironment(
-        { ...WIN_PLACES, dataDir: `${nested}/helm world-XyZ789/app/helm-data` },
+        { ...WIN_PLACES, dataDir: `${nested}/floti world-XyZ789/app/floti-data` },
         { platform: 'darwin', env: {}, tmpdir: () => nested }
       )['FLOTI_RUNTIME_DIR']!
       expect(run.startsWith(`${nested}/`)).toBe(true)

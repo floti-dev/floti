@@ -1641,7 +1641,7 @@ async fn a_floti_db_whose_children_rows_have_a_class_upgrades_in_place_and_the_n
         )
         .unwrap();
         db.execute(
-            "DELETE FROM __helm_migrations WHERE tag = ?1",
+            "DELETE FROM __floti_migrations WHERE tag = ?1",
             [dropping.tag],
         )
         .unwrap();
@@ -3126,7 +3126,7 @@ async fn a_childs_row_written_while_the_column_was_role_keeps_its_agent_and_resu
         db.execute_batch("ALTER TABLE sessions RENAME COLUMN agent TO role")
             .unwrap();
         db.execute(
-            "DELETE FROM __helm_migrations WHERE tag = ?1",
+            "DELETE FROM __floti_migrations WHERE tag = ?1",
             [renaming.tag],
         )
         .unwrap();

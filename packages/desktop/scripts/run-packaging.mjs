@@ -195,7 +195,7 @@ if (FIRSTRUN_GROUPS.some(wants)) {
   const sandbox = sandboxArg
     ? (mkdirSync(sandboxArg.slice('--sandbox='.length), { recursive: true }),
       sandboxArg.slice('--sandbox='.length))
-    : mkdtempSync(join(tmpdir(), 'helm-packaging-'))
+    : mkdtempSync(join(tmpdir(), 'floti-packaging-'))
   // A path with a space in it, deliberately: CLAUDE.md requires those to work
   // and this is the one place a fresh install's own data directory is created.
   const portableDir = join(sandbox, 'Portable Install')
@@ -205,8 +205,8 @@ if (FIRSTRUN_GROUPS.some(wants)) {
   mkdirSync(fixtures, { recursive: true })
 
   const appDataBefore = existsSync(realDataDir) ? readdirSync(realDataDir).sort() : []
-  const dbBefore = existsSync(join(realDataDir, 'helm.db'))
-    ? statSync(join(realDataDir, 'helm.db')).mtimeMs
+  const dbBefore = existsSync(join(realDataDir, 'desktop.db'))
+    ? statSync(join(realDataDir, 'desktop.db')).mtimeMs
     : null
 
   const passThrough = groups ? [`--only=${groups.join(',')}`] : []
@@ -223,7 +223,7 @@ if (FIRSTRUN_GROUPS.some(wants)) {
   )
   if (status !== 0) say(`(phase 2 exited with ${String(status)}; the report decides, not this)`)
 
-  const firstRunReport = join(portableDir, 'helm-data', 'packaging-firstrun-report.json')
+  const firstRunReport = join(portableDir, 'floti-data', 'packaging-firstrun-report.json')
   if (!existsSync(firstRunReport)) {
     console.error(`FAIL  phase 2 wrote no report to ${firstRunReport}`)
     process.exit(1)
@@ -232,15 +232,15 @@ if (FIRSTRUN_GROUPS.some(wants)) {
 
   // The isolation, checked from outside the process that claimed it.
   const appDataAfter = existsSync(realDataDir) ? readdirSync(realDataDir).sort() : []
-  const dbAfter = existsSync(join(realDataDir, 'helm.db'))
-    ? statSync(join(realDataDir, 'helm.db')).mtimeMs
+  const dbAfter = existsSync(join(realDataDir, 'desktop.db'))
+    ? statSync(join(realDataDir, 'desktop.db')).mtimeMs
     : null
   const added = appDataAfter.filter((f) => !appDataBefore.includes(f))
   checks.push({
     id: 'PKG-F1',
     criterion: 'setup: the first-run phase left the real profile alone',
     title: 'A whole first run happened and %LOCALAPPDATA%\\Floti\\desktop did not change',
-    ok: added.length === 0 && dbBefore === dbAfter && existsSync(join(portableDir, 'helm-data')),
+    ok: added.length === 0 && dbBefore === dbAfter && existsSync(join(portableDir, 'floti-data')),
     detail: {
       realDataDir,
       entriesBefore: appDataBefore.length,
@@ -248,9 +248,9 @@ if (FIRSTRUN_GROUPS.some(wants)) {
       entriesAdded: added,
       databaseMtimeBefore: dbBefore,
       databaseMtimeAfter: dbAfter,
-      sandboxDataDir: join(portableDir, 'helm-data'),
-      sandboxFiles: existsSync(join(portableDir, 'helm-data'))
-        ? readdirSync(join(portableDir, 'helm-data')).sort()
+      sandboxDataDir: join(portableDir, 'floti-data'),
+      sandboxFiles: existsSync(join(portableDir, 'floti-data'))
+        ? readdirSync(join(portableDir, 'floti-data')).sort()
         : []
     },
     notes: [
@@ -401,7 +401,7 @@ function portableChecks(exe) {
     ]
   }
 
-  const sandbox = mkdtempSync(join(tmpdir(), 'helm-portable-'))
+  const sandbox = mkdtempSync(join(tmpdir(), 'floti-portable-'))
   // A path with spaces, no install, nowhere near the build directory.
   const runDir = join(sandbox, 'Floti Test With Spaces')
   mkdirSync(runDir, { recursive: true })
@@ -427,7 +427,7 @@ function portableChecks(exe) {
   say(`running the portable exe from ${runDir}`)
   const run = spawnSync(copied, ['--selftest'], { stdio: 'inherit', timeout: 300_000 })
 
-  const dataDir = join(runDir, 'helm-data')
+  const dataDir = join(runDir, 'floti-data')
   const reportFile = join(dataDir, 'spike-report.json')
   const report = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null
   const appDataAfter = existsSync(realDataDir) ? readdirSync(realDataDir).sort() : []
@@ -442,7 +442,7 @@ function portableChecks(exe) {
         report !== null &&
         report.pass === true &&
         report.mode === 'portable' &&
-        existsSync(join(dataDir, 'helm.db')) &&
+        existsSync(join(dataDir, 'desktop.db')) &&
         (installedRunning > 0 || leaked.length === 0),
       detail: {
         exe: copied,
@@ -463,8 +463,8 @@ function portableChecks(exe) {
       notes: [
         'Run as the ordinary user this script is running as - no elevation is requested anywhere, and the exe writes only inside its own directory.',
         'The selftest is Spike B\'s: a SQLite WAL roundtrip, an interactive pwsh through ConPTY, renderer-synthesized keystrokes, a resize verified inside the shell, and the real claude TUI reaching its version banner.',
-        '"Beside the exe" is checked twice: helm.db exists in the run directory, and %LOCALAPPDATA%\\Floti\\desktop gained no files while it ran.',
-        'The second of those is dropped when an installed Helm is running, because that app writes to %LOCALAPPDATA%\\Floti\\desktop itself and the read would then be about two processes. appDataReadIsEvidence says which run this was; the first half - helm.db beside the exe - holds either way.'
+        '"Beside the exe" is checked twice: desktop.db exists in the run directory, and %LOCALAPPDATA%\\Floti\\desktop gained no files while it ran.',
+        'The second of those is dropped when an installed Floti is running, because that app writes to %LOCALAPPDATA%\\Floti\\desktop itself and the read would then be about two processes. appDataReadIsEvidence says which run this was; the first half - desktop.db beside the exe - holds either way.'
       ]
     }
   ]

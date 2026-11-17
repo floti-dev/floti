@@ -270,7 +270,7 @@ function main(args) {
   if (problems.length === 0) {
     const facts = binaryFacts(readFileSync(file))
     if (facts.os !== 'linux' || facts.cpu !== 'x64') problems.push(`${basename(file)} is not an x64 Linux executable`)
-    const work = mkdtempSync(join(tmpdir(), 'helm-appimage-'))
+    const work = mkdtempSync(join(tmpdir(), 'floti-appimage-'))
     try {
       const root = extract(file, work)
       problems.push(...appProblems(root, { floti: readFileSync(floti), sums: readFileSync(sums), origin: basename(file) }))

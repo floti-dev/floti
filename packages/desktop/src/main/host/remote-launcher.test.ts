@@ -15,16 +15,16 @@ import {
 
 const PLACES: HostPlaces = {
   appMode: 'dev',
-  dataDir: 'C:\\Users\\me\\AppData\\Local\\Helm\\dev\\helm-data',
+  dataDir: 'C:\\Users\\me\\AppData\\Local\\Floti Dev\\dev\\floti-data',
   packaged: false,
   resourcesPath: 'C:\\Program Files\\Helm\\resources',
   repoRoot: 'C:\\src\\my helm',
-  templatesDir: 'C:\\Users\\me\\AppData\\Local\\Helm\\dev\\helm-data\\templates',
+  templatesDir: 'C:\\Users\\me\\AppData\\Local\\Floti Dev\\dev\\floti-data\\templates',
   execPath: 'C:\\src\\my helm\\node_modules\\electron\\dist\\electron.exe',
   appPath: 'C:\\src\\my helm\\packages\\desktop'
 }
 const FLOTI = 'C:\\src\\my helm\\target\\debug\\floti.exe'
-const FOLDER = 'C:\\Users\\me\\AppData\\Local\\Helm\\dev\\helm-data\\remote-hosts\\0123456789abcdef'
+const FOLDER = 'C:\\Users\\me\\AppData\\Local\\Floti Dev\\dev\\floti-data\\remote-hosts\\0123456789abcdef'
 const SSH: HostTransport = { kind: 'ssh', target: 'me@build-box' }
 const COMMAND: HostTransport = {
   kind: 'command',
@@ -237,8 +237,8 @@ describe('reaching a host on another computer', () => {
   it('keeps each host’s keys in a folder of its own inside Floti’s data, whatever its id', () => {
     const one = remoteClientFolder(PLACES, 'win32', 'h-build')
     const other = remoteClientFolder(PLACES, 'win32', '..\\..\\escape')
-    expect(one).toMatch(/^C:\\Users\\me\\AppData\\Local\\Helm\\dev\\helm-data\\remote-hosts\\[0-9a-f]{16}$/)
-    expect(other).toMatch(/^C:\\Users\\me\\AppData\\Local\\Helm\\dev\\helm-data\\remote-hosts\\[0-9a-f]{16}$/)
+    expect(one).toMatch(/^C:\\Users\\me\\AppData\\Local\\Floti Dev\\dev\\floti-data\\remote-hosts\\[0-9a-f]{16}$/)
+    expect(other).toMatch(/^C:\\Users\\me\\AppData\\Local\\Floti Dev\\dev\\floti-data\\remote-hosts\\[0-9a-f]{16}$/)
     expect(one).not.toBe(other)
     expect(remoteClientFolder(PLACES, 'win32', 'h-build')).toBe(one)
   })

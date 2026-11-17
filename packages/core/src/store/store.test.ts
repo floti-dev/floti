@@ -28,7 +28,7 @@ import {
 } from './settings'
 
 /** A folder the rows name. Nothing is made there: the rows are only data. */
-const dir = join(tmpdir(), 'helm-store')
+const dir = join(tmpdir(), 'floti-store')
 let store: Store
 
 // The rows are about the store, not the file it lives in, so they live in
@@ -47,8 +47,8 @@ afterEach(() => {
  * test may close the store and reopen the file.
  */
 async function withFile(test: (file: string, onFile: Store) => void): Promise<void> {
-  const folder = await mkdtemp(join(tmpdir(), 'helm-store-'))
-  const file = join(folder, 'helm.db')
+  const folder = await mkdtemp(join(tmpdir(), 'floti-store-'))
+  const file = join(folder, 'desktop.db')
   const onFile = openStore({ file })
   try {
     test(file, onFile)
@@ -119,13 +119,13 @@ describe('openStore', () => {
     const last = '0022_concerned_gwen_stacy'
     const raw = new Database(':memory:')
     try {
-      raw.exec('CREATE TABLE __helm_migrations (tag TEXT PRIMARY KEY, applied_at TEXT NOT NULL)')
+      raw.exec('CREATE TABLE __floti_migrations (tag TEXT PRIMARY KEY, applied_at TEXT NOT NULL)')
       const upTo = MIGRATIONS.findIndex((migration) => migration.tag === last)
       expect(upTo).toBeGreaterThan(0)
       const earlier = MIGRATIONS.slice(0, upTo + 1)
       for (const migration of earlier) {
         for (const statement of migration.statements) raw.exec(statement)
-        raw.prepare('INSERT INTO __helm_migrations (tag, applied_at) VALUES (?, ?)').run(migration.tag, '2026-11-01T00:00:00.000Z')
+        raw.prepare('INSERT INTO __floti_migrations (tag, applied_at) VALUES (?, ?)').run(migration.tag, '2026-11-01T00:00:00.000Z')
       }
       raw.exec(`
         INSERT INTO sessions (name, cwd, status, exit_code, command) VALUES ('tests', 'C:/work', 'exited', 2, 'pnpm test');
@@ -264,7 +264,7 @@ describe('settings', () => {
   })
 
   it('S2: ignores a stored run-sessions-in-the-local-host row an earlier version wrote, and takes the next write', () => {
-    // An earlier version kept this switch; helm.db keeps its row and the host
+    // An earlier version kept this switch; desktop.db keeps its row and the host
     // is the only path whatever it says.
     store.raw
       .prepare('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)')
@@ -284,7 +284,7 @@ describe('settings', () => {
 
   it('ignores a stored heavy-agents limit an earlier version wrote, and takes the next write', () => {
     // An earlier version kept a limit on heavy agents; Floti has none, and
-    // helm.db keeps the row, whatever it holds.
+    // desktop.db keeps the row, whatever it holds.
     for (const value of ['3', '0', '{oops']) {
       store.raw
         .prepare(
@@ -911,7 +911,7 @@ describe('settings validation', () => {
     {
       // A byte count, and null is in the *bad* column deliberately: there is no
       // "no ceiling" for this key. The archive is always on and always bounded,
-      // and an unbounded one is the state `helm.db` is not allowed to reach.
+      // and an unbounded one is the state `desktop.db` is not allowed to reach.
       key: 'transcriptArchiveMaxBytes',
       good: [1024, 1024 ** 3, 64 * 1024 ** 3],
       bad: [1023, 0, -1, 64 * 1024 ** 3 + 1, 1024.5, '1073741824', null, {}]

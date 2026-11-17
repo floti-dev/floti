@@ -41,7 +41,7 @@ export function posixTestPlan(platform, args) {
 }
 
 /**
- * The Linux-side folder a checkout is mirrored into, under ~/.cache/helm-posix:
+ * The Linux-side folder a checkout is mirrored into, under ~/.cache/floti-posix:
  * one per checkout, so two worktrees never overwrite each other's copy.
  */
 export function mirrorName(root) {
@@ -75,7 +75,7 @@ if ! command -v rsync >/dev/null; then
   exit 2
 fi
 src=$(wslpath -a "$src_win")
-dest="$HOME/.cache/helm-posix/$mirror"
+dest="$HOME/.cache/floti-posix/$mirror"
 mkdir -p "$dest"
 echo "test:posix: mirroring $src into $dest"
 rsync -a --delete \
@@ -132,7 +132,7 @@ async function main() {
   // relayed rather than inherited: handed a stdin pipe, even an ended one, or
   // this process's own stdout when that is a pipe, wsl.exe was seen to end the
   // run with exit 139.
-  const dir = mkdtempSync(join(tmpdir(), 'helm-test-posix-'))
+  const dir = mkdtempSync(join(tmpdir(), 'floti-test-posix-'))
   try {
     const script = join(dir, 'run.sh')
     writeFileSync(script, WSL_SCRIPT.replaceAll('\r\n', '\n'))

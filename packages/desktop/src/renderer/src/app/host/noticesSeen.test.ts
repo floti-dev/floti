@@ -2,7 +2,7 @@ import { NOTICES_SEEN_HOSTS_MAX } from '@helm/core/types'
 import { describe, expect, it, vi } from 'vitest'
 import { createSeenMarks, memorySeen, newerThan, newestOf, type SeenStorage } from './noticesSeen'
 
-/** helm.db's `noticesSeen` as the window reads and writes it, recording every write. */
+/** desktop.db's `noticesSeen` as the window reads and writes it, recording every write. */
 function device(initial: Record<string, string> = {}) {
   let kept: Readonly<Record<string, string>> = initial
   const writes: Array<Readonly<Record<string, string>>> = []

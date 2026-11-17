@@ -60,7 +60,7 @@ YAML so it travels with the workspace.
 Windows 10/11, x64. No admin rights are needed for any of these.
 
 **Portable** - download `Floti-<version>-portable.exe`, put it wherever you like
-and run it. It keeps everything in a `helm-data\` folder beside itself, so the
+and run it. It keeps everything in a `floti-data\` folder beside itself, so the
 whole install travels on a stick and removing it is deleting two things.
 
 **Installed** - download `Floti-<version>-setup.exe` and run it. It installs for
@@ -98,7 +98,7 @@ services may rely on it. Run it from a terminal Floti did not start.
 
 Workspace templates are the one thing outside that: they live in
 `~/.config/floti/templates`, because they are folders you write and edit by
-hand. A portable install keeps them in its own `helm-data\templates`, so it still
+hand. A portable install keeps them in its own `floti-data\templates`, so it still
 leaves nothing behind on a machine you plug it into.
 
 Floti manages them without trying to replace your editor. **Settings ->
@@ -304,7 +304,7 @@ listening, not Floti's.
 
 ```
 packages/
-├── core/      # shared: types.ts, store/ (helm.db), layout/, theme/ - ZERO electron imports
+├── core/      # shared: types.ts, store/ (desktop.db), layout/, theme/ - ZERO electron imports
 ├── ui/        # React components
 ├── desktop/   # Electron main + preload + renderer + pty host
 └── plugin-sdk/ # the manifest validator, the bridge's types, the floti-plugin CLI

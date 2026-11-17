@@ -78,10 +78,10 @@ describe('what the leftover check selects', () => {
       row(50, 30, 'node', 20, 'node scripts/test-leftovers.mjs after state.json')
     ]
     const leftovers = selectLeftovers({
-      before: { processes: BEFORE, folders: ['helm world-old'] },
+      before: { processes: BEFORE, folders: ['floti world-old'] },
       after: {
         processes: after,
-        folders: ['helm world-old', 'floti test abc', 'helm world-xyz', 'helm-test-posix-1', 'helm-test-run-a1']
+        folders: ['floti world-old', 'floti test abc', 'floti world-xyz', 'floti-test-posix-1', 'floti-test-a1']
       },
       self: 50,
       tmp: TMP,
@@ -90,9 +90,9 @@ describe('what the leftover check selects', () => {
     })
     expect(leftovers.folders).toEqual([
       join(TMP, 'floti test abc'),
-      join(TMP, 'helm world-xyz'),
-      join(TMP, 'helm-test-posix-1'),
-      join(TMP, 'helm-test-run-a1')
+      join(TMP, 'floti world-xyz'),
+      join(TMP, 'floti-test-posix-1'),
+      join(TMP, 'floti-test-a1')
     ])
     expect(pids(leftovers.processes)).toEqual([40, 41, 42])
     expect(formatLeftovers(leftovers)).toContain('  process  40 floti floti host --listen 127.0.0.1:0')
@@ -122,8 +122,8 @@ describe('what the leftover check selects', () => {
       row(50, 30, 'node', 20)
     ]
     const leftovers = selectLeftovers({
-      before: { processes: BEFORE, folders: ['floti test earlier run', 'helm world-earlier'] },
-      after: { processes: after, folders: ['floti test earlier run', 'helm world-earlier'] },
+      before: { processes: BEFORE, folders: ['floti test earlier run', 'floti world-earlier'] },
+      after: { processes: after, folders: ['floti test earlier run', 'floti world-earlier'] },
       self: 50,
       tmp: TMP,
       places: PLACES,
@@ -191,7 +191,7 @@ describe('what the leftover check selects', () => {
 
     it('reports one running in a test temp folder, as a host session the host started with a cleared environment does', () => {
       expect(adopted({ 45: { cwd: join(TMP, 'floti test abc') } }, 'floti')).toEqual([45])
-      expect(adopted({ 45: { cwd: join(TMP, 'helm world-xyz', 'project a') } })).toEqual([45])
+      expect(adopted({ 45: { cwd: join(TMP, 'floti world-xyz', 'project a') } })).toEqual([45])
     })
 
     it('reports one running in the checkout', () => {
@@ -285,7 +285,7 @@ describe('what the leftover check selects', () => {
       before: { processes: BEFORE, folders: [] },
       after: {
         processes: [...BEFORE, row(80, 999, 'mspdbsrv', 12), row(81, 999, 'rustc', 13), row(50, 30, 'node', 20)],
-        folders: ['node-compile-cache', 'helm compile cache probe-1']
+        folders: ['node-compile-cache', 'floti compile cache probe-1']
       },
       self: 50,
       tmp: TMP,
@@ -340,13 +340,13 @@ describe('what the leftover check selects', () => {
   it('still judges folders when the process table could not be read', () => {
     const leftovers = selectLeftovers({
       before: { processes: null, folders: [] },
-      after: { processes: null, folders: ['helm world-1'] },
+      after: { processes: null, folders: ['floti world-1'] },
       self: 50,
       tmp: TMP,
       places: PLACES,
       inspect: unreadable
     })
-    expect(leftovers).toEqual({ folders: [join(TMP, 'helm world-1')], processes: null })
+    expect(leftovers).toEqual({ folders: [join(TMP, 'floti world-1')], processes: null })
   })
 })
 
@@ -468,7 +468,7 @@ const started: number[] = []
 
 beforeEach(() => {
   // A private temp folder, so what the script lists is only what this test makes.
-  temp = mkdtempSync(join(tmpdir(), 'helm leftovers temp-'))
+  temp = mkdtempSync(join(tmpdir(), 'floti leftovers temp-'))
 })
 
 afterEach(() => {

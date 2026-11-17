@@ -74,6 +74,6 @@ describe('templates and themes', () => {
     vi.stubEnv('PORTABLE_EXECUTABLE_DIR', run)
     const isolated = await import('./paths')
     expect(isolated.appMode).toBe('dev')
-    expect(isolated.templatesDir).toBe(join(run, 'helm-data', 'templates'))
+    expect(isolated.templatesDir).toBe(join(run, 'floti-data', 'templates'))
   })
 })

@@ -89,7 +89,7 @@ async function hostWorld(label: string, hostProtocol?: string) {
   const root = await mkdtemp(join(inject(RUN_ROOT), `${label} `))
   const places: HostPlaces = {
     ...FLOTI_PLACES,
-    dataDir: join(root, 'helm-data'),
+    dataDir: join(root, 'floti-data'),
     templatesDir: join(root, 'config', 'templates')
   }
   const programs = { platform: process.platform, env: process.env, tmpdir, exists: existsSync }

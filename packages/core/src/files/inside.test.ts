@@ -41,7 +41,7 @@ let root: string
 
 beforeEach(() => {
   // A space in the path, as every Helm fixture has: quoting is where paths break.
-  root = mkdtempSync(join(tmpdir(), 'helm inside-'))
+  root = mkdtempSync(join(tmpdir(), 'floti inside-'))
 })
 
 afterEach(() => {
@@ -56,7 +56,7 @@ describe('isInsideRoot', () => {
   })
 
   it('takes a project reached through a link as the project, and refuses a link out of it', () => {
-    const elsewhere = mkdtempSync(join(tmpdir(), 'helm inside elsewhere-'))
+    const elsewhere = mkdtempSync(join(tmpdir(), 'floti inside elsewhere-'))
     const linked = join(elsewhere, 'linked project')
     const escape = join(root, 'escape')
     try {
