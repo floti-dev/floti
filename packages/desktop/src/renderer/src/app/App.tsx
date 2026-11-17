@@ -5085,7 +5085,7 @@ export function App(): JSX.Element {
         settings?.transcriptArchiveMaxBytes ??
         DEFAULT_SETTINGS.transcriptArchiveMaxBytes
       }
-      // The authored templates, so the built-in Minimal row does not make an
+      // The authored templates, so the built-in Starter row does not make an
       // empty templates folder read as one that has something in it.
       templateCount={
         templates.templates.filter((choice) => !choice.builtIn).length

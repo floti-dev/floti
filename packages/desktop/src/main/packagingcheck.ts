@@ -1313,15 +1313,15 @@ async function workspaceGroup(
   /*
    * Which template this creation is from, chosen rather than assumed.
    *
-   * PKG-11 below is a claim about the **minimal** scaffold - three entries,
-   * four keys, no opinions - and since the dialog grew a picker that claim is
-   * only true of one of the rows in it. So the row is clicked and the checked
+   * PKG-11 below is a claim about **Starter**, the built-in template - three
+   * entries, four keys, nothing personal - and since the dialog grew a picker
+   * that claim is only true of one of the rows in it. So the row is clicked and the checked
    * one is read back out of the DOM, and PKG-11 asserts on that value: a
    * default that quietly changed would fail the probe rather than silently
    * re-point it at a tree it was never written about.
    */
   const pickerUp = await pollJs(win, `document.querySelector('[data-workspace-templates]')`, 10_000)
-  await click(win, '[data-workspace-template="minimal"]')
+  await click(win, '[data-workspace-template="starter"]')
   await sleep(200)
   const chosenTemplate = await js<string | null>(
     win,
@@ -1367,22 +1367,33 @@ async function workspaceGroup(
   const opinions = OPINION_WORDS.filter(
     (word) => word !== 'template:' && manifestLower.includes(word)
   )
-  const personalHits = personal().filter((p) => p.re.test(manifest?.raw ?? '')).map((p) => p.id)
+  const agentsMd = (() => {
+    try {
+      return readFileSync(join(created, 'AGENTS.md'), 'utf8')
+    } catch {
+      return null
+    }
+  })()
+  const personalHits = personal()
+    .filter((p) => p.re.test(manifest?.raw ?? '') || p.re.test(agentsMd ?? ''))
+    .map((p) => p.id)
 
   checks.push({
     id: 'PKG-11',
     criterion:
-      'The minimal scaffold contains no author-specific or workflow-opinion content',
-    title: 'Minimal: three entries, four keys, and nothing that presumes how anyone works',
+      'Starter writes workspace.yaml, an empty repos/ and AGENTS.md, and nothing author-specific',
+    title: 'Starter: three entries, four keys, and nothing personal',
     ok:
       pickerUp &&
-      chosenTemplate === 'minimal' &&
+      chosenTemplate === 'starter' &&
       onDisk &&
-      tree.join(',') === '.claude,workspace.yaml,repos' &&
+      [...tree].sort().join(',') === 'AGENTS.md,repos,workspace.yaml' &&
+      agentsMd !== null &&
+      agentsMd.startsWith(`# ${WORKSPACE_NAME}\n`) &&
       manifest !== null &&
       manifest.keys.join(',') === 'name,template,version,created' &&
       manifest.values['name'] === WORKSPACE_NAME &&
-      manifest.values['template'] === 'minimal' &&
+      manifest.values['template'] === 'starter' &&
       opinions.length === 0 &&
       personalHits.length === 0 &&
       !manifest.raw.includes('#'),
@@ -1400,10 +1411,10 @@ async function workspaceGroup(
       personalPatternsFound: personalHits
     },
     notes: [
-      'Scoped to the minimal template since the dialog grew a picker: a user template writes its own tree, so "exactly these three entries" is a claim about the built-in scaffold and about nothing else. The selected row is read back out of the DOM rather than assumed, so a changed default fails here instead of quietly re-pointing this probe.',
+      'Scoped to Starter since the dialog grew a picker: a user template writes its own tree, so "exactly these three entries" is a claim about the built-in template and about nothing else. The selected row is read back out of the DOM rather than assumed, so a changed default fails here instead of quietly re-pointing this probe.',
       'The tree is read by a plain recursion that knows nothing about workspaces, so it disagrees with the scaffolder if the scaffolder writes anything extra.',
       'The manifest is parsed line by line rather than with a YAML library, which is what makes "exactly four keys, in this order, no comments" checkable - a parser would forgive a repeat, a stray key or a comment.',
-      `Nothing in it matches any of ${String(OPINION_WORDS.length - 1)} workflow words or any of ${String(personal().length)} personal-path patterns. The whole scaffold is ${String(scaffoldBytes)} bytes.`
+      `The manifest matches none of ${String(OPINION_WORDS.length - 1)} workflow words, and neither it nor AGENTS.md (whose basics of working are the point of it) matches any of ${String(personal().length)} personal-path patterns. The whole scaffold is ${String(scaffoldBytes)} bytes.`
     ]
   })
 

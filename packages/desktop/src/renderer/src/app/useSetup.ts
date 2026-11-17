@@ -21,15 +21,18 @@ import { bridgeFor, helm } from './bridge'
 export type WorkspaceDialogMode = 'new' | 'convert'
 
 /**
- * The built-in scaffold's id, written out rather than imported.
- *
- * `MINIMAL_TEMPLATE` is a *value* in `@helm/core`, and a value import of the
- * package root from the renderer reaches `launch/` and `store/` and fails at
- * rollup rather than at typecheck (CLAUDE.md, "Boundaries"). It is one word and
- * it is also the string the main process would answer with; if the two drift,
- * `template:list` disagrees with the picker's default.
+ * Starter's id: the one template Floti ships, built into the host. The
+ * picker's default before `template:list` answers; once it has, the default is
+ * whichever row the host marks `builtIn`, so a host that names it differently
+ * still opens with its built-in chosen.
  */
-const MINIMAL = 'minimal'
+const STARTER = 'starter'
+
+/** The row to choose: `current` while the listing still has it, else the built-in. */
+function chosenFrom(templates: readonly TemplateChoice[], current: string): string {
+  if (templates.some((choice) => choice.id === current)) return current
+  return templates.find((choice) => choice.builtIn)?.id ?? templates[0]?.id ?? current
+}
 
 const sentence = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
@@ -79,13 +82,13 @@ export interface SetupState {
     template: string
   }) => void
 
-  /** The picker: `minimal` first, then whatever is in the templates directory. */
+  /** The picker: Starter first, then whatever is in the templates directory. */
   templates: TemplateChoice[]
   templatesDir: string
   templateProblems: string[]
   /** Re-reads them, for when the manager has been authoring over this dialog. */
   refreshTemplates: () => void
-  /** Which one is chosen. Reset to `minimal` every time the dialog opens. */
+  /** Which one is chosen. Reset to Starter every time the dialog opens. */
   template: string
   chooseTemplate: (template: string) => void
   /** What "What gets written" lists. Null until the first answer lands. */
@@ -124,7 +127,7 @@ export function useSetup(
   const [templates, setTemplates] = useState<TemplateChoice[]>([])
   const [templatesDir, setTemplatesDir] = useState('')
   const [templateProblems, setTemplateProblems] = useState<string[]>([])
-  const [template, setTemplate] = useState(MINIMAL)
+  const [template, setTemplate] = useState(STARTER)
   const [templatePreview, setTemplatePreview] = useState<TemplatePreview | null>(null)
 
   /** A host answer replaces what was known; a failure only says it could not look. */
@@ -219,6 +222,9 @@ export function useSetup(
     void bridgeFor(dialogHostRef.current).invoke('template:list').then(
       (listing) => {
         setTemplates(listing.templates)
+        // A template deleted in the manager, or a host whose built-in has
+        // another id, leaves the choice on a row that is there.
+        setTemplate((current) => chosenFrom(listing.templates, current))
         setTemplatesDir(listing.dir)
         setTemplateProblems(listing.problems)
       },
@@ -256,10 +262,10 @@ export function useSetup(
         }
       }
       setDialogMode(mode)
-      // Back to `minimal` every time, deliberately. The picker is not a
+      // Back to Starter every time, deliberately. The picker is not a
       // preference: someone who used a template once has a workspace from it, and
       // the next one is a fresh decision rather than a repeat of the last.
-      setTemplate(MINIMAL)
+      setTemplate(STARTER)
       // Nothing from the last open: the effect below fills this in, and until
       // it does an empty list is the truthful thing to show.
       setTemplatePreview(null)
