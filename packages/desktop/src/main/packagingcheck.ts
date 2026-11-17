@@ -821,7 +821,7 @@ function auditChecks(): Check[] {
   const publication = publishable === null ? null : publicationAudit(root, publishable)
 
   // The allowlist is only defensible if it is short and enumerated. Count what
-  // each of its two entries actually excuses, so a fourth cannot be smuggled
+  // each of its two entries actually excuses, so a third cannot be smuggled
   // in behind one of them.
   const allowed = IDENTITY_ALLOWED.map((entry) => {
     let count = 0

@@ -24,12 +24,11 @@ import { fileURLToPath } from 'node:url'
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 
 /**
- * The default set, repository-relative: overlay links, ending a process tree,
- * data directories, and node-pty's spawn-helper mode. The processes-and-ports
+ * The default set, repository-relative: ending a process tree, data
+ * directories, and node-pty's spawn-helper mode. The processes-and-ports
  * reader is the host's, tested in its crate.
  */
 export const POSIX_TESTS = [
-  'packages/core/src/launch/overlay.test.ts',
   'packages/desktop/src/main/treekill.test.ts',
   'packages/desktop/src/main/datadirs.test.ts',
   'packages/desktop/src/main/spawnhelper.test.ts'

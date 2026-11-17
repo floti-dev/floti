@@ -153,8 +153,7 @@ async function prepareDriveAgents() {
  *
  * `templates` in the user's config folder is the installed app's, resolved here
  * the same way `paths.ts` resolves it for the run that is not portable:
- * `~/.config/floti` whenever that folder is there, and `~/.config/helm` only
- * while Floti's is not there and Helm's is. Dev gets a **copy**
+ * `~/.config/floti`. Dev gets a **copy**
  * rather than a share, because the dev app can now write templates and a shared
  * directory would be somebody's real one.
  *

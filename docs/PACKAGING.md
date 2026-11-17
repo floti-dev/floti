@@ -496,10 +496,8 @@ Who runs it:
 The host's config folder is `~/.config/floti`, where the user's own files
 are: templates, themes, agents and the plugins they are writing. Every host
 and the desktop read that one folder (`config_folder`, `userConfigDirFor`).
-The installed app gives its
-host no config folder of its ownThe installed app gives its
-host no config folder of its own, so the host it starts and the host started
-any other way read the same one.
+The installed app gives its host no config folder of its own, so the host
+it starts and the host started any other way read the same one.
 
 What it adds outside the install folder, which uninstalling the app leaves
 and `floti uninstall` removes ([below](#floti-uninstall)), the host's data
