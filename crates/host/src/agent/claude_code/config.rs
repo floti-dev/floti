@@ -120,6 +120,26 @@ pub(super) fn config_files(
     Ok(files)
 }
 
+/// The skills in `project`'s `.agents/skills`, the shared shape's, which a
+/// launch composes from an overlay beside its `.claude/skills`: listed as a
+/// `.claude` skill is, with `rel_path` from the project
+/// (`.agents/skills/plan/SKILL.md`). Nothing else under `.agents` is
+/// configuration, so nothing else is listed.
+pub(super) fn shared_skill_files(project: &Path, credentials: &[PathBuf]) -> Vec<ConfigFile> {
+    let agents_dir = project.join(".agents");
+    let tree = Tree {
+        base: project,
+        claude_dir: &agents_dir,
+        credentials,
+    };
+    let mut files = Vec::new();
+    // At the depth `skills` has in a walk from the config folder.
+    walk(&tree, &agents_dir.join("skills"), 1, &mut files);
+    files.retain(|file| file.kind == ConfigFileKind::Skill);
+    files.sort_by(|a, b| compare_names(&a.name, &b.name).then_with(|| a.rel_path.cmp(&b.rel_path)));
+    files
+}
+
 /// Whether `path` might be one of `credentials`, ignoring case on every OS:
 /// a look-alike left unopened costs nothing.
 fn is_credential(credentials: &[PathBuf], path: &Path) -> bool {
@@ -198,6 +218,8 @@ fn compare_names(a: &str, b: &str) -> Ordering {
 /// What a walk of one config folder holds fixed as it descends.
 struct Tree<'a> {
     base: &'a Path,
+    /// The config folder a file is classified from: `.claude`, or the
+    /// shared shape's `.agents`.
     claude_dir: &'a Path,
     credentials: &'a [PathBuf],
 }

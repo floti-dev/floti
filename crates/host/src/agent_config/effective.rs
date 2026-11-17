@@ -8,14 +8,19 @@
 //! ([`overlay_plugin_names`]), so `<overlay>:think` follows from the
 //! composition alone. Settings merge per leaf, local over project over user,
 //! so the winner is decided at `env.A`, not at `env`.
+//!
+//! A folder in the shared shape is read as a launch reads it: an overlay's
+//! `.agents/skills` arrive beside its `.claude/skills` (Claude's taken where
+//! both have a skill folder of one name), and `AGENTS.md` beside each
+//! `CLAUDE.md`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use floti_protocol::channels::workspace::{
-    ConfigFileKind, ConfigScopeKind, EffectiveEntry, EffectiveInstruction, EffectiveMcpServer,
-    EffectiveOverlay, EffectiveSetting, EffectiveSource, EffectiveView, McpScope, SettingCandidate,
-    SettingsLayer, SettingsLayerKind, SharedName,
+    ConfigFile, ConfigFileKind, ConfigScopeKind, EffectiveEntry, EffectiveInstruction,
+    EffectiveMcpServer, EffectiveOverlay, EffectiveSetting, EffectiveSource, EffectiveView,
+    McpScope, SettingCandidate, SettingsLayer, SettingsLayerKind, SharedName,
 };
 
 use super::files::normalize;
@@ -25,7 +30,7 @@ use super::tree::{project_scope, scope_files, user_scope};
 use super::{AgentConfig, compare_names};
 use crate::agent::AgentBackend;
 use crate::agent::claude_code::overlay_plugin_names;
-use crate::agent::workspace::is_same_or_ancestor;
+use crate::agent::workspace::{Skills, WorkspaceProject, is_same_or_ancestor};
 
 /// What the view is computed for.
 #[derive(Debug, Clone, Default)]
@@ -78,18 +83,66 @@ fn entries_from(
             ConfigFileKind::Workflow => &mut entries.workflows,
             _ => continue,
         };
-        bucket.push(EffectiveEntry {
-            invocation: namespace
-                .map_or_else(|| file.name.clone(), |ns| format!("{ns}:{}", file.name)),
-            name: file.name,
-            source,
-            namespace: namespace.map(str::to_owned),
-            origin: scope.path.clone(),
-            path: file.path,
-            description: file.description,
-        });
+        bucket.push(entry_of(file, source, namespace, &scope.path));
     }
     entries
+}
+
+/// One file as a session addresses it, from `origin`.
+fn entry_of(
+    file: ConfigFile,
+    source: EffectiveSource,
+    namespace: Option<&str>,
+    origin: &str,
+) -> EffectiveEntry {
+    EffectiveEntry {
+        invocation: namespace.map_or_else(|| file.name.clone(), |ns| format!("{ns}:{}", file.name)),
+        name: file.name,
+        source,
+        namespace: namespace.map(str::to_owned),
+        origin: origin.to_owned(),
+        path: file.path,
+        description: file.description,
+    }
+}
+
+/// The skills in overlay `path`'s `.agents/skills` that its launch links: all
+/// of them where it has no `.claude/skills`, and otherwise those in a folder
+/// `.claude/skills` has none of the same name for.
+fn shared_skills(backend: &dyn AgentBackend, path: &Path, namespace: &str) -> Vec<EffectiveEntry> {
+    let linked: Vec<PathBuf> = match WorkspaceProject::read(path).skills {
+        Skills::None => return Vec::new(),
+        Skills::Folder(folder) => vec![folder],
+        Skills::Each(each) => each.into_values().collect(),
+    };
+    let Some(source) = backend.config() else {
+        return Vec::new();
+    };
+    let origin = path.display().to_string();
+    source
+        .shared_skill_files(path)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|file| {
+            linked
+                .iter()
+                .any(|folder| Path::new(&file.path).starts_with(folder))
+        })
+        .map(|file| entry_of(file, EffectiveSource::Overlay, Some(namespace), &origin))
+        .collect()
+}
+
+/// What arrives of an overlay that composes nothing else: its instruction
+/// files, named.
+fn only_instructions(path: &Path) -> &'static str {
+    match (
+        file_bytes(&path.join("CLAUDE.md")).is_some(),
+        file_bytes(&path.join("AGENTS.md")).is_some(),
+    ) {
+        (true, true) => "its CLAUDE.md and AGENTS.md",
+        (false, true) => "its AGENTS.md",
+        _ => "its CLAUDE.md",
+    }
 }
 
 /// One settings file, flattened to its leaves.
@@ -403,7 +456,8 @@ pub fn effective_view(
             });
             continue;
         }
-        let from = entries_from(backend, path, EffectiveSource::Overlay, Some(&name));
+        let mut from = entries_from(backend, path, EffectiveSource::Overlay, Some(&name));
+        from.skills.extend(shared_skills(backend, path, &name));
         let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
         overlays.push(EffectiveOverlay {
             name,
@@ -416,7 +470,8 @@ pub fn effective_view(
         });
         if from.count() == 0 {
             warnings.push(format!(
-                "{shown} has no skills, commands, agents or workflows to compose - only its CLAUDE.md would arrive."
+                "{shown} has no skills, commands, agents or workflows to compose - only {} would arrive.",
+                only_instructions(path)
             ));
         }
         entries.extend(from);
@@ -476,7 +531,9 @@ pub fn effective_view(
 
     // The order a session receives them: the user's, the folder's, then each
     // overlay's through `--append-system-prompt-file`. An overlay at or above
-    // the folder arrives once, from the agent's own walk up from it.
+    // the folder arrives once, from the agent's own walk up from it. A
+    // folder's `AGENTS.md` follows its `CLAUDE.md`, since every launch loads
+    // both.
     let mut instructions = Vec::new();
     let mut add_instruction = |path: PathBuf, source: EffectiveSource, origin: &Path| {
         if let Some(bytes) = file_bytes(&path) {
@@ -489,13 +546,18 @@ pub fn effective_view(
         }
     };
     add_instruction(user_dir.join("CLAUDE.md"), EffectiveSource::User, &user_dir);
-    add_instruction(cwd.join("CLAUDE.md"), EffectiveSource::Cwd, &cwd);
+    let mut add_folder = |folder: &Path, source: EffectiveSource| {
+        for name in ["CLAUDE.md", "AGENTS.md"] {
+            add_instruction(folder.join(name), source, folder);
+        }
+    };
+    add_folder(&cwd, EffectiveSource::Cwd);
     for overlay in overlays.iter().filter(|overlay| overlay.exists) {
         let path = PathBuf::from(&overlay.project_path);
         if !is_same_or_ancestor(&path, &cwd) {
-            add_instruction(path.join("CLAUDE.md"), EffectiveSource::Overlay, &path);
+            add_folder(&path, EffectiveSource::Overlay);
         } else if path != cwd {
-            add_instruction(path.join("CLAUDE.md"), EffectiveSource::Cwd, &path);
+            add_folder(&path, EffectiveSource::Cwd);
         }
     }
 
@@ -515,5 +577,152 @@ pub fn effective_view(
         instructions,
         warnings,
         computed_at: now_iso(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
+    use crate::platform::process_tree::Native;
+    use crate::testkit::TestDirs;
+
+    fn put(path: &Path, text: &str) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+
+    /// Claude Code with its config folder under `dirs`; nothing here runs it.
+    fn backend(dirs: &TestDirs) -> ClaudeCodeBackend {
+        let config_dir = dirs.home.join(".claude");
+        fs::create_dir_all(&config_dir).unwrap();
+        ClaudeCodeBackend::new(
+            ClaudeCodeSettings {
+                program: "claude".into(),
+                leading_args: Vec::new(),
+                config_dir,
+                pass_config_dir: true,
+                api_key_set: false,
+                search_first: Vec::new(),
+            },
+            Arc::new(Native),
+        )
+    }
+
+    fn view_of(backend: &ClaudeCodeBackend, cwd: &Path, overlays: &[&Path]) -> EffectiveView {
+        effective_view(
+            backend,
+            &backend.agent_config(),
+            &EffectiveInput {
+                cwd: cwd.to_path_buf(),
+                overlays: overlays.iter().map(|path| path.to_path_buf()).collect(),
+                ..EffectiveInput::default()
+            },
+        )
+    }
+
+    fn file_names(view: &EffectiveView) -> Vec<(String, EffectiveSource)> {
+        view.instructions
+            .iter()
+            .map(|file| {
+                let name = Path::new(&file.path).file_name().unwrap();
+                (name.to_string_lossy().into_owned(), file.source)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_shared_shape_overlay_brings_its_agents_md_and_its_skills() {
+        let dirs = TestDirs::new();
+        let backend = backend(&dirs);
+        let repo = dirs.folder("repo");
+        let hub = dirs.folder("hub space");
+        put(&hub.join("AGENTS.md"), "# hub\n");
+        put(
+            &hub.join(".agents/skills/plan/SKILL.md"),
+            "---\ndescription: Plans the work.\n---\n",
+        );
+
+        let view = view_of(&backend, &repo, &[&hub]);
+        let overlay = &view.overlays[0];
+        assert_eq!(overlay.skills, 1);
+        let [plan] = view.skills.as_slice() else {
+            panic!("one skill: {:?}", view.skills);
+        };
+        assert_eq!(plan.name, "plan");
+        assert_eq!(plan.invocation, format!("{}:plan", overlay.name));
+        assert_eq!(plan.source, EffectiveSource::Overlay);
+        assert_eq!(plan.description.as_deref(), Some("Plans the work."));
+        assert_eq!(
+            Path::new(&plan.path),
+            hub.join(".agents/skills/plan/SKILL.md")
+        );
+        assert_eq!(
+            file_names(&view),
+            [("AGENTS.md".to_owned(), EffectiveSource::Overlay)]
+        );
+        assert!(view.warnings.is_empty(), "{:?}", view.warnings);
+    }
+
+    #[test]
+    fn a_skill_in_both_of_an_overlays_skill_folders_is_listed_once_from_claudes() {
+        let dirs = TestDirs::new();
+        let backend = backend(&dirs);
+        let repo = dirs.folder("repo");
+        let hub = dirs.folder("hub");
+        put(&hub.join(".claude/skills/think/SKILL.md"), "claude's");
+        put(&hub.join(".agents/skills/think/SKILL.md"), "shared");
+        put(&hub.join(".agents/skills/plan/SKILL.md"), "plan");
+
+        let view = view_of(&backend, &repo, &[&hub]);
+        let names: Vec<&str> = view.skills.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["plan", "think"]);
+        assert_eq!(
+            Path::new(&view.skills[1].path),
+            hub.join(".claude/skills/think/SKILL.md")
+        );
+        assert_eq!(view.overlays[0].skills, 2);
+        assert!(view.shared_names.is_empty(), "{:?}", view.shared_names);
+    }
+
+    #[test]
+    fn the_working_folders_agents_md_follows_its_claude_md_and_its_shared_skills_are_not_composed()
+    {
+        let dirs = TestDirs::new();
+        let backend = backend(&dirs);
+        let repo = dirs.folder("repo");
+        put(&repo.join("CLAUDE.md"), "# claude\n");
+        put(&repo.join("AGENTS.md"), "# agents\n");
+        put(&repo.join(".agents/skills/plan/SKILL.md"), "plan");
+
+        let view = view_of(&backend, &repo, &[]);
+        assert_eq!(
+            file_names(&view),
+            [
+                ("CLAUDE.md".to_owned(), EffectiveSource::Cwd),
+                ("AGENTS.md".to_owned(), EffectiveSource::Cwd),
+            ]
+        );
+        assert!(view.skills.is_empty(), "{:?}", view.skills);
+    }
+
+    #[test]
+    fn an_overlay_with_only_an_agents_md_says_that_is_all_that_arrives() {
+        let dirs = TestDirs::new();
+        let backend = backend(&dirs);
+        let repo = dirs.folder("repo");
+        let hub = dirs.folder("hub");
+        put(&hub.join("AGENTS.md"), "# hub\n");
+
+        let view = view_of(&backend, &repo, &[&hub]);
+        assert_eq!(view.warnings.len(), 1, "{:?}", view.warnings);
+        assert!(
+            view.warnings[0].ends_with("only its AGENTS.md would arrive."),
+            "{}",
+            view.warnings[0]
+        );
     }
 }

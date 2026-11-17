@@ -33,7 +33,9 @@ pub fn user_scope(config_dir: &Path) -> ConfigScope {
 }
 
 /// A project's scope: its `.claude` folder and the `CLAUDE.md` and
-/// `.mcp.json` beside it.
+/// `.mcp.json` beside it. It exists when the folder holds config in either
+/// shape: a `.claude/` or a `CLAUDE.md`, or the shared shape's `.agents/` or
+/// `AGENTS.md`.
 pub fn project_scope(path: &Path, kind: ConfigScopeKind, label: Option<&str>) -> ConfigScope {
     let base = normalize(path);
     let claude_dir = base.join(".claude");
@@ -47,7 +49,10 @@ pub fn project_scope(path: &Path, kind: ConfigScopeKind, label: Option<&str>) ->
             },
             str::to_owned,
         ),
-        exists: is_dir(&claude_dir) || is_file(&base.join("CLAUDE.md")),
+        exists: is_dir(&claude_dir)
+            || is_file(&base.join("CLAUDE.md"))
+            || is_dir(&base.join(".agents"))
+            || is_file(&base.join("AGENTS.md")),
         path: base.display().to_string(),
         claude_dir: claude_dir.display().to_string(),
     }
@@ -114,4 +119,39 @@ pub fn config_unit<'a>(files: &'a [ConfigFile], file: &'a ConfigFile) -> Vec<&'a
         candidate.path != file.path && candidate.rel_path.to_lowercase().starts_with(&prefix)
     }));
     unit
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testkit::TestDirs;
+
+    #[test]
+    fn a_folder_with_config_in_either_shape_is_a_scope_that_exists() {
+        let dirs = TestDirs::new();
+        let exists = |name: &str, make: &dyn Fn(&Path)| {
+            let folder = dirs.folder(name);
+            make(&folder);
+            project_scope(&folder, ConfigScopeKind::Project, None).exists
+        };
+        assert!(!exists("empty", &|_| {}));
+        assert!(exists("claude", &|f| std::fs::create_dir(
+            f.join(".claude")
+        )
+        .unwrap()));
+        assert!(exists("claude md", &|f| std::fs::write(
+            f.join("CLAUDE.md"),
+            ""
+        )
+        .unwrap()));
+        assert!(exists("agents", &|f| std::fs::create_dir(
+            f.join(".agents")
+        )
+        .unwrap()));
+        assert!(exists("agents md", &|f| std::fs::write(
+            f.join("AGENTS.md"),
+            ""
+        )
+        .unwrap()));
+    }
 }
