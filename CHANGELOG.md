@@ -14,6 +14,86 @@ A version with no section here does not release: the workflow fails rather than
 publishing an empty body, because the step a person can skip is the step that
 gets skipped.
 
+## 3.0.0
+
+The first stable release of Floti 3: everything in 3.0.0-preview.1, plus what
+follows.
+
+**Getting started**
+
+- A guided first run sets Floti up in five steps: a welcome, the host on this
+  computer, your agents, a workspace to work in, and a short tour of the
+  window. The agents step shows whether Claude Code is installed and signed
+  in, with the line to install it, and Locate… for a copy Floti did not find.
+  It ends on the home screen with your workspace selected. A first run you
+  leave picks up at the same step, and Settings > Walkthrough shows it again.
+- Starter is the one workspace template Floti ships: a new workspace gets
+  `workspace.yaml`, an empty `repos/` and an `AGENTS.md` with its name. Your
+  own templates are listed after it.
+- Every empty page and list says what it is for and offers its next step,
+  such as New session, New profile or New agent. Where Floti could not look,
+  it says Unknown and why, with Try again, instead of saying there is nothing.
+
+**Workspaces**
+
+- A folder written in the shared shape, with `AGENTS.md` and `.agents/`, shows
+  as configured: the project page names them, a session's effective config
+  lists `.agents/skills` and every `AGENTS.md` it loads, and a template copies
+  them where that shape keeps them. A `.mcp.json` counts on its own.
+
+**Start-up and the host**
+
+- From the first frame, start-up shows what Floti is doing while it connects
+  to this computer's host, and what a step is waiting on when it takes a
+  while.
+- When this computer's host is older than Floti, Floti restarts it onto the
+  newer floti by itself, and the sessions carry over. The status bar and the
+  sidebar say the host is updating meanwhile.
+- A host that can't be used is said once, in one notice with its fix as a
+  button: Try again, or Update Floti for a host newer than this Floti. Lists
+  wait for it, and an action you start meanwhile says at once why it can't
+  run. A pinned project is no longer marked gone before its folders are read.
+- The Claude Code banner shows only when the host says Claude Code is
+  missing, not when the check couldn't run.
+- `floti update` with nothing published yet says so instead of failing.
+
+**Remote hosts**
+
+- Add a host is shorter on every screen. An install that fails because no
+  floti is published for that version says so, in the dialog and in
+  Settings > Hosts.
+
+**Browser**
+
+- The address bar suggests pages from your browsing history as you type,
+  completing the top match. Shift+Delete forgets a page, and the More menu
+  clears the history. Pages an agent opens are not recorded.
+- A thin line under the address bar shows a page loading, and each tab shows
+  a spinner and then its site's icon.
+- The address bar keeps the address being loaded until the page opens, fails
+  or is stopped. Reload turns into Stop while a page loads, and Escape stops
+  it too.
+- Sign-ins survive a restart, and Google's sign-in works in the browser.
+- The More and Share menus and the address suggestions open over the live
+  page without freezing it, and close when you click anywhere else.
+- The console stays hidden until you open it from More or with Ctrl+Shift+J
+  (Cmd+Option+J), and counts warnings as warnings.
+- The mouse's back and forward buttons go back and forward.
+
+**Plugins**
+
+- Plugins use API version 2 only, and a version 1 plugin is refused with a
+  message saying so. The manifest is `floti-plugin.json`, and the plugin SDK
+  2.0.0 uses Floti's names throughout; its README lists what changed.
+
+**Look and license**
+
+- The longship is Floti's app icon and in-app mark. On Windows `floti.exe`
+  shows the icon too, and on Linux a newer floti updates the menu icon an
+  older one installed.
+- Floti is open source under the Apache 2.0 license, and every download
+  includes the third-party notices for the code it ships.
+
 ## 3.0.0-preview.1
 
 A preview, not a release: nothing offers it as an update.
