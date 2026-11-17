@@ -768,6 +768,7 @@ const IMPORTABLE = new Set<ConfigFile['kind']>([
   'hook',
   'rule',
   'claude-md',
+  'agents-md',
   'settings',
   'mcp'
 ])
@@ -780,6 +781,7 @@ const KIND_LABEL: Partial<Record<ConfigFile['kind'], string>> = {
   hook: 'hook',
   rule: 'rule',
   'claude-md': 'CLAUDE.md',
+  'agents-md': 'AGENTS.md',
   settings: 'settings',
   mcp: 'mcp'
 }

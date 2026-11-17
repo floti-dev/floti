@@ -191,4 +191,23 @@ describe('TemplateManager', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Copy 1 in' }))
     expect(props.onImport).toHaveBeenCalledWith([USER_TREE.files[0]?.path])
   })
+
+  it('offers a shared-shape scope’s AGENTS.md and its .agents/skills', () => {
+    const sharedTree: ConfigTree = {
+      ...USER_TREE,
+      scope: HUB,
+      files: [
+        configFile('AGENTS.md', 'agents-md', 'AGENTS.md'),
+        configFile('.agents/skills/plan/SKILL.md', 'skill', 'plan'),
+        configFile('.agents/skills/plan/reference.md', 'other', 'plan/reference.md')
+      ]
+    }
+    renderManager({ selected: 'client', detail: DETAIL, importScope: HUB.path, importTree: sharedTree })
+    expect(
+      screen.getAllByRole('checkbox', { name: /^Copy / }).map((box) => box.getAttribute('aria-label'))
+    ).toEqual(['Copy AGENTS.md', 'Copy plan'])
+    // Its kind is named as the file is, not by the wire's `agents-md`.
+    const row = document.querySelector('[data-template-import-file="AGENTS.md"]')
+    expect(row?.textContent).toBe('AGENTS.mdAGENTS.mdAGENTS.md')
+  })
 })

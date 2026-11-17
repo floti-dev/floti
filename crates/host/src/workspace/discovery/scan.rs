@@ -25,7 +25,7 @@ use floti_protocol::channels::workspace::{
 use serde_yaml_ng::Value;
 
 use super::git::read_git_states;
-use super::inventory::{has_claude_dir, read_claude_inventory};
+use super::inventory::{has_claude_dir, read_inventory};
 use crate::agent_config::normalize;
 use crate::agent_config::time::now_iso;
 
@@ -167,7 +167,7 @@ fn describe_project(path: &Path, kind: ProjectKind, workspace_path: Option<&Path
         kind,
         workspace_path: workspace_path.map(text),
         has_claude_dir: has_claude_dir(path),
-        inventory: read_claude_inventory(path),
+        inventory: read_inventory(path),
         git: None,
     }
 }

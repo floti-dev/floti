@@ -22,6 +22,8 @@ pub const EMPTY_INVENTORY: ClaudeInventory = ClaudeInventory {
     settings: false,
     claude_md: false,
     mcp: false,
+    agents_md: false,
+    agents_dir: false,
 };
 
 /// Writes the rows a scan found, as of `seen_at` (ISO 8601).
