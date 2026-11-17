@@ -1053,6 +1053,12 @@ fn a_skill_in_both_skills_folders_counts_once() {
 }
 
 #[test]
+fn a_mcp_json_counts_with_no_claude_folder_beside_it() {
+    let inventory = inventory_of(&[("AGENTS.md", ""), (".mcp.json", "{}")]);
+    assert!(inventory.mcp);
+}
+
+#[test]
 fn an_agents_folder_alone_is_seen_with_nothing_in_it() {
     let world = Fixtures::new();
     world.dir("project/.agents");

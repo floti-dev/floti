@@ -101,11 +101,11 @@ fn count_both_shapes(project: &Path) -> u32 {
 
 /// What `project` holds in either shape: its `.claude/`, its skills from
 /// `.claude/skills` and `.agents/skills`, and whether it has a `CLAUDE.md`,
-/// an `AGENTS.md`, a `.agents/` and a `.mcp.json`. An instructions file
-/// counts with no folder beside it: it alone changes how a session behaves.
+/// an `AGENTS.md`, a `.agents/` and a `.mcp.json`. An instructions file or a
+/// `.mcp.json` counts with no folder beside it: each alone changes how a
+/// session behaves.
 pub fn read_inventory(project: &Path) -> ClaudeInventory {
     let claude = project.join(".claude");
-    let has_claude = is_directory(&claude);
     ClaudeInventory {
         skills: count_both_shapes(project),
         commands: count_markdown(&claude.join("commands")),
@@ -114,7 +114,7 @@ pub fn read_inventory(project: &Path) -> ClaudeInventory {
         settings: exists(&claude.join("settings.json"))
             || exists(&claude.join("settings.local.json")),
         claude_md: exists(&project.join("CLAUDE.md")),
-        mcp: has_claude && exists(&project.join(".mcp.json")),
+        mcp: exists(&project.join(".mcp.json")),
         agents_md: exists(&project.join("AGENTS.md")),
         agents_dir: is_directory(&project.join(".agents")),
     }
