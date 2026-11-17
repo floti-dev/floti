@@ -3,12 +3,12 @@ import { flotiBinary, hostEnvironment, type HostPlaces, type LauncherDeps } from
 
 /**
  * What `floti doctor` checks besides this PC's host: the hosts on other
- * computers this device added. Helm tells floti at start and on every change
+ * computers this device added. The desktop tells floti at start and on every change
  * to them, by running `floti doctor --record` with them as JSON on standard
  * input, under the environment its own host runs with, so `floti doctor` run
  * in a terminal finds them in the same data folder. Each one carries its
  * name, how it is reached, the full path of floti there when one was given,
- * and the client folder Helm keeps for it, whose pinned host key the doctor
+ * and the client folder the desktop keeps for it, whose pinned host key the doctor
  * checks it by. Nothing in it is secret, and the host process never reads it.
  */
 

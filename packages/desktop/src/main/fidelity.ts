@@ -54,7 +54,7 @@ const PWSH = ['-NoLogo', '-NoProfile']
  * Test-only helper host. Electron's own binary is /SUBSYSTEM:WINDOWS, and when
  * it is run as node inside a ConPTY it exits cleanly but its stdio never
  * reaches the pseudoconsole - so the harness needs a real console-subsystem
- * node for its raw-mode sink and echo processes. Nothing Helm ships depends on
+ * node for its raw-mode sink and echo processes. Nothing the desktop ships depends on
  * this.
  */
 const NODE_EXE = 'node.exe'
@@ -553,7 +553,7 @@ async function checkPaste(ctx: Ctx): Promise<Check> {
 
   // --- bracketed paste, via xterm's own paste path -------------------------
   // Separated from the Ctrl+V binding below so a failure names its own cause:
-  // this line is xterm's paste machinery, the next is Helm's key binding.
+  // this line is xterm's paste machinery, the next is the desktop's key binding.
   await probe(ctx.win, { op: 'write', data: `${ESC}[?2004h` })
   sink.clearInput()
   await probe(ctx.win, { op: 'paste', text: MULTILINE_PASTE })
@@ -890,7 +890,7 @@ async function checkSelection(ctx: Ctx): Promise<Check> {
   // A right-click over the pane is not incidental here, it is the mechanism.
   // xterm's `rightClickHandler` writes the live selection into the helper
   // textarea and calls `select()` on it, so from then on there is a real DOM
-  // selection - and Helm's Ctrl-C branch calls `term.clearSelection()`, which
+  // selection - and the desktop's Ctrl-C branch calls `term.clearSelection()`, which
   // makes xterm's own `copy` listener bow out (`if (!this.hasSelection())
   // return`) and leaves Chromium's built-in Copy to act on that textarea
   // unopposed. Its write completes after the IPC write, so it is the last

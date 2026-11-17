@@ -476,7 +476,7 @@ export interface BrowserHostOptions {
    */
   platform?: NodeJS.Platform
   /**
-   * Whether the pane may run: off when Helm runs without Chromium's sandbox
+   * Whether the pane may run: off when the desktop runs without Chromium's sandbox
    * (`browser-sandbox.ts`). Available unless a caller says otherwise.
    */
   availability?: BrowserAvailability
@@ -651,7 +651,7 @@ export function browserSession(): Session {
    * `fullscreen`.
    *
    * Reading the clipboard stays denied. Chrome asks before a page may read it,
-   * Helm has nowhere to ask, and a clipboard holds passwords; Ctrl+V still
+   * the desktop has nowhere to ask, and a clipboard holds passwords; Ctrl+V still
    * pastes, because a paste the user made needs no permission. Everything
    * else - camera, microphone, location, notifications - stays denied, and the
    * two are named rather than filtered, because a list of permissions to allow
@@ -668,7 +668,7 @@ export function browserSession(): Session {
   /*
    * Downloads, denied, with the handoff.
    *
-   * Helm's browser does not put files on your disk - the app has no download
+   * The desktop's browser does not put files on your disk - the app has no download
    * manager, no place to put one, and no business being the thing that wrote an
    * executable into somebody's Downloads folder. The URL goes to the system
    * browser instead, which does have all three.
@@ -690,7 +690,7 @@ export function browserSession(): Session {
    * exact case this pane exists for, and refusing it would make the pane
    * useless for the framework that turned https on by default. Everywhere else
    * `-3` hands the verdict back to Chromium, which refuses - and there is
-   * deliberately **no `certificate-error` handler anywhere in Helm**, so there
+   * deliberately **no `certificate-error` handler anywhere in the desktop**, so there
    * is no click-through: a bad certificate on a real host is a page that does
    * not load and a sentence in the pane.
    */
@@ -733,11 +733,11 @@ function pageMay(contents: WebContents, permission: string): boolean {
 }
 
 /**
- * The web preferences of every page Helm hosts: a view, a page a view opened,
+ * The web preferences of every page the desktop hosts: a view, a page a view opened,
  * and a popup window.
  *
  * Every one is stated, and the ones that are Electron's default are stated
- * *because* they are: this is the one place in Helm that renders somebody
+ * *because* they are: this is the one place in the desktop that renders somebody
  * else's HTML with a network behind it, and a posture made of defaults is a
  * posture that moves when Electron does. One list, so a page opened from
  * another page cannot end up with a second posture.
@@ -747,7 +747,7 @@ function viewPreferences(): WebPreferences {
     // The partition is the one thing that must match exactly: a popup on a
     // different partition could not see the sign-in it was opened to complete.
     session: browserSession(),
-    // No preload. Nothing of Helm's runs in a page, so there is no bridge to
+    // No preload. Nothing of the desktop's runs in a page, so there is no bridge to
     // abuse and nothing for a hostile page to find.
     contextIsolation: true,
     nodeIntegration: false,
@@ -822,7 +822,7 @@ function clamp(value: number, low: number, high: number): number {
  *
  * Only those two, and only when they parse as positive numbers. Everything else
  * a page can ask for in that string - `location`, `menubar`, `toolbar`,
- * `alwaysRaised` - is either not Helm's to give or is a thing a page should not
+ * `alwaysRaised` - is either not the desktop's to give or is a thing a page should not
  * be choosing about a window on somebody's screen, so the answer is the one in
  * `windowOpen` rather than whatever the page wrote.
  */
@@ -1165,7 +1165,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
    * A popup is not a tab and deliberately has no entry in `views`: it has no
    * pane, no address bar, no console and no place in the strip. What it does
    * have is the thing that made it necessary - a live `window.opener` back to
-   * the page that opened it - and everything Helm asks of a browser view:
+   * the page that opened it - and everything the desktop asks of a browser view:
    * an entry in the `exempt` registry so the app-global guard knows it, and a
    * `will-navigate` that goes through `browserReachAllows` with its owner's
    * restrictions.
@@ -1276,12 +1276,12 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
      * The ground the page paints on.
      *
      * Foreign ground (DESIGN.md 6): the view's own ground is the page's, and
-     * Helm has no business tinting it. Clear while the view is an empty new
+     * the desktop has no business tinting it. Clear while the view is an empty new
      * page, so it does not flash white on a dark canvas before anything has
      * loaded - and white from the first navigation on, which is the ground
      * every browser gives a page that sets none. Left clear, a page with no
-     * background of its own - plain HTML, a dev server's raw JSON - was Helm's
-     * canvas with black text on it, and a page in fullscreen had Helm's whole
+     * background of its own - plain HTML, a dev server's raw JSON - was the desktop's
+     * canvas with black text on it, and a page in fullscreen had the desktop's whole
      * window showing through it.
      */
     view.setBackgroundColor('#00000000')
@@ -1537,7 +1537,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
      * And a page that closed **itself**.
      *
      * `window.close()` is not an edge case: it is the last thing every OAuth
-     * popup does, and a page Helm turned into a tab can do it as freely as one
+     * popup does, and a page the desktop turned into a tab can do it as freely as one
      * in a window. Chromium destroys the web contents and Electron leaves
      * `view.webContents` undefined - so without this listener the entry stayed
      * in `views` with nothing behind it, and the next thing to touch it threw.
@@ -1599,7 +1599,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
      *
      * A popup has no address bar - that is what makes it a popup - and a window
      * asking for a password with nothing on it saying where it came from is the
-     * shape of every credential phish there has ever been. Helm cannot give it
+     * shape of every credential phish there has ever been. The desktop cannot give it
      * an address bar without making it a tab, so it puts the host where the
      * window does have room. `preventDefault` because the page sets this title
      * on every navigation and would otherwise take the host straight back off.
@@ -2052,7 +2052,7 @@ export function createBrowserHost(options: BrowserHostOptions): BrowserHost {
       const { entry, wc } = live
       if (wc.isDevToolsOpened()) wc.closeDevTools()
       // Detached, deliberately: a docked DevTools is a second rectangle inside
-      // the window whose size Helm would then have to keep out of the
+      // the window whose size the desktop would then have to keep out of the
       // placeholder's bounds, which is the bounds-sync problem twice.
       else wc.openDevTools({ mode: 'detach' })
       return announce(entry)
@@ -2472,7 +2472,7 @@ function describeValue(value: unknown): string {
  * A load failure as a sentence, with the certificate case spelled out.
  *
  * A certificate error is the one failure where the honest message has to say
- * that there is no way past it, because every other browser offers one. Helm
+ * that there is no way past it, because every other browser offers one. The desktop
  * does not: the exception is loopback and nothing else, and there is no button.
  */
 function certificateSentence(description: string, url: string): string {

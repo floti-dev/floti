@@ -19,29 +19,29 @@ import type { AppMode, LocalHostRestartOffer, LocalHostStep } from '../../shared
  * program:
  *
  * - `floti bridge <client folder>` runs the client's half of the Noise
- *   handshake from the keys in Helm's client folder, then carries protocol
+ *   handshake from the keys in the desktop's client folder, then carries protocol
  *   frames on its standard input and output. With no host key pinned yet it
  *   holds the host to the key in the host's own data folder, which only this
  *   OS user can read, and pins it once the host has proven it: reaching the
  *   host's socket as this user is the access, and nothing is asked. Its exit
  *   status says why it ended (`BRIDGE_EXIT`).
- * - `floti host --desktop <Helm> [--desktop-arg <app>]` is the host, started
- *   by Helm when no host answered, and told which Helm started it (the
- *   command that opens that Helm again). It outlives Helm: Helm reads only
+ * - `floti host --desktop <desktop> [--desktop-arg <app>]` is the host, started
+ *   by the desktop when no host answered, and told which desktop started it (the
+ *   command that opens that desktop again). It outlives the desktop: the desktop reads only
  *   its listening line, then lets go of it, and the host decides its own
  *   exit - once it runs nothing and no client is attached, or when it is
- *   stopped. Helm crashing or being killed ends nothing, and Helm's next start
+ *   stopped. The desktop crashing or being killed ends nothing, and the desktop's next start
  *   connects to the same host through its bridge before it would start one.
  *   A host still ending its sessions holds its folders until it has, so a
  *   start that finds them held waits it out, up to the start deadline.
  *
- * Helm never opens a key: the bridge reads them, and
+ * The desktop never opens a key: the bridge reads them, and
  * says what went wrong as an exit status. Nothing the bridge prints is
  * logged, nor anything on the host's standard output, and the one line shown
  * is a host's reason for not starting, which it writes to be shown and which
- * names no code or key. What a host Helm started writes to standard error
- * before it has pointed it at its own log file goes into Helm's log, until
- * Helm lets go of the host: a host that dies that early leaves its reason
+ * names no code or key. What a host the desktop started writes to standard error
+ * before it has pointed it at its own log file goes into the desktop's log, until
+ * the desktop lets go of the host: a host that dies that early leaves its reason
  * somewhere. The host writes nothing there that its log file may not hold.
  *
  * Everything that differs by OS for this (the program's name, how paths
@@ -67,7 +67,7 @@ const LISTENING = /^Floti host is listening at (.+)\.$/
 /** The line `floti host` prints on its standard output when it stops before it listens: why, in one sentence. */
 const DID_NOT_START = /^Floti host did not start: (.+)$/
 
-/** How long a host Helm started has to say it is listening, and how long a start waits out a host still exiting. */
+/** How long a host the desktop started has to say it is listening, and how long a start waits out a host still exiting. */
 export const HOST_START_DEADLINE_MS = 30_000
 
 /**
@@ -95,10 +95,10 @@ export const SOCKET_PATH_MAX = 103
  */
 export const LONGEST_SOCKET_NAME = 'keeper-00000000.sock'
 
-/** Where this Helm keeps its data and finds its programs. */
+/** Where this desktop keeps its data and finds its programs. */
 export interface HostPlaces {
   appMode: AppMode
-  /** Helm's data directory (`paths.ts`). */
+  /** The desktop's data directory (`paths.ts`). */
   dataDir: string
   /** `app.isPackaged`. */
   packaged: boolean
@@ -113,16 +113,16 @@ export interface HostPlaces {
   /** The checkout an unpackaged build runs from, whose `target/debug` holds `floti`. */
   repoRoot: string
   /**
-   * Helm's templates folder (`paths.ts`). The host keeps its templates in
+   * The desktop's templates folder (`paths.ts`). The host keeps its templates in
    * `templates` inside its config folder, so the folder holding this one is
    * the host's config folder in every run but the installed app's, whose
    * host keeps its own (`hostEnvironment`): one templates folder, whichever
    * of the two serves it.
    */
   templatesDir: string
-  /** `process.execPath`: the program that is this Helm. */
+  /** `process.execPath`: the program that is this desktop. */
   execPath: string
-  /** `app.getAppPath()`: what an unpackaged Helm's program is given to run this app. */
+  /** `app.getAppPath()`: what an unpackaged desktop's program is given to run this app. */
   appPath: string
 }
 
@@ -135,9 +135,9 @@ export interface HostChild {
   readonly stderr: Readable | null
   once(event: 'exit', listener: (code: number | null, signal: NodeJS.Signals | null) => void): this
   once(event: 'error', listener: (error: Error) => void): this
-  /** Ends the program: only ever a host Helm started that never served it. */
+  /** Ends the program: only ever a host the desktop started that never served it. */
   kill(): boolean
-  /** Lets Helm exit without waiting for the program. */
+  /** Lets the desktop exit without waiting for the program. */
   unref(): void
 }
 
@@ -150,11 +150,11 @@ export interface SpawnOptions {
   stdio: ['pipe', 'pipe', 'pipe'] | ['ignore', 'pipe', 'pipe']
   windowsHide: true
   /**
-   * A host apart from Helm, so it outlives Helm however Helm ends. On macOS
-   * and Linux it leads a session of its own, so nothing sent to Helm's
+   * A host apart from the desktop, so it outlives the desktop however the desktop ends. On macOS
+   * and Linux it leads a session of its own, so nothing sent to the desktop's
    * process group (a terminal's Ctrl+C or hang-up) reaches it. On Windows it
    * is left out of the job Node puts every other child in, which ends them
-   * all when Helm's process ends; it then has no console, so the host starts
+   * all when the desktop's process ends; it then has no console, so the host starts
    * every console program it runs outside a terminal with no window
    * (`windowless` in the host's platform launcher).
    */
@@ -181,7 +181,7 @@ export interface LauncherDeps {
 /** A connection to the local host. */
 export interface LocalHost {
   readonly connection: HostConnection
-  /** Whether Helm started the host, rather than finding one running. */
+  /** Whether the desktop started the host, rather than finding one running. */
   readonly startedHost: boolean
   /**
    * Closes the connection and lets go of the bridge; resolves once the bridge
@@ -210,7 +210,7 @@ export interface RefusedVersions {
 }
 
 /**
- * The local host refused this Helm's `hello`: its sentence, and the versions
+ * The local host refused this desktop's `hello`: its sentence, and the versions
  * it named, so the window can say which side to update and offer what fits.
  */
 export class LocalHostRefusedError extends LocalHostError {
@@ -240,8 +240,8 @@ export function pathsFor(platform: NodeJS.Platform): typeof posix {
 }
 
 /**
- * What `floti host` is told about the Helm starting it: the command that
- * opens this Helm again, which is its program and, unpackaged, the app it
+ * What `floti host` is told about the desktop starting it: the command that
+ * opens this desktop again, which is its program and, unpackaged, the app it
  * runs.
  */
 export function desktopArgs(places: HostPlaces): string[] {
@@ -249,7 +249,7 @@ export function desktopArgs(places: HostPlaces): string[] {
 }
 
 /**
- * The program that is this Helm, for the host to open it again. A packaged
+ * The program that is this desktop, for the host to open it again. A packaged
  * Linux build runs from an AppImage, whose `process.execPath` is inside a
  * mount that goes away when the app quits; the AppImage's runtime names the
  * file itself in `APPIMAGE`.
@@ -264,7 +264,7 @@ export function desktopProgram(
 }
 
 /**
- * The `floti` every program Helm runs on this computer is: the host it
+ * The `floti` every program the desktop runs on this computer is: the host it
  * starts, its bridges, doctor and the restart. The installed app's is floti
  * installed on its own, once `ensureLocalFloti` has found or put it there
  * (`useStandalone`); every other run's, and the installed app's until then,
@@ -306,7 +306,7 @@ export function standaloneFloti(deps: Pick<LauncherDeps, 'platform' | 'env'>): s
   return home ? paths.join(home, '.local', 'bin', 'floti') : null
 }
 
-/** The folder Helm's device key and pinned host key live in. */
+/** The folder the desktop's device key and pinned host key live in. */
 export function clientFolder(places: HostPlaces, platform: NodeJS.Platform): string {
   return pathsFor(platform).join(places.dataDir, 'host-client')
 }
@@ -371,10 +371,10 @@ const APPIMAGE_LISTS = ['PATH', 'LD_LIBRARY_PATH', 'XDG_DATA_DIRS', 'GSETTINGS_S
 
 /**
  * `env` without what running from an AppImage put in it. The image is mounted
- * at a temporary folder (`APPDIR`) for as long as Helm runs, and AppRun puts
+ * at a temporary folder (`APPDIR`) for as long as the desktop runs, and AppRun puts
  * that folder at the front of PATH, LD_LIBRARY_PATH, XDG_DATA_DIRS and
- * GSETTINGS_SCHEMA_DIR. The host and its sessions outlive Helm, so they would
- * keep searching a folder that is gone once Helm quits - and that anybody
+ * GSETTINGS_SCHEMA_DIR. The host and its sessions outlive the desktop, so they would
+ * keep searching a folder that is gone once the desktop quits - and that anybody
  * who saw its name could make again and fill. So the image's own entries are
  * taken out of those lists, a list left empty is dropped, and so are the
  * runtime's variables. Without `APPIMAGE` and `APPDIR` the environment is
@@ -417,7 +417,7 @@ export function nodeOnPath(deps: Pick<LauncherDeps, 'platform' | 'env'> & Partia
 }
 
 /**
- * The folder the host's sockets go in. Inside Helm's data directory when the
+ * The folder the host's sockets go in. Inside the desktop's data directory when the
  * longest of them fits macOS's and Linux's limit there; otherwise a folder of
  * its own, named from the data directory, in the user's runtime folder or temp
  * folder, which on both is the user's own. Windows names a pipe from the
@@ -503,7 +503,7 @@ type BridgeAttempt = { connection: HostConnection; exited: Promise<Exit>; child:
 /**
  * Connects to the local host, starting it when none answers. With
  * `startHost` false it only connects: a host that does not answer is a
- * failure, for a host Helm waits for rather than replaces. Rejects with a
+ * failure, for a host the desktop waits for rather than replaces. Rejects with a
  * `LocalHostError` whose message is the one sentence to show.
  */
 export async function startLocalHost(
@@ -585,7 +585,7 @@ export async function startLocalHost(
     starting?.()
     try {
       // A host still ending its sessions does not answer but holds the
-      // folders; one that answers and only refuses Helm is not waited for.
+      // folders; one that answers and only refuses the desktop is not waited for.
       host = await startHost(places, binary, hostArgs, hostOptions, deps, first === BRIDGE_EXIT.unreachable)
     } catch (error) {
       // Only a host that found one already running leaves "nothing pinned"
@@ -611,7 +611,7 @@ export async function startLocalHost(
 
   const { connection, exited, child } = attempt
   void exited.then((exit) => deps.log(`host: floti bridge ended (${describeExit(exit)})`))
-  // Connected: the host Helm started is the host's own from here on.
+  // Connected: the host the desktop started is the host's own from here on.
   host?.release()
   let closing: Promise<void> | null = null
   return {
@@ -672,7 +672,7 @@ export async function localHostRestartFrame(
 }
 
 /**
- * What a host's restart state means for the floti this Helm carries: its
+ * What a host's restart state means for the floti this desktop carries: its
  * sessions are taken over, and none ends, only when its keeper speaks this
  * floti's keeper link version; with no keeper, or another link, every one
  * ends and the new host offers them back.
@@ -689,7 +689,7 @@ export function restartOffer(state: RestartState): LocalHostRestartOffer {
  */
 export const RESTART_FRAMES_MAJOR = 2
 
-/** Whether a host that refused this Helm naming `refused` is one from before the restart frames. */
+/** Whether a host that refused this desktop naming `refused` is one from before the restart frames. */
 export function fromBeforeRestart(refused: RefusedVersions | null): refused is RefusedVersions {
   return refused !== null && refused.host.major < RESTART_FRAMES_MAJOR
 }
@@ -697,8 +697,8 @@ export function fromBeforeRestart(refused: RefusedVersions | null): refused is R
 /**
  * Restart host to update for a host from before the restart frames, which
  * cannot be asked what it runs: it is named by the protocol it refused this
- * Helm with, no count is given, and nothing ends, since its process is ended
- * as a crash would end it and the floti this Helm carries takes its keeper
+ * desktop with, no count is given, and nothing ends, since its process is ended
+ * as a crash would end it and the floti this desktop carries takes its keeper
  * back (`endOldLocalHost`).
  */
 export function oldHostOffer(refused: RefusedVersions): LocalHostRestartOffer {
@@ -711,7 +711,7 @@ export function oldHostOffer(refused: RefusedVersions): LocalHostRestartOffer {
 
 /**
  * Ends the local host when it speaks protocol 1.x, from before the restart
- * frames: runs `floti end-old-host` from the floti this Helm carries, which
+ * frames: runs `floti end-old-host` from the floti this desktop carries, which
  * ends that host's process alone, as a crash would, leaving its session
  * keeper running, and exits once it has gone. Nothing is sent to the host
  * that it could handle: no restart frame, no protocol-1.0 `hello` and no
@@ -812,11 +812,11 @@ async function waitForHostFolders(places: HostPlaces, deps: LauncherDeps, failed
  * when it has one and exits; this then waits until no host answers on the
  * socket, trying every `HOST_RETRY_MS` up to the start deadline, then until
  * it has let go of its folders (`waitForHostFolders`), and resolves with the
- * host's answer. Either way the caller then starts the floti this Helm
+ * host's answer. Either way the caller then starts the floti this desktop
  * carries, which takes the sessions over when it speaks the keeper's link,
  * and starts one host, since none holds the folders. On the user's click, or by the link itself
- * for a host that refused this Helm as older, once the floti a restart
- * starts is known to speak this Helm's protocol (`connectUpdatingLocalHost`).
+ * for a host that refused this desktop as older, once the floti a restart
+ * starts is known to speak this desktop's protocol (`connectUpdatingLocalHost`).
  */
 export async function restartLocalHost(
   places: HostPlaces,
@@ -853,10 +853,10 @@ export type LocalHostStepSaid = LocalHostStep extends infer Step
 
 /**
  * Whether restarting the local host onto the floti a restart starts
- * (`flotiBinary`) gives this Helm a host it can use (`hostUpdatePlan`), asked
+ * (`flotiBinary`) gives this desktop a host it can use (`hostUpdatePlan`), asked
  * of that floti's `floti version` (`versionOf`, null when it could not be
  * run). `refused` is the host's last refusal, null for a host that welcomed
- * this Helm with an older floti.
+ * this desktop with an older floti.
  */
 export async function localHostUpdatePlan(
   places: HostPlaces,
@@ -875,8 +875,8 @@ export function failedTargetKey(path: string, versionLine: string | null): strin
 
 /**
  * Connects to the local host as `startLocalHost` does, and updates a host
- * older than this Helm by itself: when the host refuses the `hello` saying to
- * update the host, and the floti a restart starts speaks this Helm's
+ * older than this desktop by itself: when the host refuses the `hello` saying to
+ * update the host, and the floti a restart starts speaks this desktop's
  * protocol (`localHostUpdatePlan`), it restarts the host onto that floti
  * (`restartLocalHost`; the keeper carries every session over) and connects
  * to the host it starts, all inside this one connect, so whatever waits on
@@ -888,7 +888,7 @@ export function failedTargetKey(path: string, versionLine: string | null): strin
  * the refusal instead of restarting onto it again, since every restart hands
  * the keeper over. When the floti cannot serve, nothing is
  * restarted and the refusal says which floti it is and why. With
- * `startHost` false (a host Helm waits for rather than replaces) a refusal is
+ * `startHost` false (a host the desktop waits for rather than replaces) a refusal is
  * only reported. `step` hears each step as it begins; `ready`, `refused` and
  * `unreachable` are the caller's to say, from how this settles.
  */
@@ -953,8 +953,8 @@ export async function connectUpdatingLocalHost(
 }
 
 /**
- * A Helm page's own connection to the local host: a `floti bridge` of its
- * own, run from Helm's client folder as main's is, whose frames main pipes to
+ * A desktop page's own connection to the local host: a `floti bridge` of its
+ * own, run from the desktop's client folder as main's is, whose frames main pipes to
  * the page and never reads. The device key and the Noise session stay in the
  * bridge; the page sees only protocol frames.
  */
@@ -1017,11 +1017,11 @@ export function describeExit(exit: Exit): string {
   return exit.code === null ? `stopped by ${exit.signal ?? 'a signal'}` : `status ${exit.code}`
 }
 
-/** A host Helm started and has not yet connected through. */
+/** A host the desktop started and has not yet connected through. */
 interface StartedHost {
-  /** Helm is through with it: it stops reading it and exits without waiting for it. */
+  /** The desktop is through with it: it stops reading it and exits without waiting for it. */
   release(): void
-  /** Ends it, for a host Helm could not connect through: it never served anyone. */
+  /** Ends it, for a host the desktop could not connect through: it never served anyone. */
   abandon(): Promise<void>
 }
 
@@ -1112,7 +1112,7 @@ async function startHostOnce(
         const line = pending.slice(0, newline).replace(/\r$/, '')
         pending = pending.slice(newline + 1)
         if (read(line)) {
-          // What it says after that is only drained until Helm lets go.
+          // What it says after that is only drained until the desktop lets go.
           stdout.off('data', onData)
           stdout.resume()
           resolve('listening')
@@ -1166,7 +1166,7 @@ async function startHostOnce(
 }
 
 /**
- * Logs each line a host Helm started writes to standard error, prefixed so
+ * Logs each line a host the desktop started writes to standard error, prefixed so
  * it reads as the host's, until the pipe is let go of or ends.
  */
 function keepStandardError(child: HostChild, deps: Pick<LauncherDeps, 'log'>): void {
@@ -1196,10 +1196,10 @@ function keepStandardError(child: HostChild, deps: Pick<LauncherDeps, 'log'>): v
   stderr.on('error', () => undefined)
 }
 
-/** A host Helm started that exited before it said it was listening. */
+/** A host the desktop started that exited before it said it was listening. */
 class HostEndedEarly extends LocalHostError {}
 
-/** A host Helm started that found another host still holding its folders or socket. */
+/** A host the desktop started that found another host still holding its folders or socket. */
 class HostFoldersHeld extends HostEndedEarly {
   constructor() {
     super("Another local host is running on Floti's host folders.")

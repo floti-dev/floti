@@ -34,28 +34,28 @@ import {
 import type { TerminalStreams } from './streams'
 
 /**
- * Helm's sessions when they run in the local host: the same `SessionHost`
+ * The desktop's sessions when they run in the local host: the same `SessionHost`
  * the window has always talked to, answered by the host over the protocol.
  *
  * The host owns each session's process, its row and its terminal; this side
  * keeps what the window shows - the tabs it lists, as the host last said -
  * and carries each running session's terminal on a stream (`streams.ts`).
  *
- * What stays Helm's own, by design (P5): the confirmation before a running
- * session is ended, which Helm asks in its window and then tells the host to
+ * What stays the desktop's own, by design (P5): the confirmation before a running
+ * session is ended, which the desktop asks in its window and then tells the host to
  * end the session without asking again; and the notification for an exit
  * nobody saw, which the host judges from what this client says it can see
- * and Helm shows.
+ * and the desktop shows.
  *
  * A launch with a saved profile names the host's profile, and the host
  * composes it (`profile:launch`, or `session:launch` with its id): with the
  * setting on, profiles live in the host (`profiles.ts`). A session a plugin
- * starts, once the user agreed in Helm's dialog, is handed to the host as the
+ * starts, once the user agreed in the desktop's dialog, is handed to the host as the
  * dialog showed it - the folder, the name, the first message - with nothing
  * composed here.
  *
  * The browser tools: the host serves `floti-browser` to its sessions and relays
- * each call here (`browser-tools.ts`), where Helm's own tools answer it. A
+ * each call here (`browser-tools.ts`), where the desktop's own tools answer it. A
  * running session's identity at those tools is a random key minted here, held
  * only in main and dropped when the session ends, which also ends every page
  * the user shared with it. The host holds the session's token.
@@ -68,19 +68,19 @@ import type { TerminalStreams } from './streams'
  * adopted here (`adoptSession`) so the window opens it as a tab.
  */
 
-/** The one backend Helm launches. */
+/** The one backend the desktop launches. */
 export { CLAUDE_CODE_BACKEND }
 
 /**
- * What Helm writes to the host on every connect: the `claude` its sessions
- * run - the one chosen in Settings, or the one Helm finds - the shell a
+ * What the desktop writes to the host on every connect: the `claude` its sessions
+ * run - the one chosen in Settings, or the one the desktop finds - the shell a
  * terminal opens, the ceiling its transcript archive is held to, whether its
  * sessions get the browser tools and whether those are held to this machine,
  * whether they get the session tools, and whether they can start agents of
  * their own, with the limits on a family of them and on the commands it runs
  * for watching. The host serves that
  * last family and judges every start against the numbers it was last told;
- * Helm's own process serves none of it.
+ * the desktop's own process serves none of it.
  */
 export function hostSettingsFor(settings: AppSettings, discovered: string | null): P.HostSettingsPatch {
   const claude = settings.claudePath ?? discovered
@@ -124,7 +124,7 @@ export interface HostSessionsDeps {
    * Absent when the window hears the host's word itself and hands it to main.
    */
   notify?: (record: SessionRecord) => void
-  /** Whether Helm's window is in front, so what is on screen is seen at all. */
+  /** Whether the desktop's window is in front, so what is on screen is seen at all. */
   windowFocused: () => boolean
   /**
    * Lists the host's sessions again whenever their activity or overview moves,
@@ -138,7 +138,7 @@ export interface HostSessionsDeps {
   knownProject: (cwd: string) => string | null
   /** After the host's session activity or overview moved, for plugins listing sessions. */
   onActivityChange?: () => void
-  /** Whether Helm's browser tools are on in Settings; off, no session has an identity at them. */
+  /** Whether the desktop's browser tools are on in Settings; off, no session has an identity at them. */
   browserTools?: () => boolean
   /** A session's identity at the browser tools has ended with it: its shares end too. */
   browserIdentityEnded?: (key: string) => void
@@ -239,7 +239,7 @@ export function createHostSessions(deps: HostSessionsDeps): HostSessions {
   /** Each running session's key at the browser tools, minted when first asked for. */
   const openerKeys = new Map<number, string>()
   /**
-   * The listed sessions another device started, which quitting Helm leaves
+   * The listed sessions another device started, which quitting the desktop leaves
    * running and so does not ask about. Empty while the host has not said:
    * then every running session counts, as asking too much is the safe side.
    */
@@ -389,7 +389,7 @@ export function createHostSessions(deps: HostSessionsDeps): HostSessions {
   }
 
   const running = (): SessionRecord[] => [...records.values()].filter(isRunning)
-  /** The running sessions this device started: what quitting Helm ends. */
+  /** The running sessions this device started: what quitting the desktop ends. */
   const runningHere = (): SessionRecord[] => running().filter((record) => !startedElsewhere.has(record.id))
 
   const confirmQuit: QuitConfirm =
@@ -452,7 +452,7 @@ export function createHostSessions(deps: HostSessionsDeps): HostSessions {
     startWithPrompt: (req) =>
       startPlain({
         cwd: req.cwd,
-        // A folder Helm knows as a project is recorded as one, so the session
+        // A folder the desktop knows as a project is recorded as one, so the session
         // is that project's in the sidebar and its crumb.
         projectPath: deps.knownProject(req.cwd),
         name: req.name,
@@ -513,7 +513,7 @@ export function createHostSessions(deps: HostSessionsDeps): HostSessions {
       const current = records.get(req.id)
       if (current === undefined) return { closed: true }
       if (isRunning(current)) {
-        // Helm has asked already, so the host is told not to ask again.
+        // The desktop has asked already, so the host is told not to ask again.
         await (await host()).request('session:close', { id: req.id, force: true })
       }
       records.delete(req.id)
@@ -533,7 +533,7 @@ export function createHostSessions(deps: HostSessionsDeps): HostSessions {
       const entry = records.get(req.id)
       if (entry === undefined) throw new Error('That session is not running in the local host.')
       const trimmed = req.label?.trim()
-      // Answered at once, as Helm's own rename is; the host's row follows.
+      // Answered at once, as the desktop's own rename is; the host's row follows.
       const renamed: SessionRecord = { ...entry, label: trimmed === undefined || trimmed === '' ? null : trimmed }
       records.set(req.id, renamed)
       announce()
@@ -603,7 +603,7 @@ export function createHostSessions(deps: HostSessionsDeps): HostSessions {
       subscriptions = []
       streams?.closeAll()
       for (const id of [...openerKeys.keys()]) dropOpener(id)
-      // Every session ends with the quit, as Helm's own do, so nothing is left
+      // Every session ends with the quit, as the desktop's own do, so nothing is left
       // for the window's close to ask about while the host stops them.
       records.clear()
     }

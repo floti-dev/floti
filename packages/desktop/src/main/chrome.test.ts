@@ -19,7 +19,7 @@ function items(template: MenuItemConstructorOptions[]): MenuItemConstructorOptio
 }
 
 /**
- * Helm's own Cmd shortcuts on macOS, outside the Browser tab's table: the
+ * The desktop's own Cmd shortcuts on macOS, outside the Browser tab's table: the
  * launcher, quick open on names and text, the plugins' palette, the split, and
  * moving a tab or a profile.
  */
@@ -40,7 +40,7 @@ function pressOf(accelerator: string): { key: string; control: boolean; shift: b
 
 const noQuit = (): void => undefined
 
-/** The app menu's Quit Helm item. */
+/** The app menu's Quit Floti item. */
 function quitItem(template: MenuItemConstructorOptions[]): MenuItemConstructorOptions {
   const found = items(template).find((item) => item.label === 'Quit Floti')
   if (found === undefined) throw new Error('no Quit Floti item')

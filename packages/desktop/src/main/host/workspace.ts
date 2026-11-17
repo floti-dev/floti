@@ -29,7 +29,7 @@ import { CLAUDE_CODE_BACKEND, type Emit } from './sessions'
  * the settings, the update check among them. The local host scans its own
  * machine's folders, keeps the scan roots, the pinned projects and whether
  * setup was finished, checks Claude Code for setup, makes workspaces and keeps
- * the templates; Helm's main process does none of it.
+ * the templates; the desktop's main process does none of it.
  *
  * The settings are split by who owns them. The workspace keys
  * (`HOST_WORKSPACE_KEYS`) are the host's and are held here in memory, never
@@ -40,7 +40,7 @@ import { CLAUDE_CODE_BACKEND, type Emit } from './sessions'
  * sidebar says why from its own refused read.
  *
  * On the first connect to a host that has never been set up - no scan roots
- * and no finished setup - Helm's own scan roots, pins and setup stamp are
+ * and no finished setup - the desktop's own scan roots, pins and setup stamp are
  * written to it once, before `connection()` resolves, so a user who turns the
  * setting on keeps the sidebar and the finished setup they had.
  *
@@ -50,7 +50,7 @@ import { CLAUDE_CODE_BACKEND, type Emit } from './sessions'
  * console's scope list).
  *
  * Every request goes through `link.connection()`, which joins the first
- * connect while it is in flight, so a window that asks before Helm has reached
+ * connect while it is in flight, so a window that asks before the desktop has reached
  * the host gets the host's answer, never an empty one first. When the host
  * cannot be reached, each rejects with the link's sentence; none answers an
  * empty list in its place.
@@ -121,17 +121,17 @@ export interface TemplateService {
 export interface HostWorkspaceDeps {
   link: HostLink
   emit: Emit
-  /** Helm's own settings, as they are now. */
+  /** The desktop's own settings, as they are now. */
   own: () => AppSettings
-  /** Writes Helm's own settings, and answers them after. */
+  /** Writes the desktop's own settings, and answers them after. */
   writeOwn: (patch: Partial<AppSettings>) => AppSettings
-  /** An executable the host checked and kept for Claude Code, which Helm's Settings then show. */
+  /** An executable the host checked and kept for Claude Code, which the desktop's Settings then show. */
   claudePicked: (path: string) => void
   log: (line: string) => void
 }
 
 export interface HostWorkspace extends WorkspaceService {
-  /** Helm's settings as they are now, with the host's keys laid over once it has said them. */
+  /** The desktop's settings as they are now, with the host's keys laid over once it has said them. */
   overlay(own: AppSettings): AppSettings
   /** The host's last scan, or null before it has said one. */
   lastScan(): DiscoveryResult | null
@@ -168,7 +168,7 @@ export function createHostWorkspace({
     return scanned
   }
 
-  /** Helm's scan roots, pins and setup stamp, written once to a host that has never been set up. */
+  /** The desktop's scan roots, pins and setup stamp, written once to a host that has never been set up. */
   const copyOnFirstConnect = async (connection: HostConnection, current: P.HostSettings): Promise<P.HostSettings> => {
     const fresh = current.scanRoots.length === 0 && current.firstRunCompletedAt === null
     const mine = own()
@@ -181,8 +181,8 @@ export function createHostWorkspace({
   }
 
   /**
-   * A Helm that had the update check turned off before the host kept it says
-   * so to the host, once: Helm's own row then goes back to its default, so a
+   * A desktop that had the update check turned off before the host kept it says
+   * so to the host, once: the desktop's own row then goes back to its default, so a
    * later change made at the host is never undone from here.
    */
   const carryUpdateCheck = async (connection: HostConnection, current: P.HostSettings): Promise<P.HostSettings> => {
@@ -305,7 +305,7 @@ export function createHostWorkspace({
 
     async locateClaude(path) {
       const status = await (await host()).request('setup:locateBackend', { backend: CLAUDE_CODE_BACKEND, path })
-      // Kept by the host only once it ran; Helm's Settings show the same one,
+      // Kept by the host only once it ran; the desktop's Settings show the same one,
       // and tell it to the host on every connect from then on.
       if (status.error === null && status.installed) {
         claudePicked(path)

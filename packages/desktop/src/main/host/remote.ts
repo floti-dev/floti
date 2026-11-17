@@ -9,7 +9,7 @@ import { RemoteHostError } from './remote-launcher'
 import type { WslKeepAwake } from './wsl-awake'
 
 /**
- * Helm's links to the hosts on other computers this device has added (the
+ * The desktop's links to the hosts on other computers this device has added (the
  * `hosts` setting), each over its own connection, beside this PC's own.
  *
  * - One link per host in main, for the quit and where it stands,
@@ -40,10 +40,10 @@ import type { WslKeepAwake } from './wsl-awake'
  * - A quit tells each connected host whether the sessions this device started
  *   there end, by that host's own choice (Keep them running unless set).
  * - Where each stands goes to the window on `remoteHosts:changed`. A
- *   connected host whose floti is older than this Helm's says so, with this
- *   Helm's version, and is offered Update floti. A host
+ *   connected host whose floti is older than this desktop's says so, with this
+ *   desktop's version, and is offered Update floti. A host
  *   whose floti refused this device's hello is too old or newer, with both versions; one
- *   whose login has no floti is missing; one Helm installed floti on while
+ *   whose login has no floti is missing; one desktop installed floti on while
  *   nobody was signed in there starts at the next sign-in, which is no
  *   failure.
  */
@@ -94,13 +94,13 @@ export interface RemoteHostLinks {
   /** The sessions this device started on each connected host where `endsOn` says a quit ends them. */
   quitParts(endsOn: (id: string) => boolean): HostQuitPart[]
   /**
-   * Helm is quitting on purpose: ends every page bridge, then tells each
+   * The desktop is quitting on purpose: ends every page bridge, then tells each
    * connected host `host:quit` with `endsOn(id)` and lets go. A host not
    * connected is told nothing. Nothing links after it.
    */
   quit(endsOn: (id: string) => boolean): Promise<void>
   /**
-   * Helm installed or updated floti on host `id`, at `floti` (absent for a
+   * The desktop installed or updated floti on host `id`, at `floti` (absent for a
    * floti found on the login's `PATH`): its link tries again now, and with
    * `startsAtNextSignIn` a host that is not running there yet starts at the
    * next sign-in rather than having failed.
@@ -110,7 +110,7 @@ export interface RemoteHostLinks {
    * Host `host`, being added, connected on `connected`, which pinned its key:
    * its link starts on that connection rather than making another. The
    * settings write that adds the host follows at once, and its `sync` keeps
-   * this link. Helm quitting, or a host already linked, closes it instead.
+   * this link. The desktop quitting, or a host already linked, closes it instead.
    */
   adopt(host: RemoteHost, connected: LocalHost): void
   /**
@@ -139,7 +139,7 @@ export interface RemoteHostLinksDeps {
   /**
    * What hangs on each host's main link beside the link itself (its plugins'
    * page files and tool relay, `remote-plugins.ts`), started with the link
-   * and stopped when the link is let go of or Helm quits.
+   * and stopped when the link is let go of or the desktop quits.
    */
   linked?: (host: RemoteHost, link: HostLink) => { stop(): void }
   /**
@@ -182,7 +182,7 @@ const reachedAlike = (a: RemoteHost, b: RemoteHost): boolean =>
 export function createRemoteHostLinks(deps: RemoteHostLinksDeps): RemoteHostLinks {
   const entries = new Map<string, Entry>()
   const states = new Map<string, RemoteHostConnection>()
-  /** The hosts Helm installed floti on while nobody was signed in there. */
+  /** The hosts the desktop installed floti on while nobody was signed in there. */
   const atSignIn = new Set<string>()
   /** Who waits for each host's next connection (`reconnected`), told its floti version. */
   const awaiting = new Map<string, Set<(version: string) => void>>()

@@ -6,7 +6,7 @@ import { createQuitGate, nextQuitStep, quitEnds } from './quit'
 const settle = (): Promise<void> => new Promise((done) => setImmediate(done))
 
 /**
- * Helm's main window and quit, in Electron's order and wired as index.ts wires
+ * The desktop's main window and quit, in Electron's order and wired as index.ts wires
  * them: `app.quit()` runs `before-quit`, which ends every session, and then
  * closes the window; the window's `close` handler asks the gate, and a held
  * close cancels the quit; a window that does close ends the app through

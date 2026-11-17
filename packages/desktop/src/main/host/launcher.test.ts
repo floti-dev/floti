@@ -47,7 +47,7 @@ const WIN_PLACES: HostPlaces = {
   appPath: 'C:\\src\\my floti\\packages\\desktop'
 }
 
-/** How the host Helm starts is run: told which Helm started it. */
+/** How the host the desktop starts is run: told which desktop started it. */
 const HOST_PROGRAM = `host --desktop ${WIN_PLACES.execPath} --desktop-arg ${WIN_PLACES.appPath}`
 
 /** A bridge that says one line, which a real one would never put a secret in, and exits with `code`. */
@@ -437,8 +437,8 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
       .poll(() => world.programs(), { timeout: PATIENCE })
       .toEqual([`bridge ${WIN_PLACES.dataDir}\\host-client`, HOST_PROGRAM])
     const host = world.spawned[1]!
-    // Apart from Helm, with no input to close: the host's exit is its own.
-    // Its standard output carries only the listening line Helm waits for, and
+    // Apart from the desktop, with no input to close: the host's exit is its own.
+    // Its standard output carries only the listening line the desktop waits for, and
     // its standard error what it says before its own log file is open.
     expect(host.options).toEqual({
       env: world.spawned[0]!.options.env,
@@ -452,7 +452,7 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
     const local = await starting
     expect(world.programs()).toHaveLength(3)
     expect(local.startedHost).toBe(true)
-    // Connected: Helm reads nothing more from it and does not wait for it to exit.
+    // Connected: the desktop reads nothing more from it and does not wait for it to exit.
     expect(host.unrefed).toBe(true)
     expect(host.stdout.destroyed).toBe(true)
 

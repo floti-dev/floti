@@ -51,7 +51,7 @@ async function hostWorld(label: string) {
     templatesDir: join(root, 'config', 'templates')
   }
   const programs = { platform: process.platform, env: process.env, tmpdir, exists: existsSync }
-  /** Each host Helm's start path started, with when it exits. */
+  /** Each host the desktop's start path started, with when it exits. */
   const hosts: Array<{ pid: number | undefined; exited: Promise<void> }> = []
   const deps: LauncherDeps = {
     ...programs,

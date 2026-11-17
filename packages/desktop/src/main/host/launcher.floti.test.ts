@@ -34,7 +34,7 @@ import {
 import { PROTOCOL_VERSION, type ProtocolVersion } from './protocol'
 
 /**
- * This PC's host and this Helm on either side of a protocol version, and
+ * This PC's host and this desktop on either side of a protocol version, and
  * Restart host to update, against the real `floti` this checkout built (with
  * the `testkit` feature, as `pnpm test:e2e` builds it, so the host greets
  * with the protocol a test writes in its data folder), its host in this
@@ -44,7 +44,7 @@ import { PROTOCOL_VERSION, type ProtocolVersion } from './protocol'
 /** The host environment of each world made in the test under way. */
 const worlds: NodeJS.ProcessEnv[] = []
 
-// Every host here, the ones Helm's start path started included, was spawned
+// Every host here, the ones the desktop's start path started included, was spawned
 // by this test and is ended by its own pid. A session keeper outlives the
 // host that started it, by design, and is handed from host to host, so each
 // keeper still running on a world's folders is ended too, with the terminals
@@ -103,7 +103,7 @@ async function hostWorld(label: string, hostProtocol?: string) {
     await first.exited
     await writeFile(join(env['FLOTI_DATA_DIR']!, 'floti-test-host-protocol'), hostProtocol)
   }
-  /** Each host Helm's start path started, settling once it has exited. */
+  /** Each host the desktop's start path started, settling once it has exited. */
   const startedHosts: Array<Promise<void>> = []
   const deps = (protocol?: ProtocolVersion): LauncherDeps => ({
     ...programs,
@@ -187,7 +187,7 @@ describe.runIf(flotiAvailable)('this PC’s host and this Floti on either versio
 
     await restartLocalHost(world.places, world.deps())
     await old.exited
-    // Nothing answers now; the start the link makes next starts the floti Helm carries.
+    // Nothing answers now; the start the link makes next starts the floti the desktop carries.
     expect(await localHostRestartFrame(world.places, world.deps(), false)).toBeNull()
     const local = await startLocalHost(world.places, world.deps())
     expect(local.startedHost).toBe(true)
@@ -239,7 +239,7 @@ describe.runIf(flotiAvailable)('this PC’s host and this Floti on either versio
     // 2.4.1-preview.7's keeper names no link version.
     await writeFile(join(data, 'floti-test-keeper-link-version'), 'none')
     const old = await startFlotiHost(world.env)
-    // A Helm of that release reaches it and opens a terminal.
+    // A desktop of that release reaches it and opens a terminal.
     const before = await startLocalHost(world.places, world.deps({ major: 1, minor: 4 }))
     const folder = await mkdtemp(join(inject(RUN_ROOT), 'terminal folder '))
     const opened = await before.connection.request('pterm:open', {
@@ -254,7 +254,7 @@ describe.runIf(flotiAvailable)('this PC’s host and this Floti on either versio
     first.stream.write(new TextEncoder().encode(`echo ${marker}\r`))
     await expect.poll(() => first.text(), { timeout: PATIENCE }).toContain(marker)
 
-    // This Helm is refused, naming protocol 1.4, and offered the restart as ending nothing.
+    // This desktop is refused, naming protocol 1.4, and offered the restart as ending nothing.
     const refused = (await refusedWith(startLocalHost(world.places, world.deps()))).refused
     expect(fromBeforeRestart(refused)).toBe(true)
     expect(oldHostOffer(refused)).toEqual({
@@ -267,7 +267,7 @@ describe.runIf(flotiAvailable)('this PC’s host and this Floti on either versio
     await old.exited
     await before.close()
 
-    // The carried floti, greeting with this Helm's protocol, starts on the same folders.
+    // The carried floti, greeting with this desktop's protocol, starts on the same folders.
     await rm(join(data, 'floti-test-host-protocol'))
     await rm(join(data, 'floti-test-keeper-link-version'))
     const after = await startLocalHost(world.places, world.deps())

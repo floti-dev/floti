@@ -136,14 +136,14 @@ const isSpikeMode =
  * pane's width - so a throttled renderer answers "nothing changed" to all of
  * it, which is indistinguishable from the app being broken.
  *
- * Measured on a machine running six Helm windows at once: a hover probe
+ * Measured on a machine running six desktop windows at once: a hover probe
  * measured 162 controls with its window in front and 7 with somebody else's on
  * top, reporting most of the app as having no hover state at all. The
  * alternative - raising or focusing our own window - is worse than the
  * problem, because every other window on that machine belongs to a check that
  * would then be the one being measured through a throttled renderer.
  *
- * Check and spike modes only. `app` is somebody's actual Helm, and a Helm
+ * Check and spike modes only. `app` is somebody's actual Floti, and a desktop
  * minimised behind an editor should go quiet like any other window.
  */
 if (mode !== 'app') {
@@ -180,7 +180,7 @@ protocol.registerSchemesAsPrivileged([
 /**
  * Every renderer is our own bundle; nothing else may be navigated to or opened.
  *
- * The browser pane's `WebContentsView`s are the one thing in Helm that is
+ * The browser pane's `WebContentsView`s are the one thing in the desktop that is
  * *supposed* to navigate, and they are let through **here**, by id, rather than
  * by relaxing anything. `browserWillNavigate` answers false for every web
  * contents that is not a live browser view - the window, the spike page, an
@@ -198,7 +198,7 @@ protocol.registerSchemesAsPrivileged([
  *
  * Allowing those opens is the one deliberate widening in this file and it was
  * measured into existence: denied, `window.open` returns `null` and every
- * OAuth library reports a blocked popup, and a page Helm loaded fresh instead
+ * OAuth library reports a blocked popup, and a page the desktop loaded fresh instead
  * has no `window.opener` for the sign-in to hand its code back through. See
  * `browserWindowOpen` for the terms it is held to.
  *
@@ -210,7 +210,7 @@ app.on('web-contents-created', (_e, contents) => {
   contents.on('will-navigate', (event, url) => {
     if (!browserWillNavigate(contents.id, url)) event.preventDefault()
   })
-  // A plugin frame stays on its own origin, and only Helm's pages that frame
+  // A plugin frame stays on its own origin, and only the desktop's pages that frame
   // plugins put one there (`plugins/guards.ts`). Read at navigation time, so
   // the plugin host can be made after this is armed.
   guardPluginFrames(contents, (id) => pluginFrameHosts(id))
@@ -220,7 +220,7 @@ app.on('web-contents-created', (_e, contents) => {
 let pluginFrameHosts: (contentsId: number) => boolean = () => false
 
 /**
- * What the app menu's Quit Helm does (macOS; chrome.ts). A plain quit until
+ * What the app menu's Quit Floti does (macOS; chrome.ts). A plain quit until
  * the app has sessions to ask about; `startApp` points it at the quit gate.
  */
 let quitFromMenu: () => void = () => app.quit()
@@ -352,7 +352,7 @@ export interface AppOptions {
  * Printed before the database is opened, because by the time the window is up
  * the damage this warns about is already possible: this process is about to
  * write to the `desktop.db`, the `overlays/` and the Chromium profile of whichever
- * Helm the user has open. The status bar names the mode too, but a chip on a
+ * Floti the user has open. The status bar names the mode too, but a chip on a
  * window somebody is not looking at is not a warning.
  */
 function announceLiveMode(): void {
@@ -413,7 +413,7 @@ function startApp(options: AppOptions = {}): void {
   let setupWin: BrowserWindow | null = null
   // `pnpm dev` starts from a fresh copy of the database every launch, so a
   // plugin being worked on is registered from FLOTI_PLUGINS instead of being
-  // added again in Settings each time. Dev builds only: an installed Helm
+  // added again in Settings each time. Dev builds only: an installed Floti
   // registers a folder when the user adds one, and at no other time.
   if (appMode === 'dev') {
     for (const folder of (process.env['FLOTI_PLUGINS'] ?? '').split(delimiter)) {
@@ -444,7 +444,7 @@ function startApp(options: AppOptions = {}): void {
     const hosted = label === null ? desktopHost.plugins : desktopHost.remotePlugins.byLabel(label)
     if (hosted === null) return null
     return {
-      // The local host is the one Helm started, on this computer; a remote host's is not.
+      // The local host is the one desktop started, on this computer; a remote host's is not.
       onHostComputer: label === null,
       serves: (id) => hosted.serves(id),
       file: (id, path) => hosted.file(id, path)
@@ -454,12 +454,12 @@ function startApp(options: AppOptions = {}): void {
   pluginFrameHosts = (id) => plugins.framesPlugins(id)
 
   /*
-   * Sessions and terminals run in the local host, which Helm connects to now
+   * Sessions and terminals run in the local host, which the desktop connects to now
    * and starts when none answers.
    */
   const checkConfirm = options.confirm
   /*
-   * Whether the browser pane may run: not in a Linux Helm started without
+   * Whether the browser pane may run: not in a Linux desktop started without
    * Chromium's sandbox (`browser-sandbox.ts`). Every read of the browser tools'
    * switch goes through `browserSettings`, so with the pane off no session is
    * given the tools.
@@ -557,7 +557,7 @@ function startApp(options: AppOptions = {}): void {
   /** What the quit question names on the hosts on other computers whose setting ends them. */
   const remoteQuitParts = (): ReturnType<RemoteHostLinks['quitParts']> => remoteHosts.quitParts(remoteEnds)
 
-  // One question about running sessions, shared by the menu's Quit Helm and
+  // One question about running sessions, shared by the menu's Quit Floti and
   // the window's close, asked before anything ends (quit.ts). With the setting
   // keeping them, nothing would end, so nothing is asked.
   const quitGate = createQuitGate({
@@ -635,7 +635,7 @@ function startApp(options: AppOptions = {}): void {
     settings: () => services.settings,
     writeSettings: (patch) => {
       const next = updateSettings(services, patch)
-      // The window lays the host's half over Helm's own itself, which it hears
+      // The window lays the host's half over the desktop's own itself, which it hears
       // on its own channel.
       emit(win, 'ownSettings:changed', next)
     },
@@ -678,7 +678,7 @@ function startApp(options: AppOptions = {}): void {
     browserMcp,
     // The folders the window's picker chose go to the host's scan roots.
     workspace: desktopHost.workspace,
-    // Opening an editor stays Helm's; the host reads the files.
+    // Opening an editor stays the desktop's; the host reads the files.
     files,
     themes,
     plugins,
@@ -856,7 +856,7 @@ function startApp(options: AppOptions = {}): void {
   else openShell()
 
   // A reopen while the quit below is underway opens no window in this process;
-  // it relaunches Helm once the quit has finished (reopen.ts).
+  // it relaunches the desktop once the quit has finished (reopen.ts).
   let hostStop: QuitPhase = 'running'
   const reopen = createReopen({
     quitPhase: () => hostStop,
@@ -871,7 +871,7 @@ function startApp(options: AppOptions = {}): void {
   app.on('activate', () => reopen.activate())
 
   /*
-   * The host owns the sessions' lifetime and outlives Helm. A deliberate quit tells it what becomes of what this device started,
+   * The host owns the sessions' lifetime and outlives the desktop. A deliberate quit tells it what becomes of what this device started,
    * which takes a round trip: the first `before-quit` is held while every
    * page's connection closes, the host is told whether the sessions end
    * (`host:quit`: as the quit question was answered, or as the quit setting
@@ -881,7 +881,7 @@ function startApp(options: AppOptions = {}): void {
    * host, left with no session and no client, exits by itself. Each host on
    * another computer this device is connected to is told the same at the
    * same time, by its own setting (Keep them running unless set) unless the
-   * answer kept them this once; one not connected is told nothing. A Helm that
+   * answer kept them this once; one not connected is told nothing. A desktop that
    * ends any other way tells no host anything, so nothing ends and the next
    * start reattaches.
    */
@@ -1143,7 +1143,7 @@ app.whenReady().then(() => {
    * this one can enter. The driver starts it with `PORTABLE_EXECUTABLE_DIR`
    * pointed at a temporary directory - the app's own portable-mode mechanism,
    * used as the isolation - so it opens an empty database beside that directory
-   * and touches neither `%APPDATA%\Helm` nor the user's `~/.claude`, which it is
+   * and touches neither `%LOCALAPPDATA%\Floti\desktop` nor the user's `~/.claude`, which it is
    * pointed away from with `--claude-home=`.
    */
   if (mode === 'packaging-check' || mode === 'packaging-firstrun') {

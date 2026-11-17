@@ -35,7 +35,7 @@ interface World {
   notified: SessionRecord[]
   connect(): Promise<void>
   focused: { value: boolean }
-  /** Whether Helm's browser tools are on in Settings. */
+  /** Whether the desktop's browser tools are on in Settings. */
   browserTools: { value: boolean }
   /** The browser tool identities that ended, by key, in order. */
   identitiesEnded: string[]
@@ -74,7 +74,7 @@ function world(
     },
     windowFocused: () => focused.value,
     layout: null,
-    // Helm knows one project, at /work/app.
+    // The desktop knows one project, at /work/app.
     knownProject: (cwd) => (cwd.toLowerCase() === '/work/app' ? '/work/app' : null),
     browserTools: () => browserTools.value,
     browserIdentityEnded: (key) => identitiesEnded.push(key),
@@ -484,7 +484,7 @@ describe('sessions through the local host', () => {
 
   it('asks about quitting only for the sessions this device started, which are the ones quitting ends', async () => {
     const w = world({ listed: [row(), row({ id: 8, name: 'api' }), row({ id: 9, name: 'docs' })] })
-    // Session 8 was started from another device; quitting Helm leaves it running.
+    // Session 8 was started from another device; quitting the desktop leaves it running.
     w.connection.answer('host:deviceSessions', () => [
       { id: 7, name: 'alpha' },
       { id: 9, name: 'docs' }

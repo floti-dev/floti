@@ -36,10 +36,10 @@ vi.mock('electron', async () => ({
  * The browser pane's main-process half, against a fake Electron.
  *
  * The host is real; Chromium is played by the test (`test/browser-electron.ts`).
- * So every claim here is about what **Helm** does with what Chromium reports -
+ * So every claim here is about what **the desktop** does with what Chromium reports -
  * which is exactly the part a real page cannot isolate. A refused connection
- * that later loads proves nothing about Helm's retry when Chromium may have held
- * the socket open itself; here nothing but Helm can ask for the page again.
+ * that later loads proves nothing about the desktop's retry when Chromium may have held
+ * the socket open itself; here nothing but the desktop can ask for the page again.
  */
 
 /** The sessions a workspace can share a page with, by id: what `sessions.browserOpener` would answer. */
@@ -719,7 +719,7 @@ describe('browser host - the console', () => {
     ])
     expect(stateOf(h, id).errors).toBe(2)
 
-    // An event in a shape Helm does not know is recorded, not dropped.
+    // An event in a shape the desktop does not know is recorded, not dropped.
     wc.emit('console-message', { message: 'no level' })
     expect(messages(h, id).at(-1)).toContain('does not recognise')
 
@@ -1050,7 +1050,7 @@ describe('browser host - the keyboard inside a page', () => {
       { id, command: 'reload' },
       { id, command: 'reopen-page' }
     ])
-    // A command drawn in Helm's chrome takes the keyboard back to the window
+    // A command drawn in the desktop's chrome takes the keyboard back to the window
     // first; a reload leaves it in the page.
     expect(h.window.webContents.focused).toBe(2)
 

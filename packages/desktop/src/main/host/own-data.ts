@@ -14,11 +14,11 @@ import { HostConnectionEnded, HostRequestError, type HostConnection } from './cl
 import type { HostLink } from './link'
 
 /**
- * What only Helm's own database holds, copied into the local host the first
- * time Helm reaches it with sessions running there: archived conversations
+ * What only the desktop's own database holds, copied into the local host the first
+ * time the desktop reaches it with sessions running there: archived conversations
  * whose transcripts Claude Code has since deleted, their usage and the names
  * given to sessions in History. The host rebuilds everything else from disk.
- * The config file versions an earlier Helm kept are not copied: nothing in
+ * The config file versions its database holds are not copied: nothing in
  * Floti reads them.
  *
  * Main reads `desktop.db` through core's read-only pages and sends each one on
@@ -45,7 +45,7 @@ import type { HostLink } from './link'
 
 export interface OwnDataCopyDeps {
   link: HostLink
-  /** Helm's own database, only ever read. */
+  /** The desktop's own database, only ever read. */
   store: Store
   /** How much one batch carries; core's default unless a test needs smaller. */
   budget?: CopyBudget
@@ -71,7 +71,7 @@ const NOTHING_COPIED: OwnDataCopied = {
 function stoppedBecause(error: unknown, what: string): string {
   if (error instanceof HostConnectionEnded) return 'the connection to the local host ended'
   if (error instanceof HostRequestError) return `the local host refused ${what} (${error.code})`
-  // Anything else is Helm's own: reading its database, which names no row.
+  // Anything else is the desktop's own: reading its database, which names no row.
   return error instanceof Error ? error.message : String(error)
 }
 

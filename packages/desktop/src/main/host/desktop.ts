@@ -68,14 +68,14 @@ import { createHostWorkspace, type HostWorkspace } from './workspace'
 /**
  * Everything the app needs to run its sessions and terminals in the local
  * host, put together from the parts in this folder with Electron's and Node's
- * own: where Helm's data is, how programs are started, and the window.
+ * own: where the desktop's data is, how programs are started, and the window.
  */
 
 export interface DesktopHost extends HostSessions {
   link: HostLink
   /** Answers the browser tool calls the host relays from its sessions. */
   browserRelay: BrowserToolRelay
-  /** Helm's saved profiles, which live in the host while sessions run there. */
+  /** The desktop's saved profiles, which live in the host while sessions run there. */
   profiles: HostProfiles
   /** Plugin folders, switches, settings, secrets and page files, which the host keeps while sessions run there. */
   plugins: HostPlugins
@@ -90,7 +90,7 @@ export interface DesktopHost extends HostSessions {
   files: HostFiles
   /** What each hosted session is holding, from the host's processes-and-ports pass. */
   resources: HostResources
-  /** What only Helm's own database holds, copied into the host once; its state is the window's notice. */
+  /** What only the desktop's own database holds, copied into the host once; its state is the window's notice. */
   ownData: OwnDataCopy
 }
 
@@ -100,7 +100,7 @@ export interface DesktopHostDeps {
   confirm: Confirm
   /** The quit question, with Keep running and quit beside End and quit. */
   confirmQuit: QuitConfirm
-  /** Helm's browser tools, which answer the calls; null until they exist. */
+  /** The desktop's browser tools, which answer the calls; null until they exist. */
   browserTools: () => BrowserMcpHost | null
   /** Whether the browser pane runs here; while it does not, no session is given the browser tools. */
   browserAvailability: BrowserAvailability
@@ -196,7 +196,7 @@ function launcherDeps(log: (line: string) => void): LauncherDeps {
 }
 
 /**
- * The versions the local host's last refusal of this Helm named, kept by the
+ * The versions the local host's last refusal of this desktop named, kept by the
  * local link from every connect (`createLocalHostLink`): null once a host has
  * welcomed it. A refusal naming protocol 1.x is a host from before the
  * restart frames, which Restart host to update ends as a crash would.
@@ -205,9 +205,9 @@ let localRefusal: RefusedVersions | null = null
 
 /**
  * What Restart host to update would do to this run's local host, asked in
- * place of a `hello` so a host that refuses this Helm answers too: the floti
+ * place of a `hello` so a host that refuses this desktop answers too: the floti
  * there, its sessions, and how many the restart ends. Every one ends when the
- * host's keeper speaks another link version than the floti this Helm
+ * host's keeper speaks another link version than the floti this desktop
  * carries (`KEEPER_LINK_VERSION`), or the host has no keeper; none otherwise.
  * A host whose last refusal named protocol 1.x has no restart frames and is
  * not asked: its offer names its protocol, gives no count and ends none.
@@ -250,14 +250,14 @@ export const localHostSteps: LocalHostSteps = createLocalHostSteps(() => Date.no
 /**
  * The flotis an automatic restart already failed to make usable in this run
  * (`connectUpdatingLocalHost`): none is restarted onto again, so a host that
- * refuses this Helm after its update is not restarted, keeper and all, on
+ * refuses this desktop after its update is not restarted, keeper and all, on
  * every later connect.
  */
 const failedUpdateTargets = new Set<string>()
 
 /**
  * Restart host to update applies the plan an update by itself does: a floti
- * that cannot serve this Helm is never restarted onto, and the question
+ * that cannot serve this desktop is never restarted onto, and the question
  * fails with the sentence that says so, before anything is asked of the host.
  */
 async function updatePlanOrThrow(log: (line: string) => void): Promise<string> {
@@ -267,7 +267,7 @@ async function updatePlanOrThrow(log: (line: string) => void): Promise<string> {
 }
 
 /**
- * Each Helm page's own connection to the local host: a bridge per page once
+ * Each desktop page's own connection to the local host: a bridge per page once
  * main's own `link` has connected.
  */
 export function createLocalPageLinks(
@@ -295,7 +295,7 @@ export function createLocalPageLinks(
 }
 
 /**
- * Helm's links to the hosts on other computers in its `hosts` setting, each
+ * The desktop's links to the hosts on other computers in its `hosts` setting, each
  * through `floti bridge` and that host's own transport, with its own client
  * folder in this run's data directory. Each connection names this device
  * with the computer's name, and the first one to a host pins its key.
@@ -478,11 +478,11 @@ export function createDesktopRemoteInstaller(
 }
 
 /**
- * A link to the local host for this run of Helm: its folders inside this run's
+ * A link to the local host for this run of the desktop: its folders inside this run's
  * data directory (`hostEnvironment`), `floti` from where this build carries it,
- * and a host started when none answers. A host older than this Helm is
+ * and a host started when none answers. A host older than this desktop is
  * restarted onto this run's floti inside the connect, with no question, when
- * that floti speaks this Helm's protocol (`connectUpdatingLocalHost`). Each
+ * that floti speaks this desktop's protocol (`connectUpdatingLocalHost`). Each
  * step is published on `localHostSteps`.
  */
 export function createLocalHostLink(settings: () => HostSettingsPatch, log: (line: string) => void): HostLink {
@@ -548,7 +548,7 @@ export function createDesktopHost({
   const send: Emit = (channel, payload) => emit(window(), channel, payload)
   // The window hears discovery, the settings and profiles over its own
   // connection (`renderer/src/app/host`); main keeps the host's scan and
-  // profiles for its own readers and copies Helm's into a new host.
+  // profiles for its own readers and copies the desktop's into a new host.
   const toNoWindow: Emit = () => undefined
   const workspace = createHostWorkspace({
     link,

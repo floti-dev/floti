@@ -56,7 +56,7 @@ import { runsAsWritten, systemWsl, transportArgv, type TransportPrograms } from 
  * - Nothing is copied or run there before `install`. Then an update first
  *   stops the old host for the update (`floti update-stop --stop`, which
  *   keeps its sessions' rows to offer back), then the install script is sent
- *   with this Helm's own floti on its standard input when that computer's OS
+ *   with this desktop's own floti on its standard input when that computer's OS
  *   and CPU are this PC's, or with the release's address otherwise, which
  *   that computer downloads from itself. Either way the script checks the
  *   file's SHA-256 there before it moves it into place, so a floti that was
@@ -65,13 +65,13 @@ import { runsAsWritten, systemWsl, transportArgv, type TransportPrograms } from 
  *   failed at.
  *
  * An added host's Update floti (`checkUpdate`) offers the same, and more:
- * a host whose floti is older than this Helm's gets the offer even while
- * this Helm can talk to it. Where the floti there has `floti update`
+ * a host whose floti is older than this desktop's gets the offer even while
+ * this desktop can talk to it. Where the floti there has `floti update`
  * (`hasFlotiUpdate`), the update is that, which relaunches the host through
  * its session keeper, so it stops nothing first and ends no session the new
  * host can take back:
  *
- * - A host this Helm is connected to, which keeps floti up to date
+ * - A host this desktop is connected to, which keeps floti up to date
  *   (`update:state` names no reason it does not) and whose own check found
  *   a newer floti on its channel, is asked over that connection
  *   (`update:install`), and the offer names that version. It runs
@@ -98,8 +98,8 @@ import { runsAsWritten, systemWsl, transportArgv, type TransportPrograms } from 
  * which stops the host there and ends its sessions, says first what it does
  * and waits for a yes. The offer carries how many sessions a `floti update`
  * ends, where it can be told, for the update's first line: for an update to
- * this Helm's own version, none when the host's session keeper speaks the
- * keeper link this Helm's floti takes back and every running one when it
+ * this desktop's own version, none when the host's session keeper speaks the
+ * keeper link this desktop's floti takes back and every running one when it
  * does not, as Restart host to update says it for this PC's host
  * (`restartAsk`, `askRemoteHostRestart`). Otherwise it says nothing of them.
  */
@@ -147,13 +147,13 @@ export interface RemoteInstallDeps {
   /** This PC's `process.platform` and `process.arch`. */
   platform: string
   arch: string
-  /** This Helm's version, which is floti's. */
+  /** This desktop's version, which is floti's. */
   version: string
-  /** The protocol this Helm speaks. */
+  /** The protocol this desktop speaks. */
   protocol: ProtocolVersionNumbers
-  /** This Helm's own floti and its SHA-256, or null when it carries none. */
+  /** This desktop's own floti and its SHA-256, or null when it carries none. */
   ownBuild: () => Promise<{ path: string; sha256: string } | null>
-  /** The release's SHA-256 list this Helm carries (`floti-SHA256SUMS`), or null when it carries none. */
+  /** The release's SHA-256 list this desktop carries (`floti-SHA256SUMS`), or null when it carries none. */
   sums: () => Promise<ReadonlyMap<string, string> | null>
   /** The install script for a computer of `os`: install.ps1 on Windows, install.sh elsewhere. */
   script: (os: FlotiOs) => Promise<string>
@@ -165,7 +165,7 @@ export interface RemoteInstallDeps {
    * (`askRemoteHostRestart`): its sessions and its session keeper's link.
    */
   restartState: (host: UpdateTarget) => Promise<P.RestartState>
-  /** The keeper link the floti this Helm carries takes back (`KEEPER_LINK_VERSION`). */
+  /** The keeper link the floti this desktop carries takes back (`KEEPER_LINK_VERSION`). */
   keeperLink: number
   /**
    * The floti version host `id`'s link next connects with, or null once
@@ -203,7 +203,7 @@ export interface RemoteInstaller {
   check(target: { transport: HostTransport; floti?: string | undefined }, signal?: AbortSignal): Promise<HostCheck>
   /**
    * What updating added host `host` offers: as `check`, and an update for a
-   * floti older than this Helm's that it can still talk to, through
+   * floti older than this desktop's that it can still talk to, through
    * `floti update` wherever the floti there has it. `connection` is main's
    * connection to that host now, or null. With `install`, an install is
    * offered over the floti there, never `floti update`.
@@ -432,9 +432,9 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
 
   /**
    * How many sessions a `floti update` to `updatesTo` ends on `host`: for
-   * this Helm's own version, none when the host's keeper speaks the link
-   * this Helm's floti takes back and every running one when it does not;
-   * null for any other version, whose keeper link this Helm cannot know, or
+   * this desktop's own version, none when the host's keeper speaks the link
+   * this desktop's floti takes back and every running one when it does not;
+   * null for any other version, whose keeper link this desktop cannot know, or
    * when the host could not be asked.
    */
   const endsThere = async (host: UpdateTarget, updatesTo: string | null): Promise<number | null> => {
@@ -486,7 +486,7 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
 
   /**
    * The update a floti found there is offered, too old to talk to or, for
-   * an added host's Update floti, older than this Helm's: `floti update`
+   * an added host's Update floti, older than this desktop's: `floti update`
    * where it has it (over the host's connection when that host keeps floti
    * up to date and its channel has a newer one, over its login when there is
    * no connection), otherwise an install over it.
@@ -519,7 +519,7 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
     return offer(transport, floti, system, found, talks)
   }
 
-  /** Whether a floti this Helm talks to is offered an update: only for an added host's Update floti, and only when older. */
+  /** Whether a floti this desktop talks to is offered an update: only for an added host's Update floti, and only when older. */
   const olderForUpdate = (found: FlotiFound, forUpdate: ForUpdate | null): boolean =>
     forUpdate !== null && hostFlotiOlder(found.version, deps.version)
 

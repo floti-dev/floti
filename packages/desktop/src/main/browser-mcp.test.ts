@@ -20,7 +20,7 @@ import type * as P from './host/protocol'
 import type { BrowserConsoleEntry, BrowserState } from '../shared/ipc'
 
 /**
- * Helm's browser tools, as the local host relays its sessions' calls to them
+ * The desktop's browser tools, as the local host relays its sessions' calls to them
  * over a connection the test drives: what the tools let a session do to tabs
  * it does and does not own, and where they may reach.
  *

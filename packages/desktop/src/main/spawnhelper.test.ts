@@ -43,7 +43,7 @@ function nodePty(dir: string, prebuilds: string[]): string {
 
 const mode = (path: string): number => statSync(path).mode & 0o777
 
-/** What afterPack is handed for a Mac build: the bundle's Resources are inside Helm.app. */
+/** What afterPack is handed for a Mac build: the bundle's Resources are inside Floti.app. */
 function macContext(platform: string): Parameters<typeof afterPack>[0] {
   return {
     appOutDir: join(root, 'mac-arm64'),

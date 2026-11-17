@@ -68,7 +68,7 @@ describe('settings over IPC', () => {
   let themesDir: string
   let nativeTheme: Electron.NativeTheme
   const events: Array<{ channel: EventChannel; payload: unknown }> = []
-  /** What tells the local host Helm's settings again, as `index.ts` passes it. */
+  /** What tells the local host the desktop's settings again, as `index.ts` passes it. */
   const hostSettingsChanged = vi.fn()
   /** The windows the walkthrough's hand-overs reach, as `index.ts` passes them. */
   const walkthrough = { openShell: vi.fn(), open: vi.fn() }

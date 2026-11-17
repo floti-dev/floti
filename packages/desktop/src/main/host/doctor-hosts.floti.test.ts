@@ -23,8 +23,8 @@ import { doctorHosts, recordDoctorHosts } from './doctor-hosts'
 import { hostEnvironment, type HostPlaces } from './launcher'
 
 /**
- * What Helm records for `floti doctor`, checked by the real one: the `floti`
- * this checkout built, its host in this test's own folders as Helm's data
+ * What the desktop records for `floti doctor`, checked by the real one: the `floti`
+ * this checkout built, its host in this test's own folders as the desktop's data
  * folder puts them, and two hosts on other computers this device added, one
  * reached through test/fake-ssh's `carry.mjs` and one whose command fails.
  * Runs where `floti` has been built.
@@ -65,7 +65,7 @@ describe.runIf(flotiAvailable)('the hosts floti doctor checks', () => {
       const root = await mkdtemp(join(inject(RUN_ROOT), 'doctor hosts '))
       const places: HostPlaces = { ...FLOTI_PLACES, dataDir: join(root, 'floti-data'), templatesDir: join(root, 'config', 'templates') }
       const deps = { platform: process.platform, env: process.env, tmpdir, exists: existsSync, spawn }
-      // The environment Helm's own host runs with, as `floti doctor` in a terminal would have it.
+      // The environment the desktop's own host runs with, as `floti doctor` in a terminal would have it.
       const env = { ...hostEnvironment(places, deps), FAKE_SSH_FLOTI: FLOTI }
       const host = await startFlotiHost(env)
 

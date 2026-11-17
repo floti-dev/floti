@@ -53,7 +53,7 @@ export interface ConfirmRequest {
   folder?: string
   /**
    * What the agreeing button says. Carried on the request rather than derived
-   * by each implementation, so the Helm dialog and the native fallback cannot
+   * by each implementation, so the desktop dialog and the native fallback cannot
    * word the same decision two different ways.
    */
   confirmLabel: string
@@ -65,7 +65,7 @@ export interface ConfirmRequest {
   otherNames?: readonly string[]
 }
 
-/** How the user is asked before Helm quits with sessions in the local host it would end. */
+/** How the user is asked before the desktop quits with sessions in the local host it would end. */
 export type QuitConfirm = (request: ConfirmRequest) => Promise<QuitAnswer>
 
 /**
@@ -92,7 +92,7 @@ export interface SessionHost {
   /** Reopens a conversation from the history index in a new tab. */
   resume: (req: ResumeSessionRequest) => Promise<ResumedSession>
   close: (req: CloseSessionRequest) => Promise<CloseSessionResult>
-  /** Helm's own label for a tab. Never rewrites the `-n` name. */
+  /** The desktop's own label for a tab. Never rewrites the `-n` name. */
   rename: (req: RenameSessionRequest) => SessionRecord
   /** Sessions this process is hosting, running or exited-but-not-yet-closed. */
   list: () => SessionRecord[]
@@ -156,7 +156,7 @@ export interface RestoreService {
 export interface ActivityService {
   /** Everything currently known, for a renderer that has just (re)mounted. */
   states: () => SessionActivityState[]
-  /** Every live Claude Code session on the machine, Helm's own marked. */
+  /** Every live Claude Code session on the machine, the desktop's own marked. */
   overview: () => SessionsOverview
   /** Re-read now and push if anything moved. */
   refresh: () => void

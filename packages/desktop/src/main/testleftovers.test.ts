@@ -51,7 +51,7 @@ function row(pid: number, parentPid: number, name: string, start: number, comman
 const pids = (rows: ProcessRow[] | null): number[] | null => (rows === null ? null : rows.map((r) => r.pid))
 
 /**
- * A machine before the step: the system, the installed Helm with another
+ * A machine before the step: the system, the installed Floti with another
  * session's agent and its fake agent, the CI runner, and the shell the check
  * runs from with its own ancestors.
  */
@@ -134,7 +134,7 @@ describe('what the leftover check selects', () => {
 
   it('never reports what a process the check runs under starts beside it', () => {
     // The check runs under a test runner or an app that keeps starting work of
-    // its own: vitest's other workers, Helm's other sessions. Only init or a
+    // its own: vitest's other workers, the desktop's other sessions. Only init or a
     // subreaper adopts what the step left, so a new process under any other
     // ancestor of the check was started by that ancestor, not by the step.
     const after = [
