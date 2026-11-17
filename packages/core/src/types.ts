@@ -1798,9 +1798,10 @@ export interface AppSettings {
    *
    * On by default, because the stated purpose is that Claude can open things in
    * Floti: a session that cannot reach the pane beside it is a pane the user has
-   * to drive twice. Off is a real off - `main/browser-mcp.ts` never binds a
-   * port, no token exists, and no `--mcp-config` reaches any argv - so the app
-   * has no inbound listener at all, which is the state it was in before M17.
+   * to drive twice. Off is a real off - the host switches its `floti-browser`
+   * family off (`crates/host/src/server/browser_tools.rs`), so the family has
+   * no route, no launch's `--mcp-config` names it and no session has its
+   * tools; the host's listener stays up only while another family needs it.
    */
   browserMcp: boolean
   /**
