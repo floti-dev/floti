@@ -148,8 +148,6 @@ Settings > General shows it again.
 5. **Around the window**, in the app itself.
 6. **Your first session**, with an optional first message.
 
-Someone upgrading from Helm sees a one-time note instead.
-
 A folder of ordinary repositories is enough - there is no required layout, and
 Floti is useful pointed at a directory with no workspace anywhere in sight.
 

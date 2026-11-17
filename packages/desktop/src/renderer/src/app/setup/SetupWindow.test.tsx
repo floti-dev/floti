@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS, type AppSettings, type Walkthrough } from '@helm/core/types'
@@ -91,6 +91,43 @@ describe('the setup window', () => {
     expect(await screen.findByText('irm https://claude.ai/install.ps1 | iex')).toBeTruthy()
     // It reads no file of its own: the host's check is all it asks.
     expect(bridge.invocations.map((call) => call.channel)).not.toContain('files:read')
+  })
+
+  it('says the host is running once main pushes its ready step, after starting', async () => {
+    let step: LocalHostStep | null = { step: 'starting', since: 0 }
+    const listeners = new Set<() => void>()
+    const store: LocalHostStepStore = {
+      get: () => step,
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      }
+    }
+    settings = { ...DEFAULT_SETTINGS, walkthrough: { step: 3, workspace: null } }
+    bridge.answer('settings:read', () => settings)
+    render(<SetupWindow bridge={bridge} hostStep={store} />)
+    expect(await screen.findByText('Starting…')).toBeTruthy()
+    expect(bridge.invoked('app:info')).toEqual([])
+
+    act(() => {
+      step = { step: 'ready', since: 1 }
+      for (const listener of listeners) listener()
+    })
+    expect(await screen.findByText('Running')).toBeTruthy()
+    expect(await screen.findByText('floti 3.0.0')).toBeTruthy()
+  })
+
+  it('opens the add-a-host dialog from step 3, and cancelling it adds no host', async () => {
+    bridge.answer('remoteHosts:sshHosts', () => ({ found: true, hosts: ['build-box'] }))
+    bridge.answer('remoteHosts:wslDistros', () => [])
+    openAt({ step: 3, workspace: null })
+    await userEvent.click(await screen.findByRole('button', { name: 'Add a host…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add a host' })
+    await userEvent.click(within(dialog).getAllByRole('button', { name: 'Cancel' })[0] as HTMLElement)
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add a host' })).toBeNull(), PATIENCE)
+    expect(bridge.invoked('remoteHosts:add')).toEqual([])
+    expect(written().some((patch) => 'hosts' in patch)).toBe(false)
+    expect(document.querySelector('[data-walkthrough-other-host]')).toBeNull()
   })
 
   it('sets what quitting does on this PC, End until changed', async () => {

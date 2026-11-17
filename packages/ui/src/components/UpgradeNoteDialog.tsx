@@ -28,15 +28,25 @@ const ITEMS: readonly NoteItem[] = [
   {
     key: 'workspaces',
     icon: <FolderIcon {...ICON} />,
-    lead: 'Harnesses are now workspaces.',
-    rest: "Your folders didn't change."
+    lead: 'Harnesses are now called workspaces.',
+    rest: (
+      <>
+        Nothing in your folders changed: a folder with <code className="font-mono text-[11.5px]">harness.yaml</code>{' '}
+        works as before, and new ones get <code className="font-mono text-[11.5px]">workspace.yaml</code>.
+      </>
+    )
   },
-  { key: 'kept', icon: <CheckIcon {...ICON} />, lead: 'Everything came with you.', rest: null },
+  {
+    key: 'kept',
+    icon: <CheckIcon {...ICON} />,
+    lead: 'Everything came with you:',
+    rest: 'sessions, history, profiles, templates, plugins and settings.'
+  },
   {
     key: 'host',
     icon: <MonitorIcon {...ICON} />,
-    lead: 'Sessions run in the background.',
-    rest: 'Settings can keep them running after you quit.'
+    lead: 'Sessions run in the host now.',
+    rest: 'Quitting still ends the ones you started here; Settings > Sessions can keep them running instead.'
   }
 ]
 
@@ -70,8 +80,7 @@ export function UpgradeNoteDialog({ onClose, onWhatsNew }: UpgradeNoteDialogProp
           >
             {item.icon}
             <span className="min-w-0">
-              <span className="font-medium text-fg">{item.lead}</span>
-              {item.rest !== null && <> {item.rest}</>}
+              <span className="font-medium text-fg">{item.lead}</span> {item.rest}
             </span>
           </li>
         ))}

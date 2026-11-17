@@ -158,11 +158,9 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
 ## First run
 
 A first start is one with no data folder: the open that creates `helm.db`
-(`settleWalkthrough` in core, beside `settleUpgradeNote`) writes the
-`walkthrough` setting at step 1. A database moved from Helm, or any that was
-there before, has its migrations applied already, so an upgrade gets the
-upgrade note once and never the walkthrough. `walkthrough` is the step (1 to
-6) and the workspace step 4 chose, kept in `helm.db` on this device; null
+(`settleWalkthrough` in core) writes the `walkthrough` setting at step 1. A
+database that was there before has its migrations applied already, so it
+opens the shell. `walkthrough` is the step (1 to 6) and the workspace step 4 chose, kept in `helm.db` on this device; null
 means it is not showing.
 
 - Steps 1 to 4 run in a setup window of their own, before the shell exists:

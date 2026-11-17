@@ -1665,8 +1665,8 @@ export interface AppSettings {
   /**
    * Where the guided first run stands on this device, or null while it is not
    * showing: done, skipped, or never due. A `helm.db` this start created is a
-   * first start and gets step 1 as it opens (`settleWalkthrough`); one moved
-   * from Helm, or any older one, stays null, so an upgrade never sees it.
+   * first start and gets step 1 as it opens (`settleWalkthrough`); one that
+   * was there before stays null and opens the shell.
    * Steps 1 to 4 run in the setup window, before the shell exists, and 5 and
    * 6 in the shell's main area, so closing either window resumes at the step
    * written here. Settings > General sets it to step 1 again. Kept on this

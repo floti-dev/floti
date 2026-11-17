@@ -158,10 +158,9 @@ describe('openStore', () => {
 })
 
 describe('the walkthrough as the database opens', () => {
-  /** Opens `file` as main does: migrated, then the note and the walkthrough settled. */
+  /** Opens `file` as main does: migrated, then the walkthrough settled. */
   function openAsMain(file: string): Store {
     const opened = openStore({ file })
-    settleUpgradeNote(opened)
     settleWalkthrough(opened)
     return opened
   }
@@ -200,7 +199,7 @@ describe('the walkthrough as the database opens', () => {
     })
   })
 
-  it('never starts it on a database that was already here, as one moved from Helm is', async () => {
+  it('never starts it on a database that was already here: that start opens the shell', async () => {
     await withFile((file, created) => {
       // `withFile`'s own open created it; this one finds it there.
       created.close()

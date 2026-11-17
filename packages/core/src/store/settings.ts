@@ -880,9 +880,8 @@ export function settleUpgradeNote(store: Store): void {
  * runs the guided first run (`walkthrough`).
  *
  * A first start is one with no data folder, and the open that creates
- * `helm.db` is where that shows: a database moved from Helm, or any that was
- * here before, has its migrations already applied, so an upgrade never gets
- * the walkthrough. Only a walkthrough not already written is started, and any
+ * `helm.db` is where that shows: a database that was here before has its
+ * migrations already applied, so it opens the shell. Only a walkthrough not already written is started, and any
  * later open changes nothing, so one that was closed halfway resumes where it
  * was and one that was finished stays finished.
  */

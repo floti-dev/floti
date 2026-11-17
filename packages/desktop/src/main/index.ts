@@ -507,9 +507,13 @@ function startApp(options: AppOptions = {}): void {
   }
   // An artifact frame keeps the window's scheme, answered from the host's bytes.
   serveArtifactsFrom((url) => desktopHost.files.artifactBytes(url))
-  // The window hears each step of the local host's connect as it begins; one
-  // that loads later asks for the step under way (`hostLink:currentStep`).
-  localHostSteps.onStep((step) => emit(win, 'hostLink:step', step))
+  // Each window hears each step of the local host's connect as it begins: the
+  // shell, and the setup window, whose step 3 says when the host is running.
+  // One that loads later asks for the step under way (`hostLink:currentStep`).
+  localHostSteps.onStep((step) => {
+    emit(win, 'hostLink:step', step)
+    emit(setupWin, 'hostLink:step', step)
+  })
   void desktopHost.link.connection().catch((err: unknown) => {
     console.warn(err instanceof Error ? err.message : String(err))
   })
@@ -846,6 +850,10 @@ function startApp(options: AppOptions = {}): void {
     setupWin = page
     page.on('closed', () => {
       if (setupWin === page) setupWin = null
+      // Closed with no shell to hand over to (a first start left at steps 1
+      // to 4): the hidden plugin window goes too, as it does with the shell,
+      // or it would keep Floti running with nothing on screen.
+      if (win === null || win.isDestroyed()) plugins.shutdown()
     })
   }
 
@@ -895,7 +903,7 @@ function startApp(options: AppOptions = {}): void {
     openWindow: () => {
       // A walkthrough left at steps 1 to 4 reopens on its setup window.
       if (walkthroughInSetupWindow(services.settings.walkthrough)) openSetup()
-      else win = createWindow('index', services.settings.windowBounds ?? null, windowTheme())
+      else openShell()
     },
     relaunch: () => app.relaunch()
   })
