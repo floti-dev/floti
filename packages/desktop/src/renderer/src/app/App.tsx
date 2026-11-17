@@ -110,9 +110,11 @@ import {
 import {
   AppShell,
   BROWSER_ZOOM,
+  BrowserEmpty,
   BrowserOff,
   BrowserPages,
   BrowserPane,
+  browserPageBlank,
   AwayList,
   ChildPeek,
   type TreeNoticeActions,
@@ -151,6 +153,7 @@ import {
   DocIcon,
   FileActions,
   FileCrumb,
+  FilesEmpty,
   FilesRootPicker,
   FilesStatusNote,
   FilesTree,
@@ -336,6 +339,7 @@ import { useArchiveStats } from "./useArchiveStats";
 import { ConversationPane } from "./ConversationPane";
 import { useLauncher } from "./useLauncher";
 import { useProfiles } from "./useProfiles";
+import { launchTarget } from "./launchTarget";
 import { useLiveSessions } from "./useLiveSessions";
 import { useNewSession } from "./useNewSession";
 import {
@@ -1666,8 +1670,13 @@ export function App(): JSX.Element {
   const { setShowing: setBrowserShowing, active: frontPage } = browsers;
   const browserShown = visible.some((ref) => ref.kind === "browser");
   useEffect(() => {
-    for (const id of browserViews.keys())
-      setBrowserShowing(id, browserShown && id === frontPage);
+    // A blank page's view is clear and would take the clicks meant for the
+    // empty state drawn under it, so it stays off the screen until it loads.
+    for (const [id, page] of browserViews)
+      setBrowserShowing(
+        id,
+        browserShown && id === frontPage && !browserPageBlank(page),
+      );
   }, [browserViews, browserShown, frontPage, setBrowserShowing]);
 
   // Main decides whether an exiting session is worth a notification, and that
@@ -3077,6 +3086,14 @@ export function App(): JSX.Element {
     const ref = group === undefined ? null : activeRef(group);
     return ref === null ? LOCAL_HOST_KEY : hostOf(ref);
   }, [open]);
+  /** This PC's empty states' New session: this PC's launcher, whatever host is in front. */
+  const openLocalLauncher = useCallback(() => {
+    const { folder, host } = launchTarget(LOCAL_HOST_KEY, {
+      host: frontRefHost,
+      folder: frontFolder,
+    });
+    showLauncher(folder, host);
+  }, [showLauncher, frontRefHost, frontFolder]);
   const files = useFiles({
     host: filesHost,
     active: sidebarShown && sidebarView === "files",
@@ -5356,6 +5373,9 @@ export function App(): JSX.Element {
             notOpenHere={notOpen}
             onEndSession={closeSession}
             onReveal={launcher.reveal}
+            onNewSession={openLocalLauncher}
+            listError={machineSessions.error}
+            onRetry={machineSessions.retry}
             compact={compact}
             remoteHosts={sessionsPaneHosts}
           />
@@ -5406,6 +5426,15 @@ export function App(): JSX.Element {
               onMove={browsers.move}
               onNew={() => openBrowser({ project: null, focusAddress: true })}
             />
+            {view === undefined && (
+              <div className="min-h-0 flex-1">
+                <BrowserEmpty
+                  onOpen={() =>
+                    openBrowser({ project: null, focusAddress: true })
+                  }
+                />
+              </div>
+            )}
             {view !== undefined && (
               <div className="min-h-0 flex-1">
                 <BrowserPane
@@ -6194,7 +6223,7 @@ export function App(): JSX.Element {
             onLaunch={(project) => void launch(project)}
             launchingPath={launchingPath}
             onOpenSession={openTreeSession}
-            onAddRoot={launcher.addRoot}
+            onNewSession={openLocalLauncher}
             reveal={treeReveal}
             hostActions={treeHostActions}
             localName={LOCAL_HOST_LABEL}
@@ -6272,9 +6301,10 @@ export function App(): JSX.Element {
           )}
           {files.root === null ? (
             files.rootsError === null && (
-              <p className="px-3.5 py-6 text-[12px] text-fg-subtle">
-                Choose a project above to see its files.
-              </p>
+              <FilesEmpty
+                roots={files.rootsListed ? files.roots : null}
+                onNewWorkspace={() => setup.openDialog("new", files.host)}
+              />
             )
           ) : (
             <FilesTree
@@ -6360,6 +6390,7 @@ export function App(): JSX.Element {
             }
             onOpen={(name) => openPane(agentRefOn(name, agentsHost))}
             onAdd={agentList.addShipped}
+            onNew={() => newAgent(null)}
           />
         </Sidebar>
       )}
@@ -6399,6 +6430,10 @@ export function App(): JSX.Element {
             onExport={(profile) => void profileState.exportProfile(profile.id)}
             onTogglePin={(profile) => void profileState.togglePin(profile)}
             onReorder={(ids) => void profileState.reorder(ids)}
+            onNew={() => {
+              setSaveProblems([]);
+              setEditing(blankProfile(discovery?.roots[0] ?? "", ""));
+            }}
             {...(listedHosts.length === 0
               ? {}
               : {
@@ -6750,6 +6785,13 @@ export function App(): JSX.Element {
             }
             onRetry={history.retry}
             onDismiss={() => closeHistory(true)}
+            onNewSession={() => {
+              closeHistory(false);
+              showLauncher(
+                historyHost === LOCAL_HOST_KEY ? frontFolder : null,
+                historyHost,
+              );
+            }}
             hosts={hostChoiceFor("history")}
             hostName={
               hostChoiceFor("history") === undefined

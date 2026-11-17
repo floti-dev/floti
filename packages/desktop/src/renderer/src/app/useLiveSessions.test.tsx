@@ -70,4 +70,23 @@ describe('useLiveSessions', () => {
     act(() => bridge.emit('sessions:resources', [held(1)]))
     expect([...result.current.resources.keys()]).toEqual([1])
   })
+
+  it('keeps a read that failed as why, never as nothing running, and Try again reads again', async () => {
+    let fail = true
+    bridge.answer('sessions:overview', () => {
+      if (fail) throw new Error('No local host answered on its socket.')
+      return { sessions: [], readAtMs: 7 }
+    })
+    bridge.answer('sessions:resources', () => [])
+
+    const { result } = renderHook(() => useLiveSessions())
+    await waitFor(() => expect(result.current.error).toMatch(/No local host answered/))
+    expect(result.current.readAtMs).toBeNull()
+
+    fail = false
+    act(() => result.current.retry())
+    await waitFor(() => expect(result.current.readAtMs).toBe(7))
+    expect(result.current.error).toBeNull()
+    expect(result.current.sessions).toEqual([])
+  })
 })

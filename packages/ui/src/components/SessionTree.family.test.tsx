@@ -66,7 +66,7 @@ function renderTree(
     onLaunch: vi.fn(),
     launchingPath: null,
     onOpenSession: vi.fn(),
-    onAddRoot: vi.fn(),
+    onNewSession: vi.fn(),
     reveal: null,
     ...patch
   }

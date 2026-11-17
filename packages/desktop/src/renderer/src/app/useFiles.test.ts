@@ -76,6 +76,20 @@ describe('useFiles: the sidebar', () => {
     await waitFor(() => expect(bridge.invoked('files:watch').at(-1)).toEqual({ roots: [B] }))
   })
 
+  it('says its folders are listed only once the host has answered, so none is never said before it has', async () => {
+    let answer: (list: never[]) => void = () => undefined
+    bridge.answer('content:scopes', () => new Promise<never[]>((resolve) => (answer = resolve)))
+    const { result } = renderHook((options: FilesOptions) => useFiles(options), {
+      initialProps: { active: true, follow: null, shown: NONE, revision: 0 }
+    })
+    expect(result.current.rootsListed).toBe(false)
+    expect(result.current.roots).toEqual([])
+    answer([])
+    await waitFor(() => expect(result.current.rootsListed).toBe(true))
+    expect(result.current.roots).toEqual([])
+    expect(result.current.rootsError).toBeNull()
+  })
+
   it('says the picker could not be read rather than offering no folders, and clears it once it is read', async () => {
     bridge.answer('content:scopes', () => {
       throw new Error('The local host is not running.')

@@ -3,6 +3,7 @@ import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useSta
 import type { DiscoveryResult, Workspace, HostFlotiVerdict, Project } from '@helm/core'
 import { isProjectPinned, mostPressingState } from '@helm/core/types'
 import { cn } from '../lib/cn'
+import { shortcutLabel } from '../lib/platform'
 import type { SessionState } from '../lib/sessionstate'
 import { EmptyState as EmptyWell } from './EmptyState'
 import { LimitNotice } from './LimitNotice'
@@ -215,7 +216,8 @@ export interface SessionTreeProps {
   /** The project a session is starting in right now. */
   launchingPath: string | null
   onOpenSession: (id: string) => void
-  onAddRoot: () => void
+  /** This PC's empty state's New session: the launcher, as Ctrl+N opens it. */
+  onNewSession: () => void
   /**
    * A row to bring into view: what is folded over it opens and the tree
    * scrolls to it. A new `seq` asks again for the same row.
@@ -424,7 +426,7 @@ export function SessionTree({
   onLaunch,
   launchingPath,
   onOpenSession,
-  onAddRoot,
+  onNewSession,
   reveal = null,
   hosts = [],
   hostActions,
@@ -479,10 +481,12 @@ export function SessionTree({
           // Until this PC's host has listed its sessions, the line above is all it says.
           localPhase.kind === 'live' ? (
             <ScanEmpty
-              scanning={scanning}
+              scanning={scanning || discovery === null}
               filtering={query !== '' && (discovery?.projects.length ?? 0) > 0}
-              hasRoots={(discovery?.roots.length ?? 0) > 0}
-              onAddRoot={onAddRoot}
+              unknown={scanError !== undefined}
+              hostName={localName}
+              onNewSession={onNewSession}
+              onRescan={hostActions === undefined ? undefined : () => hostActions.onRescan(localKey)}
             />
           ) : null
         }
@@ -996,17 +1000,9 @@ function RemoteEmpty({
       size="list"
       icon={<ServerIcon width={18} height={18} />}
       title={`No workspaces on ${host.name} yet`}
-      actions={
-        <button
-          type="button"
-          onClick={() => onNewWorkspace(host.id)}
-          className="flex h-7 items-center rounded-well border border-accent px-3 text-[12px] font-medium text-accent-text transition-colors hover:bg-accent-soft"
-        >
-          New workspace
-        </button>
-      }
+      action={{ label: 'New workspace', onClick: () => onNewWorkspace(host.id) }}
     >
-      {`A workspace there is a folder on ${host.name}, and its sessions run there.`}
+      {`Its sessions run on ${host.name}.`}
     </EmptyWell>
   )
 }
@@ -1383,36 +1379,55 @@ function Caption({
   )
 }
 
-/** This PC's tree with nothing in it: still scanning, nothing matched, or nothing found. */
+/**
+ * This PC's tree with nothing in it: still scanning, nothing matched, its
+ * folders could not be read (Unknown, never its empty state), or nothing has
+ * started yet - the empty-state pattern, offering New session.
+ */
 function ScanEmpty({
   scanning,
   filtering,
-  hasRoots,
-  onAddRoot
+  unknown,
+  hostName,
+  onNewSession,
+  onRescan
 }: {
   scanning: boolean
   filtering: boolean
-  hasRoots: boolean
-  onAddRoot: () => void
+  /** The scan failed: the line above the tree says why. */
+  unknown: boolean
+  hostName: string
+  onNewSession: () => void
+  onRescan: (() => void) | undefined
 }): JSX.Element {
   if (filtering) {
     return <p className="px-2 py-6 text-center text-[12px] text-fg-subtle">No match.</p>
+  }
+  if (unknown) {
+    return (
+      <EmptyWell
+        name="sessions-unknown"
+        size="list"
+        icon={<TerminalIcon width={18} height={18} />}
+        title="Unknown"
+        actions={onRescan === undefined ? undefined : <TryAgainButton onClick={onRescan} />}
+      >
+        {`Floti could not read the folders on ${hostName}.`}
+      </EmptyWell>
+    )
   }
   if (scanning) {
     return <p className="px-2 py-6 text-center text-[12px] text-fg-subtle">Scanning&hellip;</p>
   }
   return (
-    <div className="px-2 py-6 text-center">
-      <p className="text-[12px] text-fg-muted">
-        {hasRoots ? 'Nothing found in the scanned folders.' : 'No folders are being scanned yet.'}
-      </p>
-      <button
-        type="button"
-        onClick={onAddRoot}
-        className="mt-3 rounded-well border border-border-strong px-2.5 py-1 text-[12px] text-fg transition-colors hover:bg-hover"
-      >
-        Add a folder
-      </button>
-    </div>
+    <EmptyWell
+      name="sessions-empty"
+      size="list"
+      icon={<TerminalIcon width={18} height={18} />}
+      title="No sessions yet"
+      action={{ label: 'New session', keys: shortcutLabel('N'), onClick: onNewSession }}
+    >
+      Start an agent in one of your workspaces.
+    </EmptyWell>
   )
 }

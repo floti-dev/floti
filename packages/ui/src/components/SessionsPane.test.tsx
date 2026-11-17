@@ -586,6 +586,61 @@ describe("SessionsPane on its pane", () => {
   });
 });
 
+describe("SessionsPane with nothing running", () => {
+  it("says No sessions yet once, offers New session, and leaves the detail blank", async () => {
+    const onNewSession = vi.fn();
+    renderPane({ sessions: [], records: new Map(), onNewSession });
+    const empty = document.querySelector(
+      '[data-empty-state="sessions-list"]',
+    ) as HTMLElement;
+    expect(within(empty).getByText("No sessions yet")).toBeDefined();
+    expect(
+      within(empty).getByText("Start an agent in one of your workspaces."),
+    ).toBeDefined();
+    expect(screen.queryByText("Nothing running")).toBeNull();
+    expect(
+      document.querySelector('[data-empty-state="sessions-detail"]'),
+    ).toBeNull();
+    await userEvent.click(
+      within(empty).getByRole("button", { name: "New session" }),
+    );
+    expect(onNewSession).toHaveBeenCalledOnce();
+  });
+
+  it("says it is reading, never No sessions yet, before the registry has answered", () => {
+    renderPane({ sessions: [], records: new Map(), readAtMs: null });
+    expect(document.querySelector("[data-sessions-reading]")).not.toBeNull();
+    expect(screen.queryByText("No sessions yet")).toBeNull();
+    expect(document.querySelector("[data-empty-state]")).toBeNull();
+  });
+
+  it("says Unknown and why with Try again when the registry could not be read, never No sessions yet", async () => {
+    const onRetry = vi.fn();
+    renderPane({
+      sessions: [],
+      records: new Map(),
+      readAtMs: null,
+      listError: "No local host answered on its socket.",
+      onRetry,
+    });
+    const unknown = document.querySelector(
+      '[data-empty-state="sessions-unknown"]',
+    ) as HTMLElement;
+    expect(within(unknown).getByText("Unknown")).toBeDefined();
+    expect(unknown.textContent).toContain(
+      "No local host answered on its socket.",
+    );
+    expect(screen.queryByText("No sessions yet")).toBeNull();
+    expect(
+      document.querySelector('[data-empty-state="sessions-detail"]'),
+    ).toBeNull();
+    await userEvent.click(
+      within(unknown).getByRole("button", { name: "Try again" }),
+    );
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+});
+
 describe("SessionsPane: every host under its name", () => {
   const BUILD: SessionsPaneHost = {
     id: "h-build",

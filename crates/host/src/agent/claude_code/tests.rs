@@ -2444,12 +2444,22 @@ fn the_record_keeps_a_prompt_that_was_submitted_empty() {
 }
 
 #[test]
-fn the_record_reports_a_missing_file_as_a_reset_rather_than_failing() {
+fn the_record_reads_a_missing_file_as_empty_and_a_reset_rather_than_failing() {
+    // Claude Code writes the record with its first prompt: none yet is nothing there.
     let world = World::new();
     let tail = prompts::read_since(&world.config.join("nope.jsonl"), 512);
     assert!(tail.lines.is_empty());
     assert!(tail.reset);
     assert_eq!(tail.bytes, 0);
+    assert_eq!(tail.error, None);
+}
+
+#[test]
+fn the_record_still_reports_a_file_it_could_not_read() {
+    // A name no file system takes: the read fails for a reason other than absence.
+    let world = World::new();
+    let tail = prompts::read_since(&world.config.join("bad\0name.jsonl"), 0);
+    assert!(tail.lines.is_empty());
     assert!(tail.error.is_some());
 }
 

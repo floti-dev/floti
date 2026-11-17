@@ -299,6 +299,12 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   does while the sidebar is hidden. The view never enters the top 36px, where
   Windows draws the window controls, except in fullscreen, when the page has
   the whole window and there is no title bar.
+- A blank page (a new tab sent nowhere yet: no address, nothing pending,
+  loading, refused or wrong; `browserPageBlank` in `BrowserPane.tsx`) is kept
+  off the screen too. Its view is clear until its first navigation, and a
+  clear view still takes clicks, so the Browser tab's empty state ("No pages
+  open", whose Open a page puts the caret in the address bar) is drawn where
+  the page would be and the view comes back the moment an address is sent.
 - The bar's own menus (More, Share) and the address suggestions are drawn
   over the live page instead, in the **menu layer** (`main/menuLayer.ts`):
   one transparent `WebContentsView` per window, made with the window's first

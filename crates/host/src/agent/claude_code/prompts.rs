@@ -26,7 +26,10 @@ pub(super) fn history_file(config_dir: &Path) -> PathBuf {
 ///
 /// A file smaller than the cursor is a different file (rotated, cleared, or
 /// another config folder) and is read again from the start, marked as a
-/// reset; so is one that is gone. Everything after the last line break is a
+/// reset; so is one that is gone. A file that is not there is no prompt yet
+/// (Claude Code writes it with the first), so it reads as empty rather than as
+/// an error, and History says it has none; any other failure to read it is an
+/// error, and History says Unknown. Everything after the last line break is a
 /// record still being written and is left for the next read. A line that is
 /// not a usable record is counted and skipped.
 pub(super) fn read_since(file: &Path, from: u64) -> PromptTail {
@@ -73,6 +76,14 @@ struct Tail {
 fn read_tail(file: &Path, from: u64) -> Tail {
     let size = match std::fs::metadata(file) {
         Ok(meta) => meta.len(),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return Tail {
+                text: String::new(),
+                bytes: 0,
+                reset: true,
+                error: None,
+            };
+        }
         Err(err) => {
             return Tail {
                 text: String::new(),
